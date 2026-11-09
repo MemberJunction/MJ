@@ -9,6 +9,7 @@
  */
 
 import {
+    ImportanceDisplay,
     OutcomeBand,
     OutcomeConfig,
     formatPredictionScore,
@@ -187,6 +188,22 @@ export function parseDrivers(featureImportanceJson: string | null): PredictionDr
     return ParseDrivers(featureImportanceJson);
 }
 
+/** The global drivers a prediction card may show. */
+export class PredictionDrivers {
+    /** Global drivers for a model's card: coefficient models only (split / impurity counts are not comparable across features and read as importance they are not, so they are hidden). */
+    public static DriversForModel(lineageJSON: string | null | undefined, featureImportanceJson: string | null): PredictionDriver[] {
+        return ImportanceDisplay.GlobalDriversShowable(lineageJSON) ? ParseDrivers(featureImportanceJson) : [];
+    }
+
+    /**
+     * True when the model has stored importances that {@link DriversForModel} withholds because of their kind, so the card
+     * shows {@link ImportanceDisplay.HiddenNote} in their place (the same note the model detail page shows).
+     */
+    public static DriversHidden(lineageJSON: string | null | undefined, featureImportanceJson: string | null): boolean {
+        return !ImportanceDisplay.GlobalDriversShowable(lineageJSON) && ParseDrivers(featureImportanceJson).length > 0;
+    }
+}
+
 /** Format a last-scored timestamp to a short date, or null when absent/invalid. */
 export function FormatLastScored(lastScoredAt: Date | string | null): string | null {
     if (!lastScoredAt) {
@@ -274,7 +291,7 @@ export interface RawProcessRunDetail {
 /** Model metadata lookup contract for decorating history items. */
 export interface HistoryModelMetadata {
     Name?: string;
-    Pipeline?: string;
+    Pipeline?: string | null;
     Version?: number;
     ProblemType?: string;
     TargetVariable?: string;

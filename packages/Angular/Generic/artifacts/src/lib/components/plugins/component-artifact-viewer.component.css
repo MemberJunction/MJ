@@ -133,6 +133,10 @@
 .form-artifact-toolstrip-warning {
   color: var(--mj-status-warning-text);
 }
+.form-artifact-apply-notice {
+  color: var(--mj-status-warning-text);
+  font-weight: 600;
+}
 
 .form-artifact-picker-chip {
   display: inline-flex;
@@ -242,6 +246,23 @@
   min-width: 0;
   width: 100%;
   box-sizing: border-box;
+}
+
+/* A form panel previews on its own, as a card on the page, rather than inside a whole form. */
+.form-artifact-panel-preview {
+  margin: 16px;
+  padding: 16px;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md, 8px);
+  box-sizing: border-box;
+  min-width: 0;
+}
+.form-artifact-panel-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
 }
 
 /* ====================================================================

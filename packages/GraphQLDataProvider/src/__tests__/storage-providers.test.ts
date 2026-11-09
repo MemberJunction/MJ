@@ -51,7 +51,7 @@ runStorageProviderContractTests('BrowserIndexedDBStorageProvider', async () => {
     const p = new BrowserIndexedDBStorageProvider();
     await awaitDbReady(p);
     return p;
-});
+}, true);
 
 // ────────────────────────────────────────────────────────────────────────────
 // Run the full contract suite against the base in-memory provider.
@@ -59,7 +59,8 @@ runStorageProviderContractTests('BrowserIndexedDBStorageProvider', async () => {
 // ────────────────────────────────────────────────────────────────────────────
 runStorageProviderContractTests(
     'BrowserStorageProviderBase',
-    () => new BrowserStorageProviderBase()
+    () => new BrowserStorageProviderBase(),
+    false
 );
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -388,5 +389,73 @@ describe('BrowserIndexedDBStorageProvider — cross-store isolation', () => {
         await provider.SetItem('a', 1, 'RunViewCache');
         const metaKeys = await provider.GetCategoryKeys('Metadata');
         expect(metaKeys.sort()).toEqual(['a', 'b']);
+    });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// The dataset cache's own category, in the exact shape ProviderBase uses it.
+//
+// `mj:DatasetCache` has been a declared object store in this provider's schema since the stores were
+// introduced, but nothing ever wrote to it: every dataset write went through `CacheDataset`, which
+// passed no category and so landed in `mj:default`, while the only reader that named
+// `'DatasetCache'` was the batched warm read in `GetAndCacheDatasetByName`. The store was dead and
+// the warm path missed on every call. These cases pin the round trip the dataset path actually
+// performs — a blob and its `_date` proxy written to the category, then read back together in one
+// batched call — so a future change cannot quietly split the readers from the writers again.
+// ────────────────────────────────────────────────────────────────────────────
+describe('BrowserIndexedDBStorageProvider — the DatasetCache category', () => {
+    let provider: BrowserIndexedDBStorageProvider;
+
+    const DATASET_KEY = '___MJCore_Metadatahttps://api.example.com__DATASET__MJ_Metadata';
+    const DATE_KEY = `${DATASET_KEY}_date`;
+    const CACHED_AT = '2026-06-01T12:00:00.000Z';
+    const BLOB = {
+        DatasetID: 'D1',
+        DatasetName: 'MJ_Metadata',
+        Success: true,
+        Status: 'OK',
+        LatestUpdateDate: new Date(CACHED_AT),
+        Results: [{ Code: 'Entities', EntityName: 'MJ: Entities', EntityID: 'E1', Results: [{ ID: '1' }] }],
+    };
+
+    beforeEach(async () => {
+        await resetIDB();
+        provider = new BrowserIndexedDBStorageProvider();
+        await awaitDbReady(provider);
+    });
+
+    it('reads back a blob and its _date proxy in one batched call, as the warm path does', async () => {
+        await provider.SetItem(DATASET_KEY, BLOB, 'DatasetCache');
+        await provider.SetItem(DATE_KEY, CACHED_AT, 'DatasetCache');
+
+        const both = await provider.GetItems<typeof BLOB | string>([DATASET_KEY, DATE_KEY], 'DatasetCache');
+
+        expect(both.get(DATE_KEY)).toBe(CACHED_AT);
+        const blob = both.get(DATASET_KEY) as typeof BLOB;
+        expect(blob.Results[0].Results).toHaveLength(1);
+        // Structured clone, so the dataset's timestamp survives as a Date and the warm path's
+        // `localDate.getTime() >= status.LatestUpdateDate.getTime()` comparison is meaningful.
+        expect(blob.LatestUpdateDate).toBeInstanceOf(Date);
+        expect(blob.LatestUpdateDate.toISOString()).toBe(CACHED_AT);
+    });
+
+    it('keeps dataset keys out of the default store', async () => {
+        await provider.SetItem(DATASET_KEY, BLOB, 'DatasetCache');
+
+        expect(await provider.GetItem(DATASET_KEY, 'default')).toBeNull();
+        expect(await provider.GetCategoryKeys('default')).not.toContain(DATASET_KEY);
+        expect(await provider.GetCategoryKeys('DatasetCache')).toEqual([DATASET_KEY]);
+    });
+
+    it('ClearCategory(DatasetCache) drops the datasets and leaves the metadata snapshot alone', async () => {
+        await provider.SetItem(DATASET_KEY, BLOB, 'DatasetCache');
+        await provider.SetItem(DATE_KEY, CACHED_AT, 'DatasetCache');
+        await provider.SetItem('___MJCore_Metadata_Timestamps', '[]', 'default');
+
+        await provider.ClearCategory('DatasetCache');
+
+        expect(await provider.GetItem(DATASET_KEY, 'DatasetCache')).toBeNull();
+        expect(await provider.GetItem(DATE_KEY, 'DatasetCache')).toBeNull();
+        expect(await provider.GetItem<string>('___MJCore_Metadata_Timestamps', 'default')).toBe('[]');
     });
 });

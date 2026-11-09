@@ -8,7 +8,7 @@
  * GetMaxVersionForArtifact / CheckForDuplicateVersion) are overridden on a test subclass, the
  * provider is a fake entity factory, and AIEngine is module-mocked. No DB, no network.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { UserInfo, IMetadataProvider, RunViewParams, RunViewResult } from '@memberjunction/core';
 import type { ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 
@@ -276,16 +276,18 @@ describe('AgentRunner.ProcessAgentArtifacts — conversationDetailId-optional wi
         expect(requested).toHaveLength(0);
     });
 
-    it('skips the duplicate version (returns undefined) when content matches the latest version', async () => {
+    it('outside a conversation, skips the duplicate version (returns undefined) and writes nothing', async () => {
         const version = makeEntity('ver-never-saved');
-        const { provider } = makeProvider(() => version);
+        const { provider, requested } = makeProvider(() => version);
         const runner = new TestableAgentRunner(provider);
-        runner.PreviousArtifact = { artifactId: PRIOR_UUID, versionNumber: 3 };
+        runner.MaxVersion = 3;
         runner.DuplicateVersionId = 'ver-existing-3';
 
-        const info = await runner.ProcessAgentArtifacts(makeResult(), 'detail-9', undefined, contextUser, provider);
+        const info = await runner.ProcessAgentArtifacts(makeResult(), undefined, SOURCE_UUID, contextUser, provider);
 
         expect(info).toBeUndefined();
+        expect(runner.DuplicateSpy).toHaveBeenCalledWith(SOURCE_UUID);
+        expect(requested).toHaveLength(0);
         expect(version.Save).not.toHaveBeenCalled();
         expect(runner.LinkSpy).not.toHaveBeenCalled();
     });
@@ -298,6 +300,174 @@ describe('AgentRunner.ProcessAgentArtifacts — conversationDetailId-optional wi
         const info = await runner.ProcessAgentArtifacts(makeResult(), undefined, undefined, contextUser, provider);
 
         expect(info).toBeUndefined();
+    });
+});
+
+/**
+ * A duplicate hit inside a conversation reuses the existing version for the current reply: the
+ * reply gets an `Output` link to that version (so the version is visible on the reply's branch
+ * path) and the same `{ artifactId, versionId, versionNumber }` result the normal path returns.
+ * The real `LinkArtifactToConversationDetail` runs here so the saved link row can be inspected.
+ */
+describe('AgentRunner.ProcessAgentArtifacts — duplicate content reuses the version for the reply', () => {
+    const DETAIL_UUID = 'dddd0000-1111-4222-8333-444455556666';
+    const EXISTING_VERSION_UUID = 'eeee0000-1111-4222-8333-444455556666';
+    const EXISTING_LINK_UUID = 'cccc0000-1111-4222-8333-444455556666';
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    /** Stubs the version lookups only; linking runs for real against the fake provider. */
+    class ReuseRunner extends AgentRunner {
+        public PreviousArtifact: { artifactId: string; versionNumber: number } | null = null;
+        public MaxVersion = 0;
+        public DuplicateVersionId: string | null = null;
+        public DuplicateSpy = vi.fn();
+
+        public override async FindPreviousArtifactForMessage(): Promise<{ artifactId: string; versionNumber: number } | null> {
+            return this.PreviousArtifact;
+        }
+
+        public override async GetMaxVersionForArtifact(): Promise<number> {
+            return this.MaxVersion;
+        }
+
+        protected override async CheckForDuplicateVersion(artifactId: string, candidateContent: string, latestVersionNumber: number): Promise<string | null> {
+            this.DuplicateSpy(artifactId, latestVersionNumber);
+            return this.DuplicateVersionId;
+        }
+    }
+
+    /** How the fake provider answers the link-exists read and the link save. */
+    interface LinkWorld {
+        /** Rows the link-exists read returns. */
+        existingLinks?: Array<{ ID: string }>;
+        /** What each `Save` resolves to. */
+        saveResult?: boolean;
+        /** When set, the link-exists read fails with this message. */
+        readError?: string;
+    }
+
+    /**
+     * Provider whose `RunView` answers the link-exists check from `world` and whose
+     * `GetEntityObject` hands out one fake per request, recording every request.
+     */
+    function reuseProvider({ existingLinks = [], saveResult = true, readError }: LinkWorld = {}): {
+        provider: IMetadataProvider;
+        requested: string[];
+        junctions: FakeEntity[];
+        runViewCalls: RunViewParams[];
+    } {
+        const requested: string[] = [];
+        const junctions: FakeEntity[] = [];
+        const runViewCalls: RunViewParams[] = [];
+        const provider = {
+            GetEntityObject: vi.fn(async (entityName: string) => {
+                requested.push(entityName);
+                const entity = makeEntity(`new-${requested.length}`, { Save: vi.fn(async () => saveResult) });
+                if (entityName === 'MJ: Conversation Detail Artifacts') {
+                    junctions.push(entity);
+                }
+                return entity;
+            }),
+            RunView: vi.fn(async (params: RunViewParams): Promise<RunViewResult> => {
+                runViewCalls.push(params);
+                if (params.EntityName !== 'MJ: Conversation Detail Artifacts') {
+                    return { Success: true, Results: [] } as unknown as RunViewResult;
+                }
+                if (readError) {
+                    return { Success: false, Results: [], ErrorMessage: readError } as unknown as RunViewResult;
+                }
+                return { Success: true, Results: existingLinks } as unknown as RunViewResult;
+            }),
+        } as unknown as IMetadataProvider;
+        return { provider, requested, junctions, runViewCalls };
+    }
+
+    function duplicateRunner(provider: IMetadataProvider): ReuseRunner {
+        const runner = new ReuseRunner(provider);
+        runner.PreviousArtifact = { artifactId: PRIOR_UUID, versionNumber: 3 };
+        runner.DuplicateVersionId = EXISTING_VERSION_UUID;
+        return runner;
+    }
+
+    it('links the existing version to the reply with one Output row and returns it, creating no new version', async () => {
+        const { provider, requested, junctions, runViewCalls } = reuseProvider();
+        const runner = duplicateRunner(provider);
+        const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+        const info = await runner.ProcessAgentArtifacts(makeResult(), DETAIL_UUID, undefined, contextUser, provider);
+
+        // The reply's artifact result points at the reused version, as the normal path's result does.
+        expect(info).toEqual({ artifactId: PRIOR_UUID, versionId: EXISTING_VERSION_UUID, versionNumber: 3 });
+        expect(runner.DuplicateSpy).toHaveBeenCalledWith(PRIOR_UUID, 3);
+        // Only the link row is created: no artifact header and no new version.
+        expect(requested).toEqual(['MJ: Conversation Detail Artifacts']);
+        expect(junctions).toHaveLength(1);
+        expect(junctions[0].ConversationDetailID).toBe(DETAIL_UUID);
+        expect(junctions[0].ArtifactVersionID).toBe(EXISTING_VERSION_UUID);
+        expect(junctions[0].Direction).toBe('Output');
+        expect(junctions[0].Save).toHaveBeenCalledTimes(1);
+        // The link-exists check reads this exact pair.
+        const linkCheck = runViewCalls.find((p) => p.EntityName === 'MJ: Conversation Detail Artifacts');
+        expect(linkCheck?.ExtraFilter).toBe(
+            `ConversationDetailID='${DETAIL_UUID}' AND ArtifactVersionID='${EXISTING_VERSION_UUID}' AND Direction='Output'`
+        );
+        expect(logSpy).toHaveBeenCalledWith(
+            `Reusing version 3 of artifact ${PRIOR_UUID} for this reply (identical content)`
+        );
+    });
+
+    it('does not write a second link when the reply already has an Output link to that version', async () => {
+        const { provider, requested, junctions } = reuseProvider({ existingLinks: [{ ID: EXISTING_LINK_UUID }] });
+        const runner = duplicateRunner(provider);
+
+        const info = await runner.ProcessAgentArtifacts(makeResult(), DETAIL_UUID, undefined, contextUser, provider);
+
+        expect(info).toEqual({ artifactId: PRIOR_UUID, versionId: EXISTING_VERSION_UUID, versionNumber: 3 });
+        expect(junctions).toHaveLength(0);
+        expect(requested).toHaveLength(0);
+    });
+
+    it('reuses the version named by sourceArtifactId the same way', async () => {
+        const { provider, junctions } = reuseProvider();
+        const runner = new ReuseRunner(provider);
+        runner.DuplicateVersionId = EXISTING_VERSION_UUID;
+        runner.MaxVersion = 5;
+
+        const info = await runner.ProcessAgentArtifacts(makeResult(), DETAIL_UUID, SOURCE_UUID, contextUser, provider);
+
+        expect(runner.DuplicateSpy).toHaveBeenCalledWith(SOURCE_UUID, 5);
+        expect(info).toEqual({ artifactId: SOURCE_UUID, versionId: EXISTING_VERSION_UUID, versionNumber: 5 });
+        expect(junctions).toHaveLength(1);
+        expect(junctions[0].Direction).toBe('Output');
+    });
+
+    it('returns undefined (never throws) when saving the link fails', async () => {
+        const { provider, junctions } = reuseProvider({ saveResult: false });
+        const runner = duplicateRunner(provider);
+
+        const info = await runner.ProcessAgentArtifacts(makeResult(), DETAIL_UUID, undefined, contextUser, provider);
+
+        expect(info).toBeUndefined();
+        expect(junctions).toHaveLength(1);
+        expect(junctions[0].Save).toHaveBeenCalledTimes(1);
+    });
+
+    it('writes no link and returns undefined when the link-exists read fails', async () => {
+        const { provider, requested, junctions, runViewCalls } = reuseProvider({ readError: 'boom' });
+        const runner = duplicateRunner(provider);
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+        const info = await runner.ProcessAgentArtifacts(makeResult(), DETAIL_UUID, undefined, contextUser, provider);
+
+        expect(info).toBeUndefined();
+        expect(runViewCalls.some((p) => p.EntityName === 'MJ: Conversation Detail Artifacts')).toBe(true);
+        expect(requested).not.toContain('MJ: Conversation Detail Artifacts');
+        expect(junctions).toHaveLength(0);
+        const logged = errorSpy.mock.calls.map((call) => String(call[0]));
+        expect(logged.some((message) => message.includes('boom'))).toBe(true);
     });
 });
 
@@ -899,3 +1069,190 @@ describe('AgentRunner.CheckForDuplicateVersion — non-numeric version guard (#4
         expect(params.ExtraFilter).toContain('VersionNumber=3');
     });
 });
+
+describe('AgentRunner.ProcessAgentArtifacts — payload title/description fallback & version naming', () => {
+    it('adopts payload.title and payload.interpretation onto both artifact header and version when directive name is omitted', async () => {
+        const artifact = makeEntity('art-1');
+        const version = makeEntity('ver-1');
+        const { provider } = makeProvider((name) => (name === 'MJ: Artifacts' ? artifact : version));
+        const runner = new TestableAgentRunner(provider);
+
+        await runner.ProcessAgentArtifacts(
+            makeResult({
+                payload: {
+                    title: 'Top 10 Customers by Total Spend',
+                    interpretation: 'Enterprise customers account for 74% of lifetime order value.',
+                    columns: [{ field: 'Customer' }],
+                    rows: [{ Customer: 'Acme Corp' }],
+                },
+            }),
+            'detail-1',
+            undefined,
+            contextUser,
+            provider
+        );
+
+        expect(artifact.Name).toBe('Top 10 Customers by Total Spend');
+        expect(artifact.Description).toBe('Enterprise customers account for 74% of lifetime order value.');
+        expect(version.Name).toBe('Top 10 Customers by Total Spend');
+        expect(version.Description).toBe('Enterprise customers account for 74% of lifetime order value.');
+    });
+
+    it('populates version.Name and version.Description when versioning an existing artifact', async () => {
+        const version = makeEntity('ver-2');
+        const { provider } = makeProvider(() => version, world({ owners: new Map([[TARGET_UUID.toLowerCase(), 'user-1']]) }));
+        const runner = new TestableAgentRunner(provider);
+        runner.MaxVersion = 1;
+
+        await runner.ProcessAgentArtifacts(
+            makeResult({
+                artifactDirective: {
+                    behavior: 'version-source',
+                    targetArtifactId: TARGET_UUID,
+                    name: 'Top 10 Customers — Q4 Only',
+                    description: 'Filtered to Q4 orders',
+                },
+            }),
+            'detail-2',
+            undefined,
+            contextUser,
+            provider
+        );
+
+        expect(version.ArtifactID).toBe(TARGET_UUID);
+        expect(version.VersionNumber).toBe(2);
+        expect(version.Name).toBe('Top 10 Customers — Q4 Only');
+        expect(version.Description).toBe('Filtered to Q4 orders');
+    });
+});
+
+import { LoopAgentType } from '../agent-types/loop-agent-type';
+import { QueryBuilderAgent } from '../query-builder-agent';
+
+describe('LoopAgentType.DetermineNextStep — artifactDirective forwarding', () => {
+    it('forwards artifactDirective on Chat, Success, and Sub-Agent steps', async () => {
+        const loopType = new LoopAgentType();
+
+        const chatStep = await loopType.DetermineNextStep(
+            {
+                success: true,
+                result: JSON.stringify({
+                    taskComplete: false,
+                    message: 'Here are your results.',
+                    artifactDirective: {
+                        behavior: 'create-new',
+                        name: 'Top 10 Customers by Total Spend',
+                        description: 'Ranks top customers by lifetime spend',
+                    },
+                    payloadChangeRequest: {
+                        replaceElements: {
+                            title: 'Top 10 Customers by Total Spend',
+                            columns: [{ field: 'Customer' }],
+                            rows: [{ Customer: 'Acme' }],
+                        },
+                    },
+                    nextStep: { type: 'Chat' },
+                }),
+            } as unknown as Parameters<LoopAgentType['DetermineNextStep']>[0],
+            {} as unknown as Parameters<LoopAgentType['DetermineNextStep']>[1],
+            {}
+        );
+
+        expect(chatStep.step).toBe('Chat');
+        expect(chatStep.artifactDirective).toEqual({
+            behavior: 'create-new',
+            name: 'Top 10 Customers by Total Spend',
+            description: 'Ranks top customers by lifetime spend',
+        });
+
+        const subAgentStep = await loopType.DetermineNextStep(
+            {
+                success: true,
+                result: JSON.stringify({
+                    taskComplete: false,
+                    artifactDirective: {
+                        behavior: 'version-source',
+                        targetArtifactId: 'A',
+                        name: 'Refined Dashboard',
+                    },
+                    nextStep: {
+                        type: 'Sub-Agent',
+                        subAgent: {
+                            name: 'Query Strategist',
+                            message: 'Filter by Q4',
+                            terminateAfter: false,
+                        },
+                    },
+                }),
+            } as unknown as Parameters<LoopAgentType['DetermineNextStep']>[0],
+            {} as unknown as Parameters<LoopAgentType['DetermineNextStep']>[1],
+            {}
+        );
+
+        expect(subAgentStep.step).toBe('Sub-Agent');
+        expect(subAgentStep.artifactDirective).toEqual({
+            behavior: 'version-source',
+            targetArtifactId: 'A',
+            name: 'Refined Dashboard',
+        });
+    });
+});
+
+describe('QueryBuilderAgent — single-table vs multi-table payload normalization', () => {
+    class TestableQueryBuilderAgent extends QueryBuilderAgent {
+        public normalize(payload: Record<string, unknown>, replaceElements: Record<string, unknown>): Record<string, unknown> {
+            return this.normalizePayloadFormat(payload, {
+                step: 'Success',
+                payloadChangeRequest: { replaceElements },
+            });
+        }
+    }
+
+    it('strips stale multi-table fields (tables, computations, interpretation) when transitioning to single-table', () => {
+        const agent = new TestableQueryBuilderAgent();
+        const prev = {
+            title: 'Executive Dashboard',
+            tables: [{ name: 't1', rows: [] }],
+            computations: [{ name: 'c1' }],
+            interpretation: 'Multi-table summary',
+        };
+        const next = {
+            source: 'query',
+            title: 'Top 10 Customers',
+            columns: [{ field: 'Name' }],
+            rows: [{ Name: 'Acme' }],
+            metadata: { sql: 'SELECT Name FROM vwCustomers' },
+        };
+        // Simulate merged payload where PayloadManager kept prev.tables alongside next.columns/rows
+        const merged = agent.normalize({ ...prev, ...next }, next);
+
+        expect(merged.tables).toBeUndefined();
+        expect(merged.computations).toBeUndefined();
+        expect(merged.interpretation).toBeUndefined();
+        expect(merged.columns).toEqual([{ field: 'Name' }]);
+        expect(merged.rows).toEqual([{ Name: 'Acme' }]);
+    });
+
+    it('strips stale single-table fields (columns, rows, metadata) when transitioning to multi-table', () => {
+        const agent = new TestableQueryBuilderAgent();
+        const prev = {
+            source: 'query',
+            title: 'Top 10 Customers',
+            columns: [{ field: 'Name' }],
+            rows: [{ Name: 'Acme' }],
+            metadata: { sql: 'SELECT Name FROM vwCustomers' },
+        };
+        const next = {
+            title: 'Executive Dashboard',
+            tables: [{ name: 't1', rows: [] }],
+        };
+        const merged = agent.normalize({ ...prev, ...next }, next);
+
+        expect(merged.columns).toBeUndefined();
+        expect(merged.rows).toBeUndefined();
+        expect(merged.metadata).toBeUndefined();
+        expect(merged.tables).toEqual([{ name: 't1', rows: [] }]);
+    });
+});
+
+

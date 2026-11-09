@@ -8,7 +8,7 @@
  * @module @memberjunction/ai-knowledge-pipeline
  */
 
-import { UserInfo, LogStatus, LogError, RunView } from '@memberjunction/core';
+import { UserInfo, LogStatus, LogError, RunView, IMetadataProvider } from '@memberjunction/core';
 import { EntityVectorSyncer, VectorizeEntityParams } from '@memberjunction/ai-vector-sync';
 import {
     PipelineEntityParams,
@@ -28,7 +28,21 @@ import {
  * to produce both human-readable tags and machine-readable embeddings in a single pass.
  */
 export class KnowledgePipeline {
+    private _provider?: IMetadataProvider;
     private _progressCallback: PipelineProgressCallback | null = null;
+
+    /**
+     * @param provider - Optional request-scoped metadata provider. The pipeline's syncers and views
+     * run on it; when omitted they fall back to the global default provider.
+     */
+    constructor(provider?: IMetadataProvider) {
+        this._provider = provider;
+    }
+
+    /** The provider passed to the constructor, or undefined when the pipeline uses the global default. */
+    public get Provider(): IMetadataProvider | undefined {
+        return this._provider;
+    }
 
     /**
      * Register a callback to receive progress updates during pipeline execution.
@@ -60,7 +74,7 @@ export class KnowledgePipeline {
             if (params.EnableVectorization) {
                 this.emitProgress('vectorize', 0, 1, 'Starting vectorization...', startTime);
 
-                const syncer = new EntityVectorSyncer();
+                const syncer = new EntityVectorSyncer(this._provider);
                 await syncer.Config(false, contextUser);
 
                 const vectorizeParams: VectorizeEntityParams = {
@@ -114,7 +128,7 @@ export class KnowledgePipeline {
             this.emitProgress('extract', 0, 0, 'Loading content source items...', startTime);
 
             // Load content items for this content source
-            const rv = new RunView();
+            const rv = this._provider ? RunView.FromMetadataProvider(this._provider) : new RunView();
             const contentItems = await rv.RunView<Record<string, unknown>>({
                 EntityName: 'Content Items',
                 ExtraFilter: `ContentSourceID='${params.ContentSourceID}'`,
@@ -153,7 +167,7 @@ export class KnowledgePipeline {
             if (params.EnableVectorization && params.EntityDocumentID) {
                 this.emitProgress('vectorize', 0, items.length, 'Starting content vectorization...', startTime);
 
-                const syncer = new EntityVectorSyncer();
+                const syncer = new EntityVectorSyncer(this._provider);
                 await syncer.Config(false, contextUser);
 
                 const vectorizeParams: VectorizeEntityParams = {
@@ -211,7 +225,7 @@ export class KnowledgePipeline {
             if (params.EnableVectorization) {
                 this.emitProgress('vectorize', 0, 1, `Vectorizing ${params.EntityName} record`, startTime);
 
-                const syncer = new EntityVectorSyncer();
+                const syncer = new EntityVectorSyncer(this._provider);
                 await syncer.Config(false, contextUser);
 
                 // For single record, we still use the entity-level vectorizer

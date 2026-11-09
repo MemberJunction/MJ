@@ -16,7 +16,6 @@ export class MJQueryPermissionFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'permissionRecord', sectionName: 'Permission Record', isExpanded: true },
-            { sectionKey: 'descriptiveLabels', sectionName: 'Descriptive Labels', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

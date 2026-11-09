@@ -40,3 +40,22 @@
     width: 100%;
   }
 }
+
+/* compose:email shows its recipients under the button so the address is visible
+   before the mail client opens. */
+.command-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* Wraps rather than truncating: Bcc is listed LAST, so an ellipsis would cut off exactly the
+   address this line exists to expose. overflow-wrap breaks a long address that has no spaces. */
+.command-recipients {
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted, #6b6b6b);
+  max-width: 320px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

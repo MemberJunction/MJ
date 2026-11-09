@@ -1,91 +1,72 @@
 # New Package Setup Checklist
 
-This document provides step-by-step instructions for registering new MemberJunction packages with npm before creating a new build.
+How to register a new `@memberjunction/*` package on npm so that `publish.yml` can release it.
 
-## ⚠️ Automated Validation
+## When this runs
 
-The publish workflow now **automatically checks** for missing packages and will **fail early** if any publishable `@memberjunction` packages don't exist on npm. This prevents partial publish failures. Packages marked `private: true` are skipped — changesets never publishes them, so they need no placeholder.
+At **PR time**, not release time. The **Check new packages exist on npm** gate (`new-package-gate.yml`) blocks any PR that adds a publishable package until the package exists on npm, has a trusted-publisher (OIDC) config for `publish.yml`, and has a seed version whose public provenance attestation names `publish.yml`. The gate's failure message lists the packages and the exact commands. Packages marked `"private": true` are skipped. Don't set that flag just to silence the gate, or the package never ships.
 
-**When the workflow fails with missing packages:**
-1. Follow Steps 2-3 below to create placeholders and configure OIDC
-2. Re-run the workflow after setup is complete
+The setup needs publishing rights on the `@memberjunction` org and an interactive 2FA prompt, so CI can't do it. Authors without access comment on the PR and tag the escalation handle named in the gate message.
 
 ## Prerequisites
 
-- npm account with publish permissions for `@memberjunction` scope
-- Logged in with `npm login`
-- Access to npm package settings for the `@memberjunction` organization
+- npm **11.15.0 or newer**, since `npm trust` doesn't exist before then: `npm install -g npm@^11.15.0`. Under nvm, each Node version has its own npm, so check `npm --version` in the shell you'll use.
+- `npm login` on an account with 2FA and publish rights on `@memberjunction`
+- `gh auth login` with access to `MemberJunction/MJ`
 
-## Process
+## Quick path: the script
 
-### Step 1: Identify New Packages
-
-The publish workflow will automatically identify new packages, but you can check manually:
+From a checkout of this repo:
 
 ```bash
-# Run the validation script locally
-./.github/scripts/validate-npm-packages.sh
-
-# Or check a specific package
-npm view @memberjunction/package-name version 2>&1 | grep -q "404" && echo "NEW" || echo "EXISTS"
+.github/scripts/seed-new-npm-package.sh @memberjunction/new-thing [@memberjunction/other-thing ...]
 ```
 
-### Step 2: Create Placeholder Packages with OIDC
+For each package it creates the placeholder if one is missing, attaches the trusted publisher if it isn't attached yet, dispatches the seed, and waits up to 10 minutes for the attestation. It checks live npm state before every step, so it is safe to re-run and skips anything already done. Then re-run the failed gate job on the PR.
 
-For each new package, run the setup utility:
+## Manual steps (what the script does)
+
+### Step 1: Create the placeholder
+
+npm won't attach a trusted publisher to a package that doesn't exist yet.
 
 ```bash
-npx setup-npm-trusted-publish @memberjunction/package-name
+npx setup-npm-trusted-publish @memberjunction/new-thing
 ```
 
-This creates a placeholder package (version 0.0.0-reserved) and prepares it for OIDC trusted publishing.
+This publishes a `0.0.0` placeholder.
 
-Example for v2.118.0 packages:
+### Step 2: Attach the trusted publisher
+
 ```bash
-npx setup-npm-trusted-publish @memberjunction/testing-cli
-npx setup-npm-trusted-publish @memberjunction/testing-engine
-npx setup-npm-trusted-publish @memberjunction/testing-engine-base
-npx setup-npm-trusted-publish @memberjunction/ng-testing
+npm trust github @memberjunction/new-thing \
+  --file publish.yml --repo MemberJunction/MJ --allow-publish -y
+npm trust list @memberjunction/new-thing   # should show file: publish.yml
 ```
 
-### Step 3: Configure OIDC in npm UI
+This step prompts for 2FA. If you're setting up several packages, tick "skip 2FA for the next 5 minutes" on the first prompt. No GitHub environment is used. If you get `Unknown flag: --allow-publish`, your npm is too old.
 
-For each new package:
+### Step 3: Seed the package over OIDC
 
-1. Navigate to: `https://www.npmjs.com/package/@memberjunction/[package-name]/access`
-2. Go to **Settings** → **Publishing** (or **Automation tokens**)
-3. Add a new **Trusted Publisher** with these settings:
-   - **Provider**: GitHub Actions
-   - **Organization**: `MemberJunction`
-   - **Repository**: `MJ` (just the repo name, not the full URL)
-   - **Workflow**: `publish.yml`
-   - **Environment**: Leave blank/empty (the workflow doesn't use GitHub environments)
+The gate doesn't take a screenshot of npm settings as proof. It reads the public provenance attestation of a version that was actually published through the trusted publisher.
 
-### Step 4: Verify OIDC Configuration
+```bash
+gh workflow run publish.yml --repo MemberJunction/MJ --ref next \
+  -f seed_package=@memberjunction/new-thing \
+  -f confirm_seed_package=@memberjunction/new-thing
+```
 
-Check each package to ensure OIDC is properly configured:
+Or, in the Actions tab, open **Build and publish new package versions** and click **Run workflow**. Fill in only `seed_package` and `confirm_seed_package` and leave everything else empty. Only the `seed-package` job runs, so nothing is built and no changeset is consumed. It publishes `0.0.1-seed.1` under the `seed` dist-tag (never `latest`), then waits for the attestation to show up. npm takes a few minutes to expose it.
 
-1. Visit the package page on npm
-2. Check the **Publishing** settings
-3. Verify the "Trusted publishers" section shows:
-   - ✅ GitHub Actions provider
-   - ✅ Organization: `MemberJunction`
-   - ✅ Repository: `MJ`
-   - ✅ Workflow: `publish.yml`
+The seed has to run through `publish.yml` itself. npm matches the trusted publisher on the exact workflow filename, so a seed from any other workflow is refused at the OIDC exchange (npm reports it as a 404 on PUT). The gate would also reject its attestation.
 
-### Step 5: Seed the Package Over OIDC (Proves Step 3 Worked)
+### Step 4: Re-run the gate
 
-The PR gate (`check-new-npm-packages.mjs`) does not trust a screenshot of the npm settings page. It reads the public provenance attestation of a version that was actually published through the trusted publisher. Produce one:
+Re-run the failed **Check new packages exist on npm** job on the PR and it turns green. Its last result reflects npm as it was at that point, so it won't update by itself.
 
-1. In the Actions tab, open **Build and publish new package versions** and click **Run workflow** on the default ref.
-2. Fill in exactly two fields, both with the package name (e.g. `@memberjunction/new-thing`): `seed_package` and `confirm_seed_package`. Leave every other field at its default — in particular `line_branch` and `confirm_branch` stay empty; those belong to releases.
-3. Run it. Only the `seed-package` job runs; no release is built and no changeset is consumed. It publishes `0.0.1-seed.1` under the `seed` dist-tag (never `latest`) and verifies the attestation names `publish.yml`.
+## At release time
 
-This must run through `publish.yml` itself: npm matches the trusted publisher on the exact workflow filename, so a seed from any other workflow file is refused at the OIDC token exchange (npm reports it as a 404 on PUT), and the gate would reject its attestation anyway.
-
-Re-run the PR's checks afterwards; the "Check new packages exist on npm" gate turns green.
-
-### Step 6: Trigger Build Workflow
+### Step 5: Trigger Build Workflow
 
 Push to main branch or manually trigger the `publish.yml` workflow. The GitHub Action will:
 
@@ -94,7 +75,7 @@ Push to main branch or manually trigger the `publish.yml` workflow. The GitHub A
 3. Publish to npm using OIDC (no manual npm token needed)
 4. Merge main into next branch
 
-### Step 7: Verify Publication
+### Step 6: Verify Publication
 
 After the workflow completes, verify all new packages were published:
 

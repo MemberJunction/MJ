@@ -80,7 +80,6 @@ RunLLMConformanceSuite({
     ProviderName: 'Azure',
     SupportsStreaming: true,
     NonStreamingFailureMode: 'failedResult',
-    PreAbortedStreamingBehavior: 'rejectsErrorResult',
     CreateLLM: () => {
         // restoreMocks resets implementations between tests, so re-arm the client factory here.
         mockModelClient.mockReturnValue({

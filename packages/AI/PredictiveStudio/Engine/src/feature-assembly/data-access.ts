@@ -24,7 +24,7 @@ import { RunView, type UserInfo, type IMetadataProvider } from '@memberjunction/
  * because sources come from heterogeneous entities/queries; the executor selects
  * and types the columns it needs downstream.
  */
-export type SourceRow = Record<string, string | number | boolean | null | undefined>;
+export type SourceRow = Record<string, string | number | boolean | Date | null | undefined>;
 
 /**
  * Read parameters for fetching rows from a named source. A subset of MJ's
@@ -51,6 +51,12 @@ export interface FetchRowsResult {
   Success: boolean;
   /** The fetched rows (empty when `Success` is false). */
   Rows: SourceRow[];
+  /**
+   * Rows matching the read's filter as counted by the database, whatever cap applied. Equals `Rows.length` for an
+   * uncapped read and is larger when `MaxRows` cut the read short. Required so an implementation that forgets the
+   * count cannot switch the read-cap refusal off (it compares this against the cap; fail closed). `0` on a failed read.
+   */
+  TotalRowCount: number;
   /** Error detail when `Success` is false. */
   ErrorMessage?: string;
 }
@@ -86,26 +92,36 @@ export interface IFeatureDataAccess {
   fetchEmbedding(entity: string, recordId: string, embeddingModelRef: string, dims: number): Promise<number[] | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
+/** Result of {@link ICountingDataAccess.CountRows}. */
+export interface CountRowsResult {
+  readonly Success: boolean;
+  readonly Count: number;
+  readonly ErrorMessage?: string;
+}
+
+/** Data access that can also count a source exactly, as complete reads require. */
+export interface ICountingDataAccess extends IFeatureDataAccess {
+  /** The number of rows `fetchRows` with the same entity and filter must return. */
+  CountRows(params: { readonly EntityName: string; readonly ExtraFilter?: string }): Promise<CountRowsResult>;
+}
+
 /**
  * Production {@link IFeatureDataAccess} backed by `@memberjunction/core`'s
  * `RunView`. Always passes `contextUser` so server-side reads honor per-user
- * data isolation. Constructed with an optional `IMetadataProvider` for
- * multi-provider correctness (CLAUDE.md) — the provider, when supplied, is the
- * one the reads run against.
+ * data isolation, and always reads through the caller's `IMetadataProvider`
+ * (multi-provider correctness — there is no global-provider fallback).
  */
-export class RunViewDataAccess implements IFeatureDataAccess {
+export class RunViewDataAccess implements ICountingDataAccess {
   private readonly runView: RunView;
-  private readonly contextUser?: UserInfo;
-  private readonly provider?: IMetadataProvider;
+  private readonly contextUser: UserInfo;
 
   /**
-   * @param contextUser the request's user — REQUIRED on the server for isolation/audit
-   * @param provider optional provider for multi-provider scenarios (defaults to global)
+   * @param contextUser the request's user (isolation/audit)
+   * @param provider the provider every read runs on
    */
-  constructor(contextUser?: UserInfo, provider?: IMetadataProvider) {
+  constructor(contextUser: UserInfo, provider: IMetadataProvider) {
     this.contextUser = contextUser;
-    this.provider = provider;
-    this.runView = this.provider ? RunView.FromMetadataProvider(this.provider) : new RunView();
+    this.runView = RunView.FromMetadataProvider(provider);
   }
 
   /** @inheritdoc */
@@ -117,15 +133,23 @@ export class RunViewDataAccess implements IFeatureDataAccess {
         OrderBy: params.OrderBy ?? '',
         Fields: params.Fields,
         MaxRows: params.MaxRows,
+        // No explicit cap means "every matching row". Without this, RunView silently applies the
+        // entity's UserViewMaxRows (1000 by default) — training would quietly fit on the first
+        // 1000 rows of a larger population and scoring hydration could miss records.
+        IgnoreMaxRows: params.MaxRows === undefined,
         ResultType: 'simple',
       },
       this.contextUser,
     );
 
     if (!result.Success) {
-      return { Success: false, Rows: [], ErrorMessage: result.ErrorMessage };
+      return { Success: false, Rows: [], TotalRowCount: 0, ErrorMessage: result.ErrorMessage };
     }
-    return { Success: true, Rows: result.Results ?? [] };
+    // The read does not skip the count, so RunView reports it; a read without one cannot be checked for truncation.
+    if (result.TotalRowCount === undefined) {
+      return { Success: false, Rows: [], TotalRowCount: 0, ErrorMessage: `${params.EntityName}: the read returned no total row count, so it cannot be checked for truncation` };
+    }
+    return { Success: true, Rows: result.Results || [], TotalRowCount: result.TotalRowCount };
   }
 
   /**
@@ -142,5 +166,17 @@ export class RunViewDataAccess implements IFeatureDataAccess {
    */
   public async fetchEmbedding(_entity: string, _recordId: string, _embeddingModelRef: string, _dims: number): Promise<number[] | null> {
     return null;
+  }
+
+  /** @inheritdoc */
+  public async CountRows(params: { readonly EntityName: string; readonly ExtraFilter?: string }): Promise<CountRowsResult> {
+    const result = await this.runView.RunView<SourceRow>(
+      { EntityName: params.EntityName, ExtraFilter: params.ExtraFilter || '', ResultType: 'count_only', IgnoreMaxRows: true },
+      this.contextUser,
+    );
+    if (!result.Success) return { Success: false, Count: 0, ErrorMessage: result.ErrorMessage };
+    // A count_only read always counts; a result without one is not a count.
+    if (result.TotalRowCount === undefined) return { Success: false, Count: 0, ErrorMessage: `${params.EntityName}: the count read returned no total row count` };
+    return { Success: true, Count: result.TotalRowCount };
   }
 }

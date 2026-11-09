@@ -13,11 +13,26 @@ export class FormChromeCoordinator {
     public MoreExpanded = false;
     public ActiveGroupKey: string | null = null;
     public readonly Changes = new Subject<void>();
+    /**
+     * A section arrived on or left the page after the rail was worked out. A panel that
+     * draws its section only once its data has loaded (the Feature Values and Model
+     * Predictions panels, for instance) mounts inside a slot after every structural
+     * trigger the container watches has fired; without this the section belongs to no
+     * rail group, and on a left-nav form that means it never shows.
+     */
+    public readonly SectionsChanged = new Subject<void>();
+
+    public NotifySectionsChanged(): void {
+        this.SectionsChanged.next();
+    }
 
     public Apply(spec: FormChromeSpec): void {
         this.Spec = StabilizeFirstClassGroupOrder(this.Spec, spec);
         if (spec.Layout === 'left-nav') {
-            const stillValid = spec.Groups.some((g) => g.Key === this.ActiveGroupKey);
+            // A More child is a valid active key too: it is never a group of its own.
+            const active = this.ActiveGroupKey;
+            const stillValid = active !== null
+                && (spec.Groups.some((g) => g.Key === active) || this.isMoreChild(active));
             if (!stillValid) {
                 this.ActiveGroupKey = spec.Groups[0]?.Key ?? null;
             }

@@ -1,6 +1,7 @@
 import { BaseSingleton, GetGlobalObjectStore, WarningManager } from '@memberjunction/global';
 import { LogError } from './logging';
 import { BaseEntity } from './baseEntity';
+import { CompositeFilter } from './filters/compositeFilter';
 // Type-only import — avoids a runtime circular dependency with baseEngine.ts
 // (which imports BaseEngineRegistry). Erased at compile time.
 import type { BaseEnginePropertyConfig } from './baseEngine';
@@ -76,8 +77,10 @@ export interface CachedEntityMatch<T extends BaseEntity = BaseEntity> {
      * The engine's full property config for this entity — `EntityName`,
      * `PropertyName`, `Filter`, `OrderBy`, `ResultType`, etc. Inspect this to
      * decide whether the cache fits your needs (e.g. check `Filter`/`ResultType`).
+     * For a `BaseEngine` it's the engine's own config object, not a copy: read it,
+     * don't change it.
      */
-    config: BaseEnginePropertyConfig;
+    config: Readonly<BaseEnginePropertyConfig>;
     /**
      * **Live reference** to the engine's cached array for this entity — NOT a
      * copy. Reading is cheap; do not mutate it. When the config's `ResultType`
@@ -205,6 +208,11 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
     public UnregisterEngine(engine: unknown): void {
         const name = (engine as object).constructor.name;
         this._engines.delete(name);
+        for (const [k, v] of this._engines) {
+            if (v.instance === engine) {
+                this._engines.delete(k);
+            }
+        }
     }
 
     /**
@@ -333,6 +341,36 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
             return Boolean((engine as { Loaded: boolean }).Loaded);
         }
         return false;
+    }
+
+    /**
+     * True when a specific property on a `BaseEngine` has already finished `HandleSingleViewResult`
+     * with `loadedSuccessfully === true` (and was not permission-denied), even if other properties
+     * on the same engine are still loading.
+     */
+    private checkEnginePropertyLoaded(engineObj: Record<string, unknown>, propertyName: string | undefined): boolean {
+        if (!propertyName) return false;
+        const isPropertyLoaded = engineObj['IsPropertyLoaded'];
+        if (typeof isPropertyLoaded === 'function') {
+            return Boolean(isPropertyLoaded.call(engineObj, propertyName));
+        }
+        return false;
+    }
+
+    /**
+     * An engine's property configs, without copying them where the engine allows it. A
+     * `BaseEngine` exposes its own array as `ReadonlyConfigs`; its `Configs` getter deep-copies on
+     * every read. An engine that doesn't extend `BaseEngine` is read through `Configs`.
+     *
+     * @returns The configs, or null when the engine declares none.
+     */
+    private readEngineConfigs(engineObj: Record<string, unknown>): ReadonlyArray<Readonly<BaseEnginePropertyConfig>> | null {
+        const own = engineObj['ReadonlyConfigs'];
+        if (Array.isArray(own)) {
+            return own;
+        }
+        const copy = engineObj['Configs'];
+        return Array.isArray(copy) ? copy : null;
     }
 
     /**
@@ -637,11 +675,16 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
      * ```
      *
      * Notes:
-     * - Only **loaded** engines are considered (a registered-but-not-yet-loaded
-     *   engine has no data to offer).
+     * - Only **loaded** data is considered (a registered-but-not-yet-loaded
+     *   engine has no data to offer). A `BaseEngine` is asked per property via
+     *   `IsPropertyLoaded`, so a property that failed or was skipped for lack of
+     *   Read permission is never returned, even when the engine is `Loaded`.
      * - The returned `records` is the engine's *live* array — read it, don't
      *   mutate it. For `'simple'` configs the rows are plain objects, not
      *   `BaseEntity` instances (check `config.ResultType` if you need ORM rows).
+     * - A `BaseEngine`'s configs are read through `ReadonlyConfigs`, without the
+     *   copy `Configs` makes, so `config` is the engine's own object. This runs for
+     *   every record an IsA parent with an opted-in `SubtypeSelector` loads.
      *
      * @param entityName     Entity to look up (case-insensitive, whitespace-trimmed).
      * @param options.unfilteredOnly  When true, omit any cache that has a `Filter`
@@ -660,14 +703,22 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
         for (const [className, info] of this._engines) {
             const engine = info.instance;
             if (!engine || typeof engine !== 'object') continue;
-            // Only loaded engines have data to offer.
-            if (!this.checkEngineLoaded(engine)) continue;
+            const engineLoaded = this.checkEngineLoaded(engine);
 
             const engineObj = engine as Record<string, unknown>;
-            const configs = engineObj['Configs'];
-            if (!Array.isArray(configs)) continue;
+            const configs = this.readEngineConfigs(engineObj);
+            if (!configs) continue;
+            // An engine that tracks per-property load state is the authority on each property, even
+            // once the engine as a whole is Loaded: a config skipped for lack of Read permission (or
+            // one whose load failed) holds `[]`, which must never be served as the full table.
+            const tracksPropertyState = typeof engineObj['IsPropertyLoaded'] === 'function';
 
-            for (const cfg of configs as BaseEnginePropertyConfig[]) {
+            for (const cfg of configs) {
+                const hasData = tracksPropertyState
+                    ? this.checkEnginePropertyLoaded(engineObj, cfg.PropertyName)
+                    : engineLoaded;
+                if (!hasData) continue;
+
                 // Only entity configs (Type defaults to 'entity') with a matching EntityName.
                 if ((cfg.Type ?? 'entity') !== 'entity') continue;
                 if (!cfg.EntityName || cfg.EntityName.trim().toLowerCase() !== target) continue;
@@ -675,7 +726,16 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
                 const records = cfg.PropertyName ? engineObj[cfg.PropertyName] : undefined;
                 if (!Array.isArray(records)) continue;
 
-                const unfiltered = !cfg.Filter || cfg.Filter.trim().length === 0;
+                const hasFilter =
+                    typeof cfg.Filter === 'string'
+                        ? cfg.Filter.trim().length > 0
+                        : cfg.Filter != null &&
+                          !(cfg.Filter instanceof CompositeFilter
+                              ? cfg.Filter
+                              : CompositeFilter.FromDescriptor(cfg.Filter)
+                          ).IsEmpty;
+                const unfiltered = !hasFilter
+                    && (!cfg.AlternateBaseView || cfg.AlternateBaseView.trim().length === 0);
                 if (options?.unfilteredOnly && !unfiltered) continue;
 
                 matches.push({

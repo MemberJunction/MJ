@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import type { EntitySaveOptions } from '@memberjunction/core';
 import type { MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 import { AgentRunStepSaveQueue } from '../agent-run-steps';
 
@@ -7,46 +8,53 @@ import { AgentRunStepSaveQueue } from '../agent-run-steps';
  * throwing to exercise the failure paths.
  */
 function fakeStep(opts: { result?: boolean; throws?: boolean } = {}) {
-    const calls: { ignoreDirtyState: boolean | undefined; order: number }[] = [];
+    const calls: { ignoreDirtyState: boolean | undefined; saveReturnMode: string | undefined; order: number }[] = [];
     const step = {
         ID: 'step-1',
         calls,
         LatestResult: { CompleteMessage: 'save failed' },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        Save: vi.fn(async (saveOptions?: any) => {
-            calls.push({ ignoreDirtyState: saveOptions?.IgnoreDirtyState, order: calls.length });
+        Save: vi.fn(async (saveOptions?: EntitySaveOptions) => {
+            calls.push({
+                ignoreDirtyState: saveOptions?.IgnoreDirtyState,
+                saveReturnMode: saveOptions?.SaveReturnMode,
+                order: calls.length,
+            });
             if (opts.throws) {
                 throw new Error('db exploded');
             }
             return opts.result ?? true;
         }),
-    } as unknown as MJAIAgentRunStepEntity & { calls: { ignoreDirtyState: boolean | undefined }[] };
+    } as unknown as MJAIAgentRunStepEntity & { calls: { ignoreDirtyState: boolean | undefined; saveReturnMode: string | undefined }[] };
     return step;
 }
 
 describe('AgentRunStepSaveQueue', () => {
-    it('Insert fires a normal (non-forced) save, awaited by Flush', async () => {
+    it('Insert fires a normal (non-forced) save with datestamps_only return mode, awaited by Flush', async () => {
         const q = new AgentRunStepSaveQueue();
         const step = fakeStep();
         q.Insert(step);
         const result = await q.Flush();
 
         expect(step.Save).toHaveBeenCalledTimes(1);
-        expect((step as unknown as { calls: { ignoreDirtyState: boolean | undefined }[] }).calls[0].ignoreDirtyState).toBeUndefined();
+        const firstCall = (step as unknown as { calls: { ignoreDirtyState: boolean | undefined; saveReturnMode: string | undefined }[] }).calls[0];
+        expect(firstCall.ignoreDirtyState).toBe(false);
+        expect(firstCall.saveReturnMode).toBe('datestamps_only');
         expect(result.failures).toBe(0);
     });
 
-    it('QueueUpdate force-persists (IgnoreDirtyState) and runs AFTER the INSERT', async () => {
+    it('QueueUpdate force-persists (IgnoreDirtyState) with datestamps_only and runs AFTER the INSERT', async () => {
         const q = new AgentRunStepSaveQueue();
         const step = fakeStep();
         q.Insert(step);
         q.QueueUpdate(step);
         await q.Flush();
 
-        const calls = (step as unknown as { calls: { ignoreDirtyState: boolean | undefined }[] }).calls;
+        const calls = (step as unknown as { calls: { ignoreDirtyState: boolean | undefined; saveReturnMode: string | undefined }[] }).calls;
         expect(calls).toHaveLength(2);
-        expect(calls[0].ignoreDirtyState).toBeUndefined(); // insert first, normal
+        expect(calls[0].ignoreDirtyState).toBe(false); // insert first, normal
+        expect(calls[0].saveReturnMode).toBe('datestamps_only');
         expect(calls[1].ignoreDirtyState).toBe(true); // update second, forced
+        expect(calls[1].saveReturnMode).toBe('datestamps_only');
     });
 
     it('Flush reports failures for saves that resolve false', async () => {
@@ -151,4 +159,106 @@ describe('AgentRunStepSaveQueue', () => {
         // The UPDATE force-persists the reverted 'Running' — the exact "stuck at Running" symptom.
         expect(persisted).toEqual(['Running', 'Running']);
     });
+
+    it('Insert(step, [prereqA, prereqB]) waits for ALL prerequisites to settle and calls step.Save exactly once', async () => {
+        const q = new AgentRunStepSaveQueue();
+        const order: string[] = [];
+        let releaseA!: () => void;
+        let releaseB!: () => void;
+        const gateA = new Promise<void>((resolve) => { releaseA = resolve; });
+        const gateB = new Promise<void>((resolve) => { releaseB = resolve; });
+
+        const prereqA = {
+            ID: 'parent-step',
+            Save: vi.fn(async () => {
+                await gateA;
+                order.push('prereqA');
+                return true;
+            }),
+        } as unknown as MJAIAgentRunStepEntity;
+
+        const prereqB = {
+            ID: 'source-step',
+            Save: vi.fn(async () => {
+                await gateB;
+                order.push('prereqB');
+                return true;
+            }),
+        } as unknown as MJAIAgentRunStepEntity;
+
+        const child = {
+            ID: 'child-step',
+            Save: vi.fn(async () => {
+                order.push('child');
+                return true;
+            }),
+        } as unknown as MJAIAgentRunStepEntity;
+
+        q.Insert(prereqA);
+        q.Insert(prereqB);
+        q.Insert(child, [prereqA, prereqB]);
+
+        // Release A first; child must still wait for B.
+        releaseA();
+        await new Promise((r) => setTimeout(r, 10));
+        expect(order).toEqual(['prereqA']);
+        expect(child.Save).not.toHaveBeenCalled();
+
+        // Release B; child now runs once.
+        releaseB();
+        const result = await q.Flush();
+        expect(result.failures).toBe(0);
+        expect(order).toEqual(['prereqA', 'prereqB', 'child']);
+        expect(child.Save).toHaveBeenCalledTimes(1);
+    });
+
+    it('Insert(step, prereqs, beforeInsert) invokes beforeInsert after prerequisite settlement so a failed source step falls back cleanly', async () => {
+        const q = new AgentRunStepSaveQueue();
+        let releaseSource!: () => void;
+        const sourceGate = new Promise<void>((resolve) => { releaseSource = resolve; });
+
+        const sourceStep = {
+            ID: 'source-step',
+            IsSaved: false,
+            LatestResult: { CompleteMessage: 'source insert failed' },
+            Save: vi.fn(async () => {
+                await sourceGate;
+                // Simulate failed DB INSERT: IsSaved remains false
+                return false;
+            }),
+        } as unknown as MJAIAgentRunStepEntity & { IsSaved: boolean };
+
+        let persistedPayloadAtStart: string | null = null;
+        let persistedSourceStepId: string | null = null;
+        const dependentStep = {
+            ID: 'dependent-step',
+            PayloadAtStart: null as string | null,
+            PayloadAtStartSourceStepID: 'source-step' as string | null,
+            Save: vi.fn(async () => {
+                persistedPayloadAtStart = dependentStep.PayloadAtStart;
+                persistedSourceStepId = dependentStep.PayloadAtStartSourceStepID;
+                return true;
+            }),
+        } as unknown as MJAIAgentRunStepEntity & {
+            PayloadAtStart: string | null;
+            PayloadAtStartSourceStepID: string | null;
+        };
+
+        q.Insert(sourceStep);
+        q.Insert(dependentStep, [sourceStep], (s) => {
+            if (!sourceStep.IsSaved) {
+                s.PayloadAtStart = '{"fallback":true}';
+                s.PayloadAtStartSourceStepID = null;
+            }
+        });
+
+        releaseSource();
+        const flushResult = await q.Flush();
+
+        expect(flushResult.failures).toBe(1); // sourceStep failed, dependentStep succeeded
+        expect(persistedPayloadAtStart).toBe('{"fallback":true}');
+        expect(persistedSourceStepId).toBeNull();
+        expect(dependentStep.Save).toHaveBeenCalledTimes(1);
+    });
 });
+

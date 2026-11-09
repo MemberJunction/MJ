@@ -77,7 +77,7 @@ export class VectorizeEntityAction extends BaseAction {
         const entityDocumentType: string = (entityDocumentTypeParam?.Value ? String(entityDocumentTypeParam.Value).trim() : '') || 'Record Duplicate';
 
         try {
-            const vectorizer = new EntityVectorSyncer();
+            const vectorizer = new EntityVectorSyncer(params.Provider);
             await vectorizer.Config(false, params.ContextUser);
 
             const entityDocuments: MJEntityDocumentEntity[] = await vectorizer.GetActiveEntityDocuments(entityNames, entityDocumentType);

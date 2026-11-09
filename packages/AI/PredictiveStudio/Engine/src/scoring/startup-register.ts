@@ -13,7 +13,7 @@
  * ML work type with no substrate change. But that call was never made at boot — so a Record Process
  * with `WorkType='ML Model'` fell through to "unknown work type". This {@link IStartupSink} makes the
  * call once during MJAPI bootstrap (mirroring `RemoteBrowserEngine`'s `@RegisterForStartup` pattern),
- * wiring the production {@link MLInferenceDeps} bundle ({@link buildProductionMLInferenceDeps}) the
+ * wiring the production {@link MLInferenceDeps} bundle ({@link BuildProductionMLInferenceDeps}) the
  * Score action / Remote Op also use — so a model is always scored the same way it was trained.
  *
  * Unlike `RemoteBrowserEngine`, this sink warms NO `BaseEngine` cache and touches NO database: the
@@ -26,6 +26,7 @@ import { IMetadataProvider, IStartupSink, LogStatusEx, RegisterForStartup, UserI
 import { BaseSingleton } from '@memberjunction/global';
 
 import { RegisterMLScoringProcessor } from './register';
+import { PipelineAutoTrainer } from './auto-train';
 import { BuildProductionMLInferenceDeps } from '../operations/delegation';
 
 /**
@@ -56,7 +57,8 @@ export class PredictiveStudioScoringStartup extends BaseSingleton<PredictiveStud
    * @param _provider unused — see above
    */
   public async HandleStartup(_contextUser?: UserInfo, _provider?: IMetadataProvider): Promise<void> {
-    RegisterMLScoringProcessor(BuildProductionMLInferenceDeps());
+    // The auto-trainer only acts for Record Processes that declare `Configuration.autoTrain`.
+    RegisterMLScoringProcessor(BuildProductionMLInferenceDeps(), new PipelineAutoTrainer());
     // Routine boot registration — only surface it under verbose logging to keep startup quiet.
     LogStatusEx({
       message: '[PredictiveStudioScoringStartup] Registered ML Model scoring processor for Record Set Processing.',

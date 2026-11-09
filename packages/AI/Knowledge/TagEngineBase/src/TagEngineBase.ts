@@ -71,7 +71,9 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
             {
                 Type: 'entity',
                 EntityName: 'MJ: Tags',
-                PropertyName: '_tags'
+                PropertyName: '_tags',
+                // Binary vector column: loaded server-side (TagEngine reads it), skipped over the wire.
+                IncludeBinaryFields: 'DatabaseProviderOnly',
             },
             {
                 Type: 'entity',
@@ -354,7 +356,8 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
             EntityName: 'MJ: Tagged Items',
             ExtraFilter: `TagID='${tagID}' AND EntityID='${entityID}' AND RecordID='${recordID}'`,
             ResultType: 'entity_object',
-            MaxRows: 1
+            MaxRows: 1,
+            SkipTotalRowCount: true
         }, contextUser);
 
         if (result.Success && result.Results.length > 0) {

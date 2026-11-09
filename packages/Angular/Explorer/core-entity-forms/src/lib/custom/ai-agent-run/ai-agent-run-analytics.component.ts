@@ -8,6 +8,7 @@ import { WalkAgentRunTree, type AgentRunTreeNode } from '@memberjunction/ai-core
 import { TOKEN_PRICE_UNIT_TYPE_DIVISORS } from '@memberjunction/ai-engine-base';
 import * as d3 from 'd3';
 import { AIAgentRunCostService } from './ai-agent-run-cost.service';
+import { SplitPromptRunCost, type PromptRunTokenRates } from './agent-run-cost-split';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 interface PromptMetrics {
@@ -27,6 +28,8 @@ interface PromptMetrics {
     inputCost: number;
     outputCost: number;
     savings: number;
+    // Avatar video priced on its own line (the runs' CostLines), not at the output token rate.
+    avatarVideoCost: number;
     unratedCost: number; // stored cost of runs whose model+vendor had no rate row (breakdown excludes them)
   };
   tokenUsage: { totalInput: number; totalOutput: number; totalCacheRead: number; totalCacheWrite: number; byModel: Map<string, { input: number; output: number }> };
@@ -210,7 +213,7 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   }
 
   // Per model+vendor cache pricing (currency-per-token), loaded from AIModelCost for the cost split.
-  private cacheRates = new Map<string, { inputRate: number; outputRate: number; cacheReadRate: number; cacheWriteRate: number }>();
+  private cacheRates = new Map<string, PromptRunTokenRates>();
   AllActionLogs: SimpleActionLog[] = [];
 
   /** @deprecated Use {@link AllActionLogs}. */
@@ -693,7 +696,7 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
       byVendor: new Map(),
       byPrompt: new Map(),
       statusBreakdown: { success: 0, failed: 0, timeout: 0 },
-      costBreakdown: { totalCost: 0, byModel: new Map(), byVendor: new Map(), inputCost: 0, outputCost: 0, savings: 0, unratedCost: 0 },
+      costBreakdown: { totalCost: 0, byModel: new Map(), byVendor: new Map(), inputCost: 0, outputCost: 0, savings: 0, avatarVideoCost: 0, unratedCost: 0 },
       tokenUsage: { totalInput: 0, totalOutput: 0, totalCacheRead: 0, totalCacheWrite: 0, byModel: new Map() }
     };
   }
@@ -771,10 +774,10 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
       }
       const input = (row.InputPricePerUnit ?? 0) / divisor;
       this.cacheRates.set(this.rateKey(row.ModelID, row.VendorID), {
-        inputRate: input,
-        outputRate: (row.OutputPricePerUnit ?? 0) / divisor,
-        cacheReadRate: (row.CacheReadPricePerUnit ?? row.InputPricePerUnit ?? 0) / divisor,
-        cacheWriteRate: (row.CacheWritePricePerUnit ?? row.InputPricePerUnit ?? 0) / divisor
+        InputRate: input,
+        OutputRate: (row.OutputPricePerUnit ?? 0) / divisor,
+        CacheReadRate: (row.CacheReadPricePerUnit ?? row.InputPricePerUnit ?? 0) / divisor,
+        CacheWriteRate: (row.CacheWritePricePerUnit ?? row.InputPricePerUnit ?? 0) / divisor
       });
     }
   }
@@ -846,12 +849,16 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
 
       // Rate-derived cost split + cache savings. inputCost folds uncached + cache read + cache write
       // (each at its own rate); savings = the discount vs. pricing all input at the full input rate.
-      // Runs whose model+vendor has no rate row are tracked separately so the split isn't silently off.
+      // An avatar call's video is priced on its own line: its cost comes from the run's cost lines,
+      // and its tokens are not output at the text rate. Runs whose model+vendor has no rate row are
+      // tracked separately so the split isn't silently off.
       const rate = this.cacheRates.get(this.rateKey(promptRun.ModelID, promptRun.VendorID));
       if (rate) {
-        metrics.costBreakdown.inputCost += inputTokens * rate.inputRate + cacheReadTokens * rate.cacheReadRate + cacheWriteTokens * rate.cacheWriteRate;
-        metrics.costBreakdown.outputCost += outputTokens * rate.outputRate;
-        metrics.costBreakdown.savings += cacheReadTokens * (rate.inputRate - rate.cacheReadRate) + cacheWriteTokens * (rate.inputRate - rate.cacheWriteRate);
+        const split = SplitPromptRunCost(promptRun, rate);
+        metrics.costBreakdown.inputCost += split.InputCost;
+        metrics.costBreakdown.outputCost += split.OutputCost;
+        metrics.costBreakdown.savings += split.Savings;
+        metrics.costBreakdown.avatarVideoCost += split.AvatarVideoCost;
       } else {
         metrics.costBreakdown.unratedCost += cost;
       }
@@ -1084,6 +1091,9 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   }
   /** Rate-derived output dollars. */
   get OutputCost(): number { return this.PromptMetrics.costBreakdown.outputCost; }
+
+  /** Avatar video dollars, from the runs' cost lines (priced per minute, apart from the output tokens). */
+  get AvatarVideoCost(): number { return this.PromptMetrics.costBreakdown.avatarVideoCost; }
 
   /** @deprecated Use {@link OutputCost}. */
   get outputCost(): number {

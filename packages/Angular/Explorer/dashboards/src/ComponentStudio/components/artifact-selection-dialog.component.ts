@@ -321,6 +321,7 @@ export class ArtifactSelectionDialogComponent extends BaseAngularComponent imple
   async LoadVersions(artifactId: string) {
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      // conversation-scope: artifact-wide read, no conversation path applies
       const result = await rv.RunView<MJArtifactVersionEntity>({
         EntityName: 'MJ: Artifact Versions',
         ExtraFilter: `ArtifactID = '${artifactId}'`,
@@ -535,7 +536,8 @@ export class ArtifactSelectionDialogComponent extends BaseAngularComponent imple
       const typeResult = await rv.RunView({
         EntityName: 'MJ: Artifact Types',
         ExtraFilter: `Name = 'Component'`,
-        MaxRows: 1
+        MaxRows: 1,
+        SkipTotalRowCount: true
       });
 
       if (typeResult.Success && typeResult.Results?.length > 0) {

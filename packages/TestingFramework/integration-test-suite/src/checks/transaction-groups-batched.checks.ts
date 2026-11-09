@@ -37,7 +37,7 @@
  *
  * SQL Server only — `BatchedSubmit` on PostgreSQL is exercised by that provider's own unit tests
  * (the inlining path differs entirely), and the deterministic integration lane runs SQL Server.
- * On any other platform every check skips-as-pass with a loud line.
+ * On any other platform every check is recorded as skipped (SkipCheck).
  *
  * Fixtures are throwaway `MJ: Action Categories` rows, name-prefixed per run and tagged
  * "(mj-integration-test — safe to delete)". Teardown sweeps EVERYTHING matching the prefix, so a
@@ -47,7 +47,7 @@ import { Metadata, RunView, TransactionGroupBase } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { RunViewParams, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJActionCategoryEntity } from '@memberjunction/core-entities';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext, TransactionGroupsFixture } from '@memberjunction/testing-integration';
 
@@ -140,13 +140,11 @@ export const TransactionGroupsBatchedChecks: NamedCheck[] = [
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             if (!isSQLServer(ctx)) {
-                console.log('      → skipped: not SQL Server (the batched submit under test is the SQL Server one)');
-                return;
+                SkipCheck('not SQL Server: the batched submit under test is the SQL Server one.');
             }
             const provider = rawProvider(ctx);
             if (typeof provider.ExecuteSQL !== 'function') {
-                console.log('      → skipped: no ExecuteSQL seam on this provider (client transport)');
-                return;
+                SkipCheck('this provider has no ExecuteSQL seam (client transport); run the bundle on the server transport.');
             }
             const execute = provider.ExecuteSQL.bind(provider);
 
@@ -193,7 +191,7 @@ export const TransactionGroupsBatchedChecks: NamedCheck[] = [
         Name: 'TGB2: per-item results survive a real driver — each entity finalizes with its OWN server ID',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            if (!isSQLServer(ctx)) { console.log('      → skipped: not SQL Server'); return; }
+            if (!isSQLServer(ctx)) { SkipCheck('not SQL Server: the batched submit under test is the SQL Server one.'); }
             const f = fx(ctx);
             const tg = await batchedGroup(ctx);
             const a = await queueCreate(ctx, tg, 'map-a');
@@ -231,7 +229,7 @@ export const TransactionGroupsBatchedChecks: NamedCheck[] = [
         Name: 'TGB3: global @p renumbering binds what it claims — per-item values persist per item',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            if (!isSQLServer(ctx)) { console.log('      → skipped: not SQL Server'); return; }
+            if (!isSQLServer(ctx)) { SkipCheck('not SQL Server: the batched submit under test is the SQL Server one.'); }
             const f = fx(ctx);
             // Values chosen to be unmistakable if swapped or repeated, and to include the quote
             // that a naive literal-inlining implementation would break on.
@@ -265,7 +263,7 @@ export const TransactionGroupsBatchedChecks: NamedCheck[] = [
         Name: 'TGB4: a poison item fails the WHOLE batch — Submit false and nothing persists',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            if (!isSQLServer(ctx)) { console.log('      → skipped: not SQL Server'); return; }
+            if (!isSQLServer(ctx)) { SkipCheck('not SQL Server: the batched submit under test is the SQL Server one.'); }
             const f = fx(ctx);
             const poison = await categoryRows(ctx, `ID='${MISSING_PARENT_ID}'`);
             AssertEqual(poison.length, 0, `precondition: no Action Category may exist with ID ${MISSING_PARENT_ID}`);
@@ -294,7 +292,7 @@ export const TransactionGroupsBatchedChecks: NamedCheck[] = [
         Name: 'TGB5: batched and sequential submits are OBSERVABLY identical on the same fixtures',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
-            if (!isSQLServer(ctx)) { console.log('      → skipped: not SQL Server'); return; }
+            if (!isSQLServer(ctx)) { SkipCheck('not SQL Server: the batched submit under test is the SQL Server one.'); }
             const f = fx(ctx);
 
             // Same shape twice: once down the proven sequential path, once batched. The batched

@@ -1,80 +1,183 @@
 import { describe, it, expect } from 'vitest';
-import { DeriveTrustVerdict, TrustEvidenceLine, TrustDots } from '../trust';
+import { TrustVerdicts } from '../trust';
+import { TRAINING_RUN_RESULTS_SCHEMA } from '../training-run-results';
+import type { StoredGateRecord } from '../run-evaluation';
 
-/**
- * The trust translator is the safety centerpiece — these tests pin the grade bands AND the action
- * gate (the rule the UI badges and the agent's publish gate both rely on). The most important
- * assertion is that a coin-flip / unmeasured model is BLOCKED from being acted on (fail-safe).
- */
-describe('deriveTrustVerdict', () => {
-  it('grades a strong classification model Good and unlocks actions', () => {
-    const v = DeriveTrustVerdict({ HoldoutMetrics: JSON.stringify({ AUC: 0.78, Accuracy: 0.8 }), Metrics: null, ProblemType: 'classification' });
-    expect(v.grade).toBe('Good');
-    expect(v.canAct).toBe(true);
-    expect(v.gateReason).toBeNull();
-    expect(v.oneLiner).toBe('Right about 8 out of 10 times.');
-    expect(v.headlineMetric).toEqual({ key: 'AUC', value: 0.78 });
-    expect(v.unknown).toBe(false);
-  });
+const gate: StoredGateRecord = {
+  evaluationProtocolId: '33333333-4444-4555-8666-777777777777',
+  margin: 0,
+  primaryMetric: 'log-loss',
+  holdoutRows: 1205,
+  intervals: {
+    modelName: 'xgb',
+    modelVsDummy: { value: 0.0177, lower: 0.0098, upper: 0.0254 },
+    modelVsBestSimple: { value: 0.006, lower: 0.001, upper: 0.011 },
+    memberVsDummy: { glm: { value: 0.0239, lower: 0.011, upper: 0.036 } },
+    memberScores: { glm: 0.3652 },
+    deliveredMember: null,
+  },
+  guards: { taskKind: 'binary', holdoutClassCounts: { Lapsed: 300, Renewed: 905 }, modelAucInterval: { level: 0.95, lower: 0.6, upper: 0.7 }, minMinorityClassRows: 20 },
+  transcribed: { outcome: 'model', branch: 'a:beats-best-simple', shipped: 'xgb', shippedRole: 'model', note: null },
+  decision: { outcome: 'model', branch: 'a:beats-best-simple', shipped: 'xgb', shippedRole: 'model', note: null },
+  guardRefusal: null,
+  reason: { code: 'model-beats-best-simple', text: 'The model beats the flat guess by 0.0177 [0.0098, 0.0254] …' },
+  incumbentDiff: null,
+  sliceCoverage: { missingSubgroups: [], missingPeriods: [], slicesWithoutInterval: 0 },
+};
 
-  it('grades a coin-flip model Poor and BLOCKS acting (the safety gate)', () => {
-    const v = DeriveTrustVerdict({ HoldoutMetrics: JSON.stringify({ AUC: 0.513, Accuracy: 0.8 }), ProblemType: 'classification' });
-    expect(v.grade).toBe('Poor');
-    expect(v.canAct).toBe(false);
-    expect(v.gateReason).toMatch(/guessing/i);
-    expect(v.oneLiner).toMatch(/guessing/i);
-  });
+const KEEP_GLM: StoredGateRecord['decision'] = { outcome: 'keep-simple-baseline', branch: 'b:keep-simple-baseline', shipped: 'glm', shippedRole: 'simpleBaseline', note: null };
+const NO_SIGNAL: StoredGateRecord['decision'] = { outcome: 'no-signal', branch: 'c:no-signal', shipped: null, shippedRole: null, note: null };
 
-  it('grades Excellent at high AUC and Fair in the 0.6–0.7 band (allowed, with caution)', () => {
-    expect(DeriveTrustVerdict({ HoldoutMetrics: JSON.stringify({ AUC: 0.92 }), ProblemType: 'classification' }).grade).toBe('Excellent');
-    const fair = DeriveTrustVerdict({ HoldoutMetrics: JSON.stringify({ AUC: 0.65, Accuracy: 0.68 }), ProblemType: 'classification' });
-    expect(fair.grade).toBe('Fair');
-    expect(fair.canAct).toBe(true);
-  });
-
-  it('judges regression on R²', () => {
-    expect(DeriveTrustVerdict({ HoldoutMetrics: JSON.stringify({ R2: 0.6 }), ProblemType: 'regression' }).grade).toBe('Good');
-    const poor = DeriveTrustVerdict({ HoldoutMetrics: JSON.stringify({ R2: 0.1 }), ProblemType: 'regression' });
-    expect(poor.grade).toBe('Poor');
-    expect(poor.canAct).toBe(false);
-  });
-
-  it('prefers honest holdout metrics over optimistic training metrics', () => {
-    const v = DeriveTrustVerdict({ HoldoutMetrics: JSON.stringify({ AUC: 0.78 }), Metrics: JSON.stringify({ AUC: 0.99 }), ProblemType: 'classification' });
-    expect(v.grade).toBe('Good'); // 0.78 (holdout), not 0.99 (training)
-    expect(v.headlineMetric?.value).toBe(0.78);
-  });
-
-  it('falls back to Accuracy when AUC is absent', () => {
-    const v = DeriveTrustVerdict({ HoldoutMetrics: JSON.stringify({ Accuracy: 0.82 }), ProblemType: 'classification' });
-    expect(v.headlineMetric?.key).toBe('Accuracy');
-    expect(v.grade).toBe('Good');
-  });
-
-  it('gates OFF an unmeasured model (fail-safe, never fail-open)', () => {
-    const v = DeriveTrustVerdict({ HoldoutMetrics: null, Metrics: null, ProblemType: 'classification' });
-    expect(v.unknown).toBe(true);
-    expect(v.canAct).toBe(false);
-    expect(v.gateReason).toMatch(/locked/i);
-  });
-
-  it('tolerates garbage metric JSON (→ unknown → gated off)', () => {
-    const v = DeriveTrustVerdict({ HoldoutMetrics: 'not json', ProblemType: 'classification' });
-    expect(v.unknown).toBe(true);
-    expect(v.canAct).toBe(false);
-  });
+/** A v2 envelope whose `gate` member is `gate` with `over` applied, and whose request names these candidates' drivers. */
+const record = (over: Partial<StoredGateRecord>, candidates: ReadonlyArray<{ name: string; driverKey: string }> = []): string => JSON.stringify({
+  schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed',
+  unitResolution: { rowsRead: 1205, censoredRowsExcluded: 0, labelKnownRowsExcluded: 0, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 1205, dataCutoff: '2026-07-30' },
+  trainer: null, carve: null,
+  trainerRequest: candidates.length === 0 ? null : {
+    evaluationProtocolId: gate.evaluationProtocolId, seed: 7, threads: 1, timeoutSeconds: 600, maxRetries: 0,
+    candidates: candidates.map((c) => ({ name: c.name, algorithmId: 'A-1', driverKey: c.driverKey, hyperparameters: {} })),
+  },
+  gate: { ...gate, ...over },
 });
 
-describe('trustEvidenceLine / trustDots', () => {
-  it('builds the evidence line with a real count, and never fabricates one', () => {
-    expect(TrustEvidenceLine({ count: 2137, noun: 'members' })).toBe('Checked against 2,137 past members it had never seen.');
-    expect(TrustEvidenceLine()).toBe('Checked against past records it had never seen.');
+/** A model Lineage naming the shipped member and its driver. */
+const lineage = (member: string, driver: string): string => JSON.stringify({ pipelineId: 'P-1', shippedMember: member, shippedDriver: driver });
+
+describe('TrustVerdicts.DeriveTrustVerdict — a rendering of the stored gate decision', () => {
+  it('a run with no stored decision is not evaluated and cannot be acted on (no in-sample fallback)', () => {
+    for (const vr of [null, '', JSON.stringify({ metrics: { accuracy: 0.95 }, holdoutMetrics: { auc: 0.9 } })]) {
+      const v = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: vr, Lineage: null });
+      expect(v.Kind).toBe('not-evaluated');
+      expect(v.Outcome).toBeNull();
+      expect(v.CanAct).toBe(false);
+      expect(v.Comparison).toBeNull();
+      expect(v.HoldoutRows).toBeNull();
+    }
   });
 
-  it('maps grades to filled dots', () => {
-    expect(TrustDots('Excellent')).toBe(5);
-    expect(TrustDots('Good')).toBe(4);
-    expect(TrustDots('Fair')).toBe(3);
-    expect(TrustDots('Poor')).toBe(1);
+  it('a v2 envelope without a gate member (a run trained before the gate was stored) is not evaluated', () => {
+    const v = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: record({}).replace(/,"gate":\{.*\}\}$/, ',"gate":null}'), Lineage: null });
+    expect(v.Kind).toBe('not-evaluated');
+  });
+
+  it('a shipped model says how much it beats the flat guess by, with the interval', () => {
+    const v = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: record({}), Lineage: null });
+    expect(v.Kind).toBe('evaluated');
+    expect(v.Outcome).toBe('model');
+    expect(v.CanAct).toBe(true);
+    expect(v.Headline).toBe('Beats the flat guess by 0.0177 [0.0098, 0.0254] (log-loss).');
+    expect(v.Reason).toBe('The model beats the flat guess by 0.0177 [0.0098, 0.0254] …');
+    expect(v.Comparison).toEqual({ Against: 'the flat guess', Shipped: 'xgb', Value: 0.0177, Lower: 0.0098, Upper: 0.0254, Metric: 'log-loss' });
+    expect(v.HoldoutRows).toBe(1205);
+  });
+
+  it('keep-simple-baseline names the simple baseline and its own interval, and says the trained model did not beat it', () => {
+    const v = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: record({ decision: KEEP_GLM }), Lineage: null });
+    expect(v.Outcome).toBe('keep-simple-baseline');
+    expect(v.CanAct).toBe(true);
+    expect(v.Headline).toBe('A simple baseline (glm) beats the flat guess by 0.0239 [0.0110, 0.0360] (log-loss); the trained model did not beat it.');
+    expect(v.Comparison).toEqual({ Against: 'the flat guess', Shipped: 'glm', Value: 0.0239, Lower: 0.011, Upper: 0.036, Metric: 'log-loss' });
+  });
+
+  it('keep-simple-baseline claims no lost comparison when the trained model is that baseline (a 0 [0, 0] comparison)', () => {
+    const v = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: record({
+      decision: KEEP_GLM,
+      intervals: { ...gate.intervals, modelName: 'logistic_regression', modelVsBestSimple: { value: 0, lower: 0, upper: 0 } },
+    }), Lineage: null });
+    expect(v.Headline).toBe('A simple baseline (glm) beats the flat guess by 0.0239 [0.0110, 0.0360] (log-loss).');
+  });
+
+  it('keep-simple-baseline claims no lost comparison when the delivered member is the shipped baseline', () => {
+    const v = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: record({ decision: KEEP_GLM, intervals: { ...gate.intervals, modelName: 'glm', deliveredMember: 'glm' } }), Lineage: null });
+    expect(v.Headline).toBe('A simple baseline (glm) beats the flat guess by 0.0239 [0.0110, 0.0360] (log-loss).');
+  });
+
+  it('keep-simple-baseline claims no lost comparison when the trained finalist and the kept member share a driver', () => {
+    const v = TrustVerdicts.DeriveTrustVerdict({
+      ValidationResults: record({ decision: KEEP_GLM, intervals: { ...gate.intervals, modelName: 'lr-tuned' } }, [{ name: 'lr-tuned', driverKey: 'logistic_regression' }, { name: 'xgb', driverKey: 'xgboost' }]),
+      Lineage: lineage('glm', 'logistic_regression'),
+    });
+    expect(v.Headline).toBe('A simple baseline (glm) beats the flat guess by 0.0239 [0.0110, 0.0360] (log-loss).');
+  });
+
+  it('a finalist on another driver, a lineage naming another member, or no stored driver keeps the lost-comparison claim', () => {
+    const claim = 'A simple baseline (glm) beats the flat guess by 0.0239 [0.0110, 0.0360] (log-loss); the trained model did not beat it.';
+    const kept = { decision: KEEP_GLM, intervals: { ...gate.intervals, modelName: 'lr-tuned' } };
+    const lr = [{ name: 'lr-tuned', driverKey: 'logistic_regression' }];
+    for (const input of [
+      { ValidationResults: record(kept, [{ name: 'lr-tuned', driverKey: 'xgboost' }]), Lineage: lineage('glm', 'logistic_regression') },
+      { ValidationResults: record(kept, lr), Lineage: lineage('oneFeature', 'logistic_regression') },
+      { ValidationResults: record(kept, lr), Lineage: null },
+      { ValidationResults: record(kept, lr), Lineage: 'not json' },
+      { ValidationResults: record(kept), Lineage: lineage('glm', 'logistic_regression') },
+    ]) {
+      expect(TrustVerdicts.DeriveTrustVerdict(input).Headline).toBe(claim);
+    }
+  });
+
+  it('a 0 [0, 0] comparison against a different member than the shipped one still says the trained model did not beat it', () => {
+    const v = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: record({
+      decision: KEEP_GLM,
+      intervals: {
+        ...gate.intervals,
+        modelVsBestSimple: { value: 0, lower: 0, upper: 0 },
+        memberVsDummy: { ...gate.intervals.memberVsDummy, oneFeature: { value: 0.01, lower: 0.001, upper: 0.02 } },
+        memberScores: { glm: 0.3652, oneFeature: 0.3601 },
+      },
+    }), Lineage: null });
+    expect(v.Headline).toBe('A simple baseline (glm) beats the flat guess by 0.0239 [0.0110, 0.0360] (log-loss); the trained model did not beat it.');
+  });
+
+  it('a kept heuristic rule is named as the existing rule', () => {
+    const v = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: record({
+      decision: { outcome: 'keep-simple-baseline', branch: 'b:keep-simple-baseline', shipped: 'heuristic:renewed last year', shippedRole: 'simpleBaseline', note: null },
+      intervals: { ...gate.intervals, memberVsDummy: { 'heuristic:renewed last year': { value: 0.02, lower: 0.01, upper: 0.03 } } },
+    }), Lineage: null });
+    expect(v.Headline).toBe('A simple baseline (the existing rule "renewed last year") beats the flat guess by 0.0200 [0.0100, 0.0300] (log-loss); the trained model did not beat it.');
+  });
+
+  it('no-signal cannot be acted on and shows the stored reason', () => {
+    const v = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: record({
+      decision: NO_SIGNAL,
+      guardRefusal: { kind: 'minority-class-below-minimum', classLabel: 'Lapsed', rows: 12, minimum: 20 },
+      reason: { code: 'minority-class-below-minimum', text: 'The test set has only 12 rows of "Lapsed"; …' },
+    }), Lineage: null });
+    expect(v.Kind).toBe('evaluated');
+    expect(v.Outcome).toBe('no-signal');
+    expect(v.CanAct).toBe(false);
+    expect(v.Headline).toBe('Not shipped: the test set cannot tell this model from chance.');
+    expect(v.Reason).toContain('12 rows of "Lapsed"');
+    expect(v.Comparison).toBeNull();
+    expect(v.HoldoutRows).toBe(1205);
+  });
+
+  it('no-signal without a guard refusal says nothing beats the flat guess', () => {
+    const v = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: record({ decision: NO_SIGNAL, reason: { code: 'nothing-beats-dummy', text: 'Neither the model nor a simple baseline beats the flat guess.' } }), Lineage: null });
+    expect(v.CanAct).toBe(false);
+    expect(v.Headline).toBe('No signal: nothing beats the flat guess.');
+    expect(v.Reason).toBe('Neither the model nor a simple baseline beats the flat guess.');
+  });
+
+  it('a kept member without a stored interval is not evaluated (no invented number)', () => {
+    const v = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: record({ decision: KEEP_GLM, intervals: { ...gate.intervals, memberVsDummy: {} } }), Lineage: null });
+    expect(v.Kind).toBe('not-evaluated');
+    expect(v.CanAct).toBe(false);
+  });
+
+  it('never grades with a band or an accuracy sentence', () => {
+    for (const vr of [record({}), record({ decision: KEEP_GLM }), record({ decision: NO_SIGNAL }), null]) {
+      const v = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: vr, Lineage: null });
+      expect(`${v.Headline} ${v.Reason}`).not.toMatch(/Excellent|Good|Fair|Poor|out of 10|Explains about|Accounts for about/);
+    }
+  });
+
+  it('titles and evidence', () => {
+    expect(TrustVerdicts.OutcomeTitle(TrustVerdicts.DeriveTrustVerdict({ ValidationResults: record({}), Lineage: null }))).toBe('Ships — the model beats the flat guess');
+    expect(TrustVerdicts.OutcomeTitle(TrustVerdicts.DeriveTrustVerdict({ ValidationResults: record({ decision: KEEP_GLM }), Lineage: null }))).toBe('Ships — a simple baseline');
+    expect(TrustVerdicts.OutcomeTitle(TrustVerdicts.DeriveTrustVerdict({ ValidationResults: record({ decision: NO_SIGNAL }), Lineage: null }))).toBe('No signal — not usable');
+    expect(TrustVerdicts.OutcomeTitle(TrustVerdicts.DeriveTrustVerdict({ ValidationResults: null, Lineage: null }))).toBe('Not evaluated yet');
+    expect(TrustVerdicts.TrustEvidenceLine({ count: 1205, noun: 'members' })).toBe('Checked against 1,205 past members it had never seen.');
+    expect(TrustVerdicts.TrustEvidenceLine({ count: null, noun: 'records' })).toBe('Checked against past records it had never seen.');
+    expect(TrustVerdicts.TrustEvidenceLine()).toBe('Checked against past records it had never seen.');
   });
 });

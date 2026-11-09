@@ -23,6 +23,8 @@ LoadRNRealtimeDrivers();
  */
 export class MobileVoiceSession extends RealtimeSessionRuntime {
     constructor() {
+        // A host of its own: the audio adapter counts each host as one open call, so a host shared
+        // between sessions would let one session's release reset the audio session during another's.
         super(new RNRealtimeMediaHost());
     }
 

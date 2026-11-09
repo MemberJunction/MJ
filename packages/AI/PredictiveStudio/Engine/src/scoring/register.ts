@@ -32,7 +32,7 @@ import {
   ML_INFERENCE_WORK_TYPE,
   ML_INFERENCE_WORK_TYPE_ALIAS,
 } from './ml-model-inference-processor';
-import type { MLInferenceDeps, MLModelInferenceProcessorOptions } from './types';
+import type { IModelAutoTrainer, MLAutoTrainConfig, MLInferenceDeps, MLModelInferenceProcessorOptions } from './types';
 import type { DatedSourceSpec } from '../feature-assembly';
 
 // Register the alias key too, so both `'ML Model'` (the human-readable work-type)
@@ -104,12 +104,18 @@ export function resolveMLInferenceProcessor(
  * the factory), NOT in this config, so the config stays declarative + storable on the Record Process row.
  */
 export interface MLScoringConfiguration {
-  /** The `MJ: ML Models` id this Record Process scores with. */
-  modelId: string;
+  /**
+   * The `MJ: ML Models` id this Record Process scores with. May be omitted only when
+   * {@link autoTrain} is declared — the first run then trains the pipeline and writes
+   * the resulting model id back here.
+   */
+  modelId?: string;
   /** Primary-key field on the target entity (defaults to `ID`). */
   primaryKeyField?: string;
   /** Optional dated sources supplying point-in-time ("as-of") features. */
   datedSources?: DatedSourceSpec[];
+  /** Opt-in train-if-untrained (see {@link MLAutoTrainConfig}). Off unless declared. */
+  autoTrain?: MLAutoTrainConfig;
 }
 
 /**
@@ -125,19 +131,22 @@ export interface MLScoringConfiguration {
  *
  * @param deps the injected runtime seams the ML scorer needs (model loader, artifact loader, sidecar)
  */
-export function RegisterMLScoringProcessor(deps: MLInferenceDeps): void {
+export function RegisterMLScoringProcessor(deps: MLInferenceDeps, autoTrainer?: IModelAutoTrainer): void {
   const factory = (context: RecordProcessorBuildContext): IRecordProcessor => {
     const config = context.Configuration ? SafeJSONParse<MLScoringConfiguration>(context.Configuration) : undefined;
-    if (!config || !config.modelId) {
+    const autoTrain = config?.autoTrain?.pipelineId ? config.autoTrain : undefined;
+    if (!config || (!config.modelId && !autoTrain)) {
       throw new Error(
-        `Record Process '${context.RecordProcessName ?? context.RecordProcessID ?? ''}': WorkType=${context.WorkType} requires a Configuration with a 'modelId'`,
+        `Record Process '${context.RecordProcessName ?? context.RecordProcessID ?? ''}': WorkType=${context.WorkType} requires a Configuration with a 'modelId' (or an 'autoTrain.pipelineId')`,
       );
     }
     const options: MLModelInferenceProcessorOptions = {
-      modelId: config.modelId,
+      modelId: config.modelId ?? '',
       deps,
       primaryKeyField: config.primaryKeyField,
       datedSources: config.datedSources,
+      autoTrain,
+      autoTrainer: autoTrain ? autoTrainer : undefined,
     };
     // Resolve through the ClassFactory so a higher-priority subclass registration (if any) wins.
     return ResolveMLInferenceProcessor(context.WorkType, options) ?? new MLModelInferenceProcessor(options);
@@ -150,8 +159,8 @@ export function RegisterMLScoringProcessor(deps: MLInferenceDeps): void {
 }
 
 /** @deprecated Use {@link RegisterMLScoringProcessor}. */
-export function registerMLScoringProcessor(deps: MLInferenceDeps): void {
-  return RegisterMLScoringProcessor(deps);
+export function registerMLScoringProcessor(deps: MLInferenceDeps, autoTrainer?: IModelAutoTrainer): void {
+  return RegisterMLScoringProcessor(deps, autoTrainer);
 }
 
 /**

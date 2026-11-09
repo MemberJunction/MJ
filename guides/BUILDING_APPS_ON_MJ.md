@@ -239,7 +239,7 @@ flowchart LR
 | 2. **Generate the stack** | Run CodeGen to produce entities, views, sprocs, API, forms | [CodeGenLib README](../packages/CodeGenLib/README.md) |
 | 3. **Work with data in code** | Use typed `BaseEntity` classes + `RunView` | [MJCore readme](../packages/MJCore/readme.md) · [MJCoreEntities readme](../packages/MJCoreEntities/readme.md) |
 | 4. **Expose & consume the API** | GraphQL server + typed client provider | [MJServer README](../packages/MJServer/README.md) · [GraphQLDataProvider README](../packages/GraphQLDataProvider/README.md) |
-| 5. **Build the UI** | Explorer shell, generated + custom forms, dashboards | [Angular README](../packages/Angular/README.md) · [Dashboard Best Practices](DASHBOARD_BEST_PRACTICES.md) |
+| 5. **Build the UI** | Explorer shell, generated + custom forms, dashboards | [Building UI on MJ](BUILDING_UI_ON_MJ.md) · [Angular README](../packages/Angular/README.md) · [Dashboard Best Practices](DASHBOARD_BEST_PRACTICES.md) |
 | 6. **Add business logic** | Actions for workflows, validation, integrations | [Actions README](../packages/Actions/README.md) |
 | 7. **Layer in AI** | Agents, prompts, RAG over your now-unified data | [AI README](../packages/AI/README.md) · [Agents README](../packages/AI/Agents/README.md) |
 | 8. **Manage app metadata as code** | Version your config/seed data declaratively | [MetadataSync README](../packages/MetadataSync/README.md) · [metadata/CLAUDE.md](../metadata/CLAUDE.md) |
@@ -351,7 +351,7 @@ Read these before going deep:
 - **[MJCore readme](../packages/MJCore/readme.md)** — The metadata engine, `Metadata`, `BaseEntity`, `RunView`/`RunViews`, providers, `TransactionGroup`, and the core utilities every tier uses.
 - **[MJCoreEntities readme](../packages/MJCoreEntities/readme.md)** — The generated entity subclasses for MJ's own metadata schema, and the pattern your app's entities follow.
 - **[BaseEntity Server-Side Patterns](BASE_ENTITY_SERVER_PATTERNS.md)** — Persisted embeddings, cross-record invariants via `ValidateAsync`, FK cleanup before delete.
-- **[RunQuery Pagination](../packages/MJCore/docs/runquery-pagination.md)** & **[Keyset Pagination Guide](KEYSET_PAGINATION_GUIDE.md)** — Efficient paging for grids and bulk jobs.
+- **[RunQuery Pagination](../packages/MJCore/docs/runquery-pagination.md)** & **[Keyset Pagination Guide](KEYSET_PAGINATION_GUIDE.md)** — Efficient paging for grids and bulk jobs. A query has no default row limit: without `MaxRows` it returns every row it matches, and `MaxRows` limits the rows returned, not the work the database does.
 - **[Caching & Real-Time Sync Guide](CACHING_AND_PUBSUB_GUIDE.md)** — The multi-tier cache, RunView cache behavior, and event-driven invalidation that keeps your UI live.
 
 ### 4. Write once, run on every tier — the isomorphic core in practice
@@ -451,6 +451,7 @@ MJ ships **MJExplorer** — a complete Angular application — as the **default 
 
 So the UI story is: a great default app (Explorer) + reusable Angular components + a React bridge + a framework-agnostic TypeScript core. Because every surface speaks the same object model, components bind directly to typed entities.
 
+- **[Building UI on MemberJunction](BUILDING_UI_ON_MJ.md)** ([illustrated edition](https://docs.memberjunction.org/v6/building-ui/)) — Start here for UI: the layers, how to choose between Explorer, your own Angular app and an Angular Element, and why.
 - **[Angular README](../packages/Angular/README.md)** — Overview of the 60+ Angular packages: the Explorer app, the generic component library, bootstrap.
 - **[Generic Angular component library](../packages/Angular/Generic/README.md)** — Reusable components usable in any Angular app (grids, viewers, dialogs, chat, filter builder, dashboards, and more).
 - **[React runtime](../packages/React/README.md)** — The React bridge for building MJ UIs in React.
@@ -588,13 +589,12 @@ MemberJunction's full source code is public on GitHub (Business Source License 1
 
 ### Build your application on MJ
 
-You're encouraged to build on MJ, whether your app is **commercial or community-driven**. The platform gives you the data layer, API, security, UI, Actions, and AI; you bring the domain. Several **apps in the MemberJunction org** show this in practice and are worth studying as references (and reusing):
+You're encouraged to build on MJ, whether your app is **commercial or community-driven**. The platform gives you the data layer, API, security, UI, Actions, and AI; you bring the domain. The **BizApps** in the MemberJunction org show this in practice and are worth studying as references (and reusing): accounting, orders, sales, contracts, tasks, forms, committees and more, each an MJ Open App that other apps build on. Start with the foundations:
 
 - **[BizApps Common](https://github.com/MemberJunction/bizapps-common)** — a production-ready, schema-complete, fully-typed set of **foundational business entities** (people, organizations, addresses, relationships) packaged as an MJ Open App, so applications share these core entities instead of reinventing them.
 - **[BizApps Tasks](https://github.com/MemberJunction/bizapps-tasks)** — a complete, reusable **task-management system** as an MJ Open App: multi-person assignment, sub-task hierarchies, dependency tracking, and templating that any MJ app can integrate without building its own.
-- **[Committees](https://github.com/MemberJunction/committees)** — a **governance platform** built on MJ that unifies committee structure, membership, meetings, motions and voting, action tracking, and document linking.
 
-These are real, working examples of the patterns in this guide — clone them, read how they're structured, and build on or alongside them.
+**[MemberJunction BizApps](BIZAPPS_GUIDE.md)** lists every one of them, generated from each app's `mj-app.json`, with a map of how they build on each other. These are real, working examples of the patterns in this guide — clone them, read how they're structured, and build on or alongside them.
 
 ### Help shape the platform
 
@@ -613,6 +613,7 @@ And of course, because MJ's source is fully public, you can always **read, fork,
 These apply no matter which layer you're working in. The **[guides/ index](README.md)** is the full list; the essentials:
 
 - **[UUID Comparison Guide](UUID_COMPARISON_GUIDE.md)** — Always use `UUIDsEqual()`; SQL Server and PostgreSQL case UUIDs differently.
+- **[Alternate Base Views Guide](ALTERNATE_BASE_VIEWS_GUIDE.md)** — Expose multiple governed SQL views (`Active`, `OpenBalance`, `OpenPipeline`, `DueNow`) on an entity with 100% column parity across `RunView`, `BaseEngine`, User Views, Stored Queries, and AI Agents.
 - **[Caching & Real-Time Synchronization Guide](CACHING_AND_PUBSUB_GUIDE.md)** — Server cache + reactive `BaseEngine` patterns for live UIs.
 - **[BaseEntity Server-Side Patterns](BASE_ENTITY_SERVER_PATTERNS.md)** — The right way to extend entities on the server.
 - The foundational **[CLAUDE.md](../CLAUDE.md)** at the repo root — coding standards, type-safety rules, naming conventions, and the architectural guardrails that keep an MJ app maintainable.

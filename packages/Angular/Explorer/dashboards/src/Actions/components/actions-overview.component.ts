@@ -1,13 +1,14 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CompositeKey, RunView, LogError } from '@memberjunction/core';
 import { MJActionEntity, MJActionCategoryEntity, MJActionExecutionLogEntity, ResourceData } from '@memberjunction/core-entities';
-import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
+import { GroupByUUID, IndexByUUID, RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
 import { ValidateEnumParam, BoundNameList } from '../../shared/agent-tool-validation';
 import { FindByIdOrError, FindByIdOrNameOrError } from '../agent-tool-helpers';
+import { ActionSuccessRate, IsActionResultSuccess } from '../action-result-code';
 interface ActionMetrics {
   totalActions: number;
   activeActions: number;
@@ -422,14 +423,17 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
     };
   }
 
+  /**
+   * Successes as a share of SETTLED runs, through the shared classifier.
+   *
+   * This was the *believable* number on the Actions surfaces — it at least lowercased — but it
+   * was still its own private vocabulary (`success|ok|completed|200`), and it divided by every
+   * row including still-running ones. Both halves now come from `action-result-code.ts`, so
+   * this rate and the Execution Monitor's can no longer disagree.
+   */
   private calculateSuccessRate(executions: MJActionExecutionLogEntity[]): number {
     if (!executions || executions.length === 0) return 0;
-    // Check for success based on result code - Actions may use different success codes
-    const successful = executions.filter(e => {
-      const code = e.ResultCode?.toLowerCase();
-      return code === 'success' || code === 'ok' || code === 'completed' || code === '200';
-    }).length;
-    return Math.round((successful / executions.length) * 100);
+    return ActionSuccessRate(executions.map(e => e.ResultCode));
   }
 
   private calculateCategoryStats(
@@ -437,11 +441,13 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
     categories: MJActionCategoryEntity[], 
     executions: MJActionExecutionLogEntity[]
   ): void {
+    // Group once: scanning every action and every execution per category grew with all three lists.
+    const actionsByCategory = GroupByUUID(actions, a => a.CategoryID);
+    const actionsByID = IndexByUUID(actions);
+    const executionsByCategory = GroupByUUID(executions, e => actionsByID.Get(e.ActionID)?.CategoryID);
     this.CategoryStats = categories.map(category => {
-      const categoryActions = actions.filter(a => UUIDsEqual(a.CategoryID, category.ID));
-      const categoryExecutions = executions.filter(e => 
-        categoryActions.some(a => UUIDsEqual(a.ID, e.ActionID))
-      );
+      const categoryActions = actionsByCategory.Get(category.ID) ?? [];
+      const categoryExecutions = executionsByCategory.Get(category.ID) ?? [];
       
       return {
         categoryId: category.ID,
@@ -635,8 +641,7 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
   }
 
   public IsExecutionSuccess(execution: MJActionExecutionLogEntity): boolean {
-    const code = execution.ResultCode?.toLowerCase();
-    return code === 'success' || code === 'ok' || code === 'completed' || code === '200';
+    return IsActionResultSuccess(execution.ResultCode);
   }
 
   /** @deprecated Use {@link IsExecutionSuccess}. */

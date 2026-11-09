@@ -1,0 +1,56 @@
+[
+  {
+    "fields": {
+      "Name": "Integration Test Authorship Owner",
+      "FirstName": "Integration Test",
+      "LastName": "Authorship Owner",
+      "Email": "it-authorship-owner@integration.test",
+      "Type": "User",
+      "IsActive": true,
+      "LinkedRecordType": "None"
+    },
+    "relatedEntities": {
+      "MJ: User Roles": [
+        {
+          "fields": {
+            "UserID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Integration Test: Conversation Authorship"
+          },
+          "primaryKey": {
+            "ID": "8FC091C2-63C2-4827-B004-6BE3A635ACB4"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "867D84B9-5D6D-4E4D-B09F-F2E4711B352A"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Integration Test Authorship Grantee",
+      "FirstName": "Integration Test",
+      "LastName": "Authorship Grantee",
+      "Email": "it-authorship-grantee@integration.test",
+      "Type": "User",
+      "IsActive": true,
+      "LinkedRecordType": "None"
+    },
+    "relatedEntities": {
+      "MJ: User Roles": [
+        {
+          "fields": {
+            "UserID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Integration Test: Conversation Authorship"
+          },
+          "primaryKey": {
+            "ID": "D4B5F6F6-A611-4ADE-8E41-A7991407F829"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "3ED10FC5-7381-4C9A-A877-15D5DB76FC43"
+    }
+  }
+]

@@ -1,19 +1,33 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { IsColocatedVectorHost } from '@memberjunction/ai-vectordb';
+import type { IMetadataProvider } from '@memberjunction/core';
 
-const { mockRunView, mockRunViews, mockEntities, mockModels, mockVectorDBs } = vi.hoisted(() => {
+const { mockRunView, mockRunViews, mockEntities, mockModels, mockVectorDBs, mockProvider } = vi.hoisted(() => {
   const mockRunView = vi.fn();
   const mockRunViews = vi.fn();
   const mockEntities = [
     { ID: 'entity-1', Name: 'MJTestEntity', FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true } },
+    { ID: 'entity-sized-pk', Name: 'MJSizedKey', FirstPrimaryKey: { Name: 'Code', Type: 'NVarChar(255)' }, PrimaryKeys: [{ Name: 'Code' }] },
+    { ID: 'entity-scaled-pk', Name: 'MJScaledKey', FirstPrimaryKey: { Name: 'Amount', Type: ' decimal (10, 2) ' }, PrimaryKeys: [{ Name: 'Amount' }] },
+    { ID: 'entity-xml-pk', Name: 'MJXmlKey', FirstPrimaryKey: { Name: 'Doc', Type: 'xml' }, PrimaryKeys: [{ Name: 'Doc' }] },
+    { ID: 'entity-odd-pk', Name: 'MJOddKey', FirstPrimaryKey: { Name: 'Odd', Type: 'int(1)x)' }, PrimaryKeys: [{ Name: 'Odd' }] },
   ];
-  const mockModels = [
+  const mockModels: Array<{ ID: string; AIModelType: string; DriverClass: string; Name?: string; PowerRank?: number | null; IsActive?: boolean }> = [
     { ID: 'model-1', AIModelType: 'Embeddings', DriverClass: 'TestDriver' },
     { ID: 'model-2', AIModelType: 'LLM', DriverClass: 'TestLLM' },
   ];
   const mockVectorDBs = [
     { ID: 'vdb-1', ClassKey: 'TestVectorDB' },
   ];
-  return { mockRunView, mockRunViews, mockEntities, mockModels, mockVectorDBs };
+  const mockProvider = {
+    Entities: mockEntities,
+    CurrentUser: { ID: 'user-1', Email: 'test@test.com' },
+    EntityByID: (id: string) => mockEntities.find(e => e.ID === id),
+    ColocatedDialect: 'sqlserver',
+    ColocatedSchema: '__mj',
+    RunColocatedSQL: vi.fn(),
+  };
+  return { mockRunView, mockRunViews, mockEntities, mockModels, mockVectorDBs, mockProvider };
 });
 
 vi.mock('@memberjunction/core', () => {
@@ -21,10 +35,12 @@ vi.mock('@memberjunction/core', () => {
     Entities = mockEntities;
     CurrentUser = { ID: 'user-1', Email: 'test@test.com' };
     EntityByID(id: string) { return mockEntities.find(e => e.ID === id); }
+    static get Provider() { return mockProvider; }
   }
   class MockRunViewClass {
     RunView = mockRunView;
     RunViews = mockRunViews;
+    static FromMetadataProvider = vi.fn().mockImplementation(() => new MockRunViewClass());
   }
   return {
     Metadata: MockMetadata,
@@ -61,6 +77,29 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
 
 import { VectorBase } from '../models/VectorBase';
 
+/**
+ * Swap the engine's model list for the duration of `fn`, then restore it. The list is a shared
+ * hoisted array, so restoring matters: a leaked mutation silently changes later cases.
+ */
+function withModels<T>(rows: Array<{ ID: string; AIModelType: string; DriverClass: string; Name?: string; PowerRank?: number | null; IsActive?: boolean }>, fn: () => T): T {
+  const original = [...mockModels];
+  mockModels.length = 0;
+  rows.forEach(r => mockModels.push(r));
+  try {
+    return fn();
+  } finally {
+    mockModels.length = 0;
+    original.forEach(m => mockModels.push(m));
+  }
+}
+
+/** Exposes the protected keyset check. */
+class KeysetProbe extends VectorBase {
+  public CanSeek(entityID: string): boolean {
+    return this.CanUseKeysetPagination(entityID);
+  }
+}
+
 describe('VectorBase', () => {
   let vectorBase: VectorBase;
 
@@ -87,6 +126,34 @@ describe('VectorBase', () => {
       const newUser = { ID: 'user-2', Email: 'new@test.com' } as never;
       vectorBase.CurrentUser = newUser;
       expect(vectorBase.CurrentUser).toBe(newUser);
+    });
+  });
+
+  describe('Provider and colocated host wiring', () => {
+    it('should fall back to Metadata.Provider when no provider is supplied', () => {
+      expect(vectorBase.Provider).toBe(mockProvider);
+      expect(vectorBase.Metadata).toBe(mockProvider);
+    });
+
+    it('should satisfy IsColocatedVectorHost via Provider fallback to colocated host', () => {
+      expect(IsColocatedVectorHost(vectorBase.Provider)).toBe(true);
+      // Contrast with _metadata which is the helper wrapper and does NOT implement IColocatedVectorHost
+      expect(IsColocatedVectorHost(vectorBase._metadata)).toBe(false);
+    });
+
+    it('should use explicit provider when supplied in constructor', () => {
+      const explicitProvider = {
+        Entities: mockEntities,
+        CurrentUser: { ID: 'user-custom', Email: 'custom@test.com' },
+        EntityByID: (id: string) => mockEntities.find(e => e.ID === id),
+        ColocatedDialect: 'postgresql',
+        ColocatedSchema: 'public',
+        RunColocatedSQL: vi.fn(),
+      } as IMetadataProvider;
+      const customBase = new VectorBase(explicitProvider);
+      expect(customBase.Provider).toBe(explicitProvider);
+      expect(customBase.Metadata).toBe(explicitProvider);
+      expect(IsColocatedVectorHost(customBase.Provider)).toBe(true);
     });
   });
 
@@ -131,16 +198,86 @@ describe('VectorBase', () => {
     });
 
     it('should throw when no embeddings model found', () => {
-      const origModels = [...mockModels];
-      mockModels.length = 0;
-      mockModels.push({ ID: 'model-x', AIModelType: 'LLM', DriverClass: 'X' });
+      // Message deliberately changed from the old "No AI Model Entity found": that told you
+      // neither which kind of model was missing nor what to do about it.
+      withModels([{ ID: 'model-x', AIModelType: 'LLM', DriverClass: 'X' }], () => {
+        expect(() =>
+          (vectorBase as unknown as { GetAIModel: (id?: string) => unknown }).GetAIModel()
+        ).toThrow(/No AI Model of type "Embeddings" is registered/);
+      });
+    });
 
-      expect(() =>
-        (vectorBase as unknown as { GetAIModel: (id?: string) => unknown }).GetAIModel()
-      ).toThrow('No AI Model Entity found');
+    // ---------------------------------------------------------------------------------------
+    // The no-id branch used to be `Models.find(m => m.AIModelType === "Embeddings")` over an
+    // array `BaseAIEngine.Config` loads with no OrderBy and no IsActive filter. So the answer
+    // was whatever the view happened to return first: a different model on a different
+    // database, or after an unrelated insert, and possibly a deactivated one. Since the vector
+    // width is a property of the model, an arbitrary answer means an index can end up holding
+    // vectors of a width it never agreed to — and nothing in the failure names the culprit.
+    // ---------------------------------------------------------------------------------------
 
-      mockModels.length = 0;
-      origModels.forEach(m => mockModels.push(m));
+    it('picks the same model regardless of the order the engine loaded them in', () => {
+      const forward = [
+        { ID: 'emb-a', AIModelType: 'Embeddings', DriverClass: 'D', Name: 'Alpha', PowerRank: 5, IsActive: true },
+        { ID: 'emb-b', AIModelType: 'Embeddings', DriverClass: 'D', Name: 'Beta', PowerRank: 9, IsActive: true },
+        { ID: 'emb-c', AIModelType: 'Embeddings', DriverClass: 'D', Name: 'Gamma', PowerRank: 9, IsActive: true },
+      ];
+
+      const pickFor = (rows: typeof forward) =>
+        withModels(rows, () =>
+          (vectorBase as unknown as { GetAIModel: (id?: string) => { ID: string } }).GetAIModel().ID
+        );
+
+      expect(pickFor(forward)).toBe('emb-b');              // highest rank, then name
+      expect(pickFor([...forward].reverse())).toBe('emb-b');
+      expect(pickFor([forward[2], forward[0], forward[1]])).toBe('emb-b');
+    });
+
+    it('prefers an active embeddings model over an inactive one that sorts first', () => {
+      const id = withModels([
+        { ID: 'emb-off', AIModelType: 'Embeddings', DriverClass: 'D', Name: 'Aardvark', PowerRank: 100, IsActive: false },
+        { ID: 'emb-on', AIModelType: 'Embeddings', DriverClass: 'D', Name: 'Zebra', PowerRank: 1, IsActive: true },
+      ], () => (vectorBase as unknown as { GetAIModel: (id?: string) => { ID: string } }).GetAIModel().ID);
+      expect(id).toBe('emb-on');
+    });
+
+    it('still answers when every embeddings model is inactive', () => {
+      // A soft misconfiguration must not become a hard stop on a path that has always tolerated it.
+      const id = withModels([
+        { ID: 'emb-off', AIModelType: 'Embeddings', DriverClass: 'D', Name: 'Only', PowerRank: 1, IsActive: false },
+      ], () => (vectorBase as unknown as { GetAIModel: (id?: string) => { ID: string } }).GetAIModel().ID);
+      expect(id).toBe('emb-off');
+    });
+
+    it('refuses a named model that is not an embeddings model, rather than substituting one', () => {
+      // A viable substitute is deliberately present: silently swapping in some other embeddings
+      // model is exactly how an index ends up holding vectors of a width nobody chose. The id
+      // has to appear in the message, or the row that points at it cannot be found.
+      withModels([
+        { ID: 'emb-real', AIModelType: 'Embeddings', DriverClass: 'D', Name: 'Real', PowerRank: 9, IsActive: true },
+        { ID: 'model-2', AIModelType: 'LLM', DriverClass: 'TestLLM' },
+      ], () => {
+        expect(() =>
+          (vectorBase as unknown as { GetAIModel: (id?: string) => unknown }).GetAIModel('model-2')
+        ).toThrow(/model-2/);
+      });
+    });
+
+    it('refuses an id that matches nothing at all, even when other embeddings models exist', () => {
+      withModels([
+        { ID: 'emb-real', AIModelType: 'Embeddings', DriverClass: 'D', Name: 'Real', PowerRank: 9, IsActive: true },
+      ], () => {
+        expect(() =>
+          (vectorBase as unknown as { GetAIModel: (id?: string) => unknown }).GetAIModel('DEAD0000-0000-0000-0000-000000000000')
+        ).toThrow(/DEAD0000-0000-0000-0000-000000000000/);
+      });
+    });
+
+    it('recognizes the type however it is cased or padded', () => {
+      const id = withModels([
+        { ID: 'emb-lc', AIModelType: ' embeddings ', DriverClass: 'D', Name: 'Lower', PowerRank: 1, IsActive: true },
+      ], () => (vectorBase as unknown as { GetAIModel: (id?: string) => { ID: string } }).GetAIModel().ID);
+      expect(id).toBe('emb-lc');
     });
   });
 
@@ -282,6 +419,22 @@ describe('VectorBase', () => {
           ResultType: 'simple',
         })
       ).rejects.toThrow('Entity with ID non-existent not found');
+    });
+  });
+
+  describe('CanUseKeysetPagination (protected)', () => {
+    it('drops a size spec from the key type before the allowlist check', () => {
+      const probe = new KeysetProbe();
+      expect(probe.CanSeek('entity-sized-pk')).toBe(true);
+      expect(probe.CanSeek('entity-scaled-pk')).toBe(true);
+    });
+
+    it('rejects a key type that is not orderable', () => {
+      expect(new KeysetProbe().CanSeek('entity-xml-pk')).toBe(false);
+    });
+
+    it('keeps a type whose trailing parenthesis does not close a size spec', () => {
+      expect(new KeysetProbe().CanSeek('entity-odd-pk')).toBe(false);
     });
   });
 });

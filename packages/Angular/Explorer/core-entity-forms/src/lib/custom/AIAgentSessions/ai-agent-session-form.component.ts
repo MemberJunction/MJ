@@ -6,6 +6,8 @@ import { BaseFormComponent, CUSTOM_LAYOUT_TOOLBAR_CONFIG } from '@memberjunction
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { MJAIAgentSessionFormComponent } from '../../generated/Entities/MJAIAgentSession/mjaiagentsession.form.component';
+import { JoinHeroSummary, CountLabel } from '../../shared/phone-hero';
+import { SectionPickerItem } from '@memberjunction/ng-ui-components';
 
 /**
  * Authoritative shape persisted in `AIAgentSession.Config` for a client-direct
@@ -113,9 +115,29 @@ export interface SessionChannelDisplayRow {
     standalone: false,
     selector: 'mj-ai-agent-session-form',
     templateUrl: './ai-agent-session-form.component.html',
-    styleUrls: ['./ai-agent-session-form.component.css']
+    styleUrls: ['./ai-agent-session-form.component.css', '../../shared/phone-hero.css']
 })
 export class MJAIAgentSessionFormComponentExtended extends MJAIAgentSessionFormComponent implements OnInit {
+
+    /** Phone hero (6A): whether the summary line is expanded to show the rest of the hero. */
+    public HeroDetailsOpen = false;
+
+    /** Toggles the phone hero between its compact identity row and the full hero. */
+    public ToggleHeroDetails(): void {
+        this.HeroDetailsOpen = !this.HeroDetailsOpen;
+        this.cdr.markForCheck();
+    }
+
+    /** The phone hero's one-line summary of what the compact hero leaves out. */
+    public get HeroSummary(): string {
+        const agent = this.TargetAgentName ? `${this.record.Agent} → ${this.TargetAgentName}` : this.record.Agent;
+        return JoinHeroSummary([
+            agent,
+            this.SessionDuration,
+            CountLabel(this.Channels.length, 'channel'),
+            this.DelegatedRunCount > 0 ? CountLabel(this.DelegatedRunCount, 'delegated run') : null,
+        ]);
+    }
     public record!: MJAIAgentSessionEntity;
 
     /** Hide the generated-section controls — this form has a fully custom layout. */
@@ -123,6 +145,9 @@ export class MJAIAgentSessionFormComponentExtended extends MJAIAgentSessionFormC
 
     /** Sessions read best full-width, like the agent-run form. */
     public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
+
+    /** Custom-layout form owns its entire body; suppress auto-filled relationship sections. */
+    public override get OwnsEntireFormBody(): boolean { return true; }
 
     // UI state
     public ActiveTab: 'runs' | 'channels' | 'transcript' | 'details' = 'runs';
@@ -359,6 +384,25 @@ export class MJAIAgentSessionFormComponentExtended extends MJAIAgentSessionFormC
     public ChangeTab(tab: 'runs' | 'channels' | 'transcript' | 'details'): void {
         this.ActiveTab = tab;
     }
+
+    /** The tab strip as `mj-section-picker` items: strip order, a count only where the tab has rows. */
+    public get SectionPickerItems(): SectionPickerItem[] {
+        const count = (n: number): number | null => (n > 0 ? n : null);
+        return [
+            { Key: 'runs', Title: 'Runs', Icon: 'fas fa-diagram-project', Count: count(this.RunTree.length) },
+            { Key: 'channels', Title: 'Channels', Icon: 'fas fa-plug', Count: count(this.Channels.length) },
+            { Key: 'transcript', Title: 'Transcript', Icon: 'fas fa-comments', Count: count(this.Transcript.length) },
+            { Key: 'details', Title: 'Details', Icon: 'fas fa-info-circle', Count: null },
+        ];
+    }
+
+    /** A pick from the phone section sheet; goes through ChangeTab. An unknown key is ignored. */
+    public OnSectionPicked(key: string): void {
+        const tab = MJAIAgentSessionFormComponentExtended.phoneTabs.find((t) => t === key);
+        if (tab) this.ChangeTab(tab);
+    }
+
+    private static readonly phoneTabs: ReadonlyArray<MJAIAgentSessionFormComponentExtended['ActiveTab']> = ['runs', 'channels', 'transcript', 'details'];
 
     public GetStatusIcon(status: string | null): string {
         switch (status) {

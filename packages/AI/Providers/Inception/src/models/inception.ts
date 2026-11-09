@@ -135,13 +135,12 @@ export class InceptionLLM extends OpenAILLM {
 
         // This override does not call super, so it must forward the cancellation token itself —
         // otherwise an abort/timeout would abandon the promise while the socket kept streaming.
-        // Helpers are inherited from OpenAILLM; the shapes are identical.
         let result: OpenAI.Chat.Completions.ChatCompletion;
         try {
             result = await this.OpenAI.chat.completions.create(openAIParams, this.buildRequestOptions(params));
         } catch (error) {
-            if (this.isCancellationError(error, params.cancellationToken)) {
-                return this.buildCancelledChatResult(error, startTime);
+            if (this.IsCancellationError(error, params.cancellationToken)) {
+                return this.BuildCancelledChatResult(startTime, { error, signal: params.cancellationToken });
             }
             throw error;
         }
@@ -232,11 +231,8 @@ export class InceptionLLM extends OpenAILLM {
 
         this.applyInceptionExtras(openAIParams as unknown as Record<string, unknown>, params);
 
-        // Stash the token for the inherited finalizeStreamingResponse, which uses it to tell "the
-        // stream ended" from "the stream was aborted" — without this, an aborted stream would
-        // finalize as a truncated SUCCESS. Set after BaseLLM's resetStreamingState() has run.
-        this.activeStreamCancellationToken = params.cancellationToken;
-
+        // Forward the cancellation token so an abort tears down the SSE socket; BaseLLM reports
+        // the aborted stream as cancelled.
         return this.OpenAI.chat.completions.create(openAIParams, this.buildRequestOptions(params));
     }
 }

@@ -71,6 +71,70 @@ export interface BridgeMediaFrame {
      * consumer may stamp arrival time.
      */
     TimestampMs?: number;
+
+    /**
+     * The payload's format, for example `'image/jpeg'` for a `video-in` frame. Audio frames may
+     * omit it (they are in the session's declared input format); a video frame without one cannot
+     * be sent to a model that needs an image type, and the realtime driver drops it.
+     */
+    MimeType?: string;
+
+    /**
+     * The video's width in pixels, where the producer knows it: an image's own width (after any rotation and scaling),
+     * or for a fragmented MP4 stream, the width its init segment gives the video track, on the init segment and on each
+     * fragment that carries video. Absent on audio and wherever the producer does not know it; a consumer treats absent
+     * as unknown.
+     */
+    Width?: number;
+
+    /** The video's height in pixels, set and left out together with {@link BridgeMediaFrame.Width}. */
+    Height?: number;
+
+    /**
+     * Whether a decoder can start at this frame, with no frame before it. `true` for a still image (a JPEG or PNG decodes
+     * on its own); for a fragment of encoded video, whether its first video frame is a key frame. Absent where the
+     * producer does not know, and on a piece that carries no video frame (audio, an MP4 init segment); a consumer
+     * treats absent as unknown.
+     */
+    KeyFrame?: boolean;
+
+    /**
+     * Which source a `video-in` or `screen-in` frame comes from, when the endpoint can have several (each
+     * participant's camera, a shared screen): an opaque key that stays the same for one source, for example
+     * `'participant:ada:camera'`. A model that takes one video stream is shown one source at a time; this key is how
+     * the host tells sources apart and notices a switch. Absent on audio frames and where there is only one source.
+     */
+    SourceID?: string;
+
+    /**
+     * A human-readable name for the {@link BridgeMediaFrame.SourceID} source ("Ada's camera", "Ada's screen"), for
+     * the note that tells the model what it is now looking at.
+     */
+    SourceLabel?: string;
+}
+
+/**
+ * Why a driver can no longer show the agent's avatar mid-session: its decoders kept failing (`'decoder-failed'`), or the
+ * endpoint refused the video track it publishes the avatar on (`'publish-failed'`). The agent goes on audio only.
+ */
+export type BridgeAvatarFailure = 'decoder-failed' | 'publish-failed';
+
+/**
+ * An inbound video source that stopped: the person stopped letting agents see them, left, stopped sharing or turned
+ * their camera off, or the driver moved the model's view to another source. A driver that sends camera or screen frames
+ * reports it so the host can tell the model, which would otherwise go on describing the last frame it saw.
+ */
+export interface BridgeVideoSourceEnd {
+    /** The plane the source was on: a camera (`video-in`) or a shared screen (`screen-in`). */
+    Track: Extract<BridgeMediaTrackKind, 'video-in' | 'screen-in'>;
+    /** The source's key, as its frames carried it in {@link BridgeMediaFrame.SourceID}. */
+    SourceID: string;
+    /**
+     * The source's human-readable name ("Ada's camera") as the driver names it when the source ends, like
+     * {@link BridgeMediaFrame.SourceLabel}. It can differ from the name the source's first frame carried (the person was
+     * renamed, or had no name yet), so the engine names an ended source as the model was told it, not by this.
+     */
+    SourceLabel?: string;
 }
 
 /**

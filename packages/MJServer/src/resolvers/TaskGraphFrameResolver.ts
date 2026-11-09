@@ -19,6 +19,7 @@ import { Arg, Field, ID, ObjectType, PubSubEngine, Resolver, ResolverFilterData,
 import { LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { TaskGraphFrame, TaskGraphObserver } from '@memberjunction/task-graph';
+import { PublishStatusUpdate } from '../generic/PushStatusResolver.js';
 
 export const TASK_GRAPH_FRAMES_TOPIC = 'TASK_GRAPH_FRAMES';
 
@@ -173,7 +174,10 @@ export function taskGraphFrameFilter(data: {
  * the same reason.
  */
 export class TaskGraphFrameBroadcaster implements TaskGraphObserver {
-  constructor(private readonly pubSub: PubSubEngine) {}
+  constructor(
+    private readonly pubSub: PubSubEngine,
+    private readonly bridgeToPushStatus: boolean = false,
+  ) {}
 
   public OnFrame(frame: TaskGraphFrame): void {
     try {
@@ -187,6 +191,34 @@ export class TaskGraphFrameBroadcaster implements TaskGraphObserver {
         TASK_GRAPH_FRAMES_TOPIC,
         { ...frame, ownerUserId: frame.OwnerUserID } satisfies TaskGraphFramePayload,
       );
+
+      if (
+        this.bridgeToPushStatus &&
+        (frame.Kind === 'TaskStarted' ||
+          frame.Kind === 'TaskCompleted' ||
+          frame.Kind === 'TaskFailed' ||
+          frame.Kind === 'NodeProgress' ||
+          frame.Kind === 'GraphSettled')
+      ) {
+        const defaultMsg = frame.TaskName
+          ? `${frame.TaskName}: ${frame.Status ?? frame.Kind}`
+          : `Workflow: ${frame.Status ?? frame.Kind}`;
+        PublishStatusUpdate(this.pubSub, {
+          sessionId: '*',
+          ownerUserId: frame.OwnerUserID,
+          message: JSON.stringify({
+            resolver: 'TaskOrchestrator',
+            type: 'TaskGraphFrame',
+            status: 'ok',
+            data: {
+              ...frame,
+              taskName: frame.TaskName,
+              message: frame.ProgressMessage || defaultMsg,
+              percentComplete: frame.ProgressPercent,
+            },
+          }),
+        });
+      }
     } catch (e) {
       LogError(`[TaskGraphFrameBroadcaster] Could not publish ${frame.Kind} (ignored): ${e instanceof Error ? e.message : String(e)}`);
     }

@@ -6,7 +6,9 @@ import { renderComponentFixture, query, queryAll, text, click, typeInto, capture
 import { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
 import { ValidationErrorInfo } from '@memberjunction/global';
 import { MjFormFieldComponent } from './form-field.component';
+import { MjRecordLinkDirective } from '../links/record-link.directive';
 import { FORM_SECTION_FIELD_HOST, type FormSectionFieldHost } from '../section-indicators/form-section-field-host';
+import { FormFieldEditCoordinator, type FormFieldEdit } from '../form-field-edit.coordinator';
 
 /**
  * DOM-level spec for <mj-form-field> — the single most-used component in MJ forms.
@@ -109,7 +111,7 @@ function render(
   setup?: (c: MjFormFieldComponent) => void,
 ): ComponentFixture<MjFormFieldComponent> {
   return renderComponentFixture(MjFormFieldComponent, {
-    declarations: [MjFormFieldComponent],
+    declarations: [MjFormFieldComponent, MjRecordLinkDirective],
     imports: [CommonModule, StubMarkdownComponent, StubCodeEditorComponent, StubSafeRichHtmlPipe],
     inputs,
     setup,
@@ -141,6 +143,28 @@ describe('MjFormFieldComponent (DOM)', () => {
       const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', ShowLabel: false });
       expect(query(f, '.mj-forms-field-label')).toBeNull();
       expect(text(f, '.mj-forms-field-value')).toBe('Gadget');
+    });
+
+    it('marks a label-less field so its value takes the whole row, not the label column', () => {
+      const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', ShowLabel: false });
+      expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--no-label')).toBe(true);
+    });
+
+    it('keeps the two-column layout when the label shows', () => {
+      const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox' });
+      expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--no-label')).toBe(false);
+    });
+
+    it('hides a named field from FormContext even while the form is editing', () => {
+      const f = render({
+        Record: makeWidget(),
+        FieldName: 'Name',
+        Type: 'textbox',
+        EditMode: true,
+        FormContext: { hiddenFieldNames: ['Name'] },
+      });
+      expect(f.componentInstance.ShouldHideField).toBe(true);
+      expect(query(f, '.mj-forms-field')).toBeNull();
     });
 
     it('hides an empty field entirely by default (HideWhenEmptyInReadOnlyMode)', () => {
@@ -268,6 +292,13 @@ describe('MjFormFieldComponent (DOM)', () => {
   });
 
   describe('edit mode', () => {
+    it('marks a label-less field in edit mode too, so its input takes the whole row', () => {
+      const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true, ShowLabel: false });
+      expect(query(f, '.mj-forms-field-label')).toBeNull();
+      expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--no-label')).toBe(true);
+      expect(query(f, 'input.mj-forms-field-input')).not.toBeNull();
+    });
+
     it('renders a text input for textbox and typing emits ValueChange with Old/New values and writes through to the record', () => {
       const record = makeWidget();
       const f = render({ Record: record, FieldName: 'Name', Type: 'textbox', EditMode: true });
@@ -391,9 +422,17 @@ describe('MjFormFieldComponent (DOM)', () => {
       expect(text(f, '.mj-forms-field-value')).toBe(WIDGET_ID);
     });
 
-    it('flags a required (non-nullable) field with the required-empty modifier when empty', () => {
-      const f = render({ Record: makeWidget({ Name: '' }), FieldName: 'Name', Type: 'textbox', EditMode: true });
+    it('flags a required (non-nullable) field with the required-empty modifier when it has no value', () => {
+      const f = render({ Record: makeWidget({ Name: null }), FieldName: 'Name', Type: 'textbox', EditMode: true });
       expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(true);
+    });
+
+    it('does NOT flag a required field holding an empty string — that is a value, not absence (#4359)', () => {
+      // A NOT NULL string column accepts '' in SQL Server and in EntityField.Validate(), so the
+      // form must not paint red a value the save will happily accept. Requiring text is a separate
+      // constraint, not an inference from nullability.
+      const f = render({ Record: makeWidget({ Name: '' }), FieldName: 'Name', Type: 'textbox', EditMode: true });
+      expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(false);
     });
 
     it('does not flag a required field as required-empty when it has a value', () => {
@@ -808,6 +847,55 @@ describe('MjFormFieldComponent — field-level security', () => {
     const f = render({ Record: makeSecuredWidget(null), FieldName: 'Notes', Type: 'textbox', Provider: { CurrentUser: null } });
     expect(f.componentInstance.IsFieldWritableByUser).toBe(true);
   });
+
+  // ---- IS-A: a child whose own flag is off inherits its parent's rules ----
+
+  /**
+   * An IS-A child of the secured widget, with field security switched OFF on the child itself.
+   * Each parent field is mirrored on the child, read from the same row, so the parent's rules
+   * still apply to it — the same rule `BaseEntity.Get()` enforces.
+   */
+  function makeIsAChildWidget(user: UserInfo): BaseEntity {
+    const parent = makeSecuredEntityInfo();
+    const child = new EntityInfo({
+      ID: 'E0000002-0000-0000-0000-000000000002',
+      Name: 'Test Special Widgets',
+      Status: 'Active',
+      BaseTable: 'TestSpecialWidget',
+      BaseView: 'vwTestSpecialWidgets',
+      EnableFieldLevelSecurity: false,
+      ParentID: parent.ID,
+      Fields: parent.Fields.map((f) => ({ ID: `C-${f.ID}`, Name: f.Name, Type: f.Type, Length: f.Length, AllowsNull: f.AllowsNull, IsPrimaryKey: f.IsPrimaryKey, AllowUpdateAPI: f.AllowUpdateAPI })),
+    });
+    Object.defineProperty(child, 'ParentEntityInfo', { get: () => parent });
+    const entity = new TestWidgetEntity(child);
+    entity.SetMany({ ID: WIDGET_ID, Name: 'Gadget', Description: 'secret', Notes: 'jotting' }, true, true);
+    entity.ContextCurrentUser = user;
+    return entity;
+  }
+
+  function renderIsAChildAs(fieldName: string, roleIds: string[]): ComponentFixture<MjFormFieldComponent> {
+    const user = userWithRoles(roleIds);
+    return render({ Record: makeIsAChildWidget(user), FieldName: fieldName, Type: 'textbox', Provider: { CurrentUser: user } });
+  }
+
+  it("REGRESSION: hides an IS-A child's field that its parent denies, though the child's own flag is off", () => {
+    const f = renderIsAChildAs('Description', [INTERN_ROLE_ID]);
+    expect(f.componentInstance.IsFieldReadableByUser).toBe(false);
+    expect(query(f, '.mj-forms-field')).toBeNull();
+  });
+
+  it("REGRESSION: marks an IS-A child's field read-only when its parent denies the update", () => {
+    const f = renderIsAChildAs('Notes', [INTERN_ROLE_ID]);
+    expect(f.componentInstance.IsFieldReadableByUser).toBe(true);
+    expect(f.componentInstance.IsFieldWritableByUser).toBe(false);
+  });
+
+  it("renders an IS-A child's field normally for a role the parent allows", () => {
+    const f = renderIsAChildAs('Description', [HR_ROLE_ID]);
+    expect(text(f, '.mj-forms-field-value')).toBe('secret');
+    expect(f.componentInstance.IsFieldWritableByUser).toBe(true);
+  });
 });
 
 describe('a server-reported validation error paints the field the way a local one does', () => {
@@ -898,6 +986,47 @@ describe('a server-reported validation error paints the field the way a local on
 });
 
 /**
+ * A contribution can stand in for one field. The panel then draws at the top of the
+ * section that held it, so the field itself must not draw at all — in either mode, or the
+ * record shows the same value twice, once in a panel and once as an input.
+ */
+describe('MjFormFieldComponent (DOM) — a field a panel stands in for', () => {
+  it('renders nothing when the form context names it', () => {
+    const f = render({
+      Record: makeWidget(), FieldName: 'Name', Type: 'textbox',
+      FormContext: { claimedFieldNames: ['Name'] },
+    });
+    expect(f.componentInstance.IsClaimedByContribution).toBe(true);
+    expect(text(f, '.mj-forms-field')).toBe('');
+  });
+
+  it('still renders in edit mode, where ShouldHideField alone would not hide it', () => {
+    const f = render({
+      Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true,
+      FormContext: { claimedFieldNames: ['Name'] },
+    });
+    expect(queryAll(f, 'input').length).toBe(0);
+  });
+
+  it('leaves every other field alone', () => {
+    const f = render({
+      Record: makeWidget(), FieldName: 'Name', Type: 'textbox',
+      FormContext: { claimedFieldNames: ['Description'] },
+    });
+    expect(f.componentInstance.IsClaimedByContribution).toBe(false);
+    expect(query(f, '.mj-forms-field')).not.toBeNull();
+  });
+
+  it('carries its name and label on the element, so a form can be read from the DOM', () => {
+    const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox' });
+    // The fixture's own root IS the component host, so the bindings land there.
+    const host = f.nativeElement as HTMLElement;
+    expect(host.getAttribute('data-field-name')).toBe('Name');
+    expect(host.getAttribute('data-field-label')).toBe('Widget Name');
+  });
+});
+
+/**
  * golive #255 — a field tells the section it renders inside about itself through the injector,
  * because the section's content query cannot see a field declared in a child component's view.
  * The panel's half (counting and owning such a field) is in collapsible-panel.component.dom.test.ts;
@@ -975,3 +1104,55 @@ describe('MjFormFieldComponent — declaring itself to its section', () => {
     expect(text(f, '.mj-forms-field-value')).toBe('Gadget');
   });
 });
+
+/**
+ * A person's edit reaches the form through the `FormFieldEditCoordinator` that
+ * `mj-record-form-container` provides; it starts the entry-time duplicate check on a new record.
+ */
+describe('MjFormFieldComponent — reporting edits to the form', () => {
+  function renderWithEdits(inputs: Record<string, unknown>): { fixture: ComponentFixture<MjFormFieldComponent>; edits: FormFieldEdit[] } {
+    const coordinator = new FormFieldEditCoordinator();
+    const edits: FormFieldEdit[] = [];
+    coordinator.Edited$.subscribe((edit) => edits.push(edit));
+    const fixture = renderComponentFixture(MjFormFieldComponent, {
+      declarations: [MjFormFieldComponent],
+      imports: [CommonModule, StubMarkdownComponent, StubCodeEditorComponent, StubSafeRichHtmlPipe],
+      providers: [{ provide: FormFieldEditCoordinator, useValue: coordinator }],
+      inputs,
+    });
+    return { fixture, edits };
+  }
+
+  it('reports each edit a person makes, by field name', () => {
+    const { fixture, edits } = renderWithEdits({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true });
+
+    typeInto(fixture, 'input.mj-forms-field-input', 'Gizmo');
+
+    expect(edits).toEqual([{ FieldName: 'Name' }]);
+  });
+
+  it('reports nothing when only its inputs change', () => {
+    const { fixture, edits } = renderWithEdits({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox' });
+
+    fixture.componentRef.setInput('EditMode', true);
+    fixture.detectChanges();
+
+    expect(edits).toEqual([]);
+  });
+});
+
+describe('MjFormFieldComponent — deprecated and disabled fields', () => {
+  it('hides a Deprecated field and does not read its value via Record.Get()', () => {
+    const record = makeWidget();
+    const fieldInfo = record.EntityInfo.Fields.find(f => f.Name === 'Description')!;
+    Object.defineProperty(fieldInfo, 'Status', { value: 'Deprecated', configurable: true });
+    const getSpy = vi.spyOn(record, 'Get');
+
+    const f = render({ Record: record, FieldName: 'Description', Type: 'textbox' });
+    expect(f.componentInstance.IsFieldDeprecatedOrDisabled).toBe(true);
+    expect(f.componentInstance.ShouldHideField).toBe(true);
+    expect(query(f, '.mj-forms-field')).toBeNull();
+    expect(getSpy).not.toHaveBeenCalledWith('Description');
+  });
+});
+

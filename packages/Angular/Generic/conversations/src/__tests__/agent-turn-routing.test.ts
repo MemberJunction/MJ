@@ -1,0 +1,337 @@
+/**
+ * @fileoverview The routing matrix for an agent turn: reply mode × mention × allowed list × route.
+ *
+ * `ResolveAgentTurn` is the pure rule `MessageInputComponent` applies to every saved message, so
+ * the matrix is pinned here without Angular. The component-level wiring (events, rows, the host
+ * handler) is pinned in agent-turn-host-rules.test.ts.
+ */
+import { describe, it, expect } from 'vitest';
+
+import {
+    IsAddressedToHuman,
+    ResolveAgentTurn,
+    FindDisallowedTaskGraphAgents,
+    FindContinuityAgentMessage,
+    FindContinuityAgentId,
+    MessageMentionsAgent,
+    type AgentTurnCandidates,
+    type AgentTurnRules,
+    type ContinuityHistoryMessage,
+} from '../lib/utils/agent-turn-routing';
+import type { AgentReplyMode, AgentTurnRoute } from '../lib/models/agent-turn.model';
+
+const MANAGER = 'AAAAAAAA-0000-0000-0000-000000000001';
+const TAGGED = 'AAAAAAAA-0000-0000-0000-000000000002';
+const LAST = 'AAAAAAAA-0000-0000-0000-000000000003';
+const PINNED = 'AAAAAAAA-0000-0000-0000-000000000004';
+const HOST = 'AAAAAAAA-0000-0000-0000-000000000005';
+const OTHER = 'AAAAAAAA-0000-0000-0000-000000000006';
+const UNKNOWN = 'AAAAAAAA-0000-0000-0000-00000000FFFF';
+
+const KNOWN = new Set([MANAGER, TAGGED, LAST, PINNED, HOST, OTHER]);
+const isKnown = (id: string) => KNOWN.has(id.toUpperCase());
+
+function candidates(overrides: Partial<AgentTurnCandidates> = {}): AgentTurnCandidates {
+    return {
+        MentionedAgentIds: [],
+        ContinuityAgentId: null,
+        ConversationDefaultAgentId: null,
+        HostDefaultAgentId: null,
+        ConversationManagerAgentId: MANAGER,
+        ...overrides,
+    };
+}
+
+function rules(replyMode: AgentReplyMode, allowed: string[] | null = null): AgentTurnRules {
+    return { ReplyMode: replyMode, AllowedAgentIDs: allowed };
+}
+
+/** Every route with the candidate that makes it the one chosen when nothing outranks it. */
+const ROUTES: ReadonlyArray<{ route: AgentTurnRoute; agent: string; set: Partial<AgentTurnCandidates> }> = [
+    { route: 'Mention', agent: TAGGED, set: { MentionedAgentIds: [TAGGED] } },
+    { route: 'Continuity', agent: LAST, set: { ContinuityAgentId: LAST } },
+    { route: 'ConversationDefault', agent: PINNED, set: { ConversationDefaultAgentId: PINNED } },
+    { route: 'HostDefault', agent: HOST, set: { HostDefaultAgentId: HOST } },
+    { route: 'ConversationManager', agent: MANAGER, set: {} },
+];
+
+describe('ResolveAgentTurn — the routing matrix', () => {
+    describe.each(['Always', 'MentionOnly'] as const)('reply mode %s', (mode) => {
+        describe.each([
+            ['no allowed list', null],
+            ['an allowed list that includes the agent', 'includes'],
+            ['an allowed list that excludes the agent', 'excludes'],
+        ] as const)('with %s', (_label, listKind) => {
+            it.each(ROUTES)('route $route', ({ route, agent, set }) => {
+                const allowed = listKind === null ? null : listKind === 'includes' ? [agent] : [OTHER];
+                const result = ResolveAgentTurn(candidates(set), rules(mode, allowed), isKnown);
+
+                const routeApplies = mode === 'Always' || route === 'Mention';
+                const agentAllowed = listKind !== 'excludes';
+                if (routeApplies && agentAllowed) {
+                    expect(result).toEqual({ AgentId: agent, Route: route });
+                } else {
+                    // Nothing else is a candidate here, and OTHER is not the manager, so no turn.
+                    expect(result).toBeNull();
+                }
+            });
+        });
+    });
+
+    it('keeps MJ\'s order: mention, continuity, conversation default, host default, manager', () => {
+        const all = candidates({
+            MentionedAgentIds: [TAGGED],
+            ContinuityAgentId: LAST,
+            ConversationDefaultAgentId: PINNED,
+            HostDefaultAgentId: HOST,
+        });
+        expect(ResolveAgentTurn(all, rules('Always'), isKnown)?.Route).toBe('Mention');
+        expect(ResolveAgentTurn({ ...all, MentionedAgentIds: [] }, rules('Always'), isKnown)?.Route).toBe('Continuity');
+        expect(ResolveAgentTurn({ ...all, MentionedAgentIds: [], ContinuityAgentId: null }, rules('Always'), isKnown)?.Route)
+            .toBe('ConversationDefault');
+        expect(ResolveAgentTurn({ ...all, MentionedAgentIds: [], ContinuityAgentId: null, ConversationDefaultAgentId: null }, rules('Always'), isKnown)?.Route)
+            .toBe('HostDefault');
+    });
+
+    it('MentionOnly starts no turn for a message that tags no agent, whatever else is set', () => {
+        const noMention = candidates({ ContinuityAgentId: LAST, ConversationDefaultAgentId: PINNED, HostDefaultAgentId: HOST });
+        expect(ResolveAgentTurn(noMention, rules('MentionOnly'), isKnown)).toBeNull();
+        expect(ResolveAgentTurn(noMention, rules('MentionOnly', [LAST, PINNED, HOST, MANAGER]), isKnown)).toBeNull();
+    });
+
+    it('takes the first tagged agent the host allows, skipping disallowed ones', () => {
+        const twoTags = candidates({ MentionedAgentIds: [OTHER, TAGGED] });
+        expect(ResolveAgentTurn(twoTags, rules('MentionOnly', [TAGGED]), isKnown)).toEqual({ AgentId: TAGGED, Route: 'Mention' });
+        expect(ResolveAgentTurn(twoTags, rules('MentionOnly'), isKnown)).toEqual({ AgentId: OTHER, Route: 'Mention' });
+    });
+
+    it('under Always, a disallowed tag falls through to the next route instead of answering', () => {
+        const result = ResolveAgentTurn(
+            candidates({ MentionedAgentIds: [OTHER], HostDefaultAgentId: HOST }),
+            rules('Always', [HOST]),
+            isKnown
+        );
+        expect(result).toEqual({ AgentId: HOST, Route: 'HostDefault' });
+    });
+
+    it('a disallowed candidate falls through to the next allowed route', () => {
+        const result = ResolveAgentTurn(
+            candidates({ ContinuityAgentId: LAST, ConversationDefaultAgentId: PINNED, HostDefaultAgentId: HOST }),
+            rules('Always', [HOST]),
+            isKnown
+        );
+        expect(result).toEqual({ AgentId: HOST, Route: 'HostDefault' });
+    });
+
+    it('the conversation manager is narrowed like any other agent', () => {
+        expect(ResolveAgentTurn(candidates(), rules('Always', [HOST]), isKnown)).toBeNull();
+        expect(ResolveAgentTurn(candidates(), rules('Always', [MANAGER]), isKnown))
+            .toEqual({ AgentId: MANAGER, Route: 'ConversationManager' });
+        expect(ResolveAgentTurn(candidates(), rules('Always', []), isKnown)).toBeNull();
+    });
+
+    it('an unknown continuity or default agent falls back to the conversation manager, as before', () => {
+        for (const set of [{ ContinuityAgentId: UNKNOWN }, { ConversationDefaultAgentId: UNKNOWN }, { HostDefaultAgentId: UNKNOWN }]) {
+            expect(ResolveAgentTurn(candidates(set), rules('Always'), isKnown))
+                .toEqual({ AgentId: MANAGER, Route: 'ConversationManager' });
+        }
+    });
+
+    it('with no manager and no other candidate, no turn starts', () => {
+        expect(ResolveAgentTurn(candidates({ ConversationManagerAgentId: null }), rules('Always'), isKnown)).toBeNull();
+    });
+
+    it('compares IDs without regard to case (SQL Server upper, PostgreSQL lower)', () => {
+        const result = ResolveAgentTurn(
+            candidates({ MentionedAgentIds: [TAGGED.toLowerCase()] }),
+            rules('MentionOnly', [TAGGED]),
+            isKnown
+        );
+        expect(result?.Route).toBe('Mention');
+    });
+});
+
+describe('ResolveAgentTurn — a continuity candidate a routing decision chose', () => {
+    const routed = candidates({ ContinuityAgentId: OTHER, ContinuityDecisionRouted: true, HostDefaultAgentId: HOST });
+
+    it('is labelled DecisionRouted, in continuity\'s place in the order', () => {
+        expect(ResolveAgentTurn(routed, rules('Always'), isKnown)).toEqual({ AgentId: OTHER, Route: 'DecisionRouted' });
+    });
+
+    it('still loses to a tag, and routes under MentionOnly when a decision chose it', () => {
+        expect(ResolveAgentTurn({ ...routed, MentionedAgentIds: [TAGGED] }, rules('Always'), isKnown))
+            .toEqual({ AgentId: TAGGED, Route: 'Mention' });
+        expect(ResolveAgentTurn(routed, rules('MentionOnly'), isKnown))
+            .toEqual({ AgentId: OTHER, Route: 'DecisionRouted' });
+        expect(ResolveAgentTurn({ ...routed, ContinuityDecisionRouted: false }, rules('MentionOnly'), isKnown))
+            .toBeNull();
+    });
+
+    it('is skipped like any candidate the host does not allow', () => {
+        expect(ResolveAgentTurn(routed, rules('Always', [HOST]), isKnown)).toEqual({ AgentId: HOST, Route: 'HostDefault' });
+        expect(ResolveAgentTurn(routed, rules('MentionOnly', [HOST]), isKnown)).toBeNull();
+    });
+
+    it('without the flag, the same candidate is plain continuity', () => {
+        expect(ResolveAgentTurn({ ...routed, ContinuityDecisionRouted: false }, rules('Always'), isKnown))
+            .toEqual({ AgentId: OTHER, Route: 'Continuity' });
+    });
+});
+
+describe('ResolveAgentTurn — multi-party signals (human mentions, thread replies, and decision no-agent)', () => {
+    it('starts no turn when a person is @-mentioned without an @Agent mention', () => {
+        const humanMention = candidates({
+            MentionedUserIds: ['user-2'],
+            ContinuityAgentId: LAST,
+            HostDefaultAgentId: HOST,
+        });
+        expect(ResolveAgentTurn(humanMention, rules('Always'), isKnown)).toBeNull();
+        expect(ResolveAgentTurn(humanMention, rules('MentionOnly'), isKnown)).toBeNull();
+    });
+
+    it('routes to the @Agent when both a person and an agent are @-mentioned', () => {
+        const both = candidates({
+            MentionedAgentIds: [TAGGED],
+            MentionedUserIds: ['user-2'],
+        });
+        expect(ResolveAgentTurn(both, rules('MentionOnly'), isKnown)).toEqual({ AgentId: TAGGED, Route: 'Mention' });
+    });
+
+    it('routes a thread reply to an AI message directly to that agent under both Always and MentionOnly when runnable', () => {
+        const replyToAi = candidates({
+            ReplyParentAgentId: OTHER,
+            ContinuityAgentId: LAST,
+        });
+        expect(ResolveAgentTurn(replyToAi, rules('Always'), isKnown)).toEqual({ AgentId: OTHER, Route: 'ThreadReply' });
+        expect(ResolveAgentTurn(replyToAi, rules('MentionOnly'), isKnown)).toEqual({ AgentId: OTHER, Route: 'ThreadReply' });
+        expect(ResolveAgentTurn(replyToAi, rules('MentionOnly', [TAGGED]), isKnown)).toBeNull();
+        // When the parent agent is readable (isKnown) but not runnable by this user, ThreadReply does not fire
+        expect(ResolveAgentTurn(replyToAi, rules('MentionOnly'), isKnown, id => id !== OTHER)).toBeNull();
+    });
+
+    it('identifies intentional human-addressed candidates via IsAddressedToHuman', () => {
+        expect(IsAddressedToHuman(candidates())).toBe(false);
+        expect(IsAddressedToHuman(candidates({ MentionedUserIds: ['user-2'] }))).toBe(true);
+        expect(IsAddressedToHuman(candidates({ ReplyParentIsHuman: true }))).toBe(true);
+        expect(IsAddressedToHuman(candidates({ DecisionAddressedToHuman: true }))).toBe(true);
+    });
+
+    it('starts no turn for a thread reply to a human message unless an agent is explicitly @-mentioned', () => {
+        const replyToHuman = candidates({
+            ReplyParentIsHuman: true,
+            ContinuityAgentId: LAST,
+            HostDefaultAgentId: HOST,
+        });
+        expect(ResolveAgentTurn(replyToHuman, rules('Always'), isKnown)).toBeNull();
+        expect(ResolveAgentTurn(replyToHuman, rules('MentionOnly'), isKnown)).toBeNull();
+        expect(ResolveAgentTurn({ ...replyToHuman, MentionedAgentIds: [TAGGED] }, rules('MentionOnly'), isKnown))
+            .toEqual({ AgentId: TAGGED, Route: 'Mention' });
+    });
+
+    it('starts no turn when the routing decision determined the message is addressed to a human', () => {
+        const humanAddressed = candidates({
+            DecisionAddressedToHuman: true,
+            ContinuityAgentId: null,
+            HostDefaultAgentId: HOST,
+        });
+        expect(ResolveAgentTurn(humanAddressed, rules('Always'), isKnown)).toBeNull();
+        expect(ResolveAgentTurn(humanAddressed, rules('MentionOnly'), isKnown)).toBeNull();
+    });
+});
+
+describe('FindDisallowedTaskGraphAgents', () => {
+    const idByName: Record<string, string> = { Research: TAGGED, Writer: OTHER };
+    const resolve = (name: string) => idByName[name] ?? null;
+    const steps = [
+        { kind: 'Agent', configuration: { agentName: 'Research' } },
+        { kind: 'Action', configuration: { actionName: 'Send Email' } },
+        { kind: 'Agent', configuration: { agentName: 'Writer' } },
+        { kind: 'Agent', configuration: { agentName: 'Writer' } },
+        { kind: 'Agent', configuration: { agentName: 'Nobody' } },
+    ] as const;
+
+    it('finds nothing when there is no allowed list', () => {
+        expect(FindDisallowedTaskGraphAgents(steps, null, resolve)).toEqual([]);
+    });
+
+    it('names each disallowed or unknown agent once, in order', () => {
+        expect(FindDisallowedTaskGraphAgents(steps, [TAGGED], resolve)).toEqual(['Writer', 'Nobody']);
+    });
+
+    it('ignores steps that do not run an agent', () => {
+        expect(FindDisallowedTaskGraphAgents([{ kind: 'Action', configuration: { actionName: 'X' } }], [], resolve)).toEqual([]);
+    });
+});
+
+describe('FindContinuityAgentMessage and MessageMentionsAgent — handoff continuity and Return to Sage', () => {
+    it('routes the next unmentioned message to the handoff target after a handoff', () => {
+        const history: ContinuityHistoryMessage[] = [
+            { ID: 'u1', Role: 'User', Message: 'Have Research look into X' },
+            { ID: 'ai-sage-1', Role: 'AI', AgentID: MANAGER, ParentID: 'u1', Message: 'Transferring to Research.' },
+            { ID: 'ai-target-1', Role: 'AI', AgentID: TAGGED, ParentID: 'ai-sage-1', Message: 'Research report on X' },
+        ];
+        const continuityId = FindContinuityAgentId(history, MANAGER, { conversationManagerName: 'Sage' });
+        expect(continuityId).toBe(TAGGED);
+        expect(ResolveAgentTurn(candidates({ ContinuityAgentId: continuityId }), rules('Always'), isKnown)).toEqual({
+            AgentId: TAGGED,
+            Route: 'Continuity',
+        });
+    });
+
+    it('resets continuity to Sage after @Sage (JSON mention or plain @Sage) and stays with Sage on subsequent turns', () => {
+        const historyWithReturnToSage: ContinuityHistoryMessage[] = [
+            { ID: 'u1', Role: 'User', Message: 'Have Research look into X' },
+            { ID: 'ai-sage-1', Role: 'AI', AgentID: MANAGER, ParentID: 'u1', Message: 'Transferring to Research.' },
+            { ID: 'ai-target-1', Role: 'AI', AgentID: TAGGED, ParentID: 'ai-sage-1', Message: 'Research report on X' },
+            { ID: 'u2', Role: 'User', ParentID: 'ai-target-1', Message: `@{"type":"agent","id":"${MANAGER}","name":"Sage"} what do we do next?` },
+            { ID: 'ai-sage-2', Role: 'AI', AgentID: MANAGER, ParentID: 'u2', Message: 'Here is our next step.' },
+            { ID: 'u3', Role: 'User', ParentID: 'ai-sage-2', Message: 'Tell me more' },
+        ];
+        const continuityId = FindContinuityAgentId(historyWithReturnToSage, MANAGER, { conversationManagerName: 'Sage' });
+        expect(continuityId).toBeNull();
+        expect(ResolveAgentTurn(candidates({ ContinuityAgentId: continuityId }), rules('Always'), isKnown)).toEqual({
+            AgentId: MANAGER,
+            Route: 'ConversationManager',
+        });
+    });
+
+    it('allows a newer handoff after @Sage to take continuity again', () => {
+        const historyWithSecondHandoff: ContinuityHistoryMessage[] = [
+            { ID: 'u1', Role: 'User', Message: 'Have Research look into X' },
+            { ID: 'ai-sage-1', Role: 'AI', AgentID: MANAGER, ParentID: 'u1', Message: 'Transferring to Research.' },
+            { ID: 'ai-target-1', Role: 'AI', AgentID: TAGGED, ParentID: 'ai-sage-1', Message: 'Research report on X' },
+            { ID: 'u2', Role: 'User', ParentID: 'ai-target-1', Message: '@Sage hand this to Writer' },
+            { ID: 'ai-sage-2', Role: 'AI', AgentID: MANAGER, ParentID: 'u2', Message: 'Transferring to Writer.' },
+            { ID: 'ai-target-2', Role: 'AI', AgentID: OTHER, ParentID: 'ai-sage-2', Message: 'Drafting article' },
+        ];
+        const msg = FindContinuityAgentMessage(historyWithSecondHandoff, MANAGER, { conversationManagerName: 'Sage' });
+        expect(msg?.ID).toBe('ai-target-2');
+        expect(msg?.AgentID).toBe(OTHER);
+    });
+
+    it('stops continuity when a specialist hands back to the conversation manager', () => {
+        const historyWithHandback: ContinuityHistoryMessage[] = [
+            { ID: 'u1', Role: 'User', Message: 'Have Research look into X' },
+            { ID: 'ai-target-1', Role: 'AI', AgentID: TAGGED, ParentID: 'u1', Message: 'Handing back to Sage.' },
+            { ID: 'ai-sage-handback', Role: 'AI', AgentID: MANAGER, ParentID: 'ai-target-1', Message: 'Sage taking back.' },
+        ];
+        expect(FindContinuityAgentId(historyWithHandback, MANAGER)).toBeNull();
+    });
+
+    it('MessageMentionsAgent matches JSON agent mention tokens and plain @Name tokens, ignoring non-agent mentions', () => {
+        expect(MessageMentionsAgent(`@{"type":"agent","id":"${MANAGER}","name":"Sage"} hi`, MANAGER, 'Sage')).toBe(true);
+        expect(MessageMentionsAgent('@Sage can you help?', MANAGER, 'Sage')).toBe(true);
+        expect(MessageMentionsAgent(`@{"type":"user","id":"${MANAGER}","name":"Sage"} hi`, MANAGER, 'Sage')).toBe(false);
+        expect(MessageMentionsAgent('Just a normal follow up', MANAGER, 'Sage')).toBe(false);
+    });
+
+    it('MessageMentionsAgent scans 50,000 repeated @{| tokens in under 200 ms', () => {
+        const attack = '@{|'.repeat(50_000);
+        const start = performance.now();
+        const mentioned = MessageMentionsAgent(attack, MANAGER, 'Sage');
+        const elapsedMs = performance.now() - start;
+
+        expect(mentioned).toBe(false);
+        expect(elapsedMs).toBeLessThan(200);
+    });
+});

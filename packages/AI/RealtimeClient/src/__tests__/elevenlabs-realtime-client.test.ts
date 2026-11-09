@@ -9,7 +9,8 @@ import {
     ElevenLabsServerEvent,
     IElevenLabsClientSocket,
 } from '../drivers/elevenLabsRealtimeClient';
-import { collect, FakeMediaStream, FakeTrack } from './helpers/realtime-fakes';
+import { collect, FakeMediaStream, FakeMicCapture, FakeTrack } from './helpers/realtime-fakes';
+import { DescribePcmMicrophoneReplacement } from './helpers/microphone-replacement';
 
 // ── Fakes (no network, no Web Audio) ───────────────────────────────────────────
 
@@ -66,6 +67,12 @@ class FakePlayback implements IRealtimePcmPlayback {
     public Closed = false;
     /** Controllable stand-in for "playhead is ahead of the context clock". */
     public IsPlaying = false;
+    /** Stand-in for the Web Audio output stream the real playback exposes (issue #5153). */
+    public OutputStream: MediaStream | null = null;
+
+    public GetOutputStream(): MediaStream | null {
+        return this.OutputStream;
+    }
 
     public Enqueue(pcm16: ArrayBuffer): void {
         this.Enqueued.push(pcm16);
@@ -78,14 +85,6 @@ class FakePlayback implements IRealtimePcmPlayback {
     public Close(): void {
         this.Closed = true;
         this.IsPlaying = false;
-    }
-}
-
-/** Fake mic capture handle. */
-class FakeMicCapture implements IPcmMicCapture {
-    public Stopped = false;
-    public Stop(): void {
-        this.Stopped = true;
     }
 }
 
@@ -331,6 +330,15 @@ describe('ElevenLabsRealtimeClient', () => {
             expect(states).toEqual([]); // narration waits for the first model output
         });
 
+        it('RequestSpokenTurn sends the same user_message but keeps the reply a NORMAL turn (MJ#4591)', () => {
+            const { transcripts } = collect(client);
+            client.RequestSpokenTurn('Greet the participant.');
+            expect(client.Fake.SentFrames().at(-1)).toEqual({ type: 'user_message', text: 'Greet the participant.' });
+            expect(client.IsBusy).toBe(true);
+            client.Emit({ type: 'agent_response', agent_response_event: { agent_response: 'Hello, welcome.' } });
+            expect(transcripts).toEqual([{ Role: 'Assistant', Text: 'Hello, welcome.', IsFinal: true, Kind: 'normal' }]);
+        });
+
         it("should tag the NEXT agent_response as narration, then reset to normal (stamp-at-send)", () => {
             const { transcripts } = collect(client);
             client.RequestSpokenUpdate('progress update');
@@ -343,6 +351,21 @@ describe('ElevenLabsRealtimeClient', () => {
             expect(transcripts).toEqual([
                 { Role: 'Assistant', Text: "I'm on it", IsFinal: true, Kind: 'narration' },
                 { Role: 'Assistant', Text: 'Here is the answer', IsFinal: true, Kind: 'normal' },
+            ]);
+        });
+
+        it("ends the narration response when the user speaks, so the agent's next turn is normal even without agent_response_complete (MJ#6025)", () => {
+            const { transcripts } = collect(client);
+            client.RequestSpokenUpdate('greet the participant');
+            client.Emit({ type: 'agent_response', agent_response_event: { agent_response: 'Hello, welcome.' } });
+            // No agent_response_complete arrives; the user answers instead.
+            client.Emit({ type: 'user_transcript', user_transcription_event: { user_transcript: 'Hi, thanks.' } });
+            client.Emit({ type: 'agent_response', agent_response_event: { agent_response: 'Tell me about your work.' } });
+
+            expect(transcripts).toEqual([
+                { Role: 'Assistant', Text: 'Hello, welcome.', IsFinal: true, Kind: 'narration' },
+                { Role: 'User', Text: 'Hi, thanks.', IsFinal: true, Kind: 'normal' },
+                { Role: 'Assistant', Text: 'Tell me about your work.', IsFinal: true, Kind: 'normal' },
             ]);
         });
 
@@ -363,6 +386,20 @@ describe('ElevenLabsRealtimeClient', () => {
     describe('tool calls and tool-result delivery', () => {
         beforeEach(async () => {
             await connect(client);
+        });
+
+        it('sends the tool output as the JSON STRING it was given: ElevenLabs closes the socket on an object result (MJ#4806)', () => {
+            client.Emit({
+                type: 'client_tool_call',
+                client_tool_call: { tool_name: 'Whiteboard_AddNote', tool_call_id: 'call-wb', parameters: { text: 'hello' } },
+            });
+            client.SendToolResult('call-wb', '{"success":true,"noteId":"n1"}');
+            expect(client.Fake.SentFrames().at(-1)).toEqual({
+                type: 'client_tool_result',
+                tool_call_id: 'call-wb',
+                result: '{"success":true,"noteId":"n1"}',
+                is_error: false,
+            });
         });
 
         it('should surface client_tool_call with JSON-string args and release the busy lock', () => {
@@ -394,7 +431,7 @@ describe('ElevenLabsRealtimeClient', () => {
             expect(client.Fake.SentFrames().at(-1)).toEqual({
                 type: 'client_tool_result',
                 tool_call_id: 'call-1',
-                result: { tempF: 72 },
+                result: '{"tempF":72}',
                 is_error: false,
             });
             expect(states).toEqual(['speaking']);
@@ -448,7 +485,7 @@ describe('ElevenLabsRealtimeClient', () => {
             expect(client.Fake.SentFrames().at(-1)).toEqual({
                 type: 'client_tool_result',
                 tool_call_id: 'call-9',
-                result: { success: true, output: '42' },
+                result: '{"success":true,"output":"42"}',
                 is_error: false,
             });
             expect(client.IsBusy).toBe(true);
@@ -673,6 +710,22 @@ describe('ElevenLabsRealtimeClient', () => {
             expect(track.enabled).toBe(true);
         });
 
+        it('should publish the playback output stream on Connect and clear it on Disconnect (#5153)', async () => {
+            const agentStream = new FakeMediaStream([]);
+            client.Playback.OutputStream = agentStream;
+            const delivered: (MediaStream | null)[] = [];
+            client.OnRemoteMediaStream((s) => delivered.push(s));
+
+            await connect(client);
+
+            expect(client.GetRemoteMediaStream()).toBe(agentStream);
+            expect(delivered).toEqual([agentStream]);
+
+            await client.Disconnect();
+
+            expect(client.GetRemoteMediaStream()).toBeNull();
+        });
+
         it('should tear everything down and emit closed on Disconnect', async () => {
             const { states } = collect(client);
             const track = await connect(client);
@@ -776,3 +829,12 @@ describe('tool-result nudge — result lands after the turn closed', () => {
         expect(userMessages()).toHaveLength(0);
     });
 });
+
+DescribePcmMicrophoneReplacement(
+    async () => {
+        const client = new TestElevenLabsClient();
+        const track = await connect(client);
+        return { Client: client, Track: track, Capture: client.Capture };
+    },
+    () => new TestElevenLabsClient()
+);

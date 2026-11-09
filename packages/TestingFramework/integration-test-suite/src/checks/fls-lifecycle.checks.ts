@@ -137,6 +137,11 @@ async function loadUserRole(ctx: IntegrationCheckContext, userId: string, roleId
  * `metadata-optional/integration-test/users/.integration-test-fls-users.json`. The next
  * `mj sync push` then cannot find its pinned primary key, creates the row a second time, and the
  * pair is duplicated; LC8's `loadUserRole` asserts exactly one row and fails on the run after that.
+ *
+ * The caller must therefore read the row's key BEFORE deleting it: `BaseEntity.Delete()` leaves the
+ * object no longer carrying the deleted row's key, so passing `entity.ID` afterwards restores the
+ * membership under a NEW id and loses the identity the fixture pinned — the same duplication by a
+ * different route, and invisible until the next push.
  * That is invisible on a from-scratch CI database and only bites a persistent dev database, which
  * is exactly the kind of failure that wastes an afternoon.
  */
@@ -397,6 +402,15 @@ export async function CheckLc6_DenyOnSystemRoleRefused(ctx: IntegrationCheckCont
     return CheckLc6DenyOnSystemRoleRefused(ctx);
 }
 
+/** Lower-cased IDs of the roles holding at least one Allow permission row on the entity's fields. */
+async function rolesHoldingAllow(ctx: IntegrationCheckContext, entityId: string): Promise<Set<string>> {
+    const rows = await Q<{ RoleID: string }>(ctx,
+        `SELECT DISTINCT LOWER(CONVERT(NVARCHAR(36), p.RoleID)) AS RoleID ` +
+        `FROM [${SchemaOf(ctx)}].EntityFieldPermission p JOIN [${SchemaOf(ctx)}].EntityField f ON f.ID = p.EntityFieldID ` +
+        `WHERE f.EntityID = '${entityId}' AND (p.ReadAccess='Allow' OR p.UpdateAccess='Allow' OR p.CreateAccess='Allow')`);
+    return new Set(rows.map(r => r.RoleID));
+}
+
 /**
  * LC7 — the role-REMOVAL half of the guard. Removing a system-user role is permitted while
  * the other roles still duplicate its Allows; refused when it carries the LAST Allow; and a
@@ -414,30 +428,43 @@ export async function CheckLc7SystemRoleRemovalGuard(ctx: IntegrationCheckContex
     // a function of the role set alone, so the check is repeat-safe on a persistent dev database.
     const roles = [...sysUser.UserRoles.map(r => r.RoleID)].sort(ordinalCompare);
     Assert(roles.length >= 2, `the system user must hold at least two roles for this check (holds ${roles.length})`);
-    const [keeper, spare] = roles;
+    // `keeper` must carry an Allow on the fixture entity. The guard judges the AFTER-state: removing a
+    // role is refused only when, with it gone, no remaining role holds an Allow on a field. A system
+    // user that also holds a role with no rows on this entity (a magic-link baseline role, say) would
+    // otherwise make the alphabetically first role the keeper, step 2 would be refused because nobody
+    // holds an Allow rather than because `keeper` holds the last one, and step 3 would be refused too.
+    // `spare` is the first OTHER role: step 2 narrows it to No Access whether or not it has rows, and a
+    // role with no rows contributes no Allow by construction.
+    const entity = FlsEntity(ctx);
+    const allowRoles = await rolesHoldingAllow(ctx, entity.ID);
+    const keeper = roles.find(r => allowRoles.has(r.toLowerCase()));
+    Assert(keeper != null, `no system-user role carries an Allow on '${entity.Name}' (roles: ${roles.join(', ')}; with Allow: ${[...allowRoles].join(', ') || 'none'})`);
+    const spare = roles.find(r => r !== keeper);
+    Assert(spare != null, `the system user needs a second role besides ${keeper} (roles: ${roles.join(', ')})`);
 
     // 1) every role still duplicates the others' Allows → removal permitted.
-    const first = await loadUserRole(ctx, sysUser.ID, keeper);
+    const first = await loadUserRole(ctx, sysUser.ID, keeper!);
+    const firstId = first.ID; // read BEFORE Delete(): a deleted BaseEntity no longer carries the row's key
     Assert(await first.Delete(), `removing a redundant system-user role must be permitted: ${first.LatestResult?.CompleteMessage ?? ''}`);
-    await restoreUserRole(ctx, sysUser.ID, keeper, first.ID);
+    await restoreUserRole(ctx, sysUser.ID, keeper!, firstId);
 
     // 2) narrow every OTHER role to No Access by direct SQL, so `keeper` carries the only Allows.
-    const entity = FlsEntity(ctx);
     const others = roles.filter(r => r !== keeper).map(r => `'${r.toLowerCase()}'`).join(',');
     await Q(ctx,
         `UPDATE p SET p.ReadAccess='No Access', p.UpdateAccess='No Access', p.CreateAccess='No Access' ` +
         `FROM [${SchemaOf(ctx)}].EntityFieldPermission p JOIN [${SchemaOf(ctx)}].EntityField f ON f.ID = p.EntityFieldID ` +
         `WHERE f.EntityID = '${entity.ID}' AND LOWER(CONVERT(NVARCHAR(36), p.RoleID)) IN (${others})`);
     await ctx.Provider.Refresh();
-    const lastCarrier = await loadUserRole(ctx, sysUser.ID, keeper);
+    const lastCarrier = await loadUserRole(ctx, sysUser.ID, keeper!);
     const okLast = await lastCarrier.Delete();
     Assert(!okLast, `removing the role carrying the system user's LAST Allow must be refused ` +
         `(${lastCarrier.LatestResult?.CompleteMessage?.slice(0, 100) ?? 'DELETED — the guard did not fire'})`);
 
     // 3) a role contributing no Allow can still be removed.
-    const redundant = await loadUserRole(ctx, sysUser.ID, spare);
+    const redundant = await loadUserRole(ctx, sysUser.ID, spare!);
+    const redundantId = redundant.ID; // read BEFORE Delete() — see above
     Assert(await redundant.Delete(), `removing a no-Allow system-user role must still be permitted: ${redundant.LatestResult?.CompleteMessage ?? ''}`);
-    await restoreUserRole(ctx, sysUser.ID, spare, redundant.ID);
+    await restoreUserRole(ctx, sysUser.ID, spare!, redundantId);
 }
 
 /** @deprecated Use {@link CheckLc7SystemRoleRemovalGuard}. */
@@ -452,8 +479,9 @@ export async function CheckLc8OrdinaryUserRoleRemovalUnaffected(ctx: Integration
     await enableFresh(ctx);
     const roleId = fx.RoleIDs!.Neutral; // one of multi's three roles
     const ur = await loadUserRole(ctx, fx.Multi!.ID, roleId);
+    const pinnedId = ur.ID; // read BEFORE Delete() — see CheckLc7SystemRoleRemovalGuard
     Assert(await ur.Delete(), `removing a role from an ordinary user must be permitted: ${ur.LatestResult?.CompleteMessage ?? ''}`);
-    await restoreUserRole(ctx, fx.Multi!.ID, roleId, ur.ID);
+    await restoreUserRole(ctx, fx.Multi!.ID, roleId, pinnedId);
 }
 
 /** @deprecated Use {@link CheckLc8OrdinaryUserRoleRemovalUnaffected}. */

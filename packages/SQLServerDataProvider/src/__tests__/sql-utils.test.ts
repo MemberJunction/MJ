@@ -16,6 +16,22 @@ vi.mock('@memberjunction/core', () => {
     getAllFilters() {
       return [];
     }
+    /** The SQL Server dialect members the parameter processor reads. */
+    get Dialect() {
+      return { BooleanParameterValue: (value: boolean) => (value ? 1 : 0) };
+    }
+    /** The process-wide default platform, used when a render names no dialect. */
+    get Platform() {
+      return 'sqlserver';
+    }
+    /** The filters of a dialect (the processor asks per dialect key). */
+    GetFiltersForDialect() {
+      return [];
+    }
+    /** The dialect a render uses; the processor reads its binding rules for booleans. */
+    DialectFor() {
+      return { Binding: { BooleanParameterValue: (value: boolean) => (value ? 1 : 0) } };
+    }
   }
 
   class QueryParameterInfo {
@@ -57,6 +73,7 @@ vi.mock('@memberjunction/core', () => {
     QueryParameterInfo,
     QueryInfo,
     EntityFieldTSType,
+    QUERY_CONTEXT_NAME: 'Context',
     LogError: vi.fn(),
     LogStatus: vi.fn(),
     Metadata: { Provider: { Queries: [] } },

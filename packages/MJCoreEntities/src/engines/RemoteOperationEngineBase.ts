@@ -12,7 +12,14 @@
  *
  * @module @memberjunction/core-entities
  */
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo, RegisterForStartup } from '@memberjunction/core';
+import {
+    BaseEngine,
+    BaseEnginePropertyConfig,
+    ComputeRemoteOperationContractFingerprint,
+    IMetadataProvider,
+    UserInfo,
+    RegisterForStartup,
+} from '@memberjunction/core';
 import { MJRemoteOperationEntity } from '../generated/entity_subclasses';
 
 /** Why an operation is not currently invokable (for a clear caller-facing rejection). */
@@ -85,5 +92,26 @@ export class RemoteOperationEngineBase extends BaseEngine<RemoteOperationEngineB
             return { Invokable: false, ResultCode: 'OPERATION_NOT_APPROVED', Reason: `Remote operation '${operationKey}' has unapproved AI-generated code (CodeApprovalStatus='${row.CodeApprovalStatus}')` };
         }
         return { Invokable: true };
+    }
+
+    /**
+     * Computes the structural contract fingerprint for the cached `MJ: Remote Operations` row
+     * matching `operationKey`, or returns `undefined` if no metadata row exists (code-only op).
+     */
+    public GetContractFingerprint(operationKey: string): string | undefined {
+        const row = this.GetOperationByKey(operationKey);
+        if (!row) {
+            return undefined;
+        }
+        return ComputeRemoteOperationContractFingerprint({
+            OperationKey: row.OperationKey,
+            ExecutionMode: row.ExecutionMode,
+            InputTypeName: row.InputTypeName,
+            InputTypeDefinition: row.InputTypeDefinition,
+            InputTypeIsArray: row.InputTypeIsArray,
+            OutputTypeName: row.OutputTypeName,
+            OutputTypeDefinition: row.OutputTypeDefinition,
+            OutputTypeIsArray: row.OutputTypeIsArray,
+        });
     }
 }

@@ -45,6 +45,7 @@ const makeModel = (over: Record<string, unknown> = {}) =>
     Metrics: '{"AUC":0.9}',
     HoldoutMetrics: '{"AUC":0.86}',
     PipelineID: 'p1',
+    ArtifactFileID: 'f1',
     Status: 'Published',
     ...over,
   });
@@ -84,5 +85,33 @@ describe('PSProductionComponent (DOM)', () => {
   it('exposes the Operate button in the detail pane', () => {
     const fixture = render([makeModel()]);
     expect(query(fixture, '[data-testid="ps-production-operate"]')).not.toBeNull();
+  });
+
+  it('marks a published model with no trained artifact as Needs training and disables Operate', () => {
+    const fixture = render([makeModel({ ArtifactFileID: null })]);
+    expect(query(fixture, '[data-testid="ps-production-row"]')?.textContent).toContain('Needs training');
+    expect(query(fixture, '[data-testid="ps-production-needs-training"]')).not.toBeNull();
+    const operate = query(fixture, '[data-testid="ps-production-operate"]') as HTMLButtonElement | null;
+    expect(operate?.disabled).toBe(true);
+  });
+
+  it('names the metric of each holdout score in the list and the header, so a loss never reads as an AUC', () => {
+    const fixture = render([makeModel({ Metrics: '{}', HoldoutMetrics: '{"log-loss":0.367}' })]);
+    const text = (sel: string) => (query(fixture, sel)?.textContent || '').replace(/\s+/g, ' ').trim();
+    expect([text('[data-testid="ps-production-row"] .meta .ps-mono'), text('.prod-header-card .sub')]).toEqual(['Log Loss 0.367', 'XGBoost · classification · holdout Log Loss 0.367']);
+  });
+
+  it('shows no holdout score for a model with no holdout metrics, never its training score', () => {
+    const fixture = render([makeModel({ Metrics: '{"AUC":0.91}', HoldoutMetrics: null })]);
+    expect(query(fixture, '.prod-header-card .sub')?.textContent).not.toContain('0.910');
+  });
+
+  it('highlights the selected model when the selection spells its ID in another case', () => {
+    const fixture = render([makeModel({ ID: 'AAAAAAAA-0000-4000-8000-000000000001', Version: 1 }), makeModel({ ID: 'BBBBBBBB-0000-4000-8000-000000000002', Version: 2 })]);
+    fixture.componentInstance.Select('bbbbbbbb-0000-4000-8000-000000000002');
+    // a row click marks the view dirty; a direct call does not
+    fixture.componentRef.changeDetectorRef.markForCheck();
+    fixture.detectChanges();
+    expect(queryAll(fixture, '[data-testid="ps-production-row"].sel').map((r) => r.textContent?.includes('v2'))).toEqual([true]);
   });
 });

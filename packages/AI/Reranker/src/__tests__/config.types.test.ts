@@ -87,4 +87,38 @@ describe('parseRerankerConfiguration', () => {
             expect(result!.enabled).toBe(true);
         });
     });
+
+    describe('rerankExamples', () => {
+        it('should leave rerankExamples unset, so examples are not reranked, when the config omits it', () => {
+            const result = ParseRerankerConfiguration(JSON.stringify({ rerankerModelId: 'model-1' }));
+            expect(result?.rerankExamples).toBeUndefined();
+        });
+
+        it('should pass rerankExamples through when it is set', () => {
+            const result = ParseRerankerConfiguration(JSON.stringify({ rerankerModelId: 'model-1', rerankExamples: true }));
+            expect(result?.rerankExamples).toBe(true);
+        });
+    });
+
+    describe('DecisionReranker settings', () => {
+        it('should leave decisionTimeoutMS unset, so the reranker applies its default, when the config omits it', () => {
+            const result = ParseRerankerConfiguration(JSON.stringify({ rerankerModelId: 'model-1' }));
+            expect(result?.decisionTimeoutMS).toBeUndefined();
+        });
+
+        it('should pass decisionTimeoutMS through when it is set', () => {
+            const result = ParseRerankerConfiguration(JSON.stringify({ rerankerModelId: 'model-1', decisionTimeoutMS: 5000 }));
+            expect(result?.decisionTimeoutMS).toBe(5000);
+        });
+
+        it('should leave decisionMaxDocumentsPerCall unset, so the reranker applies its default, when the config omits it', () => {
+            const result = ParseRerankerConfiguration(JSON.stringify({ rerankerModelId: 'model-1' }));
+            expect(result?.decisionMaxDocumentsPerCall).toBeUndefined();
+        });
+
+        it('should pass decisionMaxDocumentsPerCall through when it is set', () => {
+            const result = ParseRerankerConfiguration(JSON.stringify({ rerankerModelId: 'model-1', decisionMaxDocumentsPerCall: 10 }));
+            expect(result?.decisionMaxDocumentsPerCall).toBe(10);
+        });
+    });
 });

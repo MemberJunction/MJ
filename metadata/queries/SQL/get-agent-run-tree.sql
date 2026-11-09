@@ -59,7 +59,7 @@ WITH Tree AS (
         CAST(r.Status AS NVARCHAR(50))                       AS Status,
         r.StartedAt                                          AS StartedAt,
         r.CompletedAt                                        AS CompletedAt,
-        r.TotalCost                                          AS Cost,
+        CAST(r.TotalCost AS DECIMAL(19, 8))                  AS Cost,
         r.TotalTokensUsed                                    AS Tokens,
         r.TotalPromptTokensUsed                              AS PromptTokens,
         r.TotalCompletionTokensUsed                          AS CompletionTokens,
@@ -84,7 +84,7 @@ WITH Tree AS (
         -- Authoring order, used as the sort tiebreak. See the ORDER BY at the bottom.
         r.__mj_CreatedAt                                     AS CreatedAt
     FROM [__mj].[vwAIAgentRuns] r
-    WHERE r.ID = '{{ agentRunID }}'
+    WHERE r.ID = {{ agentRunID | sqlString }}
 
     UNION ALL
 
@@ -102,7 +102,7 @@ WITH Tree AS (
         -- A step has no cost of its own; its spend belongs to the run or the prompt underneath it.
         -- Reporting 0 here rather than NULL would make an unpriced step indistinguishable from a
         -- free one.
-        CAST(NULL AS DECIMAL(18, 6)),
+        CAST(NULL AS DECIMAL(19, 8)),
         CAST(NULL AS INT),
         CAST(NULL AS INT),
         CAST(NULL AS INT),
@@ -118,7 +118,7 @@ WITH Tree AS (
     INNER JOIN [__mj].[vwAIAgentRunSteps] s
         ON s.AgentRunID = t.NodeID
     WHERE t.NodeType = 'Run'
-      AND t.Depth < {{ maxDepth }}
+      AND t.Depth < {{ maxDepth | sqlNumber }}
 
     UNION ALL
 
@@ -135,7 +135,7 @@ WITH Tree AS (
         CAST(tk.Status AS NVARCHAR(50)),
         tk.StartedAt,
         tk.CompletedAt,
-        CAST(NULL AS DECIMAL(18, 6)),
+        CAST(NULL AS DECIMAL(19, 8)),
         CAST(NULL AS INT),
         CAST(NULL AS INT),
         CAST(NULL AS INT),
@@ -153,7 +153,7 @@ WITH Tree AS (
     INNER JOIN [__mj].[vwTasks] tk
         ON tk.ID = JSON_VALUE(s.OutputData, '$.parentTaskID')
     WHERE t.NodeType = 'Step'
-      AND t.Depth < {{ maxDepth }}
+      AND t.Depth < {{ maxDepth | sqlNumber }}
 
     UNION ALL
 
@@ -181,7 +181,7 @@ WITH Tree AS (
         -- Cost is resolved OUTSIDE the recursion. SQL Server forbids an outer join in a recursive
         -- member, and the prompt run must be an outer join because most tasks are not prompts. So
         -- the id is carried here and joined once in the final SELECT.
-        CAST(NULL AS DECIMAL(18, 6)),
+        CAST(NULL AS DECIMAL(19, 8)),
         CAST(NULL AS INT),
         CAST(NULL AS INT),
         CAST(NULL AS INT),
@@ -209,7 +209,7 @@ WITH Tree AS (
     INNER JOIN [__mj].[vwTasks] tk
         ON tk.ParentID = t.NodeID
     WHERE t.NodeType IN ('TaskGraph', 'Task')
-      AND t.Depth < {{ maxDepth }}
+      AND t.Depth < {{ maxDepth | sqlNumber }}
 
     UNION ALL
 
@@ -230,7 +230,7 @@ WITH Tree AS (
         CAST(r.Status AS NVARCHAR(50)),
         r.StartedAt,
         r.CompletedAt,
-        r.TotalCost,
+        CAST(r.TotalCost AS DECIMAL(19, 8)),
         r.TotalTokensUsed,
         r.TotalPromptTokensUsed,
         r.TotalCompletionTokensUsed,
@@ -249,7 +249,7 @@ WITH Tree AS (
         ON r.ID = s.TargetLogID
     WHERE t.NodeType = 'Step'
       AND s.StepType = 'Sub-Agent'
-      AND t.Depth < {{ maxDepth }}
+      AND t.Depth < {{ maxDepth | sqlNumber }}
 
     UNION ALL
 
@@ -266,7 +266,7 @@ WITH Tree AS (
         CAST(r.Status AS NVARCHAR(50)),
         r.StartedAt,
         r.CompletedAt,
-        r.TotalCost,
+        CAST(r.TotalCost AS DECIMAL(19, 8)),
         r.TotalTokensUsed,
         r.TotalPromptTokensUsed,
         r.TotalCompletionTokensUsed,
@@ -289,7 +289,7 @@ WITH Tree AS (
     -- this graph, forever — a cycle bounded only by the depth cap, producing a tree a hundred
     -- levels deep that is the same five nodes repeated.
     WHERE t.NodeType = 'Task'
-      AND t.Depth < {{ maxDepth }}
+      AND t.Depth < {{ maxDepth | sqlNumber }}
 )
 SELECT
     t.NodeID,

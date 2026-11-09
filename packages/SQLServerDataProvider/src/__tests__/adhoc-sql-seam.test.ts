@@ -5,7 +5,7 @@
  * close the gap it papered over by proving the REAL provider method (the inherited
  * `InternalRunQuery` → `ExecuteAdhocQuery` pipeline running on a SQLServerDataProvider
  * instance) actually:
- *   1. invokes SQLExpressionValidator.validateFullQuery with the ad-hoc SQL,
+ *   1. invokes SQLExpressionValidator.ValidateFullQuery with the ad-hoc SQL and the SQL Server dialect,
  *   2. refuses to touch the connection when validation fails (returning the
  *      validator's own error), and
  *   3. executes the EXACT validated SQL through the mssql request boundary.
@@ -18,10 +18,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('mssql', async () => (await import('./helpers/mock-mssql')).createMockMssqlModule());
 
 import { SQLExpressionValidator } from '@memberjunction/global';
-import type { RunQueryParams, RunQueryResult, UserInfo } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/core';
+import type { RunQueryParams, RunQueryResult } from '@memberjunction/core';
+import { SystemUserID } from '@memberjunction/generic-database-provider';
 import { SQLServerDataProvider } from '../SQLServerDataProvider';
 import { mssqlState, MockConnectionPool } from './helpers/mock-mssql';
-import { TEST_USER } from './helpers/entity-fixtures';
+
+/**
+ * These tests cover how ad-hoc SQL is validated, paged, retried and shaped on SQL Server, over a
+ * mock connection with no entity metadata, so they run as the system user: a non-system caller's
+ * ad-hoc SQL must read only entity views it can read in full, which is covered in
+ * GenericDatabaseProvider's queryRun.fieldSecurity.test.ts.
+ */
+const SYSTEM_USER = new UserInfo(undefined, { ID: SystemUserID, Name: 'System', Email: 'system@example.com', IsActive: true, UserRoles: [] });
 
 /** Structural view of the provider's private surface the harness needs to seed. */
 interface ProviderPrivateSurface {
@@ -57,16 +66,16 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
     mssqlState.Reset();
   });
 
-  it('invokes SQLExpressionValidator.validateFullQuery with exactly the ad-hoc SQL before executing', async () => {
+  it('invokes SQLExpressionValidator.ValidateFullQuery with exactly the ad-hoc SQL and the SQL Server dialect before executing', async () => {
     const provider = makeProvider();
     const sqlText = 'SELECT TOP 10 ID, Name FROM __mj.vwUsers ORDER BY Name';
     const validatorSpy = vi.spyOn(SQLExpressionValidator.Instance, 'ValidateFullQuery');
     mssqlState.QueueResult({ rows: [{ ID: '1', Name: 'Alice' }] });
 
-    const result = await provider.RunQueryDirect({ SQL: sqlText }, TEST_USER);
+    const result = await provider.RunQueryDirect({ SQL: sqlText }, SYSTEM_USER);
 
     expect(validatorSpy).toHaveBeenCalledTimes(1);
-    expect(validatorSpy).toHaveBeenCalledWith(sqlText);
+    expect(validatorSpy).toHaveBeenCalledWith(sqlText, 'sqlserver');
     expect(result.Success).toBe(true);
     // The EXACT SQL the caller supplied is what hit the mssql request — no rewriting.
     expect(mssqlState.Queries).toHaveLength(1);
@@ -82,7 +91,7 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
     ];
     mssqlState.QueueResult({ rows });
 
-    const result = await provider.RunQueryDirect({ SQL: 'SELECT ID, Name FROM __mj.vwUsers' }, TEST_USER);
+    const result = await provider.RunQueryDirect({ SQL: 'SELECT ID, Name FROM __mj.vwUsers' }, SYSTEM_USER);
 
     expect(result.Success).toBe(true);
     expect(result.QueryID).toBe('');
@@ -99,10 +108,10 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
     const badSQL = "INSERT INTO Users (Name) VALUES ('hacked')";
     // The expected error is whatever the REAL validator produces — computed here,
     // asserted below, so the provider must surface the validator's message verbatim.
-    const expected = SQLExpressionValidator.Instance.validateFullQuery(badSQL);
+    const expected = SQLExpressionValidator.Instance.ValidateFullQuery(badSQL, 'sqlserver');
     expect(expected.valid).toBe(false);
 
-    const result = await provider.RunQueryDirect({ SQL: badSQL }, TEST_USER);
+    const result = await provider.RunQueryDirect({ SQL: badSQL }, SYSTEM_USER);
 
     expect(result.Success).toBe(false);
     expect(result.ErrorMessage).toBe(expected.error);
@@ -115,11 +124,25 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
   it('rejects multi-statement SQL injection attempts before execution', async () => {
     const provider = makeProvider();
 
-    const result = await provider.RunQueryDirect({ SQL: 'SELECT 1; DELETE FROM Users' }, TEST_USER);
+    const result = await provider.RunQueryDirect({ SQL: 'SELECT 1; DELETE FROM Users' }, SYSTEM_USER);
 
     expect(result.Success).toBe(false);
     expect(result.ErrorMessage).toBeTruthy();
     expect(mssqlState.Queries).toHaveLength(0);
+  });
+
+  it('screens with the SQL Server dialect, so a bracket alias that contains a quote is accepted', async () => {
+    // PostgreSQL would read the quote inside [Today's Count] as the start of a literal, so this
+    // query is accepted only when the screen knows the dialect.
+    const provider = makeProvider();
+    const sqlText = "SELECT COUNT(*) AS [Today's Count] FROM __mj.vwUsers WHERE Status = 'Active'";
+    mssqlState.QueueResult({ rows: [{ "Today's Count": 3 }] });
+
+    const result = await provider.RunQueryDirect({ SQL: sqlText }, SYSTEM_USER);
+
+    expect(result.Success).toBe(true);
+    expect(mssqlState.Queries).toHaveLength(1);
+    expect(mssqlState.Queries[0].sql).toBe(sqlText);
   });
 
   it('returns an "Ad-hoc query execution failed" error result when the request throws', async () => {
@@ -128,7 +151,7 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
     // provider's one-shot retry (covered by the next test).
     mssqlState.QueueResult({ error: new Error("Invalid column name 'Bogus'") });
 
-    const result = await provider.RunQueryDirect({ SQL: 'SELECT Bogus FROM __mj.vwUsers' }, TEST_USER);
+    const result = await provider.RunQueryDirect({ SQL: 'SELECT Bogus FROM __mj.vwUsers' }, SYSTEM_USER);
 
     expect(result.Success).toBe(false);
     expect(result.ErrorMessage).toContain('Ad-hoc query execution failed');
@@ -144,7 +167,7 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
     mssqlState.QueueResult({ error: new Error('Connection lost - socket dropped by load balancer') });
     mssqlState.QueueResult({ rows: [{ ID: '1' }] });
 
-    const result = await provider.RunQueryDirect({ SQL: sqlText }, TEST_USER);
+    const result = await provider.RunQueryDirect({ SQL: sqlText }, SYSTEM_USER);
 
     expect(result.Success).toBe(true);
     expect(result.Results).toEqual([{ ID: '1' }]);
@@ -154,20 +177,23 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
     expect(mssqlState.Queries[1].sql).toBe(sqlText);
   });
 
-  it('applies in-memory StartRow/MaxRows pagination while reporting the full TotalRowCount', async () => {
+  it('pages ad-hoc SQL in the database and reports the full TotalRowCount from a count', async () => {
     const provider = makeProvider();
-    const rows = [1, 2, 3, 4, 5].map((n) => ({ ID: `${n}` }));
-    mssqlState.QueueResult({ rows });
+    mssqlState.QueueResult({ rows: [{ ID: '2' }, { ID: '3' }] });
+    mssqlState.QueueResult({ rows: [{ TotalRowCount: 5 }] });
 
     const result = await provider.RunQueryDirect(
       { SQL: 'SELECT ID FROM __mj.vwUsers', StartRow: 1, MaxRows: 2 },
-      TEST_USER,
+      SYSTEM_USER,
     );
 
     expect(result.Success).toBe(true);
     expect(result.Results).toEqual([{ ID: '2' }, { ID: '3' }]);
     expect(result.RowCount).toBe(2);
     expect(result.TotalRowCount).toBe(5);
+    expect(mssqlState.Queries).toHaveLength(2);
+    expect(mssqlState.Queries[0].sql).toMatch(/OFFSET 1 ROWS FETCH NEXT 2 ROWS ONLY/);
+    expect(mssqlState.Queries[1].sql).toMatch(/COUNT\(\*\)/);
   });
 
   it('routes to the ad-hoc path when BOTH SQL and QueryID are supplied (SQL wins)', async () => {
@@ -178,10 +204,10 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
 
     const result = await provider.RunQueryDirect(
       { SQL: sqlText, QueryID: 'AAAAAAAA-0000-0000-0000-000000000001' },
-      TEST_USER,
+      SYSTEM_USER,
     );
 
-    expect(validatorSpy).toHaveBeenCalledWith(sqlText);
+    expect(validatorSpy).toHaveBeenCalledWith(sqlText, 'sqlserver');
     expect(result.Success).toBe(true);
     expect(result.QueryID).toBe(''); // ad-hoc result shape — the saved-query ID was ignored
     expect(result.QueryName).toBe('Ad-Hoc Query');
@@ -195,7 +221,7 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
 
     const result = await provider.RunQueryDirect(
       { QueryID: 'AAAAAAAA-0000-0000-0000-000000000001' },
-      TEST_USER,
+      SYSTEM_USER,
     );
 
     // No metadata is loaded in this harness, so the saved-query path errors —

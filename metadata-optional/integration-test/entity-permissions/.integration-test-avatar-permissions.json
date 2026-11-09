@@ -1,0 +1,28 @@
+[
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Users",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: Avatar Self-Service",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "17A3239F-F99F-4360-9D66-9A0784223BCA"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Users",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: Avatar User Editor",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": true,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "8A960EC5-8C18-40C5-8018-2F5A68FC4736"
+    }
+  }
+]

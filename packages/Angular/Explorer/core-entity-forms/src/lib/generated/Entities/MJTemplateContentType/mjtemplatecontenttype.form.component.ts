@@ -16,7 +16,6 @@ export class MJTemplateContentTypeFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'technicalMetadata', sectionName: 'Technical Metadata', isExpanded: false },
             { sectionKey: 'templateDefinition', sectionName: 'Template Definition', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJTemplateContents', sectionName: 'Template Contents', isExpanded: false }

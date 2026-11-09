@@ -72,6 +72,12 @@ function runView(params: { EntityName: string; ExtraFilter?: string; ResultType?
     return []; // permissions, settings, relationships, schema info
 }
 
+// The template-user step loads the record-cloning engine, which this file's mocks don't provide for.
+vi.mock('../install/template-user.js', () => ({
+    OfferTemplateUser: vi.fn(),
+    NamesFromEmail: vi.fn(),
+    TEMPLATE_USER_ENV: {},
+}));
 vi.mock('@memberjunction/core', () => ({
     Metadata: class { async CreateTransactionGroup() { return sharedTg; } },
     RunView: class { async RunView(params: { EntityName: string; ExtraFilter?: string; ResultType?: string }) { return { Success: true, Results: runView(params) }; } },

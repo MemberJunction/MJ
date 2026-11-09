@@ -232,6 +232,15 @@ export interface SyncResult {
     Success: boolean;
     /** Summary error message when the sync fails or completes with errors */
     ErrorMessage?: string;
+    /**
+     * Objects whose fetch stopped early, so their result set for this run is INCOMPLETE.
+     *
+     * Not a failure — the watermark is held and the unfetched window retries next run — but the
+     * run cannot be reported as an unqualified success either. Without this, a nightly sync that
+     * abandons sixteen objects reads as a clean Success with a small TotalRecords, and the only
+     * evidence is a warning buried in the event stream.
+     */
+    IncompleteObjects?: string[];
     /** The CompanyIntegrationRun ID created for this sync */
     RunID?: string;
     /** Total records processed */
@@ -385,7 +394,23 @@ export interface SyncProgressSnapshot {
     RecordsCreated: number;
     RecordsUpdated: number;
     RecordsErrored: number;
+    /**
+     * Records the sync decided not to write because the content hash matched. plan.md wants this
+     * next to created and updated: "it must show the number of NEW records or update records are
+     * being done ... and also how many are skipped, it must be clear. Synced is different between
+     * created and updated."
+     */
+    RecordsSkipped: number;
     TriggerType: string;
+    /**
+     * The run this progress belongs to, when it is known.
+     *
+     * Optional because the in-process fallback snapshot predates the durable run row and a
+     * pre-6.1.x tenant has no ProgressJSON to read an id back out of. A caller that wants to
+     * TAIL the run (or name it in a message) needs the id, and re-deriving it from a second
+     * query races the run ending between the two reads.
+     */
+    RunID?: string;
 }
 
 /** Notification event type — what triggered the notification */
@@ -461,6 +486,16 @@ export interface SourceSchemaInfo {
      * Set by the connector's `DiscoveryIsAuthoritative` getter; never assume true.
      */
     IsAuthoritative?: boolean;
+    /**
+     * TRUE when the connector handed each object to {@link IntrospectSchemaOptions.OnObject} as it
+     * was built instead of accumulating it. `Objects` then holds only what was NOT streamed — empty
+     * for both base implementations — so a caller that passed a handler must read this before
+     * treating an empty `Objects` as "the source has nothing".
+     *
+     * Falsy when no handler was passed, and also when a connector override ignored the handler and
+     * accumulated anyway; either way `Objects` is the whole schema, exactly as before the seam.
+     */
+    Streamed?: boolean;
 }
 
 /** Options controlling scope of IntrospectSchema. */
@@ -480,6 +515,17 @@ export interface IntrospectSchemaOptions {
      * default IntrospectSchema invokes it; connector overrides may or may not.
      */
     OnProgress?: (scanned: number, total: number) => void;
+    /**
+     * Optional streaming handler. When supplied, the base implementations hand each object to it
+     * as soon as that object is built, AWAIT it, and then drop the object instead of adding it to
+     * `SourceSchemaInfo.Objects` — so a caller that persists inside the handler holds one object
+     * (per describe in flight) instead of the whole catalog. The result carries `Streamed: true`.
+     *
+     * Opt-in on purpose. Without a handler nothing changes, and a connector override that never
+     * forwards this option simply returns a populated schema with `Streamed` falsy — overrides in
+     * other repositories keep working untouched.
+     */
+    OnObject?: (obj: SourceObjectInfo) => Promise<void>;
 }
 
 /** One source object (table, API entity) discovered during introspection. */

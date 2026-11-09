@@ -47,7 +47,7 @@ const ORDERS = [
 class TestableMongoDriver extends MongoExternalDataSourceDriver {
   protected override async resolveCredential<TCred extends Record<string, string> = Record<string, string>>(): Promise<ResolvedCredential<TCred> | null> {
     const values = { username: CONN.user, password: CONN.password } as unknown as TCred;
-    return { credential: null, values, source: 'request', expiresAt: null };
+    return { credential: null, values, source: 'request', expiresAt: null, expirationStatus: 'valid' };
   }
 }
 

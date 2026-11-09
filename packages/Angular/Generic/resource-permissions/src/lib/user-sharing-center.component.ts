@@ -29,10 +29,67 @@ export type SharingCenterTab = 'shared-with-me' | 'shared-by-me';
  * around the same shape.
  */
 export interface SharingCenterDomainGroup {
+    /**
+     * The permission domain's identity: a LOOKUP KEY that drives Revoke resolution,
+     * audit-entity mapping, and icon selection in PermissionEngine. Never renamed.
+     */
     DomainName: string;
+    /**
+     * Business-friendly heading shown to the user (see `GetSharingDomainDisplayLabel`). Optional so
+     * consumers that build this shape themselves keep compiling; the template falls back to `DomainName`.
+     */
+    Label?: string;
     Icon: string;
     Rows: NormalizedPermission[];
     Expanded: boolean;
+}
+
+/**
+ * Display-only friendly headings for the built-in permission domains, used purely for
+ * the Sharing Center section labels. The underlying `DomainName` is a LOOKUP KEY (it
+ * drives Revoke resolution, audit-entity mapping, and icon selection in PermissionEngine)
+ * and MUST NOT be renamed. This map translates only what the user *reads*, never what
+ * the code *matches on*.
+ */
+export const SharingDomainDisplayLabels: Record<string, string> = {
+    'Dashboard Permissions': 'Dashboards',
+    'Artifact Permissions': 'Artifacts',
+    'Collection Permissions': 'Collections',
+    'Access Control Rules': 'Rules',
+    'Resource Permissions': 'Shared Items',
+};
+
+/**
+ * Orders Sharing Center groups by the heading the user reads (`Label`), falling back to
+ * `DomainName`. Sorting by `DomainName` put "Rules" (from "Access Control Rules") first once the
+ * headings were relabeled. Display order only; `DomainName` stays the lookup key.
+ */
+export function CompareSharingDomainGroups(a: SharingCenterDomainGroup, b: SharingCenterDomainGroup): number {
+    return (a.Label ?? a.DomainName).localeCompare(b.Label ?? b.DomainName);
+}
+
+/**
+ * Returns a business-friendly heading for a permission domain. Falls back to the domain
+ * name with a trailing " Permissions" stripped (so an unmapped custom domain like
+ * "Widget Permissions" reads as "Widget"), then to the raw domain name.
+ */
+export function GetSharingDomainDisplayLabel(domainName: string): string {
+    const trimmed = domainName.trim();
+    // Own-property check, not a bare index: DomainName is user-authored for custom domains, and a
+    // plain object lookup would return inherited Object.prototype members for names like "constructor".
+    if (Object.prototype.hasOwnProperty.call(SharingDomainDisplayLabels, trimmed)) {
+        return SharingDomainDisplayLabels[trimmed];
+    }
+    // Plain string ops rather than /\s+Permissions$/i: a whitespace run before an anchored
+    // literal backtracks quadratically on adversarial input (CodeQL js/polynomial-redos).
+    const suffix = ' permissions';
+    if (trimmed.toLowerCase().endsWith(suffix)) {
+        const stripped = trimmed.slice(0, -suffix.length).trimEnd();
+        if (stripped) {
+            return stripped;
+        }
+    }
+    return trimmed || domainName;
 }
 
 /**
@@ -300,12 +357,13 @@ export class UserSharingCenterComponent extends BaseAngularComponent implements 
         for (const [domainName, list] of bucket) {
             groups.push({
                 DomainName: domainName,
+                Label: GetSharingDomainDisplayLabel(domainName),
                 Icon: PermissionEngine.DomainIconFor(domainName),
                 Rows: list.sort((a, b) => (a.ResourceName ?? '').localeCompare(b.ResourceName ?? '')),
                 Expanded: list.length <= 10,
             });
         }
-        return groups.sort((a, b) => a.DomainName.localeCompare(b.DomainName));
+        return groups.sort(CompareSharingDomainGroups);
     }
 
     private setError(message: string): void {

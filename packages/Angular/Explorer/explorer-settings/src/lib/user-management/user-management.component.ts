@@ -4,7 +4,7 @@ import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
 import { MJUserEntity, MJRoleEntity, MJUserRoleEntity, ResourceData } from '@memberjunction/core-entities';
 import { BaseDashboard } from '@memberjunction/ng-shared';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { FilterByUUIDs, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { UserDialogData, UserDialogResult } from './user-dialog/user-dialog.component';
 import { EnrolledRow, ServerRefusalReasons } from './transaction-group-refusals';
@@ -1439,8 +1439,13 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
 
   // Get roles for a specific user
   public GetUserRoles(userId: string): MJRoleEntity[] {
-    const roleIds = this.userRoleMap.get(userId) || [];
-    return this.Roles.filter(role => roleIds.some(id => UUIDsEqual(id, role.ID)));
+    const roleIds = this.userRoleMap.get(userId);
+    if (!roleIds || roleIds.length === 0) {
+      return [];
+    }
+    // Set-based, not a nested `.some(UUIDsEqual(...))`: the template calls this TWICE per user row,
+    // on every change-detection pass. Filtering `this.Roles` keeps the rendered order unchanged.
+    return FilterByUUIDs(this.Roles, roleIds);
   }
 
   /** @deprecated Use {@link GetUserRoles}. */

@@ -39,12 +39,12 @@ export interface CachedComponentInfo {
   // so the URL reflects the component's preserved state.
   savedQueryParams?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
-  // Agent context reported by this component via NavigationService.SetAgentContext()
-  // Cached so it can be restored when the component becomes active again.
+  // Not written or read by the cache manager. Tools are replayed on reattach by
+  // NavigationService.NotifyResourceReattached; a component that publishes agent context keeps
+  // it itself and publishes it again on reattach (NavigationService.ResourceReattached$).
   AgentContext?: Record<string, unknown>;
 
-  // Agent client tools registered by this component via NavigationService.SetAgentClientTools()
-  // Cached so they can be re-registered when the component becomes active again.
+  // Not written or read by the cache manager; see AgentContext.
   AgentClientTools?: { Name: string; Description: string; ParameterSchema: Record<string, unknown>; Handler: (params: Record<string, unknown>) => Promise<unknown> }[];
 }
 
@@ -88,16 +88,56 @@ export class ComponentCacheManager {
    * Generate a unique cache key from resource identity.
    * This is the ONE canonical key format used by ALL cache operations.
    *
-   * `discriminator` is appended into the recordId slot only when recordId is empty.
-   * It exists to prevent collisions between distinct "new record" tabs that share
-   * an empty recordId — e.g., a new MJ:Companies form and a new MJ:Employees form
-   * would otherwise both cache at `appId::RecordResource::__no_record__` and clobber
-   * each other. Passing the entity name as discriminator keeps them separate.
+   * `discriminator` is appended into the recordId slot when the recordId alone does not
+   * identify the resource:
+   * - **Empty recordId** — distinct "new record" tabs, e.g. a new MJ:Companies form and a new
+   *   MJ:Employees form, would otherwise both cache at `appId::RecordResource::__no_record__`
+   *   and clobber each other.
+   * - **The `'dynamic'` view marker** — `NavigationService.OpenDynamicView` stamps every
+   *   dynamic view with that same recordId, so without the entity every dynamic view in an app
+   *   shares one key. A reload from `#Accounts` to `#Contacts` would then get a cache hit on the
+   *   Accounts component, which never has its `Data` rebound, so the tab keeps showing Accounts
+   *   and the tab-container's entity check fires again on every emission.
+   *
+   * Passing the entity name as discriminator keeps them separate. Whatever the tab-container's
+   * reload check compares has to be part of this key, or a reload is handed back the component
+   * it just detached.
    */
   private getCacheKey(resourceType: string, recordId: string, appId: string, discriminator?: string): string {
-    const normalizedRecordId = recordId
-      || (discriminator ? `__new__::${discriminator}` : '__no_record__');
+    let normalizedRecordId: string;
+    if (!recordId) {
+      normalizedRecordId = discriminator ? `__new__::${discriminator}` : '__no_record__';
+    } else if (discriminator && ComponentCacheManager.IsDynamicViewMarker(recordId)) {
+      normalizedRecordId = `dynamic::${discriminator}`;
+    } else if (discriminator && discriminator.includes('abv:')) {
+      normalizedRecordId = `${recordId}::${discriminator}`;
+    } else {
+      normalizedRecordId = recordId;
+    }
     return `${appId}::${resourceType}::${normalizedRecordId}`;
+  }
+
+  /**
+   * Computes the cache discriminator for a resource configuration, combining `Entity` and any
+   * `AlternateBaseView` override so dynamic or saved views opened with different `?abv=` values
+   * do not collide in the component cache.
+   */
+  public static GetCacheDiscriminator(configuration?: Record<string, unknown> | null): string | undefined {
+    const entity = configuration?.Entity as string | undefined;
+    const abv = (configuration?.AlternateBaseView ?? configuration?.alternateBaseView) as string | undefined;
+    if (entity && abv) {
+      return `${entity}|abv:${abv}`;
+    }
+    return entity || (abv ? `abv:${abv}` : undefined);
+  }
+
+  /**
+   * Whether a recordId is the `'dynamic'` marker `NavigationService.OpenDynamicView` stamps on a
+   * dynamic view, which is not a saved-view ID. Matched the way `ViewResourceComponent` matches it
+   * (trimmed, case-insensitive), so the cache and the view agree on what counts as dynamic.
+   */
+  public static IsDynamicViewMarker(recordId: string | null | undefined): boolean {
+    return typeof recordId === 'string' && recordId.trim().toLowerCase() === 'dynamic';
   }
 
   /**
@@ -154,9 +194,8 @@ export class ComponentCacheManager {
     const resolvedResourceType = resourceData.Configuration?.resourceTypeDriverClass
       || resourceData.Configuration?.driverClass
       || resourceData.ResourceType;
-    // Entity name discriminates between distinct "new record" tabs (empty recordId).
-    // For non-Records resource types this is undefined, leaving the key unchanged.
-    const discriminator = resourceData.Configuration?.Entity as string | undefined;
+    // Entity name (plus any AlternateBaseView) discriminates between distinct "new record" or dynamic view tabs.
+    const discriminator = ComponentCacheManager.GetCacheDiscriminator(resourceData.Configuration);
     const key = this.getCacheKey(
       resolvedResourceType,
       resourceData.ResourceRecordID || '',

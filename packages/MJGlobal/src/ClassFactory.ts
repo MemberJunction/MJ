@@ -91,6 +91,14 @@ export type ClassResolutionResult<T> = {
  */
 export class ClassFactory {
     private _registrations: ClassRegistration[] = [];
+    /** Registrations indexed by `baseClassName` for fast per-base queries. */
+    private _byBaseClass = new Map<string, ClassRegistration[]>();
+    /** Registrations indexed by `baseClassName|normalizedKey` for O(1) keyed lookups. */
+    private _byBaseAndKey = new Map<string, ClassRegistration[]>();
+    /** Registrations indexed by `rootClassName` for hierarchy queries. */
+    private _byRootClass = new Map<string, ClassRegistration[]>();
+    private _indexedRegistrationsRef: ClassRegistration[] | null = null;
+    private _indexedRegistrationsLength: number = 0;
 
     /** Per-base fallback-warning counter, backing the volume cap in reportResolutionFailure. */
     private _fallbackCountByBase = new Map<string, number>();
@@ -124,6 +132,12 @@ export class ClassFactory {
      * emitted, so a hot-path resolution failure logs once instead of on every call.
      */
     private _reportedResolutionFailures: Set<string> = new Set();
+
+    /**
+     * `baseClassName|key|subClassName` triples whose duplicate-copy warning has already been
+     * emitted, so a package installed in several physical copies warns once rather than per copy.
+     */
+    private _reportedDuplicateCopies: Set<string> = new Set();
 
     /**
      * Registers a lazy loader callback that will be called when a class registration cannot
@@ -248,6 +262,14 @@ export class ClassFactory {
                 }
             }
             else if (priority === 0 || priority === null || priority === undefined) {
+                // A second physical copy of a package re-runs its module-level registrations. Without
+                // this check the copy takes highest priority + 1 and can outrank a real subclass that
+                // registered between the two copies. Skip it instead, so the earlier resolution stands.
+                if (this.isDuplicateCopy(registrations, subClass, subClassName)) {
+                    this.warnDuplicateCopyOnce(subClassName, effectiveBaseClassName, key);
+                    return;
+                }
+
                 // when priority is not provided or is zero, which is logically the same, check to see what the highest earlier registration was and increment by 1
                 // this automatically makes the most recent registration higher, IF IT DIDN'T ALREADY have a priority explicitly set
                 let highestPriority = 0;
@@ -280,7 +302,12 @@ export class ClassFactory {
             reg.Priority = priority;
             if (metadata !== undefined) reg.Metadata = metadata;
 
+            this.ensureIndexes();
             this._registrations.push(reg);
+            this.indexRegistration(reg);
+            this._indexedRegistrationsRef = this._registrations;
+            this._indexedRegistrationsLength = this._registrations.length;
+
             // Invalidate the GetRegistration memo — a new registration may change the
             // highest-priority winner for any (baseClass, key) bucket.
             this._registrationCache.clear();
@@ -288,6 +315,101 @@ export class ClassFactory {
             // diagnostic to be emitted again if it fails a second time.
             this._reportedResolutionFailures.clear();
         }
+    }
+
+    /**
+     * Rebuilds the secondary lookup maps if `_registrations` was reassigned or mutated
+     * directly (as several unit test suites do in `afterEach` cleanup).
+     */
+    private ensureIndexes(): void {
+        if (this._indexedRegistrationsRef === this._registrations && this._indexedRegistrationsLength === this._registrations.length) {
+            return;
+        }
+        this._byBaseClass.clear();
+        this._byBaseAndKey.clear();
+        this._byRootClass.clear();
+        this._registrationCache.clear();
+        for (let i = 0; i < this._registrations.length; i++) {
+            this.indexRegistration(this._registrations[i]);
+        }
+        this._indexedRegistrationsRef = this._registrations;
+        this._indexedRegistrationsLength = this._registrations.length;
+    }
+
+    private indexRegistration(reg: ClassRegistration): void {
+        const effectiveBaseClassName = (reg.BaseClass as NamedClass | undefined)?.name;
+        if (effectiveBaseClassName) {
+            let baseBucket = this._byBaseClass.get(effectiveBaseClassName);
+            if (!baseBucket) {
+                baseBucket = [];
+                this._byBaseClass.set(effectiveBaseClassName, baseBucket);
+            }
+            baseBucket.push(reg);
+
+            if (reg.Key !== undefined && reg.Key !== null) {
+                const baseKey = `${effectiveBaseClassName}|${reg.Key.trim().toLowerCase()}`;
+                let keyBucket = this._byBaseAndKey.get(baseKey);
+                if (!keyBucket) {
+                    keyBucket = [];
+                    this._byBaseAndKey.set(baseKey, keyBucket);
+                }
+                keyBucket.push(reg);
+            }
+        }
+
+        const rootClassName = (reg.RootClass as NamedClass | undefined)?.name;
+        if (rootClassName) {
+            let rootBucket = this._byRootClass.get(rootClassName);
+            if (!rootBucket) {
+                rootBucket = [];
+                this._byRootClass.set(rootClassName, rootBucket);
+            }
+            rootBucket.push(reg);
+        }
+    }
+
+    /**
+     * True when `subClass` is a second physical copy of a class that is already registered for
+     * this base class + key: a distinct constructor with the same name and the same source text.
+     *
+     * A class whose parent has its own name (`class X extends X`) is an override of that parent,
+     * not a copy, even when its source matches an earlier registration, so it is never treated as
+     * a duplicate. Name alone cannot tell a copy from a different class that happens to share the
+     * name; the identical source is what separates them.
+     */
+    private isDuplicateCopy(registrations: ClassRegistration[], subClass: unknown, subClassName: string): boolean {
+        if (typeof subClass !== 'function') {
+            return false;
+        }
+        const parent: unknown = Object.getPrototypeOf(subClass);
+        if (typeof parent === 'function' && (parent as NamedClass).name === subClassName) {
+            return false;
+        }
+        const source = Function.prototype.toString.call(subClass);
+        return registrations.some(r =>
+            r.SubClass !== subClass &&
+            typeof r.SubClass === 'function' &&
+            (r.SubClass as NamedClass).name === subClassName &&
+            Function.prototype.toString.call(r.SubClass) === source
+        );
+    }
+
+    /**
+     * Warns, once per base class + key + class, that a second copy of a registration was ignored.
+     */
+    private warnDuplicateCopyOnce(subClassName: string, effectiveBaseClassName: string, key: string | null): void {
+        const reportKey = `${effectiveBaseClassName}|${key ?? ''}|${subClassName}`;
+        if (this._reportedDuplicateCopies.has(reportKey)) {
+            return;
+        }
+        this._reportedDuplicateCopies.add(reportKey);
+        console.warn(
+            `*** ClassFactory.Register: ignored a second copy of ${subClassName} for base class ${effectiveBaseClassName} ` +
+            `with key '${key}'. Its source is identical to a class already registered under that name, which means the ` +
+            `package that defines it is installed more than once (for example, nested by peer-dependency resolution). ` +
+            `The first registration is kept, so any subclass registered after it still wins. Deduplicate the package ` +
+            `to remove this warning. ***`
+        );
     }
 
     /**
@@ -445,11 +567,16 @@ export class ClassFactory {
     }
 
     /**
-     * Builds the diagnostic message for a failed key resolution. The registered-key list is the
-     * highest-value part: a typo'd or tree-shaken key is immediately obvious next to the keys the
-     * factory actually knows about.
+     * Describes a key that has no registration for `baseClass`, listing every key that IS
+     * registered for it. Callers that look a class up with `GetRegistration`/`GetRegistrationAsync`
+     * and get nothing back can use this to build an error that shows the known keys next to the
+     * requested one, so a typo or a missing (uninstalled or tree-shaken) class is visible.
+     *
+     * @param baseClass - the base class that was looked up
+     * @param key - the key that was requested
+     * @returns e.g. `ClassFactory: no registration found for base class 'X' with key 'Y'. Registered keys for 'X': 'A', 'B'.`
      */
-    private describeResolutionFailure(baseClass: unknown, key: string | null, requiresSubclass: boolean): string {
+    public DescribeMissingRegistration(baseClass: unknown, key: string | null | undefined): string {
         const baseClassName = (baseClass as NamedClass).name;
         const known = this.GetAllRegistrations(baseClass)
             .map(r => r.Key)
@@ -459,7 +586,19 @@ export class ClassFactory {
 
         return (
             `ClassFactory: no registration found for base class '${baseClassName}' with key '${key ?? '(null)'}'. ` +
-            `Registered keys for '${baseClassName}': ${knownText}. ` +
+            `Registered keys for '${baseClassName}': ${knownText}.`
+        );
+    }
+
+    /**
+     * Builds the diagnostic message for a failed key resolution. The registered-key list is the
+     * highest-value part: a typo'd or tree-shaken key is immediately obvious next to the keys the
+     * factory actually knows about.
+     */
+    private describeResolutionFailure(baseClass: unknown, key: string | null, requiresSubclass: boolean): string {
+        const baseClassName = (baseClass as NamedClass).name;
+        return (
+            this.DescribeMissingRegistration(baseClass, key) + ' ' +
             `RequiresSubclass=${requiresSubclass}. ` +
             (requiresSubclass
                 ? `'${baseClassName}' is marked '@RequiresSubclass()', so it CANNOT be used as a fallback — ` +
@@ -519,19 +658,18 @@ export class ClassFactory {
      * @returns 
      */
     public GetAllRegistrations(baseClass: unknown, key?: string | null): ClassRegistration[] {
-        if (baseClass) {
-            // baseClassName and the normalised key are loop-invariant — computed once here rather
-            // than once per registration. This filter runs over every registration in the process.
-            const baseClassName = (baseClass as { name: string }).name;
-            const normalizedKey = key === undefined || key === null ? null : key.trim().toLowerCase();
-            return this._registrations.filter(r => {
-                const regBaseClassName = (r.BaseClass as { name: string }).name;
-                return  regBaseClassName === baseClassName && // we use the name of the class instead of the class itself because JS is finicky about this since a given module can be loaded in various places (like from multiple other modules) and the class itself will be different in each case
-                        ( normalizedKey === null ? true : r.Key?.trim().toLowerCase() === normalizedKey)
-            } );
-        }
-        else
+        if (!baseClass) {
             return [];
+        }
+        this.ensureIndexes();
+        const baseClassName = (baseClass as { name: string }).name;
+        if (key === undefined || key === null) {
+            const bucket = this._byBaseClass.get(baseClassName);
+            return bucket ? [...bucket] : [];
+        }
+        const normalizedKey = key.trim().toLowerCase();
+        const bucket = this._byBaseAndKey.get(`${baseClassName}|${normalizedKey}`);
+        return bucket ? [...bucket] : [];
     }
 
     /**
@@ -544,13 +682,12 @@ export class ClassFactory {
      */
     public GetAllRegistrationsByKeyPrefix(baseClass: unknown, keyPrefix: string): ClassRegistration[] {
         if (!baseClass || keyPrefix == null) return [];
+        this.ensureIndexes();
         const baseClassName = (baseClass as { name: string }).name;
+        const bucket = this._byBaseClass.get(baseClassName);
+        if (!bucket) return [];
         const needle = keyPrefix.trim().toLowerCase();
-        return this._registrations.filter(r => {
-            const regBaseClassName = (r.BaseClass as { name: string }).name;
-            if (regBaseClassName !== baseClassName) return false;
-            return r.Key != null && r.Key.trim().toLowerCase().startsWith(needle);
-        });
+        return bucket.filter(r => r.Key != null && r.Key.trim().toLowerCase().startsWith(needle));
     }
 
     /**
@@ -560,12 +697,11 @@ export class ClassFactory {
      */
     public GetAllRegistrationsByKeyPattern(baseClass: unknown, pattern: RegExp): ClassRegistration[] {
         if (!baseClass || !pattern) return [];
+        this.ensureIndexes();
         const baseClassName = (baseClass as { name: string }).name;
-        return this._registrations.filter(r => {
-            const regBaseClassName = (r.BaseClass as { name: string }).name;
-            if (regBaseClassName !== baseClassName) return false;
-            return r.Key != null && pattern.test(r.Key.trim());
-        });
+        const bucket = this._byBaseClass.get(baseClassName);
+        if (!bucket) return [];
+        return bucket.filter(r => r.Key != null && pattern.test(r.Key.trim()));
     }
 
     /**
@@ -582,12 +718,11 @@ export class ClassFactory {
         predicate: (metadata: Record<string, unknown> | undefined, registration: ClassRegistration) => boolean
     ): ClassRegistration[] {
         if (!baseClass || typeof predicate !== 'function') return [];
+        this.ensureIndexes();
         const baseClassName = (baseClass as { name: string }).name;
-        return this._registrations.filter(r => {
-            const regBaseClassName = (r.BaseClass as { name: string }).name;
-            if (regBaseClassName !== baseClassName) return false;
-            return predicate(r.Metadata, r);
-        });
+        const bucket = this._byBaseClass.get(baseClassName);
+        if (!bucket) return [];
+        return bucket.filter(r => predicate(r.Metadata, r));
     }
 
     /**
@@ -595,6 +730,7 @@ export class ClassFactory {
      */
     public GetRegistration(baseClass: unknown, key?: string | null): ClassRegistration | null {
         if (!baseClass) return null;
+        this.ensureIndexes();
 
         // Memoized fast path — avoids re-filtering the entire registration list on every call.
         const cacheKey = `${(baseClass as { name: string }).name}|${key == null ? '' : key.trim().toLowerCase()}`;
@@ -607,25 +743,28 @@ export class ClassFactory {
     }
 
     /**
-     * Uncached core of {@link GetRegistration}: filters all matching registrations and returns
-     * the highest-priority (last-registered on ties). Kept private so the public accessor can
-     * memoize without the cache logic obscuring the resolution rule.
+     * Uncached core of {@link GetRegistration}: finds all matching registrations in the
+     * per-base/key index and returns the highest-priority (last-registered on ties).
      */
     private resolveRegistration(baseClass: unknown, key?: string | null): ClassRegistration | null {
-        let matches = this.GetAllRegistrations(baseClass, key)
+        const baseClassName = (baseClass as { name: string }).name;
+        const matches = key === undefined || key === null
+            ? this._byBaseClass.get(baseClassName)
+            : this._byBaseAndKey.get(`${baseClassName}|${key.trim().toLowerCase()}`);
+
         if (matches && matches.length > 0) {
-            // figure out the highest priority for all the matching registrations
             let highestPriority = 0;
             for (let i = 0; i < matches.length; i++) {
-                if (matches[i].Priority > highestPriority)
+                if (matches[i].Priority > highestPriority) {
                     highestPriority = matches[i].Priority;
+                }
             }
 
-            // now filter the matches to only those that have the highest priority
-            const highest = matches.filter(r => r.Priority === highestPriority);
-
-            // return the last one in the list, which will be the last one registered - so that if everyone has the same priority number, we use the LAST one registered
-            return highest[highest.length - 1];
+            for (let i = matches.length - 1; i >= 0; i--) {
+                if (matches[i].Priority === highestPriority) {
+                    return matches[i];
+                }
+            }
         }
 
         return null;
@@ -639,15 +778,20 @@ export class ClassFactory {
      * @returns Array of matching registrations
      */
     public GetRegistrationsByRootClass(rootClass: unknown, key?: string | null): ClassRegistration[] {
-        if (rootClass) {
-            const rootClassName = (rootClass as { name: string }).name;
-            return this._registrations.filter(r => {
-                const regRootClassName = (r.RootClass as { name?: string })?.name;
-                return regRootClassName === rootClassName &&
-                       (key === undefined || key === null ? true : r.Key?.trim().toLowerCase() === key.trim().toLowerCase())
-            });
+        if (!rootClass) {
+            return [];
         }
-        return [];
+        this.ensureIndexes();
+        const rootClassName = (rootClass as { name: string }).name;
+        const bucket = this._byRootClass.get(rootClassName);
+        if (!bucket) {
+            return [];
+        }
+        if (key === undefined || key === null) {
+            return [...bucket];
+        }
+        const normalizedKey = key.trim().toLowerCase();
+        return bucket.filter(r => r.Key?.trim().toLowerCase() === normalizedKey);
     }
 }
 

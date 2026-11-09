@@ -168,6 +168,7 @@
 ::ng-deep .configuration-sections .mj-accordion-panel--expanded .mj-accordion-header {
     background: var(--mj-brand-primary);
     color: var(--mj-text-inverse);
+    outline-color: var(--mj-text-inverse);
 }
 
 ::ng-deep .configuration-sections .mj-accordion-body {
@@ -178,4 +179,54 @@
 .template-header,
 .badge {
     transition: all 0.2s ease;
+}
+
+/* Hero header row: title block left, actions right; on a phone the actions drop under the title. */
+.hero-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 20px;
+}
+
+.action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-end;
+}
+
+@media (max-width: 768px) {
+    .hero-header-row {
+        flex-direction: column;
+    }
+
+    .action-buttons {
+        width: 100%;
+        align-items: stretch;
+    }
+
+    .action-buttons > div {
+        display: flex;
+        gap: 8px;
+    }
+
+    .action-buttons > button {
+        width: 100%;
+    }
+}
+
+/* Phone: sections sit on the page's 12px gutter, so the container and the inline-padded body
+   wrappers drop their side padding (they would indent every section twice). */
+@media (max-width: 768px) {
+    .configuration-sections {
+        padding: 12px 0;
+        border-top: 0;
+        background: transparent;
+    }
+
+    .phone-flush-x {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
 }

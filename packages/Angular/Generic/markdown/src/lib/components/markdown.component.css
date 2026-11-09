@@ -257,8 +257,21 @@
    ============================================ */
 .mj-markdown-container img {
   max-width: 100%;
+  /* A host caps tall images by setting this, a chat column for one; unset, there is no cap. */
+  max-height: var(--mj-markdown-image-max-height, none);
   height: auto;
+  object-fit: contain;
   border-radius: 4px;
+}
+
+/* Images a host shows full size (ImageClicked is bound) */
+.mj-markdown-container img.mj-markdown-image-clickable {
+  cursor: zoom-in;
+}
+
+.mj-markdown-container img.mj-markdown-image-clickable:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: 2px;
 }
 
 /* ============================================
@@ -485,6 +498,50 @@
 .mj-markdown-container .collapsible-action-btn.collapse-all:hover {
   color: var(--mj-status-error);
   background-color: color-mix(in srgb, var(--mj-status-error) 10%, transparent);
+}
+
+/* ============================================
+   Math (TeX typeset as MathML by MarkdownService.RenderMath, and MathML markup)
+   ============================================ */
+.mj-markdown-container .mj-math-block {
+  display: block;
+  margin: 1em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* A wide display formula scrolls instead of widening the message. */
+.mj-markdown-container .katex:has(> math[display="block"]) {
+  display: block;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* Bold styles Unicode has no math letters for (Greek, text runs); Chrome ignores mathvariant. */
+.mj-markdown-container math [mathvariant*="bold"] {
+  font-weight: bold;
+}
+
+/* Chrome ignores MathML's columnalign too, which centres every cell and un-aligns the "=" signs of
+   a derivation. KaTeX writes exactly "right left" (repeated, for alignedat) for aligned, split and
+   alignedat, and "left left" for cases; JATS tables often say just "left" or "right". Other column
+   lists (arrays) stay centred. */
+.mj-markdown-container mtable:is([columnalign="right left"], [columnalign^="right left right left"]) > mtr > mtd:nth-child(odd) {
+  text-align: right;
+}
+
+.mj-markdown-container mtable:is([columnalign="right left"], [columnalign^="right left right left"]) > mtr > mtd:nth-child(even),
+.mj-markdown-container mtable:is([columnalign="left left"], [columnalign="left"]) > mtr > mtd {
+  text-align: left;
+}
+
+.mj-markdown-container mtable[columnalign="right"] > mtr > mtd {
+  text-align: right;
+}
+
+/* TeX that KaTeX could not parse stays visible as source; its title says why. */
+.mj-markdown-container code.mj-math-error {
+  text-decoration: underline wavy var(--mj-status-error);
 }
 
 /* ============================================

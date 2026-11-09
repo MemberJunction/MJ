@@ -45,6 +45,7 @@ import { BaseEntity } from './baseEntity';
 import { ValidationResult } from './entityInfo';
 import type { EntitySavePlan } from './entitySavePlan';
 import type { EntitySaveOptions, IEntityDataProvider } from './interfaces';
+import type { UserInfo } from './securityInfo';
 
 /**
  * The serialized form of a single companion as it crosses the wire.
@@ -273,6 +274,15 @@ export abstract class EntityCompanion<TWire = unknown> {
      * Subclasses with child entities override this to propagate the provider.
      */
     public BindProvider(_provider: IEntityDataProvider | null): void {
+        /* no-op by default */
+    }
+
+    /**
+     * Called when the owner is given a different user (`BaseEntity.ContextCurrentUser`).
+     * Subclasses holding child entities override this to give them the same user, which narrows
+     * what they already hold to that user.
+     */
+    public OnOwnerContextUserChanged(_user: UserInfo): void {
         /* no-op by default */
     }
 }

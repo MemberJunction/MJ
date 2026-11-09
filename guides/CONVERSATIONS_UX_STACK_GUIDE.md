@@ -1,5 +1,7 @@
 # Conversations UX Stack Guide
 
+> **Part of the UI guide set.** The conversations stack is a worked example of the same layering: a framework-neutral runtime with an Angular widget on top. For the big picture (the layers, choosing where UI lives, and why), start with [Building UI on MemberJunction](BUILDING_UI_ON_MJ.md) ([illustrated edition](https://docs.memberjunction.org/v6/building-ui/)).
+
 How MemberJunction's conversational AI surfaces are layered — orchestration
 logic in a pure-TS runtime, Angular widget on top, your app on top of that —
 so the same conversation engine drives a corner overlay, a full-page Chat
@@ -25,7 +27,7 @@ without forking.
 │            OR React/Vue/Node consumer driving ConversationsRuntime directly
 ├─ Layer 3   @memberjunction/ng-conversations                            (Angular widget)
 │            chat-area / message-list / message-item / overlay /
-│            realtime overlay / 7 slots + ChatSlotDirective /
+│            realtime overlay / 8 slots + ChatSlotDirective /
 │            ConversationsRuntimeBootstrap (registers adapters into runtime)
 ├─ Layer 2   @memberjunction/conversations-runtime  ★ pure TS, zero UX deps
 │            ConversationsRuntime singleton (BaseEngine + @RegisterForStartup)
@@ -174,11 +176,64 @@ and leaves `/` skill commands and `#` entity mentions working. All three sit und
 `allowMentions` master (false there disables everything regardless). See the package
 README's feature-toggle table.
 
+### Host rules: which agent answers, and when
+
+A chat with several people in it needs agents that answer only when asked, and only the agents the
+host allows. The chat area takes those rules as inputs; each defaults to today's behavior. Routing
+picks one agent per turn, in this order, skipping any agent `AllowedAgentIDs` leaves out:
+
+```
+1. A tagged agent            (the message @-mentions it)
+2. Continuity                (the last agent that answered, other than the conversation manager)
+3. The conversation's pin    (MJConversationEntity.DefaultAgentID)
+4. The host's default        ([DefaultAgentId] on the chat area)
+5. The conversation manager  (Sage unless configured otherwise; it may delegate)
+```
+
+- **`AgentReplyMode="MentionOnly"`** stops at step 1: a message that tags no agent starts no turn,
+  writes no placeholder and fires no turn events.
+- **`AllowedAgentIDs`** also narrows the `@` list, the manager's delegation (a single delegation and
+  each agent step of a workflow it plans) and the pin and voice pickers.
+- **`BeforeAgentTurn`** fires once per turn, before any reply row exists, with the resolved
+  `AgentId`, `AgentName`, `Route` and `UserMessageId`. Cancel it and nothing more is written; set
+  `RedirectAgentId` to send the turn to another allowed agent.
+- **`AgentTurnHandler`** runs the turn on the host's server instead of MJ's path, so the host's
+  rules hold on the server and not only in the browser.
+- **`AgentHistoryFrom`** is the first moment of the conversation a turn may read. MJAPI's
+  `RunAIAgentFromConversationDetail` takes it as the nullable `agentHistoryFrom` argument, and the
+  run holds it in its history tools, artifacts, compaction and carried-forward tool results. The
+  client names the argument only when it's set, so an older MJAPI keeps working.
+- **`MentionPeople`** is the people the `@` list offers, and **`AutoNameConversation`** turns MJ's
+  naming of a new conversation off.
+
+The package README's "Chats with several people" section has the full table and an example.
+
+### Handing a conversation to another agent
+
+When a top-level agent determines that another directly discoverable peer agent is a better fit for the conversation (`nextStep.type = "Handoff"`), the host transfers the conversation to that target agent rather than running it as a child sub-agent:
+
+- **What happens in the thread:** The source agent finishes its turn on its reply row with its brief handoff message (`"Transferring you to **<name>**…"` when the model omitted `message`) and records a completed `Handoff` `AIAgentRunStep` naming the target agent (`TargetID`) and the target's new detail row (`OutputData.TargetConversationDetailID`). Immediately below it in the same thread, the host creates a new `In-Progress` assistant `ConversationDetail` row with `ParentID` pointing to the source agent's completed detail row and `AgentID` set to the target agent, then runs the target agent at top level (`depth = 0`) and streams its progress and final response live on that new detail ID.
+- **In-thread handoff card and target message treatments (`@memberjunction/ng-conversations`):**
+  - The chat area batch-loads `MJ: AI Agent Run Steps` (`StepType = 'Handoff'`) across all loaded agent runs and builds `HandoffsByDetailId` keyed by the source agent's `ConversationDetail` ID.
+  - The source message row renders `<mj-agent-handoff-card>` (`role="status"`, `aria-live="polite"`) below its prose in one of three states: **Transferring** (animated baton spark while the target detail row is `In-Progress` or not yet loaded), **Transferred** (source text dimmed to secondary color, arrival pulse on target avatar, preset/brief/continuity chips, and collapsible `<details>` brief), or **Couldn't transfer** (danger border, greyed target avatar, and a user-facing refusal reason and next step mapped from `RefusalReason`). Multi-hop chains render the last two hops plus a `+N` badge.
+  - The target agent's message row renders a vertical accent rail (`--mj-handoff-target`), a `"via <Source Agent>"` provenance subline, a preset pill (`PresetName`), its own clock, and a `"Joining the conversation…"` shimmer skeleton while `Status === 'In-Progress'` with empty content.
+- **Ownership chrome, stickiness, and Return to Sage:**
+  - The chat header displays a `"with <Agent>"` chip for the current conversation owner (every owner, Sage included) alongside the pin picker (`mj-conversation-agent-picker` remains the pin). While a non-manager agent owns continuity, the composer displays `"Replying to <Agent> · Return to Sage"` with an owner-specific placeholder (`Ask <Agent> for changes, like "make the opening faster"`).
+  - Routing rule #2 (**Continuity** — `FindContinuityAgentMessage`) walks newest-first along the active branch and stops as soon as it encounters a `User` row that explicitly `@`-mentions the conversation manager (`@Sage`). Clicking **Return to Sage** (or typing `@Sage`) inserts the `@Sage` mention chip via `MessageInputBoxComponent.InsertMention` so the choice persists in the saved user message and survives reloads, returning subsequent unmentioned turns to Sage until a newer handoff occurs.
+- **Target and follow-up preset resolution order:** Both initial handoff execution and follow-up `continueWithAgent` turns resolve the active agent's configuration preset via `ResolveConversationAgentPreset` in `@memberjunction/ai-engine-base` (passing the header mode-picker preset only when its `AgentID` matches the continued agent):
+  1. **`@mention` pin on the branch path:** Newest-first scan of the active branch path (`ConversationEngine.BranchPathFilterFresh`) for an `@{"type":"agent","id":"<targetAgentId>","name":"<targetAgentName>","configId":"<presetId>"}` token matching the target agent with an `Active` `AIAgentConfiguration` owned by that agent.
+  2. **Saved user preference:** The user's `mj.agentMode.<targetAgentId lowercased>` entry in `MJ: User Settings`, matched against preset `Name` exactly on the target agent's `Active` presets.
+  3. **Agent default preset:** The target agent's `Active` `AIAgentConfiguration` with `IsDefault === true`.
+  4. **`None`:** Passes no `configurationId`.
+- **Which hosts follow a handoff — and which never offer it:**
+  - **Offer and follow handoffs** (hosts that pass `handoffChain`, up to `MAX_HANDOFF_HOPS = 3` per user turn with cycle rejection): interactive user turns in `RunAIAgentFromConversationDetail` and `RunAIAgent` (where `AllowedAgentIDs`, when provided by the host, narrows the handoff target catalog), `MJAIAgentRequestEntityServer.resumeAgent` when resuming a top-level conversation after user feedback, and `BaseMessagingAdapter` in `@memberjunction/messaging-adapters` when `settings.DisableDelegation` is not set (which calls `AgentRunner.FollowHandoffs` on a copy of the user-visible history, posts `"<Source> transferred you to **<Target>** (<PresetName>)"` on each hop, and validates legacy fallback `handleDelegation` targets through `ResolveHandoffTarget`).
+  - **Never offer handoffs** (hosts that omit `handoffChain`, so `Handoff` is omitted from the prompt catalog and rejected if emitted): `RunAIAgentSystemUser`, API-key callers with `apiKeyHash`, guests unless `ALL_AVAILABLE_AGENTS` is set under `TrustReservedRunData`, messaging adapters with `DisableDelegation: true`, scheduled jobs, evaluation harnesses, MCP tool invocations, and any sub-agent run (`depth > 0` or `parentRun` present).
+
 ---
 
 ## 6. The slot system (extension surface)
 
-The chat-area exposes 7 named template slots. Project a template via the
+The chat-area exposes 8 named template slots. Project a template via the
 `mjChatSlot` directive to replace or augment the default rendering. Every
 slot is **opt-in** — existing embeds see no UI change.
 
@@ -190,6 +245,7 @@ slot is **opt-in** — existing embeds see no UI change.
 | `emptyState` | Replaces the welcome block on a fresh conversation | Consumer projects `mjChatSlot="emptyState"` |
 | `messageRenderer` | Per-message renderer (full bubble replacement) | Consumer projects `mjChatSlot="messageRenderer"` |
 | `messageExtra` | Additive content inside each default bubble, after the text | Consumer projects `mjChatSlot="messageExtra"` |
+| `composerExtra` | **Additive** host UI directly above the composer, wherever the chat area shows one (the new-conversation composer and the empty state's included). Context: `IMJChatComposerExtraContext` | Consumer projects `mjChatSlot="composerExtra"` |
 | `demonstrationSurface` | Layout-mode switch — stage takes main pane, messages → side rail | `[showDemonstrationSurface]="true"` AND slot |
 
 ### Three ways to consume each slot
@@ -251,7 +307,7 @@ happen, plus session-lifecycle informational events.
 
 | Pair | When it fires | Cancel enforced? |
 |---|---|---|
-| `(beforeAgentTurn)` / `(afterAgentTurn)` | Around `processMessage()` | ✓ Yes |
+| `(beforeAgentTurn)` / `(afterAgentTurn)` | Once per agent turn, on every route: before any reply row exists, and after a successful turn. `beforeAgentTurn` can also redirect the turn (`RedirectAgentId`) | ✓ Yes |
 | `(beforeResponseFormSubmitted)` / `(afterResponseFormSubmitted)` | Around interactive form submission | ✓ Yes |
 | `(beforeToolInvoked)` / `(afterToolInvoked)` | Around client-tool dispatch | ✓ Yes |
 | `(sessionStarted)` / `(sessionChannelStateChanged)` / `(sessionEnded)` | Realtime session lifecycle | Informational — cancel not applicable |
@@ -555,8 +611,9 @@ async function main() {
     const runner = ConversationsRuntime.Instance.AgentRunner;
     const result = await runner.processMessage({
         conversationId: 'abc',
-        message: 'Generate the weekly report',
-        conversationDetailId: 'msg-1',
+        message: userMessage, // the user's saved MJ: Conversation Details row
+        // Only the server writes agent replies: it creates the reply row and names it here.
+        onReplyAccepted: (reply) => console.log(`reply row ${reply.ConversationDetailId}`),
         applicationId: null,
     });
 

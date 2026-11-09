@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef, HostListener, ChangeDetectorRef, Output, EventEmitter } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, HostListener, ChangeDetectorRef, Input, Output, EventEmitter } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
@@ -27,6 +27,8 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
 
   @ViewChild('searchInput') SearchInput!: ElementRef<HTMLInputElement>;
   @ViewChild('paletteModal') PaletteModal?: ElementRef<HTMLElement>;
+  /** Offers a "Search everything" row for the typed text. The host turns it on only when search is available. */
+  @Input() ShowSearch = false;
   @Output() AppSelected = new EventEmitter<string>();
   @Output() KnowledgeSearchRequested = new EventEmitter<string>();
 
@@ -59,8 +61,8 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
       this.cdr.detectChanges();
     });
 
-    // Subscribe to application changes
-    this.appManager.AllApplications.pipe(takeUntil(this.destroy$)).subscribe((apps) => {
+    // The user's own apps — the same list Home, the app switcher and the omnibar show
+    this.appManager.Applications.pipe(takeUntil(this.destroy$)).subscribe((apps) => {
       this.AllApps = apps;
       this.filterAndSortApps();
     });
@@ -153,6 +155,16 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
       event.preventDefault();
       first.focus();
     }
+  }
+
+  /** True when the "Search everything" row is shown, below the app results. */
+  get HasSearchAction(): boolean {
+    return this.ShowSearch && this.SearchQuery.trim().length > 0;
+  }
+
+  /** Empty-state hint; points at the search row only when that row is shown. */
+  get NoResultsMessage(): string {
+    return this.HasSearchAction ? 'Try a different search term, or search everything below' : 'Try a different search term';
   }
 
   /**
@@ -280,7 +292,7 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
-        // Allow selecting up to FilteredApps.length (the Knowledge Hub action is at that index)
+        // Allow selecting up to FilteredApps.length (the search row is at that index)
         this.SelectedIndex = Math.min(this.SelectedIndex + 1, this.maxSelectableIndex());
         this.scrollToSelected();
         break;
@@ -295,8 +307,8 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
         event.preventDefault();
         if (this.SelectedIndex < this.FilteredApps.length && this.FilteredApps[this.SelectedIndex]) {
           this.SelectApp(this.FilteredApps[this.SelectedIndex]);
-        } else if (this.SearchQuery.trim().length > 0 && this.SelectedIndex === this.FilteredApps.length) {
-          // Knowledge Hub search action is selected
+        } else if (this.HasSearchAction && this.SelectedIndex === this.FilteredApps.length) {
+          // The search row is selected
           this.SearchKnowledgeHub();
         }
         break;
@@ -312,8 +324,7 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
    * Get the maximum selectable index (apps + knowledge search action if query present)
    */
   private maxSelectableIndex(): number {
-    const hasKnowledgeAction = this.SearchQuery.trim().length > 0;
-    return hasKnowledgeAction ? this.FilteredApps.length : this.FilteredApps.length - 1;
+    return this.HasSearchAction ? this.FilteredApps.length : this.FilteredApps.length - 1;
   }
 
   /**

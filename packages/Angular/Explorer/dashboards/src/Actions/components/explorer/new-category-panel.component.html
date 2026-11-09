@@ -46,10 +46,11 @@
         </div>
 
         <div class="form-group">
-          <label for="categoryParent" class="form-label">
+          <label id="categoryParentLabel" class="form-label">
             Parent Category
           </label>
           <mj-dropdown
+            AriaLabelledBy="categoryParentLabel"
             [(ngModel)]="ParentID"
             [Data]="getParentOptions()"
             TextField="text"

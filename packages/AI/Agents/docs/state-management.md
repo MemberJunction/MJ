@@ -30,13 +30,18 @@ export type AgentPayloadChangeRequest<P = any> = {
     newElements?: Partial<P>;
 
     /**
-     * Elements that should be updated
+     * Elements that should be updated (deep-merged for objects/arrays)
      */
     updateElements?: Partial<P>;
 
     /**
+     * Elements that should be completely replaced (without deep-merging existing nested keys)
+     */
+    replaceElements?: Partial<P>;
+
+    /**
      * Elements that should be removed
-     * Use "_DELETE_" as the value to mark for deletion
+     * Use "__DELETE__" as the value to mark for deletion
      */
     removeElements?: Partial<P>;
     
@@ -190,7 +195,7 @@ The system handles nested changes correctly:
     users: [
       {
         preferences: {
-          theme: "_DELETE_"  // Delete nested property
+          theme: "__DELETE__"  // Delete nested property
         }
       },
       {},  // Keep second user as-is
@@ -198,6 +203,19 @@ The system handles nested changes correctly:
   }
 }
 ```
+
+### LLM Output Error Recovery (`autoCorrectStrayKeys`)
+
+LLMs occasionally emit payload properties outside the standard `newElements` / `updateElements` / `replaceElements` / `removeElements` buckets. Unless `options.ignoreStrayKeys` is set, `PayloadManager.autoCorrectStrayKeys` automatically recovers:
+
+1. **Direct sibling stray keys**: If the LLM places a payload property directly on `payloadChangeRequest` (e.g., `{ status: "published", updateElements: { title: "Updated" } }`), it is moved into `updateElements` (if the key exists on `originalPayload`) or `newElements` (if not), without overwriting any explicit entry already in that bucket.
+2. **Wrapper alias unwrapping**: If the LLM wraps payload properties inside a non-standard wrapper object such as `setFields`, `setElements`, `createElements`, `addElements`, `modifyElements`, `patchElements`, `updates`, `fields`, `set`, or `add` (or any disallowed wrapper key whose inner keys are permitted by `allowedPaths`), `autoCorrectStrayKeys` unwraps the inner keys and places each into `updateElements` or `newElements` so `PayloadSelfWritePaths` validation succeeds cleanly.
+
+### Multi-Turn Artifact Payload Isolation (`artifactDirective.behavior === 'create-new'`)
+
+In multi-turn conversations, `AgentRunner` seeds a new turn's starting payload from the conversation's previous artifact version so iterative refinements can use `updateElements`. When the user instead asks for a **separate, brand-new artifact** and the agent responds with `artifactDirective: { behavior: 'create-new', ... }`:
+- `BaseAgent.executePromptStep` detects when `payload` is still the unmodified inherited payload from the start of the run (`payload === params.payload`, even if read-only action steps executed on earlier turns of the run) or when `replaceElements` is used, and resets the base payload to `{}` before applying `payloadChangeRequest`.
+- This prevents keys from Turn 1's artifact from bleeding into Turn 2's newly created artifact.
 
 ## Benefits
 
@@ -371,7 +389,7 @@ if (result.warnings.length > 0) {
 
 ### Trace State Evolution
 Each agent step tracks:
-- `PayloadAtStart`: State before the step
+- `PayloadAtStart`: State before the step. It can be NULL, with `PayloadAtStartSourceStepID` pointing at the earlier step in the same run whose `PayloadAtEnd` it equals. Readers get the value with `ResolvePayloadAtStart` / `ApplyResolvedPayloadAtStart` from `@memberjunction/ai-core-plus`.
 - `PayloadAtEnd`: State after applying changes
 - Change request details in step output
 

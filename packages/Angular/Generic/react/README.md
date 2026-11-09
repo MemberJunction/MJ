@@ -104,6 +104,21 @@ componentProps = {
 | `ComponentError` | `EventEmitter<Error>` | Errors during rendering or transpilation |
 | `ComponentReady` | `EventEmitter<void>` | React component has mounted |
 
+### MJReactComponent Methods
+
+Hosts that drive a component from outside (an agent operating it through a realtime channel, a toolbar) call the standard component methods on the `MJReactComponent` instance: `InvokeMethod(name, ...args)`, `HasMethod(name)`, `GetCurrentDataState()`, `Refresh()` (the component's own `refresh()` when it registered one, otherwise a re-render), `Print()`, `validate()`, `IsDirty()`, `Reset()`, `ScrollTo(target)` and `Focus(target?)`. Each is a no-op (or `undefined`/`false`) until the component has initialized (`Initialized` fires). A new `Component` input is a new version: the component reinitializes in place and `Initialized` fires again.
+
+### PDF Export
+
+`CapturePDF(orientation = 'portrait', title?)` downloads the rendered component as an A4 PDF named `<title>_<date>.pdf` (the title defaults to the spec's title or name). The artifact viewer offers it from its header as **PDF – Portrait** / **PDF – Landscape**.
+
+- The component is laid out at the page's printable width (718 CSS px portrait, 1047 landscape) so it prints the same whatever the viewer's size; content wider than that (a wide table) is laid out wider and scaled down to fit. The host page around the component is not changed.
+- Content behind inner scrollbars is included, Chart.js charts are re-rendered at 3x, and `data-export-control="true"` elements (export buttons) are left out.
+- Page breaks avoid splitting charts, rows, form fields and text blocks, keep a table's lead-in (title, search box, header row) with its first row and headings with what follows, and shrink a page by up to 20% when that keeps it from being left mostly empty.
+- Content rendered in portals (antd modals, drawers) is outside the component and not included. Each page is one image, so text in the PDF is not selectable.
+
+The pieces are exported for reuse: `ExportComponentToPDF(element, title, orientation)`, `PlanPdfPages`, `EnterPrintMode`, and `BuildImagePdf` (a minimal JPEG-per-page PDF writer).
+
 ## Services
 
 | Service | Purpose |
@@ -137,3 +152,4 @@ ReactDebugConfig.logLevel = 'verbose';
 - [@memberjunction/global](../../../MJGlobal/README.md) -- Global utilities
 - React and ReactDOM (loaded at runtime from CDN)
 - Babel standalone (loaded at runtime for JSX transpilation)
+- [html-to-image](https://github.com/bubkoo/html-to-image) -- DOM capture for PDF export

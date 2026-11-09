@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { ComponentFixture } from '@angular/core/testing';
 import { NormalizedPermission } from '@memberjunction/core';
 import { renderComponentFixture, query, queryAll, text, hasClass, click, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
-import { UserSharingCenterComponent, SharingCenterDomainGroup, SharingCenterTab } from './user-sharing-center.component';
+import { UserSharingCenterComponent, SharingCenterDomainGroup, SharingCenterTab, GetSharingDomainDisplayLabel, CompareSharingDomainGroups } from './user-sharing-center.component';
 
 /**
  * DOM-level spec for <mj-user-sharing-center> — a standalone, data-bound component with
@@ -33,8 +33,13 @@ function permission(overrides: Partial<NormalizedPermission> = {}): NormalizedPe
 }
 
 function group(overrides: Partial<SharingCenterDomainGroup> = {}): SharingCenterDomainGroup {
+  const domainName = overrides.DomainName ?? 'Dashboard Permissions';
   return {
-    DomainName: 'Dashboard Permissions',
+    DomainName: domainName,
+    // Mirror production: groupByDomain sets Label to the business-friendly heading while
+    // leaving DomainName as the lookup key. Deriving it here keeps the two in step when a
+    // test overrides DomainName.
+    Label: GetSharingDomainDisplayLabel(domainName),
     Icon: 'fa-solid fa-gauge',
     Rows: [permission()],
     Expanded: true,
@@ -75,9 +80,19 @@ describe('UserSharingCenterComponent (DOM, data-bound)', () => {
     const f = render({}, (c) => {
       c.SharedWithMe = [group({ Rows: [permission(), permission({ SourceRecordID: 'perm2' })] })];
     });
-    expect(text(f, '.group-name')).toBe('Dashboard Permissions');
+    // The section heading shows the business-friendly label ("Dashboards"), NOT the raw
+    // domain lookup key ("Dashboard Permissions").
+    expect(text(f, '.group-name')).toBe('Dashboards');
     // The per-group row count now renders as the accordion title's badge.
     expect(text(f, '.mj-accordion-badge')).toBe('2');
+  });
+
+  it('falls back to the raw DomainName as the heading when a consumer-built group omits Label', () => {
+    // Label is optional on the exported shape so external custom layouts keep compiling.
+    const f = render({}, (c) => {
+      c.SharedWithMe = [group({ Label: undefined })];
+    });
+    expect(text(f, '.group-name')).toBe('Dashboard Permissions');
   });
 
   it('renders one row per permission in an expanded group', () => {
@@ -166,5 +181,55 @@ describe('UserSharingCenterComponent (DOM, data-bound)', () => {
       c.SharedWithMe = [group({ Rows: [permission({ Actions: ['Read', 'Update'] })] })];
     });
     expect(text(f, '.row .actions')).toBe('Read, Update');
+  });
+});
+
+describe('GetSharingDomainDisplayLabel', () => {
+  it('maps each built-in permission domain to a business-friendly heading', () => {
+    expect(GetSharingDomainDisplayLabel('Dashboard Permissions')).toBe('Dashboards');
+    expect(GetSharingDomainDisplayLabel('Artifact Permissions')).toBe('Artifacts');
+    expect(GetSharingDomainDisplayLabel('Collection Permissions')).toBe('Collections');
+    expect(GetSharingDomainDisplayLabel('Access Control Rules')).toBe('Rules');
+    expect(GetSharingDomainDisplayLabel('Resource Permissions')).toBe('Shared Items');
+  });
+
+  it('falls back to the domain name with a trailing " Permissions" stripped', () => {
+    // An unmapped custom domain still reads cleanly instead of showing "… Permissions".
+    expect(GetSharingDomainDisplayLabel('Widget Permissions')).toBe('Widget');
+  });
+
+  it('falls back to the raw domain name when there is nothing to strip', () => {
+    expect(GetSharingDomainDisplayLabel('Something Custom')).toBe('Something Custom');
+  });
+
+  it('normalizes whitespace before the map lookup, so a padded built-in still maps', () => {
+    expect(GetSharingDomainDisplayLabel('  Dashboard Permissions ')).toBe('Dashboards');
+  });
+
+  it('returns the trimmed name on the raw fallback, so padding never reaches the heading', () => {
+    expect(GetSharingDomainDisplayLabel('  Something Custom ')).toBe('Something Custom');
+  });
+
+  it('does not treat inherited Object.prototype members as map hits', () => {
+    // A custom domain literally named "constructor" must not render the Object constructor.
+    expect(GetSharingDomainDisplayLabel('constructor')).toBe('constructor');
+  });
+});
+
+describe('CompareSharingDomainGroups', () => {
+  const byDomain = (domainName: string) => group({ DomainName: domainName });
+
+  it('orders the headings alphabetically by the label the user reads, not by DomainName', () => {
+    // By DomainName this reads Rules, Artifacts, Collections, Dashboards, Shared Items, because
+    // 'Access Control Rules' sorts first.
+    const sorted = ['Resource Permissions', 'Dashboard Permissions', 'Access Control Rules', 'Collection Permissions', 'Artifact Permissions']
+      .map(byDomain)
+      .sort(CompareSharingDomainGroups);
+    expect(sorted.map(g => g.Label)).toEqual(['Artifacts', 'Collections', 'Dashboards', 'Rules', 'Shared Items']);
+  });
+
+  it('falls back to DomainName for a group without a Label', () => {
+    const sorted = [group({ DomainName: 'Zeta', Label: undefined }), group({ DomainName: 'Alpha', Label: undefined })].sort(CompareSharingDomainGroups);
+    expect(sorted.map(g => g.DomainName)).toEqual(['Alpha', 'Zeta']);
   });
 });

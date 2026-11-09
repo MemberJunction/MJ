@@ -14,6 +14,13 @@ import { InMemoryArtifactLoader } from '../artifact-loader';
 import type { IMLModelLoader, ISidecarPredictor, MLInferenceDeps } from '../types';
 import { FeatureAssemblyExecutor } from '../../feature-assembly';
 import type { IFeatureDataAccess, FetchRowsParams, FetchRowsResult } from '../../feature-assembly';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
+
+/** The models in these tests are legacy models: their pipelines point at no Prediction Unit. */
+const NO_PIPELINE_UNITS = { PredictionUnitIDOf: async (): Promise<string | null> => null };
+/** A model trained without a Training Snapshot: no record was a training row. */
+const NO_TRAINING_ROWS = { TrainingRowIDsOf: async (): Promise<ReadonlySet<string>> => new Set<string>() };
+
 
 /**
  * Write-back wiring tests (plan §10.1). The MLModelInferenceProcessor is
@@ -38,6 +45,7 @@ const FROZEN_SCHEMA: FeatureSchemaEntry[] = [
 
 class FakeMLModel {
   public ID = 'model-1';
+  public Status: MJMLModelEntity['Status'] = 'Published';
   public ArtifactFileID: string | null = 'file-1';
   public FittedPreprocessing: string | null = JSON.stringify({});
   public FeatureSchema = JSON.stringify(FROZEN_SCHEMA);
@@ -61,13 +69,13 @@ class FakeModelLoader implements IMLModelLoader {
 
 class FakeSidecar implements ISidecarPredictor {
   async predict(req: PredictRequest): Promise<PredictResponse> {
-    return { predictions: req.rows.map(() => ({ score: 0.83, class: 'renew' })) };
+    return { predictions: req.rows.map(() => ({ score: 0.83, class: 'renew', probabilities: null })), classOrder: null };
   }
 }
 
 class InMemoryDataAccess implements IFeatureDataAccess {
   async fetchRows(_params: FetchRowsParams): Promise<FetchRowsResult> {
-    return { Success: true, Rows: [] };
+    return { Success: true, Rows: [], TotalRowCount: 0 };
   }
   async fetchEmbedding(): Promise<number[] | null> {
     return null;
@@ -110,8 +118,8 @@ class TestWriteBackWrapper implements IRecordProcessor {
 }
 
 const CTX: RecordProcessorContext = {
-  contextUser: undefined as unknown as UserInfo,
-  provider: undefined as unknown as IMetadataProvider,
+  ContextUser: undefined as unknown as UserInfo,
+  Provider: undefined as unknown as IMetadataProvider,
 };
 
 function record(id: string): RecordRef {
@@ -122,6 +130,7 @@ function buildInner(): MLModelInferenceProcessor {
   const deps: MLInferenceDeps = {
     modelLoader: new FakeModelLoader(new FakeMLModel()),
     artifactLoader: new InMemoryArtifactLoader(new Map([['file-1', new TextEncoder().encode('bytes')]])),
+    pipelineUnits: NO_PIPELINE_UNITS, trainingRows: NO_TRAINING_ROWS,
     sidecar: new FakeSidecar(),
   };
   return new MLModelInferenceProcessor({ modelId: 'model-1', deps }, new TestAssembler(new InMemoryDataAccess()));
@@ -174,6 +183,7 @@ describe('scoring write-back wiring (§10.1)', () => {
   });
 
   it('does not write when the inner record fails', async () => {
+    const errors = ConsoleCapture.Errors();
     // A processor whose model load fails → Failed result → write path untouched.
     const failing = new MLModelInferenceProcessor(
       {
@@ -190,5 +200,6 @@ describe('scoring write-back wiring (§10.1)', () => {
     const result = await wrapped.ProcessRecord(record('m1'), CTX);
     expect(result.Status).toBe('Failed');
     expect(wrapped.Writes.length).toBe(0);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("MLModelInferenceProcessor: scoring failed for record 'm1': MLModelInferenceProcessor: ML Model 'missing' not found")]);
   });
 });

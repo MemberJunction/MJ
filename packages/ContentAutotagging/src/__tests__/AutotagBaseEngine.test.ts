@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { VectorDBBase } from '@memberjunction/ai-vectordb';
+import type { MJContentItemEntity } from '@memberjunction/core-entities';
 
 // Mock all external dependencies, preserving BaseEngine and related classes
 // Shared mock function so tests can reconfigure RunView behavior
@@ -52,6 +53,9 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
   class MockRunView {
     RunView = mockRunViewFn;
     RunViews = mockRunViewsFn;
+    static FromMetadataProvider() {
+      return new MockRunView();
+    }
   }
   return {
     ...actual,
@@ -138,6 +142,7 @@ vi.mock('@memberjunction/ai-prompts', () => {
       }),
     })),
     AIModelRunner: MockAIModelRunner,
+    AIEmbeddingRunner: MockAIModelRunner,
   };
 });
 
@@ -202,6 +207,14 @@ const mockPrompts = [
   },
 ];
 
+// Vector index fixtures — shared by the AIEngine mock (which owns the Vector Indexes cache) and the
+// KnowledgeHubMetadataEngine mock (whose VectorIndexes getter proxies it). Hoisted so both factories see one array.
+const { mockVectorIndexes } = vi.hoisted(() => ({
+  mockVectorIndexes: [
+    { ID: 'idx-1', Name: 'test-index', VectorDatabaseID: 'vdb-1', EmbeddingModelID: 'embed-model-1', Dimensions: null },
+  ] as Array<{ ID: string; Name: string; VectorDatabaseID: string; EmbeddingModelID: string; Dimensions?: number | null; ExternalID?: string | null }>,
+}));
+
 vi.mock('@memberjunction/aiengine', () => ({
   AIEngine: class MockAIEngine {
     static getInstance() {
@@ -213,6 +226,10 @@ vi.mock('@memberjunction/aiengine', () => ({
         Models: mockModels,
         Prompts: mockPrompts,
         VectorDatabases: [{ ID: 'vdb-1', Name: 'Pinecone', ClassKey: 'PineconeDB' }],
+        VectorIndexes: mockVectorIndexes,
+        GetVectorIndexByID: (id: string) => mockVectorIndexes.find(v => v.ID === id),
+        // Mirrors the real engine: the provider-side name is ExternalID, falling back to Name.
+        GetProviderIndexName: (v: { Name: string; ExternalID?: string | null }) => v.ExternalID?.trim() || v.Name,
       };
     }
     Config = vi.fn().mockResolvedValue(undefined);
@@ -233,15 +250,15 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
   // MJAICredentialBindingEntity, pulled in via BaseAIEngine) always exist —
   // otherwise adding any new core-entities export breaks this mock's load.
   const actual = await importOriginal<typeof import('@memberjunction/core-entities')>();
-  const mockVectorIndexes = [
-    { ID: 'idx-1', Name: 'test-index', VectorDatabaseID: 'vdb-1', EmbeddingModelID: 'embed-model-1' },
-  ];
   const mockKHInstance = {
     ContentSources: [],
     ContentTypes: [],
     ContentSourceTypes: [],
     ContentFileTypes: [],
     VectorIndexes: mockVectorIndexes,
+    // The engine reloads this cache when an item references a source/type it lacks. A no-op by
+    // default (the reload finds nothing new); tests that model a late-created source override it.
+    Config: vi.fn().mockResolvedValue(undefined),
     GetVectorIndexByID: vi.fn().mockImplementation((id: string) =>
       mockVectorIndexes.find(v => v.ID === id)
     ),
@@ -326,6 +343,7 @@ vi.mock('date-fns-tz', () => ({
 }));
 
 import { AutotagBaseEngine } from '../Engine/generic/AutotagBaseEngine';
+import { ContentVectorInfrastructure } from '../Engine/generic/ContentVectorInfrastructure';
 
 // Mock EntityInfo for 'MJ: Content Items', used by the strategy-driven metadata field resolution.
 // Field set covers each eligibility branch: PK+uuid (ID), plain strings (Name/Description/URL),
@@ -775,10 +793,10 @@ describe('AutotagBaseEngine', () => {
           ID: 'source-1',
           ContentSourceTypeID: 'type-1',
           ConfigurationObject: cfg,
-          // loadContentSourceAndTypeMaps calls GetAll() to build the infra map. Return null
-          // infra ids so the item falls back to the default (global) vector infrastructure that
+          // No infra pair, so the item falls back to the default (global) vector infrastructure that
           // setupVectorMocks provides.
-          GetAll: () => ({ EmbeddingModelID: null, VectorIndexID: null }),
+          EmbeddingModelID: null,
+          VectorIndexID: null,
         } as never);
       }
     }
@@ -874,6 +892,7 @@ describe('AutotagBaseEngine', () => {
         return {
           CreateRecords: mockCreateRecords,
           DeleteRecords: mockDeleteRecords,
+          QueryIndex: vi.fn().mockResolvedValue({ success: true, data: { matches: [] } }),
           TryWireColocatedHost: vi.fn().mockReturnValue(false),
           SupportsColocatedQuery: false,
           RequiresAPIKey: true,
@@ -957,7 +976,7 @@ describe('AutotagBaseEngine', () => {
       expect(records[0].metadata.Tags).toEqual(['ai']);
     });
 
-    it('threads the vector index Dimensions through to the embedding call', async () => {
+    it("pins the vector index's embedding model and threads its Dimensions through to the embedding call", async () => {
       await setupVectorMocks();
       const { KnowledgeHubMetadataEngine } = await import('@memberjunction/core-entities');
       const index = KnowledgeHubMetadataEngine.Instance.VectorIndexes[0] as { Dimensions?: number | null };
@@ -969,6 +988,8 @@ describe('AutotagBaseEngine', () => {
         // RunEmbedding so the provider produces reduced-dimension vectors.
         expect(mockRunEmbeddingFn).toHaveBeenCalled();
         const embedArgs = mockRunEmbeddingFn.mock.calls[0][0];
+        // ModelID keeps the index single-model: unpinned, the runner may answer from another model.
+        expect(embedArgs.ModelID).toBe('embed-model-1');
         expect(embedArgs.Dimensions).toBe(1024);
       } finally {
         index.Dimensions = original;
@@ -1136,7 +1157,7 @@ describe('AutotagBaseEngine', () => {
     // A colocated provider keeps vectors in the application's own database: no credentials to present,
     // and it needs the active data-provider connection wired in before use. Both facts are only
     // knowable after instantiation, which is why the key check moved below it.
-    describe('createVectorDBInstance — colocated providers', () => {
+    describe('ContentVectorInfrastructure.CreateVectorDB — colocated providers', () => {
       /** Swap in a vector-DB double with the given colocated/key characteristics. */
       async function withVectorDB(shape: { SupportsColocatedQuery: boolean; RequiresAPIKey: boolean }, apiKey: string | null) {
         const { MJGlobal } = await import('@memberjunction/global');
@@ -1153,8 +1174,10 @@ describe('AutotagBaseEngine', () => {
         return { tryWire, createRecords };
       }
 
-      const create = (): VectorDBBase =>
-        (engine as unknown as { createVectorDBInstance: (k: string) => VectorDBBase }).createVectorDBInstance.call(engine, 'SQLServerVectorDatabase');
+      const create = (): Promise<VectorDBBase> =>
+        new ContentVectorInfrastructure({} as never, mockUser).CreateVectorDB(
+          { ID: 'vdb-local', Name: 'Local', ClassKey: 'SQLServerVectorDatabase', CredentialID: null } as never,
+        );
 
       afterEach(async () => {
         const { GetAIAPIKey } = await import('@memberjunction/ai');
@@ -1164,7 +1187,7 @@ describe('AutotagBaseEngine', () => {
       it('wires the host connection on every instance it creates', async () => {
         const { tryWire } = await withVectorDB({ SupportsColocatedQuery: true, RequiresAPIKey: false }, null);
 
-        create();
+        await create();
 
         // Without this the provider throws "requires a host connection" the first time it is used —
         // and it failed confusingly: CreateIndex logged and continued, then vectorization died later
@@ -1177,14 +1200,14 @@ describe('AutotagBaseEngine', () => {
 
         // Previously this threw before instantiation, so a colocated store could only be used by
         // inventing a meaningless AI_VENDOR_API_KEY__SQLServerVectorDatabase.
-        expect(() => create()).not.toThrow();
+        await expect(create()).resolves.toBeDefined();
       });
 
       it('never hands the constructor an empty key, because VectorDBBase rejects one', async () => {
         await withVectorDB({ SupportsColocatedQuery: true, RequiresAPIKey: false }, null);
         const { MJGlobal } = await import('@memberjunction/global');
 
-        create();
+        await create();
 
         // Not cosmetic. `VectorDBBase`'s constructor throws "API key cannot be empty" and colocated
         // providers do not override it, so passing '' would break the keyless case this supports —
@@ -1199,7 +1222,7 @@ describe('AutotagBaseEngine', () => {
 
         // The relaxation is scoped to providers that genuinely need no credentials — Pinecone and
         // friends must still fail loudly rather than attempt an unauthenticated call.
-        expect(() => create()).toThrow(/No API key found for vector DB SQLServerVectorDatabase/);
+        await expect(create()).rejects.toThrow(/No API key found for vector DB SQLServerVectorDatabase/);
       });
     });
 
@@ -1751,6 +1774,147 @@ describe('AutotagBaseEngine', () => {
       });
     });
 
+    // ── A KNOWLEDGEHUB CACHE THAT PREDATES THE ITEM'S SOURCE ──────────────────────────────────
+    // A long-running worker's KnowledgeHub cache loaded before another process created the source.
+    // The source row carries the item's routing (its own index) and storage config, so read from the
+    // stale cache the item silently lands in the content type's / default index with default storage.
+    // Every vectorization entry point reloads the cache once on such a miss.
+    describe('KnowledgeHub cache that predates the item\'s content source', () => {
+      interface KHDouble {
+        ContentSources: unknown[];
+        ContentTypes: unknown[];
+        VectorIndexes: Array<Record<string, unknown>>;
+        Config: ReturnType<typeof vi.fn>;
+      }
+      async function kh(): Promise<KHDouble> {
+        const { KnowledgeHubMetadataEngine } = await import('@memberjunction/core-entities');
+        return KnowledgeHubMetadataEngine.Instance as unknown as KHDouble;
+      }
+      const SOURCE_INDEX = { ID: 'idx-source', Name: 'source-index', VectorDatabaseID: 'vdb-1', EmbeddingModelID: 'embed-model-1' };
+      /** The row another process created after this one's cache loaded: its own index + storage config. */
+      function lateSource() {
+        return {
+          ID: 'source-1',
+          ContentSourceTypeID: 'type-1',
+          ConfigurationObject: { ChunkTextStorage: 'mixed' },
+          EmbeddingModelID: 'embed-model-1',
+          VectorIndexID: SOURCE_INDEX.ID,
+        };
+      }
+      /** Make the next reload find the late source (idempotent — a second reload adds nothing). */
+      async function reloadFindsLateSource(): Promise<KHDouble> {
+        const k = await kh();
+        k.Config.mockImplementation(async () => {
+          if (!k.ContentSources.some(s => (s as { ID: string }).ID === 'source-1')) k.ContentSources.push(lateSource());
+        });
+        return k;
+      }
+
+      beforeEach(async () => {
+        const k = await kh();
+        k.VectorIndexes.push(SOURCE_INDEX);
+        // The content type IS cached (it predates the worker) and carries no infra of its own, so
+        // a lost source override falls through to the default index.
+        k.ContentTypes.push({ ID: 'content-type-1', EmbeddingModelID: null, VectorIndexID: null });
+      });
+      afterEach(async () => {
+        const k = await kh();
+        k.VectorIndexes.splice(k.VectorIndexes.indexOf(SOURCE_INDEX), 1);
+        k.ContentTypes.length = 0;
+        k.Config.mockReset();
+        k.Config.mockResolvedValue(undefined);
+      });
+
+      it('reloads once, then routes and stores by the source\'s own configuration', async () => {
+        const { mockCreateRecords } = await setupVectorMocks();
+        const k = await reloadFindsLateSource();
+
+        await engine.VectorizeContentItems([createMockItem('item-1', 'Content from a late source')] as never[], mockUser);
+
+        expect(k.Config).toHaveBeenCalledTimes(1);
+        expect(k.Config.mock.calls[0][0]).toBe(true); // forceRefresh — the reload bypasses every cache tier
+        expect(k.Config.mock.calls[0][1]).toBe(mockUser);
+        // The SOURCE's index, not the default the stale cache routed to ('test-index')...
+        expect(mockCreateRecords.mock.calls[0][1]).toBe('source-index');
+        // ...and the source's storage config: 'mixed' keeps a single-chunk item at item identity.
+        expect(mockCreateRecords.mock.calls[0][0][0].metadata.Entity).toBe('MJ: Content Items');
+      });
+
+      it('does not reload when the cache already holds every source and type the items reference', async () => {
+        const { mockCreateRecords } = await setupVectorMocks();
+        const k = await kh();
+        k.ContentSources.push(lateSource());
+
+        await engine.VectorizeContentItems([createMockItem('item-1', 'Content')] as never[], mockUser);
+
+        expect(k.Config).not.toHaveBeenCalled();
+        expect(mockCreateRecords.mock.calls[0][1]).toBe('source-index');
+      });
+
+      it('reloads at most once per pass, and a row still missing afterwards keeps the old cascade and says so', async () => {
+        const { mockCreateRecords } = await setupVectorMocks();
+        mockRunEmbeddingFn.mockImplementationOnce(async (params: { Texts: string[] }) => ({
+          Success: true, Vectors: params.Texts.map(() => [0.1, 0.2, 0.3]), PromptRunID: null,
+          TokensUsed: 0, Cost: 0, ErrorMessage: null, ExecutionTimeMs: 0,
+        }));
+        const k = await kh(); // default Config: the reload finds nothing new
+        const { LogError } = await import('@memberjunction/core');
+        const items = [
+          createMockItem('item-1', 'First'),
+          { ...createMockItem('item-2', 'Second'), ContentSourceID: 'source-2' },
+        ];
+
+        await engine.VectorizeContentItems(items as never[], mockUser);
+
+        expect(k.Config).toHaveBeenCalledTimes(1);
+        const stillAbsent = vi.mocked(LogError).mock.calls.map(c => String(c[0])).find(m => m.includes('still absent'));
+        expect(stillAbsent).toContain('source-1');
+        expect(stillAbsent).toContain('source-2');
+        // Unchanged pre-reload behavior: no source row → the content type → the default index.
+        expect(mockCreateRecords.mock.calls[0][1]).toBe('test-index');
+      });
+
+      it('logs a reload that throws and carries on with the cache it has', async () => {
+        const { mockCreateRecords } = await setupVectorMocks();
+        const k = await kh();
+        k.Config.mockRejectedValue(new Error('connection reset'));
+        const { LogError } = await import('@memberjunction/core');
+
+        const result = await engine.VectorizeContentItems([createMockItem('item-1', 'Content')] as never[], mockUser);
+
+        expect(vi.mocked(LogError)).toHaveBeenCalledWith(expect.stringContaining('reload failed: connection reset'));
+        expect(result.vectorized).toBe(1);
+        expect(mockCreateRecords.mock.calls[0][1]).toBe('test-index');
+      });
+
+      it('EmbedPendingChunks reloads too, and embeds the pending chunk into the source\'s index', async () => {
+        const { mockCreateRecords } = await setupVectorMocks();
+        const k = await reloadFindsLateSource();
+        const chunk = {
+          ID: 'chunk-1', ContentItemID: 'item-1', Sequence: 0, Text: 'Pending chunk text',
+          VectorRecordID: null as string | null, EmbeddingStatus: 'Pending' as string, LastEmbeddedAt: null as Date | null,
+          Save: vi.fn().mockResolvedValue(true), LatestResult: { CompleteMessage: '' },
+        };
+        const provider = {
+          RunView: vi.fn().mockImplementation(async (p: Record<string, unknown>) => {
+            if (p['EntityName'] === 'MJ: Content Item Chunks') return { Success: true, Results: [chunk] };
+            if (p['EntityName'] === 'MJ: Content Items') {
+              return { Success: true, Results: [{ ID: 'item-1', ContentSourceID: 'source-1', ContentSourceTypeID: 'type-1', ContentTypeID: 'content-type-1' }] };
+            }
+            return { Success: true, Results: [] };
+          }),
+          EntityByName: () => MOCK_CONTENT_ITEM_ENTITY,
+        };
+        Object.defineProperty(engine, 'ProviderToUse', { get() { return provider; }, configurable: true });
+
+        const result = await engine.EmbedPendingChunks(mockUser);
+
+        expect(k.Config).toHaveBeenCalledTimes(1);
+        expect(result.embedded).toBe(1);
+        expect(mockCreateRecords.mock.calls[0][1]).toBe('source-index');
+      });
+    });
+
     describe('EmbedPendingChunks', () => {
       // A ProviderToUse whose RunView dispatches by entity: pending chunks, then their parent
       // content items. Chunk rows carry Save spies so the Complete transition can be asserted.
@@ -1828,6 +1992,55 @@ describe('AutotagBaseEngine', () => {
         expect(result.embedded).toBe(0);
         expect(chunk.EmbeddingStatus).toBe('Pending');
         expect(chunk.Save).not.toHaveBeenCalled();
+      });
+
+      it("pins the vector index's embedding model and threads its Dimensions to AIEmbeddingRunner.RunEmbedding", async () => {
+        await setupVectorMocks();
+        const { KnowledgeHubMetadataEngine } = await import('@memberjunction/core-entities');
+        const index = KnowledgeHubMetadataEngine.Instance.VectorIndexes[0];
+        const original = index.Dimensions;
+        index.Dimensions = 1024;
+        try {
+          const chunk = makePendingChunk('chunk-dim', 'item-1', 'Chunk text to embed');
+          installChunkProvider([chunk], [makeParentItem('item-1')]);
+
+          await engine.EmbedPendingChunks(mockUser);
+
+          expect(mockRunEmbeddingFn).toHaveBeenCalled();
+          const lastCall = mockRunEmbeddingFn.mock.calls[mockRunEmbeddingFn.mock.calls.length - 1][0];
+          expect(lastCall.ModelID).toBe('embed-model-1');
+          expect(lastCall.Dimensions).toBe(1024);
+        } finally {
+          index.Dimensions = original;
+        }
+      });
+    });
+
+    describe('DetectVectorDuplicates', () => {
+      it("pins the vector index's embedding model and threads its Dimensions to AIEmbeddingRunner.RunEmbedding", async () => {
+        await setupVectorMocks();
+        const { KnowledgeHubMetadataEngine } = await import('@memberjunction/core-entities');
+        const index = KnowledgeHubMetadataEngine.Instance.VectorIndexes[0];
+        const original = index.Dimensions;
+        index.Dimensions = 768;
+        try {
+          // The dedup path reads only these fields of the item.
+          const item = {
+            ID: 'item-dedup',
+            Text: 'Some content for dedup',
+            ContentSourceID: 'source-1',
+            ContentSourceTypeID: 'type-1',
+            ContentTypeID: 'content-type-1',
+          } satisfies Partial<MJContentItemEntity>;
+          await engine.DetectVectorDuplicates(item as MJContentItemEntity, mockUser, true);
+
+          expect(mockRunEmbeddingFn).toHaveBeenCalled();
+          const lastCall = mockRunEmbeddingFn.mock.calls[mockRunEmbeddingFn.mock.calls.length - 1][0];
+          expect(lastCall.ModelID).toBe('embed-model-1');
+          expect(lastCall.Dimensions).toBe(768);
+        } finally {
+          index.Dimensions = original;
+        }
       });
     });
   });
@@ -2187,6 +2400,103 @@ describe('AutotagBaseEngine', () => {
 
       expect(acquireSpy.mock.calls.length).toBe(3);
       acquireSpy.mockRestore();
+    });
+  });
+
+  // The tagging pass reads the source's classification config and the type's model / tag limits
+  // from the same KnowledgeHub cache, so a source created after it loaded is caught per batch too.
+  describe('Autotag pass — KnowledgeHub cache that predates the item\'s content source', () => {
+    const mockUser = { ID: 'user-1' } as never;
+    const CLASSIFICATION = { ClassificationContext: 'Late source context' };
+    interface KHDouble { ContentSources: unknown[]; ContentTypes: unknown[]; Config: ReturnType<typeof vi.fn> }
+
+    async function kh(): Promise<KHDouble> {
+      const { KnowledgeHubMetadataEngine } = await import('@memberjunction/core-entities');
+      return KnowledgeHubMetadataEngine.Instance as unknown as KHDouble;
+    }
+    function tagItem(id: string): Record<string, unknown> {
+      return {
+        ID: id, Name: `Item ${id}`, Text: `text ${id}`,
+        ContentSourceID: 'src-late', ContentSourceTypeID: 'st1', ContentFileTypeID: 'ft1', ContentTypeID: 'ct-late',
+        TaggingStatus: 'Pending', EmbeddingStatus: 'Pending',
+      };
+    }
+
+    afterEach(async () => {
+      const k = await kh();
+      k.ContentSources.length = 0;
+      k.ContentTypes.length = 0;
+      k.Config.mockReset();
+      k.Config.mockResolvedValue(undefined);
+    });
+
+    it('reloads once for the batch, and the item then reads its source\'s classification config', async () => {
+      const k = await kh();
+      k.Config.mockImplementation(async () => {
+        if (k.ContentSources.length > 0) return;
+        k.ContentSources.push({ ID: 'src-late', ConfigurationObject: CLASSIFICATION });
+        k.ContentTypes.push({ ID: 'ct-late', Name: 'Late Type', AIModelID: 'model-1', MinTags: 1, MaxTags: 5 });
+      });
+      const { ClassificationContextResolver } = await import('../Engine/generic/ClassificationContextResolver');
+      const resolveSpy = vi.spyOn(ClassificationContextResolver, 'ResolveEffectiveContext').mockResolvedValue(undefined);
+      const config = { Pipeline: { BatchSize: 1, ErrorThresholdPercent: 100, DelayBetweenBatchesMs: 0 } };
+
+      try {
+        // Two batches on the same late source: the first reloads, the second finds it cached.
+        await engine.ExtractTextAndProcessWithLLM([tagItem('t-1'), tagItem('t-2')] as never[], mockUser, undefined, config);
+
+        expect(k.Config).toHaveBeenCalledTimes(1);
+        expect(k.Config.mock.calls[0][0]).toBe(true);
+        expect(resolveSpy).toHaveBeenCalled();
+        expect(resolveSpy.mock.calls[0][0]).toEqual(CLASSIFICATION);
+      } finally {
+        resolveSpy.mockRestore();
+      }
+    });
+  });
+
+  describe('GetContentSourceLastRunDate & read-only vector DB guards', () => {
+    it("filters MJ: Content Process Runs by Status = 'Completed' AND ProcessedItems > 0 with SQL-escaped SourceID", async () => {
+      const cutoffDate = new Date('2026-06-15T12:00:00Z');
+      mockRunViewFn.mockResolvedValueOnce({
+        Success: true,
+        Results: [{ __mj_CreatedAt: cutoffDate }],
+      });
+
+      const result = await engine.GetContentSourceLastRunDate("src-id'1", {} as never);
+
+      expect(mockRunViewFn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          EntityName: 'MJ: Content Process Runs',
+          ExtraFilter: "SourceID='src-id''1' AND Status = 'Completed' AND ProcessedItems > 0",
+          OrderBy: 'EndTime DESC',
+        }),
+        expect.anything(),
+      );
+      expect(result).toEqual(cutoffDate);
+    });
+
+    it('short-circuits deleteChunkVectors without calling DeleteRecords when vectorDB.IsReadOnly is true', async () => {
+      const deleteRecordsSpy = vi.fn();
+      const deleteChunkVectors = (engine as unknown as {
+        deleteChunkVectors(
+          batch: unknown[],
+          infra: { vectorDB: { IsReadOnly: boolean; DeleteRecords: typeof deleteRecordsSpy }; indexName: string },
+          itemById: Map<string, unknown>,
+        ): Promise<boolean>;
+      }).deleteChunkVectors.bind(engine);
+
+      const ok = await deleteChunkVectors(
+        [{ VectorRecordID: 'vec-1', ContentItemID: 'item-1' }],
+        {
+          vectorDB: { IsReadOnly: true, DeleteRecords: deleteRecordsSpy },
+          indexName: 'test-idx',
+        },
+        new Map(),
+      );
+
+      expect(ok).toBe(true);
+      expect(deleteRecordsSpy).not.toHaveBeenCalled();
     });
   });
 });

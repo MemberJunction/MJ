@@ -24,3 +24,4 @@ export * from './lib/agent-editor/flow-agent-editor.component';
 export * from './lib/agent-editor/agent-properties-panel.component';
 export * from './lib/agent-editor/agent-step-list.component';
 export * from './lib/agent-editor/agent-flow-transformer.service';
+export * from './lib/agent-editor/flow-run-check';

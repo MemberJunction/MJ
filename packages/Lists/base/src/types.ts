@@ -37,7 +37,7 @@ export type ListRefreshMode = 'Additive' | 'Sync';
 export type ListSource =
   | { kind: 'list'; listId: string }
   | { kind: 'view'; viewId: string; runtimeParams?: Record<string, unknown> }
-  | { kind: 'adhoc'; entityName: string; extraFilter: string };
+  | { kind: 'adhoc'; entityName: string; extraFilter: string; alternateBaseView?: string };
 
 /**
  * `AudienceSource` is the same discriminated union as `ListSource` — same

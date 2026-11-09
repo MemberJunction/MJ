@@ -4,7 +4,7 @@
  * These mirror (and extend) the fakes embedded in the original per-driver test files so the
  * extended / contract suites can reuse one implementation. No network, no WebRTC, no Web Audio.
  */
-import { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, JSONObject, type RealtimeVideoFrame } from '@memberjunction/ai';
 import type { Blob as GeminiBlob, Content, FunctionResponse, LiveServerMessage } from '@google/genai';
 import {
     BaseRealtimeClient,
@@ -17,8 +17,10 @@ import {
     IRealtimeAudioSink,
     IRealtimeDataChannel,
     IRealtimePeerConnection,
+    IRealtimeRtpSender,
     OpenAIRealtimeClient,
 } from '../../drivers/openAIRealtimeClient';
+import { IPcmMicCapture } from '../../audio/micCapture';
 import {
     GeminiClientConnectArgs,
     GeminiLiveClientSession,
@@ -26,6 +28,8 @@ import {
     IGeminiAudioPlayback,
     IGeminiMicCapture,
 } from '../../drivers/geminiRealtimeClient';
+import { GEMINI_AVATAR_MP4_TYPE, type IAvatarVideoPlayout, type VideoPlayoutOptions, type VideoPlayoutProblem } from '../../media/videoPlayout';
+import type { MediaVideoSource } from '../../media/model';
 
 // ── Generic media fakes ────────────────────────────────────────────────────────
 
@@ -59,6 +63,36 @@ export class FakeTrack extends EventTarget implements MediaStreamTrack {
     public stop(): void {
         this.Stopped = true;
         this.readyState = 'ended';
+    }
+}
+
+/**
+ * Fake PCM mic capture: records stops and rebinds. Like the real one, a rebind to a stream without an
+ * audio track throws.
+ */
+export class FakeMicCapture implements IPcmMicCapture {
+    public Stopped = false;
+    /** Every stream handed to Rebind, in order. */
+    public readonly Rebound: MediaStream[] = [];
+    public Stop(): void {
+        this.Stopped = true;
+    }
+    public Rebind(micStream: MediaStream): void {
+        if (micStream.getAudioTracks().length === 0) {
+            throw new Error('The microphone stream has no audio track.');
+        }
+        this.Rebound.push(micStream);
+    }
+}
+
+/** Fake RTP sender: records every track it is moved to. */
+export class FakeRtpSender implements IRealtimeRtpSender {
+    /** Every track handed to replaceTrack, in order. */
+    public readonly Replaced: Array<MediaStreamTrack | null> = [];
+    constructor(public Track: MediaStreamTrack | null) {}
+    public async replaceTrack(track: MediaStreamTrack | null): Promise<void> {
+        this.Replaced.push(track);
+        this.Track = track;
     }
 }
 
@@ -169,6 +203,8 @@ export class FakeDataChannel implements IRealtimeDataChannel {
 export class FakePeerConnection implements IRealtimePeerConnection {
     public ontrack: ((event: RTCTrackEvent) => void) | null = null;
     public AddedTracks: MediaStreamTrack[] = [];
+    /** The sender handed back for each added track. */
+    public Senders: FakeRtpSender[] = [];
     public Channel = new FakeDataChannel();
     public ChannelLabel = '';
     public LocalDescription: RTCSessionDescriptionInit | null = null;
@@ -179,8 +215,11 @@ export class FakePeerConnection implements IRealtimePeerConnection {
     /** The offer returned by createOffer (sdp may be intentionally omitted). */
     public Offer: RTCSessionDescriptionInit = { type: 'offer', sdp: 'FAKE_OFFER_SDP' };
 
-    public addTrack(track: MediaStreamTrack, _stream: MediaStream): void {
+    public addTrack(track: MediaStreamTrack, _stream: MediaStream): FakeRtpSender {
         this.AddedTracks.push(track);
+        const sender = new FakeRtpSender(track);
+        this.Senders.push(sender);
+        return sender;
     }
     public createDataChannel(label: string): IRealtimeDataChannel {
         this.ChannelLabel = label;
@@ -258,6 +297,17 @@ export function makeOpenAIConfig(sessionConfig: JSONObject = { instructions: 'be
 
 // ── Gemini fakes ───────────────────────────────────────────────────────────────
 
+/** What Google sends once it has applied a connection's setup. */
+export const GEMINI_SETUP_COMPLETE = { setupComplete: {} } as LiveServerMessage;
+
+/**
+ * Confirms a fake connection's setup through its message callback, as Google does once it has applied the setup the
+ * client sent. The Gemini client puts a connection to use only after that.
+ */
+export function ConfirmGeminiSetup(args: GeminiClientConnectArgs): void {
+    args.OnMessage(GEMINI_SETUP_COMPLETE);
+}
+
 /** Fake Gemini Live session: records every outbound send for assertions. */
 export class FakeGeminiSession implements GeminiLiveClientSession {
     public RealtimeInputs: Array<{ audio?: GeminiBlob; text?: string; media?: GeminiBlob; video?: GeminiBlob }> = [];
@@ -286,6 +336,8 @@ export class FakeGeminiPlayback implements IGeminiAudioPlayback {
     public Closed = false;
     /** Controllable stand-in for "playhead is ahead of the context clock". */
     public IsPlaying = false;
+    /** Every element routed into the playback's graph, in order. */
+    public readonly ConnectedElements: HTMLMediaElement[] = [];
 
     public Enqueue(pcm16: ArrayBuffer): void {
         this.Enqueued.push(pcm16);
@@ -299,13 +351,50 @@ export class FakeGeminiPlayback implements IGeminiAudioPlayback {
         this.Closed = true;
         this.IsPlaying = false;
     }
+    public ConnectMediaElement(element: HTMLMediaElement): void {
+        this.ConnectedElements.push(element);
+    }
 }
 
-/** Fake mic capture handle. */
-export class FakeGeminiMicCapture implements IGeminiMicCapture {
-    public Stopped = false;
-    public Stop(): void {
-        this.Stopped = true;
+/** Fake avatar video player: records what the driver hands it and does with it. */
+export class FakeAvatarPlayout implements IAvatarVideoPlayout {
+    /** Every frame the driver appended, in order. */
+    public readonly Appended: RealtimeVideoFrame[] = [];
+    public EndOfTurnCount = 0;
+    public FlushCount = 0;
+    public Disposed = false;
+    /** Controllable stand-in for "the element plays with media buffered ahead". */
+    public IsPlaying = false;
+    /** Controllable stand-in for the playhead: how many of the appended frames, from the first, have played. A flush plays them all. */
+    public Played = 0;
+    public CarriesVoice: boolean;
+    public readonly Source: MediaVideoSource = { Kind: 'element', Attach: () => () => undefined };
+
+    constructor(public readonly Options: VideoPlayoutOptions) {
+        this.CarriesVoice = Options.CarriesVoice ?? true;
+    }
+
+    /** The appended frames the playhead has not reached ({@link Played}). */
+    public get FramesAhead(): number {
+        return Math.max(0, this.Appended.length - this.Played);
+    }
+
+    public Append(frame: RealtimeVideoFrame): void {
+        this.Appended.push(frame);
+    }
+    public EndOfTurn(): void {
+        this.EndOfTurnCount++;
+    }
+    public Flush(): void {
+        this.FlushCount++;
+        this.IsPlaying = false;
+        this.Played = this.Appended.length;
+    }
+    public OnProblem(_handler: (problem: VideoPlayoutProblem, message: string) => void): () => void {
+        return () => undefined;
+    }
+    public Dispose(): void {
+        this.Disposed = true;
     }
 }
 
@@ -313,15 +402,50 @@ export class FakeGeminiMicCapture implements IGeminiMicCapture {
 export class GeminiTestClient extends GeminiRealtimeClient {
     public Fake = new FakeGeminiSession();
     public Playback = new FakeGeminiPlayback();
-    public Capture = new FakeGeminiMicCapture();
+    public Capture = new FakeMicCapture();
     public LastConnectArgs: GeminiClientConnectArgs | null = null;
     /** The driver's mic-chunk callback, captured so tests can simulate worklet frames. */
     public OnPcmChunk: ((base64Pcm16: string) => void) | null = null;
+    /** Every avatar player the driver created, in order (fakes unless {@link UseRealPlayout}). */
+    public readonly Playouts: IAvatarVideoPlayout[] = [];
+    /** Every set of options the driver created an avatar player with. */
+    public readonly PlayoutOptions: VideoPlayoutOptions[] = [];
+    /** Create the real `VideoPlayout` (install the fake MSE and DOM first) instead of a {@link FakeAvatarPlayout}. */
+    public UseRealPlayout = false;
+    /** Confirm each connection's setup as it opens, as Google does; `false` leaves it to the test ({@link ConfirmSetup}). */
+    public AutoConfirmSetup = true;
+
+    /** The fake avatar player the driver created last; throws when it created none or a real one. */
+    public get Playout(): FakeAvatarPlayout {
+        const playout = this.Playouts.at(-1);
+        if (!(playout instanceof FakeAvatarPlayout)) {
+            throw new Error('The driver created no fake avatar player.');
+        }
+        return playout;
+    }
+
+    protected override CreateVideoPlayout(options: VideoPlayoutOptions): IAvatarVideoPlayout {
+        this.PlayoutOptions.push(options);
+        const playout = this.UseRealPlayout ? super.CreateVideoPlayout(options) : new FakeAvatarPlayout(options);
+        this.Playouts.push(playout);
+        return playout;
+    }
 
     protected override async connectLiveSession(args: GeminiClientConnectArgs): Promise<GeminiLiveClientSession> {
         this.LastConnectArgs = args;
+        if (this.AutoConfirmSetup) {
+            ConfirmGeminiSetup(args);
+        }
         return this.Fake;
     }
+
+    /** Has Google confirm the setup of the connection opened last (with {@link AutoConfirmSetup} off). */
+    public ConfirmSetup(): void {
+        if (this.LastConnectArgs) {
+            ConfirmGeminiSetup(this.LastConnectArgs);
+        }
+    }
+
     protected override async createMicCapture(
         _micStream: MediaStream,
         onPcmChunk: (base64Pcm16: string) => void
@@ -351,4 +475,31 @@ export function makeGeminiConfig(sessionConfig?: JSONObject): ClientRealtimeSess
             config: { systemInstruction: 'be the voice', responseModalities: ['AUDIO'] },
         },
     };
+}
+
+/** How {@link makeGeminiAvatarConfig} mints the avatar and what the host asks for. */
+export interface GeminiAvatarConfigOptions {
+    /** The minted `audioMuxed`. Default `true`. */
+    AudioMuxed?: boolean;
+    /** The minted encoding; `null` mints none. Default the Gemini avatar type. */
+    Encoding?: string | null;
+    /** Whether the host requests the agent's video, as the Avatar channel does. Default `true`. */
+    RequestAgentVideo?: boolean;
+}
+
+/** The avatar name the avatar configs carry (a stand-in, not a real preset). */
+export const STAND_IN_AVATAR_NAME = 'stand-in-avatar';
+
+/** A Gemini session config whose server granted an avatar (the minted `avatar` block), as AV2's mint writes it. */
+export function makeGeminiAvatarConfig(options: GeminiAvatarConfigOptions = {}): ClientRealtimeSessionConfig {
+    const encoding = options.Encoding === undefined ? GEMINI_AVATAR_MP4_TYPE : options.Encoding;
+    const sessionConfig: JSONObject = {
+        model: 'gemini-3.8-live',
+        config: { systemInstruction: 'be the voice', responseModalities: ['VIDEO'], avatarConfig: { avatarName: STAND_IN_AVATAR_NAME } },
+        avatar: { output: true, encoding, audioMuxed: options.AudioMuxed ?? true },
+    };
+    if (options.RequestAgentVideo !== false) {
+        sessionConfig['requestedTracks'] = [{ Modality: 'video', Direction: 'outbound' }];
+    }
+    return makeGeminiConfig(sessionConfig);
 }

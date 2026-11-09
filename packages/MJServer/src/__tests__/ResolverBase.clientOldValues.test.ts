@@ -1,0 +1,616 @@
+// Reflect.metadata polyfill at import time.
+import 'reflect-metadata';
+import { describe, it, expect, vi } from 'vitest';
+import { BaseEntity, EntityFieldTSType, EntityInfo, UserInfo, type EntityFieldInfo, type IMetadataProvider } from '@memberjunction/core';
+import { ENCRYPTED_SENTINEL } from '@memberjunction/global';
+import { ResolverBase } from '../generic/ResolverBase.js';
+
+/**
+ * Client old values arrive as strings, with dates as epoch milliseconds (the GraphQL Timestamp form).
+ * Loading them as-is made an unchanged date field an Invalid Date, so it read as edited: a
+ * Comments-only update to an MJ: Record Changes row was refused for "changing" ChangedAt.
+ */
+class Probe extends ResolverBase {
+    public Convert(field: Partial<EntityFieldInfo>, raw: unknown) {
+        return this.ClientOldValueToFieldValue(field as EntityFieldInfo, raw);
+    }
+    public MustLoad(
+        entity: Record<string, unknown>,
+        oldValues: boolean | Array<{ Key: string; Value: unknown }>,
+        entityFields: Array<Record<string, unknown>> = []
+    ) {
+        // A real entity with no permission rows and a user with no roles: no row filter applies.
+        // The Update RLS term itself is covered in resolverBase.fls.test.ts.
+        const user = new UserInfo(null, { ID: 'u-1', Name: 'Probe', Email: 'probe@example.test', IsActive: true, UserRoles: [] });
+        const resolvedOldValues = Array.isArray(oldValues)
+            ? oldValues
+            : oldValues
+              ? [{ Key: 'Comments', Value: null }]
+              : undefined;
+        return this.MustLoadTruthFromDatabase(
+            new EntityInfo({ EntityFields: entityFields, ...entity }),
+            { OldValues___: resolvedOldValues },
+            false,
+            false,
+            user
+        );
+    }
+    public HasComplete(entityInfo: EntityInfo, oldValues?: Array<{ Key: string; Value: unknown }> | null): boolean {
+        return this.hasCompleteOldValues(entityInfo, oldValues);
+    }
+    public async TestAndSet(
+        entityObject: BaseEntity,
+        input: { OldValues___?: Array<{ Key: string; Value: unknown }> } & Record<string, unknown>,
+        contextUser: UserInfo
+    ): Promise<Record<string, unknown>> {
+        const clientNewValues: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(input)) {
+            if (k !== 'OldValues___') {
+                clientNewValues[k] = v;
+            }
+        }
+        return await this.TestAndSetClientOldValuesToDBValues(input, clientNewValues, entityObject, contextUser);
+    }
+}
+const probe = new Probe();
+const dateField = { Name: 'ChangedAt', TSType: EntityFieldTSType.Date, Type: 'datetimeoffset', AllowsNull: false, DefaultValue: 'getutcdate()' };
+
+describe('ResolverBase.ClientOldValueToFieldValue', () => {
+    it('reads an epoch-milliseconds string as the same instant', () => {
+        const value = probe.Convert(dateField, '1790365634563') as Date;
+        expect(value).toBeInstanceOf(Date);
+        expect(value.getTime()).toBe(1790365634563);
+    });
+
+    it('reads an ISO date string too, and keeps null as null for a nullable date', () => {
+        expect((probe.Convert(dateField, '2026-09-25T19:47:14.563Z') as Date).toISOString()).toBe('2026-09-25T19:47:14.563Z');
+        expect(probe.Convert({ ...dateField, AllowsNull: true, DefaultValue: null }, null)).toBeNull();
+    });
+
+    it('types numbers and booleans like the field', () => {
+        expect(probe.Convert({ Name: 'N', TSType: EntityFieldTSType.Number, Type: 'int' }, '42')).toBe(42);
+        expect(probe.Convert({ Name: 'B', TSType: EntityFieldTSType.Boolean, Type: 'bit' }, 'false')).toBe(false);
+        expect(probe.Convert({ Name: 'B', TSType: EntityFieldTSType.Boolean, Type: 'bit', AllowsNull: true }, null)).toBe(false);
+        expect(probe.Convert({ Name: 'B', TSType: EntityFieldTSType.Boolean, Type: 'bit' }, '1')).toBe(true);
+        expect(probe.Convert({ Name: 'M', TSType: EntityFieldTSType.Number, Type: 'money' }, '1.5')).toBe(1.5);
+    });
+});
+
+function buildTagEntityFields(): Array<Record<string, unknown>> {
+    const entityId = 'E0000000-0000-4000-8000-000000000001';
+    return [
+        { ID: 'F-1', EntityID: entityId, Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, Sequence: 1, Status: 'Active' },
+        { ID: 'F-2', EntityID: entityId, Name: 'Name', Type: 'nvarchar', IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, Sequence: 2, Status: 'Active' },
+        { ID: 'F-3', EntityID: entityId, Name: 'Display Name', Type: 'nvarchar', IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, Sequence: 3, Status: 'Active' },
+        { ID: 'F-4', EntityID: entityId, Name: 'Description', Type: 'nvarchar', IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, Sequence: 4, Status: 'Active' },
+        { ID: 'F-5', EntityID: entityId, Name: '__mj_UpdatedAt', Type: 'datetimeoffset', IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, Sequence: 5, Status: 'Active' },
+        { ID: 'F-6', EntityID: entityId, Name: 'ParentName', Type: 'nvarchar', IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: false, IsVirtual: true, Sequence: 6, Status: 'Active' },
+    ];
+}
+
+describe('ResolverBase.MustLoadTruthFromDatabase & hasCompleteOldValues', () => {
+    it('always loads a Record Change from the database, so client OldValues cannot pin forged audit columns', () => {
+        expect(probe.MustLoad({ Name: 'MJ: Record Changes', TrackRecordChanges: false }, true)).toBe(true);
+    });
+
+    it("always loads a conversation message, so client OldValues cannot claim a message's author or role", () => {
+        expect(probe.MustLoad({ Name: 'MJ: Conversation Details', TrackRecordChanges: false }, true)).toBe(true);
+        expect(probe.MustLoad({ Name: ' mj: conversation details ', TrackRecordChanges: false }, true)).toBe(true);
+    });
+
+    it("always loads a conversation and an agent session, so client OldValues cannot hide a change to the anonymous ownership key (#4931)", () => {
+        expect(probe.MustLoad({ Name: 'MJ: Conversations', TrackRecordChanges: false }, true)).toBe(true);
+        expect(probe.MustLoad({ Name: 'MJ: AI Agent Sessions', TrackRecordChanges: false }, true)).toBe(true);
+    });
+
+    it("always loads a conversation folder, so client OldValues cannot pose as its stored owner", () => {
+        expect(probe.MustLoad({ Name: 'MJ: Projects', TrackRecordChanges: false }, true)).toBe(true);
+    });
+
+    it('still trusts OldValues on other untracked entities without field security when OldValues___ covers all writable fields', () => {
+        const fields = buildTagEntityFields();
+        const completeOldValues = [
+            { Key: 'ID', Value: '11111111-2222-3333-4444-555555555555' },
+            { Key: 'Name', Value: 'Original' },
+            { Key: 'Display_Name', Value: 'Original Display' },
+            { Key: 'Description', Value: 'Desc' },
+        ];
+        expect(
+            probe.MustLoad(
+                { ID: 'E0000000-0000-4000-8000-000000000001', Name: 'MJ: Tags', TrackRecordChanges: false, EnableFieldLevelSecurity: false },
+                completeOldValues,
+                fields
+            )
+        ).toBe(false);
+    });
+
+    it('requires loading truth from the database when OldValues___ is a partial delta (even when TrackRecordChanges === false)', () => {
+        const fields = buildTagEntityFields();
+        const deltaOldValues = [
+            { Key: 'ID', Value: '11111111-2222-3333-4444-555555555555' },
+            { Key: 'Name', Value: 'Original' },
+            // Display_Name and Description omitted because they were not dirty on the client
+        ];
+        expect(
+            probe.MustLoad(
+                { ID: 'E0000000-0000-4000-8000-000000000001', Name: 'MJ: Tags', TrackRecordChanges: false, EnableFieldLevelSecurity: false },
+                deltaOldValues,
+                fields
+            )
+        ).toBe(true);
+    });
+
+    it('requires loading truth from the database when OldValues___ is empty or undefined', () => {
+        const fields = buildTagEntityFields();
+        const entityMeta = { ID: 'E0000000-0000-4000-8000-000000000001', Name: 'MJ: Tags', TrackRecordChanges: false, EnableFieldLevelSecurity: false };
+        expect(probe.MustLoad(entityMeta, [], fields)).toBe(true);
+        expect(probe.MustLoad(entityMeta, false, fields)).toBe(true);
+    });
+});
+
+describe('ResolverBase.TestAndSetClientOldValuesToDBValues — partial delta Update', () => {
+    const tagEntityInfo = new EntityInfo({
+        ID: 'E0000000-0000-4000-8000-000000000001',
+        Name: 'MJ: Tags',
+        BaseTable: 'Tag',
+        BaseView: 'vwTags',
+        SchemaName: '__mj',
+        Status: 'Active',
+        EntityFields: buildTagEntityFields(),
+    });
+
+    function createLoadedTagEntity(errorLogSaves: Array<Record<string, unknown>> = [], failSaveWith?: string): { entity: BaseEntity; user: UserInfo } {
+        const fakeProvider = {
+            Entities: [tagEntityInfo],
+            GetEntityObject: async () => {
+                const errEntity: Record<string, unknown> = {
+                    Save: async () => {
+                        errorLogSaves.push({ ...errEntity });
+                        return failSaveWith === undefined;
+                    },
+                    LatestResult: failSaveWith === undefined ? null : { CompleteMessage: failSaveWith },
+                };
+                return errEntity;
+            },
+        } as unknown as IMetadataProvider;
+
+        const entity = new BaseEntity(tagEntityInfo, fakeProvider);
+        entity.LoadFromData({
+            ID: '11111111-2222-3333-4444-555555555555',
+            Name: 'OriginalTag',
+            'Display Name': 'Original Display',
+            Description: 'Untouched DB Description',
+            __mj_UpdatedAt: new Date('2026-03-01T00:00:00.000Z'),
+            ParentName: 'RootTag',
+        });
+        const user = new UserInfo(null, { ID: 'u-1', Name: 'Probe', Email: 'probe@example.test', IsActive: true, UserRoles: [] });
+        return { entity, user };
+    }
+
+    it('preserves untouched DB fields and applies only the dirty field from a partial delta', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedTagEntity(errorLogSaves);
+
+        await probe.TestAndSet(
+            entity,
+            {
+                ID: '11111111-2222-3333-4444-555555555555',
+                Display_Name: 'Updated Display',
+                OldValues___: [
+                    { Key: 'ID', Value: '11111111-2222-3333-4444-555555555555' },
+                    { Key: 'Display_Name', Value: 'Original Display' },
+                ],
+            },
+            user
+        );
+
+        // Updated field is applied
+        expect(entity.Get('Display Name')).toBe('Updated Display');
+        // Untouched DB fields remain intact (never overwritten with null/defaults)
+        expect(entity.Get('Name')).toBe('OriginalTag');
+        expect(entity.Get('Description')).toBe('Untouched DB Description');
+        // No concurrency conflict warning logged
+        expect(errorLogSaves).toHaveLength(0);
+    });
+
+    it('rejects a conflicting concurrent modification with CONCURRENT_MODIFICATION_CONFLICT while logging SAVE_INCONSISTENCY', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedTagEntity(errorLogSaves);
+
+        // Client thinks Display_Name was 'Stale Client Display', DB has 'Original Display', and client tries to write 'Client New Display'
+        await expect(
+            probe.TestAndSet(
+                entity,
+                {
+                    ID: '11111111-2222-3333-4444-555555555555',
+                    Display_Name: 'Client New Display',
+                    OldValues___: [
+                        { Key: 'ID', Value: '11111111-2222-3333-4444-555555555555' },
+                        { Key: 'Display_Name', Value: 'Stale Client Display' },
+                    ],
+                },
+                user
+            )
+        ).rejects.toMatchObject({
+            extensions: {
+                code: 'CONCURRENT_MODIFICATION_CONFLICT',
+                entityName: 'MJ: Tags',
+                conflictingFields: ['Display_Name'],
+            },
+        });
+
+        // Warning is logged to ErrorLog, and the conflicting DB field is NOT overwritten
+        expect(errorLogSaves).toHaveLength(1);
+        expect(errorLogSaves[0].Code).toBe('SAVE_INCONSISTENCY');
+        // ErrorLog.Code is NCHAR(20)
+        expect(String(errorLogSaves[0].Code).length).toBeLessThanOrEqual(20);
+        expect(String(errorLogSaves[0].Message)).toContain('Display_Name');
+        expect(entity.Get('Display Name')).toBe('Original Display');
+        expect(entity.Get('Description')).toBe('Untouched DB Description');
+    });
+
+    it('allows idempotent concurrent convergence when ClientNewValue already matches the current DB value', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedTagEntity(errorLogSaves);
+
+        // Client thinks Display_Name was 'Stale Client Display', and wants 'Original Display' — which DB already holds
+        await probe.TestAndSet(
+            entity,
+            {
+                ID: '11111111-2222-3333-4444-555555555555',
+                Display_Name: 'Original Display',
+                OldValues___: [
+                    { Key: 'ID', Value: '11111111-2222-3333-4444-555555555555' },
+                    { Key: 'Display_Name', Value: 'Stale Client Display' },
+                ],
+            },
+            user
+        );
+
+        expect(errorLogSaves).toHaveLength(0);
+        expect(entity.Get('Display Name')).toBe('Original Display');
+    });
+
+    it('reports the entity name and the reason when the ErrorLog save fails before throwing CONCURRENT_MODIFICATION_CONFLICT', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const { entity, user } = createLoadedTagEntity([], 'value too long for Code');
+        try {
+            await expect(
+                probe.TestAndSet(
+                    entity,
+                    {
+                        ID: '11111111-2222-3333-4444-555555555555',
+                        Display_Name: 'Client New Display',
+                        OldValues___: [
+                            { Key: 'ID', Value: '11111111-2222-3333-4444-555555555555' },
+                            { Key: 'Display_Name', Value: 'Stale Client Display' },
+                        ],
+                    },
+                    user
+                )
+            ).rejects.toThrow(/Concurrent modification conflict/);
+            const message = errorSpy.mock.calls.map((c) => String(c[0])).join('\n');
+            expect(message).toContain('Failed to save ErrorLog record');
+            expect(message).toContain('value too long for Code');
+            expect(message).toContain(entity.EntityInfo.Name);
+        } finally {
+            errorSpy.mockRestore();
+        }
+    });
+
+    it('merges non-overlapping concurrent edits without overwriting fields that changed in the DB', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedTagEntity(errorLogSaves);
+
+        // Suppose client sent full OldValues___ (e.g. IgnoreDirtyState: true) where Description
+        // changed in DB ('Untouched DB Description' vs 'Old Desc'), while the client only changed Name
+        await probe.TestAndSet(
+            entity,
+            {
+                ID: '11111111-2222-3333-4444-555555555555',
+                Name: 'RenamedTag',
+                Description: 'Old Desc',
+                OldValues___: [
+                    { Key: 'ID', Value: '11111111-2222-3333-4444-555555555555' },
+                    { Key: 'Name', Value: 'OriginalTag' },
+                    { Key: 'Description', Value: 'Old Desc' },
+                ],
+            },
+            user
+        );
+
+        // Description had a DB difference ('Untouched DB Description' !== 'Old Desc'),
+        // and client was NOT changing Description ('Old Desc' === 'Old Desc'): overlap is empty,
+        // Name is updated, AND Description keeps the concurrent DB value instead of being clobbered!
+        expect(errorLogSaves).toHaveLength(0);
+        expect(entity.Get('Name')).toBe('RenamedTag');
+        expect(entity.Get('Description')).toBe('Untouched DB Description');
+    });
+});
+
+
+describe('ResolverBase.TestAndSetClientOldValuesToDBValues — representation drift is not a conflict', () => {
+    const entityId = 'E0000000-0000-4000-8000-000000000002';
+    const jobEntityInfo = new EntityInfo({
+        ID: entityId,
+        Name: 'MJ: Probe Jobs',
+        BaseTable: 'ProbeJob',
+        BaseView: 'vwProbeJobs',
+        SchemaName: '__mj',
+        Status: 'Active',
+        EntityFields: [
+            { ID: 'J-1', EntityID: entityId, Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, Sequence: 1, Status: 'Active' },
+            { ID: 'J-2', EntityID: entityId, Name: 'Name', Type: 'nvarchar', IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, Sequence: 2, Status: 'Active' },
+            { ID: 'J-3', EntityID: entityId, Name: 'Config', Type: 'nvarchar', IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, Sequence: 3, Status: 'Active' },
+            { ID: 'J-4', EntityID: entityId, Name: 'ScheduledAt', Type: 'datetime', IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, Sequence: 4, Status: 'Active' },
+            { ID: 'J-5', EntityID: entityId, Name: 'CompletedAt', Type: 'datetimeoffset', IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, Sequence: 5, Status: 'Active' },
+            { ID: 'J-6', EntityID: entityId, Name: '__mj_UpdatedAt', Type: 'datetimeoffset', IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, Sequence: 6, Status: 'Active' },
+        ],
+    });
+    const jobId = '22222222-3333-4444-5555-666666666666';
+    const dbScheduledAt = new Date('2026-03-01T00:00:00.000Z');
+    const dbCompletedAt = new Date('2026-03-02T00:00:00.000Z');
+
+    function createLoadedJobEntity(errorLogSaves: Array<Record<string, unknown>>): { entity: BaseEntity; user: UserInfo } {
+        const fakeProvider = {
+            Entities: [jobEntityInfo],
+            GetEntityObject: async () => {
+                const errEntity: Record<string, unknown> = {
+                    Save: async () => {
+                        errorLogSaves.push({ ...errEntity });
+                        return true;
+                    },
+                    LatestResult: null,
+                };
+                return errEntity;
+            },
+        } as unknown as IMetadataProvider;
+        const entity = new BaseEntity(jobEntityInfo, fakeProvider);
+        entity.LoadFromData({
+            ID: jobId,
+            Name: 'Nightly',
+            Config: '{"retries":3,"targets":["a","b"]}',
+            ScheduledAt: dbScheduledAt,
+            CompletedAt: dbCompletedAt,
+            __mj_UpdatedAt: new Date('2026-03-01T00:00:00.000Z'),
+        });
+        const user = new UserInfo(null, { ID: 'u-1', Name: 'Probe', Email: 'probe@example.test', IsActive: true, UserRoles: [] });
+        return { entity, user };
+    }
+
+    it('saves an edited JSON field whose old value differs from the DB only in whitespace and key order', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedJobEntity(errorLogSaves);
+
+        await probe.TestAndSet(
+            entity,
+            {
+                ID: jobId,
+                Config: '{"retries":5,"targets":["a","b"]}',
+                OldValues___: [
+                    { Key: 'ID', Value: jobId },
+                    { Key: 'Config', Value: '{ "targets": ["a", "b"],\n  "retries": 3 }' },
+                ],
+            },
+            user
+        );
+
+        expect(errorLogSaves).toHaveLength(0);
+        expect(entity.Get('Config')).toBe('{"retries":5,"targets":["a","b"]}');
+    });
+
+    it('still rejects an edited JSON field when the DB content really changed', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedJobEntity(errorLogSaves);
+
+        await expect(
+            probe.TestAndSet(
+                entity,
+                {
+                    ID: jobId,
+                    Config: '{"retries":5,"targets":["a","b"]}',
+                    OldValues___: [
+                        { Key: 'ID', Value: jobId },
+                        { Key: 'Config', Value: '{"retries":3,"targets":["a"]}' },
+                    ],
+                },
+                user
+            )
+        ).rejects.toMatchObject({ extensions: { code: 'CONCURRENT_MODIFICATION_CONFLICT', conflictingFields: ['Config'] } });
+        expect(errorLogSaves).toHaveLength(1);
+        expect(entity.Get('Config')).toBe('{"retries":3,"targets":["a","b"]}');
+    });
+
+    it('saves an edited datetime field whose old value is within the column resolution of the DB value', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedJobEntity(errorLogSaves);
+        const newScheduledAt = new Date('2026-04-01T00:00:00.000Z');
+
+        // SQL Server datetime resolves to 1/300 s: a 3 ms drift is below one tick.
+        await probe.TestAndSet(
+            entity,
+            {
+                ID: jobId,
+                ScheduledAt: newScheduledAt,
+                OldValues___: [
+                    { Key: 'ID', Value: jobId },
+                    { Key: 'ScheduledAt', Value: String(dbScheduledAt.getTime() + 3) },
+                ],
+            },
+            user
+        );
+
+        expect(errorLogSaves).toHaveLength(0);
+        expect((entity.Get('ScheduledAt') as Date).getTime()).toBe(newScheduledAt.getTime());
+    });
+
+    it('still rejects an edited datetime field when the DB value moved by a full second', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedJobEntity(errorLogSaves);
+
+        await expect(
+            probe.TestAndSet(
+                entity,
+                {
+                    ID: jobId,
+                    ScheduledAt: new Date('2026-04-01T00:00:00.000Z'),
+                    OldValues___: [
+                        { Key: 'ID', Value: jobId },
+                        { Key: 'ScheduledAt', Value: String(dbScheduledAt.getTime() + 1000) },
+                    ],
+                },
+                user
+            )
+        ).rejects.toMatchObject({ extensions: { code: 'CONCURRENT_MODIFICATION_CONFLICT', conflictingFields: ['ScheduledAt'] } });
+        expect(errorLogSaves).toHaveLength(1);
+    });
+
+    it('keeps millisecond precision on a datetimeoffset column, so a 1 ms drift there is a real conflict', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedJobEntity(errorLogSaves);
+
+        await expect(
+            probe.TestAndSet(
+                entity,
+                {
+                    ID: jobId,
+                    CompletedAt: new Date('2026-04-02T00:00:00.000Z'),
+                    OldValues___: [
+                        { Key: 'ID', Value: jobId },
+                        { Key: 'CompletedAt', Value: String(dbCompletedAt.getTime() + 1) },
+                    ],
+                },
+                user
+            )
+        ).rejects.toMatchObject({ extensions: { code: 'CONCURRENT_MODIFICATION_CONFLICT', conflictingFields: ['CompletedAt'] } });
+        expect(errorLogSaves).toHaveLength(1);
+    });
+});
+
+describe('ResolverBase.TestAndSetClientOldValuesToDBValues — encrypted fields', () => {
+    const entityId = 'E0000000-0000-4000-8000-000000000003';
+    const credentialEntityInfo = new EntityInfo({
+        ID: entityId,
+        Name: 'MJ: Probe Credentials',
+        BaseTable: 'ProbeCredential',
+        BaseView: 'vwProbeCredentials',
+        SchemaName: '__mj',
+        Status: 'Active',
+        EntityFields: [
+            { ID: 'C-1', EntityID: entityId, Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, Sequence: 1, Status: 'Active' },
+            { ID: 'C-2', EntityID: entityId, Name: 'Name', Type: 'nvarchar', IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, Sequence: 2, Status: 'Active' },
+            { ID: 'C-3', EntityID: entityId, Name: 'Secret', Type: 'nvarchar', IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, Sequence: 3, Status: 'Active', Encrypt: true, AllowDecryptInAPI: false, SendEncryptedValue: false },
+            { ID: 'C-4', EntityID: entityId, Name: 'Token', Type: 'nvarchar', IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, Sequence: 4, Status: 'Active', Encrypt: true, AllowDecryptInAPI: true, SendEncryptedValue: false },
+        ],
+    });
+    const credentialId = '33333333-4444-5555-6666-777777777777';
+    const dbSecret = 'decrypted-plaintext-secret';
+    const dbToken = 'decrypted-plaintext-token';
+
+    function createLoadedCredential(errorLogSaves: Array<Record<string, unknown>>): { entity: BaseEntity; user: UserInfo } {
+        const fakeProvider = {
+            Entities: [credentialEntityInfo],
+            GetEntityObject: async () => {
+                const errEntity: Record<string, unknown> = {
+                    Save: async () => {
+                        errorLogSaves.push({ ...errEntity });
+                        return true;
+                    },
+                    LatestResult: null,
+                };
+                return errEntity;
+            },
+        } as unknown as IMetadataProvider;
+        const entity = new BaseEntity(credentialEntityInfo, fakeProvider);
+        entity.LoadFromData({ ID: credentialId, Name: 'Vendor key', Secret: dbSecret, Token: dbToken });
+        const user = new UserInfo(null, { ID: 'u-1', Name: 'Probe', Email: 'probe@example.test', IsActive: true, UserRoles: [] });
+        return { entity, user };
+    }
+
+    it.each([
+        ['the sentinel', ENCRYPTED_SENTINEL],
+        ['re-encrypted ciphertext', '$ENC$11111111-2222-3333-4444-555555555555$AES-256-GCM$iv$cipher$tag'],
+    ])('saves a rotated value for a field the API never decrypts, when the old value is %s', async (_label, oldValue) => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedCredential(errorLogSaves);
+
+        await probe.TestAndSet(
+            entity,
+            {
+                ID: credentialId,
+                Secret: 'rotated-secret',
+                OldValues___: [
+                    { Key: 'ID', Value: credentialId },
+                    { Key: 'Secret', Value: oldValue },
+                ],
+            },
+            user
+        );
+
+        expect(entity.Get('Secret')).toBe('rotated-secret');
+        expect(errorLogSaves).toHaveLength(0);
+    });
+
+    it('keeps encrypted values out of the conflict diagnostics', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedCredential(errorLogSaves);
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+        try {
+            await expect(
+                probe.TestAndSet(
+                    entity,
+                    {
+                        ID: credentialId,
+                        Token: 'client-new-token',
+                        OldValues___: [
+                            { Key: 'ID', Value: credentialId },
+                            { Key: 'Token', Value: 'client-stale-token' },
+                        ],
+                    },
+                    user
+                )
+            ).rejects.toMatchObject({ extensions: { code: 'CONCURRENT_MODIFICATION_CONFLICT', conflictingFields: ['Token'] } });
+
+            const written = [
+                ...errorLogSaves.map((s) => String(s.Message)),
+                ...[...warn.mock.calls, ...error.mock.calls, ...log.mock.calls].map((args) => args.map(String).join(' ')),
+            ].join('\n');
+            expect(errorLogSaves).toHaveLength(1);
+            expect(String(errorLogSaves[0].Message)).toContain('Token');
+            for (const secret of [dbToken, 'client-stale-token', 'client-new-token']) {
+                expect(written).not.toContain(secret);
+            }
+        } finally {
+            warn.mockRestore();
+            error.mockRestore();
+            log.mockRestore();
+        }
+    });
+
+    it('returns only client-modified fields in the concurrencyBaseline map so untouched fields cannot trigger false conflicts', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedCredential(errorLogSaves);
+
+        const baseline = await probe.TestAndSet(
+            entity,
+            {
+                ID: credentialId,
+                Name: 'Updated Vendor Key',
+                Token: dbToken, // untouched by client (matches OldValues___)
+                OldValues___: [
+                    { Key: 'ID', Value: credentialId },
+                    { Key: 'Name', Value: 'Vendor key' },
+                    { Key: 'Token', Value: dbToken },
+                ],
+            },
+            user,
+        );
+
+        expect(baseline).toEqual({ Name: 'Vendor key' });
+        expect(baseline).not.toHaveProperty('Token');
+        expect(baseline).not.toHaveProperty('ID');
+    });
+});

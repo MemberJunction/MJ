@@ -200,6 +200,40 @@ export function resolveInboundCall(params: Record<string, string>): ResolvedInbo
     return ResolveInboundCall(params);
 }
 
+/** Vonage call-event `status` values that mean the call is over and will never carry media again. */
+const VONAGE_TERMINAL_CALL_STATUSES: ReadonlySet<string> = new Set([
+    'completed',
+    'busy',
+    'failed',
+    'rejected',
+    'timeout',
+    'cancelled',
+    'canceled',
+    'unanswered',
+]);
+
+/**
+ * Whether a Vonage call-event `status` is terminal (`completed`, `busy`, `failed`, `rejected`, `timeout`,
+ * `cancelled`, `unanswered`). Pure. An unknown or missing status is NOT terminal — an unrecognized value
+ * must never tear down a live call.
+ *
+ * @param status The `status` field of a Vonage event-webhook payload.
+ * @returns `true` when the call has ended.
+ */
+export function IsTerminalVonageCallStatus(status: string | undefined): boolean {
+    return status !== undefined && VONAGE_TERMINAL_CALL_STATUSES.has(status.trim().toLowerCase());
+}
+
+/**
+ * Whether a Vonage call-event `status` is the answering-machine verdict (`machine`). Pure.
+ *
+ * @param status The `status` field of a Vonage event-webhook payload.
+ * @returns `true` when machine detection decided a machine answered.
+ */
+export function IsVonageMachineStatus(status: string | undefined): boolean {
+    return status !== undefined && status.trim().toLowerCase() === 'machine';
+}
+
 /** Concatenates params sorted by key as `&key=value` (Vonage's signature input), excluding `sig`. */
 function concatSortedParams(params: Record<string, string>): string {
     return Object.keys(params)

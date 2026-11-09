@@ -26,6 +26,13 @@ export type RunQueryParams = {
      */
     SQL?: string
     /**
+     * For ad-hoc SQL ({@link SQL}) only: the longest the query may run, in seconds. When it is
+     * exceeded the database cancels the query and the run fails with a timeout error. Omitted
+     * means the connection's usual limit applies; a longer value does not lift that limit.
+     * Ignored for saved queries.
+     */
+    TimeoutSeconds?: number
+    /**
      * Optional, if provided, the query to be run will be selected to match the specified Category by hierarchical path
      * (e.g., "/MJ/AI/Agents/") or simple category name for backward compatibility
      */
@@ -42,7 +49,17 @@ export type RunQueryParams = {
     Parameters?: Record<string, any>
     /**
      * Optional maximum number of rows to return from the query.
-     * If not provided, all rows will be returned.
+     *
+     * There is no default. Without `MaxRows`, and with no `TOP` / `LIMIT` in the query's own SQL,
+     * the query returns every row it matches: bounding the result is the caller's and the query
+     * author's job.
+     *
+     * `MaxRows` limits the rows returned, not the work the database does. The query still reads
+     * everything its SQL asks for, and with paging the total row count is computed over the whole
+     * result. When the query carries its own cap (`TOP n`, `LIMIT n`, `OFFSET … FETCH`), the
+     * smaller of the two applies and `TotalRowCount` counts the capped result. A query that returns
+     * a document (`FOR JSON` / `FOR XML`) cannot be paged; asking for a page of one fails with an
+     * error that says so.
      */
     MaxRows?: number
     /**
@@ -124,6 +141,59 @@ export type RunQueryParams = {
      * Existing callers that omit this are unaffected (they get live results, exactly as before).
      */
     DataSource?: 'Live' | 'Materialized'
+
+    /**
+     * Server only: the IANA time zone (e.g. `'Europe/Paris'`) that context tokens such as
+     * `Context.Today` are worked out in for this run. Unset means UTC.
+     *
+     * MJServer's GraphQL resolvers set it from the request's `x-mj-timezone` header
+     * (`TIME_ZONE_HEADER`); server code that runs without a request (agents, schedules) sets it
+     * itself. No GraphQL run input carries it, so a GraphQL client cannot set it.
+     *
+     * It is not part of the result-cache fingerprint. Code that resolves tokens with it must put the
+     * resolved values, not the zone, into whatever the fingerprint covers.
+     */
+    TimeZone?: string
+
+    /**
+     * Server only: values for the query's server-set parameters (`MJ: Query Parameters.IsServerSet`),
+     * keyed by parameter name. Server code sets them; a value for a server-set parameter in
+     * {@link Parameters} is refused, so a caller cannot choose it. A value here may also set an
+     * ordinary parameter, and wins over {@link Parameters} when both name it.
+     *
+     * No GraphQL run input carries it, and the `RunQuery*` resolvers never read it from a request,
+     * so a GraphQL client cannot set it. Transports that build run params from a request body strip
+     * it ({@link SERVER_ONLY_RUN_QUERY_PARAMS}). The result-cache fingerprint covers these values.
+     */
+    ServerParameters?: Record<string, unknown>
+
+    /**
+     * Opt-in: refuse to run unless the query's approval is current — its status is Approved and
+     * the fingerprint stored when it was approved matches the fingerprint of the definition about
+     * to run (SQL, dialect variants, parameter contract), worked out on the server. A query it
+     * composes must have a current approval too. Unset, an unapproved query runs with a logged
+     * warning, as before.
+     *
+     * Server only: no GraphQL run input carries it. A run with it set skips the `CacheLocal`
+     * result cache, so every run is checked.
+     */
+    RequireApproved?: boolean
+}
+
+/**
+ * `RunQueryParams` fields only server code may set. A transport that builds run params from a
+ * client's request body removes these before running the query, so a client cannot choose them.
+ * GraphQL run inputs never carry them in the first place.
+ */
+export const SERVER_ONLY_RUN_QUERY_PARAMS: ReadonlyArray<keyof RunQueryParams> = ['TimeZone', 'ServerParameters', 'RequireApproved'];
+
+/** A copy of client-supplied run params without the {@link SERVER_ONLY_RUN_QUERY_PARAMS} fields. */
+export function StripServerOnlyRunQueryParams(params: RunQueryParams): RunQueryParams {
+    const copy: RunQueryParams = { ...params };
+    for (const key of SERVER_ONLY_RUN_QUERY_PARAMS) {
+        delete copy[key];
+    }
+    return copy;
 }
 
 /**

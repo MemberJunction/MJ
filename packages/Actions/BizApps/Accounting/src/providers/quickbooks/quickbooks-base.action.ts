@@ -43,8 +43,9 @@ export abstract class QuickBooksBaseAction extends BaseAccountingAction {
             throw new Error('CompanyID parameter is required');
         }
 
-        // Get the integration credentials
-        const integration = await this.getCompanyIntegration(companyId, contextUser);
+        // Get the connection: the one named by CompanyIntegrationID, or the company's only active one
+        const companyIntegrationId = this.getOptionalStringParam(this._params, 'CompanyIntegrationID');
+        const integration = await this.getCompanyIntegration(companyId, contextUser, companyIntegrationId);
         
         // Get OAuth tokens (from env vars or database)
         const { accessToken } = await this.getOAuthTokens(integration);

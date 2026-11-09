@@ -1,0 +1,33 @@
+{
+  "Name": "backchannels-never-take-floor",
+  "Description": "Sage holds the floor through a long answer while two other agents acknowledge with short backchannels. The acknowledgements are granted but never take or move the floor; a longer interjection is a turn and is denied until Sage finishes.",
+  "Agents": [
+    { "Id": "sage", "Names": ["Sage"] },
+    { "Id": "demo", "Names": ["Demo Loop"] },
+    { "Id": "scout", "Names": ["Scout"] }
+  ],
+  "Events": [
+    { "Type": "HumanSpeech", "AtMs": 0, "DurationMs": 2000, "Text": "Sage, walk us through the migration plan.",
+      "ExpectDecisions": { "sage": "Speak", "demo": "Silent", "scout": "Silent" } },
+    { "Type": "AgentSpeech", "AtMs": 3000, "Agent": "sage", "DurationMs": 12000, "Text": "The migration runs in three phases: first we freeze writes, then we copy the history, and finally we cut over." },
+    { "Type": "AgentSpeech", "AtMs": 5000, "Agent": "demo", "DurationMs": 500, "Text": "mm-hm" },
+    { "Type": "AgentSpeech", "AtMs": 7000, "Agent": "scout", "DurationMs": 700, "Text": "right" },
+    { "Type": "AgentSpeech", "AtMs": 9000, "Agent": "demo", "DurationMs": 6000, "Text": "That is not quite how I remember it, so let me add some context here" },
+    { "Type": "AgentSpeech", "AtMs": 11000, "Agent": "demo", "DurationMs": 400, "Text": "yeah" },
+    { "Type": "AgentSpeech", "AtMs": 16000, "Agent": "demo", "DurationMs": 4000, "Text": "What I remember is that the copy phase took two weekends last time." }
+  ],
+  "Expect": {
+    "Speeches": [
+      { "Agent": "sage", "Kind": "Turn", "Granted": true, "Reason": "FloorFree" },
+      { "Agent": "demo", "Kind": "Backchannel", "Granted": true, "Reason": "Backchannel" },
+      { "Agent": "scout", "Kind": "Backchannel", "Granted": true, "Reason": "Backchannel" },
+      { "Agent": "demo", "Kind": "Turn", "Granted": false, "Reason": "HeldByOtherAgent" },
+      { "Agent": "demo", "Kind": "Backchannel", "Granted": true, "Reason": "Backchannel" },
+      { "Agent": "demo", "Kind": "Turn", "Granted": true, "Reason": "FloorFree" }
+    ],
+    "Preempted": [],
+    "BackchannelCount": 3,
+    "LoopCapReached": false,
+    "FinalFloorHolder": null
+  }
+}

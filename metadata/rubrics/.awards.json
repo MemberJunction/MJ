@@ -1,0 +1,98 @@
+{
+  "fields": {
+    "Name": "Awards",
+    "Status": "Active",
+    "Description": "Eligibility is a gate at 1. Craft weighs 2. Pass threshold 0.6. See guides/RUBRICS_GUIDE.md."
+  },
+  "primaryKey": {
+    "ID": "FDE5A507-C3A8-45C0-B450-330FECB95F70"
+  },
+  "relatedEntities": {
+    "MJ: Rubric Versions": [
+      {
+        "fields": {
+          "RubricID": "@parent:ID",
+          "Status": "Draft",
+          "NotApplicablePolicy": "NotAllowed",
+          "ScoreDisplayMin": 0,
+          "ScoreDisplayMax": 1,
+          "ChangeSummary": "Worked example from guides/RUBRICS_GUIDE.md. Draft because publish stamps are not set here.",
+          "PassThreshold": 0.6
+        },
+        "primaryKey": {
+          "ID": "F494515D-0177-460F-8523-875037C66675"
+        },
+        "relatedEntities": {
+          "MJ: Rubric Criteria": [
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "eligible",
+                "Name": "Eligible",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": true,
+                "Sequence": 0,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Binary (Met / Not met)",
+                "GateMinimumScore": 1
+              },
+              "primaryKey": {
+                "ID": "A87EC1B1-2895-4FE0-B2C0-CD76FEB9C36E"
+              },
+              "sync": {
+                "lastModified": "2026-10-02T21:42:22.270Z",
+                "checksum": "277fe510a5e4f34a5e6079940cdf2e7e2916a2df24457ba41d5d5558e34e33af"
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "craft",
+                "Name": "Craft",
+                "NodeType": "Criterion",
+                "Weight": 2,
+                "IsGate": false,
+                "Sequence": 1,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+              },
+              "primaryKey": {
+                "ID": "36B0EE12-37CE-45B1-A78E-6CDD1A917D55"
+              },
+              "sync": {
+                "lastModified": "2026-10-02T21:42:22.284Z",
+                "checksum": "278f3064c42417da255147c6ce27395ecdf7fd21d0e2794c72e226c27b8e00a3"
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "originality",
+                "Name": "Originality",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "Sequence": 2,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+              },
+              "primaryKey": {
+                "ID": "CF7DEE2F-84D0-4AAC-A292-9952982EC66F"
+              },
+              "sync": {
+                "lastModified": "2026-10-02T21:42:22.301Z",
+                "checksum": "a025721b5d952f7c63057d049e1849fbac3dd99bef79107f0f37f0b97b70a887"
+              }
+            }
+          ]
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:22.252Z",
+          "checksum": "a50cea47423049e54f575be10fb3fde222668b581275506f54a33e0a39296ac0"
+        }
+      }
+    ]
+  },
+  "sync": {
+    "lastModified": "2026-10-02T21:42:22.238Z",
+    "checksum": "f9e3779bf19eb7d634cb9eb5b07fa94317dcc067c666801f1786ecd9e4c7d416"
+  }
+}

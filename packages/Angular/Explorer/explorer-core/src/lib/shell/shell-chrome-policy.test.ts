@@ -16,7 +16,7 @@ import { ShellComponent } from './shell.component';
 
 const allOn: ShellChromeFlags = {
   searchBar: true, searchPreview: true, notifications: true, appSwitcher: true,
-  appSwitcherStyle: 'auto', appNav: true, recordOpenStyle: 'records'
+  appSwitcherStyle: 'auto', appNav: true, chatOverlay: true, recordOpenStyle: 'records'
 };
 
 class NoSearchPolicy extends BaseShellChromePolicy {
@@ -41,13 +41,28 @@ describe('BaseShellChromePolicy', () => {
   it('a policy cannot widen past Instance Config — true from the policy never re-enables', () => {
     class WidenPolicy extends BaseShellChromePolicy {
       public override Resolve(flags: ShellChromeFlags): ShellChromeFlags {
-        return { ...flags, searchBar: true, notifications: true, appSwitcher: true, appNav: true };
+        return { ...flags, searchBar: true, notifications: true, appSwitcher: true, appNav: true, chatOverlay: true };
       }
     }
-    const ceiling: ShellChromeFlags = { ...allOn, searchBar: false, notifications: false };
+    const ceiling: ShellChromeFlags = { ...allOn, searchBar: false, notifications: false, chatOverlay: false };
     const flags = ApplyShellChromePolicy(ceiling, new WidenPolicy());
     expect(flags.searchBar).toBe(false);
     expect(flags.notifications).toBe(false);
+    expect(flags.chatOverlay).toBe(false);
+    expect(flags.appSwitcher).toBe(true);
+  });
+
+  it('a host policy can hide the floating chat overlay for one audience — a learner portal that owns its own AI surface', () => {
+    class NoOverlayPolicy extends BaseShellChromePolicy {
+      public override Resolve(flags: ShellChromeFlags): ShellChromeFlags {
+        return { ...flags, chatOverlay: false };
+      }
+    }
+    const flags = ApplyShellChromePolicy(allOn, new NoOverlayPolicy());
+    expect(flags.chatOverlay).toBe(false);
+    // Only the overlay goes: the rest of the chrome is untouched.
+    expect(flags.searchBar).toBe(true);
+    expect(flags.notifications).toBe(true);
     expect(flags.appSwitcher).toBe(true);
   });
 
@@ -115,6 +130,12 @@ describe('ShellComponent — the cached flags follow the policy', () => {
     return shell;
   }
 
+  it('ChromeFlags exposes the resolved set (explorer-app reads the overlay bit through it)', () => {
+    const shell = createShell();
+    expect(shell.ChromeFlags).toEqual(allOn);
+    expect(shell.ChromeFlags.chatOverlay).toBe(true);
+  });
+
   it('Changed drops the cache and asks for a repaint', () => {
     const shell = createShell();
     const open = shell as unknown as Record<string, unknown>;
@@ -151,6 +172,37 @@ describe('ShellComponent — a hidden search bar has no keyboard back door', () 
     const guard = html.lastIndexOf('@if (ShowSearchBar)', at);
     expect(guard).toBeGreaterThan(-1);
     expect(html.slice(guard, at)).not.toMatch(/\n\}\n/); // no closing brace between the guard and the palette
+  });
+});
+
+describe('ShellComponent — the command palette search row', () => {
+  function createShell(searchBar: boolean): { shell: ShellComponent; openSearch: ReturnType<typeof vi.fn> } {
+    const shell = Object.create(ShellComponent.prototype) as ShellComponent;
+    const openSearch = vi.fn();
+    const open = shell as unknown as Record<string, unknown>;
+    open['_chromeFlags'] = { ...allOn, searchBar };
+    open['navigationService'] = { OpenSearch: openSearch };
+    return { shell, openSearch };
+  }
+
+  it('opens Search Results for the palette query while search is shown', () => {
+    const { shell, openSearch } = createShell(true);
+    shell.OnCommandPaletteSearch('invoices');
+    expect(openSearch).toHaveBeenCalledWith('invoices');
+  });
+
+  it('does nothing while search is hidden', () => {
+    const { shell, openSearch } = createShell(false);
+    shell.OnCommandPaletteSearch('invoices');
+    expect(openSearch).not.toHaveBeenCalled();
+  });
+
+  it('the palette gets the search gate and the shell handles its search request', () => {
+    const html = readFileSync(join(__dirname, 'shell.component.html'), 'utf8');
+    const start = html.indexOf('<mj-command-palette');
+    const tag = html.slice(start, html.indexOf('>', start));
+    expect(tag).toContain('[ShowSearch]="ShowSearchBar"');
+    expect(tag).toContain('(KnowledgeSearchRequested)="OnCommandPaletteSearch($event)"');
   });
 });
 

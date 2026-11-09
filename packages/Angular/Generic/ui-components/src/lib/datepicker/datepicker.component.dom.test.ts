@@ -1,9 +1,10 @@
 import { Component, Input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { renderComponentFixture } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, overlayQuery, clearOverlayContainers } from '@memberjunction/ng-test-utils';
 import { MJDatepickerComponent } from './datepicker.component';
+import { MJDialogComponent } from '../dialog/dialog.component';
 
 /**
  * DOM-level spec for <mj-datepicker>. Special case: the calendar is a CDK overlay
@@ -167,5 +168,163 @@ describe('MJDatepickerComponent — Disabled with no Angular Forms binding (DOM)
     f.componentInstance.Toggle();
     f.detectChanges();
     expect(f.componentInstance.IsOpen, 'a disabled datepicker must not open its calendar').toBe(false);
+  });
+});
+
+describe('MJDatepickerComponent — accessible name (#4116)', () => {
+  const render = (inputs: Record<string, unknown> = {}) =>
+    renderComponentFixture(MJDatepickerComponent, { inputs });
+  const input = (f: ComponentFixture<MJDatepickerComponent>) =>
+    f.nativeElement.querySelector('input.mj-datepicker-input') as HTMLInputElement;
+  const toggle = (f: ComponentFixture<MJDatepickerComponent>) =>
+    f.nativeElement.querySelector('.mj-datepicker-toggle') as HTMLButtonElement;
+  const open = (f: ComponentFixture<MJDatepickerComponent>) => { toggle(f).click(); f.detectChanges(); };
+  /** Id of the hidden span holding one composed word, found by the word itself. */
+  const srOnlyId = (f: ComponentFixture<MJDatepickerComponent>, word: string) =>
+    Array.from(f.nativeElement.querySelectorAll('.mj-datepicker-sr-only') as NodeListOf<HTMLElement>)
+      .find((el) => el.textContent?.trim() === word)
+      ?.getAttribute('id');
+
+  // The calendar renders through a CDK connected-overlay; one left open would leak into the next test.
+  afterEach(() => clearOverlayContainers());
+
+  it('names the date field with AriaLabel', () => {
+    expect(input(render({ AriaLabel: 'Due date' })).getAttribute('aria-label')).toBe('Due date');
+  });
+
+  it('names the date field from a visible label via AriaLabelledBy', () => {
+    expect(input(render({ AriaLabelledBy: 'due-label' })).getAttribute('aria-labelledby')).toBe('due-label');
+  });
+
+  it('puts InputId on the real <input>, which IS a valid <label for> target', () => {
+    const f = render({ InputId: 'due-date-field' });
+    expect(input(f).getAttribute('id')).toBe('due-date-field');
+    expect(input(f).tagName).toBe('INPUT');
+  });
+
+  it('passes AriaDescribedBy through for hint and error text', () => {
+    expect(input(render({ AriaDescribedBy: 'due-hint' })).getAttribute('aria-describedby')).toBe('due-hint');
+  });
+
+  it('renders NO empty name attributes when nothing is configured — absent beats empty', () => {
+    const el = input(render());
+    expect(el.hasAttribute('aria-label')).toBe(false);
+    expect(el.hasAttribute('aria-labelledby')).toBe(false);
+    expect(el.hasAttribute('id')).toBe(false);
+    expect(el.hasAttribute('aria-describedby')).toBe(false);
+  });
+
+  it('names the toggle button from the field name instead of a bare "Open calendar"', () => {
+    expect(toggle(render({ AriaLabel: 'Due date' })).getAttribute('aria-label')).toBe('Open calendar for Due date');
+  });
+
+  it('names the toggle button from the VISIBLE label too, via an id list', () => {
+    const f = render({ AriaLabelledBy: 'due-label' });
+    const wordId = srOnlyId(f, 'Open calendar for');
+    expect(wordId).toBeTruthy();
+    expect(toggle(f).getAttribute('aria-labelledby')).toBe(`${wordId} due-label`);
+    // aria-label must be ABSENT, not empty: it would otherwise win over aria-labelledby.
+    expect(toggle(f).hasAttribute('aria-label')).toBe(false);
+  });
+
+  it('falls back to a generic toggle name when the field itself is unnamed', () => {
+    expect(toggle(render()).getAttribute('aria-label')).toBe('Open calendar');
+  });
+
+  it('names the calendar grid from the field name, so two pickers do not present two "Calendar"s', () => {
+    const f = render({ AriaLabel: 'Due date' });
+    open(f);
+    expect(overlayQuery('.mj-calendar')?.getAttribute('aria-label')).toBe('Calendar for Due date');
+  });
+
+  it('names the calendar grid from the VISIBLE label too, via an id list', () => {
+    const f = render({ AriaLabelledBy: 'due-label' });
+    const wordId = srOnlyId(f, 'Calendar for');
+    open(f);
+    expect(overlayQuery('.mj-calendar')?.getAttribute('aria-labelledby')).toBe(`${wordId} due-label`);
+    expect(overlayQuery('.mj-calendar')?.hasAttribute('aria-label')).toBe(false);
+  });
+
+  it('falls back to a generic calendar name when the field itself is unnamed', () => {
+    const f = render();
+    open(f);
+    expect(overlayQuery('.mj-calendar')?.getAttribute('aria-label')).toBe('Calendar');
+  });
+});
+
+/** The calendar renders on body, outside the dialog. Tab on a day must not jump to the dialog's ✕. */
+@Component({
+  standalone: true,
+  imports: [MJDialogComponent, MJDatepickerComponent],
+  template: `
+    <mj-dialog [Visible]="true" [AutoFocus]="false" Title="Form">
+      <button type="button" class="before">Before</button>
+      <mj-datepicker AriaLabel="Due date"></mj-datepicker>
+      <button type="button" class="after">After</button>
+    </mj-dialog>
+  `,
+})
+class DatepickerInDialogHostComponent {}
+
+describe('MJDatepickerComponent inside mj-dialog (DOM)', () => {
+  afterEach(() => clearOverlayContainers());
+
+  const press = (el: HTMLElement, key: string, init: KeyboardEventInit = {}): KeyboardEvent => {
+    const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init });
+    el.dispatchEvent(event);
+    return event;
+  };
+
+  it('Tab on a calendar button closes the calendar and returns to the field, not the dialog close', () => {
+    const f = renderComponentFixture(DatepickerInDialogHostComponent, { imports: [DatepickerInDialogHostComponent] });
+    const closeBtn = query(f, '.mj-dialog-close') as HTMLButtonElement;
+    const field = query(f, '.mj-datepicker-input') as HTMLInputElement;
+    (query(f, '.mj-datepicker-toggle') as HTMLButtonElement).click();
+    f.detectChanges();
+    const day = overlayQuery('.mj-calendar-day') as HTMLButtonElement;
+    expect(day).not.toBeNull();
+    day.focus();
+
+    const tab = press(day, 'Tab');
+    f.detectChanges();
+
+    expect(tab.defaultPrevented).toBe(false);
+    expect(overlayQuery('.mj-calendar')).toBeNull();
+    expect(document.activeElement).toBe(field);
+    expect(document.activeElement).not.toBe(closeBtn);
+  });
+
+  it('Shift+Tab on a calendar button does not land on the dialog last stop', () => {
+    const f = renderComponentFixture(DatepickerInDialogHostComponent, { imports: [DatepickerInDialogHostComponent] });
+    (query(f, '.mj-datepicker-toggle') as HTMLButtonElement).click();
+    f.detectChanges();
+    const day = overlayQuery('.mj-calendar-nav') as HTMLButtonElement;
+    day.focus();
+
+    const tab = press(day, 'Tab', { shiftKey: true });
+    f.detectChanges();
+
+    expect(tab.defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(query(f, '.mj-datepicker-input'));
+    expect(document.activeElement).not.toBe(query(f, '.after'));
+    expect(overlayQuery('.mj-calendar')).toBeNull();
+  });
+
+  it('Tab on the date field while the calendar is open closes the calendar and stays on the field', () => {
+    const f = renderComponentFixture(DatepickerInDialogHostComponent, { imports: [DatepickerInDialogHostComponent] });
+    const closeBtn = query(f, '.mj-dialog-close') as HTMLButtonElement;
+    const field = query(f, '.mj-datepicker-input') as HTMLInputElement;
+    (query(f, '.mj-datepicker-toggle') as HTMLButtonElement).click();
+    f.detectChanges();
+    expect(overlayQuery('.mj-calendar')).not.toBeNull();
+    field.focus();
+
+    const tab = press(field, 'Tab');
+    f.detectChanges();
+
+    expect(tab.defaultPrevented).toBe(false);
+    expect(overlayQuery('.mj-calendar')).toBeNull();
+    expect(document.activeElement).toBe(field);
+    expect(document.activeElement).not.toBe(closeBtn);
   });
 });

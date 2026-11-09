@@ -21,10 +21,15 @@ import {
     AfterToolInvokedEventArgs,
     BeforeResponseFormSubmittedEventArgs,
     AfterResponseFormSubmittedEventArgs,
+    BeforeFolderEditEventArgs,
+    AfterFolderEditEventArgs,
+    BeforeArtifactPanelOpenEventArgs,
+    AfterArtifactPanelOpenEventArgs,
     SessionStartedEventArgs,
     SessionChannelStateChangedEventArgs,
     SessionEndedEventArgs,
 } from '../lib/events/chat-events';
+import type { MJProjectEntity } from '@memberjunction/core-entities';
 
 describe('CancellableChatEventArgs (base class)', () => {
     it('defaults Cancel to false', () => {
@@ -54,6 +59,34 @@ describe('BeforeAgentTurnEventArgs', () => {
     it('applicationId defaults to null when omitted', () => {
         const e = new BeforeAgentTurnEventArgs('conv-1', 'hello');
         expect(e.ApplicationId).toBeNull();
+    });
+
+    it('carries the resolved agent, its route and the message it answers', () => {
+        const e = new BeforeAgentTurnEventArgs('conv-1', 'hello', null, {
+            AgentId: 'agent-1',
+            AgentName: 'Research',
+            Route: 'Mention',
+            UserMessageId: 'detail-1',
+        });
+        expect(e.AgentId).toBe('agent-1');
+        expect(e.AgentName).toBe('Research');
+        expect(e.Route).toBe('Mention');
+        expect(e.UserMessageId).toBe('detail-1');
+    });
+
+    it('turn details are null when constructed without them (older call sites)', () => {
+        const e = new BeforeAgentTurnEventArgs('conv-1', 'hello', 'app-1');
+        expect(e.AgentId).toBeNull();
+        expect(e.AgentName).toBeNull();
+        expect(e.Route).toBeNull();
+        expect(e.UserMessageId).toBeNull();
+    });
+
+    it('RedirectAgentId starts null and a listener can set it', () => {
+        const e = new BeforeAgentTurnEventArgs('conv-1', 'hello');
+        expect(e.RedirectAgentId).toBeNull();
+        e.RedirectAgentId = 'agent-2';
+        expect(e.RedirectAgentId).toBe('agent-2');
     });
 });
 
@@ -99,6 +132,40 @@ describe('AfterResponseFormSubmittedEventArgs', () => {
         const e = new AfterResponseFormSubmittedEventArgs('form-1', { q1: 'yes' });
         expect(e.FormId).toBe('form-1');
         expect(e.Values).toEqual({ q1: 'yes' });
+    });
+});
+
+describe('BeforeFolderEditEventArgs & AfterFolderEditEventArgs', () => {
+    const folder = { ID: 'proj-1', Name: 'Q3 Policy' } as unknown as MJProjectEntity;
+
+    it('BeforeFolderEditEventArgs extends CancellableChatEventArgs and carries the folder entity', () => {
+        const e = new BeforeFolderEditEventArgs(folder);
+        expect(e).toBeInstanceOf(CancellableChatEventArgs);
+        expect(e.Project).toBe(folder);
+        expect(e.Cancel).toBe(false);
+    });
+
+    it('AfterFolderEditEventArgs carries the saved folder entity', () => {
+        const e = new AfterFolderEditEventArgs(folder);
+        expect(e.Project).toBe(folder);
+    });
+});
+
+describe('BeforeArtifactPanelOpenEventArgs & AfterArtifactPanelOpenEventArgs', () => {
+    it('BeforeArtifactPanelOpenEventArgs extends CancellableChatEventArgs and carries artifact and version identifiers', () => {
+        const e = new BeforeArtifactPanelOpenEventArgs('art-1', 2, 'ver-2');
+        expect(e).toBeInstanceOf(CancellableChatEventArgs);
+        expect(e.ArtifactId).toBe('art-1');
+        expect(e.VersionNumber).toBe(2);
+        expect(e.VersionId).toBe('ver-2');
+        expect(e.Cancel).toBe(false);
+    });
+
+    it('AfterArtifactPanelOpenEventArgs carries artifact and version identifiers', () => {
+        const e = new AfterArtifactPanelOpenEventArgs('art-1', 2, 'ver-2');
+        expect(e.ArtifactId).toBe('art-1');
+        expect(e.VersionNumber).toBe(2);
+        expect(e.VersionId).toBe('ver-2');
     });
 });
 

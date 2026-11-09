@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, JSONObject, RealtimeToolBatchBarrier } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, JSONObject, MapRealtimeUsageModalityDetail, RealtimeToolBatchBarrier } from '@memberjunction/ai';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
 import {
     BaseRealtimeClient,
@@ -13,6 +13,7 @@ import {
     IRealtimeAudioSink,
     IRealtimeDataChannel,
     IRealtimePeerConnection,
+    IRealtimeRtpSender,
 } from './openAIRealtimeClient';
 
 /**
@@ -53,9 +54,9 @@ export class OpenAILiveClient extends BaseRealtimeClient {
     private peerConnection: IRealtimeLivePeerConnection | null = null;
     protected dataChannel: IRealtimeDataChannel | null = null;
     private remoteAudioEl: IRealtimeAudioSink | null = null;
-    private remoteStream: MediaStream | null = null;
-    private remoteStreamHandlers: Array<(stream: MediaStream) => void> = [];
     private micStream: MediaStream | null = null;
+    /** The senders carrying the mic tracks, kept so {@link ReplaceMicrophone} can move them to a new track. */
+    private micSenders: IRealtimeRtpSender[] = [];
     protected sessionConfig: JSONObject | null = null;
 
     // ── State Machine ──────────────────────────────────────────────────────────
@@ -112,6 +113,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         micStream: MediaStream,
         _cameraStream?: MediaStream
     ): Promise<void> {
+        this.AssertTransportSupported(config);
         this.sessionConfig = config.SessionConfig;
         this.micStream = micStream;
         this.setState('connecting');
@@ -160,6 +162,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         this.closeAudioMeters();
         this.micStream?.getTracks().forEach((t) => t.stop());
         this.micStream = null;
+        this.micSenders = [];
 
         if (this.dataChannel) {
             try {
@@ -185,8 +188,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
             this.remoteAudioEl = null;
         }
 
-        this.remoteStream = null;
-        this.remoteStreamHandlers = [];
+        this.clearRemoteMediaStream();
         this.sessionConfig = null;
         this.responseActive = false;
         this.audioPlaying = false;
@@ -267,11 +269,24 @@ export class OpenAILiveClient extends BaseRealtimeClient {
      * Requests a brief interim narration utterance during delegated background work.
      */
     public RequestSpokenUpdate(instructions: string): void {
+        this.requestInstructedResponse(instructions, 'narration');
+    }
+
+    /** A spoken TURN: the same commentary trigger as the update, with the reply kept `normal` (MJ#4591). */
+    public RequestSpokenTurn(instructions: string): void {
+        this.requestInstructedResponse(instructions, 'normal');
+    }
+
+    /**
+     * The one trigger behind both spoken requests, so the two cannot drift: the instructions ride a
+     * commentary frame and a `response.create` follows unless a tool batch holds it. Skipped while a
+     * response is in flight (the collision rule); `kind` decides only how the reply is tagged.
+     */
+    private requestInstructedResponse(instructions: string, kind: 'normal' | 'narration'): void {
         if (this.responseActive || this.audioPlaying) {
-            // Collision rule: narration is disposable; skip when response is in flight
             return;
         }
-        this.pendingNarration = true;
+        this.pendingNarration = kind === 'narration';
         this.sendDataChannelFrame({
             type: 'session.commentary.append',
             content: instructions,
@@ -329,24 +344,20 @@ export class OpenAILiveClient extends BaseRealtimeClient {
     }
 
     /**
-     * Returns the agent's remote audio MediaStream if available.
+     * Moves the mic senders and the input meter to the stream's current tracks (obligation #10).
+     * `replaceTrack` needs no renegotiation, so the call carries on.
      */
-    public override GetRemoteMediaStream(): MediaStream | null {
-        return this.remoteStream;
-    }
-
-    /**
-     * Registers a callback for when the agent's remote audio MediaStream lands.
-     */
-    public override OnRemoteMediaStream(handler: (stream: MediaStream) => void): void {
-        this.remoteStreamHandlers.push(handler);
-        if (this.remoteStream) {
-            try {
-                handler(this.remoteStream);
-            } catch (error) {
-                console.warn('[OpenAILiveClient] remote-stream handler threw:', error);
-            }
+    public async ReplaceMicrophone(micStream: MediaStream): Promise<void> {
+        if (this.micSenders.length === 0) {
+            return;
         }
+        const tracks = micStream.getAudioTracks();
+        if (tracks.length === 0) {
+            throw new Error('The microphone stream has no audio track.');
+        }
+        await Promise.all(this.micSenders.map((sender, index) => sender.replaceTrack(tracks[index] ?? null)));
+        this.micStream = micStream;
+        this.attachInputAudioMeter(RealtimeAudioMeter.ForMicStream(micStream));
     }
 
     // ── Overridable Factory / Network Seams (Tests inject fakes) ───────────────
@@ -434,9 +445,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
     }
 
     private attachMicrophone(pc: IRealtimePeerConnection, micStream: MediaStream): void {
-        for (const track of micStream.getAudioTracks()) {
-            pc.addTrack(track, micStream);
-        }
+        this.micSenders = micStream.getAudioTracks().map((track) => pc.addTrack(track, micStream));
     }
 
     private attachRemoteAudio(pc: IRealtimePeerConnection): void {
@@ -444,14 +453,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         pc.ontrack = (e: RTCTrackEvent) => {
             if (this.remoteAudioEl && e.streams[0]) {
                 this.remoteAudioEl.srcObject = e.streams[0];
-                this.remoteStream = e.streams[0];
-                for (const h of this.remoteStreamHandlers) {
-                    try {
-                        h(e.streams[0]);
-                    } catch (err) {
-                        console.warn('[OpenAILiveClient] remote stream handler threw:', err);
-                    }
-                }
+                this.publishRemoteMediaStream(e.streams[0]);
                 // Capability obligation #9: agent-side audio meter
                 this.attachOutputAudioMeter(RealtimeAudioMeter.ForStream(e.streams[0]));
             }
@@ -639,10 +641,15 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         const duration = seconds !== undefined ? Math.max(OpenAILiveClient.PREBILL_DURATION_SECONDS, seconds) : this.totalDurationSeconds;
         this.totalDurationSeconds = duration;
 
+        // The per-modality split is per response, like the token totals; only the completed response carries it.
+        const inputDetails = MapRealtimeUsageModalityDetail(usage?.['input_token_details']);
+        const outputDetails = MapRealtimeUsageModalityDetail(usage?.['output_token_details']);
         this.emitUsage({
             InputTokens: typeof usage?.input_tokens === 'number' ? usage.input_tokens : 0,
             OutputTokens: typeof usage?.output_tokens === 'number' ? usage.output_tokens : 0,
             DurationSeconds: duration,
+            ...(inputDetails ? { InputTokenDetails: inputDetails } : {}),
+            ...(outputDetails ? { OutputTokenDetails: outputDetails } : {}),
             Raw: usage,
         });
     }

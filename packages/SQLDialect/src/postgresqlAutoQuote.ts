@@ -28,12 +28,6 @@ const pgDialect = new PostgreSQLDialect();
  * the mixed-case column form still quotes.
  */
 /**
- * Known tokenization limitations (comments containing an apostrophe, and `E'...'` escape
- * strings) are tracked as **MJ #3775** — pre-existing, unchanged by the consolidation, and now
- * fixable in one place rather than two.
- */
-
-/**
  * NOT the only identifier quoter in MJ, and deliberately so.
  *
  * `PostgreSQLDataProvider` carries a separate, METADATA-DRIVEN quoter
@@ -637,6 +631,19 @@ function previousWord(sql: string, to: number): string {
         if (sql.substring(lineStart, end).includes('--')) return '';
     }
     return sql.substring(i + 1, end);
+}
+
+/**
+ * Whether {@link AutoQuotePostgreSQLIdentifiers} leaves the word at `start`–`end` of `sql` bare,
+ * so PostgreSQL folds it to lower case, instead of quoting it as written. A database error about
+ * that word names it in lower case in the first case and as written in the second.
+ *
+ * @param sql The SQL text the word is in
+ * @param start Offset of the word's first character
+ * @param end Offset just past the word
+ */
+export function AutoQuoteLeavesWordBare(sql: string, start: number, end: number): boolean {
+    return isBareWord(sql.substring(start, end), sql, start, end);
 }
 
 /** True when a word must be emitted verbatim rather than quoted as an identifier. */

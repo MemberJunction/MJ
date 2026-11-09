@@ -40,6 +40,10 @@ vi.mock('@memberjunction/core', () => {
     }
   }
   class Metadata {
+    /** The global provider; it screens ad-hoc filters, and this suite's filters all pass. */
+    static get Provider() {
+      return { ScreenClientClause: () => undefined };
+    }
     get Entities() {
       return mockEntities;
     }

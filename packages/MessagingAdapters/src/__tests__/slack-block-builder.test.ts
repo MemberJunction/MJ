@@ -1,6 +1,7 @@
 /**
  * Unit tests for slack-block-builder.ts — rich Block Kit response builder.
  */
+import type { ComposeEmailCommand } from '@memberjunction/ai-core-plus';
 import { describe, it, expect } from 'vitest';
 import {
     BuildRichResponse,
@@ -159,7 +160,7 @@ describe('slack-block-builder', () => {
         });
     });
 
-    describe('buildActionButtons', () => {
+    describe('BuildActionButtons', () => {
         it('should create URL buttons for open:url commands', () => {
             const commands = [
                 { type: 'open:url' as const, label: 'Visit', url: 'https://example.com' }
@@ -946,4 +947,58 @@ describe('slack-block-builder', () => {
         });
     });
 
+});
+
+describe('BuildActionButtons — compose:email', () => {
+    // A mailto: URL fails isOpenableURI (http/https only), so a button built from one is dropped.
+    // Without an explicit branch the command renders as NOTHING AT ALL — these assertions are what
+    // stop that regressing back to silence.
+    const cmd = (over: Partial<ComposeEmailCommand> = {}): ComposeEmailCommand => ({
+        type: 'compose:email',
+        label: 'Open draft in Mail',
+        to: ['bob@example.com'],
+        subject: 'Membership renewal',
+        ...over,
+    });
+
+    it('renders a context note rather than nothing — the label and the route back to Explorer', () => {
+        const blocks = BuildActionButtons([cmd()]);
+        expect(blocks.length).toBeGreaterThan(0);
+        const text = JSON.stringify(blocks);
+        expect(text).toContain('Open draft in Mail');
+        expect(text).toContain('MJ Explorer');
+    });
+
+    // A Slack channel is a shared, retained, exportable surface. What is safe to show the person
+    // who will send the mail (Explorer puts the recipients beside the button) is not safe to show
+    // every participant — so the fallback carries neither the recipient nor the subject.
+    it('discloses neither the recipient nor the subject on the channel', () => {
+        const blocks = BuildActionButtons([cmd({ to: ['private.person@example.com'], subject: 'Confidential: settlement terms' })]);
+        const text = JSON.stringify(blocks);
+        expect(text).not.toContain('private.person@example.com');
+        expect(text).not.toContain('settlement');
+        expect(text).toContain('MJ Explorer');  // …but the reader still has a route to the draft
+    });
+
+    it('never emits a button carrying a mailto: URL', () => {
+        const blocks = BuildActionButtons([cmd()]);
+        expect(JSON.stringify(blocks)).not.toContain('mailto:');
+        const actions = blocks.filter((b) => (b as { type?: string }).type === 'actions');
+        expect(actions).toHaveLength(0);
+    });
+
+    it('still names the draft when no recipient is known', () => {
+        const blocks = BuildActionButtons([cmd({ to: undefined })]);
+        expect(JSON.stringify(blocks)).toContain('Open draft in Mail');
+    });
+
+    // The whole note is one italic span. A nested `_..._` around the subject closed the outer
+    // italic early (Slack pairs underscores left-to-right), leaving trailing underscores literal.
+    it('does not nest italics inside the note', () => {
+        const text = String((BuildActionButtons([cmd()])[0] as { elements: { text: string }[] }).elements[0].text);
+        expect(text.startsWith('✉️ _')).toBe(true);
+        expect(text.endsWith('_')).toBe(true);
+        // exactly the opening and closing pair, no nested ones
+        expect((text.match(/_/g) ?? []).length).toBe(2);
+    });
 });

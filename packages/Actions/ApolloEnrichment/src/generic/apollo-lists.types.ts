@@ -112,11 +112,16 @@ export interface ApolloContact {
 export interface ApolloPerson {
     id: string;
     firstName: string;
+    /** Full last name. Since 2026 Apollo withholds it on `api_search` (see `lastNameObfuscated`); '' then. */
     lastName: string;
+    /** Apollo's masked last name, e.g. `De***n`, on `api_search`; '' when the full name was sent. */
+    lastNameObfuscated: string;
     name: string;
     title: string;
-    /** LinkedIn profile URL when present; '' otherwise. */
+    /** LinkedIn profile URL when present; '' otherwise (withheld on `api_search`). */
     linkedinUrl: string;
+    /** Apollo's `has_email` flag on `api_search`: whether a bulk_match on this id would return an email. Null when absent. */
+    hasEmail: boolean | null;
     /** Apollo organization id of the employer; null when absent. */
     organizationId: string | null;
     /** Employer name; '' when absent. */
@@ -125,7 +130,12 @@ export interface ApolloPerson {
 
 // ─── Pagination ─────────────────────────────────────────────────────────────
 
-/** Apollo's `pagination` envelope on every search response. */
+/**
+ * Apollo's `pagination` envelope on the saved-record searches. The prospecting
+ * search (`mixed_people/api_search`) no longer sends one, only a top-level
+ * `total_entries`; the client fills this shape from that, with `totalPages`
+ * computed from the requested page size.
+ */
 export interface ApolloPagination {
     page: number;
     perPage: number;
@@ -187,7 +197,8 @@ export interface ApolloContactSearchFilter {
 /**
  * Prospecting-search filter. `organizationDomains` → `q_organization_domains_list`,
  * `organizationIds` → `organization_ids`, `titles` → `person_titles`,
- * `seniorities` → `person_seniorities`. All are optional to Apollo, but supplying
+ * `seniorities` → `person_seniorities`, `locations` → `person_locations`,
+ * `keywords` → `q_keywords`. All are optional to Apollo, but supplying
  * none returns an unscoped firehose that burns the rate limit for nothing, so the
  * action requires at least one.
  */
@@ -197,6 +208,10 @@ export interface ApolloPeopleSearchFilter {
     titles?: string[];
     /** e.g. 'owner' | 'founder' | 'c_suite' | 'vp' | 'director' | 'manager' */
     seniorities?: string[];
+    /** Person locations as Apollo spells them, e.g. 'Boston, Massachusetts, United States'. */
+    locations?: string[];
+    /** Free-text keywords matched against names, titles and employers. */
+    keywords?: string;
 }
 
 // ─── Move results ───────────────────────────────────────────────────────────

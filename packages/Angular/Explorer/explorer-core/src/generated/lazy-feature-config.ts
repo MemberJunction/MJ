@@ -23,7 +23,7 @@ const loadNgDashboardsActionsDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/actions-dashboards.module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (17 entries) ---
+// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (22 entries) ---
 const loadNgDashboardsAiDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/ai-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/ai-dashboards.module').then(() => {})
@@ -47,7 +47,7 @@ const loadNgDashboardsComponentStudioDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/component-studio-dashboards.module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./core-dashboards.module (36 entries) ---
+// --- @memberjunction/ng-dashboards → ./core-dashboards.module (40 entries) ---
 const loadNgDashboardsCoreDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/core-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/core-dashboards.module').then(() => {})
@@ -89,7 +89,7 @@ const loadNgDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module (3 entries) ---
+// --- @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module (7 entries) ---
 const loadNgDashboardsPredictiveStudioDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/predictive-studio-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/predictive-studio-dashboards.module').then(() => {})
@@ -99,6 +99,12 @@ const loadNgDashboardsPredictiveStudioDashboardsModule = {
 const loadNgDashboardsRoutinesDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/routines-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/routines-dashboards.module').then(() => {})
+};
+
+// --- @memberjunction/ng-dashboards → ./rubrics-dashboards.module (5 entries) ---
+const loadNgDashboardsRubricsDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/rubrics-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/rubrics-dashboards.module').then(() => {})
 };
 
 // --- @memberjunction/ng-dashboards → ./scheduling-dashboards.module (4 entries) ---
@@ -111,6 +117,18 @@ const loadNgDashboardsSchedulingDashboardsModule = {
 const loadNgDashboardsTestingDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/testing-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/testing-dashboards.module').then(() => {})
+};
+
+// --- @memberjunction/ng-dashboards → ./video-studio-dashboards.module (3 entries) ---
+const loadNgDashboardsVideoStudioDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/video-studio-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/video-studio-dashboards.module').then(() => {})
+};
+
+// --- @memberjunction/ng-dashboards → ./work-queue-dashboards.module (1 entries) ---
+const loadNgDashboardsWorkQueueDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/work-queue-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/work-queue-dashboards.module').then(() => {})
 };
 
 // --- @memberjunction/ng-dashboards → ./workflows-dashboards.module (3 entries) ---
@@ -154,6 +172,11 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::AIPromptsResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::AnalyticsResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::AutotaggingPipelineResource': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::ChiefOfStaffApprovals': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::ChiefOfStaffDashboard': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::ChiefOfStaffGovernance': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::ChiefOfStaffOverview': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::ChiefOfStaffResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::ClusterVisualizationResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::DuplicateDetectionResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::FeaturePipelinesResource': loadNgDashboardsAiDashboardsModule,
@@ -198,12 +221,15 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::BulkOperationsRunHistory': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::ClassRegistryInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::DashboardBrowserResource': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::DashboardsCategoriesResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::EventMonitorInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::GraphQLConsoleInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::GridWidthLabInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::HomeDashboard': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::InteractionOperationsDashboard': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::LayoutInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::LazyModuleStatusInspector': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::LoginStudioResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::PermissionsAuditLogResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::PermissionsResourceAccessResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::PermissionsUserAccessResource': loadNgDashboardsCoreDashboardsModule,
@@ -212,6 +238,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::SettingsExplorerInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::SystemDiagnosticsResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::TabStripLabInspector': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::TelephonyOperationsDashboard': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::ThemeManagerResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::ThemeStudioResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::VersionHistoryDiffResource': loadNgDashboardsCoreDashboardsModule,
@@ -254,12 +281,23 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::DatabaseDesignerDashboard': loadNgDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module
+  'BaseFormPanel::form-panel:MJMLEvaluationProtocols:versions': loadNgDashboardsPredictiveStudioDashboardsModule,
+  'BaseFormPanel::form-panel:MJMLModels:evaluation': loadNgDashboardsPredictiveStudioDashboardsModule,
+  'BaseFormPanel::form-panel:MJMLPredictionUnits:versions': loadNgDashboardsPredictiveStudioDashboardsModule,
+  'BaseFormPanel::form-panel:MJMLTrainingPipelines:bindings': loadNgDashboardsPredictiveStudioDashboardsModule,
   'BaseResourceComponent::PredictiveStudioModelsResource': loadNgDashboardsPredictiveStudioDashboardsModule,
   'BaseResourceComponent::PredictiveStudioPredictionsResource': loadNgDashboardsPredictiveStudioDashboardsModule,
   'BaseResourceComponent::PredictiveStudioStudioResource': loadNgDashboardsPredictiveStudioDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./routines-dashboards.module
   'BaseResourceComponent::UserRoutines': loadNgDashboardsRoutinesDashboardsModule,
+
+  // @memberjunction/ng-dashboards → ./rubrics-dashboards.module
+  'BaseDashboard::RubricScalesDashboard': loadNgDashboardsRubricsDashboardsModule,
+  'BaseDashboard::RubricsDashboard': loadNgDashboardsRubricsDashboardsModule,
+  'BaseResourceComponent::RubricDriftResource': loadNgDashboardsRubricsDashboardsModule,
+  'BaseResourceComponent::RubricScalesResource': loadNgDashboardsRubricsDashboardsModule,
+  'BaseResourceComponent::RubricsResource': loadNgDashboardsRubricsDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./scheduling-dashboards.module
   'BaseDashboard::SchedulingDashboard': loadNgDashboardsSchedulingDashboardsModule,
@@ -274,6 +312,14 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::TestingExplorerResource': loadNgDashboardsTestingDashboardsModule,
   'BaseResourceComponent::TestingReviewResource': loadNgDashboardsTestingDashboardsModule,
   'BaseResourceComponent::TestingRunsResource': loadNgDashboardsTestingDashboardsModule,
+
+  // @memberjunction/ng-dashboards → ./video-studio-dashboards.module
+  'BaseResourceComponent::VideoStudioArchetypesResource': loadNgDashboardsVideoStudioDashboardsModule,
+  'BaseResourceComponent::VideoStudioBrandKitsResource': loadNgDashboardsVideoStudioDashboardsModule,
+  'BaseResourceComponent::VideoStudioProductionsResource': loadNgDashboardsVideoStudioDashboardsModule,
+
+  // @memberjunction/ng-dashboards → ./work-queue-dashboards.module
+  'BaseDashboard::WorkQueueDashboard': loadNgDashboardsWorkQueueDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./workflows-dashboards.module
   'BaseDashboard::WorkflowsDashboard': loadNgDashboardsWorkflowsDashboardsModule,
@@ -293,4 +339,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 117;
+export const LAZY_FEATURE_CONFIG_COUNT = 139;

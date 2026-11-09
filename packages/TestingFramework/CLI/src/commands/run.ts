@@ -14,6 +14,7 @@ import { ParseVariableFlags, GetTestVariablesSchema } from '../utils/variable-pa
 import { LoadOraclesModule } from '../utils/oracle-module-loader';
 import { LoadCheckModules } from '../utils/check-module-loader';
 import { installInstrumentedCacheFirst } from '@memberjunction/testing-integration';
+import { LookupRubricOverride } from './rubric-cli';
 
 /**
  * Run command - Execute a single test or filtered set of tests
@@ -179,10 +180,13 @@ export class RunCommand {
             // Execute test
             this.spinner.start(`Running test: ${test.Name}...`);
 
+            const rubric = flags.rubric ? await LookupRubricOverride(flags.rubric, contextUser) : undefined;
             const result = await engine.RunTest(test.ID, {
                 environment,
                 verbose: flags.verbose,
-                variables
+                variables,
+                rubricId: rubric?.rubricId,
+                rubricVersionId: rubric?.versionId,
             }, contextUser);
 
             this.spinner.stop();
@@ -253,7 +257,7 @@ export class RunCommand {
      * Validate that a test is ready to execute without actually running it.
      * Catches misconfigured oracles, malformed JSON, and missing drivers.
      */
-    private dryRunValidation(test: { Name: string; ID: string; Type: string; Status: string; TypeID: string; Configuration?: string | null; InputDefinition?: string | null; ExpectedOutcomes?: string | null }, engine: TestEngine): { errors: string[]; warnings: string[]; info: string[] } {
+    private dryRunValidation(test: { Name: string; ID: string; Type: string | null; Status: string; TypeID: string; Configuration?: string | null; InputDefinition?: string | null; ExpectedOutcomes?: string | null }, engine: TestEngine): { errors: string[]; warnings: string[]; info: string[] } {
         const errors: string[] = [];
         const warnings: string[] = [];
         const info: string[] = [];

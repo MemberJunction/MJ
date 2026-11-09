@@ -52,7 +52,6 @@
     "RepeatCount": null,
     "MaxExecutionTimeMS": null,
     "Variables": null,
-    "Type": "Computer Use",
     "SkipEmbeddings": false
   },
   "primaryKey": {

@@ -43,8 +43,20 @@ export class RealtimeAgentBannerComponent {
    */
   @Input() Compact = false;
 
+  /**
+   * Whether to suppress the turn-state pill and redundant "speaking as" label in the banner
+   * because the center hero orb is already displaying the agent's name and live turn state.
+   */
+  @Input() HideState = false;
+
   /** Display name of the agent the voice session fronts (e.g. "Sage"). */
   @Input() AgentName = 'the agent';
+
+  /**
+   * What the state label says in the `'error'` state when the call said why it ended (`DescribeCallEnd`'s `Label`, such
+   * as "Time limit reached"); `null` keeps "Connection error".
+   */
+  @Input() ErrorLabel: string | null = null;
 
   /**
    * Display name of the realtime model the live session runs on (e.g. "GPT Realtime 2").
@@ -71,26 +83,49 @@ export class RealtimeAgentBannerComponent {
   /** When reviewing: when the past session closed (null while it is still open). */
   @Input() ReviewClosedAt: Date | null = null;
 
-  /** When reviewing: why the past session closed (`Explicit` | `Janitor` | `Shutdown` | `Error`), when known. */
+  /** When reviewing: why the past session closed (`Explicit` | `Janitor` | `Shutdown` | `Error` | `TimeLimit` | `Idle`), when known. */
   @Input() ReviewCloseReason: string | null = null;
 
   // ── App-bar action cluster (disclosure-gated by the overlay) ────────────────
   // STATE + WINDOW-CHROME only. Captions & End were removed (they duplicated the bottom dock's
   // controls — one home per control), and "pure audio" was folded into the gear's Density = Simple.
 
-  /** Whether the gear (density escape hatch + dev toggle) renders (disclosure level 2+). */
-  @Input() ShowGear = false;
+  /**
+   * Whether the gear (density escape hatch + dev toggle) renders (disclosure level 2+). Taking the
+   * gear away also closes its popover, so no empty popover outlives the button that opened it.
+   */
+  @Input()
+  set ShowGear(value: boolean) {
+    this._showGear = value;
+    if (!value) {
+      this.GearOpen = false;
+    }
+  }
+  get ShowGear(): boolean {
+    return this._showGear;
+  }
+  private _showGear = false;
 
   /**
    * Whether the interface-density segmented control renders inside the gear popover.
    * Default `true` (historical behaviour); a host may hide it via the overlay's
-   * `[ShowDensityPicker]` input. The gear itself (and its developer-links toggle) still
-   * renders when {@link ShowGear} is true even if the density picker is hidden.
+   * `[ShowDensityPicker]` input. The gear itself still renders when {@link ShowGear} is true
+   * even if the density picker is hidden; its developer-links toggle renders only when
+   * {@link AllowDevLinks} is also true.
    */
   @Input() ShowDensityPicker = true;
 
+  /**
+   * Host ceiling for developer links: `false` removes the gear's "Developer links" toggle.
+   * Per-session {@link DevMode} still decides whether links render when allowed.
+   */
+  @Input() AllowDevLinks = true;
+
   /** Whether the Minimize control renders (live sessions only). */
   @Input() ShowMinimize = false;
+
+  /** Review only: whether the "Start live session" action renders. */
+  @Input() ShowStartLive = true;
 
   /** The user's current interface-density override (selected state in the gear popover). */
   @Input() Density: RealtimeUxDensity = 'auto';
@@ -178,6 +213,8 @@ export class RealtimeAgentBannerComponent {
     switch (this.ReviewCloseReason) {
       case 'Explicit': return 'Ended by user';
       case 'Janitor': return 'Closed by janitor';
+      case 'TimeLimit': return 'Time limit';
+      case 'Idle': return 'Idle — no activity';
       case 'Shutdown': return 'Closed at shutdown';
       case 'Error': return 'Ended with error';
       default: return '';
@@ -209,7 +246,7 @@ export class RealtimeAgentBannerComponent {
       case 'listening': return 'Listening';
       case 'speaking': return `${this.AgentName} is speaking…`;
       case 'thinking': return 'Working on it…';
-      case 'error': return 'Connection error';
+      case 'error': return this.ErrorLabel ?? 'Connection error';
       case 'closed': return 'Call ended';
       default: return '';
     }

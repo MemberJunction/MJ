@@ -45,6 +45,18 @@
             <span class="s-tab__badge" aria-hidden="true">{{ State.Cards.length }}</span>
           }
         </button>
+        @if (tab.Kind === 'channel' && tab.Data?.Plugin && tab.Key === Model.ActiveKey) {
+          <!-- "Move to…" for the active channel's surface: beside its tab, since a tab is itself a button. -->
+          <mj-media-move-menu
+            class="s-tab-move"
+            [Key]="tab.Key"
+            [Title]="tab.Title"
+            [Placement]="PlacementOf(tab.Key)"
+            [Allowed]="AllowedOf(tab.Key)"
+            (MoveRequested)="MoveRequested.emit($event)"
+            (ResetLayoutRequested)="ResetLayoutRequested.emit()">
+          </mj-media-move-menu>
+        }
       }
       <div class="tabs-end">
         <button type="button"
@@ -73,13 +85,24 @@
             </mj-realtime-activity-rail>
           }
           @case ('channel') {
-            @if (tab.Data?.Plugin; as plugin) {
-              <!-- Registry-resolved channel: the pane host creates the plugin's surface
-                   component dynamically and hands the instance back for binding -->
-              <mj-realtime-channel-pane [Plugin]="plugin"></mj-realtime-channel-pane>
-              <!-- First-run intro: overlaid over the active channel pane the first time this user
-                   opens it; the pane host renders display:none + a sibling surface, so the overlay
-                   sits here (inside the positioned .s-pane) rather than inside the pane host. -->
+            @if (tab.Data?.Plugin && PlacementOf(tab.Key) !== 'tab') {
+              <!-- The user moved this channel's surface elsewhere: the tab says where, and brings it back. -->
+              <div class="s-pane__away" role="status">
+                <i [class]="AwayIcon(tab.Key)" aria-hidden="true"></i>
+                <span>{{ tab.Title }} is {{ AwayText(tab.Key) }}.</span>
+                @if (AllowedOf(tab.Key).includes('tab')) {
+                  <button type="button" mjButton Variant="secondary" Size="sm"
+                          (click)="MoveRequested.emit({ Key: tab.Key, Placement: 'tab' })">
+                    Bring it here
+                  </button>
+                }
+              </div>
+            } @else if (tab.Data?.Plugin) {
+              <!-- Registry-resolved channel: its surface lives on the overlay's stage, which lays it
+                   over this slot while the tab is active (ChannelSlotChange reports the slot). -->
+              <div #channelSlot class="s-pane__slot" [attr.data-channel-key]="tab.Key"></div>
+              <!-- First-run intro: overlaid over the active channel's surface the first time this user
+                   opens it. It sits here, inside the positioned .s-pane, above the stage's surface. -->
               @if (tab.Key === Model.ActiveKey && OnboardingContent) {
                 <mj-channel-onboarding-panel
                   [Content]="OnboardingContent"

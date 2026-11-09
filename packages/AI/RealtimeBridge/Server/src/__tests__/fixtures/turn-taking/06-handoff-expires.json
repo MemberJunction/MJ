@@ -1,0 +1,29 @@
+{
+  "Name": "handoff-expires",
+  "Description": "Sage hands the floor to Demo Loop, but Demo Loop never takes it. Scout is held back while the reservation stands, then speaks once its TTL has lapsed, so a silent target cannot wedge the room.",
+  "Agents": [
+    { "Id": "sage", "Names": ["Sage"] },
+    { "Id": "demo", "Names": ["Demo Loop"] },
+    { "Id": "scout", "Names": ["Scout"] }
+  ],
+  "Events": [
+    { "Type": "HumanSpeech", "AtMs": 0, "DurationMs": 2000, "Text": "Sage, start the standup and call on the others.",
+      "ExpectDecisions": { "sage": "Speak", "demo": "Silent", "scout": "Silent" } },
+    { "Type": "AgentSpeech", "AtMs": 3000, "Agent": "sage", "DurationMs": 4000, "Text": "Good morning everyone, Demo Loop, you are up first." },
+    { "Type": "Yield", "AtMs": 6500, "Agent": "sage", "To": "demo" },
+    { "Type": "AgentSpeech", "AtMs": 9000, "Agent": "scout", "DurationMs": 4000, "Text": "While we wait I can share my update" },
+    { "Type": "AgentSpeech", "AtMs": 12000, "Agent": "scout", "DurationMs": 4000, "Text": "Since nobody picked that up I will go ahead" }
+  ],
+  "Expect": {
+    "Speeches": [
+      { "Agent": "sage", "Kind": "Turn", "Granted": true, "Reason": "FloorFree" },
+      { "Agent": "scout", "Kind": "Turn", "Granted": false, "Reason": "ReservedForHandoff" },
+      { "Agent": "scout", "Kind": "Turn", "Granted": true, "Reason": "FloorFree" }
+    ],
+    "Yields": [{ "Reason": "Yielded", "HandoffTo": "demo" }],
+    "Preempted": [],
+    "BackchannelCount": 0,
+    "LoopCapReached": false,
+    "FinalFloorHolder": null
+  }
+}

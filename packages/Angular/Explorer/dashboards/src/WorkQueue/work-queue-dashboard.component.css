@@ -1,0 +1,13 @@
+:host {
+    display: block;
+    height: 100%;
+}
+
+.work-queue-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px;
+    background: var(--mj-bg-page);
+    min-height: 100%;
+}

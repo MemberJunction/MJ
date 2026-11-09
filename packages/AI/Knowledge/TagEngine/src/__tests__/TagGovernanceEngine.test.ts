@@ -24,6 +24,7 @@ vi.mock('@memberjunction/global', () => ({
         return a.toLowerCase() === b.toLowerCase();
     },
     NormalizeUUID: (id: string) => id.toLowerCase(),
+    EscapeSQLString: (v: string | null | undefined) => (v ?? '').replace(/'/g, "''"),
     RegisterClass: vi.fn(),
     // Needed because @memberjunction/ai-engine-base's PriceUnitTypes marks its base class
     // @RequiresSubclass(); this mock replaces the module wholesale, so an unlisted symbol
@@ -31,7 +32,7 @@ vi.mock('@memberjunction/global', () => ({
     RequiresSubclass: () => (target: unknown) => target,
 }));
 
-vi.mock('@memberjunction/core', () => {
+vi.mock('@memberjunction/core', async () => {
     class MockMetadata {
         GetEntityObject = mockGetEntityObject;
     }
@@ -39,6 +40,9 @@ vi.mock('@memberjunction/core', () => {
         RunView = mockRunView;
     }
     return {
+        // The real SharedLoad, so Config's load sharing runs as it does in production. Imported from its
+        // own module: the whole of @memberjunction/core would load the @memberjunction/global mocked here.
+        SharedLoad: (await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core/dist/generic/sharedLoad.js')).SharedLoad,
         Metadata: MockMetadata,
         RunView: MockRunView,
         UserInfo: class {},
@@ -67,6 +71,7 @@ vi.mock('@memberjunction/core-entities', () => ({
 
 vi.mock('@memberjunction/ai-prompts', () => ({
     AIModelRunner: class {},
+    AIEmbeddingRunner: class {},
     AIPromptRunner: class {
         async ExecutePrompt() {
             return { success: true, result: { taxonomy: [] }, errorMessage: null };
@@ -138,7 +143,7 @@ describe('TagGovernanceEngine', () => {
     // ========================================================================
 
     describe('MergeTags', () => {
-        it('should re-point content item tags and tagged items to surviving tag', async () => {
+        it('should re-point content item tags, tagged items, and direct child tags to surviving tag', async () => {
             const mockContentItems = [
                 createMockEntity({ ID: 'ci-1', TagID: 'source-1' }),
                 createMockEntity({ ID: 'ci-2', TagID: 'source-1' }),
@@ -146,15 +151,21 @@ describe('TagGovernanceEngine', () => {
             const mockTaggedItems = [
                 createMockEntity({ ID: 'ti-1', TagID: 'source-1' }),
             ];
+            const mockChildTags = [
+                createMockEntity({ ID: 'child-1', ParentID: 'source-1' }),
+            ];
 
-            // First call: content item tags; second call: tagged items
+            // 1st call: content item tags; 2nd call: tagged items; 3rd call: child tags
             let runViewCallCount = 0;
             mockRunView.mockImplementation(() => {
                 runViewCallCount++;
                 if (runViewCallCount === 1) {
                     return Promise.resolve({ Success: true, Results: mockContentItems });
                 }
-                return Promise.resolve({ Success: true, Results: mockTaggedItems });
+                if (runViewCallCount === 2) {
+                    return Promise.resolve({ Success: true, Results: mockTaggedItems });
+                }
+                return Promise.resolve({ Success: true, Results: mockChildTags });
             });
 
             // The tag Load entity for marking as merged
@@ -171,6 +182,7 @@ describe('TagGovernanceEngine', () => {
 
             expect(result.ItemsMoved).toBe(2);
             expect(result.TaggedItemsMoved).toBe(1);
+            expect(mockChildTags[0].ParentID).toBe('surviving-1');
             // Verify source tag was marked as merged
             expect(sourceTag.Status).toBe('Merged');
             expect(sourceTag.MergedIntoTagID).toBe('surviving-1');
@@ -449,6 +461,62 @@ describe('TagGovernanceEngine', () => {
 
             await expect(engine.RenameTag('tag-1', 'New', mockUser))
                 .rejects.toThrow('Failed to rename tag');
+        });
+    });
+
+    // ========================================================================
+    // PromoteSuggestion
+    // ========================================================================
+
+    describe('PromoteSuggestion', () => {
+        it('merges an existing active MJ: Tags record when ProposedName matches an active tag under merge-into-existing', async () => {
+            const { TagEngine } = await import('../TagEngine');
+            const existingSourceTag = createMockEntity({
+                ID: 'source-tag-id',
+                Name: 'AI Agents',
+                Status: 'Active',
+            });
+            const configSpy = vi.spyOn(TagEngine.prototype, 'Config').mockResolvedValue(undefined);
+            const getByNameSpy = vi.spyOn(TagEngine.prototype, 'GetTagByName').mockReturnValue(existingSourceTag as never);
+            const mergeTagsSpy = vi.spyOn(engine, 'MergeTags').mockResolvedValue({ ItemsMoved: 1, TaggedItemsMoved: 2 });
+
+            const suggestionEntity = createMockEntity({
+                ID: 'sugg-1',
+                ProposedName: 'AI Agents',
+                Status: 'Pending',
+            });
+            const targetTagEntity = createMockEntity({
+                ID: 'target-tag-id',
+                Name: 'Artificial Intelligence Agents',
+                Status: 'Active',
+            });
+
+            let entityCall = 0;
+            mockGetEntityObject.mockImplementation(() => {
+                entityCall++;
+                if (entityCall === 1) return Promise.resolve(suggestionEntity);
+                if (entityCall === 2) return Promise.resolve(targetTagEntity);
+                return Promise.resolve(createMockEntity());
+            });
+            mockRunView.mockResolvedValue({ Success: true, Results: [] });
+
+            try {
+                const resolved = await engine.PromoteSuggestion(
+                    'sugg-1',
+                    { kind: 'merge-into-existing', targetTagID: 'target-tag-id' },
+                    mockUser,
+                );
+
+                expect(configSpy).toHaveBeenCalledWith(false, mockUser);
+                expect(getByNameSpy).toHaveBeenCalledWith('AI Agents');
+                expect(mergeTagsSpy).toHaveBeenCalledWith(['source-tag-id'], 'target-tag-id', mockUser);
+                expect(resolved.ID).toBe('target-tag-id');
+                expect(suggestionEntity.Status).toBe('Merged');
+            } finally {
+                configSpy.mockRestore();
+                getByNameSpy.mockRestore();
+                mergeTagsSpy.mockRestore();
+            }
         });
     });
 });

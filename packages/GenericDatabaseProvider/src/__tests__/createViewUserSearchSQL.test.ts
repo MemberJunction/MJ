@@ -158,8 +158,12 @@ function makeField(opts: FieldOpts): EntityFieldInfo {
  * prototype, so the getter would be `undefined` — falsy — and every entity would silently take the
  * "no search surface" branch, making an assertion about the `(1=0)` fallback pass for the wrong
  * reason. Seeding `_Fields` on a prototype-backed object keeps the getter live. See MJ#4581.
+ *
+ * `ftxFunction` stays nullable: the cases below deliberately pass `null` and `''` for a
+ * FullTextSearchEnabled entity whose search function was never minted, and the body preserves
+ * them rather than defaulting them away.
  */
-function makeEntity(opts: { ftx?: boolean; ftxFunction?: string; pkName?: string; fields: EntityFieldInfo[] }): EntityInfo {
+function makeEntity(opts: { ftx?: boolean; ftxFunction?: string | null; pkName?: string; fields: EntityFieldInfo[] }): EntityInfo {
     // EntityInfo has a heavy constructor / initialization path; we build a
     // minimal shape via Object.create + property assignment. The SUT only
     // touches FullTextSearchEnabled, FullTextSearchFunction, SchemaName,
@@ -174,7 +178,10 @@ function makeEntity(opts: { ftx?: boolean; ftxFunction?: string; pkName?: string
     pkField.IsPrimaryKey = true;
     Object.assign(entity, {
         FullTextSearchEnabled: !!opts.ftx,
-        FullTextSearchFunction: opts.ftxFunction ?? 'fnSearchTest',
+        // `in`, not `??` — an explicit null/'' ftxFunction is a real case under test (a
+        // FullTextSearchEnabled entity whose search function was never minted), so it must
+        // survive as null/'' rather than being defaulted away.
+        FullTextSearchFunction: 'ftxFunction' in opts ? opts.ftxFunction : 'fnSearchTest',
         SchemaName: 'crm',
         _fields: [pkField, ...opts.fields],
     });
@@ -239,6 +246,33 @@ describe('createViewUserSearchSQL — escaping', () => {
         const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: 'BeginsWith' })] });
         const sql = provider.buildSQL(e, '50%');
         expect(sql).toBe(`(([Name]  LIKE N'50\\%%' ESCAPE '\\'))`);
+    });
+
+    it('a phrase in quotes is searched without them, straight or curly', () => {
+        const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: 'Contains' })] });
+        const expected = `(([Name]  LIKE N'%Steering Review%' ESCAPE '\\'))`;
+        expect(provider.buildSQL(e, '"Steering Review"')).toBe(expected);
+        expect(provider.buildSQL(e, ' “Steering Review” ')).toBe(expected);
+    });
+
+    it('a quote inside the term, or quotes around only whitespace, stay literal', () => {
+        const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: 'Contains' })] });
+        expect(provider.buildSQL(e, '6" pipe')).toBe(`(([Name]  LIKE N'%6" pipe%' ESCAPE '\\'))`);
+        expect(provider.buildSQL(e, '""')).toBe(`(([Name]  LIKE N'%""%' ESCAPE '\\'))`);
+        expect(provider.buildSQL(e, '" "')).toBe(`(([Name]  LIKE N'%" "%' ESCAPE '\\'))`);
+    });
+
+    it('a quoted phrase is unquoted for BeginsWith, EndsWith and Exact too, after single quotes are doubled', () => {
+        const field = (predicate: string) => makeEntity({ fields: [makeField({ name: 'Name', predicate })] });
+        expect(provider.buildSQL(field('BeginsWith'), '"Steering"')).toBe(`(([Name]  LIKE N'Steering%' ESCAPE '\\'))`);
+        expect(provider.buildSQL(field('EndsWith'), '"Review"')).toBe(`(([Name]  LIKE N'%Review' ESCAPE '\\'))`);
+        expect(provider.buildSQL(field('Exact'), '"ABC-123"')).toBe(`(([Name]  = N'ABC-123'))`);
+        expect(provider.buildSQL(field('Contains'), '"O\'Brien"')).toBe(`(([Name]  LIKE N'%O''Brien%' ESCAPE '\\'))`);
+    });
+
+    it('a custom format gets the term as typed, quotes included', () => {
+        const e = makeEntity({ fields: [makeField({ name: 'Code', paramFormat: " = '{0}'" })] });
+        expect(provider.buildSQL(e, '"ABC"')).toBe(`(([Code]  = '"ABC"'))`);
     });
 
     it('Exact does NOT escape LIKE metacharacters (it does not use LIKE)', () => {
@@ -409,6 +443,10 @@ describe('createViewUserSearchSQL — UserSearchParamFormatAPI still gets the fr
         expect(provider.buildSQL(customFormatEntity(), '2026')).toBe(`(([Year]  = 2026))`);
     });
 
+    it('says why it refuses a term that cannot be read as complete SQL tokens', () => {
+        expect(() => provider.buildSQL(customFormatEntity(), '[2026')).toThrow(/cannot be read as complete SQL tokens/);
+    });
+
     it('a QUOTED custom format keeps working for terms with punctuation', () => {
         const e = makeEntity({ fields: [makeField({ name: 'Phone', predicate: 'Exact', paramFormat: " = '{0}'" })] });
         expect(provider.buildSQL(e, "O'Leary")).toBe(`(([Phone]  = 'O''Leary'))`);
@@ -515,11 +553,64 @@ describe('createViewUserSearchSQL — FTX path is unchanged', () => {
         expect(sql).toBe(`[ID] IN (SELECT [ID] FROM [crm].[fnSearchAccount]('inc'))`);
     });
 
+    it('FTX-enabled entity keeps a quoted phrase quoted (phrase search)', () => {
+        const e = makeEntity({ ftx: true, ftxFunction: 'fnSearchAccount', fields: [] });
+        const sql = provider.buildSQL(e, '"steering review"');
+        expect(sql).toBe(`[ID] IN (SELECT [ID] FROM [crm].[fnSearchAccount]('"steering review"'))`);
+    });
+
     it('FTX-enabled entity preserves explicit boolean operators in input', () => {
         const e = makeEntity({ ftx: true, ftxFunction: 'fnSearchAccount', fields: [] });
         const sql = provider.buildSQL(e, 'foo AND bar');
         expect(sql).toContain('fnSearchAccount');
         expect(sql).toContain(' AND ');
+    });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FullTextSearchEnabled with no FullTextSearchFunction
+//
+// The two columns are independent: the flag can be set by hand or by a metadata sync before
+// CodeGen has minted the function. Taking the FTX branch on the flag alone emitted
+// `... IN (SELECT [ID] FROM [crm].[]('term'))` — a syntax error on EVERY user search of such
+// an entity, with no fallback. A blank name must fall through to the per-field LIKE path,
+// which needs no database object.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('createViewUserSearchSQL — FTX requires a function NAME, not just the flag', () => {
+    const searchableField = () => makeField({ name: 'Name', predicate: 'Contains' });
+    // Byte-identical to what a NON-FTX entity with the same one field produces (asserted first),
+    // so these prove the fall-through reaches the ordinary per-field path, not a variant of it.
+    const likePathSQL = `(([Name]  LIKE N'%inc%' ESCAPE '\\'))`;
+
+    it('produces the SAME SQL a non-FTX entity produces (the baseline for the three cases below)', () => {
+        const e = makeEntity({ fields: [searchableField()] });
+        expect(provider.buildSQL(e, 'inc')).toBe(likePathSQL);
+    });
+
+    it('falls through to the per-field LIKE path when FullTextSearchFunction is null', () => {
+        const e = makeEntity({ ftx: true, ftxFunction: null, fields: [searchableField()] });
+        expect(provider.buildSQL(e, 'inc')).toBe(likePathSQL);
+    });
+
+    it('falls through to the per-field LIKE path when FullTextSearchFunction is an empty string', () => {
+        const e = makeEntity({ ftx: true, ftxFunction: '', fields: [searchableField()] });
+        expect(provider.buildSQL(e, 'inc')).toBe(likePathSQL);
+    });
+
+    it('falls through to the per-field LIKE path when FullTextSearchFunction is whitespace only', () => {
+        const e = makeEntity({ ftx: true, ftxFunction: '   ', fields: [searchableField()] });
+        expect(provider.buildSQL(e, 'inc')).toBe(likePathSQL);
+    });
+
+    it('never emits the empty-object-name SQL that PostgreSQL and SQL Server both reject', () => {
+        for (const ftxFunction of [null, '', '   ']) {
+            const e = makeEntity({ ftx: true, ftxFunction, fields: [searchableField()] });
+            const sql = provider.buildSQL(e, 'inc');
+            // `[crm].[]` / `"crm".""` — a quoted EMPTY identifier is the syntax error.
+            expect(sql).not.toMatch(/\[\s*\]|""/);
+            expect(sql).not.toContain('[crm].');
+        }
     });
 });
 

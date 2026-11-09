@@ -63,6 +63,33 @@ describe('resolveOutcomeConfig', () => {
     warnSpy.mockRestore();
   });
 
+  it('narrows a stored Lineage config: an array or primitive config is ignored, and malformed bands are dropped', () => {
+    expect(resolveOutcomeConfig({ Lineage: JSON.stringify({ outcomeConfig: [{ Polarity: 'positive' }] }), TargetVariable: 'Status' }).Polarity).toBeUndefined();
+    expect(resolveOutcomeConfig({ Lineage: JSON.stringify([{ outcomeConfig: { Polarity: 'positive' } }]), TargetVariable: 'Status' }).Polarity).toBeUndefined();
+    expect(resolveOutcomeConfig({ Lineage: JSON.stringify({ outcomeConfig: 'positive' }), TargetVariable: 'Status' }).Polarity).toBeUndefined();
+    const resolved = resolveOutcomeConfig({
+      Lineage: JSON.stringify({
+        OutcomeConfig: {
+          Polarity: 'sideways',
+          Bands: [
+            { Key: 'ok', Label: 'OK', Min: 0, Max: 1, BadgeColor: 'green' },
+            { Key: 'bad', Label: 'Bad', Min: '0', Max: 1, BadgeColor: 'green' },
+            { Key: 'odd', Label: 'Odd', Min: 0, Max: 1, BadgeColor: 'purple' },
+          ],
+        },
+      }),
+    });
+    expect(resolved.Polarity).toBeUndefined();
+    expect(resolved.Bands?.map((b) => b.Key)).toEqual(['ok']);
+  });
+
+  it('names the current function in its malformed-Lineage warning', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    resolveOutcomeConfig({ Lineage: '{ malformed json' });
+    expect(warnSpy.mock.calls[0][0]).toMatch(/^ResolveOutcomeConfig:/);
+    warnSpy.mockRestore();
+  });
+
   it('infers positive renewal config when target contains renew or retention', () => {
     const resolved = resolveOutcomeConfig({ TargetVariable: 'MemberRenewal' });
     expect(resolved.ScoreLabel).toBe('Renewal Probability');

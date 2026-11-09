@@ -1,15 +1,18 @@
-import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, TemplateRef, ChangeDetectorRef, inject, DoCheck, OnInit, OnDestroy } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, TemplateRef, ChangeDetectorRef, inject, DoCheck, OnInit, OnDestroy, ElementRef, Renderer2 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { BaseEntity, EntityInfo, CompositeKey } from '@memberjunction/core';
+import { IsPhoneViewport, WatchPhoneViewport } from '../chrome/phone-viewport';
+import { BaseEntity, EntityInfo, CompositeKey, LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { UserInfoEngine } from '@memberjunction/core-entities';
+import { RecordCloneService, type CloneCompletedEvent, type CloneNavigationEvent } from '@memberjunction/ng-record-clone';
 import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
 import { FormToolbarItemConfig, FormToolbarItemKey, FormToolbarItemClickEventArgs, ResolvedToolbarItem } from '../types/form-toolbar-item';
 import { IsAccordionFormChrome } from '../chrome/form-chrome';
 import { FormNavigationEvent } from '../types/navigation-events';
 import { DiscoverISADescendants, BuildDescendantTree, IsaRelatedItem } from '../isa-related-panel/isa-hierarchy-utils';
-import { FormWidthMode, FormContext } from '../types/form-types';
+import { FormWidthMode, FormModeSwitch, FormContext } from '../types/form-types';
 import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
 import {
   BeforeSaveEventArgs,
@@ -18,9 +21,48 @@ import {
   BeforeCancelEventArgs,
   BeforeHistoryViewEventArgs,
   BeforeListManagementEventArgs,
+  BeforeCloneEventArgs,
   CustomToolbarButtonClickEventArgs,
   CustomToolbarButton
 } from '../types/form-events';
+
+/** User setting that stores the toolbar actions a user pinned, shared across every form. */
+export const TOOLBAR_PINS_SETTING_KEY = 'mj.form.toolbar.pinnedActions';
+
+/** User setting that stores whether the form toolbar stays pinned open in Read Mode (global + per-entity). */
+export const TOOLBAR_VISIBILITY_SETTING_KEY = 'mj.form.toolbar.visibility';
+
+export interface FormToolbarVisibilitySetting {
+  Version: 1;
+  /** When true, the full toolbar stays expanded in Read Mode across all entities by default. */
+  GlobalPinned: boolean;
+  /**
+   * Per-entity overrides keyed by EntityInfo.Name (e.g. "MJ: Entities": true).
+   * - true: always expanded on this entity
+   * - false: always collapsed on this entity (even when GlobalPinned is true)
+   * - omitted: inherits GlobalPinned (which defaults to false)
+   */
+  EntityPinned?: Record<string, boolean>;
+}
+
+/** Built-in actions that start pinned for a user who has not chosen pins. */
+export const DEFAULT_PINNED_TOOLBAR_ACTIONS: readonly string[] = ['favorite', 'history'];
+
+/** More-menu labels for the built-in actions, whose buttons are icon-only. */
+const STANDARD_MENU_LABELS: Record<string, string> = {
+  edit: 'Edit',
+  delete: 'Delete record',
+  refresh: 'Refresh',
+  clone: 'Clone',
+  favorite: 'Favorite',
+  history: 'History',
+  list: 'Add to list',
+  tags: 'Tags',
+  comments: 'Comments',
+  links: 'Links',
+  attachments: 'Attachments',
+  'ask-ai': 'Ask AI',
+};
 
 /**
  * Configurable form toolbar component.
@@ -54,6 +96,9 @@ import {
 export class MjFormToolbarComponent extends BaseAngularComponent implements DoCheck, OnInit, OnDestroy {
   private cdr = inject(ChangeDetectorRef);
   private recordRefresh = inject(FormRecordRefreshCoordinator, { optional: true });
+  private cloneService = inject(RecordCloneService);
+  private host = inject(ElementRef<HTMLElement>);
+  private renderer = inject(Renderer2);
   private destroy$ = new Subject<void>();
 
   // ---- Deprecated form reference (backward compat) ----
@@ -105,6 +150,21 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
   /** Whether the tags panel is currently open */
   @Input() IsTagsPanelOpen = false;
+
+  /** Whether the links drawer is currently open */
+  @Input() LinksOpen = false;
+
+  /** Number of linked records for this record */
+  @Input() LinkCount = 0;
+
+  /** Whether the comments drawer is currently open */
+  @Input() CommentsOpen = false;
+
+  /** Number of open anchored comments on this record */
+  @Input() CommentCount = 0;
+
+  /** Number of active field conflicts requiring review in edit mode */
+  @Input() ConflictCount = 0;
 
   /** Number of attachments linked to this record */
   @Input() AttachmentCount = 0;
@@ -177,6 +237,12 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   /** The currently-applied variant ID, or null when the Default form is active. */
   @Input() CurrentVariantID: string | null = null;
 
+  /**
+   * Callback supplied by the form host when the entity has both a custom view
+   * and a CodeGen standard form. Shown inside the View bottom sheet on phones.
+   */
+  @Input() FormModeSwitch: FormModeSwitch | null = null;
+
   // ---- Outputs ----
 
   /** Emitted when any toolbar item (standard or custom) is clicked */
@@ -230,6 +296,18 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   /** Emitted when the Tags button is clicked */
   @Output() TagsPanelToggled = new EventEmitter<void>();
 
+  /** Emitted when the Links button is clicked */
+  @Output() LinksRequest = new EventEmitter<void>();
+
+  /** Emitted when the Comments button is clicked */
+  @Output() CommentsRequest = new EventEmitter<void>();
+
+  /** Emitted when the Ask AI button is clicked */
+  @Output() AskAIRequested = new EventEmitter<void>();
+
+  /** Emitted when the user pins or unpins a toolbar action in the More menu */
+  @Output() ActionPinChanged = new EventEmitter<{ Key: string; Pinned: boolean }>();
+
   /** Emitted when the Attachments button is clicked */
   @Output() AttachmentsPanelToggled = new EventEmitter<void>();
 
@@ -255,9 +333,21 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   @Output() ResetSectionOrderRequested = new EventEmitter<void>();
   @Output() ManageSectionsRequested = new EventEmitter<void>();
 
+  /** Emitted before the clone slide-in opens. Set `Cancel` to handle cloning yourself. */
+  @Output() BeforeClone = new EventEmitter<BeforeCloneEventArgs>();
+
+  /** Emitted after the clone slide-in commits a clone of this record. */
+  @Output() CloneCompleted = new EventEmitter<CloneCompletedEvent>();
+
   // ---- Internal state ----
   ShowDeleteDialog = false;
   ShowDiscardDialog = false;
+  private coordinatorConflictCount = 0;
+
+  /** Effective number of unresolved field conflicts (from explicit input or FormRecordRefreshCoordinator) */
+  get EffectiveConflictCount(): number {
+    return this.ConflictCount > 0 ? this.ConflictCount : this.coordinatorConflictCount;
+  }
 
   /** Computed descendant tree for breadcrumb display */
   DescendantTree: IsaRelatedItem[] = [];
@@ -267,21 +357,56 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   // ---- Lifecycle ----
 
   ngOnInit(): void {
+    this.watchAutoHideViewport();
     this.recordRefresh?.Refreshed$.pipe(takeUntil(this.destroy$)).subscribe(() => {
       this.InvalidateHierarchy();
     });
+    if (this.recordRefresh) {
+      this.coordinatorConflictCount = this.recordRefresh.ActiveConflicts.size;
+      this.recordRefresh.ConflictsChanged$.pipe(takeUntil(this.destroy$)).subscribe(conflicts => {
+        this.coordinatorConflictCount = conflicts.size;
+        this.cdr.markForCheck();
+      });
+    }
   }
 
   ngOnDestroy(): void {
+    this.unwatchAutoHideViewport();
+    this.stopDocumentListeners();
     this.destroy$.next();
     this.destroy$.complete();
   }
 
   ngDoCheck(): void {
+    // Inputs and record state may have changed since the last pass: resolve the items afresh.
+    this._resolvedItems = null;
+    this._pinnedItems = null;
+    this._userInfoEngine = null;
     if (this._formRef) {
       this.syncFromFormRef();
     }
     this.checkDescendantChains();
+    this.checkCloneCapability();
+    this.checkPinsChanged();
+    this.checkVisibilityChanged();
+  }
+
+  /** Redraws when the saved pins changed elsewhere (another open form, another tab). */
+  private checkPinsChanged(): void {
+    const before = this._pinsRaw;
+    this.readPins();
+    if (this._pinsRaw !== before) {
+      this.cdr.markForCheck();
+    }
+  }
+
+  /** Redraws when the toolbar visibility setting changed elsewhere. */
+  private checkVisibilityChanged(): void {
+    const before = this._visibilityRaw;
+    this.readVisibilitySetting();
+    if (this._visibilityRaw !== before) {
+      this.cdr.markForCheck();
+    }
   }
 
   /**
@@ -532,6 +657,15 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     this.emitCancel();
   }
 
+  /** The Discard confirm's message: how many unsaved changes the user is about to lose. */
+  get DiscardMessage(): string {
+    const n = this.DirtyFieldDisplayNames.length;
+    // A record can be dirty with no named field changed (a new record prefilled by its caller);
+    // "0 unsaved changes" would contradict the prompt, so say it plainly.
+    if (n === 0) return 'You have unsaved changes. Are you sure you want to discard them?';
+    return `You have ${n} unsaved change${n === 1 ? '' : 's'}. Are you sure you want to discard ${n === 1 ? 'it' : 'them'}?`;
+  }
+
   OnDiscardConfirm(): void {
     this.ShowDiscardDialog = false;
     this.emitCancel();
@@ -624,6 +758,21 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     this.TagsPanelToggled.emit();
   }
 
+  OnLinks(): void {
+    if (this.dispatchToFormRef('HandleLinksPanel')) return;
+    this.LinksRequest.emit();
+  }
+
+  OnComments(): void {
+    if (this.dispatchToFormRef('HandleCommentsPanel')) return;
+    this.CommentsRequest.emit();
+  }
+
+  OnAskAI(): void {
+    if (this.dispatchToFormRef('OnAskAIRequested')) return;
+    this.AskAIRequested.emit();
+  }
+
   OnAttachmentsPanel(): void {
     if (this.dispatchToFormRef('HandleAttachmentsPanel')) return;
     this.AttachmentsPanelToggled.emit();
@@ -643,6 +792,14 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
    * evaluated against the current Record and EditMode.
    */
   public get ResolvedToolbarItems(): ResolvedToolbarItem[] {
+    // Many template bindings read this per pass (five per More-menu row); resolve once per pass.
+    return (this._resolvedItems ??= this.resolveToolbarItems());
+  }
+
+  /** The resolved items for the current change-detection pass; cleared in ngDoCheck. */
+  private _resolvedItems: ResolvedToolbarItem[] | null = null;
+
+  private resolveToolbarItems(): ResolvedToolbarItem[] {
     const rawItems: FormToolbarItemConfig[] = [];
 
     // 1. Standard Built-in Items
@@ -683,6 +840,19 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
         Visible: this.Config.ShowRefreshButton !== false && (this.Record?.IsSaved ?? false),
         Disabled: this.IsSaving || this.IsRefreshing,
         IsLoading: this.IsRefreshing,
+      },
+      {
+        Key: 'clone',
+        Text: '',
+        Description: `Clone this ${this.EntityInfo?.DisplayNameOrName ?? 'record'} and the records it owns`,
+        Icon: 'fa-solid fa-clone',
+        Variant: 'default',
+        Mode: 'read',
+        Placement: 'actions',
+        Order: 15,
+        Visible: this.ShowCloneAction,
+        Disabled: false,
+        CssClass: this.IsClonePanelOpen ? 'active' : '',
       },
       {
         Key: 'favorite',
@@ -736,6 +906,34 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
         Disabled: false,
       },
       {
+        Key: 'comments',
+        Text: '',
+        Description: this.CommentCount > 0 ? `${this.CommentCount} open comment${this.CommentCount === 1 ? '' : 's'}` : 'Comments',
+        Icon: 'fa-regular fa-comment-dots',
+        Badge: this.CommentCount > 0 ? this.CommentCount : undefined,
+        Variant: 'default',
+        Mode: 'read',
+        Placement: 'actions',
+        Order: 62,
+        Visible: this.Config.ShowCommentsButton !== false && (this.Record?.IsSaved ?? false) && (this.EntityInfo?.AllowRecordComments !== false),
+        Disabled: false,
+        CssClass: this.CommentsOpen ? 'mj-forms-toolbar__btn--active active' : '',
+      },
+      {
+        Key: 'links',
+        Text: '',
+        Description: this.LinkCount > 0 ? `${this.LinkCount} linked record${this.LinkCount === 1 ? '' : 's'}` : 'Links',
+        Icon: 'fa-solid fa-link',
+        Badge: this.LinkCount > 0 ? this.LinkCount : undefined,
+        Variant: 'default',
+        Mode: 'read',
+        Placement: 'actions',
+        Order: 65,
+        Visible: this.Config.ShowLinksButton !== false && (this.Record?.IsSaved ?? false),
+        Disabled: false,
+        CssClass: this.LinksOpen ? 'mj-forms-toolbar__btn--active active' : '',
+      },
+      {
         Key: 'attachments',
         Text: '',
         Description: this.AttachmentCount > 0 ? `${this.AttachmentCount} attachment${this.AttachmentCount === 1 ? '' : 's'}` : 'Attachments',
@@ -748,6 +946,18 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
         Visible: this.Config.ShowAttachmentsButton && this.AttachmentsAvailable,
         Disabled: false,
         CssClass: this.IsAttachmentsPanelOpen ? 'active' : '',
+      },
+      {
+        Key: 'ask-ai',
+        Text: '',
+        Description: 'Ask AI about this record',
+        Icon: 'fa-solid fa-wand-magic-sparkles',
+        Variant: 'default',
+        Mode: 'read',
+        Placement: 'actions',
+        Order: 75,
+        Visible: this.Config.ShowAskAIButton !== false && (this.Record?.IsSaved ?? false),
+        Disabled: false,
       }
     );
 
@@ -786,7 +996,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
     // 4. Resolve states, evaluate predicates, apply overrides
     const resolved: ResolvedToolbarItem[] = [];
-    const standardKeys: Set<string> = new Set(['edit', 'delete', 'refresh', 'favorite', 'history', 'list', 'tags', 'attachments']);
+    const standardKeys: Set<string> = new Set(['edit', 'delete', 'refresh', 'clone', 'favorite', 'history', 'list', 'tags', 'comments', 'links', 'attachments', 'ask-ai']);
 
     for (const item of rawItems) {
       const overrides = this.ItemOverrides?.get(item.Key);
@@ -858,6 +1068,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
       }
 
       const description = disabled && disabledReason ? disabledReason : (merged.Description ?? '');
+      const isStandard = standardKeys.has(merged.Key);
 
       resolved.push({
         Key: merged.Key,
@@ -874,7 +1085,9 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
         Badge: badge,
         IsLoading: isLoading,
         CssClass: merged.CssClass ?? '',
-        IsStandard: standardKeys.has(merged.Key),
+        IsStandard: isStandard,
+        MenuLabel: merged.MenuLabel || merged.Text || (isStandard ? STANDARD_MENU_LABELS[merged.Key] : '') || merged.Description || merged.Key,
+        Pinnable: merged.Pinnable ?? (isStandard && merged.Key !== 'edit'),
         Config: merged,
       });
     }
@@ -894,8 +1107,550 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     return this.ResolvedActionItems.filter(item => (item.Order ?? 100) >= 50);
   }
 
+  /**
+   * Items drawn on the right, beside the View menu.
+   *
+   * `overflow` is folded in: the placement is part of the public type but the More menu
+   * lists only `actions` items, so without this an item registered for `overflow` would
+   * render nowhere and the caller would have no way to tell.
+   */
   public get ResolvedRightItems(): ResolvedToolbarItem[] {
-    return this.ResolvedToolbarItems.filter(item => item.Placement === 'right');
+    return this.ResolvedToolbarItems.filter(
+      item => item.Placement === 'right' || item.Placement === 'overflow',
+    );
+  }
+
+  // ── Pinned actions and the More menu ────────────────────────────
+
+  /** Whether the More menu is open. */
+  public MoreMenuOpen = false;
+
+  /** Whether the View menu (section and layout controls) is open. */
+  public ViewMenuOpen = false;
+
+  /** Last raw pins setting read from UserInfoEngine, and its parse, so each change detection pass doesn't re-parse. */
+  private _pinsRaw: string | undefined;
+  private _pinsParsed: string[] | null = null;
+  /** Pins set in this session when no user settings are available (tests, anonymous hosts). */
+  private _localPins: string[] | null = null;
+
+  /** The maximum number of pinned buttons, the same for every user. */
+  public get MaxPinnedActions(): number {
+    return Math.max(0, this.Config.MaxPinnedActions ?? 3);
+  }
+
+  /**
+   * Keys the user pinned, in their order, or the configured defaults until they choose. Read from
+   * UserInfoEngine on every pass (pending debounced writes included), so every open form agrees.
+   * May include actions this form doesn't offer; those neither render nor use a slot here.
+   */
+  public get PinnedKeys(): string[] {
+    return this.readPins() ?? this._localPins ?? this.Config.DefaultPinnedActions ?? [...DEFAULT_PINNED_TOOLBAR_ACTIONS];
+  }
+
+  /** Read-mode actions that always render as buttons: Edit and custom items that are not pinnable. */
+  public get InlineActionItems(): ResolvedToolbarItem[] {
+    return this.ResolvedActionItems.filter(item => !item.Pinnable);
+  }
+
+  /** The resolved 'edit' action item when visible in read mode (used by the collapsed trigger pill). */
+  public get EditActionItem(): ResolvedToolbarItem | undefined {
+    return this.ResolvedActionItems.find(item => item.Key === 'edit');
+  }
+
+  // ── Toolbar Auto-Hide & Visibility Pinning ──────────────────────
+
+  /** Whether the user expanded the full toolbar for the current viewing session in Read Mode. */
+  public ToolbarSessionExpanded = false;
+
+  private _visibilityRaw: string | undefined;
+  private _visibilityParsed: FormToolbarVisibilitySetting | null = null;
+  private _localVisibility: FormToolbarVisibilitySetting | null = null;
+  private _visibilityRawAtWrite: string | undefined;
+
+  /** Name of the current entity from EntityInfo input or Record.EntityInfo. */
+  public get CurrentEntityName(): string | null {
+    return this.EntityInfo?.Name ?? this.Record?.EntityInfo?.Name ?? null;
+  }
+
+  /** Display name of the current entity for UI labels. */
+  public get CurrentEntityDisplayName(): string {
+    return this.EntityInfo?.DisplayNameOrName ?? this.Record?.EntityInfo?.DisplayNameOrName ?? 'this entity';
+  }
+
+  /** Current resolved toolbar visibility setting. */
+  public get ToolbarVisibilitySetting(): FormToolbarVisibilitySetting {
+    return this.readVisibilitySetting() ?? { Version: 1, GlobalPinned: false };
+  }
+
+  /** True when the user has pinned the toolbar globally across all forms. */
+  public get IsGlobalToolbarPinned(): boolean {
+    return this.ToolbarVisibilitySetting.GlobalPinned === true;
+  }
+
+  /**
+   * Per-entity toolbar pin override for the current entity:
+   * - `true`: pinned open on this entity
+   * - `false`: explicitly unpinned/collapsed on this entity (overrides GlobalPinned)
+   * - `undefined`: no entity override (inherits GlobalPinned)
+   */
+  public get EntityToolbarPinState(): boolean | undefined {
+    const entityName = this.CurrentEntityName;
+    if (!entityName) return undefined;
+    const state = this.ToolbarVisibilitySetting.EntityPinned?.[entityName];
+    return typeof state === 'boolean' ? state : undefined;
+  }
+
+  /**
+   * Whether the toolbar is pinned open for the current form:
+   * 1. Look up `EntityPinned?.[entityName]`. If boolean (`true` or `false`), return it.
+   * 2. Otherwise return `GlobalPinned ?? false`.
+   */
+  public get IsToolbarPinnedOpen(): boolean {
+    const entityState = this.EntityToolbarPinState;
+    if (typeof entityState === 'boolean') {
+      return entityState;
+    }
+    return this.IsGlobalToolbarPinned;
+  }
+
+  private stopWatchingPhoneViewport: (() => void) | null = null;
+
+  /**
+   * True at phone width, where pixels matter enough to hide the toolbar by default. Desktop
+   * always shows the full toolbar; the pin and hide controls exist only here.
+   */
+  public get IsAutoHideViewport(): boolean {
+    return IsPhoneViewport();
+  }
+
+  private watchAutoHideViewport(): void {
+    this.stopWatchingPhoneViewport = WatchPhoneViewport(() => this.cdr.markForCheck());
+  }
+
+  private unwatchAutoHideViewport(): void {
+    this.stopWatchingPhoneViewport?.();
+    this.stopWatchingPhoneViewport = null;
+  }
+
+  /**
+   * Whether the full toolbar renders (`true`) vs. the compact Read-Mode trigger pill (`false`).
+   * Only a phone-width viewport ever collapses. An IS-A hierarchy does not force the toolbar
+   * open: its breadcrumb is its own row below the toolbar block, so it renders either way.
+   */
+  public get IsToolbarExpanded(): boolean {
+    if (!this.IsAutoHideViewport) return true;
+    if (this.EditMode) return true;
+    if (this.SearchFilter.trim().length > 0) return true;
+    if (this.IsToolbarPinnedOpen) return true;
+    if (this.ToolbarSessionExpanded) return true;
+    return false;
+  }
+
+  /**
+   * Expands the full toolbar in Read Mode for the current viewing session. Focus moves to the
+   * "Hide toolbar" chevron once the swap has rendered.
+   */
+  public ExpandToolbarForSession(): void {
+    this.ToolbarSessionExpanded = true;
+    this.cdr.markForCheck();
+    this.focusAfterRender('.mj-forms-toolbar-collapse-btn');
+  }
+
+  /**
+   * Collapses the full toolbar back to the compact Read-Mode trigger pill.
+   * If the toolbar was pinned open, unpins it for this entity only so it collapses immediately:
+   * an entity pin is cleared (or overridden to `false` when the global pin would still show it),
+   * and a global pin gets an entity override of `false`. The global pin itself is never touched
+   * here; only "Unpin toolbar on all forms" changes it. Focus moves to the "…" expand button
+   * once the swap has rendered, so a keyboard user is not dropped on `<body>`.
+   */
+  public CollapseToolbarForSession(): void {
+    this.ToolbarSessionExpanded = false;
+    this.CloseMenus();
+    if (this.IsToolbarPinnedOpen) {
+      this.unpinToolbarForEntity();
+    }
+    this.cdr.markForCheck();
+    this.focusAfterRender('.mj-forms-collapsed-btn--expand');
+  }
+
+  /** Writes the per-entity override that makes `IsToolbarPinnedOpen` false for the current entity. */
+  private unpinToolbarForEntity(): void {
+    const entityName = this.CurrentEntityName;
+    if (!entityName) return;
+    const current = this.ToolbarVisibilitySetting;
+    const nextEntityPinned = { ...(current.EntityPinned ?? {}) };
+    if (current.GlobalPinned) {
+      nextEntityPinned[entityName] = false;
+    } else {
+      delete nextEntityPinned[entityName];
+    }
+    this.writeVisibilitySetting({
+      Version: 1,
+      GlobalPinned: current.GlobalPinned,
+      EntityPinned: nextEntityPinned,
+    });
+  }
+
+  /**
+   * Focuses the first element matching `selector` inside this component after the next render.
+   * The expand/collapse controls replace each other in an `@if` swap, so the activated button is
+   * gone by the time the view updates; this hands focus to its counterpart. A no-op when nothing
+   * matches (the toolbar stayed expanded because of a search filter, say).
+   */
+  private focusAfterRender(selector: string): void {
+    setTimeout(() => {
+      const root: HTMLElement = this.host.nativeElement;
+      root.querySelector<HTMLElement>(selector)?.focus();
+    }, 0);
+  }
+
+  /** Toggles pinning the toolbar open globally across all forms. */
+  public ToggleGlobalToolbarPin(): void {
+    const current = this.ToolbarVisibilitySetting;
+    const nextGlobal = !current.GlobalPinned;
+    this.writeVisibilitySetting({
+      Version: 1,
+      GlobalPinned: nextGlobal,
+      EntityPinned: current.EntityPinned,
+    });
+    this.ToolbarSessionExpanded = nextGlobal;
+    this.cdr.markForCheck();
+  }
+
+  /** Toggles pinning the toolbar open specifically for the current entity (overrides GlobalPinned). */
+  public ToggleEntityToolbarPin(): void {
+    const entityName = this.CurrentEntityName;
+    if (!entityName) return;
+    const current = this.ToolbarVisibilitySetting;
+    const nextEntityPinned = { ...(current.EntityPinned ?? {}) };
+    const nextState = !this.IsToolbarPinnedOpen;
+    nextEntityPinned[entityName] = nextState;
+    this.writeVisibilitySetting({
+      Version: 1,
+      GlobalPinned: current.GlobalPinned,
+      EntityPinned: nextEntityPinned,
+    });
+    this.ToolbarSessionExpanded = nextState;
+    this.cdr.markForCheck();
+  }
+
+  /** Pinned actions this form offers, in pin order, up to MaxPinnedActions. Computed once per pass. */
+  public get PinnedActionItems(): ResolvedToolbarItem[] {
+    return (this._pinnedItems ??= this.resolvePinnedItems()).Items;
+  }
+
+  /**
+   * The pinned items for the current change-detection pass (cleared in ngDoCheck): those shown as
+   * buttons, and every pinned key this form offers, including ones past the cap.
+   */
+  private _pinnedItems: { Items: ResolvedToolbarItem[]; Shown: Set<string>; Pinned: Set<string> } | null = null;
+
+  private resolvePinnedItems(): { Items: ResolvedToolbarItem[]; Shown: Set<string>; Pinned: Set<string> } {
+    const byKey = new Map(this.MoreMenuItems.map(i => [i.Key, i]));
+    const offered = this.PinnedKeys
+      .map(k => byKey.get(k))
+      .filter((i): i is ResolvedToolbarItem => !!i);
+    const items = offered.slice(0, this.MaxPinnedActions);
+    return { Items: items, Shown: new Set(items.map(i => i.Key)), Pinned: new Set(offered.map(i => i.Key)) };
+  }
+
+  /** Pinnable actions listed in the More menu, Delete excluded (it has its own row). */
+  public get MoreMenuItems(): ResolvedToolbarItem[] {
+    return this.ResolvedActionItems.filter(i => i.Pinnable && i.Key !== 'delete');
+  }
+
+  /** The Delete action, shown last in the More menu, unless a host made it an inline button. */
+  public get DeleteMenuItem(): ResolvedToolbarItem | undefined {
+    return this.ResolvedActionItems.find(i => i.Key === 'delete' && i.Pinnable);
+  }
+
+  public get ShowMoreMenu(): boolean {
+    return this.MoreMenuItems.length > 0 || !!this.DeleteMenuItem;
+  }
+
+  /** Whether the action is pinned for this user and offered on this form (shown as a button, or waiting past the cap). */
+  public IsPinned(key: string): boolean {
+    return (this._pinnedItems ??= this.resolvePinnedItems()).Pinned.has(key);
+  }
+
+  /**
+   * Pinned (in the user's list) but not shown on this form, because the pins before it filled every
+   * slot. Pins count per form, so one saved on a form without some of the others can land here.
+   */
+  public IsPinnedOverCap(key: string): boolean {
+    const pinned = (this._pinnedItems ??= this.resolvePinnedItems());
+    return pinned.Pinned.has(key) && !pinned.Shown.has(key);
+  }
+
+  /** Whether another action can be pinned here; counts only the pinned buttons this form shows. */
+  public get CanPinMore(): boolean {
+    return this.PinnedActionItems.length < this.MaxPinnedActions;
+  }
+
+  /**
+   * Pins or unpins an action for this user and saves the choice. Pins for actions this form
+   * doesn't offer are kept, so they come back on forms that do.
+   */
+  public TogglePin(key: string): void {
+    const pins = [...this.PinnedKeys];
+    let nowPinned = false;
+    if (pins.includes(key)) {
+      pins.splice(pins.indexOf(key), 1);
+      nowPinned = false;
+    } else if (this.CanPinMore) {
+      pins.push(key);
+      nowPinned = true;
+    } else {
+      return; // at the cap: the button stays focusable (aria-disabled) so its hint can be read
+    }
+    this.writePins(pins);
+    this._pinnedItems = null;
+    this.ActionPinChanged.emit({ Key: key, Pinned: nowPinned });
+    this.cdr.markForCheck();
+  }
+
+  private static nextMenuId = 0;
+  /** Prefix for the More and View panels' ids, unique per toolbar, for the triggers' aria-controls. */
+  public readonly MenuIdPrefix = `mj-forms-toolbar-${++MjFormToolbarComponent.nextMenuId}`;
+
+  public ToggleMoreMenu(): void {
+    this.MoreMenuOpen = !this.MoreMenuOpen;
+    this.ViewMenuOpen = false;
+    this.syncDocumentListeners();
+    this.cdr.markForCheck();
+    if (this.MoreMenuOpen) this.focusFirstIn(`#${this.MenuIdPrefix}-more`);
+  }
+
+  /** The phone sheet closed itself (scrim, grab handle, Escape inside it): drop the matching menu state. */
+  public OnMenuSheetVisibleChange(menu: 'more' | 'view', visible: boolean): void {
+    if (visible) return;
+    if (menu === 'more') this.MoreMenuOpen = false;
+    else this.ViewMenuOpen = false;
+    this.syncDocumentListeners();
+    this.cdr.markForCheck();
+  }
+
+  public ToggleViewMenu(): void {
+    this.ViewMenuOpen = !this.ViewMenuOpen;
+    this.MoreMenuOpen = false;
+    this.syncDocumentListeners();
+    this.cdr.markForCheck();
+    // The section search if there is one, otherwise the first control.
+    if (this.ViewMenuOpen) this.focusFirstIn(`#${this.MenuIdPrefix}-view`);
+  }
+
+  /** Puts focus back on a panel's trigger, for when the control that had focus goes away with the panel. */
+  private focusTrigger(menu: 'more' | 'view'): void {
+    (this.host.nativeElement.querySelector(`[data-menu-trigger="${menu}"]`) as HTMLElement | null)?.focus();
+  }
+
+  /** Moves focus into a just-opened panel, once it has rendered, so keyboard users land in it. */
+  private focusFirstIn(panelSelector: string): void {
+    // A macrotask, not a microtask: the panel's @if block renders in the change detection that
+    // runs after this handler, and a microtask would still find it missing.
+    setTimeout(() => {
+      const panel = this.host.nativeElement.querySelector(panelSelector) as HTMLElement | null;
+      const first = panel?.querySelector('input, button:not([disabled])') as HTMLElement | null;
+      first?.focus();
+    });
+  }
+
+  /**
+   * Runs a More-menu item and closes the menu. Focus goes back to the More button first, so a
+   * keyboard user isn't left on <body>; an item that opens its own drawer or dialog then takes it.
+   */
+  public OnMenuItemClick(item: ResolvedToolbarItem, event: MouseEvent): void {
+    this.MoreMenuOpen = false;
+    this.syncDocumentListeners();
+    this.focusTrigger('more');
+    void this.OnToolbarItemClick(item, event);
+  }
+
+  public CloseMenus(): void {
+    if (this.MoreMenuOpen || this.ViewMenuOpen || this.VariantMenuOpen) {
+      this.MoreMenuOpen = false;
+      this.ViewMenuOpen = false;
+      this.VariantMenuOpen = false;
+      this.cdr.markForCheck();
+    }
+    this.syncDocumentListeners();
+  }
+
+  /** Document listeners run only while a panel is open, so a click elsewhere in the app costs closed toolbars nothing. */
+  private _unlistenDocument: Array<() => void> = [];
+
+  private syncDocumentListeners(): void {
+    const open = this.MoreMenuOpen || this.ViewMenuOpen || this.VariantMenuOpen;
+    if (open && this._unlistenDocument.length === 0) {
+      this._unlistenDocument = [
+        this.renderer.listen('document', 'click', (e: MouseEvent) => this.OnDocumentClick(e)),
+        this.renderer.listen('document', 'keydown.escape', (e: KeyboardEvent) => this.OnEscape(e)),
+      ];
+    } else if (!open) {
+      this.stopDocumentListeners();
+    }
+  }
+
+  private stopDocumentListeners(): void {
+    this._unlistenDocument.forEach(unlisten => unlisten());
+    this._unlistenDocument = [];
+  }
+
+  /** Whether the View menu has anything to show. */
+  public get ShowViewMenu(): boolean {
+    const sections = !!this.Config.ShowSectionControls && (
+      !!this.Config.ShowSectionFilter ||
+      this.ShowExpandCollapseAll ||
+      !!this.Config.ShowSectionManager ||
+      this.HasCustomSectionOrder ||
+      !!this.Config.ShowWidthToggle
+    );
+    return sections || this.ShowVariantPickerButton || (this.IsAutoHideViewport && !!this.FormModeSwitch);
+  }
+
+  /** Switch between the entity's custom view and its CodeGen standard form from the phone View sheet. */
+  public OnFormModeSwitchClick(): void {
+    if (!this.FormModeSwitch) return;
+    const next = this.FormModeSwitch.Mode === 'standard' ? 'default' : 'standard';
+    if (this.FormModeSwitch.Switch(next)) {
+      this.OnMenuSheetVisibleChange('view', false);
+    }
+  }
+
+  OnDocumentClick(event: MouseEvent): void {
+    if (!this.host.nativeElement.contains(event.target as Node)) {
+      this.CloseMenus();
+    }
+  }
+
+  OnEscape(event?: Event): void {
+    // Escape in a section search that has text clears the text first; the next Escape closes the panel.
+    const target = event?.target as HTMLInputElement | null;
+    if (target?.classList?.contains('mj-section-search') && target.value) {
+      this.OnClearFilter();
+      return;
+    }
+    // Closing a panel that holds focus returns focus to the button that opened it.
+    const open = this.MoreMenuOpen ? 'more' : this.ViewMenuOpen ? 'view' : null;
+    const focusInside = open !== null && this.host.nativeElement.contains(document.activeElement);
+    this.CloseMenus();
+    if (open && focusInside) {
+      this.focusTrigger(open);
+    }
+  }
+
+  /**
+   * The engine for this component's provider (a multi-provider host has one per connection), else
+   * the global one. Resolved once per change-detection pass (cleared in ngDoCheck).
+   */
+  private get userInfoEngine(): UserInfoEngine {
+    return (this._userInfoEngine ??= this.resolveUserInfoEngine());
+  }
+
+  private _userInfoEngine: UserInfoEngine | null = null;
+
+  private resolveUserInfoEngine(): UserInfoEngine {
+    const provider = this.ProviderToUse;
+    const engine = provider
+      ? UserInfoEngine.GetProviderInstance<UserInfoEngine>(provider, UserInfoEngine) as UserInfoEngine
+      : UserInfoEngine.Instance;
+    // A host that never ran startup (lazy startup, a bare form) can hand back a fresh, unloaded
+    // engine with no settings: pins would never load. Use the loaded global one then.
+    return engine.Loaded ? engine : UserInfoEngine.Instance;
+  }
+
+  private readPins(): string[] | null {
+    let raw: string | undefined;
+    try {
+      raw = this.userInfoEngine.GetSetting(TOOLBAR_PINS_SETTING_KEY);
+    } catch {
+      return null;
+    }
+    if (raw !== this._pinsRaw) {
+      this._pinsRaw = raw;
+      this._pinsParsed = null;
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as { Pinned?: unknown };
+          this._pinsParsed = Array.isArray(parsed.Pinned) ? parsed.Pinned.filter((k): k is string => typeof k === 'string') : null;
+        } catch {
+          this._pinsParsed = null;
+        }
+      }
+    }
+    return this._pinsParsed;
+  }
+
+  private writePins(pins: string[]): void {
+    this._localPins = pins;
+    try {
+      this.userInfoEngine.SetSettingDebounced(TOOLBAR_PINS_SETTING_KEY, JSON.stringify({ Version: 1, Pinned: pins }));
+    } catch {
+      // No user context (tests, anonymous hosts): the pins still apply for this session.
+    }
+  }
+
+  private safeGetRawVisibility(): string | undefined {
+    try {
+      return this.userInfoEngine.GetSetting(TOOLBAR_VISIBILITY_SETTING_KEY);
+    } catch {
+      return undefined;
+    }
+  }
+
+  private readVisibilitySetting(): FormToolbarVisibilitySetting | null {
+    const raw = this.safeGetRawVisibility();
+    if (this._localVisibility !== null) {
+      if (raw === this._visibilityRawAtWrite) {
+        return this._localVisibility;
+      }
+      this._localVisibility = null;
+      this._visibilityRawAtWrite = undefined;
+    }
+    if (raw !== this._visibilityRaw) {
+      this._visibilityRaw = raw;
+      this._visibilityParsed = null;
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as Partial<FormToolbarVisibilitySetting>;
+          const entityPinned: Record<string, boolean> = {};
+          if (parsed.EntityPinned && typeof parsed.EntityPinned === 'object') {
+            for (const [k, v] of Object.entries(parsed.EntityPinned)) {
+              if (typeof v === 'boolean') {
+                entityPinned[k] = v;
+              }
+            }
+          }
+          this._visibilityParsed = {
+            Version: 1,
+            GlobalPinned: parsed.GlobalPinned === true,
+            ...(Object.keys(entityPinned).length > 0 ? { EntityPinned: entityPinned } : {}),
+          };
+        } catch {
+          this._visibilityParsed = null;
+        }
+      }
+    }
+    return this._visibilityParsed;
+  }
+
+  private writeVisibilitySetting(setting: FormToolbarVisibilitySetting): void {
+    const normalized: FormToolbarVisibilitySetting = {
+      Version: 1,
+      GlobalPinned: setting.GlobalPinned === true,
+      ...(setting.EntityPinned && Object.keys(setting.EntityPinned).length > 0
+        ? { EntityPinned: { ...setting.EntityPinned } }
+        : {}),
+    };
+    this._localVisibility = normalized;
+    this._visibilityRawAtWrite = this.safeGetRawVisibility();
+    try {
+      this.userInfoEngine.SetSettingDebounced(TOOLBAR_VISIBILITY_SETTING_KEY, JSON.stringify(normalized));
+    } catch {
+      // No user context (tests, anonymous hosts): setting still applies for this session.
+    }
   }
 
   public async OnToolbarItemClick(item: ResolvedToolbarItem, event: MouseEvent): Promise<void> {
@@ -935,8 +1690,24 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
         case 'tags':
           this.OnTagsPanel();
           break;
+        case 'comments':
+          if (!item.Config.OnClick) {
+            this.OnComments();
+          }
+          break;
+        case 'links':
+          if (!item.Config.OnClick) {
+            this.OnLinks();
+          }
+          break;
         case 'attachments':
           this.OnAttachmentsPanel();
+          break;
+        case 'ask-ai':
+          this.OnAskAI();
+          break;
+        case 'clone':
+          this.OnClone();
           break;
       }
     }
@@ -962,6 +1733,87 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
         console.error(`[FormToolbar] Error executing OnClick for toolbar item '${item.Key}':`, err);
       }
     }
+  }
+
+  // ── Record cloning ──────────────────────────────────────────────
+
+  /** Whether the clone slide-in is open. */
+  public IsClonePanelOpen = false;
+
+  /** Whether the server said this user may clone records of the current entity. */
+  public CanCloneEntity = false;
+
+  /** The entity name the last clone capability check ran for. */
+  private _cloneCheckedEntity: string | null = null;
+  private _cloneRecordKey: string | null = null;
+
+  /** True when the Clone action should render for the current record. */
+  public get ShowCloneAction(): boolean {
+    return !!this.Config.ShowCloneButton && this.CanCloneEntity && !!this.Record?.IsSaved;
+  }
+
+  /** Opens the clone slide-in, unless a `BeforeClone` handler cancels. */
+  OnClone(): void {
+    const beforeEvent = new BeforeCloneEventArgs();
+    this.BeforeClone.emit(beforeEvent);
+    if (beforeEvent.Cancel) return;
+
+    this.IsClonePanelOpen = true;
+    this.cdr.markForCheck();
+  }
+
+  OnClonePanelVisibleChange(visible: boolean): void {
+    this.IsClonePanelOpen = visible;
+    this.cdr.markForCheck();
+  }
+
+  OnCloneCompleted(event: CloneCompletedEvent): void {
+    this.CloneCompleted.emit(event);
+  }
+
+  /** Turns the clone widget's navigation request into the toolbar's own `Navigate` event. */
+  OnCloneNavigate(event: CloneNavigationEvent): void {
+    const entityInfo = this.ProviderToUse?.EntityByName(event.EntityName);
+    this.Navigate.emit({
+      Kind: 'record',
+      EntityName: event.EntityName,
+      PrimaryKey: CompositeKey.FromURLSegment(entityInfo, event.RecordKey),
+      OpenInNewTab: true,
+    });
+  }
+
+  /**
+   * Asks `RecordClone.Describe` (cached per entity per session) once per entity whether the
+   * user may clone it. Entities whose `Configuration.Clone.Enabled` is not true are skipped
+   * without a server call.
+   */
+  private checkCloneCapability(): void {
+    // A panel opened for one record must not stay open over the next one the form loads.
+    const recordKey = this.Record?.PrimaryKey?.ToConcatenatedString() ?? null;
+    if (recordKey !== this._cloneRecordKey) {
+      this._cloneRecordKey = recordKey;
+      this.IsClonePanelOpen = false;
+    }
+
+    const entityName = this.Config.ShowCloneButton ? this.Record?.EntityInfo?.Name ?? null : null;
+    if (entityName === this._cloneCheckedEntity) return;
+    this._cloneCheckedEntity = entityName;
+    this.CanCloneEntity = false;
+    this.IsClonePanelOpen = false; // a panel opened for the previous entity must not reopen itself for this one
+
+    if (!entityName || this.Record?.EntityInfo?.CloneConfig?.Enabled !== true) return;
+
+    this.cloneService
+      .DescribeRecord({ EntityName: entityName }, this.ProviderToUse)
+      .then((describe) => {
+        if (this._cloneCheckedEntity !== entityName) return;
+        this.CanCloneEntity = describe.CanClone;
+        this.cdr.markForCheck();
+      })
+      .catch((err: unknown) => {
+        // A failed capability check hides the action; the server re-checks on every clone.
+        LogError(`Clone capability check failed for ${entityName}: ${err instanceof Error ? err.message : String(err)}`);
+      });
   }
 
   OnShowChanges(): void {
@@ -1001,11 +1853,13 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     return `${v.Scope} · ${v.Status}`;
   }
 
+  /** @deprecated The variant list lives in the View panel; nothing opens a separate variant menu. */
   public ToggleVariantMenu(): void {
     this.VariantMenuOpen = !this.VariantMenuOpen;
     this.cdr.markForCheck();
   }
 
+  /** @deprecated The variant list lives in the View panel; use {@link CloseMenus}. */
   public CloseVariantMenu(): void {
     if (this.VariantMenuOpen) {
       this.VariantMenuOpen = false;
@@ -1020,7 +1874,11 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
    */
   public OnVariantClick(variantID: string | null): void {
     this.VariantMenuOpen = false;
+    this.ViewMenuOpen = false;
+    this.syncDocumentListeners();
     if (variantID === this.CurrentVariantID) {
+      // Nothing reloads, so the row that had focus just went away: back to the View button.
+      this.focusTrigger('view');
       this.cdr.markForCheck();
       return;
     }
@@ -1127,6 +1985,14 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
   OnResetSectionOrder(): void {
     this.ResetSectionOrderRequested.emit();
+  }
+
+  /** "Reorder sections" in the View panel: close it properly (listeners, focus on View), then open the manager. */
+  OnReorderSectionsFromView(): void {
+    this.ViewMenuOpen = false;
+    this.syncDocumentListeners();
+    this.focusTrigger('view');
+    this.OnManageSections();
   }
 
   OnManageSections(): void {

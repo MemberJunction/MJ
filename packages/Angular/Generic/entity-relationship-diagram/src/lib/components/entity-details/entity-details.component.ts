@@ -326,10 +326,9 @@ export class EntityDetailsComponent extends BaseAngularComponent implements OnCh
 
     // Convert to actual EntityInfo objects
     const md = this.ProviderToUse;
-    const allEntities = md.Entities;
     const retVals: EntityInfo[] = [];
     relatedEntityIds.forEach(id => {
-      const entity = allEntities.find(e => UUIDsEqual(e.ID, id));
+      const entity = md.EntityByID(id);
       if (entity) {
         retVals.push(entity);
       }

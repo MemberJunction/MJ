@@ -12,6 +12,8 @@ import { Router, type Request, type Response } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { LogError, type PublicAuthProviderCatalog } from '@memberjunction/core';
 import { AuthProviderEngine } from './AuthProviderEngine.js';
+import { EMPTY_PUBLIC_LOGIN_SCREEN, LoginScreenEngine } from './LoginScreenEngine.js';
+import { AttachLocalDevAuthRoutes } from './localDevAuth.js';
 
 /** Mount path for the public catalog router. */
 export const AUTH_CATALOG_MOUNT_PATH = '/auth';
@@ -71,6 +73,33 @@ export function CreateAuthProviderCatalogRouter(): Router {
       res.status(200).json(empty);
     }
   });
+
+  /**
+   * `GET /auth/login-screen`: the default theme's PUBLISHED sign-in page, logos and seeds, for the login
+   * screen to draw before anyone signs in. Its own rate-limit budget (a 429 must answer in this route's
+   * shape), the catalog's cache window, and the same failure rule: empty, never an error.
+   */
+  const loginScreenLimiter = rateLimit({
+    windowMs: DEFAULT_RATE_LIMIT_WINDOW_MS,
+    limit: DEFAULT_RATE_LIMIT_MAX,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: EMPTY_PUBLIC_LOGIN_SCREEN
+  });
+
+  router.get('/login-screen', loginScreenLimiter, (_req: Request, res: Response) => {
+    try {
+      const body = LoginScreenEngine.Instance.GetPublicLoginScreen();
+      res.set('Cache-Control', `public, max-age=${CACHE_MAX_AGE_SECONDS}`);
+      res.status(200).json(body);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      LogError(`[Auth] Failed to serve the public login screen: ${message}`);
+      res.status(200).json(EMPTY_PUBLIC_LOGIN_SCREEN);
+    }
+  });
+
+  AttachLocalDevAuthRoutes(router);
 
   return router;
 }

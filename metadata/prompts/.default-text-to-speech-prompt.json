@@ -1,0 +1,65 @@
+[
+  {
+    "fields": {
+      "Name": "Default Text To Speech",
+      "Description": "The carrier prompt AITextToSpeechRunner uses when no other is named. Its bindings choose the TTS model and its failover settings apply; every call is recorded as an AI Prompt Run. Voices belong to a vendor, so failover stays on the selected model's vendors (SameModelDifferentVendor) and never moves to a model whose voices differ; a caller whose voice matters pins the model. The caller's text goes straight to the speech model, so the template only renders that text.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Text To Speech",
+      "TemplateText": "@file:templates/system/default-text-to-speech.template.md",
+      "Status": "Active",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=TTS",
+      "SelectionStrategy": "Specific",
+      "RequireSpecificModels": true,
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "ResponseFormat": "Any",
+      "OutputType": "string",
+      "ValidationBehavior": "None",
+      "MaxRetries": 0,
+      "FailoverStrategy": "SameModelDifferentVendor",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=OpenAI TTS",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 20
+          },
+          "primaryKey": {
+            "ID": "B0A4286D-6E9C-45EA-852F-B5D239EA1665"
+          },
+          "sync": {
+            "lastModified": "2026-10-02T21:42:16.024Z",
+            "checksum": "574d94b45f3f1daa70e00c664a1e2cd8daf2f773b6dcbf03d2b84c176670b79c"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Eleven v4",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "21CCCAB5-6A52-4C4E-A629-F48FD4C4F0F5"
+          },
+          "sync": {
+            "lastModified": "2026-10-02T21:42:16.039Z",
+            "checksum": "715be1287b201a24fcd4954ac0db44bb8d7811503f0a7219299da748a55b4a1a"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "CE4CDC6C-78B2-4392-8970-298FE2A69336"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:16.008Z",
+      "checksum": "150760d67e3ebccbbf41476487f0e4f8ee8fcdd072829737f60d153cf77b8d53"
+    }
+  }
+]

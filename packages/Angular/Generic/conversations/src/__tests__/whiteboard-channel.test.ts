@@ -10,7 +10,8 @@ import {
 } from '../lib/components/realtime/whiteboard/whiteboard-channel';
 import {
   RealtimeWhiteboardHostComponent, WHITEBOARD_TOOL_DEFINITIONS, WHITEBOARD_TOOL_PREFIX,
-  WhiteboardToolResult, WhiteboardWidgetInteractionEvent, WhiteboardWidgetSubmitEvent
+  WhiteboardToolResult, WhiteboardWidgetAccess, WhiteboardWidgetActionsChangedEventArgs,
+  WhiteboardWidgetInteractionEvent, WhiteboardWidgetSubmitEvent
 } from '@memberjunction/ng-whiteboard';
 
 /**
@@ -32,6 +33,8 @@ class FakeWhiteboardHost {
   public SaveToArtifactsRequested = new EventEmitter<void>();
   public WidgetSubmitted = new EventEmitter<WhiteboardWidgetSubmitEvent>();
   public WidgetInteraction = new EventEmitter<WhiteboardWidgetInteractionEvent>();
+  public WidgetActionsChanged = new EventEmitter<WhiteboardWidgetActionsChangedEventArgs>();
+  public AgentWidgetAccess: WhiteboardWidgetAccess = 'full';
   public AppliedTools: Array<{ ToolName: string; ArgsJson: string }> = [];
 
   public ApplyAgentTool(toolName: string, argsJson: string): string {
@@ -43,6 +46,18 @@ class FakeWhiteboardHost {
     this.FocusMode = !this.FocusMode;
     this.FocusModeChange.emit(this.FocusMode);
   }
+
+  public SetOnStage(onStage: boolean): void {
+    this.FocusMode = onStage;
+  }
+}
+
+/** Board tools resolve synchronously; only the widget tools return a Promise. */
+function syncResult(result: string | Promise<string>): string {
+  if (typeof result !== 'string') {
+    throw new Error('expected a synchronous (board-tool) result');
+  }
+  return result;
 }
 
 function asHost(fake: FakeWhiteboardHost): RealtimeWhiteboardHostComponent {
@@ -96,6 +111,8 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     expect(channel.TabIcon).toBe('fa-solid fa-chalkboard');
     expect(channel.GetToolDefinitions()).toBe(WHITEBOARD_TOOL_DEFINITIONS);
     expect(channel.GetSurfaceComponent()).toBe(RealtimeWhiteboardHostComponent);
+    // The board is the call's first panel the user can share on its own ("This panel").
+    expect(channel.SurfaceShareable).toBe(true);
   });
 
   it('supplies first-run onboarding details (heading, description, tips, icon)', () => {
@@ -108,7 +125,7 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
   });
 
   it('ApplyAgentTool with NO surface bound falls back to the pure engine (collapsed panel)', () => {
-    const resultJson = channel.ApplyAgentTool('Whiteboard_AddNote', JSON.stringify({ text: 'hello' }));
+    const resultJson = syncResult(channel.ApplyAgentTool('Whiteboard_AddNote', JSON.stringify({ text: 'hello' })));
     const result = JSON.parse(resultJson) as WhiteboardToolResult;
 
     expect(result.success).toBe(true);
@@ -130,7 +147,7 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     expect(fake.State).toBe(channel.State);
     expect(fake.AgentName).toBe('Sage');
 
-    const resultJson = channel.ApplyAgentTool('Whiteboard_AddNote', JSON.stringify({ text: 'via host' }));
+    const resultJson = syncResult(channel.ApplyAgentTool('Whiteboard_AddNote', JSON.stringify({ text: 'via host' })));
     expect(fake.AppliedTools).toEqual([{ ToolName: 'Whiteboard_AddNote', ArgsJson: JSON.stringify({ text: 'via host' }) }]);
     expect((JSON.parse(resultJson) as WhiteboardToolResult).itemId).toBe('host-item');
 
@@ -308,6 +325,20 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
 
     channel.RequestFocusExit(); // not in focus → no double-toggle
     expect(log.Focus).toEqual([true, false]);
+  });
+
+  it("keeps the board's button true to where the host placed it, without asking to move", () => {
+    const fake = new FakeWhiteboardHost();
+    channel.BindSurface(asHost(fake));
+    channel.OnSurfacePlacementChange('stage');
+    expect(fake.FocusMode).toBe(true);
+    channel.OnSurfacePlacementChange('hidden');
+    expect(fake.FocusMode).toBe(false);
+    expect(log.Focus).toEqual([]);
+  });
+
+  it('ignores a placement with no board bound', () => {
+    expect(() => channel.OnSurfacePlacementChange('stage')).not.toThrow();
   });
 
   it('Dispose releases the surface, the state subscription and the context', () => {
@@ -495,6 +526,42 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     }
   });
 
+  it('tags frames with the change id of the state they describe, and emits typed state events (the lifted pump)', async () => {
+    const mockBridge = { PushFrame: () => true };
+    const c = channel as unknown as { videoBridge: typeof mockBridge };
+    vi.spyOn(channel, 'GetLatestFrame').mockResolvedValue('tagged-frame');
+    channel.Initialize({
+      ...makeContext(log),
+      Client: {
+        IsTrackEstablished: (modality: string, direction: string) => modality === 'video' && direction === 'inbound',
+      } as unknown as RealtimeChannelContext['Client'],
+    });
+    c.videoBridge = mockBridge;
+    const events: Array<{ Name: string; ChangeId?: number; Payload: Record<string, unknown> }> = [];
+    channel.Events$.subscribe((e) => events.push(e));
+
+    channel.State.AddItem({ Kind: 'text', X: 0, Y: 0, Text: 'hello' }, 'user');
+    await vi.waitFor(() => expect(events.some((e) => e.Name === 'frame_pushed')).toBe(true));
+
+    const change = events.find((e) => e.Name === 'state_changed');
+    const frame = events.find((e) => e.Name === 'frame_pushed');
+    expect(change?.Payload).toEqual({ author: 'user' });
+    expect(frame?.ChangeId).toBe(change?.ChangeId); // the pixels and the state event describe the same moment
+    expect(frame?.Payload).toMatchObject({ reason: 'change' });
+  });
+
+  it('does not add a structured perception note: the board already feeds the model its own scene deltas', async () => {
+    vi.useFakeTimers();
+    try {
+      channel.Initialize(makeContext(log));
+      channel.State.AddItem({ Kind: 'text', X: 0, Y: 0, Text: 'hello' }, 'user');
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(log.Notes.some((n) => n.startsWith('[channel:Whiteboard'))).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('ApplyAgentTool pushes exactly ONE confirmation frame with no-repetition etiquette note', async () => {
     const pushedFrames: string[] = [];
     const mockBridge = {
@@ -555,7 +622,7 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     channel.Initialize(contextWithClient);
     c.videoBridge = mockBridge;
 
-    const resultJson = channel.ApplyAgentTool(toolName, argsJson);
+    const resultJson = syncResult(channel.ApplyAgentTool(toolName, argsJson));
 
     // The tool itself reported failure...
     expect(JSON.parse(resultJson).success).toBe(false);

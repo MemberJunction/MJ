@@ -62,7 +62,7 @@ interface NavigationCard {
           <span class="stat-label">Models</span>
         </div>
         <div class="stat-pill">
-          <i class="fa-solid fa-message-lines"></i>
+          <i class="fa-solid fa-comment-dots"></i>
           <span class="stat-value">{{ PromptCount }}</span>
           <span class="stat-label">Prompts</span>
         </div>
@@ -76,7 +76,7 @@ interface NavigationCard {
       <!-- Navigation Cards Grid -->
       <div class="cards-grid">
         @for (card of Cards; track card.Key) {
-          <div class="nav-card" [class]="card.ColorClass" (click)="NavigateToTab(card.NavItemLabel)">
+          <div class="nav-card" [class]="card.ColorClass" [mjClickable]="'Open ' + card.Title" (click)="NavigateToTab(card.NavItemLabel)">
             <div class="card-header">
               <div class="card-icon-circle" [class]="card.ColorClass + '-icon'">
                 <i [class]="card.Icon"></i>
@@ -195,6 +195,11 @@ interface NavigationCard {
       overflow: hidden;
     }
 
+    .nav-card:focus-visible {
+      outline: none;
+      box-shadow: var(--mj-focus-ring);
+    }
+
     .nav-card::before {
       content: '';
       position: absolute;
@@ -217,7 +222,7 @@ interface NavigationCard {
     .card-analytics::before { background: var(--mj-brand-primary); }
     .card-agents::before { background: var(--mj-status-success); }
     .card-prompts::before { background: var(--mj-brand-primary); }
-    .card-models::before { background: var(--mj-color-violet-500, #8b5cf6); }
+    .card-models::before { background: var(--mj-brand-tertiary); }
     .card-requests::before { background: var(--mj-status-warning); }
     .card-config::before { background: var(--mj-text-muted); }
 
@@ -255,8 +260,8 @@ interface NavigationCard {
     }
 
     .card-models-icon {
-      background: color-mix(in srgb, var(--mj-color-violet-500, #8b5cf6) 12%, var(--mj-bg-surface));
-      color: var(--mj-color-violet-500, #8b5cf6);
+      background: color-mix(in srgb, var(--mj-brand-tertiary) 12%, var(--mj-bg-surface));
+      color: var(--mj-brand-tertiary);
     }
 
     .card-requests-icon {
@@ -363,7 +368,7 @@ export class AIOverviewHubComponent extends BaseResourceComponent implements OnI
   }
 
   async GetResourceIconClass(data: ResourceData): Promise<string> {
-    return 'fa-solid fa-grid-2';
+    return 'fa-solid fa-table-cells-large';
   }
 
   /**
@@ -413,7 +418,7 @@ export class AIOverviewHubComponent extends BaseResourceComponent implements OnI
         Key: 'prompts',
         Title: 'Prompts',
         Description: 'Manage prompt templates, categories, and model priority assignments.',
-        Icon: 'fa-solid fa-message-lines',
+        Icon: 'fa-solid fa-comment-dots',
         ColorClass: 'card-prompts',
         NavItemLabel: 'Prompts',
         Stats: [

@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { FindReferencedIdentifiers } from '../identifierReferences';
+import { FindReferencedIdentifiers, IdentifierMatches } from '../identifierReferences';
 
 const find = (expr: string, ids: string[]) => FindReferencedIdentifiers(expr, ids);
 
@@ -200,5 +200,73 @@ describe('FindReferencedIdentifiers', () => {
         it('matches a denied name used as a column alias', () => {
             expect(find('Base AS Salary', ['Salary'])).toEqual(['Salary']);
         });
+    });
+});
+
+/** Every BMP letter that has another case form, grouped with the letters it shares a one-character case form with. */
+function caseGroups(): string[][] {
+    const groupOf = new Map<string, Set<string>>();
+    for (let code = 0; code <= 0xffff; code++) {
+        if (code >= 0xd800 && code <= 0xdfff) continue;
+        const letter = String.fromCharCode(code);
+        const forms = [letter.toUpperCase(), letter.toLowerCase()].filter((form) => form !== letter);
+        if (forms.length === 0) continue;
+        const group = groupOf.get(letter) ?? new Set([letter]);
+        groupOf.set(letter, group);
+        for (const form of forms.filter((f) => f.length === 1)) {
+            for (const member of groupOf.get(form) ?? [form]) {
+                group.add(member);
+                groupOf.set(member, group);
+            }
+        }
+    }
+    return [...new Set(groupOf.values())].map((group) => [...group]);
+}
+
+/** A name as UTF-16 code units, so look-alike letters read apart in a failure message. */
+function codeUnits(name: string): string {
+    return Array.from(name, (c) => c.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')).join(' ');
+}
+
+describe('IdentifierMatches', () => {
+    it('matches a name regardless of ASCII case and surrounding spaces', () => {
+        expect(IdentifierMatches('bankaccount', 'BankAccount')).toBe(true);
+        expect(IdentifierMatches(' BANKACCOUNT ', 'BankAccount')).toBe(true);
+        expect(IdentifierMatches('BankAccounts', 'BankAccount')).toBe(false);
+        expect(IdentifierMatches('', 'BankAccount')).toBe(false);
+    });
+
+    it('matches a non-ASCII name written in another case', () => {
+        expect(IdentifierMatches('SALÁRIO', 'Salário')).toBe(true);
+        expect(IdentifierMatches('ΜΙΣΘΌΣ', 'Μισθός')).toBe(true);
+    });
+
+    it('does not equate a look-alike letter with the ASCII letter it lower-cases to', () => {
+        expect(IdentifierMatches('Ban\u212AAccount', 'BankAccount')).toBe(false); // KELVIN SIGN
+        expect(IdentifierMatches('STRA\u1E9EE', 'Straße')).toBe(false); // CAPITAL SHARP S
+        expect(IdentifierMatches('\u212Brea', 'Årea')).toBe(false); // ANGSTROM SIGN
+    });
+
+    it('does not equate two lower-case letters that share one upper-case form', () => {
+        expect(IdentifierMatches('Μισθόσ', 'Μισθός')).toBe(false); // σ in place of the final ς
+        expect(IdentifierMatches('Dose\u00B5g', 'Dose\u03BCg')).toBe(false); // MICRO SIGN in place of μ
+        expect(IdentifierMatches('С\u1C84авка', 'Ставка')).toBe(false); // TALL TE in place of т
+    });
+
+    it('agrees with FindReferencedIdentifiers for every letter, alone and in place of each letter it shares a case form with', () => {
+        const disagreements: string[] = [];
+        for (const group of caseGroups()) {
+            for (const written of group) {
+                for (const letter of group) {
+                    for (const [reference, name] of [[`A${written}B`, `A${letter}B`], [`A${written}`, `A${letter}`]]) {
+                        const matches = IdentifierMatches(reference, name);
+                        if (matches !== FindReferencedIdentifiers(`[${reference}]`, [name]).length > 0) {
+                            disagreements.push(`${codeUnits(reference)} for ${codeUnits(name)}: IdentifierMatches ${matches}`);
+                        }
+                    }
+                }
+            }
+        }
+        expect(disagreements).toEqual([]);
     });
 });

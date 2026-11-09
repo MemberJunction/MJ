@@ -12,7 +12,7 @@
     "mergeStrategy": "merge",
     "backupBeforeUpdate": true,
     "backupDirectory": ".backups",
-    "filter": "",
+    "filter": "Scope <> 'User'",
     "externalizeFields": [],
     "ignoreNullFields": true,
     "ignoreVirtualFields": true,

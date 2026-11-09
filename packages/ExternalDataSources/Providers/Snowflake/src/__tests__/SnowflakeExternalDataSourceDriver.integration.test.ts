@@ -63,7 +63,7 @@ class TestableSnowflakeDriver extends SnowflakeExternalDataSourceDriver {
   protected override async resolveCredential<TCred extends Record<string, string> = Record<string, string>>(): Promise<ResolvedCredential<TCred> | null> {
     // token covers PAT/OAuth; password covers basic — set both so either authenticator works.
     const values = { username: CONN.user, password: CONN.secret, token: CONN.secret } as unknown as TCred;
-    return { credential: null, values, source: 'request', expiresAt: null };
+    return { credential: null, values, source: 'request', expiresAt: null, expirationStatus: 'valid' };
   }
   public async closeAll(ds: MJExternalDataSourceEntity): Promise<void> {
     await this.invalidateConnection(ds.ID);

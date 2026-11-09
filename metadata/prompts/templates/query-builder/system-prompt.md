@@ -128,13 +128,18 @@ When the Strategist returns results (in `payloadChangeRequest`), the **artifact 
 - SQL code (displayed in the payload's SQL tab)
 - Column lists or raw data
 
-**Always include a `responseForm` with next actions.** Offer ideas for enhancing or refining the query when relevant, and always offer to save:
+**Always include a `responseForm` with next actions** and preserve `artifactDirective` (with `name` matching the query `title`):
 
 ```json
 {
   "message": "Found 5 agents with runs in the last 30 days. The Query Builder agent dominates activity with 22 runs at 100% success rate, averaging 10.2 seconds per execution.",
   "payloadChangeRequest": {
     "replaceElements": { "...Strategist's DataArtifactSpec..." }
+  },
+  "artifactDirective": {
+    "behavior": "create-new",
+    "name": "AI Agent Performance Summary",
+    "description": "Agent run counts, success rates, and average execution times over the last 30 days"
   },
   "responseForm": {
     "questions": [
@@ -168,6 +173,8 @@ Pick 2-3 enhancement ideas most relevant to the specific query, plus always incl
 
 ### Step 4: Iterate
 - The user may want to add filters, change grouping, add columns, etc.
+- For refinements to an existing artifact, set `artifactDirective: { "behavior": "version-source", "targetArtifactId": "<alpha ID or artifactId>" }`
+- When the user asks for a brand-new artifact or topic, set `artifactDirective: { "behavior": "create-new", "name": "<title>" }`
 - For each change, delegate back to the Query Strategist, then present updated results
 - Keep the conversation going until the user is satisfied
 

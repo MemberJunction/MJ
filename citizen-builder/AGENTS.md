@@ -41,31 +41,33 @@ If you have access to the MemberJunction repository (or view them on GitHub at `
 The MetadataSync engine (`mj sync push`) parses declarative JSON files under `./metadata/` and maps them into SQL Server records. Follow these rules strictly:
 
 ### A. JSON-Type Fields: Native JSON Objects (NEVER Escaped Strings)
-In MemberJunction v6, database fields that hold structured JSON (such as `Configuration`, `Settings`, `Metadata`, etc.) **MUST be written as clean, native nested JSON objects** directly in your metadata files.
+In MemberJunction v6, database fields that hold structured JSON (such as `ActionInputMapping`, `ActionOutputMapping`, `Configuration`, `Settings`, `Metadata`, etc.) **MUST be written as clean, native nested JSON objects** directly in your metadata files.
 
 ```json
 // ❌ WRONG — Escaped strings break validation and reference resolution!
 {
   "fields": {
-    "Name": "Invoice Analysis Agent",
-    "Configuration": "{\"Steps\":[{\"Name\":\"ProcessInvoice\",\"StepType\":\"Prompt\"}]}"
+    "Name": "Fetch Overdue Invoices",
+    "StepType": "Action",
+    "ActionInputMapping": "{\"Query\":\"static:SELECT TOP 10 * FROM Invoices\"}"
   }
 }
 
 // ✅ CORRECT — Clean, native nested JSON object
 {
   "fields": {
-    "Name": "Invoice Analysis Agent",
-    "Configuration": {
-      "Steps": [
-        {
-          "Name": "ProcessInvoice",
-          "StepType": "Prompt",
-          "TargetID": "@lookup:MJ: AI Prompts.Name=Invoice Analysis Prompt",
-          "ExecutionOrder": 1,
-          "OnError": "fail"
-        }
-      ]
+    "Name": "Fetch Overdue Invoices",
+    "StepType": "Action",
+    "ActionID": "@lookup:MJ: Actions.Name=Run Ad-hoc Query",
+    "ActionInputMapping": {
+      "Query": "static:SELECT TOP 10 * FROM Invoices",
+      "DataFormat": "static:markdown",
+      "ColumnMaxLength": 200
+    },
+    "ActionOutputMapping": {
+      "Results": "invoices",
+      "FormattedResults": "invoicesTable",
+      "RowCount": "invoiceCount"
     }
   }
 }
@@ -80,40 +82,130 @@ Never hardcode foreign key UUIDs. Use dynamic reference tokens:
   - *Multi-field lookup*: `"PromptID": "@lookup:MJ: AI Prompts.Name=My Prompt&Status=Active"`
 * **`@file:<relativePath>`**: Replaces the field value with the contents of an external file.
   - Used for prompt templates: `"TemplateText": "@file:templates/my-agent.template.md"`
-  - *Note*: `@file:` paths are resolved at push time. If you modify a `.template.md` file, you must run `./scripts/sync-metadata.sh` again to push changes to the database.
-* **`@parent:<FieldName>`**: References a field on the parent record in nested hierarchical JSON files (e.g. `"AgentID": "@parent:ID"`).
+  - *Note*: `@file:` paths are resolved at push time (`mj sync push --dir /work/metadata`). `./scripts/sync-metadata.sh` creates and links `MJ: Templates` and `MJ: Template Contents` records via `TemplateID` automatically on first push.
+* **`@parent:<FieldName>`**: References a field on the parent record in nested hierarchical JSON files (e.g. `"AgentID": "@parent:ID"`, `"OriginStepID": "@parent:ID"`).
+* **Directory Ordering (`.mj-sync.json`)**: `metadata/.mj-sync.json` sets `"directoryOrder": ["prompts", "agents"]` so prompts are always created before agents that reference them via `@lookup:MJ: AI Prompts.Name=...`.
 
 ### C. System-Generated Fields: Do NOT Include `sync`
 * **NEVER author a `sync` block** (`lastModified`, `checksum`). `mj sync push` manages this block automatically. If you write it by hand, checksum calculation will fail.
 * **Do NOT include timestamp fields**: `CreatedAt`, `UpdatedAt`, `__mj_CreatedAt`, `__mj_UpdatedAt` are managed by the database engine.
 * **Assign deterministic `primaryKey`**: Assign a fresh UUID in uppercase (e.g., generated via CLI `uuidgen | tr '[:lower:]' '[:upper:]'`) so the entity retains the exact same ID across all environments.
 
-### D. Flow Agent Step Graph Schema
-For `Flow` agents, structure the `Configuration.Steps` array in `metadata/agents/.*.json` like this:
+### D. Loop Agent Schema (Recommended Default) vs Flow Agent Step Graph Schema
+
+#### 1. Loop Agents (`@lookup:MJ: AI Agent Types.Name=Loop` — Recommended Default)
+`Loop` agents are interactive, conversational, and can dynamically call actions/tools across multiple turns. Bind the agent's system prompt in `MJ: AI Agent Prompts` (`ExecutionOrder: 0`, `PromptRole: "System"`, `PromptPosition: "First"`, without overriding `ResponseFormat`) and bind any allowed tools in `MJ: AI Agent Actions`:
 ```json
-"Configuration": {
-  "Steps": [
+{
+  "fields": {
+    "Name": "Customer Insight Specialist",
+    "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant",
+    "Description": "Interactive Loop agent that summarizes customer activity and suggests next actions.",
+    "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+    "Status": "Active",
+    "ExecutionOrder": 0,
+    "ExposeAsAction": false,
+    "ArtifactCreationMode": "Never",
+    "ModelSelectionMode": "Agent Type"
+  },
+  "relatedEntities": {
+    "MJ: AI Agent Prompts": [
+      {
+        "fields": {
+          "AgentID": "@parent:ID",
+          "PromptID": "@lookup:MJ: AI Prompts.Name=Customer Insight Specialist Prompt",
+          "Status": "Active",
+          "ExecutionOrder": 0
+        },
+        "primaryKey": { "ID": "<UUID-1>" }
+      }
+    ],
+    "MJ: AI Agent Actions": [
+      {
+        "fields": {
+          "AgentID": "@parent:ID",
+          "ActionID": "@lookup:MJ: Actions.Name=Run Ad-hoc Query",
+          "Status": "Active"
+        },
+        "primaryKey": { "ID": "<UUID-2>" }
+      }
+    ]
+  },
+  "primaryKey": { "ID": "<UUID-0>" }
+}
+```
+> **Important (`ArtifactCreationMode`)**: Valid values for `ArtifactCreationMode` are `"Never"`, `"Always"`, or `"System Only"` (never `"None"`).
+
+#### 2. Flow Agents (`@lookup:MJ: AI Agent Types.Name=Flow` — Deterministic Task Graphs)
+For non-interactive deterministic pipelines (`Flow` agents), steps are defined in `relatedEntities["MJ: AI Agent Steps"]` and connected via nested `relatedEntities["MJ: AI Agent Step Paths"]` on the origin step:
+```json
+"relatedEntities": {
+  "MJ: AI Agent Prompts": [
     {
-      "Name": "Step 1 Name",
-      "Description": "Evaluates customer orders",
-      "StepType": "Prompt",
-      "TargetID": "@lookup:MJ: AI Prompts.Name=Step 1 Prompt",
-      "ExecutionOrder": 1,
-      "OnError": "fail",
-      "RetryCount": 0,
-      "TimeoutSeconds": 300
+      "fields": {
+        "AgentID": "@parent:ID",
+        "PromptID": "@lookup:MJ: AI Prompts.Name=Synthesize Report Prompt",
+        "Status": "Active",
+        "ExecutionOrder": 1
+      },
+      "primaryKey": { "ID": "<UUID-1>" }
+    }
+  ],
+  "MJ: AI Agent Steps": [
+    {
+      "fields": {
+        "AgentID": "@parent:ID",
+        "Name": "Query Account Data",
+        "StepType": "Action",
+        "StartingStep": true,
+        "ActionID": "@lookup:MJ: Actions.Name=Run Ad-hoc Query",
+        "ActionInputMapping": {
+          "Query": "static:SELECT TOP 20 Name, AccountType, Industry, AnnualRevenue FROM [__mj].[vwAccounts] ORDER BY AnnualRevenue DESC",
+          "DataFormat": "static:markdown",
+          "ColumnMaxLength": 200
+        },
+        "ActionOutputMapping": {
+          "Results": "accounts",
+          "FormattedResults": "accountsMarkdown",
+          "RowCount": "accountCount"
+        },
+        "Status": "Active",
+        "PositionX": 100,
+        "PositionY": 100
+      },
+      "relatedEntities": {
+        "MJ: AI Agent Step Paths": [
+          {
+            "fields": {
+              "OriginStepID": "@parent:ID",
+              "DestinationStepID": "<UUID-4>",
+              "Priority": 1,
+              "Description": "Pass queried rows to synthesis prompt"
+            },
+            "primaryKey": { "ID": "<UUID-3>" }
+          }
+        ]
+      },
+      "primaryKey": { "ID": "<UUID-2>" }
     },
     {
-      "Name": "Step 2 Name",
-      "Description": "Executes notification action",
-      "StepType": "Action",
-      "TargetID": "@lookup:MJ: Actions.Name=Send Email",
-      "ExecutionOrder": 2,
-      "OnError": "continue"
+      "fields": {
+        "AgentID": "@parent:ID",
+        "Name": "Synthesize Report",
+        "StepType": "Prompt",
+        "StartingStep": false,
+        "PromptID": "@lookup:MJ: AI Prompts.Name=Synthesize Report Prompt",
+        "Status": "Active",
+        "PositionX": 400,
+        "PositionY": 100
+      },
+      "primaryKey": { "ID": "<UUID-4>" }
     }
   ]
 }
 ```
+* **Flow Prompt Step Nunjucks Context**: Every Flow `Prompt` step automatically receives `{{ payload }}` (and `{{ _CURRENT_PAYLOAD }}`), `{{ userMessage }}` (the user's input prompt), and `{{ flowContext }}` in its Nunjucks template context. Reference mapped action outputs as `{{ payload.accountsMarkdown }}` or `{{ payload.accounts | dump(2) }}`.
+* **Flow Prompt Response Format**: If the final `Prompt` step produces a human-readable report, set `"ResponseFormat": "Markdown"`, `"OutputType": "string"`, `"ValidationBehavior": "None"` on the `MJ: AI Prompts` record; the Flow agent automatically returns the Markdown output as the run's final message.
 
 ### E. File Naming & Directory Structure
 * **Agent definitions**: `metadata/agents/.<slug>-agent.json` (must start with `.` to match the `.*.json` pattern in `.mj-sync.json`).
@@ -174,9 +266,11 @@ These defaults prevent portability bugs and privilege escalation:
 3. **Never Hardcode Record Names or IDs:**
    - Entity schemas are portable across environments; record instances and IDs are not.
    - Prompts must resolve records dynamically via queries, lookup actions, or input parameters. Never write prompts like `"Find the member named John Doe (ID: 12345)"`.
-4. **Prefer `Flow` Over `Loop` for Deterministic Sequences:**
-   - If the task is sequential and bounded, use a `Flow` agent. It is faster, cheaper, and far easier to audit. Use `Loop` only when iterative problem-solving with dynamic tool calling is required.
-5. **Never Hand-Edit `ID`, `lastModified`, or `checksum`:**
+4. **Prefer `Loop` Agents by Default for Interactive Citizen Builder Scenarios:**
+   - Use a `Loop` agent (`@lookup:MJ: AI Agent Types.Name=Loop`) by default — `Loop` agents are interactive, conversational in MJExplorer and CLI, and can invoke bound `MJ: AI Agent Actions` as needed. Use a `Flow` agent (`@lookup:MJ: AI Agent Types.Name=Flow`) only when you want a fixed, non-interactive multi-step pipeline.
+5. **Valid `ArtifactCreationMode` Values:**
+   - Always use `"Never"`, `"Always"`, or `"System Only"` (never `"None"`).
+6. **Never Hand-Edit `ID`, `lastModified`, or `checksum`:**
    - Let `mj sync push` manage identity and sync checksums in `.agent.json` and `.prompt.json`. Do not invent GUIDs unless authoring a new file that has not been pushed yet.
 
 ---
@@ -249,9 +343,9 @@ Determine:
 - Error handling: For each step, should failures halt execution (`"OnError": "fail"`) or continue (`"OnError": "continue"`)?
 
 ### Step 5: Select the Execution Pattern
+- **Loop Agent (`Loop` — Recommended Default)**: Best for interactive Citizen Builder agents, conversational assistants, and tasks that dynamically invoke actions/queries or synthesize user-provided notes.
+- **Flow Agent (`Flow`)**: Best for non-interactive, fixed sequential pipelines ("Step 1: Run fixed query -> Step 2: Run synthesis prompt") where every run executes the exact same step graph.
 - **Single Prompt**: Lightweight classification, summarization, or single-entity extraction.
-- **Flow Agent (`Flow`)**: Best for deterministic, sequential, multi-step pipelines ("Step 1: Fetch order history -> Step 2: Compute risk score -> Step 3: Draft retention email"). Predictable, auditable, and low token overhead.
-- **Loop Agent (`Loop`)**: Iterative problem-solving requiring dynamic tool calling, multi-step reasoning, or exploratory querying.
 - **Orchestrator / Sub-Agent Tree**: Complex multi-domain tasks decomposed into specialist sub-agents (e.g., a triage agent dispatching to a risk agent and a billing agent).
 
 ### Step 6: Author Declarative Metadata under `metadata/`
@@ -279,8 +373,10 @@ Test the agent with representative test cases:
 - **Headless CLI execution**:
   ```bash
   docker compose exec -T mj mj ai agents run -a "<Agent Name>" -p "<Test Input>" --format json
+  # Or pass a multi-line prompt file to avoid shell escaping issues:
+  docker compose exec -T mj mj ai agents run -a "<Agent Name>" -f /work/prompt.txt --format json
   ```
-- **Interactive UI testing**: Invite the user to test in their browser at `http://localhost:4202`.
+- **Interactive UI testing**: Invite the user to test in their browser at `http://localhost:4202` (Zero-Config Local Dev Auth is enabled by default on localhost).
 
 ### Step 10: Audit Execution Traces & Assert Behavior
 Inspect the run trace to verify internal execution paths and safety:

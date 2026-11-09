@@ -1,7 +1,7 @@
 import { Component, ViewContainerRef, ViewChild, AfterViewInit, OnDestroy, inject } from '@angular/core';
 import { MJActionEntity, MJAIAgentActionEntity, MJAIAgentLearningCycleEntity, MJAIAgentNoteEntity, MJAIAgentPromptEntity, MJAIAgentTypeEntity, MJAIAgentRelationshipEntity } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, } from "@memberjunction/ai-core-plus";
-import { RegisterClass, MJGlobal , UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { RegisterClass, MJGlobal , UUIDsEqual, NormalizeUUID, FilterByUUIDs } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormSectionComponent, CUSTOM_LAYOUT_TOOLBAR_CONFIG } from '@memberjunction/ng-base-forms';
 import { CompositeKey, KeyValuePair, Metadata, RunView } from '@memberjunction/core';
 import { TreeBranchConfig } from '@memberjunction/ng-trees';
@@ -21,6 +21,8 @@ import { ActionEngineBase } from '@memberjunction/actions-base';
 import { PromptSelectorDialogComponent } from './prompt-selector-dialog.component';
 import { CreateAgentService, CreateAgentResult, type AgentInvocationOpenRequestedEventArgs } from '@memberjunction/ng-agents';
 import { SearchScopeChildGridColumn } from '@memberjunction/ng-search';
+import { SectionPickerItem } from '@memberjunction/ng-ui-components';
+import { JoinHeroSummary } from '../../shared/phone-hero';
 // AgentPermissionsDialogComponent is now from @memberjunction/ng-agents (shown via ShowPermissionsDialog flag)
 
 /**
@@ -111,7 +113,7 @@ export interface AgentSessionHistoryItem {
   standalone: false,
     selector: 'mj-ai-agent-form',
     templateUrl: './ai-agent-form.component.html',
-    styleUrls: ['./ai-agent-form.component.css']
+    styleUrls: ['./ai-agent-form.component.css', '../../shared/phone-hero.css']
 })
 export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent implements OnDestroy {
     /** The AI Agent entity being edited */
@@ -127,6 +129,13 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
 
     /** Custom-layout AI Agent form looks best full-width on first open. */
     public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
+
+    /**
+     * This form renders its own complete layout (header + custom accordion sections
+     * for Sub-Agents, Prompts, Actions, Execution History, and Configuration), so
+     * `<mj-record-form-container>` must not auto-append stock related-entity sections.
+     */
+    public override get OwnsEntireFormBody(): boolean { return true; }
     
     /** Subject for managing component lifecycle and cleaning up subscriptions */
     private destroy$ = new Subject<void>();
@@ -725,6 +734,34 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         this.ActiveFormTab = plan.ActiveKey;
     }
 
+    /** The form tabs as `mj-section-picker` items: tab order, a numeric badge as the count. */
+    public get SectionPickerItems(): SectionPickerItem[] {
+        return this.FormTabs.map((t) => ({ Key: t.key, Title: t.label, Icon: t.icon, Count: typeof t.badge === 'number' ? t.badge : null }));
+    }
+
+    /** A pick from the phone section sheet; goes through OnFormTabChange. An unknown key is ignored. */
+    public OnSectionPicked(key: string): void {
+        if (this.FormTabs.some((t) => t.key === key)) this.OnFormTabChange(key);
+    }
+
+    /** Phone hero (6A): whether the summary line is expanded to show the rest of the hero. */
+    public HeroDetailsOpen = false;
+
+    /** Toggles the phone hero between its compact identity row and the full hero. */
+    public ToggleHeroDetails(): void {
+        this.HeroDetailsOpen = !this.HeroDetailsOpen;
+        this.cdr.markForCheck();
+    }
+
+    /** The phone hero's one-line summary: agent type, parent, and who can run it. */
+    public get HeroSummary(): string {
+        return JoinHeroSummary([
+            this.record.Type ? `${this.record.Type} agent` : null,
+            this.record.Parent ? `Child of ${this.record.Parent}` : null,
+            this.IsOpenToEveryone ? 'Open to everyone' : 'Restricted',
+        ]);
+    }
+
     public OnFormTabChange(key: string): void {
         this.ActiveFormTab = key;
         this.persistPreferences();
@@ -1196,6 +1233,18 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     }
 
     /**
+     * The prompts and actions linked to this agent, in engine order. Gathers the agent's links once,
+     * rather than re-filtering every agent's links for each prompt and action.
+     */
+    private resolveLinkedPromptsAndActions(): void {
+        const agentPromptIDs = AIEngineBase.Instance.AgentPrompts.filter(ap => UUIDsEqual(ap.AgentID, this.record.ID)).map(ap => ap.PromptID);
+        this.AgentPrompts = FilterByUUIDs(AIEngineBase.Instance.Prompts, agentPromptIDs);
+
+        const agentActionIDs = AIEngineBase.Instance.AgentActions.filter(aa => UUIDsEqual(aa.AgentID, this.record.ID)).map(aa => aa.ActionID);
+        this.AgentActions = FilterByUUIDs(ActionEngineBase.Instance.Actions, agentActionIDs);
+    }
+
+    /**
      * Loads counts and preview data for all related entities including sub-agents,
      * prompts, actions, learning cycles, notes, and execution history. 
      * This data populates the various expander panels in the enhanced form interface.
@@ -1309,15 +1358,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             // totalSubAgentCount changes exactly once against settled state (no NG0100).
             this.allSubAgents = newSubAgents;
 
-            this.AgentPrompts = AIEngineBase.Instance.Prompts.filter(p => {
-                const filteredAgentPrompts = AIEngineBase.Instance.AgentPrompts.filter(ap => UUIDsEqual(ap.AgentID, this.record.ID));
-                return filteredAgentPrompts.some(ap => UUIDsEqual(ap.PromptID, p.ID));
-            });
-
-            this.AgentActions = ActionEngineBase.Instance.Actions.filter(a => {
-                const filteredAgentActions = AIEngineBase.Instance.AgentActions.filter(aa => UUIDsEqual(aa.AgentID, this.record.ID));
-                return filteredAgentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID));
-            });
+            this.resolveLinkedPromptsAndActions();
 
             // Execute all queries in a single batch for better performance
             const results = await rv.RunViews([
@@ -1342,7 +1383,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     Fields: [ // limit what we take from runs as this is where we can have a LOT come down if we include JSON fields
                         "ID","AgentID","ParentRunID","Status","StartedAt","CompletedAt",
                         "Success","TotalTokensUsed","TotalCost","TotalCostRollUp","TotalTokensUsedRollUp",
-                        "Configuration","ConversationID","Result","ErrorMessage","__mj_CreatedAt"
+                        "Configuration","ConversationID","FinalPayload","Result","ErrorMessage","__mj_CreatedAt"
                     ],
                     ExtraFilter: `AgentID='${this.record.ID}'`,
                     OrderBy: '__mj_CreatedAt DESC',
@@ -1364,7 +1405,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 this.AgentNotes = results[1].Results as MJAIAgentNoteEntity[] || [];
 
                 this.RecentExecutions = results[2].Results as MJAIAgentRunEntityExtended[] || [];
-                this.TotalExecutionHistoryCount = results[2].TotalRowCount;
+                this.TotalExecutionHistoryCount = results[2].TotalRowCount ?? 0;
 
                 // Initialize cache with first page of results
                 this.allLoadedExecutions = [...this.RecentExecutions];
@@ -1494,7 +1535,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     Fields: [
                         "ID","AgentID","ParentRunID","Status","StartedAt","CompletedAt",
                         "Success","TotalTokensUsed","TotalCost","TotalCostRollUp","TotalTokensUsedRollUp",
-                        "Configuration","ConversationID","Result","ErrorMessage","__mj_CreatedAt"
+                        "Configuration","ConversationID","FinalPayload","Result","ErrorMessage","__mj_CreatedAt"
                     ],
                     ExtraFilter: `AgentID='${this.record.ID}'`,
                     OrderBy: '__mj_CreatedAt DESC',
@@ -2777,7 +2818,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 Fields: [
                     "ID","AgentID","ParentRunID","Status","StartedAt","CompletedAt",
                     "Success","TotalTokensUsed","TotalCost","TotalCostRollUp","TotalTokensUsedRollUp",
-                    "Configuration","ConversationID","Result","ErrorMessage","__mj_CreatedAt"
+                    "Configuration","ConversationID","FinalPayload","Result","ErrorMessage","__mj_CreatedAt"
                 ],
                 ExtraFilter: `AgentID='${this.record.ID}' AND ID LIKE '%${searchText}%'`,
                 OrderBy: '__mj_CreatedAt DESC',
@@ -2809,14 +2850,28 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     }
     
     /**
+     * Whether to show a run's result: the run is no longer Running and has a result. A running run can
+     * already have a partial `FinalPayload`.
+     */
+    public HasExecutionResult(execution: MJAIAgentRunEntityExtended): boolean {
+        return execution.Status !== 'Running' && !!this.executionResultJSON(execution);
+    }
+
+    /** A run's result JSON: `FinalPayload`, or `Result` on older runs. */
+    private executionResultJSON(execution: MJAIAgentRunEntityExtended): string | null {
+        return execution.FinalPayload ?? execution.Result;
+    }
+
+    /**
      * Gets a preview of the execution result for collapsed view
      */
     public GetExecutionResultPreview(execution: MJAIAgentRunEntityExtended, trimLongMessages: boolean): string {
+        const resultJSON = this.executionResultJSON(execution);
         try {
-            if (!execution.Result) return 'No result';
+            if (!resultJSON) return 'No result';
             
             // Try to parse the result as JSON
-            const parsed = JSON.parse(execution.Result);
+            const parsed = JSON.parse(resultJSON);
             
             // Extract the user message if it exists
             if (parsed.returnValue?.nextStep?.userMessage) {
@@ -2835,7 +2890,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 return stringified;
         } catch {
             // If not JSON, just return the string
-            const result = execution.Result || '';
+            const result = resultJSON || '';
             if (trimLongMessages)
                 return result.length > 120 ? result.substring(0, 120) + '...' : result;
             else
@@ -2852,11 +2907,12 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      * Gets the full execution result message for expanded view
      */
     public GetExecutionResultMessage(execution: MJAIAgentRunEntityExtended): string {
+        const resultJSON = this.executionResultJSON(execution);
         try {
-            if (!execution.Result) return 'No result';
+            if (!resultJSON) return 'No result';
             
             // Try to parse the result as JSON
-            const parsed = JSON.parse(execution.Result);
+            const parsed = JSON.parse(resultJSON);
             
             // Extract the user message if it exists
             if (parsed.returnValue?.nextStep?.userMessage) {
@@ -2867,7 +2923,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             return JSON.stringify(parsed, null, 2);
         } catch {
             // If not JSON, just return the string
-            return execution.Result || '';
+            return resultJSON || '';
         }
     }
 
@@ -4049,6 +4105,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      * Component cleanup - critical for preventing memory leaks
      */
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         // Signal all subscriptions to complete
         this.destroy$.next();
         this.destroy$.complete();

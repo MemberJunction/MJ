@@ -61,6 +61,16 @@
   font-size: 16px;
 }
 
+/* Explorer's app-wide _shared-patterns.scss absolutely-positions any bare .search-icon
+   and pairs that with a compensating padding-left scoped to .mj-search-box /
+   .search-container / .mj-search. This wrapper is none of those, so the icon gets pulled
+   out of the flex row and positioned against the overlay instead — landing outside the
+   panel — while the input slides left into the vacated slot. Emulated encapsulation does
+   not block global rules from reaching in, so opt back out explicitly. */
+.search-input-wrapper .search-icon {
+  position: static;
+}
+
 .search-input {
   flex: 1;
   border: none;
@@ -312,6 +322,20 @@
   padding: 2px 8px;
   background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
   color: var(--mj-brand-primary);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* A message hit on a branch other than the one its conversation shows */
+.branch-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+  padding: 2px 8px;
+  background: color-mix(in srgb, var(--mj-status-warning) 12%, var(--mj-bg-surface));
+  color: var(--mj-text-secondary);
   border-radius: 4px;
   font-size: 11px;
   font-weight: 500;

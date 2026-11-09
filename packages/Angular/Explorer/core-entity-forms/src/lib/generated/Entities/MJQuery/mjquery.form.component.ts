@@ -20,6 +20,7 @@ export class MJQueryFormComponent extends BaseFormComponent {
             { sectionKey: 'performanceQuality', sectionName: 'Performance & Quality', isExpanded: true },
             { sectionKey: 'cachingExecutionSettings', sectionName: 'Caching & Execution Settings', isExpanded: true },
             { sectionKey: 'aIEmbeddings', sectionName: 'AI & Embeddings', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJDataContextItems', sectionName: 'Data Context Items', isExpanded: false },
             { sectionKey: 'mJQueryFields', sectionName: 'Query Fields', isExpanded: false },

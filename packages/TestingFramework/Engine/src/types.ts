@@ -12,6 +12,7 @@ import {
   MJAIAgentRunEntity
 } from '@memberjunction/core-entities';
 import { IOracle } from './oracles/IOracle';
+import type { JudgeOutputEvidence } from './utils/judge-evidence';
 
 // Re-export all types from EngineBase for convenience
 export {
@@ -355,9 +356,23 @@ export interface OracleInput {
   contextUser: UserInfo;
 
   /**
+   * The test run being judged. The rubric oracle uses this as the subject record.
+   */
+  testRunId?: string;
+
+  /**
    * Optional metadata provider to use for entity/SQL operations during oracle evaluation.
    * If supplied, oracles should use this provider instead of the global Metadata.Provider
    * to participate in the same transaction/connection as the calling test run.
    */
   provider?: IMetadataProvider;
+
+  /**
+   * Labeled, size-bounded evidence for judge oracles: the agent's final message, its final payload
+   * and the artifacts the run produced. Set by drivers whose output is not all in the payload (an
+   * agent that answers in its message, or one that leaves a manifest in its payload and the
+   * substance in an artifact). Judge oracles read it in place of `actualOutput` when present;
+   * `actualOutput` itself is unchanged, so structural oracles (schema, exact-match) are unaffected.
+   */
+  judgeEvidence?: JudgeOutputEvidence;
 }

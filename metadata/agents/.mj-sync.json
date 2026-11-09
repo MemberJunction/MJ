@@ -30,6 +30,10 @@
       "MJ: AI Agent Skills": {
         "entity": "MJ: AI Agent Skills",
         "foreignKey": "AgentID"
+      },
+      "MJ: AI Agent Rubrics": {
+        "entity": "MJ: AI Agent Rubrics",
+        "foreignKey": "AgentID"
       }
     }
   }

@@ -190,6 +190,7 @@
                       [LiveUpdates]="selected.Status === 'Running' || selected.Status === 'In Progress'"
                       [ReplayAt]="ReplayAt"
                       [ShowLegend]="Layout.ShowLegend"
+                      [ShowVariables]="false"
                       Height="100%"
                       (NodeSelected)="OnGraphNodeSelected($event)"
                       (ConnectionSelected)="OnGraphConnectionSelected($event)"
@@ -306,6 +307,13 @@
                             <span>{{ step.Name }}</span>
                             <span class="wfr-row-status" [attr.data-status]="step.Status">{{ step.Status }}</span>
                           </div>
+
+                          @if (SelectedStepFailureReason; as reason) {
+                            <div class="wfr-insp-card wfr-insp-failure" role="status">
+                              <span class="wfr-insp-label">Why it failed</span>
+                              <span>{{ reason }}</span>
+                            </div>
+                          }
 
                           <button type="button" class="wfr-bp"
                                   [class.wfr-bp-on]="HasBreakpoint(step.ID)"

@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, ViewEncapsulation, ChangeDetectionStrategy } from '@angular/core';
 import { MJAIAgentStepEntity, MJAIAgentStepPathEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
+import { ReadFlowDecisionStepConfiguration } from '@memberjunction/ai-core-plus';
 
 /**
  * Tabular list view of agent steps and paths.
@@ -227,6 +228,14 @@ export class AgentStepListComponent {
       case 'Sub-Agent': return step.SubAgent || '—';
       case 'ForEach':
       case 'While': return `${step.LoopBodyType ?? 'Action'} loop`;
+      case 'Decision': {
+        const read = ReadFlowDecisionStepConfiguration(step.Configuration);
+        if ('Config' in read) {
+          const count = Object.keys(read.Config.questions || {}).length;
+          return `${read.Config.key} · ${count} ${count === 1 ? 'question' : 'questions'}`;
+        }
+        return 'Unconfigured';
+      }
       default: return '—';
     }
   }

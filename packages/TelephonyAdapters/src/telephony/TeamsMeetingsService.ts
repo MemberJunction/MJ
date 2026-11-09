@@ -13,6 +13,7 @@ import { RealTeamsBindings, RealGraphCallsClient, PumpBackedAcsMedia, type Teams
 import type { TeamsMeetingsConfig } from '../types.js';
 import { IAgentSessionManager, DefaultAgentSessionManager } from '../sessionManager.js';
 import { TeamsAcsMediaRegistry } from './teamsAcsMediaRegistry.js';
+import { CloseAgentSessionRow } from './telephonyCallSession.js';
 
 const TEAMS_PROVIDER_DRIVER = 'TeamsBridge';
 const AGENT_IDENTITY_ENTITY = 'MJ: AI Bridge Agent Identities';
@@ -65,7 +66,9 @@ export class TeamsMeetingsService {
     }
 
     /**
-     * Joins a Teams meeting by URL for a given agent identity and starts the bridge session.
+     * Joins a Teams meeting by URL for a given agent identity and starts the bridge session. The agent session created for
+     * the join closes as soon as the bot's bridge ends, whatever ended it, with the bridge's reason (`HostEnded` as
+     * `Explicit`).
      */
     public async JoinMeetingByUrl(
         agentIdentityId: string,
@@ -101,7 +104,8 @@ export class TeamsMeetingsService {
     }
 
     /**
-     * Builds the {@link StartBridgeSessionParams} for a SCHEDULED Teams join.
+     * Builds the {@link StartBridgeSessionParams} for a SCHEDULED Teams join. The agent session is the caller's (the
+     * calendar watcher creates one per invite), so these params don't close it when the bridge ends.
      */
     public async BuildScheduledStartParams(args: {
         agentID: string;
@@ -175,6 +179,9 @@ export class TeamsMeetingsService {
             BindSdk: this.BuildBindSdk(graphClient),
             ContextUser: args.contextUser,
             MetadataProvider: args.provider,
+            // The session exists for this join alone: it closes when the bot's bridge ends (the meeting ended, everyone
+            // left, the engine reaped the bridge, the model session was lost), as phone and room calls close theirs.
+            OnSessionEnded: (reason) => CloseAgentSessionRow(agentSession.ID, reason, args.contextUser, args.provider),
         });
 
         const callId = active.RoomKey;

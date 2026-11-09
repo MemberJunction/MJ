@@ -1,12 +1,12 @@
 import { Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { MentionPerson } from '@memberjunction/conversations-runtime';
 import { MentionSuggestion,
   ComposerTriggerProvider,
   MentionEditorComponent,
   MessageInputBoxComponent,
   PendingAttachment,
-  BeforeSkillsOpenedEventArgs
-} from '@memberjunction/ng-composer';
+  BeforeSkillsOpenedEventArgs, SendSlotMode } from '@memberjunction/ng-composer';
 import { AgentMentionProvider } from '../../composer-plugins/agent-mention.provider';
 import { RecordMentionProvider } from '../../composer-plugins/record-mention.provider';
 import { SkillCommandProvider } from '../../composer-plugins/skill-command.provider';
@@ -53,6 +53,12 @@ import { SkillCommandProvider } from '../../composer-plugins/skill-command.provi
       [EnablePlanMode]="enablePlanMode"
       [EnableSkills]="EnableSkillCommands"
       [PlanModeActive]="planModeActive"
+      [SendSlotMode]="SendSlotMode"
+      [StopCount]="StopCount"
+      [StopLabel]="StopLabel"
+      [StatusText]="StatusText"
+      [StatusElapsed]="StatusElapsed"
+      (StopClicked)="StopClicked.emit()"
       (TextSubmitted)="textSubmitted.emit($event)"
       (Blurred)="blurred.emit()"
       (ValueChange)="onInnerValueChange($event)"
@@ -105,8 +111,44 @@ export class AiComposerComponent {
     return this.skillCommandProvider.TargetAgentId;
   }
 
+  private _allowedAgentIDs: readonly string[] | null = null;
+  private _mentionPeople: readonly MentionPerson[] | null = null;
+
+  /**
+   * The agents the '@' list may offer. Null (the default) offers every agent the user can run;
+   * an empty list offers none. Applies to this composer only.
+   */
+  @Input()
+  set AllowedAgentIDs(value: readonly string[] | null) {
+    this._allowedAgentIDs = value ?? null;
+    this.applyMentionScope();
+  }
+  get AllowedAgentIDs(): readonly string[] | null {
+    return this._allowedAgentIDs;
+  }
+
+  /**
+   * The people the '@' list offers, such as a chat's members. Null (the default) offers the
+   * current user, as before. Applies to this composer only.
+   */
+  @Input()
+  set MentionPeople(value: readonly MentionPerson[] | null) {
+    this._mentionPeople = value ?? null;
+    this.applyMentionScope();
+  }
+  get MentionPeople(): readonly MentionPerson[] | null {
+    return this._mentionPeople;
+  }
+
   constructor() {
     this.rebuildTriggerProviders();
+  }
+
+  /** Hands this composer's '@' scope to its own agent-mention provider (never the shared engine). */
+  private applyMentionScope(): void {
+    this.agentMentionProvider.Scope = this._allowedAgentIDs == null && this._mentionPeople == null
+      ? null
+      : { AllowedAgentIDs: this._allowedAgentIDs, People: this._mentionPeople };
   }
 
   /** Enables the '@' trigger (agent + user mentions). */
@@ -160,6 +202,18 @@ export class AiComposerComponent {
 
   // ── Proxied inputs (identical names/defaults to MessageInputBoxComponent) ────────
   @Input() Placeholder: string = 'Type your message to start a new conversation...';
+
+  // ── The send slot as a stop control (pass-through; see MessageInputBoxComponent) ──────
+  /** What the send slot is doing; the host decides. */
+  @Input() SendSlotMode: SendSlotMode = 'send';
+  /** How many things a stop would stop; above 1 the slot reads "Stop all". */
+  @Input() StopCount: number = 0;
+  /** Tooltip and accessible name of the slot in `stop` mode. */
+  @Input() StopLabel: string = 'Stop';
+  /** Status line shown bottom-left inside the box while non-null. */
+  @Input() StatusText: string | null = null;
+  /** Elapsed time after the status text, kept out of the live region and dropped on narrow screens. */
+  @Input() StatusElapsed: string | null = null;
 
   /** @deprecated Use {@link Placeholder}. */
   @Input() set placeholder(value: string) {
@@ -325,6 +379,8 @@ export class AiComposerComponent {
 
   // ── Proxied outputs ───────────────────────────────────────────────────────────────
   @Output() TextSubmitted = new EventEmitter<string>();
+  /** The send slot was clicked in `stop` mode. */
+  @Output() StopClicked = new EventEmitter<void>();
 
   /**
    * @deprecated Use {@link TextSubmitted}.

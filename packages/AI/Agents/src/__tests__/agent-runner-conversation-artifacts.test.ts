@@ -18,8 +18,9 @@ import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { ExecuteAgentParams, InputArtifact } from '@memberjunction/ai-core-plus';
 
 /** Recorded RunView calls, newest last — asserted on to prove the no-double-scan guarantee. */
-const runViewCalls: Array<{ EntityName?: string }> = [];
+const runViewCalls: Array<{ EntityName?: string; ExtraFilter?: string }> = [];
 let junctionVersionIds: string[] = [];
+let branchRows: Array<Record<string, unknown>> = [];
 const runQueryCalls: Array<{ QueryName?: string }> = [];
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
@@ -27,8 +28,11 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     return {
         ...actual,
         RunView: class {
-            async RunView(params: { EntityName?: string }) {
+            async RunView(params: { EntityName?: string; ExtraFilter?: string }) {
                 runViewCalls.push(params);
+                if (params.EntityName === 'MJ: Conversation Branches') {
+                    return { Success: true, Results: branchRows };
+                }
                 if (params.EntityName === 'MJ: Conversation Details') {
                     return { Success: true, Results: [{ ID: 'detail-1' }] };
                 }
@@ -105,6 +109,7 @@ describe('AgentRunner — conversation artifact hydration on the direct RunAgent
         runViewCalls.length = 0;
         runQueryCalls.length = 0;
         junctionVersionIds = ['ver-1'];
+        branchRows = [];
     });
 
     it('hydrates inputArtifacts from conversationDetailId alone', async () => {
@@ -163,5 +168,39 @@ describe('AgentRunner — conversation artifact hydration on the direct RunAgent
 
         expect(result).toBe(params);
         expect(runViewCalls).toEqual([]);
+    });
+
+    it('under a history floor, gathers only the artifacts of messages written at or after it', async () => {
+        const { provider } = makeProvider();
+        const floor = new Date('2026-09-01T12:00:00.000Z');
+        await bridge(provider).hydrateConversationArtifacts(makeParams({ conversationId: 'conv-99', ConversationHistoryFrom: floor }));
+
+        const detailScan = runViewCalls.find((c) => c.EntityName === 'MJ: Conversation Details');
+        expect(detailScan?.ExtraFilter).toBe(`[ConversationID]='conv-99' AND [BranchID] IS NULL AND __mj_CreatedAt >= '${floor.toISOString()}' AND [ReplacedAt] IS NULL`);
+    });
+
+    it('without a floor, scans the whole conversation as before', async () => {
+        const { provider } = makeProvider();
+        await bridge(provider).hydrateConversationArtifacts(makeParams({ conversationId: 'conv-99' }));
+
+        const detailScan = runViewCalls.find((c) => c.EntityName === 'MJ: Conversation Details');
+        expect(detailScan?.ExtraFilter).toBe(`[ConversationID]='conv-99' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL`);
+    });
+
+    it('on a branch, gathers only the artifacts of messages on that branch\'s path', async () => {
+        const { provider } = makeProvider();
+        branchRows = [{ ID: 'b1', ConversationID: 'conv-99', ParentBranchID: null, ForkFromSequence: 4, Name: null }];
+        await bridge(provider).hydrateConversationArtifacts(makeParams({ conversationId: 'conv-99', ConversationBranchID: 'b1' }));
+
+        const detailScan = runViewCalls.find((c) => c.EntityName === 'MJ: Conversation Details');
+        expect(detailScan?.ExtraFilter).toBe(`[ConversationID]='conv-99' AND ([BranchID]='b1' OR ([BranchID] IS NULL AND [Sequence] <= 4)) AND [ReplacedAt] IS NULL`);
+    });
+
+    it('leaves out the artifacts of a replaced answer', async () => {
+        const { provider } = makeProvider();
+        await bridge(provider).hydrateConversationArtifacts(makeParams({ conversationId: 'conv-99' }));
+
+        const detailScan = runViewCalls.find((c) => c.EntityName === 'MJ: Conversation Details');
+        expect(detailScan?.ExtraFilter?.endsWith('AND [ReplacedAt] IS NULL')).toBe(true);
     });
 });

@@ -7,6 +7,7 @@ import {
   inject,
 } from '@angular/core';
 import { RunView } from '@memberjunction/core';
+import type { MJArchiveRunEntityType } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /** Summary metrics for the dashboard cards */
@@ -24,6 +25,7 @@ export interface ArchiveRunSummary {
   StartedAt: Date;
   CompletedAt: Date | null;
   Status: string;
+  StorageMode: MJArchiveRunEntityType['StorageMode'];
   RecordsArchived: number;
   RecordsFailed: number;
   RecordsSkipped: number;
@@ -197,6 +199,7 @@ export class ArchiveRunViewerComponent extends BaseAngularComponent implements O
       StartedAt: startedAt,
       CompletedAt: completedAt,
       Status: r.Status ?? 'Unknown',
+      StorageMode: r.StorageMode ?? 'Store',
       RecordsArchived: Number(r.ArchivedRecords) || 0,
       RecordsFailed: Number(r.FailedRecords) || 0,
       RecordsSkipped: Number(r.SkippedRecords) || 0,
@@ -271,6 +274,7 @@ interface RunRecord {
   StartedAt: string;
   CompletedAt: string;
   Status: string;
+  StorageMode: MJArchiveRunEntityType['StorageMode'] | null;
   ArchivedRecords: number;
   FailedRecords: number;
   SkippedRecords: number;

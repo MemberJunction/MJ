@@ -2,7 +2,7 @@ import { Component, Output, EventEmitter, OnInit, Input, SimpleChanges, OnChange
 
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJEntityPermissionEntity } from '@memberjunction/core-entities';
-import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { UUIDsEqual, NormalizeUUID, ExcludeByUUIDs } from '@memberjunction/global';
 
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -110,7 +110,8 @@ export class EntityPermissionsGridComponent extends BaseAngularComponent impleme
       const roles = md.Roles;
 
       if (this.Mode === 'Entity') {
-        const rolesWithNoPermissions = roles.filter(r => !existingPermissions.some(p => UUIDsEqual(p.RoleID, r.ID)));
+        // Set-based, not a nested UUIDsEqual scan: roles x permissions grows with both.
+        const rolesWithNoPermissions = ExcludeByUUIDs(roles, existingPermissions.map(p => p.RoleID));
         for (const r of rolesWithNoPermissions) {
           const p = await md.GetEntityObject<MJEntityPermissionEntity>('MJ: Entity Permissions')
            
@@ -130,7 +131,8 @@ export class EntityPermissionsGridComponent extends BaseAngularComponent impleme
       }
       else if (this.Mode === 'Role') {
         // for the mode of Role, that means we want to show all entities and their permissions for the given role
-        const entitiesWithNoPermissions = md.Entities.filter(e => !existingPermissions.some(p => UUIDsEqual(p.EntityID, e.ID)));
+        // Set-based, not a nested UUIDsEqual scan: every entity x every permission row.
+        const entitiesWithNoPermissions = ExcludeByUUIDs(md.Entities, existingPermissions.map(p => p.EntityID));
         for (const e of entitiesWithNoPermissions) {
           const p = await md.GetEntityObject<MJEntityPermissionEntity>('MJ: Entity Permissions')
           

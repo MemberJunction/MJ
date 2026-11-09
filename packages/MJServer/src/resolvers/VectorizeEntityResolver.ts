@@ -1,26 +1,27 @@
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, Float } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { EntityVectorSyncer, VectorizeEntityParams, VectorizeProgressUpdate } from '@memberjunction/ai-vector-sync';
 import { PubSubManager } from '../generic/PubSubManager.js';
 import { PipelineProgressNotification } from './PipelineProgressResolver.js';
 import { v4 as uuidv4 } from 'uuid';
+import { GetReadWriteProvider } from '../util.js';
 
 const PIPELINE_PROGRESS_TOPIC = 'PIPELINE_PROGRESS';
 
 @ObjectType()
 export class VectorizeEntityResult {
-    @Field()
+    @Field(() => Boolean)
     Success: boolean;
 
-    @Field({ nullable: true })
+    @Field(() => String, { nullable: true })
     Status?: string;
 
-    @Field({ nullable: true })
+    @Field(() => String, { nullable: true })
     ErrorMessage?: string;
 
-    @Field({ nullable: true })
+    @Field(() => String, { nullable: true })
     PipelineRunID?: string;
 }
 
@@ -28,10 +29,10 @@ export class VectorizeEntityResult {
 export class VectorizeEntityResolver extends ResolverBase {
     @Mutation(() => VectorizeEntityResult)
     async VectorizeEntity(
-        @Arg('entityDocumentID') entityDocumentID: string,
-        @Arg('entityID') entityID: string,
+        @Arg('entityDocumentID', () => String) entityDocumentID: string,
+        @Arg('entityID', () => String) entityID: string,
         @Arg('batchSize', () => Float, { nullable: true }) batchSize?: number,
-        @Ctx() { userPayload }: AppContext = {} as AppContext
+        @Ctx() { userPayload, providers }: AppContext = {} as AppContext
     ): Promise<VectorizeEntityResult> {
         try {
             const currentUser = this.GetUserFromPayload(userPayload);
@@ -39,12 +40,15 @@ export class VectorizeEntityResolver extends ResolverBase {
                 return { Success: false, Status: 'Error', ErrorMessage: 'Unable to determine current user' };
             }
 
+            // Capture the request's provider before returning, so the background run writes through the
+            // same connection the caller used. It is also the colocated vector host (#4910).
+            const provider = GetReadWriteProvider(providers, { allowFallbackToReadOnly: true }) ?? undefined;
             const pipelineRunID = uuidv4();
             LogStatus(`VectorizeEntity: starting pipeline ${pipelineRunID} for entity document ${entityDocumentID}`);
 
             // Fire-and-forget: start the pipeline in the background and return immediately.
             // Progress is delivered to the client via the PipelineProgress GraphQL subscription.
-            this.runPipelineInBackground(pipelineRunID, entityDocumentID, entityID, batchSize, currentUser);
+            this.runPipelineInBackground(pipelineRunID, entityDocumentID, entityID, batchSize, currentUser, provider);
 
             return {
                 Success: true,
@@ -71,10 +75,11 @@ export class VectorizeEntityResolver extends ResolverBase {
         entityDocumentID: string,
         entityID: string,
         batchSize: number | undefined,
-        currentUser: UserInfo
+        currentUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<void> {
         try {
-            const syncer = new EntityVectorSyncer();
+            const syncer = new EntityVectorSyncer(provider);
             await syncer.Config(true, currentUser);
 
             const params: VectorizeEntityParams = {

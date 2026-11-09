@@ -1,4 +1,4 @@
-import { IMetadataProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, Metadata, SharedLoad, UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import { BaseSingleton } from '@memberjunction/global';
 import {
     FileStorageEngineBase,
@@ -8,7 +8,9 @@ import {
     MJFileStorageProviderEntity
 } from '@memberjunction/core-entities';
 import { FileStorageBase } from './generic/FileStorageBase';
+import { StorageObjectKeyOf } from './generic/ObjectKeys';
 import { InitializeDriverWithAccountCredentials } from './util';
+import { StorageAccessEvaluator, StorageAccountAccess } from './StorageAccessEvaluator';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -65,6 +67,19 @@ export interface UploadFileResult {
     Provider: MJFileStorageProviderEntity;
 }
 
+/** Where an `MJ: Files` row says its bytes live — what {@link FileStorageEngine.ResolveFileObject} reads. */
+export type StorageFileLocation = Pick<MJFileEntity, 'ProviderID' | 'ProviderKey' | 'Name'>;
+
+/** The account, driver and object key that serve an `MJ: Files` row, as {@link FileStorageEngine.ResolveFileObject} returns them. */
+export interface ResolvedFileObject {
+    /** The storage account the row's provider resolves to (the provider's first account). */
+    Account: MJFileStorageAccountEntity;
+    /** An initialized driver for that account. */
+    Driver: FileStorageBase;
+    /** The object key the row resolves to ({@link StorageObjectKeyOf}): `ProviderKey`, else `Name`. */
+    ObjectKey: string;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Engine
 // ─────────────────────────────────────────────────────────────────────────────
@@ -104,8 +119,8 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
 
     // Loading state management (mirrors AIEngine pattern)
     private _loaded: boolean = false;
-    private _loading: boolean = false;
-    private _loadingPromise: Promise<void> | null = null;
+    /** Shares concurrent loads; a forced `Config(true)` always gets a load that starts after it. */
+    private readonly _load = new SharedLoad();
     private _contextUser: UserInfo | undefined;
 
     // Server-specific state: cached, initialized drivers keyed by account ID
@@ -188,28 +203,14 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
     /**
      * Configures the engine by loading the underlying metadata cache and any
      * server-specific state. Safe to call multiple times — uses cached data
-     * unless `forceRefresh` is true. Concurrent callers share a single loading
-     * promise to avoid redundant work.
+     * unless `forceRefresh` is true. Concurrent callers share the load that is
+     * running, except that a `forceRefresh` call gets one more load after it (see SharedLoad).
      */
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
         if (this._loaded && !forceRefresh) {
             return;
         }
-
-        // If currently loading, return the existing promise so all callers wait together
-        if (this._loading && this._loadingPromise) {
-            return this._loadingPromise;
-        }
-
-        this._loading = true;
-        this._loadingPromise = this.innerLoad(forceRefresh, contextUser, provider);
-
-        try {
-            await this._loadingPromise;
-        } finally {
-            this._loading = false;
-            this._loadingPromise = null;
-        }
+        return this._load.Run(forceRefresh === true, () => this.innerLoad(forceRefresh, contextUser, provider));
     }
 
     /**
@@ -235,6 +236,22 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
     }
 
     /**
+     * Calls `Dispose()` on every currently-cached driver before it's dropped. Most driver
+     * implementations no-op (their SDK exposes no explicit teardown), but drivers that do own a
+     * disposable client (e.g. `AWSFileStorage`'s `S3Client`) get their keep-alive sockets
+     * released instead of leaking them for the remainder of the process.
+     */
+    private disposeCachedDrivers(): void {
+        for (const driver of this._driverCache.values()) {
+            try {
+                driver.Dispose();
+            } catch (error) {
+                LogError(`FileStorageEngine: error disposing cached driver: ${error}`);
+            }
+        }
+    }
+
+    /**
      * Initializes storage drivers for all active accounts and caches them.
      * Called automatically during Config(). Can also be called independently to
      * re-initialize drivers without reloading metadata (e.g., after credential rotation).
@@ -242,6 +259,7 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
      * on-demand initialization when GetDriver() is called.
      */
     public async RefreshDriverCache(): Promise<void> {
+        this.disposeCachedDrivers();
         this._driverCache.clear();
 
         const activeAccounts = this.Base.AccountsWithProviders.filter(a => a.provider.IsActive !== false);
@@ -309,6 +327,11 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
      * - Decrypting credentials via the Credential Engine
      * - Setting up OAuth token refresh callbacks for providers like Box
      *
+     * **No permission check.** The driver cache is process-wide and this method does not ask whether `contextUser` may
+     * use the account. Code acting for a user must call {@link StorageAccessEvaluator.AssertAccountAccess} (or
+     * `AccessibleAccountIDs`) first — the MJServer storage routes, the File Storage core actions and the search lane do —
+     * and, going from an `MJ: Files` row to its object, should use {@link ResolveFileObject} instead.
+     *
      * @param accountId - The FileStorageAccount ID to get a driver for
      * @param contextUser - User context for credential decryption (used for on-demand init)
      * @returns An initialized, ready-to-use FileStorageBase driver
@@ -324,7 +347,7 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
         // On-demand fallback: account wasn't in cache (failed init, added late, etc.)
         let resolved = this.Base.GetAccountWithProvider(accountId);
         if (!resolved) {
-            await this.Config(true, contextUser);
+            await this.RefreshAfterMiss();
             resolved = this.Base.GetAccountWithProvider(accountId);
         }
 
@@ -341,6 +364,75 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
         // Cache it for future calls
         this._driverCache.set(accountId, driver);
         return driver;
+    }
+
+    /**
+     * Resolves an `MJ: Files` row to the account, driver and object key that serve its bytes — and refuses unless
+     * `contextUser` may use that account for `access` and may read every `MJ: Files` row that tracks the object.
+     *
+     * Every route that goes from a file ID to bytes or a URL uses this: the row names only a PROVIDER (and `ProviderKey`
+     * / `Name` are written by whoever saved the row), so without the account gate a row could reach an account the caller
+     * is refused, and without the tracked-file rule a second row could alias an object whose own row the caller cannot
+     * read. Load the row as the caller first — this decides storage access, not whether the caller may see the row.
+     *
+     * @param file - The row's storage location (`ProviderID`, `ProviderKey`, `Name`)
+     * @param contextUser - The caller the decision is for
+     * @param access - `Read` to download or sign a URL; `Write` to delete, rename or overwrite the object
+     * @param provider - The metadata provider to read permissions through; defaults to `Metadata.Provider`
+     * @returns The resolved object, or `null` when the row's provider has no storage account
+     * @throws StorageAccountAccessDeniedError when the account refuses `access`;
+     *   TrackedFileAccessDeniedError when a row tracking the object is not readable by the caller
+     */
+    public async ResolveFileObject(
+        file: StorageFileLocation,
+        contextUser: UserInfo,
+        access: StorageAccountAccess = 'Read',
+        provider?: IMetadataProvider
+    ): Promise<ResolvedFileObject | null> {
+        const account = await this.firstAccountForProvider(file.ProviderID, contextUser, provider);
+        if (!account) {
+            return null;
+        }
+        const evaluator = StorageAccessEvaluator.Instance;
+        await evaluator.AssertAccountAccess(account.ID, contextUser, access, provider);
+        const driver = await this.GetDriver(account.ID, contextUser);
+        const objectKey = StorageObjectKeyOf(file);
+        await evaluator.AssertTrackedObjectsReadable(file.ProviderID, [objectKey], contextUser, provider, driver);
+        return { Account: account, Driver: driver, ObjectKey: objectKey };
+    }
+
+    /** The first storage account on `providerID`, refreshing the cache once when none is found; `null` when there is none. */
+    private async firstAccountForProvider(
+        providerID: string,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<MJFileStorageAccountEntity | null> {
+        await this.Config(false, contextUser, provider);
+        let accounts = this.Base.GetAccountsByProviderID(providerID);
+        if (accounts.length === 0) {
+            await this.RefreshAfterMiss(provider);
+            accounts = this.Base.GetAccountsByProviderID(providerID);
+        }
+        return accounts[0] ?? null;
+    }
+
+    /**
+     * Reloads the shared account cache after a lookup missed, as the MJ system user. A forced `Config` loads as the user
+     * it is given, and `BaseEngine` empties a config that user cannot read (`MJ: File Storage Accounts`), so a restricted
+     * caller forcing the reload would blank the cache, and re-initialize every driver, for everyone. With no system user
+     * nothing is reloaded and the miss stands.
+     */
+    public async RefreshAfterMiss(provider?: IMetadataProvider): Promise<void> {
+        const md = provider ?? Metadata.Provider;
+        let systemUser: UserInfo | null = null;
+        try {
+            systemUser = await WellKnownUserSource.Instance.GetSystemUser(md);
+        } catch (error) {
+            LogError(`FileStorageEngine: resolving the system user for a cache refresh failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        if (systemUser) {
+            await this.Config(true, systemUser, md);
+        }
     }
 
     /**
@@ -378,8 +470,8 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
         // 1. Resolve storage account
         let resolved = this.ResolveStorageAccount(storageAccountId);
         if (!resolved) {
-            // Attempt a forced refresh from database in case account was recently added or cache was stale
-            await this.Config(true, contextUser, md);
+            // Attempt a refresh from the database in case the account was recently added or the cache was stale
+            await this.RefreshAfterMiss(md);
             resolved = this.ResolveStorageAccount(storageAccountId);
         }
 
@@ -395,6 +487,9 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
         const rawPrefix = options.pathPrefix ?? `artifacts/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}`;
         const cleanPrefix = rawPrefix.replace(/\.\./g, '').replace(/^[/\\]+/, '').replace(/[\x00-\x1f\x7f]/g, '').replace(/[/\\]+/g, '/').replace(/\/+$/, '') || 'artifacts';
         const storagePath = `${cleanPrefix}/${cleanFileName}`;
+        // Never overwrite an object that backs an `MJ: Files` row the caller cannot read (a caller-chosen pathPrefix can
+        // name one). The account gate is the caller's job — this method uploads to the account it is given.
+        await StorageAccessEvaluator.Instance.AssertTrackedObjectsReadable(resolved.provider.ID, [storagePath], contextUser, md, driver);
         const uploaded = await driver.PutObject(storagePath, content, mimeType);
         if (!uploaded) {
             throw new Error(`FileStorageEngine.UploadFile: PutObject returned false for path '${storagePath}'`);

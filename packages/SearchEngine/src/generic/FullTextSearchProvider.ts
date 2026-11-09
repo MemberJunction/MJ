@@ -12,6 +12,7 @@
 import { IRunViewProvider, LogError, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider, SearchProviderConfig } from './ISearchProvider';
+import type { LaneKind } from './ScopeExplanation';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints } from './search.types';
 import { SearchEnricher } from './SearchEnricher';
 import { EnvIntOverride } from './env-config';
@@ -23,6 +24,15 @@ import { EnvIntOverride } from './env-config';
 @RegisterClass(BaseSearchProvider, 'FullTextSearchProvider')
 export class FullTextSearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'fulltext';
+
+    /** Reads the entity names of the scope's entity lanes (see `BaseSearchProvider.ConsumesLaneKinds`). */
+    public override readonly ConsumesLaneKinds: readonly LaneKind[] = ['Entity'];
+
+    /**
+     * Every hit is a row of the entity it names: `FullTextSearch` reads each FTS-enabled entity through
+     * `RunViews` as the user (see the base class).
+     */
+    public override readonly ResultsAreRowsOfLabelledEntity: boolean = true;
 
     /**
      * Minimum trimmed term length we accept. SQL Server FTS treats single
@@ -71,11 +81,11 @@ export class FullTextSearchProvider extends BaseSearchProvider {
             const effectiveQuery = scopeConstraints?.QueryTransforms?.[this.SourceType] ?? query;
 
             // Restrict entities: scopeConstraints take precedence, then filters.EntityNames,
-            // then no restriction.
+            // then no restriction. A DEFINED but empty scope list means the scope gives this
+            // provider no entity — search nothing, never every FTS entity.
             const scopedEntityNames = scopeConstraints?.Entities?.map(e => e.EntityName);
-            const restrictedEntityNames = scopedEntityNames?.length
-                ? scopedEntityNames
-                : filters?.EntityNames;
+            if (scopedEntityNames && scopedEntityNames.length === 0) return [];
+            const restrictedEntityNames = scopedEntityNames ?? filters?.EntityNames;
 
             // Multi-provider migration (v5.31+): use `this.Provider` instead of
             // `new Metadata()`. Cast to IRunViewProvider to access FullTextSearch

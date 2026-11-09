@@ -24,6 +24,7 @@ import { GetDefaultAgentId } from '@/data/preferences';
 import { MentionsToPlainText } from '@/data/mention-display';
 import { MJRealtimeSessionCard } from '@/chat/realtime/RealtimeSessionCard';
 import { ArtifactMessageCard } from '@/chat/artifacts/ArtifactMessageCard';
+import { Metadata } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { MJConversationArtifactEntity } from '@memberjunction/core-entities';
 import { FindActiveTrigger, ApplyMention, MentionedAgentId, SerializeDraft, type InsertedMention } from '@/chat/mentions/trigger';
@@ -287,6 +288,7 @@ export default function ChatThreadScreen() {
                                         Group={item.Group}
                                         Meta={item.Meta}
                                         Turns={item.Turns}
+                                        CurrentUserID={Metadata.Provider?.CurrentUser?.ID ?? null}
                                     />
                                 ),
                             )}

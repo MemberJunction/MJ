@@ -105,6 +105,9 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
         return this.PreviewMode;
     }
 
+    /** A full custom entity form replaces the whole form body. */
+    public override get OwnsEntireFormBody(): boolean { return true; }
+
     /** FormHostProps passed to the React component. Recomputed when record or mode changes. */
     public FormHostProps: FormHostProps | null = null;
 
@@ -452,6 +455,7 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
                     Fields: ['ID', 'Name', 'Specification'],
                     ExtraFilter: `ID='${this.ComponentID}'`,
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                     ResultType: 'simple',
                     BypassCache: true,
                 }, user);

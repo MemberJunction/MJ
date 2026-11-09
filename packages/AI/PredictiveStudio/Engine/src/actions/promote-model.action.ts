@@ -9,7 +9,8 @@
  *
  * Per CLAUDE.md "Actions are boundaries": this action does NOT mutate the model's
  * metrics, artifact, or any training payload — promotion is a **lifecycle-only**
- * transition (the model is immutable, §6.4). It validates `ModelID` +
+ * transition (the model is immutable, §6.4). A calibration-held model is never moved to Validated or Published (no
+ * sign-off overrides it), and a model whose artifact `/predict` does not serve is never published. It validates `ModelID` +
  * `TargetStatus`, delegates the leakage check + transition to an injectable
  * {@link IModelPromotionGate}, and maps the new status back.
  *
@@ -18,14 +19,15 @@
 
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RegisterClass } from '@memberjunction/global';
-import { LogError, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { LogError, Metadata, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
 
 import { BasePredictiveStudioAction } from './base-predictive-studio.action';
 import { ProductionModelPromotionGate } from './promote-model.gate';
 
 /** The driver-class key this action registers under (matches the metadata row). */
-export const PROMOTE_MODEL_DRIVER_CLASS = 'PredictiveStudioPromoteModelAction';
+export { PROMOTE_MODEL_DRIVER_CLASS } from './driver-classes';
+import { PROMOTE_MODEL_DRIVER_CLASS } from './driver-classes';
 
 /** The lifecycle statuses a model may be promoted/transitioned to. */
 export type PromotableStatus = 'Validated' | 'Published' | 'Archived';
@@ -46,7 +48,8 @@ export interface PromoteModelRequest {
    */
   reason?: string;
   contextUser?: UserInfo;
-  provider?: IMetadataProvider;
+  /** The provider every read and write goes through (required: no fallback to the global provider). */
+  provider: IMetadataProvider;
 }
 
 /** Outcome of a promotion attempt. */
@@ -54,7 +57,12 @@ export type PromoteModelOutcome =
   | { kind: 'promoted'; newStatus: PromotableStatus; signOffNote?: string }
   | { kind: 'refused-leakage'; topFeature?: string; topShare?: number }
   | { kind: 'signoff-reason-required'; topFeature?: string; topShare?: number }
+  /** The model's family is hidden for its holdout calibration (its Lineage's `calibrationHold`); no sign-off overrides it. */
+  | { kind: 'refused-calibration'; slope: number | null }
+  /** The model's artifact is not served by the sidecar's `/predict` (a forecast's series forecaster), so it is not published. */
+  | { kind: 'not-servable'; message: string }
   | { kind: 'invalid-transition'; currentStatus: string; targetStatus: PromotableStatus }
+  | { kind: 'needs-training'; message: string }
   | { kind: 'not-found' }
   | { kind: 'save-failed'; message: string };
 
@@ -102,7 +110,7 @@ export class PredictiveStudioPromoteModelAction extends BasePredictiveStudioActi
         signOff,
         reason,
         contextUser: params.ContextUser,
-        provider: params.Provider,
+        provider: params.Provider || Metadata.Provider, // global-provider-ok: RunActionParams.Provider is optional; ActionEngine contract falls back to the global provider (ActionEngine-Base.ts:413-419)
       });
 
       return this.mapOutcome(params, modelId, outcome);
@@ -130,12 +138,18 @@ export class PredictiveStudioPromoteModelAction extends BasePredictiveStudioActi
         return this.fail('LEAKAGE_SIGNOFF_REQUIRED', this.leakageRefusalMessage(modelId, outcome));
       case 'signoff-reason-required':
         return this.fail('SIGNOFF_REASON_REQUIRED', this.signOffReasonRequiredMessage(modelId, outcome));
+      case 'refused-calibration':
+        return this.fail('CALIBRATION_HOLD', ProductionModelPromotionGate.CalibrationRefusalMessage(modelId, outcome.slope));
+      case 'not-servable':
+        return this.fail('MODEL_NOT_SERVABLE', outcome.message);
       case 'invalid-transition':
         return this.fail(
           'INVALID_TRANSITION',
           `Model ${modelId} cannot move from '${outcome.currentStatus}' to '${outcome.targetStatus}'. ` +
             'Allowed lifecycle: Draft → Validated → Published → Archived (with Published ↔ Archived).',
         );
+      case 'needs-training':
+        return this.fail('MODEL_NEEDS_TRAINING', outcome.message);
       case 'not-found':
         return this.fail('MODEL_NOT_FOUND', `ML Model '${modelId}' was not found.`);
       case 'save-failed':

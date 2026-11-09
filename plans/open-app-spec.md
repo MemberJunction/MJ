@@ -610,6 +610,17 @@ Apps follow a bootstrap package pattern similar to MJ core's `@memberjunction/se
 @acme/mj-crm-ng                 # Angular module + components
 ```
 
+### HTTP Routes and MJAPI's Base Path
+
+MJAPI does not know where it is exposed. A proxy may serve it from its own host and port, or under a path such as `/api` (every MJ Central CloudFront distribution forwards `/api/*` to MJAPI). An app's HTTP surface must work wherever that is:
+
+1. **`MJAPI_BASE_PATH`** (default `/`) is the prefix MJAPI mounts every route under on its own listener. An app's server extension `RootPath` is **relative to it**: core composes the real mount path (`/api` + `/forms` → `/api/forms`) and hands it back as `context.config.RootPath`. Mount on it as-is; never add the base path yourself, and never mount at a root-relative literal (`app.use('/forms', …)`).
+2. **`GRAPHQL_ROOT_PATH`** is only where Apollo listens. It is never a base for an app's routes, and core no longer reserves it: extensions may sit beside or under it, and they win because Apollo mounts last. Collision checks against core routes and other extensions still apply.
+3. **`MJAPI_PUBLIC_URL`** (`context.publicUrl`) is where the world reaches MJAPI, prefix included. It is the only base for a URL handed to a browser, an email or a webhook registration: `publicUrl` + a path relative to the base path (`publicUrl` + `/forms/asset/…`, never `publicUrl` + `config.RootPath`).
+4. **Browser bundles are told the MJAPI URL**: a rendered attribute, provider config, or Explorer's `MJAPI_URI` (`ResolveMJAPIURL()` in `@memberjunction/core`). They never work it out from `window.location`, from `new URL('/x', graphqlUri)`, or by stripping `/graphql`. A host that sets `MJAPI_BASE_PATH` sets `MJAPI_URI` in the same change. `context.apiRootPath` carries the base path when the server renders a page.
+
+Core uses `ApiRoute()` from `@memberjunction/server` for the same job, and `check:api-root` fails CI on a root-relative `app.*` mount. See MJ #5674.
+
 ### Bootstrap Package Requirement
 
 Every app MUST publish bootstrap packages that serve as the entry point for class registration. These packages:

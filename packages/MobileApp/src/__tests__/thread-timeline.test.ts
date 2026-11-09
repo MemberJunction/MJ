@@ -138,7 +138,7 @@ describe('BuildRealtimeSessionCardView', () => {
 
     it('names the agent and humanizes the close reason', () => {
         const view = BuildRealtimeSessionCardView(group(), meta({ AgentName: 'Sage', Status: 'Closed', CloseReason: 'Janitor' }), 2, 'You');
-        expect(view.Title).toBe('Realtime session · Sage');
+        expect(view.Title).toBe('Voice call with Sage');
         expect(view.Chip).toEqual({ Label: 'Timed out', Tone: 'neutral' });
     });
 
@@ -151,7 +151,7 @@ describe('BuildRealtimeSessionCardView', () => {
         const view = BuildRealtimeSessionCardView(group(), null, 2, 'You');
         expect(view.Range).toContain('→');
         expect(view.Range?.match(/Sep 14/g) ?? []).toHaveLength(1);
-        expect(view.MetaLine).toContain('2 turns');
+        expect(view.MetaLine).toContain('2 messages');
     });
 
     it('repeats the date when the session crosses midnight', () => {
@@ -163,11 +163,11 @@ describe('BuildRealtimeSessionCardView', () => {
     it('drops the range entirely rather than printing a half one', () => {
         const view = BuildRealtimeSessionCardView(group({ StartedAt: null, EndedAt: null }), null, 0, 'You');
         expect(view.Range).toBeNull();
-        expect(view.MetaLine).toBe('2 turns');
+        expect(view.MetaLine).toBe('2 messages');
     });
 
-    it('singularizes a one-turn session', () => {
-        expect(BuildRealtimeSessionCardView(group({ TurnCount: 1 }), null, 1, 'You').TurnLabel).toBe('1 turn');
+    it('singularizes a one-message session', () => {
+        expect(BuildRealtimeSessionCardView(group({ TurnCount: 1 }), null, 1, 'You').MessageCountLabel).toBe('1 message');
     });
 
     it('names the user on their own last turn', () => {
@@ -175,8 +175,39 @@ describe('BuildRealtimeSessionCardView', () => {
         expect(view.Preview?.Role).toBe('Amith');
     });
 
-    it('labels an agent turn generically, as the web card does', () => {
+    it('labels an agent turn generically when the lookup did not name the agent, as the web card does', () => {
         expect(BuildRealtimeSessionCardView(group(), null, 2, 'Amith').Preview?.Role).toBe('Agent');
+    });
+
+    it('names the agent on its own line when the lookup did', () => {
+        expect(BuildRealtimeSessionCardView(group(), meta({ AgentName: 'Sage' }), 2, 'Amith').Preview?.Role).toBe('Sage');
+    });
+
+    it('keeps the supplied label on a user line when no viewer id is passed, so it never guesses a name', () => {
+        const theirs = meta({ UserID: 'OTHER-USER', UserName: 'Dana Lee' });
+        const view = BuildRealtimeSessionCardView(group({ LastTurnRole: 'User' }), theirs, 2, 'You');
+        expect(view.Preview?.Role).toBe('You');
+        expect(view.UserTurnLabel).toBe('You');
+    });
+
+    it('with the viewer id, says "You" on their own call and names the caller on anyone else\'s', () => {
+        const userLine = group({ LastTurnRole: 'User' });
+        const mine = BuildRealtimeSessionCardView(userLine, meta({ UserID: 'VIEWER', UserName: 'Amith' }), 2, 'You', 'viewer');
+        expect(mine.Preview?.Role).toBe('You');
+        expect(mine.UserTurnLabel).toBe('You');
+        const theirs = BuildRealtimeSessionCardView(userLine, meta({ UserID: 'OTHER-USER', UserName: 'Dana Lee' }), 2, 'You', 'VIEWER');
+        expect(theirs.Preview?.Role).toBe('Dana Lee');
+        expect(theirs.UserTurnLabel).toBe('Dana Lee');
+    });
+
+    it('labels the expanded user turns even when the last line was the agent\'s', () => {
+        const view = BuildRealtimeSessionCardView(group(), meta({ UserID: 'OTHER-USER', UserName: 'Dana Lee' }), 2, 'You', 'VIEWER');
+        expect(view.Preview?.Role).toBe('Agent');
+        expect(view.UserTurnLabel).toBe('Dana Lee');
+    });
+
+    it('says "Caller", never "You", when the viewer is known but the session row is not', () => {
+        expect(BuildRealtimeSessionCardView(group({ LastTurnRole: 'User' }), null, 2, 'You', 'VIEWER').UserTurnLabel).toBe('Caller');
     });
 
     it('does not offer to expand a session with no visible turns', () => {

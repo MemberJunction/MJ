@@ -3,17 +3,21 @@
  * @module @memberjunction/testing-cli
  */
 
-import { TestEngine } from '@memberjunction/testing-engine';
+import { TestEngine, ParseShardSpec } from '@memberjunction/testing-engine';
 import { UserInfo } from '@memberjunction/core';
 import { SuiteFlags } from '../types';
 import { OutputFormatter } from '../utils/output-formatter';
+import { CriterionSpreads } from './criterion-spread';
+import { LookupRubricOverride } from './rubric-cli';
 import { SpinnerManager } from '../utils/spinner-manager';
 import { LoadMJConfig, LoadCLIConfig } from '../utils/config-loader';
 import { InitializeMJProvider, CloseMJProvider, GetContextUser } from '../lib/mj-provider';
 import { ParseVariableFlags } from '../utils/variable-parser';
 import { LoadOraclesModule } from '../utils/oracle-module-loader';
 import { LoadCheckModules } from '../utils/check-module-loader';
-import { installInstrumentedCacheFirst } from '@memberjunction/testing-integration';
+import { installInstrumentedCacheFirst, FormatSkipGateReport } from '@memberjunction/testing-integration';
+import { EvaluateSuiteSkipGate } from './suite-skip-gate';
+import { FlushAndExit } from '../utils/flush-and-exit';
 
 /**
  * Suite command - Execute a test suite
@@ -30,6 +34,11 @@ export class SuiteCommand {
      */
     async Execute(suiteId: string | undefined, flags: SuiteFlags, contextUser?: UserInfo): Promise<void> {
         try {
+            const parsedShard = flags.shard ? ParseShardSpec(flags.shard) : undefined;
+            if (flags.transport && flags.transport !== 'server' && flags.transport !== 'client' && flags.transport !== 'all') {
+                throw new Error(`Invalid --transport value '${String(flags.transport)}': expected 'server', 'client', or 'all'.`);
+            }
+
             // Integration tests must install the instrumented cache as the FIRST caller
             // (before any provider setup) or its counters are a silent no-op. Opt-in via
             // MJ_INTEGRATION_TEST=1 so every other suite run is byte-for-byte unchanged.
@@ -152,6 +161,7 @@ export class SuiteCommand {
             // so integration suites MUST run strictly serially (CANONICAL D). Force serial
             // execution under MJ_INTEGRATION_TEST=1 regardless of any --parallel flag.
             const integrationSerial = process.env.MJ_INTEGRATION_TEST === '1';
+            const rubric = flags.rubric ? await LookupRubricOverride(flags.rubric, contextUser) : undefined;
             const result = await engine.RunSuite(suite.ID, {
                 verbose: flags.verbose,
                 variables,
@@ -159,6 +169,10 @@ export class SuiteCommand {
                 parallel: integrationSerial ? false : flags.parallel,
                 maxParallel: integrationSerial ? 1 : flags.maxParallel,
                 repeatCountOverride: flags.flakyCheck && flags.flakyCheck > 1 ? flags.flakyCheck : undefined,
+                rubricId: rubric?.rubricId,
+                rubricVersionId: rubric?.versionId,
+                transport: flags.transport,
+                shard: parsedShard,
             }, contextUser);
 
             this.spinner.stop();
@@ -180,11 +194,21 @@ export class SuiteCommand {
             const fileOutput = flakyReport && format !== 'json' ? output + '\n' + flakyReport : output;
             OutputFormatter.writeToFile(fileOutput, flags.output);
 
+            // Skip gate: a skipped integration check verified nothing, so a skip that is not on the
+            // allowlist fails the run, as does a bundle that skipped every check and a registered
+            // check that produced no result. Allowed skips are listed so they stay visible.
+            const skipGate = EvaluateSuiteSkipGate(result, engine.Tests ?? []);
+            const skipGateOutput = FormatSkipGateReport(skipGate);
+            if (skipGateOutput) {
+                console.log(skipGateOutput);
+            }
+
             // Clean up resources
             await CloseMJProvider();
 
-            // Exit with appropriate code (non-zero if any test failed)
-            process.exit(result.failedTests === 0 ? 0 : 1);
+            // Exit with appropriate code (non-zero if any test failed or the skip gate failed),
+            // after the result above has reached a piped stdout in full
+            await FlushAndExit(result.failedTests === 0 && skipGate.Passed ? 0 : 1);
 
         } catch (error) {
             this.spinner.fail();
@@ -215,20 +239,21 @@ export class SuiteCommand {
      * Variance threshold of 0.3 is the plan-recommended cutoff — small enough
      * to catch real instability, large enough to ignore minor LLM judge noise.
      */
-    private buildFlakyReport(testResults: Array<{ testId: string; testName: string; score: number; status: string }>, iterations: number): string {
+    private buildFlakyReport(testResults: Array<{ testId: string; testName: string; score: number; status: string; oracleResults?: { oracleType?: string; details?: unknown }[] }>, iterations: number): string {
         const VARIANCE_THRESHOLD = 0.3;
 
         // Group by testId — when --flaky-check N is used, each test produces N entries
-        const byTest = new Map<string, { name: string; scores: number[]; statuses: string[] }>();
+        const byTest = new Map<string, { name: string; scores: number[]; statuses: string[]; oracleResults: { oracleType?: string; details?: unknown }[][] }>();
         for (const r of testResults) {
-            const entry = byTest.get(r.testId) ?? { name: r.testName, scores: [], statuses: [] };
+            const entry = byTest.get(r.testId) ?? { name: r.testName, scores: [], statuses: [], oracleResults: [] };
             entry.scores.push(r.score);
             entry.statuses.push(r.status);
+            entry.oracleResults.push(r.oracleResults ?? []);
             byTest.set(r.testId, entry);
         }
 
         // Compute variance + status mixing per test
-        type FlakyRow = { name: string; scores: number[]; statuses: string[]; variance: number; mixedStatus: boolean; flaky: boolean };
+        type FlakyRow = { name: string; scores: number[]; statuses: string[]; variance: number; mixedStatus: boolean; flaky: boolean; criteria: { Key: string; Scores: number[]; Spread: number }[] };
         const rows: FlakyRow[] = [];
         for (const [, entry] of byTest) {
             // Skip tests that didn't actually run multiple times (e.g. if an iteration errored)
@@ -239,8 +264,10 @@ export class SuiteCommand {
             const variance = max - min;
             const uniqueStatuses = new Set(entry.statuses);
             const mixedStatus = uniqueStatuses.size > 1;
-            const flaky = variance > VARIANCE_THRESHOLD || mixedStatus;
-            rows.push({ ...entry, variance, mixedStatus, flaky });
+            const criteria = CriterionSpreads(entry.oracleResults.map(oracleResults => ({ oracleResults })));
+            const criterionFlaky = criteria.some(criterion => criterion.Spread > VARIANCE_THRESHOLD);
+            const flaky = variance > VARIANCE_THRESHOLD || mixedStatus || criterionFlaky;
+            rows.push({ ...entry, variance, mixedStatus, flaky, criteria });
         }
 
         const flakyRows = rows.filter(r => r.flaky).sort((a, b) => b.variance - a.variance);
@@ -268,9 +295,14 @@ export class SuiteCommand {
             if (r.mixedStatus) {
                 reasons.push(`mixed: ${r.statuses.join('/')}`);
             }
+            if (r.criteria.some(criterion => criterion.Spread > VARIANCE_THRESHOLD)) {
+                reasons.push('criterion spread');
+            }
             const scoresStr = r.scores.map(s => (s * 100).toFixed(0) + '%').join(', ');
+            const criterionLines = r.criteria.map(criterion => `${criterion.Key} ${criterion.Scores.map(score => (score * 100).toFixed(0) + '%').join(', ')} (spread ${(criterion.Spread * 100).toFixed(0)}%)`);
             lines.push(`  [FLAKY] ${r.name}`);
             lines.push(`          scores: ${scoresStr}  (${reasons.join(', ')})`);
+            if (criterionLines.length > 0) lines.push(`          criteria: ${criterionLines.join('; ')}`);
         }
         lines.push('');
 

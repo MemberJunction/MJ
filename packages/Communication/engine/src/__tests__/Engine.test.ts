@@ -209,6 +209,7 @@ vi.mock('@memberjunction/communication-types', () => {
 // ============================================================================
 import { CommunicationEngine } from '../Engine';
 import { ProcessedMessageServer } from '../BaseProvider';
+import { TemplateEngineServer } from '@memberjunction/templates';
 
 describe('CommunicationEngine', () => {
     let engine: CommunicationEngine;
@@ -259,6 +260,57 @@ describe('CommunicationEngine', () => {
             const provider = engine.GetProvider('SendGrid');
             expect(provider).toBe(subClassInstance);
         });
+
+        it('should cache and reuse the same provider instance across repeated calls', () => {
+            // Regression test: GetProvider() used to call ClassFactory.CreateInstance on
+            // every invocation, which meant a provider's own internal SDK-client cache
+            // (e.g. Twilio/Gmail/MSGraph's MJLruCache) was thrown away and rebuilt from
+            // scratch every single send.
+            const subClassInstance = {
+                constructor: { name: 'SendGridProvider' },
+                SendSingleMessage: vi.fn(),
+            };
+            mockClassFactory.CreateInstance.mockReturnValue(subClassInstance);
+
+            const first = engine.GetProvider('SendGrid');
+            const second = engine.GetProvider('SendGrid');
+            const third = engine.GetProvider('SendGrid');
+
+            expect(first).toBe(subClassInstance);
+            expect(second).toBe(first);
+            expect(third).toBe(first);
+            expect(mockClassFactory.CreateInstance).toHaveBeenCalledTimes(1);
+        });
+
+        it('should cache distinct providers separately by name', () => {
+            const sendGridInstance = { constructor: { name: 'SendGridProvider' }, SendSingleMessage: vi.fn() };
+            const twilioInstance = { constructor: { name: 'TwilioProvider' }, SendSingleMessage: vi.fn() };
+
+            mockClassFactory.CreateInstance.mockImplementation((_base: unknown, key: string) =>
+                key === 'SendGrid' ? sendGridInstance : twilioInstance
+            );
+
+            const sendGrid = engine.GetProvider('SendGrid');
+            const twilio = engine.GetProvider('Twilio');
+            const sendGridAgain = engine.GetProvider('SendGrid');
+
+            expect(sendGrid).toBe(sendGridInstance);
+            expect(twilio).toBe(twilioInstance);
+            expect(sendGridAgain).toBe(sendGridInstance);
+            expect(mockClassFactory.CreateInstance).toHaveBeenCalledTimes(2);
+        });
+
+        it('should not cache a failed lookup (base-class fallback)', () => {
+            mockClassFactory.CreateInstance.mockReturnValue({
+                constructor: { name: 'BaseCommunicationProvider' },
+            });
+
+            expect(() => engine.GetProvider('Unregistered')).toThrow('Provider Unregistered not found');
+            expect(() => engine.GetProvider('Unregistered')).toThrow('Provider Unregistered not found');
+            // A failed lookup must not poison the cache with a stale/invalid instance -
+            // each retry should re-attempt ClassFactory.CreateInstance.
+            expect(mockClassFactory.CreateInstance).toHaveBeenCalledTimes(2);
+        });
     });
 
     describe('SendMessages', () => {
@@ -302,6 +354,17 @@ describe('CommunicationEngine', () => {
 
             expect(results).toHaveLength(2);
             expect(sendSpy).toHaveBeenCalledTimes(2);
+        });
+
+        it('forwards the acting user to every per-recipient send', async () => {
+            vi.spyOn((engine as unknown as { base: object }).base as never, 'StartRun' as never).mockResolvedValue({ ID: 'run-1' } as never);
+            vi.spyOn((engine as unknown as { base: object }).base as never, 'EndRun' as never).mockResolvedValue(true as never);
+            const sendSpy = vi.spyOn(engine, 'SendSingleMessage').mockResolvedValue({ Success: true, Error: '', Message: {} as never });
+            const actingUser = { ID: 'acting-user' };
+
+            await engine.SendMessages('P', 'T', {} as never, [{ To: 'a@test.com', ContextData: null }] as never, true, undefined, actingUser as never);
+
+            expect(sendSpy.mock.calls[0][6]).toBe(actingUser);
         });
 
         it('should throw when StartRun fails', async () => {
@@ -548,6 +611,22 @@ describe('ProcessedMessageServer', () => {
         expect(processed.ProcessedBody).toBe('Plain body');
         expect(processed.ProcessedHTMLBody).toBe('<b>HTML body</b>');
         expect(processed.ProcessedSubject).toBe('Test Subject');
+    });
+
+    it('renders every template as the user it is processed for', async () => {
+        const content = { ID: 'c1', TemplateText: 'Hi' };
+        const template = { GetHighestPriorityContent: () => content };
+        const message = { Body: null, HTMLBody: 'x', Subject: null, BodyTemplate: template, HTMLBodyTemplate: null, SubjectTemplate: template };
+        const actingUser = { ID: 'acting-user' };
+
+        const result = await new ProcessedMessageServer(message as never).Process(false, actingUser as never);
+
+        expect(result.Success).toBe(true);
+        const render = vi.mocked(TemplateEngineServer.Instance.RenderTemplate);
+        expect(render).toHaveBeenCalled();
+        for (const call of render.mock.calls) {
+            expect(call[5]).toEqual({ ContextUser: actingUser });
+        }
     });
 
     it('should set empty HTML body when no HTMLBody and no template', async () => {

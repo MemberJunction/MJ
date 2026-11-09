@@ -21,9 +21,14 @@
  * preprocessing travels with the model and is passed straight through to the
  * sidecar's `/predict`, which only *applies* it. This is what keeps train-time
  * and score-time features identical.
+ *
+ * A model trained on a Prediction Unit goes further: its Lineage stores the unit, the typed feature columns and the
+ * kept categorical levels, and scoring assembles the scoped rows as of their decision dates through the same
+ * `AsOfFeatureAssembler` training used ({@link LoadedModel.unit}).
  */
 
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import type { UUIDSet } from '@memberjunction/global';
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import type {
   PredictRequest,
@@ -36,7 +41,13 @@ import type {
   ProblemType,
   FeatureStepGraph,
   OutcomeConfig,
+  FeatureColumnSpec,
+  PredictionUnitSpec,
 } from '@memberjunction/predictive-studio-core';
+import type { ICountingDataAccess } from '../feature-assembly/data-access';
+import type { IAssemblyMetadata } from '../feature-assembly/assembly-metadata';
+import type { IRecordHistoryReader } from '../feature-assembly/as-of/record-history';
+import type { IPredictionUnitStore } from '../prediction-unit/unit-store';
 
 import type { DatedSourceSpec } from '../feature-assembly';
 
@@ -51,25 +62,27 @@ export interface IMLModelLoader {
    *
    * @param modelId model primary-key value
    * @param contextUser request user — required server-side for isolation/audit
-   * @param provider optional provider for multi-provider correctness
+   * @param provider the provider the read goes through (required: no fallback to the global provider)
    */
-  loadModel(modelId: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<MJMLModelEntity | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  loadModel(modelId: string, contextUser: UserInfo | undefined, provider: IMetadataProvider): Promise<MJMLModelEntity | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
  * Read seam for fetching the serialized model artifact bytes by file id (the
- * read-side counterpart to the training `IArtifactStore.save`). Wraps `MJ: Files`
- * / MJStorage in production; tests inject an in-memory map.
+ * read-side counterpart to the training `IArtifactStore.save`). Reads through the
+ * storage provider the file's `MJ: Files` row names in production
+ * (`StorageProviderArtifactLoader`); tests inject an in-memory map.
  */
 export interface IArtifactLoader {
   /**
    * Fetch the serialized artifact bytes previously stored under `fileId`.
    *
    * @param fileId the `MLModel.ArtifactFileID` value
-   * @param contextUser request user — required server-side for isolation/audit
+   * @param contextUser the acting user the file row is read as (required: a call site without one is a compile error)
+   * @param provider the provider the file row is read through (required: no fallback to the global provider)
    * @returns the artifact bytes, or `null` when not found
    */
-  load(fileId: string, contextUser?: UserInfo): Promise<Uint8Array | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  load(fileId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<Uint8Array | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -86,6 +99,24 @@ export interface ISidecarPredictor {
    * @param req the predict request (artifact + frozen preprocessing + schema + rows)
    */
   predict(req: PredictRequest): Promise<PredictResponse>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+}
+
+/**
+ * Which Prediction Unit a model's pipeline points at. Scoring asks before reading a model's Lineage, so a unit model
+ * whose Lineage is missing or malformed fails loudly instead of being scored as a legacy model.
+ */
+export interface IPipelineUnitLookup {
+  /** The pipeline's `PredictionUnitID`, or null for a pipeline without a unit. */
+  PredictionUnitIDOf(pipelineId: string, contextUser: UserInfo | undefined, provider: IMetadataProvider): Promise<string | null>;
+}
+
+/**
+ * Which records a model was trained on. Scoring asks once per loaded model, so each result can say whether its record
+ * contributed a development row to the model's Training Snapshot.
+ */
+export interface ITrainingRowsLookup {
+  /** The row ids of the model's snapshot manifest whose role is `development`; empty for a model without a snapshot. */
+  TrainingRowIDsOf(modelId: string, contextUser: UserInfo | undefined, provider: IMetadataProvider): Promise<ReadonlySet<string>>;
 }
 
 /**
@@ -118,6 +149,26 @@ export interface LoadedModel {
   leakageGuard: LeakageGuard;
   /** Metadata-driven outcome and band configuration frozen on the model or resolved from defaults. */
   outcomeConfig: OutcomeConfig;
+  /**
+   * For a model trained on a Prediction Unit: the unit version, the typed feature columns and the kept categorical
+   * levels its Lineage stored, and the unit's row entity. Null for a model trained without a unit (the legacy path).
+   */
+  unit: LoadedUnitModel | null;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
+  /**
+   * The records that contributed a development row to the model's Training Snapshot (its manifest's development row
+   * ids, compared as UUIDs); empty for a model trained without a snapshot.
+   */
+  trainingRowIds: UUIDSet;  // case-violation-ok-legacy-back-compat: matches the existing LoadedModel member casing
+}
+
+/** What scoring needs to assemble a unit model's features exactly as training did. */
+export interface LoadedUnitModel {
+  readonly Spec: PredictionUnitSpec;
+  readonly Features: readonly FeatureColumnSpec[];
+  /** The name of the entity whose records the unit rows are; a scoring scope must hold this entity's records. */
+  readonly RowEntity: string;
+  /** The kept levels of each categorical column, by column name, as training stored them. */
+  readonly CategoryLevels: ReadonlyMap<string, readonly string[]>;
 }
 
 /**
@@ -132,6 +183,18 @@ export interface MLInferenceDeps {
   artifactLoader: IArtifactLoader;
   /** Sidecar `/predict` seam. */
   sidecar: ISidecarPredictor;
+  /** Which unit a model's pipeline points at; defaults to a `RunViewPipelineUnitLookup` on the run's provider. */
+  pipelineUnits?: IPipelineUnitLookup;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
+  /** Which records a model was trained on; defaults to a `RunViewTrainingRowsLookup` (the snapshot manifest) on the run's provider. */
+  trainingRows?: ITrainingRowsLookup;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
+  /** Prediction Unit store a unit model's unit is loaded from; defaults to a `RunViewPredictionUnitStore` on the run's provider. */
+  predictionUnits?: IPredictionUnitStore;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
+  /** Entity metadata a unit model's assembly resolves against; defaults to a `ProviderAssemblyMetadata` on the run's provider. */
+  assemblyMetadata?: IAssemblyMetadata;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
+  /** The counting data access a unit model's rows are read through; defaults to a `RunViewDataAccess` on the run's provider. */
+  dataAccess?: ICountingDataAccess;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
+  /** The Record Changes history a unit model's assembly replays; defaults to a complete-read `RunViewRecordHistoryReader` over `dataAccess`. */
+  history?: IRecordHistoryReader;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
 }
 
 /**
@@ -149,6 +212,70 @@ export interface MLModelInferenceProcessorOptions {
    * model's pipeline uses them. Carried through to the FeatureAssembly executor.
    */
   datedSources?: DatedSourceSpec[];
+  /**
+   * Opt-in **train-if-untrained** behavior (see {@link MLAutoTrainConfig}). When set
+   * together with {@link autoTrainer}, a run whose model needs training trains the
+   * declared pipeline, publishes the result, repoints the run's Record Process and
+   * bindings at it, and then scores — instead of refusing the run. When absent, a
+   * model that needs training refuses the run with a clear message.
+   */
+  autoTrain?: MLAutoTrainConfig;
+  /** The trainer that fulfils {@link autoTrain}. Required for auto-train to take effect. */
+  autoTrainer?: IModelAutoTrainer;
+}
+
+/**
+ * Opt-in **train-if-untrained** declaration carried in an `'ML Model'` Record
+ * Process's `Configuration` (`{ "modelId": "...", "autoTrain": { ... } }`).
+ *
+ * Why it exists: a trained model artifact is per-host (its bytes live on the server
+ * that trained it) and training always creates a NEW immutable model row. So an app
+ * that ships a scoring process can't ship a usable model — on a fresh install the
+ * model has to be trained there. Declaring `autoTrain` lets the scoring run itself do
+ * that, once, with no hand steps. Processes that don't declare it are unaffected.
+ */
+export interface MLAutoTrainConfig {
+  /** The `MJ: ML Training Pipelines` id to train when the configured model needs training. */
+  pipelineId: string;
+  /**
+   * Optional scoring binding to ensure for the trained model when the process has none
+   * yet (bindings that already point at this process are always repointed). Lets an
+   * app declare where scores land without shipping a binding row that would have to
+   * reference a model id that doesn't exist on a fresh install.
+   */
+  binding?: {
+    /** The target-entity column the process writes the score to (shown by the prediction panel). */
+    targetColumn?: string;
+    /** Binding mode; defaults to `Scheduled` when the process is scheduled, else `OnDemand`. */
+    mode?: 'OnDemand' | 'Scheduled';
+  };
+}
+
+/** Input to {@link IModelAutoTrainer.EnsureTrainedModel}. */
+export interface AutoTrainRequest {
+  /** The pipeline to train. */
+  pipelineId: string;
+  /** The model the process currently points at (may be empty or missing). */
+  currentModelId: string | null;
+  /** The `MJ: Record Processes` row driving this run, to repoint at the trained model. */
+  recordProcessId: string | null;
+  /** Optional binding to ensure (see {@link MLAutoTrainConfig.binding}). */
+  binding?: MLAutoTrainConfig['binding'];
+}
+
+/**
+ * Seam that turns "this model needs training" into a published, scoreable model.
+ * Production: `PipelineAutoTrainer` (train via the real `TrainingEngine`, publish via
+ * the promotion gate, repoint the Record Process + bindings). Injected so the
+ * processor stays free of training dependencies and is unit-testable.
+ */
+export interface IModelAutoTrainer {
+  /**
+   * Ensure a published, artifact-backed model exists for the pipeline and that the
+   * Record Process + its bindings point at it. Returns that model's id.
+   * @throws when training or publishing fails (e.g. leakage-flagged model needing sign-off)
+   */
+  EnsureTrainedModel(request: AutoTrainRequest, contextUser: UserInfo, provider: IMetadataProvider): Promise<string>;
 }
 
 /** Re-export for downstream scoring consumers without reaching into core. */

@@ -1,5 +1,5 @@
 import { MJAIPromptModelEntity } from "@memberjunction/core-entities";
-import { MJAIPromptEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, AIPromptParams } from '@memberjunction/ai-core-plus';
+import { MJAIPromptEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, AIPromptParams, type AIPromptExecutionScope } from '@memberjunction/ai-core-plus';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { ValidationResult } from '@memberjunction/global';
 import { ChatResult, ChatMessage, StreamingChatCallbacks } from '@memberjunction/ai';
@@ -65,6 +65,12 @@ export interface ExecutionTask {
 
   /** Selected vendor ID for this execution */
   vendorId?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+
+  /** ID of the agent this prompt was run as part of */
+  AgentID?: string;
+
+  /** User ID on whose behalf this prompt was executed */
+  UserID?: string;
 }
 
 /**
@@ -129,6 +135,20 @@ export interface ExecutionTaskResult {
 
   /** Whether this task used streaming */
   wasStreamed?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+}
+
+/**
+ * Represents a candidate ranking produced by an AI judge.
+ */
+export interface JudgeRanking {
+  /** Identifier of the candidate task that was evaluated */
+  CandidateID: string;
+  /** Numerical rank (1 = best) */
+  Rank: number;
+  /** Rationale explaining the rank */
+  Rationale: string;
+  /** Optional numerical score assigned by the judge */
+  Score?: number;
 }
 
 /**
@@ -476,5 +496,7 @@ export interface IParallelExecutionCoordinator {
     config: ResultSelectionConfig,
     parentPromptRunId?: string,
     cancellationToken?: AbortSignal,
+    contextUser?: UserInfo,
+    executionScope?: AIPromptExecutionScope,
   ): Promise<ExecutionTaskResult | null>;
 }

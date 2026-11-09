@@ -1,5 +1,492 @@
 # @memberjunction/record-set-processor-base
 
+## 6.2.0
+
+### Minor Changes
+
+- 1090caa: Add the content pipeline framework: Discover, Extract, Tag, Segment, Embed and Delete stages that run over
+  Content Sources, Items and Chunks through Record Set Processing's new `Pipeline Stage` work type. One
+  working record passes between stages, each well-known field carrying a confidence score so stages resolve
+  a shared field on merit. Only the hydrator and committer touch the database, so a test run is the same
+  code with commits withheld.
+
+  The stages reuse what MJ already has. Discover and Extract call the Content Source Type's existing driver
+  (new optional `Discover` and `Fetch` on `AutotagBase`); file-type detection reads `MJ: Content File Types`
+  (new `ByteSignature`, `IsText`, `ExtractorKey` columns, seeded in metadata); durable copies go through
+  `FileStorageEngine.UploadFile`; Tag, Embed and Delete share the autotagger's prompt helpers and its new
+  `ContentVectorInfrastructure`, which also routes a source or content type that names only a `VectorIndexID`
+  (with no `EmbeddingModelID`) to that index using the index's own `EmbeddingModelID`. Document parsing moves
+  into `@memberjunction/document-parsing`, used by Get File Content (which now trims extracted PDF and Word
+  text) and the pipeline. Record Set Processing gains a per-work-type tracker pairing, so scheduled and
+  on-change runs record the same detail rows as manual ones. Additionally, `AutotagLocalFileSystem` skips
+  symbolic links and recurses into subfolders during tagging; `AutotagCloudStorage` normalizes extensions
+  written with or without a leading dot and prefers the provider's first configured `MJ: File Storage Accounts`
+  row over environment variables; `NormalizeAutotagKeywords` in `@memberjunction/content-autotagging` drops blank
+  tag names; and `ContentItemTagBridge` in `@memberjunction/tag-engine` delegates `MJ: Tagged Items` creation to
+  `TagEngine.CreateTaggedItem` (updating the stored weight on re-tagging).
+
+- 4248fb3: Add `DecisionFeaturePipelineDriver`, an infer processor driver that evaluates structured decisions through `AIDecisionRunner` for feature pipelines. Supports Likelihood (boolean with configurable constraint threshold), Choice (enum), and Score (numeric with 2-10 level rubrics) outputs, confidence tracking, and metadata catalog integration.
+- ce758af: Feature Pipelines: keyed, versioned Feature Values and honest runs (migration `V202610201100__v6.2.x__Feature_Value_Key_And_Versions.sql`).
+  - Feature Values upsert on a key (record, feature, pipeline version, prompt version, primary model, parameters, input); a value a person entered (`Source='Human'`) is never overwritten unless the run sets `overwriteHumanValues`. Child write-back can `reconcile` rows on a key.
+  - `MJ: Feature Pipeline Versions` registers each pipeline pin; a gated pipeline runs only under a version whose golden-set result meets its threshold. The `Steward Feature Pipeline Version` Action (`StewardFeaturePipelineVersionAction`) and `Feature Pipeline Version Steward` Record Process (`WorkType='Action'`, scheduled via `RecordProcessScheduledJobDriver`) evaluate and backfill changed versions; golden sets carry a label-quality record, `Required` and `ExpectAbstain` cases.
+  - New `@memberjunction/feature-pipelines-engine` package houses server-side Feature Pipeline execution (`InferProcessor`, `BaseFeaturePipelineDriver`, `LLMFeaturePipelineDriver`, `DecisionFeaturePipelineDriver`, `FeaturePipelineEscalation`, `FeaturePipelineHumanValueGuard`, `FeaturePipelineErrors`), golden-set testing (`FeaturePipelineGoldenSetDriver`, `golden-set-scoring`, `golden-label-quality`), and version stewardship (`FeaturePipelineVersionSteward`, `StewardFeaturePipelineVersionAction`, `RegisterInferRecordProcessor`), keeping `@memberjunction/record-set-processor-base`, `@memberjunction/record-set-processor`, `@memberjunction/scheduling-engine`, and `@memberjunction/testing-engine` free of Feature Pipeline dependencies.
+  - Outputs are checked against `lookup` constraints (per item with `ItemRef`); an output below its `MinConfidence` is withheld (`OnLowConfidence: 'null'`); `Context.RecordAsUserMessage` sends the record as a JSON user turn.
+  - Dry runs write nothing, preview only what the real write would change, cap at 25 records and report `WouldRefuse`; a Feature Pipeline run with a failed record ends `Failed` with a `FeaturePipelineRunResult` summary; the breaker counts attempted records.
+  - An output may omit its write target (builder target mode `Feature value only (no write-back)`): the answer is stored in `MJ: Feature Values` only, typed by its constraint (`numeric`/`money`, `boolean`, `date`), and no entity field is written. The Bulk Operations dry-run dialog shows each as a `<Feature> (feature value)` row with the previous and proposed value, and loads only the non-skipped details so a large scope counts every changed record.
+  - A Feature Values panel on every record form shows the latest answer per pipeline and feature (Source, Confidence, version, Computed, Reasoning) and expands to its history; a latest answer that withheld its value reads "no value". `@memberjunction/ng-base-forms` re-resolves the form chrome when a panel mounts after first render, so a late panel gets its left-nav entry.
+  - The Version Steward beats on a timer while its backfill runs, defers a backfill while a run is Running, marks only a clean run as backfilled, and ignores a Running Process Run not checkpointed for 30 minutes. A Feature Value insert that loses the race on its key to an equal value is `Unchanged`.
+  - Bedrock sends a configured temperature of 0 as 0 (F-FP-13).
+  - `AIPromptParams.templateAutoescape` (set by the Feature Pipeline drivers) renders a prompt template without HTML escaping; a Feature Pipeline run reads its prompt's template from the database at run start, so a template edit takes effect on the next run.
+  - API moves & PascalCase standardization: `WriteBackResult`, `TagWriteBackPreview`, `FieldRulesResultPayload`, and `MetadataProviderCapabilities` live in `@memberjunction/record-set-processor-base`; `FeaturePipelineRunResults` lives in `@memberjunction/feature-pipelines`; `RunRecordProcessOptions`, `RecordProcessorContext`, `RecordSetProcessOptions`, `ProcessRunSummary`, and `WriteBackValuePreview` use `PascalCase` properties across `@memberjunction/record-set-processor-base` and `@memberjunction/record-set-processor`.
+
+### Patch Changes
+
+- 664baea: A Decision Feature Pipeline can now escalate its borderline records to an LLM Feature Pipeline: set `Escalation` (the LLM pipeline's ID and a confidence floor) in its spec, and only the records whose confidence falls below the floor are re-run through the LLM pipeline, whose answers replace the decision's.
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- 21175fa: Predictive Studio: a model that has never been trained on this server now says "needs training" instead of looking deployed and failing every scoring run. Scoring processes can also opt in to train their model on first use, so an Open App's scoring works on a fresh install.
+  - **Run-level `Preflight` seam.** `IRecordProcessor` has an optional `Preflight(context)`. `RecordSetProcessor.Process` calls it once before the first batch. When it throws, the run is recorded `Failed` with that message and no record is processed. `WriteBackProcessor` forwards it to the processor it wraps.
+  - **The ML scorer refuses clearly.** `MLModelInferenceProcessor.Preflight` loads the model before any record is scored. A model that is missing, has no `ArtifactFileID`, or whose artifact can't be loaded on this server throws `ModelNeedsTrainingError` with a "needs training" message. Before, all 100 records of the first batch failed and the run ended "Circuit breaker: error rate 100.0% exceeded 20%". `ScoreRecordSet` runs the same check.
+  - **No publishing an untrained model.** The promotion gate refuses `→ Published` for a model with no artifact (`needs-training`). The Promote Action returns `MODEL_NEEDS_TRAINING` and the Remote Op throws the message.
+  - **Studio badge.** The Production panel shows such a model as **Needs training** (amber) instead of Bound / Scheduled, explains why, and disables **Operate**.
+  - **Opt-in auto-train.** An `'ML Model'` Record Process may declare `Configuration.autoTrain = { pipelineId, binding? }`, and `modelId` may then be omitted. When the run's model needs training, the new `PipelineAutoTrainer` does the following, then the run goes on to score:
+    - Reuses the newest Published model of that pipeline whose artifact loads here. If there is none, it trains the pipeline with `TrainingEngine` and publishes the result through the promotion gate. A leakage-flagged model is refused and stays Draft.
+    - Writes the model id into the process `Configuration`.
+    - Repoints the process's bindings, plus any binding still on the old model, and creates the declared binding if none exists.
+    - Archives the old model if it was Published.
+
+    Processes without `autoTrain` behave exactly as before. New exports: `ModelHasTrainedArtifact`, `ModelNeedsTrainingMessage`, `ModelArtifactMissingMessage`, `ModelNeedsTrainingError`, `PipelineAutoTrainer`, `MLAutoTrainConfig`, `IModelAutoTrainer`, `AutoTrainRequest`. `RegisterMLScoringProcessor(deps, autoTrainer?)` accepts the trainer.
+
+  - **Fix: training was capped at 1000 rows.** Feature assembly passed no `MaxRows`, so RunView applied the entity's `UserViewMaxRows` (1000 by default). Training silently used only the first 1000 records. It now reads every matching row (`IgnoreMaxRows`) unless the caller sets a cap.
+  - **Fix: write-back failed for every ML scoring run.** `WriteBackProcessor.ProcessBatch` assumed the inner processor returns a `Map`. The `IRecordProcessor` contract also allows an array aligned with the input records, which is what the ML scorer returns. Every ML Model process with an `OutputMapping` therefore failed every record with `innerResults.get is not a function`. Both shapes are now accepted.
+
+- 6a5fb64: Record Processes that run an Action per record are fast again (#6045). Since #6027 each record waited in the loop until its Action Execution Log row was inserted and updated, which made runs of fast actions up to 13x slower. The wait now lives in the queued Process Run Detail write instead: `ActionRecordProcessor` passes the log row's promise on as `RecordResult.ActionExecutionLogPersisted`, and `GenericProcessRunTracker` saves the detail with the new `BaseEntitySaveQueue.InsertWhen`, so the detail row still never reaches the database before its log row, and the loop moves on at once. `RecordSetProcessor.Process` waits for those log rows once, before it completes the run, so a run still returns only after every log row is written, whatever tracker it uses. `KeyedSerialTaskQueue.Enqueue` gains a `ready` option that holds a task back until a promise from outside the queue settles; `Flush` still waits for it.
+- 9a2d7cc: RunView's `TotalRowCount` contract is now explicit: a number is always a real total, and `undefined` means the caller passed `SkipTotalRowCount: true`.
+
+  **Contract change.** `RunViewResult.TotalRowCount` is now optional (`TotalRowCount?: number`). With `SkipTotalRowCount: true` it is always `undefined`, including on a page that was not full, where it used to be the number of rows returned. A caller that needs a total must not pass the flag. Strict TypeScript consumers that read the field will see a compile error; a call without the flag always gets a number, so `?? 0` is safe there. `ResultType: 'count_only'` ignores the flag and always counts.
+
+  `MaxRows: 1` is no longer special-cased: a full page of one row now runs the same count as any other full page and reports the real total. Callers that only read `Results` should pass `SkipTotalRowCount: true` to avoid that second query; about 270 such reads in this repo now do. `SkipTotalRowCount` is now sent over GraphQL, so browser callers can use it too.
+
+- c8fb9d7: Keep the real row total where a variable `MaxRows` can be 1 (#6000). Run-history retention reads `keep + 1` runs and counts them, so `MJ_INTEGRATION_MAX_RUNS_PER_CI=1` prunes again. The list, view and filter record-set sources read two rows for a batch of one and keep the first, so the reported progress total stays the full count.
+- Updated dependencies [1419ba7]
+- Updated dependencies [39b35f1]
+- Updated dependencies [e97d95c]
+- Updated dependencies [6c36fb6]
+- Updated dependencies [cc36de5]
+- Updated dependencies [9cb815b]
+- Updated dependencies [709de1a]
+- Updated dependencies [c159e2f]
+- Updated dependencies [d2db108]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [a3539d2]
+- Updated dependencies [db39145]
+- Updated dependencies [41274aa]
+- Updated dependencies [29b16ee]
+- Updated dependencies [c671f85]
+- Updated dependencies [49f26d9]
+- Updated dependencies [5e4205c]
+- Updated dependencies [7be1684]
+- Updated dependencies [21f9e15]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [f2248d5]
+- Updated dependencies [81aea34]
+- Updated dependencies [5465489]
+- Updated dependencies [3bace5a]
+- Updated dependencies [88e6902]
+- Updated dependencies [c87f87a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [4248fb3]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [59e32e0]
+- Updated dependencies [0a7c255]
+- Updated dependencies [0adaf76]
+- Updated dependencies [0ff7523]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [f65fec7]
+- Updated dependencies [9b5b489]
+- Updated dependencies [cb205de]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [683f652]
+- Updated dependencies [914e6ff]
+- Updated dependencies [2274f42]
+- Updated dependencies [0fb3649]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [705ab4e]
+- Updated dependencies [a7da50b]
+- Updated dependencies [0f04590]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [f26084f]
+- Updated dependencies [db39145]
+- Updated dependencies [f48dffc]
+- Updated dependencies [41c2c08]
+- Updated dependencies [630bb88]
+- Updated dependencies [e69634e]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [17cc774]
+- Updated dependencies [dae1d31]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [80905a1]
+- Updated dependencies [397ae9a]
+- Updated dependencies [7e72c86]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [25f7b82]
+- Updated dependencies [104125c]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [d296edd]
+- Updated dependencies [66fd011]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [509d2aa]
+- Updated dependencies [196160a]
+- Updated dependencies [5513c2a]
+- Updated dependencies [90829e3]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [8c120db]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [60bd774]
+- Updated dependencies [0a348e2]
+- Updated dependencies [ac18db8]
+- Updated dependencies [35da130]
+- Updated dependencies [5b41d48]
+- Updated dependencies [4b9542c]
+- Updated dependencies [28c92e0]
+- Updated dependencies [5f707d1]
+- Updated dependencies [369e229]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [aca4317]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+- Updated dependencies [2c590b0]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [dc38250]
+  - @memberjunction/global@6.2.0
+  - @memberjunction/core@6.2.0
+
+## 6.2.0-edge.8
+
+### Patch Changes
+
+- Updated dependencies [6c36fb6]
+- Updated dependencies [9cb815b]
+- Updated dependencies [d2db108]
+- Updated dependencies [c671f85]
+- Updated dependencies [59e32e0]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [e69634e]
+- Updated dependencies [ac18db8]
+  - @memberjunction/core@6.2.0-edge.8
+  - @memberjunction/global@6.2.0-edge.8
+
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- 9a2d7cc: RunView's `TotalRowCount` contract is now explicit: a number is always a real total, and `undefined` means the caller passed `SkipTotalRowCount: true`.
+
+  **Contract change.** `RunViewResult.TotalRowCount` is now optional (`TotalRowCount?: number`). With `SkipTotalRowCount: true` it is always `undefined`, including on a page that was not full, where it used to be the number of rows returned. A caller that needs a total must not pass the flag. Strict TypeScript consumers that read the field will see a compile error; a call without the flag always gets a number, so `?? 0` is safe there. `ResultType: 'count_only'` ignores the flag and always counts.
+
+  `MaxRows: 1` is no longer special-cased: a full page of one row now runs the same count as any other full page and reports the real total. Callers that only read `Results` should pass `SkipTotalRowCount: true` to avoid that second query; about 270 such reads in this repo now do. `SkipTotalRowCount` is now sent over GraphQL, so browser callers can use it too.
+
+- c8fb9d7: Keep the real row total where a variable `MaxRows` can be 1 (#6000). Run-history retention reads `keep + 1` runs and counts them, so `MJ_INTEGRATION_MAX_RUNS_PER_CI=1` prunes again. The list, view and filter record-set sources read two rows for a batch of one and keep the first, so the reported progress total stays the full count.
+- Updated dependencies [1419ba7]
+- Updated dependencies [29b16ee]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [3bace5a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [0fb3649]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [397ae9a]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+
+## 6.2.0-edge.6
+
+### Minor Changes
+
+- 1090caa: Add the content pipeline framework: Discover, Extract, Tag, Segment, Embed and Delete stages that run over
+  Content Sources, Items and Chunks through Record Set Processing's new `Pipeline Stage` work type. One
+  working record passes between stages, each well-known field carrying a confidence score so stages resolve
+  a shared field on merit. Only the hydrator and committer touch the database, so a test run is the same
+  code with commits withheld.
+
+  The stages reuse what MJ already has. Discover and Extract call the Content Source Type's existing driver
+  (new optional `Discover` and `Fetch` on `AutotagBase`); file-type detection reads `MJ: Content File Types`
+  (new `ByteSignature`, `IsText`, `ExtractorKey` columns, seeded in metadata); durable copies go through
+  `FileStorageEngine.UploadFile`; Tag, Embed and Delete share the autotagger's prompt helpers and its new
+  `ContentVectorInfrastructure`, which also routes a source or content type that names only a `VectorIndexID`
+  (with no `EmbeddingModelID`) to that index using the index's own `EmbeddingModelID`. Document parsing moves
+  into `@memberjunction/document-parsing`, used by Get File Content (which now trims extracted PDF and Word
+  text) and the pipeline. Record Set Processing gains a per-work-type tracker pairing, so scheduled and
+  on-change runs record the same detail rows as manual ones. Additionally, `AutotagLocalFileSystem` skips
+  symbolic links and recurses into subfolders during tagging; `AutotagCloudStorage` normalizes extensions
+  written with or without a leading dot and prefers the provider's first configured `MJ: File Storage Accounts`
+  row over environment variables; `NormalizeAutotagKeywords` in `@memberjunction/content-autotagging` drops blank
+  tag names; and `ContentItemTagBridge` in `@memberjunction/tag-engine` delegates `MJ: Tagged Items` creation to
+  `TagEngine.CreateTaggedItem` (updating the stored weight on re-tagging).
+
+### Patch Changes
+
+- 6a5fb64: Record Processes that run an Action per record are fast again (#6045). Since #6027 each record waited in the loop until its Action Execution Log row was inserted and updated, which made runs of fast actions up to 13x slower. The wait now lives in the queued Process Run Detail write instead: `ActionRecordProcessor` passes the log row's promise on as `RecordResult.ActionExecutionLogPersisted`, and `GenericProcessRunTracker` saves the detail with the new `BaseEntitySaveQueue.InsertWhen`, so the detail row still never reaches the database before its log row, and the loop moves on at once. `RecordSetProcessor.Process` waits for those log rows once, before it completes the run, so a run still returns only after every log row is written, whatever tracker it uses. `KeyedSerialTaskQueue.Enqueue` gains a `ready` option that holds a task back until a promise from outside the queue settles; `Flush` still waits for it.
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [f2248d5]
+- Updated dependencies [0ff7523]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [dae1d31]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [0a348e2]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Minor Changes
+
+- ce758af: Feature Pipelines: keyed, versioned Feature Values and honest runs (migration `V202610201100__v6.2.x__Feature_Value_Key_And_Versions.sql`).
+  - Feature Values upsert on a key (record, feature, pipeline version, prompt version, primary model, parameters, input); a value a person entered (`Source='Human'`) is never overwritten unless the run sets `overwriteHumanValues`. Child write-back can `reconcile` rows on a key.
+  - `MJ: Feature Pipeline Versions` registers each pipeline pin; a gated pipeline runs only under a version whose golden-set result meets its threshold. The `Steward Feature Pipeline Version` Action (`StewardFeaturePipelineVersionAction`) and `Feature Pipeline Version Steward` Record Process (`WorkType='Action'`, scheduled via `RecordProcessScheduledJobDriver`) evaluate and backfill changed versions; golden sets carry a label-quality record, `Required` and `ExpectAbstain` cases.
+  - New `@memberjunction/feature-pipelines-engine` package houses server-side Feature Pipeline execution (`InferProcessor`, `BaseFeaturePipelineDriver`, `LLMFeaturePipelineDriver`, `DecisionFeaturePipelineDriver`, `FeaturePipelineEscalation`, `FeaturePipelineHumanValueGuard`, `FeaturePipelineErrors`), golden-set testing (`FeaturePipelineGoldenSetDriver`, `golden-set-scoring`, `golden-label-quality`), and version stewardship (`FeaturePipelineVersionSteward`, `StewardFeaturePipelineVersionAction`, `RegisterInferRecordProcessor`), keeping `@memberjunction/record-set-processor-base`, `@memberjunction/record-set-processor`, `@memberjunction/scheduling-engine`, and `@memberjunction/testing-engine` free of Feature Pipeline dependencies.
+  - Outputs are checked against `lookup` constraints (per item with `ItemRef`); an output below its `MinConfidence` is withheld (`OnLowConfidence: 'null'`); `Context.RecordAsUserMessage` sends the record as a JSON user turn.
+  - Dry runs write nothing, preview only what the real write would change, cap at 25 records and report `WouldRefuse`; a Feature Pipeline run with a failed record ends `Failed` with a `FeaturePipelineRunResult` summary; the breaker counts attempted records.
+  - An output may omit its write target (builder target mode `Feature value only (no write-back)`): the answer is stored in `MJ: Feature Values` only, typed by its constraint (`numeric`/`money`, `boolean`, `date`), and no entity field is written. The Bulk Operations dry-run dialog shows each as a `<Feature> (feature value)` row with the previous and proposed value, and loads only the non-skipped details so a large scope counts every changed record.
+  - A Feature Values panel on every record form shows the latest answer per pipeline and feature (Source, Confidence, version, Computed, Reasoning) and expands to its history; a latest answer that withheld its value reads "no value". `@memberjunction/ng-base-forms` re-resolves the form chrome when a panel mounts after first render, so a late panel gets its left-nav entry.
+  - The Version Steward beats on a timer while its backfill runs, defers a backfill while a run is Running, marks only a clean run as backfilled, and ignores a Running Process Run not checkpointed for 30 minutes. A Feature Value insert that loses the race on its key to an equal value is `Unchanged`.
+  - Bedrock sends a configured temperature of 0 as 0 (F-FP-13).
+  - `AIPromptParams.templateAutoescape` (set by the Feature Pipeline drivers) renders a prompt template without HTML escaping; a Feature Pipeline run reads its prompt's template from the database at run start, so a template edit takes effect on the next run.
+  - API moves & PascalCase standardization: `WriteBackResult`, `TagWriteBackPreview`, `FieldRulesResultPayload`, and `MetadataProviderCapabilities` live in `@memberjunction/record-set-processor-base`; `FeaturePipelineRunResults` lives in `@memberjunction/feature-pipelines`; `RunRecordProcessOptions`, `RecordProcessorContext`, `RecordSetProcessOptions`, `ProcessRunSummary`, and `WriteBackValuePreview` use `PascalCase` properties across `@memberjunction/record-set-processor-base` and `@memberjunction/record-set-processor`.
+
+### Patch Changes
+
+- Updated dependencies [39b35f1]
+- Updated dependencies [c159e2f]
+- Updated dependencies [db39145]
+- Updated dependencies [5e4205c]
+- Updated dependencies [81aea34]
+- Updated dependencies [5465489]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [2274f42]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [7e72c86]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [5f707d1]
+- Updated dependencies [dc38250]
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- 21175fa: Predictive Studio: a model that has never been trained on this server now says "needs training" instead of looking deployed and failing every scoring run. Scoring processes can also opt in to train their model on first use, so an Open App's scoring works on a fresh install.
+  - **Run-level `Preflight` seam.** `IRecordProcessor` has an optional `Preflight(context)`. `RecordSetProcessor.Process` calls it once before the first batch. When it throws, the run is recorded `Failed` with that message and no record is processed. `WriteBackProcessor` forwards it to the processor it wraps.
+  - **The ML scorer refuses clearly.** `MLModelInferenceProcessor.Preflight` loads the model before any record is scored. A model that is missing, has no `ArtifactFileID`, or whose artifact can't be loaded on this server throws `ModelNeedsTrainingError` with a "needs training" message. Before, all 100 records of the first batch failed and the run ended "Circuit breaker: error rate 100.0% exceeded 20%". `ScoreRecordSet` runs the same check.
+  - **No publishing an untrained model.** The promotion gate refuses `→ Published` for a model with no artifact (`needs-training`). The Promote Action returns `MODEL_NEEDS_TRAINING` and the Remote Op throws the message.
+  - **Studio badge.** The Production panel shows such a model as **Needs training** (amber) instead of Bound / Scheduled, explains why, and disables **Operate**.
+  - **Opt-in auto-train.** An `'ML Model'` Record Process may declare `Configuration.autoTrain = { pipelineId, binding? }`, and `modelId` may then be omitted. When the run's model needs training, the new `PipelineAutoTrainer` does the following, then the run goes on to score:
+    - Reuses the newest Published model of that pipeline whose artifact loads here. If there is none, it trains the pipeline with `TrainingEngine` and publishes the result through the promotion gate. A leakage-flagged model is refused and stays Draft.
+    - Writes the model id into the process `Configuration`.
+    - Repoints the process's bindings, plus any binding still on the old model, and creates the declared binding if none exists.
+    - Archives the old model if it was Published.
+
+    Processes without `autoTrain` behave exactly as before. New exports: `ModelHasTrainedArtifact`, `ModelNeedsTrainingMessage`, `ModelArtifactMissingMessage`, `ModelNeedsTrainingError`, `PipelineAutoTrainer`, `MLAutoTrainConfig`, `IModelAutoTrainer`, `AutoTrainRequest`. `RegisterMLScoringProcessor(deps, autoTrainer?)` accepts the trainer.
+
+  - **Fix: training was capped at 1000 rows.** Feature assembly passed no `MaxRows`, so RunView applied the entity's `UserViewMaxRows` (1000 by default). Training silently used only the first 1000 records. It now reads every matching row (`IgnoreMaxRows`) unless the caller sets a cap.
+  - **Fix: write-back failed for every ML scoring run.** `WriteBackProcessor.ProcessBatch` assumed the inner processor returns a `Map`. The `IRecordProcessor` contract also allows an array aligned with the input records, which is what the ML scorer returns. Every ML Model process with an `OutputMapping` therefore failed every record with `innerResults.get is not a function`. Both shapes are now accepted.
+
+- Updated dependencies [49f26d9]
+- Updated dependencies [88e6902]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [25f7b82]
+- Updated dependencies [90829e3]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [dfe40a4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 4248fb3: Add `DecisionFeaturePipelineDriver`, an infer processor driver that evaluates structured decisions through `AIDecisionRunner` for feature pipelines. Supports Likelihood (boolean with configurable constraint threshold), Choice (enum), and Score (numeric with 2-10 level rubrics) outputs, confidence tracking, and metadata catalog integration.
+
+### Patch Changes
+
+- 664baea: A Decision Feature Pipeline can now escalate its borderline records to an LLM Feature Pipeline: set `Escalation` (the LLM pipeline's ID and a confidence floor) in its spec, and only the records whose confidence falls below the floor are re-run through the LLM pipeline, whose answers replace the decision's.
+- Updated dependencies [e97d95c]
+- Updated dependencies [21f9e15]
+- Updated dependencies [4248fb3]
+- Updated dependencies [0adaf76]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [369e229]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [a7da50b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+
 ## 6.2.0-edge.0
 
 ### Patch Changes

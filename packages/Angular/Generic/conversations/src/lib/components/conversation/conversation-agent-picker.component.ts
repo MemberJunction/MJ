@@ -16,6 +16,7 @@ import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import type { MJConversationEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UUIDsEqual } from '@memberjunction/global';
+import { IsAgentAllowed } from '@memberjunction/ai-core-plus';
 
 /**
  * Header widget that lets a user pin a default AI agent on the active
@@ -25,7 +26,7 @@ import { UUIDsEqual } from '@memberjunction/global';
  * non-mention messages route to it instead of Sage.
  *
  * Eligible agents are top-level, Active, non-Sub-Agent rows from
- * `AIEngineBase.Instance.Agents`. The widget renders as a compact button
+ * `AIEngineBase.Instance.ReadableAgents`. The widget renders as a compact button
  * showing the current pin (or "Auto" when nothing is pinned). Clicking
  * opens an inline list with a "Clear" option to remove the pin.
  *
@@ -132,6 +133,19 @@ export class ConversationAgentPickerComponent implements OnInit {
     /** Disable the picker (e.g. read-only conversation). */
     @Input() Disabled: boolean = false;
 
+    /**
+     * The agents the chat allows (the chat area's `AllowedAgentIDs`). Only these can be pinned.
+     * Null (the default) offers every eligible agent.
+     */
+    @Input()
+    set AllowedAgentIDs(value: readonly string[] | null) {
+        this._allowedAgentIDs = value ?? null;
+        this.applyAllowedAgents();
+    }
+    get AllowedAgentIDs(): readonly string[] | null {
+        return this._allowedAgentIDs;
+    }
+
     /** Emitted after a successful save with the new (or null) agent ID. */
     @Output() AgentChanged = new EventEmitter<string | null>();
 
@@ -140,6 +154,9 @@ export class ConversationAgentPickerComponent implements OnInit {
 
     private readonly cdr = inject(ChangeDetectorRef);
     private readonly notifications = inject(MJNotificationService);
+    private _allowedAgentIDs: readonly string[] | null = null;
+    /** Every top-level, active agent, before the allowed list narrows it. */
+    private catalogAgents: MJAIAgentEntityExtended[] = [];
 
     public async ngOnInit(): Promise<void> {
         try {
@@ -147,17 +164,23 @@ export class ConversationAgentPickerComponent implements OnInit {
             // loaded — most app shells warm it up at boot, but the picker
             // could mount before that completes.
             await AIEngineBase.Instance.Config(false);
-            this.EligibleAgents = (AIEngineBase.Instance.Agents ?? [])
+            this.catalogAgents = (AIEngineBase.Instance.ReadableAgents ?? [])
                 .filter(a =>
                     !a.ParentID &&
                     a.Status === 'Active' &&
                     a.InvocationMode !== 'Sub-Agent'
                 )
                 .sort((a, b) => (a.Name ?? '').localeCompare(b.Name ?? ''));
-            this.cdr.markForCheck();
+            this.applyAllowedAgents();
         } catch (err) {
             LogError(`ConversationAgentPicker.ngOnInit: ${err instanceof Error ? err.message : String(err)}`);
         }
+    }
+
+    /** Narrows the catalog to the allowed agents. */
+    private applyAllowedAgents(): void {
+        this.EligibleAgents = this.catalogAgents.filter(a => IsAgentAllowed(a.ID, this._allowedAgentIDs));
+        this.cdr.markForCheck();
     }
 
     public get CurrentAgentLabel(): string {
@@ -168,7 +191,7 @@ export class ConversationAgentPickerComponent implements OnInit {
         // sub-agent), still surface its name from the cache so the user can
         // see what was pinned even though they can't re-pin it.
         const fromCache = match
-            ?? (AIEngineBase.Instance.Agents ?? []).find(a => UUIDsEqual(a.ID, id));
+            ?? (AIEngineBase.Instance.ReadableAgents ?? []).find(a => UUIDsEqual(a.ID, id));
         return fromCache?.Name ?? 'Pinned agent';
     }
 

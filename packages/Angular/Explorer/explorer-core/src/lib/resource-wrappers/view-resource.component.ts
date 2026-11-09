@@ -1,13 +1,16 @@
-import { Component, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
-import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { Component, ViewChild, ElementRef, ChangeDetectorRef, OnInit, inject } from '@angular/core';
+import { BaseResourceComponent, NavigationService, SafeDetectChanges } from '@memberjunction/ng-shared';
 import { ResourceData, MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal, MJEventType , UUIDsEqual } from '@memberjunction/global';
-import { CompositeKey, Metadata, EntityInfo } from '@memberjunction/core';
-import { RecordOpenedEvent, ViewGridState, EntityViewerComponent, ViewRelatedRecordNavigation } from '@memberjunction/ng-entity-viewer';
+import { CompositeKey, Metadata, EntityInfo, BaseEntity, BaseEntityEvent, LogError } from '@memberjunction/core';
+import { FormResolverService } from '@memberjunction/ng-base-forms';
+import { RecordOpenedEvent, ViewGridState, EntityViewerComponent, ViewRelatedRecordNavigation, ExportColumnTypeForSQLType } from '@memberjunction/ng-entity-viewer';
 import { ExportService } from '@memberjunction/ng-export-service';
 import { ExportColumn } from '@memberjunction/export-engine';
 import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
 import type { SaveViewAsListResult } from '@memberjunction/ng-list-management';
+import { ShouldOfferStandardFormCreate } from './standard-form-create';
+import { debounceTime, filter, takeUntil } from 'rxjs/operators';
 /**
  * UserViewResource - Resource wrapper for displaying User Views in tabs
  *
@@ -171,6 +174,12 @@ export class UserViewResource extends BaseResourceComponent {
     }
     public ViewEntity: MJUserViewEntityExtended | null = null;
 
+    /**
+     * Show "New in standard form" (MJ#4755): a custom form hides the CodeGen
+     * form for this entity and the user may create. Resolved after load.
+     */
+    public ShowNewInStandardForm = false;
+
     /** @deprecated Use {@link ViewEntity}. */
     public get viewEntity(): MJUserViewEntityExtended | null {
       return this.ViewEntity;
@@ -180,6 +189,7 @@ export class UserViewResource extends BaseResourceComponent {
       this.ViewEntity = value;
     }
     public GridState: ViewGridState | null = null;
+    public AlternateBaseView: string | null = null;
 
     /** @deprecated Use {@link GridState}. */
     public get gridState(): ViewGridState | null {
@@ -248,6 +258,7 @@ export class UserViewResource extends BaseResourceComponent {
     }
 
     private dataLoaded = false;
+    private formResolver = inject(FormResolverService);
     private get metadata() { return this.ProviderToUse; }
     constructor(
         private cdr: ChangeDetectorRef,
@@ -256,25 +267,52 @@ export class UserViewResource extends BaseResourceComponent {
         super();
     }
 
+    public override ngOnInit(): void {
+        super.ngOnInit();
+
+        // Refresh when rows of this view's entity change: a local save/delete, or a server-side
+        // write announced as remote-invalidate (a clone, or another server). Debounced, so a burst
+        // of writes (a clone creating many rows) reloads the view once.
+        MJGlobal.Instance.GetEventListener()
+            .pipe(
+                filter((event) => {
+                    if (event.event !== MJEventType.ComponentEvent || event.eventCode !== BaseEntity.BaseEventCode) return false;
+                    const entityEvent = event.args as BaseEntityEvent;
+                    const type = entityEvent?.type;
+                    if (type !== 'save' && type !== 'delete' && type !== 'remote-invalidate') return false;
+                    const affectedName = (entityEvent.baseEntity?.EntityInfo?.Name ?? entityEvent.entityName)?.trim().toLowerCase();
+                    return !!affectedName && affectedName === this.entityInfo?.Name?.trim().toLowerCase();
+                }),
+                debounceTime(300),
+                takeUntil(this.destroy$)
+            )
+            // In place: a change made elsewhere shouldn't move the user off their page or sort.
+            .subscribe(() => this.entityViewerRef?.RefreshInPlace());
+    }
+
     override set Data(value: ResourceData) {
         const previousRecordId = super.Data?.ResourceRecordID;
         const previousEntity = super.Data?.Configuration?.Entity;
+        const previousAbv = super.Data?.Configuration?.AlternateBaseView;
         super.Data = value;
 
         const newRecordId = value?.ResourceRecordID;
         const newEntity = value?.Configuration?.Entity;
+        const newAbv = value?.Configuration?.AlternateBaseView;
 
         // View-type (grid/cards/timeline/map) and per-view-type config are now resolved
         // internally by mj-entity-viewer from the saved view's ViewTypeID — nothing to read here.
 
-        // Load on first set, or when the view/entity has changed
-        if (!this.dataLoaded || newRecordId !== previousRecordId || newEntity !== previousEntity) {
+        // Load on first set, or when the view/entity/alternateBaseView has changed
+        if (!this.dataLoaded || newRecordId !== previousRecordId || newEntity !== previousEntity || newAbv !== previousAbv) {
             this.dataLoaded = true;
             // Reset state before loading new view
             this.EntityInfo = null;
             this.ViewEntity = null;
             this.GridState = null;
+            this.AlternateBaseView = null;
             this.errorMessage = null;
+            this.ShowNewInStandardForm = false;
             this.loadView();
         }
     }
@@ -312,12 +350,15 @@ export class UserViewResource extends BaseResourceComponent {
             else if (data.Configuration?.Entity) {
                 await this.loadDynamicView(
                     data.Configuration.Entity as string,
-                    data.Configuration.ExtraFilter as string | undefined
+                    data.Configuration.ExtraFilter as string | undefined,
+                    data.Configuration.AlternateBaseView as string | undefined
                 );
             }
             else {
                 this.errorMessage = 'No view ID or entity specified';
             }
+            // Deliberately not awaited: the extra button must never hold up the view.
+            void this.refreshStandardFormCreate();
         } catch (error) {
             console.error('Error loading view:', error);
             this.errorMessage = error instanceof Error ? error.message : 'Failed to load view';
@@ -376,9 +417,9 @@ export class UserViewResource extends BaseResourceComponent {
     }
 
     /**
-     * Load a dynamic view (no saved view, just entity + filter)
+     * Load a dynamic view (no saved view, just entity + filter + optional alternate base view)
      */
-    private async loadDynamicView(entityName: string, _extraFilter?: string): Promise<void> {
+    private async loadDynamicView(entityName: string, _extraFilter?: string, alternateBaseView?: string): Promise<void> {
         const entity = this.metadata.Entities.find(
             e => e.Name.trim().toLowerCase() === entityName.trim().toLowerCase()
         );
@@ -390,6 +431,7 @@ export class UserViewResource extends BaseResourceComponent {
         this.EntityInfo = entity;
         this.ViewEntity = null;
         this.GridState = null;
+        this.AlternateBaseView = alternateBaseView || null;
 
         // For dynamic views, we could create a synthetic viewEntity with just the WhereClause
         // but for now, we'll rely on the entity-viewer's default behavior
@@ -514,22 +556,31 @@ export class UserViewResource extends BaseResourceComponent {
       return this.OnExport();
     }
 
-    /** Columns to export — from grid state, else the view's columns, else the entity's real fields. */
+    /**
+     * Columns to export — from grid state, else the view's columns, else the entity's real fields. Each
+     * column carries its field's export type, as the grid's export does, so a date-only field writes
+     * a date cell on its stored day rather than a timestamp.
+     */
     private buildExportColumns(): ExportColumn[] {
         if (!this.EntityInfo) return [];
+        const entity = this.EntityInfo;
+        const typed = (name: string, displayName: string): ExportColumn => {
+            const field = entity.Fields.find(f => f.Name.toLowerCase() === name.toLowerCase());
+            return { name, displayName, dataType: ExportColumnTypeForSQLType(field?.Type) };
+        };
         if (this.GridState?.columnSettings && this.GridState.columnSettings.length > 0) {
             return this.GridState.columnSettings
                 .filter(col => col.hidden !== true)
-                .map(col => ({ name: col.Name, displayName: col.DisplayName || col.Name }));
+                .map(col => typed(col.Name, col.DisplayName || col.Name));
         }
         if (this.ViewEntity?.Columns) {
             return this.ViewEntity.Columns
                 .filter(col => !col.hidden)
-                .map(col => ({ name: col.Name, displayName: col.DisplayName || col.Name }));
+                .map(col => typed(col.Name, col.DisplayName || col.Name));
         }
-        return this.EntityInfo.Fields
+        return entity.Fields
             .filter(f => !f.IsVirtual)
-            .map(f => ({ name: f.Name, displayName: f.DisplayNameOrName }));
+            .map(f => typed(f.Name, f.DisplayNameOrName));
     }
 
     private buildExportFileName(): string {
@@ -574,6 +625,38 @@ export class UserViewResource extends BaseResourceComponent {
     /** @deprecated Use {@link OnCreateNewRecord}. */
     public onCreateNewRecord(): void {
       return this.OnCreateNewRecord();
+    }
+
+    /**
+     * Create a new record in the CodeGen standard form (MJ#4755) — the escape
+     * hatch for entities whose custom form cannot create records.
+     */
+    public OnCreateNewRecordInStandardForm(): void {
+        if (!this.EntityInfo) return;
+        this.navigationService.OpenNewEntityRecord(this.EntityInfo.Name, { formMode: 'standard' });
+    }
+
+    /**
+     * Decide whether to offer "New in standard form" for the loaded entity.
+     * Discards the answer if the view moved to another entity meanwhile.
+     */
+    private async refreshStandardFormCreate(): Promise<void> {
+        const entity = this.EntityInfo;
+        if (!entity) return;
+        let show = false;
+        try {
+            const p = this.ProviderToUse;
+            const res = await this.formResolver.ResolveFormForEntity(entity, p.CurrentUser, p);
+            const canCreate = entity.GetUserPermisions(p.CurrentUser).CanCreate;
+            show = ShouldOfferStandardFormCreate(res, canCreate);
+        } catch (err) {
+            LogError(`ViewResource: could not resolve forms for "${entity.Name}": ${err instanceof Error ? err.message : String(err)}`);
+        }
+        if (this.EntityInfo !== entity) return;
+        this.ShowNewInStandardForm = show;
+        // Safe variant: this runs after an await in a fire-and-forget promise,
+        // so the view may be destroyed (tab closed) or mid-pass by now.
+        SafeDetectChanges(this.cdr);
     }
 
     /**

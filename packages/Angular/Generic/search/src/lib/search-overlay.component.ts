@@ -553,9 +553,9 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
     }
 
     /**
-     * Streaming variant of executeSearch — subscribes to `SearchService.StreamSearch` and
-     * progressively updates the result list as each provider reports back. The 'final'
-     * event carries the canonical fused/reranked list, which replaces the partials.
+     * Streaming variant of executeSearch — subscribes to `SearchService.StreamSearch`, shows each
+     * provider's count in the chip strip as it reports back, and renders the result list from the
+     * 'final' event. A 'provider' event carries no rows: they arrive before the server's permission pass.
      *
      * Cancellation: a new search invocation tears down the in-flight stream via
      * `searchVersion` and `currentStream.unsubscribe()`.
@@ -580,27 +580,18 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
                 if (version !== this.searchVersion) return;
 
                 if (event.Phase === 'provider' && event.ProviderName) {
-                    const count = event.Results?.length ?? 0;
+                    // Progress only: the count, never the rows (they precede the permission pass).
                     this.StreamingProviders = [
                         ...this.StreamingProviders,
                         {
                             Name: event.ProviderName,
-                            Count: count,
+                            Count: event.ResultCount ?? 0,
                             ElapsedMs: event.ElapsedMs ?? 0,
                             State: 'Completed',
                         },
                     ];
-                    if (event.Results && event.Results.length > 0) {
-                        // Append partials so the user sees the list grow as providers return.
-                        this.AllResults = [...this.AllResults, ...event.Results];
-                        this.ResultGroups = this.searchService.GroupResults(this.AllResults);
-                        this.TotalCount = this.AllResults.length;
-                        if (this.HighlightedIndex < 0) {
-                            this.HighlightedIndex = 0;
-                        }
-                    }
                 } else if (event.Phase === 'final' && event.Results) {
-                    // Replace the appended partials with the canonical fused/reranked list.
+                    // The permission-filtered fused/reranked list.
                     this.AllResults = event.Results;
                     this.ResultGroups = this.searchService.GroupResults(this.AllResults);
                     this.Filters = this.searchService.BuildFilters(this.AllResults);

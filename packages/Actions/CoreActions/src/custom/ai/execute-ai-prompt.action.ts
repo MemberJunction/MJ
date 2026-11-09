@@ -125,6 +125,9 @@ export class ExecuteAIPromptAction extends BaseAction {
             promptParams.prompt = prompt;
             promptParams.data = variables;
             promptParams.contextUser = params.ContextUser;
+            // The calling run's credential scope. This action is never handed the run's keys, so under
+            // 'RuntimeOnly' the prompt finds no usable model and fails instead of spending the platform's.
+            promptParams.CredentialScope = params.CredentialScope;
 
             // Apply overrides if provided
             if (modelOverride) {
@@ -246,6 +249,7 @@ export class ExecuteAIPromptAction extends BaseAction {
             EntityName: 'MJ: AI Prompts',
             ExtraFilter: `Name = '${promptName.replace(/'/g, "''")}'`,
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'entity_object'
         }, contextUser);
 

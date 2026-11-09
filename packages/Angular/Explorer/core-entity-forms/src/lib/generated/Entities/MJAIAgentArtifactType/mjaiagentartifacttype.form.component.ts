@@ -16,7 +16,6 @@ export class MJAIAgentArtifactTypeFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'linkDefinition', sectionName: 'Link Definition', isExpanded: true },
-            { sectionKey: 'displayNames', sectionName: 'Display Names', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

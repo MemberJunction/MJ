@@ -1,5 +1,813 @@
 # @memberjunction/integration-engine
 
+## 6.2.0
+
+### Minor Changes
+
+- ccfd553: Integration GraphQL additions: `IntegrationStartSchemaRefresh` (detached discovery start returning a tailable run id), live `RecordsCreated/Updated/Errored/Skipped` that actually count, offset paging on sync history and run listing with per-entity counts recovered from the run artifact, `IntegrationGetActiveOperations`, and `IntegrationProbeCredentials` (tests credentials without persisting anything).
+
+### Patch Changes
+
+- b1295d2: Discovery stops for memory instead of being killed, and no longer has to hold the whole catalog to finish.
+  - **A memory budget beside the time budget.** Introspect and PK classification stop taking on new work when the V8 heap reaches `HEAP_STOP_FRACTION` of its limit or resident memory reaches `RSS_STOP_FRACTION` of the box, keep what they gathered, and report `HOST_MEMORY_PRESSURE`. PK classification refreshes only the catalog (not every engine dataset) and yields to the collector every 25 objects. A discovery sample never requests a page larger than its target.
+  - **An absolute heap floor.** `heap_size_limit` includes a fixed ~192 MB young-generation reserve that live data never occupies, so a fraction of it alone sits above V8's real abort line on any heap under ~2.4 GB. The heap gate also stops when no more than `HEAP_STOP_MIN_HEADROOM_BYTES` (320 MB) remain; large heaps are unaffected.
+  - **Streaming introspection.** `IntrospectSchemaOptions.OnObject` lets a caller take each object as a base connector builds it (`SourceSchemaInfo.Streamed` says it did). The creation pipeline uses it to sample and persist each object as it is produced, carrying only object names to a final pass that retires absent objects — so peak memory is one object, not the catalog. `PersistDiscoveredSchema` gains `DeactivateAbsentObjects` / `DeactivateAbsentFields`, each defaulting to `DeactivateAbsent`. Connectors whose `IntrospectSchema` does not forward the option behave exactly as before.
+
+- 420fc02: Discovery no longer persists an object with no fields. Two independent routes led there, both ending with an object that maps to nothing and syncs nothing, while the run reported a sample that had succeeded.
+  - **A runtime-discovered object was never sampled at all.** `BaseRESTIntegrationConnector.DiscoverySampleRecordStream` opened by resolving the object from the engine cache, and that lookup throws when the object has no persisted row. Sampling is what decides what the row will contain, so it necessarily runs before the row exists: the throw fired on the first line, before the connector was consulted, and unwound into the failure fallback. The whole sampling chain therefore ran with zero records for precisely the objects discovery exists to learn — no statistical primary key, no observed column widths. The lookup is now optional. A missing row disqualifies only the record-constrained sampler, which reads the object's API path and ID; the generic `FetchChanges` loop needs neither and hands routing to the connector, which owns first contact with an object the catalog has never seen. Deadline and watchdog forwarding on that route are unchanged.
+  - **An empty source table produced a fieldless object.** A sample returns zero fields whenever it saw zero records, which is the ordinary state of an empty table rather than a malfunction — so it never threw, never took the existing fallback, and the empty result was written out verbatim as the object's schema. Because discovery does not re-run on its own, the emptiness of a table at one moment became a permanent property of the schema, even though the connector's describe surface knew the columns throughout. `StageIntrospect` now consults that describe surface as a last resort before persisting an object with no fields, and reports it on the existing `discover-fields-fallback` channel so a discovery that learned nothing stays distinguishable from one that succeeded.
+
+    The backstop is deliberately placed at the point of persistence and gated on there being no declared fields either, because zero fields is also a _designed_ outcome: a composition child whose parent tuple is unknowable adjourns to declared-only fields on purpose. Only the two paths where the sample is the sole source of fields — a runtime-discovered object, and a name-only declaration — can reach the backstop; an object that declared fields keeps them and merges exactly as before.
+
+- f68e17b: The discovery run deadline — the outermost bound, and the only one that can fail a whole run — is configurable per connection and defaults to 12 hours. Resolution order is the explicit `RunDeadlineMs` argument, then the connection's `Configuration.runDeadlineMs`, then `MJ_INTEGRATION_RUN_DEADLINE_MS`, then the default; `0` disables the ceiling, and a negative, non-numeric or malformed value falls through rather than disabling it. The default was 45 minutes, which failed large catalogs mid-introspection and discarded everything gathered; the ceiling exists to release a run that has hung, not to bound one that is merely big.
+- 794660a: Discovery no longer caps a sampled string width at 4000 when twice the observed value exceeds it: past 2,000 observed characters it returns MAX, and `MergeLength` treats MAX as unbounded (1,001–2,000 observed keeps 4000, which holds 2–4x it); fixes that lived only in a deployed patch set — the first-discovery heal (now scoped to the objects it missed, reported as a warning if it fails, and reporting the first pass's counts), the run-boundary watermark pin, the prefetch-cache leak — are in source with pinning tests; a relative import without `.js` is a guarded boot error. A keyset scan whose page hits the fetch timeout is suspended for the run (no retry, no page-skip re-request stacked on the abandoned attempt) and resumes from its persisted key next run, where the page is retried; the record-map and run-detail saves enrol in an active write group like the entity saves. A run that leaves objects INCOMPLETE — suspended, aborted, pages skipped or overlapped, or short of the source's stated total — names them in its completion message after any error count, and the REST base now passes the API's stated total out as `SourceTotalRecords`.
+- a1a7e2c: Schema evolution acts on the watermark-field change it already detects, and the remaining bare RSU pipeline calls retry.
+
+  **A watermark-field change now resets the watermark (MJ-RUN-37).**
+
+  When a connector upgrade moves an object's incremental cursor to a different source column, `IntegrationSchemaSync.UpsertObject` has always overlaid `IntegrationObject.IncrementalWatermarkField` and recorded `'IncrementalWatermarkField'` on a local `changes` array. Nothing consumed that array. The schema evolution's `changedObjects` — the only input to `ResetPullWatermarks` — was built from a physical column diff and a field-map add/disable, and a cursor swap produces neither: no column moves and no field map changes. So the object read as unchanged, its Pull watermark survived, and the next incremental sync applied the OLD column's stored value as a lower bound on the NEW one.
+
+  Where the new column sorts later than the old one, every row below that value is filtered out at the source and never fetched again. Nothing reports it. On an incremental the source returns a total consistent with the filter it was handed, so the run's fetch-integrity check sees fetched equal to expected and closes clean — the defect produces silent, permanent absence rather than an error or a duplicate.
+
+  The fix is wiring, not detection. `ObjectMergeLog` now carries the `ChangedAttributes` the persist layer already computed, and `IntegrationSchemaEvolution` consumes it through a new pure helper, `ObjectsWithWatermarkFieldChange`, so such an object is marked changed and its Pull watermark is reset exactly as a column change already does. The helper is scoped to the evolution's CONTINUING entity maps and excludes newly-created objects, so it cannot inflate the change set (and therefore `HasChanges`, and therefore a full re-fetch) with objects nothing can act on.
+
+  `SupportsIncrementalSync` is deliberately NOT covered: the persist layer never writes that column on an existing row, so there is no detected change to consume. Making it work is a detection change, not a wiring one.
+
+  **The remaining bare `RunPipelineBatch` calls retry (MJ-APPLY-6 residual).**
+
+  `SchemaBuilder.RunSchemaPipeline` already states the reason: the pipeline's expensive middle steps (`ExecuteMigration`, `RunCodeGen`, `CompileTypeScript`, `RestartMJAPI`) fail transiently, `RunPipelineBatchWithRetry` whitelists exactly those and refuses to replay once anything has been applied, and "the callers simply never used it". Three of the four remaining bare call sites now do: `IntegrationApplySchemaBatch` (parity with its single-connector sibling, which retries), `IntegrationSchemaEvolution`, and the post-sync `CustomColumnPromoter` (which runs unattended, mid-sync, where a dropped promotion is invisible).
+
+  `RunRuntimeSchemaUpdateBatch` deliberately keeps the bare call, now with the reason stated in the code: it replays CALLER-AUTHORED SQL, and `executeMigration` is not transactional — it issues one `ExecuteSQL` per GO/statement chunk, so a migration that fails on a later chunk leaves earlier chunks committed while the step records `failed`, which is exactly the state a replay reads as safe. For SchemaBuilder-generated DDL that risk is accepted upstream; for arbitrary operator SQL it is not.
+
+- 4283a82: `SafeExpressionEvaluator` now allowlists identifiers instead of denying a fixed list, and field-rule / integration formulas go through the same screen before they compile (#5569, CodeQL #183, #184, #185).
+  - **Identifiers.** A free name must be an evaluation-context key, an arrow-function parameter in scope, `undefined`/`NaN`/`Infinity`, or an approved global (`APPROVED_EXPRESSION_GLOBALS`) used as a call. `fetch`, `setTimeout` and every other host global are refused, as are approved globals used as values or callbacks (`Math.PI`, `items.map(Number)`, `Object.assign`).
+  - **Callbacks.** `.some()`, `.every()`, `.find()`, `.filter()`, `.map()` and `.reduce()` take only an inline arrow function. Arrow functions are not allowed anywhere else. `JSON.parse`/`JSON.stringify` take only a literal or array literal as the reviver/replacer.
+  - **Context keys** must match `/^[A-Za-z_$][\w$]*$/`; any other key fails the evaluation. Function-valued properties of class instances are dropped from the cloned context.
+  - **New API.** `SafeExpressionEvaluator.ScreenExpression(expression, allowedIdentifiers)` screens without compiling. `ValidateSyntax` takes optional `contextKeys`.
+  - **Formulas.** `FieldTransformEngine` screens `formula` and `custom` expressions with `value` and `fields` as the only names. A rejected expression throws `Expression rejected: ...` and is handled by the step's `OnError` policy like a compile error.
+  - **Methods.** Added pure string/array/number methods to the safe-method list: `split`, `slice`, `substring`, `join`, `concat`, `charAt`, `at`, `padStart`, `padEnd`, `toFixed`, `toPrecision`.
+  - Unbalanced-parenthesis errors are reported only when the expression fails to parse, so a parenthesis inside a string literal no longer rejects it.
+  - Tests in `ai-core-plus` and `integration-engine` updated for the new rules (approved namespace methods are no longer readable as values; a malformed custom expression is now refused by the screen before `Function` is reached).
+
+- d659bb2: `ActionMetadataGenerator` writes a `primaryKey` on every generated Action, Action Param and Action Result Code. Before, its records carried only `fields`, so `mj sync push` inserted every action again on each push of regenerated metadata. A new optional `ExistingActionRecords` config takes the previously generated records and reuses their IDs: actions match by `Name`, params by `Name` + `Type`, result codes by `ResultCode`. A regenerated file then updates the rows it created before. No ID is handed out twice.
+- 477b49b: A sync no longer keeps the response pages of a connector in memory after it has processed them.
+
+  A connector that parses response text with a regex returns values that point into the page they came from, so keeping one value keeps the whole page. The engine kept three kinds of these values after their batch:
+  - **Record IDs for orphan detection.** The ID of every record of an entity map stays in a Set until the map ends, so every page of the map stayed in memory until then.
+  - **Samples of IDs that a later page serves again.** Up to 5 per entity map stay until the map ends, for the overlapping-pages warning.
+  - **Samples of unmapped columns.** Up to 20 values per unmapped column stay in the run result until the run ends, for schema promotion. A column that is mostly empty takes its samples from many pages. A sample can also be an object or an array (for example, from an XML parser) that holds parsed strings.
+
+  All three now keep a copy (`DetachString`; a plain object or array sample is parsed back from its JSON), so a page is released when its batch is done. On a production sync of wide objects (about 7 MB per page of 200 rows), these values kept more than 2 GB of pages in memory.
+
+- 2c38278: `IntegrationEngineBase` no longer loads `MJ: Company Integration Field Maps` at startup. A consumer reads the field maps of one entity map on demand with `LoadFieldMapsForEntityMap(entityMapID, contextUser?, provider?)`.
+
+  The engine is `@RegisterForStartup`, so every server process and every browser tab loaded the whole field-map table. A deployment with about 86,000 field maps read about 88 MB per load. That result is larger than the per-entry cache limit, so it was never cached and every load went back to the database. On a production API each load blocked the event loop for 9 to 13 seconds. The only reader, the integration mapping workspace, reads one entity map at a time.
+  - Removed from `IntegrationEngineBase`: the `FieldMaps` getter, `GetFieldMapsForEntityMap`, and the `FieldMaps` option of `SeedForTesting`.
+  - Removed from `IntegrationEngine`: the `FieldMaps` pass-through. `GetFieldMapsForEntityMap` is replaced by `LoadFieldMapsForEntityMap(entityMapID, contextUser?)`.
+  - `IntegrationDataService.LoadFieldMaps` reads through `LoadFieldMapsForEntityMap` and now uses the provider it is given.
+  - `LoadFieldMapsForEntityMap` throws when the read fails, so a failed read is not taken for an entity map with no field maps.
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- 315e8f7: Per-connection integration catalog, engine half: a resolution API and catalog scope (`WithCatalogScope`/`RunInCatalogScope`), a `CatalogSource` flag (`Shared` | `PerConnection`, per connection or via `MJ_INTEGRATION_CATALOG_SOURCE`), and a catalog writer that persists discovery into the connection's own rows and rebases them from the declared definition. Flag off is byte-identical behaviour. `MJ_INTEGRATION_CATALOG_STRICT=1` makes the declared catalog read-only at runtime. The per-connection rows are never loaded at boot: a catalog scope loads its connection's objects and a narrow dependency-edge set, and field rows are warmed per object into a row-bounded cache that the sync loop warms and pins around each entity map. Catalog reads made during a run (the scope's loads, the catalog store, the catalog writer) bypass the query-result cache, whose entries for these entities are not invalidated by the run's own writes.
+- 9c2a051: Fix "Maximum call stack size exceeded" in the full-sync orphan sweep and full push on large record maps. The record-map loader set `IgnoreMaxRows`, which also drops `MaxRows`, so its first "page" was the whole map (~126k rows on one HubSpot portal) and `rows.push(...page)` overflowed the stack. It now pages at `MaxRows` and appends without spreading.
+- 9a2d7cc: RunView's `TotalRowCount` contract is now explicit: a number is always a real total, and `undefined` means the caller passed `SkipTotalRowCount: true`.
+
+  **Contract change.** `RunViewResult.TotalRowCount` is now optional (`TotalRowCount?: number`). With `SkipTotalRowCount: true` it is always `undefined`, including on a page that was not full, where it used to be the number of rows returned. A caller that needs a total must not pass the flag. Strict TypeScript consumers that read the field will see a compile error; a call without the flag always gets a number, so `?? 0` is safe there. `ResultType: 'count_only'` ignores the flag and always counts.
+
+  `MaxRows: 1` is no longer special-cased: a full page of one row now runs the same count as any other full page and reports the real total. Callers that only read `Results` should pass `SkipTotalRowCount: true` to avoid that second query; about 270 such reads in this repo now do. `SkipTotalRowCount` is now sent over GraphQL, so browser callers can use it too.
+
+- 0a348e2: `RunViewParams.SkipTotalRowCount` — an explicit caller opt-out of the extra COUNT round trip. A row-limited read that comes back exactly full runs the count SQL as a second, sequential query, and a paginated read counts up front; a caller that only consumes `Results` can now skip both. (`next` already skips the full-page count for a `MaxRows: 1` probe; this covers every other read that never reads `TotalRowCount`.) With the flag, `TotalRowCount` is the number of rows returned; `count_only` ignores it. Calls with the flag get their own RunView cache slot (`strc:1`), so a counted and an uncounted result are never served for each other. The integration engine's per-record match lookups set it explicitly.
+- 3f92ec2: Sync lifecycle: `IntegrationGetResourcePressure` plus run warnings before a host runs out of memory or disk; deactivating a connection pauses its schedules, requests cancel of an in-flight sync and refuses refresh/evolution with a named reason; schema evolution offers accumulated custom columns and materialises accepted ones in the same migration; connectors declare a `SettingsSchema` exposed by `IntegrationGetConnectorSettingsSchema`.
+- 48d2b32: Sync sheds load under host memory pressure instead of only warning about it.
+
+  `ResourcePressure` previously watched the V8 heap, which cannot see the memory that actually
+  kills a sync: `--max-old-space-size` bounds old space only, while an HTTP response body lives in
+  `Buffer`/`ArrayBuffer` — external, and counted in neither. A throttle watching the heap reads
+  healthy right up to the kill. Measured on a 3,830 MB box: the kernel killed node at 3,478 MB RSS
+  against a 1,964 MB heap ceiling — 1.8x — with heap usage unremarkable.
+
+  It now also reads host RAM from `/proc/meminfo` (MemAvailable, not MemFree, which excludes
+  reclaimable page cache and reads far tighter than what a process can obtain) and reports
+  `ResidentFraction`. Where both thresholds trip, the worse of the two is reported under one code,
+  so a caller has a single number to act on.
+
+  `MemoryGovernor` decides and `RunMemoryControl` applies, split so the decision is testable without
+  a live sync. The governor runs PER BATCH rather than between entity maps: a table fetching twelve
+  consecutive 2,000-record pages allocates all of it without ever reaching a boundary, which is the
+  difference between noticing and dying. One control per run, never shared — the engine is a
+  singleton across concurrent syncs, so calibration held on it would let one connection's behaviour
+  throttle another's.
+
+  `AdaptiveConcurrency` gains `Hold()`/`Release()`: stop the cap GROWING without lowering it. The
+  cheapest possible response — everything in flight keeps running and nothing new is admitted — so
+  it costs no throughput. Without it the only options were "carry on" and "halve", and halving work
+  that is already succeeding is a real cost paid for a problem holding would have solved.
+
+  Memory pressure feeds the SAME AIMD signal a source rate-limit uses, so no per-connector tuning
+  and no advance knowledge of which connector misbehaves is required: a connector returning 10x the
+  requested batch costs 10x the memory, the reading notices, and the cap follows. The floor is 1, so
+  a sync always makes progress rather than deadlocking on a full box.
+
+  `ResourcePressureOutput` exposes `ResidentFraction`, `HostMemTotalMB` and `HostMemAvailableMB`.
+
+  The governor judges pressure on the HOST — memory in use, `MemTotal - MemAvailable` — not this
+  process's RSS, and sheds above 0.85 / releases below 0.75. RSS counts heap the deployment gave V8
+  on purpose: with the heap sized at (RAM - 1 GB) x 0.70, a large workspace sits at 72.7% of RAM five
+  minutes after a restart with nothing running, so a 0.70 trigger fired on ordinary work and a 0.55
+  release line sat below the idle floor. It takes at most one step per run every 10 s
+  (`DECISION_INTERVAL_MS`), whichever map reports, and under the release line gives one step back:
+  `ReleaseAdmissions` lets the concurrency controller ramp again and the page doubles back to its
+  configured size. Measured on a 825-table sync before this: five tables at 25 records a page for 75
+  minutes while 711 never started. `EvaluatePressure` uses the same reading and line.
+
+- 94e3a12: A sync's numbers, warnings and successes now correspond to what the run did: `RecordsSynced` counts records written (not created+updated+skipped+errored) and is finalised after the loop, so an object that completes in one page no longer sits at 0 forever; a discovery re-checks its connection before persisting and refuses when it has been deleted (which on the shared catalog used to succeed and overwrite the declared floor); discovery completion messages name the field counts, so a run that created 69 fields no longer reports "0 objects created, 0 updated"; repeated warnings are rolled up by code instead of burying a run under one cause, and the rollup keeps what each rolled-up occurrence reported; the batch apply and the schema evolution surface the declared-but-deactivated row warnings the single apply already had; the single apply reads `APIRestarted` from the pipeline, filters its fallback describe, and invalidates the catalog caches the batch always did; and the record-map read streams to its caller rather than holding every row of the table in memory.
+- b8a9e5e: Remove nested `UUIDsEqual` scans where both lists grow with the data or the code runs on every render. Fix one cross-database lookup bug.
+  - **Rubric publish validation could miss advisory parents.** `ValidateRubricTree` looked a raw `parentId` up in a map with normalized keys. On SQL Server (upper-case IDs) the advisory-ancestor walk silently stopped, so a non-advisory criterion under an advisory group was not reported. The map is now a `UUIDMap`.
+  - **Per-render getters no longer rescan the entity list.** The Entity form's `FormChromeCandidates`, the Data Explorer's `RecentEntities` / `FavoriteEntities` and the storage admin's `FilteredAccountRows` now read cached or once-built indexes.
+  - **Entity lookups by ID** in the ERD, the get-entity-details and list-entities actions, recent-access and the form builder now use the provider's indexed `EntityByID`. The application dialog uses a once-built index.
+  - **Other once-built indexes:** tag lookups, permission grantee names, orphaned-conversation owners and flow-editor node moves.
+  - `createFakeProvider` (`ng-test-utils`) now implements `EntityByID`, like a real provider.
+  - **New helper:** `GroupByUUID(items, getId?)` in `@memberjunction/global` groups items by a UUID in one pass, each group in input order.
+  - **Server sites that matched two growing lists:** the user cache (users × user roles), resource-permission deduplication, user/role sync, default-app user applications, scheduled-job statistics, MCP action discovery, REST connector schema introspection and rubric calibration.
+  - **Offline tools:** CodeGen relationship sync and CHECK-constraint value lists, CodeGen's related-entity form lookups, and `mj artifacts reclassify`.
+  - **Angular screens that scale with the data:** the AI Agent form's linked prompts and actions, the prompt priority matrix, the Testing explorer, the conversations message cache, the Query Browser tree, the Actions overview and categories, the dashboard browser, list-form bulk remove and credentials bulk actions.
+
+  Behaviour is unchanged otherwise, and each site has a test that also passes against the old code.
+
+- c8fb9d7: Keep the real row total where a variable `MaxRows` can be 1 (#6000). Run-history retention reads `keep + 1` runs and counts them, so `MJ_INTEGRATION_MAX_RUNS_PER_CI=1` prunes again. The list, view and filter record-set sources read two rows for a batch of one and keep the first, so the reported progress total stays the full count.
+- 5ba9ce9: The discovery watchdog stops reporting work that is not running.
+
+  `End` is called in a `finally`, so an in-flight entry survives its owner only when the owner never unwound at all — a process killed mid-discovery, or an await that neither settled nor rejected. The registry had no way to notice: the entry stayed, and every report line kept claiming `"Orders" 4211s still in flight`.
+
+  That is the failure this class exists to prevent, pointed the other way. Its own doc argues a watchdog that under-reports what is in flight is worse than no watchdog, because the whole contract is that the report is true; a watchdog that OVER-reports sends an operator chasing a sample that stopped existing an hour ago.
+
+  `Tick` now evicts entries older than `StaleAfterMs` (default one hour, `<= 0` disables) before building the report, so a single tick can never both describe an entry and bury it. Eviction is loud: a sample disappearing quietly would read as completion, which is the opposite of what happened, so each one is named along with how long it sat and what stage it died at.
+
+  This is not a timeout and it cancels nothing. It only decides when the watchdog should stop asserting something it cannot know.
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [1419ba7]
+- Updated dependencies [a709bb6]
+- Updated dependencies [39b35f1]
+- Updated dependencies [e97d95c]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [a50948e]
+- Updated dependencies [2552b1e]
+- Updated dependencies [25bb295]
+- Updated dependencies [432cb73]
+- Updated dependencies [3080e83]
+- Updated dependencies [4c6a28b]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [6c36fb6]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [cc36de5]
+- Updated dependencies [9cb815b]
+- Updated dependencies [709de1a]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [d2db108]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [d43d86e]
+- Updated dependencies [a3539d2]
+- Updated dependencies [db39145]
+- Updated dependencies [41274aa]
+- Updated dependencies [91cba84]
+- Updated dependencies [b14c72f]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [c671f85]
+- Updated dependencies [49f26d9]
+- Updated dependencies [5e4205c]
+- Updated dependencies [7be1684]
+- Updated dependencies [21f9e15]
+- Updated dependencies [1090caa]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [f2248d5]
+- Updated dependencies [81aea34]
+- Updated dependencies [7384dd6]
+- Updated dependencies [6849b00]
+- Updated dependencies [67f6c85]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [5465489]
+- Updated dependencies [3bace5a]
+- Updated dependencies [88e6902]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [4248fb3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [59e32e0]
+- Updated dependencies [d122a41]
+- Updated dependencies [0a7c255]
+- Updated dependencies [0adaf76]
+- Updated dependencies [0ff7523]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [307da67]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [f65fec7]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [cb205de]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [0c634ba]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [223669e]
+- Updated dependencies [683f652]
+- Updated dependencies [914e6ff]
+- Updated dependencies [a8be410]
+- Updated dependencies [7316ac3]
+- Updated dependencies [2274f42]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [0fb3649]
+- Updated dependencies [131f3c4]
+- Updated dependencies [2c38278]
+- Updated dependencies [ccfd553]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [705ab4e]
+- Updated dependencies [a7da50b]
+- Updated dependencies [0f04590]
+- Updated dependencies [5fed75a]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [f26084f]
+- Updated dependencies [db39145]
+- Updated dependencies [f48dffc]
+- Updated dependencies [41c2c08]
+- Updated dependencies [630bb88]
+- Updated dependencies [e69634e]
+- Updated dependencies [6779eed]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [44faf83]
+- Updated dependencies [17cc774]
+- Updated dependencies [dae1d31]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [80905a1]
+- Updated dependencies [315e8f7]
+- Updated dependencies [4c97994]
+- Updated dependencies [397ae9a]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [7e72c86]
+- Updated dependencies [a17a228]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [ce758af]
+- Updated dependencies [89a5b59]
+- Updated dependencies [1ea4085]
+- Updated dependencies [aee2d53]
+- Updated dependencies [8420f36]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [25f7b82]
+- Updated dependencies [8b90b41]
+- Updated dependencies [104125c]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [d296edd]
+- Updated dependencies [66fd011]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [509d2aa]
+- Updated dependencies [68f5c01]
+- Updated dependencies [196160a]
+- Updated dependencies [5513c2a]
+- Updated dependencies [90829e3]
+- Updated dependencies [5986939]
+- Updated dependencies [14c7719]
+- Updated dependencies [48c974e]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [8c120db]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [aac148b]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [539dfe3]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [60bd774]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [ac18db8]
+- Updated dependencies [35da130]
+- Updated dependencies [5b41d48]
+- Updated dependencies [4b9542c]
+- Updated dependencies [28c92e0]
+- Updated dependencies [5f707d1]
+- Updated dependencies [369e229]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [aca4317]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [718b01c]
+- Updated dependencies [57fea6a]
+- Updated dependencies [374b1a4]
+- Updated dependencies [2c590b0]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [2854a2e]
+- Updated dependencies [b0b2cc9]
+- Updated dependencies [dc38250]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/core-entities@6.2.0
+  - @memberjunction/global@6.2.0
+  - @memberjunction/core@6.2.0
+  - @memberjunction/integration-engine-base@6.2.0
+  - @memberjunction/integration-progress-artifacts@6.2.0
+  - @memberjunction/integration-pk-classifier@6.2.0
+
+## 6.2.0-edge.8
+
+### Patch Changes
+
+- 477b49b: A sync no longer keeps the response pages of a connector in memory after it has processed them.
+
+  A connector that parses response text with a regex returns values that point into the page they came from, so keeping one value keeps the whole page. The engine kept three kinds of these values after their batch:
+  - **Record IDs for orphan detection.** The ID of every record of an entity map stays in a Set until the map ends, so every page of the map stayed in memory until then.
+  - **Samples of IDs that a later page serves again.** Up to 5 per entity map stay until the map ends, for the overlapping-pages warning.
+  - **Samples of unmapped columns.** Up to 20 values per unmapped column stay in the run result until the run ends, for schema promotion. A column that is mostly empty takes its samples from many pages. A sample can also be an object or an array (for example, from an XML parser) that holds parsed strings.
+
+  All three now keep a copy (`DetachString`; a plain object or array sample is parsed back from its JSON), so a page is released when its batch is done. On a production sync of wide objects (about 7 MB per page of 200 rows), these values kept more than 2 GB of pages in memory.
+
+- Updated dependencies [6c36fb6]
+- Updated dependencies [9cb815b]
+- Updated dependencies [d2db108]
+- Updated dependencies [c671f85]
+- Updated dependencies [6849b00]
+- Updated dependencies [59e32e0]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [e69634e]
+- Updated dependencies [539dfe3]
+- Updated dependencies [ac18db8]
+  - @memberjunction/core@6.2.0-edge.8
+  - @memberjunction/core-entities@6.2.0-edge.8
+  - @memberjunction/global@6.2.0-edge.8
+  - @memberjunction/integration-engine-base@6.2.0-edge.8
+  - @memberjunction/integration-pk-classifier@6.2.0-edge.8
+  - @memberjunction/integration-progress-artifacts@6.2.0-edge.8
+
+## 6.2.0-edge.7
+
+### Minor Changes
+
+- ccfd553: Integration GraphQL additions: `IntegrationStartSchemaRefresh` (detached discovery start returning a tailable run id), live `RecordsCreated/Updated/Errored/Skipped` that actually count, offset paging on sync history and run listing with per-entity counts recovered from the run artifact, `IntegrationGetActiveOperations`, and `IntegrationProbeCredentials` (tests credentials without persisting anything).
+
+### Patch Changes
+
+- 794660a: Discovery no longer caps a sampled string width at 4000 when twice the observed value exceeds it: past 2,000 observed characters it returns MAX, and `MergeLength` treats MAX as unbounded (1,001–2,000 observed keeps 4000, which holds 2–4x it); fixes that lived only in a deployed patch set — the first-discovery heal (now scoped to the objects it missed, reported as a warning if it fails, and reporting the first pass's counts), the run-boundary watermark pin, the prefetch-cache leak — are in source with pinning tests; a relative import without `.js` is a guarded boot error. A keyset scan whose page hits the fetch timeout is suspended for the run (no retry, no page-skip re-request stacked on the abandoned attempt) and resumes from its persisted key next run, where the page is retried; the record-map and run-detail saves enrol in an active write group like the entity saves. A run that leaves objects INCOMPLETE — suspended, aborted, pages skipped or overlapped, or short of the source's stated total — names them in its completion message after any error count, and the REST base now passes the API's stated total out as `SourceTotalRecords`.
+- 4283a82: `SafeExpressionEvaluator` now allowlists identifiers instead of denying a fixed list, and field-rule / integration formulas go through the same screen before they compile (#5569, CodeQL #183, #184, #185).
+  - **Identifiers.** A free name must be an evaluation-context key, an arrow-function parameter in scope, `undefined`/`NaN`/`Infinity`, or an approved global (`APPROVED_EXPRESSION_GLOBALS`) used as a call. `fetch`, `setTimeout` and every other host global are refused, as are approved globals used as values or callbacks (`Math.PI`, `items.map(Number)`, `Object.assign`).
+  - **Callbacks.** `.some()`, `.every()`, `.find()`, `.filter()`, `.map()` and `.reduce()` take only an inline arrow function. Arrow functions are not allowed anywhere else. `JSON.parse`/`JSON.stringify` take only a literal or array literal as the reviver/replacer.
+  - **Context keys** must match `/^[A-Za-z_$][\w$]*$/`; any other key fails the evaluation. Function-valued properties of class instances are dropped from the cloned context.
+  - **New API.** `SafeExpressionEvaluator.ScreenExpression(expression, allowedIdentifiers)` screens without compiling. `ValidateSyntax` takes optional `contextKeys`.
+  - **Formulas.** `FieldTransformEngine` screens `formula` and `custom` expressions with `value` and `fields` as the only names. A rejected expression throws `Expression rejected: ...` and is handled by the step's `OnError` policy like a compile error.
+  - **Methods.** Added pure string/array/number methods to the safe-method list: `split`, `slice`, `substring`, `join`, `concat`, `charAt`, `at`, `padStart`, `padEnd`, `toFixed`, `toPrecision`.
+  - Unbalanced-parenthesis errors are reported only when the expression fails to parse, so a parenthesis inside a string literal no longer rejects it.
+  - Tests in `ai-core-plus` and `integration-engine` updated for the new rules (approved namespace methods are no longer readable as values; a malformed custom expression is now refused by the screen before `Function` is reached).
+
+- d659bb2: `ActionMetadataGenerator` writes a `primaryKey` on every generated Action, Action Param and Action Result Code. Before, its records carried only `fields`, so `mj sync push` inserted every action again on each push of regenerated metadata. A new optional `ExistingActionRecords` config takes the previously generated records and reuses their IDs: actions match by `Name`, params by `Name` + `Type`, result codes by `ResultCode`. A regenerated file then updates the rows it created before. No ID is handed out twice.
+- 2c38278: `IntegrationEngineBase` no longer loads `MJ: Company Integration Field Maps` at startup. A consumer reads the field maps of one entity map on demand with `LoadFieldMapsForEntityMap(entityMapID, contextUser?, provider?)`.
+
+  The engine is `@RegisterForStartup`, so every server process and every browser tab loaded the whole field-map table. A deployment with about 86,000 field maps read about 88 MB per load. That result is larger than the per-entry cache limit, so it was never cached and every load went back to the database. On a production API each load blocked the event loop for 9 to 13 seconds. The only reader, the integration mapping workspace, reads one entity map at a time.
+  - Removed from `IntegrationEngineBase`: the `FieldMaps` getter, `GetFieldMapsForEntityMap`, and the `FieldMaps` option of `SeedForTesting`.
+  - Removed from `IntegrationEngine`: the `FieldMaps` pass-through. `GetFieldMapsForEntityMap` is replaced by `LoadFieldMapsForEntityMap(entityMapID, contextUser?)`.
+  - `IntegrationDataService.LoadFieldMaps` reads through `LoadFieldMapsForEntityMap` and now uses the provider it is given.
+  - `LoadFieldMapsForEntityMap` throws when the read fails, so a failed read is not taken for an entity map with no field maps.
+
+- 9a2d7cc: RunView's `TotalRowCount` contract is now explicit: a number is always a real total, and `undefined` means the caller passed `SkipTotalRowCount: true`.
+
+  **Contract change.** `RunViewResult.TotalRowCount` is now optional (`TotalRowCount?: number`). With `SkipTotalRowCount: true` it is always `undefined`, including on a page that was not full, where it used to be the number of rows returned. A caller that needs a total must not pass the flag. Strict TypeScript consumers that read the field will see a compile error; a call without the flag always gets a number, so `?? 0` is safe there. `ResultType: 'count_only'` ignores the flag and always counts.
+
+  `MaxRows: 1` is no longer special-cased: a full page of one row now runs the same count as any other full page and reports the real total. Callers that only read `Results` should pass `SkipTotalRowCount: true` to avoid that second query; about 270 such reads in this repo now do. `SkipTotalRowCount` is now sent over GraphQL, so browser callers can use it too.
+
+- 3f92ec2: Sync lifecycle: `IntegrationGetResourcePressure` plus run warnings before a host runs out of memory or disk; deactivating a connection pauses its schedules, requests cancel of an in-flight sync and refuses refresh/evolution with a named reason; schema evolution offers accumulated custom columns and materialises accepted ones in the same migration; connectors declare a `SettingsSchema` exposed by `IntegrationGetConnectorSettingsSchema`.
+- 48d2b32: Sync sheds load under host memory pressure instead of only warning about it.
+
+  `ResourcePressure` previously watched the V8 heap, which cannot see the memory that actually
+  kills a sync: `--max-old-space-size` bounds old space only, while an HTTP response body lives in
+  `Buffer`/`ArrayBuffer` — external, and counted in neither. A throttle watching the heap reads
+  healthy right up to the kill. Measured on a 3,830 MB box: the kernel killed node at 3,478 MB RSS
+  against a 1,964 MB heap ceiling — 1.8x — with heap usage unremarkable.
+
+  It now also reads host RAM from `/proc/meminfo` (MemAvailable, not MemFree, which excludes
+  reclaimable page cache and reads far tighter than what a process can obtain) and reports
+  `ResidentFraction`. Where both thresholds trip, the worse of the two is reported under one code,
+  so a caller has a single number to act on.
+
+  `MemoryGovernor` decides and `RunMemoryControl` applies, split so the decision is testable without
+  a live sync. The governor runs PER BATCH rather than between entity maps: a table fetching twelve
+  consecutive 2,000-record pages allocates all of it without ever reaching a boundary, which is the
+  difference between noticing and dying. One control per run, never shared — the engine is a
+  singleton across concurrent syncs, so calibration held on it would let one connection's behaviour
+  throttle another's.
+
+  `AdaptiveConcurrency` gains `Hold()`/`Release()`: stop the cap GROWING without lowering it. The
+  cheapest possible response — everything in flight keeps running and nothing new is admitted — so
+  it costs no throughput. Without it the only options were "carry on" and "halve", and halving work
+  that is already succeeding is a real cost paid for a problem holding would have solved.
+
+  Memory pressure feeds the SAME AIMD signal a source rate-limit uses, so no per-connector tuning
+  and no advance knowledge of which connector misbehaves is required: a connector returning 10x the
+  requested batch costs 10x the memory, the reading notices, and the cap follows. The floor is 1, so
+  a sync always makes progress rather than deadlocking on a full box.
+
+  `ResourcePressureOutput` exposes `ResidentFraction`, `HostMemTotalMB` and `HostMemAvailableMB`.
+
+  The governor judges pressure on the HOST — memory in use, `MemTotal - MemAvailable` — not this
+  process's RSS, and sheds above 0.85 / releases below 0.75. RSS counts heap the deployment gave V8
+  on purpose: with the heap sized at (RAM - 1 GB) x 0.70, a large workspace sits at 72.7% of RAM five
+  minutes after a restart with nothing running, so a 0.70 trigger fired on ordinary work and a 0.55
+  release line sat below the idle floor. It takes at most one step per run every 10 s
+  (`DECISION_INTERVAL_MS`), whichever map reports, and under the release line gives one step back:
+  `ReleaseAdmissions` lets the concurrency controller ramp again and the page doubles back to its
+  configured size. Measured on a 825-table sync before this: five tables at 25 records a page for 75
+  minutes while 711 never started. `EvaluatePressure` uses the same reading and line.
+
+- 94e3a12: A sync's numbers, warnings and successes now correspond to what the run did: `RecordsSynced` counts records written (not created+updated+skipped+errored) and is finalised after the loop, so an object that completes in one page no longer sits at 0 forever; a discovery re-checks its connection before persisting and refuses when it has been deleted (which on the shared catalog used to succeed and overwrite the declared floor); discovery completion messages name the field counts, so a run that created 69 fields no longer reports "0 objects created, 0 updated"; repeated warnings are rolled up by code instead of burying a run under one cause, and the rollup keeps what each rolled-up occurrence reported; the batch apply and the schema evolution surface the declared-but-deactivated row warnings the single apply already had; the single apply reads `APIRestarted` from the pipeline, filters its fallback describe, and invalidates the catalog caches the batch always did; and the record-map read streams to its caller rather than holding every row of the table in memory.
+- c8fb9d7: Keep the real row total where a variable `MaxRows` can be 1 (#6000). Run-history retention reads `keep + 1` runs and counts them, so `MJ_INTEGRATION_MAX_RUNS_PER_CI=1` prunes again. The list, view and filter record-set sources read two rows for a batch of one and keep the first, so the reported progress total stays the full count.
+- Updated dependencies [1419ba7]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [91cba84]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [3bace5a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [0fb3649]
+- Updated dependencies [2c38278]
+- Updated dependencies [ccfd553]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [6779eed]
+- Updated dependencies [397ae9a]
+- Updated dependencies [89a5b59]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [509d2aa]
+- Updated dependencies [14c7719]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/core-entities@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+  - @memberjunction/integration-engine-base@6.2.0-edge.7
+  - @memberjunction/integration-progress-artifacts@6.2.0-edge.7
+  - @memberjunction/integration-pk-classifier@6.2.0-edge.7
+
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- b1295d2: Discovery stops for memory instead of being killed, and no longer has to hold the whole catalog to finish.
+  - **A memory budget beside the time budget.** Introspect and PK classification stop taking on new work when the V8 heap reaches `HEAP_STOP_FRACTION` of its limit or resident memory reaches `RSS_STOP_FRACTION` of the box, keep what they gathered, and report `HOST_MEMORY_PRESSURE`. PK classification refreshes only the catalog (not every engine dataset) and yields to the collector every 25 objects. A discovery sample never requests a page larger than its target.
+  - **An absolute heap floor.** `heap_size_limit` includes a fixed ~192 MB young-generation reserve that live data never occupies, so a fraction of it alone sits above V8's real abort line on any heap under ~2.4 GB. The heap gate also stops when no more than `HEAP_STOP_MIN_HEADROOM_BYTES` (320 MB) remain; large heaps are unaffected.
+  - **Streaming introspection.** `IntrospectSchemaOptions.OnObject` lets a caller take each object as a base connector builds it (`SourceSchemaInfo.Streamed` says it did). The creation pipeline uses it to sample and persist each object as it is produced, carrying only object names to a final pass that retires absent objects — so peak memory is one object, not the catalog. `PersistDiscoveredSchema` gains `DeactivateAbsentObjects` / `DeactivateAbsentFields`, each defaulting to `DeactivateAbsent`. Connectors whose `IntrospectSchema` does not forward the option behave exactly as before.
+
+- 420fc02: Discovery no longer persists an object with no fields. Two independent routes led there, both ending with an object that maps to nothing and syncs nothing, while the run reported a sample that had succeeded.
+  - **A runtime-discovered object was never sampled at all.** `BaseRESTIntegrationConnector.DiscoverySampleRecordStream` opened by resolving the object from the engine cache, and that lookup throws when the object has no persisted row. Sampling is what decides what the row will contain, so it necessarily runs before the row exists: the throw fired on the first line, before the connector was consulted, and unwound into the failure fallback. The whole sampling chain therefore ran with zero records for precisely the objects discovery exists to learn — no statistical primary key, no observed column widths. The lookup is now optional. A missing row disqualifies only the record-constrained sampler, which reads the object's API path and ID; the generic `FetchChanges` loop needs neither and hands routing to the connector, which owns first contact with an object the catalog has never seen. Deadline and watchdog forwarding on that route are unchanged.
+  - **An empty source table produced a fieldless object.** A sample returns zero fields whenever it saw zero records, which is the ordinary state of an empty table rather than a malfunction — so it never threw, never took the existing fallback, and the empty result was written out verbatim as the object's schema. Because discovery does not re-run on its own, the emptiness of a table at one moment became a permanent property of the schema, even though the connector's describe surface knew the columns throughout. `StageIntrospect` now consults that describe surface as a last resort before persisting an object with no fields, and reports it on the existing `discover-fields-fallback` channel so a discovery that learned nothing stays distinguishable from one that succeeded.
+
+    The backstop is deliberately placed at the point of persistence and gated on there being no declared fields either, because zero fields is also a _designed_ outcome: a composition child whose parent tuple is unknowable adjourns to declared-only fields on purpose. Only the two paths where the sample is the sole source of fields — a runtime-discovered object, and a name-only declaration — can reach the backstop; an object that declared fields keeps them and merges exactly as before.
+
+- f68e17b: The discovery run deadline — the outermost bound, and the only one that can fail a whole run — is configurable per connection and defaults to 12 hours. Resolution order is the explicit `RunDeadlineMs` argument, then the connection's `Configuration.runDeadlineMs`, then `MJ_INTEGRATION_RUN_DEADLINE_MS`, then the default; `0` disables the ceiling, and a negative, non-numeric or malformed value falls through rather than disabling it. The default was 45 minutes, which failed large catalogs mid-introspection and discarded everything gathered; the ceiling exists to release a run that has hung, not to bound one that is merely big.
+- a1a7e2c: Schema evolution acts on the watermark-field change it already detects, and the remaining bare RSU pipeline calls retry.
+
+  **A watermark-field change now resets the watermark (MJ-RUN-37).**
+
+  When a connector upgrade moves an object's incremental cursor to a different source column, `IntegrationSchemaSync.UpsertObject` has always overlaid `IntegrationObject.IncrementalWatermarkField` and recorded `'IncrementalWatermarkField'` on a local `changes` array. Nothing consumed that array. The schema evolution's `changedObjects` — the only input to `ResetPullWatermarks` — was built from a physical column diff and a field-map add/disable, and a cursor swap produces neither: no column moves and no field map changes. So the object read as unchanged, its Pull watermark survived, and the next incremental sync applied the OLD column's stored value as a lower bound on the NEW one.
+
+  Where the new column sorts later than the old one, every row below that value is filtered out at the source and never fetched again. Nothing reports it. On an incremental the source returns a total consistent with the filter it was handed, so the run's fetch-integrity check sees fetched equal to expected and closes clean — the defect produces silent, permanent absence rather than an error or a duplicate.
+
+  The fix is wiring, not detection. `ObjectMergeLog` now carries the `ChangedAttributes` the persist layer already computed, and `IntegrationSchemaEvolution` consumes it through a new pure helper, `ObjectsWithWatermarkFieldChange`, so such an object is marked changed and its Pull watermark is reset exactly as a column change already does. The helper is scoped to the evolution's CONTINUING entity maps and excludes newly-created objects, so it cannot inflate the change set (and therefore `HasChanges`, and therefore a full re-fetch) with objects nothing can act on.
+
+  `SupportsIncrementalSync` is deliberately NOT covered: the persist layer never writes that column on an existing row, so there is no detected change to consume. Making it work is a detection change, not a wiring one.
+
+  **The remaining bare `RunPipelineBatch` calls retry (MJ-APPLY-6 residual).**
+
+  `SchemaBuilder.RunSchemaPipeline` already states the reason: the pipeline's expensive middle steps (`ExecuteMigration`, `RunCodeGen`, `CompileTypeScript`, `RestartMJAPI`) fail transiently, `RunPipelineBatchWithRetry` whitelists exactly those and refuses to replay once anything has been applied, and "the callers simply never used it". Three of the four remaining bare call sites now do: `IntegrationApplySchemaBatch` (parity with its single-connector sibling, which retries), `IntegrationSchemaEvolution`, and the post-sync `CustomColumnPromoter` (which runs unattended, mid-sync, where a dropped promotion is invisible).
+
+  `RunRuntimeSchemaUpdateBatch` deliberately keeps the bare call, now with the reason stated in the code: it replays CALLER-AUTHORED SQL, and `executeMigration` is not transactional — it issues one `ExecuteSQL` per GO/statement chunk, so a migration that fails on a later chunk leaves earlier chunks committed while the step records `failed`, which is exactly the state a replay reads as safe. For SchemaBuilder-generated DDL that risk is accepted upstream; for arbitrary operator SQL it is not.
+
+- 315e8f7: Per-connection integration catalog, engine half: a resolution API and catalog scope (`WithCatalogScope`/`RunInCatalogScope`), a `CatalogSource` flag (`Shared` | `PerConnection`, per connection or via `MJ_INTEGRATION_CATALOG_SOURCE`), and a catalog writer that persists discovery into the connection's own rows and rebases them from the declared definition. Flag off is byte-identical behaviour. `MJ_INTEGRATION_CATALOG_STRICT=1` makes the declared catalog read-only at runtime. The per-connection rows are never loaded at boot: a catalog scope loads its connection's objects and a narrow dependency-edge set, and field rows are warmed per object into a row-bounded cache that the sync loop warms and pins around each entity map. Catalog reads made during a run (the scope's loads, the catalog store, the catalog writer) bypass the query-result cache, whose entries for these entities are not invalidated by the run's own writes.
+- 0a348e2: `RunViewParams.SkipTotalRowCount` — an explicit caller opt-out of the extra COUNT round trip. A row-limited read that comes back exactly full runs the count SQL as a second, sequential query, and a paginated read counts up front; a caller that only consumes `Results` can now skip both. (`next` already skips the full-page count for a `MaxRows: 1` probe; this covers every other read that never reads `TotalRowCount`.) With the flag, `TotalRowCount` is the number of rows returned; `count_only` ignores it. Calls with the flag get their own RunView cache slot (`strc:1`), so a counted and an uncounted result are never served for each other. The integration engine's per-record match lookups set it explicitly.
+- 5ba9ce9: The discovery watchdog stops reporting work that is not running.
+
+  `End` is called in a `finally`, so an in-flight entry survives its owner only when the owner never unwound at all — a process killed mid-discovery, or an await that neither settled nor rejected. The registry had no way to notice: the entry stayed, and every report line kept claiming `"Orders" 4211s still in flight`.
+
+  That is the failure this class exists to prevent, pointed the other way. Its own doc argues a watchdog that under-reports what is in flight is worse than no watchdog, because the whole contract is that the report is true; a watchdog that OVER-reports sends an operator chasing a sample that stopped existing an hour ago.
+
+  `Tick` now evicts entries older than `StaleAfterMs` (default one hour, `<= 0` disables) before building the report, so a single tick can never both describe an entry and bury it. Eviction is loud: a sample disappearing quietly would read as completion, which is the opposite of what happened, so each one is named along with how long it sat and what stage it died at.
+
+  This is not a timeout and it cancels nothing. It only decides when the watchdog should stop asserting something it cannot know.
+
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [d43d86e]
+- Updated dependencies [1090caa]
+- Updated dependencies [f2248d5]
+- Updated dependencies [0ff7523]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [dae1d31]
+- Updated dependencies [315e8f7]
+- Updated dependencies [4c97994]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [68f5c01]
+- Updated dependencies [48c974e]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/core-entities@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/integration-engine-base@6.2.0-edge.6
+  - @memberjunction/integration-progress-artifacts@6.2.0-edge.6
+  - @memberjunction/integration-pk-classifier@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- 9c2a051: Fix "Maximum call stack size exceeded" in the full-sync orphan sweep and full push on large record maps. The record-map loader set `IgnoreMaxRows`, which also drops `MaxRows`, so its first "page" was the whole map (~126k rows on one HubSpot portal) and `rows.push(...page)` overflowed the stack. It now pages at `MaxRows` and appends without spreading.
+- Updated dependencies [0d81c53]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [2274f42]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [7e72c86]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [8420f36]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [5f707d1]
+- Updated dependencies [dc38250]
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/integration-engine-base@6.2.0-edge.5
+  - @memberjunction/integration-pk-classifier@6.2.0-edge.5
+  - @memberjunction/integration-progress-artifacts@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- b8a9e5e: Remove nested `UUIDsEqual` scans where both lists grow with the data or the code runs on every render. Fix one cross-database lookup bug.
+  - **Rubric publish validation could miss advisory parents.** `ValidateRubricTree` looked a raw `parentId` up in a map with normalized keys. On SQL Server (upper-case IDs) the advisory-ancestor walk silently stopped, so a non-advisory criterion under an advisory group was not reported. The map is now a `UUIDMap`.
+  - **Per-render getters no longer rescan the entity list.** The Entity form's `FormChromeCandidates`, the Data Explorer's `RecentEntities` / `FavoriteEntities` and the storage admin's `FilteredAccountRows` now read cached or once-built indexes.
+  - **Entity lookups by ID** in the ERD, the get-entity-details and list-entities actions, recent-access and the form builder now use the provider's indexed `EntityByID`. The application dialog uses a once-built index.
+  - **Other once-built indexes:** tag lookups, permission grantee names, orphaned-conversation owners and flow-editor node moves.
+  - `createFakeProvider` (`ng-test-utils`) now implements `EntityByID`, like a real provider.
+  - **New helper:** `GroupByUUID(items, getId?)` in `@memberjunction/global` groups items by a UUID in one pass, each group in input order.
+  - **Server sites that matched two growing lists:** the user cache (users × user roles), resource-permission deduplication, user/role sync, default-app user applications, scheduled-job statistics, MCP action discovery, REST connector schema introspection and rubric calibration.
+  - **Offline tools:** CodeGen relationship sync and CHECK-constraint value lists, CodeGen's related-entity form lookups, and `mj artifacts reclassify`.
+  - **Angular screens that scale with the data:** the AI Agent form's linked prompts and actions, the prompt priority matrix, the Testing explorer, the conversations message cache, the Query Browser tree, the Actions overview and categories, the dashboard browser, list-form bulk remove and credentials bulk actions.
+
+  Behaviour is unchanged otherwise, and each site has a test that also passes against the old code.
+
+- Updated dependencies [a709bb6]
+- Updated dependencies [432cb73]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [49f26d9]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [7316ac3]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [1ea4085]
+- Updated dependencies [aee2d53]
+- Updated dependencies [25f7b82]
+- Updated dependencies [90829e3]
+- Updated dependencies [aac148b]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/integration-engine-base@6.2.0-edge.4
+  - @memberjunction/integration-pk-classifier@6.2.0-edge.4
+  - @memberjunction/integration-progress-artifacts@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/integration-engine-base@6.2.0-edge.3
+  - @memberjunction/integration-pk-classifier@6.2.0-edge.3
+  - @memberjunction/integration-progress-artifacts@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [e97d95c]
+- Updated dependencies [2552b1e]
+- Updated dependencies [21f9e15]
+- Updated dependencies [4248fb3]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/integration-engine-base@6.2.0-edge.2
+  - @memberjunction/integration-pk-classifier@6.2.0-edge.2
+  - @memberjunction/integration-progress-artifacts@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [307da67]
+- Updated dependencies [a7da50b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/integration-progress-artifacts@6.2.0-edge.1
+  - @memberjunction/integration-engine-base@6.2.0-edge.1
+  - @memberjunction/integration-pk-classifier@6.2.0-edge.1
+
 ## 6.2.0-edge.0
 
 ### Patch Changes

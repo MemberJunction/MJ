@@ -428,7 +428,7 @@ graph TD
 
 **The one genuinely new problem is turn-taking discipline among multiple agents** so they don't talk
 over each other or loop forever — and that is exactly the passive/active/hybrid policy we're already
-building (§6). Two **passive** agents never loop (neither speaks unless addressed by name); a
+building (§6; the full-duplex rules for rooms with several agents are in §6a). Two **passive** agents never loop (neither speaks unless addressed by name); a
 **facilitator** agent (Meeting Controls channel) can arbitrate explicitly.
 
 **Self-hosted rooms when you don't want to depend on Zoom:** an MJ-native multi-party experience
@@ -661,6 +661,71 @@ sequenceDiagram
   where chat isn't available.
 
 `AIAgentSessionBridge.TurnMode` selects the mode per session; the default is `Passive`.
+
+### 6a. Multi-agent rooms and full-duplex models
+
+Everything above assumes a turn-based model: the engine decides when the agent may speak and triggers the
+speech. Full-duplex realtime models (GPT-Live, Gemini 3.8 Live with always-on proactive audio) listen
+continuously and decide for themselves when to talk, so a room with two of them needs a floor discipline that
+holds even when a model never asks first. The rules below apply per **room** (a LiveKit room name, or any
+bridge's external connection id) and only bite once a room has a second agent; a one-agent room behaves
+exactly as before.
+
+**One floor, one holder.** `MultiAgentRoomCoordinator` (`@memberjunction/ai-bridge-server`) arbitrates. The
+`FullDuplexTurnGate` sits on a full-duplex session's output: the first audio of a burst must win the floor or
+the burst is dropped and the model is told to stay silent; a burst ends after 1.2 s of output silence or the
+turn-complete signal. Two agents that start in the same instant cannot both win, whatever order the events
+arrive in.
+
+**Who was addressed: the model decides, a regex backs it up.** `IAddressedMatcher` has two implementations,
+chosen per session by `TurnAddressing`:
+
+| Value | Meaning |
+|---|---|
+| `Auto` (default) | Model-side when the model reports `FullDuplex` and the session carries the host tools, name matching otherwise. |
+| `ModelSide` | The model judges. It is given two host tools, `i_am_addressed` and `yield_turn`, because neither vendor exposes a native "this was for me" signal. `i_am_addressed` latches a one-shot, 4 s signal that the next evaluated human segment consumes, and takes the floor early; if the floor is denied the tool result tells the model to stay silent. An explicit `ModelSide` on a model that cannot do it degrades to `Regex` rather than leaving the agent unable to be addressed. |
+| `Regex` | The agent answers only when one of its names is said (the original behaviour). Meeting-bridge sessions always use this. |
+
+When a room gains its second agent, each tool-equipped full-duplex agent is told once how to take turns (a
+context note; never repeated, never sent to a turn-based model).
+
+**Backchannels never take the floor.** An utterance of at most 1.5 s and three words ("mm-hm", "right", "go on")
+is a backchannel: it is recorded as an event, never reserves or interrupts the floor, and never counts as an
+agent turn. A short question ("what time?") is a real turn.
+
+**Explicit hand-off.** `yield_turn(to?)` releases the floor. With a name it reserves the floor for that agent
+for 5 s: the target is nudged to speak, and no third agent can take the floor in the meantime. The reservation
+lapses on its own, and a person starting to speak cancels it. An unknown name just returns the floor to the room
+and says so.
+
+**Humans always preempt.** A diarized human's speech (PCM16 energy above a fixed threshold, reported at most every
+100 ms) cuts the floor holder through the existing barge-in flush path: queued audio is dropped and the model's
+current turn is interrupted. **Delegated work keeps running** and its answer is still delivered (barge-in never
+cancels a delegated run; `cancel_pending_work` does, when the person says so). New agent turns are held while a
+person is speaking and for 800 ms after.
+
+**Agent-to-agent loop cap.** After 8 consecutive agent turns with no human turn between them (configurable per
+engine with `ConfigureTurnLimits` and per room with `SetRoomMaxConsecutiveAgentTurns`), floor requests are denied
+with `LoopCapReached` until a person speaks. Passive agents rarely get near it; two Active agents prompting each
+other reach it by design.
+
+**Observability.** `GetRoomTurnSnapshot` returns the floor holder, human-speaking flag, pending hand-off, loop
+progress, backchannel count, the last 60 floor / backchannel / yield / preempt events, and each seat's mode and
+resolved addressing. It is exposed as the `GetLiveKitRoomTurnState` query, the typed
+`GraphQLLiveKitClient.GetRoomTurnState`, and rendered by the agent test bed (the Meet app's Live Room).
+
+**Replay harness.** The rules are pinned by a deterministic harness in `@memberjunction/ai-bridge-server`
+(`src/__tests__/helpers/turn-taking-replay-harness.ts`) that replays JSON fixtures of recorded room timelines
+on a virtual clock through the real coordinator, gate and policy, then asserts invariants derived from the
+resulting timeline: no two agents ever speak at once, no agent-to-agent run beyond the cap, a person speaking
+always preempts, backchannels never take the floor. Add a fixture under
+`src/__tests__/fixtures/turn-taking/` when a new failure is found in a live room.
+
+**Not yet proven on live models.** The full-duplex signals (`FullDuplex` capability, the host tools, the
+framing note) are exercised against fakes. How reliably each vendor's model calls `i_am_addressed` before it
+speaks is a live question: see the "Multi-agent rooms" section of
+[`bridges-and-widget/LIVE-CALL-CHECKLIST.md`](bridges-and-widget/LIVE-CALL-CHECKLIST.md). The floor gate is the
+safety net precisely because that behaviour cannot be assumed.
 
 ---
 
@@ -1073,6 +1138,13 @@ Every phase is "done" only when **all** of the following hold — this is baked 
       93 (incl. +20 coordinator; existing 73 still green) tests · both packages build. *(Real LiveKit SDK
       adapter binding + runner-layer floor wiring around an agent's generation remain — documented as
       pending.)*
+- [x] **Full-duplex turn-taking + agent test bed (PR 4)** — see §6a. Model-side addressing
+      (`IAddressedMatcher`: `ModelSide` via the `i_am_addressed` / `yield_turn` host tools, `Regex` fallback,
+      selectable per session, `Auto` by default), backchannel rule, coordinator-granted hand-off with TTL,
+      humans-preempt through the barge-in path with delegated work kept running, configurable agent-to-agent loop
+      cap, `FullDuplexTurnGate` safety net, deterministic replay harness with 12 fixtures, the
+      `GetLiveKitRoomTurnState` query + typed client, and the Live Room test bed (turn-taking pickers, floor /
+      backchannel / yield / loop-cap panel). Live-model behaviour is unverified (LIVE-CALL-CHECKLIST, "Multi-agent rooms").
 
 ### Phase 8 — Remote Browser channel  (option 3 — pluggable backends, the MJ way; see §4d-i)
 - [x] **Migration** `V202606161000__v5.42.x__AI_Remote_Browser_Providers.sql` — one table

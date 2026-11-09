@@ -40,7 +40,7 @@
           <button
             class="toolbar-button"
             (click)="onOpenInTabClick()"
-            title="Open in its own tab">
+            title="Open in a dashboard tab">
             <i class="fa-solid fa-up-right-from-square"></i>
             Open in Tab
           </button>
@@ -86,15 +86,15 @@
     <!-- Golden Layout will render panels here -->
   </div>
 
-  <!-- Empty State -->
-  @if (!hasPanels && !isLoading) {
+  <!-- Empty State: Add part shows in edit mode, and in view mode to a user who can edit -->
+  @if (!HasPanels && !isLoading) {
     <mj-empty-state
       class="dashboard-empty"
-      Icon="fa-solid fa-layer-group"
-      Title="No parts configured"
-      Message="This dashboard has no parts yet. Add your first part to start visualizing your data."
-      [ActionText]="isEditing ? 'Add Your First Part' : ''"
+      Icon="fa-solid fa-table-columns"
+      Title="No parts yet"
+      Message="Add a view, query, artifact, or web page to get started."
+      [ActionText]="IsEditing || CanEdit ? 'Add part' : ''"
       ActionIcon="fa-solid fa-plus"
-      (Action)="onAddPanelClick()" />
+      (Action)="OnAddPanelClick()" />
   }
 </div>

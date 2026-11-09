@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // Mock @memberjunction/global so @RegisterClass is a no-op decorator.
 vi.mock('@memberjunction/global', () => ({
@@ -7,7 +7,7 @@ vi.mock('@memberjunction/global', () => ({
 
 // Mock @memberjunction/ai — provide BaseModel/BaseRealtimeModel base classes only. The realtime
 // type aliases (RealtimeSessionParams, etc.) are compile-time interfaces and need no runtime mock.
-vi.mock('@memberjunction/ai', () => {
+vi.mock('@memberjunction/ai', async () => {
     class BaseModel {
         private _apiKey: string;
         protected get apiKey(): string {
@@ -37,8 +37,13 @@ vi.mock('@memberjunction/ai', () => {
     // registry and skips every key in it), while membership of the registry — that `firstMessage` is
     // in the shared vocabulary at all — is pinned in @memberjunction/ai's own suite. Neither test
     // can drift without the other failing.
-    const REALTIME_SHARED_CONFIG_KEYS = ['voice', 'firstMessage', 'reasoningEffort', 'mcpTools'];
-    return { BaseModel, BaseRealtimeModel, REALTIME_SHARED_CONFIG_KEYS };
+    const REALTIME_SHARED_CONFIG_KEYS = ['voice', 'firstMessage', 'reasoningEffort', 'mcpTools', 'turnDetection'];
+    // The dropped-input reporter is dependency-free, so the REAL implementation loads from its own
+    // module without the barrel: the drop tests below assert against shipped behavior.
+    const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
+    // The turn-detection reader is dependency-free too, so the mapping tests run against the real one.
+    const { ReadRealtimeTurnDetection, DescribeUnappliedTurnDetection } = await import('../../../../Core/src/generic/realtimeTurnDetection');
+    return { BaseModel, BaseRealtimeModel, REALTIME_SHARED_CONFIG_KEYS, RealtimeDroppedInputReporter, ReadRealtimeTurnDetection, DescribeUnappliedTurnDetection };
 });
 
 import {
@@ -47,6 +52,8 @@ import {
     INWORLD_REALTIME_WS_URL,
     INWORLD_DEFAULT_MODEL_ID,
     INWORLD_DEFAULT_VAD_EAGERNESS,
+    BuildInworldTurnDetection,
+    MapInworldEagerness,
     type InworldRealtimeSocket,
     type InworldConnectArgs,
     type InworldServerEvent,
@@ -260,6 +267,71 @@ describe('InworldRealtime', () => {
             expect(update.session?.['turn_detection']).toEqual({ type: 'server_vad', threshold: 0.6 });
         });
 
+        describe('normalized turnDetection', () => {
+            let warn: ReturnType<typeof vi.spyOn>;
+            beforeEach(() => {
+                warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            });
+            afterEach(() => {
+                warn.mockRestore();
+            });
+
+            it('maps Eagerness onto semantic-VAD eagerness, auto becoming medium', () => {
+                expect(MapInworldEagerness('low')).toBe('low');
+                expect(MapInworldEagerness('auto')).toBe('medium');
+                expect(MapInworldEagerness('high')).toBe('high');
+                expect(MapInworldEagerness(undefined)).toBeUndefined();
+                expect(BuildInworldTurnDetection({ turnDetection: { Eagerness: 'low' } })).toEqual({
+                    Block: { type: 'semantic_vad', eagerness: 'low' },
+                    Warning: undefined,
+                });
+            });
+
+            it('sends the normalized Eagerness on the session and does not forward turnDetection raw', async () => {
+                await startReadySession(driver, { Config: { turnDetection: { Eagerness: 'high' } } });
+                const update = driver.Fake.Find('session.update') as { session?: Record<string, JSONLike> };
+                expect(update.session?.['turn_detection']).toEqual({ type: 'semantic_vad', eagerness: 'high' });
+                expect(update.session?.['turnDetection']).toBeUndefined();
+                expect(warn).not.toHaveBeenCalled();
+            });
+
+            it('lets the flat eagerness shorthand win over the normalized Eagerness', () => {
+                expect(BuildInworldTurnDetection({ eagerness: 'high', turnDetection: { Eagerness: 'low' } }).Block).toEqual({ type: 'semantic_vad', eagerness: 'high' });
+            });
+
+            it("maps Mode 'serverVad' with Threshold and SilenceDurationMs onto server_vad", () => {
+                const result = BuildInworldTurnDetection({ turnDetection: { Mode: 'serverVad', Threshold: 0.55, SilenceDurationMs: 800 } });
+                expect(result.Block).toEqual({ type: 'server_vad', threshold: 0.55, silence_duration_ms: 800 });
+                expect(result.Warning).toBeUndefined();
+            });
+
+            it('warns at launch for Threshold and SilenceDurationMs outside server VAD', async () => {
+                await startReadySession(driver, { Config: { turnDetection: { Eagerness: 'low', Threshold: 0.6, SilenceDurationMs: 900 } } });
+                const update = driver.Fake.Find('session.update') as { session?: Record<string, JSONLike> };
+                expect(update.session?.['turn_detection']).toEqual({ type: 'semantic_vad', eagerness: 'low' });
+                expect(warn).toHaveBeenCalledTimes(1);
+                const line = String(warn.mock.calls[0][0]);
+                expect(line).toContain('[InworldRealtime]');
+                expect(line).toContain('Threshold=0.6');
+                expect(line).toContain('SilenceDurationMs=900');
+                expect(line).not.toContain('Eagerness=');
+            });
+
+            it('warns for Eagerness under server VAD, and for Coverage and Mode native', () => {
+                expect(BuildInworldTurnDetection({ turnDetection: { Mode: 'serverVad', Eagerness: 'low' } }).Warning).toContain('Eagerness="low"');
+                const native = BuildInworldTurnDetection({ turnDetection: { Mode: 'native', Coverage: 'audioActivityOnly' } });
+                expect(native.Block).toEqual({ type: 'semantic_vad', eagerness: INWORLD_DEFAULT_VAD_EAGERNESS });
+                expect(native.Warning).toContain('Mode="native"');
+                expect(native.Warning).toContain('Coverage="audioActivityOnly"');
+            });
+
+            it('sends a raw turn_detection block as given and warns that the normalized request was not applied', () => {
+                const result = BuildInworldTurnDetection({ turn_detection: { type: 'server_vad', threshold: 0.6 }, turnDetection: { Eagerness: 'low' } });
+                expect(result.Block).toEqual({ type: 'server_vad', threshold: 0.6 });
+                expect(result.Warning).toContain('raw `turn_detection`');
+            });
+        });
+
         /**
          * The raw-override loop forwards every unrecognized Config key straight onto the session,
          * which makes it the leak path for any NEUTRAL MJ key this driver does not consume — the
@@ -374,10 +446,31 @@ describe('InworldRealtime', () => {
             const session = await startReadySession(driver);
             driver.Fake.Reset();
             const bytes = new Uint8Array([1, 2, 3, 4]);
-            session.SendInput(bytes.buffer);
+            session.SendInput({ Data: bytes.buffer, Kind: 'audio' });
             const append = driver.Fake.Find('input_audio.append') as { audio?: string };
             expect(append).toBeDefined();
             expect(append.audio).toBe(Buffer.from(bytes).toString('base64'));
+        });
+
+        it('SendInput drops a video frame instead of appending it as audio, reports it once, and still sends audio (#5091)', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            try {
+                const session = await startReadySession(driver);
+                driver.Fake.Reset();
+                const jpeg = new Uint8Array([0xff, 0xd8, 0xff]);
+                session.SendInput({ Data: jpeg.buffer, Kind: 'video', MimeType: 'image/jpeg' });
+                session.SendInput({ Data: jpeg.buffer, Kind: 'video', MimeType: 'image/jpeg' });
+
+                expect(driver.Fake.Sent).toEqual([]);
+                const drops = warn.mock.calls.filter((call) => String(call[0]).startsWith('[InworldRealtime] Dropped video input of type image/jpeg'));
+                expect(drops).toHaveLength(1);
+
+                const audio = new Uint8Array([1, 2, 3, 4]);
+                session.SendInput({ Data: audio.buffer, Kind: 'audio' });
+                expect(driver.Fake.Sent).toEqual([{ type: 'input_audio.append', audio: Buffer.from(audio).toString('base64') }]);
+            } finally {
+                warn.mockRestore();
+            }
         });
 
         it('RegisterTools sends a mid-session session.update with mapped tools', async () => {
@@ -479,7 +572,7 @@ describe('InworldRealtime', () => {
         it('SendInput throws after the socket was released (Close)', async () => {
             const session = await startReadySession(driver);
             await session.Close();
-            expect(() => session.SendInput(new Uint8Array([1]).buffer)).toThrow(/not open/);
+            expect(() => session.SendInput({ Data: new Uint8Array([1]).buffer, Kind: 'audio' })).toThrow(/not open/);
         });
     });
 

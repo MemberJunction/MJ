@@ -3,7 +3,7 @@ import { RunView, LogError } from '@memberjunction/core';
 import { MJActionCategoryEntity, MJActionEntity } from '@memberjunction/core-entities';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
-import { UUIDsEqual } from '@memberjunction/global';
+import { GroupByUUID } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 interface CategoryWithStats extends MJActionCategoryEntity {
@@ -369,8 +369,9 @@ export class CategoriesListViewComponent extends BaseAngularComponent implements
       console.log(`Loaded ${categories.length} categories and ${actions.length} actions`);
 
       // Calculate stats for each category
+      const actionsByCategory = GroupByUUID(actions, a => a.CategoryID);
       this.Categories = categories.map(category => {
-        const categoryActions = actions.filter(a => UUIDsEqual(a.CategoryID, category.ID));
+        const categoryActions = actionsByCategory.Get(category.ID) ?? [];
         return {
           ...category,
           actionCount: categoryActions.length,

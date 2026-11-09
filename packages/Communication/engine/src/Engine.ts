@@ -45,6 +45,18 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
     public get ContextUser(): UserInfo { return this._contextUser ?? this.base.ContextUser; }
     public set ContextUser(value: UserInfo) { this._contextUser = value; }
 
+    /**
+     * Cache of provider instances, keyed by provider name. Providers are stateless aside from
+     * their own internal SDK-client caches (e.g. TwilioProvider/GmailProvider/MSGraphProvider's
+     * `MJLruCache`), and those caches only pay off if the provider instance itself survives
+     * across calls. Without this cache, `GetProvider()` asked `ClassFactory.CreateInstance` for
+     * a brand-new instance on every single send — including once per recipient during a bulk
+     * `SendMessages` — so each provider's client-caching fix was silently thrown away the moment
+     * the call returned. Bounded by the number of distinct registered provider names (a handful,
+     * admin-managed via `MJ: Communication Providers`), so no eviction is needed.
+     */
+    private _providerInstanceCache: Map<string, BaseCommunicationProvider> = new Map();
+
     // ── Proxied cached collections (single source of truth: CommunicationEngineBase.Instance) ──
     public get BaseMessageTypes(): MJCommunicationBaseMessageTypeEntity[] { return this.base.BaseMessageTypes; }
     public get Providers(): MJCommunicationProviderEntityExtended[] { return this.base.Providers; }
@@ -61,14 +73,20 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
             throw new Error(`Metadata not loaded. Call Config() before accessing metadata.`);
         }
 
+        const cached = this._providerInstanceCache.get(providerName);
+        if (cached) {
+            return cached;
+        }
+
         const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseCommunicationProvider>(BaseCommunicationProvider, providerName);
         if (instance) {
-            // make sure the class we got back is NOT an instance of the base class, that is the default behavior of CreateInstance if we 
+            // make sure the class we got back is NOT an instance of the base class, that is the default behavior of CreateInstance if we
             // dont have a registration for the class we are looking for
             if (instance.constructor.name === 'BaseCommunicationProvider'){
                 throw new Error(`Provider ${providerName} not found.`);
             }
             else {
+                this._providerInstanceCache.set(providerName, instance);
                 return instance; // we got a valid instance of the sub-class we were looking for
             }
         }
@@ -97,6 +115,9 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
       *                      Provider-specific credential object (e.g., SendGridCredentials).
       *                      If not provided, uses environment variables.
       *                      Set `credentials.disableEnvironmentFallback = true` to require explicit credentials.
+      * @param contextUser - Optional user the messages are processed as (template rendering and its
+      *                      extensions). Defaults to this engine's context user; pass it whenever the send
+      *                      is on behalf of a specific user, since the engine is shared across requests.
       */
      public async SendMessages(
         providerName: string,
@@ -104,7 +125,8 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
         message: Message,
         recipients: MessageRecipient[],
         previewOnly: boolean = false,
-        credentials?: ProviderCredentialsBase
+        credentials?: ProviderCredentialsBase,
+        contextUser?: UserInfo
      ): Promise<MessageResult[]> {
         const run = await this.base.StartRun();
         if (!run)
@@ -115,7 +137,7 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
             const messageCopy = new Message(message);
             messageCopy.To = r.To;
             messageCopy.ContextData = r.ContextData;
-            const result = await this.SendSingleMessage(providerName, providerMessageTypeName, messageCopy, run, previewOnly, credentials);
+            const result = await this.SendSingleMessage(providerName, providerMessageTypeName, messageCopy, run, previewOnly, credentials, contextUser);
             results.push(result);
         }
 
@@ -141,6 +163,7 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
       *                      Provider-specific credential object (e.g., SendGridCredentials).
       *                      If not provided, uses environment variables.
       *                      Set `credentials.disableEnvironmentFallback = true` to require explicit credentials.
+      * @param contextUser - Optional user the message is processed as. Defaults to this engine's context user.
       */
      public async SendSingleMessage(
         providerName: string,
@@ -148,7 +171,8 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
         message: Message,
         run?: MJCommunicationRunEntity,
         previewOnly?: boolean,
-        credentials?: ProviderCredentialsBase
+        credentials?: ProviderCredentialsBase,
+        contextUser?: UserInfo
      ): Promise<MessageResult> {
         if (!this.Loaded){
             throw new Error(`Metadata not loaded. Call Config() before accessing metadata.`);
@@ -176,7 +200,7 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
 
         // now, process the message
         const processedMessage = new ProcessedMessageServer(message);
-        const processResult = await processedMessage.Process(false, this.ContextUser);
+        const processResult = await processedMessage.Process(false, contextUser ?? this.ContextUser);
         if (processResult.Success) {
             if (previewOnly) {
                 return { Success: true, Error: '', Message: processedMessage };

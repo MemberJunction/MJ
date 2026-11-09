@@ -107,6 +107,7 @@ import {
     ActionLibrary,
     GeneratedCode,
     RunActionParams,
+    ActionRunScopeIsBounded,
     EntityActionEngineBase,
     EntityActionInvocationParams,
     EntityActionResult,
@@ -234,6 +235,23 @@ describe('RunActionParams', () => {
         expect(params.Context.apiKey).toBe('test-key');
         expect(params.Params).toEqual([]);
         expect(params.Filters).toEqual([]);
+    });
+});
+
+describe('ActionRunScopeIsBounded', () => {
+    const TENANT = 'aaaaaaaa-0000-4000-8000-0000000000a7';
+
+    it('holds when the run carries a tenant or a secondary dimension', () => {
+        expect(ActionRunScopeIsBounded({ PrimaryScopeRecordID: TENANT })).toBe(true);
+        expect(ActionRunScopeIsBounded({ PrimaryScopeRecordID: null, SecondaryScopes: { Region: 'EMEA' } })).toBe(true);
+        expect(ActionRunScopeIsBounded({ PrimaryScopeEntityName: 'Organizations', PrimaryScopeRecordID: TENANT, SecondaryScopes: null })).toBe(true);
+    });
+
+    it('does not hold outside a run, for an unscoped run, or for an entity name alone', () => {
+        expect(ActionRunScopeIsBounded(undefined)).toBe(false);
+        expect(ActionRunScopeIsBounded(null)).toBe(false);
+        expect(ActionRunScopeIsBounded({ PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null })).toBe(false);
+        expect(ActionRunScopeIsBounded({ PrimaryScopeEntityName: 'Organizations', PrimaryScopeRecordID: '  ', SecondaryScopes: {} })).toBe(false);
     });
 });
 

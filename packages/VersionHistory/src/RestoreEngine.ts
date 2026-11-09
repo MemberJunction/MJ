@@ -22,6 +22,7 @@ import {
     RestoreStatus,
     VersionLabelScope,
 } from './types';
+import { SortByEntityDependencyOrder } from '@memberjunction/record-graph';
 import { LabelManager } from './LabelManager';
 import { SnapshotBuilder } from './SnapshotBuilder';
 import {
@@ -244,51 +245,10 @@ export class RestoreEngine {
     /**
      * Sort label items by entity dependency order so parents are restored
      * before their children.
+     * Delegates to SortByEntityDependencyOrder in @memberjunction/record-graph.
      */
     private sortByDependencyOrder(items: MJVersionLabelItemEntityType[]): MJVersionLabelItemEntityType[] {
-        const md = this.ProviderToUse;
-
-        // Build a map of entityId -> dependency level
-        const levelMap = new Map<string, number>();
-        const visited = new Set<string>();
-
-        const computeLevel = (entityId: string): number => {
-            if (levelMap.has(entityId)) return levelMap.get(entityId)!;
-            if (visited.has(entityId)) return 0; // Cycle — break it
-            visited.add(entityId);
-
-            const entityInfo = md.EntityByID(entityId);
-            if (!entityInfo) {
-                levelMap.set(entityId, 0);
-                return 0;
-            }
-
-            // Find all FK fields pointing to other entities
-            let maxParentLevel = -1;
-            for (const field of entityInfo.Fields) {
-                if (field.RelatedEntityID && !UUIDsEqual(field.RelatedEntityID, entityId)) {
-                    const parentLevel = computeLevel(field.RelatedEntityID);
-                    maxParentLevel = Math.max(maxParentLevel, parentLevel);
-                }
-            }
-
-            const level = maxParentLevel + 1;
-            levelMap.set(entityId, level);
-            return level;
-        };
-
-        // Compute levels for all entities in the item set
-        const entityIds = new Set(items.map(i => i.EntityID));
-        for (const entityId of entityIds) {
-            computeLevel(entityId);
-        }
-
-        // Sort: lower level (parents) first
-        return [...items].sort((a, b) => {
-            const levelA = levelMap.get(a.EntityID) ?? 0;
-            const levelB = levelMap.get(b.EntityID) ?? 0;
-            return levelA - levelB;
-        });
+        return SortByEntityDependencyOrder(items, i => i.EntityID, this.ProviderToUse);
     }
 
     /**

@@ -1,4 +1,5 @@
 import { UserInfo } from '@memberjunction/core';
+import type { MentionSuggestionScope } from '@memberjunction/conversations-runtime';
 import { ComposerSuggestionRequest, ComposerTriggerProvider, MentionSuggestion } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '../services/mention-autocomplete.service';
 
@@ -20,6 +21,14 @@ export abstract class BaseConversationMentionProvider extends ComposerTriggerPro
   public TargetAgentId: string | null = null;
 
   /**
+   * Narrows the '@' list for the composer that owns this provider instance: the agents it may
+   * offer and the people it offers. Each `mj-ai-composer` holds its own providers, so two
+   * composers on one page keep separate scopes even though they share the suggestion engine.
+   * `null` (the default) keeps the engine's full list.
+   */
+  public Scope: MentionSuggestionScope | null = null;
+
+  /**
    * Warm the shared suggestion engine so the first keystroke after a trigger is fast.
    * Safe to call repeatedly/concurrently — the engine has a promise-locked initialize.
    */
@@ -36,6 +45,6 @@ export abstract class BaseConversationMentionProvider extends ComposerTriggerPro
     const engine = MentionAutocompleteService.Instance;
     // No-op when already initialized; covers hosts that never called Initialize()
     await engine.initialize(request.ContextUser, request.Provider ?? undefined);
-    return engine.getSuggestions(request.Query, true, this.TriggerChar, this.TargetAgentId).slice(0, request.MaxResults);
+    return engine.GetSuggestions(request.Query, true, this.TriggerChar, this.TargetAgentId, this.Scope).slice(0, request.MaxResults);
   }
 }

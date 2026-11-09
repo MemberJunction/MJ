@@ -336,12 +336,8 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
       this.OnNewComponent();
     }
 
-    // Ctrl+/ or ? = Toggle keyboard shortcuts
-    if ((event.ctrlKey || event.metaKey) && event.key === '/') {
-      event.preventDefault();
-      this.ShowKeyboardShortcuts = !this.ShowKeyboardShortcuts;
-      this.cdr.detectChanges();
-    } else if (event.key === '?' && !isInputFocused) {
+    // ? = Toggle keyboard shortcuts (Ctrl/Cmd+/ belongs to the shell's command palette)
+    if (event.key === '?' && !isInputFocused) {
       this.ShowKeyboardShortcuts = !this.ShowKeyboardShortcuts;
       this.cdr.detectChanges();
     }
@@ -1108,11 +1104,13 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
         version.UserID = this.metadata.CurrentUser.ID;
 
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        // conversation-scope: artifact-wide read, no conversation path applies
         const versionsResult = await rv.RunView<MJArtifactVersionEntity>({
           EntityName: 'MJ: Artifact Versions',
           ExtraFilter: `ArtifactID = '${artifact.ID}'`,
           OrderBy: 'VersionNumber DESC',
           MaxRows: 1,
+          SkipTotalRowCount: true,
           ResultType: 'entity_object'
         });
 

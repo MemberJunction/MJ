@@ -257,6 +257,15 @@ describe('MJLexer', () => {
             expect(parsed.parameters[0].isPassThrough).toBe(false);
         });
 
+        it('reads a doubled quote inside a static value as one quote', () => {
+            const tokens = MJLexer.Tokenize(`FROM {{query:"Reports/Summary(owner='O''Brien', note='a, b')"}} r`);
+            const parsed = tokens.find(t => t.type === 'MJ_COMPOSITION_REF')!.parsed as MJCompositionRefContent;
+            expect(parsed.parameters).toEqual([
+                { key: 'owner', value: "O'Brien", isPassThrough: false },
+                { key: 'note', value: 'a, b', isPassThrough: false }
+            ]);
+        });
+
         it('should parse composition with pass-through parameters', () => {
             const tokens = MJLexer.Tokenize('FROM {{query:"Analytics/Counts(min=MinCount)"}} mac');
             const comp = tokens.find(t => t.type === 'MJ_COMPOSITION_REF')!;

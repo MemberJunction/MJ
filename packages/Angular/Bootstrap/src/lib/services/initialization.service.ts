@@ -16,6 +16,14 @@ import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-
 import { SharedService } from '@memberjunction/ng-shared';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT, MJStartupValidationService, MJ_STARTUP_VALIDATION } from '../bootstrap.types';
 
+/**
+ * The server's permission error for a user who cannot read their own roles. The entity is named
+ * `MJ: User Roles` since v5 (older servers say `User Roles`). SetupGraphQLClient appends it to its
+ * own message when the boot's metadata download fails for that reason (#4887). Intentionally
+ * duplicated in the Explorer WorkspaceInitializerService, which classifies the same boot error.
+ */
+const NO_USER_ROLES_PERMISSION_TEXT = /does not have read permissions on (MJ: )?User Roles/;
+
 export interface InitializationResult {
   success: boolean;
   error?: {
@@ -117,19 +125,17 @@ export class MJInitializationService {
   }
 
   /**
-   * Navigate to initial route after successful login
+   * Navigate to the initial route after a successful login. A deep link is replayed
+   * through the router; a bare `/` is left to the router's default route (the Home app).
+   *
+   * @param document Unused since the Kendo drawer was removed; kept so existing callers
+   * (`AuthShellComponent`) and the deprecated alias keep compiling.
    */
   NavigateToInitialRoute(initialPath: string, document: Document): void {
+    void document;
     localStorage.removeItem('jwt-retry-ts');
 
-    if (initialPath === '/') {
-      // Use first nav item instead
-      setTimeout(() => {
-        // Find the KendoDrawer element and simulate a click for the first item
-        const drawerElement = document.querySelector('li.k-drawer-item.k-level-0') as any;
-        if (drawerElement) drawerElement.click();
-      }, 10); // Wait for the drawer to finish render
-    } else {
+    if (initialPath !== '/') {
       this.router.navigateByUrl(initialPath, { replaceUrl: true });
     }
   }
@@ -150,7 +156,7 @@ export class MJInitializationService {
       if (err.response && Array.isArray(err.response.errors)) {
         return err.response.errors.some((e: any) =>
           e && e.message && typeof e.message === 'string' &&
-          e.message.includes('does not have read permissions on User Roles')
+          NO_USER_ROLES_PERMISSION_TEXT.test(e.message)
         );
       }
 
@@ -165,7 +171,7 @@ export class MJInitializationService {
       // Check for error message directly on the error object
       if (err.message && typeof err.message === 'string') {
         const message = err.message;
-        return message.includes('does not have read permissions on User Roles') ||
+        return NO_USER_ROLES_PERMISSION_TEXT.test(message) ||
                message.includes("Cannot read properties of undefined (reading 'ResourceTypes')");
       }
 

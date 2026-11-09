@@ -7,6 +7,8 @@ import {
 import { DatabaseReference, DatabaseReferenceScanner } from './database-reference-scanner';
 import { EntityForeignKeyHelper } from './entity-foreign-key-helper';
 import { SyncEngine } from './sync-engine';
+import { ParseEnvReference } from './env-reference';
+import { METADATA_KEYWORDS } from '../constants/metadata-keywords';
 /**
  * Complete audit result for deletion operations
  */
@@ -138,10 +140,7 @@ export class DeletionAuditor {
             }
         }
 
-        const deletionLevels = analyzer.reverseTopologicalSort(
-            recordsForSort,
-            reverseDepsForSort
-        );
+        const deletionLevels = analyzer.reverseTopologicalSort(recordsForSort);
 
         // Step 8: Check for circular dependencies among records to delete
         const circularDependencies = this.findCircularDependencies(recordsForSort);
@@ -272,7 +271,7 @@ export class DeletionAuditor {
     ): Promise<void> {
         const recordByKey = new Map<string, FlattenedRecord>();
         for (const record of records) {
-            const value = record.record.primaryKey?.[pkField] ?? record.record.fields?.[pkField];
+            const value = auditKeyValue(record.record.primaryKey?.[pkField] ?? record.record.fields?.[pkField]);
             if (value == null) {
                 // Cannot determine the key — assume it still exists (safe: avoids skipping a real delete).
                 existingRecords.push(record);
@@ -330,11 +329,14 @@ export class DeletionAuditor {
     ): Promise<void> {
         const syncEngine = new SyncEngine(this.contextUser);
         for (const record of records) {
+            const key = auditKey(record.record.primaryKey || {});
+            if (!key) {
+                // A key variable that cannot be resolved: assume the record exists, so push reports it
+                existingRecords.push(record);
+                continue;
+            }
             try {
-                const existingEntity = await syncEngine.loadEntity(
-                    record.entityName,
-                    record.record.primaryKey || {}
-                );
+                const existingEntity = await syncEngine.loadEntity(record.entityName, key);
                 if (existingEntity) {
                     existingRecords.push(record);
                 } else {
@@ -536,4 +538,29 @@ export class DeletionAuditor {
     requiresConfirmation(audit: DeletionAudit): boolean {
         return this.RequiresConfirmation(audit);
     }
+}
+
+/**
+ * A key value as the database holds it: an `@env:` reference is replaced by its variable's value.
+ * Undefined when the reference is malformed or its variable is not set.
+ */
+function auditKeyValue(value: unknown): unknown {
+    if (typeof value !== 'string' || !value.startsWith(METADATA_KEYWORDS.ENV)) {
+        return value;
+    }
+    const reference = ParseEnvReference(value);
+    return reference ? process.env[reference.VariableName] : undefined;
+}
+
+/** The key with each `@env:` value resolved; null when one cannot be resolved. */
+function auditKey(primaryKey: Record<string, unknown>): Record<string, unknown> | null {
+    const key: Record<string, unknown> = {};
+    for (const [field, value] of Object.entries(primaryKey)) {
+        const resolved = auditKeyValue(value);
+        if (resolved === undefined) {
+            return null;
+        }
+        key[field] = resolved;
+    }
+    return key;
 }

@@ -1,5 +1,652 @@
 # Change Log - @memberjunction/ng-auth-services
 
+## 6.2.0
+
+### Minor Changes
+
+- 9cb815b: Add Anchored Conversations and Record Commenting across the database schema (`AnchorType`, `AnchorKey`, `AnchorMetadata` with `IConversationAnchorMetadata`, `IsResolved`, `ResolvedByUserID`, `ResolvedAt`), `ConversationEngine`, server-side RLS + FLS read enforcement (`AnchoredConversationPostRunViewHook` on `MJ: Conversations` and `MJ: Conversation Details`), two-stage write-time FLS restricted-field classification via `AIPromptRunner` (`Anchored Comment Restricted Field Classifier`) without value-matching refusal oracles or restricted `quotedValue` snapshots, FLS/RLS-aware `@mention` notifications, entity-level commenting configuration (`MJ: Entities.Configuration.Comments.Enabled` and `RequiredPermission` — enabled by default and configurable per entity via `Configuration.Comments.Enabled: false`), record-bound "Ask AI" overlay conversations (`LinkedEntityID` + `LinkedRecordID`), and `@memberjunction/ng-base-forms` (`<mj-record-comments>` with `MJ_CommentsPanel_Width` user preference persistence, field/section/group comment badges, `FormSectionIndicators` rollup, and click-to-navigate anchor scrolling).
+- 281724a: Round 2 Citizen Agent Builder feedback fixes and local development JWT auth provider (`local`):
+  - **Local Development Mock/Test JWT Auth (`local`)**: Added `LocalDevProvider` in `@memberjunction/auth-providers`, `/auth/dev-login` and `/auth/dev-users` endpoints in `@memberjunction/server` backed by `MagicLinkKeyManager` RS256 signing, `MJLocalDevProvider` in `@memberjunction/ng-auth-services`, and `AuthProvider: "local"` support in `@memberjunction/installer`. Enforced strict security guards: server startup refuses to boot if `MJ_DEV_AUTH_ENABLED=true` when `NODE_ENV=production`, and `/auth/dev-login` / `/auth/dev-users` reject any non-localhost request (`X-Forwarded-For`, `Forwarded`, `X-Real-IP`, `CF-Connecting-IP`, `Sec-Fetch-Site: cross-site`, `Host`, `Origin`, `Referer`, and socket remote address).
+  - **Single-Tarball OpenApp Archive Download**: Updated `GitHubClient` in `@memberjunction/open-app-engine` to download and extract `.sql` migrations from a single repository `.tar.gz` archive stream (`downloadTarballArchive`) instead of per-directory and per-file Contents/Blob API calls, avoiding anonymous GitHub API rate limits and large-file truncation.
+  - **Flow Agent & CLI Execution Fixes**: Enabled in-process `inRun` execution for Flow agents when no `AgentStepNode` task handler is registered, populated `userMessage` and `payload` in Flow prompt step context, supported multiple starting steps and join deferral, added `--prompt-file` (`-f`) to `mj ai agents run`, and wired `ClientClauseScreen` entity-view authorization for ad-hoc queries in `@memberjunction/ai-cli`.
+  - **Query Action Output & Truncation**: Updated `RunStoredQueryAction` and `RunAdhocQueryAction` in `@memberjunction/core-actions` to populate structured `Results`, `RowCount`, and `TotalRowCount` output parameters, raised default `ColumnMaxLength` to `500`, and appended `...[truncated]` when values are truncated.
+  - **Citizen Builder Template & Turbo Pass-Through**: Updated `citizen-builder` starter template to default to `Loop` agents, bind Docker host ports to `127.0.0.1`, pass `AI_VENDOR_API_KEY__*` and `MJ_*` through `turbo.json`, auto-select free host ports and unique `COMPOSE_PROJECT_NAME` in `mj agent init`, and added `AI_TURBO_ENV_PASSTHROUGH` doctor check in `@memberjunction/installer`.
+
+- 1cb1d52: Login Studio: design the Explorer sign-in page on the default theme.
+  - **Schema:** `MJ: Themes` gains `LoginScreen` (published) and `LoginScreenDraft`. `MJThemeEntityExtended`
+    refuses a design the login screen cannot draw safely (`StoredLoginDesignProblems` in
+    `@memberjunction/theme-engine`, the same contract the editor checks).
+  - **App:** Login Studio (`LoginStudioResource`) edits blocks, layout, background and colors, saves a draft
+    and publishes it.
+  - **Public route:** `GET /auth/login-screen` serves the default Active theme's published design, logos and
+    seeds, sanitized (`SanitizePublicLoginScreen`) on the server and again in the browser. Drafts are never
+    served to anonymous visitors; signed-in users who can read themes can read them.
+  - **Login screen:** `<mj-explorer-app>` draws a published design through `<mj-login-region>` and wears the
+    default theme's brand colors before sign-in. A host's `mjLoginSlot` templates still win;
+    `UsePublishedLoginScreen = false` keeps the screen as the host's own inputs and CSS draw it.
+
+- 8420f36: Client-direct realtime recordings no longer depend on the browser surviving the end of the call (#5294).
+  - **Opus shards during the call.** The browser captures at 48 kHz into one continuous Opus encoder (WebCodecs, or libopus WebAssembly in a Worker where WebCodecs cannot encode Opus) and uploads a 5 s `MJOPUS1` shard as raw bytes to `POST /realtime/recording/:agentSessionId/shard/:index`. Each shard is kept in IndexedDB until the server acknowledges it, so shards survive network drops and reloads and are uploaded on the next page load.
+  - **Keepalive terminal.** End, `pagehide` and `visibilitychange`→hidden send `POST /realtime/recording/:agentSessionId/end` with the last partial window as a `keepalive` request, then re-send every unacknowledged shard with `keepalive`. A hidden tab's terminal carries `final=false`: the server stamps the counts but assembles only after the grace period, so switching tabs does not rewrite the recording. `EndRealtimeSession()` waits for the terminal's acknowledgement for at most 3 s. The whole-call `UploadRealtimeRecording` upload and the `beforeunload` prompt are gone from new clients. The mutations remain for older clients.
+  - **Server ledger and assembly.** Migration `V202610151535` adds `RecordingStatus`, `RecordingExpectedShards`, `RecordingCapturedSamples`, `RecordingGaps` and `RecordingAssemblyVersion` to `AIAgentSession`, and the new `MJ: AI Agent Session Recording Shards` entity, written through guarded stored procedures. MJAPI assembles `recording.wav` and `peaks.json` within seconds of the terminal. A recording with missing shards is assembled as `Partial` after `realtime.recordingAssemblyGraceSeconds` (default 90): each gap is silence and is listed in `RecordingGaps`. The session janitor assembles sessions that never sent a terminal. Recovery of legacy `seg-*.pcm` storage shards is unchanged.
+  - **Breaking for custom hosts:** `IRealtimeSessionRecorder` now returns Opus packets (`TakeEncodedPackets()`, `Stop(): Promise<number>`) instead of base64 audio. `BrowserRecordingUnloadGuard` is removed. A host that wires its own page-lifecycle events calls `SendRecordingTerminal({ Final: false })` when the page is hidden and `SendRecordingTerminal()` on `pagehide`.
+
+### Patch Changes
+
+- c159e2f: MJAPI can now live under a path prefix without per-route CDN patches (#5674). A new setting, `MJAPI_BASE_PATH` (default `/`), is the prefix MJAPI mounts every route under. `GRAPHQL_ROOT_PATH` stays only where Apollo listens, and `MJAPI_PUBLIC_URL` stays where the world reaches MJAPI.
+  - **`ApiRoute(subpath, { absolute? })`** (new, `@memberjunction/server`): the mount path under `MJAPI_BASE_PATH`, or with `absolute` the public URL (`MJAPI_PUBLIC_URL` + subpath). Also exports `ApiRootPath()`, `ConfiguredPublicUrl()`, `JoinApiRoute()` and `NormalizeApiRootPath()`.
+  - **Core mounts** (`/healthcheck`, `/oauth`, `/esignature`, `/media`, `/realtime/sdp-exchange`, `/magic-link`, `/widget`, `/realtime/verify`, `/health/extensions`, `/auth`) are composed under the base path, as are the magic-link and realtime-verify form actions, `CreateMediaAccessToken`'s URL and `CreateUploadStageToken`'s `Url`.
+  - **Server extensions:** every `RootPath` is relative to the base path. `PrepareServerExtensionConfigs({ apiRootPath })` composes the mount path (new `ComposeServerExtensionMountPath`), and `ServerExtensionInitContext.apiRootPath` carries it. `graphqlRootPath` is no longer a reserved root, and `CoreReservedServerExtensionRoots()` no longer takes it.
+  - **Explorer is told where MJAPI is.** New optional `MJAPI_URI` environment value (`MJEnvironmentConfig`, `WorkspaceEnvironment`, `GraphQLProviderConfigData.MJAPIURL`) and `ResolveMJAPIURL(mjapiUrl)` in `@memberjunction/core`. When set, the auth-provider catalog, the Login Studio sign-in page, the healthcheck poll, the OAuth code exchange and the upload-stage POST use it as given. When unset, each keeps exactly its previous behaviour.
+  - Default config changes nothing: with `MJAPI_BASE_PATH` and `MJAPI_URI` unset, every mount path, emitted URL and Explorer request is unchanged, whatever `GRAPHQL_ROOT_PATH` is. REST stays at the origin-absolute `/api/v1`.
+
+  **Opting in (`MJAPI_BASE_PATH=/api`, e.g. behind MJ Central's CloudFront, which forwards `/api/*` unstripped).** Every route moves under the prefix, and nothing on the MJ side reports a caller still using the old address. In the same change:
+  - Set `MJAPI_PUBLIC_URL` to the prefixed address (`https://host/api`) so links MJAPI hands out carry it, and set Explorer's `MJAPI_URI` to the same. Server and Explorer switch together: either one alone leaves the login-provider catalog and the healthcheck pointing at the wrong place.
+  - Re-register every URL an outside party holds, or keep a temporary edge redirect from the old path: provider webhooks (Open App extensions such as Orders' `/webhooks/payments` and `/webhooks/billcom`, telephony `/telephony/*` and `/meetings/teams`, Slack/Teams messaging, core `/esignature/webhook/:driverKey`), OAuth redirect URIs (`/oauth/callback`), and links already emailed (magic-link invites, realtime-verify links). Carrier URLs MJ registers itself (`BuildCallbackUrl`) follow automatically.
+  - Remove CDN behaviors added per route for the old root paths once nothing calls them.
+  - **Update your own MJExplorer app.** `packages/MJExplorer` is a starter template, not a published package, so this release does not change your copy. Its `src/main.ts` preloads the sign-in data before Angular starts and must pass `MJAPI_URI` through itself. Add `MJAPI_URI` to your `environment.ts` files, then change the two preload calls:
+
+    ```ts
+    AuthProviderCatalog.Preload(environment.GRAPHQL_URI, undefined, environment.MJAPI_URI),
+    LoginScreenLoader.Load(environment.GRAPHQL_URI, undefined, environment.MJAPI_URI),
+    ```
+
+    If your `environment.ts` is a plain object literal without `MJAPI_URI`, type it as `MJEnvironmentConfig` from `@memberjunction/ng-bootstrap` so the property exists. Everything after bootstrap (healthcheck, OAuth exchange, uploads, the login screen) reads `MJAPI_URI` from the environment you already pass to `MJExplorerAppModule.forRoot()`; no other change is needed. Skipping this step does not break sign-in. The provider list and the Login Studio design just fall back to the compiled defaults.
+
+  Telephony media WebSocket URLs (`/telephony/*/media`) and `/realtime-proxy` do not move.
+
+- b5955fb: The org brand overlay now survives a cold load. `ApplyBrandOverlay()` persisted only the overlay id, and the overlay stylesheet is a session Blob, so after a reload the pre-paint script restored the `data-theme-overlay` attribute with no CSS behind it: the shell's loading screen and the sign-in page rendered MJ's default tokens until workspace bootstrap re-emitted the overlay at the end of its metadata refresh.
+  - `ApplyBrandOverlay()` persists the emitted overlay CSS beside the id (`mj-theme-overlay-css`, JSON `{ id, css }`). A session-only overlay (`persist: false`, the Theme Studio preview) persists neither.
+  - New `ThemeService.RestorePersistedBrandOverlay()` re-injects that CSS as a `<style>` and sets the attribute from localStorage alone, and records the overlay id so `Initialize()` keeps the attribute until bootstrap registers the brand. Bootstrap's real `<link>` replaces the preloaded `<style>`; a CSS entry whose id no longer matches the persisted overlay is dropped as stale; `ClearBrandOverlay()` removes both. localStorage failures are swallowed as before.
+  - `MJExplorerAppComponent` calls the restore in its constructor, before the sign-in page or the shell's loading screen renders.
+  - `ng-workspace-initializer`: when bootstrap's brand query succeeds and finds no active brand, it calls `ClearBrandOverlay()`, so a brand restored from localStorage cannot outlive its retirement; a failed query leaves the cached brand alone. The service tracks a restored overlay as pending until bootstrap confirms or clears it (not inferred from the preload `<style>`'s presence), the preload lookup is an attribute walk so an id with selector metacharacters cannot throw from the constructor, and a re-apply of the same brand skips the CSS write.
+  - `ng-auth-services`: the logout cache clearing now preserves `mj-theme-overlay-css` alongside `mj-theme` and `mj-theme-overlay`, so a sign-out followed by a sign-in still has the CSS to restore. Without it the sign-in cold load had the attribute and no stylesheet behind it.
+
+  Verified live: on a cold reload the loading screen is branded at the first instant it exists (~400 ms, before any real stylesheet link), and the real overlay link takes over once bootstrap completes.
+
+- e225ece: Login screen: a composable Explorer surface — theme it, rearrange it, extend it.
+
+  The sign-in page was the one Explorer surface a deployment could not adapt without forking the
+  component or writing CSS against its internal class names. It is now customized the same three
+  ways the rest of MJ is, each additive and each defaulting to today's rendering:
+  - **Tokens** — a `--mj-login-*` group covers the whole surface: `--mj-login-banner-bg` (the story
+    panel's background; the stock gradient is its default, so a theme can retarget just the
+    `--mj-login-grad-*` stops or replace the value outright), banner text and logo, the
+    editorial split, the panel surface, the picker width, and both card surfaces. Only the gradient
+    stops carry dark-mode values — everything else either references a semantic token that swaps on
+    its own or is theme-constant by design. Documented in THEMING.md.
+  - **Layout** — `LoginLayout`: `'split'` (stock), `'split-reverse'` (mirrored; DOM order unchanged,
+    so the story stays first for a screen reader), `'centered'` (one column: story on a full-bleed
+    banner background, sign-in options in a card on top). A layout moves regions; it never drops one.
+  - **Content** — `LoginHeading`, `LoginShowPoweredBy`, `LoginBannerAlignment`, `LoginBannerTitle`,
+    `LoginBannerSubtitle`, `LoginBannerLogoLabel`, and `LoginCards`: a `MJLoginCard[]` of tiles
+    (icon, title, text, optional sanitized link) each naming its region, so content a deployment
+    wants to add is configuration rather than markup.
+  - **Slots** — the `mjLoginSlot` directive (the shape of `mjChatSlot` in `ng-conversations`) projects
+    templates into `bannerContent` (replaces the brand block), `bannerFooter`, `panelHeader` and
+    `panelFooter`. Replace-vs-augment is stated per slot; a footer slot takes over from that region's
+    cards. `<mj-login-picker>` is deliberately not replaceable — a host surrounds sign-in, not owns it.
+
+  Also fixes a latent clipping bug this made easy to hit: the app shell sets
+  `html, body { overflow: hidden }`, so login content taller than the viewport was unreachable — which
+  already affected a tenant with many identity providers on a short screen. Both columns now scroll
+  their own content and centre with auto margins rather than `justify-content: center`, which would
+  strand the overflow above the scroll origin.
+
+  Review follow-ups: the card's focus ring took `border-radius: inherit`, which resolves to `0` on a
+  pseudo-element (the property is not inherited, and `inherit` takes from the originating anchor
+  rather than the positioned card), so it drew square around a rounded tile; the login screen gains
+  the repo's first `@media (forced-colors: active)` block, since Windows High Contrast substitutes
+  the card fill, border token and hover tint away and this is the one surface a user meets before
+  any other; and landscape phones are handled, where the width-only breakpoints left the sign-in
+  controls off the bottom of the screen.
+
+  The stacked layout's banner is now sized by its height rule rather than by a flex grow ratio. It
+  carried `flex: var(--mj-login-banner-flex, 1.05)`, whose shorthand sets flex-basis to `0%`, so
+  every `height` in the stacked breakpoints was dead — invisible until the sign-in column gained
+  `overflow-y: auto`, which dropped its automatic minimum size to zero and handed the layout to the
+  ratio. So THIS DOES CHANGE the stacked banner for an app that binds nothing: 183px to 92px at
+  844x390 and 277px to 196px at 820x560, in both cases returning the sign-in options to the screen.
+  Portrait is deliberately unchanged at 422px.
+
+  Two tokens are added alongside `--mj-login-panel-text` — `--mj-login-panel-text-secondary` and
+  `--mj-login-panel-text-muted` — so a themed panel carries the picker's whole text ramp instead of
+  only its body colour. Both default to the semantic tokens.
+
+  Apart from the stacked banner above, no behaviour or visual change for an app that binds nothing,
+  projects nothing and themes nothing.
+
+- 3b7c949: Login Studio preview fidelity: the desktop preview draws the page at 1440 x 900 and scales it to fit, the phone preview uses the live page's 50% banner, and the selected block's toolbar sits inside its outline as `mjButton` icon buttons.
+- eedb293: The Microsoft (MSAL) sign-in no longer resumes a session as whichever cached account is listed first. On a browser that still holds an earlier person's account, a reload or the end of a sign-in redirect could switch the session to that account. The session now resumes only as the active account (the one the last sign-in set), or as the only cached account; with several cached accounts and none active, the user signs in again.
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [1419ba7]
+- Updated dependencies [39b35f1]
+- Updated dependencies [e97d95c]
+- Updated dependencies [6c36fb6]
+- Updated dependencies [cc36de5]
+- Updated dependencies [9cb815b]
+- Updated dependencies [709de1a]
+- Updated dependencies [c159e2f]
+- Updated dependencies [e4c355e]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [d2db108]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [a3539d2]
+- Updated dependencies [db39145]
+- Updated dependencies [41274aa]
+- Updated dependencies [0581392]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [29b16ee]
+- Updated dependencies [c671f85]
+- Updated dependencies [49f26d9]
+- Updated dependencies [961d529]
+- Updated dependencies [5e4205c]
+- Updated dependencies [7be1684]
+- Updated dependencies [21f9e15]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [f2248d5]
+- Updated dependencies [81aea34]
+- Updated dependencies [7384dd6]
+- Updated dependencies [5465489]
+- Updated dependencies [3bace5a]
+- Updated dependencies [88e6902]
+- Updated dependencies [83486cf]
+- Updated dependencies [bb3028a]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [4248fb3]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [59e32e0]
+- Updated dependencies [8b62f8c]
+- Updated dependencies [490cd8d]
+- Updated dependencies [0a7c255]
+- Updated dependencies [0adaf76]
+- Updated dependencies [0ff7523]
+- Updated dependencies [b5c11d3]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [c4645bc]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [f65fec7]
+- Updated dependencies [9b5b489]
+- Updated dependencies [cb205de]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [683f652]
+- Updated dependencies [914e6ff]
+- Updated dependencies [91be34f]
+- Updated dependencies [2274f42]
+- Updated dependencies [0fb3649]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [705ab4e]
+- Updated dependencies [a7da50b]
+- Updated dependencies [0f04590]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [3b7c949]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [f26084f]
+- Updated dependencies [db39145]
+- Updated dependencies [f48dffc]
+- Updated dependencies [41c2c08]
+- Updated dependencies [630bb88]
+- Updated dependencies [e69634e]
+- Updated dependencies [7658d68]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [17cc774]
+- Updated dependencies [dae1d31]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a610c6e]
+- Updated dependencies [80905a1]
+- Updated dependencies [397ae9a]
+- Updated dependencies [7e72c86]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [1c9ac95]
+- Updated dependencies [4fb501e]
+- Updated dependencies [2de7fe0]
+- Updated dependencies [0d0ba18]
+- Updated dependencies [ae78a45]
+- Updated dependencies [b2f8b5b]
+- Updated dependencies [dcfdda4]
+- Updated dependencies [d714f25]
+- Updated dependencies [a35b50f]
+- Updated dependencies [3e7f8c8]
+- Updated dependencies [4889ca0]
+- Updated dependencies [ca2791b]
+- Updated dependencies [1ea4085]
+- Updated dependencies [975948b]
+- Updated dependencies [22c9074]
+- Updated dependencies [88b85fc]
+- Updated dependencies [891dc77]
+- Updated dependencies [0a952ee]
+- Updated dependencies [efbe5f5]
+- Updated dependencies [72827e6]
+- Updated dependencies [cb1e602]
+- Updated dependencies [18c66ce]
+- Updated dependencies [5e1e343]
+- Updated dependencies [84fc9d4]
+- Updated dependencies [8420f36]
+- Updated dependencies [6328ed3]
+- Updated dependencies [b3db2aa]
+- Updated dependencies [b6b3990]
+- Updated dependencies [50a2cf6]
+- Updated dependencies [3977917]
+- Updated dependencies [20d1f4a]
+- Updated dependencies [c4645bc]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [6a19f78]
+- Updated dependencies [74d9357]
+- Updated dependencies [a5b4a72]
+- Updated dependencies [25f7b82]
+- Updated dependencies [7fb8598]
+- Updated dependencies [d853bf8]
+- Updated dependencies [44428b5]
+- Updated dependencies [1b8791e]
+- Updated dependencies [02bb563]
+- Updated dependencies [104125c]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [db4e210]
+- Updated dependencies [d296edd]
+- Updated dependencies [66fd011]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [509d2aa]
+- Updated dependencies [c26b355]
+- Updated dependencies [196160a]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [5513c2a]
+- Updated dependencies [90829e3]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [8c120db]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [c159f99]
+- Updated dependencies [920bef8]
+- Updated dependencies [60bd774]
+- Updated dependencies [0a348e2]
+- Updated dependencies [ac18db8]
+- Updated dependencies [35da130]
+- Updated dependencies [c4645bc]
+- Updated dependencies [5b41d48]
+- Updated dependencies [4b9542c]
+- Updated dependencies [28c92e0]
+- Updated dependencies [5f707d1]
+- Updated dependencies [369e229]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [aca4317]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [718b01c]
+- Updated dependencies [e7b2ebc]
+- Updated dependencies [e0cf9ed]
+- Updated dependencies [374b1a4]
+- Updated dependencies [2c590b0]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [dc38250]
+  - @memberjunction/global@6.2.0
+  - @memberjunction/core@6.2.0
+  - @memberjunction/realtime-runtime@6.2.0
+  - @memberjunction/ng-ui-components@6.2.0
+  - @memberjunction/theme-engine@6.2.0
+
+## 6.2.0-edge.8
+
+### Minor Changes
+
+- 9cb815b: Add Anchored Conversations and Record Commenting across the database schema (`AnchorType`, `AnchorKey`, `AnchorMetadata` with `IConversationAnchorMetadata`, `IsResolved`, `ResolvedByUserID`, `ResolvedAt`), `ConversationEngine`, server-side RLS + FLS read enforcement (`AnchoredConversationPostRunViewHook` on `MJ: Conversations` and `MJ: Conversation Details`), two-stage write-time FLS restricted-field classification via `AIPromptRunner` (`Anchored Comment Restricted Field Classifier`) without value-matching refusal oracles or restricted `quotedValue` snapshots, FLS/RLS-aware `@mention` notifications, entity-level commenting configuration (`MJ: Entities.Configuration.Comments.Enabled` and `RequiredPermission` — enabled by default and configurable per entity via `Configuration.Comments.Enabled: false`), record-bound "Ask AI" overlay conversations (`LinkedEntityID` + `LinkedRecordID`), and `@memberjunction/ng-base-forms` (`<mj-record-comments>` with `MJ_CommentsPanel_Width` user preference persistence, field/section/group comment badges, `FormSectionIndicators` rollup, and click-to-navigate anchor scrolling).
+
+### Patch Changes
+
+- Updated dependencies [6c36fb6]
+- Updated dependencies [9cb815b]
+- Updated dependencies [d2db108]
+- Updated dependencies [c671f85]
+- Updated dependencies [59e32e0]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [e69634e]
+- Updated dependencies [ac18db8]
+  - @memberjunction/core@6.2.0-edge.8
+  - @memberjunction/global@6.2.0-edge.8
+  - @memberjunction/realtime-runtime@6.2.0-edge.8
+  - @memberjunction/ng-ui-components@6.2.0-edge.8
+  - @memberjunction/theme-engine@6.2.0-edge.8
+
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- eedb293: The Microsoft (MSAL) sign-in no longer resumes a session as whichever cached account is listed first. On a browser that still holds an earlier person's account, a reload or the end of a sign-in redirect could switch the session to that account. The session now resumes only as the active account (the one the last sign-in set), or as the only cached account; with several cached accounts and none active, the user signs in again.
+- Updated dependencies [1419ba7]
+- Updated dependencies [29b16ee]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [3bace5a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [0fb3649]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [397ae9a]
+- Updated dependencies [efbe5f5]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+  - @memberjunction/realtime-runtime@6.2.0-edge.7
+  - @memberjunction/ng-ui-components@6.2.0-edge.7
+  - @memberjunction/theme-engine@6.2.0-edge.7
+
+## 6.2.0-edge.6
+
+### Minor Changes
+
+- 281724a: Round 2 Citizen Agent Builder feedback fixes and local development JWT auth provider (`local`):
+  - **Local Development Mock/Test JWT Auth (`local`)**: Added `LocalDevProvider` in `@memberjunction/auth-providers`, `/auth/dev-login` and `/auth/dev-users` endpoints in `@memberjunction/server` backed by `MagicLinkKeyManager` RS256 signing, `MJLocalDevProvider` in `@memberjunction/ng-auth-services`, and `AuthProvider: "local"` support in `@memberjunction/installer`. Enforced strict security guards: server startup refuses to boot if `MJ_DEV_AUTH_ENABLED=true` when `NODE_ENV=production`, and `/auth/dev-login` / `/auth/dev-users` reject any non-localhost request (`X-Forwarded-For`, `Forwarded`, `X-Real-IP`, `CF-Connecting-IP`, `Sec-Fetch-Site: cross-site`, `Host`, `Origin`, `Referer`, and socket remote address).
+  - **Single-Tarball OpenApp Archive Download**: Updated `GitHubClient` in `@memberjunction/open-app-engine` to download and extract `.sql` migrations from a single repository `.tar.gz` archive stream (`downloadTarballArchive`) instead of per-directory and per-file Contents/Blob API calls, avoiding anonymous GitHub API rate limits and large-file truncation.
+  - **Flow Agent & CLI Execution Fixes**: Enabled in-process `inRun` execution for Flow agents when no `AgentStepNode` task handler is registered, populated `userMessage` and `payload` in Flow prompt step context, supported multiple starting steps and join deferral, added `--prompt-file` (`-f`) to `mj ai agents run`, and wired `ClientClauseScreen` entity-view authorization for ad-hoc queries in `@memberjunction/ai-cli`.
+  - **Query Action Output & Truncation**: Updated `RunStoredQueryAction` and `RunAdhocQueryAction` in `@memberjunction/core-actions` to populate structured `Results`, `RowCount`, and `TotalRowCount` output parameters, raised default `ColumnMaxLength` to `500`, and appended `...[truncated]` when values are truncated.
+  - **Citizen Builder Template & Turbo Pass-Through**: Updated `citizen-builder` starter template to default to `Loop` agents, bind Docker host ports to `127.0.0.1`, pass `AI_VENDOR_API_KEY__*` and `MJ_*` through `turbo.json`, auto-select free host ports and unique `COMPOSE_PROJECT_NAME` in `mj agent init`, and added `AI_TURBO_ENV_PASSTHROUGH` doctor check in `@memberjunction/installer`.
+
+### Patch Changes
+
+- b5955fb: The org brand overlay now survives a cold load. `ApplyBrandOverlay()` persisted only the overlay id, and the overlay stylesheet is a session Blob, so after a reload the pre-paint script restored the `data-theme-overlay` attribute with no CSS behind it: the shell's loading screen and the sign-in page rendered MJ's default tokens until workspace bootstrap re-emitted the overlay at the end of its metadata refresh.
+  - `ApplyBrandOverlay()` persists the emitted overlay CSS beside the id (`mj-theme-overlay-css`, JSON `{ id, css }`). A session-only overlay (`persist: false`, the Theme Studio preview) persists neither.
+  - New `ThemeService.RestorePersistedBrandOverlay()` re-injects that CSS as a `<style>` and sets the attribute from localStorage alone, and records the overlay id so `Initialize()` keeps the attribute until bootstrap registers the brand. Bootstrap's real `<link>` replaces the preloaded `<style>`; a CSS entry whose id no longer matches the persisted overlay is dropped as stale; `ClearBrandOverlay()` removes both. localStorage failures are swallowed as before.
+  - `MJExplorerAppComponent` calls the restore in its constructor, before the sign-in page or the shell's loading screen renders.
+  - `ng-workspace-initializer`: when bootstrap's brand query succeeds and finds no active brand, it calls `ClearBrandOverlay()`, so a brand restored from localStorage cannot outlive its retirement; a failed query leaves the cached brand alone. The service tracks a restored overlay as pending until bootstrap confirms or clears it (not inferred from the preload `<style>`'s presence), the preload lookup is an attribute walk so an id with selector metacharacters cannot throw from the constructor, and a re-apply of the same brand skips the CSS write.
+  - `ng-auth-services`: the logout cache clearing now preserves `mj-theme-overlay-css` alongside `mj-theme` and `mj-theme-overlay`, so a sign-out followed by a sign-in still has the CSS to restore. Without it the sign-in cold load had the attribute and no stylesheet behind it.
+
+  Verified live: on a cold reload the loading screen is branded at the first instant it exists (~400 ms, before any real stylesheet link), and the real overlay link takes over once bootstrap completes.
+
+- 3b7c949: Login Studio preview fidelity: the desktop preview draws the page at 1440 x 900 and scales it to fit, the phone preview uses the live page's 50% banner, and the selected block's toolbar sits inside its outline as `mjButton` icon buttons.
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [0581392]
+- Updated dependencies [f2248d5]
+- Updated dependencies [0ff7523]
+- Updated dependencies [b5c11d3]
+- Updated dependencies [c4645bc]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [3b7c949]
+- Updated dependencies [f26084f]
+- Updated dependencies [dae1d31]
+- Updated dependencies [a610c6e]
+- Updated dependencies [cb1e602]
+- Updated dependencies [c4645bc]
+- Updated dependencies [db4e210]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [c159f99]
+- Updated dependencies [0a348e2]
+- Updated dependencies [c4645bc]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/ng-ui-components@6.2.0-edge.6
+  - @memberjunction/realtime-runtime@6.2.0-edge.6
+  - @memberjunction/theme-engine@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Minor Changes
+
+- 1cb1d52: Login Studio: design the Explorer sign-in page on the default theme.
+  - **Schema:** `MJ: Themes` gains `LoginScreen` (published) and `LoginScreenDraft`. `MJThemeEntityExtended`
+    refuses a design the login screen cannot draw safely (`StoredLoginDesignProblems` in
+    `@memberjunction/theme-engine`, the same contract the editor checks).
+  - **App:** Login Studio (`LoginStudioResource`) edits blocks, layout, background and colors, saves a draft
+    and publishes it.
+  - **Public route:** `GET /auth/login-screen` serves the default Active theme's published design, logos and
+    seeds, sanitized (`SanitizePublicLoginScreen`) on the server and again in the browser. Drafts are never
+    served to anonymous visitors; signed-in users who can read themes can read them.
+  - **Login screen:** `<mj-explorer-app>` draws a published design through `<mj-login-region>` and wears the
+    default theme's brand colors before sign-in. A host's `mjLoginSlot` templates still win;
+    `UsePublishedLoginScreen = false` keeps the screen as the host's own inputs and CSS draw it.
+
+- 8420f36: Client-direct realtime recordings no longer depend on the browser surviving the end of the call (#5294).
+  - **Opus shards during the call.** The browser captures at 48 kHz into one continuous Opus encoder (WebCodecs, or libopus WebAssembly in a Worker where WebCodecs cannot encode Opus) and uploads a 5 s `MJOPUS1` shard as raw bytes to `POST /realtime/recording/:agentSessionId/shard/:index`. Each shard is kept in IndexedDB until the server acknowledges it, so shards survive network drops and reloads and are uploaded on the next page load.
+  - **Keepalive terminal.** End, `pagehide` and `visibilitychange`→hidden send `POST /realtime/recording/:agentSessionId/end` with the last partial window as a `keepalive` request, then re-send every unacknowledged shard with `keepalive`. A hidden tab's terminal carries `final=false`: the server stamps the counts but assembles only after the grace period, so switching tabs does not rewrite the recording. `EndRealtimeSession()` waits for the terminal's acknowledgement for at most 3 s. The whole-call `UploadRealtimeRecording` upload and the `beforeunload` prompt are gone from new clients. The mutations remain for older clients.
+  - **Server ledger and assembly.** Migration `V202610151535` adds `RecordingStatus`, `RecordingExpectedShards`, `RecordingCapturedSamples`, `RecordingGaps` and `RecordingAssemblyVersion` to `AIAgentSession`, and the new `MJ: AI Agent Session Recording Shards` entity, written through guarded stored procedures. MJAPI assembles `recording.wav` and `peaks.json` within seconds of the terminal. A recording with missing shards is assembled as `Partial` after `realtime.recordingAssemblyGraceSeconds` (default 90): each gap is silence and is listed in `RecordingGaps`. The session janitor assembles sessions that never sent a terminal. Recovery of legacy `seg-*.pcm` storage shards is unchanged.
+  - **Breaking for custom hosts:** `IRealtimeSessionRecorder` now returns Opus packets (`TakeEncodedPackets()`, `Stop(): Promise<number>`) instead of base64 audio. `BrowserRecordingUnloadGuard` is removed. A host that wires its own page-lifecycle events calls `SendRecordingTerminal({ Final: false })` when the page is hidden and `SendRecordingTerminal()` on `pagehide`.
+
+### Patch Changes
+
+- c159e2f: MJAPI can now live under a path prefix without per-route CDN patches (#5674). A new setting, `MJAPI_BASE_PATH` (default `/`), is the prefix MJAPI mounts every route under. `GRAPHQL_ROOT_PATH` stays only where Apollo listens, and `MJAPI_PUBLIC_URL` stays where the world reaches MJAPI.
+  - **`ApiRoute(subpath, { absolute? })`** (new, `@memberjunction/server`): the mount path under `MJAPI_BASE_PATH`, or with `absolute` the public URL (`MJAPI_PUBLIC_URL` + subpath). Also exports `ApiRootPath()`, `ConfiguredPublicUrl()`, `JoinApiRoute()` and `NormalizeApiRootPath()`.
+  - **Core mounts** (`/healthcheck`, `/oauth`, `/esignature`, `/media`, `/realtime/sdp-exchange`, `/magic-link`, `/widget`, `/realtime/verify`, `/health/extensions`, `/auth`) are composed under the base path, as are the magic-link and realtime-verify form actions, `CreateMediaAccessToken`'s URL and `CreateUploadStageToken`'s `Url`.
+  - **Server extensions:** every `RootPath` is relative to the base path. `PrepareServerExtensionConfigs({ apiRootPath })` composes the mount path (new `ComposeServerExtensionMountPath`), and `ServerExtensionInitContext.apiRootPath` carries it. `graphqlRootPath` is no longer a reserved root, and `CoreReservedServerExtensionRoots()` no longer takes it.
+  - **Explorer is told where MJAPI is.** New optional `MJAPI_URI` environment value (`MJEnvironmentConfig`, `WorkspaceEnvironment`, `GraphQLProviderConfigData.MJAPIURL`) and `ResolveMJAPIURL(mjapiUrl)` in `@memberjunction/core`. When set, the auth-provider catalog, the Login Studio sign-in page, the healthcheck poll, the OAuth code exchange and the upload-stage POST use it as given. When unset, each keeps exactly its previous behaviour.
+  - Default config changes nothing: with `MJAPI_BASE_PATH` and `MJAPI_URI` unset, every mount path, emitted URL and Explorer request is unchanged, whatever `GRAPHQL_ROOT_PATH` is. REST stays at the origin-absolute `/api/v1`.
+
+  **Opting in (`MJAPI_BASE_PATH=/api`, e.g. behind MJ Central's CloudFront, which forwards `/api/*` unstripped).** Every route moves under the prefix, and nothing on the MJ side reports a caller still using the old address. In the same change:
+  - Set `MJAPI_PUBLIC_URL` to the prefixed address (`https://host/api`) so links MJAPI hands out carry it, and set Explorer's `MJAPI_URI` to the same. Server and Explorer switch together: either one alone leaves the login-provider catalog and the healthcheck pointing at the wrong place.
+  - Re-register every URL an outside party holds, or keep a temporary edge redirect from the old path: provider webhooks (Open App extensions such as Orders' `/webhooks/payments` and `/webhooks/billcom`, telephony `/telephony/*` and `/meetings/teams`, Slack/Teams messaging, core `/esignature/webhook/:driverKey`), OAuth redirect URIs (`/oauth/callback`), and links already emailed (magic-link invites, realtime-verify links). Carrier URLs MJ registers itself (`BuildCallbackUrl`) follow automatically.
+  - Remove CDN behaviors added per route for the old root paths once nothing calls them.
+  - **Update your own MJExplorer app.** `packages/MJExplorer` is a starter template, not a published package, so this release does not change your copy. Its `src/main.ts` preloads the sign-in data before Angular starts and must pass `MJAPI_URI` through itself. Add `MJAPI_URI` to your `environment.ts` files, then change the two preload calls:
+
+    ```ts
+    AuthProviderCatalog.Preload(environment.GRAPHQL_URI, undefined, environment.MJAPI_URI),
+    LoginScreenLoader.Load(environment.GRAPHQL_URI, undefined, environment.MJAPI_URI),
+    ```
+
+    If your `environment.ts` is a plain object literal without `MJAPI_URI`, type it as `MJEnvironmentConfig` from `@memberjunction/ng-bootstrap` so the property exists. Everything after bootstrap (healthcheck, OAuth exchange, uploads, the login screen) reads `MJAPI_URI` from the environment you already pass to `MJExplorerAppModule.forRoot()`; no other change is needed. Skipping this step does not break sign-in. The provider list and the Login Studio design just fall back to the compiled defaults.
+
+  Telephony media WebSocket URLs (`/telephony/*/media`) and `/realtime-proxy` do not move.
+
+- Updated dependencies [39b35f1]
+- Updated dependencies [c159e2f]
+- Updated dependencies [db39145]
+- Updated dependencies [5e4205c]
+- Updated dependencies [81aea34]
+- Updated dependencies [5465489]
+- Updated dependencies [83486cf]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [8b62f8c]
+- Updated dependencies [2274f42]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [7e72c86]
+- Updated dependencies [8420f36]
+- Updated dependencies [7fb8598]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [5f707d1]
+- Updated dependencies [dc38250]
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/theme-engine@6.2.0-edge.5
+  - @memberjunction/ng-ui-components@6.2.0-edge.5
+  - @memberjunction/realtime-runtime@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [49f26d9]
+- Updated dependencies [88e6902]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [490cd8d]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [5e1e343]
+- Updated dependencies [25f7b82]
+- Updated dependencies [90829e3]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [e7b2ebc]
+- Updated dependencies [e0cf9ed]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/ng-ui-components@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [dfe40a4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/ng-ui-components@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [e97d95c]
+- Updated dependencies [21f9e15]
+- Updated dependencies [4248fb3]
+- Updated dependencies [0adaf76]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [369e229]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/ng-ui-components@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [a7da50b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [920bef8]
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/ng-ui-components@6.2.0-edge.1
+
 ## 6.2.0-edge.0
 
 ### Patch Changes

@@ -133,7 +133,7 @@ import { ParallelExecutionCoordinator } from '../ParallelExecutionCoordinator';
 import { MJGlobal } from '@memberjunction/global';
 import {
   buildRealisticCatalog, DEFAULT_CONFIGURED_DRIVERS, MODEL, VENDOR, CONFIG, MODEL_TYPE,
-  makePromptModel, type AICatalog,
+  makePromptModel, makeModel, makeModelVendor, type AICatalog,
 } from './__fixtures__/ai-metadata.fixtures';
 
 // ---------------------------------------------------------------------------
@@ -144,7 +144,7 @@ type SelectModelResult = {
   vendorDriverClass?: string;
   vendorApiName?: string;
   selectionInfo?: {
-    modelsConsidered: Array<{ model: { ID: string }; vendor?: { ID: string }; available: boolean; unavailableReason?: string }>;
+    modelsConsidered: Array<{ model: { ID: string }; vendor?: { ID: string }; available: boolean; unavailableReason?: string; driverClass?: string }>;
     selectionReason: string;
     fallbackUsed: boolean;
   };
@@ -277,6 +277,76 @@ describe('selectModel — Specific strategy + AIPromptModel', () => {
     expect(r.vendorDriverClass).toBe('OpenAILLM');
   });
 
+  it('Default strategy preserves AIPromptModel VendorID preference, EffortLevel, and PromptConfigurationObject', async () => {
+    // ClaudeOpus45 is offered by Anthropic (Priority 1) and Bedrock (Priority 5).
+    // When AIPromptModel specifies VendorID=Anthropic under SelectionStrategy='Default',
+    // Anthropic is selected by substitution for its model (no priority boost) and carries EffortLevel + PromptConfigurationObject.
+    const promptConfig = { temperature: 0.1 };
+    catalog.promptModels.push({
+      ...makePromptModel({ PromptID: 'prompt-1', ModelID: MODEL.ClaudeOpus45, VendorID: VENDOR.Anthropic, Priority: 10 }),
+      EffortLevel: 25,
+      PromptConfigurationObject: promptConfig,
+    } as never);
+    loadCatalog(catalog);
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }));
+    expect(r.model?.ID).toBe(MODEL.ClaudeOpus45);
+    expect(r.vendorDriverClass).toBe('AnthropicLLM');
+    const winningCandidate = (r.allCandidates as Array<{
+      model: { ID: string };
+      driverClass: string;
+      effortLevel?: number;
+      promptModelConfiguration?: Record<string, unknown>;
+    }>)?.find(c => c.model.ID === MODEL.ClaudeOpus45 && c.driverClass === 'AnthropicLLM');
+    expect(winningCandidate?.effortLevel).toBe(25);
+    expect(winningCandidate?.promptModelConfiguration).toEqual(promptConfig);
+  });
+
+  it('Default strategy: the caller\'s runtime vendor override beats the AIPromptModel VendorID', async () => {
+    catalog.promptModels.push(
+      makePromptModel({ PromptID: 'prompt-1', ModelID: MODEL.ClaudeOpus45, VendorID: VENDOR.Anthropic, Priority: 10 }),
+    );
+    loadCatalog(catalog);
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }), { vendorId: VENDOR.AmazonBedrock });
+    expect(r.model?.ID).toBe(MODEL.ClaudeOpus45);
+    expect(r.vendorDriverClass).toBe('BedrockLLM');
+  });
+
+  it('Default strategy: a row naming a vendor gives its effort and configuration to that vendor only', async () => {
+    catalog.promptModels.push({
+      ...makePromptModel({ PromptID: 'prompt-1', ModelID: MODEL.ClaudeOpus45, VendorID: VENDOR.Anthropic, Priority: 10 }),
+      EffortLevel: 25,
+      PromptConfigurationObject: { temperature: 0.1 },
+    } as never);
+    loadCatalog(catalog);
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }), { vendorId: VENDOR.Anthropic });
+    const opus = (r.allCandidates as Array<{ model: { ID: string }; driverClass: string; isPreferredVendor: boolean; effortLevel?: number; promptModelConfiguration?: unknown }>)
+      .filter(c => c.model.ID === MODEL.ClaudeOpus45);
+    const preferred = opus.find(c => c.isPreferredVendor);
+    expect(preferred?.driverClass).toBe('AnthropicLLM');
+    expect(preferred?.effortLevel).toBe(25);
+    expect(preferred?.promptModelConfiguration).toEqual({ temperature: 0.1 });
+    const bedrock = opus.find(c => c.driverClass === 'BedrockLLM');
+    expect(bedrock?.effortLevel).toBeUndefined();
+    expect(bedrock?.promptModelConfiguration).toBeUndefined();
+  });
+
+  it('Default strategy: a row naming no vendor gives its effort and configuration to a vendorless model\'s own driver', async () => {
+    const solo = makeModel({ ID: 'AA000000-0000-0000-0000-0000000000B1', Name: 'Solo', DriverClass: 'OpenAILLM', PowerRank: 99 });
+    catalog.models.push(solo);
+    catalog.promptModels.push({
+      ...makePromptModel({ PromptID: 'prompt-1', ModelID: solo.ID, Priority: 10 }),
+      EffortLevel: 40,
+      PromptConfigurationObject: { temperature: 0.2 },
+    } as never);
+    loadCatalog(catalog);
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }));
+    expect(r.model?.ID).toBe(solo.ID);
+    const own = (r.allCandidates as Array<{ model: { ID: string }; effortLevel?: number; promptModelConfiguration?: unknown }>)
+      .find(c => c.model.ID === solo.ID);
+    expect(own?.effortLevel).toBe(40);
+    expect(own?.promptModelConfiguration).toEqual({ temperature: 0.2 });
+  });
+
   it('orders multiple prompt models by Priority (higher first)', async () => {
     catalog.promptModels.push(
       makePromptModel({ PromptID: 'prompt-1', ModelID: MODEL.GPT5Mini, VendorID: VENDOR.OpenAI, Priority: 1 }),
@@ -302,6 +372,107 @@ describe('selectModel — Specific strategy + AIPromptModel', () => {
     const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Specific', RequireSpecificModels: false }));
     expect(r.model).not.toBeNull();
     expect(r.vendorDriverClass).toBe('AnthropicLLM'); // fell back to a credentialed Anthropic model
+  });
+});
+
+// A prompt-model row names a vendor for its model. It must pick which of that model's vendors serves
+// the prompt, never which model runs. The shape is the shipped Database Research prompt: aggregator
+// vendors on top (OpenRouter 50, Fireworks 150), direct vendors at 0-2, rows Gemini/Google 15,
+// Gemini/Vertex 14, GPT-OSS/Cerebras 10. Without aggregator keys `next` runs Gemini via Google.
+describe('selectModel — Default strategy: a prompt-model row picks the vendor, never the model', () => {
+  const V = { OpenRouter: 'AA000000-0000-0000-0000-0000000000F1', Fireworks: 'AA000000-0000-0000-0000-0000000000F2' };
+  const M = { Gemini: 'AA000000-0000-0000-0000-0000000000A1', GptOss: 'AA000000-0000-0000-0000-0000000000A2' };
+  const DIRECT = ['GeminiLLM', 'VertexLLM', 'CerebrasLLM', 'GroqLLM'];
+
+  function loadDatabaseResearch(configuredDrivers: string[]): void {
+    catalog.vendors.push({ ID: V.OpenRouter, Name: 'OpenRouter' }, { ID: V.Fireworks, Name: 'Fireworks.ai' });
+    const mv = (ModelID: string, VendorID: string, Vendor: string, DriverClass: string, Priority: number) =>
+      makeModelVendor({ ModelID, VendorID, Vendor, DriverClass, Priority });
+    const gemini = makeModel({ ID: M.Gemini, Name: 'Gemini 3.8 Flash', PowerRank: 26, ModelVendors: [
+      mv(M.Gemini, V.OpenRouter, 'OpenRouter', 'OpenRouterLLM', 50),
+      mv(M.Gemini, VENDOR.Google, 'Google', 'GeminiLLM', 1),
+      mv(M.Gemini, VENDOR.VertexAI, 'Vertex AI', 'VertexLLM', 0),
+    ] });
+    const oss = makeModel({ ID: M.GptOss, Name: 'GPT-OSS-120B', PowerRank: 14, ModelVendors: [
+      mv(M.GptOss, V.Fireworks, 'Fireworks.ai', 'FireworksLLM', 150),
+      mv(M.GptOss, VENDOR.Cerebras, 'Cerebras', 'CerebrasLLM', 2),
+      mv(M.GptOss, VENDOR.Groq, 'Groq', 'GroqLLM', 1),
+    ] });
+    catalog.models.push(gemini, oss);
+    catalog.modelVendors.push(...gemini.ModelVendors, ...oss.ModelVendors);
+    catalog.promptModels.push(
+      makePromptModel({ PromptID: 'prompt-1', ModelID: M.Gemini, VendorID: VENDOR.Google, Priority: 15 }),
+      makePromptModel({ PromptID: 'prompt-1', ModelID: M.Gemini, VendorID: VENDOR.VertexAI, Priority: 14 }),
+      makePromptModel({ PromptID: 'prompt-1', ModelID: M.GptOss, VendorID: VENDOR.Cerebras, Priority: 10 }),
+    );
+    loadCatalog(catalog, configuredDrivers);
+  }
+
+  it('with no aggregator key, runs the model next runs (Gemini via Google), not GPT-OSS via Cerebras', async () => {
+    loadDatabaseResearch(DIRECT);
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }));
+    expect(r.model?.ID).toBe(M.Gemini);
+    expect(r.vendorDriverClass).toBe('GeminiLLM');
+    expect(r.selectionInfo?.fallbackUsed).toBe(true); // the top candidate (Fireworks) had no key
+  });
+
+  it('with the top vendor credentialed, the row vendor still serves the model next chose', async () => {
+    loadDatabaseResearch([...DIRECT, 'OpenRouterLLM', 'FireworksLLM']); // next: GPT-OSS via Fireworks (5250)
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }));
+    expect(r.model?.ID).toBe(M.GptOss);
+    expect(r.vendorDriverClass).toBe('CerebrasLLM');
+    expect(r.selectionInfo?.fallbackUsed).toBe(false); // the row vendor serving next's pick is not a fallback
+  });
+
+  it('failover starts each model on its row vendor and reaches the models in next\'s order of first appearance', async () => {
+    loadDatabaseResearch([...DIRECT, 'OpenRouterLLM']);
+    const prompt = makePrompt({ SelectionStrategy: 'Default', FailoverStrategy: 'NextBestModel', FailoverMaxAttempts: 20 });
+    const selection = await selectModel(runner, prompt);
+    const calls: Array<{ model: string; driver: string }> = [];
+    vi.spyOn(runner as unknown as { executeModel: (...a: unknown[]) => Promise<unknown> }, 'executeModel')
+      .mockImplementation(async (...args: unknown[]) => {
+        calls.push({ model: (args[0] as { ID: string }).ID, driver: args[8] as string });
+        throw new Error('connect ECONNREFUSED 10.0.0.5:443');
+      });
+    const first = selection.allCandidates![0] as unknown as { model: unknown; vendorId: string; driverClass: string; apiName: string };
+    await (runner as unknown as { executeModelWithFailover: (...a: unknown[]) => Promise<unknown> }).executeModelWithFailover(
+      first.model, 'rendered prompt', prompt, { verbose: false }, first.vendorId,
+      undefined, 'system', undefined, selection.allCandidates, undefined,
+      first.driverClass, first.apiName, false, undefined,
+    );
+    const ours = calls.filter(c => c.model === M.Gemini || c.model === M.GptOss);
+    expect(ours[0]).toEqual({ model: M.Gemini, driver: 'GeminiLLM' });
+    expect([...new Set(ours.map(c => c.model))]).toEqual([M.Gemini, M.GptOss]);
+    expect(ours.find(c => c.model === M.GptOss)?.driver).toBe('CerebrasLLM');
+  });
+});
+
+// The one rule every runner selects by (BaseModelRunner.SelectCandidate): the first credentialed
+// candidate decides the model, and that model's own row vendor serves it when it has a key.
+describe('SelectCandidate — the row vendor serves the model the ranking picked, never another model', () => {
+  type Fake = { model: { ID: string }; vendorId: string; driverClass: string; isPreferredVendor: boolean; isPromptModelVendor: boolean; priority: number; source: string };
+  const c = (model: string, driver: string, opts: { row?: boolean; preferred?: boolean } = {}): Fake => ({
+    model: { ID: model }, vendorId: `v-${driver}`, driverClass: driver,
+    isPreferredVendor: !!opts.preferred, isPromptModelVendor: !!opts.row, priority: 0, source: 'prompt-model',
+  });
+  const pick = (candidates: Fake[], keyed: string[]): string | undefined =>
+    (runner as unknown as { SelectCandidate(c: Fake[], has: (x: Fake) => boolean): { Candidate: Fake | null } })
+      .SelectCandidate(candidates, x => keyed.includes(x.driverClass)).Candidate?.driverClass;
+
+  it('swaps to the same model\'s row vendor, past another model\'s row vendor ranked in between', () => {
+    expect(pick([c('A', 'A-top'), c('B', 'B-row', { row: true }), c('A', 'A-row', { row: true })], ['A-top', 'B-row', 'A-row'])).toBe('A-row');
+  });
+
+  it('never moves to another model: with the top keyless, the next model keeps its own vendor', () => {
+    expect(pick([c('A', 'A-top'), c('B', 'B-1'), c('A', 'A-row', { row: true })], ['B-1', 'A-row'])).toBe('B-1');
+  });
+
+  it('keeps the first credentialed candidate when its row vendor has no key', () => {
+    expect(pick([c('A', 'A-top'), c('A', 'A-row', { row: true })], ['A-top'])).toBe('A-top');
+  });
+
+  it('never swaps away from a runtime vendor override', () => {
+    expect(pick([c('A', 'A-pref', { preferred: true }), c('A', 'A-row', { row: true })], ['A-pref', 'A-row'])).toBe('A-pref');
   });
 });
 
@@ -339,6 +510,23 @@ describe('selectModel — credential gating, short-circuit & forceFullModelEvalu
     expect(notEvaluated.length).toBe(0);
     // With all common drivers configured, more than one candidate is available.
     expect(considered.filter(c => c.available).length).toBeGreaterThan(1);
+  });
+
+  it('records the driver class on every considered row, probed and short-circuited alike', async () => {
+    // The driver class is what makes a long candidate list readable: 101 rows over ONE class is
+    // a key-delivery problem, 101 rows over twelve is a chain problem, and the message that an
+    // operator reads (buildNoModelFoundMessage) can only say which if selection records it.
+    //
+    // BOTH push sites matter. The short-circuited tail is pushed from a different statement to
+    // the probed candidates, and it is the tail that dominates a long list — miss it and the
+    // count that gets reported is a handful of rows, not the 101 the operator is looking at.
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }));
+    const considered = r.selectionInfo!.modelsConsidered;
+    const notEvaluated = considered.filter(c => (c.unavailableReason ?? '').startsWith('Not evaluated'));
+
+    expect(considered.length).toBeGreaterThan(1);
+    expect(notEvaluated.length).toBeGreaterThan(0);
+    expect(considered.every(c => typeof c.driverClass === 'string' && c.driverClass.length > 0)).toBe(true);
   });
 
   it('short-circuit still returns the correct first-available model when the top candidate is uncredentialed', async () => {
@@ -425,7 +613,7 @@ describe('executeModelWithFailover — skips uncredentialed candidates', () => {
 // ===========================================================================
 // selectModel must EXPOSE the credential probes it performed (credentialAvailability)
 // so the execution/failover layer can reuse them instead of recomputing
-// hasCredentialsAvailable for candidates selection already walked. The map only
+// HasCredentialsAvailable for candidates selection already walked. The map only
 // covers the probed prefix + the selected candidate — the short-circuited tail is
 // intentionally absent so failover still probes it lazily if it ever walks there.
 // ===========================================================================
@@ -476,7 +664,7 @@ describe('selectModel — exposes credentialAvailability for reuse', () => {
 // ===========================================================================
 // executeModelWithFailover must REUSE the credential probes selection already did
 // (threaded in via the credentialAvailability map) rather than recomputing
-// hasCredentialsAvailable on the happy path. This is the perf re-optimization:
+// HasCredentialsAvailable on the happy path. This is the perf re-optimization:
 // selection and failover walk the same prefix, so failover should not re-probe it.
 // The not-evaluated tail (absent from the seeded map) is still probed lazily only
 // if a real failure forces failover to walk down to it.
@@ -486,7 +674,7 @@ describe('executeModelWithFailover — reuses selection credential probes', () =
   type ReuseRunner = {
     executeModel: (...args: ExecArgs) => Promise<{ success: boolean; errorInfo?: unknown }>;
     executeModelWithFailover: (...args: ExecArgs) => Promise<{ success: boolean; errorMessage?: string }>;
-    hasCredentialsAvailable: (...args: ExecArgs) => boolean;
+    HasCredentialsAvailable: (...args: ExecArgs) => boolean;
   };
 
   function candidate(modelId: string, driverClass: string, vendorId: string, vendorName: string, priority: number) {
@@ -519,7 +707,7 @@ describe('executeModelWithFailover — reuses selection credential probes', () =
 
   it('does NOT re-probe credentials for a candidate selection already evaluated (happy path)', async () => {
     const runner = new AIPromptRunner();
-    const credSpy = vi.spyOn(runner as unknown as ReuseRunner, 'hasCredentialsAvailable');
+    const credSpy = vi.spyOn(runner as unknown as ReuseRunner, 'HasCredentialsAvailable');
     const execSpy = vi.spyOn(runner as unknown as ReuseRunner, 'executeModel').mockResolvedValue({ success: true });
 
     const c = candidate('m-gem', 'GeminiLLM', 'v-google', 'Google', 5251);
@@ -533,7 +721,7 @@ describe('executeModelWithFailover — reuses selection credential probes', () =
 
   it('treats the seeded map as authoritative — a seeded `true` runs even with NO drivers configured', async () => {
     const runner = new AIPromptRunner();
-    const credSpy = vi.spyOn(runner as unknown as ReuseRunner, 'hasCredentialsAvailable');
+    const credSpy = vi.spyOn(runner as unknown as ReuseRunner, 'HasCredentialsAvailable');
     const execSpy = vi.spyOn(runner as unknown as ReuseRunner, 'executeModel').mockResolvedValue({ success: true });
 
     const c = candidate('m-gem', 'GeminiLLM', 'v-google', 'Google', 5251);
@@ -548,7 +736,7 @@ describe('executeModelWithFailover — reuses selection credential probes', () =
 
   it('reuses a seeded `false` to skip the prefix without re-probing, landing on the seeded credentialed candidate', async () => {
     const runner = new AIPromptRunner();
-    const credSpy = vi.spyOn(runner as unknown as ReuseRunner, 'hasCredentialsAvailable');
+    const credSpy = vi.spyOn(runner as unknown as ReuseRunner, 'HasCredentialsAvailable');
     const execSpy = vi.spyOn(runner as unknown as ReuseRunner, 'executeModel').mockResolvedValue({ success: true });
 
     const top = candidate('m-oss', 'FireworksLLM', 'v-fireworks', 'Fireworks.ai', 5300);
@@ -564,7 +752,7 @@ describe('executeModelWithFailover — reuses selection credential probes', () =
 
   it('lazily probes ONLY the not-evaluated tail (absent from the seeded map) during a real failover', async () => {
     const runner = new AIPromptRunner();
-    const credSpy = vi.spyOn(runner as unknown as ReuseRunner, 'hasCredentialsAvailable'); // calls through to real impl
+    const credSpy = vi.spyOn(runner as unknown as ReuseRunner, 'HasCredentialsAvailable'); // calls through to real impl
     // First (seeded) candidate fails over-ably; the tail (lazily probed) then succeeds.
     const execSpy = vi.spyOn(runner as unknown as ReuseRunner, 'executeModel')
       .mockResolvedValueOnce({ success: false, errorInfo: { canFailover: true, errorType: 'ServiceError', severity: 'NonFatal' } })
@@ -577,7 +765,7 @@ describe('executeModelWithFailover — reuses selection credential probes', () =
 
     // Selection covered `sel`, so the only credential probe is the lazy one for the tail.
     expect(credSpy).toHaveBeenCalledTimes(1);
-    expect(credSpy.mock.calls[0][0]).toBe('AnthropicLLM'); // driverClass arg of hasCredentialsAvailable
+    expect(credSpy.mock.calls[0][0]).toBe('AnthropicLLM'); // driverClass arg of HasCredentialsAvailable
     expect(execSpy).toHaveBeenCalledTimes(2);
     expect(result.success).toBe(true);
   });
@@ -657,5 +845,180 @@ describe('ParallelExecutionCoordinator — reuses base execution path (no drift)
     expect(per.additionalParameters).toEqual({ temperature: 0.1, topP: 0.9 }); // per-model merged in
     per.onStreaming?.({ content: 'tok', isComplete: false });
     expect(onContent).toHaveBeenCalledWith('tok', false);              // OnContent bridged via onStreaming
+  });
+
+  it('coalesces rapid streaming token chunks within the 35ms window and flushes immediately on completion (MJ-AI-9)', async () => {
+    const runner = new AIPromptRunner();
+    const receivedChunks: Array<{ content: string; isComplete: boolean; modelName?: string }> = [];
+
+    type RunnerStreamingInternals = {
+      executeModel: (
+        model: unknown,
+        renderedPrompt: string,
+        prompt: unknown,
+        params: Record<string, unknown>,
+        vendorId: string | null,
+        conversationMessages?: unknown[],
+        templateMessageRole?: string,
+        cancellationToken?: AbortSignal,
+        vendorDriverClass?: string,
+        vendorApiName?: string
+      ) => Promise<unknown>;
+      ResolveCredentialForExecution: () => Promise<string>;
+      buildMessageArray: () => unknown[];
+      runChatCompletionBounded: (llm: unknown, chatParams: { streamingCallbacks?: { OnContent?: (c: string, d: boolean) => void } }) => Promise<unknown>;
+    };
+
+    const internals = runner as unknown as RunnerStreamingInternals;
+    vi.spyOn(internals, 'ResolveCredentialForExecution').mockResolvedValue('test-key');
+    vi.spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance').mockReturnValue({
+      GetFileCapabilities: () => ({}),
+      SupportsAssistantPrefill: false,
+    } as never);
+    vi.spyOn(internals, 'buildMessageArray').mockReturnValue([]);
+    vi.spyOn(internals, 'runChatCompletionBounded').mockImplementation(async (_llm, chatParams) => {
+      const onContent = chatParams.streamingCallbacks?.OnContent;
+      // First chunk should emit immediately
+      onContent?.('Hello', false);
+      // Rapid subsequent chunks in same tick should be buffered and coalesced
+      onContent?.(' ', false);
+      onContent?.('world', false);
+      onContent?.('!', true);
+      return { success: true, data: { choices: [{ message: { content: 'Hello world!' } }], usage: {} } };
+    });
+
+    await internals.executeModel(
+      { ID: 'm1', Name: 'Model One', DriverClass: 'OpenAILLM', APIName: 'gpt-4o' },
+      'rendered',
+      makePrompt(),
+      { onStreaming: (c: { content: string; isComplete: boolean; modelName?: string }) => receivedChunks.push(c) },
+      'v1',
+      [],
+      'system',
+      undefined,
+      'OpenAILLM',
+      'gpt-4o'
+    );
+
+    // 4 rapid token emissions were coalesced into 2 callbacks: immediate first chunk + flushed completion chunk
+    expect(receivedChunks).toEqual([
+      { content: 'Hello', isComplete: false, modelName: 'Model One' },
+      { content: ' world!', isComplete: true, modelName: 'Model One' },
+    ]);
+  });
+});
+
+// ============================================================================
+// BaseModelRunner.PreviewModelSelection (VS-UX-3)
+// ============================================================================
+
+describe('BaseModelRunner.PreviewModelSelection (VS-UX-3)', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    catalog = buildRealisticCatalog();
+    catalog.configurations = [{ ID: CONFIG.Standard, Name: 'Standard', ParentID: null }];
+    catalog.promptModels.push(
+      makePromptModel({
+        PromptID: 'prompt-1',
+        ModelID: MODEL.ClaudeOpus45,
+        VendorID: VENDOR.Anthropic,
+        ConfigurationID: CONFIG.Standard,
+        Priority: 10,
+      }),
+      makePromptModel({
+        PromptID: 'prompt-1',
+        ModelID: MODEL.Gemini3Flash,
+        VendorID: VENDOR.Google,
+        ConfigurationID: CONFIG.Standard,
+        Priority: 5,
+      }),
+      makePromptModel({
+        PromptID: 'prompt-1',
+        ModelID: MODEL.GPT5,
+        VendorID: VENDOR.OpenAI,
+        ConfigurationID: null,
+        Priority: 1,
+      }),
+    );
+  });
+
+  it('returns the exact candidate order from BuildModelVendorCandidates, flags HasCredentials per candidate, and makes no driver call', () => {
+    loadCatalog(catalog, ['GeminiLLM']);
+    const previewRunner = new AIPromptRunner();
+    const classFactorySpy = vi.spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance');
+    const execModelSpy = vi.spyOn(
+      previewRunner as unknown as { executeModel: (...args: unknown[]) => unknown },
+      'executeModel',
+    );
+    const buildCandidates = (
+      previewRunner as unknown as {
+        BuildModelVendorCandidates: (
+          prompt: unknown,
+          explicitModelId?: string,
+          configurationId?: string,
+        ) => Array<{ model: { ID: string; Name: string }; vendorName: string; driverClass: string }>;
+      }
+    ).BuildModelVendorCandidates.bind(previewRunner);
+
+    const prompt = makePrompt({ SelectionStrategy: 'Specific', RequireSpecificModels: true });
+    const rawCandidates = buildCandidates(prompt, undefined, CONFIG.Standard);
+    const preview = previewRunner.PreviewModelSelection(prompt as never, CONFIG.Standard);
+
+    expect(preview.map((item) => item.ModelID)).toEqual(rawCandidates.map((c) => c.model.ID));
+    expect(preview).toEqual([
+      {
+        ModelID: MODEL.ClaudeOpus45,
+        ModelName: rawCandidates[0].model.Name,
+        VendorName: rawCandidates[0].vendorName,
+        DriverClass: 'AnthropicLLM',
+        HasCredentials: false,
+      },
+      {
+        ModelID: MODEL.Gemini3Flash,
+        ModelName: rawCandidates[1].model.Name,
+        VendorName: rawCandidates[1].vendorName,
+        DriverClass: 'GeminiLLM',
+        HasCredentials: true,
+      },
+      {
+        ModelID: MODEL.GPT5,
+        ModelName: rawCandidates[2].model.Name,
+        VendorName: rawCandidates[2].vendorName,
+        DriverClass: 'OpenAILLM',
+        HasCredentials: false,
+      },
+    ]);
+    expect(classFactorySpy).not.toHaveBeenCalled();
+    expect(execModelSpy).not.toHaveBeenCalled();
+  });
+
+  it('reflects platform credential bindings on the model or vendor without instantiating any LLM', () => {
+    loadCatalog(catalog, []);
+    vi.spyOn(
+      h.engine as unknown as { HasCredentialBindings: (bindingType: string, targetId: string) => boolean },
+      'HasCredentialBindings',
+    ).mockImplementation((bindingType: string, targetId: string) => {
+      return bindingType === 'Vendor' && targetId === VENDOR.Anthropic;
+    });
+
+    const previewRunner = new AIPromptRunner();
+    const classFactorySpy = vi.spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance');
+    const execModelSpy = vi.spyOn(
+      previewRunner as unknown as { executeModel: (...args: unknown[]) => unknown },
+      'executeModel',
+    );
+    const prompt = makePrompt({ SelectionStrategy: 'Specific', RequireSpecificModels: true });
+
+    const preview = previewRunner.PreviewModelSelection(prompt as never, CONFIG.Standard);
+
+    expect(preview[0]).toMatchObject({
+      ModelID: MODEL.ClaudeOpus45,
+      DriverClass: 'AnthropicLLM',
+      HasCredentials: true,
+    });
+    expect(preview[1].HasCredentials).toBe(false);
+    expect(preview[2].HasCredentials).toBe(false);
+    expect(classFactorySpy).not.toHaveBeenCalled();
+    expect(execModelSpy).not.toHaveBeenCalled();
   });
 });

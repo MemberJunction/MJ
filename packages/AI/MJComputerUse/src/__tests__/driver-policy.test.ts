@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
     DEFAULT_CONSOLE_LOG_LEVEL,
@@ -5,6 +8,7 @@ import {
     ClassifyFailure,
     ComputeDivergence,
     FormatConsoleLine,
+    InlineVerdictIsAdvisory,
     IsOracleAdvisory,
     IsSevereBrowserFault,
     MergeComputerUseConfig,
@@ -13,6 +17,7 @@ import {
     ResolveReplayHeal,
     ReadSuiteComputerUseConfig,
     ResolveConsoleLogLevel,
+    ResolveRunValidationCriteria,
     ShouldCaptureArtifact,
     ShouldLogToConsole,
     ShouldRetainArtifact,
@@ -29,6 +34,16 @@ function res(oracleType: string, passed: boolean, advisory?: boolean): OracleRes
 
 describe('oracle-scoring', () => {
     describe('isOracleAdvisory', () => {
+        it('keeps the inline verdict advisory unless the test opts in', () => {
+            expect(InlineVerdictIsAdvisory({})).toBe(true);
+            expect(InlineVerdictIsAdvisory({ gateInlineVerdicts: false })).toBe(true);
+            expect(InlineVerdictIsAdvisory({ gateInlineVerdicts: true })).toBe(false);
+            const driver = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../test-driver/ComputerUseTestDriver.ts'), 'utf8');
+            expect(driver).toMatch(/inline\.advisory = InlineVerdictIsAdvisory\(config\)/);
+            const policy = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../test-driver/driver-policy.ts'), 'utf8');
+            expect(policy).not.toContain('export function inlineVerdictIsAdvisory');
+        });
+
         it('defaults step-count to advisory', () => {
             expect(IsOracleAdvisory('step-count')).toBe(true);
         });
@@ -491,5 +506,42 @@ describe('resolveReplayHeal', () => {
 
     it('is independent of the LLM fallback flag, which the framework owns', () => {
         expect(ResolveReplayHeal({ replayHeal: 'off', elementGrounding: true })).toBe('off');
+    });
+});
+
+describe('ResolveRunValidationCriteria', () => {
+    it('passes plain criteria through as texts', () => {
+        expect(ResolveRunValidationCriteria(['Shows the dashboard', 'Lists three items'])).toEqual(['Shows the dashboard', 'Lists three items']);
+    });
+
+    it('passes weighted criteria as their texts, in order, without the weights', () => {
+        expect(ResolveRunValidationCriteria([
+            { criterion: 'Shows the dashboard', weight: 3 },
+            'Lists three items',
+            { criterion: 'No error banner' },
+        ])).toEqual(['Shows the dashboard', 'Lists three items', 'No error banner']);
+    });
+
+    it('is undefined when the test sets no criteria', () => {
+        expect(ResolveRunValidationCriteria(undefined)).toBeUndefined();
+        expect(ResolveRunValidationCriteria([])).toBeUndefined();
+    });
+
+    it('leaves weight-0 criteria out, since they count for nothing in the score', () => {
+        expect(ResolveRunValidationCriteria([
+            { criterion: 'Shows the dashboard', weight: 2 },
+            { criterion: 'Nice to have', weight: 0 },
+            'Lists three items',
+        ])).toEqual(['Shows the dashboard', 'Lists three items']);
+    });
+
+    it('rejects an invalid weight with the judge oracles\' message', () => {
+        expect(() => ResolveRunValidationCriteria(['Fine', { criterion: 'Heavy', weight: -1 }]))
+            .toThrow(/^ExpectedOutcomes\.judgeValidationCriteria: Criterion 2 must be a non-empty string, or an object with a non-empty "criterion"/);
+    });
+
+    it('rejects a list whose weights are all 0', () => {
+        expect(() => ResolveRunValidationCriteria([{ criterion: 'A', weight: 0 }]))
+            .toThrow('ExpectedOutcomes.judgeValidationCriteria: Every criterion has weight 0, so none counts toward the score: give at least one a weight above 0');
     });
 });

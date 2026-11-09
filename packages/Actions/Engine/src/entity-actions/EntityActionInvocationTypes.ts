@@ -11,7 +11,7 @@ import {
     EntityActionResult,
     IsEntityActionInScope,
     MJActionEntityExtended,
-    RedactParamsToJSON,
+    RedactParamsToRecord,
     ResolveEntityActionScopeResolver,
     RunActionParams,
 } from "@memberjunction/actions-base";
@@ -113,6 +113,7 @@ export abstract class EntityActionInvocationBase {
                     // The record's field values as a plain object. BaseEntity fields are getters, not
                     // enumerable own properties, so an action that spreads or JSON-serializes an
                     // 'Entity Object' value gets `{}` — GetAll() is what actually carries the data.
+                    // fls-guard: object built for params.ContextUser by the invoker; width follows its user
                     value = entityObject.GetAll();
                     break;
                 case 'Entity Field':
@@ -205,6 +206,15 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
      * make Durable worse than leaving it off; nesting it is what blew up cheese (LogActivity inside
      * Person.Save on a shared provider).
      */
+    /**
+     * The action's param definitions from the engine's live `ActionParams` list. Read this rather than
+     * `action.Params.Items`: that collection is cached and keeps serving the pre-save row after an
+     * in-place engine update (it refreshes only on a changed array reference or length).
+     */
+    protected liveParamDefinitionsFor(action: MJActionEntityExtended): MJActionParamEntity[] {
+        return ActionEngineServer.Instance.ActionParams.filter((p) => UUIDsEqual(p.ActionID, action.ID));
+    }
+
     protected BuildDurableDeferral(
         params: EntityActionInvocationParams,
         action: MJActionEntityExtended,
@@ -240,12 +250,21 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
                 RecordID: params.EntityObject.PrimaryKey.ToConcatenatedString(),
                 InvocationType: params.InvocationType.Name,
                 // Persistent, user-visible storage: nothing writes a raw ActionParam[] there. Redacted
-                // through the same helper ActionExecutionLog.Params goes through, so the binding's
-                // LogValue rows decide what survives.
-                RedactedParams: SafeJSONParse<Record<string, unknown>>(
-                    RedactParamsToJSON(runParams.Params, [...action.Params.Items], params.EntityAction.Params),
-                ) ?? {},
+                // through the same rules ActionExecutionLog.Params goes through, so the binding's
+                // LogValue rows decide what survives — but stored by name, not as an array, because
+                // TaskGraphActionRunner re-hydrates this payload into a run by parameter name.
+                //
+                // The definitions come from the engine's live ActionParam list — the same source the log
+                // redaction reads (ActionEngine.ParamDefinitionsFor) — not from `action.Params`, a cached
+                // collection that keeps serving the pre-save row after an in-place engine update. Reading
+                // that one let a runtime LogValue=0 redact the log while its value still reached the Task.
+                RedactedParams: RedactParamsToRecord(
+                    runParams.Params,
+                    this.liveParamDefinitionsFor(action),
+                    params.EntityAction.Params,
+                ),
                 ContextUser: params.ContextUser,
+                Provider: params.EntityObject.ProviderToUse,
             });
 
             if (submission.Success) {
@@ -257,11 +276,22 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
             }
 
             // Declining the deferral runs the action normally. See the doc comment above: dropping
-            // the work would make opting into durability worse than not opting in.
+            // the work would make opting into durability worse than not opting in. When the save's
+            // transaction is still open (transactional outbox enlistment), defer the inline fallback
+            // onto RunAfterCommit so it runs right after commit instead of nesting inside the save tx.
             LogError(
                 `Entity Action ${params.EntityAction.ID} asked for durable dispatch but ran inline instead: ` +
                 `${submission.ErrorMessage ?? 'the durable submission failed'}`,
             );
+            const savingProvider = params.EntityObject.ProviderToUse;
+            if (isProviderInAmbientTransactionWithPostCommit(savingProvider)) {
+                this.scheduleDurableLocalRun(params, action, runParams);
+                return {
+                    Success: true,
+                    ResultCode: 'DEFERRED_LOCAL',
+                    Message: 'Durable submission declined; inline fallback deferred until the ambient transaction commits.',
+                };
+            }
             return null;
         };
     }
@@ -353,7 +383,10 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
 
             // prepare the variables for the action
             const action = ActionEngineServer.Instance.Actions.find(a => UUIDsEqual(a.ID, params.EntityAction.ActionID));
-            const internalParams = await this.MapParams([...action.Params.Items], params.EntityAction.Params, params.EntityObject);
+            // Named from the live definitions, the same list the durable payload and the log are redacted
+            // against: redaction matches definitions BY NAME, so a name from the stale cached collection
+            // (after an in-place rename) matched nothing and applied no rule at all.
+            const internalParams = await this.MapParams(this.liveParamDefinitionsFor(action), params.EntityAction.Params, params.EntityObject);
             const { Filters: filters, Unresolved } = this.ResolveFilters(params);
             if (Unresolved.length > 0) {
                 const message =
@@ -557,4 +590,15 @@ export class EntityActionInvocationValidate extends EntityActionInvocationSingle
  */
 function hasPostCommitQueue(provider: object | undefined | null): provider is Pick<DatabaseProviderBase, 'RunAfterCommit'> {
     return !!provider && 'RunAfterCommit' in provider && typeof provider.RunAfterCommit === 'function';
+}
+
+function isProviderInAmbientTransactionWithPostCommit(
+    provider: object | undefined | null,
+): provider is Pick<DatabaseProviderBase, 'RunAfterCommit'> & { TransactionDepth: number } {
+    return (
+        hasPostCommitQueue(provider) &&
+        'TransactionDepth' in provider &&
+        typeof provider.TransactionDepth === 'number' &&
+        provider.TransactionDepth > 0
+    );
 }

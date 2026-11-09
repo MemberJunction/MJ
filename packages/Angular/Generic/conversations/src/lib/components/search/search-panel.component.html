@@ -239,6 +239,9 @@
                         {{ result.conversationName }}
                       </div>
                     }
+                    @if (IsInFork(result)) {
+                      <span class="branch-tag" title="Opening this message opens its fork"><i class="fa-solid fa-code-branch"></i> in a fork</span>
+                    }
                     <div class="result-preview" [innerHTML]="highlightMatch(result.preview, searchQuery)"></div>
                     @if (result.matchedText) {
                       <div class="result-match" [innerHTML]="highlightMatch(result.matchedText, searchQuery)"></div>

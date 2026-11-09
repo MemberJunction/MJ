@@ -9,6 +9,29 @@ import {
   CreateDefaultWorkspaceConfiguration
 } from './interfaces/workspace-configuration.interface';
 import { TabRequest } from './interfaces/tab-request.interface';
+import {
+  BrowserWorkspaceJournalStorage,
+  ShouldUseWorkspaceJournal,
+  WorkspaceJournal
+} from './workspace-journal';
+
+/**
+ * Options for {@link WorkspaceStateManager.Initialize}.
+ */
+export interface WorkspaceInitializeOptions {
+  /**
+   * Adjusts the loaded configuration BEFORE it is published to any subscriber.
+   *
+   * The shell uses this to make a deep link win on a full page load: the URL's query params
+   * are written into the matching restored tab before the tab container mounts that tab's
+   * component. Applying them afterwards (when the resolver's queued tab request replays) is
+   * too late — the component has already initialised from the saved params, and an async
+   * init that writes its selection back can clobber the URL's params entirely.
+   *
+   * Return the same object for "no change"; a different object is published and persisted.
+   */
+  PrepareConfiguration?: (config: WorkspaceConfiguration) => WorkspaceConfiguration | Promise<WorkspaceConfiguration>;
+}
 
 /**
  * Manages workspace state including tabs, layout, and persistence.
@@ -26,6 +49,28 @@ export class WorkspaceStateManager {
   private loading$ = new BehaviorSubject<boolean>(false);
   private tabBarVisible$ = new BehaviorSubject<boolean>(true);
   private initialized = false;
+
+  /** The user this manager was initialized for (journal key). */
+  private userId: string | null = null;
+
+  /** A configuration change has been requested but not yet handed to the database. */
+  private savePending = false;
+
+  /**
+   * The database save currently running, if any. Saves run one at a time: they share one
+   * `MJ: Workspaces` entity instance, and a flush on page hide must not start a second
+   * `Save()` on it while the debounced one is still in flight.
+   */
+  private saveInFlight: Promise<void> | null = null;
+
+  /** The serialized configuration the in-flight save is writing (journaled — see WorkspaceJournalEntry.InFlightConfiguration). */
+  private inFlightConfiguration: string | null = null;
+
+  /**
+   * Synchronous browser-local snapshot of the newest configuration — see {@link WorkspaceJournal}.
+   * Replaceable for tests.
+   */
+  public Journal: WorkspaceJournal = new WorkspaceJournal(BrowserWorkspaceJournalStorage);
 
   /**
    * Optional predicate identifying tabs that belong to the MAIN layout.
@@ -106,8 +151,23 @@ export class WorkspaceStateManager {
     this.saveRequest$.pipe(
       debounceTime(500) // Wait 500ms after last change
     ).subscribe(() => {
-      this.persistConfiguration();
+      this.runPendingSave();
     });
+
+    // Flush the debounced save when the page is going away or being backgrounded, so a
+    // refresh/close inside the debounce window doesn't drop the newest change. (The journal
+    // already holds it locally; this gets it to the database too.) beforeunload is avoided
+    // deliberately: registering it makes the page ineligible for the back/forward cache.
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('pagehide', () => { void this.FlushPendingSave(); });
+      if (typeof document !== 'undefined') {
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'hidden') {
+            void this.FlushPendingSave();
+          }
+        });
+      }
+    }
 
     // Update tab bar visibility whenever configuration changes
     this.configuration$.subscribe(config => {
@@ -175,15 +235,16 @@ export class WorkspaceStateManager {
   /**
    * Initialize the workspace state for a user
    */
-  async Initialize(userId: string): Promise<void> {
+  async Initialize(userId: string, options?: WorkspaceInitializeOptions): Promise<void> {
     if (this.initialized) {
       return;
     }
 
     this.loading$.next(true);
+    this.userId = userId;
 
     try {
-      await this.loadWorkspace(userId);
+      await this.loadWorkspace(userId, options);
       this.initialized = true;
     } finally {
       this.loading$.next(false);
@@ -206,7 +267,7 @@ export class WorkspaceStateManager {
   /**
    * Load workspace from database using UserInfoEngine for centralized, cached access
    */
-  private async loadWorkspace(userId: string): Promise<void> {
+  private async loadWorkspace(userId: string, options?: WorkspaceInitializeOptions): Promise<void> {
     if (this.isEphemeral()) {
       // Test mode — skip server load entirely. Just emit a default config so the
       // workspace starts clean for this BrowserContext. No MJWorkspaceEntity is
@@ -220,7 +281,13 @@ export class WorkspaceStateManager {
     // Permission-denied ≠ empty — don't auto-create a workspace for denied users.
     if (engine.IsPermissionConstrained) {
       LogStatus('[WorkspaceStateManager] UserInfoEngine is permission-constrained, using default workspace configuration');
-      this.configuration$.next(CreateDefaultWorkspaceConfiguration());
+      // No server row to persist to, but the browser journal still carries this session's
+      // tabs across a refresh.
+      const journal = this.Journal.Read(userId);
+      const base = ShouldUseWorkspaceJournal(journal, null, null) && journal
+        ? journal.Configuration
+        : CreateDefaultWorkspaceConfiguration();
+      await this.publishInitialConfiguration(base, options, false);
       return;
     }
 
@@ -233,11 +300,21 @@ export class WorkspaceStateManager {
       // Parse configuration or create default
       const configJson = workspace.Configuration;
 
-      const config = configJson
+      const serverConfig = configJson
         ? JSON.parse(configJson) as WorkspaceConfiguration
         : CreateDefaultWorkspaceConfiguration();
 
-      this.configuration$.next(config);
+      // A refresh inside the debounce/save window left a newer snapshot in the journal than
+      // the row we just read (or the row came from a stale local cache): the journal wins,
+      // and is pushed to the database.
+      const journal = this.Journal.Read(userId);
+      const useJournal = ShouldUseWorkspaceJournal(journal, workspace.ID, workspace.__mj_UpdatedAt, configJson) && journal != null
+        && JSON.stringify(journal.Configuration) !== JSON.stringify(serverConfig);
+      if (useJournal) {
+        LogStatus('[WorkspaceStateManager] Restoring workspace from the local journal (newer than the saved row)');
+      }
+
+      await this.publishInitialConfiguration(useJournal && journal ? journal.Configuration : serverConfig, options, useJournal);
     }
     else {
       // Create new workspace for user
@@ -251,11 +328,42 @@ export class WorkspaceStateManager {
 
       if (saveResult) {
         this.workspace$.next(workspace);
-        this.configuration$.next(CreateDefaultWorkspaceConfiguration());
+        // Through the same path as a loaded row, so a brand-new user's first boot also gets the
+        // PrepareConfiguration hook (deep-link precedence) and a journal seeded on the new row.
+        await this.publishInitialConfiguration(CreateDefaultWorkspaceConfiguration(), options, false);
       } else {
         console.error('[WorkspaceStateManager.loadWorkspace] Failed to save workspace');
         throw new Error('Failed to create default workspace');
       }
+    }
+  }
+
+  /**
+   * Runs the caller's {@link WorkspaceInitializeOptions.PrepareConfiguration} hook, then
+   * publishes the result as the first configuration. Persists when the hook (or the journal)
+   * changed what the server holds.
+   */
+  private async publishInitialConfiguration(
+    config: WorkspaceConfiguration,
+    options: WorkspaceInitializeOptions | undefined,
+    alreadyDiffersFromServer: boolean
+  ): Promise<void> {
+    let prepared = config;
+    if (options?.PrepareConfiguration) {
+      try {
+        prepared = await options.PrepareConfiguration(config);
+      } catch (e) {
+        // The hook is an enhancement (deep-link precedence); never let it block startup.
+        console.error('[WorkspaceStateManager] PrepareConfiguration failed; using the loaded configuration', e);
+        prepared = config;
+      }
+    }
+    this.configuration$.next(prepared);
+    if (alreadyDiffersFromServer || prepared !== config) {
+      this.requestSave();
+    }
+    else {
+      this.writeJournal(); // seed / re-base the snapshot on the row as loaded
     }
   }
 
@@ -272,16 +380,90 @@ export class WorkspaceStateManager {
     const config = this.configuration$.value;
 
     if (workspace && config) {
-      workspace.Configuration = JSON.stringify(config);
-      await workspace.Save();
+      const json = JSON.stringify(config);
+      workspace.Configuration = json;
+      // Journal what this save writes BEFORE it is sent: if the page unloads while it is in flight
+      // and the write still lands, the next load recognises the newer row as this browser's own.
+      this.inFlightConfiguration = json;
+      this.writeJournal();
+      try {
+        await workspace.Save();
+      } finally {
+        this.inFlightConfiguration = null;
+        // Re-base the journal on the stamp this save produced (a failed save leaves the stamp, and
+        // so the base, unchanged). The CURRENT configuration is written, not the one just saved:
+        // any change made while the save was in flight is newer still, and must keep winning.
+        this.writeJournal();
+      }
     }
+  }
+
+  /**
+   * Runs the debounced save if one is still pending (a flush may already have run it). Saves are
+   * serialised: a call while one is in flight waits for it, then saves whatever is still pending.
+   */
+  private runPendingSave(): Promise<void> {
+    if (this.saveInFlight) {
+      return this.saveInFlight.then(() => this.runPendingSave());
+    }
+    if (!this.savePending) {
+      return Promise.resolve();
+    }
+    this.savePending = false;
+    const run: Promise<void> = this.persistConfiguration()
+      .catch((e: unknown) => {
+        // A failed save leaves the change in the journal; the next change (or load) retries it.
+        console.error('[WorkspaceStateManager] Workspace save failed', e);
+      })
+      .finally(() => {
+        if (this.saveInFlight === run) {
+          this.saveInFlight = null;
+        }
+      });
+    this.saveInFlight = run;
+    return run;
+  }
+
+  /**
+   * Persist any change still waiting in the save debounce NOW. Called automatically on
+   * `pagehide` and when the page becomes hidden; hosts may also call it before a deliberate
+   * reload or sign-out. A no-op when nothing is pending.
+   */
+  FlushPendingSave(): Promise<void> {
+    return this.runPendingSave();
+  }
+
+  /** True while a configuration change is waiting for the debounced database save. */
+  get HasPendingSave(): boolean {
+    return this.savePending;
   }
 
   /**
    * Request a save (will be debounced)
    */
   private requestSave(): void {
+    this.savePending = true;
+    this.writeJournal();
     this.saveRequest$.next();
+  }
+
+  /** Synchronously snapshot the current configuration to the browser journal. */
+  private writeJournal(): void {
+    const config = this.configuration$.value;
+    if (!config || !this.userId || this.isEphemeral()) {
+      return;
+    }
+    const workspace = this.workspace$.value;
+    // Typed Date, but a value that crossed the wire can still be an ISO string at runtime.
+    const base: Date | string | null | undefined = workspace?.__mj_UpdatedAt;
+    this.Journal.Write({
+      Version: 1,
+      UserID: this.userId,
+      WorkspaceID: workspace?.ID ?? null,
+      BaseUpdatedAt: base instanceof Date ? base.toISOString() : (base ?? null),
+      InFlightConfiguration: this.inFlightConfiguration,
+      Configuration: config
+    });
   }
 
   /**
@@ -299,7 +481,9 @@ export class WorkspaceStateManager {
   async ResetConfiguration(): Promise<void> {
     const defaultConfig = CreateDefaultWorkspaceConfiguration();
     this.configuration$.next(defaultConfig);
-    await this.persistConfiguration();
+    this.savePending = true;
+    this.writeJournal(); // the reset must also replace a (possibly corrupt) local snapshot
+    await this.runPendingSave(); // serialised with any save already in flight
   }
 
   /**
@@ -651,6 +835,27 @@ export class WorkspaceStateManager {
     this.UpdateConfiguration({
       ...config,
       layout: undefined // Clear the layout, tabs will be recreated fresh
+    });
+  }
+
+  /**
+   * Pin a tab, idempotently. Used to PROMOTE a records-region preview tab the
+   * moment its form enters edit mode (VS Code's promote-on-modify): a promoted
+   * tab is pinned, so it is neither replaceable by the next plain open nor
+   * rendered italic. Unlike TogglePin this never unpins, and it emits NO
+   * configuration update when the tab is already pinned or does not exist —
+   * new-record tabs are born pinned and report edit mode on init, so a
+   * non-idempotent pin would persist workspace state on every new record.
+   */
+  PinTab(tabId: string): void {
+    const config = this.configuration$.value;
+    if (!config) return;
+    const tab = config.tabs.find(t => t.id === tabId);
+    if (!tab || tab.isPinned) return;
+
+    this.UpdateConfiguration({
+      ...config,
+      tabs: config.tabs.map(t => (t.id === tabId ? { ...t, isPinned: true } : t))
     });
   }
 

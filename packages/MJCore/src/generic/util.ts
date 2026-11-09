@@ -1,7 +1,8 @@
 import type { BaseEntity } from "./baseEntity";
 import type { EntityInfo } from "./entityInfo";
-import type { IEntityDataProvider, IMetadataProvider } from "./interfaces";
+import type { IEntityDataProvider, IMetadataProvider, IRunViewProvider } from "./interfaces";
 import { LogError } from "./logging";
+import { NormalizeUUID } from '@memberjunction/global';
 import type { UserInfo } from "./securityInfo";
 import {
     IsBooleanSQLType,
@@ -16,6 +17,22 @@ import {
     IsStringSQLType,
     IsUuidSQLType,
 } from "@memberjunction/sql-dialect";
+
+/**
+ * Canonical lookup key for a primary-key value when rows from different sources (a probe's
+ * `RecordPK` column, a loaded row, a `CompositeKey`) must be matched by value.
+ *
+ * UUID keys are case-insensitive by definition (SQL Server returns them upper-case, PostgreSQL
+ * lower-case), so they are normalized with {@link NormalizeUUID}. Every other type keeps its
+ * exact text after trimming: lower-casing a case-sensitive `nvarchar`/`text` key would merge
+ * `'ABC'` and `'abc'` into one record.
+ *
+ * Both sides of a match must use this function with the same `isUuid` for the same field.
+ */
+export function CanonicalPrimaryKeyValue(value: string, isUuid: boolean): string {
+    const text = value.trim();
+    return isUuid ? NormalizeUUID(text) : text;
+}
 
 /**
  * Whether a SQL type is the date-only `date` type: a calendar day with no time and no zone, as
@@ -198,6 +215,12 @@ export function SQLFullType(baseType: string, length: number, precision: number,
         sOutput += `(${length > 0 ? length / 2 : 'MAX'})`; // nvarchar divide the system length by 2 to get the actual length for the output
     else if (type === 'char')
         sOutput += `(${length})`;
+    else if (type === 'varbinary')
+        // A bare `varbinary` parameter or variable means varbinary(1) in T-SQL, which silently
+        // truncates every value to one byte — so always emit the length, MAX when unbounded (-1).
+        sOutput += `(${length > 0 ? length : 'MAX'})`;
+    else if (type === 'binary')
+        sOutput += `(${length > 0 ? length : 1})`;
     else if (type === 'nchar')
         sOutput += `(${length / 2})`; // nchar divide the system length by 2 to get the actual length for the output
     else if (type === 'decimal' || type === 'numeric')
@@ -233,6 +256,21 @@ export function SQLMaxLength(sqlBaseType: string, sqlLength: number): number {
             return 36; // UUID string representation: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
         default:
             return 0;
+    }
+}
+
+/**
+ * Byte cap of a binary column, or 0 when it has none. `varbinary(MAX)` reports -1 and PostgreSQL
+ * `bytea` reports no length. SQL Server `image` reports 16 in `sys.columns.max_length`, which is the
+ * size of its text pointer rather than a limit, so it is unbounded here too.
+ */
+export function SQLMaxByteLength(sqlBaseType: string, sqlLength: number): number {
+    switch (sqlBaseType.trim().toLowerCase()) {
+        case 'binary':
+        case 'varbinary':
+            return sqlLength > 0 ? sqlLength : 0; // -1 means MAX
+        default:
+            return 0; // image, bytea and anything else: no byte cap
     }
 }
 
@@ -483,7 +521,13 @@ export function StripContainingParens(value: string): string {
  * // entities is MyEntity[] — fully usable with .Save(), .Load(), etc.
  * ```
  */
-export async function TransformSimpleObjectToEntityObject<T extends BaseEntity>(md: IMetadataProvider, entityName: string, items: Array<Record<string, unknown>>, contextUser?: UserInfo): Promise<Array<T>> {
+export async function TransformSimpleObjectToEntityObject<T extends BaseEntity>(
+    md: IMetadataProvider,
+    entityName: string,
+    items: Array<Record<string, unknown>>,
+    contextUser?: UserInfo,
+    batchUnfilteredCache?: ReadonlyMap<string, ReadonlyArray<BaseEntity | Record<string, unknown>>>
+): Promise<Array<T>> {
     if (items.length === 0) return [];
 
     // Look up EntityInfo once via the O(1) name map. Inside GetEntityObject this
@@ -536,6 +580,9 @@ export async function TransformSimpleObjectToEntityObject<T extends BaseEntity>(
             }
 
             const e = new SubClassCtor!(entityInfo, provider);
+            if (provider && typeof (e as unknown as { BindProvider?: (p: IEntityDataProvider) => void }).BindProvider === 'function' && (e as unknown as { BoundProvider?: IEntityDataProvider | null }).BoundProvider !== provider) {
+                (e as unknown as { BindProvider: (p: IEntityDataProvider) => void }).BindProvider(provider);
+            }
             if (contextUser) {
                 (e as unknown as { ContextCurrentUser?: UserInfo }).ContextCurrentUser = contextUser;
             }
@@ -549,9 +596,47 @@ export async function TransformSimpleObjectToEntityObject<T extends BaseEntity>(
         return results;
     }
 
-    // Slow / correct path: IS-A entities (need parent/child chain built) and
-    // mocks that don't implement EntityByName. Per-row async — preserves the
-    // original semantics exactly.
+    // Batched IS-A parent hydration: when the provider implements batched `RunViews`
+    // (DatabaseProviderBase / GraphQLDataProvider), hydrate all N parent records and
+    // resolve/load their child hierarchy level-by-level in O(depth) queries instead of O(2N).
+    // Minimal test providers without `RunViews` (e.g. LoadHintTestProvider) fall through
+    // to the per-row path below.
+    if (
+        entityInfo?.IsParentType &&
+        items.length > 0 &&
+        typeof (md as Partial<IRunViewProvider>).RunViews === 'function'
+    ) {
+        type PlainRow = Record<string, string | number | boolean | Date | object | null | undefined>;
+        const results: T[] = new Array(items.length);
+        const pendingPeers: Array<{ entity: BaseEntity; data: PlainRow }> = [];
+
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (typeof (item as { Save?: () => Promise<boolean> }).Save === 'function') {
+                results[i] = item as T;
+                continue;
+            }
+            const entity = await md.GetEntityObject<T>(entityName, contextUser);
+            if (!entity) {
+                throw new Error(`TransformSimpleObjectToEntityObject: could not instantiate an entity object for '${entityName}' — GetEntityObject returned null.`);
+            }
+            results[i] = entity;
+            pendingPeers.push({ entity, data: item as PlainRow });
+        }
+
+        if (pendingPeers.length > 0) {
+            const coordinator = pendingPeers[0].entity;
+            if (typeof coordinator.LoadFromDataBatchAsISAParent === 'function') {
+                await coordinator.LoadFromDataBatchAsISAParent(pendingPeers, md, contextUser, batchUnfilteredCache);
+            } else {
+                await Promise.all(pendingPeers.map(p => p.entity.LoadFromData(p.data)));
+            }
+        }
+        return results;
+    }
+
+    // Slow / correct path: IS-A child entities, minimal providers without RunViews, and
+    // mocks that don't implement EntityByName. Per-row async — preserves original semantics.
     const entityPromises = items.map(async (item) => {
         if (typeof (item as { Save?: unknown }).Save === 'function') {
             return item as unknown as T;

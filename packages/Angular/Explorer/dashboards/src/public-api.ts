@@ -15,6 +15,7 @@ export * from './ThemeStudio/theme-studio-dashboard.component';
 export * from './ThemeStudio/theme-studio-resource.component';
 export * from './ThemeStudio/theme-manager-dashboard.component';
 export * from './ThemeStudio/theme-manager-resource.component';
+export * from './LoginStudio/login-studio-resource.component';
 export * from './DevTools';
 export * from './Admin';
 export * from './Lists';
@@ -54,7 +55,9 @@ export {
   AnalyticsErrorAnalysisComponent,
   LoadAnalyticsErrorAnalysis,
   AnalyticsUsagePatternsComponent,
-  LoadAnalyticsUsagePatterns
+  LoadAnalyticsUsagePatterns,
+  UsageExplorerComponent,
+  LoadUsageExplorer
 } from './AI/index';
 
 // Knowledge Hub components
@@ -72,6 +75,10 @@ export {
   LoadVisualizeResource
 } from './KnowledgeHub/components/visualize/visualize-resource.component';
 export { TagCloudComponent } from './KnowledgeHub/components/visualize/tag-cloud/tag-cloud.component';
+export {
+  SemanticGraphExplorerComponent,
+  LoadSemanticGraphExplorerComponent
+} from './KnowledgeHub/components/visualize/semantic-graph/semantic-graph-explorer.component';
 export { RecordDrilldownComponent } from './KnowledgeHub/components/visualize/record-drilldown/record-drilldown.component';
 export {
   AnalyticsResourceComponent,
@@ -164,6 +171,10 @@ export {
   ShareDialogResult
 } from './DashboardBrowser/dashboard-share-dialog.component';
 
+// Dashboards app pages (the Library is DashboardBrowserResourceComponent above)
+export { DashboardsCategoriesResourceComponent, LoadDashboardsCategoriesResource } from './DashboardBrowser/dashboards-categories-resource.component';
+export * from './shared/dashboards-app.helpers';
+
 // Home Application and Dashboard
 export { HomeApplication } from './Home/home-application';
 export { HomeDashboardComponent } from './Home/home-dashboard.component';
@@ -173,6 +184,10 @@ export { ApplicationRolesResourceComponent, LoadApplicationRolesResource } from 
 
 // Realtime Recordings — review & replay recorded realtime sessions (audio + transcript)
 export { RealtimeRecordingsDashboardComponent, LoadRealtimeRecordingsDashboard } from './RealtimeRecordings/realtime-recordings-dashboard.component';
+
+// Telephony & Interaction Operations
+export { TelephonyOperationsDashboardComponent } from './TelephonyOperations/telephony-operations-dashboard.component';
+export * from './TelephonyOperations/telephony-operations-agent-context';
 
 // Permissions admin — three independent resource tabs (Phase 2a/b/c — unified permissions)
 export {
@@ -216,6 +231,7 @@ export * from './ai-dashboards.module';
 export * from './actions-dashboards.module';
 export * from './testing-dashboards.module';
 export * from './scheduling-dashboards.module';
+export * from './rubrics-dashboards.module';
 export * from './communication-dashboards.module';
 export * from './credentials-dashboards.module';
 export * from './data-explorer-dashboards.module';
@@ -237,5 +253,21 @@ export { DatabaseDesignerDashboardComponent, LoadDatabaseDesignerDashboard } fro
 export * from './shared/shared-dashboard-widgets.module';
 export * from './archiving-dashboards.module';
 
+// Work Queue app — operator dashboard over the WorkQueue.* remote operations (spec 09b)
+export * from './work-queue-dashboards.module';
+export { WorkQueueDashboardComponent } from './WorkQueue/work-queue-dashboard.component';
+
 // Routines app — schedule AI agents to run on a cron cadence
 export { UserRoutinesResourceComponent, LoadUserRoutinesResource } from './UserRoutines/user-routines-resource.component';
+
+// Video Studio app — Productions, Brand Kits, and Archetypes resource tabs
+export * from './video-studio-dashboards.module';
+export * from './VideoStudio';
+
+// Chief of Staff app: one resource component per nav item
+export { BaseChiefOfStaffPage, type ChiefOfStaffClientTool } from './ChiefOfStaff/chief-of-staff-page-base';
+export { ChiefOfStaffOverviewComponent, LoadChiefOfStaffOverview } from './ChiefOfStaff/chief-of-staff-overview.component';
+export { ChiefOfStaffApprovalsComponent, LoadChiefOfStaffApprovals } from './ChiefOfStaff/chief-of-staff-approvals.component';
+export { ChiefOfStaffGovernanceComponent, LoadChiefOfStaffGovernance } from './ChiefOfStaff/chief-of-staff-governance.component';
+export * from './ChiefOfStaff/chief-of-staff-agent-context';
+export * from './ChiefOfStaff/chief-of-staff-live-refresh';

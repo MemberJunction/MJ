@@ -9,7 +9,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // empty catalog so the tests below exercise the tool set without a database.
 vi.mock('@memberjunction/aiengine', async (importOriginal) => {
     const actual = await importOriginal<Record<string, unknown>>();
-    return { ...actual, AIEngine: { Instance: { AgentActions: [] } } };
+    return { ...actual, AIEngine: { Instance: { AgentActions: [], GetAgentConfigurationPresets: (): unknown[] => [] } } };
 });
 import { BaseAgent } from '../base-agent';
 import { LoopAgentType } from '../agent-types/loop-agent-type';
@@ -108,15 +108,15 @@ describe('applyNativeTools — actions plus control tools', () => {
     it('declares actions, one tool per sub-agent, payload_change_request and ask_user, and names the control ones', () => {
         const promptParams = {} as AIPromptParams;
         new DeclaringProbe([anAction], [aSubAgent]).Apply(promptParams, agentParams);
-        expect(promptParams.tools?.map((t) => t.name)).toEqual(['run_ad_hoc_query', 'delegate_to_query_strategist', 'payload_change_request', 'ask_user']);
-        expect(promptParams.controlFlowToolNames).toEqual(['delegate_to_query_strategist', 'payload_change_request', 'ask_user']);
+        expect(promptParams.tools?.map((t) => t.name)).toEqual(['run_ad_hoc_query', 'delegate_to_query_strategist', 'payload_change_request', 'ask_user', 'complete_task']);
+        expect(promptParams.controlFlowToolNames).toEqual(['delegate_to_query_strategist', 'payload_change_request', 'ask_user', 'complete_task']);
         expect(promptParams.toolChoice).toBe('auto');
     });
 
     it('declares for an agent with sub-agents but no actions (pure orchestrator)', () => {
         const promptParams = {} as AIPromptParams;
         new DeclaringProbe([], [aSubAgent]).Apply(promptParams, agentParams);
-        expect(promptParams.tools?.map((t) => t.name)).toEqual(['delegate_to_query_strategist', 'payload_change_request', 'ask_user']);
+        expect(promptParams.tools?.map((t) => t.name)).toEqual(['delegate_to_query_strategist', 'payload_change_request', 'ask_user', 'complete_task']);
     });
 
     it('declares nothing for an agent with neither', () => {

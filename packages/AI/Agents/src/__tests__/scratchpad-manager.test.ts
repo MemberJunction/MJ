@@ -311,6 +311,66 @@ describe('ScratchpadManager', () => {
         });
     });
 
+    // ─── PruneNotes & GetNoteLines ─────────────────────────────────
+
+    describe('PruneNotes & GetNoteLines', () => {
+        it('should return non-empty note lines from GetNoteLines', () => {
+            manager.SetNotes('Line 1\n\nLine 2\n   \nLine 3');
+            expect(manager.GetNoteLines()).toEqual(['Line 1', 'Line 2', 'Line 3']);
+        });
+
+        it('should return empty array when notes are empty', () => {
+            expect(manager.GetNoteLines()).toEqual([]);
+        });
+
+        it('should not prune when note count is within maxNotes', () => {
+            manager.SetNotes('Note 1\nNote 2\nNote 3');
+            const pruned = manager.PruneNotes(3);
+            expect(pruned).toBe(0);
+            expect(manager.GetNoteLines()).toEqual(['Note 1', 'Note 2', 'Note 3']);
+        });
+
+        it('should prune oldest low-priority notes first while preserving high-priority notes', () => {
+            manager.SetNotes([
+                'Old low note 1',
+                '[HIGH] Critical constraint',
+                'Old low note 2',
+                '[PINNED] Keep this rule',
+                'Newest low note 3',
+            ].join('\n'));
+
+            const pruned = manager.PruneNotes(3);
+            expect(pruned).toBe(2);
+            expect(manager.GetNoteLines()).toEqual([
+                '[HIGH] Critical constraint',
+                '[PINNED] Keep this rule',
+                'Newest low note 3',
+            ]);
+        });
+
+        it('should prune oldest high-priority notes if low-priority notes are exhausted', () => {
+            manager.SetNotes([
+                '[HIGH] High 1',
+                '[IMPORTANT] High 2',
+                '❗ High 3',
+            ].join('\n'));
+
+            const pruned = manager.PruneNotes(2);
+            expect(pruned).toBe(1);
+            expect(manager.GetNoteLines()).toEqual([
+                '[IMPORTANT] High 2',
+                '❗ High 3',
+            ]);
+        });
+
+        it('should clear notes when maxNotes is 0', () => {
+            manager.SetNotes('Note A\nNote B');
+            const pruned = manager.PruneNotes(0);
+            expect(pruned).toBe(2);
+            expect(manager.GetNotes()).toBe('');
+        });
+    });
+
     // ─── Serialization ──────────────────────────────────────────────
 
     describe('ToJSON', () => {

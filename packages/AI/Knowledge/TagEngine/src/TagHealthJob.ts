@@ -3,6 +3,7 @@ import { LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { MJTagCoOccurrenceEntity, MJTagSuggestionEntity, MJTagEntity } from '@memberjunction/core-entities';
 import { TagEngine } from './TagEngine';
 import { TagGovernanceEngine } from './TagGovernanceEngine';
+import { ReadStoredVector } from '@memberjunction/ai-vectors-memory';
 
 /**
  * Threshold knobs for the Tag Health emitters. Defaults are conservative;
@@ -268,17 +269,15 @@ export class TagHealthJob extends BaseSingleton<TagHealthJob> {
     private embeddingSimilarity(tagAID: string, tagBID: string): number | null {
         const tagA = TagEngine.Instance.GetTagByID(tagAID);
         const tagB = TagEngine.Instance.GetTagByID(tagBID);
-        if (!tagA?.EmbeddingVector || !tagB?.EmbeddingVector) return null;
-        try {
-            const vA = JSON.parse(tagA.EmbeddingVector) as number[];
-            const vB = JSON.parse(tagB.EmbeddingVector) as number[];
-            return this.cosine(vA, vB);
-        } catch {
-            return null;
-        }
+        if (!tagA || !tagB) return null;
+        // Binary column first, JSON as the fallback — a malformed value reads as "no vector".
+        const vA = ReadStoredVector(tagA.EmbeddingVectorBinary, tagA.EmbeddingVector);
+        const vB = ReadStoredVector(tagB.EmbeddingVectorBinary, tagB.EmbeddingVector);
+        if (!vA || !vB) return null;
+        return this.cosine(vA, vB);
     }
 
-    private cosine(a: number[], b: number[]): number {
+    private cosine(a: ArrayLike<number>, b: ArrayLike<number>): number {
         const len = Math.min(a.length, b.length);
         if (len === 0) return 0;
         let dot = 0, magA = 0, magB = 0;

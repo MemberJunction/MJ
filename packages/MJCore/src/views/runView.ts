@@ -5,6 +5,11 @@ import { BaseEntity } from '../generic/baseEntity';
 import { PlatformSQL, IsPlatformSQL } from '../generic/platformSQL';
 import { CompositeKey } from '../generic/compositeKey';
 import type { CacheChangedEvent } from '../generic/localCacheManager';
+import { IsExplicitBaseViewOverride } from '../generic/alternateBaseViews';
+import { ViewPropertyValues, ViewPropertyValuesKey } from './viewProperties';
+import type { CompositeFilter } from '../generic/filters/compositeFilter';
+import type { CompositeFilterDescriptor } from '../generic/filters/filter.types';
+import { CanonicalCompositeFilterKey } from '../generic/filters/compositeFilterSQL';
 
 /**
  * Reason codes for {@link AfterKeyNotSupportedError}. Use these to make caller
@@ -114,6 +119,192 @@ export interface RunViewTelemetryOptions {
 }
 
 /**
+ * Allowed scalar value types for a bound parameter in {@link RunViewParams.Parameters}.
+ */
+export type RunViewParameterScalar = string | number | boolean | Date | null;
+
+/**
+ * Allowed value for a bound parameter in {@link RunViewParams.Parameters}:
+ * a scalar value, or a non-empty array of scalars (expanded to comma-separated bound placeholders for `IN (@list)`).
+ */
+export type RunViewParameterValue = RunViewParameterScalar | readonly RunViewParameterScalar[];
+
+/**
+ * Map of named parameter values (`@paramName` in {@link RunViewParams.ExtraFilter}, keyed without the leading `@`).
+ */
+export type RunViewParameters = Record<string, RunViewParameterValue>;
+
+type CanonicalParameterScalar = string | number | boolean | null | { readonly $date: string };
+type CanonicalParameterValue = CanonicalParameterScalar | readonly CanonicalParameterScalar[];
+
+function normalizeParameterScalar(value: RunViewParameterScalar): CanonicalParameterScalar {
+    if (value instanceof Date) {
+        return { $date: value.toISOString() };
+    }
+    return value;
+}
+
+function normalizeParameterValue(value: RunViewParameterValue): CanonicalParameterValue {
+    if (Array.isArray(value)) {
+        return value.map((item: RunViewParameterScalar) => normalizeParameterScalar(item));
+    }
+    return normalizeParameterScalar(value as RunViewParameterScalar);
+}
+
+/**
+ * Validates and normalizes a {@link RunViewParameters} map, stripping any leading `@` from
+ * parameter keys and rejecting non-plain objects, prototype-pollution keys (`__proto__`,
+ * `constructor`, `prototype`), invalid parameter identifiers, duplicate keys after `@`-stripping
+ * (e.g. `{ status: 'A', '@status': 'B' }`), empty arrays, non-finite numbers, invalid Dates,
+ * and unsupported value types.
+ *
+ * Returns a `Map<string, RunViewParameterValue>` keyed by normalized parameter name (without `@`).
+ */
+export function NormalizeRunViewParameters(
+    parameters: RunViewParameters | undefined | null,
+): Map<string, RunViewParameterValue> {
+    const normalized = new Map<string, RunViewParameterValue>();
+    if (parameters === undefined || parameters === null) {
+        return normalized;
+    }
+    if (typeof parameters !== 'object' || Array.isArray(parameters)) {
+        throw new Error(
+            'Invalid RunViewParams.Parameters: expected a plain object mapping parameter names to scalar or scalar-array values.',
+        );
+    }
+    const proto = Object.getPrototypeOf(parameters);
+    if (proto !== null && proto !== Object.prototype) {
+        throw new Error('Invalid RunViewParams.Parameters: expected a plain object.');
+    }
+
+    const validateScalar = (paramName: string, value: RunViewParameterScalar): RunViewParameterScalar => {
+        if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+            return value;
+        }
+        if (typeof value === 'number') {
+            if (!Number.isFinite(value)) {
+                throw new Error(`Invalid RunView parameter '@${paramName}': numeric parameter values must be finite numbers.`);
+            }
+            return value;
+        }
+        if (value instanceof Date) {
+            if (Number.isNaN(value.getTime())) {
+                throw new Error(`Invalid RunView parameter '@${paramName}': Date parameter value is invalid.`);
+            }
+            return value;
+        }
+        throw new Error(`Invalid RunView parameter '@${paramName}': unsupported value type '${typeof value}'.`);
+    };
+
+    const seenKeys = new Set<string>();
+    for (const rawKey of Object.getOwnPropertyNames(parameters)) {
+        if (rawKey === '__proto__' || rawKey === 'constructor' || rawKey === 'prototype') {
+            throw new Error(`Invalid RunView parameter name '${rawKey}'.`);
+        }
+        const cleanKey = rawKey.startsWith('@') ? rawKey.slice(1) : rawKey;
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(cleanKey)) {
+            throw new Error(
+                `Invalid RunView parameter name '${rawKey}': parameter names must match @[A-Za-z_][A-Za-z0-9_]*.`,
+            );
+        }
+        if (cleanKey === '__proto__' || cleanKey === 'constructor' || cleanKey === 'prototype') {
+            throw new Error(`Invalid RunView parameter name '${rawKey}'.`);
+        }
+        if (seenKeys.has(cleanKey)) {
+            throw new Error(`Duplicate RunView parameter name '@${cleanKey}'.`);
+        }
+        seenKeys.add(cleanKey);
+
+        const rawVal = parameters[rawKey];
+        if (rawVal === undefined) {
+            continue;
+        }
+        if (Array.isArray(rawVal)) {
+            if (rawVal.length === 0) {
+                throw new Error(`RunView parameter '@${cleanKey}' cannot be an empty array.`);
+            }
+            normalized.set(
+                cleanKey,
+                rawVal.map((item: RunViewParameterScalar) => validateScalar(cleanKey, item)),
+            );
+        } else {
+            normalized.set(cleanKey, validateScalar(cleanKey, rawVal as RunViewParameterScalar));
+        }
+    }
+
+    return normalized;
+}
+
+/**
+ * Extracts the set of valid normalized parameter names (without leading `@`) from a
+ * {@link RunViewParameters} map without throwing on malformed entries. Used by
+ * {@link FieldSecuritySQLGate} when screening `ExtraFilter` before parameter binding runs.
+ */
+export function ExtractRunViewParameterNames(
+    parameters: RunViewParameters | undefined | null,
+): ReadonlySet<string> {
+    const names = new Set<string>();
+    if (!parameters || typeof parameters !== 'object' || Array.isArray(parameters)) {
+        return names;
+    }
+    for (const rawKey of Object.keys(parameters)) {
+        if (parameters[rawKey] === undefined) continue;
+        const cleanKey = rawKey.startsWith('@') ? rawKey.slice(1) : rawKey;
+        if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(cleanKey)) {
+            names.add(cleanKey);
+        }
+    }
+    return names;
+}
+
+/**
+ * Produces a deterministic, pipe-safe canonical string for {@link RunViewParams.Parameters}
+ * suitable for cache fingerprinting and {@link RunViewParams.Equals}.
+ * Returns `''` when `parameters` is undefined, null, or contains no defined keys.
+ */
+export function RunViewParametersKey(parameters?: RunViewParameters | null): string {
+    if (!parameters || typeof parameters !== 'object' || Array.isArray(parameters)) {
+        return '';
+    }
+    const keys = Object.keys(parameters)
+        .filter((k) => parameters[k] !== undefined)
+        .sort((a, b) => {
+            const na = a.startsWith('@') ? a.slice(1) : a;
+            const nb = b.startsWith('@') ? b.slice(1) : b;
+            return na.localeCompare(nb);
+        });
+    if (keys.length === 0) {
+        return '';
+    }
+    const entries: [string, CanonicalParameterValue][] = keys.map((k) => {
+        const normalizedKey = k.startsWith('@') ? k.slice(1) : k;
+        return [normalizedKey, normalizeParameterValue(parameters[k])];
+    });
+    // Escape '|' as \u007c so parameter string values containing '|' never split pipe-delimited cache fingerprints.
+    return JSON.stringify(entries).replace(/\|/g, '\\u007c');
+}
+
+/**
+ * `RunViewParams` fields only server code may set. A transport that builds run params from a
+ * client's request body (the REST endpoint) removes these before running the view, so a client
+ * cannot choose them. GraphQL run inputs never carry them in the first place.
+ */
+export const SERVER_ONLY_RUN_VIEW_PARAMS: ReadonlyArray<keyof RunViewParams> = [
+    'TimeZone',
+    'ServerProperties',
+    'PreserveRestrictedApiCiphertext',
+];
+
+/** A copy of client-supplied run params without the {@link SERVER_ONLY_RUN_VIEW_PARAMS} fields. */
+export function StripServerOnlyRunViewParams(params: RunViewParams): RunViewParams {
+    const copy: RunViewParams = { ...params };
+    for (const key of SERVER_ONLY_RUN_VIEW_PARAMS) {
+        delete copy[key];
+    }
+    return copy;
+}
+
+/**
  * Parameters for running either a stored or dynamic view.
  * A stored view is a view that is saved in the database and can be run either by ID or Name.
  * A dynamic view is one that is not stored in the database and you provide parameters to return data as
@@ -157,6 +348,22 @@ export class RunViewParams {
      */
     DataSource?: 'Live' | 'Materialized';
     /**
+     * optional - semantic `Name` of a registered `EntityAlternateBaseView` on the target entity
+     * (for example, `'Active'` or `'Open'`).
+     *
+     * When set, `RunView` routes the read (and any parallel aggregate or count query) against the
+     * alternate view's physical SQL view (`EntityAlternateBaseView.ViewName` in `EffectiveSchemaName`)
+     * instead of `entity.BaseView`.
+     *
+     * **Precedence & Composition:**
+     * - Explicit `params.AlternateBaseView` overrides any `AlternateBaseView` pinned inside a saved
+     *   `UserView.DisplayState` JSON.
+     * - Mutually exclusive with `DataSource: 'Materialized'` (throws a descriptive error when combined).
+     * - Entity `CanRead`, Row-Level Security (RLS), and Field-Level Security (FLS) apply identically
+     *   on top of the alternate base view.
+     */
+    AlternateBaseView?: string;
+    /**
      * An optional SQL WHERE clause that you can add to the existing filters on a stored view. For dynamic views, you can either
      * run a view without a filter (if the entity definition allows it with AllowAllRowsAPI=1) or filter with any valid SQL WHERE clause.
      *
@@ -165,6 +372,22 @@ export class RunViewParams {
      * before the query is executed.
      */
     ExtraFilter?: string | PlatformSQL;
+    /**
+     * Structured filter, ANDed with {@link ExtraFilter} when both are set. Compiled to parameterized
+     * SQL by the provider; never interpolated. Field names are validated against the entity and its
+     * field-level security; an unknown or unreadable field is refused.
+     */
+    Filter?: CompositeFilterDescriptor | CompositeFilter;
+    /**
+     * Optional map of named bind parameters referenced as `@paramName` in {@link ExtraFilter}.
+     * Keys omit the leading `@` (an optional `@` prefix is normalized).
+     *
+     * Each parameter value may be a scalar (`string | number | boolean | Date | null`) or a non-empty
+     * array of scalars (expanded to comma-separated bound placeholders for `IN (@list)` predicates).
+     * Bound via dialect-native placeholders (`@p0` on SQL Server, `$1` on PostgreSQL) and included in
+     * result-cache fingerprints and {@link RunViewParams.Equals}.
+     */
+    Parameters?: RunViewParameters;
     /**
      * An optional SQL ORDER BY clause that you can use for dynamic views, as well as to OVERRIDE the stored view's sorting order.
      *
@@ -214,8 +437,30 @@ export class RunViewParams {
     IgnoreMaxRows?: boolean;
     /**
      * optional - if provided, and if IgnoreMaxRows = false, this value will be used to constrain the total # of rows returned by the view. If this is not provided, either the default settings at the entity-level will be used, or if the entity has no UserViewMaxRows setting, all rows will be returned that match any filter, if provided.
+     *
+     * `TotalRowCount` with `MaxRows`: when the page comes back full, a second query counts the
+     * matching rows, whatever the limit. A caller that only reads `Results`, such as a single-row
+     * lookup, should pass `SkipTotalRowCount: true` to avoid paying for that count.
      */
     MaxRows?: number;
+    /**
+     * optional - when true, the provider skips the EXTRA count query it would otherwise run to
+     * populate `TotalRowCount` when the returned page comes back exactly full
+     * (`Results.length === MaxRows`). That fallback count is a second, sequential round trip after
+     * the data query — and for a single-row existence/lookup read (`MaxRows: 1`) it fires on every
+     * HIT, so a hot lookup path pays double round trips to compute a total it never reads. Set
+     * this on reads that only consume `Results`. Ignored for `ResultType: 'count_only'`, whose
+     * entire point is the count.
+     *
+     * Scope: it also suppresses the up-front count a PAGINATED read (`StartRow` with `MaxRows`)
+     * runs, so a paginated caller that needs "1-100 of N" must leave it unset.
+     *
+     * With the flag, `TotalRowCount` is always `undefined`, even on a page that was not full, so
+     * a read of it fails the same way on every data size instead of working only until the data
+     * grows. A caller that needs a total must not pass the flag. Calls with and without it get
+     * separate cache slots, since their `TotalRowCount` differs.
+     */
+    SkipTotalRowCount?: boolean;
     /**
      * optional - if provided, this value will be used to offset the rows returned.
      *
@@ -397,6 +642,85 @@ export class RunViewParams {
     BypassCache?: boolean;
 
     /**
+     * When true, binary fields (SQL Server `binary` / `varbinary` / `image`, PostgreSQL `bytea`)
+     * are included in the results. Their values are base64 strings, the same representation a
+     * `BaseEntity` holds; convert with `Base64ToBytes` / `Base64ToFloat32Vector` from
+     * `@memberjunction/global`.
+     *
+     * Binary columns are left out by default on **every** provider, server-side database
+     * providers included: the provider emits an explicit column list instead of `SELECT *`, so the
+     * values are never read from the database, let alone sent over the wire. They are usually
+     * large and most lists, grids and lookups never need them. A `simple` row then has no key
+     * for the column, and an `entity_object` row marks the field `NotLoaded`, which a later
+     * `Save()` leaves out so the stored value is never wiped.
+     *
+     * To get them, set this flag, or name the binary field in {@link Fields} — the provider sets
+     * the flag for you in that case. A single-record `BaseEntity.Load()` always includes them. An
+     * engine that caches the entity opts in through its config's `IncludeBinaryFields`
+     * (`true`, or `'DatabaseProviderOnly'` to load them on the server but not in the browser).
+     *
+     * The flag is part of the result-cache fingerprint, so a request with it never shares a slot
+     * with one without. See `guides/BINARY_FIELDS_GUIDE.md`.
+     *
+     * @default false
+     */
+    IncludeBinaryFields?: boolean;
+
+    /**
+     * Server only: the IANA time zone (e.g. `'Europe/Paris'`) that context tokens such as
+     * `Context.Today` are worked out in for this run. Unset means UTC.
+     *
+     * MJServer's GraphQL resolvers set it from the request's `x-mj-timezone` header
+     * (`TIME_ZONE_HEADER`); server code that runs without a request (agents, schedules) sets it
+     * itself. No GraphQL run input carries it, so a GraphQL client cannot set it.
+     *
+     * It is not part of the result-cache fingerprint. Code that resolves tokens with it must put the
+     * resolved values, not the zone, into whatever the fingerprint covers.
+     */
+    TimeZone?: string;
+
+    /**
+     * Values for a stored view's declared properties (`MJ: User Views.Properties`), keyed by
+     * property name. Each property with a value, or with a default, adds one predicate on its target
+     * field, ANDed after the view's own filter and `ExtraFilter`; row-level security applies on top.
+     * A value is checked against the property's type and written as a typed SQL literal. A list is
+     * accepted only for a property whose operator is `IN`. `null` means "no value": the default is
+     * not used and no predicate is added.
+     *
+     * Clients may set this (the GraphQL view inputs and REST carry it). The run is refused, with an
+     * error naming the property, for: a name the view does not declare, a value for a property whose
+     * `AllowOverride` is false, a value of the wrong type, or a required property left without one.
+     * Only a stored view (ViewID, ViewName or ViewEntity) takes properties.
+     *
+     * Part of the result-cache fingerprint. On the server the database provider replaces it, before
+     * the cache lookup, with the resolved values in {@link ServerProperties}.
+     */
+    Properties?: ViewPropertyValues;
+
+    /**
+     * Server only: values for a stored view's properties that server code sets, including properties
+     * whose `AllowOverride` is false (a client value for those is refused). A value here wins over
+     * {@link Properties} and over the property's default. Unknown names are refused.
+     *
+     * No GraphQL run input carries it and the REST view routes strip it
+     * ({@link SERVER_ONLY_RUN_VIEW_PARAMS}), so a client cannot set it. Part of the result-cache
+     * fingerprint.
+     */
+    ServerProperties?: ViewPropertyValues;
+
+    /**
+     * Server-only transport optimization flag set by API boundary layers (`ResolverBase` / GraphQL).
+     *
+     * When `true`, database providers leave `Encrypt = true` fields whose `AllowDecryptInAPI` is
+     * `false` in their stored ciphertext form instead of decrypting them on read only for the API
+     * layer to re-encrypt (when `SendEncryptedValue = true`) or mask with `ENCRYPTED_SENTINEL`
+     * (when `SendEncryptedValue = false`). Stripped from client-supplied REST bodies via
+     * {@link SERVER_ONLY_RUN_VIEW_PARAMS} and excluded from cache fingerprints (cache slots always
+     * store ciphertext at rest).
+     */
+    PreserveRestrictedApiCiphertext?: boolean;
+
+    /**
      * Optional TTL (time-to-live) in milliseconds for cached results when CacheLocal is true.
      * After this time, cached results will be considered stale and fresh data will be fetched.
      * If not specified, the LocalCacheManager's default TTL will be used (typically 5 minutes).
@@ -492,6 +816,7 @@ export class RunViewParams {
         if (a.ViewName !== b.ViewName) return false;
         if (a.EntityName !== b.EntityName) return false;
         if (!RunViewParams.platformSQLEqual(a.ExtraFilter, b.ExtraFilter)) return false;
+        if (CanonicalCompositeFilterKey(a.Filter) !== CanonicalCompositeFilterKey(b.Filter)) return false;
         if (!RunViewParams.platformSQLEqual(a.OrderBy, b.OrderBy)) return false;
         if (a.UserSearchString !== b.UserSearchString) return false;
         if (a.ExcludeUserViewRunID !== b.ExcludeUserViewRunID) return false;
@@ -500,6 +825,7 @@ export class RunViewParams {
         if (a.SaveViewResults !== b.SaveViewResults) return false;
         if (a.IgnoreMaxRows !== b.IgnoreMaxRows) return false;
         if (a.MaxRows !== b.MaxRows) return false;
+        if (a.SkipTotalRowCount !== b.SkipTotalRowCount) return false;
         if (a.StartRow !== b.StartRow) return false;
         if (!RunViewParams.afterKeyEqual(a.AfterKey, b.AfterKey)) return false;
         if (a.ForceAuditLog !== b.ForceAuditLog) return false;
@@ -507,10 +833,21 @@ export class RunViewParams {
         if (a.ResultType !== b.ResultType) return false;
         if (a.CacheLocal !== b.CacheLocal) return false;
         if (a.CacheLocalTTL !== b.CacheLocalTTL) return false;
+        // Including binary fields changes the columns returned, so a toggle must trigger a reload.
+        // undefined and false mean the same thing and must not cause a spurious one.
+        if ((a.IncludeBinaryFields === true) !== (b.IncludeBinaryFields === true)) return false;
+        if (a.TimeZone !== b.TimeZone) return false;
+        if (ViewPropertyValuesKey(a.Properties, a.ServerProperties) !== ViewPropertyValuesKey(b.Properties, b.ServerProperties)) return false;
+        if (RunViewParametersKey(a.Parameters) !== RunViewParametersKey(b.Parameters)) return false;
         // A Live↔Materialized DataSource toggle changes the result set and MUST trigger a reload. Compared via
         // IsMaterializedDataSource so undefined/'Live' are treated as equal (no spurious reload) while a switch to
         // (or from) 'Materialized' is not — matching the read-routing decision everywhere else.
         if (IsMaterializedDataSource(a.DataSource) !== IsMaterializedDataSource(b.DataSource)) return false;
+        // Switching AlternateBaseView (case-insensitive, trimmed) changes the underlying SQL view and MUST trigger
+        // a reload. An explicit empty string (`""`) overrides a saved User View's pinned `DisplayState.alternateBaseView`
+        // back to `BaseView` and therefore differs from `undefined` (which inherits the saved view's pin).
+        if (IsExplicitBaseViewOverride(a) !== IsExplicitBaseViewOverride(b)) return false;
+        if (NormalizeAlternateBaseViewName(a.AlternateBaseView) !== NormalizeAlternateBaseViewName(b.AlternateBaseView)) return false;
 
         // Compare ViewEntity by reference (deep comparison would be expensive)
         if (a.ViewEntity !== b.ViewEntity) return false;
@@ -598,6 +935,14 @@ export class RunViewParams {
  */
 export function IsMaterializedDataSource(dataSource: string | null | undefined): boolean {
     return typeof dataSource === 'string' && dataSource.trim().toLowerCase() === 'materialized';
+}
+
+/**
+ * Normalizes an `AlternateBaseView` name for comparison and cache-key construction:
+ * trims whitespace and lowercases. Returns `''` when the input is null, undefined, or whitespace-only.
+ */
+export function NormalizeAlternateBaseViewName(name: string | null | undefined): string {
+    return typeof name === 'string' ? name.trim().toLowerCase() : '';
 }
 
 /**

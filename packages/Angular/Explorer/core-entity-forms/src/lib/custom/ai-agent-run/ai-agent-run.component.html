@@ -20,7 +20,13 @@
             <div class="meta-info">
               @if (agent) {
                 <span class="agent-name">
-                  <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: AI Agents', record.AgentID)">
+                  <a href="javascript:void(0)"
+                     class="entity-link"
+                     [mjRecordLink]="record"
+                     FieldName="AgentID"
+                     [DisplayName]="agent.Name"
+                     [HandleClick]="false"
+                     (click)="openEntityRecord('MJ: AI Agents', record.AgentID)">
                     {{ agent.Name }}
                   </a>
                 </span>
@@ -29,7 +35,11 @@
               @if (record.ParentRunID) {
                 <span class="parent-run">
                   <i class="fas fa-level-up-alt"></i>
-                  <a (click)="navigateToParentRun()" class="parent-link">Parent Run</a>
+                  <a [mjRecordLink]="record"
+                     FieldName="ParentRunID"
+                     [HandleClick]="false"
+                     (click)="navigateToParentRun()"
+                     class="parent-link">Parent Run</a>
                 </span>
               }
               <!-- Conversation Link Pill -->
@@ -143,6 +153,12 @@
       }
     </div>
 
+    <!-- Phone: the strip becomes one button that opens the Sections sheet (Timeline, Details) -->
+    <mj-section-picker class="phone-section-picker"
+                       [Items]="SectionPickerItems"
+                       [ActiveKey]="ActiveTab"
+                       (ActiveKeyChange)="OnSectionPicked($event)"></mj-section-picker>
+
     <!-- Tabs -->
     <div class="tabs">
       <button class="tab" [class.active]="activeTab === 'timeline'" (click)="changeTab('timeline')">
@@ -163,8 +179,8 @@
     <div class="content-area">
       <!-- Timeline Tab -->
       @if (activeTab === 'timeline') {
-        <div class="tab-content" style="height: 100%;">
-          <as-split direction="horizontal" style="height: 100%;">
+        <div class="tab-content timeline-tab" style="height: 100%;">
+          <as-split [direction]="TimelineSplitDirection" style="height: 100%;">
             <!-- Timeline Pane -->
             <as-split-area [size]="selectedTimelineItem ? 55 : 100">
               <mj-ai-agent-run-timeline
@@ -181,13 +197,22 @@
                 <mj-ai-agent-run-step-detail
                   [selectedTimelineItem]="selectedTimelineItem"
                   [Provider]="ProviderToUse"
+                  [SavingWorkflow]="SavingWorkflow"
                   (closePanel)="closeJsonPanel()"
                   (navigateToActionLog)="navigateToActionLog($event)"
-                  (copyToClipboard)="copyToClipboard($event)">
+                  (copyToClipboard)="copyToClipboard($event)"
+                  (SaveAsWorkflowRequested)="OnSaveAsWorkflowRequested($event)">
                 </mj-ai-agent-run-step-detail>
               </as-split-area>
             }
           </as-split>
+          <!-- Phone only: the desktop-only views are named, with a link to open the run there -->
+          <div class="phone-desktop-note">
+            <span>Visualization and Analytics are desktop views for this run.</span>
+            <button mjButton variant="flat" size="sm" type="button" (click)="CopyPageLink()">
+              <i class="fas fa-link" aria-hidden="true"></i> Copy link
+            </button>
+          </div>
         </div>
       }
 
@@ -393,7 +418,7 @@
               </div>
             </div>
           </mj-accordion-panel>
-          @if (record.Result) {
+          @if (ShowResultPanel) {
             <mj-accordion-panel [Expanded]="false">
               <ng-template mjAccordionTitle>
                 <i class="fas fa-code"></i> Result

@@ -1,0 +1,15 @@
+-- ============================================================================
+-- MemberJunction PostgreSQL Migration — V202609291627__v6.2.x__MagicLink_Consume_Invite_Sproc.sql
+-- ============================================================================
+--
+-- PG-EMPTY-BY-DESIGN: spConsumeMagicLinkInvite exists on SQL Server only because its runtime roles
+-- are never granted table DML, so the single-use compare-and-swap must run inside a granted
+-- procedure (#4753). PostgreSQL's runtime roles DO hold UPDATE on every __mj table
+-- (V202605040300__v5.33.x__Unblock_PostgreSQL_End_To_End.pg-only.sql), and MagicLinkService
+-- branches on platform: on PostgreSQL it runs BuildConsumeInvitePostgresSQL's guarded
+-- `UPDATE … RETURNING` directly (packages/MJServer/src/auth/magicLink/magicLinkCore.ts), with the
+-- same Active / not-exhausted / not-expired predicate as the procedure. Nothing on PostgreSQL calls
+-- the procedure, so shipping one would be dead code that could drift from the live predicate.
+--
+-- An empty counterpart is indistinguishable at a glance from the silent-emptying defect that
+-- shipped v5.45 broken (issue #3253), so this header records the reasoning for a reviewer to check.

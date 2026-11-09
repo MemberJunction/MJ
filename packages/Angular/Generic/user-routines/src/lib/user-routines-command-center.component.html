@@ -34,6 +34,14 @@
       @if (ActiveView === 'list') {
         <mj-page-search class="urcc-search" Placeholder="Search routines..."
           [Value]="SearchText" (ValueChange)="OnSearchChange($event)"></mj-page-search>
+        @if (AgentWakeCount > 0 || ShowAgentWakes) {
+          <button mjButton variant="outline" size="sm"
+            [class.urcc-tab--active]="ShowAgentWakes"
+            [title]="ShowAgentWakes ? 'Hide pending self-scheduled agent wakes' : 'Show pending self-scheduled agent wakes'"
+            (click)="ToggleAgentWakes()">
+            <i class="fa-solid fa-bolt"></i> Agent Wakes ({{ AgentWakeCount }})
+          </button>
+        }
         <mj-refresh-button [ShowLabel]="false" (Clicked)="Refresh()"></mj-refresh-button>
         <button mjButton variant="primary" size="sm" (click)="ShowNewRoutine()">
           <i class="fa-solid fa-plus"></i> New Routine
@@ -59,6 +67,7 @@
           [Provider]="Provider"
           [SearchText]="SearchText"
           [StatusFilter]="StatusFilter"
+          [ShowAgentWakes]="ShowAgentWakes"
           (CreateRequested)="ShowNewRoutine()"
           (EditRequested)="OnEditRequested($event)"
           (HistoryRequested)="OnHistoryRequested($event)"

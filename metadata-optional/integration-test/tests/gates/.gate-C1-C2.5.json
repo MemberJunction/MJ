@@ -1,0 +1,13 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C1 -> C2.5",
+    "Description": "Gate G7.5 (owner PR 1, phase 7, dataset C1, criterion C2.5): every active pipeline version has a stored golden-set result at or above its declared accuracy threshold, 100%, and a version below it is refused activation, 1 of 1. Gates the installed job-title pipeline cloned onto a deterministic stub driver with a 52-title golden-set test at accuracy 0.9: the first version activates only through its stored golden-set result, a weaker version (40/52) is refused activation and refused a run, and every active gated version in the database has a passing stored result; no model calls.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G7.5\",\"owner:PR1\",\"phase:7\",\"dataset:C1\",\"criterion:C2.5\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": { "summary": "A gated pipeline with no activated version is refused; its golden-set test (52/52) activates it with a stored result >= 0.9 and the next run completes; the next version scores 40/52 = 0.769, is Refused, cannot be saved Active, and its run is refused; active gated versions with a passing stored result: 100%." },
+    "Configuration": { "tier": "mutation", "transport": "server", "checks": [ { "type": "fp-gate-c2-5" } ] }
+  },
+  "primaryKey": { "ID": "5903A7DA-BEFA-4312-ADA0-613DE32A11C8" }
+}

@@ -38,14 +38,17 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Maximum number of agents to return (1-20). Defaults to 5.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "integer"
+            }
           },
           "primaryKey": {
             "ID": "648BAD68-DD3E-4D2A-B1DF-968F50E8C501"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:18.075Z",
-            "checksum": "ec08aeb876aa53eb41d506effc0b8ddea722fd6ca1da07af9e79350262023040"
+            "lastModified": "2026-10-20T23:18:48.044Z",
+            "checksum": "4d00f70478595e0877184f588d45bfd201aca8a8dbd0415273fecc2b7e1ea94c"
           }
         },
         {
@@ -57,14 +60,17 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Minimum similarity score (0-1) for matching agents. Agents with scores below this threshold will be excluded. Defaults to 0.5 (50% match).",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "number"
+            }
           },
           "primaryKey": {
             "ID": "6833C542-0EA7-4BFA-9D23-477332ECA0C6"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:18.078Z",
-            "checksum": "acd8728ef9d6b9fa54c095bbbca570ce7dedce602bd48c5a9b7e54aba965aa58"
+            "lastModified": "2026-10-20T23:18:48.049Z",
+            "checksum": "ad9418262afa7ff224929178bd115464a674ad5935f5508df0c6e5f3d422494f"
           }
         },
         {
@@ -76,14 +82,17 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Whether to include inactive agents in search results. Defaults to false.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "boolean"
+            }
           },
           "primaryKey": {
             "ID": "8B6F7322-9D6D-44E2-AE16-4C86D9063009"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:18.079Z",
-            "checksum": "5f85fcc8a4ecad2751fdc3eea0e3491f95157f3e91c9253ce137ebc4082d98b5"
+            "lastModified": "2026-10-20T23:18:48.054Z",
+            "checksum": "4b4aca27544f7d0723d29b9ac9690c5440c524450201243d3f5457e2e8feec21"
           }
         },
         {
@@ -95,14 +104,17 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Whether to exclude agents with invocation mode 'Sub-Agent' from search results. Sub-agents are typically called by other agents. Defaults to true.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "boolean"
+            }
           },
           "primaryKey": {
             "ID": "4195795C-0613-453E-9688-CEE6CD390C46"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:18.081Z",
-            "checksum": "4b4c9fb73c0ec7d8d78aaaaf63ee9c7f6c637faeb905f78020adb7a2d520831f"
+            "lastModified": "2026-10-20T23:18:48.059Z",
+            "checksum": "d0e06ebad87d781861463cfee014eb73ebd8f8468af4e387dae00881bfc19f70"
           }
         },
         {

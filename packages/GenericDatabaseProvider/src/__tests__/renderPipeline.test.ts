@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { Metadata } from '@memberjunction/core';
+import { Metadata, type UserInfo } from '@memberjunction/core';
 import { RenderPipeline } from '../renderPipeline';
 import { SQLParser } from '@memberjunction/sql-parser';
 import { SQLServerDialect, PostgreSQLDialect } from '@memberjunction/sql-dialect';
@@ -132,15 +132,11 @@ describe('composition tokens', () => {
             expect(RenderPipeline.HasCompositionTokens(`-- {{query:"x/y"}}\nSELECT 1`)).toBe(false);
         });
 
-        // KNOWN LIMITATION: HasCompositionTokens recognizes tokens inside string literals
-        // and bracket identifiers, even though full resolution correctly skips them.
-        // Wasted work only; not a correctness issue.
-        it.skip('returns false when the only token is inside a string literal', () => {
+        it('returns false when the only token is inside a string literal', () => {
             expect(RenderPipeline.HasCompositionTokens(`SELECT 'literal {{query:"x/y"}} text' FROM t`)).toBe(false);
         });
 
-        // KNOWN LIMITATION: same string-literal/bracket-identifier blind spot as above.
-        it.skip('returns false when the only token is inside a bracket identifier', () => {
+        it('returns false when the only token is inside a bracket identifier', () => {
             expect(RenderPipeline.HasCompositionTokens(`SELECT [{{query:"x/y"}}] FROM t`)).toBe(false);
         });
     });
@@ -166,23 +162,31 @@ describe('composition tokens', () => {
 
 describe('Nunjucks templates', () => {
 
-    it('preserves `{{ paramName }}` verbatim when UsesTemplate is false', () => {
+    // Whether SQL is a template is a lexical fact (COMPAT-MAP B12): template syntax outside SQL comments renders
+    // whatever the stored UsesTemplate flag says, because unrendered `{{ }}` text is never valid SQL.
+    it('renders `{{ paramName }}` when UsesTemplate is false (B12: the lexer decides)', () => {
         stubMetadata();
         const result = RenderPipeline.Run(`SELECT * FROM t WHERE name = {{ paramName | sqlString }}`, {
             Platform: 'sqlserver',
             UsesTemplate: false,
+            Parameters: { paramName: "O'Brien" },
         });
-        expect(result.FinalSQL).toContain('{{ paramName | sqlString }}');
+        expect(result.FinalSQL).toBe(`SELECT * FROM t WHERE name = 'O''Brien'`);
     });
 
-    it('preserves `{% if %}` block-tags verbatim when UsesTemplate is false', () => {
+    it('renders `{% if %}` block-tags when UsesTemplate is false (B12)', () => {
         stubMetadata();
-        const result = RenderPipeline.Run(`SELECT * FROM t {% if Param %}WHERE x = 1{% endif %}`, {
-            Platform: 'sqlserver',
-            UsesTemplate: false,
-        });
-        expect(result.FinalSQL).toContain('{% if Param %}');
-        expect(result.FinalSQL).toContain('{% endif %}');
+        const sql = `SELECT * FROM t {% if Param %}WHERE x = 1{% endif %}`;
+        expect(RenderPipeline.Run(sql, { Platform: 'sqlserver', UsesTemplate: false }).FinalSQL).toBe('SELECT * FROM t ');
+        expect(RenderPipeline.Run(sql, { Platform: 'sqlserver', UsesTemplate: false, Parameters: { Param: 'yes' } }).FinalSQL).toBe('SELECT * FROM t WHERE x = 1');
+    });
+
+    it('renders a query whose only tags read Context, with no UsesTemplate flag (B12)', () => {
+        stubMetadata();
+        const user = { ID: 'C2B8E4A1-0000-4000-8000-000000000001', Email: 'a@b.c', Name: 'A' } as unknown as UserInfo;
+        const result = RenderPipeline.Run('SELECT {{ Context.UserID | sqlString }} AS UserID', { Platform: 'sqlserver', ContextUser: user });
+        expect(result.FinalSQL).toBe("SELECT 'C2B8E4A1-0000-4000-8000-000000000001' AS UserID");
+        expect(result.ContextValues).toEqual({ UserID: 'C2B8E4A1-0000-4000-8000-000000000001' });
     });
 
     it('strips template-like content out of block comments', () => {
@@ -195,20 +199,67 @@ describe('Nunjucks templates', () => {
         expect(result.FinalSQL).toMatch(/SELECT\s+1/);
     });
 
-    it('preserves a string literal containing {{ }} verbatim', () => {
+    // SQL quoting does not hide a tag (guides/MJ_QUERY_LANGUAGE.md §1): a tag inside a string literal or a quoted
+    // identifier is still a tag (B12). Save refuses both placements (MJQ_TAG_IN_STRING_LITERAL,
+    // MJQ_TAG_IN_QUOTED_IDENTIFIER). A value tag in either place also stops every run, since its value would be pasted
+    // between the quotes unescaped.
+    it('refuses to run a value tag inside a string literal, with the fix (B12)', () => {
         stubMetadata();
-        const sql = `SELECT 'literal {{ not_a_param }} text' AS s FROM t`;
-        const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', UsesTemplate: false });
-        expect(result.FinalSQL).toContain(`'literal {{ not_a_param }} text'`);
+        const sql = `SELECT 'literal {{ word }} text' AS s FROM t`;
+        expect(() => RenderPipeline.Run(sql, { Platform: 'sqlserver', UsesTemplate: false, Parameters: { word: "x' + (SELECT 1) + '" } }))
+            .toThrow(/^This query cannot run: .*\{\{ word \}\} \(parameter "word"\) at line 1, column 17: 'literal \{\{ word \}\} text'.*CONCAT\('…', \{\{ word \| sqlString \}\}, '…'\)/);
     });
 
-    it('preserves a bracket identifier containing {{ }} verbatim', () => {
+    it('runs the same value written with a filter outside the quotes', () => {
         stubMetadata();
-        const result = RenderPipeline.Run('SELECT [{{not_a_param}}] FROM t', {
-            Platform: 'sqlserver',
-            UsesTemplate: false,
-        });
-        expect(result.FinalSQL).toContain('[{{not_a_param}}]');
+        const result = RenderPipeline.Run(`SELECT {{ word | sqlString }} AS s FROM t`, { Platform: 'sqlserver', UsesTemplate: false, Parameters: { word: "O'Brien" } });
+        expect(result.FinalSQL).toBe(`SELECT 'O''Brien' AS s FROM t`);
+    });
+
+    it('refuses to run a value tag inside a bracket identifier, with the sqlIdentifier fix (B12)', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run('SELECT [{{ col }}] FROM t', { Platform: 'sqlserver', UsesTemplate: false, Parameters: { col: 'Name] FROM t; --' } }))
+            .toThrow(/^This query cannot run: .*\{\{ col \}\} \(parameter "col"\) at line 1, column 9: \[\{\{ col \}\}\].*a value that contains the closing \] can end the identifier.*Fix: replace \[\{\{ col \}\}\] with \{\{ col \| sqlIdentifier \}\} and drop the surrounding brackets/);
+    });
+
+    it('refuses to run a value tag inside a PostgreSQL double-quoted identifier', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run('SELECT "{{ col }}" FROM t', { Platform: 'postgresql', UsesTemplate: false, Parameters: { col: 'Name' } }))
+            .toThrow(/^This query cannot run: .*at line 1, column 9: "\{\{ col \}\}".*closing " can end the identifier.*Fix: replace "\{\{ col \}\}" with \{\{ col \| sqlIdentifier \}\} and drop the surrounding double quotes/);
+    });
+
+    it('runs the same name written with sqlIdentifier and no brackets', () => {
+        stubMetadata();
+        const result = RenderPipeline.Run('SELECT {{ col | sqlIdentifier }} FROM t', { Platform: 'sqlserver', UsesTemplate: false, Parameters: { col: 'Name' } });
+        expect(result.FinalSQL).toBe('SELECT [Name] FROM t');
+    });
+
+    it('lists a string-literal tag and an identifier tag in one refusal, with both fixes', () => {
+        stubMetadata();
+        let message = '';
+        try {
+            RenderPipeline.Run("SELECT [{{ col }}] FROM t WHERE Region = '{{ Region }}'", { Platform: 'sqlserver', UsesTemplate: true, Parameters: { col: 'Name', Region: 'West' } });
+        } catch (e) {
+            message = e instanceof Error ? e.message : String(e);
+        }
+        expect(message).toMatch(/^This query cannot run: .*\[\{\{ col \}\}\]; \{\{ Region \}\} \(parameter "Region"\) at line 1, column 43: '\{\{ Region \}\}'\./);
+        expect(message).toContain("Fix: replace '{{ Region }}' with {{ Region | sqlString }}");
+        expect(message).toContain('Fix: replace [{{ col }}] with {{ col | sqlIdentifier }}');
+        expect(message).toContain('MJQ_TAG_IN_STRING_LITERAL or MJQ_TAG_IN_QUOTED_IDENTIFIER');
+        expect(message).not.toContain('cannot be rendered');
+    });
+
+    it('refuses the composing run when a dependency writes a value tag inside a quoted identifier, naming the dependency', () => {
+        stubMetadata();
+        const deps = [{ Name: 'ByColumn', CategoryPath: '/Test/', UsesTemplate: true, SQL: 'SELECT ID, [{{ Col }}] AS V FROM t' }];
+        expect(() => RenderPipeline.Run('SELECT x.V FROM {{query:"Test/ByColumn(Col=Col)"}} x', { Platform: 'sqlserver', UsesTemplate: true, Dependencies: deps, Parameters: { Col: 'Name' } }))
+            .toThrow(/^Query "Test\/ByColumn" cannot run: .*\{\{ Col \}\} \(parameter "Col"\) at line 1, column 13: \[\{\{ Col \}\}\].*Fix: replace \[\{\{ Col \}\}\] with \{\{ Col \| sqlIdentifier \}\}/);
+    });
+
+    it('does not stop a run for a block inside a quoted identifier', () => {
+        stubMetadata();
+        const result = RenderPipeline.Run('SELECT [Total{% if Net %}Net{% endif %}] FROM t', { Platform: 'sqlserver', UsesTemplate: true, Parameters: { Net: true } });
+        expect(result.FinalSQL).toBe('SELECT [TotalNet] FROM t');
     });
 
     it('throws when a template processing error occurs', () => {
@@ -465,13 +516,12 @@ describe('MaxRows row cap — tighter cap wins', () => {
 
 describe('MaxRows row cap — outer wrap', () => {
 
-    it('wraps a UNION ALL with an outer TOP cap', () => {
+    it('caps a UNION ALL with OFFSET … FETCH after its rows, in place', () => {
         stubMetadata();
         const sql = `SELECT ID FROM A UNION ALL SELECT ID FROM B`;
         const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 });
-        expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
-        expect(result.FinalSQL).toMatch(/_mj_capped/);
-        expect(result.FinalSQL).toMatch(/UNION\s+ALL/i);
+        expect(result.FinalSQL).toMatch(/^SELECT ID FROM A UNION ALL SELECT ID FROM B\s+ORDER BY 1\s+OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY$/);
+        expect(result.FinalSQL).not.toMatch(/_mj_capped/);
     });
 
     it('wraps TOP WITH TIES with an outer cap (inner TOP keeps ORDER BY legal)', () => {
@@ -483,13 +533,11 @@ describe('MaxRows row cap — outer wrap', () => {
         expect(result.FinalSQL).toMatch(/_mj_capped/);
     });
 
-    it('wraps CROSS APPLY OPENJSON with an outer cap', () => {
+    it('caps CROSS APPLY OPENJSON in place', () => {
         stubMetadata();
         const sql = `SELECT j.Name FROM dbo.T t CROSS APPLY OPENJSON(t.Data) WITH ([Name] NVARCHAR(100)) j`;
         const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 });
-        expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
-        expect(result.FinalSQL).toMatch(/CROSS\s+APPLY/i);
-        expect(result.FinalSQL).toMatch(/_mj_capped/);
+        expect(result.FinalSQL).toBe(`SELECT TOP 10 j.Name FROM dbo.T t CROSS APPLY OPENJSON(t.Data) WITH ([Name] NVARCHAR(100)) j`);
     });
 });
 
@@ -499,13 +547,13 @@ describe('MaxRows row cap — outer wrap', () => {
 
 describe('MaxRows row cap — incompatible shapes left alone', () => {
 
-    it('does not modify a SELECT … INTO statement (write op, validator should block)', () => {
+    // The lexer read-only check runs on every path, so SELECT … INTO is refused on the saved path (DISCUSSION §6, 2026-10-27). W3.
+    // Was: 'does not modify a SELECT … INTO statement (write op, validator should block)', which asserted the
+    // statement passed through uncapped.
+    it('refuses a SELECT … INTO statement on the saved-query path (it writes a table)', () => {
         stubMetadata();
         const sql = 'SELECT * INTO #temp FROM Users';
-        const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 });
-        expect(result.FinalSQL).not.toMatch(/_mj_capped/);
-        expect(result.FinalSQL).not.toMatch(/FETCH\s+NEXT\s+10/i);
-        expect(result.FinalSQL).toContain('INTO #temp');
+        expect(() => RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 })).toThrow(/read query|write statement/i);
     });
 
     it('preserves FOR JSON AUTO and never wraps it in a derived table', () => {
@@ -639,14 +687,13 @@ describe('MaxRows row cap — hard cap guarantee', () => {
         expect(result.FinalSQL).toMatch(/_mj_capped/);
     });
 
-    it('caps a UNION ALL via outer wrap', () => {
+    it('caps a UNION ALL with OFFSET … FETCH', () => {
         stubMetadata();
         const result = RenderPipeline.Run('SELECT ID FROM A UNION ALL SELECT ID FROM B UNION ALL SELECT ID FROM C', {
             Platform: 'sqlserver',
             MaxRows: 100,
         });
-        expect(result.FinalSQL).toMatch(/\bTOP\s+100\b/i);
-        expect(result.FinalSQL).toMatch(/_mj_capped/);
+        expect(result.FinalSQL).toMatch(/FETCH\s+NEXT\s+100\s+ROWS\s+ONLY$/i);
     });
 
     it('caps a CTE with bracket-quoted names via AST TOP injection', () => {
@@ -664,14 +711,14 @@ describe('MaxRows row cap — hard cap guarantee', () => {
         expect(result.FinalSQL).not.toMatch(/_mjid_/);
     });
 
-    it('caps a SELECT with CROSS APPLY via outer wrap', () => {
+    it('caps a SELECT with CROSS APPLY in place', () => {
         stubMetadata();
         const result = RenderPipeline.Run(
             'SELECT j.Name FROM Users u CROSS APPLY OPENJSON(u.Meta) WITH ([Name] NVARCHAR(100)) j',
             { Platform: 'sqlserver', MaxRows: 100 },
         );
-        expect(result.FinalSQL).toMatch(/\bTOP\s+100\b/i);
-        expect(result.FinalSQL).toMatch(/_mj_capped/);
+        expect(result.FinalSQL).toMatch(/^SELECT TOP 100 j\.Name/);
+        expect(result.FinalSQL).not.toMatch(/_mj_capped/);
     });
 
     it('caps a plain SELECT on PostgreSQL', () => {
@@ -700,7 +747,7 @@ describe('MaxRows row cap — hard cap guarantee', () => {
 
 describe('MaxRows row cap — CTE fallback', () => {
 
-    it('caps a CTE with bracket-quoted CTE name via OFFSET/FETCH', () => {
+    it('caps a CTE with a bracket-quoted CTE name via AST TOP injection', () => {
         stubMetadata();
         const sql = `WITH [ActivePeople] AS (
     SELECT [CompanyID], COUNT([ID]) AS [ActivePeopleCount]
@@ -713,9 +760,11 @@ FROM [dbo].[vwCompanies] c
 LEFT JOIN [ActivePeople] ap ON c.[ID] = ap.[CompanyID]
 ORDER BY ap.[ActivePeopleCount] DESC`;
         const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 100 });
-        expect(result.FinalSQL).toMatch(/FETCH\s+NEXT\s+100\s+ROWS\s+ONLY/i);
+        expect(result.FinalSQL).toMatch(/\)\s*SELECT\s+TOP\s+100\b/i);
+        expect(result.FinalSQL.match(/\bTOP\b/gi)).toHaveLength(1);
         expect(result.FinalSQL).toMatch(/ORDER\s+BY/i);
         expect(result.FinalSQL).toMatch(/WITH\s+\[ActivePeople\]\s+AS/i);
+        expect(result.FinalSQL).not.toMatch(/_mjid_/);
     });
 
     it('caps a CTE with a hyphenated bracket name via AST TOP injection', () => {
@@ -786,78 +835,116 @@ describe('MaxRows row cap — numeric sanitation', () => {
 });
 
 // ════════════════════════════════════════════════════════════════════
+// Read-statement gate for caller-supplied SQL
+// ════════════════════════════════════════════════════════════════════
+
+describe('RequireReadStatement — caller-supplied SQL must be a single read query', () => {
+    const refused: Array<[string, 'sqlserver' | 'postgresql']> = [
+        ["SET statement_timeout = '3s'", 'postgresql'],
+        ['SET LOCK_TIMEOUT 0', 'sqlserver'],
+        ['SELECT * INTO copy_of_users FROM Users', 'sqlserver'],
+        ['WITH gone AS (DELETE FROM users RETURNING *) SELECT * FROM gone', 'postgresql'],
+        ['DECLARE @x INT = 1 SELECT @x', 'sqlserver']
+    ];
+    for (const [sql, platform] of refused) {
+        it(`refuses ${sql} on ${platform}`, () => {
+            stubMetadata();
+            expect(() => RenderPipeline.Run(sql, { Platform: platform, RequireReadStatement: true }))
+                .toThrow(/only a single read query/i);
+        });
+    }
+
+    it('still runs read queries the AST parser cannot read', () => {
+        stubMetadata();
+        const result = RenderPipeline.Run('SELECT TRY_CAST(a AS INT) AS a FROM t', { Platform: 'sqlserver', RequireReadStatement: true });
+        expect(result.FinalSQL).toContain('TRY_CAST');
+    });
+
+    // Changed with the token-based gate on every path (DISCUSSION §6, 2026-10-27; COMPAT-MAP B5): a saved
+    // query is held to the same single-read-query rule as caller SQL, so a DECLARE prefix is refused there too.
+    // Was: 'leaves saved-query rendering alone when the flag is not set'.
+    it('refuses a DECLARE prefix on the saved-query path as well (the flag is not needed)', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run('DECLARE @x INT = 1 SELECT @x', { Platform: 'sqlserver' })).toThrow(/only a single read query/i);
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
 // Safety guard — mutation rejection
 // ════════════════════════════════════════════════════════════════════
 
+// One token-based gate on every path refuses these (DISCUSSION §6, 2026-10-27: node-sql-parser never decides
+// safety). Its message names the reason, so the expectations match it instead of the old AST check's
+// "write statement" / "multiple statements" wording.
 describe('safety guard — write-statement rejection', () => {
     // ── Single write statements (DML) ─────────────────────────────────
     it('throws when the rendered query is a DELETE', () => {
         stubMetadata();
         expect(() => RenderPipeline.Run('DELETE FROM Users WHERE ID = 1', { Platform: 'sqlserver' }))
-            .toThrow(/write statement/i);
+            .toThrow(/only a single read query/i);
     });
 
     it('throws when the rendered query is an UPDATE', () => {
         stubMetadata();
         expect(() => RenderPipeline.Run('UPDATE Users SET Active = 1', { Platform: 'sqlserver' }))
-            .toThrow(/write statement/i);
+            .toThrow(/only a single read query/i);
     });
 
     it('throws when the rendered query is an INSERT', () => {
         stubMetadata();
         expect(() => RenderPipeline.Run("INSERT INTO Users (Name) VALUES ('x')", { Platform: 'sqlserver' }))
-            .toThrow(/write statement/i);
+            .toThrow(/only a single read query/i);
     });
 
     // ── Single DDL (StatementKind 'other' — missed by the old mutation-only guard) ──
     it('throws when the rendered query is a DROP (DDL)', () => {
         stubMetadata();
         expect(() => RenderPipeline.Run('DROP TABLE Users', { Platform: 'sqlserver' }))
-            .toThrow(/write statement/i);
+            .toThrow(/only a single read query/i);
     });
 
     // ── Stacked-statement injection (second layer) ────────────────────
     it('throws on a stacked SELECT; DELETE injection', () => {
         stubMetadata();
         expect(() => RenderPipeline.Run('SELECT 1 AS x; DELETE FROM Users', { Platform: 'sqlserver' }))
-            .toThrow(/write statement/i);
+            .toThrow(/only a single read query/i);
     });
 
     it('throws on a stacked SELECT; DROP injection', () => {
         stubMetadata();
         expect(() => RenderPipeline.Run('SELECT 1 AS x; DROP TABLE Users', { Platform: 'sqlserver' }))
-            .toThrow(/write statement/i);
+            .toThrow(/only a single read query/i);
     });
 
     it('throws on a stacked injection on PostgreSQL', () => {
         stubMetadata();
         expect(() => RenderPipeline.Run('SELECT 1 AS x; DROP TABLE users', { Platform: 'postgresql' }))
-            .toThrow(/write statement/i);
+            .toThrow(/only a single read query/i);
     });
 
     // ── Stacked payloads that DON'T parse (the AST write check can't see them) ──
     it('throws on a stacked SELECT; EXEC xp_cmdshell payload (unparseable)', () => {
         stubMetadata();
         expect(() => RenderPipeline.Run("SELECT 1 AS x; EXEC xp_cmdshell 'dir'", { Platform: 'sqlserver' }))
-            .toThrow(/multiple statements/i);
+            .toThrow(/more than one statement/i);
     });
 
     it('throws on a stacked SELECT; WAITFOR DELAY time-based payload (unparseable)', () => {
         stubMetadata();
         expect(() => RenderPipeline.Run("SELECT 1 AS x; WAITFOR DELAY '00:00:05'", { Platform: 'sqlserver' }))
-            .toThrow(/multiple statements/i);
+            .toThrow(/more than one statement/i);
     });
 
     it('throws on a stacked statement separated only by a comment', () => {
         stubMetadata();
         expect(() => RenderPipeline.Run("SELECT 1 AS x; -- c\nEXEC xp_cmdshell 'dir'", { Platform: 'sqlserver' }))
-            .toThrow(/multiple statements/i);
+            .toThrow(/more than one statement/i);
     });
 
     it('rejects an otherwise-benign SET NOCOUNT ON; SELECT — a rendered query must be a single statement', () => {
         stubMetadata();
         expect(() => RenderPipeline.Run('SET NOCOUNT ON; SELECT * FROM Users', { Platform: 'sqlserver' }))
-            .toThrow(/multiple statements/i);
+            .toThrow(/more than one statement/i);
     });
 
     // ── Legitimate single reads must still pass ───────────────────────
@@ -1026,11 +1113,15 @@ describe('RenderTrace', () => {
         expect(result.Trace.AfterComposition).toBe(sql);
     });
 
-    it('AfterComposition still contains line comments (stripping happens after composition)', () => {
+    // Changed by render-then-compose (DISCUSSION §6, 2026-10-27; C16): comments are removed before the
+    // template renders, and AfterComposition is the assembled SQL, so it holds no comment.
+    // Was: 'AfterComposition still contains line comments (stripping happens after composition)'.
+    it('AfterComposition holds no comments (they are removed before rendering)', () => {
         stubMetadata();
-        const sql = `SELECT * FROM t -- this comment survives composition\n`;
+        const sql = `SELECT * FROM t -- this comment does not survive\n`;
         const result = RenderPipeline.Run(sql, { Platform: 'sqlserver' });
-        expect(result.Trace.AfterComposition).toContain('-- this comment survives composition');
+        expect(result.Trace.AfterComposition).not.toContain('-- this comment');
+        expect(result.Trace.AfterComposition).toContain('SELECT * FROM t');
     });
 
     it('AfterTemplates does NOT contain comments', () => {
@@ -1083,7 +1174,10 @@ describe('RenderTrace', () => {
 
 describe('RenderTrace — pipeline stage visibility', () => {
 
-    it('AfterComposition preserves Nunjucks tokens, AfterTemplates resolves them', () => {
+    // Render-then-compose; Trace.AfterComposition is the assembled SQL, after templates (DISCUSSION §6, 2026-10-27). C16.
+    // Was: 'AfterComposition preserves Nunjucks tokens, AfterTemplates resolves them', which asserted the token
+    // survived.
+    it('AfterComposition is the assembled SQL with values rendered, no Nunjucks tokens left', () => {
         stubMetadata();
         const sql = `SELECT * FROM [dbo].[vwMembers] WHERE [Status] = {{ Status | sqlString }}`;
         const result = RenderPipeline.Run(sql, {
@@ -1091,8 +1185,9 @@ describe('RenderTrace — pipeline stage visibility', () => {
             UsesTemplate: true,
             Parameters: { Status: 'Active' },
         });
-        // AfterComposition still has the Nunjucks token (composition runs before templates)
-        expect(result.Trace.AfterComposition).toContain('{{ Status | sqlString }}');
+        // AfterComposition is the assembled SQL: the value is rendered, no template tag remains
+        expect(result.Trace.AfterComposition).not.toMatch(/\{\{|\{%/);
+        expect(result.Trace.AfterComposition).toContain("'Active'");
         // AfterTemplates has the resolved value
         expect(result.Trace.AfterTemplates).toContain("'Active'");
         expect(result.Trace.AfterTemplates).not.toContain('{{ Status');
@@ -1109,9 +1204,7 @@ describe('RenderTrace — pipeline stage visibility', () => {
         expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
     });
 
-    it('trace captures every stage for TRY_CAST query with MaxRows (the Skip failure case)', () => {
-        stubMetadata();
-        const sql = `SELECT t.ID, COUNT(DISTINCT mel.ID) AS Cnt
+    const skipFailureCaseSQL = `SELECT t.ID, COUNT(DISTINCT mel.ID) AS Cnt
 FROM [document].[vwMemberEngagementLogs] mel
 INNER JOIN [__mj].[vwTaggedItems] ti ON mel.ID = TRY_CAST(ti.RecordID AS INT)
 INNER JOIN [__mj].[vwTags] t ON ti.TagID = t.ID
@@ -1119,21 +1212,46 @@ WHERE mel.IsMemberInitiated = 1
   AND mel.[Date] >= {{ StartDate | sqlDate }}
 GROUP BY t.ID
 ORDER BY Cnt DESC`;
+
+    it('trace captures the template and cap stages for TRY_CAST query with MaxRows (the Skip failure case)', () => {
+        stubMetadata();
+        const result = RenderPipeline.Run(skipFailureCaseSQL, {
+            Platform: 'sqlserver',
+            MaxRows: 10,
+            UsesTemplate: true,
+            Parameters: { StartDate: '2024-01-01' },
+        });
+        expect(result.Trace.AfterComposition).toContain('TRY_CAST');
+        expect(result.Trace.AfterTemplates).toMatch(/2024-01-01/);
+        expect(result.Trace.AfterTemplates).not.toMatch(/_mj_capped/);
+        expect(result.FinalSQL).toMatch(/^SELECT TOP 10 t\.ID/);
+        expect(result.FinalSQL).toMatch(/ORDER\s+BY\s+Cnt\s+DESC$/i);
+        expect(result.Trace.AfterTemplates).toMatch(/ORDER\s+BY\s+Cnt\s+DESC/i);
+    });
+
+    // Render-then-compose; Trace.AfterComposition is the assembled SQL, after templates (DISCUSSION §6, 2026-10-27). C16.
+    // Was: 'trace captures every stage for TRY_CAST query with MaxRows (the Skip failure case)', which asserted
+    // AfterComposition still held '{{ StartDate | sqlDate }}'. The stage assertions that do not depend on that
+    // are kept in the test above.
+    it('trace captures every stage for TRY_CAST query with MaxRows (the Skip failure case), AfterComposition already rendered', () => {
+        stubMetadata();
+        const sql = skipFailureCaseSQL;
         const result = RenderPipeline.Run(sql, {
             Platform: 'sqlserver',
             MaxRows: 10,
             UsesTemplate: true,
             Parameters: { StartDate: '2024-01-01' },
         });
-        // AfterComposition: Nunjucks tokens still present
-        expect(result.Trace.AfterComposition).toContain('{{ StartDate | sqlDate }}');
+        // AfterComposition: the assembled SQL, values rendered, no template tags
+        expect(result.Trace.AfterComposition).not.toMatch(/\{\{|\{%/);
+        expect(result.Trace.AfterComposition).toMatch(/2024-01-01/);
         expect(result.Trace.AfterComposition).toContain('TRY_CAST');
         // AfterTemplates: Nunjucks resolved, but no MaxRows wrapping yet
         expect(result.Trace.AfterTemplates).toMatch(/2024-01-01/);
         expect(result.Trace.AfterTemplates).not.toMatch(/_mj_capped/);
-        // FinalSQL: MaxRows applied (outer wrap with ORDER BY moved outside)
-        expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
-        expect(result.FinalSQL).toMatch(/_mj_capped/);
+        // FinalSQL: MaxRows applied in place, with the ORDER BY where the query put it
+        expect(result.FinalSQL).toMatch(/^SELECT TOP 10 t\.ID/);
+        expect(result.FinalSQL).toMatch(/ORDER\s+BY\s+Cnt\s+DESC$/i);
         // The trace makes it possible to diagnose the transformation
         expect(result.Trace.AfterTemplates).toMatch(/ORDER\s+BY\s+Cnt\s+DESC/i);
     });
@@ -1258,11 +1376,10 @@ describe('sqlify output characteristics', () => {
         expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
     });
 
-    it('auto-brackets unquoted identifiers on SQL Server', () => {
+    it('keeps the caller’s identifiers as written on SQL Server', () => {
         stubMetadata();
         const result = RenderPipeline.Run('SELECT id, name FROM users', { Platform: 'sqlserver', MaxRows: 10 });
-        expect(result.FinalSQL).toMatch(/\[id\]/i);
-        expect(result.FinalSQL).toMatch(/\[users\]/i);
+        expect(result.FinalSQL).toBe('SELECT TOP 10 id, name FROM users');
     });
 
     it('preserves already-bracketed identifiers through a sqlify round-trip', () => {
@@ -1386,15 +1503,12 @@ describe('dialect parity', () => {
         expect(pgResult.FinalSQL).toMatch(/LIMIT\s+10\b/i);
     });
 
-    // KNOWN LIMITATION: PostgreSQL dollar-quoted strings (`$$ … $$`, `$tag$ … $tag$`) are
-    // not currently recognized by StripComments. Skip until a PG caller exercises this.
-    it.skip('PG `$$ … $$` dollar-quoted strings are not eaten by comment stripping', () => {
+    it('PG `$$ … $$` dollar-quoted strings are not eaten by comment stripping', () => {
         const out = SQLParser.StripComments(`SELECT $$it -- has dashes$$ AS s`, pg);
         expect(out).toContain('$$it -- has dashes$$');
     });
 
-    // KNOWN LIMITATION: same dollar-quoting blind spot as above.
-    it.skip('PG tagged dollar-quoted strings are not eaten by comment stripping', () => {
+    it('PG tagged dollar-quoted strings are not eaten by comment stripping', () => {
         const out = SQLParser.StripComments(`SELECT $body$function_body -- $/* */$body$ AS s`, pg);
         expect(out).toContain('$body$function_body -- $/* */$body$');
     });
@@ -1874,16 +1988,10 @@ WHERE mel.IsMemberInitiated = 1
 GROUP BY t.ID, t.Name
 ORDER BY EngagementCount DESC`;
         const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 });
-        // Must be capped (outer wrap with TOP 10)
-        expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
-        expect(result.FinalSQL).toMatch(/_mj_capped/);
-        // ORDER BY must NOT be inside the derived table — it must be on the outer SELECT
-        const innerMatch = result.FinalSQL.match(/\([\s\S]*\)\s+AS\s+_mj_capped/i);
-        expect(innerMatch).not.toBeNull();
-        expect(innerMatch![0]).not.toMatch(/ORDER\s+BY/i);
-        // ORDER BY must appear after _mj_capped (on the outer SELECT)
-        const afterCapped = result.FinalSQL.split('_mj_capped')[1];
-        expect(afterCapped).toMatch(/ORDER\s+BY\s+EngagementCount\s+DESC/i);
+        // Capped in place: TOP on the SELECT, the ORDER BY untouched and still in scope
+        expect(result.FinalSQL).toMatch(/^SELECT TOP 10 t\.ID AS TagID/);
+        expect(result.FinalSQL).toMatch(/ORDER BY EngagementCount DESC$/);
+        expect(result.FinalSQL).not.toMatch(/_mj_capped/);
     });
 
     it('TRY_CAST without ORDER BY — no ORDER BY to strip', () => {
@@ -1892,8 +2000,7 @@ ORDER BY EngagementCount DESC`;
 FROM [document].[vwMemberEngagementLogs] mel
 WHERE mel.IsMemberInitiated = 1`;
         const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 });
-        expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
-        expect(result.FinalSQL).toMatch(/_mj_capped/);
+        expect(result.FinalSQL).toMatch(/^SELECT TOP 10 mel\.ID, TRY_CAST/);
         // No ORDER BY anywhere
         expect(result.FinalSQL).not.toMatch(/ORDER\s+BY/i);
     });
@@ -2116,14 +2223,14 @@ describe('bulletproof — fuzzed invariant over a corpus of shapes', () => {
         { name: 'JOIN no cap', path: 'ast', sql: `SELECT m.[ID], c.[Name] FROM [Members] m INNER JOIN [Chapters] c ON m.[ChapterID]=c.[ID]` },
         { name: 'GROUP BY', path: 'ast', sql: `SELECT [ChapterID], COUNT(*) FROM [Members] GROUP BY [ChapterID]` },
         { name: 'CTE plain', path: 'ast', sql: `WITH a AS (SELECT [ID] FROM [Members]) SELECT * FROM a` },
-        { name: 'CTE bracket-named', path: 'fetch', sql: `WITH [hi] AS (SELECT 1 AS x) SELECT * FROM [hi]` },
+        { name: 'CTE bracket-named', path: 'ast', sql: `WITH [hi] AS (SELECT 1 AS x) SELECT * FROM [hi]` },
         { name: 'CTE with hyphens in name', path: 'ast', sql: `WITH [my-cte] AS (SELECT 1 AS x) SELECT * FROM [my-cte]` },
         { name: 'multi CTE', path: 'ast', sql: `WITH a AS (SELECT 1 AS x), b AS (SELECT 2 AS y) SELECT a.x, b.y FROM a, b` },
         { name: 'window function', path: 'ast', sql: `SELECT [ID], ROW_NUMBER() OVER (ORDER BY [JoinedAt]) AS rn FROM [Members]` },
-        { name: 'UNION ALL', path: 'wrap', sql: `SELECT [ID] FROM [A] UNION ALL SELECT [ID] FROM [B]` },
-        { name: 'UNION (deduped)', path: 'wrap', sql: `SELECT [ID] FROM [A] UNION SELECT [ID] FROM [B]` },
-        { name: 'INTERSECT', path: 'wrap', sql: `SELECT [ID] FROM [A] INTERSECT SELECT [ID] FROM [B]` },
-        { name: 'EXCEPT', path: 'wrap', sql: `SELECT [ID] FROM [A] EXCEPT SELECT [ID] FROM [B]` },
+        { name: 'UNION ALL', path: 'fetch', sql: `SELECT [ID] FROM [A] UNION ALL SELECT [ID] FROM [B]` },
+        { name: 'UNION (deduped)', path: 'fetch', sql: `SELECT [ID] FROM [A] UNION SELECT [ID] FROM [B]` },
+        { name: 'INTERSECT', path: 'fetch', sql: `SELECT [ID] FROM [A] INTERSECT SELECT [ID] FROM [B]` },
+        { name: 'EXCEPT', path: 'fetch', sql: `SELECT [ID] FROM [A] EXCEPT SELECT [ID] FROM [B]` },
         { name: 'TOP 5', path: 'ast', sql: `SELECT TOP 5 * FROM [Members]` },
         { name: 'TOP huge', path: 'ast', sql: `SELECT TOP 999999 * FROM [Members]` },
         { name: 'TOP (N)', path: 'ast', sql: `SELECT TOP (1000000) * FROM [Members]` },
@@ -2138,17 +2245,16 @@ describe('bulletproof — fuzzed invariant over a corpus of shapes', () => {
         { name: 'CASE expression', path: 'ast', sql: `SELECT CASE WHEN [X]>1 THEN 'a' ELSE 'b' END FROM [Members]` },
         { name: 'VALUES table', path: 'ast', sql: `SELECT * FROM (VALUES (1),(2),(3)) AS t(x)` },
         { name: 'three-part name', path: 'ast', sql: `SELECT * FROM [DB1].[dbo].[Members]` },
-        { name: 'with parens', path: 'ast', sql: `(SELECT * FROM [Members])` },
+        { name: 'with parens', path: 'wrap', sql: `(SELECT * FROM [Members])` },
         { name: 'comment-only', path: 'passthrough', sql: `/* nothing */` },
         { name: 'whitespace-only', path: 'passthrough', sql: `   ` },
         { name: 'just semicolon', path: 'passthrough', sql: `;` },
-        { name: 'CROSS APPLY', path: 'wrap', sql: `SELECT m.[ID], j.[Name] FROM [Members] m CROSS APPLY OPENJSON(m.[Meta]) WITH ([Name] NVARCHAR(100)) j` },
+        { name: 'CROSS APPLY', path: 'ast', sql: `SELECT m.[ID], j.[Name] FROM [Members] m CROSS APPLY OPENJSON(m.[Meta]) WITH ([Name] NVARCHAR(100)) j` },
         { name: 'JSON_VALUE', path: 'ast', sql: `SELECT JSON_VALUE([Meta],'$.x') FROM [Members]` },
         { name: 'CTE + GROUP BY + JOIN', path: 'ast', sql: `WITH d AS (SELECT [MID], SUM([Amt]) AS T FROM [Don] GROUP BY [MID]) SELECT m.[ID], d.T FROM [Members] m LEFT JOIN d ON d.[MID]=m.[ID]` },
-        { name: 'FOR JSON AUTO', path: 'passthrough', sql: `SELECT [ID] FROM [Members] FOR JSON AUTO` },
+        { name: 'FOR JSON AUTO', path: 'ast', sql: `SELECT [ID] FROM [Members] FOR JSON AUTO` },
         { name: 'FOR XML AUTO', path: 'ast', sql: `SELECT [ID] FROM [Members] FOR XML AUTO` },
         { name: 'OPTION RECOMPILE', path: 'ast', sql: `SELECT [ID] FROM [Members] OPTION (RECOMPILE)` },
-        { name: 'SELECT INTO temp', path: 'passthrough', sql: `SELECT * INTO #t FROM [Members]` },
         { name: 'self-join', path: 'ast', sql: `SELECT a.[ID] FROM [Members] a JOIN [Members] b ON a.[ReferredBy]=b.[ID]` },
         { name: 'GROUP BY ROLLUP', path: 'ast', sql: `SELECT [ChapterID], COUNT(*) FROM [Members] GROUP BY ROLLUP([ChapterID])` },
         { name: 'string with FOR JSON', path: 'ast', sql: `SELECT [Name] FROM [Members] WHERE [Note]='FOR JSON inside string'` },
@@ -2157,7 +2263,7 @@ describe('bulletproof — fuzzed invariant over a corpus of shapes', () => {
         { name: 'comment-hidden TOP', path: 'ast', sql: `SELECT /* TOP 999999 */ [ID] FROM [Members]` },
         { name: 'CRLF line breaks', path: 'ast', sql: `SELECT\r\n*\r\nFROM\r\n[Members]` },
         { name: 'mixed case keywords', path: 'ast', sql: `seLect * fRom [Members]` },
-        { name: 'trailing semicolons', path: 'wrap', sql: `SELECT * FROM [Members];;;` },
+        { name: 'trailing semicolons', path: 'ast', sql: `SELECT * FROM [Members];;;` },
     ];
 
     for (const { name, sql, path } of corpus) {
@@ -2168,6 +2274,14 @@ describe('bulletproof — fuzzed invariant over a corpus of shapes', () => {
         });
     }
 
+    // Was a 'passthrough' row: SELECT … INTO went through uncapped on the saved path. The read-only gate now
+    // runs on every path (W3; DISCUSSION §6, 2026-10-27), so it is refused before any cap is applied.
+    it('refuses SELECT INTO temp before capping it', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run(`SELECT * INTO #t FROM [Members]`, { Platform: 'sqlserver', MaxRows: CAP }))
+            .toThrow(/SELECT … INTO/);
+    });
+
     // The same shapes on PostgreSQL where applicable (no [brackets], no TOP).
     const pgCorpus: { name: string; sql: string; path: ExpectedPath }[] = [
         { name: 'plain SELECT', path: 'ast', sql: `SELECT * FROM members` },
@@ -2176,7 +2290,7 @@ describe('bulletproof — fuzzed invariant over a corpus of shapes', () => {
         { name: 'CTE', path: 'ast', sql: `WITH a AS (SELECT id FROM members) SELECT * FROM a` },
         { name: 'multi CTE', path: 'ast', sql: `WITH a AS (SELECT 1 x), b AS (SELECT 2 y) SELECT * FROM a, b` },
         { name: 'window', path: 'ast', sql: `SELECT id, ROW_NUMBER() OVER (ORDER BY joined) AS rn FROM members` },
-        { name: 'UNION ALL', path: 'wrap', sql: `SELECT id FROM a UNION ALL SELECT id FROM b` },
+        { name: 'UNION ALL', path: 'ast', sql: `SELECT id FROM a UNION ALL SELECT id FROM b` },
         { name: 'LIMIT 5', path: 'ast', sql: `SELECT * FROM members LIMIT 5` },
         { name: 'LIMIT huge', path: 'ast', sql: `SELECT * FROM members LIMIT 999999` },
         { name: 'LIMIT N OFFSET M', path: 'ast', sql: `SELECT * FROM members LIMIT 999999 OFFSET 10` },
@@ -2194,4 +2308,18 @@ describe('bulletproof — fuzzed invariant over a corpus of shapes', () => {
             assertPathTaken(sql, result.FinalSQL, CAP, path);
         });
     }
+});
+
+// Forbidden-function screening applies to saved queries too (IMPLEMENTATION-PLAN §5.5; DISCUSSION §6, 2026-10-27).
+describe('forbidden functions are refused on every path', () => {
+    it('refuses pg_read_file when a read statement is required', () => {
+        expect(() => RenderPipeline.Run(`SELECT pg_read_file('/etc/hostname') AS f`, { Platform: 'postgresql', RequireReadStatement: true }))
+            .toThrow(/may not call pg_read_file/);
+    });
+
+    // Was: 'leaves a saved query that calls one alone'.
+    it('refuses a saved query that calls one', () => {
+        expect(() => RenderPipeline.Run(`SELECT CAST(query_to_xml('SELECT 1', true, false, '') AS text) AS x`, { Platform: 'postgresql' }))
+            .toThrow(/may not call query_to_xml/);
+    });
 });

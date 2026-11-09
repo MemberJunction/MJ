@@ -470,22 +470,45 @@ describe('AzureLLM', () => {
 
             expect(result.success).toBe(false);
             expect(result.statusText).toBe('cancelled');
+            expect(result.errorMessage).toMatch(/^Request was cancelled/);
+            expect(result.exception).toBe(abortError);
+            expect(result.errorInfo?.errorType).toBe('Cancelled');
             expect(result.errorInfo?.severity).toBe('Fatal');
             expect(result.errorInfo?.canFailover).toBe(false);
             expect(result.errorInfo?.providerErrorCode).toBe('request_cancelled');
         });
 
-        it('finalizes an aborted stream as a cancelled result rather than a truncated success', async () => {
+        it('makes no request when the token is already aborted', async () => {
             const controller = new AbortController();
-            mockPost.mockResolvedValueOnce({ body: {} });
-
-            await internals.createStreamingRequest(buildChatParams(controller.signal));
             controller.abort();
 
-            const result = internals.finalizeStreamingResponse('partial content', null, null);
+            const result = await instance.ChatCompletion(buildChatParams(controller.signal));
+
+            expect(mockPost).not.toHaveBeenCalled();
+            expect(result.statusText).toBe('cancelled');
+            expect(result.errorInfo?.errorType).toBe('Cancelled');
+        });
+
+        it('resolves a stream aborted mid-flight as cancelled rather than a truncated success', async () => {
+            const controller = new AbortController();
+            async function* abortedStream(): AsyncGenerator<{ choices: Array<{ delta: { content: string }; index: number }> }> {
+                yield { choices: [{ delta: { content: 'partial ' }, index: 0 }] };
+                // The pipeline ends the body silently once the signal fires.
+                controller.abort();
+            }
+            mockPost.mockResolvedValueOnce({ body: abortedStream() });
+            const onComplete = vi.fn();
+            const params = buildChatParams(controller.signal);
+            params.streaming = true;
+            params.streamingCallbacks = { OnContent: vi.fn(), OnComplete: onComplete };
+
+            const result = await instance.ChatCompletion(params);
+
             expect(result.success).toBe(false);
             expect(result.statusText).toBe('cancelled');
+            expect(result.errorInfo?.errorType).toBe('Cancelled');
             expect(result.errorInfo?.canFailover).toBe(false);
+            expect(onComplete).toHaveBeenCalledWith(result);
         });
 
         it('finalizes a normal stream as a success', async () => {

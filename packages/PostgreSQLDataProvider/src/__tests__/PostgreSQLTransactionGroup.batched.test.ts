@@ -7,9 +7,10 @@
  * no safe literal form), because a silent fallback that never fires — or fires always — would
  * make the flag a lie in one direction or the other.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { PostgreSQLTransactionGroup } from '../PostgreSQLTransactionGroup.js';
-import type { TransactionItem } from '@memberjunction/core';
+import { Metadata } from '@memberjunction/core';
+import type { IMetadataProvider, TransactionItem } from '@memberjunction/core';
 
 type QueryCall = { text: string; params?: unknown[] };
 
@@ -20,7 +21,9 @@ function makeClient(opts: { withEscape?: boolean; multiResult?: (text: string) =
         query: async (text: string, params?: unknown[]) => {
             calls.push({ text, params });
             if (text === 'BEGIN' || text === 'COMMIT' || text === 'ROLLBACK') return { rows: [] };
-            if (opts.multiResult) return opts.multiResult(text);
+            // Only the batched multi-statement text gets the scripted multi-result answer; a
+            // single-statement (sequential fallback) query returns one result, like the real driver.
+            if (opts.multiResult && text.includes('__mj_batch_item')) return opts.multiResult(text);
             return { rows: [] };
         },
         release: () => undefined,
@@ -43,8 +46,8 @@ function makeItem(instruction: string, params: unknown[] | undefined, entityName
 
 /** Reaches HandleSubmit's internals without a live pool: call executeBatched directly. */
 type BatchedRunner = {
-    executeBatched: (items: TransactionItem[], client: unknown, results: unknown[]) => Promise<void>;
-    executeWithoutVariables: (items: TransactionItem[], client: unknown, results: unknown[]) => Promise<void>;
+    executeBatched: (items: TransactionItem[], client: unknown, provider: unknown, results: unknown[]) => Promise<void>;
+    executeWithoutVariables: (items: TransactionItem[], client: unknown, provider: unknown, results: unknown[]) => Promise<void>;
 };
 function makeGroup(): BatchedRunner {
     const g = new PostgreSQLTransactionGroup();
@@ -53,6 +56,19 @@ function makeGroup(): BatchedRunner {
 }
 
 describe('PostgreSQLTransactionGroup.BatchedSubmit', () => {
+    // Returned rows are post-processed through the global provider's ProcessEntityRows (binary →
+    // base64, datetimes, decryption). These fixtures carry stub EntityInfo, so use a pass-through.
+    let previousProvider: IMetadataProvider;
+    beforeEach(() => {
+        previousProvider = Metadata.Provider;
+        Metadata.Provider = {
+            ProcessEntityRows: async (rows: Record<string, unknown>[]) => rows,
+        } as unknown as IMetadataProvider;
+    });
+    afterEach(() => {
+        Metadata.Provider = previousProvider;
+    });
+
     it('sends the whole group as ONE query and maps results per item via sentinels', async () => {
         const { client, calls } = makeClient({
             multiResult: () => [
@@ -67,7 +83,7 @@ describe('PostgreSQLTransactionGroup.BatchedSubmit', () => {
             makeItem("SELECT * FROM sp_create_b($1)", ["O'Brien"], 'B'),
         ];
         const results: Array<{ Success: boolean; Result: unknown }> = [];
-        await makeGroup().executeBatched(items, client, results);
+        await makeGroup().executeBatched(items, client, Metadata.Provider, results);
 
         expect(calls.length).toBe(1); // the property being sold
         const text = calls[0].text;
@@ -100,7 +116,7 @@ describe('PostgreSQLTransactionGroup.BatchedSubmit', () => {
             makeItem('SELECT 3', [], 'C'),
         ];
         const results: Array<{ Success: boolean; Result: unknown }> = [];
-        await makeGroup().executeBatched(items, client, results);
+        await makeGroup().executeBatched(items, client, Metadata.Provider, results);
         expect(results.length).toBe(3);
         expect(results[0].Success).toBe(true);
         expect(results[1].Success).toBe(false); // no rows = the same "no result" the serial path reports
@@ -120,7 +136,7 @@ describe('PostgreSQLTransactionGroup.BatchedSubmit', () => {
             makeItem('SELECT * FROM sp_y($1)', ['fine'], 'Y'),
         ];
         const results: unknown[] = [];
-        await makeGroup().executeBatched(items, client, results);
+        await makeGroup().executeBatched(items, client, Metadata.Provider, results);
         // Sequential path = one query per item (2), not one batch (1).
         expect(calls.length).toBe(2);
         // And the un-inlinable value travelled as a PARAMETER, never as text.
@@ -137,7 +153,7 @@ describe('PostgreSQLTransactionGroup.BatchedSubmit', () => {
             makeItem('SELECT * FROM sp_y($1)', ['fine'], 'Y'),
         ];
         const results: unknown[] = [];
-        await makeGroup().executeBatched(items, client, results);
+        await makeGroup().executeBatched(items, client, Metadata.Provider, results);
         expect(calls.length).toBe(2);              // sequential, not one batch
         expect(calls[0].params).toEqual(['only-one']); // and $2 never became a NULL literal
         expect(calls[0].text).toContain('$2');
@@ -147,7 +163,7 @@ describe('PostgreSQLTransactionGroup.BatchedSubmit', () => {
         const { client, calls } = makeClient({ withEscape: false, multiResult: () => [{ rows: [] }] });
         const items = [makeItem('SELECT * FROM sp_x($1)', ['v'], 'X')];
         const results: unknown[] = [];
-        await makeGroup().executeBatched(items, client, results);
+        await makeGroup().executeBatched(items, client, Metadata.Provider, results);
         expect(calls.length).toBe(1); // sequential for 1 item — but crucially, NOT the inlined batch
         expect(calls[0].params).toEqual(['v']); // parameters travelled as parameters, not literals
     });
@@ -160,7 +176,7 @@ describe('PostgreSQLTransactionGroup.BatchedSubmit', () => {
         });
         const items = [makeItem('SELECT 1', [], 'A'), makeItem('SELECT 2', [], 'B')];
         const results: Array<{ Success: boolean }> = [];
-        await expect(makeGroup().executeBatched(items, client, results)).rejects.toThrow(/rolled back/);
+        await expect(makeGroup().executeBatched(items, client, Metadata.Provider, results)).rejects.toThrow(/rolled back/);
         expect(results.length).toBe(2);
         expect(results.every(r => r.Success === false)).toBe(true);
     });

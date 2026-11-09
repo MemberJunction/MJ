@@ -10,8 +10,8 @@
  * NEVER the model's content (§3). Every assertion is a framework observable via verifyAgentRun
  * (terminal run + every AIAgentRunStep terminal with CompletedAt; Sub-Agent steps recurse into their
  * linked child runs; Prompt steps → AIPromptRun, Action/Tool steps → Action Execution Log) plus the
- * conversation/artifact plumbing. A missing or non-Active shipped agent is SKIPPED cleanly (informative,
- * not a failure) — mirrors agent-runner AR1.
+ * conversation/artifact plumbing. A missing or non-Active shipped agent ends the check as SKIPPED
+ * (recorded as a skip, not a pass or a failure).
  *
  * Self-cleaning: live runs are FK-purged and the SA4 conversation removed in Teardown.
  * ON by default (RequiresLiveModel); opt out with RUN_AGENT_TESTS=0.
@@ -20,12 +20,13 @@ import { RunView } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
-import { Assert, AssertEqual, verifyAgentRun } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, verifyAgentRun, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext, AgentLiveFixture } from '@memberjunction/testing-integration';
 import {
     AGENT_LIVE_FIXTURE_TAG, AGENT_LIVE_SETTLE_MS, NewMarker, Sleep,
     MakeAIClient, UserTurn, RunAgentOverWire, ResolveRunId, GetRunSteps, DeleteById, PurgeAgentRun,
+    type WireRunOptions,
 } from './agent-live-shared';
 
 function fixture(ctx: IntegrationCheckContext): AgentLiveFixture {
@@ -35,25 +36,28 @@ function fixture(ctx: IntegrationCheckContext): AgentLiveFixture {
     return ctx.ShippedAgentsLiveFixture;
 }
 
-/** Resolve a shipped agent by name; returns null (skip-clean) when absent or non-Active. */
-async function resolveShipped(name: string, user: UserInfo): Promise<MJAIAgentEntityExtended | null> {
+/** Resolve a shipped agent by name; ends the running check as SKIPPED when absent or non-Active. */
+async function resolveShipped(name: string, user: UserInfo): Promise<MJAIAgentEntityExtended> {
     const r = await new RunView().RunView<MJAIAgentEntityExtended>({
         EntityName: 'MJ: AI Agents', ExtraFilter: `Name='${name}'`, ResultType: 'entity_object', BypassCache: true,
     }, user);
     const agent = r.Success && r.Results.length === 1 ? r.Results[0] : null;
-    if (!agent) { console.log(`      → SKIPPED: shipped agent '${name}' not found in metadata`); return null; }
-    if (agent.Status !== 'Active') { console.log(`      → SKIPPED: '${name}' is ${agent.Status} (not runnable)`); return null; }
+    if (!agent) SkipCheck(`shipped agent '${name}' not found in metadata`);
+    if (agent.Status !== 'Active') SkipCheck(`shipped agent '${name}' is ${agent.Status} (not runnable)`);
     return agent;
 }
 
 /** Run a shipped agent over the wire, land its run id (recorded for teardown), deep-verify it. */
-async function runAndVerify(ctx: IntegrationCheckContext, agent: MJAIAgentEntityExtended, message: string, opts?: { conversationDetailId?: string; conversationId?: string }): Promise<string> {
+// Typed as the shared WireRunOptions — not a local copy — so a rename there breaks this file at
+// compile time. A local `{ conversationId? }` copy survived the rename to `ConversationId`, and
+// because it was forwarded as a variable (no excess-property check) SA4 silently ran unlinked.
+async function runAndVerify(ctx: IntegrationCheckContext, agent: MJAIAgentEntityExtended, message: string, opts?: Pick<WireRunOptions, 'conversationDetailId' | 'ConversationId'>): Promise<string> {
     const result = await RunAgentOverWire(MakeAIClient(ctx.Provider, ctx.User), agent, UserTurn(message), opts);
     await Sleep(AGENT_LIVE_SETTLE_MS);
     const fallback = opts?.conversationDetailId
         ? `AgentID='${agent.ID}' AND ConversationDetailID='${opts.conversationDetailId}'`
-        : opts?.conversationId
-            ? `AgentID='${agent.ID}' AND ConversationID='${opts.conversationId}'`
+        : opts?.ConversationId
+            ? `AgentID='${agent.ID}' AND ConversationID='${opts.ConversationId}'`
             : `AgentID='${agent.ID}' AND Status<>'Running'`;
     const runId = await ResolveRunId(result, ctx.User, fallback, ctx.Provider);
     Assert(!!runId, `shipped run for '${agent.Name}' landed an AI Agent Run`);
@@ -70,7 +74,6 @@ export const ShippedAgentsLiveChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const sage = await resolveShipped('Sage', ctx.User);
-            if (!sage) { return; }
             const runId = await runAndVerify(ctx, sage, 'Reply with the single word: pong.');
             const steps = await GetRunSteps(runId, ctx.User, ctx.Provider);
             Assert(steps.length > 0, 'SA1: the run produced steps (the agent graph executed)');
@@ -82,7 +85,6 @@ export const ShippedAgentsLiveChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const qb = await resolveShipped('Query Builder', ctx.User);
-            if (!qb) { return; }
             // verifyAgentRun already recurses Sub-Agent steps into their linked child runs (parent↔child lineage).
             const runId = await runAndVerify(ctx, qb, 'How many users are in the system? Give the number only.');
             const steps = await GetRunSteps(runId, ctx.User, ctx.Provider);
@@ -97,7 +99,6 @@ export const ShippedAgentsLiveChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const research = await resolveShipped('Research Agent', ctx.User);
-            if (!research) { return; }
             // Narrowly bounded so the multi-sub-agent tree terminates deterministically (no live web dependency).
             const runId = await runAndVerify(
                 ctx, research,
@@ -114,7 +115,6 @@ export const ShippedAgentsLiveChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const sage = await resolveShipped('Sage', ctx.User);
-            if (!sage) { return; }
             const fx = fixture(ctx);
             // Fabricate the conversation + user turn, then run linked to it.
             const conversation = await ctx.Provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', ctx.User);
@@ -130,12 +130,13 @@ export const ShippedAgentsLiveChecks: NamedCheck[] = [
             Assert(await detail.Save(), `SA4: detail save: ${detail.LatestResult?.CompleteMessage}`);
             fx.ConversationDetailIds.push(detail.ID);
 
-            // Pass conversationId, NOT conversationDetailId: the resolver treats a supplied
-            // conversationDetailId as the caller's ALREADY-CREATED agent-response row (the real UI
-            // pre-creates it client-side) and only updates it — so handing it the Role='User' row
-            // would update that row in place and never produce a Role='AI' detail. With
-            // conversationId the server owns both details, which is what this check asserts.
-            const runId = await runAndVerify(ctx, sage, 'Reply with the single word: pong.', { conversationId: conversation.ID });
+            // Pass ConversationId, NOT conversationDetailId: the resolver treats a supplied
+            // conversationDetailId as an ALREADY-CREATED agent-response row and only updates it — so
+            // handing it the Role='User' row would update that row in place and never produce a
+            // Role='AI' detail. The real UI no longer pre-creates the reply row: the server creates
+            // it (AgentRunner.CreateAgentReplyDetail, marked as server-authored). With ConversationId
+            // the server owns both details, which is what this check asserts.
+            const runId = await runAndVerify(ctx, sage, 'Reply with the single word: pong.', { ConversationId: conversation.ID });
 
             const run = await new RunView().RunView<{ ConversationID: string | null }>({
                 EntityName: 'MJ: AI Agent Runs', ExtraFilter: `ID='${runId}'`, Fields: ['ConversationID'], ResultType: 'simple', BypassCache: true,

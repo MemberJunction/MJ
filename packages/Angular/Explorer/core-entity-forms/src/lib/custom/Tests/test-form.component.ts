@@ -12,10 +12,11 @@ import {
   TestingDialogService,
   TagsHelper,
   EvaluationPreferencesService,
-  EvaluationPreferences
+  EvaluationPreferences,
+  RubricPickerOptions
 } from '@memberjunction/ng-testing';
 import { createCopyOnlyToolbar, ToolbarConfig } from '@memberjunction/ng-code-editor';
-import { MJConfirmService } from '@memberjunction/ng-ui-components';
+import { MJConfirmService, SectionPickerItem } from '@memberjunction/ng-ui-components';
 
 /** Settings key for keyboard shortcuts visibility */
 const SHORTCUTS_SETTINGS_KEY = '__mj.Testing.ShowKeyboardShortcuts';
@@ -335,6 +336,7 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
     this.IsSaving = value;
   }
   TestTypeOptions: MJTestTypeEntity[] = [];
+  RubricOptions: { id: string; name: string }[] = [];
 
   /** @deprecated Use {@link TestTypeOptions}. */
   get testTypeOptions(): MJTestTypeEntity[] {
@@ -366,6 +368,7 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
     this.loadShortcutsSetting();
     // Fire-and-forget: test type list for the edit form
     this.loadTestTypeOptions();
+    void this.loadRubricOptions();
 
     // Subscribe to evaluation preferences
     this.evalPrefsService.preferences$
@@ -388,6 +391,7 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
   }
 
   ngOnDestroy() {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -609,6 +613,22 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
     } catch (error) {
       console.error('Error parsing JSON fields:', error);
     }
+  }
+
+  /** The tab strip as `mj-section-picker` items: strip order, a count once that tab's data has loaded. */
+  get SectionPickerItems(): SectionPickerItem[] {
+    return [
+      { Key: 'overview', Title: 'Overview', Icon: 'fas fa-th-large' },
+      { Key: 'config', Title: 'Configuration', Icon: 'fas fa-sliders-h' },
+      { Key: 'runs', Title: 'Runs', Icon: 'fas fa-history', Count: this.TestRunsLoaded ? this.TestRuns.length : null },
+      { Key: 'suites', Title: 'Test Suites', Icon: 'fas fa-layer-group', Count: this.SuiteTestsLoaded ? this.SuiteTests.length : null },
+      { Key: 'analytics', Title: 'Analytics', Icon: 'fas fa-chart-line' },
+    ];
+  }
+
+  /** A pick from the phone section sheet; goes through ChangeTab so lazy loads fire. An unknown key is ignored. */
+  OnSectionPicked(key: string): void {
+    if (this.SectionPickerItems.some((i) => i.Key === key)) this.ChangeTab(key);
   }
 
   ChangeTab(tab: string) {
@@ -1325,6 +1345,18 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
   /** Parsed tags as a plain array — derived from record.Tags JSON. */
   get tags(): string[] {
     return TagsHelper.parseTags(this.record?.Tags);
+  }
+
+  /** Active rubrics for the RubricID picker. */
+  private async loadRubricOptions(): Promise<void> {
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const result = await rv.RunView({ EntityName: 'MJ: Rubrics', ExtraFilter: `Status='Active'`, OrderBy: 'Name', ResultType: 'simple', MaxRows: 500 });
+      this.RubricOptions = RubricPickerOptions((result.Results ?? []) as { ID: string; Name: string; Status: string }[]);
+      this.cdr.markForCheck();
+    } catch (error) {
+      console.warn('Failed to load rubric options:', error);
+    }
   }
 
   /** Load test types for the Type dropdown. */

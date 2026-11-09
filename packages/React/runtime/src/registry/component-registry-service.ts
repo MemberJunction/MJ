@@ -14,7 +14,7 @@ import {
   RegistryComponentMetadata
 } from './registry-provider';
 import { UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { GetGlobalObjectStore, UUIDsEqual } from '@memberjunction/global';
 import { 
   MJComponentEntity, 
   MJComponentRegistryEntity,
@@ -59,7 +59,7 @@ export interface IComponentRegistryClient {
  * Service for managing component loading from registries with compilation caching
  */
 export class ComponentRegistryService {
-  private static instance: ComponentRegistryService | null = null;
+  private static readonly _globalStoreKey = '___SINGLETON__ComponentRegistryService';
   
   // Caches
   private compiledComponentCache = new Map<string, CachedCompiledComponent>();
@@ -97,9 +97,18 @@ export class ComponentRegistryService {
     this.debug = debug;
     this.graphQLClient = graphQLClient;
   }
+
+  /**
+   * Returns the initialized singleton instance from the Global Object Store, or undefined if not yet created.
+   */
+  public static get Instance(): ComponentRegistryService | undefined {
+    const g = GetGlobalObjectStore();
+    return g ? (g[ComponentRegistryService._globalStoreKey] as ComponentRegistryService | undefined) : undefined;
+  }
   
   /**
-   * Get or create the singleton instance
+   * Get or create the singleton instance, backed by the Global Object Store so bundler duplication
+   * across execution paths cannot split the cached registry.
    */
   static GetInstance(
     compiler: ComponentCompiler, 
@@ -107,10 +116,14 @@ export class ComponentRegistryService {
     debug: boolean = false,
     graphQLClient?: IComponentRegistryClient
   ): ComponentRegistryService {
-    if (!ComponentRegistryService.instance) {
-      ComponentRegistryService.instance = new ComponentRegistryService(compiler, context, debug, graphQLClient);
+    const g = GetGlobalObjectStore();
+    if (g) {
+      if (!g[ComponentRegistryService._globalStoreKey]) {
+        g[ComponentRegistryService._globalStoreKey] = new ComponentRegistryService(compiler, context, debug, graphQLClient);
+      }
+      return g[ComponentRegistryService._globalStoreKey] as ComponentRegistryService;
     }
-    return ComponentRegistryService.instance;
+    return new ComponentRegistryService(compiler, context, debug, graphQLClient);
   }
 
   /** @deprecated Use {@link GetInstance}. */
@@ -990,9 +1003,13 @@ export class ComponentRegistryService {
    * Forces new instance creation on next access
    */
   static Reset(): void {
-    if (ComponentRegistryService.instance) {
-      ComponentRegistryService.instance.forceClearAll();
-      ComponentRegistryService.instance = null;
+    const g = GetGlobalObjectStore();
+    const existing = g ? (g[ComponentRegistryService._globalStoreKey] as ComponentRegistryService | undefined) : undefined;
+    if (existing) {
+      existing.forceClearAll();
+      if (g) {
+        delete g[ComponentRegistryService._globalStoreKey];
+      }
     }
   }
 

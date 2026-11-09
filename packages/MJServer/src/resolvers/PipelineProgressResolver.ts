@@ -1,6 +1,7 @@
 import { Resolver, Subscription, Root, ObjectType, Field, Float, Mutation, Arg, Ctx, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { LogStatus, LogError } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { ResolverBase } from '../generic/ResolverBase.js';
 
 const PIPELINE_PROGRESS_TOPIC = 'PIPELINE_PROGRESS';
@@ -49,6 +50,16 @@ export class PipelineStartResult {
     ErrorMessage?: string;
 }
 
+export function PipelineProgressFilter({
+    payload,
+    args,
+}: {
+    payload: PipelineProgressNotification;
+    args: { pipelineRunID: string };
+}): boolean {
+    return UUIDsEqual(payload.PipelineRunID, args.pipelineRunID) || payload.PipelineRunID === args.pipelineRunID;
+}
+
 @Resolver()
 export class PipelineProgressResolver extends ResolverBase {
     /**
@@ -56,9 +67,7 @@ export class PipelineProgressResolver extends ResolverBase {
      */
     @Subscription(() => PipelineProgressNotification, {
         topics: PIPELINE_PROGRESS_TOPIC,
-        filter: ({ payload, args }: { payload: PipelineProgressNotification; args: { pipelineRunID: string } }) => {
-            return payload.PipelineRunID === args.pipelineRunID;
-        },
+        filter: PipelineProgressFilter,
     })
     PipelineProgress(
         @Root() notification: PipelineProgressNotification,

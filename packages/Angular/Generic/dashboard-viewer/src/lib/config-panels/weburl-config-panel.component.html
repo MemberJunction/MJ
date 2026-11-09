@@ -1,19 +1,21 @@
 <!-- WebURL Config Panel - Form content only, no dialog chrome -->
 <div class="config-panel">
   <!-- Title -->
-  <div class="form-group">
-    <label for="partTitle">
-      <i class="fa-solid fa-heading"></i>
-      Part Title
-    </label>
-    <input
-      type="text"
-      id="partTitle"
-      [(ngModel)]="title"
-      (input)="onTitleChange()"
-      placeholder="Enter a title for this part"
-      class="form-input">
-  </div>
+  @if (ShowCommonFields) {
+    <div class="form-group">
+      <label for="partTitle">
+        <i class="fa-solid fa-heading"></i>
+        Part Title
+      </label>
+      <input
+        type="text"
+        id="partTitle"
+        [(ngModel)]="title"
+        (input)="onTitleChange()"
+        placeholder="Enter a title for this part"
+        class="form-input">
+    </div>
+  }
 
   <!-- URL -->
   <div class="form-group">

@@ -1,0 +1,38 @@
+{
+  "name": "@memberjunction/diagnostics",
+  "type": "module",
+  "version": "6.2.0",
+  "description": "MemberJunction: isomorphic diagnostic flight-recorder ring buffers, two-stage credential/literal scrubber, .mjdiag ZIP archive builder & verifier, X25519+AES-256-GCM envelope encryption, automated findings engine, and Perfetto/OTLP exporters.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "/dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "dependencies": {
+    "@memberjunction/global": "6.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

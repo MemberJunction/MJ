@@ -10,18 +10,24 @@
  *
  * Deep ("hardcore", Data-Explorer depth) enrichment: bounded name lists (cap
  * {@link HOME_AGENT_CONTEXT_NAME_LIST_CAP} with a companion `*Count` flag when
- * truncated) for apps, pins, pin groups, notifications, and recents; structured
- * recent-item summaries; and a tolerant name resolver so the agent can open a
- * pin / app / recent the way the user named it (exact name → partial contains).
+ * truncated) for apps, pins, pin groups, notifications, recents and pinned
+ * dashboards; structured recent-item summaries; whether the Pinned section is
+ * collapsed; the Home view (the overview, or a dashboard by name and id and
+ * whether it is being edited); and a tolerant name resolver so the agent can
+ * open a pin / app / recent / pinned dashboard the way the user named it (exact
+ * name → partial contains).
  *
  * 🔒 SAFETY BOUNDARY: the Home dashboard exposes ONLY navigation / discovery /
- * panel-toggle operations. No helper here describes — and no tool may perform —
- * pin create / delete / rename, group mutation, or reordering.
+ * panel-toggle operations; showing a pinned dashboard in Home is navigation. No
+ * helper here describes — and no tool may perform — pin create / delete /
+ * rename, group mutation, reordering, or dashboard create / rename / edit /
+ * save / delete.
  */
 
 /**
  * Upper bound on how many names we publish in a name-list context field
- * (AvailableApps, PinnedItems, PinGroupNames, NotificationTitles, RecentItems).
+ * (AvailableApps, PinnedItems, PinGroupNames, NotificationTitles, RecentItems,
+ * PinnedDashboardNames).
  * Keeping the streamed note bounded avoids flooding the co-agent with hundreds of
  * names; when the underlying list is larger we surface a companion total-count
  * field instead.
@@ -132,6 +138,43 @@ export interface HomeAgentContextInput {
     SidebarOpen: boolean;
     /** Current search query inside the Add Pin panel (empty when not searching). */
     AddPanelSearchQuery: string;
+    /** Whether the Pinned section is collapsed. */
+    PinnedCollapsed: boolean;
+    /** The dashboard Home shows in place of its overview: its name, or null on the overview. */
+    CurrentDashboardName: string | null;
+    /** ID of that dashboard, or null. */
+    CurrentDashboardID: string | null;
+    /** True while that dashboard is in edit mode. */
+    IsEditingDashboard: boolean;
+    /** Names of the pinned dashboards the Dashboards switcher lists, in pin order. */
+    PinnedDashboardNames: string[];
+}
+
+/**
+ * Add a bounded name list under `key` when it is not empty, plus `countKey` with the true total
+ * when the list is longer than {@link HOME_AGENT_CONTEXT_NAME_LIST_CAP}.
+ */
+function addBoundedNames(context: Record<string, unknown>, key: string, countKey: string, names: readonly string[]): void {
+    if (names.length === 0) {
+        return;
+    }
+    context[key] = capNames(names);
+    if (names.length > HOME_AGENT_CONTEXT_NAME_LIST_CAP) {
+        context[countKey] = names.length;
+    }
+}
+
+/** Add the Home view (overview or a dashboard), the open dashboard and the pinned dashboards to the context. */
+function addDashboardViewContext(context: Record<string, unknown>, input: HomeAgentContextInput): void {
+    context['HomeView'] = input.CurrentDashboardName ? 'Dashboard' : 'Overview';
+    if (input.CurrentDashboardName) {
+        context['CurrentDashboardName'] = input.CurrentDashboardName;
+        context['IsEditingDashboard'] = input.IsEditingDashboard;
+        if (input.CurrentDashboardID) {
+            context['CurrentDashboardID'] = input.CurrentDashboardID;
+        }
+    }
+    addBoundedNames(context, 'PinnedDashboardNames', 'PinnedDashboardNameCount', input.PinnedDashboardNames);
 }
 
 /**
@@ -139,10 +182,13 @@ export interface HomeAgentContextInput {
  *
  * Reports the app launcher state (app counts + names), the pin board state (pin
  * counts + names + groups + edit mode), the notifications (count + bounded titles),
- * the recents (count + bounded structured summaries), the Add Pin panel state, and
- * the sidebar state. Each name list is bounded with a companion total-count when
- * truncated. Keeping this a pure function (no `this`) makes the context shape
- * unit-testable and decouples it from change-detection timing.
+ * the recents (count + bounded structured summaries), the Add Pin panel state, the
+ * sidebar state, whether the Pinned section is collapsed, the Home view (the
+ * overview, or the dashboard Home shows by name and id and whether it is being
+ * edited) and the pinned dashboards' names. Each name list is bounded with a
+ * companion total-count when truncated. Keeping this a pure function (no `this`)
+ * makes the context shape unit-testable and decouples it from change-detection
+ * timing.
  *
  * @param input - the component's current state snapshot
  * @returns a flat key-value object suitable for `SetAgentContext`
@@ -160,6 +206,7 @@ export function BuildHomeAgentContext(input: HomeAgentContextInput): Record<stri
         EditMode: input.EditMode,
         AddPanelOpen: input.AddPanelOpen,
         SidebarOpen: input.SidebarOpen,
+        PinnedCollapsed: input.PinnedCollapsed,
     };
 
     // When the lists are longer than we publish names for, tell the co-agent the
@@ -171,21 +218,10 @@ export function BuildHomeAgentContext(input: HomeAgentContextInput): Record<stri
         context['PinnedItemNameCount'] = input.PinNames.length;
     }
 
-    // Pin group names — bounded; companion count when over the cap.
-    if (input.PinGroupNames.length > 0) {
-        context['PinGroupNames'] = capNames(input.PinGroupNames);
-        if (input.PinGroupNames.length > HOME_AGENT_CONTEXT_NAME_LIST_CAP) {
-            context['PinGroupNameCount'] = input.PinGroupNames.length;
-        }
-    }
-
-    // Notification titles — bounded; only surfaced when there are unread notifications.
-    if (input.NotificationTitles.length > 0) {
-        context['NotificationTitles'] = capNames(input.NotificationTitles);
-        if (input.NotificationTitles.length > HOME_AGENT_CONTEXT_NAME_LIST_CAP) {
-            context['NotificationTitleCount'] = input.NotificationTitles.length;
-        }
-    }
+    // Pin group names and unread notification titles — bounded; only surfaced when
+    // there are some, with a companion count when over the cap.
+    addBoundedNames(context, 'PinGroupNames', 'PinGroupNameCount', input.PinGroupNames);
+    addBoundedNames(context, 'NotificationTitles', 'NotificationTitleCount', input.NotificationTitles);
 
     // Recent items — bounded structured summaries (name + resource type).
     if (input.RecentItems.length > 0) {
@@ -200,6 +236,8 @@ export function BuildHomeAgentContext(input: HomeAgentContextInput): Record<stri
     if (input.AddPanelOpen && input.AddPanelSearchQuery) {
         context['AddPanelSearchQuery'] = input.AddPanelSearchQuery;
     }
+
+    addDashboardViewContext(context, input);
 
     return context;
 }

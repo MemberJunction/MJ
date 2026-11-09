@@ -200,7 +200,8 @@ function makeProviderEntity(driverClass: string = LOOPBACK_BRIDGE_DRIVER_CLASS):
 
 const HOST: IHostInstanceIdentity = {
     GetHostInstanceID: () => 'cphost:1:boot',
-    GetHostNamePrefix: () => 'cphost:',
+    GetInstancePrefix: () => 'cphost:1:',
+    IsPriorBoot: () => false,
 };
 
 function engine(): AIBridgeEngine {

@@ -7,11 +7,14 @@
  * `@memberjunction/ai-core-plus`, which both this dispatcher and the in-run executor consume.
  */
 export * from './types';
+export * from './resolve-by-tool-name';
 export * from './debug-state';
 export * from './TaskGraphService';
 export * from './TaskClaimStore';
 export * from './settlement-rescue';
 export * from './condition-gate';
+export * from './decision-node';
+export * from './AIDecisionTaskRunner';
 export * from './task-predicates';
 export * from './DispatcherConditionEvaluator';
 export * from './TaskGraphDispatcher';

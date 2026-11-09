@@ -9,17 +9,15 @@ import {
     CaptureResult,
     CreateLabelParams,
     CreateLabelProgressCallback,
-    DependencyNode,
     DiffResult,
     LabelFilter,
     RecordSnapshot,
     RestoreOptions,
     RestoreResult,
-    WalkOptions,
 } from './types';
+import { DependencyGraphWalker, DependencyNode, WalkOptions } from '@memberjunction/record-graph';
 import { LabelManager } from './LabelManager';
 import { SnapshotBuilder } from './SnapshotBuilder';
-import { DependencyGraphWalker } from './DependencyGraphWalker';
 import { DiffEngine } from './DiffEngine';
 import { RestoreEngine } from './RestoreEngine';
 

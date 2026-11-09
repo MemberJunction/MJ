@@ -15,11 +15,29 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import type { EntityActionUXContext, EntityActionUXResult } from '@memberjunction/ng-entity-action-ux';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { LogError, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression, CoerceImageSrc, ParseCssHexColor, CompositeKey, IsDateOnlySQLType, FormatDateOnly, EntityFieldTSType } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { ExportColumnTypeForSQLType } from '../utils/export-column.util';
+import { LogError, LogStatus, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression, CoerceImageSrc, ParseCssHexColor, CompositeKey, IsDateOnlySQLType, FormatDateOnly, EntityFieldTSType, BaseEntity, BaseEntityEvent } from '@memberjunction/core';
+import { UUIDsEqual, MJGlobal, MJEvent } from '@memberjunction/global';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
+import { CommunicationEngineBase } from '@memberjunction/communication-types';
+import { ExcelAddinClient, type ExcelWorkbookSourceRequest } from '@memberjunction/excel-addin';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
-import { BuildPkString, CanonicalizeColumnFields, ComputeFieldsList } from '../utils/record.util';
+import {
+  ExcelSourceMenuDescription,
+  ExcelSourceTooltip,
+  ResolveGridExcelSource,
+} from './open-in-excel';
+import {
+  BuildPkString,
+  BuildUsablePkString,
+  CanonicalizeColumnFields,
+  ComputeFieldsList,
+  ResolvePolymorphicTargetEntity,
+  BuildPolymorphicCompositeKey,
+  PolymorphicCacheKey,
+  BatchResolvePolymorphicRecordNames
+} from '../utils/record.util';
 import { AggregateField } from '../utils/aggregate-field.util';
 import {
   MJUserViewEntityExtended,
@@ -163,6 +181,8 @@ const AUTO_WIDTH_COLUMN_MIN_PX = 160;
 
 /** Column id of the inert width-filler appended when `FillWidth` is on. See `buildFillerColumnDef`. */
 const FILLER_COLUMN_ID = '__mjFill';
+/** Field (and column id) of the row-number column added when `ShowRowNumbers` is on. */
+const ROW_NUMBER_FIELD = '__rowNumber';
 
 /**
  * Flex weight given to a `width: 'auto'` column so it outranks the filler when leftover row width is
@@ -212,6 +232,25 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   }
   get Params(): RunViewParams | null {
     return this._params;
+  }
+
+  private _alternateBaseView: string | null = null;
+  /**
+   * Optional semantic `Name` of a registered alternate base view on the entity (`MJ: Entity Alternate Base Views.Name`).
+   * Overrides `Params.AlternateBaseView` when set.
+   */
+  @Input()
+  set AlternateBaseView(value: string | null) {
+    const normalized = value?.trim() || null;
+    if (normalized !== this._alternateBaseView) {
+      this._alternateBaseView = normalized;
+      if (this._params) {
+        this.onParamsChanged();
+      }
+    }
+  }
+  get AlternateBaseView(): string | null {
+    return this._alternateBaseView;
   }
 
   private _allowLoad: boolean = true;
@@ -750,6 +789,8 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   // ========================================
 
   private _visualConfig: GridVisualConfig = {};
+  private _effectiveVisualConfig: Required<GridVisualConfig> = { ...DEFAULT_VISUAL_CONFIG };
+  private _effectiveVisualConfigSource: GridVisualConfig | null = null;
   /**
    * Visual configuration for the grid appearance.
    * Allows customization of header styles, row colors, cell formatting, and more.
@@ -758,6 +799,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   @Input()
   set VisualConfig(value: GridVisualConfig) {
     this._visualConfig = value || {};
+    this._effectiveVisualConfigSource = null;
     this.applyVisualConfig();
   }
   get VisualConfig(): GridVisualConfig {
@@ -765,10 +807,15 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   }
 
   /**
-   * Get the effective visual config (user config merged with defaults)
+   * Get the effective visual config (user config merged with defaults).
+   * Memoized on `_visualConfig` reference to avoid allocating a new object on every change-detection pass.
    */
   get EffectiveVisualConfig(): Required<GridVisualConfig> {
-    return { ...DEFAULT_VISUAL_CONFIG, ...this._visualConfig };
+    if (this._effectiveVisualConfigSource !== this._visualConfig) {
+      this._effectiveVisualConfigSource = this._visualConfig;
+      this._effectiveVisualConfig = { ...DEFAULT_VISUAL_CONFIG, ...this._visualConfig };
+    }
+    return this._effectiveVisualConfig;
   }
 
   /** @deprecated Use {@link EffectiveVisualConfig}. */
@@ -914,6 +961,19 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     return this._showExportButton;
   }
 
+  private _showOpenInExcelButton: boolean = true;
+  /**
+   * Show the "Open in Excel" button in the toolbar. It appears only for a saved view, and only when the
+   * MemberJunction host serves the Excel add-in; it downloads a workbook that loads the view in Excel.
+   */
+  @Input()
+  set ShowOpenInExcelButton(value: boolean) {
+    this._showOpenInExcelButton = value;
+  }
+  get ShowOpenInExcelButton(): boolean {
+    return this._showOpenInExcelButton;
+  }
+
   private _showDeleteButton: boolean = false;
   /**
    * Show the "Delete" button in toolbar (deletes selected rows)
@@ -984,6 +1044,219 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   }
   get ShowCommunicationButton(): boolean {
     return this._showCommunicationButton;
+  }
+
+  private _entitySupportsCommunication = false;
+  private _communicationCheckedForEntityID: string | null = null;
+  /**
+   * True when the current entity has at least one active Entity Communication Message Type. "Send
+   * Message" is offered — as a toolbar button or in the overflow menu — only when this is true, so an
+   * entity with no communication setup never shows a control that cannot do anything.
+   */
+  get EntitySupportsCommunication(): boolean {
+    return this._entitySupportsCommunication;
+  }
+
+  /** Resolves {@link EntitySupportsCommunication} for the current entity, once per entity. */
+  private async resolveCommunicationSupport(): Promise<void> {
+    const entity = this._entityInfo;
+    if (!entity) {
+      this._entitySupportsCommunication = false;
+      this._communicationCheckedForEntityID = null;
+      return;
+    }
+    if (this._communicationCheckedForEntityID && UUIDsEqual(this._communicationCheckedForEntityID, entity.ID)) {
+      return;
+    }
+    this._communicationCheckedForEntityID = entity.ID;
+    this._entitySupportsCommunication = false;
+    try {
+      const provider = this.ProviderToUse;
+      const engine = <CommunicationEngineBase>CommunicationEngineBase.GetProviderInstance(provider, CommunicationEngineBase);
+      await engine.Config(false, provider.CurrentUser, provider);
+      if (this._entityInfo !== entity) {
+        return; // the grid moved to another entity while the engine loaded
+      }
+      this._entitySupportsCommunication = engine.Metadata.EntityCommunicationMessageTypes
+        .some(m => m.IsActive && UUIDsEqual(m.EntityID, entity.ID));
+      this.cdr.detectChanges();
+    } catch {
+      // Non-fatal: leave Send Message hidden, and retry on the next entity resolution.
+      this._communicationCheckedForEntityID = null;
+    }
+  }
+
+  private static _nextExcelMenuInstanceId = 0;
+  private _excelAddinEnabled = false;
+  private _savedViewID: string | null = null;
+  @ViewChild('excelMenuTrigger') private _excelMenuTrigger?: ElementRef<HTMLButtonElement>;
+
+  /** Unique DOM id pairing the unified Export/Excel disclosure trigger with its action popover. */
+  public readonly ExcelMenuId = `mj-entity-grid-excel-menu-${++EntityDataGridComponent._nextExcelMenuInstanceId}`;
+  /** True while the unified Export/Excel toolbar action popover is open. */
+  public ShowExcelMenu = false;
+
+  /**
+   * Optional ID of the persisted `MJ: User Views` record backing the rows on screen when a parent
+   * container (such as `<mj-entity-viewer>` / `<mj-grid-view-renderer>`) loads the view itself and
+   * feeds the grid `[Data]` + `{ EntityName }` params. Used by Open in Excel without giving the grid
+   * ownership of persisting the `UserView` record.
+   */
+  @Input()
+  set SavedViewID(value: string | null) {
+    const normalized = value?.trim() || null;
+    if (normalized !== this._savedViewID) {
+      this._savedViewID = normalized;
+      if (normalized) {
+        void this.resolveExcelAddinAvailability();
+      }
+    }
+  }
+  get SavedViewID(): string | null {
+    return this._savedViewID;
+  }
+
+  /** The saved view ID to open in Excel: explicit `SavedViewID` input, else the grid's loaded `_viewEntity`. */
+  private get effectiveSavedViewID(): string | null {
+    if (this._savedViewID) {
+      return this._savedViewID;
+    }
+    const view = this._viewEntity;
+    if (!view || view.IsSaved === false) {
+      return null;
+    }
+    return view.ID?.trim() || null;
+  }
+
+  /** Resolves the workbook source (`View` for saved views, `Entity` for unscoped default entity grids). */
+  private get resolvedExcelSource(): ExcelWorkbookSourceRequest | null {
+    return ResolveGridExcelSource({
+      ShowButton: this._showOpenInExcelButton,
+      AddinEnabled: this._excelAddinEnabled,
+      SavedViewID: this.effectiveSavedViewID,
+      EntityID: this._entityInfo?.ID ?? null,
+      ExtraFilter: this._params?.ExtraFilter ?? null,
+      AlternateBaseView: this._alternateBaseView ?? this._params?.AlternateBaseView ?? null,
+    });
+  }
+
+  /** True while Open in Excel is building the workbook. */
+  public IsOpeningInExcel = false;
+
+  /** Tooltip matching the resolved workbook source (`View` vs `Entity`). */
+  get OpenInExcelTooltip(): string {
+    return ExcelSourceTooltip(this.resolvedExcelSource);
+  }
+
+  /** Subtitle shown under "Open in Excel" inside the unified toolbar menu. */
+  get OpenInExcelDescription(): string {
+    return ExcelSourceMenuDescription(this.resolvedExcelSource);
+  }
+
+  /** True when the toolbar offers Open in Excel (saved view or unscoped entity, and the host serves the add-in). */
+  get CanOpenInExcel(): boolean {
+    return this.resolvedExcelSource !== null;
+  }
+
+  /** Toggles the unified Export/Excel action popover. */
+  public ToggleExcelMenu(): void {
+    if (this.ShowOverflowMenu) {
+      this.CloseOverflowMenu();
+    }
+    this.ShowExcelMenu = !this.ShowExcelMenu;
+    this.cdr.detectChanges();
+
+    if (this.ShowExcelMenu) {
+      setTimeout(() => {
+        document.addEventListener('click', this.handleExcelMenuOutsideClick);
+      }, 0);
+    } else {
+      document.removeEventListener('click', this.handleExcelMenuOutsideClick);
+    }
+  }
+
+  /** Closes the unified Export/Excel action popover, optionally restoring focus to the trigger button. */
+  public CloseExcelMenu(restoreFocus = false): void {
+    if (!this.ShowExcelMenu) {
+      document.removeEventListener('click', this.handleExcelMenuOutsideClick);
+      return;
+    }
+    this.ShowExcelMenu = false;
+    document.removeEventListener('click', this.handleExcelMenuOutsideClick);
+    this.cdr.detectChanges();
+    if (restoreFocus) {
+      this._excelMenuTrigger?.nativeElement?.focus();
+    }
+  }
+
+  /** Handles Escape key dismissal inside the unified Export/Excel dropdown. */
+  public OnExcelMenuEscape(event: Event): void {
+    if (!this.ShowExcelMenu) {
+      return;
+    }
+    event.stopPropagation();
+    this.CloseExcelMenu(true);
+  }
+
+  /** Invokes Open in Excel from the unified toolbar popover. */
+  public OnOpenInExcelFromMenu(): void {
+    this.CloseExcelMenu();
+    void this.OnOpenInExcelClick();
+  }
+
+  /** Invokes static snapshot export from the unified toolbar popover. */
+  public OnExportSnapshotFromMenu(): void {
+    this.CloseExcelMenu();
+    this.OnExportClick();
+  }
+
+  private handleExcelMenuOutsideClick = (): void => {
+    this.CloseExcelMenu();
+  };
+
+  /**
+   * Asks the host, once per provider (the client caches the answer), whether it serves the Excel add-in.
+   */
+  private async resolveExcelAddinAvailability(): Promise<void> {
+    const provider = this.ProviderToUse;
+    if ((!this.effectiveSavedViewID && !this._entityInfo?.ID) || this._excelAddinEnabled || !provider) {
+      return;
+    }
+    try {
+      this._excelAddinEnabled = await ExcelAddinClient.Instance.IsEnabled(provider);
+      if (this._excelAddinEnabled) {
+        this.cdr.detectChanges();
+      }
+    } catch (e) {
+      // Non-fatal: the option stays hidden. The client already treats an unreadable status as "off".
+      LogError(`EntityDataGrid: Excel add-in status check failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  /** Builds a workbook that loads the saved view or unscoped entity in Excel, and downloads it. */
+  public async OnOpenInExcelClick(): Promise<void> {
+    const source = this.resolvedExcelSource;
+    if (!source || this.IsOpeningInExcel) {
+      return;
+    }
+    this.IsOpeningInExcel = true;
+    this.cdr.detectChanges();
+    try {
+      const result = await ExcelAddinClient.Instance.OpenInExcel([source], this.ProviderToUse);
+      if (result.Success) {
+        MJNotificationService.Instance?.CreateSimpleNotification(
+          `Downloaded ${result.FileName}. Open it in Excel and sign in to load the data.`, 'success', 5000);
+      } else {
+        MJNotificationService.Instance?.CreateSimpleNotification(result.ErrorMessage || 'The workbook could not be built.', 'error', 6000);
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      LogError(`EntityDataGrid: Open in Excel failed: ${message}`);
+      MJNotificationService.Instance?.CreateSimpleNotification(`Open in Excel failed: ${message}`, 'error', 6000);
+    } finally {
+      this.IsOpeningInExcel = false;
+      this.cdr.detectChanges();
+    }
   }
 
   // ========================================
@@ -1103,8 +1376,9 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     this._entityActionsAutoLoaded = true;
     try {
       const provider = this.ProviderToUse;
-      await EntityActionEngineBase.Instance.Config(false, provider?.CurrentUser, provider);
-      const configs = this.mapEntityActionsToConfigs(this._entityInfo.Name);
+      const engine = this.entityActionEngine();
+      await engine.Config(false, provider.CurrentUser, provider);
+      const configs = this.mapEntityActionsToConfigs(engine, this._entityInfo.Name);
       if (configs.length > 0) {
         this._entityActions = configs;
         this._showEntityActionButtons = true;
@@ -1116,9 +1390,13 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     }
   }
 
+  /** The EntityAction engine for this grid's provider, so a multi-provider client reads the right server's actions. */
+  private entityActionEngine(): EntityActionEngineBase {
+    return <EntityActionEngineBase>EntityActionEngineBase.GetProviderInstance(this.ProviderToUse, EntityActionEngineBase);
+  }
+
   /** Maps the entity's active EntityActions to grid configs, carrying the driver key + RecordProcessID. */
-  private mapEntityActionsToConfigs(entityName: string): EntityActionConfig[] {
-    const engine = EntityActionEngineBase.Instance;
+  private mapEntityActionsToConfigs(engine: EntityActionEngineBase, entityName: string): EntityActionConfig[] {
     return engine.GetActionsByEntityName(entityName, 'Active').map((ea): EntityActionConfig => {
       const driverInvocation = engine.Invocations.find(i => UUIDsEqual(i.EntityActionID, ea.ID) && !!i.RuntimeUXDriverClass);
       const recordProcessParam = engine.Params.find(p => UUIDsEqual(p.EntityActionID, ea.ID) && p.ActionParam?.trim().toLowerCase() === 'recordprocessid');
@@ -1176,33 +1454,136 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   }
 
   /**
+   * Whether `_gridState` can be believed to describe the CURRENT entity.
+   *
+   * The evidence is the one `buildAgColumnDefs()` already relies on: a `columnSettings` list none
+   * of whose names resolve to a field of this entity did not come from this entity. A state with
+   * no `columnSettings` at all is no evidence either way, so it is trusted — refusing there would
+   * break a perfectly valid aggregates-only state.
+   *
+   * Deliberately NOT a check of the aggregate expressions themselves. Those are raw SQL
+   * (`SUM(OrderTotal)`, `COUNT(*)`), so validating them means parsing SQL and would reject valid
+   * expressions over joins or literals. The column list is the honest, already-computed signal.
+   */
+  private gridStateDescribesCurrentEntity(): boolean {
+    const settings = this._gridState?.columnSettings;
+    if (!this._entityInfo || !settings?.length) {
+      return true;
+    }
+    return settings.some(col =>
+      this._entityInfo!.Fields.some(f => f.Name.toLowerCase() === col.Name.toLowerCase())
+    );
+  }
+
+  /**
+   * The aggregates to write into CAPTURED state, as distinct from the ones to compute.
+   *
+   * These differ in exactly one case. {@link effectiveAggregatesConfig} returns `undefined` when it
+   * refuses a foreign grid state, which is right for computing — but `persistGridStateToView()` and
+   * `persistUserDefaultGridState()` both assign `aggregates` unconditionally, so `undefined` does not mean
+   * "no opinion", it means "this view has no aggregates". A single column resize would then erase
+   * the loaded view's real aggregates. Refusing the wrong numbers only to delete the right ones is
+   * not an improvement (raised by @rkihm-BC reviewing #4656).
+   *
+   * So on refusal — and ONLY on refusal, so that nothing about a non-refused state changes — fall
+   * back to what the loaded view record legitimately holds.
+   *
+   * Which hosts this protects. It serves a host that binds `mj-entity-data-grid` DIRECTLY with a
+   * saved-view `[Params]` (`ViewID`/`ViewName`) and a separate `[GridState]`: only there does the
+   * grid hold a `_viewEntity` whose aggregates can differ from the state's. It does NOT reach the
+   * `mj-entity-viewer` path. There `mj-grid-view-renderer` hands the grid `{ EntityName }` unless a
+   * view-type config supplies `params` (nothing in-repo does), so `_viewEntity` is null; and both
+   * in-repo hosts parse the `[GridState]` they bind from the very record the viewer saves to. A
+   * foreign state on that path is therefore a POLLUTED record whose aggregates are the foreign
+   * ones, and capturing `undefined` is what removes them — which is the intended outcome.
+   *
+   * The user-default path needs no equivalent: `loadUserDefaultGridState()` adopts its aggregates
+   * into `_aggregatesConfig`, which outranks the grid state and so never reaches a refusal.
+   */
+  private get capturableAggregatesConfig(): ViewGridAggregatesConfig | undefined {
+    const refusedForeignState =
+      !this._aggregatesConfig &&
+      !!this._gridState?.aggregates &&
+      !this.gridStateDescribesCurrentEntity();
+
+    if (refusedForeignState) {
+      return this._viewEntity?.GridStateObject?.aggregates ?? undefined;
+    }
+    return this.effectiveAggregatesConfig ?? undefined;
+  }
+
+  /**
    * Returns the effective aggregates config, preferring _aggregatesConfig but falling back to _gridState.aggregates.
    * This ensures aggregates work regardless of whether they came from explicit config or from view's GridState.
+   *
+   * The fallback is refused when the grid state is not this entity's. Aggregates are raw SQL
+   * expressions carrying their own labels, so a foreign state does not fail visibly the way a
+   * foreign column list does — `COUNT(*)` evaluates against any entity, so a card reading
+   * "Open Orders" renders a real count of whatever this grid is actually showing. A plausible
+   * number under someone else's label is worse than a blank one, because nothing looks wrong.
+   * An explicit `[AggregatesConfig]` is the host's instruction and always wins.
    */
   private get effectiveAggregatesConfig(): ViewGridAggregatesConfig | null | undefined {
-    return this._aggregatesConfig || this._gridState?.aggregates;
+    if (this._aggregatesConfig) {
+      return this._aggregatesConfig;
+    }
+    return this.gridStateDescribesCurrentEntity() ? this._gridState?.aggregates : undefined;
+  }
+
+  private _cardAggregatesCache: ViewGridAggregate[] = [];
+  private _cardAggregatesKey = '';
+  private _columnAggregatesCache: ViewGridAggregate[] = [];
+  private _columnAggregatesKey = '';
+
+  private buildAggregatesCacheKey(expressions: ViewGridAggregate[] | undefined, displayType: 'card' | 'column'): string {
+    if (!expressions || expressions.length === 0) {
+      return '';
+    }
+    return expressions
+      .filter(a => a.enabled !== false && a.displayType === displayType)
+      .map(a => `${a.id ?? a.expression}:${a.label ?? ''}:${a.order ?? 0}:${a.column ?? ''}`)
+      .join('|');
   }
 
   /**
    * Returns enabled aggregates configured for card display.
+   * Memoized by expression signature so template bindings do not allocate a new array
+   * or trigger `AggregatePanelComponent.ngOnChanges` on unrelated change-detection passes.
    */
   public get CardAggregates(): ViewGridAggregate[] {
     const config = this.effectiveAggregatesConfig;
-    if (!config?.expressions) return [];
-    return config.expressions
-      .filter(a => a.enabled !== false && a.displayType === 'card')
-      .sort((a, b) => (a.order || 0) - (b.order || 0));
+    const expressions = config?.expressions;
+    if (!expressions || expressions.length === 0) {
+      return this._cardAggregatesCache.length === 0 ? this._cardAggregatesCache : (this._cardAggregatesCache = []);
+    }
+    const key = this.buildAggregatesCacheKey(expressions, 'card');
+    if (key !== this._cardAggregatesKey) {
+      this._cardAggregatesKey = key;
+      this._cardAggregatesCache = expressions
+        .filter(a => a.enabled !== false && a.displayType === 'card')
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+    }
+    return this._cardAggregatesCache;
   }
 
   /**
    * Returns enabled aggregates configured for column footer display.
+   * Memoized by expression signature to avoid per-CD array allocation and sorting.
    */
   public get ColumnAggregates(): ViewGridAggregate[] {
     const config = this.effectiveAggregatesConfig;
-    if (!config?.expressions) return [];
-    return config.expressions
-      .filter(a => a.enabled !== false && a.displayType === 'column')
-      .sort((a, b) => (a.order || 0) - (b.order || 0));
+    const expressions = config?.expressions;
+    if (!expressions || expressions.length === 0) {
+      return this._columnAggregatesCache.length === 0 ? this._columnAggregatesCache : (this._columnAggregatesCache = []);
+    }
+    const key = this.buildAggregatesCacheKey(expressions, 'column');
+    if (key !== this._columnAggregatesKey) {
+      this._columnAggregatesKey = key;
+      this._columnAggregatesCache = expressions
+        .filter(a => a.enabled !== false && a.displayType === 'column')
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+    }
+    return this._columnAggregatesCache;
   }
 
   /**
@@ -1576,9 +1957,27 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     }
   }
 
-  /** Get row ID function for AG Grid */
-  public GetRowId = (params: GetRowIdParams<Record<string, unknown>>) =>
-    params.data['__pk'] as string;
+  /**
+   * Get row ID function for AG Grid.
+   *
+   * `__pk` is minted by {@link getRowKey}, which guarantees a non-empty, collision-free value.
+   * The guard here covers the one case that does not come from there: the infinite row model
+   * hands `getRowId` a node whose `data` is not yet loaded, and reading `['__pk']` off that
+   * throws inside ag-Grid's own call stack.
+   */
+  public GetRowId = (params: GetRowIdParams<Record<string, unknown>>): string => this.resolveRowId(params);
+
+  /**
+   * The body of {@link GetRowId}, on the prototype so it is reachable without constructing the
+   * component (the public member has to stay an arrow field: the template passes it to ag-Grid
+   * as a bare reference, `[getRowId]="getRowId"` (the deprecated accessor returning this field), which would lose `this`).
+   */
+  private resolveRowId(params: GetRowIdParams<Record<string, unknown>>): string {
+    const pk = params.data?.['__pk'];
+    return typeof pk === 'string' && pk.length > 0
+      ? pk
+      : `mjrow_pending_${this._syntheticRowKeySeq++}`;
+  }
 
   /** @deprecated Use {@link GetRowId}. */
   public get getRowId() {
@@ -1769,6 +2168,19 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   // Export dialog state
   public ShowExportDialog: boolean = false;
 
+  /**
+   * Number of live record creations or deletions detected for the current entity
+   * since the last grid load. Displayed in a non-disruptive floating pill so
+   * the user can refresh on demand without losing scroll or sort state.
+   */
+  public LivePendingChangesCount: number = 0;
+
+  /**
+   * Concatenated PK string (`__pk`) of the most recently live-patched visible row.
+   */
+  public LastPatchedRowKey: string | null = null;
+  private _patchedRowClearTimer: ReturnType<typeof setTimeout> | null = null;
+
   /** @deprecated Use {@link ShowExportDialog}. */
   public get showExportDialog(): boolean {
     return this.ShowExportDialog;
@@ -1804,12 +2216,19 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     this.setupRefreshDebounce();
     this.setupStatePersistDebounce();
     this.setupUserDefaultsPersistDebounce();
+    this.subscribeToLiveEntityEvents();
     this.updateAgRowSelection();
   }
 
   ngOnDestroy(): void {
     // Flush any pending state persistence immediately before destroying
     this.EnsurePendingChangesSaved();
+    if (this._patchedRowClearTimer) {
+      clearTimeout(this._patchedRowClearTimer);
+      this._patchedRowClearTimer = null;
+    }
+    document.removeEventListener('click', this.handleOutsideClick);
+    document.removeEventListener('click', this.handleExcelMenuOutsideClick);
 
     this.destroy$.next();
     this.destroy$.complete();
@@ -1863,6 +2282,168 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     ).subscribe((state) => {
       this.persistUserDefaultGridState(state);
     });
+  }
+
+  /**
+   * Subscribes to `MJGlobal` `BaseEntity.BaseEventCode` (`save`, `delete`, `remote-invalidate`)
+   * events so visible rows in the grid are patched in-place on update without resetting scroll/sort,
+   * and new/deleted records surface a non-disruptive floating refresh pill.
+   */
+  private subscribeToLiveEntityEvents(): void {
+    MJGlobal.Instance.GetEventListener(false)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((event: MJEvent) => {
+        this.handleLiveEntityEvent(event);
+      });
+  }
+
+  private handleLiveEntityEvent(event: MJEvent): void {
+    if (!this._entityInfo || event.eventCode !== BaseEntity.BaseEventCode) {
+      return;
+    }
+    const baEvent = event.args as BaseEntityEvent | undefined;
+    if (!baEvent) {
+      return;
+    }
+
+    let entityName: string | undefined;
+    let candidateKey = '';
+    let action: 'save' | 'delete' = 'save';
+    let localRecordData: Record<string, unknown> | null = null;
+
+    if ((baEvent.type === 'save' || baEvent.type === 'delete') && baEvent.baseEntity) {
+      entityName = baEvent.baseEntity.EntityInfo?.Name;
+      action = baEvent.type;
+      if (entityName && entityName.trim().toLowerCase() === this._entityInfo.Name.trim().toLowerCase()) {
+        const rawData = baEvent.baseEntity.GetAll();
+        localRecordData = rawData;
+        candidateKey = BuildPkString(rawData, this._entityInfo);
+      }
+    } else if (baEvent.type === 'remote-invalidate' && baEvent.payload && typeof baEvent.payload === 'object') {
+      const payload = baEvent.payload as { entityName?: string; key?: string; action?: 'save' | 'delete' };
+      entityName = payload.entityName;
+      candidateKey = payload.key ?? '';
+      action = payload.action ?? 'save';
+    } else {
+      return;
+    }
+
+    if (!entityName || entityName.trim().toLowerCase() !== this._entityInfo.Name.trim().toLowerCase()) {
+      return;
+    }
+
+    const matchedKey = candidateKey ? this.findMatchingRowKey(candidateKey) : null;
+    if (action === 'save' && matchedKey !== null) {
+      if (localRecordData) {
+        this.patchRowInPlace(matchedKey, localRecordData);
+      } else {
+        void this.fetchAndPatchSingleRow(matchedKey);
+      }
+    } else {
+      // Record created (not currently in visible rows) or deleted: surface non-disruptive pill
+      this.LivePendingChangesCount++;
+      this.cdr.detectChanges();
+    }
+  }
+
+  private findMatchingRowKey(candidateKey: string): string | null {
+    if (this._rowDataMap.has(candidateKey)) {
+      return candidateKey;
+    }
+    const lower = candidateKey.toLowerCase();
+    for (const existingKey of this._rowDataMap.keys()) {
+      if (existingKey.toLowerCase() === lower) {
+        return existingKey;
+      }
+    }
+    return null;
+  }
+
+  private async fetchAndPatchSingleRow(matchedKey: string): Promise<void> {
+    if (!this._entityInfo) {
+      return;
+    }
+    try {
+      const ck = new CompositeKey();
+      ck.LoadFromConcatenatedString(matchedKey);
+      if (!ck.HasValue) {
+        return;
+      }
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const result = await rv.RunView<Record<string, unknown>>({
+        EntityName: this._entityInfo.Name,
+        ExtraFilter: ck.ToWhereClause(),
+        MaxRows: 1,
+        SkipTotalRowCount: true,
+        ResultType: 'simple',
+        Fields: ComputeFieldsList(this._entityInfo, this._gridState, this.hostColumnFieldNames()),
+      });
+      if (result.Success && result.Results.length > 0) {
+        this.patchRowInPlace(matchedKey, result.Results[0]);
+      }
+    } catch {
+      // Non-fatal: row remains at previous snapshot until next full refresh
+    }
+  }
+
+  private patchRowInPlace(matchedKey: string, updatedRecordData: Record<string, unknown>): void {
+    const existingRowData = this._rowDataMap.get(matchedKey);
+    if (!existingRowData || !this._entityInfo) {
+      return;
+    }
+
+    const mergedEntity: Record<string, unknown> = {
+      ...existingRowData.entity,
+      ...updatedRecordData,
+    };
+    existingRowData.entity = mergedEntity;
+
+    const agRow: Record<string, unknown> = {
+      __pk: matchedKey,
+    };
+    for (const field of this._entityInfo.Fields) {
+      agRow[field.Name] = mergedEntity[field.Name];
+    }
+
+    const rowIdx = this.RowData.findIndex((r) => r['__pk'] === matchedKey);
+    if (rowIdx >= 0) {
+      this.RowData[rowIdx] = agRow;
+    }
+
+    if (this.gridApi && !this.gridApi.isDestroyed()) {
+      this.gridApi.applyTransaction({ update: [agRow] });
+    }
+
+    void this.resolvePolymorphicNamesForCurrentRows([agRow]);
+
+    this.LastPatchedRowKey = matchedKey;
+    if (this._patchedRowClearTimer) {
+      clearTimeout(this._patchedRowClearTimer);
+    }
+    this._patchedRowClearTimer = setTimeout(() => {
+      this.LastPatchedRowKey = null;
+      this._patchedRowClearTimer = null;
+      this.cdr.detectChanges();
+    }, 2500);
+
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Triggered when the user clicks the floating live-updates pill to reload the grid.
+   */
+  public OnApplyLiveGridRefresh(): void {
+    this.LivePendingChangesCount = 0;
+    void this.Refresh();
+  }
+
+  /**
+   * Dismisses the floating live-updates pill without reloading the grid.
+   */
+  public OnDismissLiveGridPill(event: MouseEvent): void {
+    event.stopPropagation();
+    this.LivePendingChangesCount = 0;
+    this.cdr.detectChanges();
   }
 
   /**
@@ -1997,6 +2578,8 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       this._suppressPersist = false;
       // Entity is resolved by now — self-load its actions if auto-load is enabled.
       void this.maybeAutoLoadEntityActions();
+      void this.resolveCommunicationSupport();
+      void this.resolveExcelAddinAvailability();
     }
   }
 
@@ -2261,11 +2844,23 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         }
       }
 
-      // Apply aggregates from GridState if present and fetch their values
-      if (this._gridState.aggregates) {
+      // Apply aggregates from GridState if present and fetch their values. Skipped for a state
+      // that is not this entity's — adopting them here would COPY the foreign config into
+      // `_aggregatesConfig`, which outranks every later check.
+      if (this._gridState.aggregates && this.gridStateDescribesCurrentEntity()) {
         this._aggregatesConfig = this._gridState.aggregates;
         // Fetch aggregate values when gridState aggregates change
         this.RefreshAggregates();
+      } else if (this._gridState.aggregates) {
+        // The refusal is otherwise silent — the cards simply do not appear — so say so, once per
+        // grid-state change, to make a "my aggregates vanished" report traceable. Deliberately
+        // here and NOT in `gridStateDescribesCurrentEntity()`, which runs on every aggregates read
+        // and would flood the console (suggested by @rkihm-BC reviewing #4656).
+        const refusedCount = this._gridState.aggregates.expressions?.length ?? 0;
+        LogStatus(
+          `[entity-data-grid] Ignored ${refusedCount} aggregate(s) from a grid state that names none of ` +
+          `"${this._entityInfo.Name}"'s fields; it describes a different entity.`
+        );
       }
 
       // Clear suppression after AG Grid's async events have been processed.
@@ -2324,10 +2919,17 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         extraFilter = this._viewEntity.WhereClause;
       }
 
+      const alternateBaseView =
+        this._alternateBaseView ||
+        this._params?.AlternateBaseView ||
+        this._viewEntity?.AlternateBaseView ||
+        undefined;
+
       const result = await rv.RunView({
         EntityName: this._entityInfo.Name,
         MaxRows: 0, // Only get aggregates, no row data
         ExtraFilter: extraFilter,
+        AlternateBaseView: alternateBaseView,
         Aggregates: aggregateExpressions
       });
 
@@ -2653,7 +3255,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     if (this._showRowNumbers && this.AgColumnDefs.length > 0) {
       this.AgColumnDefs.unshift({
         headerName: '#',
-        field: '__rowNumber',
+        field: ROW_NUMBER_FIELD,
         width: 60,
         minWidth: 50,
         maxWidth: 80,
@@ -3144,6 +3746,34 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         return linkHtml;
       }
 
+      // Polymorphic FK rendering (driven by hard metadata link EntityField.EntityIDFieldName)
+      if (!customFormat && field?.EntityIDFieldName && params.data) {
+        const rawRecordId = String(params.value ?? '').trim();
+        if (rawRecordId) {
+          const targetEntity = ResolvePolymorphicTargetEntity(params.data, field, this.ProviderToUse);
+          if (targetEntity) {
+            const compositeKey = BuildPolymorphicCompositeKey(rawRecordId, targetEntity);
+            const resolvedName = compositeKey
+              ? this._polymorphicRecordNames.get(PolymorphicCacheKey(targetEntity.Name, compositeKey))
+              : undefined;
+            const labelToDisplay = resolvedName || rawRecordId;
+            const escapedLabel = HighlightUtil.escapeHtml(labelToDisplay);
+            const escapedFieldName = HighlightUtil.escapeHtml(field.Name);
+            const escapedRelatedEntityId = HighlightUtil.escapeHtml(targetEntity.ID);
+            const escapedRelatedEntityName = HighlightUtil.escapeHtml(targetEntity.Name);
+            const escapedRawRecordId = HighlightUtil.escapeHtml(rawRecordId);
+            const titleAttr = resolvedName
+              ? ` title="${HighlightUtil.escapeHtml(`${targetEntity.DisplayNameOrName}: ${resolvedName} (${rawRecordId})`)}"`
+              : '';
+            const dataAttrs = `data-related-entity-id="${escapedRelatedEntityId}" data-record-id="${escapedRawRecordId}" data-field-name="${escapedFieldName}" data-related-entity-name="${escapedRelatedEntityName}"${titleAttr}`;
+            const displayText = this._filterText
+              ? HighlightUtil.highlight(labelToDisplay, this._filterText, true)
+              : escapedLabel;
+            return `<a href="javascript:void(0)" class="cell-link cell-fk-link" ${dataAttrs}>${displayText}</a>`;
+          }
+        }
+      }
+
       let displayValue = '';
       let extraClass = '';
       let inlineStyle = '';
@@ -3603,6 +4233,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       const loadTimeMs = performance.now() - startTime;
 
       if (result.Success) {
+        this.LivePendingChangesCount = 0;
         this._allData = result.Results || [];
         this.totalRowCount = result.TotalRowCount || this._allData.length;
         this.processData();
@@ -3682,6 +4313,9 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     }
 
     const params: RunViewParams = { ...this._params };
+    if (this._alternateBaseView) {
+      params.AlternateBaseView = this._alternateBaseView;
+    }
 
     // Apply sort state (may be modified by user interactions)
     const orderBy = this.buildOrderByClause();
@@ -3867,7 +4501,31 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       return row;
     });
 
+    if (this._entityInfo && this.RowData.length > 0) {
+      void this.resolvePolymorphicNamesForCurrentRows(this.RowData);
+    }
+
     this.cdr.detectChanges();
+  }
+
+  /** Cache of resolved polymorphic target record display names (`entityName::compositeKey` -> name). */
+  private _polymorphicRecordNames = new Map<string, string>();
+
+  private async resolvePolymorphicNamesForCurrentRows(rows: readonly Record<string, unknown>[]): Promise<void> {
+    if (!this._entityInfo) return;
+    const sizeBefore = this._polymorphicRecordNames.size;
+    await BatchResolvePolymorphicRecordNames(
+      rows,
+      this._entityInfo,
+      this.ProviderToUse,
+      this._polymorphicRecordNames,
+    );
+    if (this._polymorphicRecordNames.size !== sizeBefore) {
+      if (this.gridApi && !this.gridApi.isDestroyed()) {
+        this.gridApi.refreshCells({ force: true });
+      }
+      this.cdr.detectChanges();
+    }
   }
 
   /**
@@ -3910,14 +4568,62 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     this.cdr.detectChanges();
   }
 
+  /**
+   * Per-row synthetic identity for rows that carry no usable key, so {@link getRowKey} can
+   * never hand ag-Grid the same id twice.
+   *
+   * Keyed on the row object reference, so the same source row keeps the same id across
+   * re-processing (a sort, a filter, a re-render). A WeakMap, so it never retains rows past
+   * their lifetime. Mirrors `query-data-grid.component.ts`, which already solved this.
+   */
+  private _syntheticRowKeys = new WeakMap<object, string>();
+  private _syntheticRowKeySeq = 0;
+
+  /**
+   * Stable identity for one row — the value behind `__pk`, and therefore behind
+   * {@link getRowId}.
+   *
+   * ag-Grid treats `getRowId` as authoritative and SILENTLY MERGES rows that share an id
+   * (raising error #2, *"Duplicate node id … from getRowId"*). Both previous branches could
+   * return the same value for every row in the grid:
+   *
+   * - `buildPkString` formats without validating, so a row whose primary-key column was not
+   *   selected produced the constant `"ID|undefined"`;
+   * - the configured-key-field branch returned `''` whenever that field was absent or null.
+   *
+   * Either way N rows collapsed to one, which reads as a data-loading bug rather than an
+   * identity bug. A key is used only when it is actually a key; otherwise the row gets a
+   * synthetic id, which cannot collide.
+   *
+   * The trade-off matches query-data-grid's: a synthetic id is per-object rather than
+   * value-derived, so a keyless row loses its selection across a REFETCH. Not dropping rows
+   * matters far more than preserving a selection on rows that cannot be addressed anyway.
+   */
   private getRowKey(entity: Record<string, unknown>): string {
     // Build key from EntityInfo PK fields when available
     if (this._entityInfo) {
-      return BuildPkString(entity, this._entityInfo);
+      const pk = BuildUsablePkString(entity, this._entityInfo);
+      if (pk !== null) {
+        return pk;
+      }
+    } else {
+      // Fallback to configured key field via direct property access
+      const keyValue = entity[this._keyField];
+      if (keyValue != null && String(keyValue).length > 0) {
+        return String(keyValue);
+      }
     }
-    // Fallback to configured key field via direct property access
-    const keyValue = entity[this._keyField];
-    return keyValue != null ? String(keyValue) : '';
+    return this.syntheticRowKey(entity);
+  }
+
+  /** Mint (or reuse) this row object's synthetic id. See {@link _syntheticRowKeys}. */
+  private syntheticRowKey(entity: Record<string, unknown>): string {
+    let key = this._syntheticRowKeys.get(entity);
+    if (!key) {
+      key = `mjrow_${this._syntheticRowKeySeq++}`;
+      this._syntheticRowKeys.set(entity, key);
+    }
+    return key;
   }
 
   private computeRowClasses(index: number, _entity: Record<string, unknown>): string[] {
@@ -4445,7 +5151,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
 
     for (let i = 0; i < columnState.length; i++) {
       const col = columnState[i];
-      if (col.colId === '__rowNumber') continue; // Skip row number column
+      if (col.colId === ROW_NUMBER_FIELD) continue; // Skip row number column
 
       // Case-insensitive: `colId` originates from a colDef's `field`, which for host-supplied
       // columns is whatever the page wrote. `canonicalizeHostColumns()` normally settles that
@@ -4566,7 +5272,9 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     return {
       columnSettings,
       sortSettings,
-      aggregates: this._aggregatesConfig || this._gridState?.aggregates
+      // Via the getter, so a foreign state's aggregates are not captured into THIS entity's saved
+      // view. Without it one column resize makes the wrong numbers durable.
+      aggregates: this.capturableAggregatesConfig
     };
   }
 
@@ -4842,7 +5550,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     } finally {
       this.IsPreparingExport = false;
     }
-    const columns = this.getExportColumns();
+    const columns = this.GetExportColumns();
     const fileName = this.getDefaultExportFileName();
 
     this.ExportDialogConfig = {
@@ -4882,7 +5590,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
    */
   async Export(options?: Partial<ExportOptions>, download: boolean = true): Promise<ExportResult> {
     const data = await this.resolveExportData();
-    const columns = this.getExportColumns();
+    const columns = this.GetExportColumns();
     const fileName = options?.fileName || this.getDefaultExportFileName();
 
     const exportOptions: Partial<ExportOptions> = {
@@ -4953,58 +5661,41 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   }
 
   /**
-   * Get column definitions for export based on current grid columns
+   * The columns the grid is showing, in the order it shows them, with the headers it shows. This is the
+   * single source for every export path — the toolbar's Export button, {@link Export}, and hosts such as
+   * the view workspace — so an export always matches the screen. It reads the rendered AG Grid columns
+   * rather than the host-declared `Columns` or a saved grid state, because either of those can differ
+   * from the screen in order, visibility or header text. Before the grid has rendered, it falls back to
+   * the column definitions it is about to render.
    */
-  private getExportColumns(): ExportColumn[] {
-    if (!this._entityInfo) {
-      // Fallback: use AG Grid column definitions
-      return this.AgColumnDefs
-        .filter(col => col.field && !col.hide)
-        .map(col => ({
-          name: col.field as string,
-          displayName: (col.headerName || col.field) as string
-        }));
-    }
+  public GetExportColumns(): ExportColumn[] {
+    const displayed = this.gridApi?.getAllDisplayedColumns() ?? [];
+    const defs = displayed.length > 0
+      ? displayed.map(c => c.getColDef())
+      : this.AgColumnDefs.filter(d => !d.hide);
 
-    // Use entity field info for better column metadata
-    return this._columns
-      .filter(col => col.visible !== false)
-      .map(col => {
+    // No `width`: ExportColumn.width is in characters, while grid widths are pixels, so passing them
+    // made a 150px column 150 characters wide. Left unset, the Excel exporter auto-fits each column.
+    return defs
+      .filter(def => this.isExportableColumn(def))
+      .map(def => {
+        const colField = def.field as string;
         // Case-insensitive, matching how col defs and auto-width resolve a host's field name.
-        // An exact-case match here silently cost the export column its data type.
-        const field = this._entityInfo?.Fields.find(f => f.Name.toLowerCase() === col.field.toLowerCase());
+        const field = this._entityInfo?.Fields.find(f => f.Name.toLowerCase() === colField.toLowerCase());
         return {
           // The entity's spelling, because `name` is the KEY the export engine reads each row by
           // (`row[col.name]`) and rows are keyed from entity metadata. The host's spelling here
           // exported a correctly-headed column of blank cells.
-          name: field?.Name ?? col.field,
-          displayName: col.title || field?.DisplayName || col.field,
-          dataType: this.mapFieldTypeToExportType(field?.Type),
-          width: typeof col.width === 'number' ? col.width : undefined
+          name: field?.Name ?? colField,
+          displayName: def.headerName || field?.DisplayNameOrName || colField,
+          dataType: ExportColumnTypeForSQLType(field?.Type)
         };
       });
   }
 
-  /**
-   * Map MemberJunction field types to export column types
-   */
-  private mapFieldTypeToExportType(fieldType?: string): ExportColumn['dataType'] {
-    if (!fieldType) return 'string';
-
-    const type = fieldType.toLowerCase();
-    if (type.includes('int') || type.includes('decimal') || type.includes('float') || type.includes('numeric')) {
-      return 'number';
-    }
-    if (type.includes('date') || type.includes('time')) {
-      return 'date';
-    }
-    if (type.includes('bit') || type.includes('bool')) {
-      return 'boolean';
-    }
-    if (type.includes('money') || type.includes('currency')) {
-      return 'currency';
-    }
-    return 'string';
+  /** A data column: not the layout filler, not the row-number column, and bound to a field. */
+  private isExportableColumn(def: ColDef): boolean {
+    return !!def.field && def.field !== ROW_NUMBER_FIELD && def.colId !== FILLER_COLUMN_ID;
   }
 
   /**
@@ -5262,6 +5953,9 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   // ========================================
 
   ToggleOverflowMenu(): void {
+    if (this.ShowExcelMenu) {
+      this.CloseExcelMenu();
+    }
     this.ShowOverflowMenu = !this.ShowOverflowMenu;
     this.cdr.detectChanges();
 
@@ -5338,7 +6032,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
 
   get ShowCommunicationInOverflow(): boolean {
     // Communication is in overflow when it's not shown as a primary button
-    return !this.ShowCommunicationButton && this.HasSelection;
+    return !this.ShowCommunicationButton && this.HasSelection && this.EntitySupportsCommunication;
   }
 
   /** @deprecated Use {@link ShowCommunicationInOverflow}. */
@@ -5482,14 +6176,47 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   // Public Getters
   // ========================================
 
+  private _visibleRowsCache: GridRowData[] = [];
+  private _visibleRowsKey = '';
+  private _visibleColumnStatesCache: ColumnRuntimeState[] = [];
+  private _visibleColumnStatesKey = '';
+
+  /**
+   * Returns the currently loaded grid rows.
+   * Memoized on map size and boundary keys so repeated change-detection checks reuse the same array instance.
+   */
   get VisibleRows(): GridRowData[] {
-    return Array.from(this._rowDataMap.values());
+    const size = this._rowDataMap.size;
+    if (size === 0) {
+      return this._visibleRowsCache.length === 0 ? this._visibleRowsCache : (this._visibleRowsCache = []);
+    }
+    let firstKey = '';
+    let lastKey = '';
+    for (const k of this._rowDataMap.keys()) {
+      if (!firstKey) firstKey = k;
+      lastKey = k;
+    }
+    const key = `${size}:${firstKey}:${lastKey}`;
+    if (key !== this._visibleRowsKey || this._visibleRowsCache.length !== size) {
+      this._visibleRowsKey = key;
+      this._visibleRowsCache = Array.from(this._rowDataMap.values());
+    }
+    return this._visibleRowsCache;
   }
 
+  /**
+   * Returns visible column runtime states sorted by display order.
+   * Memoized on column visibility and order signature to prevent per-CD array allocation and sorting.
+   */
   get VisibleColumnStates(): ColumnRuntimeState[] {
-    return this._columnStates
-      .filter(c => c.visible)
-      .sort((a, b) => a.order - b.order);
+    const key = this._columnStates.map(c => `${c.config.field}:${c.visible ? 1 : 0}:${c.order}`).join('|');
+    if (key !== this._visibleColumnStatesKey) {
+      this._visibleColumnStatesKey = key;
+      this._visibleColumnStatesCache = this._columnStates
+        .filter(c => c.visible)
+        .sort((a, b) => a.order - b.order);
+    }
+    return this._visibleColumnStatesCache;
   }
 }
 

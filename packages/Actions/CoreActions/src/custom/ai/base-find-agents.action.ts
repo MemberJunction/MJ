@@ -100,14 +100,8 @@ export abstract class BaseFindAgentsAction extends BaseAction {
                 }
             }
 
-            // Permission-filter to agents the user can 'run'
-            const accessibleAgents = await AIAgentPermissionHelper.GetAccessibleAgents(params.ContextUser, 'run');
-            const accessibleAgentIds = new Set(accessibleAgents.map(a => NormalizeUUID(a.ID)));
-            matched = matched.filter(a => accessibleAgentIds.has(NormalizeUUID(a.ID)));
-
-            if (!includeInactive) {
-                matched = matched.filter(a => a.Status === 'Active');
-            }
+            // Permission-filter to agents the user can 'run' (Active only unless includeInactive)
+            matched = await AIAgentPermissionHelper.FilterRunnableAgents(matched, params.ContextUser, includeInactive);
 
             matched = this.applyInvocationFilter(matched, params).slice(0, maxResults);
 

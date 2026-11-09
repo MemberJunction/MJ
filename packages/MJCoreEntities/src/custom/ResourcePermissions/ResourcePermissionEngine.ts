@@ -1,5 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, IStartupSink, RegisterForStartup, UserInfo } from "@memberjunction/core";
-import { UUIDsEqual } from "@memberjunction/global";
+import { NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
 import { MJResourcePermissionEntity, MJResourceTypeEntity } from "../../generated/entity_subclasses";
 
 /**
@@ -31,7 +31,8 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
                 Type: 'dataset',
                 DatasetName: 'ResourceTypes',
                 PropertyName: "_resourceTypes",
-                DatasetResultHandling: "single_property"
+                DatasetResultHandling: "single_property",
+                Entities: ['MJ: Resource Types']
             }
         ]
         await super.Load(c, provider, forceRefresh, contextUser);
@@ -145,14 +146,17 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
         // now filter to ONLY approved permissions
         permissions = permissions.filter((r) => r.Status === 'Approved');
 
-        // now, we reduce the array so that we only have the highest permission level for each resourcetypeid/resourcerecordid combination
-        let reducedPermissions: MJResourcePermissionEntity[] = [];
-        permissions.forEach((p) => {
-            let existing = reducedPermissions.find((r) => UUIDsEqual(r.ResourceTypeID, p.ResourceTypeID) && UUIDsEqual(r.ResourceRecordID, p.ResourceRecordID));
+        // now, we reduce the array so that we only have the highest permission level for each resourcetypeid/resourcerecordid combination.
+        // Keyed by the normalized pair so this stays linear; a swap deletes and re-adds the key, which moves the
+        // winner to the end exactly as removing it from an array and pushing the new one did.
+        const reducedPermissions = new Map<string, MJResourcePermissionEntity>();
+        for (const p of permissions) {
+            const key = `${NormalizeUUID(p.ResourceTypeID)}|${NormalizeUUID(p.ResourceRecordID)}`;
+            const existing = reducedPermissions.get(key);
             if (!existing) {
-                reducedPermissions.push(p);
+                reducedPermissions.set(key, p);
             } else {
-                // existing permission and see if this one is higher, if so, replace it in the array with the new one
+                // existing permission and see if this one is higher, if so, replace it with the new one
                 let bSwap = false;
                 if (p.PermissionLevel === 'Owner' && existing.PermissionLevel !== 'Owner') {
                     bSwap = true;
@@ -161,15 +165,13 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
                     bSwap = true;
                 }
                 if (bSwap) {
-                    // get rid of the existing permission
-                    reducedPermissions = reducedPermissions.filter((r) => r !== existing);
-                    // add the new permission
-                    reducedPermissions.push(p);
+                    reducedPermissions.delete(key);
+                    reducedPermissions.set(key, p);
                 }
             }
-        });
+        }
 
-        return reducedPermissions;
+        return [...reducedPermissions.values()];
     }
 
     /**
@@ -180,8 +182,16 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
     public GetResourceTypeInfoFields(ResourceTypeID: string): {OwnerIDFieldName: string, NameFieldName: string, PrimaryKeyFieldName: string} {
         const md = this.ProviderToUse;
         const rt = this.ResourceTypes.find((rt) => UUIDsEqual(rt.ID, ResourceTypeID));
-        if (!rt)
+        if (!rt) {
+            if (UUIDsEqual(ResourceTypeID, '88D0DF27-AF8F-43AC-9EC4-2AC314F49355')) {
+                return {
+                    OwnerIDFieldName: 'OwnerUserID',
+                    NameFieldName: 'Name',
+                    PrimaryKeyFieldName: 'ID' // pk-literal-ok: MJ: Projects core entity primary key
+                };
+            }
             throw new Error(`Resource Type ${ResourceTypeID} not found`);
+        }
         const entity = md.EntityByID(rt.EntityID);
         if (!entity)
             throw new Error(`Entity ${rt.EntityID} not found`);

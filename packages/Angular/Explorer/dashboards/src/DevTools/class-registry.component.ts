@@ -48,7 +48,8 @@ export class ClassRegistryInspectorComponent extends BaseResourceComponent imple
         super();
     }
 
-    public ngOnInit(): void {
+    public override ngOnInit(): void {
+        super.ngOnInit();
         const prefs = DevToolsPrefs.Get<{ search?: string; expanded?: string[] }>('classRegistry');
         if (prefs?.search) this.SearchQuery = prefs.search;
         this.Refresh();

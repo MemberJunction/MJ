@@ -17,8 +17,12 @@ import {
     JSONObject,
     RealtimeTurnDetectionMode,
     RealtimeTurnDetectionSettings,
+    RealtimeDroppedInputReporter,
+    RealtimeDriverFactsOf,
+    type RealtimeDriverFacts,
+    type RealtimeInputFrame,
 } from '@memberjunction/ai';
-import { ClientRealtimeSessionConfig, ResolveResponseDoneUsage } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, MapRealtimeUsageModalityDetail, NormalizeTurnDetectionSettings, RealtimeWireUsageModalityDetail, ResolveResponseDoneUsage } from '@memberjunction/ai';
 import { OpenAI } from 'openai';
 import { OpenAIRealtimeWebSocket } from 'openai/realtime/websocket';
 // NOTE: the bare 'openai/realtime' directory subpath is not exported by the SDK's package
@@ -115,32 +119,8 @@ type GARealtimeSessionCreateRequest = RealtimeSessionCreateRequest & RealtimeSes
 interface GARealtimeResponseUsage {
     input_tokens?: number;
     output_tokens?: number;
-    input_token_details?: GARealtimeUsageDetail;
-    output_token_details?: GARealtimeUsageDetail;
-}
-
-/** Wire shape of a per-modality usage-detail block on the GA API. */
-interface GARealtimeUsageDetail {
-    text_tokens?: number;
-    audio_tokens?: number;
-    image_tokens?: number;
-    cached_tokens?: number;
-}
-
-/**
- * Maps a GA per-modality usage-detail block onto the Core {@link RealtimeUsageModalityDetail}
- * shape. Returns `undefined` when the provider reported no detail block (totals-only flows).
- */
-export function MapUsageModalityDetail(detail: GARealtimeUsageDetail | undefined): RealtimeUsageModalityDetail | undefined {
-    if (!detail) {
-        return undefined;
-    }
-    const mapped: RealtimeUsageModalityDetail = {};
-    if (typeof detail.text_tokens === 'number') mapped.TextTokens = detail.text_tokens;
-    if (typeof detail.audio_tokens === 'number') mapped.AudioTokens = detail.audio_tokens;
-    if (typeof detail.image_tokens === 'number') mapped.ImageTokens = detail.image_tokens;
-    if (typeof detail.cached_tokens === 'number') mapped.CachedTokens = detail.cached_tokens;
-    return Object.keys(mapped).length > 0 ? mapped : undefined;
+    input_token_details?: RealtimeWireUsageModalityDetail;
+    output_token_details?: RealtimeWireUsageModalityDetail;
 }
 
 /**
@@ -210,6 +190,13 @@ export interface OpenAIRealtimeProfile {
      */
     buildTurnDetection(disableAutoResponse: boolean, requested?: RealtimeTurnDetectionSettings): RealtimeAudioInputTurnDetection | undefined;
     /**
+     * The `turn_detection.type` the provider applies when a session sends none (OpenAI: `server_vad`, as its
+     * `session.created` reports). Used only when a Config-bag `audio.input.turn_detection` leaf would otherwise go out
+     * without a `type`, which the provider rejects. Leave unset when the provider's default is not known; nothing is
+     * then invented.
+     */
+    defaultTurnDetectionType?: 'server_vad' | 'semantic_vad';
+    /**
      * Maps MJ's NORMALIZED effort level (numeric 1–100 or named — the same vocabulary as
      * `ChatParams.effortLevel`) onto THIS provider's realtime effort literals. Providers whose
      * endpoint uses a different level set override this seam; return `undefined` to drop an
@@ -270,10 +257,20 @@ export function MapNormalizedTurnDetection(
     return undefined;
 }
 
-/** The OpenAI provider profile — the defaults every OpenAI-compatible subclass overrides from. */
+/**
+ * The OpenAI provider profile — the defaults every OpenAI-compatible subclass overrides from.
+ *
+ * A raw `audio` key in the Config bag merges into the built audio block (see `MergeAudioOverride`),
+ * so these native keys are reachable: `audio.input.turn_detection.{ prefix_padding_ms,
+ * idle_timeout_ms, interrupt_response, create_response }`. `create_response` only takes effect
+ * outside meeting mode (`disableAutoResponse`), where the floor `create_response: false` always wins,
+ * and a live `Reconfigure` sets it from its own `DisableAutoResponse`. An explicit `null` is sent as
+ * `null`: `turn_detection: null` turns VAD off (the client triggers responses).
+ */
 export const OPENAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     providerKey: 'openai',
     inputTranscriptionModel: OPENAI_INPUT_TRANSCRIPTION_MODEL,
+    defaultTurnDetectionType: 'server_vad',
     deferInitialConfigUntilSessionCreated: true,
     foldInitialContextIntoPrompt: false,
     supportsReasoningEffort: true,
@@ -322,14 +319,19 @@ interface ExtractedRealtimeFeatures {
     /** Per-session input-transcription model override (`inputTranscriptionModel` bag key). */
     inputTranscriptionModel?: string;
     /**
-     * MJ-side transport settings (`endpoint`, `sampleRate`, `proxyBaseUrl` bag keys) consumed by
-     * self-hosted/proxied drivers — ALWAYS scrubbed so they never leak into a provider payload.
+     * MJ-side transport settings (`endpoint`, `sampleRate`, `proxyBaseUrl`, `brokerBaseUrl` bag keys) consumed by
+     * self-hosted/proxied drivers and OpenAI Live — ALWAYS scrubbed so they never leak into a provider payload.
      */
     endpoint?: string;
     /** See {@link ExtractedRealtimeFeatures.endpoint}. */
     sampleRate?: number;
     /** See {@link ExtractedRealtimeFeatures.endpoint}. */
     proxyBaseUrl?: string;
+    /**
+     * OpenAI Live's SDP broker origin. No driver in this family reads it, but a co-agent's provider bag keyed
+     * `openai` is filed onto OpenAI Realtime as well as OpenAI Live. See {@link ExtractedRealtimeFeatures.endpoint}.
+     */
+    brokerBaseUrl?: string;
     /** The remaining bag entries, safe to spread into the session payload. */
     rest: JSONObject;
 }
@@ -403,7 +405,7 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
     // Normalized turn-detection request — validated structurally (only recognized, correctly-typed
     // knobs survive) and ALWAYS scrubbed: the normalized shape is MJ vocabulary, not a wire field.
     const turnDetectionBag = rest as JSONObject & { turnDetection?: unknown };
-    const turnDetection = normalizeTurnDetectionRequest(turnDetectionBag.turnDetection);
+    const turnDetection = NormalizeTurnDetectionSettings(turnDetectionBag.turnDetection);
     delete turnDetectionBag.turnDetection;
 
     // PROTECTED WIRE FIELDS — never overridable through the open bag. `type` is the GA session
@@ -424,10 +426,16 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
 
     // Per-session transcription-model override + MJ-side transport settings. All scrubbed
     // unconditionally — none of these are wire fields on ANY provider in the family.
-    const bag = rest as JSONObject & { inputTranscriptionModel?: unknown; endpoint?: unknown; sampleRate?: unknown; proxyBaseUrl?: unknown };
+    const bag = rest as JSONObject & {
+        inputTranscriptionModel?: unknown; transcriptionLanguages?: unknown; endpoint?: unknown; sampleRate?: unknown; proxyBaseUrl?: unknown;
+        brokerBaseUrl?: unknown;
+    };
     const rawItm = bag.inputTranscriptionModel;
     delete bag.inputTranscriptionModel;
     const inputTranscriptionModel = typeof rawItm === 'string' && rawItm.trim().length > 0 ? rawItm.trim() : undefined;
+    // The caption-language hint is not mapped for this family yet (the model's own text is the
+    // agent caption, so only user ASR could use it, and the compat endpoints' support is unverified).
+    delete bag.transcriptionLanguages;
     const rawEndpoint = bag.endpoint;
     delete bag.endpoint;
     const endpoint = typeof rawEndpoint === 'string' && rawEndpoint.trim().length > 0 ? rawEndpoint.trim() : undefined;
@@ -437,36 +445,11 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
     const rawProxy = bag.proxyBaseUrl;
     delete bag.proxyBaseUrl;
     const proxyBaseUrl = typeof rawProxy === 'string' && rawProxy.trim().length > 0 ? rawProxy.trim() : undefined;
+    const rawBroker = bag.brokerBaseUrl;
+    delete bag.brokerBaseUrl;
+    const brokerBaseUrl = typeof rawBroker === 'string' && rawBroker.trim().length > 0 ? rawBroker.trim() : undefined;
 
-    return { effortLevel, parallelToolCalls, mcpTools, voice, disableAutoResponse, turnDetection, inputTranscriptionModel, endpoint, sampleRate, proxyBaseUrl, rest };
-}
-
-/**
- * Structurally validates the `turnDetection` bag value into a {@link RealtimeTurnDetectionSettings}
- * — only recognized, correctly-typed knobs survive (the bag came through JSON layers of unknown
- * provenance). Returns `undefined` when nothing valid is present, so an absent/garbage value
- * contributes nothing (tolerant, like every other cascade input).
- */
-function normalizeTurnDetectionRequest(raw: unknown): RealtimeTurnDetectionSettings | undefined {
-    if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
-        return undefined;
-    }
-    const source = raw as { Mode?: unknown; Eagerness?: unknown; Threshold?: unknown; SilenceDurationMs?: unknown };
-    const result: RealtimeTurnDetectionSettings = {};
-    const modes: ReadonlyArray<RealtimeTurnDetectionMode> = ['default', 'serverVad', 'semanticVad', 'native'];
-    if (typeof source.Mode === 'string' && (modes as readonly string[]).includes(source.Mode)) {
-        result.Mode = source.Mode as RealtimeTurnDetectionMode;
-    }
-    if (source.Eagerness === 'low' || source.Eagerness === 'auto' || source.Eagerness === 'high') {
-        result.Eagerness = source.Eagerness;
-    }
-    if (typeof source.Threshold === 'number' && Number.isFinite(source.Threshold)) {
-        result.Threshold = source.Threshold;
-    }
-    if (typeof source.SilenceDurationMs === 'number' && Number.isFinite(source.SilenceDurationMs)) {
-        result.SilenceDurationMs = source.SilenceDurationMs;
-    }
-    return Object.keys(result).length > 0 ? result : undefined;
+    return { effortLevel, parallelToolCalls, mcpTools, voice, disableAutoResponse, turnDetection, inputTranscriptionModel, endpoint, sampleRate, proxyBaseUrl, brokerBaseUrl, rest };
 }
 
 /**
@@ -533,6 +516,191 @@ function BuildAudioBlock(
     return {
         ...(Object.keys(input).length > 0 ? { input } : {}),
         ...(output ? { output } : {}),
+    };
+}
+
+/** True for a non-null, non-array object — the only shape the audio merge recurses into. */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** Bag keys that would let untrusted JSON poison object prototypes; skipped by {@link mergeDeep}. */
+const UNSAFE_MERGE_KEYS: ReadonlySet<string> = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
+ * Recursively merges `override` onto `base` without mutating either. Two plain objects merge key
+ * by key; any other override value, `null` included, replaces the base value. `null` is kept
+ * because on the OpenAI wire it means "off" (`turn_detection: null` turns VAD off), while an
+ * omitted key already means "keep the built value".
+ */
+function mergeDeep(base: Record<string, unknown>, override: Record<string, unknown>): Record<string, unknown> {
+    const merged: Record<string, unknown> = { ...base };
+    for (const [key, value] of Object.entries(override)) {
+        if (UNSAFE_MERGE_KEYS.has(key)) {
+            continue; // the bag is untrusted JSON; never let it reach Object.prototype
+        }
+        const current = merged[key];
+        if (isPlainObject(value) && isPlainObject(current)) {
+            merged[key] = mergeDeep(current, value);
+        }
+        else if (isPlainObject(value)) {
+            merged[key] = mergeDeep({}, value);
+        }
+        else {
+            merged[key] = value;
+        }
+    }
+    return merged;
+}
+
+/** Reads `audio.input.turn_detection` from an untyped audio-shaped object, or `undefined`. */
+function readTurnDetection(audio: Record<string, unknown>): Record<string, unknown> | undefined {
+    const input = audio.input;
+    if (!isPlainObject(input)) {
+        return undefined;
+    }
+    return isPlainObject(input.turn_detection) ? input.turn_detection : undefined;
+}
+
+/**
+ * Applies the meeting-mode floor to a merged audio block, in place on `merged` (a fresh object the
+ * caller owns). The surviving `turn_detection` object gets `create_response: false`. An explicit
+ * `turn_detection: null` is kept: with VAD off nothing commits a turn, so the model cannot auto-respond
+ * and the floor already holds. When the bag nulled or broke `input`, or sent a `turn_detection` that is
+ * neither an object nor null, the built `turn_detection` is restored (with the floor) on the built
+ * input, since a missing block makes OpenAI fall back to auto-responding VAD. When the profile built
+ * no `turn_detection` (e.g. HuggingFace), nothing is invented.
+ */
+function applyMeetingFloor(merged: Record<string, unknown>, base: Record<string, unknown>): void {
+    const mergedInput = isPlainObject(merged.input) ? merged.input : undefined;
+    if (mergedInput && mergedInput.turn_detection === null) {
+        return;
+    }
+    const mergedDetection = mergedInput && isPlainObject(mergedInput.turn_detection) ? mergedInput.turn_detection : undefined;
+    if (mergedInput && mergedDetection) {
+        merged.input = { ...mergedInput, turn_detection: { ...mergedDetection, create_response: false } };
+        return;
+    }
+    const builtDetection = readTurnDetection(base);
+    if (!builtDetection) {
+        return; // the profile built none; leave whatever the bag sent
+    }
+    const input = mergedInput ?? (isPlainObject(base.input) ? base.input : {});
+    merged.input = { ...input, turn_detection: { ...builtDetection, create_response: false } };
+}
+
+/**
+ * Merges a raw `audio` override from the Config bag into the audio block the driver built, so a
+ * bag that tunes one leaf (say `turn_detection.idle_timeout_ms`) no longer discards the built
+ * transcription model, voice, and VAD settings.
+ *
+ * Rules:
+ * - Plain objects merge key by key; the bag's leaves win over the built values.
+ * - An explicit `null` leaf in the bag is kept and sent as `null` (OpenAI's "off": `turn_detection:
+ *   null` turns VAD off, `transcription: null` turns transcription off). Omitting a key keeps the
+ *   built value. Null leaves inside an object the bag writes onto a non-object or nothing are kept too.
+ * - A non-object override (string, null, array, ...) is ignored; `built` is returned unchanged.
+ * - A `turn_detection.type` that differs from the built one replaces the whole `turn_detection`
+ *   object, because fields of one detector kind (e.g. `silence_duration_ms`) are invalid on another.
+ * - A merged `turn_detection` object that still has no `type` (nothing was built, the bag gave none) gets
+ *   `defaultTurnDetectionType` when one is passed: the provider rejects a type-less block.
+ * - In meeting mode, after the merge: a surviving `turn_detection` object gets `create_response:
+ *   false`. An explicit `turn_detection: null` is kept (VAD off cannot auto-respond). If the bag nulled
+ *   or broke `input`, or sent a `turn_detection` that is neither an object nor null, and the built block
+ *   had a `turn_detection`, that block is restored with the floor (on the built input when `input` was
+ *   clobbered). If the profile built none, nothing is invented and the bag's value stands.
+ *
+ * Neither argument is mutated.
+ *
+ * @param built The audio block from {@link BuildAudioBlock}, or `undefined` when nothing was built.
+ * @param override The raw `audio` value from the open JSON Config bag; untrusted shape.
+ * @param meetingMode Whether the session is a meeting (the model must not auto-respond).
+ * @param defaultTurnDetectionType The provider's own default `turn_detection.type` ({@link OpenAIRealtimeProfile.defaultTurnDetectionType}), if known.
+ * @returns The merged audio block, or `undefined` when there is neither a built block nor an override.
+ */
+export function MergeAudioOverride(
+    built: RealtimeSessionCreateRequest['audio'] | undefined,
+    override: unknown,
+    meetingMode: boolean,
+    defaultTurnDetectionType?: string,
+): RealtimeSessionCreateRequest['audio'] | undefined {
+    if (!isPlainObject(override)) {
+        return built;
+    }
+    const base: Record<string, unknown> = built ? { ...built } : {};
+    const merged = mergeDeep(base, override);
+
+    const builtType = readTurnDetection(base)?.type;
+    const overrideDetection = readTurnDetection(override);
+    if (overrideDetection && typeof overrideDetection.type === 'string' && overrideDetection.type !== builtType
+        && isPlainObject(merged.input)) {
+        merged.input = { ...merged.input, turn_detection: mergeDeep({}, overrideDetection) };
+    }
+    // Nothing was built and the bag gave no type: the provider rejects a type-less block, so name its own default.
+    const mergedDetection = readTurnDetection(merged);
+    if (mergedDetection && typeof mergedDetection.type !== 'string' && defaultTurnDetectionType && isPlainObject(merged.input)) {
+        merged.input = { ...merged.input, turn_detection: { type: defaultTurnDetectionType, ...mergedDetection } };
+    }
+
+    if (meetingMode) {
+        applyMeetingFloor(merged, base);
+    }
+    // The bag's shape is unvalidated JSON, passed through for the provider to validate.
+    return merged as RealtimeSessionCreateRequest['audio'];
+}
+
+/**
+ * Returns a copy of `audio` without `output.voice`, for a profile that has no voice output. The
+ * other output keys (`format`, `speed`, ...) are kept; `output` is dropped only if it ends empty.
+ * Copies rather than deletes in place, so the merge result's nested objects are never mutated.
+ */
+function withoutOutputVoice(
+    audio: RealtimeSessionCreateRequest['audio'] | undefined,
+): RealtimeSessionCreateRequest['audio'] | undefined {
+    if (!audio || !isPlainObject(audio.output)) {
+        return audio;
+    }
+    const output = { ...audio.output };
+    delete output.voice;
+    const copy = { ...audio };
+    if (Object.keys(output).length > 0) {
+        copy.output = output;
+    }
+    else {
+        delete copy.output;
+    }
+    return copy;
+}
+
+/**
+ * Builds the provider session payload (minus `model`, `tools` and the GA features, which the caller
+ * adds). Both topologies call this — the client-direct mint and the server-bridged `session.update` —
+ * so the payload is built once and a raw `audio` override in the Config bag merges into the built
+ * block (via {@link MergeAudioOverride}) instead of replacing it.
+ *
+ * `audio` is stripped from the residual bag before it is spread so it cannot overwrite the merged
+ * block; the other protected wire fields are already scrubbed by {@link ExtractRealtimeFeatures}.
+ *
+ * @param profile The provider profile.
+ * @param features The features extracted from the Config bag.
+ * @param instructions The system prompt; omitted from the payload when undefined.
+ * @returns The session payload.
+ */
+export function BuildSessionPayload(
+    profile: OpenAIRealtimeProfile,
+    features: ExtractedRealtimeFeatures,
+    instructions: string | undefined,
+): GARealtimeSessionCreateRequest {
+    const turnDetection = profile.buildTurnDetection(features.disableAutoResponse, features.turnDetection);
+    const { audio: audioOverride, ...rest } = features.rest;
+    const merged = MergeAudioOverride(BuildAudioBlock(profile, features, turnDetection), audioOverride, features.disableAutoResponse, profile.defaultTurnDetectionType);
+    const voiced = profile.supportsVoiceOutput ? merged : withoutOutputVoice(merged);
+    const audio = voiced && Object.keys(voiced).length > 0 ? voiced : undefined;
+    return {
+        type: 'realtime',
+        ...(instructions !== undefined ? { instructions } : {}),
+        ...(audio ? { audio } : {}),
+        ...rest,
     };
 }
 
@@ -623,6 +791,12 @@ export interface IOpenAIRealtimeConnection {
  */
 @RegisterClass(BaseRealtimeModel, 'OpenAIRealtime')
 export class OpenAIRealtime extends BaseRealtimeModel {
+    /** OpenAI documents a 60-minute maximum for one Realtime session. */
+    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = {
+        ProviderMaxSessionSeconds: 3600,
+        SupportedTurnSettings: { Mode: 'exact', Eagerness: 'exact', SilenceDurationMs: 'exact', Threshold: 'exact' },
+    };
+
     public static override readonly SupportsDynamicToolSet = OPENAI_REALTIME_PROFILE.supportsDynamicToolSet;
 
     private _openAI: OpenAI;
@@ -671,7 +845,7 @@ export class OpenAIRealtime extends BaseRealtimeModel {
      * @returns The session bound to this driver's {@link Profile}.
      */
     protected createSessionInstance(connection: IOpenAIRealtimeConnection): OpenAIRealtimeSession {
-        return new OpenAIRealtimeSession(connection, this.Profile);
+        return new OpenAIRealtimeSession(connection, this.Profile, RealtimeDriverFactsOf(this));
     }
 
     /**
@@ -750,18 +924,8 @@ export class OpenAIRealtime extends BaseRealtimeModel {
         // The OUTPUT voice comes from the effective config's per-provider voice (`params.Config.voice`,
         // shaped by GetProviderVoiceSettings) — this is what lets a co-agent's configured voice OR a
         // per-session override actually take effect in the client-direct topology.
-        const turnDetection = profile.buildTurnDetection(features.disableAutoResponse, features.turnDetection);
-        const audio = BuildAudioBlock(profile, features, turnDetection);
-        const session: GARealtimeSessionCreateRequest = {
-            type: 'realtime',
-            model: params.Model,
-            instructions: params.SystemPrompt,
-            ...(audio ? { audio } : {}),
-            // The residual (feature-scrubbed, wire-field-protected) Config bag applies here EXACTLY
-            // as on the server-bridged session.update — same construction ORDER too, so a raw
-            // `audio` override behaves identically on both topologies.
-            ...features.rest,
-        };
+        const session = BuildSessionPayload(profile, features, params.SystemPrompt);
+        session.model = params.Model;
         if (params.Tools && params.Tools.length > 0) {
             session.tools = mapRealtimeTools(params.Tools);
         }
@@ -774,6 +938,7 @@ export class OpenAIRealtime extends BaseRealtimeModel {
             ExpiresAt: new Date(response.expires_at * 1000).toISOString(),
             // The provider-native session config the browser applies verbatim (plain JSON).
             SessionConfig: JSON.parse(JSON.stringify(session)) as JSONObject,
+            MaxSessionSeconds: this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds),
         };
     }
 }
@@ -790,6 +955,7 @@ export class OpenAIRealtime extends BaseRealtimeModel {
 export class OpenAIRealtimeSession implements IRealtimeSession {
     private connection: IOpenAIRealtimeConnection;
     private profile: OpenAIRealtimeProfile;
+    private readonly driverFacts: Readonly<RealtimeDriverFacts>;
     private outputHandler?: (chunk: ArrayBuffer) => void;
     private transcriptHandler?: (t: RealtimeTranscript) => void;
     private toolCallHandler?: (call: RealtimeToolCall) => void;
@@ -803,11 +969,12 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     private closedByConsumer = false;
 
     /**
-     * The normalized turn-detection request from the LAST applied session config, kept so
-     * {@link Reconfigure}'s partial `session.update` rebuilds the session's actual mode rather
-     * than hardcoding server_vad (which would silently downgrade a semantic/native session).
+     * The features extracted from the LAST applied session config, kept so {@link Reconfigure}'s
+     * partial `session.update` rebuilds the session's actual mode (`turnDetection`) rather than
+     * hardcoding server_vad (which would silently downgrade a semantic/native session), and
+     * re-applies the same transcription model and raw `audio` override the start payload carried.
      */
-    private lastTurnDetectionRequest?: RealtimeTurnDetectionSettings;
+    private lastFeatures?: ExtractedRealtimeFeatures;
 
     /** Backing promise for {@link WaitForConfigApplied}; resolve/reject handles null once settled. */
     private configAppliedPromise: Promise<void>;
@@ -862,12 +1029,26 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     private lastUserTranscript = '';
 
     /**
+     * Reports the frames {@link SendInput} drops, once per kind and type. Named for the profile's provider, so an xAI or
+     * Hugging Face session's line says which it is.
+     */
+    private readonly droppedInput: RealtimeDroppedInputReporter;
+
+    /**
      * @param connection The injectable provider-connection seam.
      * @param profile The provider profile (defaults to OpenAI's so existing direct construction keeps working).
+     * @param driverFacts The creating driver's static facts. Passed in (not read from a hard-coded
+     * class) so a subclass driver's own ceiling wins; direct construction defaults to OpenAI's.
      */
-    constructor(connection: IOpenAIRealtimeConnection, profile: OpenAIRealtimeProfile = OPENAI_REALTIME_PROFILE) {
+    constructor(
+        connection: IOpenAIRealtimeConnection,
+        profile: OpenAIRealtimeProfile = OPENAI_REALTIME_PROFILE,
+        driverFacts: Readonly<RealtimeDriverFacts> = OpenAIRealtime.DriverFacts,
+    ) {
         this.connection = connection;
         this.profile = profile;
+        this.driverFacts = driverFacts;
+        this.droppedInput = new RealtimeDroppedInputReporter(`${profile.providerKey}Realtime`, 'this session sends audio only');
         this.configAppliedPromise = new Promise<void>((resolve, reject) => {
             this.resolveConfigApplied = resolve;
             this.rejectConfigApplied = reject;
@@ -1006,11 +1187,21 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
 
     // ---- IRealtimeSession outbound ----
 
-    /** @inheritdoc */
-    public SendInput(chunk: ArrayBuffer): void {
+    /**
+     * @inheritdoc
+     *
+     * Appends one audio frame to the input audio buffer. The session sends audio only, so a frame of another kind (a
+     * camera or screen frame) is dropped, never appended as audio, and reported once per kind and type. The xAI and
+     * Hugging Face sessions inherit this.
+     */
+    public SendInput(frame: RealtimeInputFrame): void {
+        if (frame.Kind !== 'audio') {
+            this.droppedInput.Report(frame);
+            return;
+        }
         this.connection.send({
             type: 'input_audio_buffer.append',
-            audio: this.encodeBase64(chunk),
+            audio: this.encodeBase64(frame.Data),
         });
     }
 
@@ -1079,8 +1270,8 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
      * back-to-back local triggers can't both fire.
      *
      * @param instructions Instructions for the single spoken update. **Blank/empty means "respond now using
-     *   the SESSION system prompt"** (the meeting-mode bridge trigger passes `''`); only a non-empty value is
-     *   forwarded as a per-response override.
+     *   the SESSION system prompt"** (the meeting-mode bridge trigger passes `''`); a non-empty value is
+     *   forwarded as a per-response override **carrying the session prompt ahead of it** — see below.
      */
     public RequestSpokenUpdate(instructions: string): boolean {
         if (this.responseActive) {
@@ -1088,15 +1279,29 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
             return false; // NOT sent — the caller (bridge) releases the floor instead of wedging on it
         }
         this.responseActive = true;
-        RealtimeDiagLog(`[${this.profile.providerKey}Realtime][diag] RequestSpokenUpdate → sending response.create (perResponseInstructions=${typeof instructions === 'string' && instructions.trim().length > 0 ? 'yes' : 'none → session prompt governs'})`);
-        // CRITICAL: only set per-response `instructions` when the caller actually supplied some. OpenAI's
-        // `response.create` treats `response.instructions` as a FULL override of the session system prompt for
-        // that response — so forwarding `''` would wipe the co-agent identity framing (incl. the
-        // "call invoke-target-agent, don't do the work yourself" directive), and the model would answer
-        // directly instead of delegating. A blank value ⇒ plain `response.create` ⇒ the session prompt governs.
-        const hasInstructions = typeof instructions === 'string' && instructions.trim().length > 0;
+        const direction = typeof instructions === 'string' ? instructions.trim() : '';
+        RealtimeDiagLog(`[${this.profile.providerKey}Realtime][diag] RequestSpokenUpdate → sending response.create (perResponseInstructions=${direction.length > 0 ? 'yes, with the session prompt carried ahead of it' : 'none → session prompt governs'})`);
+        // CRITICAL: OpenAI's `response.create` treats `response.instructions` as a FULL override of the
+        // session system prompt for that response. A blank value ⇒ plain `response.create` ⇒ the session
+        // prompt governs; forwarding `''` as an override would wipe the co-agent identity framing (incl.
+        // the "call invoke-target-agent, don't do the work yourself" directive) and the model would answer
+        // directly instead of delegating.
+        //
+        // ⚠️ THE SAME IS TRUE OF A NON-BLANK VALUE, and that half went unguarded until #4591. A caller
+        // handing over a real direction — an opening nudge, a silence check-in, a progress narration —
+        // wiped the identity just as thoroughly and far less visibly: only the ONE turn riding this method
+        // lost it, so the session read as intermittently amnesiac rather than as misconfigured. Observed
+        // downstream (bizapps-caliber#397) as an interviewer opening a hiring assessment with "I'm ChatGPT,
+        // your friendly voice companion" while every other turn in the same session correctly gave her
+        // configured name. So the session prompt is carried AHEAD of the direction, which keeps the
+        // direction last — the most recent line is the one the model weights hardest — and means no caller
+        // has to restate an identity the session already holds.
+        const identity = this.activeSystemPrompt;
+        const perResponse = identity === null ? direction : `${identity}\n\n${direction}`;
         this.connection.send(
-            hasInstructions ? { type: 'response.create', response: { instructions } } : { type: 'response.create' },
+            direction.length > 0
+                ? { type: 'response.create', response: { instructions: perResponse } }
+                : { type: 'response.create' },
         );
         return true; // a response.create was issued — the bridge may hold the floor for this turn
     }
@@ -1104,6 +1309,7 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     /** @inheritdoc — profile-gated: only providers whose endpoint honors a live partial `session.update`. */
     public get Capabilities(): RealtimeSessionCapabilities {
         const caps: RealtimeSessionCapabilities = {
+            ...this.driverFacts,
             CanReconfigureTurnMode: this.profile.supportsLiveReconfigure,
         };
         if (this.profile.supportsDynamicToolSet) {
@@ -1116,8 +1322,15 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
      * @inheritdoc
      *
      * Live turn-mode change via a partial `session.update` — flips server-VAD auto-response on/off without
-     * reconnecting (e.g. re-gate a 1:1 agent to meeting mode when its room becomes multi-agent). The input
-     * transcription block is re-sent alongside so the partial update can't drop it.
+     * reconnecting (e.g. re-gate a 1:1 agent to meeting mode when its room becomes multi-agent). It re-sends
+     * the merged `audio.input` block (transcription, turn detection and any raw bag `audio.input` override)
+     * so the partial update can't drop them. It never sends `audio.output`: OpenAI rejects a voice change on
+     * a live session once audio has played.
+     *
+     * The frame always carries `audio.input.turn_detection`, because flipping `create_response` is the
+     * whole point. The explicit live `DisableAutoResponse` wins over any bag `create_response`: the
+     * caller asked for this mode now. The one exception is a bag `turn_detection: null`, re-sent as `null`
+     * in either mode so VAD stays off, as it was at start: without VAD nothing auto-responds.
      */
     public Reconfigure(params: RealtimeReconfigureParams): void {
         if (!this.profile.supportsLiveReconfigure) {
@@ -1127,26 +1340,51 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
             return;
         }
         const disable = params.DisableAutoResponse === true;
+        // Before any start there are no remembered features: fall back to the profile's transcription
+        // model only (a partial update must not fabricate `transcription: { model: undefined }` for
+        // natively-transcribing providers — BuildAudioBlock omits it when no model is set).
+        const features = this.lastFeatures ?? ExtractRealtimeFeatures({});
         // Preserve the session's resolved turn-detection MODE across the live flip: rebuild from
         // the remembered normalized request (semantic/native sessions stay semantic/native) and
-        // only fall back to explicit server_vad when no request produced a block — the partial
-        // update must ALWAYS carry create_response, since flipping it is the whole point here.
-        const turnDetection: RealtimeAudioInputTurnDetection =
-            this.profile.buildTurnDetection(disable, this.lastTurnDetectionRequest)
-            ?? { type: 'server_vad', create_response: !disable, interrupt_response: true };
-        // Re-send the transcription block alongside ONLY when this profile transcribes via an
-        // opt-in model — a partial update must not fabricate `transcription: { model: undefined }`
-        // for natively-transcribing providers.
-        const transcription = this.profile.inputTranscriptionModel
-            ? { transcription: { model: this.profile.inputTranscriptionModel } }
-            : {};
+        // only fall back to explicit server_vad when no request produced a block.
+        const turnDetection: RealtimeAudioInputTurnDetection = {
+            ...(this.profile.buildTurnDetection(disable, features.turnDetection) ?? { type: 'server_vad', interrupt_response: true }),
+            create_response: !disable,
+        };
+        const built = BuildAudioBlock(this.profile, features, turnDetection);
+        const merged = MergeAudioOverride(built, features.rest.audio, disable);
         this.connection.send({
             type: 'session.update',
             session: {
                 type: 'realtime',
-                audio: { input: { ...transcription, turn_detection: turnDetection } },
+                audio: { input: this.buildReconfigureInput(merged, turnDetection, disable) },
             },
         });
+    }
+
+    /**
+     * The `audio.input` for a {@link Reconfigure} frame: the merged input with a `turn_detection`
+     * that always carries `create_response: !disable`. A merged `input` that is not an object (the
+     * bag nulled it) contributes nothing, so the frame does not re-add what the bag removed.
+     */
+    private buildReconfigureInput(
+        merged: RealtimeSessionCreateRequest['audio'] | undefined,
+        turnDetection: RealtimeAudioInputTurnDetection,
+        disable: boolean,
+    ): NonNullable<RealtimeSessionCreateRequest['audio']>['input'] {
+        const input: Record<string, unknown> = isPlainObject(merged?.input) ? { ...merged.input } : {};
+        const mergedDetection = input.turn_detection;
+        if (isPlainObject(mergedDetection)) {
+            input.turn_detection = { ...mergedDetection, create_response: !disable };
+        }
+        else if (mergedDetection === null) {
+            input.turn_detection = null; // the bag turned VAD off at start; keep it off (without VAD nothing auto-responds)
+        }
+        else {
+            input.turn_detection = turnDetection;
+        }
+        // The bag's shape is unvalidated JSON, passed through for the provider to validate.
+        return input as NonNullable<RealtimeSessionCreateRequest['audio']>['input'];
     }
 
     // ---- IRealtimeSession handler registration ----
@@ -1409,11 +1647,11 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
             InputTokens: usage.input_tokens ?? 0,
             OutputTokens: usage.output_tokens ?? 0,
         };
-        const input = MapUsageModalityDetail(usage.input_token_details);
+        const input = MapRealtimeUsageModalityDetail(usage.input_token_details);
         if (input) {
             update.InputTokenDetails = input;
         }
-        const output = MapUsageModalityDetail(usage.output_token_details);
+        const output = MapRealtimeUsageModalityDetail(usage.output_token_details);
         if (output) {
             update.OutputTokenDetails = output;
         }
@@ -1422,8 +1660,21 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
 
     // ---- Config helpers ----
 
+    /**
+     * The session system prompt currently in force — the co-agent's identity, persona and standing
+     * directives, exactly as the last `session.update` established them.
+     *
+     * Retained because {@link RequestSpokenUpdate} has to carry it: a per-response `instructions`
+     * override REPLACES it rather than adding to it, so a spoken update that does not restate it
+     * speaks with no identity at all (#4591). Null before the first `session.update`.
+     */
+    private activeSystemPrompt: string | null = null;
+
     /** Sends the `session.update` that establishes instructions, input transcription, tools, and GA features. */
     private sendSessionUpdate(systemPrompt: string, tools?: RealtimeToolDefinition[], config?: JSONObject): void {
+        // Remembered here rather than at the call site so a LIVE Reconfigure that rebuilds the session
+        // cannot leave the two disagreeing: whatever was last SENT is what the model is holding.
+        this.activeSystemPrompt = systemPrompt.trim().length > 0 ? systemPrompt : null;
         // Pull the MJ-idiomatic feature keys OUT of the open Config bag: the host-neutral meeting flag
         // (disableAutoResponse), the output voice, and the GA features (reasoningEffort/parallelToolCalls/
         // mcpTools) — each translated to its provider-native field only when the profile confirms support,
@@ -1432,24 +1683,14 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         // while KEEPING detection so input transcription and barge-in still work. A 1:1 call (flag absent)
         // keeps the provider's default auto-response.
         const features = ExtractRealtimeFeatures(config);
-        // Remember the normalized request so a LIVE Reconfigure (meeting-mode flip) rebuilds the
-        // SAME mode instead of silently downgrading a semantic/native session to server_vad.
-        this.lastTurnDetectionRequest = features.turnDetection;
-        const turnDetection = this.profile.buildTurnDetection(features.disableAutoResponse, features.turnDetection);
-
-        // Opt into USER input transcription — the same opt-in CreateClientSession applies for the
-        // client-direct topology — so user-role transcripts flow server-bridged too (the contract
-        // promises BOTH roles). Providers that transcribe natively (profile model undefined, no bag
-        // override) get no transcription block; an all-empty audio block is omitted entirely. The
-        // residual config bag spreads AFTER the built block so a per-conversation raw `audio`
-        // override can still replace it wholesale.
-        const audio = BuildAudioBlock(this.profile, features, turnDetection);
-        const session: GARealtimeSessionCreateRequest = {
-            type: 'realtime',
-            instructions: systemPrompt,
-            ...(audio ? { audio } : {}),
-            ...features.rest,
-        };
+        // Remember all extracted features (normalized turn request, transcription model, the bag
+        // `audio` fragment) so a LIVE Reconfigure (meeting-mode flip) rebuilds the same audio block:
+        // the same turn mode (no silent downgrade of a semantic/native session to server_vad), the
+        // same transcription model and the same bag override.
+        this.lastFeatures = features;
+        // Opts into USER input transcription (as CreateClientSession does) so user-role transcripts flow
+        // server-bridged too; see BuildSessionPayload for how the audio block and raw override merge.
+        const session = BuildSessionPayload(this.profile, features, systemPrompt);
         if (tools && tools.length > 0) {
             session.tools = this.mapTools(tools);
         }

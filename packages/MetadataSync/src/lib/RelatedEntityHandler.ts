@@ -1,6 +1,8 @@
 import { BaseEntity, RunView, UserInfo } from '@memberjunction/core';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
 import { RelatedEntityConfig, EntityConfig } from '../config';
+import { ExistingRecordIndex, UnsetPrimaryKeyVariableError } from './existing-record-index';
+import { ExtractPrimaryKeyValues } from './record-primary-key';
 
 /**
  * Handles loading and processing of related entities for records
@@ -65,6 +67,9 @@ export class RelatedEntityHandler {
         verbose
       );
     } catch (error) {
+      if (error instanceof UnsetPrimaryKeyVariableError) {
+        throw error;
+      }
       this.logError(`Error loading related entities for ${relationConfig.entity}`, error, verbose);
       return [];
     }
@@ -196,7 +201,7 @@ export class RelatedEntityHandler {
       const relatedRecords = batchedRelatedRecords.get(parentPrimaryKey) || [];
 
       if (verbose) {
-        console.log(`Using batch data: ${relatedRecords.length} related ${relationConfig.entity} records for parent ${parentPrimaryKey}`);
+        console.log(`Using batch data: ${relatedRecords.length} related ${relationConfig.entity} records for this parent`);
       }
 
       const relatedEntityConfig = this.createRelatedEntityConfig(relationConfig, parentEntityConfig);
@@ -212,6 +217,9 @@ export class RelatedEntityHandler {
         verbose
       );
     } catch (error) {
+      if (error instanceof UnsetPrimaryKeyVariableError) {
+        throw error;
+      }
       this.logError(`Error loading related entities from batch for ${relationConfig.entity}`, error, verbose);
       return [];
     }
@@ -254,7 +262,7 @@ export class RelatedEntityHandler {
     const filter = this.buildRelatedEntityFilter(parentPrimaryKey, relationConfig);
     
     if (verbose) {
-      console.log(`Loading related entities: ${relationConfig.entity} with filter: ${filter}`);
+      console.log(`Loading related entities: ${relationConfig.entity} by ${relationConfig.foreignKey}${relationConfig.filter ? ` with filter: ${relationConfig.filter}` : ''}`);
     }
 
     const rv = new RunView();
@@ -327,6 +335,7 @@ export class RelatedEntityHandler {
     // Process existing related entities first (preserving order)
     await this.processExistingRelatedEntities(
       existingRelatedEntities,
+      dbRecords,
       dbRecordMap,
       relationConfig,
       relatedEntityConfig,
@@ -371,10 +380,14 @@ export class RelatedEntityHandler {
   }
 
   /**
-   * Processes existing related entities
+   * Processes the existing related entities in file order. A child is matched to its database record
+   * by the resolved primary key (`@env:` key values use their variable; UUID fields ignore case).
+   * When the child entity is unknown, the child is matched by `primaryKey.ID` only.
+   * @throws UnsetPrimaryKeyVariableError when a child key variable is not set
    */
   private async processExistingRelatedEntities(
     existingRelatedEntities: RecordData[],
+    dbRecords: BaseEntity[],
     dbRecordMap: Map<string, BaseEntity>,
     relationConfig: RelatedEntityConfig,
     relatedEntityConfig: EntityConfig,
@@ -385,24 +398,54 @@ export class RelatedEntityHandler {
     processedIds: Set<string>,
     verbose?: boolean
   ): Promise<void> {
+    const childEntityInfo = this.syncEngine.getEntityInfo(relationConfig.entity);
+    const existingIndex = ExistingRecordIndex.Build(
+      existingRelatedEntities.map((existing) => ({ Record: existing })),
+      childEntityInfo
+    );
+    existingIndex.ThrowIfUnsetKeyVariables(relationConfig.entity);
+
+    const dbByKey = new Map<string, BaseEntity>();
+    if (childEntityInfo) {
+      for (const dbRecord of dbRecords) {
+        try {
+          dbByKey.set(existingIndex.MatchKey(ExtractPrimaryKeyValues(dbRecord, childEntityInfo)), dbRecord);
+        } catch {
+          // A database record without its key cannot be matched
+        }
+      }
+    }
+
     for (const existingRelatedEntity of existingRelatedEntities) {
-      const existingPrimaryKey = existingRelatedEntity.primaryKey?.ID;
-      if (!existingPrimaryKey) {
+      const existingKey = existingRelatedEntity.primaryKey;
+      if (!existingKey || Object.keys(existingKey).length === 0) {
         this.logWarning('Existing related entity missing primary key, skipping', verbose);
         continue;
       }
 
-      const dbRecord = dbRecordMap.get(existingPrimaryKey);
+      let dbRecord: BaseEntity | undefined;
+      if (childEntityInfo) {
+        const matchKey = existingIndex.KeyOf(existingRelatedEntity);
+        dbRecord = matchKey !== null ? dbByKey.get(matchKey) : undefined;
+      } else if (existingKey.ID) {
+        dbRecord = dbRecordMap.get(existingKey.ID);
+      }
+
       if (!dbRecord) {
         if (verbose) {
-          console.log(`Related entity ${existingPrimaryKey} no longer exists in database, removing from results`);
+          console.log(`Related entity ${JSON.stringify(existingKey)} no longer exists in database, removing from results`);
         }
         continue; // Skip deleted records
       }
 
+      const dbId = this.getRecordPrimaryKey(dbRecord);
+      if (dbId && processedIds.has(dbId)) {
+        continue; // A repeated entry for a record already written
+      }
+
       const recordData = await this.processExistingRelatedEntity(
         dbRecord,
-        existingPrimaryKey,
+        dbId ?? '',
         relationConfig,
         relatedEntityConfig,
         processRecordData,
@@ -414,7 +457,9 @@ export class RelatedEntityHandler {
 
       if (recordData) {
         relatedRecords.push(recordData);
-        processedIds.add(existingPrimaryKey);
+        if (dbId) {
+          processedIds.add(dbId);
+        }
       }
     }
   }

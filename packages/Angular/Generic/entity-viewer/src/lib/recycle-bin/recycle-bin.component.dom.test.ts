@@ -26,6 +26,7 @@ class SlidePanelStub {
 }
 @Component({ standalone: true, selector: 'mj-restore-preview-panel', template: '' })
 class RestorePreviewStub {
+  @Input() Provider: unknown;
   @Input() Visible = false;
   @Input() Mode = '';
   @Input() RecordChange: unknown;

@@ -54,5 +54,33 @@
       "lastModified": "2026-06-16T01:17:11.257Z",
       "checksum": "eab488741b67126efea252dd672a8cc31fa55350588380860d4a2b10fc803ed1"
     }
+  },
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Manage Form Defaults",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "19B23744-F9E4-4314-9645-E6974BB373BE"
+    },
+    "sync": {
+      "lastModified": "2026-10-06T20:21:39.577Z",
+      "checksum": "c50ab07cdaf14091ca9b5567edbedb9f256e46bd62f4e2176ada67429f1990d7"
+    }
+  },
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Manage Form Defaults",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "9B1047B5-4289-4B0D-9118-2965E890AE39"
+    },
+    "sync": {
+      "lastModified": "2026-10-06T20:21:39.587Z",
+      "checksum": "6dc16b90ac43ffaf3c20ea61618f722654d7f8419dd7c86d27e73c57fcb37bd0"
+    }
   }
 ]

@@ -96,29 +96,22 @@ echo "  ✓ Migrations complete"
 echo ""
 
 # Step 3: CodeGen — generates entity classes, views, stored procedures, and
-# the matching EntityField metadata rows in a single pass.
+# the matching EntityField metadata rows.
 # CodeGen handles the __mj_CreatedAt/__mj_UpdatedAt/__mj_DeletedAt EntityField
 # rows itself via ensureSpecialDateEntityFieldsExist (see CodeGenLib's
 # manage-metadata.ts) — no post-codegen patching is required.
-# A fresh DB needs more than one pass. Any pass that adds a view join (a new
-# name field or system column) can fail the entityFieldsSequenceCheck integrity
-# check, because the matching EntityField rows only land on the next pass.
-# Metadata settles within three passes, so retry until a pass after the first
-# succeeds.
+# Two passes, each of which must succeed: pass 1 creates the demo EntityField
+# rows, set-demo-field-types.cjs types the email/URL ones, and pass 2 runs
+# against that metadata so this DB matches the forms form-gen-entrypoint.sh
+# generated.
 echo "Step 3: Running CodeGen..."
-node /app/packages/MJCLI/bin/run.js codegen \
-    || echo "  ⚠ CodeGen pass 1 reported failures; a later pass must succeed"
-# Pass 1 created the demo EntityField rows; type the email/URL ones before the
-# next pass so this DB matches the forms that form-gen-entrypoint.sh generated.
+node /app/packages/MJCLI/bin/run.js codegen
 node "$SCRIPTS/set-demo-field-types.cjs" 2>&1 || {
     echo "  WARNING: Demo field type update failed — email/URL fields stay untyped"
 }
-echo "  ↻ CodeGen pass 1 complete; re-running against settled metadata..."
-node /app/packages/MJCLI/bin/run.js codegen || {
-    echo "  ⚠ CodeGen pass 2 reported failures; running pass 3"
-    node /app/packages/MJCLI/bin/run.js codegen
-}
-echo "  ✓ CodeGen complete"
+echo "  ↻ CodeGen pass 1 complete; re-running against the typed demo fields..."
+node /app/packages/MJCLI/bin/run.js codegen
+echo "  ✓ CodeGen complete (2 passes)"
 echo ""
 
 # Step 4: Sync application metadata (baseline migration only seeds 2 of ~20 apps)

@@ -2,6 +2,8 @@ import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { BaseSingleton } from '@memberjunction/global';
 import { BridgeHandlerMap } from '@memberjunction/code-execution';
 import { MJActionEntity, MJActionEntity_IRuntimeActionConfiguration } from '@memberjunction/core-entities';
+import type { ActionRunScope } from './ActionEngine-Base';
+import type { ActionRunAudience } from './ActionAudience';
 
 /**
  * Shared context passed to `RuntimeActionBridgeBuilder.BuildHandlers` at
@@ -27,6 +29,17 @@ export interface BridgeContext {
      * the default global provider when not supplied.
      */
     provider?: IMetadataProvider;
+    /**
+     * The calling agent run's scope (`RunActionParams.RunScope`). Handlers that dispatch further actions or agents
+     * must pass it on, so a nested Scoped Search searches the run's tenant instead of trusting the sandboxed code's
+     * parameters. Absent outside an agent run.
+     */
+    runScope?: ActionRunScope;
+    /**
+     * The calling run's audience (`RunActionParams.Audience`). The engine refuses a Runtime action under an audience
+     * today (it does not declare `SupportsAudience`), so this is normally absent; handlers pass it on or refuse.
+     */
+    audience?: ActionRunAudience;
 }
 
 /**

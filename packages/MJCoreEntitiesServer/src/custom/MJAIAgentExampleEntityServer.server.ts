@@ -1,7 +1,7 @@
 import { RegisterClass } from "@memberjunction/global";
 import { BaseEntity, EntityDeleteOptions, EntitySaveOptions, LogError, SimpleEmbeddingResult } from "@memberjunction/core";
 import { MJAIAgentExampleEntity } from "@memberjunction/core-entities";
-import { EmbedTextLocalHelper } from "./util";
+import { EmbedTextLocalHelper, IsLocalEmbeddingStaleHelper } from "./util";
 import { AIEngine } from "@memberjunction/aiengine";
 
 /**
@@ -21,16 +21,20 @@ export class MJAIAgentExampleEntityServer extends MJAIAgentExampleEntity {
         return EmbedTextLocalHelper(this, textToEmbed);
     }
 
+    /** A stored vector from a model other than the default local one is re-embedded on save. */
+    protected override async IsEmbeddingStale(embeddingModelID: string | null): Promise<boolean> {
+        return IsLocalEmbeddingStaleHelper(this, embeddingModelID);
+    }
+
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         try {
-            // 1. Generate/refresh the embedding if the ExampleInput text is new or dirty.
-            const inputField = this.GetFieldByName('ExampleInput');
-            const shouldGenerateEmbedding = !this.IsSaved || inputField.Dirty;
-
-            if (shouldGenerateEmbedding && this.ExampleInput && this.ExampleInput.trim().length > 0) {
-                await this.GenerateEmbeddingByFieldName("ExampleInput", "EmbeddingVector", "EmbeddingModelID");
+            // 1. Generate/refresh the embedding. GenerateEmbedding skips it unless the ExampleInput is
+            //    new or dirty, or its stored vector is from another model (IsEmbeddingStale).
+            if (this.ExampleInput && this.ExampleInput.trim().length > 0) {
+                await this.GenerateEmbeddingByFieldName("ExampleInput", "EmbeddingVector", "EmbeddingModelID", "EmbeddingVectorBinary");
             } else if (!this.ExampleInput || this.ExampleInput.trim().length === 0) {
                 this.EmbeddingVector = null;
+                this.EmbeddingVectorBinary = null;
                 this.EmbeddingModelID = null;
             }
 
@@ -42,7 +46,7 @@ export class MJAIAgentExampleEntityServer extends MJAIAgentExampleEntity {
             //    AIEngine is registered as deferred — EnsureLoaded blocks until the
             //    background load completes so the underlying vector service exists.
             await AIEngine.Instance.EnsureLoaded();
-            if (this.Status === 'Active' && this.EmbeddingVector) {
+            if (this.Status === 'Active' && (this.EmbeddingVectorBinary || this.EmbeddingVector)) {
                 AIEngine.Instance.AddOrUpdateSingleExampleEmbedding(this);
             } else {
                 AIEngine.Instance.RemoveSingleExampleEmbedding(this.ID);

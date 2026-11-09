@@ -1,5 +1,5 @@
 import { LogError, UserInfo } from "@memberjunction/core";
-import { UUIDsEqual } from "@memberjunction/global";
+import { NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
 import { MJAIAgentEntity } from "@memberjunction/core-entities";
 import { AIEngineBase } from "./BaseAIEngine";
 
@@ -181,6 +181,40 @@ export class AIAgentPermissionHelper {
             LogError(error, 'Error getting accessible agents');
             return [];
         }
+    }
+
+    /**
+     * Narrows `agents` to the ones `user` may run: the 'run' permission, and Active only unless
+     * `includeInactive`. Keeps the input order.
+     *
+     * This is the filter the Find Best Agent / Find Candidate Agents actions apply to their search
+     * results, and the one agent decision discovery applies to the whole catalog, so both offer the
+     * same agents.
+     * @param agents - The agents to filter, e.g. search results or the whole catalog
+     * @param user - The user who would run them
+     * @param includeInactive - Keep agents whose Status is not 'Active'. Default false.
+     * @returns The agents the user may run, in their original order
+     */
+    public static async FilterRunnableAgents<T extends Pick<MJAIAgentEntity, 'ID' | 'Status'>>(
+        agents: T[],
+        user: UserInfo,
+        includeInactive: boolean = false
+    ): Promise<T[]> {
+        const accessibleAgents = await this.GetAccessibleAgents(user, 'run');
+        const accessibleAgentIds = new Set(accessibleAgents.map(a => NormalizeUUID(a.ID)));
+        const runnable = agents.filter(a => accessibleAgentIds.has(NormalizeUUID(a.ID)));
+        return includeInactive ? runnable : runnable.filter(a => a.Status === 'Active');
+    }
+
+    /**
+     * Whether an agent is meant to be found and delegated to directly. Sub-Agents and child agents
+     * are meant to be called by other agents, not discovered directly, so an agent whose
+     * InvocationMode is 'Sub-Agent', or that has a ParentID, is not.
+     * @param agent - The agent to check
+     * @returns True when the agent can be discovered directly
+     */
+    public static IsDirectlyDiscoverable(agent: Pick<MJAIAgentEntity, 'InvocationMode' | 'ParentID'>): boolean {
+        return agent.InvocationMode !== 'Sub-Agent' && !agent.ParentID;
     }
 
     /**

@@ -1,5 +1,6 @@
 import { Type, EventEmitter } from '@angular/core';
 import { EntityInfo, IMetadataProvider } from '@memberjunction/core';
+import { ExportColumn } from '@memberjunction/export-engine';
 import { RegisterClass } from '@memberjunction/global';
 
 /**
@@ -147,6 +148,12 @@ export interface IViewRenderer<TConfig = unknown> {
   pageSize?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Whether the host is currently (re)loading the record set. */
   isLoading?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /**
+   * Optional ID of the persisted `MJ: User Views` record backing the current record set, or `null`
+   * for a dynamic / unsaved view. Generic view context — lets a renderer offer saved-view actions
+   * (such as Open in Excel) without taking ownership of the `UserView` entity record.
+   */
+  SavedViewID?: string | null;
 
   /** Emitted when a record is selected (single click). Payload is the raw record object. */
   recordSelected: EventEmitter<unknown>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
@@ -216,6 +223,14 @@ export interface IViewRenderer<TConfig = unknown> {
    * @returns true when the export was initiated, false when it couldn't be (no data / unsupported).
    */
   exportRecords?(format?: 'csv' | 'excel' | 'json'): Promise<boolean>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+
+  /**
+   * Optional: the columns this renderer is showing, in on-screen order and with on-screen headers.
+   * A host that exports on the renderer's behalf (the workspace toolbar's Export) uses this so its
+   * export matches the screen. Renderers without a column layout (Cards, Map, Timeline) omit it and
+   * the host falls back to the view's saved columns.
+   */
+  GetExportColumns?(): ExportColumn[];
 }
 
 /**

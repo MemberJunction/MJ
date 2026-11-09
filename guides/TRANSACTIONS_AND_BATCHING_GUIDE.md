@@ -56,10 +56,13 @@ already unwound its own scope. `RunInEntityTransaction()` wraps that for you and
 The provider arbitrates. If a transaction is **already in flight**, `BeginEntityTransaction()` joins
 it (a dialect savepoint — SQL Server `SAVE TRANSACTION`, PostgreSQL `SAVEPOINT`) rather than starting
 a second physical transaction; only the outermost commit commits for real. **Participants never ask
-whether someone else already opened a transaction.** Inspect `TransactionDepth` (public on
-`DatabaseProviderBase`), not `IsInTransaction` — SQL Server deliberately leaves `IsInTransaction`
-false so `RunMaybeSerial` can fan out. After a server abort, call `ResetTransactionState()` rather
-than poking private fields.
+whether someone else already opened a transaction** — code that needs to be inside one just calls
+`BeginEntityTransaction()` (or `RunInEntityTransaction()`) and joins automatically. To see whether a
+transaction is open on an instance at all, read `TransactionDepth` (public on `DatabaseProviderBase`),
+not `IsInTransaction` — SQL Server deliberately leaves `IsInTransaction` false so `RunMaybeSerial` can
+fan out. `TransactionDepth` is instance-wide: on a shared provider `TransactionDepth > 0` does **not**
+mean your statements run in that transaction (see [Who is in the transaction](#who-is-in-the-transaction-scope-affinity)).
+After a server abort, call `ResetTransactionState()` rather than poking private fields.
 
 That is not a nicety, it is a correctness requirement. Before 6.2 MemberJunction had two transaction
 mechanisms that were blind to each other:
@@ -78,16 +81,65 @@ the same `BeginEntityTransaction()` everything else does, which is why the two c
 disagree. If you called any of them, switch to `BeginEntityTransaction()` — or better,
 `RunInEntityTransaction()`.
 
-> **Concurrency note.** The ambient transaction lives on the *provider instance*, not a global.
-> MJServer builds per-request providers, so an ambient transaction is effectively request-scoped.
-> Long-lived CLI tools must not run parallel Saves on one provider instance. `mj sync push` is
-> atomic by default: every save runs on the host provider inside the push transaction, **one
-> JSON-root graph at a time**, so nothing interleaves. An entity directory that opts into isolated
-> transactions (`push.isolatedTransactions`, or `--isolated-transactions`) runs its graphs
-> in parallel on `DatabaseProviderBase.CreateIndependentInstance()`, which forks a provider that
-> **shares the connection pool and metadata cache** but has its own transaction stack (SQL Server and
-> PostgreSQL). Those saves commit as they go and are not rolled back with the push.
+> **Concurrency note.** The transaction *handle* lives on the provider instance; *membership* in it
+> is per async scope (see "Who is in the transaction" below). MJServer builds per-request providers,
+> so an ambient transaction is effectively request-scoped. Long-lived CLI tools must not run
+> parallel Saves on one provider instance. `mj sync push` is atomic by default: every save runs on
+> the host provider inside the push transaction, **one JSON-root graph at a time**, so nothing
+> interleaves. An entity directory that opts into isolated transactions
+> (`push.isolatedTransactions`, or `--isolated-transactions`)
+> runs its graphs in parallel on `DatabaseProviderBase.CreateIndependentInstance()`, which forks a
+> provider that **shares the connection pool and metadata cache** but has its own transaction stack
+> (SQL Server and PostgreSQL). Those saves commit as they go and are not rolled back with the push.
 > `ReleaseIndependentInstance()` must not close the pool.
+
+### Who is in the transaction (scope affinity)
+
+A transaction belongs to the **async scope that began it** — the code that awaited
+`BeginTransaction()` / `BeginEntityTransaction()` / `RunInEntityTransaction()` and everything that
+code starts (awaited calls, `Promise.all` fan-out, timers and fire-and-forget work launched from
+inside it). Only that scope's statements run on the transaction. Any other caller on the same
+provider instance — another request using the global provider, a background timer that started
+earlier — runs its statements on the pool: they are never rolled back with the transaction, never
+queued behind its `COMMIT`, and never blocked by it being doomed (#4786). That caller is not wholly
+unaffected — a `BeginTransaction()` it issues joins the open transaction, or throws
+`DoomedTransactionError` while that transaction is doomed, and the edge cases below can pull code
+into a transaction it did not begin.
+
+Consequences:
+
+- **Begin where you write.** The scope is set when the begin is *called*. Call it from the function
+  that performs the writes (or use `RunInEntityTransaction`, which does). A helper that `await`s
+  something and *then* begins does not make its caller part of the transaction:
+  ```typescript
+  // ❌ the caller's writes after `await open()` are NOT in the transaction
+  async function open() { await loadConfig(); return provider.BeginEntityTransaction(); }
+  ```
+- **Work that outlives the transaction runs on the pool.** Something launched inside the scope that
+  runs after the commit/rollback (a timer, an un-awaited promise) is no longer part of any
+  transaction — it autocommits, as before, and never joins a *later* transaction someone else opens.
+  Use `RunAfterCommit()` for work that must wait for the commit.
+- **`RunAfterCommit()` from outside the scope runs now, detached, on the pool.** A task registered by
+  a caller that is not in the open transaction (or with a token whose transaction already committed)
+  is not tied to that transaction: it starts immediately, fire-and-forget, outside every transaction
+  on the instance, so it is never rolled back with — nor awaited by — someone else's unit of work.
+  If such a task begins its own transaction while another is open on the instance, it joins that one
+  as a savepoint (logged, see the next bullet); a task that needs a transaction of its own belongs on
+  `CreateIndependentInstance()`.
+- **An unrelated scope that *begins* while another transaction is open still joins it** as a
+  savepoint (the behaviour before #4786, kept because waiting could deadlock), and the provider logs
+  it once per transaction. The joiner stays in that transaction after its own savepoint is released:
+  its later statements keep running on it — and roll back with it — until the owner ends it.
+  Independent units of work belong on `CreateIndependentInstance()` or a per-request provider.
+- **A begin that runs synchronously inside un-awaited work or an event listener makes the code that
+  launched it part of that transaction.** Async context flows down into a call *and* back up out of
+  its synchronous prefix, so `void saveAll()` whose first step begins a transaction, or an
+  `EventEmitter` listener that begins one, makes the launcher (the emitter) a member. On Node builds
+  without `AsyncContextFrame` (Node < 24, or `--no-async-context-frame`), a begin inside a
+  `setInterval` callback also carries over to that interval's later ticks. Await the unit of work, or
+  run independent units on `CreateIndependentInstance()` / a per-request provider.
+- `ExecuteSQLOptions.ignoreAmbientTransaction` still lets code *inside* the scope run a read on the
+  pool (#4514).
 
 ### Client-side
 
@@ -213,6 +265,11 @@ standalone save.
 The root additionally raises `graph_save_started` and `graph_save`, so a UI can refresh once per unit
 of work rather than once per line.
 
+If a node fails, the graph rolls back, and every record in it (IS-A parents included) goes back in
+memory to how it was before `Save()`, so the same call can be retried. A delete works the same way,
+whether it's a graph or an IS-A chain: each record it deletes is reset with `NewRecord()` only once
+the unit of work commits, so a rollback leaves every record saved, under the same key.
+
 ### Loading children
 
 | Mode | Behaviour |
@@ -258,6 +315,39 @@ The column and its type definition ship in 6.2; **CodeGen emission of `DeclareRe
 from these rows is a follow-up**, so hand-written declarations remain the only working path for now.
 When adding an option, keep `RelatedRecordCollectionOptions` and
 `metadata/entities/JSONType-interfaces/IRelatedRecordCollectionConfig.ts` in step.
+
+---
+
+## 4. Server-Side Concurrency & Delta-Only Updates
+
+MemberJunction separates **disjoint-column safety** (enabled by default with zero extra database round-trips) from **same-column optimistic concurrency checking** (enforced automatically on GraphQL client mutations and opt-in on server-direct saves):
+
+- **Delta-only `spUpdate*` / `fn_update*` bindings (`deltaUpdates: true` by default).** When an existing row is saved on an entity with a CodeGen-generated update routine (`entityInfo.spUpdateGenerated === true`), `GenericDatabaseProvider.GenerateSaveSQL` binds **only dirty editable parameters** (plus the primary key) instead of sending every column on the entity. Because generated update routines declare `= NULL` parameter defaults and merge via `ISNULL(@Param, [Col])` (SQL Server) / `COALESCE(p_param, "Col")` (PostgreSQL) with `_Clear = 1` flags for explicit `NULL` writes, untouched columns remain unchanged in the database. If Writer A changes `Status` and Writer B concurrently changes `Notes`, both saves succeed in a single round-trip and neither overwrites the other's column. Forced saves (`IgnoreDirtyState: true`), `ReplayOnly` saves, entities with custom `spUpdate` implementations (`spUpdateGenerated === false`), or providers with the emergency kill-switch `databaseSettings.deltaUpdates: false` (`ProviderConfigDataBase.DeltaUpdates = false`) retain full-row parameter binding.
+- **Locked-row same-column conflict detection (`CheckUpdateConcurrency`).** When concurrency checking is active (`'log'` or `'enforce'`), `DatabaseProviderBase.Save()` compares the caller's pre-edit baseline (`Field.OldValue` or `EntitySaveOptions.ConcurrencyBaseline`) against the current database row **inside the save transaction**, under a row lock (`WITH (UPDLOCK, ROWLOCK)` on SQL Server; `FOR UPDATE` on PostgreSQL). Disjoint column edits merge cleanly; overlapping edits to the same column (`DetectFieldConcurrencyConflicts` in `@memberjunction/generic-database-provider`) trigger a structured warning (`'log'`) or abort and roll back the save (`'enforce'`), including full multi-level IS-A parent/child chain rollback and in-memory `Dirty` / `OldValue` restoration.
+
+### Configuration (`deltaUpdates` & `concurrencyCheck`)
+
+Configure provider-wide defaults in `mj.config.cjs` under `databaseSettings` (`ProviderConfigDataBase` when instantiating a provider directly), or override concurrency checking per save via `EntitySaveOptions.ConcurrencyCheck`:
+
+- `databaseSettings.deltaUpdates` (`boolean`, default `true`): Set to `false` only as an operational escape hatch to revert to full-row `spUpdate*` / `fn_update*` parameter binding without redeploying code.
+- `databaseSettings.concurrencyCheck` (`'off' | 'log' | 'enforce'`, default `'off'`): Controls the default mode for server-direct `entity.Save()` calls (agents, actions, scheduled jobs). GraphQL `UpdateRecord` mutations carrying client `OldValues___` **always** set `ConcurrencyCheck: 'enforce'` per save regardless of the server-wide default.
+
+| Mode | Behaviour on save |
+|---|---|
+| `'off'` (server default) | Skip the locked baseline read on server-direct saves (zero extra round-trips or row locks; delta updates still preserve concurrent writes to untouched columns). |
+| `'log'` | Read dirty columns under lock inside the save transaction; on overlapping change, emit a structured warning via `LogErrorEx` (`category: 'GenericDatabaseProvider.CheckUpdateConcurrency'`) naming the entity, conflicting fields, and redacted diff diagnostics, then proceed with the save. |
+| `'enforce'` (GraphQL `OldValues___` default) | Read dirty columns under lock inside the save transaction; on overlapping change, abort and roll back before `spUpdate*` commits, populate `entity.LatestResult.ConcurrencyConflict` (`{ ConflictingFields: string[] }`), and on GraphQL mutations persist a `SAVE_INCONSISTENCY` record to `MJ: Error Logs` and return a structured `CONCURRENT_MODIFICATION_CONFLICT` refusal (`RefusalExtensions`). |
+
+```typescript
+const saved = await order.Save({ ConcurrencyCheck: 'enforce' });
+if (!saved && order.LatestResult?.ConcurrencyConflict) {
+    for (const fieldName of order.LatestResult.ConcurrencyConflict.ConflictingFields) {
+        console.warn(`Concurrent edit conflict on field: ${fieldName}`);
+    }
+}
+```
+
+> **Current scope notes:** Queued `TransactionGroup` updates already use delta-only `spUpdate*` / `fn_update*` parameter binding (`deltaUpdates: true`), while locked-row `CheckUpdateConcurrency` inside `TransactionGroup.Submit()` is tracked as a dedicated follow-up ([PR #6490](https://github.com/MemberJunction/MJ/pull/6490)). Post-save SQL hydration of `RecordChange.FullRecordJSON` under concurrent delta updates is tracked in [PR #6489](https://github.com/MemberJunction/MJ/pull/6489).
 
 ---
 

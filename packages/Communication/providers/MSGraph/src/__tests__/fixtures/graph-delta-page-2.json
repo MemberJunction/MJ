@@ -1,0 +1,32 @@
+{
+    "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#Collection(event)",
+    "@odata.deltaLink": "https://graph.microsoft.com/v1.0/users/organizer%40contoso.com/calendarView/delta?$deltatoken=R0usmci39OQxqJrxK4",
+    "value": [
+        {
+            "@odata.type": "#microsoft.graph.event",
+            "@odata.etag": "W/\"ZlnW4RIAV06KYYwlrfNZvQAALfZeRS==\"",
+            "id": "AAMkAGI1AGU4LTk4ZmEtNDhkMy1iYTU2LTQ5NzEwNjc5NTA2NgBGAAAAAAAt9AHkAAA=",
+            "lastModifiedDateTime": "2026-10-13T10:00:00.0000000Z",
+            "iCalUId": "040000008200E00074C5B7101A82E00800000000AB12CD34EF56AB0100000000000000001000000011112222333344445555666677778888",
+            "subject": "Budget review",
+            "isAllDay": false,
+            "isCancelled": false,
+            "isOrganizer": true,
+            "seriesMasterId": "AAMkAGI1AGU4LTk4ZmEtNDhkMy1iYTU2LTQ5NzEwNjc5NTA2NgBGAAAAAAAt9AHiAAA=",
+            "type": "occurrence",
+            "start": { "dateTime": "2026-10-21T13:00:00.0000000", "timeZone": "UTC" },
+            "end": { "dateTime": "2026-10-21T13:30:00.0000000", "timeZone": "UTC" },
+            "attendees": [
+                { "type": "required", "status": { "response": "accepted", "time": "2026-10-13T09:58:00Z" }, "emailAddress": { "name": "Ada Lovelace", "address": "ada@contoso.com" } },
+                { "type": "required", "status": { "response": "tentativelyAccepted", "time": "2026-10-13T09:59:00Z" }, "emailAddress": { "name": "Alan Turing", "address": "alan@contoso.com" } },
+                { "type": "optional", "status": { "response": "declined", "time": "2026-10-13T10:00:00Z" }, "emailAddress": { "name": "Grace Hopper", "address": "grace@fabrikam.com" } }
+            ],
+            "organizer": { "emailAddress": { "name": "Org Anizer", "address": "organizer@contoso.com" } }
+        },
+        {
+            "@odata.type": "#microsoft.graph.event",
+            "id": "AAMkAGI1AGU4LTk4ZmEtNDhkMy1iYTU2LTQ5NzEwNjc5NTA2NgBGAAAAAAAt9AHlAAA=",
+            "@removed": { "reason": "deleted" }
+        }
+    ]
+}

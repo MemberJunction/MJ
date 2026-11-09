@@ -55,6 +55,12 @@ describe('MJFilterPanelComponent (DOM)', () => {
     expect(changes.at(-1)).toEqual({ status: 'active' });
   });
 
+  it('names a dropdown field by its label, so it does not announce as a bare combobox', () => {
+    const dropdownField: FilterFieldConfig = { key: 'company', label: 'Company', type: 'dropdown', options: [{ text: 'Acme', value: 'acme' }] };
+    const f = render({ Fields: [dropdownField], Values: {} });
+    expect(query(f, '[role="combobox"]')?.getAttribute('aria-label')).toBe('Company');
+  });
+
   it('shows the reset button with the label by default and emits Reset on click', () => {
     const f = render({ Fields: [textField], Values: {}, ResetLabel: 'Clear all' });
     const btn = query(f, '.mj-filter-panel-reset') as HTMLButtonElement;

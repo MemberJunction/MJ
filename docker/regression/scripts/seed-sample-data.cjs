@@ -4,8 +4,9 @@
  *
  *   1. Communication logs (T124). The Communication app's Logs view is empty until
  *      something is actually sent, so "filter the log table, then clear the filter and
- *      see the fuller list return" has nothing to narrow or restore. Seeds six logs across
- *      every Status, with searchable message content.
+ *      see the fuller list return" has nothing to narrow or restore. Seeds one run and six
+ *      logs across every Status, one with an error message. The Logs search matches
+ *      provider, message type, status and error text, not message content.
  *   2. An integration connection (T120). The Integrations app shows "No integrations
  *      yet" until a CompanyIntegration exists, so there is no connection detail view, no
  *      entity map, and no visual field editor to open. Seeds one File Feed connection
@@ -49,12 +50,6 @@ async function seedCommunicationLogs(pool, userId) {
         return;
     }
 
-    const runId = (await pool.request()
-        .input('userId', sql.UniqueIdentifier, userId)
-        .query(`INSERT INTO __mj.CommunicationRun (UserID, Direction, Status, Comments)
-                OUTPUT inserted.ID
-                VALUES (@userId, 'Sending', 'Complete', 'Regression sample run')`)).recordset[0].ID;
-
     const logs = [
         { status: 'Complete', content: 'Welcome to the association — your membership is active' },
         { status: 'Complete', content: 'Your renewal reminder: membership expires in 30 days' },
@@ -63,21 +58,38 @@ async function seedCommunicationLogs(pool, userId) {
         { status: 'Pending', content: 'Monthly newsletter — chapter updates' },
         { status: 'In-Progress', content: 'Certification exam results notice' },
     ];
-    for (let i = 0; i < logs.length; i++) {
-        const log = logs[i];
-        await pool.request()
-            .input('providerId', sql.UniqueIdentifier, messageType.CommunicationProviderID)
-            .input('messageTypeId', sql.UniqueIdentifier, messageType.ID)
-            .input('runId', sql.UniqueIdentifier, runId)
-            .input('status', sql.NVarChar, log.status)
-            .input('content', sql.NVarChar, `${log.content} ${LOG_MARKER}`)
-            .input('error', sql.NVarChar, log.error ?? null)
-            .input('hoursAgo', sql.Int, i * 6)
-            .query(`INSERT INTO __mj.CommunicationLog
-                        (CommunicationProviderID, CommunicationProviderMessageTypeID, CommunicationRunID, Direction, MessageDate, Status, MessageContent, ErrorMessage)
-                    VALUES (@providerId, @messageTypeId, @runId, 'Sending', DATEADD(hour, -@hoursAgo, SYSDATETIMEOFFSET()), @status, @content, @error)`);
+
+    // One transaction: the marker check above skips seeding once any marked log exists,
+    // so a partial set left by a failed run would never be completed.
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+        const runId = (await new sql.Request(transaction)
+            .input('userId', sql.UniqueIdentifier, userId)
+            .query(`INSERT INTO __mj.CommunicationRun (UserID, Direction, Status, Comments)
+                    OUTPUT inserted.ID
+                    VALUES (@userId, 'Sending', 'Complete', 'Regression sample run')`)).recordset[0].ID;
+
+        for (let i = 0; i < logs.length; i++) {
+            const log = logs[i];
+            await new sql.Request(transaction)
+                .input('providerId', sql.UniqueIdentifier, messageType.CommunicationProviderID)
+                .input('messageTypeId', sql.UniqueIdentifier, messageType.ID)
+                .input('runId', sql.UniqueIdentifier, runId)
+                .input('status', sql.NVarChar, log.status)
+                .input('content', sql.NVarChar, `${log.content} ${LOG_MARKER}`)
+                .input('error', sql.NVarChar, log.error ?? null)
+                .input('hoursAgo', sql.Int, i * 6)
+                .query(`INSERT INTO __mj.CommunicationLog
+                            (CommunicationProviderID, CommunicationProviderMessageTypeID, CommunicationRunID, Direction, MessageDate, Status, MessageContent, ErrorMessage)
+                        VALUES (@providerId, @messageTypeId, @runId, 'Sending', DATEADD(hour, -@hoursAgo, SYSDATETIMEOFFSET()), @status, @content, @error)`);
+        }
+        await transaction.commit();
+        console.log(`  Seeded ${logs.length} communication logs`);
+    } catch (err) {
+        await transaction.rollback();
+        throw err;
     }
-    console.log(`  Seeded ${logs.length} communication logs`);
 }
 
 async function seedIntegrationConnection(pool) {

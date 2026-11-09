@@ -21,6 +21,7 @@ export class MJAIPromptRunFormComponent extends BaseFormComponent {
             { sectionKey: 'performanceCostMetrics', sectionName: 'Performance & Cost Metrics', isExpanded: true },
             { sectionKey: 'modelParametersSettings', sectionName: 'Model Parameters & Settings', isExpanded: true },
             { sectionKey: 'validationRetryDetails', sectionName: 'Validation & Retry Details', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJContentProcessRunPromptRuns', sectionName: 'Content Process Run Prompt Runs', isExpanded: false },
             { sectionKey: 'mJAIPromptRunMedias', sectionName: 'AI Prompt Run Medias', isExpanded: false },
@@ -30,7 +31,8 @@ export class MJAIPromptRunFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIPromptRunsParentID', sectionName: 'AI Prompt Runs (Parent Run)', isExpanded: false },
             { sectionKey: 'mJDuplicateRunDetailMatches', sectionName: 'Duplicate Run Detail Matches', isExpanded: false },
             { sectionKey: 'mJUserRoutineRuns', sectionName: 'User Routine Runs', isExpanded: false },
-            { sectionKey: 'mJConversationCompactionRuns', sectionName: 'Conversation Compaction Runs', isExpanded: false }
+            { sectionKey: 'mJConversationCompactionRuns', sectionName: 'Conversation Compaction Runs', isExpanded: false },
+            { sectionKey: 'mJRubricEvaluations', sectionName: 'Rubric Evaluations', isExpanded: false }
         ]);
     }
 }

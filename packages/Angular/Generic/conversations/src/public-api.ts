@@ -10,11 +10,25 @@ export * from './lib/models/conversation-state.model';
 export * from './lib/models/notification.model';
 export * from './lib/models/lazy-artifact-info';
 export * from './lib/models/navigation-request.model';
+// Host rules for an agent turn: reply mode, routes, and the host turn handler contract
+export * from './lib/models/agent-turn.model';
+export * from './lib/utils/agent-turn-routing';
+export * from './lib/utils/agent-handoff-map';
+// Opt-in decision routing for an unmentioned message (EnableDecisionRouting)
+// NOTE: the routing decision's builders and types, and IsAgentAllowed, live in
+// @memberjunction/ai-core-plus — import them from there directly.
+export * from './lib/utils/decision-routing';
+// Fork rules: the delete guard and the open view (Main or one fork)
+export * from './lib/utils/conversation-branching';
+export * from './lib/utils/conversation-forks';
+export * from './lib/utils/thread-replies';
+export * from './lib/utils/agent-failure-display';
 
 // Services - State
 export * from './lib/services/data-cache.service';
 export * from './lib/services/artifact-state.service';
 export * from './lib/services/agent-state.service';
+export * from './lib/services/conversation-liveness-dom.service';
 export * from './lib/services/conversation-agent.service';
 export * from './lib/services/active-tasks.service';
 export * from './lib/services/conversation-streaming.service';
@@ -53,8 +67,10 @@ export * from './lib/components/sidebar/conversation-sidebar.component';
 export * from './lib/components/sidebar/routines-section.component';
 export * from './lib/components/conversation/conversation-list.component';
 export * from './lib/components/conversation/conversation-chat-area.component';
+export * from './lib/components/conversation/conversation-remote-browser-controller';
 export * from './lib/components/conversation/conversation-empty-state.component';
 export * from './lib/components/message/message-item.component';
+export * from './lib/components/message/agent-handoff-card.component';
 export * from './lib/components/message/message-list.component';
 export * from './lib/components/message/message-input.component';
 // AI-aware composer wrapper (mj-ai-composer): mj-message-input-box + the three AI trigger
@@ -103,6 +119,7 @@ export * from './lib/components/collection/collection-form-modal.component';
 export * from './lib/components/conversation/conversation-agent-picker.component';
 export * from './lib/components/conversation/conversation-mode-picker.component';
 export * from './lib/components/conversation/pinned-messages-panel.component';
+export * from './lib/components/conversation/forks-popover.component';
 export * from './lib/components/dialogs/input-dialog.component';
 export * from './lib/components/dialogs/rating-dialog.component';
 export * from './lib/components/export/export-modal.component';
@@ -113,8 +130,10 @@ export * from './lib/components/message/workflow-plan-card.component';
 export * from './lib/components/search/search-panel.component';
 export * from './lib/components/shared/user-picker.component';
 export * from './lib/components/tasks/tasks-dropdown.component';
-export * from './lib/components/thread/thread-panel.component';
 export * from './lib/directives/search-shortcut.directive';
+// SearchResult / SearchResultType are the payload of SearchPanelComponent's
+// ResultSelected output, so consumers cannot type a handler without them.
+export type { SearchResult, SearchResultType } from './lib/services/search.service';
 
 // PR 2c — Widget extension surface (slots, events, design tokens)
 export * from './lib/services/conversations-runtime-bootstrap.service';
@@ -134,11 +153,14 @@ export * from './lib/components/realtime/realtime-agent-picker.component';
 export * from './lib/components/realtime/realtime-session-overlay.component';
 export * from './lib/components/realtime/realtime-session-state';
 export * from './lib/components/realtime/realtime-agent-banner.component';
+export * from './lib/components/realtime/realtime-agent-orb.component';
 export * from './lib/components/realtime/realtime-session-thread.component';
 export * from './lib/components/realtime/realtime-delegation-card.component';
 export * from './lib/components/realtime/realtime-activity-rail.component';
 export * from './lib/components/realtime/realtime-surface-tabs.component';
 export * from './lib/components/realtime/realtime-surface-tabs.model';
+export * from './lib/components/realtime/realtime-surface-stage.model';
+export * from './lib/components/realtime/realtime-surface-placement-prefs';
 export * from './lib/components/realtime/realtime-surface-panel-prefs';
 export * from './lib/components/realtime/realtime-disclosure';
 export * from './lib/components/realtime/realtime-audio-visuals';
@@ -155,6 +177,7 @@ export * from './lib/components/realtime/channels/channel-onboarding-panel.compo
 // NOTE: the whiteboard itself (engine, tools, components, export builders) lives in
 // @memberjunction/ng-whiteboard — import board types/components from there directly.
 export * from './lib/components/realtime/whiteboard/whiteboard-channel';
+export * from './lib/components/realtime/whiteboard/whiteboard-channel-config';
 export * from './lib/components/realtime/whiteboard/whiteboard-artifact-viewer.component';
 // Remote Browser channel plugin (client-direct, server-hosted browser) + its live surface + tools.
 export * from './lib/components/realtime/remote-browser/remote-browser-channel';
@@ -166,6 +189,30 @@ export * from './lib/components/realtime/media/media-channel';
 export * from './lib/components/realtime/media/media-channel-state';
 export * from './lib/components/realtime/media/media-channel-tools';
 export * from './lib/components/realtime/media/realtime-media-surface.component';
+// Identity Verification channel (generic, opt-in): prove an email address mid-call. State machine + surface.
+export * from './lib/components/realtime/identity-verification/identity-verification-channel';
+export * from './lib/components/realtime/identity-verification/identity-verification-model';
+export * from './lib/components/realtime/identity-verification/identity-verification-surface.component';
+// Camera and Screen Share channels (opt-in, on demand): the agent asks, the user turns the capture on. State + surface.
+export * from './lib/components/realtime/capture/realtime-capture-channel';
+export * from './lib/components/realtime/capture/realtime-capture-model';
+export * from './lib/components/realtime/capture/realtime-capture-surface.component';
+// The Avatar channel (in every call, inert without video): the agent's video on its surface.
+export * from './lib/components/realtime/avatar/realtime-avatar-channel';
+export * from './lib/components/realtime/avatar/realtime-avatar-surface.component';
+
+// Interactive Component channel: hosts any component artifact (mj-react-component) next to the call, with a
+// contract derived from the component's own spec. The pure parts (spec -> contract, config, data-state bounding,
+// instance engine, artifact source port) are framework-free; the channel and surface are the Angular layer.
+export * from './lib/components/realtime/interactive-component/interactive-component-types';
+export * from './lib/components/realtime/interactive-component/interactive-component-config';
+export * from './lib/components/realtime/interactive-component/component-contract';
+export * from './lib/components/realtime/interactive-component/component-data-state';
+export * from './lib/components/realtime/interactive-component/component-instance-engine';
+export * from './lib/components/realtime/interactive-component/component-spec-content';
+export * from './lib/components/realtime/interactive-component/run-view-component-artifact-source';
+export * from './lib/components/realtime/interactive-component/interactive-component-channel';
+export * from './lib/components/realtime/interactive-component/realtime-interactive-component-surface.component';
 // Time-aligned Evidence Playback component (recorded session audio synced to the transcript).
 export * from './lib/components/realtime/evidence-playback/realtime-evidence-playback.component';
 export * from './lib/services/composer-draft-store';

@@ -6,6 +6,7 @@
  * - Tab-scoped filtering prevents cross-tab leakage
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { Subject } from 'rxjs';
 import { LogError } from '@memberjunction/core';
 import { NavigationService, TabQueryParamUpdateGuard } from '../navigation.service';
 import { BaseResourceComponent } from '../base-resource-component';
@@ -49,8 +50,11 @@ vi.mock('@memberjunction/core-entities', () => ({
   },
 }));
 
+// Mirrors the real UUIDsEqual contract (null-safe, trimmed, case-insensitive): the
+// tab identity guard compares record ids through it, so a plain === would hide that.
 vi.mock('@memberjunction/global', () => ({
-  UUIDsEqual: (a: string, b: string) => a === b,
+  UUIDsEqual: (a: string | null | undefined, b: string | null | undefined) =>
+    a == null || b == null ? a == b : a.trim().toLowerCase() === b.trim().toLowerCase(),
 }));
 
 // ---- QueryParamChangeEvent tests ----
@@ -476,7 +480,7 @@ describe('UpdateTabQueryParams guard', () => {
     });
   });
 
-  it('normalizes resourceType and entity but exact-matches canonical fields', () => {
+  it('normalizes resourceType, entity and record id but exact-matches class and nav names', () => {
     const { service, updateTabConfiguration } = createService({
       id: 'tab-1',
       resourceRecordId: 'ID|ABC',
@@ -501,6 +505,7 @@ describe('UpdateTabQueryParams guard', () => {
       }
     );
 
+    // Record ids compare like UUIDs (case-insensitive); nav item names stay exact.
     const exactMismatch = service.UpdateTabQueryParams(
       'tab-1',
       { tab: 'details' },
@@ -509,13 +514,74 @@ describe('UpdateTabQueryParams guard', () => {
         entity: 'invoices',
         recordId: 'id|abc',
         driverClass: 'RecordResource',
-        navItemName: 'Invoice Record'
+        navItemName: 'invoice record'
       }
     );
 
     expect(normalizedMatch).toBe(true);
     expect(exactMismatch).toBe(false);
     expect(updateTabConfiguration).toHaveBeenCalledTimes(1);
+  });
+
+  // A Records tab's persisted config never records a driver class, but the tab
+  // container injects `resourceTypeDriverClass: 'RecordResource'` into the
+  // COMPONENT's Data.Configuration — which is where BaseResourceComponent builds
+  // its guard. Treating that as a mismatch dropped every record resource's
+  // UpdateQueryParams (MJ#4755: the standard-form strip never reached the URL).
+  const recordsTab = (configuration: Record<string, unknown> = {}): TestTab => ({
+    id: 'tab-1',
+    resourceRecordId: '499EB',
+    configuration: { resourceType: 'Records', recordId: '499EB', Entity: 'Caliber: Assessments', ...configuration }
+  });
+  const recordResourceGuard: TabQueryParamUpdateGuard = {
+    resourceType: 'Records',
+    driverClass: 'RecordResource',
+    recordId: '499EB',
+    entity: 'Caliber: Assessments'
+  };
+
+  it('applies writes when the tab records no driver class (identity still held by type, record and entity)', () => {
+    const { service, updateTabConfiguration } = createService(recordsTab());
+
+    const updated = service.UpdateTabQueryParams('tab-1', { form: 'standard' }, recordResourceGuard);
+
+    expect(updated).toBe(true);
+    expect(updateTabConfiguration).toHaveBeenCalledWith('tab-1', { queryParams: { form: 'standard' } });
+  });
+
+  it('still drops writes when the tab records a DIFFERENT driver class', () => {
+    const { service, updateTabConfiguration } = createService(recordsTab({ driverClass: 'Other' }));
+
+    expect(service.UpdateTabQueryParams('tab-1', { form: 'standard' }, recordResourceGuard)).toBe(false);
+    expect(updateTabConfiguration).not.toHaveBeenCalled();
+  });
+
+  it('matches record ids case-insensitively (a save rewrites the component id to the server casing)', () => {
+    const { service, updateTabConfiguration } = createService(recordsTab());
+
+    const updated = service.UpdateTabQueryParams('tab-1', { form: 'standard' }, { ...recordResourceGuard, recordId: ' 499eb ' });
+
+    expect(updated).toBe(true);
+    expect(updateTabConfiguration).toHaveBeenCalledWith('tab-1', { queryParams: { form: 'standard' } });
+  });
+
+  it('still drops writes when the record differs, even without a recorded driver class', () => {
+    const { service, updateTabConfiguration } = createService(recordsTab());
+
+    const updated = service.UpdateTabQueryParams('tab-1', { form: 'standard' }, { ...recordResourceGuard, recordId: 'OTHER' });
+
+    expect(updated).toBe(false);
+    expect(updateTabConfiguration).not.toHaveBeenCalled();
+  });
+
+  it('GetTabRecordIdentity reads the record a tab hosts NOW (entity + record id)', () => {
+    const { service } = createService(recordsTab());
+    expect(service.GetTabRecordIdentity('tab-1')).toEqual({ Entity: 'Caliber: Assessments', RecordId: '499EB' });
+  });
+
+  it('GetTabRecordIdentity is null for a closed tab', () => {
+    const { service } = createService(null);
+    expect(service.GetTabRecordIdentity('tab-1')).toBeNull();
   });
 
   it('quietly ignores writes to closed or removed tabs', () => {
@@ -746,5 +812,87 @@ describe('BaseResourceComponent re-homing on a cache reattach', () => {
     host.RebindTabId('tab-birth');
 
     expect(child.ParentTabId).toBe('tab-birth');
+  });
+});
+
+describe('BaseResourceComponent query-param delivery while its tab shows another resource', () => {
+  type DeliverySeam = { setupQueryParamSubscription(): void; setupInitialParamDelivery(): void };
+
+  /** A resource that records what it receives, over a NavigationService double that reports `showing`. */
+  function makeResource(showing: boolean): {
+    component: BaseResourceComponent;
+    received: Record<string, string>[];
+    popstate: Subject<{ TabId: string; Params: Record<string, string>; Force?: boolean }>;
+    observeTabQueryParams: ReturnType<typeof vi.fn>;
+    isTabShowingResource: ReturnType<typeof vi.fn>;
+  } {
+    const received: Record<string, string>[] = [];
+    class CachedResource extends BaseResourceComponent {
+      async GetResourceDisplayName(_data: ResourceData): Promise<string> { return 'Cached'; }
+      async GetResourceIconClass(_data: ResourceData): Promise<string> { return 'fa-solid fa-cube'; }
+      protected override OnQueryParamsChanged(params: Record<string, string>): void { received.push(params); }
+    }
+    const component = Object.create(CachedResource.prototype) as BaseResourceComponent;
+    const internals = component as unknown as Record<string, unknown>;
+    // Object.create skips the field initializers
+    internals['destroy$'] = new Subject<void>();
+    internals['_lastDeliveredParamsKey'] = null;
+    const popstate = new Subject<{ TabId: string; Params: Record<string, string>; Force?: boolean }>();
+    const observeTabQueryParams = vi.fn(() => new Subject<Record<string, string>>().asObservable());
+    const isTabShowingResource = vi.fn(() => showing);
+    internals['navigationService'] = {
+      QueryParamChanged$: popstate.asObservable(),
+      ObserveTabQueryParams: observeTabQueryParams,
+      IsTabShowingResource: isTabShowingResource,
+    };
+    component.Data = resourceData({ tabId: 'tab-1', resourceType: 'Custom', driverClass: 'LibraryResource' });
+    return { component, received, popstate, observeTabQueryParams, isTabShowingResource };
+  }
+
+  it('ignores a back/forward change on its tab while the tab shows another resource', () => {
+    const { component, received, popstate, isTabShowingResource } = makeResource(false);
+    (component as unknown as DeliverySeam).setupQueryParamSubscription();
+
+    popstate.next({ TabId: 'tab-1', Params: { dashboard: 'd-1' } });
+
+    expect(received).toEqual([]);
+    expect(isTabShowingResource).toHaveBeenCalledWith('tab-1', component.Data);
+  });
+
+  it('applies a back/forward change on its tab while the tab shows it', () => {
+    const { component, received, popstate } = makeResource(true);
+    (component as unknown as DeliverySeam).setupQueryParamSubscription();
+
+    popstate.next({ TabId: 'tab-1', Params: { dashboard: 'd-1' } });
+
+    expect(received).toEqual([{ dashboard: 'd-1' }]);
+  });
+
+  it('still applies a back/forward change for a child its host stamps with ParentTabId', () => {
+    const { component, received, popstate, isTabShowingResource } = makeResource(false);
+    component.ParentTabId = 'host-tab';
+    (component as unknown as DeliverySeam).setupQueryParamSubscription();
+
+    popstate.next({ TabId: 'host-tab', Params: { section: 'summary' } });
+
+    expect(received).toEqual([{ section: 'summary' }]);
+    expect(isTabShowingResource).not.toHaveBeenCalled();
+  });
+
+  it("observes its tab's params as the resource the tab container gave it", () => {
+    const { component, observeTabQueryParams } = makeResource(true);
+
+    (component as unknown as DeliverySeam).setupInitialParamDelivery();
+
+    expect(observeTabQueryParams).toHaveBeenCalledWith('tab-1', component.Data);
+  });
+
+  it("observes its host tab's params with no owner when a host stamps it with ParentTabId", () => {
+    const { component, observeTabQueryParams } = makeResource(true);
+    component.ParentTabId = 'host-tab';
+
+    (component as unknown as DeliverySeam).setupInitialParamDelivery();
+
+    expect(observeTabQueryParams).toHaveBeenCalledWith('host-tab', undefined);
   });
 });

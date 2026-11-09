@@ -1,34 +1,43 @@
 """Predictive Studio Python ML sidecar — FastAPI service.
 
-CPU-only tabular ML training + inference. The server side of the contract in
-``packages/AI/PredictiveStudio/Core/src/sidecar-contract.ts``: MJ assembles the
-feature matrix and orchestrates; this service fits/serves the model.
+CPU-only tabular ML training + inference. Training is the protocol-driven ``/trainer`` (the contract in
+``packages/AI/PredictiveStudio/Core/src/trainer-contract.ts``); ``/predict`` also loads the legacy (v1) envelopes of
+models trained before Prediction Units, so they keep scoring.
 
 Endpoints:
   * ``GET  /health``  — liveness + registered algorithms + warm-cache depth
-  * ``POST /train``   — fit a model, return artifact + fitted preprocessing + metrics
-  * ``POST /predict``— score rows by APPLYING (never re-fitting) frozen preprocessing
+  * ``POST /trainer`` — one protocol-driven training: inner-CV selection, one holdout scoring, baselines, the gate
+  * ``POST /predict``— score rows by APPLYING (never re-fitting) frozen preprocessing (legacy or v2 artifacts)
 """
 
 from __future__ import annotations
 
+import base64
+import binascii
 import time
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+import pandas as pd
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 
-from . import algorithms, artifacts, metrics, preprocessing
+from . import algorithms, artifacts, preprocessing
+from .artifacts_v2 import PredictorEnvelope
+from .failures import RequestRefused
+from .run import run_trainer
+from .trainer import DriverBaseline, TrainedPredictor, single_coef_row, top_signed_drivers
+from .trainer_schemas import TrainerRequest
 from .schemas import (
     HealthResponse,
     PredictRequest,
     PredictResponse,
     Prediction,
-    TrainRequest,
-    TrainResponse,
+    PredictionContribution,
 )
 
 app = FastAPI(title="Predictive Studio Sidecar", version="1.0.0")
+
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -45,387 +54,19 @@ def health() -> HealthResponse:
 
 
 # ---------------------------------------------------------------------------
-# /train
+# /trainer
 # ---------------------------------------------------------------------------
 
-@app.post("/train", response_model=TrainResponse)
-def train(req: TrainRequest) -> TrainResponse:
-    """Fit a model on the assembled inline matrix and return the full train result.
-
-    Validates the request (inline ``data`` required, ``target`` must be present),
-    delegates the ML work to :func:`_run_training`, then serializes the estimator
-    into a base64 envelope, warms the model cache (so an immediately-following
-    ``/predict`` is fast), and returns the artifact, frozen fitted preprocessing,
-    metrics, feature importance, and any locked-holdout metrics.
-
-    Raises:
-        HTTPException: 400 for a missing/invalid target, an unimplemented
-            ``data_ref`` path, an unsupported algorithm, or any training ValueError.
-    """
-    if req.data is None:
-        raise HTTPException(
-            status_code=400,
-            detail="Inline `data` is required (data_ref shared-storage is not "
-            "implemented in v1).",
-        )
-    if req.target not in req.data.columns:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Target column '{req.target}' not found in data columns.",
-        )
-
-    started = time.perf_counter()
+@app.post("/trainer")
+def trainer(req: TrainerRequest) -> JSONResponse:
+    """Run one protocol-driven training: inner-CV selection on development rows, one scoring of the locked holdout
+    for one finalist, baselines, the gate and artifacts. Returns the TrainerResult (`completed`, or `failed` with its
+    stage); a request that must not run at all (e.g. a primary score of another family) is a 400."""
     try:
-        result = _run_training(req)
-    except algorithms.AlgorithmNotSupportedError as exc:
+        result = run_trainer(req)
+    except RequestRefused as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    duration = time.perf_counter() - started
-
-    artifact_b64, model_id = artifacts.serialize_envelope(
-        result["estimator"],
-        result["fitted"],
-        [fs.model_dump() for fs in req.feature_schema],
-    )
-    # warm the cache so the immediately-following /predict is fast
-    artifacts.MODEL_CACHE.put(model_id, (result["estimator"], {
-        "fitted_preprocessing": result["fitted"],
-    }))
-
-    return TrainResponse(
-        artifact_b64=artifact_b64,
-        model_id=model_id,
-        fitted_preprocessing=result["fitted"],
-        metrics=result["metrics"],
-        feature_importance=result["feature_importance"],
-        training_row_count=result["training_row_count"],
-        duration_sec=round(duration, 4),
-        holdout_metrics=result.get("holdout_metrics"),
-    )
-
-
-def _feature_columns(req: TrainRequest) -> List[str]:
-    """Ordered feature column names: prefer feature_schema, else data minus target."""
-    if req.feature_schema:
-        return [fs.Name for fs in req.feature_schema]
-    return [c for c in req.data.columns if c != req.target]
-
-
-def _split_holdout_indices(
-    matrix: np.ndarray,
-    y: np.ndarray,
-    holdout_size,
-    random_state: int,
-    is_classification: bool,
-) -> Tuple[np.ndarray, np.ndarray]:
-    """Split row INDICES into (dev, holdout). Index-based so the caller can carry
-    the raw dev rows alongside the transformed matrix (needed for the anti-skew
-    validation split). When no holdout is configured, all rows are dev."""
-    from sklearn.model_selection import train_test_split
-
-    n = matrix.shape[0]
-    all_idx = np.arange(n)
-    if not holdout_size or holdout_size <= 0 or holdout_size >= 1:
-        return all_idx, np.empty((0,), dtype=int)
-    stratify = y if (is_classification or _looks_like_classes(y)) and len(np.unique(y)) > 1 else None
-    dev_idx, hold_idx = train_test_split(
-        all_idx, test_size=holdout_size, random_state=random_state, stratify=stratify
-    )
-    return dev_idx, hold_idx
-
-
-def _looks_like_classes(y: np.ndarray) -> bool:
-    """Heuristic: do these labels look categorical (so a holdout split can stratify)?
-
-    True when the dtype is string/bool/int AND the distinct-value count is small
-    relative to the sample size — i.e. a plausible label set rather than a continuum.
-    """
-    return y.dtype.kind in {"U", "S", "O", "b", "i"} and len(np.unique(y)) <= max(
-        20, int(0.5 * len(y))
-    )
-
-
-def _run_training(req: TrainRequest) -> Dict[str, Any]:
-    """Run the full training pipeline and return all artifacts the response needs.
-
-    The anti-skew backbone (plan §6.2) lives here:
-      1. Fit preprocessing on ALL training data → the FROZEN ``fitted`` payload.
-      2. Label-encode classification targets to contiguous ints (XGBoost requires it),
-         stashing the decode map on the estimator for /predict.
-      3. Carve the locked holdout — an orchestrator-forwarded ``req.holdout`` (scored
-         via the frozen transform, apply-only) takes precedence over a sidecar
-         re-carve from ``validation.holdout_size``.
-      4. Fit + score via :func:`_fit_and_score` (honest, train-fold-only validation),
-         then re-fit the production estimator on all dev rows.
-      5. Score the locked holdout exactly once.
-
-    Returns:
-        A dict with ``estimator``, ``fitted``, ``metrics``, ``feature_importance``,
-        ``training_row_count``, and (when a holdout exists) ``holdout_metrics``.
-    """
-    feature_cols = _feature_columns(req)
-    target = req.target
-    columns = list(req.data.columns)
-    rows = req.data.rows
-    target_idx = columns.index(target)
-
-    # Filter out rows where target is None (unlabeled / in-flight rows cannot be used for training)
-    valid_indices = [i for i, r in enumerate(rows) if r[target_idx] is not None]
-    if not valid_indices:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Target column '{target}' contains only null values in training data.",
-        )
-    if len(valid_indices) < len(rows):
-        rows = [rows[i] for i in valid_indices]
-
-    # Fit preprocessing on the FULL training data, then transform. This `fitted`
-    # payload is FROZEN: it is what gets applied (never re-fit) to the locked
-    # holdout below and at /predict — the anti-skew guarantee (plan §6.2).
-    ops_spec = [op.model_dump(exclude_none=True) for op in req.preprocessing]
-    matrix, output_columns, fitted = preprocessing.fit_transform(
-        columns, rows, ops_spec, feature_cols
-    )
-
-    y_raw = [r[target_idx] for r in rows]
-    is_classification = req.problem_type == "classification"
-
-    # Classification: label-encode to contiguous ints. XGBoost's sklearn wrapper
-    # requires integer-encoded labels [0..n-1]; encoding uniformly across all
-    # classifiers keeps the metrics + decode path identical. The original string
-    # labels are stashed on the estimator so /predict can decode back. The same
-    # fitted encoder is reused to encode the locked-holdout labels so the holdout
-    # score uses an identical label mapping.
-    label_classes: List[str] = []
-    encoder = None
-    if is_classification:
-        from sklearn.preprocessing import LabelEncoder
-
-        encoder = LabelEncoder()
-        y = encoder.fit_transform([str(v) for v in y_raw])
-        label_classes = [str(c) for c in encoder.classes_]
-    else:
-        y = np.array([float(v) for v in y_raw], dtype=float)
-
-    rng = req.validation.random_state or 42
-
-    # Carve off a locked holdout for scoring exactly once. Precedence:
-    #   1. An explicit forwarded `req.holdout` (the orchestrator-carved locked
-    #      holdout) — scored via the FROZEN fitted transform (apply-only).
-    #   2. Else `validation.holdout_size` — the sidecar re-carves from `matrix`
-    #      (fallback used by the sidecar's own fixtures).
-    # When (1) is used, `data` already excludes the holdout, so we DON'T re-carve.
-    # We carve by ROW INDEX so the raw dev rows are available for an anti-skew
-    # validation split (preprocessing fit on the train fold only — see below).
-    forwarded_holdout = _prepare_forwarded_holdout(
-        req, fitted, feature_cols, is_classification, encoder
-    )
-    if forwarded_holdout is not None:
-        X_dev, y_dev = matrix, y
-        dev_rows = rows
-        X_hold, y_hold = forwarded_holdout
-    else:
-        dev_idx, hold_idx = _split_holdout_indices(
-            matrix, y, req.validation.holdout_size, rng, is_classification
-        )
-        X_dev, y_dev = matrix[dev_idx], y[dev_idx]
-        X_hold, y_hold = matrix[hold_idx], y[hold_idx]
-        dev_rows = [rows[i] for i in dev_idx]
-
-    # Train/validation split (or full-fit fallback for kfold/none). The validation
-    # metric fits preprocessing on the TRAIN fold ONLY (no val-fold leakage), so the
-    # reported `metrics` are an honest estimate; the production `estimator` + the
-    # FROZEN `fitted` payload remain fit on ALL dev data.
-    train_metrics, estimator = _fit_and_score(
-        req, X_dev, y_dev, is_classification, rng,
-        dev_rows=dev_rows, columns=columns, feature_cols=feature_cols, ops_spec=ops_spec,
-        target_idx=target_idx, encoder=encoder,
-    )
-
-    # Stash decode map so the serialized model can map int predictions -> labels.
-    if is_classification:
-        estimator.mj_label_classes_ = label_classes
-
-    feature_importance = _extract_importance(estimator, output_columns)
-
-    result: Dict[str, Any] = {
-        "estimator": estimator,
-        "fitted": fitted,
-        "metrics": train_metrics,
-        "feature_importance": feature_importance,
-        "training_row_count": int(len(rows)),
-    }
-
-    if X_hold.shape[0] > 0:
-        result["holdout_metrics"] = _score(
-            estimator, X_hold, y_hold, is_classification
-        )
-    return result
-
-
-def _prepare_forwarded_holdout(
-    req: TrainRequest,
-    fitted: Dict[str, Any],
-    feature_cols: List[str],
-    is_classification: bool,
-    encoder,
-) -> Tuple[np.ndarray, np.ndarray] | None:
-    """Transform + encode an explicit orchestrator-forwarded locked holdout.
-
-    Returns ``(X_hold, y_hold)`` ready to score, or ``None`` when no `holdout`
-    matrix was forwarded. The holdout feature rows are run through the FROZEN
-    fitted preprocessing (``preprocessing.transform`` — apply only, never re-fit),
-    so the holdout score is free of train/serve skew. Classification labels are
-    encoded with the SAME fitted ``encoder`` used on the training labels.
-    """
-    if req.holdout is None or not req.holdout.rows:
-        return None
-
-    hold_columns = list(req.holdout.columns)
-    if req.target not in hold_columns:
-        raise ValueError(
-            f"Holdout matrix is missing the target column '{req.target}'."
-        )
-    target_idx = hold_columns.index(req.target)
-
-    # Map each holdout row to a feature-name -> value dict (the /predict shape)
-    # so the frozen `preprocessing.transform` apply-path produces a positionally
-    # identical vector to training.
-    # Exclude holdout rows with null targets (unlabeled rows cannot be evaluated).
-    hold_rows = [r for r in req.holdout.rows if r[target_idx] is not None]
-    if not hold_rows:
-        return None
-    feature_dicts = [
-        {c: r[i] for i, c in enumerate(hold_columns) if c != req.target}
-        for r in hold_rows
-    ]
-    X_hold = preprocessing.transform(feature_dicts, fitted, feature_cols)
-
-    y_raw_hold = [r[target_idx] for r in hold_rows]
-    if is_classification:
-        y_hold = encoder.transform([str(v) for v in y_raw_hold])
-    else:
-        y_hold = np.array([float(v) for v in y_raw_hold], dtype=float)
-    return X_hold, y_hold
-
-
-def _fit_and_score(
-    req: TrainRequest,
-    X: np.ndarray,
-    y: np.ndarray,
-    is_classification: bool,
-    random_state: int,
-    *,
-    dev_rows: List[Sequence[Any]],
-    columns: List[str],
-    feature_cols: List[str],
-    ops_spec: List[Dict[str, Any]],
-    target_idx: int,
-    encoder: Any,
-) -> Tuple[Dict[str, float], Any]:
-    """Fit the estimator using the configured validation strategy.
-
-    For ``train_test_split`` the validation metric is computed with preprocessing
-    fit on the TRAIN fold ONLY — the raw dev rows are split first, preprocessing is
-    fit on the training fold and APPLIED (never re-fit) to the validation fold, and
-    only then is the estimator scored. This prevents the validation fold from
-    leaking into the fitted preprocessing (which would make ``metrics`` optimistic).
-
-    Returns the (honest) validation metrics plus the FINAL estimator, re-fit on the
-    full transformed dev matrix ``X`` (which carries the frozen, fit-on-all-dev
-    preprocessing) so the shipped model uses every available row.
-    """
-    from sklearn.model_selection import train_test_split
-
-    strategy = req.validation.strategy
-
-    def build():
-        return algorithms.build_estimator(
-            req.algorithm, req.problem_type, req.hyperparameters
-        )
-
-    if strategy == "train_test_split" and X.shape[0] >= 4:
-        test_size = req.validation.test_size or 0.2
-        idx = np.arange(X.shape[0])
-        stratify = y if is_classification and len(np.unique(y)) > 1 else None
-        tr_idx, te_idx = train_test_split(
-            idx, test_size=test_size, random_state=random_state, stratify=stratify
-        )
-        val_metrics = _anti_skew_val_metrics(
-            req, dev_rows, columns, feature_cols, ops_spec, target_idx,
-            tr_idx, te_idx, y, is_classification, encoder, build,
-        )
-        # re-fit on all dev data (with the frozen, fit-on-all-dev preprocessing)
-        # for the production model.
-        final = build()
-        final.fit(X, y)
-        return val_metrics, final
-
-    # kfold / holdout-only / tiny data: fit on all dev data and score in-sample.
-    est = build()
-    est.fit(X, y)
-    return _score(est, X, y, is_classification), est
-
-
-def _anti_skew_val_metrics(
-    req: TrainRequest,
-    dev_rows: List[Sequence[Any]],
-    columns: List[str],
-    feature_cols: List[str],
-    ops_spec: List[Dict[str, Any]],
-    target_idx: int,
-    tr_idx: np.ndarray,
-    te_idx: np.ndarray,
-    y_dev: np.ndarray,
-    is_classification: bool,
-    encoder: Any,
-    build,
-) -> Dict[str, float]:
-    """Compute validation metrics with preprocessing fit on the TRAIN fold only.
-
-    The raw dev rows are split by ``tr_idx``/``te_idx``; preprocessing is FIT on the
-    train fold and APPLIED to the validation fold (fit-once / apply-everywhere within
-    the split), so the validation fold never leaks into the fitted params.
-    """
-    tr_rows = [list(dev_rows[i]) for i in tr_idx]
-    te_rows = [list(dev_rows[i]) for i in te_idx]
-
-    # Fit preprocessing on the train fold ONLY, then apply to the validation fold.
-    X_tr, _, fold_fitted = preprocessing.fit_transform(
-        columns, tr_rows, ops_spec, feature_cols
-    )
-    te_feature_dicts = [
-        {c: r[i] for i, c in enumerate(columns) if i != target_idx}
-        for r in te_rows
-    ]
-    X_te = preprocessing.transform(te_feature_dicts, fold_fitted, feature_cols)
-
-    y_tr = y_dev[tr_idx]
-    y_te = y_dev[te_idx]
-
-    est = build()
-    est.fit(X_tr, y_tr)
-    return _score(est, X_te, y_te, is_classification)
-
-
-def _score(
-    estimator: Any, X: np.ndarray, y: np.ndarray, is_classification: bool
-) -> Dict[str, float]:
-    """Score a fitted estimator against ``(X, y)`` and return the metric map.
-
-    Dispatches to classification vs. regression metrics; returns an empty dict for
-    an empty matrix (e.g. no holdout rows).
-    """
-    if X.shape[0] == 0:
-        return {}
-    if is_classification:
-        y_pred = estimator.predict(X)
-        y_score = _positive_scores(estimator, X)
-        return metrics.classification_metrics(y, y_pred, y_score)
-    y_pred = estimator.predict(X)
-    return metrics.regression_metrics(y, y_pred)
+    return JSONResponse(result.model_dump(mode="json"))
 
 
 def _positive_scores(estimator: Any, X: np.ndarray) -> np.ndarray:
@@ -442,33 +83,7 @@ def _positive_scores(estimator: Any, X: np.ndarray) -> np.ndarray:
     return np.asarray(estimator.predict(X), dtype=float)
 
 
-def _extract_importance(estimator: Any, columns: List[str]) -> Dict[str, float]:
-    """Build a ``feature_name -> importance`` map from a fitted estimator.
-
-    Prefers ``feature_importances_`` (tree models); falls back to the absolute,
-    class-summed ``coef_`` magnitude (linear models). Returns ``{}`` when the
-    estimator exposes neither. The map drives the leakage guard's single-feature-
-    dominance check (plan §6.4).
-    """
-    if hasattr(estimator, "feature_importances_"):
-        values = np.asarray(estimator.feature_importances_, dtype=float)
-    elif hasattr(estimator, "coef_"):
-        raw = np.asarray(estimator.coef_, dtype=float)
-        # Multi-class linear models produce (n_classes, n_features); sum magnitudes across classes
-        values = np.sum(np.abs(raw), axis=0) if raw.ndim > 1 else np.abs(raw)
-    else:
-        return {}
-    total = float(np.sum(np.abs(values)))
-    if total > 0:
-        values = values / total
-    n = min(len(columns), len(values))
-    return {columns[i]: float(values[i]) for i in range(n)}
-
-
-# ---------------------------------------------------------------------------
-# /predict
-# ---------------------------------------------------------------------------
-
+# The legacy response carries importance shares only (no interval), so no bootstrap draws are spent on one.
 @app.post("/predict", response_model=PredictResponse)
 def predict(req: PredictRequest) -> PredictResponse:
     """Score 1..N rows by APPLYING (never re-fitting) the frozen preprocessing.
@@ -483,6 +98,9 @@ def predict(req: PredictRequest) -> PredictResponse:
         HTTPException: 400 for a missing artifact/cache key, missing
             ``fitted_preprocessing`` (with ``output_columns``), or a transform error.
     """
+    v2 = _load_v2(req.artifact_b64)
+    if v2 is not None:
+        return _predict_v2(v2[0], v2[1], req)
     try:
         estimator, _ = artifacts.load_estimator(req.artifact_b64, req.model_id)
     except (ValueError, artifacts.ArtifactRefusedError) as exc:
@@ -514,24 +132,61 @@ def predict(req: PredictRequest) -> PredictResponse:
     # model's coef_ for per-record contributions (P1-5). Absent/mismatched → contributions degrade to None.
     output_cols = list(req.fitted_preprocessing.get("output_columns") or [])
     predictions = _build_predictions(estimator, X, is_classification, label_classes, output_cols)
-    return PredictResponse(predictions=predictions)
+    return PredictResponse(predictions=predictions, classOrder=list(label_classes) if label_classes else None)
 
 
-def _linear_coef_row(estimator: Any) -> Optional[np.ndarray]:
-    """The single coefficient vector for a linear model, or None when per-row attribution isn't exact.
-
-    Returns the 1-D ``coef_`` for regression (Ridge) or binary classification (LogisticRegression,
-    ``coef_`` shape ``(1, n)``). Returns None for tree/ensemble models (no ``coef_``) and for multiclass
-    (``coef_`` shape ``(k, n)``, k>1) — those fall back to global importance rather than a dishonest guess.
-    """
-    if not hasattr(estimator, "coef_"):
+def _load_v2(artifact_b64: Optional[str]) -> Optional[Tuple[TrainedPredictor, PredictorEnvelope]]:
+    """(predictor, envelope) when `artifact_b64` carries a ps-predictor/v2 envelope; None when it is another envelope
+    (the legacy loader owns it). A refused v2 envelope is a 400, never a 500."""
+    if not artifact_b64:
         return None
-    coef = np.asarray(estimator.coef_, dtype=float)
-    if coef.ndim == 1:
-        return coef
-    if coef.ndim == 2 and coef.shape[0] == 1:
-        return coef[0]
-    return None
+    try:
+        raw = base64.b64decode(artifact_b64.encode("ascii"), validate=True)
+    except (binascii.Error, UnicodeEncodeError):  # not base64 at all: the legacy loader reports it
+        return None
+    try:
+        return artifacts.load_v2_envelope(raw)
+    except artifacts.NotAV2EnvelopeError:
+        return None
+    except artifacts.ArtifactRefusedError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _predict_v2(predictor: TrainedPredictor, envelope: PredictorEnvelope, req: PredictRequest) -> PredictResponse:
+    """Score raw rows with a v2 predictor, its own in-fold encoding applied (never re-fit). Classification returns
+    every class's probability in the artifact's declared classOrder; `score` is P(classOrder[1]) for binary, else
+    the predicted class's probability. A linear predictor's rows carry signed drivers measured from the envelope's
+    training mean; an envelope without one gives no driver."""
+    names = [c.name for c in envelope.featureColumns if c.encoding.kind != "identifier"]
+    missing = sorted(n for n in names if not any(n in r for r in req.rows))
+    if req.rows and missing:
+        raise HTTPException(status_code=400, detail=f"rows lack the model's feature columns: {missing}")
+    frame = pd.DataFrame([{n: r.get(n) for n in names} for r in req.rows], columns=names)
+    try:
+        out = np.asarray(predictor.predict(frame), dtype=np.float64)
+        drivers = predictor.contributions(frame, _envelope_driver_baseline(envelope))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    contribs = [None if d is None else [PredictionContribution(feature=f, value=v) for f, v in d] for d in drivers]
+    order = envelope.classOrder
+    if order is None:
+        return PredictResponse(predictions=[Prediction(score=float(v), contributions=c) for v, c in zip(out, contribs)],
+                               classOrder=None)
+    probs = np.column_stack([1 - out, out]) if out.ndim == 1 else out
+    preds: List[Prediction] = []
+    for row, c in zip(probs, contribs):
+        k = int(np.argmax(row))
+        score = float(row[1]) if len(order) == 2 else float(row[k])
+        preds.append(Prediction.model_validate({"score": score, "class": order[k], "contributions": c,
+                                                "probabilities": [float(v) for v in row]}))
+    return PredictResponse(predictions=preds, classOrder=list(order))
+
+
+def _envelope_driver_baseline(envelope: PredictorEnvelope) -> Optional[DriverBaseline]:
+    """The training mean a v2 envelope carries with its encoded column names, or None when either is absent."""
+    if envelope.driverBaseline is None or envelope.transformedColumns is None:
+        return None
+    return DriverBaseline(np.asarray(envelope.driverBaseline, dtype=np.float64), list(envelope.transformedColumns))
 
 
 def _row_contributions(
@@ -539,27 +194,27 @@ def _row_contributions(
 ) -> List[Optional[List[Dict[str, Any]]]]:
     """Top signed per-record feature contributions for a LINEAR model (P1-5), else all-None.
 
-    For a linear model the exact contribution of feature j to row i's output is ``coef[j] * X[i, j]``
-    (the log-odds contribution for classification, the value contribution for regression). We rank by
-    magnitude and return the top ``top_k`` non-negligible ones per row. Any shape mismatch or unexpected
-    estimator yields ``[None, ...]`` so /predict never fails because of the explanation layer — the score
-    path is unaffected and the UI falls back to global importance.
+    For a linear model the contribution of feature j to row i's output, measured from the mean development row
+    ``x_bar`` stashed at training as ``mj_driver_baseline_``, is ``coef[j] * (X[i, j] - x_bar[j])`` (the log-odds
+    contribution for classification, the value contribution for regression), so a driver says how the row differs
+    from the training population rather than from zero. We rank by magnitude and return the top ``top_k``
+    non-negligible ones per row. A model without the stashed mean (trained before it was stashed), any shape
+    mismatch or an unexpected estimator yields ``[None, ...]``: no driver rather than one measured from zero, and
+    /predict never fails because of the explanation layer — the score path is unaffected and the UI falls back to
+    global importance.
     """
     n_rows = int(X.shape[0]) if hasattr(X, "shape") and X.ndim >= 1 else 0
     try:
-        coef = _linear_coef_row(estimator)
-        if coef is None or X.ndim != 2 or X.shape[1] != coef.shape[0] or len(feature_names) != coef.shape[0]:
+        coef = single_coef_row(estimator)
+        stashed = getattr(estimator, "mj_driver_baseline_", None)
+        baseline = None if stashed is None else np.asarray(stashed, dtype=float).reshape(-1)
+        if coef is None or baseline is None or X.ndim != 2 or X.shape[1] != coef.shape[0] \
+                or len(feature_names) != coef.shape[0] or baseline.shape[0] != coef.shape[0]:
             return [None] * n_rows
         out: List[Optional[List[Dict[str, Any]]]] = []
         for i in range(n_rows):
-            contrib = coef * np.asarray(X[i], dtype=float)
-            order = np.argsort(-np.abs(contrib))[:top_k]
-            row = [
-                {"feature": feature_names[j], "value": float(contrib[j])}
-                for j in order
-                if abs(float(contrib[j])) > 1e-9
-            ]
-            out.append(row or None)
+            drivers = top_signed_drivers(coef * (np.asarray(X[i], dtype=float) - baseline), feature_names, top_k)
+            out.append(None if drivers is None else [{"feature": f, "value": v} for f, v in drivers])
         return out
     except Exception:  # never let the explanation layer break scoring
         return [None] * n_rows
@@ -587,10 +242,14 @@ def _build_predictions(
         # estimator.classes_ are the encoded ints [0..n-1]; map idx -> string label.
         encoded_labels = estimator.predict(X)
         scores = _positive_scores(estimator, X)
-        return [
+        out = [
             _classification_prediction(scores, encoded_labels, label_classes, i, contribs[i])
             for i in range(X.shape[0])
         ]
+        if scores.ndim == 2 and label_classes and scores.shape[1] == len(label_classes):
+            for i, pred in enumerate(out):
+                pred.probabilities = [float(v) for v in scores[i]]  # every class, in label order
+        return out
     values = np.asarray(estimator.predict(X), dtype=float)
     return [
         Prediction(score=float(values[i]), contributions=contribs[i]) for i in range(X.shape[0])

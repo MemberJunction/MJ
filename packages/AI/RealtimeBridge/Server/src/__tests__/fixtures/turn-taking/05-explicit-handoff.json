@@ -1,0 +1,29 @@
+{
+  "Name": "explicit-handoff",
+  "Description": "Sage yields the floor to Demo Loop mid-answer. In the gap, Scout tries to jump in and is held back by the reservation; Demo Loop then takes the floor as the named successor. No two agents ever start at once.",
+  "Agents": [
+    { "Id": "sage", "Names": ["Sage"] },
+    { "Id": "demo", "Names": ["Demo Loop"] },
+    { "Id": "scout", "Names": ["Scout"] }
+  ],
+  "Events": [
+    { "Type": "HumanSpeech", "AtMs": 0, "DurationMs": 2000, "Text": "Sage, kick off the review and bring in whoever you need.",
+      "ExpectDecisions": { "sage": "Speak", "demo": "Silent", "scout": "Silent" } },
+    { "Type": "AgentSpeech", "AtMs": 3000, "Agent": "sage", "DurationMs": 8000, "Text": "I will start with the scope of the review and then hand over to Demo Loop for the numbers." },
+    { "Type": "Yield", "AtMs": 9000, "Agent": "sage", "To": "demo" },
+    { "Type": "AgentSpeech", "AtMs": 9200, "Agent": "scout", "DurationMs": 3000, "Text": "I have a quick point to add on the security side" },
+    { "Type": "AgentSpeech", "AtMs": 9500, "Agent": "demo", "DurationMs": 5000, "Text": "Thanks Sage, picking up from the scope with the numbers." }
+  ],
+  "Expect": {
+    "Speeches": [
+      { "Agent": "sage", "Kind": "Turn", "Granted": true, "Reason": "FloorFree" },
+      { "Agent": "scout", "Kind": "Turn", "Granted": false, "Reason": "ReservedForHandoff" },
+      { "Agent": "demo", "Kind": "Turn", "Granted": true, "Reason": "HandoffGranted" }
+    ],
+    "Yields": [{ "Reason": "Yielded", "HandoffTo": "demo" }],
+    "Preempted": [],
+    "BackchannelCount": 0,
+    "LoopCapReached": false,
+    "FinalFloorHolder": null
+  }
+}

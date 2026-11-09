@@ -77,6 +77,12 @@ export { EncryptionKeySourceBase } from './EncryptionKeySourceBase';
 
 // Core encryption engine
 export { EncryptionEngine } from './EncryptionEngine';
+export {
+    EncryptionKeyUnavailableError,
+    IsEncryptionKeyUnavailable,
+    ReportEncryptionKeyUnavailable,
+    ENCRYPTION_KEY_UNAVAILABLE
+} from './EncryptionKeyUnavailableError';
 
 // Startup validation (auto-registered via @RegisterForStartup)
 export { EncryptionStartupValidator } from './EncryptionStartupValidator';

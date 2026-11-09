@@ -20,12 +20,25 @@ Extensions are discovered automatically using MemberJunction's standard `@Regist
 1. Named export `MJ_SERVER_EXTENSIONS` on the server package (preferred; read after the package is imported).
 2. Fallback: `package.json` → `memberjunction.serverExtensions`.
 
-`@memberjunction/server-bootstrap` collects those declarations and `serve()` merges them with the host `serverExtensions[]`. Host `DriverClass` wins (`Enabled`, `RootPath`, per-key `Settings`, `Phase`). A host entry with `Enabled: false` disables a discovered extension.
+`@memberjunction/server-bootstrap` collects those declarations and `serve()` merges them with the host `serverExtensions[]`. Host `DriverClass` wins (`Enabled`, `RootPath`, per-key `Settings`, `Phase`, `OwnsCORS`). A host entry with `Enabled: false` disables a discovered extension.
 
 ### Lifecycle Phases (G1)
 Extensions declare their execution phase or inherit their class default:
 - **`'pre-auth'`** (Default): Mounted **before** MJServer authentication middleware. Used for external webhooks that carry provider signatures (Slack HMAC, Teams Bot Framework JWT, Twilio signatures, WebRTC SDP brokers).
 - **`'post-auth'`**: Mounted **after** MJServer authentication middleware (`createUnifiedAuthMiddleware`). Guaranteed to have authenticated `req.user` context.
+
+### Extension-Owned CORS (`OwnsCORS`)
+MJServer mounts one global CORS middleware ahead of every extension. By default it reflects any allowed origin onto an extension's responses (refusals included) and answers every preflight (`OPTIONS`) with `204` itself, so an extension's own `OPTIONS` handler never runs.
+
+An extension with its own origin policy — e.g. a public pre-auth edge whose allowed origins are set per resource — sets `OwnsCORS: true` in its config (Open App `MJ_SERVER_EXTENSIONS` entry or host `serverExtensions[]`). The global CORS middleware then skips every request under that `RootPath` (case-insensitive, segment boundary: `/ballot` owns `/ballot/x`, not `/ballots`), and the extension answers its own preflights and sets its own `Access-Control-*` headers. A path that sets none is simply not readable cross-origin, so a forgotten handler fails closed. The unified auth middleware passes `OPTIONS` through, so the flag also works for `post-auth` extensions (their 401s then carry no CORS headers unless the extension adds them). Disabled entries own nothing; a non-boolean value is ignored with a warning. Helpers: `GetCorsOwningServerExtensionRoots`, `IsPathUnderServerExtensionRoot`, `SkipForServerExtensionRoots`.
+
+```javascript
+export const MJ_SERVER_EXTENSIONS = [
+    { Enabled: true, DriverClass: 'BallotEdgeExtension', RootPath: '/ballot', Phase: 'pre-auth', OwnsCORS: true, Settings: {} },
+];
+```
+
+MJServer also disables Express's `X-Powered-By` header app-wide.
 
 ### Reserved Root Path Safety (G2)
 Core system paths cannot be claimed by server extensions: `/`, `/graphql`, `/auth`, `/oauth`, `/health`, `/magic-link`, `/schema`, `/media`, `/mcp`. Configured roots matching these reserved paths fail closed and are dropped with an error.
@@ -145,6 +158,7 @@ export interface ServerExtensionConfig {
     RootPath: string;
     Enabled: boolean;
     Phase?: ServerExtensionPhase;
+    OwnsCORS?: boolean;            // true = global CORS skips RootPath; the extension handles CORS + preflights
     Settings?: Record<string, unknown>;
     PackagePath?: string;
 }

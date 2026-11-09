@@ -4,6 +4,7 @@ export { AuthProviderFactory } from './AuthProviderFactory.js';
 export { TokenExpiredError } from './tokenExpiredError.js';
 export { type IEnvironmentConfigurableProvider, IsEnvironmentConfigurable, isEnvironmentConfigurable } from './IEnvironmentConfigurableProvider.js';
 export { MagicLinkProvider } from './providers/MagicLinkProvider.js';
+export { LocalDevProvider } from './providers/LocalDevProvider.js';
 export {
   HostIdentityProvider,
   type HostAssertionVerifyResult,

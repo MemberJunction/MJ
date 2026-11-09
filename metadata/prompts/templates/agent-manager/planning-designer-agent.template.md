@@ -986,7 +986,7 @@ Create a **markdown document** that explains the technical architecture. This do
 
 ### 5. Design Flow Steps and Paths (For Flow Agents Only)
 If you chose type="Flow", define:
-- **Steps**: Array of workflow steps (StartingStep, StepType: Action/Sub-Agent/Prompt)
+- **Steps**: Array of workflow steps (StartingStep, StepType: Action/Sub-Agent/Prompt/Decision — fast typed classification or triage without an LLM turn)
 - **StepPaths**: Connections between steps with conditions and priority
 - Each step needs: Name, StepType, and type-specific ID (ActionID/SubAgentID/PromptID)
 - Paths need: OriginStepID, DestinationStepID, Condition (optional), Priority

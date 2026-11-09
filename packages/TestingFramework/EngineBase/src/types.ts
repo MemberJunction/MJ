@@ -101,6 +101,21 @@ export interface TestRunOptions {
   configOverride?: Record<string, unknown>;
 
   /**
+   * Experiment override for the rubric that judges this run.
+   * A version here is explicit and is not replaced by the suite pin.
+   */
+  rubricId?: string;
+
+  /** Explicit rubric version id. When omitted, the suite run pins the latest published version. */
+  rubricVersionId?: string;
+
+  /** Latest published version observed at suite-run start, used to pin the suite. */
+  publishedRubricVersionId?: string;
+
+  /** The target agent's default Evaluation rubric, used when nothing earlier names one. */
+  agentEvaluationRubricId?: string;
+
+  /**
    * Progress callback for real-time updates
    */
   progressCallback?: (progress: TestProgress) => void;
@@ -179,6 +194,29 @@ export interface SuiteRunOptions extends TestRunOptions {
    * when tests perform repeated logins from the same IP.
    */
   delayBetweenTests?: number;
+
+  /**
+   * Filter tests by transport layer ('server' | 'client' | 'all').
+   * Reads `Configuration.transport` off each test (falling back to bundle-based inference
+   * or 'server' when omitted). Server-side wire-companion bundles that seed state for or
+   * connect a secondary GraphQL client to MJAPI (`realtime-session-guard`,
+   * `calendar-event-links`) are grouped with `'client'` so they run in the MJAPI-attached
+   * worker process ahead of client-transport bundles.
+   */
+  transport?: 'server' | 'client' | 'all';
+
+  /**
+   * Deterministic shard specification for partitioning a suite across multiple isolated
+   * worker processes (`1 <= index <= total`). Applied after all other test filters using
+   * duration-aware Longest Processing Time (LPT) bucketing while preserving original suite
+   * sequence order within each shard.
+   */
+  shard?: {
+    /** 1-based shard index (`1 <= index <= total`). */
+    index: number;
+    /** Total number of shards (`total >= 1`). */
+    total: number;
+  };
 }
 
 /**
@@ -901,4 +939,10 @@ export interface SuiteFixtureContext {
 
   /** Rows the driver created and must delete; teardown sweeps these best-effort. */
   CreatedRecords: { EntityName: string; PrimaryKeyID: string }[];
+
+  /**
+   * Published rubric versions captured when the suite started, keyed by rubric id.
+   * A version published after the suite starts does not replace these.
+   */
+  PinnedRubricVersions?: Record<string, { id: string; label: string }>;
 }

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "Name": "Rubric Architect",
+    "CategoryID": "@lookup:MJ: AI Agent Categories.Name=System",
+    "Description": "Authors a rubric from a description or a numbered matrix, critiques the draft, and improves it from diagnostics and agreement. Writes Draft versions only and never publishes.",
+    "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+    "Status": "Active",
+    "InvocationMode": "Top-Level",
+    "ExposeAsAction": false
+  },
+  "primaryKey": {
+    "ID": "0ABCE54F-B821-4193-93BA-E22BC3FCAC3E"
+  },
+  "relatedEntities": {
+    "MJ: AI Agent Prompts": [
+      {
+        "fields": {
+          "AgentID": "@parent:ID",
+          "PromptID": "@lookup:MJ: AI Prompts.Name=Rubric Architect",
+          "ExecutionOrder": 0,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "F764E5CD-FD37-48DC-B955-5C5F69D22B8F"
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:25.364Z",
+          "checksum": "33fe8a656870e0bbf1ede2af2f89c412ab0d7c0abfca3667491b151ca811d480"
+        }
+      }
+    ],
+    "MJ: AI Agent Actions": [
+      {
+        "fields": {
+          "AgentID": "@parent:ID",
+          "ActionID": "@lookup:MJ: Actions.Name=Create Rubric Draft",
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "9C63016B-76DF-4F9F-9877-BCA96AC04E24"
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:25.395Z",
+          "checksum": "95eca3ab1b13b487ae4844b21217d928b7fd2f63d9ba60b300ab3bde02e574d6"
+        }
+      },
+      {
+        "fields": {
+          "AgentID": "@parent:ID",
+          "ActionID": "@lookup:MJ: Actions.Name=Get Rubric",
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "3874C3F1-E466-4CED-932C-9468D7F86533"
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:25.417Z",
+          "checksum": "bb3a4c3d41d4aaf72170740e6d0d0fe14c23df0370c96717417d8b6d8c6d56b6"
+        }
+      },
+      {
+        "fields": {
+          "AgentID": "@parent:ID",
+          "ActionID": "@lookup:MJ: Actions.Name=Get Rubric Consensus",
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "56D2876B-A20F-411F-95E8-DC7247701596"
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:25.440Z",
+          "checksum": "5d0759245f2ccdb7706b0f4b9ff089b1d00ded0dd6b3a506b1329e4ce3981b3f"
+        }
+      }
+    ]
+  },
+  "sync": {
+    "lastModified": "2026-10-02T21:42:25.331Z",
+    "checksum": "af9a148630028406750adec27c70c20fe68c34c18ec2461a45de583f2b6cede4"
+  }
+}

@@ -1,5 +1,5 @@
-import { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
-import { logError, logStatus } from "./status_logging";
+import { CodeGenConnection, BaseViewExclusionsPermitted } from '../Database/codeGenDatabaseProvider';
+import { logError, logStatus, logWarning } from "./status_logging";
 import { configInfo, DbPlatform, MjCoreSchema } from "../Config/config";
 
 
@@ -7,6 +7,11 @@ export type IntegrityCheckResult = {
     Name: string;
     Success: boolean;
     Message: string;
+    /**
+     * Problems reported without failing the check: a condition that is being introduced as a
+     * warning before it becomes a failure. Logged with the results; never affects `Success`.
+     */
+    Warnings?: string[];
 }
 
 export type RunIntegrityCheck = {
@@ -14,6 +19,20 @@ export type RunIntegrityCheck = {
     Enabled: boolean;
     Run: (pool: CodeGenConnection) => Promise<IntegrityCheckResult>;
 }
+
+/**
+ * What a set of integrity-check results means. Three outcomes, not two: an empty result array is
+ * its own case and must never be collapsed into 'passed'.
+ *
+ * `RunIntegrityChecks(pool, true)` runs only the checks whose `Enabled` is true, so it returns `[]`
+ * when the checks are configured off. Reporting that as a pass is the same defect as discarding the
+ * results entirely — a green tick over nothing measured — and it is the likelier one, because
+ * turning a check off is the obvious way to quiet it.
+ */
+export type IntegrityCheckOutcome =
+    | { Kind: 'none-ran' }
+    | { Kind: 'passed'; Count: number }
+    | { Kind: 'failed'; Failures: IntegrityCheckResult[] };
 
 /**
  * Returns a quoted identifier appropriate for the current database platform.
@@ -26,16 +45,31 @@ function qi(name: string): string {
     return '[' + name + ']';
 }
 
-/**
- * Returns the SQL syntax for limiting results to 1 row.
- * SQL Server: SELECT TOP 1 * FROM ...
- * PostgreSQL: SELECT * FROM ... LIMIT 1
- */
-function selectOne(schema: string, viewName: string): string {
-    if (DbPlatform() === 'postgresql') {
-        return `SELECT * FROM ${qi(schema)}.${qi(viewName)} LIMIT 1`;
-    }
-    return `SELECT TOP 1 * FROM ${qi(schema)}.${qi(viewName)}`;
+/** One row of the EntityField scan the sequence check reads. */
+type EntityFieldSequenceRow = {
+    ID: string;
+    Entity: string;
+    SchemaName: string;
+    BaseView: string;
+    EntityID: string;
+    Name: string;
+    Sequence: number;
+};
+
+/** One column of a base view as the database catalog reports it. */
+type CatalogColumnRow = {
+    TableSchema: string;
+    TableName: string;
+    ColumnName: string;
+    Ordinal: number | string;
+};
+
+function catalogKey(schema: string, objectName: string): string {
+    return `${schema.trim().toLowerCase()}.${objectName.trim().toLowerCase()}`;
+}
+
+function escapeLiteral(value: string): string {
+    return value.replace(/'/g, "''");
 }
 
 /**
@@ -79,6 +113,9 @@ export class SystemIntegrityBase {
                     else {
                         logError(`   Integrity check FAILED: ${result.Name} - ${result.Message}`);
                     }
+                    for (const warning of result.Warnings ?? []) {
+                        logWarning(`   Integrity check WARNING: ${result.Name} - ${warning}`);
+                    }
                 }
             }
             return results;
@@ -113,92 +150,250 @@ export class SystemIntegrityBase {
         return SystemIntegrityBase.CheckEntityFieldSequencesInternal(pool, `WHERE ${qi('Entity')}='${entityName}'`);
     }
 
+    /**
+     * Checks every in-scope entity on its own, so one failing entity does not hide the next one
+     * (#4737). For each entity the EntityField sequences must run 1..N with no duplicates, and the
+     * fields must line up with the base view's columns as the database catalog reports them. The
+     * catalog is read instead of a sample row so a view with no rows is still checked.
+     *
+     * Scope follows the run's schema configuration: `excludeSchemas` is skipped, and when
+     * `includeSchemas` is set only those schemas are checked.
+     */
     protected static async CheckEntityFieldSequencesInternal(pool: CodeGenConnection, filter: string): Promise<IntegrityCheckResult> {
         try {
             const schema = MjCoreSchema();
             const sSQL = `SELECT ${qi('ID')}, ${qi('Entity')}, ${qi('SchemaName')}, ${qi('BaseView')}, ${qi('EntityID')}, ${qi('Name')}, ${qi('Sequence')} FROM ${qi(schema)}.${qi('vwEntityFields')} ${filter} ORDER BY ${qi('Entity')}, ${qi('Sequence')}`;
             const resultResult = await pool.query(sSQL);
-            const result = resultResult.recordset;
-            if (!result || result.length === 0) {
+            const result = (resultResult.recordset ?? []) as EntityFieldSequenceRow[];
+            if (result.length === 0) {
                 throw new Error("No entity fields found");
             }
-            else {
-                // getting here means we check one entity at a time and build a message
-                let success: boolean = true;
-                let message: string = "";
-                let lastEntity: string = "";
 
-                // loop through all the fields. Each time the entity changes, check to see if there are any duplicate fields
-                // that has the same sequence number and flag that as an error.
-                const excludedSchemas = new Set(
-                    (configInfo.excludeSchemas ?? []).map((s) => s.toLowerCase())
-                );
-
-                for (const row of result) {
-                    if (excludedSchemas.has(String(row.SchemaName ?? '').toLowerCase())) {
-                        lastEntity = row.Entity;
-                        continue;
-                    }
-                    if (lastEntity !== row.Entity) {
-                        // we have a new entity, check all the fields in this entity
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        const fields = result.filter((f: any) => f.Entity === row.Entity);
-                        // check for duplicate sequences, and build a list of duplicate sequences to include the field name in the message along with the sequence
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        const duplicates = fields.filter((f: any) => fields.filter((f2: any) => f2.Sequence === f.Sequence).length > 1);
-                        if (duplicates.length > 0) {
-                            success = false;
-                            message += `Entity ${row.Entity} has duplicate Entity Field sequences:\n`;
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            message += duplicates.map((d: any) => `      * ${d.Name} (${d.Sequence})`).join("\n");
-                            message += "\n";
-                        }
-                        else {
-                            // no duplicates, so now check to see if all of the sequences are in order, starting with 1
-                            let sequence = 1;
-                            for (const field of fields) {
-                                if (field.Sequence !== sequence) {
-                                    success = false;
-                                    message += `Entity ${row.Entity} has a missing sequence number. Expected ${sequence}, but found ${field.Sequence} for field ${field.Name}\n`;
-                                }
-                                sequence++;
-                            }
-
-                            if (success) {
-                                // finally, check to see if the metadata sequence numbers match the physical order of the columns in the
-                                // underlying base view. This is critical for calling the spUpdate/spCreate procs correctly.
-                                // we will do this by selecting one row from the base view
-                                const entity = row.Entity;
-                                const sampleSQL = selectOne(row.SchemaName, row.BaseView);
-                                const sampleResultResult = await pool.query(sampleSQL);
-                                const sampleResult = sampleResultResult.recordset;
-                                // now check the order of the columns in the result set relative to the
-                                // fields array
-                                if (sampleResult && sampleResult.length > 0) {
-                                    const columns = Object.keys(sampleResult[0]);
-                                    let i = 0;
-                                    for (const field of fields) {
-                                        if (columns[i] !== field.Name) {
-                                            success = false;
-                                            message += `Entity ${entity} has a mismatch between the metadata sequence and the physical column order in the base view ${qi(row.SchemaName)}.${qi(row.BaseView)} for position ${i+1}. Expected ${field.Name} but found ${columns[i]}\n`;
-                                        }
-                                        i++;
-                                    }
-                                }
-                            }
-                        }
-
-                        lastEntity = row.Entity;
-                    }
+            const inScope = result.filter(r => SystemIntegrityBase.IsSchemaInScope(r.SchemaName));
+            const byEntity = new Map<string, EntityFieldSequenceRow[]>();
+            for (const row of inScope) {
+                const key = String(row.EntityID);
+                let fields = byEntity.get(key);
+                if (!fields) {
+                    fields = [];
+                    byEntity.set(key, fields);
                 }
-
-                return { Success: success, Message: message, Name: 'entityFieldsSequenceCheck' };
+                fields.push(row);
             }
+
+            const viewSchemas = [...new Set(inScope.map(r => r.SchemaName).filter(s => !!s))];
+            const catalog = await SystemIntegrityBase.LoadCatalogColumns(pool, viewSchemas);
+            const excludedViewFields = SystemIntegrityBase.ExcludedBaseViewFields();
+
+            const messages: string[] = [];
+            const warnings: string[] = [];
+            for (const fields of byEntity.values()) {
+                const entityMessage = SystemIntegrityBase.CheckSingleEntity(fields, catalog, excludedViewFields);
+                if (entityMessage) {
+                    messages.push(entityMessage);
+                    continue;
+                }
+                const widthWarning = SystemIntegrityBase.CheckBaseViewWidth(fields, catalog, excludedViewFields);
+                if (widthWarning) {
+                    warnings.push(widthWarning);
+                }
+            }
+
+            return {
+                Success: messages.length === 0,
+                Message: messages.join(''),
+                Name: 'entityFieldsSequenceCheck',
+                ...(warnings.length > 0 ? { Warnings: warnings } : {}),
+            };
         }
         catch (e) {
             const message = `Error checking entity field sequences: ${e}`;
             logError(message);
             return { Success: false, Message: message, Name: 'entityFieldsSequenceCheck' };
         }
+    }
+
+    /**
+     * True when the schema is checked: not in `excludeSchemas`, and in `includeSchemas` when that
+     * list is set. Compared case-insensitively.
+     */
+    protected static IsSchemaInScope(schemaName: string | null | undefined): boolean {
+        const target = String(schemaName ?? '').trim().toLowerCase();
+        const excluded = (configInfo.excludeSchemas ?? []).map(s => s.trim().toLowerCase());
+        if (excluded.includes(target)) {
+            return false;
+        }
+        const included = (configInfo.includeSchemas ?? []).map(s => s.trim().toLowerCase());
+        if (included.length > 0 && !included.includes(target)) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Reads the column order of every view and table in the given schemas from
+     * INFORMATION_SCHEMA.COLUMNS, which both SQL Server and PostgreSQL provide.
+     * @returns `schema.object` (lower case) → column names in ordinal order
+     */
+    protected static async LoadCatalogColumns(pool: CodeGenConnection, schemas: string[]): Promise<Map<string, string[]>> {
+        const columns = new Map<string, string[]>();
+        if (schemas.length === 0) {
+            return columns;
+        }
+        const schemaList = schemas.map(s => `'${escapeLiteral(s)}'`).join(', ');
+        const sql = `SELECT TABLE_SCHEMA AS "TableSchema", TABLE_NAME AS "TableName", COLUMN_NAME AS "ColumnName", ORDINAL_POSITION AS "Ordinal"
+                     FROM INFORMATION_SCHEMA.COLUMNS
+                     WHERE TABLE_SCHEMA IN (${schemaList})
+                     ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION`;
+        const rows = ((await pool.query(sql)).recordset ?? []) as CatalogColumnRow[];
+        const ordered = [...rows].sort((a, b) => Number(a.Ordinal) - Number(b.Ordinal));
+        for (const row of ordered) {
+            const key = catalogKey(row.TableSchema, row.TableName);
+            let list = columns.get(key);
+            if (!list) {
+                list = [];
+                columns.set(key, list);
+            }
+            list.push(row.ColumnName);
+        }
+        return columns;
+    }
+
+    /**
+     * Base-view column exclusions (`baseViewExcludedFields`) keep an EntityField whose column the
+     * view leaves out on purpose, so those fields are skipped in the column comparison. Entries are
+     * `Entity.Field` or a bare `Field` (any entity). Empty unless exclusions are permitted.
+     */
+    protected static ExcludedBaseViewFields(): { qualified: Set<string>; bare: Set<string> } {
+        const qualified = new Set<string>();
+        const bare = new Set<string>();
+        if (!BaseViewExclusionsPermitted()) {
+            return { qualified, bare };
+        }
+        for (const raw of configInfo.baseViewExcludedFields ?? []) {
+            const entry = raw.trim();
+            const lastDot = entry.lastIndexOf('.');
+            if (lastDot > 0 && lastDot < entry.length - 1) {
+                qualified.add(`${entry.slice(0, lastDot).trim().toLowerCase()}.${entry.slice(lastDot + 1).trim().toLowerCase()}`);
+            } else if (entry.length > 0) {
+                bare.add(entry.toLowerCase());
+            }
+        }
+        return { qualified, bare };
+    }
+
+    /**
+     * Checks one entity's fields (already ordered by Sequence).
+     * @returns an empty string when the entity passes, otherwise the failure text
+     */
+    protected static CheckSingleEntity(
+        fields: EntityFieldSequenceRow[],
+        catalog: Map<string, string[]>,
+        excludedViewFields: { qualified: Set<string>; bare: Set<string> }
+    ): string {
+        const entity = fields[0].Entity;
+
+        const seen = new Map<number, number>();
+        for (const f of fields) {
+            seen.set(f.Sequence, (seen.get(f.Sequence) ?? 0) + 1);
+        }
+        const duplicates = fields.filter(f => (seen.get(f.Sequence) ?? 0) > 1);
+        if (duplicates.length > 0) {
+            return `Entity ${entity} has duplicate Entity Field sequences:\n` +
+                duplicates.map(d => `      * ${d.Name} (${d.Sequence})`).join("\n") + "\n";
+        }
+
+        let message = '';
+        fields.forEach((field, index) => {
+            if (field.Sequence !== index + 1) {
+                message += `Entity ${entity} has a missing sequence number. Expected ${index + 1}, but found ${field.Sequence} for field ${field.Name}\n`;
+            }
+        });
+        if (message) {
+            return message;
+        }
+
+        // The metadata sequence must match the physical column order of the base view; the
+        // spCreate/spUpdate result capture depends on it.
+        const schemaName = fields[0].SchemaName;
+        const baseView = fields[0].BaseView;
+        if (!schemaName || !baseView) {
+            return '';
+        }
+        const columns = catalog.get(catalogKey(schemaName, baseView));
+        if (!columns || columns.length === 0) {
+            return `Entity ${entity} has no base view ${qi(schemaName)}.${qi(baseView)} in the database catalog\n`;
+        }
+        const comparable = SystemIntegrityBase.ComparableFields(fields, excludedViewFields);
+        for (let i = 0; i < comparable.length; i++) {
+            if (columns[i] !== comparable[i].Name) {
+                return `Entity ${entity} has a mismatch between the metadata sequence and the physical column order in the base view ${qi(schemaName)}.${qi(baseView)} for position ${i + 1}. Expected ${comparable[i].Name} but found ${columns[i]}\n`;
+            }
+        }
+        return '';
+    }
+
+    /** An entity's fields that are expected in its base view: all of them but the configured exclusions. */
+    protected static ComparableFields(
+        fields: EntityFieldSequenceRow[],
+        excludedViewFields: { qualified: Set<string>; bare: Set<string> }
+    ): EntityFieldSequenceRow[] {
+        const entityKey = fields[0].Entity.trim().toLowerCase();
+        return fields.filter(f => {
+            const name = f.Name.toLowerCase();
+            return !excludedViewFields.bare.has(name) && !excludedViewFields.qualified.has(`${entityKey}.${name}`);
+        });
+    }
+
+    /**
+     * Checks that the base view has no more columns than the entity has fields (MJ #3608).
+     *
+     * The position check in {@link CheckSingleEntity} only compares as many columns as there are
+     * fields, so a view with extra trailing columns (say a joined name column with no virtual field)
+     * passes it. Every write to such an entity fails: `spCreate`/`spUpdate` capture the view row
+     * into a table variable shaped by the fields, and the column counts differ. Run only after
+     * {@link CheckSingleEntity} passes.
+     *
+     * Reported as a warning for one release, so databases already in this state can still run
+     * CodeGen and the count of affected entities becomes visible; it is planned to become a failure
+     * after that.
+     * @returns an empty string when the widths match, otherwise the warning text
+     */
+    protected static CheckBaseViewWidth(
+        fields: EntityFieldSequenceRow[],
+        catalog: Map<string, string[]>,
+        excludedViewFields: { qualified: Set<string>; bare: Set<string> }
+    ): string {
+        const schemaName = fields[0].SchemaName;
+        const baseView = fields[0].BaseView;
+        if (!schemaName || !baseView) {
+            return '';
+        }
+        const columns = catalog.get(catalogKey(schemaName, baseView)) ?? [];
+        const comparable = SystemIntegrityBase.ComparableFields(fields, excludedViewFields);
+        if (columns.length <= comparable.length) {
+            return '';
+        }
+        const extra = columns.slice(comparable.length);
+        return `Entity ${fields[0].Entity} has ${extra.length} base view column(s) in ${qi(schemaName)}.${qi(baseView)} with no entity field: ${extra.join(', ')}. ` +
+            `Creates and updates on this entity fail until the fields exist (run CodeGen against the schema) or the columns leave the view.`;
+    }
+
+    /**
+     * Classifies the output of {@link RunIntegrityChecks}. Pure: it decides, it does not report.
+     *
+     * This lives here rather than inline in the caller so the decision can be tested without
+     * standing up the CodeGen pipeline. The case that needs the test is `none-ran`: it is
+     * indistinguishable from a pass by every signal except the array's length, so a caller that
+     * forgets it looks correct and is not.
+     */
+    public static ClassifyResults(results: IntegrityCheckResult[]): IntegrityCheckOutcome {
+        if (results.length === 0) {
+            return { Kind: 'none-ran' };
+        }
+        const failures = results.filter((r) => !r.Success);
+        return failures.length > 0
+            ? { Kind: 'failed', Failures: failures }
+            : { Kind: 'passed', Count: results.length };
     }
 }

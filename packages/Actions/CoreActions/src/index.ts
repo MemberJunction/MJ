@@ -20,6 +20,8 @@ export * from './custom/crud/write-entity-fields.action';
 
 // Data processing
 export * from './custom/data/run-record-process.action';
+export * from './custom/record-cloning/clone-record.action';
+export * from './custom/record-cloning/clone-records.action';
 
 // Demo Actions
 export * from './custom/demo/get-weather.action';
@@ -31,6 +33,7 @@ export * from './custom/demo/unit-converter.action';
 
 // Utility Actions
 export * from './custom/utilities/vectorize-entity.action';
+export * from './custom/utilities/reembed-local-vectors.action';
 export * from './custom/utilities/business-days-calculator.action';
 export * from './custom/utilities/ip-geolocation.action';
 export * from './custom/utilities/census-data-lookup.action';
@@ -110,9 +113,11 @@ export * from './custom/workflow/loop.action';
 export * from './custom/workflow/parallel-execute.action';
 export * from './custom/workflow/retry.action';
 export * from './custom/workflow/delay.action';
+export * from './custom/workflow/workflow-run-scope';
 
 // AI Actions
 export * from './custom/ai/execute-ai-prompt.action';
+export * from './custom/ai/run-decision.action';
 export * from './custom/ai/execute-agent.action';
 export * from './custom/ai/create-runtime-action.action';
 export * from './custom/ai/test-runtime-action.action';
@@ -127,8 +132,15 @@ export * from './custom/ai/find-best-action.action';
 export * from './custom/ai/find-best-agent.action';
 export * from './custom/ai/load-agent-spec.action';
 export * from './custom/ai/generate-image.action';
+export * from './custom/ai/generate-video.action';
 export * from './custom/ai/run-cluster-analysis.action';
 export * from './custom/ai/actionsmith-agent';
+export * from './custom/ai/schedule-next-agent-wake.action';
+export * from './custom/ai/configure-agent-user-policy.action';
+export * from './custom/ai/send-inter-agent-request.action';
+export * from './custom/ai/prepare-outbound-call-brief.action';
+export * from './custom/ai/user-scoped-communication.action';
+export * from './custom/ai/communication-oauth-service';
 
 // User Management Actions
 export * from './custom/user-management/check-user-permission.action';
@@ -148,6 +160,8 @@ export * from './custom/visualization/create-svg-network.action';
 export * from './custom/visualization/create-svg-infographic.action';
 export * from './custom/visualization/create-svg-sketch-diagram.action';
 export * from './custom/visualization/create-mermaid-diagram.action';
+export * from './custom/visualization/render-architecture-diagram.action';
+export * from './custom/visualization/get-architecture-diagram-reference.action';
 export * from './custom/visualization/shared/svg-types';
 export * from './custom/visualization/shared/svg-utils';
 export * from './custom/visualization/shared/svg-theming';

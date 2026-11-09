@@ -3,6 +3,12 @@ import BodyParser from 'body-parser';
 import { LogStatusEx } from '@memberjunction/core';
 import { RESTEndpointHandler } from './RESTEndpointHandler.js';
 
+/**
+ * Known exception to the API-root rule (#5674): REST stays at the ORIGIN-absolute `/api/v1` and does NOT go
+ * through `ApiRoute()`. Prefixed deployments (CloudFront `/api/*`) already reach it at this absolute path;
+ * under `MJAPI_BASE_PATH=/api` wrapping it would make it `/api/api/v1` and break
+ * every REST client. It is passed as a constant, so `check:api-root` (which flags literals) does not trip.
+ */
 export const REST_API_BASE_PATH = '/api/v1';
 
 /** @deprecated Use {@link REST_API_BASE_PATH}. */
@@ -47,10 +53,12 @@ export interface RESTApiOptions {
 }
 
 /**
- * Default REST API configuration
+ * Default REST API configuration. Disabled by default (matching the documented default and
+ * MJServer's own config default): mounting a full-entity REST API must be an explicit decision,
+ * never a side effect of calling SetupRESTEndpoints with no options.
  */
 export const DEFAULT_REST_API_OPTIONS: RESTApiOptions = {
-    enabled: true,
+    enabled: false,
 };
 
 /**
@@ -89,6 +97,13 @@ export function SetupRESTEndpoints(
     if (authMiddleware) {
         app.use(basePath, BodyParser.json({ limit: '50mb' }), authMiddleware, restHandler.getRouter());
     } else {
+        // MJServer itself is safe here (its unified auth middleware runs globally before this
+        // mount), but a third-party caller passing no authMiddleware may be mounting a fully
+        // UNauthenticated entity CRUD API — say so loudly.
+        LogStatusEx({
+            message: `REST API mounted at ${basePath} WITHOUT a route-level auth middleware. ` +
+                `Ensure an authentication middleware runs globally before this mount, or pass one to SetupRESTEndpoints.`,
+        });
         app.use(basePath, BodyParser.json({ limit: '50mb' }), restHandler.getRouter());
     }
 

@@ -1,19 +1,32 @@
-import { LogError, LogStatus } from "@memberjunction/core";
+import { LogError, LogStatusEx } from "@memberjunction/core";
 import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { Subscription } from "rxjs";
 
 /**
- * Idle timeout for fire-and-forget operations (12 minutes).
+ * Idle timeout for fire-and-forget operations (3 minutes).
  *
  * This is an *inactivity* window, not an absolute cap: it resets every time a
  * message (progress, streaming, liveness pulse, completion) arrives for the
- * operation. The server emits a liveness pulse every ~5 minutes while the
+ * operation. The server emits a liveness pulse every 60 seconds while the
  * operation runs, so as long as the work is alive the timer never fires. It
  * only expires when the server has gone genuinely silent — at which point the
  * optional reconciliation hook decides whether the operation is dead or still
  * running.
+ *
+ * WAS 12 MINUTES (MJ #4222). Paired with a 5-minute server pulse, that was ~2.4 missed
+ * pulses before anyone grew suspicious — defensible for a 40-minute agent run, absurd for
+ * the 20-second one that actually broke: a 36x horizon on a UI the user is watching. The
+ * window and the pulse are a matched pair and must be changed together; this value must
+ * stay at roughly 3x {@link DEFAULT_PULSE_INTERVAL_MS} in MJServer's FireAndForgetHeartbeat,
+ * or a healthy long-running agent will trip reconciliation on every quiet stretch.
+ *
+ * DEPLOYMENT ORDER. The pair spans two independently deployable packages — this one and
+ * `@memberjunction/server`. A client on this window talking to a server still pulsing every
+ * 5 minutes times out on EVERY pulse gap, not merely on a dead transport, so the server must
+ * ship first or with it. Combined with `DEFAULT_MAX_STALL_RECONCILES`, the give-up horizon is
+ * 6 x this window: roughly 18 minutes.
  */
-const DEFAULT_IDLE_TIMEOUT_MS = 12 * 60 * 1000;
+export const DEFAULT_IDLE_TIMEOUT_MS = 3 * 60 * 1000;
 
 /**
  * Maximum number of consecutive idle-timeout reconciliations that may return
@@ -104,6 +117,22 @@ export interface FireAndForgetConfig<TResult> {
     onMessage?: (parsed: Record<string, unknown>) => void;
 
     /**
+     * Optional predicate deciding whether a PubSub message belongs to THIS operation.
+     *
+     * The push-status subscription is per-SESSION, not per-operation, so without this every
+     * message for every concurrent run resets every pending operation's idle timer. With
+     * several agents in flight, one chatty run holds a dead run's timer open indefinitely —
+     * the "idle" window silently means "the whole session went quiet", which is not what any
+     * caller intends (MJ #4222).
+     *
+     * MUST FAIL OPEN: return `true` for anything not positively identifiable as another
+     * operation's. Wrongly ignoring a message that IS ours shortens the window and causes a
+     * spurious reconcile; wrongly accepting one that is not merely preserves the old
+     * behaviour. When omitted, every message counts as activity, exactly as before.
+     */
+    isRelevantMessage?: (parsed: Record<string, unknown>) => boolean;
+
+    /**
      * Optional reconciliation hook invoked when the idle timer expires (no message
      * received within the idle window) or the PubSub stream drops. Should query the
      * authoritative server-side run record and return a {@link StallDecision}.
@@ -119,6 +148,13 @@ export interface FireAndForgetConfig<TResult> {
 
     /** Custom timeout error message */
     timeoutErrorMessage?: string;
+    /**
+     * Hold PubSub messages that arrive before the acknowledgement, then route them, in arrival order, once
+     * {@link validateAck} has accepted it. For an operation whose identity comes FROM the acknowledgement (the server
+     * names the record it created), so a message that beats the ack over the WebSocket can still be attributed rather
+     * than lost. Off by default: messages are routed as they arrive, exactly as before.
+     */
+    deferMessagesUntilAck?: boolean;
 
     /**
      * Create an error result when the server rejects the request
@@ -128,6 +164,15 @@ export interface FireAndForgetConfig<TResult> {
 
     /** Label for logging (e.g., 'RunTest', 'RunAIAgent') */
     operationLabel?: string;
+}
+
+/** What the PubSub subscription calls for one operation. */
+interface PubSubHandlers<TResult> {
+    onActivity: () => void;
+    onCompletion: (value: TResult) => void;
+    onStreamEnd: () => void;
+    /** Takes a message to route later and returns true; returns false to have it routed now. */
+    hold: (message: string) => boolean;
 }
 
 /** Internal resettable inactivity timer. */
@@ -225,7 +270,7 @@ export class FireAndForgetHelper {
 
             let decision: StallDecision<TResult>;
             try {
-                LogStatus(`[FireAndForget:${label}] Idle window elapsed, reconciling against server run record`);
+                LogStatusEx({ message: `[FireAndForget:${label}] Idle window elapsed, reconciling against server run record`, verboseOnly: true });
                 decision = await config.onStall();
             } catch (e) {
                 settleReject(e as Error);
@@ -243,7 +288,7 @@ export class FireAndForgetHelper {
                     idleTimer.reset();
                 }
             } else if ('resolve' in decision) {
-                LogStatus(`[FireAndForget:${label}] Reconciliation recovered a completed run`);
+                LogStatusEx({ message: `[FireAndForget:${label}] Reconciliation recovered a completed run`, verboseOnly: true });
                 settleResolve(decision.resolve);
             } else {
                 settleReject(decision.reject);
@@ -251,15 +296,22 @@ export class FireAndForgetHelper {
         };
 
         const idleTimer = FireAndForgetHelper.createIdleTimer(idleMs, () => { void onStall(); });
+        // Messages held until the ack (deferMessagesUntilAck); null when messages route as they arrive.
+        let held: string[] | null = config.deferMessagesUntilAck ? [] : null;
+        const handlers: PubSubHandlers<TResult> = {
+            onActivity: () => { stallCount = 0; idleTimer.reset(); },
+            onCompletion: (value) => settleResolve(value),
+            onStreamEnd: () => { void onStall(); },
+            hold: (message) => {
+                held?.push(message);
+                return held !== null;
+            },
+        };
 
         try {
             idleTimer.reset();
 
-            subscription = FireAndForgetHelper.subscribeToPubSub(config, {
-                onActivity: () => { stallCount = 0; idleTimer.reset(); },
-                onCompletion: (value) => settleResolve(value),
-                onStreamEnd: () => { void onStall(); },
-            });
+            subscription = FireAndForgetHelper.subscribeToPubSub(config, handlers);
 
             // Execute the mutation (server returns immediately in fire-and-forget mode)
             const ackResult = await FireAndForgetHelper.executeMutation(config);
@@ -272,7 +324,14 @@ export class FireAndForgetHelper {
                 return config.createErrorResult(errorMsg);
             }
 
-            LogStatus(`[FireAndForget:${label}] Server accepted, waiting for completion via WebSocket`);
+            // The ack has named the operation: route what arrived before it, then everything as it comes.
+            const early = held ?? [];
+            held = null;
+            for (const message of early) {
+                FireAndForgetHelper.routeMessage(config, handlers, message);
+            }
+
+            LogStatusEx({ message: `[FireAndForget:${label}] Server accepted, waiting for completion via WebSocket`, verboseOnly: true });
 
             return await promise;
 
@@ -339,33 +398,15 @@ export class FireAndForgetHelper {
      */
     private static subscribeToPubSub<TResult>(
         config: FireAndForgetConfig<TResult>,
-        handlers: {
-            onActivity: () => void;
-            onCompletion: (value: TResult) => void;
-            onStreamEnd: () => void;
-        }
+        handlers: PubSubHandlers<TResult>
     ): Subscription {
         const sessionId = config.dataProvider.sessionId;
-        const label = config.operationLabel ?? config.mutationFieldName;
 
         return config.dataProvider.PushStatusUpdates(sessionId)
             .subscribe({
                 next: (message: string) => {
-                    // Any inbound message means the server is alive — reset the idle timer.
-                    handlers.onActivity();
-                    try {
-                        const parsed = JSON.parse(message) as Record<string, unknown>;
-
-                        if (config.onMessage) {
-                            config.onMessage(parsed);
-                        }
-
-                        if (config.isCompletionEvent(parsed)) {
-                            LogStatus(`[FireAndForget:${label}] Completion event received`);
-                            handlers.onCompletion(config.extractResult(parsed));
-                        }
-                    } catch (e) {
-                        console.error(`[FireAndForget:${label}] Failed to parse PubSub message:`, e);
+                    if (!handlers.hold(message)) {
+                        FireAndForgetHelper.routeMessage(config, handlers, message);
                     }
                 },
                 // Stream dropping mid-operation is itself a "we've gone silent" signal —
@@ -373,6 +414,44 @@ export class FireAndForgetHelper {
                 error: () => handlers.onStreamEnd(),
                 complete: () => handlers.onStreamEnd(),
             });
+    }
+
+    /** Routes one PubSub message: liveness, the operation's own message handler, then completion detection. */
+    private static routeMessage<TResult>(
+        config: FireAndForgetConfig<TResult>,
+        handlers: PubSubHandlers<TResult>,
+        message: string
+    ): void {
+        const label = config.operationLabel ?? config.mutationFieldName;
+        let parsed: Record<string, unknown> | undefined;
+        try {
+            parsed = JSON.parse(message) as Record<string, unknown>;
+        } catch (e) {
+            // Unparseable, so it cannot be attributed to another operation. Treat it
+            // as liveness (fail open) and stop — there is nothing further to route.
+            console.error(`[FireAndForget:${label}] Failed to parse PubSub message:`, e);
+            handlers.onActivity();
+            return;
+        }
+
+        // Only traffic for THIS operation counts as proof that THIS operation is
+        // alive. Absent a predicate, any message does — the historical behaviour.
+        if (!config.isRelevantMessage || config.isRelevantMessage(parsed)) {
+            handlers.onActivity();
+        }
+
+        try {
+            if (config.onMessage) {
+                config.onMessage(parsed);
+            }
+
+            if (config.isCompletionEvent(parsed)) {
+                LogStatusEx({ message: `[FireAndForget:${label}] Completion event received`, verboseOnly: true });
+                handlers.onCompletion(config.extractResult(parsed));
+            }
+        } catch (e) {
+            console.error(`[FireAndForget:${label}] Failed to route PubSub message:`, e);
+        }
     }
 
     /**
@@ -398,9 +477,10 @@ export class FireAndForgetHelper {
         config: FireAndForgetConfig<TResult>
     ): Promise<TResult> {
         const label = config.operationLabel ?? config.mutationFieldName;
-        LogStatus(
-            `[FireAndForget:${label}] Provider has no PushStatusUpdates channel — running synchronously (fireAndForget disabled)`
-        );
+        LogStatusEx({
+            message: `[FireAndForget:${label}] Provider has no PushStatusUpdates channel — running synchronously (fireAndForget disabled)`,
+            verboseOnly: true
+        });
 
         // Override fireAndForget so the server runs the operation inline and returns the result,
         // rather than acking immediately and publishing the result over a channel we can't hear.
@@ -421,7 +501,7 @@ export class FireAndForgetHelper {
             );
         }
 
-        LogStatus(`[FireAndForget:${label}] Synchronous execution completed`);
+        LogStatusEx({ message: `[FireAndForget:${label}] Synchronous execution completed`, verboseOnly: true });
         return config.extractSyncResult(ack);
     }
 }

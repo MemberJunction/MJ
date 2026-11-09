@@ -1,0 +1,16 @@
+[
+    {
+        "name": "name",
+        "description": "Extracts the data artifact title or name",
+        "type": "string",
+        "standardProperty": "name",
+        "extractor": "@file:data-artifact/data-name.js"
+    },
+    {
+        "name": "description",
+        "description": "Extracts the data artifact summary or interpretation",
+        "type": "string",
+        "standardProperty": "description",
+        "extractor": "@file:data-artifact/data-description.js"
+    }
+]

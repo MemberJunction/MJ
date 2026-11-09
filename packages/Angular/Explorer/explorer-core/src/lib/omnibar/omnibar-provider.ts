@@ -18,7 +18,8 @@ export type OmnibarNavPayload =
     | { kind: 'nav'; appId: string; navItemName: string }
     | { kind: 'entity-list'; entityName: string }
     | { kind: 'agent'; agentName: string }
-    | { kind: 'file'; fileName: string; rawMetadata?: string };
+    | { kind: 'file'; fileName: string; rawMetadata?: string }
+    | { kind: 'dashboard'; dashboardId: string; dashboardName: string };
 
 /** Key under which the nav payload rides in `MentionSuggestion.data`. */
 export const OMNIBAR_NAV_KEY = 'nav';

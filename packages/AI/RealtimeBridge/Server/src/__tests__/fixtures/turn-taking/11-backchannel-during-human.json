@@ -1,0 +1,28 @@
+{
+  "Name": "backchannel-during-human",
+  "Description": "A person gives a long explanation. Sage acknowledges twice with short listening sounds, which are welcome and granted. Demo Loop starts a real answer partway through and is denied because the person is still talking. Sage replies properly once the person has finished.",
+  "Agents": [
+    { "Id": "sage", "Names": ["Sage"] },
+    { "Id": "demo", "Names": ["Demo Loop"] }
+  ],
+  "Events": [
+    { "Type": "HumanSpeech", "AtMs": 0, "DurationMs": 8000, "Text": "Let me explain the whole situation from the beginning, because the context matters for what comes next.",
+      "ExpectDecisions": { "sage": "Silent", "demo": "Silent" } },
+    { "Type": "AgentSpeech", "AtMs": 3000, "Agent": "sage", "DurationMs": 400, "Text": "mm-hm" },
+    { "Type": "AgentSpeech", "AtMs": 5000, "Agent": "demo", "DurationMs": 3000, "Text": "I think I can answer that already without waiting." },
+    { "Type": "AgentSpeech", "AtMs": 6000, "Agent": "sage", "DurationMs": 500, "Text": "right" },
+    { "Type": "AgentSpeech", "AtMs": 10000, "Agent": "sage", "DurationMs": 3000, "Text": "Thank you, that is very clear." }
+  ],
+  "Expect": {
+    "Speeches": [
+      { "Agent": "sage", "Kind": "Backchannel", "Granted": true, "Reason": "Backchannel" },
+      { "Agent": "demo", "Kind": "Turn", "Granted": false, "Reason": "HumanSpeaking" },
+      { "Agent": "sage", "Kind": "Backchannel", "Granted": true, "Reason": "Backchannel" },
+      { "Agent": "sage", "Kind": "Turn", "Granted": true, "Reason": "FloorFree" }
+    ],
+    "Preempted": [],
+    "BackchannelCount": 2,
+    "LoopCapReached": false,
+    "FinalFloorHolder": null
+  }
+}
