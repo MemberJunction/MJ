@@ -1921,7 +1921,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT164 - Integration & Runtime Schema Typing and Auto-Indexing Pipeline",
+            "TestID": "@lookup:MJ: Tests.Name=IT164 - Integration and Runtime Schema Typing and Auto-Indexing Pipeline",
             "Sequence": 49,
             "Status": "Active"
           },
