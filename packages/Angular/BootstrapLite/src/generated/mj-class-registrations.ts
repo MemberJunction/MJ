@@ -570,7 +570,7 @@ import {
     MJRecordProcessEntityExtended,
 } from '@memberjunction/feature-pipelines';
 
-// @memberjunction/ng-artifacts (16 classes)
+// @memberjunction/ng-artifacts (17 classes)
 import {
     AudioArtifactViewerComponent,
     CodeArtifactViewerComponent,
@@ -584,6 +584,7 @@ import {
     MarkdownArtifactViewerComponent,
     PdfArtifactViewerComponent,
     SlideDeckArtifactViewerComponent,
+    SpreadsheetArtifactViewerComponent,
     SvgArtifactViewerComponent,
     VideoArtifactViewerComponent,
     VideoProductionViewerComponent,
@@ -1300,6 +1301,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MarkdownArtifactViewerComponent,
     PdfArtifactViewerComponent,
     SlideDeckArtifactViewerComponent,
+    SpreadsheetArtifactViewerComponent,
     SvgArtifactViewerComponent,
     VideoArtifactViewerComponent,
     VideoProductionViewerComponent,
@@ -1368,11 +1370,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ContentItemHierarchyPanel,
     ConversationHeaderPanel,
     ConversationOverviewPanel,
-    DashboardCategoryHierarchyPanel,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    DashboardCategoryHierarchyPanel,
     EmployeeHeaderPanel,
     EmployeeOverviewPanel,
     FileCategoryHierarchyPanel,
@@ -1448,7 +1450,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 661;
+export const CLASS_REGISTRATIONS_COUNT = 662;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

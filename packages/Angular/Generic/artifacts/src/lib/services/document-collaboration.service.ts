@@ -8,10 +8,15 @@ import * as decoding from 'lib0/decoding';
 import {
   DocumentLiveBlockEngine,
   SlideDeckEngine,
+  SpreadsheetEngine,
   type DocumentBlockSpec,
   type DocumentBlockKind,
   type SlideDeckSpec,
   type SlideSpec,
+  type WorkbookSpec,
+  type WorksheetSpec,
+  type SpreadsheetCellSpec,
+  type SpreadsheetNamedRangeSpec,
 } from '@memberjunction/core-entities';
 
 const MSG_SYNC = 0;
@@ -181,12 +186,19 @@ export class DocumentCollaborationSession {
 
   /**
    * Returns the current string content of the shared Yjs `Y.Text('content')` CRDT
-   * (or the reconstructed `SlideDeckSpec` JSON when the room hosts a presentation deck).
+   * (or the reconstructed `SlideDeckSpec` / `WorkbookSpec` JSON when the room hosts a deck or workbook).
    */
   public GetContent(): string {
     const slideOrder = this.Doc.getArray<string>('slideOrder');
     if (slideOrder.length > 0) {
       const reconstructed = this.reconstructSlideDeckJsonFromCrdt();
+      if (reconstructed) {
+        return reconstructed;
+      }
+    }
+    const worksheetsById = this.Doc.getMap<string>('worksheetsById');
+    if (worksheetsById.size > 0) {
+      const reconstructed = this.reconstructWorkbookJsonFromCrdt();
       if (reconstructed) {
         return reconstructed;
       }
@@ -214,6 +226,7 @@ export class DocumentCollaborationSession {
       this.Doc.transact(() => {
         this.ContentText.insert(0, initialContent);
         this.populateSlideDeckCrdtIfPresentation(initialContent);
+        this.populateSpreadsheetCrdtIfWorkbook(initialContent);
       }, 'init');
       this.seededInDoc = true;
     }
@@ -336,6 +349,7 @@ export class DocumentCollaborationSession {
         this.ContentText.insert(prefixLen, insertText);
       }
       this.populateSlideDeckCrdtIfPresentation(newMarkdown);
+      this.populateSpreadsheetCrdtIfWorkbook(newMarkdown);
     }, 'local');
   }
 
@@ -445,6 +459,117 @@ export class DocumentCollaborationSession {
   }
 
   /**
+   * Surgically updates a single spreadsheet cell in `sheetCellsByCoord` (`Y.Map`) keyed by
+   * `${sheetId}::${cell.RowID}::${cell.ColumnID}` (`§ 6.2`, `Accept #1`).
+   * Concurrent row/column insertions (`worksheetsById`) and formula edits (`sheetCellsByCoord`)
+   * touch disjoint Yjs maps and merge cleanly without overwriting one another.
+   */
+  public UpdateSpreadsheetCell(
+    sheetId: string,
+    cell: SpreadsheetCellSpec,
+    fullWorkbookFallback?: WorkbookSpec,
+  ): void {
+    if (!this.canEdit || this.applyingRemote) {
+      return;
+    }
+    this.seededInDoc = true;
+    this.Doc.transact(() => {
+      if (this.Doc.getMap<string>('worksheetsById').size === 0 && fullWorkbookFallback) {
+        this.populateSpreadsheetCrdtIfWorkbook(
+          SpreadsheetEngine.Instance.SerializeWorkbook(fullWorkbookFallback),
+        );
+      }
+      const sheetCellsByCoord = this.Doc.getMap<string>('sheetCellsByCoord');
+      sheetCellsByCoord.set(`${sheetId}::${cell.RowID}::${cell.ColumnID}`, JSON.stringify(cell));
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+        this.syncContentTextFromSpreadsheetCrdt();
+      }
+    }, 'local');
+  }
+
+  /**
+   * Deletes a single spreadsheet cell from `sheetCellsByCoord` (`Y.Map`).
+   */
+  public DeleteSpreadsheetCell(
+    sheetId: string,
+    rowId: string,
+    colId: string,
+    fullWorkbookFallback?: WorkbookSpec,
+  ): void {
+    if (!this.canEdit || this.applyingRemote) {
+      return;
+    }
+    this.seededInDoc = true;
+    this.Doc.transact(() => {
+      if (this.Doc.getMap<string>('worksheetsById').size === 0 && fullWorkbookFallback) {
+        this.populateSpreadsheetCrdtIfWorkbook(
+          SpreadsheetEngine.Instance.SerializeWorkbook(fullWorkbookFallback),
+        );
+      }
+      const sheetCellsByCoord = this.Doc.getMap<string>('sheetCellsByCoord');
+      sheetCellsByCoord.delete(`${sheetId}::${rowId}::${colId}`);
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+        this.syncContentTextFromSpreadsheetCrdt();
+      }
+    }, 'local');
+  }
+
+  /**
+   * Surgically updates worksheet structural metadata (`Rows`, `Columns`, `LiveTables`, `Charts`,
+   * `EmbeddedArtifacts`, `Sort`, `Filters`, `FrozenRows`, `FrozenColumns`) in `worksheetsById` (`Y.Map`)
+   * without touching individual cell entries in `sheetCellsByCoord` (`Accept #1`).
+   */
+  public UpdateWorksheetStructure(
+    sheet: WorksheetSpec,
+    fullWorkbookFallback?: WorkbookSpec,
+  ): void {
+    if (!this.canEdit || this.applyingRemote) {
+      return;
+    }
+    this.seededInDoc = true;
+    this.Doc.transact(() => {
+      if (this.Doc.getMap<string>('worksheetsById').size === 0 && fullWorkbookFallback) {
+        this.populateSpreadsheetCrdtIfWorkbook(
+          SpreadsheetEngine.Instance.SerializeWorkbook(fullWorkbookFallback),
+        );
+      }
+      const worksheetsById = this.Doc.getMap<string>('worksheetsById');
+      const sheetOrder = this.Doc.getArray<string>('sheetOrder');
+      const wsWithoutCells: WorksheetSpec = {
+        ...sheet,
+        Cells: {},
+      };
+      worksheetsById.set(sheet.SheetID, JSON.stringify(wsWithoutCells));
+      const existingOrder = sheetOrder.toArray();
+      if (!existingOrder.includes(sheet.SheetID)) {
+        sheetOrder.push([sheet.SheetID]);
+      }
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+        this.syncContentTextFromSpreadsheetCrdt();
+      }
+    }, 'local');
+  }
+
+  /**
+   * Updates workbook-level metadata (`Title`, `ActiveSheetID`, `NamedRanges`, and `sheetOrder`)
+   * in `workbookMeta` (`Y.Map`) and `sheetOrder` (`Y.Array`).
+   */
+  public UpdateWorkbookMetadata(workbook: WorkbookSpec): void {
+    if (!this.canEdit || this.applyingRemote) {
+      return;
+    }
+    this.seededInDoc = true;
+    this.Doc.transact(() => {
+      this.populateSpreadsheetCrdtIfWorkbook(
+        SpreadsheetEngine.Instance.SerializeWorkbook(workbook),
+      );
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+        this.syncContentTextFromSpreadsheetCrdt();
+      }
+    }, 'local');
+  }
+
+  /**
    * Sends a `save-version` control frame (`MSG_CONTROL = 2`) to the collaboration server
    * to compact the active room into a new immutable `MJ: Artifact Versions` record.
    */
@@ -547,6 +672,7 @@ export class DocumentCollaborationSession {
         this.Doc.transact(() => {
           this.ContentText.insert(0, this.initialSeedContent);
           this.populateSlideDeckCrdtIfPresentation(this.initialSeedContent);
+          this.populateSpreadsheetCrdtIfWorkbook(this.initialSeedContent);
         }, 'local');
       } else if (this.ContentText.length > 0) {
         this.seededInDoc = true;
@@ -730,6 +856,197 @@ export class DocumentCollaborationSession {
 
   private syncContentTextFromSlideCrdt(): void {
     const reconstructed = this.reconstructSlideDeckJsonFromCrdt();
+    if (!reconstructed) {
+      return;
+    }
+    const current = this.ContentText.toString();
+    if (current !== reconstructed) {
+      if (current.length > 0) {
+        this.ContentText.delete(0, current.length);
+      }
+      this.ContentText.insert(0, reconstructed);
+    }
+  }
+
+  private populateSpreadsheetCrdtIfWorkbook(rawContent: string): void {
+    const trimmed = (rawContent ?? '').trim();
+    if (!trimmed.startsWith('{') || !trimmed.includes('"Worksheets"')) {
+      return;
+    }
+    try {
+      const parsed = JSON.parse(trimmed) as Partial<WorkbookSpec>;
+      if (!parsed || !Array.isArray(parsed.Worksheets) || parsed.Worksheets.length === 0) {
+        return;
+      }
+      const workbookMeta = this.Doc.getMap<string>('workbookMeta');
+      const sheetOrder = this.Doc.getArray<string>('sheetOrder');
+      const worksheetsById = this.Doc.getMap<string>('worksheetsById');
+      const sheetCellsByCoord = this.Doc.getMap<string>('sheetCellsByCoord');
+
+      workbookMeta.set('WorkbookID', parsed.WorkbookID || 'wb-1');
+      workbookMeta.set('Title', parsed.Title || 'Workbook');
+      workbookMeta.set('ActiveSheetID', parsed.ActiveSheetID || parsed.Worksheets[0].SheetID);
+      workbookMeta.set('NamedRanges', JSON.stringify(parsed.NamedRanges ?? []));
+
+      const nextSheetIds: string[] = [];
+      const activeCellKeys = new Set<string>();
+
+      for (const ws of parsed.Worksheets) {
+        if (!ws || typeof ws.SheetID !== 'string' || !ws.SheetID.trim()) {
+          continue;
+        }
+        nextSheetIds.push(ws.SheetID);
+        const wsWithoutCells: WorksheetSpec = {
+          ...ws,
+          Cells: {},
+        };
+        worksheetsById.set(ws.SheetID, JSON.stringify(wsWithoutCells));
+
+        for (const cell of Object.values(ws.Cells ?? {})) {
+          if (cell && cell.RowID && cell.ColumnID) {
+            const coordKey = `${ws.SheetID}::${cell.RowID}::${cell.ColumnID}`;
+            activeCellKeys.add(coordKey);
+            sheetCellsByCoord.set(coordKey, JSON.stringify(cell));
+          }
+        }
+      }
+
+      const staleCellKeys: string[] = [];
+      sheetCellsByCoord.forEach((_val, key) => {
+        if (!activeCellKeys.has(key)) {
+          staleCellKeys.push(key);
+        }
+      });
+      for (const k of staleCellKeys) {
+        sheetCellsByCoord.delete(k);
+      }
+
+      const staleSheetIds: string[] = [];
+      worksheetsById.forEach((_val, id) => {
+        if (!nextSheetIds.includes(id)) {
+          staleSheetIds.push(id);
+        }
+      });
+      for (const id of staleSheetIds) {
+        worksheetsById.delete(id);
+      }
+
+      const currentOrder = sheetOrder.toArray();
+      const sameOrder =
+        currentOrder.length === nextSheetIds.length &&
+        currentOrder.every((id, idx) => id === nextSheetIds[idx]);
+      if (!sameOrder) {
+        sheetOrder.delete(0, sheetOrder.length);
+        sheetOrder.insert(0, nextSheetIds);
+      }
+    } catch {
+      // Ignore non-workbook content
+    }
+  }
+
+  private reconstructWorkbookJsonFromCrdt(): string | null {
+    const workbookMeta = this.Doc.getMap<string>('workbookMeta');
+    const sheetOrder = this.Doc.getArray<string>('sheetOrder');
+    const worksheetsById = this.Doc.getMap<string>('worksheetsById');
+    const sheetCellsByCoord = this.Doc.getMap<string>('sheetCellsByCoord');
+    if (worksheetsById.size === 0) {
+      return null;
+    }
+
+    const orderedIds = sheetOrder.toArray();
+    const placedIds = new Set<string>();
+    const worksheets: WorksheetSpec[] = [];
+
+    const hydrateSheet = (rawSheet: string): WorksheetSpec | null => {
+      try {
+        const ws = JSON.parse(rawSheet) as WorksheetSpec;
+        ws.Cells = ws.Cells ?? {};
+        return ws;
+      } catch {
+        return null;
+      }
+    };
+
+    for (const id of orderedIds) {
+      const raw = worksheetsById.get(id);
+      if (raw && !placedIds.has(id)) {
+        const ws = hydrateSheet(raw);
+        if (ws) {
+          worksheets.push(ws);
+          placedIds.add(id);
+        }
+      }
+    }
+    worksheetsById.forEach((raw, id) => {
+      if (!placedIds.has(id)) {
+        const ws = hydrateSheet(raw);
+        if (ws) {
+          worksheets.push(ws);
+          placedIds.add(id);
+        }
+      }
+    });
+
+    if (worksheets.length === 0) {
+      return null;
+    }
+
+    const sheetMap = new Map<string, WorksheetSpec>();
+    for (const ws of worksheets) {
+      sheetMap.set(ws.SheetID, ws);
+    }
+
+    sheetCellsByCoord.forEach((rawCell, coordKey) => {
+      const sep1 = coordKey.indexOf('::');
+      if (sep1 < 0) return;
+      const sheetId = coordKey.slice(0, sep1);
+      const ws = sheetMap.get(sheetId);
+      if (!ws) return;
+      try {
+        const cell = JSON.parse(rawCell) as SpreadsheetCellSpec;
+        const row = ws.Rows.find((r) => r.RowID === cell.RowID);
+        const col = ws.Columns.find((c) => c.ColumnID === cell.ColumnID);
+        if (!row || !col) {
+          return;
+        }
+        const addr = `${col.Letter}${row.Index}`;
+        cell.Address = addr;
+        ws.Cells[addr] = cell;
+      } catch {
+        // Ignore malformed cell entry
+      }
+    });
+
+    let namedRanges: SpreadsheetNamedRangeSpec[] = [];
+    const rawNamedRanges = workbookMeta.get('NamedRanges');
+    if (rawNamedRanges) {
+      try {
+        namedRanges = JSON.parse(rawNamedRanges) as SpreadsheetNamedRangeSpec[];
+      } catch {
+        namedRanges = [];
+      }
+    }
+
+    const nowIso = new Date().toISOString();
+    const wb: WorkbookSpec = {
+      WorkbookID: workbookMeta.get('WorkbookID') || 'wb-1',
+      Title: workbookMeta.get('Title') || 'Workbook',
+      ActiveSheetID: workbookMeta.get('ActiveSheetID') || worksheets[0].SheetID,
+      Worksheets: worksheets,
+      NamedRanges: namedRanges,
+      CreatedAt: nowIso,
+      UpdatedAt: nowIso,
+    };
+
+    for (const ws of wb.Worksheets) {
+      SpreadsheetEngine.Instance.ReindexWorksheetAndResolveFormulas(ws);
+    }
+    SpreadsheetEngine.Instance.EvaluateWorkbook(wb);
+    return SpreadsheetEngine.Instance.SerializeWorkbook(wb);
+  }
+
+  private syncContentTextFromSpreadsheetCrdt(): void {
+    const reconstructed = this.reconstructWorkbookJsonFromCrdt();
     if (!reconstructed) {
       return;
     }

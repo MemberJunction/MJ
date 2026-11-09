@@ -14,6 +14,7 @@ import {
 } from '@memberjunction/core';
 import { BaseSingleton, EscapeSQLString, IndexByUUID, MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { ArtifactPermissionEngine } from './ArtifactPermissionDelegate';
+import { SpreadsheetEngine } from './SpreadsheetEngine';
 
 /**
  * Discriminator for the 5 canonical block types embeddable across MJ Docs, Slides, and Sheets.
@@ -149,6 +150,12 @@ export interface DocumentBlockSpec {
     EmbedMode?: ArtifactEmbedMode;
     /** Optional height in pixels for inline canvas/viewer rendering. */
     HeightPx?: number;
+    /** Optional worksheet ID or name when embedding a chart or cell range from an `Excel Spreadsheet` artifact (`§ 6.3`, `Accept #5`). */
+    SheetID?: string;
+    /** Optional A1 range (`'A1:C6'`) when embedding a range or chart from an `Excel Spreadsheet` artifact (`§ 6.3`, `Accept #5`). */
+    SheetRange?: string;
+    /** Optional chart ID (`'chart-1'`) when embedding a range chart from an `Excel Spreadsheet` artifact (`§ 6.3`, `Accept #5`). */
+    SheetChartID?: string;
 
     // --- Row Limits & Frozen State ---
     /** Maximum rows to fetch in live mode (defaults to 100). */
@@ -654,7 +661,7 @@ export class ArtifactDocumentBlock extends BaseDocumentBlock {
                     EntityName: 'MJ: Artifact Versions',
                     ExtraFilter: versionFilter,
                     OrderBy: 'VersionNumber DESC',
-                    Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Content'],
+                    Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Content', 'Configuration'],
                     MaxRows: 1,
                     SkipTotalRowCount: true,
                     ResultType: 'simple'
@@ -665,10 +672,46 @@ export class ArtifactDocumentBlock extends BaseDocumentBlock {
 
         const artifactRow = (artifactRes.Results?.[0] as { ID: string; Name: string; Type: string } | undefined) ?? null;
         const versionRow =
-            (versionRes.Results?.[0] as { ID: string; VersionNumber: number; Content?: string | null } | undefined) ?? null;
+            (versionRes.Results?.[0] as
+                | { ID: string; VersionNumber: number; Content?: string | null; Configuration?: string | null }
+                | undefined) ?? null;
 
         if (!artifactRow) {
             return buildErrorResult(spec, `Embedded artifact '${spec.ArtifactID}' was not found.`);
+        }
+
+        const resolvedType = artifactRow.Type || spec.ArtifactType || '';
+        if (
+            (spec.SheetChartID || spec.SheetRange || resolvedType === 'Excel Spreadsheet') &&
+            (spec.SheetChartID || spec.SheetRange)
+        ) {
+            const wb = SpreadsheetEngine.Instance.ParseWorkbook(
+                versionRow?.Content ?? '',
+                versionRow?.Configuration ?? null
+            );
+            const targetSheetId = spec.SheetID || wb.ActiveSheetID;
+            let dataset = spec.SheetChartID
+                ? SpreadsheetEngine.Instance.ExtractChartDataset(wb, targetSheetId, spec.SheetChartID)
+                : null;
+            if (!dataset && spec.SheetRange) {
+                dataset = SpreadsheetEngine.Instance.ExtractChartDataset(wb, targetSheetId, spec.SheetRange);
+            }
+            if (dataset) {
+                return {
+                    BlockID: spec.BlockID,
+                    Kind: spec.Kind,
+                    Mode: 'Live',
+                    Success: true,
+                    Columns: dataset.Columns,
+                    Rows: dataset.Rows,
+                    TotalRowCount: dataset.Rows.length,
+                    ArtifactContent: versionRow?.Content ?? '',
+                    ArtifactType: resolvedType,
+                    ArtifactName: artifactRow.Name,
+                    ArtifactVersionNumber: versionRow?.VersionNumber ?? 1,
+                    CanEditArtifact: perms.CanEdit && !spec.VersionID
+                };
+            }
         }
 
         return {

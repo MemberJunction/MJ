@@ -14,6 +14,10 @@ import {
     ExcelWorkbookSourceRequest,
 } from '../catalog-types';
 import type { ExcelParameterValue, ExcelWorkbookSource } from '../contract';
+import type {
+    ExcelAddinEvaluateCustomFunctionInput,
+    ExcelAddinEvaluateCustomFunctionOutput,
+} from '../custom-functions';
 import type { StoredConnection } from './connection-store';
 
 /** The rows of one source, and how many there were in all. */
@@ -111,6 +115,18 @@ export async function ResolveWorkbookSourceOnServer(
         { Source: request },
     );
     return result.Source;
+}
+
+/** Evaluates an `=MJ.QUERY(...)` or `=MJ.VIEW(...)` custom function on the server under the caller's scoped API key. */
+export async function EvaluateCustomFunctionOnServer(
+    connection: StoredConnection,
+    input: ExcelAddinEvaluateCustomFunctionInput,
+): Promise<ExcelAddinEvaluateCustomFunctionOutput> {
+    return ExecuteRemoteOp<ExcelAddinEvaluateCustomFunctionOutput>(
+        connection,
+        EXCEL_ADDIN_OPERATION_KEYS.EvaluateCustomFunction,
+        input,
+    );
 }
 
 /** Calls a registered `ExcelAddin.*` Remote Operation over GraphQL with the pane's scoped API key. */

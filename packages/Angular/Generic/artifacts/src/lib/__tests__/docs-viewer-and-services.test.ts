@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as encoding from 'lib0/encoding';
+import * as Y from 'yjs';
+import { SpreadsheetEngine } from '@memberjunction/core-entities';
 import { DocumentCollaborationService } from '../services/document-collaboration.service';
 import { DocumentImportExportService } from '../services/document-import-export.service';
 import type { MammothModuleShim } from '../components/previews/office-preview.logic';
@@ -179,3 +181,65 @@ describe('DocumentImportExportService — .md, .docx (mammoth + docx), and .pdf 
     expect(bytes[3]).toBe(0x04);
   });
 });
+
+describe('DocumentCollaborationSession — Wave 3 Spreadsheet Per-Cell / Per-Worksheet CRDT Sync', () => {
+  const service = new DocumentCollaborationService();
+
+  it('Syncs per-cell edits and concurrent row insertions without clobbering formulas (Accept #1)', () => {
+    const wbA = SpreadsheetEngine.Instance.CreateEmptyWorkbook('FY27 Budget');
+    const sheetId = wbA.Worksheets[0].SheetID;
+    SpreadsheetEngine.Instance.SetCell(wbA, sheetId, 'B2', { Value: 100 });
+    SpreadsheetEngine.Instance.SetCell(wbA, sheetId, 'B3', { Value: 200 });
+    SpreadsheetEngine.Instance.SetCell(wbA, sheetId, 'B4', { Value: 300 });
+    SpreadsheetEngine.Instance.SetCell(wbA, sheetId, 'B5', { Value: 400 });
+    const initialJson = SpreadsheetEngine.Instance.SerializeWorkbook(wbA);
+
+    const sessionA = service.CreateSession(
+      'art-sheet-1',
+      initialJson,
+      { id: 'u-alice', name: 'Alice' },
+      true,
+    );
+    const sessionB = service.CreateSession(
+      'art-sheet-1',
+      '',
+      { id: 'u-bob', name: 'Bob' },
+      true,
+      true,
+    );
+
+    // Sync initial Y.Doc state from room/Session A into Session B
+    Y.applyUpdate(sessionB.Doc, Y.encodeStateAsUpdate(sessionA.Doc), 'remote');
+
+    // Client A inserts a row at row 2 and updates worksheet structure
+    SpreadsheetEngine.Instance.InsertRows(wbA, sheetId, 2, 1);
+    sessionA.UpdateWorksheetStructure(wbA.Worksheets[0], wbA);
+
+    // Client B concurrently writes a formula in C1 summing the original B2:B5 range
+    const wbB = SpreadsheetEngine.Instance.ParseWorkbook(initialJson);
+    const formulaCell = SpreadsheetEngine.Instance.SetCell(wbB, sheetId, 'C1', {
+      Formula: '=SUM(B2:B5)',
+    });
+    sessionB.UpdateSpreadsheetCell(sheetId, formulaCell, wbB);
+
+    // Exchange Yjs CRDT state updates between Session A and Session B
+    const updateA = Y.encodeStateAsUpdate(sessionA.Doc);
+    const updateB = Y.encodeStateAsUpdate(sessionB.Doc);
+    Y.applyUpdate(sessionA.Doc, updateB, 'remote');
+    Y.applyUpdate(sessionB.Doc, updateA, 'remote');
+
+    const convergedA = SpreadsheetEngine.Instance.ParseWorkbook(sessionA.GetContent());
+    const convergedB = SpreadsheetEngine.Instance.ParseWorkbook(sessionB.GetContent());
+    SpreadsheetEngine.Instance.EvaluateWorkbook(convergedA);
+    SpreadsheetEngine.Instance.EvaluateWorkbook(convergedB);
+
+    expect(convergedA.Worksheets[0].Cells['C1']?.Formula).toBe('=SUM(B3:B6)');
+    expect(convergedA.Worksheets[0].Cells['C1']?.ComputedValue).toBe(1000);
+    expect(convergedB.Worksheets[0].Cells['C1']?.Formula).toBe('=SUM(B3:B6)');
+    expect(convergedB.Worksheets[0].Cells['C1']?.ComputedValue).toBe(1000);
+
+    sessionA.Destroy();
+    sessionB.Destroy();
+  });
+});
+

@@ -622,7 +622,7 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
                                   </span>
                                 </div>
 
-                                @if (WorkspaceMode === 'edit' && block.Kind !== 'Artifact') {
+                                @if (WorkspaceMode === 'edit' && !IsInlineOleArtifactBlock(block)) {
                                   <div class="mj-slide-live-block-controls">
                                     <button
                                       type="button"
@@ -654,7 +654,7 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
                                   </div>
                                 }
 
-                                @if (block.Kind === 'Artifact' && WorkspaceMode === 'edit' && IsEditable) {
+                                @if (IsInlineOleArtifactBlock(block) && WorkspaceMode === 'edit' && IsEditable) {
                                   <div class="mj-slide-live-block-controls">
                                     <button
                                       type="button"
@@ -671,7 +671,7 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
                               </div>
 
                               <!-- Inline OLE Artifact / Whiteboard Region (§ 3.4.1 & § 5.1) -->
-                              @if (block.Kind === 'Artifact') {
+                              @if (IsInlineOleArtifactBlock(block)) {
                                 <div
                                   class="mj-slide-ole-viewer-container"
                                   [attr.data-testid]="'slide-ole-artifact-host-' + region.RegionID"
@@ -2606,7 +2606,7 @@ export class SlideDeckArtifactViewerComponent
     region: SlideRegionSpec,
     block: DocumentBlockSpec,
   ): Promise<void> {
-    if (block.Kind === 'Artifact') {
+    if (this.IsInlineOleArtifactBlock(block)) {
       return;
     }
     if (block.Mode === 'Frozen' && block.FrozenSnapshot) {
@@ -3210,6 +3210,16 @@ export class SlideDeckArtifactViewerComponent
     return undefined;
   }
 
+  public IsInlineOleArtifactBlock(block: DocumentBlockSpec): boolean {
+    if (block.Kind !== 'Artifact') {
+      return false;
+    }
+    if (block.SheetChartID || block.SheetRange) {
+      return false;
+    }
+    return true;
+  }
+
   private async executeAllLiveBlocksInDeck(
     deck: SlideDeckSpec,
     forceLiveRefresh = false,
@@ -3217,7 +3227,7 @@ export class SlideDeckArtifactViewerComponent
     for (const slide of deck.Slides) {
       for (const region of slide.Regions) {
         const block = SlideDeckEngine.Instance.ExtractRegionBlockSpec(region);
-        if (block && block.Kind !== 'Artifact') {
+        if (block && !this.IsInlineOleArtifactBlock(block)) {
           const effectiveBlock: DocumentBlockSpec = forceLiveRefresh
             ? { ...block, Mode: 'Live' }
             : block;

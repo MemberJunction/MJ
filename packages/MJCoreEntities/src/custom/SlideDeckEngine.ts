@@ -1,5 +1,5 @@
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
-import { UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
     DocumentBlockExecutionResult,
     DocumentBlockSpec,
@@ -1236,6 +1236,30 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
             Slides: nextSlides,
             UpdatedAt: frozenAt
         };
+    }
+
+    /**
+     * Executes all live MJ blocks across every slide region in `deck` for `user` (`Accept #2` & `Accept #5`).
+     */
+    public async ExecuteDeckLiveBlocks(
+        deck: SlideDeckSpec,
+        provider: IMetadataProvider,
+        user: UserInfo
+    ): Promise<Record<string, DocumentBlockExecutionResult>> {
+        const results: Record<string, DocumentBlockExecutionResult> = {};
+        for (const slide of deck.Slides) {
+            for (const region of slide.Regions) {
+                const block = this.ExtractRegionBlockSpec(region);
+                if (block) {
+                    results[block.BlockID] = await DocumentLiveBlockEngine.Instance.ExecuteBlock(
+                        block,
+                        user,
+                        provider
+                    );
+                }
+            }
+        }
+        return results;
     }
 
     /**

@@ -43,6 +43,7 @@ export * from './lib/components/plugins/json-artifact-viewer.component';
 export * from './lib/components/plugins/code-artifact-viewer.component';
 export * from './lib/components/plugins/markdown-artifact-viewer.component';
 export * from './lib/components/plugins/slide-deck-artifact-viewer.component';
+export * from './lib/components/plugins/spreadsheet-artifact-viewer.component';
 export * from './lib/components/plugins/html-artifact-viewer.component';
 export * from './lib/components/plugins/svg-artifact-viewer.component';
 export * from './lib/components/plugins/component-artifact-viewer.component';

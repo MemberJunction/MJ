@@ -1062,7 +1062,7 @@ import {
     VoyageReRanker,
 } from '@memberjunction/search-engine';
 
-// @memberjunction/ai-agents (28 classes)
+// @memberjunction/ai-agents (29 classes)
 import {
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
@@ -1089,6 +1089,7 @@ import {
     RealtimeAgentType,
     SearchResultSetToolLibrary,
     SlideDeckToolLibrary,
+    SpreadsheetToolLibrary,
     TextToolLibrary,
     WhiteboardChannelServer,
     WhiteboardToolLibrary,
@@ -2324,6 +2325,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     RealtimeAgentType,
     SearchResultSetToolLibrary,
     SlideDeckToolLibrary,
+    SpreadsheetToolLibrary,
     TextToolLibrary,
     WhiteboardChannelServer,
     WhiteboardToolLibrary,
@@ -2519,11 +2521,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     FindBestActionAction,
     FindBestAgentAction,
     FindCandidateActionsAction,
-    FindCandidateAgentsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    FindCandidateAgentsAction,
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
@@ -2688,7 +2690,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1148;
+export const CLASS_REGISTRATIONS_COUNT = 1149;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

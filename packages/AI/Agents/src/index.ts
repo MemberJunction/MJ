@@ -58,6 +58,7 @@ export * from './artifact-tools/GenericBinaryToolLibrary';
 export * from './artifact-tools/DocumentToolLibrary';
 export * from './artifact-tools/WhiteboardToolLibrary';
 export * from './artifact-tools/SlideDeckToolLibrary';
+export * from './artifact-tools/SpreadsheetToolLibrary';
 export * from './PayloadChangeAnalyzer';
 export * from './PayloadFeedbackManager';
 export * from './types/payload-operations';

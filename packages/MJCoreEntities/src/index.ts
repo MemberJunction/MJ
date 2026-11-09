@@ -20,6 +20,7 @@ export * from './custom/AnchoredConversationSecurity';
 export * from './custom/ArtifactPermissionDelegate';
 export * from './custom/DocumentLiveBlockEngine';
 export * from './custom/SlideDeckEngine';
+export * from './custom/SpreadsheetEngine';
 export * from './custom/MJConversationBranchEntityExtended';
 export * from './custom/MJQueryEntityExtended';
 export * from './custom/QueryDiagnostics';

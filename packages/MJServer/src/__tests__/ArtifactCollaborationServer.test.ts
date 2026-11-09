@@ -8,7 +8,14 @@ import * as awarenessProtocol from 'y-protocols/awareness';
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
 import { IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
-import { ArtifactPermissionEngine, DocumentLiveBlockEngine } from '@memberjunction/core-entities';
+import {
+    ArtifactPermissionEngine,
+    DocumentLiveBlockEngine,
+    SpreadsheetEngine,
+    type SpreadsheetCellSpec,
+    type WorkbookSpec,
+    type WorksheetSpec
+} from '@memberjunction/core-entities';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 
 vi.mock('../context.js', () => ({
@@ -942,6 +949,86 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         expect(savedDeck.Theme.PrimaryColor).toBe('#7C3AED');
         expect(savedDeck.Master.OrganizationName).toBe('Nova Cybernetics');
         expect(savedDeck.Slides.map((s) => s.SlideID)).toEqual(['slide-3', 'slide-1', 'slide-2']);
+
+        clientA.ws.close();
+        clientB.ws.close();
+    });
+
+    it('synchronizes concurrent row insertions (worksheetsById) and formula edits (sheetCellsByCoord) over Yjs so every formula points where it did (Wave 3 Accept #1)', async () => {
+        const sheetEngine = SpreadsheetEngine.Instance;
+        const wb = sheetEngine.CreateEmptyWorkbook('Q1 Collaborative Budget', ['Operating'], 12, 6);
+        const ws = wb.Worksheets[0];
+        sheetEngine.SetCell(wb, ws.SheetID, 'B2', { Value: 100 }, false);
+        sheetEngine.SetCell(wb, ws.SheetID, 'B3', { Value: 200 }, false);
+        sheetEngine.SetCell(wb, ws.SheetID, 'B4', { Value: 300 }, false);
+        sheetEngine.SetCell(wb, ws.SheetID, 'B5', { Value: 400 }, true);
+        versions[0].Content = sheetEngine.SerializeWorkbook(wb);
+
+        const clientA = await connectYjsClient(editorUser.ID);
+        const clientB = await connectYjsClient(secondEditorUser.ID);
+
+        await clientA.waitForText('Q1 Collaborative Budget');
+        await clientB.waitForText('Q1 Collaborative Budget');
+
+        // Verify initial Yjs CRDT maps were populated
+        expect(clientA.doc.getArray<string>('sheetOrder').toArray()).toEqual(['sheet-1']);
+        expect(clientB.doc.getMap<string>('worksheetsById').has('sheet-1')).toBe(true);
+
+        // User A inserts 1 row at the top of sheet-1 (before row 1) in `worksheetsById`
+        clientA.doc.transact(() => {
+            const worksheetsById = clientA.doc.getMap<string>('worksheetsById');
+            const sheetStruct = JSON.parse(worksheetsById.get('sheet-1')!) as WorksheetSpec;
+            sheetStruct.Rows.unshift({
+                RowID: 'sheet-1-row-inserted-top',
+                Index: 1,
+                Height: 24,
+                Hidden: false
+            });
+            sheetStruct.Rows.forEach((r, idx) => {
+                r.Index = idx + 1;
+            });
+            worksheetsById.set('sheet-1', JSON.stringify(sheetStruct));
+        });
+
+        // Simultaneously, User B writes =SUM(B2:B5) into row-6, col-B (against the stable RowIDs sheet-1-row-2 .. sheet-1-row-5)
+        clientB.doc.transact(() => {
+            const sheetCellsByCoord = clientB.doc.getMap<string>('sheetCellsByCoord');
+            const formulaCell: SpreadsheetCellSpec = {
+                RowID: 'sheet-1-row-6',
+                ColumnID: 'sheet-1-col-B',
+                Address: 'B6',
+                RawValue: null,
+                Formula: '=SUM(B2:B5)',
+                FormulaStable:
+                    '=SUM(@RANGE(sheet-1-row-2,sheet-1-col-B,sheet-1-row-5,sheet-1-col-B))'
+            };
+            sheetCellsByCoord.set('sheet-1::sheet-1-row-6::sheet-1-col-B', JSON.stringify(formulaCell));
+        });
+
+        // Wait for server room to converge both User A's row insertion AND User B's formula edit
+        await vi.waitFor(async () => {
+            const roomJson = await ArtifactCollaborationServer.Instance.GetRoomContent(
+                artifactId,
+                editorUser
+            );
+            const mergedWb = JSON.parse(roomJson) as WorkbookSpec;
+            const mergedSheet = mergedWb.Worksheets[0];
+            // Because User A inserted a row at index 1, sheet-1-row-6 moved to row 7 (B7)
+            // and sheet-1-row-2..sheet-1-row-5 moved to B3:B6, so the formula resolved to =SUM(B3:B6) = 1000!
+            expect(mergedSheet.Cells['B7']).toBeDefined();
+            expect(mergedSheet.Cells['B7'].Formula).toBe('=SUM(B3:B6)');
+            expect(mergedSheet.Cells['B7'].ComputedValue).toBe(1000);
+        });
+
+        // Compact room into MJ: Artifact Versions and verify both Content and Configuration are persisted
+        const compacted = await ArtifactCollaborationServer.Instance.CompactRoomToArtifactVersion(
+            artifactId,
+            editorUser
+        );
+        expect(compacted.Saved).toBe(true);
+        const savedWb = JSON.parse(versions[versions.length - 1].Content) as WorkbookSpec;
+        expect(savedWb.Worksheets[0].Cells['B7'].Formula).toBe('=SUM(B3:B6)');
+        expect(savedWb.Worksheets[0].Cells['B7'].ComputedValue).toBe(1000);
 
         clientA.ws.close();
         clientB.ws.close();

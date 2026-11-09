@@ -4,6 +4,8 @@ import { BaseArtifactToolLibrary } from '@memberjunction/ai-core-plus';
 import { DocumentToolLibrary } from '../artifact-tools/DocumentToolLibrary';
 import { WhiteboardToolLibrary } from '../artifact-tools/WhiteboardToolLibrary';
 import { SlideDeckToolLibrary } from '../artifact-tools/SlideDeckToolLibrary';
+import { SpreadsheetToolLibrary } from '../artifact-tools/SpreadsheetToolLibrary';
+import ExcelJS from 'exceljs';
 
 const SAMPLE_DOC = `# Quarterly Strategy Report
 
@@ -420,5 +422,133 @@ describe('SlideDeckToolLibrary (@RegisterClass BaseArtifactToolLibrary — Wave 
     expect(reorderRes.success).toBe(true);
     const orderedIds = (reorderRes.data as { orderedSlideIds: string[] }).orderedSlideIds;
     expect(orderedIds).toEqual(['slide-3', 'slide-1', 'slide-2']);
+  });
+});
+
+describe('SpreadsheetToolLibrary (Wave 3 — MJ Sheets § 3.6 & § 6)', () => {
+  const sheetLib = new SpreadsheetToolLibrary();
+
+  it('registers SpreadsheetToolLibrary in MJGlobal ClassFactory under BaseArtifactToolLibrary', () => {
+    const inst = MJGlobal.Instance.ClassFactory.CreateInstance<BaseArtifactToolLibrary>(
+      BaseArtifactToolLibrary,
+      'SpreadsheetToolLibrary',
+    );
+    expect(inst).toBeInstanceOf(SpreadsheetToolLibrary);
+  });
+
+  it('Accept #3: agent writes a formula into a cell and reads back the evaluated value headlessly with no browser open', async () => {
+    const writeRes = await sheetLib.InvokeTool(
+      'write_cells',
+      {
+        cells: [
+          { address: 'B2', value: 1450, formatType: 'currency' },
+          { address: 'B3', value: 2550, formatType: 'currency' },
+          { address: 'B4', formula: '=SUM(B2:B3)', formatType: 'currency', bold: true },
+          { address: 'B5', formula: '=ROUND(B4 * 0.15, 2)', formatType: 'currency' },
+        ],
+      },
+      '',
+    );
+    expect(writeRes.success).toBe(true);
+    const writeData = writeRes.data as {
+      updatedContent: string;
+      revisionHash: string;
+      updatedCells: Array<{ address: string; computedValue: number; displayValue: string }>;
+    };
+    const b4Cell = writeData.updatedCells.find((c) => c.address === 'B4');
+    const b5Cell = writeData.updatedCells.find((c) => c.address === 'B5');
+    expect(b4Cell?.computedValue).toBe(4000);
+    expect(b4Cell?.displayValue).toBe('$4,000.00');
+    expect(b5Cell?.computedValue).toBe(600);
+
+    // Agent reads back B4:B5 with no browser open -> computedValue is immediately accurate
+    const readBack = await sheetLib.InvokeTool(
+      'read_range',
+      { range: 'B4:B5' },
+      writeData.updatedContent,
+    );
+    expect(readBack.success).toBe(true);
+    const readData = readBack.data as {
+      cells: Array<{ address: string; formula: string; computedValue: number; displayValue: string }>;
+    };
+    expect(readData.cells[0]).toMatchObject({
+      address: 'B4',
+      formula: '=SUM(B2:B3)',
+      computedValue: 4000,
+      displayValue: '$4,000.00',
+    });
+    expect(readData.cells[1]).toMatchObject({
+      address: 'B5',
+      formula: '=ROUND(B4 * 0.15, 2)',
+      computedValue: 600,
+      displayValue: '$600.00',
+    });
+
+    // Insert row at row 1 and verify B4 moved to B5 with =SUM(B3:B4) and still equals 4000 (Accept #1)
+    const insertRowRes = await sheetLib.InvokeTool(
+      'insert_rows',
+      { atRowNumber: 1, count: 1, expectedRevisionHash: writeData.revisionHash },
+      writeData.updatedContent,
+    );
+    expect(insertRowRes.success).toBe(true);
+    const afterInsertContent = (insertRowRes.data as { updatedContent: string }).updatedContent;
+
+    const readShifted = await sheetLib.InvokeTool('read_range', { range: 'B5' }, afterInsertContent);
+    expect(readShifted.success).toBe(true);
+    const shiftedCell = (readShifted.data as { cell: { formula: string; computedValue: number } }).cell;
+    expect(shiftedCell.formula).toBe('=SUM(B3:B4)');
+    expect(shiftedCell.computedValue).toBe(4000);
+  });
+
+  it('Accept #4: imports an .xlsx budget built with exceljs (DEFLATE zip), preserves formulas and formats, and exports an .xlsx readable by exceljs', async () => {
+    const excelWb = new ExcelJS.Workbook();
+    const ws = excelWb.addWorksheet('Budget 2026');
+    ws.getColumn(1).width = 24;
+    ws.getColumn(2).width = 18;
+    ws.getCell('A1').value = 'Category';
+    ws.getCell('B1').value = 'Budget';
+    ws.getCell('A2').value = 'Events';
+    ws.getCell('B2').value = 15000;
+    ws.getCell('B2').numFmt = '$#,##0.00';
+    ws.getCell('A3').value = 'Research';
+    ws.getCell('B3').value = 9500;
+    ws.getCell('B3').numFmt = '$#,##0.00';
+    ws.getCell('A4').value = 'Total';
+    ws.getCell('B4').value = { formula: 'SUM(B2:B3)', result: 24500 };
+    ws.getCell('B4').numFmt = '$#,##0.00';
+
+    const rawArrayBuffer = await excelWb.xlsx.writeBuffer();
+    const inputBuffer = Buffer.from(rawArrayBuffer);
+
+    // 1. Read range from the exceljs DEFLATE .xlsx Buffer via SpreadsheetToolLibrary
+    const readRes = await sheetLib.InvokeTool('read_range', { sheet: 'Budget 2026', range: 'A1:B4' }, inputBuffer);
+    expect(readRes.success).toBe(true);
+    const cells = (readRes.data as { cells: Array<{ address: string; formula: string | null; computedValue: unknown; displayValue: string }> }).cells;
+    const b4 = cells.find((c) => c.address === 'B4');
+    expect(b4?.formula).toBe('=SUM(B2:B3)');
+    expect(b4?.computedValue).toBe(24500);
+    expect(b4?.displayValue).toBe('$24,500.00');
+
+    // 2. Agent updates B3 from 9500 to 10500 and exports a new .xlsx Buffer
+    const writeRes = await sheetLib.InvokeTool(
+      'write_cells',
+      {
+        sheet: 'Budget 2026',
+        cells: [{ address: 'B3', value: 10500, formatType: 'currency' }],
+      },
+      inputBuffer,
+    );
+    expect(writeRes.success).toBe(true);
+    const exportedBase64 = (writeRes.data as { xlsxBase64: string }).xlsxBase64;
+    const exportedBuffer = Buffer.from(exportedBase64, 'base64');
+
+    // 3. Load exported .xlsx back into ExcelJS to verify Excel compatibility!
+    const reloadedExcel = new ExcelJS.Workbook();
+    await reloadedExcel.xlsx.load(exportedBuffer);
+    const reloadedSheet = reloadedExcel.getWorksheet('Budget 2026');
+    expect(reloadedSheet).toBeDefined();
+    expect(reloadedSheet!.getCell('B3').value).toBe(10500);
+    expect(reloadedSheet!.getCell('B4').formula).toBe('SUM(B2:B3)');
+    expect(reloadedSheet!.getCell('B4').result).toBe(25500);
   });
 });

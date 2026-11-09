@@ -4,6 +4,7 @@ import { IMetadataProvider, QueryInfo, RemoteOpServerContext, UserInfo } from '@
 import {
     ExcelAddinBuildWorkbookServerOperation,
     ExcelAddinCreateConnectionServerOperation,
+    ExcelAddinEvaluateCustomFunctionServerOperation,
     ExcelAddinGetCatalogServerOperation,
     ExcelAddinGetEntityViewsServerOperation,
     ExcelAddinGetStatusServerOperation,
@@ -101,6 +102,43 @@ describe('ExcelAddin operations, add-in on', () => {
         );
         expect(resolvedResult.Success).toBe(true);
         expect(resolvedResult.Output?.Source.Name).toBe('Renewals: 2026');
+    });
+
+    it('evaluates =MJ.QUERY custom functions and refuses IsServerSet parameters', async () => {
+        const evalProvider = {
+            Queries: [{
+                ID: QUERY_ID,
+                Name: 'Renewals: 2026',
+                UserCanRun: () => true,
+                Fields: [{ Name: 'Total', Sequence: 1, SQLBaseType: 'decimal' }],
+                Parameters: [
+                    { Name: 'Year', Type: 'number', IsRequired: false, IsServerSet: false },
+                    { Name: 'TenantID', Type: 'string', IsRequired: false, IsServerSet: true },
+                ],
+            } as unknown as QueryInfo],
+            RunQuery: async () => ({
+                Success: true,
+                Results: [{ Total: 7500 }],
+                RowCount: 1,
+                TotalRowCount: 1,
+            }),
+        } as unknown as IMetadataProvider;
+        const evalContext: RemoteOpServerContext = { provider: evalProvider, user, emitProgress: vi.fn() };
+
+        const ok = await new ExcelAddinEvaluateCustomFunctionServerOperation().ExecuteServer(
+            { Kind: 'Query', Target: 'Renewals: 2026', PositionalArguments: [2026] },
+            evalContext,
+        );
+        expect(ok.Success).toBe(true);
+        expect(ok.Output?.Matrix).toEqual([[7500]]);
+        expect(ok.Output?.ScalarValue).toBe(7500);
+
+        const refused = await new ExcelAddinEvaluateCustomFunctionServerOperation().ExecuteServer(
+            { Kind: 'Query', Target: 'Renewals: 2026', Parameters: { TenantID: 'override' } },
+            evalContext,
+        );
+        expect(refused.Success).toBe(false);
+        expect(refused.ErrorMessage).toMatch(/set by the server/i);
     });
 });
 

@@ -21,8 +21,13 @@ import {
     MJArtifactVersionEntity,
     MJArtifactWorkingStateEntity,
     SlideDeckEngine,
+    SpreadsheetEngine,
     type SlideDeckSpec,
-    type SlideSpec
+    type SlideSpec,
+    type SpreadsheetCellSpec,
+    type SpreadsheetNamedRangeSpec,
+    type WorkbookSpec,
+    type WorksheetSpec
 } from '@memberjunction/core-entities';
 import { getUserPayload } from '../context.js';
 import { InMemoryYjsRoomRelay, type IYjsRoomRelay, type YjsRelayMessage } from './YjsRoomRelay.js';
@@ -398,6 +403,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         versionEntity.UserID = user.ID;
         versionEntity.Content = currentContent;
         versionEntity.ContentHash = contentHash;
+        if (room.Doc.getMap('worksheetsById').size > 0) {
+            versionEntity.Configuration = currentContent;
+        }
 
         const saved = await versionEntity.Save();
         if (!saved) {
@@ -463,6 +471,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     yText.insert(0, newContent);
                 }
                 this.syncSlideDeckStructuresIfPresent(room.Doc, newContent);
+                this.syncSpreadsheetStructuresIfPresent(room.Doc, newContent);
             }, 'server-agent');
             room.LastModifiedByUser = user;
             room.DirtyWorkingState = true;
@@ -716,7 +725,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         EntityName: 'MJ: Artifact Versions',
                         ExtraFilter: `ArtifactID='${safeId}'`,
                         OrderBy: 'VersionNumber DESC',
-                        Fields: ['ID', 'VersionNumber', 'Content'],
+                        Fields: ['ID', 'VersionNumber', 'Content', 'Configuration'],
                         MaxRows: 1,
                         SkipTotalRowCount: true,
                         ResultType: 'simple'
@@ -729,7 +738,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 ? (workingRes.Results?.[0] as { ID: string; YjsState?: string | null } | undefined)
                 : undefined;
             const versionRow = versionRes.Success
-                ? (versionRes.Results?.[0] as { ID: string; VersionNumber: number; Content?: string | null } | undefined)
+                ? (versionRes.Results?.[0] as
+                      | { ID: string; VersionNumber: number; Content?: string | null; Configuration?: string | null }
+                      | undefined)
                 : undefined;
 
             if (workingRow?.YjsState) {
@@ -740,10 +751,18 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
 
             const yText = room.Doc.getText('content');
-            if (yText.length === 0 && versionRow?.Content) {
+            if (yText.length === 0 && (versionRow?.Content || versionRow?.Configuration)) {
                 room.Doc.transact(() => {
-                    yText.insert(0, versionRow.Content!);
-                    this.syncSlideDeckStructuresIfPresent(room.Doc, versionRow.Content!);
+                    const initialText = versionRow.Content || versionRow.Configuration || '';
+                    if (initialText) {
+                        yText.insert(0, initialText);
+                    }
+                    this.syncSlideDeckStructuresIfPresent(room.Doc, initialText);
+                    this.syncSpreadsheetStructuresIfPresent(
+                        room.Doc,
+                        versionRow.Content ?? '',
+                        versionRow.Configuration ?? null
+                    );
                     room.Doc.getMap('meta').set('versionNumber', versionRow.VersionNumber);
                     room.Doc.getMap('meta').set('versionId', versionRow.ID);
                 }, 'hydrate');
@@ -1127,12 +1146,173 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     }
 
     /**
+     * When `rawContent` or `rawConfiguration` represents a serialized {@link WorkbookSpec} (`Excel Spreadsheet`),
+     * populates `doc.getMap('workbookMeta')`, `doc.getArray('sheetOrder')`, `doc.getMap('worksheetsById')`,
+     * and `doc.getMap('sheetCellsByCoord')` (keyed by `<SheetID>::<RowID>::<ColumnID>`) so concurrent
+     * cell edits, row/column insertions, and formula edits merge without conflicts (`§ 6.2`, `Accept #1`).
+     */
+    private syncSpreadsheetStructuresIfPresent(
+        doc: Y.Doc,
+        rawContent: string,
+        rawConfiguration?: string | null
+    ): void {
+        const candidate = (rawConfiguration || rawContent || '').trim();
+        if (!candidate) return;
+        const looksLikeJsonWorkbook =
+            candidate.startsWith('{') && candidate.includes('"Worksheets"');
+        const looksLikeXlsx = candidate.startsWith('data:') || candidate.startsWith('UEsDB');
+        if (!looksLikeJsonWorkbook && !looksLikeXlsx) {
+            return;
+        }
+        try {
+            const wb = SpreadsheetEngine.Instance.ParseWorkbook(rawContent, rawConfiguration);
+            if (!wb || !Array.isArray(wb.Worksheets) || wb.Worksheets.length === 0) {
+                return;
+            }
+            const workbookMeta = doc.getMap<string>('workbookMeta');
+            const sheetOrder = doc.getArray<string>('sheetOrder');
+            const worksheetsById = doc.getMap<string>('worksheetsById');
+            const sheetCellsByCoord = doc.getMap<string>('sheetCellsByCoord');
+
+            if (workbookMeta.get('WorkbookID') !== wb.WorkbookID) {
+                workbookMeta.set('WorkbookID', wb.WorkbookID);
+            }
+            if (workbookMeta.get('Title') !== wb.Title) {
+                workbookMeta.set('Title', wb.Title);
+            }
+            if (workbookMeta.get('ActiveSheetID') !== wb.ActiveSheetID) {
+                workbookMeta.set('ActiveSheetID', wb.ActiveSheetID);
+            }
+            const namedRangesJson = JSON.stringify(wb.NamedRanges ?? []);
+            if (workbookMeta.get('NamedRanges') !== namedRangesJson) {
+                workbookMeta.set('NamedRanges', namedRangesJson);
+            }
+
+            const validSheetIds = new Set<string>();
+            const validCellCoordKeys = new Set<string>();
+
+            for (const ws of wb.Worksheets) {
+                validSheetIds.add(ws.SheetID);
+                const sheetStruct: WorksheetSpec = {
+                    ...ws,
+                    Cells: {}
+                };
+                const sheetStructJson = JSON.stringify(sheetStruct);
+                if (worksheetsById.get(ws.SheetID) !== sheetStructJson) {
+                    worksheetsById.set(ws.SheetID, sheetStructJson);
+                }
+
+                for (const cell of Object.values(ws.Cells)) {
+                    const coordKey = `${ws.SheetID}::${cell.RowID}::${cell.ColumnID}`;
+                    validCellCoordKeys.add(coordKey);
+                    const cellJson = JSON.stringify(cell);
+                    if (sheetCellsByCoord.get(coordKey) !== cellJson) {
+                        sheetCellsByCoord.set(coordKey, cellJson);
+                    }
+                }
+            }
+
+            for (const existingSheetId of Array.from(worksheetsById.keys())) {
+                if (!validSheetIds.has(existingSheetId)) {
+                    worksheetsById.delete(existingSheetId);
+                }
+            }
+            for (const existingCoordKey of Array.from(sheetCellsByCoord.keys())) {
+                if (!validCellCoordKeys.has(existingCoordKey)) {
+                    sheetCellsByCoord.delete(existingCoordKey);
+                }
+            }
+
+            const currentOrder = sheetOrder.toArray();
+            const targetOrder = wb.Worksheets.map((w) => w.SheetID);
+            if (
+                currentOrder.length !== targetOrder.length ||
+                currentOrder.some((id, idx) => id !== targetOrder[idx])
+            ) {
+                if (sheetOrder.length > 0) {
+                    sheetOrder.delete(0, sheetOrder.length);
+                }
+                sheetOrder.insert(0, targetOrder);
+            }
+        } catch {
+            // Non-Spreadsheet content
+        }
+    }
+
+    /**
      * Reconstructs the canonical string content of a Yjs room.
-     * If the room contains per-slide CRDT maps (`slidesById` + `slideOrder`), reconstructs
-     * the merged {@link SlideDeckSpec} JSON so concurrent slide edits, reorders, and `deckMeta`
-     * theme/master updates are preserved.
+     * - If the room contains per-worksheet/per-cell CRDT maps (`worksheetsById` + `sheetCellsByCoord`),
+     *   reconstructs the merged {@link WorkbookSpec}, resolves all stable-ID formulas (`FormulaStable`),
+     *   and recalculates the workbook (`§ 6.2`, `Accept #1`).
+     * - If the room contains per-slide CRDT maps (`slidesById` + `slideOrder`), reconstructs
+     *   the merged {@link SlideDeckSpec} JSON (`§ 5.1`).
      */
     private extractRoomSerializedContent(doc: Y.Doc): string {
+        const worksheetsById = doc.getMap<string>('worksheetsById');
+        const sheetOrder = doc.getArray<string>('sheetOrder');
+        const workbookMeta = doc.getMap<string>('workbookMeta');
+        const sheetCellsByCoord = doc.getMap<string>('sheetCellsByCoord');
+
+        if (worksheetsById.size > 0) {
+            try {
+                const orderedSheetIds = sheetOrder.toArray();
+                const placedSheetIds = new Set<string>();
+                const worksheets: WorksheetSpec[] = [];
+
+                const collectSheet = (sheetId: string, rawJson: string): void => {
+                    if (placedSheetIds.has(sheetId) || !rawJson) return;
+                    placedSheetIds.add(sheetId);
+                    const ws = JSON.parse(rawJson) as WorksheetSpec;
+                    ws.Cells = ws.Cells ?? {};
+
+                    const prefix = `${sheetId}::`;
+                    for (const [coordKey, cellJson] of sheetCellsByCoord.entries()) {
+                        if (!coordKey.startsWith(prefix) || !cellJson) continue;
+                        const cell = JSON.parse(cellJson) as SpreadsheetCellSpec;
+                        const tempAddr = cell.Address || `${cell.RowID}:${cell.ColumnID}`;
+                        ws.Cells[tempAddr] = cell;
+                    }
+                    SpreadsheetEngine.Instance.ReindexWorksheetAndResolveFormulas(ws);
+                    worksheets.push(ws);
+                };
+
+                for (const sId of orderedSheetIds) {
+                    const sJson = worksheetsById.get(sId);
+                    if (sJson) collectSheet(sId, sJson);
+                }
+                for (const [sId, sJson] of worksheetsById.entries()) {
+                    collectSheet(sId, sJson);
+                }
+
+                if (worksheets.length > 0) {
+                    let namedRanges: SpreadsheetNamedRangeSpec[] = [];
+                    const nrRaw = workbookMeta.get('NamedRanges');
+                    if (nrRaw) {
+                        try {
+                            namedRanges = JSON.parse(nrRaw) as SpreadsheetNamedRangeSpec[];
+                        } catch {
+                            namedRanges = [];
+                        }
+                    }
+                    const now = new Date().toISOString();
+                    const activeId = workbookMeta.get('ActiveSheetID') || worksheets[0].SheetID;
+                    const wb: WorkbookSpec = SpreadsheetEngine.Instance.NormalizeWorkbook({
+                        WorkbookID: workbookMeta.get('WorkbookID') || 'wb-1',
+                        Title: workbookMeta.get('Title') || 'Workbook',
+                        ActiveSheetID: activeId,
+                        Worksheets: worksheets,
+                        NamedRanges: namedRanges,
+                        CreatedAt: now,
+                        UpdatedAt: now
+                    });
+                    SpreadsheetEngine.Instance.EvaluateWorkbook(wb);
+                    return SpreadsheetEngine.Instance.SerializeWorkbook(wb);
+                }
+            } catch {
+                // Fall back to other extractors
+            }
+        }
+
         const slidesById = doc.getMap<string>('slidesById');
         const slideOrder = doc.getArray<string>('slideOrder');
         const deckMeta = doc.getMap<string>('deckMeta');

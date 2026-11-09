@@ -1038,10 +1038,11 @@ import {
     PandaDocSignatureProvider,
 } from '@memberjunction/esignature-pandadoc';
 
-// @memberjunction/excel-addin-server (7 classes)
+// @memberjunction/excel-addin-server (8 classes)
 import {
     ExcelAddinBuildWorkbookServerOperation,
     ExcelAddinCreateConnectionServerOperation,
+    ExcelAddinEvaluateCustomFunctionServerOperation,
     ExcelAddinGetCatalogServerOperation,
     ExcelAddinGetEntityViewsServerOperation,
     ExcelAddinGetStatusServerOperation,
@@ -1269,7 +1270,7 @@ import {
     VoyageReRanker,
 } from '@memberjunction/search-engine';
 
-// @memberjunction/ai-agents (28 classes)
+// @memberjunction/ai-agents (29 classes)
 import {
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
@@ -1296,6 +1297,7 @@ import {
     RealtimeAgentType,
     SearchResultSetToolLibrary,
     SlideDeckToolLibrary,
+    SpreadsheetToolLibrary,
     TextToolLibrary,
     WhiteboardChannelServer,
     WhiteboardToolLibrary,
@@ -2597,6 +2599,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PandaDocSignatureProvider,
     ExcelAddinBuildWorkbookServerOperation,
     ExcelAddinCreateConnectionServerOperation,
+    ExcelAddinEvaluateCustomFunctionServerOperation,
     ExcelAddinGetCatalogServerOperation,
     ExcelAddinGetEntityViewsServerOperation,
     ExcelAddinGetStatusServerOperation,
@@ -2643,11 +2646,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RestoreRecordAction,
     RunAllActiveArchivesAction,
     TagEngineBase,
-    AIPromptExtension,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    AIPromptExtension,
     TemplateEmbedExtension,
     TemplateRunServerOperation,
     LLMDecision,
@@ -2723,6 +2726,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     RealtimeAgentType,
     SearchResultSetToolLibrary,
     SlideDeckToolLibrary,
+    SpreadsheetToolLibrary,
     TextToolLibrary,
     WhiteboardChannelServer,
     WhiteboardToolLibrary,
@@ -2846,12 +2850,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJBrandKitEntityServer,
     MJCompanyIntegrationEntityServer,
     MJComponentEntityServer,
-    MJConversationDetailAttachmentEntityServer,
-    MJConversationDetailEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJConversationDetailAttachmentEntityServer,
+    MJConversationDetailEntityServer,
     MJConversationEntityServer,
     MJDashboardEntityServer,
     MJDataContextItemEntityServer,
@@ -3050,12 +3054,12 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PerplexitySearchAction,
     PostalCodeLookupAction,
     PrepareOutboundCallBriefAction,
-    PreviewDocumentAction,
-    QRCodeAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    PreviewDocumentAction,
+    QRCodeAction,
     ReadRSSFeedAction,
     ReembedLocalVectorsAction,
     RefreshListFromSourceAction,
@@ -3161,7 +3165,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1288;
+export const CLASS_REGISTRATIONS_COUNT = 1290;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -172,3 +172,46 @@ Located in `packages/MJCoreEntities/src/custom/SlideDeckEngine.ts`:
 - **`SlideDeckExportService`**:
   - `ExportToPptxPackage(deck, user, executionSnapshots)`: Generates a standards-compliant OpenXML `.pptx` PKZIP archive (`PK\x03\x04`) containing `[Content_Types].xml`, `ppt/presentation.xml`, `ppt/theme/theme1.xml`, `ppt/slides/slide1..N.xml` (with editable `<p:sp>` `<a:t>` text runs and native DrawingML `<a:tbl>` tables for frozen live block rows per `Accept #2`), and `ppt/notesSlides/notesSlide1..N.xml` (preserving speaker notes per `Accept #5`).
   - `BuildPrintableDeckHtml(deck, executionSnapshots)`: Generates a 16:9 widescreen `@page { size: 13.333in 7.5in; }` HTML document for `.pdf` export.
+
+---
+
+## 8. Wave 3: MJ Sheets (`Excel Spreadsheet` Artifact Type) & Track A Custom Functions (`=MJ.QUERY`, `=MJ.VIEW`)
+
+### 8.1 Multi-Tab `WorkbookSpec`, Stable Row/Column IDs & Headless Formula Evaluator (`@memberjunction/core-entities`)
+
+- **`SpreadsheetEngine` (`packages/MJCoreEntities/src/custom/SpreadsheetEngine.ts`)**:
+  - **Multi-Tab Workbook Schema**: Models workbooks (`WorkbookSpec`) with ordered `WorksheetSpec` tabs, stable `RowID`s (`SpreadsheetRowSpec`) and `ColumnID`s (`SpreadsheetColumnSpec`), cell styles (`SpreadsheetCellStyle`), conditional formatting rules, named ranges, bound live MJ tables (`SpreadsheetLiveTableSpec`), range charts (`SpreadsheetChartSpec`), and inline OLE embedded artifacts (`SpreadsheetEmbeddedArtifactSpec`).
+  - **Conflict-Free Stable-ID Formula Compilation (`§ 6.2`, `Accept #1`)**:
+    - `CompileFormulaToStableIds(sheet, formula)`: Rewrites A1 coordinates (`=SUM(B2:B5)`) into stable row/column token references (`=SUM(@RANGE(row-2,col-2,row-5,col-2))`).
+    - `ResolveFormulaFromStableIds(sheet, stableFormula)`: Reconstructs updated A1 coordinates (`=SUM(B3:B6)`) after concurrent row or column insertions/deletions.
+  - **Headless Formula Engine (`Accept #3`)**:
+    - Evaluates 35+ built-in functions (`SUM`, `AVERAGE`, `COUNT`, `COUNTA`, `MIN`, `MAX`, `IF`, `IFS`, `AND`, `OR`, `NOT`, `SUMIF`, `COUNTIF`, `AVERAGEIF`, `VLOOKUP`, `XLOOKUP`, `INDEX`, `MATCH`, `ROUND`, `ROUNDUP`, `ROUNDDOWN`, `ABS`, `SQRT`, `POWER`, `MOD`, `CONCAT`, `UPPER`, `LOWER`, `TRIM`, `LEN`, `LEFT`, `RIGHT`, `TODAY`, `NOW`, `YEAR`, `MONTH`, `DAY`, `NPV`, `PMT`), cross-sheet references (`'Rates'!B2`), and named ranges with topological dependency ordering and cycle detection (`#CYCLE!`).
+  - **Viewer-Scoped `=MJ.QUERY` & `=MJ.VIEW` Custom Functions + Bound Live Tables (`§ 6.3`, `§ 7.2`, `Accept #2`)**:
+    - `EvaluateMjCustomFunctions(workbook, contextUser, provider)`: Evaluates `=MJ.QUERY("Name", ...params)` and `=MJ.VIEW("Entity", "View", "Filter")` under the viewing user's permissions with RLS + FLS output projection (`ProjectEntityValueRowsForUser`), `IsServerSet` parameter stripping (`StripServerOnlyRunQueryParams`), unsafe SQL filter token rejection, 60-second per-viewer TTL cache, concurrency limit (5), multi-cell spilling, and `#MJ_ACCESS_DENIED!` error handling.
+    - `RefreshLiveTables(workbook, contextUser, provider)`: Refreshes bound `EntityView` and `SavedQuery` tables, automatically filling down adjacent `CalculatedColumns` (`=ROUND(B{ROW}*1.15, 2)`) across refreshed rows.
+    - `FreezeLiveTable(workbook, sheetId, tableId, executionResult, user, true)`: Requires explicit `O5` security confirmation before baking viewer-scoped data into the shared workbook.
+  - **Isomorphic OpenXML `.xlsx` & `.csv` Import/Export (`§ 6.4`, `Accept #4`)**:
+    - `ExportToXlsxBytes(workbook)` & `ImportFromXlsxBytes(bytes)` (including RFC 1951 raw DEFLATE decompression for third-party `.xlsx` archives such as Excel / `exceljs`) preserve `<f>` formulas, currency/percent/date `numFmt` styles, column widths, frozen panes, and hidden `_mj_sheets_meta` workbook metadata.
+  - **Live Cross-Artifact Sheet-to-Slide / Sheet-to-Doc Range Charts (`Accept #5`)**:
+    - `ExtractChartDataset(workbook, sheetId, chartIdOrRange)` + `ArtifactDocumentBlock.Execute` resolve live `Excel Spreadsheet` range charts inside MJ Slides and MJ Docs so updating a cell on a Sheet automatically updates the chart in the Slide on refresh.
+
+### 8.2 Per-Worksheet & Per-Cell Yjs CRDT Synchronization (`Accept #1`)
+
+- Both `ArtifactCollaborationServer` (`@memberjunction/server`) and `DocumentCollaborationSession` (`@memberjunction/ng-artifacts`) synchronize `WorkbookSpec` workbooks using disjoint Yjs maps:
+  - `doc.getMap('workbookMeta')`: Workbook title, active sheet ID, and named ranges.
+  - `doc.getArray('sheetOrder')`: Ordered list of `SheetID`s.
+  - `doc.getMap('worksheetsById')`: Worksheet structural metadata (`Rows` with `RowID`s, `Columns` with `ColumnID`s, `LiveTables`, `Charts`, `EmbeddedArtifacts`, `FrozenRows`).
+  - `doc.getMap('sheetCellsByCoord')`: Individual cells keyed by `${SheetID}::${RowID}::${ColumnID}` storing `FormulaStable`.
+- Because structural row/column insertions mutate `worksheetsById` while cell/formula edits mutate `sheetCellsByCoord`, concurrent row insertions and formula edits merge without conflict and resolve to shifted A1 coordinates (`=SUM(B2:B5)` -> `=SUM(B3:B6)`).
+
+### 8.3 Server-Side `SpreadsheetToolLibrary` (`@memberjunction/ai-agents`)
+
+- Registered via `@RegisterClass(BaseArtifactToolLibrary, 'SpreadsheetToolLibrary')` (`packages/AI/Agents/src/artifact-tools/SpreadsheetToolLibrary.ts`):
+  - Exposes 11 structured agent tools: `get_workbook_summary`, `read_range`, `write_cells`, `evaluate_formula`, `insert_rows`, `delete_rows`, `add_worksheet`, `bind_live_table`, `add_chart`, `export_xlsx_base64`, and `import_xlsx_base64`.
+  - Executes formulas headlessly via `SpreadsheetEngine` so `@SheetsAgent` can write a formula and immediately read back the evaluated scalar or range without a browser tab (`Accept #3`).
+
+### 8.4 Track A Microsoft Excel Add-In Custom Functions (`@memberjunction/excel-addin` & `@memberjunction/excel-addin-server`)
+
+- `packages/OfficeAddins/Excel/src/custom-functions.ts`:
+  - Implements `MJ.QUERY` (`ExecuteMjQueryCustomFunction`) and `MJ.VIEW` (`ExecuteMjViewCustomFunction`) with `registerMjCustomFunctions()`, 60-second per-viewer TTL cache, max 5 concurrent requests, `IsServerSet` parameter stripping, unsafe filter rejection, 2D spill matrix formatting, and `#MJ_ACCESS_DENIED!` error handling.
+
