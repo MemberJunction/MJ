@@ -18,13 +18,16 @@
  * @module @memberjunction/search-engine
  */
 
-import nunjucks from 'nunjucks';
+import { CreateSandboxedEnvironment } from '@memberjunction/nunjucks-sandbox';
 import { EscapeScopeValueDeep, RenderedPathHasRefusedValue, type ScopeLaneKind } from './ScopeValueEscaper';
 import { LogError } from '@memberjunction/core';
 import { SearchContext } from './search.types';
 
-/** Environment used for all ad-hoc scope template rendering. */
-const env = new nunjucks.Environment(null as unknown as nunjucks.ILoader, {
+/**
+ * Environment used for all ad-hoc scope template rendering. Built sandboxed: scope templates are
+ * stored data, and this module must not rely on another package having guarded nunjucks.
+ */
+const env = CreateSandboxedEnvironment(null, {
     autoescape: false, // values go into filters / metadata, not HTML
     throwOnUndefined: false,
     trimBlocks: true,

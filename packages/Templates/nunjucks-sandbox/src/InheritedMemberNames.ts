@@ -1,6 +1,6 @@
 /**
  * @fileoverview The one list of names that the template sandbox refuses wherever a template names something.
- * @module @memberjunction/templates
+ * @module @memberjunction/nunjucks-sandbox
  */
 
 /**

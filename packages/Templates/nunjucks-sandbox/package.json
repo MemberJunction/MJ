@@ -1,0 +1,29 @@
+{
+  "name": "@memberjunction/nunjucks-sandbox",
+  "type": "module",
+  "version": "6.2.0",
+  "description": "MemberJunction nunjucks sandbox - guards the nunjucks parser, compiler and runtime so templates cannot run JavaScript or reach server objects. Every MemberJunction package that builds a nunjucks Environment builds it through this package.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^3.1.1"
+  },
+  "dependencies": {
+    "@types/nunjucks": "^3.2.6",
+    "nunjucks": "3.2.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

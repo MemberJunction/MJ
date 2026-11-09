@@ -2,7 +2,8 @@
  * Prompt execution engine combining Nunjucks templating with AI/Core
  */
 
-import nunjucks from 'nunjucks';
+import type nunjucks from 'nunjucks';
+import { CreateSandboxedEnvironment } from '@memberjunction/nunjucks-sandbox';
 import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
 import { PromptFileLoader } from './PromptFileLoader.js';
 import { AIConfig, RetryConfig } from '../types/config.js';
@@ -24,7 +25,7 @@ export class PromptEngine {
   ) {
     // Initialize Nunjucks with custom loader
     const loader = new PromptFileLoader(promptsDir);
-    this.nunjucksEnv = new nunjucks.Environment(loader, {
+    this.nunjucksEnv = CreateSandboxedEnvironment(loader, {
       autoescape: false,
       dev: true
     });

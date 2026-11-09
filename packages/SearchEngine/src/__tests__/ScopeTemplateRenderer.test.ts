@@ -74,3 +74,31 @@ describe('ScopeTemplateRenderer', () => {
         });
     });
 });
+
+declare global {
+    // Set only by template code that managed to run JavaScript.
+    // eslint-disable-next-line no-var
+    var __mjScopeTemplateEscape: string | undefined;
+}
+
+describe('ScopeTemplateRenderer: sandboxed environment', () => {
+    // This file never loads @memberjunction/templates: the renderer guards nunjucks itself.
+    const CODE = `globalThis.__mjScopeTemplateEscape = 'ran'; return 6*707`;
+
+    it.each([
+        `{{ ''.constructor.constructor("${CODE}")() }}`,
+        `{{ range.constructor("${CODE}")() }}`,
+        `{{ context.PrimaryScopeRecordID.constructor.constructor("${CODE}")() }}`,
+    ])('refuses a constructor escape in a scope template: %s', (template) => {
+        globalThis.__mjScopeTemplateEscape = undefined;
+        const rendered = RenderScopeTemplate(template, { PrimaryScopeRecordID: 'tenant-a' });
+        expect(globalThis.__mjScopeTemplateEscape).toBeUndefined();
+        expect(rendered).not.toContain('4242');
+    });
+
+    it('refuses the escape in a JSON scope template', () => {
+        globalThis.__mjScopeTemplateEscape = undefined;
+        RenderScopeJsonTemplate(`{"a": "{{ ''.constructor.constructor("${CODE}")() }}"}`, { PrimaryScopeRecordID: 'tenant-a' });
+        expect(globalThis.__mjScopeTemplateEscape).toBeUndefined();
+    });
+});

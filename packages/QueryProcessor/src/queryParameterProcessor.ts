@@ -1,7 +1,9 @@
 import { RunQuerySQLFilterManager, LogError, QUERY_CONTEXT_NAME } from '@memberjunction/core';
 import type { QueryTemplateContext } from '@memberjunction/core';
 import { MJQueryParameterEntity } from '@memberjunction/core-entities';
-import nunjucks from 'nunjucks';
+import type nunjucks from 'nunjucks';
+import { CreateSandboxedEnvironment } from '@memberjunction/nunjucks-sandbox';
+import { FindUnfilteredOutputNames, IsSafeUnfilteredValue } from './unfilteredOutputs';
 
 /**
  * The fields of a parameter definition the processor reads. Both `MJQueryParameterEntity` (saved
@@ -136,7 +138,7 @@ export class QueryParameterProcessor {
     private static environmentFor(dialectKey: string): nunjucks.Environment {
         let env = this.environments.get(dialectKey);
         if (!env) {
-            env = new nunjucks.Environment(null, {
+            env = CreateSandboxedEnvironment(null, {
                 autoescape: false,
                 throwOnUndefined: true,
                 trimBlocks: true,
@@ -401,8 +403,9 @@ export class QueryParameterProcessor {
                             validatedParams[paramDef.Name] = String(finalValue);
                             break;
                         case 'number': {
+                            // Finite only: `Infinity` and `NaN` are not SQL numbers, and a bare tag would write them as names.
                             const num = Number(finalValue);
-                            if (isNaN(num)) {
+                            if (!Number.isFinite(num)) {
                                 errors.push(`Parameter '${paramDef.Name}' must be a number`);
                                 continue;
                             }
@@ -431,12 +434,13 @@ export class QueryParameterProcessor {
                             if (Array.isArray(finalValue)) {
                                 validatedParams[paramDef.Name] = finalValue;
                             } else if (typeof finalValue === 'string') {
-                                try {
-                                    validatedParams[paramDef.Name] = JSON.parse(finalValue);
-                                } catch {
+                                // JSON text that is not an array (a quoted string, a number, an object) is not an array value.
+                                const parsed = QueryParameterProcessor.parseJsonArray(finalValue);
+                                if (!parsed) {
                                     errors.push(`Parameter '${paramDef.Name}' must be a valid JSON array`);
                                     continue;
                                 }
+                                validatedParams[paramDef.Name] = parsed;
                             } else {
                                 errors.push(`Parameter '${paramDef.Name}' must be an array`);
                                 continue;
@@ -486,6 +490,77 @@ export class QueryParameterProcessor {
             errors,
             validatedParameters: validatedParams
         };
+    }
+
+    /**
+     * {@link refuseUnfilteredValues}, with a template that does not parse reported as a refusal: a
+     * template that cannot be checked is not rendered.
+     */
+    private static unfilteredValueRefusals(
+        sql: string,
+        renderParams: Record<string, unknown>,
+        parameterDefinitions: ReadonlyArray<QueryParameterDefinition>,
+        serverValues: QueryServerValues | undefined,
+        options: QueryRenderOptions | undefined
+    ): string[] {
+        try {
+            return this.refuseUnfilteredValues(sql, renderParams, parameterDefinitions, serverValues, options);
+        } catch (e: unknown) {
+            return [`the query template could not be read (${e instanceof Error ? e.message : String(e)})`];
+        }
+    }
+
+    /** The array that `text` holds as JSON, or `undefined` when it is not JSON or not an array. */
+    private static parseJsonArray(text: string): unknown[] | undefined {
+        try {
+            const parsed: unknown = JSON.parse(text);
+            return Array.isArray(parsed) ? parsed : undefined;
+        } catch {
+            return undefined;
+        }
+    }
+
+    /** Declared types whose values validation converts to a number, a boolean or an ISO date, whatever the caller sent. */
+    private static readonly convertedTypes: ReadonlySet<QueryParameterDefinition['Type']> = new Set<QueryParameterDefinition['Type']>(['number', 'boolean', 'date']);
+
+    /**
+     * Refusals for caller values a template writes into the SQL without a SQL filter.
+     *
+     * `{{ Name | sqlString }}` is safe for any value: the filter writes the literal. `TOP {{ n }}` and
+     * `Status = {{ status }}` paste the value as SQL text, so `1 UNION SELECT …` would become part of the
+     * statement and undo the row scoping the query's author wrote. A value written that way must be a
+     * number, a boolean, or text that is a plain decimal number or `ASC`/`DESC`
+     * (`IsSafeUnfilteredValue`). The author's fix is a SQL filter in the query, or a `number`,
+     * `boolean` or `date` parameter type.
+     *
+     * Not checked, because a caller cannot set them or validation already converted them: `Context`,
+     * the render's `Scope`, server-set values, and parameters declared `number`, `boolean` or `date`.
+     *
+     * @throws when the template does not parse; the caller reports it as a failed render
+     */
+    private static refuseUnfilteredValues(
+        sql: string,
+        renderParams: Record<string, unknown>,
+        parameterDefinitions: ReadonlyArray<QueryParameterDefinition>,
+        serverValues: QueryServerValues | undefined,
+        options: QueryRenderOptions | undefined
+    ): string[] {
+        const sqlFilters = new Set(RunQuerySQLFilterManager.Instance.GetFiltersForDialect(this.dialectKeyOf(options)).map(f => f.name));
+        const scopeNames = new Set(Object.keys(options?.Scope ?? {}));
+        const trusted = new Set<string>([QUERY_CONTEXT_NAME, ...scopeNames, ...Object.keys(serverValues?.ServerParameters ?? {})]);
+        for (const def of parameterDefinitions) {
+            if (def.IsServerSet || this.convertedTypes.has(def.Type)) {
+                trusted.add(def.Name);
+            }
+        }
+        const refusals: string[] = [];
+        for (const name of FindUnfilteredOutputNames(sql, sqlFilters, scopeNames)) {
+            if (!trusted.has(name) && Object.hasOwn(renderParams, name) && !IsSafeUnfilteredValue(renderParams[name])) {
+                refusals.push(`Parameter '${name}' is written into the SQL without a SQL filter, so its value may only be a number or ASC/DESC. `
+                    + `To accept other values, the query must format it: {{ ${name} | sqlString }} for text, or sqlNumber, sqlDate, sqlIdentifier or sqlIn`);
+            }
+        }
+        return refusals;
     }
 
     /**
@@ -593,6 +668,16 @@ export class QueryParameterProcessor {
             }
 
             const renderParams = this.buildRenderParams(validation.validatedParameters, parameters, forceTemplateProcessing, serverValues);
+            const unfiltered = this.unfilteredValueRefusals(sql, renderParams, query.Parameters, serverValues, options);
+            if (unfiltered.length > 0) {
+                LogError(`Query parameters refused: ${unfiltered.join('; ')}`);
+                return {
+                    success: false,
+                    processedSQL: '',
+                    error: `Parameter validation failed: ${unfiltered.join('; ')}`,
+                    appliedParameters: {}
+                };
+            }
             return this.renderTemplate(sql, renderParams, serverValues, options);
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e);

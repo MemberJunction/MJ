@@ -5,7 +5,8 @@
  * queries against the database. Handles error fixing with retry loop.
  */
 
-import nunjucks from 'nunjucks';
+import type nunjucks from 'nunjucks';
+import { CreateSandboxedEnvironment } from '@memberjunction/nunjucks-sandbox';
 import {
   DatabaseProviderBase,
   RunQuerySQLFilterManager,
@@ -37,7 +38,7 @@ export class QueryTester {
     private config: QueryGenConfig
   ) {
     // Initialize Nunjucks environment with SQL-safe filters
-    this.nunjucksEnv = new nunjucks.Environment(null, {
+    this.nunjucksEnv = CreateSandboxedEnvironment(null, {
       autoescape: false,
       throwOnUndefined: true,
       trimBlocks: true,
