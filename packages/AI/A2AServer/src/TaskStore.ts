@@ -483,8 +483,9 @@ interface SerializedA2ATaskOutputPayload {
 
 export interface DurableEntityA2ATaskStoreOptions extends TaskStoreOptions {
     /**
-     * Whether to persist and hydrate tasks via the `MJ: Tasks` entity.
-     * Defaults to `true`. Set to `false` when `a2aServerSettings.taskStoreMode === 'memory'`.
+     * Whether to persist and hydrate tasks via the `MJ: Tasks` entity. Defaults to `true`; `false` keeps
+     * tasks in this process only. `a2aServerSettings.taskStoreMode: 'memory'` does not use this store at
+     * all: it creates an {@link InMemoryA2ATaskStore} ({@link CreateA2ATaskStore}).
      */
     PersistenceEnabled?: boolean;
 }
