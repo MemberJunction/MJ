@@ -1,52 +1,70 @@
-# MemberJunction Docs, Slides, and Sheets Architecture Guide
+# MemberJunction Docs, Slides, Sheets, Version Compare & Library Architecture Guide
 
-This guide documents the shared real-time collaboration core, viewer-scoped live MJ blocks, "MS OLE" inline artifact embedding, server-side agent tool libraries (`BaseArtifactToolLibrary`), the collaborative **MJ Docs** editor (Wave 1), and the **MJ Slides** presentation deck editor & OpenXML `.pptx` exporter (Wave 2) implemented per [plans/docs-slides-sheets.md](../plans/docs-slides-sheets.md).
+This guide is the canonical architectural reference for MemberJunction's collaborative productivity and workspace stack:
+
+- **Real-Time Yjs CRDT Collaboration Core** (`MJ: Artifact Working States`, `ArtifactCollaborationServer`, `InMemoryYjsRoomRelay` / `RedisYjsRoomRelay`, and delegated permission enforcement via `ArtifactPermissionEngine`)
+- **Viewer-Scoped Live MJ Blocks & MS OLE Inline Artifacts** (`DocumentLiveBlockEngine`, `O5` freeze confirmation, and inline `Whiteboard` / cross-artifact `Sheet` chart embedding)
+- **MJ Docs (`Markdown Document`)** with progressive-disclosure formatting chrome, two-tier **Word-Level Suggesting Redlines**, anchored `DocBlock` comments, and `.md` / `.docx` / `.pdf` import/export
+- **MJ Slides (`Presentation`)** with 11 structured 16:9 layouts, per-slide Yjs CRDT co-editing, Organization Brand Color Seed theme derivation, `O6` Presenter View freeze, and standards-compliant OpenXML `.pptx` export
+- **MJ Sheets (`Excel Spreadsheet`)** with stable `RowID`/`ColumnID` formula compilation (`@RANGE`), headless 35+ function evaluator, viewer-scoped `=MJ.QUERY` / `=MJ.VIEW` & bound Live Tables, `.xlsx` OpenXML round-trip, and Microsoft Excel Add-In custom functions
+- **Git-Style Visual Version Compare (`<mj-artifact-version-compare>`)** across Documents, Spreadsheets, Presentations, Interactive `ComponentSpec` artifacts, SQL Queries, and structured JSON/text
+- **Top-Level `Library` Application & Stateless Connected Cloud Drives** (`Hub` + `Power Navigator` + `Full-Canvas Studio`, 7 AI Agent Client Tools, zero-`MJ: Files` remote drive browsing, and `Chat` **`Agent Activity`** scoping)
 
 ---
 
-## 1. Architectural Overview
+## 1. End-to-End System Architecture
 
 ```mermaid
 flowchart TD
-    subgraph Browser["Angular Browser Client (@memberjunction/ng-artifacts & @memberjunction/ng-conversations)"]
-        Docs["MarkdownArtifactViewerComponent (MJ Docs)"]
-        Slides["SlideDeckArtifactViewerComponent (MJ Slides)"]
-        CollabSvc["DocumentCollaborationService (Yjs + Awareness + Per-Slide CRDT)"]
-        ImpExp["DocumentImportExportService (.md / .docx / .pdf)"]
-        PptxExp["SlideDeckExportService (.pptx OpenXML + .pdf)"]
-        PluginHost["ArtifactTypePluginViewerComponent (OLE Host)"]
+    subgraph Explorer["MJ Explorer & Workspace Applications (@memberjunction/ng-explorer-core & @memberjunction/ng-conversations)"]
+        LibApp["LibraryResource + LibraryWorkspaceComponent (Hub | Navigator | Full-Canvas Studio)"]
+        RemoteDrive["LibraryRemoteDrivePaneComponent (Stateless Zero-MJ:Files Cloud Drives)"]
+        ChatAct["ChatTasksResource ('Agent Activity' — Agent/Conversation Scoped)"]
+    end
+
+    subgraph Browser["Artifact Viewers, Collaboration & Diff (@memberjunction/ng-artifacts & @memberjunction/ng-conversations)"]
+        Panel["ArtifactViewerPanelComponent (Toolbar, Save to Collection, Compare)"]
+        VerComp["ArtifactVersionCompareComponent (Visual | JSON-Tree | Unified | Split)"]
+        Docs["MarkdownArtifactViewerComponent (MJ Docs + Word-Level Redlines)"]
+        Slides["SlideDeckArtifactViewerComponent (MJ Slides 16:9 Studio + Presenter)"]
+        Sheets["SpreadsheetArtifactViewerComponent (MJ Sheets Multi-Tab Workbook)"]
+        CollabSvc["DocumentCollaborationService (Yjs CRDT + Awareness)"]
+        PluginHost["ArtifactTypePluginViewerComponent (MS OLE Host)"]
         WbPlugin["WhiteboardArtifactViewerComponent (SupportsInlineEdit = true)"]
     end
 
     subgraph Server["MJServer (@memberjunction/server)"]
         CollabSrv["ArtifactCollaborationServer (/collaboration/yjs)"]
-        Relay["IYjsRoomRelay (InMemoryYjsRoomRelay / RedisYjsRoomRelay)"]
+        Relay["IYjsRoomRelay (InMemoryYjsRoomRelay | RedisYjsRoomRelay)"]
         GqlRes["DocumentCollaborationResolver (GraphQL)"]
+        FileRes["ArtifactFileResolver (ArtifactPermissionEngine + FileStorageEngine Gate)"]
     end
 
-    subgraph Core["Shared Core (@memberjunction/core-entities & @memberjunction/ai-agents)"]
-        PermEng["ArtifactPermissionEngine + IArtifactPermissionDelegate"]
-        LiveEng["DocumentLiveBlockEngine (Viewer RLS/FLS + Freeze/Live)"]
-        SlideEng["SlideDeckEngine (Layouts, Brand Themes, O6 Freeze, Outline)"]
-        DocTools["DocumentToolLibrary (@RegisterClass BaseArtifactToolLibrary)"]
-        SlideTools["SlideDeckToolLibrary (@RegisterClass BaseArtifactToolLibrary)"]
-        WbTools["WhiteboardToolLibrary (@RegisterClass BaseArtifactToolLibrary)"]
+    subgraph Core["Shared Engines & Agent Tool Libraries (@memberjunction/core-entities & @memberjunction/ai-agents)"]
+        PermEng["ArtifactPermissionEngine + ParentArtifactPermissionDelegate (O4)"]
+        LiveEng["DocumentLiveBlockEngine (Viewer RLS/FLS + IsServerSet Strip + O5 Freeze)"]
+        SlideEng["SlideDeckEngine (Layouts, Brand Themes, O6 Freeze, Markdown-to-Deck)"]
+        SheetEng["SpreadsheetEngine (Stable IDs, Headless Formulas, =MJ.VIEW/=MJ.QUERY, .xlsx)"]
+        Tools["DocumentToolLibrary | SlideDeckToolLibrary | SpreadsheetToolLibrary | WhiteboardToolLibrary"]
     end
 
-    subgraph Database["SQL Server"]
+    subgraph Database["SQL Server / PostgreSQL + MJStorage"]
         Art["MJ: Artifacts (DelegateEntityID, DelegateRecordID)"]
-        Ver["MJ: Artifact Versions (Immutable Checkpoints)"]
+        Ver["MJ: Artifact Versions (Immutable Version Checkpoints)"]
         Work["MJ: Artifact Working States (YjsState VARBINARY(MAX))"]
-        Conv["MJ: Conversations (AnchorType = 'DocBlock' | 'SlideRegion')"]
+        Conv["MJ: Conversations (AnchorType = DocBlock | SlideRegion | SheetRange)"]
+        Cloud["External Cloud Drives (GDrive, SharePoint/OneDrive, Dropbox, Box, S3, Azure)"]
     end
 
-    Docs --> CollabSvc
-    Docs --> ImpExp
-    Docs --> PluginHost
-    Slides --> CollabSvc
-    Slides --> PptxExp
-    Slides --> PluginHost
-    Slides --> SlideEng
+    LibApp --> Panel
+    LibApp --> RemoteDrive
+    RemoteDrive <-->|"GraphQLFileStorageClient (No MJ: Files rows)"| Cloud
+    Panel --> VerComp
+    Panel --> Docs
+    Panel --> Slides
+    Panel --> Sheets
+    Docs & Slides & Sheets --> CollabSvc
+    Docs & Slides & Sheets --> PluginHost
     PluginHost --> WbPlugin
     CollabSvc <-->|"y-protocols/sync + awareness"| CollabSrv
     CollabSrv <--> Relay
@@ -54,164 +72,188 @@ flowchart TD
     CollabSrv --> Work
     CollabSrv --> Ver
     GqlRes --> LiveEng
-    GqlRes --> PermEng
-    DocTools --> LiveEng
-    SlideTools --> SlideEng
+    FileRes --> PermEng
+    Tools --> LiveEng & SlideEng & SheetEng
     PermEng --> Art
-    Docs --> Conv
-    Slides --> Conv
+    Docs & Slides & Sheets --> Conv
 ```
 
 ---
 
-## 2. Schema & Metadata Foundation (§ 3.1, `O1`, `O2`, `O4`)
+## 2. Schema & Metadata Foundation (`O1`, `O2`, `O4`)
 
 1. **`MJ: Artifact Working States` (`__mj.ArtifactWorkingState`)**:
-   - Stores transient binary Yjs CRDT state vectors (`YjsState VARBINARY(MAX)`) between immutable `MJ: Artifact Versions` checkpoints.
-   - Indexed with a unique constraint `UQ_ArtifactWorkingState_ArtifactID` on `ArtifactID`.
+   - Stores active compacted binary Yjs CRDT state vectors (`YjsState VARBINARY(MAX)`, exposed as base64 on `MJArtifactWorkingStateEntity`) in a strict 1:1 relationship (`UQ_ArtifactWorkingState_ArtifactID` with `ON DELETE CASCADE` to `MJ: Artifacts`).
+   - Separates high-frequency real-time keystroke/cell/slide synchronization from clean, human-meaningful `MJ: Artifact Versions` checkpoints.
 2. **Delegated Host Entity Permissions (`MJ: Artifacts.DelegateEntityID` + `DelegateRecordID`, `O4`)**:
-   - Polymorphic foreign key pair decorated with `EntityField.EntityIDFieldName = "DelegateEntityID"` in `metadata/entities/.polymorphic-fk-entity-fields.json`.
-   - Evaluated via `ArtifactPermissionEngine.Instance.ResolvePermissions(provider, artifactId, user)` and `IArtifactPermissionDelegate` (`@RegisterClass(BaseArtifactPermissionDelegate, '<EntityName>')`).
-   - Built-in `ParentArtifactPermissionDelegate` (`@RegisterClass(BaseArtifactPermissionDelegate, 'MJ: Artifacts')`) allows inline OLE child artifacts (such as an embedded Whiteboard created via `/whiteboard`) to inherit permissions directly from their host Document artifact.
+   - Enforced physically by `CK_Artifact_DelegateBinding` (both columns `NULL` or both `NOT NULL`) and decorated with `EntityField.EntityIDFieldName = "DelegateEntityID"` in `metadata/entities/.polymorphic-fk-entity-fields.json`.
+   - Evaluated via `ArtifactPermissionEngine.Instance.ResolvePermissions(provider, artifactId, user)` and `IArtifactPermissionDelegate` (`@RegisterClass(BaseArtifactPermissionDelegate, '<EntityName>')`), with cycle detection and `MAX_DELEGATE_DEPTH = 8`.
+   - Built-in `ParentArtifactPermissionDelegate` (`@RegisterClass(BaseArtifactPermissionDelegate, 'MJ: Artifacts')`) cascades read/edit/delete/share decisions from a host Document, Slide Deck, or Spreadsheet to inline OLE child artifacts (such as an embedded Whiteboard created via `/whiteboard`) without duplicating permission rows.
 3. **Artifact Type Metadata (`metadata/artifact-types/.artifact-types.json`, `O1`)**:
-   - `"Markdown Document"` -> `DriverClass: "MarkdownArtifactViewerPlugin"`, `ToolLibraryClass: "DocumentToolLibrary"`.
-   - `"Whiteboard"` -> `DriverClass: "WhiteboardArtifactViewerPlugin"`, `ToolLibraryClass: "WhiteboardToolLibrary"`.
-   - `"Presentation"` -> `DriverClass: "SlideDeckArtifactViewerPlugin"`, `ToolLibraryClass: "SlideDeckToolLibrary"`.
-   - `"Excel Spreadsheet"` -> `DriverClass: "SpreadsheetArtifactViewerPlugin"`, `ToolLibraryClass: "SpreadsheetToolLibrary"`.
+
+   | Artifact Type | `ContentType` | Viewer Plugin (`DriverClass`) | Agent Tool Library (`ToolLibraryClass`) |
+   |---|---|---|---|
+   | `Markdown Document` | `text/markdown` | `MarkdownArtifactViewerPlugin` | `DocumentToolLibrary` |
+   | `Presentation` | `application/vnd.mj.presentation+json` | `SlideDeckArtifactViewerPlugin` | `SlideDeckToolLibrary` |
+   | `Excel Spreadsheet` | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` | `SpreadsheetArtifactViewerPlugin` | `SpreadsheetToolLibrary` |
+   | `Whiteboard` | `application/json` | `WhiteboardArtifactViewerPlugin` | `WhiteboardToolLibrary` |
 
 ---
 
-## 3. Real-Time Collaboration Service (`ArtifactCollaborationServer`, § 3.2, `O2`, `O3`)
+## 3. Real-Time Yjs Collaboration Service (`ArtifactCollaborationServer`, `O2`, `O3`)
 
 Located in `packages/MJServer/src/collaboration/`:
+
+- **Why Yjs Is Built Into `@memberjunction/server`**:
+  - GraphQL request/response mutations cannot merge concurrent character, cell, or slide edits without lock contention or last-writer-wins overwrites. Yjs provides mathematically deterministic CRDT convergence (the same foundation used by **JupyterLab**, **Affine**, **Nextcloud Text**, **BlockSuite**, and **Hocuspocus/TipTap**) over a lightweight binary WebSocket endpoint mounted directly on MJServer's HTTP upgrade pipeline.
 - **`ArtifactCollaborationServer.ts`**:
   - Handles WebSocket upgrades on `/collaboration/yjs?artifactId=<uuid>`.
   - Authenticates the connecting user via `getUserPayload` and verifies `CanRead` / `CanEdit` via `ArtifactPermissionEngine`.
-  - Hydrates room state from `MJ: Artifact Working States.YjsState` (or initializes `Y.Text('content')` from the latest `MJ: Artifact Versions.Content`).
-  - Enforces read-only access at the binary frame layer: any `syncStep2` or `update` write frame sent by a client with `CanEdit === false` is dropped before mutating `room.Doc`, returning a `YJS_MESSAGE_CONTROL` (`readonly-rejected`) frame.
-  - Subscribes to `ArtifactPermissionEngine.Instance.OnPermissionsChanged` to immediately downgrade active editors to read-only (`YJS_MESSAGE_PERMISSION_STATUS` with `canEdit: false`) or close sockets (`4403`) when `CanRead` is revoked mid-session.
-  - Periodically checkpoints binary updates to `MJ: Artifact Working States` and compacts into a new `MJ: Artifact Versions` record on explicit save, last-client disconnect, or server-side agent tool execution.
-- **`YjsRoomRelay.ts` (`O3`)**:
-  - `IYjsRoomRelay` interface with `InMemoryYjsRoomRelay` (default) and `RedisYjsRoomRelay` (using `RedisLocalStorageProvider.SubscribeToChannel` / `PublishMessageAndWait` on `yjs:room:<artifactId>`).
+  - Hydrates room state from `MJ: Artifact Working States.YjsState` (or seeds `Y.Text('content')` and structured maps from the latest `MJ: Artifact Versions.Content`).
+  - **Binary Frame Read-Only Enforcement**: Any `syncStep2` or `update` write frame sent by a client with `CanEdit === false` is dropped before mutating `room.Doc`, returning a `YJS_MESSAGE_CONTROL` (`readonly-rejected`) frame while still allowing live cursor/selection awareness.
+  - **Mid-Session Permission Revocation**: Subscribes to `ArtifactPermissionEngine.Instance.OnPermissionsChanged` to immediately downgrade active editors (`YJS_MESSAGE_PERMISSION_STATUS` with `canEdit: false`) or close sockets (`4403`) when `CanRead` is revoked.
+  - **Checkpointing & Compaction**: Debounces binary checkpoints to `MJ: Artifact Working States` during active sessions and compacts into an immutable `MJ: Artifact Versions` record on explicit checkpoint save, last-client disconnect, or server-side agent tool mutation.
+- **Multi-Instance Horizontal Scaling (`YjsRoomRelay.ts`, `O3`)**:
+  - `IYjsRoomRelay` abstracts room fan-out behind `InMemoryYjsRoomRelay` (single-node default) and `RedisYjsRoomRelay` (broadcasting binary CRDT & awareness frames across MJAPI cluster nodes on `yjs:room:<artifactId>`).
 
 ---
 
-## 4. Viewer-Scoped Live MJ Blocks & Freeze Semantics (`DocumentLiveBlockEngine`, § 3.4, `O5`)
+## 4. Viewer-Scoped Live MJ Blocks & Freeze Semantics (`DocumentLiveBlockEngine`, `O5`)
 
 Located in `packages/MJCoreEntities/src/custom/DocumentLiveBlockEngine.ts`:
-- Parses and serializes fenced `:::mj-block` directives inside Markdown documents.
-- Supports `EntityView`, `SavedQuery`, `DashboardPart`, `InteractiveComponent`, and `Artifact` block kinds.
-- **Viewer-Scoped Security**:
-  - Executes `RunView` and `RunQuery` using the viewing user's `UserInfo`.
-  - Strips any parameter whose metadata declares `IsServerSet === true` (or matches server-only parameter prefixes) before execution so untrusted block JSON can never override server-bound security parameters.
-  - Projects output columns through Field-Level Security (`CanUserViewField`) so restricted fields are never leaked.
-- **Explicit `Live` vs. `Frozen` Mode (`O5`)**:
-  - Blocks default to `Mode: "Live"`.
-  - Freezing a block requires `acknowledgeSecurityWarning === true` (enforced both in `MarkdownArtifactViewerComponent`'s confirmation modal and in `DocumentLiveBlockEngine.FreezeBlock`), recording `FrozenAt`, `FrozenByUserID`, and `FrozenByUserName` provenance metadata.
+
+- Parses and serializes fenced `:::mj-block` directives across Markdown documents, Slide regions, and Sheet references.
+- Registers 5 `BaseDocumentBlock` handlers: `EntityView`, `SavedQuery`, `DashboardPart`, `InteractiveComponent`, and `Artifact`.
+- **Zero-Trust Viewer-Scoped Execution**:
+  - Executes `RunView` and `RunQuery` strictly under the **viewing user's** `UserInfo` (never the document author's credentials).
+  - Strips any parameter whose query metadata declares `IsServerSet === true` or matches `SERVER_ONLY_RUN_QUERY_PARAMS` (`StripServerOnlyRunQueryParams`) so untrusted block JSON can never spoof tenant or identity parameters.
+  - Projects output columns and rows through Field-Level Security (`ProjectEntityValueRowsForUser`) so restricted columns are omitted from both `Columns` and `Rows`.
+- **Explicit `Live` vs. `Frozen` Governance (`O5`)**:
+  - Blocks default to `Mode: 'Live'`.
+  - Converting a block to `Mode: 'Frozen'` bakes the freezing user's visible rows into the shared artifact payload. Therefore, `DocumentLiveBlockEngine.FreezeBlock` fails closed unless `acknowledgeSecurityWarning === true` (paired with a confirmation modal in the UI), stamping `FrozenAt`, `FrozenByUserID`, `FrozenByUserName`, and `SecurityWarningAcknowledged: true`. Executing a tampered `FrozenSnapshot` whose `SecurityWarningAcknowledged` is `false` is rejected at runtime.
 
 ---
 
-## 5. "MS OLE" Inline Artifact Blocks & Whiteboard Inline Editing (§ 3.4.1 / D12)
+## 5. "MS OLE" Inline Artifact Blocks & Whiteboard Inline Editing
 
 - `BaseArtifactViewerPluginComponent` (`@memberjunction/ng-artifacts`) exposes:
   - `SupportsInlineEdit: boolean` (default `false`)
   - `@Output() ContentCommitted = new EventEmitter<string>()`
-- `WhiteboardArtifactViewerComponent` (`@memberjunction/ng-conversations`) sets `SupportsInlineEdit = true`.
-  - When `[readonly]="true"`, it renders `<mj-whiteboard-snapshot>`.
-  - When `[readonly]="false"` (toggled via **Edit Inline (OLE Canvas)** inside a Document or in the Artifact Viewer Panel), it mounts `<mj-realtime-whiteboard-host [State]="EditableBoardState" [ShowFocusToggle]="false">` and emits `ContentCommitted` with `state.ToJSON()`.
+- `WhiteboardArtifactViewerComponent` (`@memberjunction/ng-conversations`) sets `SupportsInlineEdit = true`:
+  - When `[readonly]="true"`, renders a lightweight `<mj-whiteboard-snapshot>`.
+  - When `[readonly]="false"` (toggled via **Edit Inline (OLE Canvas)** inside a Document, Slide, or Sheet), mounts `<mj-realtime-whiteboard-host [State]="EditableBoardState" [ShowFocusToggle]="false">` directly in place and commits serialized JSON changes via `ContentCommitted`.
+  - Inline child artifacts automatically set `DelegateEntityID` (`MJ: Artifacts`) and `DelegateRecordID` (`hostArtifact.ID`) so permissions stay in lockstep with the host document.
 
 ---
 
-## 6. Server-Side Agent Tool Libraries (`BaseArtifactToolLibrary`, § 3.6)
+## 6. Server-Side Agent Tool Libraries (`BaseArtifactToolLibrary`)
 
-Located in `packages/AI/Agents/src/artifact-tools/`:
-- **`DocumentToolLibrary`** (`@RegisterClass(BaseArtifactToolLibrary, 'DocumentToolLibrary')`):
-  - Inspection tools: `get_outline`, `get_section`, `get_blocks`, `search_blocks`, `grep`, `get_lines`.
-  - Mutation tools (with optional `expectedRevisionHash` SHA-256 optimistic concurrency check): `insert_block_after`, `replace_block`, `delete_block`, `upsert_table`, `insert_live_block`, `embed_artifact_block`, `propose_suggestion`.
-- **`WhiteboardToolLibrary`** (`@RegisterClass(BaseArtifactToolLibrary, 'WhiteboardToolLibrary')`):
-  - Inspection & layout tools: `get_board_summary`, `list_elements`, `upsert_nodes`, `connect_nodes`, `add_sticky_notes`, `delete_elements`, `auto_layout`.
-- **`SlideDeckToolLibrary`** (`@RegisterClass(BaseArtifactToolLibrary, 'SlideDeckToolLibrary')`):
-  - Inspection tools: `read_deck`, `get_deck_outline`, `get_slide`.
-  - Mutation tools: `add_slide`, `update_slide`, `delete_slide`, `reorder_slides`, `upsert_slide_element`, `update_slide_region`, `delete_slide_element`, `update_speaker_notes`, `apply_theme`, `generate_deck_from_markdown`.
+Located in `packages/AI/Agents/src/artifact-tools/`, all 4 tool libraries register on `MJGlobal.Instance.ClassFactory` under `BaseArtifactToolLibrary` and support SHA-256 `expectedRevisionHash` optimistic concurrency so agents never overwrite concurrent human edits:
 
----
-
-## 7. MJ Slides — Presentation Deck Architecture (Wave 2, § 5)
-
-### 7.1 `SlideDeckSpec` & `SlideDeckEngine` (`@memberjunction/core-entities`)
-
-Located in `packages/MJCoreEntities/src/custom/SlideDeckEngine.ts`:
-- **Canonical Slide Layouts (11 supported layouts)**:
-  - `Title`, `SectionHeader`, `TitleAndBody`, `TwoColumn`, `Comparison`, `LiveDataSlide`, `ChartAndText`, `BigNumber`, `Quote`, `FullBleedImage`, and `Blank`.
-- **Theme Engine & Brand Color Seed Derivation (`Accept #4`)**:
-  - `SLIDE_DECK_THEME_PRESETS` provides 4 built-in themes (`mj-corporate-light`, `mj-executive-dark`, `mj-emerald-growth`, `mj-sunset-strategy`).
-  - `SlideDeckEngine.Instance.DeriveThemeFromBrandSeeds(seeds)` deterministically derives a high-contrast slide theme (surface, elevated card, primary/secondary text, accent badges, borders, and font stacks) from an organization's brand color seeds (`PrimaryColor`, `SecondaryColor`, `AccentColor`, `DarkMode`) and applies it across every slide via `ApplyTheme`.
-- **"Make a Deck from This Doc" (`ConvertMarkdownToSlideDeck`, § 5.2)**:
-  - Converts Markdown documents (headings, bullet lists, callouts, and `:::mj-block` directives) into a structured multi-slide `SlideDeckSpec`, preserving live MJ blocks (`EntityView`, `SavedQuery`, `DashboardPart`, `InteractiveComponent`) and embedded `Artifact` blocks (`Whiteboard`) as live slide regions.
-- **Presentation Mode Automatic Live-Block Freeze (`O6` & `Accept #2`)**:
-  - `SlideDeckEngine.Instance.FreezeDeckLiveBlocksForPresentation(deck, user, executionSnapshots)` freezes all live MJ blocks across the deck when entering `Present` / `Presenter View` (or exporting `.pptx`), stamping `FrozenAt`, `FrozenByUserID`, and `FrozenByUserName` so live presentations never flicker or fail mid-talk while supporting one-click **Refresh Live Data**.
-
-### 7.2 Per-Slide Yjs CRDT Room Synchronization (`Accept #1`)
-
-- Both `ArtifactCollaborationServer` (`@memberjunction/server`) and `DocumentCollaborationSession` (`@memberjunction/ng-artifacts`) synchronize `SlideDeckSpec` decks using structured Yjs shared types alongside `Y.Text('content')`:
-  - `doc.getMap('deckMeta')`: Deck title, subtitle, aspect ratio, theme JSON, and master header/footer settings.
-  - `doc.getMap('slidesById')`: Keyed by `SlideID`, storing each slide's serialized `SlideSpec` independently.
-  - `doc.getArray('slideOrder')`: Ordered list of `SlideID` strings.
-- **Conflict-Free Co-Editing**:
-  - When User A edits Slide 1 (`slidesById.set(slide1Id, ...)`), User B edits Slide 2 (`slidesById.set(slide2Id, ...)`), and User A reorders slides in the filmstrip (`slideOrder`), Yjs merges all operations with zero data loss or last-writer-wins clobbering.
-
-### 7.3 Angular Slides Editor & OpenXML `.pptx` Exporter (`@memberjunction/ng-artifacts`)
-
-- **`SlideDeckArtifactViewerComponent` (`@RegisterClass(BaseArtifactViewerPluginComponent, 'SlideDeckArtifactViewerPlugin')`)**:
-  - 16:9 widescreen visual slide stage with CSS custom property bindings derived from `Deck.Theme`.
-  - Left filmstrip sorter rail (`add`, `duplicate`, `move up/down`, `delete`) with per-slide awareness badges and comment counters.
-  - In-place `contenteditable` editing for slide titles, subtitles, rich-text regions, callouts, big-number metrics, and speaker notes.
-  - Live MJ Block region execution via `DocumentLiveBlockEngine` with viewer RLS/FLS, `O5` freeze warning modal, and inline OLE `Whiteboard` canvas editing (`<mj-artifact-type-plugin-viewer>` -> `<mj-realtime-whiteboard-host>`).
-  - Full-screen **Presenter View** (`O6`) with elapsed timer, speaker notes, slide navigation, automatic live-block freeze, and one-click **Refresh Live Data**.
-  - Anchored `SlideRegion` comment threads (`AnchorType = 'SlideRegion'`) with `@SlidesAgent` invocation that mutates only the targeted slide (`Accept #3`).
-- **`SlideDeckExportService`**:
-  - `ExportToPptxPackage(deck, user, executionSnapshots)`: Generates a standards-compliant OpenXML `.pptx` PKZIP archive (`PK\x03\x04`) containing `[Content_Types].xml`, `ppt/presentation.xml`, `ppt/theme/theme1.xml`, `ppt/slides/slide1..N.xml` (with editable `<p:sp>` `<a:t>` text runs and native DrawingML `<a:tbl>` tables for frozen live block rows per `Accept #2`), and `ppt/notesSlides/notesSlide1..N.xml` (preserving speaker notes per `Accept #5`).
-  - `BuildPrintableDeckHtml(deck, executionSnapshots)`: Generates a 16:9 widescreen `@page { size: 13.333in 7.5in; }` HTML document for `.pdf` export.
+| Class | Registered Key | Capabilities |
+|---|---|---|
+| `DocumentToolLibrary` | `'DocumentToolLibrary'` | `get_outline`, `get_section`, `get_blocks`, `search_blocks`, `grep`, `get_lines`, `insert_block_after`, `replace_block`, `delete_block`, `upsert_table`, `insert_live_block`, `embed_artifact_block`, `propose_suggestion` |
+| `SlideDeckToolLibrary` | `'SlideDeckToolLibrary'` | `read_deck`, `get_deck_outline`, `get_slide`, `add_slide`, `update_slide`, `delete_slide`, `reorder_slides`, `upsert_slide_element`, `update_slide_region`, `delete_slide_element`, `update_speaker_notes`, `apply_theme`, `generate_deck_from_markdown` |
+| `SpreadsheetToolLibrary` | `'SpreadsheetToolLibrary'` | `get_workbook_summary`, `read_range`, `write_cells`, `evaluate_formula`, `insert_rows`, `delete_rows`, `add_worksheet`, `bind_live_table`, `add_chart`, `export_xlsx_base64`, `import_xlsx_base64` |
+| `WhiteboardToolLibrary` | `'WhiteboardToolLibrary'` | `get_board_summary`, `list_elements`, `upsert_nodes`, `connect_nodes`, `add_sticky_notes`, `delete_elements`, `auto_layout` |
 
 ---
 
-## 8. Wave 3: MJ Sheets (`Excel Spreadsheet` Artifact Type) & Track A Custom Functions (`=MJ.QUERY`, `=MJ.VIEW`)
+## 7. MJ Slides — Collaborative Presentation Studio
 
-### 8.1 Multi-Tab `WorkbookSpec`, Stable Row/Column IDs & Headless Formula Evaluator (`@memberjunction/core-entities`)
+- **`SlideDeckEngine` (`packages/MJCoreEntities/src/custom/SlideDeckEngine.ts`)**:
+  - **11 Canonical 16:9 Layouts**: `Title`, `SectionHeader`, `TitleAndBody`, `TwoColumn`, `Comparison`, `LiveDataSlide`, `ChartAndText`, `BigNumber`, `Quote`, `FullBleedImage`, and `Blank`.
+  - **Organization Brand Color Seeds (`DeriveThemeFromBrandSeeds`)**: Deterministically computes WCAG-conscious background, elevated surface, primary/muted foreground text, and accent tokens from brand seed colors, alongside 4 curated presets (`SLIDE_DECK_THEME_PRESETS`).
+  - **"Make a Deck from This Doc" (`ConvertMarkdownToSlideDeck`)**: Transforms Markdown headings, bullets, speaker notes (`> Speaker Notes: ...`), and live `:::mj-block` directives into a multi-slide presentation while keeping live data blocks and OLE Whiteboards interactive.
+  - **Presenter Mode Freeze (`O6` — `FreezeDeckLiveBlocksForPresentation`)**: Freezes live blocks when entering full-screen Presenter View or exporting `.pptx` so presentations never flicker mid-talk, with one-click **Refresh Live Data**.
+- **Per-Slide Yjs CRDT Synchronization**:
+  - Synchronizes `deckMeta` (`Y.Map`), `slidesById` (`Y.Map` keyed by `SlideID`), and `slideOrder` (`Y.Array`) so concurrent edits to different slides and filmstrip reorders merge cleanly without clobbering.
+- **OpenXML `.pptx` & `.pdf` Export (`SlideDeckExportService`)**:
+  - Produces standards-compliant `.pptx` archives (`ppt/presentation.xml`, `ppt/slides/slide1..N.xml`, DrawingML `<a:tbl>` tables for frozen live blocks, and `ppt/notesSlides/notesSlide1..N.xml` speaker notes) plus 16:9 print-ready HTML/PDF output.
+
+---
+
+## 8. MJ Sheets & Excel Custom Functions (`=MJ.QUERY`, `=MJ.VIEW`)
 
 - **`SpreadsheetEngine` (`packages/MJCoreEntities/src/custom/SpreadsheetEngine.ts`)**:
-  - **Multi-Tab Workbook Schema**: Models workbooks (`WorkbookSpec`) with ordered `WorksheetSpec` tabs, stable `RowID`s (`SpreadsheetRowSpec`) and `ColumnID`s (`SpreadsheetColumnSpec`), cell styles (`SpreadsheetCellStyle`), conditional formatting rules, named ranges, bound live MJ tables (`SpreadsheetLiveTableSpec`), range charts (`SpreadsheetChartSpec`), and inline OLE embedded artifacts (`SpreadsheetEmbeddedArtifactSpec`).
-  - **Conflict-Free Stable-ID Formula Compilation (`§ 6.2`, `Accept #1`)**:
-    - `CompileFormulaToStableIds(sheet, formula)`: Rewrites A1 coordinates (`=SUM(B2:B5)`) into stable row/column token references (`=SUM(@RANGE(row-2,col-2,row-5,col-2))`).
-    - `ResolveFormulaFromStableIds(sheet, stableFormula)`: Reconstructs updated A1 coordinates (`=SUM(B3:B6)`) after concurrent row or column insertions/deletions.
-  - **Headless Formula Engine (`Accept #3`)**:
-    - Evaluates 35+ built-in functions (`SUM`, `AVERAGE`, `COUNT`, `COUNTA`, `MIN`, `MAX`, `IF`, `IFS`, `AND`, `OR`, `NOT`, `SUMIF`, `COUNTIF`, `AVERAGEIF`, `VLOOKUP`, `XLOOKUP`, `INDEX`, `MATCH`, `ROUND`, `ROUNDUP`, `ROUNDDOWN`, `ABS`, `SQRT`, `POWER`, `MOD`, `CONCAT`, `UPPER`, `LOWER`, `TRIM`, `LEN`, `LEFT`, `RIGHT`, `TODAY`, `NOW`, `YEAR`, `MONTH`, `DAY`, `NPV`, `PMT`), cross-sheet references (`'Rates'!B2`), and named ranges with topological dependency ordering and cycle detection (`#CYCLE!`).
-  - **Viewer-Scoped `=MJ.QUERY` & `=MJ.VIEW` Custom Functions + Bound Live Tables (`§ 6.3`, `§ 7.2`, `Accept #2`)**:
-    - `EvaluateMjCustomFunctions(workbook, contextUser, provider)`: Evaluates `=MJ.QUERY("Name", ...params)` and `=MJ.VIEW("Entity", "View", "Filter")` under the viewing user's permissions with RLS + FLS output projection (`ProjectEntityValueRowsForUser`), `IsServerSet` parameter stripping (`StripServerOnlyRunQueryParams`), unsafe SQL filter token rejection, 60-second per-viewer TTL cache, concurrency limit (5), multi-cell spilling, and `#MJ_ACCESS_DENIED!` error handling.
-    - `RefreshLiveTables(workbook, contextUser, provider)`: Refreshes bound `EntityView` and `SavedQuery` tables, automatically filling down adjacent `CalculatedColumns` (`=ROUND(B{ROW}*1.15, 2)`) across refreshed rows.
-    - `FreezeLiveTable(workbook, sheetId, tableId, executionResult, user, true)`: Requires explicit `O5` security confirmation before baking viewer-scoped data into the shared workbook.
-  - **Isomorphic OpenXML `.xlsx` & `.csv` Import/Export (`§ 6.4`, `Accept #4`)**:
-    - `ExportToXlsxBytes(workbook)` & `ImportFromXlsxBytes(bytes)` (including RFC 1951 raw DEFLATE decompression for third-party `.xlsx` archives such as Excel / `exceljs`) preserve `<f>` formulas, currency/percent/date `numFmt` styles, column widths, frozen panes, and hidden `_mj_sheets_meta` workbook metadata.
-  - **Live Cross-Artifact Sheet-to-Slide / Sheet-to-Doc Range Charts (`Accept #5`)**:
-    - `ExtractChartDataset(workbook, sheetId, chartIdOrRange)` + `ArtifactDocumentBlock.Execute` resolve live `Excel Spreadsheet` range charts inside MJ Slides and MJ Docs so updating a cell on a Sheet automatically updates the chart in the Slide on refresh.
+  - **Stable Row/Column ID Formula Compilation**: Compiles A1 formulas (`=SUM(B2:B5)`) into immutable `RowID`/`ColumnID` tokens (`@CELL(...)`, `@RANGE(...)`) stored in `FormulaStable`. When collaborators insert or delete rows/columns concurrently over Yjs (`worksheetsById` + `sheetCellsByCoord`), `ResolveFormulaFromStableIds` deterministically reconstructs shifted A1 coordinates (`=SUM(B3:B6)`).
+  - **Headless 35+ Function Evaluator**: Evaluates math, logical, conditional (`SUMIF`, `COUNTIF`, `AVERAGEIF`), lookup (`VLOOKUP`, `XLOOKUP`, `INDEX`, `MATCH`), text, date, and financial (`NPV`, `PMT`) formulas, cross-sheet references (`'Rates'!B2`), and named ranges with `#CYCLE!` detection.
+  - **Viewer-Scoped `=MJ.QUERY` / `=MJ.VIEW` & Bound Live Tables**: Enforces viewer RLS + FLS, strips `IsServerSet` parameters, rejects raw SQL injection tokens in filter strings (`#MJ_ACCESS_DENIED!`), caches per-viewer results for 60 seconds, and auto-fills `CalculatedColumns` (`=ROUND(B{ROW}*1.03, 2)`).
+  - **Isomorphic `.xlsx` OpenXML Round-Trip**: `ExportToXlsxBytes` and `ImportFromXlsxBytes` (with RFC 1951 DEFLATE support for Excel / `exceljs` workbooks) preserve `<f>` formulas, currency/percent/date `numFmt` styles, column widths, and hidden `_mj_sheets_meta` workbook state.
+  - **Cross-Artifact Live Range Charts**: `ExtractChartDataset` feeds live Sheet charts directly into MJ Slides and MJ Docs `Artifact` blocks.
+- **Microsoft Excel Add-In (`packages/OfficeAddins/Excel`)**:
+  - Ships `MJ.QUERY` and `MJ.VIEW` custom functions with matching viewer-scoped security, 60s TTL caching, concurrency throttling, and 2D spill matrix projection.
 
-### 8.2 Per-Worksheet & Per-Cell Yjs CRDT Synchronization (`Accept #1`)
+---
 
-- Both `ArtifactCollaborationServer` (`@memberjunction/server`) and `DocumentCollaborationSession` (`@memberjunction/ng-artifacts`) synchronize `WorkbookSpec` workbooks using disjoint Yjs maps:
-  - `doc.getMap('workbookMeta')`: Workbook title, active sheet ID, and named ranges.
-  - `doc.getArray('sheetOrder')`: Ordered list of `SheetID`s.
-  - `doc.getMap('worksheetsById')`: Worksheet structural metadata (`Rows` with `RowID`s, `Columns` with `ColumnID`s, `LiveTables`, `Charts`, `EmbeddedArtifacts`, `FrozenRows`).
-  - `doc.getMap('sheetCellsByCoord')`: Individual cells keyed by `${SheetID}::${RowID}::${ColumnID}` storing `FormulaStable`.
-- Because structural row/column insertions mutate `worksheetsById` while cell/formula edits mutate `sheetCellsByCoord`, concurrent row insertions and formula edits merge without conflict and resolve to shifted A1 coordinates (`=SUM(B2:B5)` -> `=SUM(B3:B6)`).
+## 9. Word-Level Redline Diff & Suggesting Mode (`MarkdownArtifactViewerComponent`)
 
-### 8.3 Server-Side `SpreadsheetToolLibrary` (`@memberjunction/ai-agents`)
+MJ Docs implements a **two-tier Suggesting Mode** modeled directly on Google Docs Suggesting and Microsoft Word Track Changes:
 
-- Registered via `@RegisterClass(BaseArtifactToolLibrary, 'SpreadsheetToolLibrary')` (`packages/AI/Agents/src/artifact-tools/SpreadsheetToolLibrary.ts`):
-  - Exposes 11 structured agent tools: `get_workbook_summary`, `read_range`, `write_cells`, `evaluate_formula`, `insert_rows`, `delete_rows`, `add_worksheet`, `bind_live_table`, `add_chart`, `export_xlsx_base64`, and `import_xlsx_base64`.
-  - Executes formulas headlessly via `SpreadsheetEngine` so `@SheetsAgent` can write a formula and immediately read back the evaluated scalar or range without a browser tab (`Accept #3`).
+1. **Tier 1 — Logical Block Alignment**:
+   - Aligns paragraphs, headings, lists, tables, code fences, and `:::mj-block` directives between the baseline Markdown and suggested edits (whether typed interactively in **Suggesting** mode or proposed by `@DocsAgent` via `DocumentToolLibrary.propose_suggestion` with rationale metadata).
+2. **Tier 2 — Sub-Paragraph Myers Word & Punctuation Diffing (`computeWordDiffSpans`)**:
+   - Whenever a modified block shares prose with its baseline (similarity threshold check rather than whole-block replacement), MJ Docs tokenizes both strings into word, whitespace, and punctuation tokens and computes the shortest Myers edit script.
+   - Unchanged words render in normal document prose; only the exact deleted words render as inline red strikethrough (`<del class="mj-doc-redline-del">`) and inserted words render as inline green underline/pill (`<ins class="mj-doc-redline-ins">`).
+   - **Granular Per-Hunk & Batch Review**: Reviewers can **Accept** or **Reject** individual word/phrase hunks inline, accept/reject an entire suggestion card (including `@DocsAgent` rationale), or run **Accept All** / **Reject All** across the document.
 
-### 8.4 Track A Microsoft Excel Add-In Custom Functions (`@memberjunction/excel-addin` & `@memberjunction/excel-addin-server`)
+---
 
-- `packages/OfficeAddins/Excel/src/custom-functions.ts`:
-  - Implements `MJ.QUERY` (`ExecuteMjQueryCustomFunction`) and `MJ.VIEW` (`ExecuteMjViewCustomFunction`) with `registerMjCustomFunctions()`, 60-second per-viewer TTL cache, max 5 concurrent requests, `IsServerSet` parameter stripping, unsafe filter rejection, 2D spill matrix formatting, and `#MJ_ACCESS_DENIED!` error handling.
+## 10. Git-Style Visual Version Compare (`<mj-artifact-version-compare>`)
 
+Located in `packages/Angular/Generic/artifacts/src/lib/components/version-diff/` and powered by `ArtifactVersionDiffService` (`artifact-version-diff.service.ts`), `<mj-artifact-version-compare>` brings Git-grade version comparison directly into `ArtifactViewerPanelComponent` (accessible from both the **Compare** toolbar button and any entry in the Version History drawer):
+
+- **Unified Compare Chrome**:
+  - **Base (`vA`) <-> Target (`vB`) Selectors** with `(HEAD)` labeling, one-click **Swap (`⇄`)**, collapsible **Commit History Timeline Rail** (`fa-code-branch`), `+N / -M / ~K` change summary badges, and mode switching across **Visual**, **JSON Tree**, **Unified**, and **Side-by-Side (Split)** views.
+- **6 Specialized Visual Diff Renderers**:
+  1. **`DocsVersionDiffComponent` (`Markdown Document`)**: Visual rendered document redline with inline Myers word-level `<del>`/`<ins>` spans, plus raw Markdown line-diff toggle.
+  2. **`SpreadsheetVersionDiffComponent` (`Excel Spreadsheet`)**: Worksheet tab pills with change counts and a visual coordinate grid highlighting **Added** cells (green), **Removed** cells (red), **Formula Changed** cells (indigo `oldFormula -> newFormula` + computed value delta), and **Value Changed** cells (amber `old -> new`).
+  3. **`SlidesVersionDiffComponent` (`Presentation`)**: Side-by-side 16:9 slide diff cards classifying each slide as `Added`, `Removed`, `Modified`, `Moved`, or `Unchanged`, highlighting title, layout, region Markdown, and speaker note deltas.
+  4. **`ComponentVersionDiffComponent` (`Component`)**: Structured `ComponentSpec` inspector comparing root properties (`title`, `functionalRequirements`, `technicalDesign`), `dataRequirements` entities/queries, child components, library dependencies, and unified source-code diffs.
+  5. **`QueryVersionDiffComponent` (`SQL` / `Query`)**: Syntax-aware SQL line and intra-line token diff.
+  6. **Universal Semantic JSON Tree & Text Diff (`GitDiffLinesViewComponent`)**: Recursive key-path diff (`added`, `removed`, `changed`) for arbitrary JSON artifacts plus Myers unified/split line diff for code, HTML, SVG, and plain text.
+
+---
+
+## 11. Top-Level `Library` Application, Stateless Connected Drives & Scoped `Agent Activity`
+
+### 11.1 Top-Bar Pinned `Library` Application (`LibraryResource` & `<mj-library-workspace>`)
+
+- **Application Metadata (`metadata/applications/.file-browser-application.json`)**:
+  - Promoted from the legacy `Files` app to **`Library`** (`ID: EB07016C-AE35-4EF9-804B-91563529A08A`, `Icon: fa-solid fa-book-open`, `NavigationStyle: Both`, `TopNavLocation: Left of User Menu`, `DefaultSequence: 2` directly beside `Chat`).
+- **3 Progressive Workspace Modes (`LibraryWorkspaceComponent`)**:
+  1. **Hub Mode** (default landing): *Create New* quick-launch strip (`Blank Document`, `Blank Spreadsheet`, `Blank Presentation`, `New Collection`, `Upload File` via `LibraryCreationService`), *Continue Working* recent items, curated *Collections*, and *Connected Cloud Drives* overview cards.
+  2. **Power Navigator Mode**: Split-pane hierarchy with nested `MJ: Collections` + Connected Cloud Drive folders on the left, `MJFilterPanelComponent` faceted search & list/grid toggle in the center, and a contextual preview/metadata drawer on the right. User preferences (`Library.SurfaceMode`, `Library.ListStyle`, `Library.StarredArtifactIDs`) persist server-side via `UserInfoEngine.Instance`.
+  3. **Full-Canvas Studio Mode**: Distraction-free full-viewport collaborative editor hosting `<mj-artifact-viewer-panel>` with breadcrumb navigation back to Hub/Navigator, **Save to Collection**, **Export to Connected Drive** (`LibraryExportDriveDialogComponent`), **Share**, and **Compare Versions**.
+- **Deep-Link Query Parameter Round-Trip & 7 AI Agent Client Tools**:
+  - `LibraryResource` synchronizes `mode`, `tab`, `section`, `collectionId`, `driveId`, `folder`, `artifactId`, `version`, `canvas`, and `q` bidirectionally with `NavigationService.UpdateActiveTabQueryParams` and registers 7 client tools (`SwitchLibrarySection`, `SwitchLibraryViewMode`, `OpenArtifactInStudio`, `OpenCollection`, `BrowseConnectedDrive`, `CreateBlankOfficeArtifact`, `FilterLibraryItems`) in `library-agent-context.ts`.
+
+### 11.2 Stateless Connected Cloud Drives — Zero `MJ: Files` Architectural Invariant
+
+`LibraryRemoteDrivePaneComponent` (`<mj-library-remote-drive-pane>`) connects directly to configured `MJStorage` accounts (Google Drive, SharePoint/OneDrive, Dropbox, Box, Amazon S3, Azure Blob Storage) via `GraphQLFileStorageClient`:
+
+- **Dynamic Live Browsing (Zero `MJ: Files` Records)**: Listing folders, searching across drives (`SearchFiles`), downloading/previewing files, uploading (`CreatePreAuthUploadUrl`), creating folders, moving, copying, renaming, and deleting operate **dynamically against the remote provider** without inserting shadow rows into `MJ: Files`. This eliminates stale metadata sync jobs and orphaned database records.
+- **Explicit Governed Import & Export**:
+  - Clicking **Import to MJ Library** on a remote `.md`, `.docx`, `.xlsx`, or `.csv` file converts it into a governed, versioned `MJ: Artifacts` record ready for Yjs co-editing.
+  - Clicking **Export to Drive** in Studio exports any MJ Doc (`.docx` / `.md`), MJ Sheet (`.xlsx` / `.csv`), or MJ Slide Deck (`.pptx`) directly into the chosen remote drive folder.
+
+### 11.3 Dual-Layer Binary Artifact Permission Gate (`ArtifactFileResolver`)
+
+For binary-backed artifacts (`ContentMode = 'File'`), `packages/MJServer/src/resolvers/ArtifactFileResolver.ts` evaluates `ArtifactPermissionEngine.Instance.ResolvePermissions(provider, artifactId, user)` **ahead of** `FileStorageEngine.Instance.ResolveFileObject`. This guarantees that owner access, direct `MJ: Artifact Permissions` shares, `MJ: Collection Permissions` shares, and `O4` delegated permissions (`ParentArtifactPermissionDelegate`) govern binary file downloads identically to text artifacts and Yjs rooms.
+
+### 11.4 Chat `Agent Activity` Renaming & Human-Task Isolation
+
+- In `metadata/applications/.chat-application.json` (`7A873E1A-692E-43FA-97F8-57D8161A985C`), the secondary navigation item is named **`Agent Activity`** (`Icon: fa-solid fa-diagram-project`) rather than `Tasks` so users never confuse background AI agent workflows with human project deliverables in `bizapps-tasks`.
+- `ChatTasksResource` (`BuildConversationTasksFilter`) scopes `MJ: Tasks` queries strictly to `(ConversationDetailID IS NOT NULL OR AgentID IS NOT NULL OR AgentRunID IS NOT NULL)`, guaranteeing human-only tasks never bleed into the Chat `Agent Activity` view.
+
+---
+
+## 12. Automated Testing & Verification Matrix
+
+| Layer | Package / Location | What It Verifies |
+|---|---|---|
+| **Core Engine Unit Tests** | `packages/MJCoreEntities/src/__tests__/` (`DocsLiveBlocksAndPermissions.test.ts`, `SlideDeckEngine.test.ts`, `SpreadsheetEngine.test.ts`) | `ArtifactPermissionEngine`, `ParentArtifactPermissionDelegate` (`O4`), `DocumentLiveBlockEngine` RLS/FLS + `IsServerSet` stripping + `O5` freeze, `SlideDeckEngine` layouts/brand contrast/`O6` freeze, `SpreadsheetEngine` stable-ID `@RANGE` shifts, 35+ formulas, `=MJ.QUERY`/`=MJ.VIEW`, and `.xlsx` OpenXML round-trip |
+| **Server Collaboration & File Gate Tests** | `packages/MJServer/src/__tests__/` (`ArtifactCollaborationServer.test.ts`, `ArtifactFileResolver.permissions.test.ts`) | Yjs WebSocket auth, binary frame read-only rejection, mid-session permission downgrade/disconnect, `InMemoryYjsRoomRelay` / `RedisYjsRoomRelay`, working-state compaction, and `ArtifactFileResolver` pre-download permission enforcement |
+| **Agent Tool Library Tests** | `packages/AI/Agents/src/__tests__/DocumentAndWhiteboardToolLibraries.test.ts` | Headless execution + SHA-256 `expectedRevisionHash` optimistic concurrency across `DocumentToolLibrary`, `SlideDeckToolLibrary`, `SpreadsheetToolLibrary`, and `WhiteboardToolLibrary` |
+| **Angular UI & Diff Unit Tests** | `packages/Angular/Generic/artifacts`, `packages/Angular/Generic/conversations`, `packages/Angular/Explorer/explorer-core` | Myers word-level Suggesting redlines, `ArtifactVersionDiffService` + all 6 visual diff views, `LibraryCreationService`, `LibraryWorkspaceComponent`, stateless `LibraryRemoteDrivePaneComponent`, 7 Library agent tools, and `ChatTasksResource` `Agent Activity` scoping |
+| **Tier-2 Live DB Integration Suite** | `packages/TestingFramework/integration-test-suite/src/checks/docs-slides-sheets-library.checks.ts` (`IT164`, `DSL1`–`DSL7`) | Live SQL Server / PostgreSQL catalog constraints (`ArtifactWorkingState`, `CK_Artifact_DelegateBinding`), polymorphic `DelegateRecordID -> DelegateEntityID`, live `MJArtifactWorkingStateEntity` VARBINARY round-trip, live `ParentArtifactPermissionDelegate` cascade, live `DocumentLiveBlockEngine` + `SpreadsheetEngine` `RunView` evaluation, and `ClassFactory` tool library execution |

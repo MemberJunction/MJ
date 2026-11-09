@@ -607,10 +607,28 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
             const rv = RunView.FromMetadataProvider(provider);
             const safeArtifactId = EscapeSQLString(artifactId);
             const safeUserId = EscapeSQLString(user.ID);
+            const versionsResult = await rv.RunView<{ ID: string }>(
+                {
+                    EntityName: 'MJ: Artifact Versions',
+                    ExtraFilter: `ArtifactID='${safeArtifactId}'`,
+                    Fields: ['ID'],
+                    MaxRows: 500,
+                    SkipTotalRowCount: true,
+                    ResultType: 'simple'
+                },
+                user
+            );
+            const versionIds = Array.from(
+                new Set((versionsResult.Success ? versionsResult.Results ?? [] : []).map((v) => v.ID).filter(Boolean))
+            );
+            if (versionIds.length === 0) {
+                return [];
+            }
+            const versionInList = versionIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
             const colResult = await rv.RunView<CollectionArtifactRowProjection>(
                 {
                     EntityName: 'MJ: Collection Artifacts',
-                    ExtraFilter: `ArtifactID='${safeArtifactId}'`,
+                    ExtraFilter: `ArtifactVersionID IN (${versionInList})`,
                     Fields: ['CollectionID'],
                     MaxRows: 500,
                     SkipTotalRowCount: true,

@@ -150,6 +150,48 @@ describe('ArtifactPermissionEngine & ParentArtifactPermissionDelegate', () => {
     expect(outsiderPerms.Source).toBe('Denied');
   });
 
+  it('cascades Collection Permissions through MJ: Artifact Versions -> MJ: Collection Artifacts', async () => {
+    const artId = 'c011ec71-0000-0000-0000-000000000001';
+    const verId = 'c011ec71-0000-0000-0000-000000000002';
+    const colId = 'c011ec71-0000-0000-0000-000000000003';
+
+    const provider = {
+      RunView: vi.fn().mockImplementation(async (params: { EntityName: string; ExtraFilter: string }) => {
+        if (params.EntityName === 'MJ: Artifacts') {
+          return {
+            Success: true,
+            Results: [{ ID: artId, UserID: ownerUser.ID, DelegateEntityID: null, DelegateRecordID: null }],
+          };
+        }
+        if (params.EntityName === 'MJ: Artifact Permissions') {
+          return { Success: true, Results: [] };
+        }
+        if (params.EntityName === 'MJ: Artifact Versions') {
+          expect(params.ExtraFilter).toContain(artId);
+          return { Success: true, Results: [{ ID: verId }] };
+        }
+        if (params.EntityName === 'MJ: Collection Artifacts') {
+          expect(params.ExtraFilter).toContain('ArtifactVersionID IN');
+          expect(params.ExtraFilter).toContain(verId);
+          return { Success: true, Results: [{ CollectionID: colId }] };
+        }
+        if (params.EntityName === 'MJ: Collection Permissions') {
+          expect(params.ExtraFilter).toContain(colId);
+          return {
+            Success: true,
+            Results: [{ CanRead: true, CanEdit: true, CanDelete: false, CanShare: false }],
+          };
+        }
+        return { Success: true, Results: [] };
+      }),
+    } as unknown as IMetadataProvider;
+
+    const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(provider, artId, editorUser);
+    expect(perms.CanRead).toBe(true);
+    expect(perms.CanEdit).toBe(true);
+    expect(perms.Source).toBe('CollectionPermission');
+  });
+
   it('delegates child OLE artifact permissions to the parent host artifact via ParentArtifactPermissionDelegate', async () => {
     const childId = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
     const parentId = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
