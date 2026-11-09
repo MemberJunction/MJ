@@ -137,8 +137,8 @@ export class ConversationsRuntimeBootstrap {
             if (convId) {
                 runtime.Bridge.SwitchToWorkspace(convId);
                 runtime.Bridge.NavigateToConversation({
-                    conversationId: convId,
-                    messageId: customEv.detail?.MessageID,
+                    ConversationID: convId,
+                    MessageID: customEv.detail?.MessageID,
                 });
             }
         });

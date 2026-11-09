@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/browser-extension-host",
   "version": "6.2.0",
-  "description": "Manifest V3 Chrome Extension Host entry points (Service Worker, Content Script with Shadow-DOM Coach-Mark renderer, Offscreen Audio Daemon, and Side Panel bootstrap) for the MemberJunction Browser Extension.",
+  "description": "Manifest V3 Browser Extension Host entry points and standalone Angular 21 Side Panel application mounting @memberjunction/ng-browser-extension and @memberjunction/ng-conversations directly against MJAPI.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -10,21 +10,58 @@
     "manifest.template.json"
   ],
   "scripts": {
-    "build": "tsc && tsc-alias -f",
+    "build": "tsc && tsc-alias -f && NG_CLI_ANALYTICS=false ng build --configuration production",
+    "build:lib": "tsc && tsc-alias -f",
+    "build:sidepanel": "NG_CLI_ANALYTICS=false ng build --configuration production",
     "watch": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@angular/animations": "21.2.22",
+    "@angular/cdk": "21.2.14",
+    "@angular/common": "21.2.22",
+    "@angular/compiler": "21.2.22",
+    "@angular/core": "21.2.22",
+    "@angular/forms": "21.2.22",
+    "@angular/localize": "21.2.22",
+    "@angular/platform-browser": "21.2.22",
+    "@angular/platform-browser-dynamic": "21.2.22",
+    "@fortawesome/fontawesome-free": "6.7.2",
+    "@memberjunction/ai-agent-client": "6.2.0",
     "@memberjunction/ai-core-plus": "6.2.0",
+    "@memberjunction/ai-engine-base": "6.2.0",
+    "@memberjunction/ai-realtime-client": "6.2.0",
+    "@memberjunction/ai-vectors-memory": "6.2.0",
     "@memberjunction/browser-extension-core": "6.2.0",
     "@memberjunction/computer-use": "6.2.0",
+    "@memberjunction/conversations-runtime": "6.2.0",
     "@memberjunction/core": "6.2.0",
+    "@memberjunction/core-entities": "6.2.0",
     "@memberjunction/global": "6.2.0",
-    "tslib": "^2.8.1"
+    "@memberjunction/graphql-dataprovider": "6.2.0",
+    "@memberjunction/ng-agent-client": "6.2.0",
+    "@memberjunction/ng-artifacts": "6.2.0",
+    "@memberjunction/ng-base-types": "6.2.0",
+    "@memberjunction/ng-browser-extension": "6.2.0",
+    "@memberjunction/ng-conversations": "6.2.0",
+    "@memberjunction/ng-notifications": "6.2.0",
+    "@memberjunction/ng-shared-generic": "6.2.0",
+    "@memberjunction/ng-ui-components": "6.2.0",
+    "@memberjunction/realtime-runtime": "6.2.0",
+    "@memberjunction/theme-engine": "6.2.0",
+    "ag-grid-angular": "^35.0.1",
+    "ag-grid-community": "^35.0.1",
+    "rxjs": "^7.8.2",
+    "tslib": "^2.8.1",
+    "zone.js": "^0.16.0"
   },
   "devDependencies": {
+    "@angular-devkit/build-angular": "21.2.23",
+    "@angular/cli": "21.2.23",
+    "@angular/compiler-cli": "21.2.22",
     "jsdom": "^27.0.0",
+    "sass": "^1.97.3",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },
@@ -35,6 +72,6 @@
     "type": "git",
     "url": "https://github.com/MemberJunction/MJ.git"
   },
-  "license": "MIT",
+  "license": "BUSL-1.1",
   "author": "MemberJunction.com"
 }

@@ -223,6 +223,7 @@ describe.runIf(hasPlaywrightChromium)('Headless Playwright E2E Proof — Live Wi
     let unpackedCopilotDir = '';
     let unpackedBettyDir = '';
     let unpackedSidecarDir = '';
+    let extensionId = '';
     let context: BrowserContext | null = null;
 
     beforeAll(async () => {
@@ -251,10 +252,13 @@ describe.runIf(hasPlaywrightChromium)('Headless Playwright E2E Proof — Live Wi
         unpackedBettyDir = bettyRes.UnpackedDir;
         unpackedSidecarDir = sidecarRes.UnpackedDir;
 
-        // Verify white-label manifest & sidepanel invariants across all 3 brands
+        // Verify white-label manifest & standalone Angular 21 Side Panel invariants across all 3 brands
         expect(copilotRes.Manifest.optional_permissions).toContain('debugger');
         expect(bettyRes.Manifest.optional_permissions).toBeUndefined();
         expect(sidecarRes.BrandProfile.DefaultControlBackend).toBe('auto');
+        expect(fs.existsSync(path.join(unpackedCopilotDir, 'sidepanel-app', 'main.js'))).toBe(true);
+        expect(fs.existsSync(path.join(unpackedCopilotDir, 'brand-config.js'))).toBe(true);
+        expect(fs.existsSync(path.join(unpackedCopilotDir, 'sidepanel.js'))).toBe(false);
         expect(fs.existsSync(path.join(unpackedBettyDir, 'manifest.json'))).toBe(true);
         expect(fs.existsSync(path.join(unpackedSidecarDir, 'manifest.json'))).toBe(true);
 
@@ -271,6 +275,13 @@ describe.runIf(hasPlaywrightChromium)('Headless Playwright E2E Proof — Live Wi
                 `--load-extension=${unpackedCopilotDir}`,
             ],
         });
+
+        let sw = context.serviceWorkers()[0];
+        if (!sw) {
+            sw = await context.waitForEvent('serviceworker', { timeout: 15000 });
+        }
+        extensionId = new URL(sw.url()).host;
+        expect(extensionId.length).toBeGreaterThan(10);
     }, 60000);
 
     afterAll(async () => {
@@ -637,10 +648,10 @@ describe.runIf(hasPlaywrightChromium)('Headless Playwright E2E Proof — Live Wi
         const sidePanelPage = await context!.newPage();
 
         try {
-            const sidePanelFileUrl = 'file://' + path.join(unpackedCopilotDir, 'sidepanel.html');
-            await sidePanelPage.goto(sidePanelFileUrl, { waitUntil: 'domcontentloaded' });
+            const sidePanelUrl = `chrome-extension://${extensionId}/sidepanel.html`;
+            await sidePanelPage.goto(sidePanelUrl, { waitUntil: 'domcontentloaded' });
             await sidePanelPage.waitForSelector('#mj-extension-sidepanel-root[data-ready="true"]', {
-                timeout: 10000,
+                timeout: 15000,
             });
 
             // Expand the Direct OAuth / Server Endpoint details section
@@ -871,10 +882,10 @@ describe.runIf(hasPlaywrightChromium)('Headless Playwright E2E Proof — Live Wi
                 });
             });
 
-            const sidePanelFileUrl = 'file://' + path.join(unpackedCopilotDir, 'sidepanel.html');
-            await sidePanelPage.goto(sidePanelFileUrl, { waitUntil: 'domcontentloaded' });
+            const sidePanelUrl = `chrome-extension://${extensionId}/sidepanel.html`;
+            await sidePanelPage.goto(sidePanelUrl, { waitUntil: 'domcontentloaded' });
             await sidePanelPage.waitForSelector('#mj-extension-sidepanel-root[data-ready="true"]', {
-                timeout: 10000,
+                timeout: 15000,
             });
 
             // Verify zero-mock behavior before sign-in: honest "Not in MemberJunction" state and zero fake deals/tasks
@@ -910,14 +921,18 @@ describe.runIf(hasPlaywrightChromium)('Headless Playwright E2E Proof — Live Wi
             const chatText = await sidePanelPage.innerText('#mj-sidepanel-context-view');
             expect(chatText).toContain('Q4 Executive Pipeline & Renewal Strategy');
             expect(chatText).toContain('Wikimedia Foundation is an Active Enterprise Member');
+
+            // Clean up persisted auth session so subsequent tests start cleanly
+            await sidePanelPage.click('#mj-btn-toggle-auth');
+            await sidePanelPage.click('#mj-btn-sign-out');
         } finally {
             await hostPage.close();
             await sidePanelPage.close();
         }
     }, 60000);
 
-    it('E2E 5 (LinkedIn Profile Top-Card & Ad-Iframe Guard + Embedded ng-conversations Overlay): extracts LinkedIn profile without h1, blocks ad iframes from overwriting context, and expands embedded ng-conversations overlay', async () => {
-        const linkedInPage = await context.newPage();
+    it('E2E 5 (LinkedIn Profile Top-Card & Ad-Iframe Guard): extracts LinkedIn profile without h1 and blocks third-party ad iframes from overwriting context', async () => {
+        const linkedInPage = await context!.newPage();
         try {
             // Mock LinkedIn profile HTML without an <h1> (modern LinkedIn layout) + a right-rail Ricoh ad iframe (/tscp-serving/dtag)
             await linkedInPage.route('https://www.linkedin.com/tscp-serving/**', async (route) => {
@@ -956,7 +971,7 @@ describe.runIf(hasPlaywrightChromium)('Headless Playwright E2E Proof — Live Wi
                 timeout: 10000,
             });
 
-            // Verify the ad iframe is ignored by content-script.js top-frame guard
+            // Verify the ad iframe is ignored by manifest all_frames:false and content-script.js top-frame guard
             const adFrame = linkedInPage.frames().find((f) => f.url().includes('/tscp-serving/'));
             expect(adFrame).toBeDefined();
             if (adFrame) {
@@ -978,6 +993,52 @@ describe.runIf(hasPlaywrightChromium)('Headless Playwright E2E Proof — Live Wi
             expect(snap.CapturedSignals.Location).toBe('New Orleans, Louisiana, United States');
         } finally {
             await linkedInPage.close();
+        }
+    }, 60000);
+
+    it('E2E 6 (Standalone Angular 21 Side Panel Architecture): boots native <mj-extension-sidepanel-app> inside chrome-extension:// with zero iframes, zero MJExplorer <mj-shell>, and zero MV3 CSP errors', async () => {
+        expect(context).not.toBeNull();
+        const sidePanelPage = await context!.newPage();
+        const cspViolations: string[] = [];
+        const pageErrors: string[] = [];
+
+        sidePanelPage.on('console', (msg) => {
+            if (msg.type() === 'error' && msg.text().toLowerCase().includes('content security policy')) {
+                cspViolations.push(msg.text());
+            }
+        });
+        sidePanelPage.on('pageerror', (err) => {
+            pageErrors.push(err.message);
+        });
+
+        try {
+            const sidePanelUrl = `chrome-extension://${extensionId}/sidepanel.html`;
+            await sidePanelPage.goto(sidePanelUrl, { waitUntil: 'domcontentloaded' });
+            await sidePanelPage.waitForSelector('#mj-extension-sidepanel-root[data-ready="true"]', {
+                timeout: 15000,
+            });
+
+            // 1. Standalone Angular 21 component tree mounted directly inside chrome-extension:// origin
+            expect(await sidePanelPage.locator('mj-extension-sidepanel-app').count()).toBe(1);
+            expect(await sidePanelPage.locator('iframe').count()).toBe(0);
+            expect(await sidePanelPage.locator('mj-shell').count()).toBe(0);
+
+            // 2. Switch to Agent tab — still zero iframes and zero MJExplorer shell
+            await sidePanelPage.click('[data-tab="chat"]');
+            expect(await sidePanelPage.locator('iframe').count()).toBe(0);
+            expect(await sidePanelPage.locator('mj-shell').count()).toBe(0);
+
+            // 3. Switch to Actions tab — real @memberjunction/ng-browser-extension <mj-extension-playbook-stepper> mounted
+            await sidePanelPage.click('[data-tab="playbooks"]');
+            await sidePanelPage.waitForSelector('mj-extension-playbook-stepper', { timeout: 10000 });
+            expect(await sidePanelPage.locator('mj-extension-playbook-stepper').count()).toBe(1);
+            expect(await sidePanelPage.locator('iframe').count()).toBe(0);
+
+            // 4. Zero Manifest V3 CSP errors and zero uncaught page errors
+            expect(cspViolations).toEqual([]);
+            expect(pageErrors).toEqual([]);
+        } finally {
+            await sidePanelPage.close();
         }
     }, 60000);
 });

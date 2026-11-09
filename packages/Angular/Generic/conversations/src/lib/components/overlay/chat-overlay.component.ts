@@ -257,36 +257,7 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
         this.loadPreferences();
         this.subscribeToBridgeEvents();
         this.subscribeToToolEvents();
-        this.wireBrowserExtensionEmbedAndContext();
         void this.syncActiveRecordBinding();
-    }
-
-    /**
-     * When hosted inside the MJ Browser Extension Side Panel (`?mj_ext_agent_embed=1`)
-     * or receiving active browser tab context events (`mj-ext-active-tab-context`),
-     * automatically maximizes the overlay and injects the active tab's DOM & braided
-     * MemberJunction context into `AppContext`.
-     */
-    private wireBrowserExtensionEmbedAndContext(): void {
-        if (typeof window !== 'undefined' && window.location?.search?.includes('mj_ext_agent_embed=1')) {
-            this._isVisible = true;
-            this.IsHidden = false;
-            this.Expand();
-            this.State = 'maximized';
-            this.cdr.detectChanges();
-        }
-        if (typeof document !== 'undefined') {
-            document.addEventListener('mj-ext-active-tab-context', (ev: Event) => {
-                const customEv = ev as CustomEvent<Record<string, unknown>>;
-                if (customEv.detail) {
-                    this.AppContext = {
-                        ...(this.AppContext ?? {}),
-                        BrowserExtensionActiveTab: customEv.detail,
-                    };
-                    this.cdr.detectChanges();
-                }
-            });
-        }
     }
 
     ngOnChanges(changes: SimpleChanges): void {

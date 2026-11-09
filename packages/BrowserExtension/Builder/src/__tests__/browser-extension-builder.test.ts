@@ -218,6 +218,17 @@ describe('@memberjunction/browser-extension-builder', () => {
                 expect(manifest.background.service_worker).toBe('service-worker.js');
                 expect(manifest.optional_permissions).toContain('debugger');
                 expect(manifest.permissions).toContain('offscreen');
+
+                const targetDir = path.join(tmpDir, 'mj-copilot', chromiumTarget);
+                expect(fs.existsSync(path.join(targetDir, 'brand-config.js'))).toBe(true);
+                expect(fs.existsSync(path.join(targetDir, 'sidepanel-app', 'main.js'))).toBe(true);
+                expect(fs.existsSync(path.join(targetDir, 'sidepanel-app', 'polyfills.js'))).toBe(true);
+                expect(fs.existsSync(path.join(targetDir, 'sidepanel-app', 'styles.css'))).toBe(true);
+                expect(fs.existsSync(path.join(targetDir, 'sidepanel.js'))).toBe(false);
+
+                const sidePanelHtml = fs.readFileSync(path.join(targetDir, 'sidepanel.html'), 'utf8');
+                expect(sidePanelHtml).toContain('<mj-extension-sidepanel-app></mj-extension-sidepanel-app>');
+                expect(sidePanelHtml).not.toContain('<iframe');
             }
 
             // Verify Firefox manifest has sidebar_action, background.scripts, gecko ID, and NO debugger/offscreen
