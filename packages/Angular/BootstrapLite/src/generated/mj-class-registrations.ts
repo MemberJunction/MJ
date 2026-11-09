@@ -36,17 +36,21 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (480 classes)
+// @memberjunction/core-entities (487 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
     AccessControlRuleProvider,
+    AlternateBaseViewEdgeProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
     DashboardPermissionProvider,
+    EntityMetadataEdgeProvider,
     EntityPermissionProvider,
+    ForeignKeyEdgeProvider,
+    JoinEntityEdgeProvider,
     MJAIActionEntity,
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
@@ -516,7 +520,10 @@ import {
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    QueryEdgeProvider,
+    QueryMetadataEdgeProvider,
     QueryPermissionProvider,
+    RecordLinkEdgeProvider,
     ResourcePermissionProvider,
 } from '@memberjunction/core-entities';
 
@@ -772,12 +779,16 @@ const CLASS_REGISTRATIONS_0: any[] = [
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
     AccessControlRuleProvider,
+    AlternateBaseViewEdgeProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
     DashboardPermissionProvider,
+    EntityMetadataEdgeProvider,
     EntityPermissionProvider,
+    ForeignKeyEdgeProvider,
+    JoinEntityEdgeProvider,
     MJAIActionEntity,
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
@@ -952,14 +963,14 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJConversationDetailEntity,
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
-    MJConversationEntity,
-    MJConversationSkillEntity,
-    MJConversationWidgetInstanceEntity,
-    MJCountryEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJConversationEntity,
+    MJConversationSkillEntity,
+    MJConversationWidgetInstanceEntity,
+    MJCountryEntity,
     MJCredentialCategoryEntity,
     MJCredentialEntity,
     MJCredentialTypeEntity,
@@ -1156,14 +1167,14 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRubricBandEntity,
     MJRubricCategoryEntity,
     MJRubricCriterionEntity,
-    MJRubricCriterionLevelEntity,
-    MJRubricEntity,
-    MJRubricEvaluationEntity,
-    MJRubricEvaluationScoreEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRubricCriterionLevelEntity,
+    MJRubricEntity,
+    MJRubricEvaluationEntity,
+    MJRubricEvaluationScoreEntity,
     MJRubricScaleEntity,
     MJRubricScaleLevelEntity,
     MJRubricVersionEntity,
@@ -1255,7 +1266,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    QueryEdgeProvider,
+    QueryMetadataEdgeProvider,
     QueryPermissionProvider,
+    RecordLinkEdgeProvider,
     ResourcePermissionProvider,
     MJActionEntityExtended,
     MJEntityActionEntityExtended,
@@ -1357,6 +1371,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     CompanyOverviewPanel,
     ContentItemHierarchyPanel,
     ConversationHeaderPanel,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     ConversationOverviewPanel,
     DashboardCategoryHierarchyPanel,
     EmployeeHeaderPanel,
@@ -1364,10 +1382,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     FileCategoryHierarchyPanel,
     FlowAgentFormSectionComponent,
     ListCategoryHierarchyPanel,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     MJAIAgentChannelFormComponentExtended,
     MJAIAgentFormComponentExtended,
     MJAIAgentRubricFormComponentExtended,
@@ -1438,7 +1452,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 656;
+export const CLASS_REGISTRATIONS_COUNT = 663;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

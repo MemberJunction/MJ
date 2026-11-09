@@ -192,8 +192,8 @@ export const PredictiveShadowDriftChecks: NamedCheck[] = [
                 );
 
                 const artifacts = new InMemoryArtifactLoader();
-                artifacts.set('artifact-champion', new Uint8Array(Buffer.from('champion-bytes')));
-                artifacts.set('artifact-challenger', new Uint8Array(Buffer.from('challenger-bytes')));
+                artifacts.Set('artifact-champion', new Uint8Array(Buffer.from('champion-bytes')));
+                artifacts.Set('artifact-challenger', new Uint8Array(Buffer.from('challenger-bytes')));
                 championModel.ArtifactFileID = 'artifact-champion';
                 challengerModel.ArtifactFileID = 'artifact-challenger';
 
@@ -216,9 +216,10 @@ export const PredictiveShadowDriftChecks: NamedCheck[] = [
                             return {
                                 predictions: [
                                     isChallenger
-                                        ? { score: 0.91, class: 'challenger-band' }
-                                        : { score: 0.35, class: 'champion-band' },
+                                        ? { score: 0.91, class: 'challenger-band', probabilities: null }
+                                        : { score: 0.35, class: 'champion-band', probabilities: null },
                                 ],
+                                classOrder: null,
                             };
                         },
                     },

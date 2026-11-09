@@ -460,7 +460,7 @@ describe('ShadowScoringCoordinator', () => {
     it('should score frozen features with ChallengerModelID and persist a Role="Challenger" FeatureValue row with ValueKeyHash=null', async () => {
       const capturedRequests: PredictRequest[] = [];
       const artifacts = new InMemoryArtifactLoader();
-      artifacts.set('challenger-file-1', new TextEncoder().encode('challenger-artifact'));
+      artifacts.Set('challenger-file-1', new TextEncoder().encode('challenger-artifact'));
 
       const fakeModel: Partial<MJMLModelEntity> = {
         ID: 'Model-Challenger-V2',
@@ -608,8 +608,8 @@ describe('ShadowScoringCoordinator', () => {
 
       let currentArtifactFileId = 'challenger-artifact-v1';
       const artifacts = new InMemoryArtifactLoader();
-      artifacts.set('challenger-artifact-v1', new TextEncoder().encode('bytes-v1'));
-      artifacts.set('challenger-artifact-v2', new TextEncoder().encode('bytes-v2'));
+      artifacts.Set('challenger-artifact-v1', new TextEncoder().encode('bytes-v1'));
+      artifacts.Set('challenger-artifact-v2', new TextEncoder().encode('bytes-v2'));
 
       const deps: MLInferenceDeps = {
         modelLoader: {
@@ -670,7 +670,7 @@ describe('ShadowScoringCoordinator', () => {
 
     it('names the challenger schema columns the champion row lacks, and records the challenger as errored with one SHADOW_ERROR prefix (M4)', async () => {
       const artifacts = new InMemoryArtifactLoader();
-      artifacts.set('file-1', new TextEncoder().encode('artifact-data'));
+      artifacts.Set('file-1', new TextEncoder().encode('artifact-data'));
 
       const runner = new MLModelChallengerScoreRunner({
         modelLoader: {

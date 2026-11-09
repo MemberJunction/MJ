@@ -239,6 +239,6 @@ describe('MLSidecar.RunTrainer', () => {
     const s = new MLSidecar({ url: URL_BASE });
     const controller = new AbortController();
     controller.abort();
-    await expect(s.predict(buildPredictRequest(), controller.signal)).rejects.toThrow(/aborted/);
+    await expect(s.Predict(buildPredictRequest(), controller.signal)).rejects.toThrow(/aborted/);
   });
 });
