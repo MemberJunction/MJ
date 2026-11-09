@@ -577,7 +577,27 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         return this.ResolveConstraints(context);
     }
 
+    /**
+     * Computes and records one record. The champion inputs its compute captured for a challenger
+     * ({@link dispatchChallengerIfConfigured}) are dropped when it ends, however it ends: the challenger has taken them by
+     * then, or never will (the record failed before its Feature Value write). A run that calls this per record, as
+     * `RecordSetProcessor` does, never starts a batch ({@link ResetBatchState}), so they would otherwise stay in memory.
+     */
     public async ProcessRecord(
+        record: RecordRef,
+        context: RecordProcessorContext,
+        options?: { skipLookup?: boolean; keyInfo?: CacheKeyResult }
+    ): Promise<FeaturePipelineRecordResult> {
+        try {
+            return await this.processOneRecord(record, context, options);
+        } finally {
+            this.championPromptDataByRecord.delete(record.RecordID);
+            this.championUserMessageByRecord.delete(record.RecordID);
+        }
+    }
+
+    /** {@link ProcessRecord}'s work: the Dedup Cache lookup, then the driver's compute and the record's finalization. */
+    private async processOneRecord(
         record: RecordRef,
         context: RecordProcessorContext,
         options?: { skipLookup?: boolean; keyInfo?: CacheKeyResult }
