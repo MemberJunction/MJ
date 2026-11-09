@@ -6,26 +6,31 @@ export interface ApiUsage { input_tokens?: number | null; output_tokens?: number
 /** Dollars per million tokens. */
 export interface Price { Input: number; Output: number; CachedInput: number; }
 
-/** Host-side token count for one agent session. Each API message id counts once; cache tokens count as input. */
+/** Host-side token count for one agent session. Each API message id counts once for input; output is the largest count the id reports. */
 export class UsageCounter {
-    private readonly seen = new Set<string>();
+    private readonly outputByID = new Map<string, number>();
     /** Uncached input plus cache-creation tokens. */
     public InputTokens = 0;
     public CacheReadTokens = 0;
     public OutputTokens = 0;
 
     public Add(messageId: string, u: ApiUsage | undefined): void {
-        if (this.seen.has(messageId)) return;
-        this.seen.add(messageId);
+        const output = u?.output_tokens ?? 0;
+        const previous = this.outputByID.get(messageId);
+        if (previous !== undefined) {
+            if (output > previous) { this.OutputTokens += output - previous; this.outputByID.set(messageId, output); }
+            return;
+        }
+        this.outputByID.set(messageId, output);
         this.InputTokens += (u?.input_tokens ?? 0) + (u?.cache_creation_input_tokens ?? 0);
         this.CacheReadTokens += u?.cache_read_input_tokens ?? 0;
-        this.OutputTokens += u?.output_tokens ?? 0;
+        this.OutputTokens += output;
     }
 
     /** Distinct API messages seen. */
-    public get Turns(): number { return this.seen.size; }
+    public get Turns(): number { return this.outputByID.size; }
 
-    /** Tokens checked against the session budget. Output counts here run low; the `result` message has the exact figure. */
+    /** Tokens checked against the session budget. Output is the largest snapshot per message, so it runs close to the final figure. */
     public get BudgetTokens(): number { return this.InputTokens + this.CacheReadTokens + this.OutputTokens; }
 
     /** Dollar estimate from prices per million tokens; used when an aborted session has no `result` message. */
