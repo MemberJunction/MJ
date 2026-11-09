@@ -541,6 +541,92 @@ describe('psi-drift-detector', () => {
       expect(report.Summary).toContain('Truncated=true');
     });
 
+    describe("ProblemType from the champion's ML model (M3)", () => {
+      const nowMs = Date.now();
+      /** A champion at 0.45 and a challenger at 0.55 for each of `count` records of one process and model. */
+      function pairedRows(recordProcessID: string, mlModelID: string | null, count: number) {
+        return Array.from({ length: count }, (_, i) => [
+          {
+            ID: `${recordProcessID}-champ-${i}`, RecordProcessID: recordProcessID, RecordID: `rec-${i}`, FeatureName: 'Score',
+            Role: 'Champion' as const, Source: 'Pipeline' as const, MLModelID: mlModelID, ValueNumeric: 0.45,
+            ComputedAt: new Date(nowMs - 2 * 86_400_000 + i * 1000),
+          },
+          {
+            ID: `${recordProcessID}-chall-${i}`, RecordProcessID: recordProcessID, RecordID: `rec-${i}`, FeatureName: 'Score',
+            Role: 'Challenger' as const, Source: 'Pipeline' as const, MLModelID: 'model-challenger', ValueNumeric: 0.55,
+            ComputedAt: new Date(nowMs - 2 * 86_400_000 + i * 1000 + 500),
+          },
+        ]).flat();
+      }
+      /** Feature Value reads answered from `rows`; `MJ: ML Models` reads answered from `models` (IDs matched case-insensitively). */
+      function routedProvider(
+        rows: FeatureValueDoubleRow[],
+        models: Array<{ ID: string; ProblemType: 'classification' | 'regression' }>,
+        modelReads: Array<{ View: RunViewParams; User?: UserInfo }>,
+      ): IMetadataProvider {
+        const one = (v: RunViewParams, user?: UserInfo): RunViewResult => {
+          if (v.EntityName !== 'MJ: ML Models') {
+            return RunFeatureValueView(rows, v);
+          }
+          modelReads.push({ View: v, User: user });
+          const filter = String(v.ExtraFilter ?? '').toLowerCase();
+          const results = models.filter((m) => filter.includes(`'${m.ID.toLowerCase()}'`));
+          return { Success: true, Results: results, RowCount: results.length, TotalRowCount: results.length, ExecutionTime: 1, ErrorMessage: '' };
+        };
+        return {
+          RunView: async (v: RunViewParams, user?: UserInfo) => one(v, user),
+          RunViews: async (views: RunViewParams[], user?: UserInfo) => views.map((v) => one(v, user)),
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+      }
+      const caller = { ID: 'user-m3' } as UserInfo;
+
+      it("reads the champion model's ProblemType as the caller, so a regression model's close scores agree", async () => {
+        const modelReads: Array<{ View: RunViewParams; User?: UserInfo }> = [];
+        const input = await LoadFeatureAndPredictionDriftFromFeatureValues({
+          RecordProcessID: 'rp-reg',
+          Provider: routedProvider(pairedRows('rp-reg', 'model-reg', 20), [{ ID: 'MODEL-REG', ProblemType: 'regression' }], modelReads),
+          ContextUser: caller,
+          MinSampleSize: 10,
+        });
+
+        expect(modelReads).toHaveLength(1);
+        expect(modelReads[0].User).toBe(caller);
+        expect(input.ConfidenceAndDivergence?.ProblemType).toBe('regression');
+        // Under the classification cut 0.45 vs 0.55 disagree; within the regression tolerance they agree.
+        const metrics = ComputeConfidenceAndChallengerDivergence(input.ConfidenceAndDivergence);
+        expect(metrics.AgreementRate).toBe(1);
+        expect(metrics.ChallengerDiverged).toBe(false);
+      });
+
+      it('gives each ML process of a sweep its own ProblemType from one ML Models read, and leaves non-ML processes unset', async () => {
+        const rows = [
+          ...pairedRows('rp-cls', 'model-cls', 5),
+          ...pairedRows('rp-reg', 'model-reg', 5),
+          ...pairedRows('rp-infer', null, 5),
+        ];
+        const modelReads: Array<{ View: RunViewParams; User?: UserInfo }> = [];
+        const loads = await LoadFeatureAndPredictionDriftForRecordProcesses(['rp-cls', 'rp-reg', 'rp-infer'], {
+          Provider: routedProvider(
+            rows,
+            [
+              { ID: 'model-cls', ProblemType: 'classification' },
+              { ID: 'model-reg', ProblemType: 'regression' },
+            ],
+            modelReads,
+          ),
+          ContextUser: caller,
+        });
+
+        expect(modelReads).toHaveLength(1);
+        expect(modelReads[0].View.ExtraFilter).toBe("ID IN ('model-cls', 'model-reg')");
+        expect(loads.map((l) => [l.RecordProcessID, l.Input?.ConfidenceAndDivergence?.ProblemType])).toEqual([
+          ['rp-cls', 'classification'],
+          ['rp-reg', 'regression'],
+          ['rp-infer', undefined],
+        ]);
+      });
+    });
+
     describe('MaxRows caps each window separately (P2)', () => {
       const nowMs = Date.now();
       /** `baseline` rows 14-20 days ago at 0.1 and `evaluation` rows in the last 3 days at 0.9, one minute apart. */

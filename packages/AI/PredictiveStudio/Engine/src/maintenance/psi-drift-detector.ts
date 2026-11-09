@@ -17,7 +17,7 @@
  */
 
 import { LogError, RunView, type IMetadataProvider, type RunViewParams, type UserInfo } from '@memberjunction/core';
-import type { MJFeatureValueEntity } from '@memberjunction/core-entities';
+import type { MJFeatureValueEntity, MJMLModelEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
 import type { DriftContext, DriftResult, IDriftDetector } from './types';
 
@@ -966,6 +966,58 @@ function capDriftWindows(
   return { Rows: rows, Truncated: truncated };
 }
 
+/** The ML model of a process's newest champion row; `rows` are oldest first. Undefined for non-ML processes. */
+function championMLModelID(rows: readonly FeatureValueDriftRow[]): string | undefined {
+  for (let i = rows.length - 1; i >= 0; i--) {
+    if (rows[i].Role !== 'Challenger' && rows[i].MLModelID) {
+      return rows[i].MLModelID ?? undefined;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Each named ML model's `ProblemType`, by lower-cased ID, from one `MJ: ML Models` read as the caller. A failed read
+ * is logged and yields no entries, so divergence falls back to its score-range heuristic rather than failing the load.
+ */
+async function loadModelProblemTypes(
+  modelIDs: ReadonlyArray<string | undefined>,
+  options: Pick<LoadDriftFromFeatureValuesOptions, 'Provider' | 'ContextUser'>,
+): Promise<Map<string, MJMLModelEntity['ProblemType']>> {
+  const ids = [...new Set(modelIDs.filter((id): id is string => !!id).map((id) => id.toLowerCase()))];
+  const problemTypes = new Map<string, MJMLModelEntity['ProblemType']>();
+  if (ids.length === 0) {
+    return problemTypes;
+  }
+  const res = await RunView.FromMetadataProvider(options.Provider).RunView<Pick<MJMLModelEntity, 'ID' | 'ProblemType'>>(
+    {
+      EntityName: 'MJ: ML Models',
+      ExtraFilter: `ID IN (${ids.map((id) => `'${EscapeSQLString(id)}'`).join(', ')})`,
+      Fields: ['ID', 'ProblemType'],
+      ResultType: 'simple',
+    },
+    options.ContextUser,
+  );
+  if (!res.Success) {
+    LogError(`Drift evaluation could not read the ProblemType of ML Models ${ids.join(', ')}: ${res.ErrorMessage ?? 'unknown error'}`);
+    return problemTypes;
+  }
+  for (const model of res.Results ?? []) {
+    problemTypes.set(model.ID.toLowerCase(), model.ProblemType);
+  }
+  return problemTypes;
+}
+
+/** A caller-supplied ProblemType, else the one of the ML model behind the process's newest champion row. */
+function withChampionProblemType(
+  options: LoadDriftFromFeatureValuesOptions,
+  rows: readonly FeatureValueDriftRow[],
+  problemTypes: ReadonlyMap<string, MJMLModelEntity['ProblemType']>,
+): LoadDriftFromFeatureValuesOptions {
+  const modelID = championMLModelID(rows);
+  return { ...options, ProblemType: options.ProblemType ?? (modelID ? problemTypes.get(modelID.toLowerCase()) : undefined) };
+}
+
 /**
  * Load baseline and rolling evaluation feature distributions, confidence distributions, and
  * champion-vs-challenger pairs from pipeline-generated `MJ: Feature Values` (`Source = 'Pipeline'`)
@@ -1001,7 +1053,13 @@ export async function LoadFeatureAndPredictionDriftFromFeatureValues(
     maxRows,
     options.RecordProcessID ?? options.ModelID ?? '',
   );
-  return { ...buildDriftInputFromRows(capped.Rows, windows, options), Truncated: capped.Truncated };
+  const problemTypes = options.ProblemType
+    ? new Map<string, MJMLModelEntity['ProblemType']>()
+    : await loadModelProblemTypes([championMLModelID(capped.Rows)], options);
+  return {
+    ...buildDriftInputFromRows(capped.Rows, windows, withChampionProblemType(options, capped.Rows, problemTypes)),
+    Truncated: capped.Truncated,
+  };
 }
 
 /** One record process's drift input, or (with no `Input`) why its Feature Values could not be read. */
@@ -1039,25 +1097,40 @@ export async function LoadFeatureAndPredictionDriftForRecordProcesses(
       options.ContextUser,
     );
 
-    for (let i = 0; i < perProcess.length; i++) {
-      const o = perProcess[i];
+    const chunkLoads = perProcess.map((o, i) => {
       const recordProcessID = o.RecordProcessID ?? '';
       const windowResults = [results[2 * i], results[2 * i + 1]];
       if (windowResults.some((r) => !r?.Success)) {
-        allLoads.push({
+        return {
           RecordProcessID: recordProcessID,
           ErrorMessage: `Failed to load MJ: Feature Values for drift evaluation: ${windowResults.find((r) => r && !r.Success)?.ErrorMessage ?? 'unknown error'}`,
-        });
+        };
+      }
+      return {
+        RecordProcessID: recordProcessID,
+        Options: o,
+        Capped: capDriftWindows(windowResults.map((r) => r?.Results ?? []), maxRows, recordProcessID),
+      };
+    });
+
+    // One ML Models read for the chunk: each ML process's ProblemType comes from its champion's model.
+    const problemTypes = options.ProblemType
+      ? new Map<string, MJMLModelEntity['ProblemType']>()
+      : await loadModelProblemTypes(
+          chunkLoads.map((l) => ('Capped' in l && l.Capped ? championMLModelID(l.Capped.Rows) : undefined)),
+          options,
+        );
+    for (const load of chunkLoads) {
+      if (!('Capped' in load) || !load.Capped) {
+        allLoads.push(load);
         continue;
       }
-      const capped = capDriftWindows(
-        windowResults.map((r) => r?.Results ?? []),
-        maxRows,
-        recordProcessID,
-      );
       allLoads.push({
-        RecordProcessID: recordProcessID,
-        Input: { ...buildDriftInputFromRows(capped.Rows, windows, o), Truncated: capped.Truncated },
+        RecordProcessID: load.RecordProcessID,
+        Input: {
+          ...buildDriftInputFromRows(load.Capped.Rows, windows, withChampionProblemType(load.Options, load.Capped.Rows, problemTypes)),
+          Truncated: load.Capped.Truncated,
+        },
       });
     }
   }

@@ -533,7 +533,7 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
     function driftingRows(recordProcessId: unknown, mlModelId: unknown): Array<FeatureValueDoubleRow> {
       const nowMs = Date.now();
       const row = (id: string, value: number, computedAt: number) => ({
-        ID: id, RecordProcessID: String(recordProcessId), MLModelID: String(mlModelId), EntityID: 'ent-1', RecordID: id, FeatureName: 'Score', Role: 'Champion',
+        ID: id, RecordProcessID: String(recordProcessId), MLModelID: mlModelId === undefined ? null : String(mlModelId), EntityID: 'ent-1', RecordID: id, FeatureName: 'Score', Role: 'Champion',
         Source: 'Pipeline', ValueNumeric: value, ValueText: null, Confidence: 0.9, Reasoning: null,
         ComputedAt: new Date(computedAt).toISOString(),
       });
@@ -551,8 +551,9 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
       readsAs: Array<string | undefined>,
     ): IMetadataProvider {
       const view = async (v: RunViewParams, user?: UserInfo): Promise<RunViewResult> => {
-        const idMatch = /^ID = '([^']+)'$/.exec(String(v.ExtraFilter ?? ''));
-        const byId = <T extends { ID: string }>(rows: T[]): T[] => (idMatch ? rows.filter((r) => r.ID === idMatch[1]) : rows);
+        // Reads by `ID = '…'` or `ID IN ('…', …)`
+        const ids = [...String(v.ExtraFilter ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1].toLowerCase());
+        const byId = <T extends { ID: string }>(rows: T[]): T[] => rows.filter((r) => ids.includes(r.ID.toLowerCase()));
         let results: unknown[] = [];
         if (v.EntityName === 'MJ: Record Processes') {
           readsAs.push(user?.ID);
