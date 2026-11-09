@@ -9,6 +9,7 @@ import { UserCache, resolveDbPlatformFromEnv, GenericDatabaseProvider, Summarize
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
+import { ImportResolverModules } from './resolverModuleImport.js';
 import { registerIntegrationCustomColumnPromoter, IntegrationCustomColumnPromoter } from './integration/CustomColumnPromoter.js';
 import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, selectFieldsToMap } from './integration/EntityMapLifecycle.js';
 import { RSUPostRestartProgressSession } from './integration/RSUPostRestartProgress.js';
@@ -20,7 +21,7 @@ import cors from 'cors';
 import express, { Application } from 'express';
 import { default as fg } from 'fast-glob';
 import { useServer } from 'graphql-ws/lib/use/ws';
-import { createServer } from 'node:http';
+import { createServer, type Server as HttpServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -45,6 +46,8 @@ import { requireSystemUserDirective, publicDirective } from './directives/index.
 import { ApplyRootVariablesLoggingMiddleware, variablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
 import { auditResolversForUndecoratedArgs } from './logging/bootAudit.js';
 import { StartupLogger } from './logging/StartupLogger.js';
+import { MJServerStartupState } from './startupState.js';
+import { CreateStartupGate, ListenOnPort, RejectUpgradeWhileStarting } from './startupGate.js';
 import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
@@ -272,6 +275,7 @@ export * from './resolvers/FileCategoryResolver.js';
 export * from './resolvers/FileResolver.js';
 export * from './rest/MediaAccessKeys.js';
 export * from './rest/MediaStreamHandler.js';
+export * from './routeRateLimitConfigUnits.js';
 export * from './rest/RealtimeRecordingHandler.js';
 export * from './resolvers/InfoResolver.js';
 export * from './resolvers/PotentialDuplicateRecordResolver.js';
@@ -307,6 +311,11 @@ import { BaseServerMiddleware, ServerMiddlewareContext } from './middleware/Base
 import { SuppressTaskGraphSubmission } from '@memberjunction/ai-core-plus';
 
 export type MJServerOptions = {
+  /**
+   * Runs at the end of the bootstrap, before any request reaches the app. The port is already bound
+   * by then (Serve binds it first), but until this returns every request is answered by the startup
+   * gate (503, or the health endpoints), never by the app.
+   */
   onBeforeServe?: () => void | Promise<void>;
   restApiOptions?: Partial<RESTApiOptions>; // Options for REST API configuration
   /**
@@ -447,7 +456,43 @@ async function wireRealtimeSessionEventFanOut(redisProvider: RedisLocalStoragePr
 // there is no ordering hazard in binding this early.
 GetAttachmentService().BlobStore = new MJStorageBlobStore();
 
+/**
+ * Starts MJServer. The port is bound first, behind a startup gate: until the bootstrap finishes,
+ * `/healthcheck` answers 503 with the current phase, `/healthcheck/live` answers 200, and every
+ * other request gets 503 with `Retry-After`. A port already in use therefore fails at the start of
+ * boot, not the end. A bootstrap that throws marks the server `failed` (the health endpoint keeps
+ * saying so if the process stays up), logs the phase it failed in, and rethrows.
+ */
 export const Serve = async (resolverPaths: Array<string>, app: Application = CreateApp(), options?: MJServerOptions): Promise<void> => {
+  const startup = MJServerStartupState.Instance;
+  startup.Begin();
+  const httpServer = createServer(CreateStartupGate(app, startup));
+  // Until the upgrade router is installed, every WebSocket upgrade is refused with a 503.
+  httpServer.on('upgrade', (_request, socket) => {
+    RejectUpgradeWhileStarting(startup, socket);
+  });
+  try {
+    await ListenOnPort(httpServer, graphqlPort);
+    await serveBehindStartupGate(httpServer, startup, resolverPaths, app, options);
+  } catch (err) {
+    // A throw after the gate opened leaves the server serving, as it did before the gate existed.
+    if (!startup.IsReady) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      startup.MarkFailed(error);
+      console.error(`❌ MJServer startup failed during "${startup.Phase}": ${error.message}`);
+    }
+    throw err;
+  }
+};
+
+/** The bootstrap {@link Serve} runs once its port is bound; requests stay behind the startup gate until it returns. */
+const serveBehindStartupGate = async (
+  httpServer: HttpServer,
+  startup: MJServerStartupState,
+  resolverPaths: Array<string>,
+  app: Application,
+  options?: MJServerOptions
+): Promise<void> => {
   const t0 = performance.now();
   // Name this MJAPI instance by its port before anything stamps a session row with its identity, so the janitor's
   // startup recovery closes only the sessions an earlier boot of this instance left, never those of another MJAPI on
@@ -971,17 +1016,7 @@ const setupComplete$ = new ReplaySubject(1);
   lap('Telemetry + Cache + APIKey Init', tServe);
   tServe = startupLog.BeginPhase('Discovering resolvers');
 
-  const dynamicModules = await Promise.all(
-    paths.map((modulePath) => {
-      try {
-        const module = import(isWindows ? `file://${modulePath}` : modulePath);
-        return module;
-      } catch (e) {
-        console.error(`Error loading dynamic module at '${modulePath}'`, e);
-        throw e;
-      }
-    })
-  );
+  const dynamicModules = await ImportResolverModules(paths, isWindows, 'Error loading dynamic module');
   const resolvers = dynamicModules.flatMap((module) =>
     Object.values(module).filter((value) => typeof value === 'function')
   ) as BuildSchemaOptions['resolvers'];
@@ -1055,16 +1090,7 @@ const setupComplete$ = new ReplaySubject(1);
       const mwGlobs = mwResolverPaths.flatMap((p) => (isWindows ? p.replace(/\\/g, '/') : p));
       const mwResolverFiles = fg.globSync(mwGlobs);
       if (mwResolverFiles.length > 0) {
-          const mwModules = await Promise.all(
-              mwResolverFiles.map((modulePath) => {
-                  try {
-                      return import(isWindows ? `file://${modulePath}` : modulePath);
-                  } catch (e) {
-                      console.error(`Error loading middleware resolver at '${modulePath}'`, e);
-                      throw e;
-                  }
-              })
-          );
+          const mwModules = await ImportResolverModules(mwResolverFiles, isWindows, 'Error loading middleware resolver');
           const mwResolvers = mwModules.flatMap((module) =>
               Object.values(module).filter((value) => typeof value === 'function')
           );
@@ -1242,7 +1268,9 @@ const setupComplete$ = new ReplaySubject(1);
   lap('Schema Build', tServe);
   tServe = startupLog.BeginPhase('Starting HTTP server');
 
-  const httpServer = createServer(app);
+  // The HTTP server was created and bound at the top of Serve (behind the startup gate); the startup
+  // gate's upgrade listener is replaced by the router below, which checks readiness itself.
+  httpServer.removeAllListeners('upgrade');
 
   // `noServer` so we own the HTTP `upgrade` routing ourselves (below) and can dispatch by path between
   // the graphql-ws server and the realtime proxy. (In `{ server, path }` mode, ws destroys any socket whose
@@ -1252,11 +1280,14 @@ const setupComplete$ = new ReplaySubject(1);
   // Single upgrade router: the realtime proxy claims its own path first (an authenticated byte-tunnel that
   // lets self-hosted realtime providers — e.g. HuggingFace speech-to-speech — run the shipped client-direct
   // audio topology without the internal endpoint ever being exposed to the browser); everything on the
-  // graphql path goes to graphql-ws; anything else is rejected. Must be registered before httpServer.listen().
+  // graphql path goes to graphql-ws; anything else is rejected. Until the server is ready, every upgrade is refused (503).
   // Path acceptance (including the bare-root/`/graphql` alias) is centralized in `IsGraphQLWsPath` — see
   // its doc comment for why the alias exists — so this listener and `InstallMediaUpgradeDispatcher`'s
   // telephony-active replacement listener can never disagree on what counts as "the GraphQL path."
   httpServer.on('upgrade', (request, socket, head) => {
+    if (RejectUpgradeWhileStarting(startup, socket)) {
+      return;
+    }
     if (RealtimeProxyServer.Instance.TryHandleUpgrade(request, socket, head as Buffer)) {
       return;
     }
@@ -1602,7 +1633,7 @@ const setupComplete$ = new ReplaySubject(1);
   // media sockets cannot coexist as separate {server} servers — this strips the auto-listeners and
   // routes upgrades by path. No-op when no media routes registered (telephony off).
   InstallMediaUpgradeDispatcher(httpServer, webSocketServer, graphqlRootPath, (req, socket, head) => {
-    return RealtimeProxyServer.Instance.TryHandleUpgrade(req, socket, head);
+    return RejectUpgradeWhileStarting(startup, socket) || RealtimeProxyServer.Instance.TryHandleUpgrade(req, socket, head);
   });
 
   // ─── REST API endpoints (auth already handled by unified middleware) ─────
@@ -1745,7 +1776,8 @@ const setupComplete$ = new ReplaySubject(1);
 
   lap('Apollo + Express Setup', tServe);
 
-  await new Promise<void>((resolve) => httpServer.listen({ port: graphqlPort }, resolve));
+  // The port was bound at the top of Serve; from here on requests reach the app.
+  startup.MarkReady();
   // The summary headline reports TRUE wall-clock since process start (see
   // StartupLogger.buildStartupLine), so we don't push a synthetic "total" phase row
   // (that double-counted the headline). Keep a verbose-only line for the serve()-scoped span.

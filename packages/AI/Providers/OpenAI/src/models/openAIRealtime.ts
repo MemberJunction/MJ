@@ -22,7 +22,7 @@ import {
     type RealtimeDriverFacts,
     type RealtimeInputFrame,
 } from '@memberjunction/ai';
-import { ClientRealtimeSessionConfig, NormalizeTurnDetectionSettings, ResolveResponseDoneUsage } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, MapRealtimeUsageModalityDetail, NormalizeTurnDetectionSettings, RealtimeWireUsageModalityDetail, ResolveResponseDoneUsage } from '@memberjunction/ai';
 import { OpenAI } from 'openai';
 import { OpenAIRealtimeWebSocket } from 'openai/realtime/websocket';
 // NOTE: the bare 'openai/realtime' directory subpath is not exported by the SDK's package
@@ -119,32 +119,8 @@ type GARealtimeSessionCreateRequest = RealtimeSessionCreateRequest & RealtimeSes
 interface GARealtimeResponseUsage {
     input_tokens?: number;
     output_tokens?: number;
-    input_token_details?: GARealtimeUsageDetail;
-    output_token_details?: GARealtimeUsageDetail;
-}
-
-/** Wire shape of a per-modality usage-detail block on the GA API. */
-interface GARealtimeUsageDetail {
-    text_tokens?: number;
-    audio_tokens?: number;
-    image_tokens?: number;
-    cached_tokens?: number;
-}
-
-/**
- * Maps a GA per-modality usage-detail block onto the Core {@link RealtimeUsageModalityDetail}
- * shape. Returns `undefined` when the provider reported no detail block (totals-only flows).
- */
-export function MapUsageModalityDetail(detail: GARealtimeUsageDetail | undefined): RealtimeUsageModalityDetail | undefined {
-    if (!detail) {
-        return undefined;
-    }
-    const mapped: RealtimeUsageModalityDetail = {};
-    if (typeof detail.text_tokens === 'number') mapped.TextTokens = detail.text_tokens;
-    if (typeof detail.audio_tokens === 'number') mapped.AudioTokens = detail.audio_tokens;
-    if (typeof detail.image_tokens === 'number') mapped.ImageTokens = detail.image_tokens;
-    if (typeof detail.cached_tokens === 'number') mapped.CachedTokens = detail.cached_tokens;
-    return Object.keys(mapped).length > 0 ? mapped : undefined;
+    input_token_details?: RealtimeWireUsageModalityDetail;
+    output_token_details?: RealtimeWireUsageModalityDetail;
 }
 
 /**
@@ -1671,11 +1647,11 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
             InputTokens: usage.input_tokens ?? 0,
             OutputTokens: usage.output_tokens ?? 0,
         };
-        const input = MapUsageModalityDetail(usage.input_token_details);
+        const input = MapRealtimeUsageModalityDetail(usage.input_token_details);
         if (input) {
             update.InputTokenDetails = input;
         }
-        const output = MapUsageModalityDetail(usage.output_token_details);
+        const output = MapRealtimeUsageModalityDetail(usage.output_token_details);
         if (output) {
             update.OutputTokenDetails = output;
         }

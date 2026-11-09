@@ -3,6 +3,16 @@ import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import { SafeFetch, SSRFError, DrainResponseBody } from "@memberjunction/network-utils";
 
+/** Entities decoded by `cleanText`. */
+const CLEAN_TEXT_ENTITIES: Record<string, string> = {
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&quot;': '"',
+    '&#39;': "'",
+    '&nbsp;': ' ',
+};
+
 /**
  * Action that extracts comprehensive metadata from web pages including OpenGraph, Twitter Cards,
  * Schema.org structured data, and standard HTML meta tags
@@ -34,6 +44,7 @@ import { SafeFetch, SSRFError, DrainResponseBody } from "@memberjunction/network
  * });
  * ```
  */
+
 @RegisterClass(BaseAction, "__URLMetadataExtractor")
 export class URLMetadataExtractorAction extends BaseAction {
 
@@ -498,14 +509,18 @@ export class URLMetadataExtractorAction extends BaseAction {
      * Cleans and normalizes text content
      */
     private cleanText(text: string): string {
-        return text
-            .replace(/<[^>]*>/g, '') // Remove HTML tags
-            .replace(/&amp;/g, '&')
-            .replace(/&lt;/g, '<')
-            .replace(/&gt;/g, '>')
-            .replace(/&quot;/g, '"')
-            .replace(/&#39;/g, "'")
-            .replace(/&nbsp;/g, ' ')
+        // Remove HTML tags. One global pass already leaves no complete tag (each match runs from the
+        // first remaining '<' to the next '>'); the loop exists so CodeQL's js/incomplete-multi-character-sanitization
+        // check can see the removal is repeated to a fixed point.
+        let withoutTags = text;
+        let previous: string;
+        do {
+            previous = withoutTags;
+            withoutTags = withoutTags.replace(/<[^>]*>/g, '');
+        } while (withoutTags !== previous);
+        return withoutTags
+            // One pass, so a decoded '&' never starts a second entity (&amp;lt; -> &lt;, not <)
+            .replace(/&(?:amp|lt|gt|quot|#39|nbsp);/g, (entity) => CLEAN_TEXT_ENTITIES[entity])
             .replace(/\s+/g, ' ')
             .trim();
     }

@@ -369,3 +369,33 @@
 mj-empty-state.no-results-state {
     flex: 1;
 }
+
+/* Phone: the three-column table (a fixed 200px name column) cannot fit a 375px dialog, so each
+   parameter becomes a card: name with its remove action beside it, the value full width under it. */
+@media (max-width: 768px) {
+    .params-table-header {
+        display: none;
+    }
+
+    .params-table-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "name actions"
+            "value value";
+        gap: 8px;
+        padding: 12px;
+    }
+
+    .params-table-row > .param-name { grid-area: name; }
+    .params-table-row > .param-value { grid-area: value; }
+
+    .params-table-row > .param-actions {
+        grid-area: actions;
+        padding-top: 0;
+    }
+
+    .param-actions > button {
+        min-width: 44px;
+        min-height: 44px;
+    }
+}

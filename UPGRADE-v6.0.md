@@ -249,9 +249,14 @@ SET    [ValueListType] = 'ListOrUserEntry'
 WHERE  [Entity] = '<entity name>' AND [Name] = '<field name>' AND [ValueListType] = 'List';
 ```
 
-then restart MJAPI so the metadata cache picks it up. To find affected rows before you upgrade,
-compare each `List` field's column against its `EntityFieldValue` rows; a scan tool for this is
-tracked for 6.2.
+then restart MJAPI so the metadata cache picks it up.
+
+To find affected rows, run `mj doctor value-lists` (6.3 and later) against the database. It reads
+every `List` field's distinct values, classifies them with the same rule the save path uses, and
+lists each field with rows outside its list, the offending values, and whether the column has a
+CHECK constraint. `--format json --fail-on-findings` suits CI. `--fix "<Entity>.<Field>"` sets the
+named fields to `ListOrUserEntry` through the entity layer, so Record Changes logs it; fields are
+never changed without being named.
 
 ### `ng-filter-builder` renamed two public exports
 
