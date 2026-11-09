@@ -50,7 +50,8 @@ const USAGE = `usage: jit-catch <${COMMANDS.join('|')}> [options]
   execute       --run <run ID> [--settings <file>]
   assess        --run <run ID> [--settings <file>] [--store <dir>]
   corpus mine   --since <YYYY-MM-DD> --until <YYYY-MM-DD> --out <file>
-  backtest      --corpus <file> --slice ${SliceSchema.options.join('|')} --set Bug|Clean|Both --model <generator> [--max-usd <n, default 50>] [--only <n,n>] [--settings <file>] [--store <dir>]`;
+  backtest      --corpus <file> --slice ${SliceSchema.options.join('|')} --set Bug|Clean|Both --model <generator> [--max-usd <n, default 50>] [--only <n,n>] [--retry-failed] [--settings <file>] [--store <dir>]
+                --max-usd counts the cost of the whole ledger and is checked before each run, so the last run can take the total above it.`;
 const SHA_RE = /^[0-9a-f]{7,40}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -58,7 +59,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 class UsageError extends Error {}
 
 interface Parsed { Command: CommandName; PR: number | null; RunID: string | null; Base?: string; Head?: string; Trigger: Trigger; SettingsPath?: string; Store?: string; Since?: string; Until?: string; Out?: string; Backtest?: BacktestArgs; }
-interface BacktestArgs { CorpusPath: string; Slice: Slice; Set: 'Bug' | 'Clean' | 'Both'; Model: string; MaxUsd: number; Only?: number[]; }
+interface BacktestArgs { CorpusPath: string; Slice: Slice; Set: 'Bug' | 'Clean' | 'Both'; Model: string; MaxUsd: number; Only?: number[]; RetryFailed: boolean; }
 const BACKTEST_SETS = ['Bug', 'Clean', 'Both'] as const;
 
 /** Parses argv and dispatches one command. Returns the process exit code: 0 done, 1 failed, 2 usage error. */
@@ -87,7 +88,7 @@ function parse(argv: string[]): Parsed {
         pr: { type: 'string' }, run: { type: 'string' }, base: { type: 'string' }, head: { type: 'string' },
         settings: { type: 'string' }, store: { type: 'string' }, trigger: { type: 'string' },
         since: { type: 'string' }, until: { type: 'string' }, out: { type: 'string' },
-        corpus: { type: 'string' }, slice: { type: 'string' }, set: { type: 'string' }, model: { type: 'string' }, 'max-usd': { type: 'string' }, only: { type: 'string' },
+        corpus: { type: 'string' }, slice: { type: 'string' }, set: { type: 'string' }, model: { type: 'string' }, 'max-usd': { type: 'string' }, only: { type: 'string' }, 'retry-failed': { type: 'boolean' },
     } });
     const command = COMMANDS.find((c) => c === positionals[0]);
     if (!command || positionals.length > (command === 'corpus' ? 2 : 1)) throw new UsageError(positionals[0] ? `unknown command ${positionals[0]}` : 'no command');
@@ -112,7 +113,7 @@ function checkCorpusMine(sub: string | undefined, p: Parsed): void {
 }
 
 /** Checks and converts the `backtest` options; --max-usd defaults to 50. */
-function parseBacktest(v: { corpus?: string; slice?: string; set?: string; model?: string; 'max-usd'?: string; only?: string }): BacktestArgs {
+function parseBacktest(v: { corpus?: string; slice?: string; set?: string; model?: string; 'max-usd'?: string; only?: string; 'retry-failed'?: boolean }): BacktestArgs {
     if (!v.corpus) throw new UsageError('backtest needs --corpus');
     if (!v.model) throw new UsageError('backtest needs --model');
     const slice = SliceSchema.safeParse(v.slice);
@@ -122,7 +123,7 @@ function parseBacktest(v: { corpus?: string; slice?: string; set?: string; model
     const maxUsd = Number(v['max-usd'] ?? '50');
     if (!Number.isFinite(maxUsd) || maxUsd <= 0) throw new UsageError('--max-usd must be a positive number');
     if (v.only !== undefined && !/^[1-9]\d*(,[1-9]\d*)*$/.test(v.only)) throw new UsageError('--only must be PR numbers separated by commas');
-    return { CorpusPath: resolve(v.corpus), Slice: slice.data, Set: set, Model: v.model, MaxUsd: maxUsd, Only: v.only?.split(',').map(Number) };
+    return { CorpusPath: resolve(v.corpus), Slice: slice.data, Set: set, Model: v.model, MaxUsd: maxUsd, Only: v.only?.split(',').map(Number), RetryFailed: v['retry-failed'] === true };
 }
 
 /** Mines the corpus candidates, writes `{ Clean, Bug }` to --out and prints the counts. */
@@ -131,6 +132,12 @@ async function corpusMine(p: Parsed, deps: CliDeps): Promise<number> {
     writeFileSync(resolve(p.Out ?? ''), JSON.stringify({ Clean: mined.Clean, Bug: mined.Bug }, null, 2) + '\n');
     process.stdout.write(`${mined.Clean.length} clean, ${mined.Bug.length} bug candidates written to ${p.Out}\n`);
     return 0;
+}
+
+/** The parsed `backtest` options; `parse` sets them for every backtest command. */
+function backtestArgs(p: Parsed): BacktestArgs {
+    if (!p.Backtest) throw new Error('backtest options were not parsed');
+    return p.Backtest;
 }
 
 async function dispatch(p: Parsed, deps: CliDeps): Promise<number> {
@@ -148,7 +155,7 @@ async function dispatch(p: Parsed, deps: CliDeps): Promise<number> {
         case 'execute': await deps.ExecuteStep({ RunID: runID, RepoRoot: repoRoot, Settings: settings }); break;
         case 'assess': await deps.AssessStep({ RunID: runID, RepoRoot: repoRoot, Settings: settings, StoreDir: storeDir }); break;
         case 'run': await deps.RunAll({ PR: p.PR, BaseSHA: p.Base, HeadSHA: p.Head, Trigger: p.Trigger, RepoRoot: repoRoot, Settings: settings, StoreDir: storeDir }); break;
-        case 'backtest': if (p.Backtest) await deps.BacktestStep({ ...p.Backtest, RepoRoot: repoRoot, Settings: settings, StoreDir: storeDir }); break;
+        case 'backtest': await deps.BacktestStep({ ...backtestArgs(p), RepoRoot: repoRoot, Settings: settings, StoreDir: storeDir }); break;
     }
     return 0;
 }

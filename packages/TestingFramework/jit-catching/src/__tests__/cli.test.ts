@@ -74,6 +74,12 @@ describe('Main', () => {
     expect(d.BacktestStep).toHaveBeenCalledWith(expect.objectContaining({ CorpusPath: resolve('c.json'), Slice: 'HeldOut', Set: 'Both', Model: 'gen-model', MaxUsd: 50, Only: [3, 5], RepoRoot: '/repo', StoreDir: join('/repo', '.jit-catch', 'store') }));
   });
 
+  it('backtest --retry-failed sets RetryFailed', async () => {
+    const d = deps();
+    expect(await Main(['backtest', '--corpus', 'c.json', '--slice', 'Tuning', '--set', 'Bug', '--model', 'm', '--retry-failed'], d)).toBe(0);
+    expect(d.BacktestStep).toHaveBeenCalledWith(expect.objectContaining({ RetryFailed: true }));
+  });
+
   it('backtest returns 2 and names the option for a bad --slice, --set, --max-usd or --only, or a missing --corpus or --model', async () => {
     const d = deps();
     const base = { '--corpus': 'c.json', '--slice': 'Tuning', '--set': 'Bug', '--model': 'm' };
