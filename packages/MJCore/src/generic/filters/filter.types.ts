@@ -24,7 +24,10 @@ export type FilterOperator =
     | 'isnull'
     | 'isnotnull'
     | 'isempty'
-    | 'isnotempty';
+    | 'isnotempty'
+    | 'in'
+    | 'notin'
+    | 'between';
 
 export type FilterLogic = 'and' | 'or';
 

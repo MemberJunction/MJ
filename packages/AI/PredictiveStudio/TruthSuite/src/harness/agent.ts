@@ -1,13 +1,16 @@
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import type { MJMLModelEntity } from '@memberjunction/core-entities';
+import type { MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import type { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 import { TrustVerdicts } from '@memberjunction/predictive-studio-core';
-import type { PredictiveStudioBuilderPayload } from '@memberjunction/predictive-studio';
+import { PredictiveStudioPipelineBuilderAgent, type PredictiveStudioBuilderPayload } from '@memberjunction/predictive-studio';
 import type { RunContext } from './run-fixtures';
 import type { AgentStepResult } from './types';
+
+/** The parameters of one Pipeline Builder run. */
+export type BuilderRunParams = Parameters<GraphQLAIClient['RunAIAgent']>[0];
 
 /**
  * Agent runs for the truth harness, in process over the harness's client provider: `GraphQLAIClient.RunAIAgent` runs
@@ -16,6 +19,19 @@ import type { AgentStepResult } from './types';
 export class HarnessAgent {
   /** Pipeline names longer than this are cut by the builder (`ModelingPlanToPipelineConfig`'s name rule). */
   private static readonly maxPipelineNameLength = 80;
+
+  /**
+   * The Pipeline Builder run of a plan. The gates measure what automation publishes, so the run turns publishing on (a
+   * conversation's build leaves its model in Draft).
+   */
+  public static BuilderRunParams(agent: MJAIAgentEntityExtended, plan: ModelingPlanSpec): BuilderRunParams {
+    return {
+      agent,
+      conversationMessages: [{ role: 'user', content: 'build it' }],
+      payload: plan,
+      data: { [PredictiveStudioPipelineBuilderAgent.AUTO_PUBLISH_DATA_KEY]: true },
+    };
+  }
 
   /**
    * Run the Pipeline Builder agent on `plan` and report the run, its build, and every pipeline the run created — read
@@ -27,11 +43,7 @@ export class HarnessAgent {
       throw new Error(`'Pipeline Builder' agent has DriverClass '${agent.DriverClass || 'none'}'`);
     }
     const t0 = Date.now();
-    const result: ExecuteAgentResult<PredictiveStudioBuilderPayload> = await new GraphQLAIClient(ctx.Provider).RunAIAgent({
-      agent,
-      conversationMessages: [{ role: 'user', content: 'build it' }],
-      payload: plan,
-    });
+    const result: ExecuteAgentResult<PredictiveStudioBuilderPayload> = await new GraphQLAIClient(ctx.Provider).RunAIAgent(HarnessAgent.BuilderRunParams(agent, plan));
     const wallMs = Date.now() - t0;
     const build = result.payload?.BuildResult || null;
     const pipelineIds = await HarnessAgent.PipelineIDsNamed(ctx.Provider, ctx.User, HarnessAgent.BuilderPipelineNames(plan));
@@ -54,17 +66,21 @@ export class HarnessAgent {
     const agent = await HarnessAgent.loadAgent(ctx, 'Model Development Agent');
     const model = await ctx.Provider.GetEntityObject<MJMLModelEntity>('MJ: ML Models', ctx.User);
     if (!(await model.Load(modelId))) throw new Error(`ML Model ${modelId} not found`);
+    const validationResults = await HarnessAgent.trainingRunValidationResults(ctx, model.ID);
     const result = await new GraphQLAIClient(ctx.Provider).RunAIAgent({
       agent,
-      conversationMessages: [{ role: 'user', content: HarnessAgent.StoryRequest(model) }],
+      conversationMessages: [{ role: 'user', content: HarnessAgent.StoryRequest(model, validationResults) }],
     });
     // A run that ended without a final message counts as "no story".
     return result.success && result.agentRun?.Message ? result.agentRun.Message : null;
   }
 
-  /** The facts a user would have after a build, in the words the Model Development Agent receives them. */
-  public static StoryRequest(model: MJMLModelEntity): string {
-    const trust = TrustVerdicts.DeriveTrustVerdict(model);
+  /**
+   * The facts a user would have after a build, in the words the Model Development Agent receives them. The trust line
+   * renders the stored gate decision of the model's training run (`validationResults`, its `ValidationResults`).
+   */
+  public static StoryRequest(model: MJMLModelEntity, validationResults: string | null): string {
+    const trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: validationResults, Lineage: model.Lineage || null });
     const weights = Object.entries(SafeJSONParse<Record<string, number>>(model.FeatureImportance || '{}') || {})
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
@@ -72,7 +88,7 @@ export class HarnessAgent {
       .join(', ');
     return [
       `Our model predicting ${model.TargetVariable} is already built and trained (ML Model ${model.ID}, version ${model.Version}).`,
-      `Holdout metrics: ${model.HoldoutMetrics || 'none'}. Trust: ${trust.grade} — ${trust.oneLiner}`,
+      `Holdout metrics: ${model.HoldoutMetrics || 'none'}. Trust: ${TrustVerdicts.OutcomeTitle(trust)} — ${trust.Headline}`,
       `Feature weights recorded for it: ${weights || 'none'}.`,
       'Do not call any sub-agent or action and do not train anything. Give me the summary you give after a build',
       '(your "Report" step): what it predicts, how good it is with the metric explained, and which features it weighted most.',
@@ -110,6 +126,23 @@ export class HarnessAgent {
     );
     if (!res.Success) throw new Error(`read the pipelines named ${names.join(', ')}: ${res.ErrorMessage}`);
     return res.Results.map((p) => p.ID);
+  }
+
+  /** The `ValidationResults` of the training run that produced `modelId` (null when no run names it, or it stores none). */
+  private static async trainingRunValidationResults(ctx: RunContext, modelId: string): Promise<string | null> {
+    const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<Pick<MJMLTrainingRunEntity, 'ResultingModelID' | 'ValidationResults'>>(
+      {
+        EntityName: 'MJ: ML Training Runs',
+        ExtraFilter: `ResultingModelID='${EscapeSQLString(modelId)}'`,
+        Fields: ['ResultingModelID', 'ValidationResults'],
+        ResultType: 'simple',
+        BypassCache: true,
+      },
+      ctx.User,
+    );
+    if (!res.Success) throw new Error(`read the training run of ML Model ${modelId}: ${res.ErrorMessage}`);
+    const run = res.Results.find((r) => UUIDsEqual(r.ResultingModelID, modelId));
+    return run?.ValidationResults || null;
   }
 
   /** The `MJ: AI Agents` row named `name`, as the agent entity `RunAIAgent` takes. */

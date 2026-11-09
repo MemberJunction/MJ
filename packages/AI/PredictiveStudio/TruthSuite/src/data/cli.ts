@@ -15,8 +15,8 @@ const { values } = parseArgs({
 });
 
 const setArg = values.set || 'base';
-if (setArg !== 'base' && setArg !== 't2') {
-  console.error(`Invalid --set ${setArg}; expected base | t2`);
+if (setArg !== 'base' && setArg !== 't2' && setArg !== 'n400') {
+  console.error(`Invalid --set ${setArg}; expected base | t2 | n400`);
   process.exit(1);
 }
 const set: SeedSetName = setArg;

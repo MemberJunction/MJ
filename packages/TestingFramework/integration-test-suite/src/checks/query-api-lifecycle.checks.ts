@@ -184,7 +184,7 @@ function targetPath(): string {
 // ─── GraphQL ────────────────────────────────────────────────────────────────
 
 const FIELD_COLUMNS = 'ID QueryID Name Description Sequence SQLBaseType SQLFullType SourceEntityID SourceFieldName IsComputed ComputationDescription ' +
-    'IsSummary SummaryDescription DetectionMethod AutoDetectConfidenceScore SourceEntityFieldID IsNullable SourceObjectName';
+    'IsSummary SummaryDescription DetectionMethod AutoDetectConfidenceScore SourceEntityFieldID IsNullable SourceObjectName InAllBranchVariants';
 const PARAMETER_COLUMNS = 'ID QueryID Name Type IsRequired DefaultValue Description SampleValue ValidationFilters DetectionMethod AutoDetectConfidenceScore IsServerSet';
 const ENTITY_COLUMNS = 'ID QueryID EntityID DetectionMethod AutoDetectConfidenceScore AlternateBaseViewID';
 
@@ -400,7 +400,7 @@ function fieldRow(ctx: IntegrationCheckContext, queryID: string, queryName: stri
         SourceEntityID: entity?.ID ?? null, SourceEntity: entity?.Name ?? null, SourceEntityFieldID: field?.ID ?? null,
         SourceEntityField: field?.Name ?? null, SourceFieldName: field?.Name ?? null, SourceObjectName: null,
         ComputationDescription: null, IsSummary: false, SummaryDescription: null, ...spec.Annotations,
-        DetectionMethod: 'Database', AutoDetectConfidenceScore: null,
+        DetectionMethod: 'Database', AutoDetectConfidenceScore: null, InAllBranchVariants: true,
     };
 }
 

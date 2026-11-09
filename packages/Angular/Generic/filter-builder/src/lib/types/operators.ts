@@ -27,6 +27,8 @@ export const STRING_OPERATORS: OperatorInfo[] = [
   { value: 'neq', label: 'not equals', requiresValue: true },
   { value: 'startswith', label: 'starts with', requiresValue: true },
   { value: 'endswith', label: 'ends with', requiresValue: true },
+  { value: 'in', label: 'is one of', requiresValue: true },
+  { value: 'notin', label: 'is not one of', requiresValue: true },
   { value: 'isempty', label: 'is empty', requiresValue: false },
   { value: 'isnotempty', label: 'is not empty', requiresValue: false }
 ];
@@ -41,6 +43,9 @@ export const NUMBER_OPERATORS: OperatorInfo[] = [
   { value: 'gte', label: 'greater than or equal', requiresValue: true },
   { value: 'lt', label: 'less than', requiresValue: true },
   { value: 'lte', label: 'less than or equal', requiresValue: true },
+  { value: 'between', label: 'between', requiresValue: true },
+  { value: 'in', label: 'is one of', requiresValue: true },
+  { value: 'notin', label: 'is not one of', requiresValue: true },
   { value: 'isnull', label: 'is empty', requiresValue: false },
   { value: 'isnotnull', label: 'is not empty', requiresValue: false }
 ];
@@ -65,6 +70,7 @@ export const DATE_OPERATORS: OperatorInfo[] = [
   { value: 'gte', label: 'is on or after', requiresValue: true },
   { value: 'lt', label: 'is before', requiresValue: true },
   { value: 'lte', label: 'is on or before', requiresValue: true },
+  { value: 'between', label: 'between', requiresValue: true },
   { value: 'isnull', label: 'is empty', requiresValue: false },
   { value: 'isnotnull', label: 'is not empty', requiresValue: false }
 ];
@@ -80,6 +86,8 @@ export const LOOKUP_OPERATORS: OperatorInfo[] = [
   { value: 'doesnotcontain', label: 'does not contain', requiresValue: true },
   { value: 'startswith', label: 'starts with', requiresValue: true },
   { value: 'endswith', label: 'ends with', requiresValue: true },
+  { value: 'in', label: 'is one of', requiresValue: true },
+  { value: 'notin', label: 'is not one of', requiresValue: true },
   { value: 'isnull', label: 'is empty', requiresValue: false },
   { value: 'isnotnull', label: 'is not empty', requiresValue: false }
 ];

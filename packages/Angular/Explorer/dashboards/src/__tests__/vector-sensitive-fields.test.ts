@@ -343,6 +343,11 @@ describe('calibration against MJ core entity field names', () => {
         // or widening `token` back to a bare substring (+35) fails here rather than
         // silently making the guard unusable again. Raise it only with the same kind of
         // evidence that lowered it.
+        //
+        // Raised from 55 to 60 with that evidence: the Predictive Studio schema adds two
+        // columns the name rule refuses, `FeatureSchemaHash` (matches `hash`: a content hash
+        // of a training snapshot's feature schema) and `AuthoredBy` (matches `auth`: the name
+        // of a unit's author). Neither holds a credential; they are counted, not exempted.
         const refused = FIELDS.filter((f) => IsSensitiveFieldName(f));
         expect(refused.length).toBeGreaterThanOrEqual(30);
         expect(refused.length).toBeLessThanOrEqual(60);

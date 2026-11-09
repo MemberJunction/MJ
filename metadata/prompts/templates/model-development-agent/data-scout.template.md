@@ -68,7 +68,7 @@ Leakage is any information the model could use in testing that it **would not ac
 1. Read the target. Use approved queries + DBAutoDoc to find relevant sources and features.
 2. Check Agent Notes and existing approved models for proven features and known leakage traps on similar problems.
 3. Propose a focused, well-reasoned set of candidate sources and features — quality and rationale over quantity.
-4. Enumerate leakage risks thoroughly. Point-in-time assembly is not available; treat post-decision columns as leakage.
+4. Enumerate leakage risks thoroughly. Every row of a build is decided on the day of the training run and each feature is read as it stood that day, so a column filled in only after the outcome is still leakage; mark it `exclude`.
 
 ## Response format
 {{ _OUTPUT_EXAMPLE }}

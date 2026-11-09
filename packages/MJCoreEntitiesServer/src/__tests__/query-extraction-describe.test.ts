@@ -151,7 +151,11 @@ describe('ComputeQueryExtraction — branch renders (D3)', () => {
 
         expect(asked).toHaveLength(2);
         expect(asked.some(s => s.includes('u.Email')) && asked.some(s => s.includes('ShortName'))).toBe(true);
-        expect(result.Fields?.map(f => [f.Sequence, f.Name])).toEqual([[1, 'ID'], [2, 'Email'], [3, 'ShortName']]);
+        expect(result.Fields?.map(f => [f.Sequence, f.Name, f.InAllBranchVariants])).toEqual([
+            [1, 'ID', true],
+            [2, 'Email', false],
+            [3, 'ShortName', false],
+        ]);
         expect(result.Messages.join('\n')).toContain('ShortName');
         expect(result.Messages.join('\n')).toContain('Email (not in render 1)');
         expect(result.Status).toBe('OK');
