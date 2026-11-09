@@ -1295,7 +1295,7 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "Optional User ID to receive drift alerts. Required when running as system user (e.g. from scheduled jobs), otherwise alerts are logged but suppressed."
+            "Description": "Optional active User ID to receive drift alerts. Honoured only when the action runs as the system user (e.g. from scheduled jobs) or as an Owner; any other caller is notified themselves. The system user without a NotifyUserID sends no alert."
           },
           "primaryKey": {
             "ID": "B8BB82A6-B9C9-46B3-BCB3-4E2B2C07C5D7"

@@ -1,7 +1,9 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ActionParam, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
-import type { IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
+import { UserInfo, type IMetadataProvider, type RunViewParams, type RunViewResult } from '@memberjunction/core';
+import { ResourceTypeEngine, type MJResourceTypeEntity } from '@memberjunction/core-entities';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { MJGlobal } from '@memberjunction/global';
 import {
   EVALUATE_DRIFT_DRIVER_CLASS,
@@ -262,11 +264,13 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
 
       const runView = async (viewParams: RunViewParams): Promise<RunViewResult> => {
         if (viewParams.EntityName === 'MJ: Record Processes') {
-          capturedProcessQuery = viewParams;
+          // The first read is the sweep's; an alert then reads its own process by ID.
+          capturedProcessQuery ??= viewParams;
+          const idMatch = /^ID = '([^']+)'$/.exec(String(viewParams.ExtraFilter ?? ''));
           const processes = [
             { ID: 'rp-ml-1', Name: 'Alpha ML Scorer', WorkType: 'ML Model', Status: 'Active' },
             { ID: 'rp-infer-2', Name: 'Beta Infer Pipeline', WorkType: 'Infer', Status: 'Active' },
-          ];
+          ].filter((p) => !idMatch || p.ID === idMatch[1]);
           return {
             Success: true,
             Results: processes,
@@ -327,8 +331,9 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
       expect(getOutput(runParams, 'ShouldAlert')).toBe(true);
       expect(getOutput(runParams, 'AlertEmitted')).toBe(true);
       expect(getOutput(runParams, 'AlertID')).toBe('notif-sweep-1');
-      // Only the drifted process ('rp-ml-1') emits an alert
+      // Only the drifted process ('rp-ml-1') emits an alert, titled from its stored name
       expect(savedNotifications).toHaveLength(1);
+      expect(savedNotifications[0].Title).toBe("Predictive Drift Alert (Critical): Record Process 'Alpha ML Scorer'");
 
       const processResults = getOutput(runParams, 'ProcessResults') as Array<{
         RecordProcessID: string;
@@ -423,194 +428,6 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
       expect(result.ResultCode).toBe('MISSING_PARAMETER');
     });
 
-    it('routes alerts to NotifyUserID when provided and populates process name/ID and resource fields (S3)', async () => {
-      const savedNotifications: Array<{
-        UserID: string;
-        Title: string;
-        Message: string;
-        ResourceTypeID?: string;
-        ResourceRecordID?: string;
-        ResourceConfiguration?: string;
-      }> = [];
-
-      const fakeProvider = {
-        RunView: async (viewParams: RunViewParams): Promise<RunViewResult> => {
-          if (viewParams.EntityName === 'MJ: Record Processes') {
-            return {
-              Success: true,
-              Results: [{ ID: 'rp-alert-1', Name: 'Customer Churn Predictor', WorkType: 'ML Model', Status: 'Active' }],
-              RowCount: 1,
-              TotalRowCount: 1,
-              ExecutionTime: 1,
-              ErrorMessage: '',
-            };
-          }
-          // Return drifting rows so alert is triggered
-          return {
-            Success: true,
-            Results: [
-              ...Array.from({ length: 120 }, (_, i) => ({
-                ID: `b-${i}`,
-                RecordProcessID: 'rp-alert-1',
-                ProcessRunID: 'run-1',
-                EntityID: 'ent-1',
-                RecordID: `r-${i}`,
-                FeatureName: 'Score',
-                Role: 'Champion',
-                AIModelID: 'model-1',
-                ValueNumeric: 0.1,
-                ValueText: null,
-                Confidence: 0.9,
-                Reasoning: null,
-                ComputedAt: new Date(Date.now() - 14 * 86_400_000).toISOString(),
-              })),
-              ...Array.from({ length: 120 }, (_, i) => ({
-                ID: `e-${i}`,
-                RecordProcessID: 'rp-alert-1',
-                ProcessRunID: 'run-2',
-                EntityID: 'ent-1',
-                RecordID: `r-e-${i}`,
-                FeatureName: 'Score',
-                Role: 'Champion',
-                AIModelID: 'model-1',
-                ValueNumeric: 0.99,
-                ValueText: null,
-                Confidence: 0.9,
-                Reasoning: null,
-                ComputedAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
-              })),
-            ],
-            RowCount: 240,
-            TotalRowCount: 240,
-            ExecutionTime: 1,
-            ErrorMessage: '',
-          };
-        },
-        RunViews: async (views: RunViewParams[]): Promise<RunViewResult[]> =>
-          Promise.all(views.map((v) => fakeProvider.RunView(v))),
-        GetEntityObject: async <T>() => {
-          const notif = {
-            ID: 'notif-admin-1',
-            UserID: '',
-            Title: '',
-            Message: '',
-            ResourceTypeID: '',
-            ResourceRecordID: '',
-            ResourceConfiguration: '',
-            Unread: false,
-            LatestResult: null,
-            NewRecord: () => true,
-            Save: async () => {
-              savedNotifications.push({
-                UserID: notif.UserID,
-                Title: notif.Title,
-                Message: notif.Message,
-                ResourceTypeID: notif.ResourceTypeID,
-                ResourceRecordID: notif.ResourceRecordID,
-                ResourceConfiguration: notif.ResourceConfiguration,
-              });
-              return true;
-            },
-          };
-          return notif as T;
-        },
-      } as Pick<IMetadataProvider, 'RunView' | 'RunViews' | 'GetEntityObject'> as IMetadataProvider;
-
-      const action = new EvaluateFeatureAndPredictionDriftAction();
-      const runParams = buildRunParams({
-        NotifyUserID: { value: 'admin-target-uuid' },
-      });
-      runParams.Provider = fakeProvider;
-
-      const result = await action.Run(runParams);
-      expect(result.Success).toBe(true);
-      expect(getOutput(runParams, 'AlertEmitted')).toBe(true);
-      expect(savedNotifications).toHaveLength(1);
-      const notif = savedNotifications[0];
-      expect(notif.UserID).toBe('admin-target-uuid');
-      expect(notif.Title).toContain('Predictive Drift Alert');
-      expect(notif.Title).toContain('Customer Churn Predictor (rp-alert-1)');
-      expect(notif.Message).toContain('Customer Churn Predictor (rp-alert-1)');
-      expect(notif.ResourceTypeID).toBe('DAAFCCEC-6A37-EF11-86D4-000D3A4E707E');
-      expect(notif.ResourceRecordID).toBe('rp-alert-1');
-      expect(JSON.parse(notif.ResourceConfiguration || '{}')).toEqual({
-        EntityName: 'MJ: Record Processes',
-        RecordID: 'rp-alert-1',
-      });
-    });
-
-    it('suppresses alerts when executed by system user without NotifyUserID and logs warning (S3)', async () => {
-      const savedNotifications: Array<{ UserID: string }> = [];
-
-      const fakeProvider = {
-        RunView: async (): Promise<RunViewResult> => ({
-          Success: true,
-          Results: [
-            ...Array.from({ length: 120 }, (_, i) => ({
-              ID: `b-${i}`,
-              RecordProcessID: 'rp-alert-2',
-              ProcessRunID: 'run-1',
-              EntityID: 'ent-1',
-              RecordID: `r-${i}`,
-              FeatureName: 'Score',
-              Role: 'Champion',
-              AIModelID: 'model-1',
-              ValueNumeric: 0.1,
-              ValueText: null,
-              Confidence: 0.9,
-              Reasoning: null,
-              ComputedAt: new Date(Date.now() - 14 * 86_400_000).toISOString(),
-            })),
-            ...Array.from({ length: 120 }, (_, i) => ({
-              ID: `e-${i}`,
-              RecordProcessID: 'rp-alert-2',
-              ProcessRunID: 'run-2',
-              EntityID: 'ent-1',
-              RecordID: `r-e-${i}`,
-              FeatureName: 'Score',
-              Role: 'Champion',
-              AIModelID: 'model-1',
-              ValueNumeric: 0.99,
-              ValueText: null,
-              Confidence: 0.9,
-              Reasoning: null,
-              ComputedAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
-            })),
-          ],
-          RowCount: 240,
-          TotalRowCount: 240,
-          ExecutionTime: 1,
-          ErrorMessage: '',
-        }),
-        GetEntityObject: async <T>() => {
-          const notif = {
-            ID: 'notif-sys',
-            UserID: '',
-            NewRecord: () => true,
-            Save: async () => {
-              savedNotifications.push({ UserID: notif.UserID });
-              return true;
-            },
-          };
-          return notif as T;
-        },
-      } as Pick<IMetadataProvider, 'RunView' | 'GetEntityObject'> as IMetadataProvider;
-
-      const action = new EvaluateFeatureAndPredictionDriftAction();
-      const runParams = buildRunParams({
-        RecordProcessID: { value: 'rp-alert-2' },
-      });
-      // System user as context user without NotifyUserID
-      runParams.ContextUser = { ID: 'system-user-uuid', Name: 'System', Type: 'System' } as unknown as UserInfo;
-      runParams.Provider = fakeProvider;
-
-      const result = await action.Run(runParams);
-      expect(result.Success).toBe(true);
-      expect(getOutput(runParams, 'ShouldAlert')).toBe(true);
-      expect(getOutput(runParams, 'AlertEmitted')).toBe(false);
-      expect(savedNotifications).toHaveLength(0);
-    });
-
     it('passes MaxRows to the drift loader (S9)', async () => {
       let capturedMaxRows: number | undefined;
 
@@ -638,6 +455,197 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
 
       await action.Run(runParams);
       expect(capturedMaxRows).toBe(5000);
+    });
+  });
+  describe('Alert routing and content (P1)', () => {
+    const SYSTEM = new UserInfo(null, { ID: UserCache.Instance.SYSTEM_USER_ID, Name: 'System', Type: 'User', IsActive: true });
+    const OWNER = new UserInfo(null, { ID: 'owner-1', Name: 'Org Owner', Email: 'owner@example.com', Type: 'Owner', IsActive: true });
+    const MEMBER = new UserInfo(null, { ID: 'member-1', Name: 'Regular Member', Email: 'member@example.com', Type: 'User', IsActive: true });
+    const TARGET = new UserInfo(null, { ID: 'admin-target-uuid', Name: 'Alert Admin', Email: 'admin@example.com', Type: 'User', IsActive: true });
+    const INACTIVE = new UserInfo(null, { ID: 'inactive-1', Name: 'Gone', Email: 'gone@example.com', Type: 'User', IsActive: false });
+    // Named and emailed "system", but not the system user.
+    const NAMED_SYSTEM = new UserInfo(null, { ID: 'named-system-1', Name: 'System', Email: 'system', Type: 'User', IsActive: true });
+
+    interface SavedNotification {
+      UserID: string;
+      Title: string;
+      Message: string;
+      ResourceTypeID: string | null;
+      ResourceRecordID: string | null;
+      ResourceConfiguration: string | null;
+    }
+    interface StoredRows {
+      Processes?: Array<{ ID: string; Name: string }>;
+      Models?: Array<{ ID: string; Pipeline: string; Version: number }>;
+    }
+
+    /** 120 baseline rows at 0.1 and 120 evaluation rows at 0.99: Critical drift. */
+    function driftingRows(): Array<Record<string, unknown>> {
+      const nowMs = Date.now();
+      const row = (id: string, value: number, computedAt: number) => ({
+        ID: id, RecordProcessID: 'rp-alert', EntityID: 'ent-1', RecordID: id, FeatureName: 'Score', Role: 'Champion',
+        Source: 'Pipeline', ValueNumeric: value, ValueText: null, Confidence: 0.9, Reasoning: null,
+        ComputedAt: new Date(computedAt).toISOString(),
+      });
+      return [
+        ...Array.from({ length: 120 }, (_, i) => row(`b-${i}`, 0.1, nowMs - 14 * 86_400_000 + i * 60_000)),
+        ...Array.from({ length: 120 }, (_, i) => row(`e-${i}`, 0.99, nowMs - 2 * 86_400_000 + i * 60_000)),
+      ];
+    }
+
+    /** Serves the stored Record Process / ML Model rows (by `ID = '…'`) and drifting Feature Values; captures saved notifications. */
+    function alertProvider(stored: StoredRows, saved: SavedNotification[], readsAs: Array<string | undefined>): IMetadataProvider {
+      const view = async (v: RunViewParams, user?: UserInfo): Promise<RunViewResult> => {
+        const idMatch = /^ID = '([^']+)'$/.exec(String(v.ExtraFilter ?? ''));
+        const byId = <T extends { ID: string }>(rows: T[]): T[] => (idMatch ? rows.filter((r) => r.ID === idMatch[1]) : rows);
+        let results: unknown[] = [];
+        if (v.EntityName === 'MJ: Record Processes') {
+          readsAs.push(user?.ID);
+          results = byId(stored.Processes ?? []);
+        } else if (v.EntityName === 'MJ: ML Models') {
+          readsAs.push(user?.ID);
+          results = byId(stored.Models ?? []);
+        } else if (v.EntityName === 'MJ: Feature Values') {
+          results = driftingRows();
+        }
+        return { Success: true, Results: results, RowCount: results.length, TotalRowCount: results.length, ExecutionTime: 1, ErrorMessage: '' };
+      };
+      return {
+        RunView: view,
+        RunViews: async (views: RunViewParams[], user?: UserInfo) => Promise.all(views.map((v) => view(v, user))),
+        GetEntityObject: async <T>() => {
+          const notif = {
+            ID: `notif-${saved.length + 1}`,
+            UserID: '',
+            Title: '',
+            Message: '',
+            ResourceTypeID: null as string | null,
+            ResourceRecordID: null as string | null,
+            ResourceConfiguration: null as string | null,
+            Unread: false,
+            LatestResult: null,
+            NewRecord: () => true,
+            Save: async () => {
+              saved.push({
+                UserID: notif.UserID,
+                Title: notif.Title,
+                Message: notif.Message,
+                ResourceTypeID: notif.ResourceTypeID,
+                ResourceRecordID: notif.ResourceRecordID,
+                ResourceConfiguration: notif.ResourceConfiguration,
+              });
+              return true;
+            },
+          };
+          return notif as T;
+        },
+      } as unknown as IMetadataProvider;
+    }
+
+    async function runAlert(
+      caller: UserInfo,
+      inputs: Record<string, { value: unknown }>,
+      stored: StoredRows = { Processes: [{ ID: 'rp-alert-1', Name: 'Customer Churn Predictor' }] },
+    ) {
+      const saved: SavedNotification[] = [];
+      const readsAs: Array<string | undefined> = [];
+      const runParams = buildRunParams(inputs);
+      runParams.ContextUser = caller;
+      runParams.Provider = alertProvider(stored, saved, readsAs);
+      const result = await new EvaluateFeatureAndPredictionDriftAction().Run(runParams);
+      expect(result.Success).toBe(true);
+      expect(getOutput(runParams, 'ShouldAlert')).toBe(true);
+      return { saved, readsAs, runParams };
+    }
+
+    let byNameSpy: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => {
+      UserCache.Instance.SetUsers([SYSTEM, OWNER, MEMBER, TARGET, INACTIVE, NAMED_SYSTEM]);
+      vi.spyOn(ResourceTypeEngine.Instance, 'Config').mockResolvedValue(undefined);
+      byNameSpy = vi
+        .spyOn(ResourceTypeEngine.Instance, 'ByName')
+        .mockImplementation((name: string) => (name === 'Records' ? ({ ID: 'rt-records', Name: 'Records' } as MJResourceTypeEntity) : undefined));
+    });
+    afterEach(() => {
+      vi.restoreAllMocks();
+      UserCache.Instance.SetUsers([]);
+    });
+
+    it('routes the alert to NotifyUserID when an Owner runs it, titled from the stored Record Process name and linked through the Records resource type', async () => {
+      const { saved, readsAs } = await runAlert(OWNER, {
+        RecordProcessID: { value: 'rp-alert-1' },
+        NotifyUserID: { value: TARGET.ID },
+      });
+      expect(saved).toHaveLength(1);
+      expect(saved[0].UserID).toBe(TARGET.ID);
+      expect(saved[0].Title).toBe("Predictive Drift Alert (Critical): Record Process 'Customer Churn Predictor'");
+      expect(saved[0].Message).toContain("Drift detected for Record Process 'Customer Churn Predictor'.");
+      expect(saved[0].ResourceTypeID).toBe('rt-records');
+      expect(byNameSpy).toHaveBeenCalledWith('Records');
+      expect(saved[0].ResourceRecordID).toBe('rp-alert-1');
+      expect(JSON.parse(saved[0].ResourceConfiguration ?? '{}')).toEqual({ EntityName: 'MJ: Record Processes', RecordID: 'rp-alert-1' });
+      // The stored name is read as the caller.
+      expect(readsAs).toEqual([OWNER.ID]);
+    });
+
+    it('routes the alert to NotifyUserID when the system user runs it (the scheduled job)', async () => {
+      const { saved } = await runAlert(SYSTEM, { RecordProcessID: { value: 'rp-alert-1' }, NotifyUserID: { value: TARGET.ID } });
+      expect(saved.map((n) => n.UserID)).toEqual([TARGET.ID]);
+    });
+
+    it('ignores NotifyUserID from a caller who is neither the system user nor an Owner, and notifies the caller', async () => {
+      const { saved, runParams } = await runAlert(MEMBER, {
+        RecordProcessID: { value: 'rp-alert-1' },
+        NotifyUserID: { value: TARGET.ID },
+      });
+      expect(saved.map((n) => n.UserID)).toEqual([MEMBER.ID]);
+      expect(getOutput(runParams, 'AlertEmitted')).toBe(true);
+    });
+
+    it('treats a user named and emailed "system" as an ordinary user: their NotifyUserID is ignored and they are notified themselves', async () => {
+      const { saved } = await runAlert(NAMED_SYSTEM, {
+        RecordProcessID: { value: 'rp-alert-1' },
+        NotifyUserID: { value: TARGET.ID },
+      });
+      expect(saved.map((n) => n.UserID)).toEqual([NAMED_SYSTEM.ID]);
+    });
+
+    it('suppresses the alert for the system user without NotifyUserID, or with one naming no active user', async () => {
+      const withoutTarget = await runAlert(SYSTEM, { RecordProcessID: { value: 'rp-alert-1' } });
+      expect(withoutTarget.saved).toHaveLength(0);
+      expect(getOutput(withoutTarget.runParams, 'AlertEmitted')).toBe(false);
+
+      const inactiveTarget = await runAlert(SYSTEM, { RecordProcessID: { value: 'rp-alert-1' }, NotifyUserID: { value: INACTIVE.ID } });
+      expect(inactiveTarget.saved).toHaveLength(0);
+
+      const unknownTarget = await runAlert(SYSTEM, { RecordProcessID: { value: 'rp-alert-1' }, NotifyUserID: { value: 'no-such-user' } });
+      expect(unknownTarget.saved).toHaveLength(0);
+    });
+
+    it('never puts input text in the title: a ModelID the caller cannot read gives a generic title and no link', async () => {
+      const { saved } = await runAlert(MEMBER, { ModelID: { value: 'Click <a href="http://x">here</a>' } }, { Models: [] });
+      expect(saved).toHaveLength(1);
+      expect(saved[0].Title).toBe('Predictive Drift Alert (Critical): Predictive Studio');
+      expect(saved[0].Message).not.toContain('Click');
+      expect(saved[0].ResourceTypeID).toBeNull();
+      expect(saved[0].ResourceRecordID).toBeNull();
+    });
+
+    it('titles a model-only alert from the stored ML Model row', async () => {
+      const { saved } = await runAlert(MEMBER, { ModelID: { value: 'model-7' } }, {
+        Models: [{ ID: 'model-7', Pipeline: 'Member Renewal', Version: 3 }],
+      });
+      expect(saved[0].Title).toBe("Predictive Drift Alert (Critical): ML Model 'Member Renewal' v3");
+      expect(JSON.parse(saved[0].ResourceConfiguration ?? '{}')).toEqual({ EntityName: 'MJ: ML Models', RecordID: 'model-7' });
+    });
+
+    it('leaves the link off when no Records resource type is seeded', async () => {
+      byNameSpy.mockReturnValue(undefined);
+      const { saved } = await runAlert(MEMBER, { RecordProcessID: { value: 'rp-alert-1' } });
+      expect(saved).toHaveLength(1);
+      expect(saved[0].ResourceTypeID).toBeNull();
+      expect(saved[0].ResourceRecordID).toBeNull();
+      expect(saved[0].ResourceConfiguration).toBeNull();
     });
   });
 });

@@ -9,10 +9,16 @@
  */
 
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
-import { RegisterClass } from '@memberjunction/global';
-import { LogError, Metadata, RunView, WellKnownUserSource, type IMetadataProvider } from '@memberjunction/core';
-import type { MJRecordProcessEntity, MJUserNotificationEntity } from '@memberjunction/core-entities';
+import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { LogError, Metadata, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import {
+  ResourceTypeEngine,
+  type MJMLModelEntity,
+  type MJRecordProcessEntity,
+  type MJUserNotificationEntity,
+} from '@memberjunction/core-entities';
 import { BaseAction } from '@memberjunction/actions';
+import { UserCache } from '@memberjunction/generic-database-provider';
 
 import { BasePredictiveStudioAction, type JsonObject } from './base-predictive-studio.action';
 import { EVALUATE_DRIFT_DRIVER_CLASS } from './driver-classes';
@@ -67,15 +73,29 @@ export interface IDriftAlertEmitter {
     params: RunActionParams,
     contextInfo?: {
       recordProcessId?: string;
-      recordProcessName?: string;
     },
   ): Promise<{ readonly AlertID?: string; readonly Emitted: boolean }>;
 }
 
+/** The record a drift alert is about, as stored and as the caller may read it. */
+interface DriftAlertSubject {
+  readonly EntityName: 'MJ: Record Processes' | 'MJ: ML Models';
+  readonly ID: string;
+  readonly Label: string;
+}
+
+/** The `MJ: Resource Types` row whose notifications link to one record of an entity. */
+const RECORD_RESOURCE_TYPE_NAME = 'Records';
+
 /**
- * Production {@link IDriftAlertEmitter} that persists an `MJ: User Notifications` alert
- * for `params.ContextUser` (or `NotifyUserID` when specified or run under scheduled jobs)
- * when a metadata provider is available.
+ * Production {@link IDriftAlertEmitter} that persists an `MJ: User Notifications` alert.
+ *
+ * Who is notified: the caller, except that the system user or an Owner may route the alert to the
+ * active user named by `NotifyUserID`. Any other caller's `NotifyUserID` is ignored, so a user cannot
+ * send notifications to someone else. The system user without a usable `NotifyUserID` notifies no one.
+ *
+ * The title and link come from the stored Record Process (or ML Model) read as the caller, never from
+ * the action's input text.
  */
 export class DefaultDriftAlertEmitter implements IDriftAlertEmitter {
   constructor(private readonly provider?: IMetadataProvider) {}
@@ -85,7 +105,6 @@ export class DefaultDriftAlertEmitter implements IDriftAlertEmitter {
     params: RunActionParams,
     contextInfo?: {
       recordProcessId?: string;
-      recordProcessName?: string;
     },
   ): Promise<{ readonly AlertID?: string; readonly Emitted: boolean }> {
     const provider = this.provider ?? params.Provider ?? Metadata.Provider; // global-provider-ok: RunActionParams.Provider is optional; ActionEngine contract falls back to the global provider (ActionEngine-Base.ts)
@@ -93,56 +112,39 @@ export class DefaultDriftAlertEmitter implements IDriftAlertEmitter {
       return { Emitted: false };
     }
 
-    const notifyParam = params.Params?.find(
-      (p) => p.Name?.trim().toLowerCase() === 'notifyuserid',
-    );
-    const notifyUserId =
-      typeof notifyParam?.Value === 'string' && notifyParam.Value.trim().length > 0
-        ? notifyParam.Value.trim()
-        : undefined;
-
-    const isSystem =
-      WellKnownUserSource.Instance.IsSystemUser(params.ContextUser) ||
-      (params.ContextUser as { Type?: string; IsSystem?: boolean } | undefined)?.Type?.toLowerCase() === 'system' ||
-      (params.ContextUser as { Type?: string; IsSystem?: boolean } | undefined)?.IsSystem === true ||
-      params.ContextUser?.Email?.toLowerCase() === 'system' ||
-      params.ContextUser?.Name?.toLowerCase() === 'system';
-    const targetUserId = notifyUserId ?? (isSystem ? undefined : params.ContextUser?.ID);
-
-    if (!targetUserId) {
-      if (isSystem && !notifyUserId) {
-        LogError(
-          'DefaultDriftAlertEmitter: drift alert suppressed — action was executed by system user and no NotifyUserID parameter was provided.',
-        );
-      }
-      return { Emitted: false };
-    }
-
     try {
+      const targetUserId = await this.resolveTargetUserId(params);
+      if (!targetUserId) {
+        LogError(
+          'DefaultDriftAlertEmitter: drift alert suppressed — the action ran as the system user without a NotifyUserID naming an active user.',
+        );
+        return { Emitted: false };
+      }
+
+      const subject = await this.loadSubject(
+        provider,
+        params.ContextUser,
+        contextInfo?.recordProcessId ?? report.RecordProcessID,
+        report.ModelID,
+      );
+
       const notification = await provider.GetEntityObject<MJUserNotificationEntity>(
         'MJ: User Notifications',
         params.ContextUser,
       );
       notification.NewRecord();
       notification.UserID = targetUserId;
-
-      const recordProcessId = contextInfo?.recordProcessId ?? report.RecordProcessID;
-      const recordProcessName = contextInfo?.recordProcessName;
-      const processLabel = recordProcessName
-        ? `${recordProcessName} (${recordProcessId ?? 'unknown'})`
-        : (recordProcessId ?? report.ModelID ?? 'Predictive Studio');
-
-      notification.Title = `Predictive Drift Alert (${report.OverallSeverity}): ${processLabel}`;
-      notification.Message = `Drift detected for Record Process: ${processLabel}\n\n${report.Summary}`;
+      notification.Title = `Predictive Drift Alert (${report.OverallSeverity}): ${subject?.Label ?? 'Predictive Studio'}`;
+      notification.Message = subject
+        ? `Drift detected for ${subject.Label}.\n\n${report.Summary}`
+        : `Drift detected.\n\n${report.Summary}`;
       notification.Unread = true;
 
-      if (recordProcessId) {
-        notification.ResourceTypeID = 'DAAFCCEC-6A37-EF11-86D4-000D3A4E707E';
-        notification.ResourceRecordID = recordProcessId;
-        notification.ResourceConfiguration = JSON.stringify({
-          EntityName: 'MJ: Record Processes',
-          RecordID: recordProcessId,
-        });
+      const resourceTypeId = subject ? await this.recordResourceTypeId(provider, params.ContextUser) : undefined;
+      if (subject && resourceTypeId) {
+        notification.ResourceTypeID = resourceTypeId;
+        notification.ResourceRecordID = subject.ID;
+        notification.ResourceConfiguration = JSON.stringify({ EntityName: subject.EntityName, RecordID: subject.ID });
       }
 
       const saved = await notification.Save();
@@ -156,6 +158,92 @@ export class DefaultDriftAlertEmitter implements IDriftAlertEmitter {
     } catch (error: unknown) {
       LogError(error);
       return { Emitted: false };
+    }
+  }
+
+  /**
+   * The user to notify: an active `NotifyUserID` when the caller is the system user or an Owner,
+   * else the caller; undefined for the system user without a usable `NotifyUserID`.
+   */
+  private async resolveTargetUserId(params: RunActionParams): Promise<string | undefined> {
+    const caller: UserInfo | undefined = params.ContextUser;
+    const systemUser = UserCache.Instance.GetSystemUser();
+    const callerIsSystem = !!caller?.ID && !!systemUser?.ID && UUIDsEqual(caller.ID, systemUser.ID);
+    const callerMayRoute = callerIsSystem || caller?.Type?.trim().toLowerCase() === 'owner';
+
+    const notifyParam = params.Params?.find((p) => p.Name?.trim().toLowerCase() === 'notifyuserid');
+    const notifyUserId =
+      typeof notifyParam?.Value === 'string' && notifyParam.Value.trim().length > 0 ? notifyParam.Value.trim() : undefined;
+    if (notifyUserId) {
+      const target = callerMayRoute ? await UserCache.Instance.FindUser({ ID: notifyUserId }) : undefined;
+      if (target?.IsActive) {
+        return target.ID;
+      }
+      LogError(
+        callerMayRoute
+          ? 'DefaultDriftAlertEmitter: NotifyUserID ignored — it names no active user.'
+          : 'DefaultDriftAlertEmitter: NotifyUserID ignored — only the system user or an Owner may route drift alerts to another user; notifying the caller.',
+      );
+    }
+    return callerIsSystem ? undefined : caller?.ID;
+  }
+
+  /** The stored Record Process (else ML Model) the alert is about, read as the caller; undefined when the caller cannot read it. */
+  private async loadSubject(
+    provider: IMetadataProvider,
+    contextUser: UserInfo | undefined,
+    recordProcessId: string | undefined,
+    modelId: string | undefined,
+  ): Promise<DriftAlertSubject | undefined> {
+    const rv = RunView.FromMetadataProvider(provider);
+    if (recordProcessId) {
+      const res = await rv.RunView<Pick<MJRecordProcessEntity, 'ID' | 'Name'>>(
+        {
+          EntityName: 'MJ: Record Processes',
+          ExtraFilter: `ID = '${EscapeSQLString(recordProcessId)}'`,
+          Fields: ['ID', 'Name'],
+          ResultType: 'simple',
+          MaxRows: 1,
+          SkipTotalRowCount: true,
+        },
+        contextUser,
+      );
+      const row = res.Success ? res.Results?.[0] : undefined;
+      return row ? { EntityName: 'MJ: Record Processes', ID: row.ID, Label: `Record Process '${row.Name}'` } : undefined;
+    }
+    if (modelId) {
+      const res = await rv.RunView<Pick<MJMLModelEntity, 'ID' | 'Pipeline' | 'Version'>>(
+        {
+          EntityName: 'MJ: ML Models',
+          ExtraFilter: `ID = '${EscapeSQLString(modelId)}'`,
+          Fields: ['ID', 'Pipeline', 'Version'],
+          ResultType: 'simple',
+          MaxRows: 1,
+          SkipTotalRowCount: true,
+        },
+        contextUser,
+      );
+      const row = res.Success ? res.Results?.[0] : undefined;
+      return row ? { EntityName: 'MJ: ML Models', ID: row.ID, Label: `ML Model '${row.Pipeline}' v${row.Version}` } : undefined;
+    }
+    return undefined;
+  }
+
+  /**
+   * The `Records` resource type's ID, resolved by name through {@link ResourceTypeEngine}; undefined when it is
+   * not seeded or cannot be loaded (the alert is still sent, without its link).
+   */
+  private async recordResourceTypeId(provider: IMetadataProvider, contextUser: UserInfo | undefined): Promise<string | undefined> {
+    try {
+      await ResourceTypeEngine.Instance.Config(false, contextUser, provider);
+      const resourceType = ResourceTypeEngine.Instance.ByName(RECORD_RESOURCE_TYPE_NAME);
+      if (!resourceType) {
+        LogError(`DefaultDriftAlertEmitter: no '${RECORD_RESOURCE_TYPE_NAME}' resource type is seeded; the drift alert has no record link.`);
+      }
+      return resourceType?.ID;
+    } catch (error: unknown) {
+      LogError(error);
+      return undefined;
     }
   }
 }
@@ -402,7 +490,6 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
       if (report.ShouldAlert && emitAlertOnDrift) {
         const alertOutcome = await activeEmitter.EmitDriftAlert(report, params, {
           recordProcessId: proc.ID,
-          recordProcessName: proc.Name,
         });
         procAlertEmitted = alertOutcome.Emitted;
         procAlertId = alertOutcome.AlertID;

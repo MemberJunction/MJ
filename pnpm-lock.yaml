@@ -1498,6 +1498,9 @@ importers:
       '@memberjunction/feature-pipelines':
         specifier: 6.2.0
         version: link:../../Knowledge/FeaturePipelines
+      '@memberjunction/generic-database-provider':
+        specifier: 6.2.0
+        version: link:../../../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.2.0
         version: link:../../../MJGlobal
