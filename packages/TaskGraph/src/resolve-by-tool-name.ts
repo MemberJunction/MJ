@@ -16,6 +16,7 @@ import { SanitizeToolName, SUB_AGENT_TOOL_PREFIX } from '@memberjunction/ai-agen
 export interface NamedIdRecord {
     ID: string;
     Name: string;
+    Status?: string;
 }
 
 export interface ResolveRecordsByNameOptions {
@@ -28,10 +29,20 @@ export interface ResolveRecordsByNameOptions {
     /** User context for `RunView` and permission checks. */
     ContextUser: UserInfo;
     /**
+     * When true, restricts the initial `Name IN (...)` query to `Status = 'Active'` and requests
+     * `Status` in `Fields`.
+     */
+    ActiveOnly?: boolean;
+    /**
      * When true, strips `SUB_AGENT_TOOL_PREFIX` (`delegate_to_`) case-insensitively before
      * comparing sanitized tool names against active records.
      */
     StripSubAgentPrefix?: boolean;
+    /**
+     * Optional batch permission filter evaluated on non-empty exact-match results before
+     * per-record `AllowCandidate`.
+     */
+    FilterCandidates?: (records: NamedIdRecord[]) => Promise<NamedIdRecord[]>;
     /**
      * Optional permission or eligibility filter evaluated before accepting either an exact match
      * or a sanitized-tool-name fallback match.
@@ -43,6 +54,8 @@ export interface ResolveRecordsByNameResult {
     Success: boolean;
     Map?: Map<string, string>;
     Missing?: string[];
+    /** Active records that matched by name or tool name but were rejected by `FilterCandidates` or `AllowCandidate`. */
+    Rejected?: Map<string, NamedIdRecord>;
     ErrorMessage?: string;
 }
 
@@ -63,8 +76,9 @@ export async function ResolveRecordsByNameOrToolName(
 ): Promise<ResolveRecordsByNameResult> {
     const uniqueNames = [...new Set(options.Names.filter((n) => n.trim().length > 0))];
     const found = new Map<string, string>();
+    const rejected = new Map<string, NamedIdRecord>();
     if (uniqueNames.length === 0) {
-        return { Success: true, Map: found, Missing: [] };
+        return { Success: true, Map: found, Missing: [], Rejected: rejected };
     }
 
     const quoted = uniqueNames.map((n) => `'${EscapeSQLString(n)}'`).join(',');
@@ -72,8 +86,8 @@ export async function ResolveRecordsByNameOrToolName(
     const exact = await rv.RunView<NamedIdRecord>(
         {
             EntityName: options.EntityName,
-            ExtraFilter: `Name IN (${quoted})`,
-            Fields: ['ID', 'Name'],
+            ExtraFilter: options.ActiveOnly ? `Name IN (${quoted}) AND Status = 'Active'` : `Name IN (${quoted})`,
+            Fields: options.ActiveOnly ? ['ID', 'Name', 'Status'] : ['ID', 'Name'],
             ResultType: 'simple',
         },
         options.ContextUser,
@@ -85,9 +99,21 @@ export async function ResolveRecordsByNameOrToolName(
         return { Success: false, ErrorMessage: reason };
     }
 
+    const exactRows = exact.Results ?? [];
+    const batchAllowedIds =
+        options.FilterCandidates && exactRows.length > 0
+            ? new Set((await options.FilterCandidates(exactRows)).map((r) => r.ID))
+            : null;
+
     const exactByLower = new Map<string, NamedIdRecord>();
-    for (const r of exact.Results ?? []) {
-        if (options.AllowCandidate && !(await options.AllowCandidate(r))) {
+    const rejectedByLower = new Map<string, NamedIdRecord>();
+    for (const r of exactRows) {
+        const allowedByBatch = !batchAllowedIds || batchAllowedIds.has(r.ID);
+        const allowedByCandidate = allowedByBatch && (!options.AllowCandidate || (await options.AllowCandidate(r)));
+        if (!allowedByCandidate) {
+            if (!rejectedByLower.has(r.Name.toLowerCase())) {
+                rejectedByLower.set(r.Name.toLowerCase(), r);
+            }
             continue;
         }
         found.set(r.Name, r.ID);
@@ -100,12 +126,17 @@ export async function ResolveRecordsByNameOrToolName(
             const ciMatch = exactByLower.get(req.toLowerCase());
             if (ciMatch) {
                 found.set(req, ciMatch.ID);
+                continue;
+            }
+            const rejectedMatch = rejectedByLower.get(req.toLowerCase());
+            if (rejectedMatch) {
+                rejected.set(req, rejectedMatch);
             }
         }
     }
 
-    let missing = uniqueNames.filter((n) => !found.has(n));
-    if (missing.length > 0 && missing.some(looksLikeSanitizedToolName)) {
+    const unresolvedForFallback = uniqueNames.filter((n) => !found.has(n) && !rejected.has(n));
+    if (unresolvedForFallback.length > 0 && unresolvedForFallback.some(looksLikeSanitizedToolName)) {
         const fallback = await rv.RunView<NamedIdRecord>(
             {
                 EntityName: options.EntityName,
@@ -124,7 +155,7 @@ export async function ResolveRecordsByNameOrToolName(
 
         const subAgentPrefix = (SUB_AGENT_TOOL_PREFIX ?? 'delegate_to_').toLowerCase();
         const activeRecords = fallback.Results ?? [];
-        for (const rawName of missing) {
+        for (const rawName of unresolvedForFallback) {
             const trimmed = rawName.trim();
             const stripped =
                 options.StripSubAgentPrefix && trimmed.toLowerCase().startsWith(subAgentPrefix)
@@ -137,13 +168,14 @@ export async function ResolveRecordsByNameOrToolName(
             if (matches.length === 1) {
                 const candidate = matches[0];
                 if (options.AllowCandidate && !(await options.AllowCandidate(candidate))) {
+                    rejected.set(rawName, candidate);
                     continue;
                 }
                 found.set(rawName, candidate.ID);
             }
         }
-        missing = uniqueNames.filter((n) => !found.has(n));
     }
 
-    return { Success: true, Map: found, Missing: missing };
+    const missing = uniqueNames.filter((n) => !found.has(n));
+    return { Success: true, Map: found, Missing: missing, Rejected: rejected };
 }

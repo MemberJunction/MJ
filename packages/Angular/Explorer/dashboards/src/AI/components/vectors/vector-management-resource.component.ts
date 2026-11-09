@@ -851,7 +851,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
             // Step 2: Subscribe to progress updates and also set a safety timeout
             // in case the subscription misses events (race condition, network issue, etc.)
-            this.subscribeToPipelineProgress(entityDocumentId, result.PipelineRunID, doc.Entity);
+            this.subscribeToPipelineProgress(entityDocumentId, result.PipelineRunID, doc.Entity ?? doc.Name);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             console.error(`[VectorManagement] Error starting sync for ${entityDocumentId}:`, msg);
@@ -1500,7 +1500,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     private buildVectorDBHealth(): void {
         if (this.vectorDatabases.length > 0) {
-            const db = this.vectorDatabases[0];
+            const activeDbID = this.vectorIndexes[0]?.VectorDatabaseID ?? this.entityDocuments[0]?.VectorDatabaseID;
+            const db = (activeDbID ? this.vectorDatabases.find(d => UUIDsEqual(d.ID, activeDbID)) : undefined) ?? this.vectorDatabases[0];
             this.VectorDBName = db.Name;
             // "Degraded" here doesn't mean the database is unhealthy — it means no
             // records have been vectorized yet. Say that plainly so users don't

@@ -127,9 +127,12 @@
       "column": "LinkedEntityID",
       "nullable": true,
       "action": "null",
-      "reason": "Nullable reference; cleared with LinkedRecordID (both-or-neither CHECK) so the row survives without the entity.",
+      "reason": "Nullable reference; cleared with LinkedRecordID and anchor columns (CK_Conversation_LinkBinding / CK_Conversation_AnchorLinkBinding) so the row survives without the entity.",
       "alsoNull": [
-        "LinkedRecordID"
+        "LinkedRecordID",
+        "AnchorType",
+        "AnchorKey",
+        "AnchorMetadata"
       ]
     },
     {
@@ -327,6 +330,27 @@
       "nullable": true,
       "action": "null",
       "reason": "Nullable reference; cleared so the row survives without the entity."
+    },
+    {
+      "table": "GraphEdge",
+      "column": "SourceEntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "GraphEdge",
+      "column": "TargetEntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "GraphEdgeTypeEndpoint",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
     },
     {
       "table": "IdentityClaim",
@@ -904,6 +928,22 @@
       "nullable": false,
       "action": "delete",
       "reason": "NOT NULL reference to a MLTrainingPipeline row this proc deletes; deleted first."
+    },
+    {
+      "table": "MLTrainingSnapshot",
+      "column": "PipelineID",
+      "references": "MLTrainingPipeline",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a MLTrainingPipeline row this proc deletes; deleted first."
+    },
+    {
+      "table": "MLTrainingRun",
+      "column": "TrainingSnapshotID",
+      "references": "MLTrainingSnapshot",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to an MLTrainingSnapshot row this proc deletes; cleared."
     },
     {
       "table": "FeatureValue",

@@ -42,7 +42,8 @@
 
 import express, { Application, Request, Response, Router } from 'express';
 import { WebClient } from '@slack/web-api';
-import { RegisterClass } from '@memberjunction/global';
+import { rateLimit } from 'express-rate-limit';
+import { RegisterClass, SanitizeForLog } from '@memberjunction/global';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { SocketModeClient } from '@slack/socket-mode';
 import {
@@ -53,9 +54,14 @@ import {
     ExtensionHealthResult
 } from '@memberjunction/server-extensions-core';
 import { SlackAdapter } from './SlackAdapter.js';
-import { MessagingAdapterSettings, RequestWithRawBody } from '../base/types.js';
+import { MessagingAdapterSettings, RequestWithRawBody, WebhookRateLimitSettings } from '../base/types.js';
 import { VerifySlackSignature } from './slack-routes.js';
 import { HandleSlackInteraction } from './slack-interactivity.js';
+
+/** Returns a request-supplied value as one length-capped line for a log message. */
+function logValue(value: unknown): string {
+    return SanitizeForLog(String(value));
+}
 
 /**
  * Server Extension that registers Slack webhook routes and delegates
@@ -72,6 +78,31 @@ import { HandleSlackInteraction } from './slack-interactivity.js';
  * // No manual instantiation needed — just add to mj.config.cjs
  * ```
  */
+/** Defaults for {@link WebhookRateLimitSettings}: generous, per IP, one-minute window. */
+export const DEFAULT_SLACK_WEBHOOK_RATE_LIMIT: Required<WebhookRateLimitSettings> = { Enabled: true, WindowMs: 60_000, MaxRequests: 1200 };
+
+/**
+ * The Slack webhook limiter as a list to spread into `router.use`: one `express-rate-limit`
+ * handler, or none when disabled. Over the limit the route answers 429 (Slack retries).
+ */
+export function CreateSlackWebhookLimiter(settings?: WebhookRateLimitSettings): express.RequestHandler[] {
+    const resolved = { ...DEFAULT_SLACK_WEBHOOK_RATE_LIMIT, ...(settings ?? {}) };
+    if (!resolved.Enabled) {
+        return [];
+    }
+    return [
+        rateLimit({
+            windowMs: resolved.WindowMs,
+            limit: resolved.MaxRequests,
+            standardHeaders: 'draft-7',
+            legacyHeaders: false,
+            handler: (_req: Request, res: Response) => {
+                res.status(429).json({ error: 'Too many requests' });
+            },
+        }),
+    ];
+}
+
 @RegisterClass(BaseServerExtension, 'SlackMessagingExtension')
 export class SlackMessagingExtension extends BaseServerExtension {
     /** Slack webhooks arrive unsigned from Slack servers; run in pre-auth phase. */
@@ -213,7 +244,14 @@ export class SlackMessagingExtension extends BaseServerExtension {
         config: ServerExtensionConfig,
         settings: MessagingAdapterSettings
     ): ExtensionInitResult {
+        // One per-IP budget across the events, interactivity and slash-command routes, checked
+        // before the body is parsed. The routes are unauthenticated (signature-checked per request).
+        const limiter = CreateSlackWebhookLimiter(settings.WebhookRateLimit);
+
         const router = Router();
+        if (limiter.length > 0) {
+            router.use(...limiter);
+        }
         router.use(express.json({
             limit: '1mb',
             verify: (req: Request, _res, buf) => {
@@ -225,12 +263,18 @@ export class SlackMessagingExtension extends BaseServerExtension {
         // Interactivity endpoint for button clicks, modal submissions, etc.
         // Slack sends these as application/x-www-form-urlencoded with a `payload` JSON field
         const interactRouter = Router();
+        if (limiter.length > 0) {
+            interactRouter.use(...limiter);
+        }
         interactRouter.use(express.urlencoded({ extended: true }));
         interactRouter.post('/', this.handleInteraction.bind(this));
         app.use(config.RootPath + '/interact', interactRouter);
 
         // Slash command endpoint — Slack sends these as application/x-www-form-urlencoded
         const slashRouter = Router();
+        if (limiter.length > 0) {
+            slashRouter.use(...limiter);
+        }
         slashRouter.use(express.urlencoded({ extended: true }));
         slashRouter.post('/', this.handleSlashCommand.bind(this));
         app.use(config.RootPath + '/slash', slashRouter);
@@ -397,7 +441,7 @@ export class SlackMessagingExtension extends BaseServerExtension {
     private async handleSlashCommand(req: Request, res: Response): Promise<void> {
         const { command, text, user_id, user_name, channel_id } = req.body as Record<string, string>;
 
-        LogStatus(`Slack slash command: command=${command}, text="${text}", user=${user_id}, channel=${channel_id}`);
+        LogStatus(`Slack slash command: command=${logValue(command)}, text="${logValue(text)}", user=${logValue(user_id)}, channel=${logValue(channel_id)}`);
 
         // Look up the agent for this command
         const agentName = this.resolveSlashCommandAgent(command);
@@ -539,17 +583,17 @@ export class SlackMessagingExtension extends BaseServerExtension {
         }
 
         const eventType = event.type as string;
-        LogStatus(`Slack event received: type=${eventType}, channel=${event.channel}, user=${event.user}`);
+        LogStatus(`Slack event received: type=${logValue(eventType)}, channel=${logValue(event.channel)}, user=${logValue(event.user)}`);
 
         // Only handle message and app_mention events
         if (eventType !== 'message' && eventType !== 'app_mention') {
-            LogStatus(`Slack: ignoring event type '${eventType}'`);
+            LogStatus(`Slack: ignoring event type '${logValue(eventType)}'`);
             return;
         }
 
         // Skip bot messages (prevent loops) and message edits/deletes
         if (event.bot_id || event.subtype) {
-            LogStatus(`Slack: skipping bot/subtype message (bot_id=${event.bot_id}, subtype=${event.subtype})`);
+            LogStatus(`Slack: skipping bot/subtype message (bot_id=${logValue(event.bot_id)}, subtype=${logValue(event.subtype)})`);
             return;
         }
 

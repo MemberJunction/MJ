@@ -28,7 +28,7 @@
     <!-- Floating chat overlay — persistent across navigation, hidden during load and in Conversations -->
     @if (IsChatOverlayReady && ShowChatOverlay) {
       <mj-chat-agents-overlay
-        [IsVisible]="!isChatRoute"
+        [IsVisible]="!isChatRoute && !IsChatOverlaySuppressedBySurface"
         [AppContext]="$any(AppContextSnapshot)"
         [EmptyStateGreeting]="'Ask me anything — I can navigate apps, search data, run queries, or help with tasks.'"
         [TopBoundaryPx]="ChatOverlayTopBoundaryPx"

@@ -3,14 +3,15 @@
  * DETERMINISTIC seams, exercised against the live DB + the real compiled driver registry
  * (packages/MJStorage — a subsystem that previously had zero integration coverage).
  *
- * SERVER TRANSPORT, no cloud credentials: every shipped storage driver (AWS S3, Azure Blob,
+ * SERVER TRANSPORT, no cloud credentials: every shipped cloud storage driver (AWS S3, Azure Blob,
  * GCS, Google Drive, Dropbox, Box, SharePoint) demands provider credentials in its CONSTRUCTOR
- * (env-var `.required()` calls), and there is no filesystem/local driver in the package — so a
- * real put/get/list/delete round-trip is structurally impossible in the credential-free CI
- * environment. What IS real and deterministic without credentials — and what this bundle pins:
+ * (env-var `.required()` calls), so a real cloud put/get/list/delete round-trip is structurally
+ * impossible in the credential-free CI environment. (The local file-system driver needs no
+ * credentials; its round-trip is covered by its unit tests in packages/MJStorage.) What IS real
+ * and deterministic without credentials — and what this bundle pins:
  *
  *   - ST1  The seeded provider catalog: `FileStorageEngine.Config` against the live DB loads
- *          the 7 canonical `MJ: File Storage Providers` rows with their EXACT
+ *          the 8 canonical `MJ: File Storage Providers` rows with their EXACT
  *          ServerDriverKey/ClientDriverKey values (the DB half of the dispatch seam).
  *   - ST2  Metadata↔ClassFactory parity: every canonical ServerDriverKey resolves to a REAL
  *          compiled `FileStorageBase` subclass registration — a renamed driver key (either
@@ -100,7 +101,8 @@ const ACTION_ACCESS_DENIED = 'ACCESS_DENIED';
 const UNKNOWN_ACCOUNT_ID = '00000000-0000-0000-0000-0000000000fe';
 
 /**
- * The canonical provider catalog seeded by the baseline migration: display Name → the exact
+ * The canonical provider catalog (the seven cloud rows seeded by the baseline migration, plus the
+ * local file-system row from metadata/file-storage-providers): display Name → the exact
  * ServerDriverKey each row must carry, which must in turn resolve on the ClassFactory. These
  * strings are the dispatch contract between `MJ: File Storage Providers` rows and the
  * `@RegisterClass(FileStorageBase, '<key>')` decorations in packages/MJStorage/src/drivers.
@@ -112,7 +114,8 @@ const CANONICAL_PROVIDERS: ReadonlyArray<{ Name: string; ServerDriverKey: string
     { Name: 'Google Drive', ServerDriverKey: 'Google Drive Storage' },
     { Name: 'Dropbox', ServerDriverKey: 'Dropbox Storage' },
     { Name: 'Box.com', ServerDriverKey: 'Box.com Storage' },
-    { Name: 'SharePoint Storage', ServerDriverKey: 'SharePoint Storage' }
+    { Name: 'SharePoint Storage', ServerDriverKey: 'SharePoint Storage' },
+    { Name: 'Local File System', ServerDriverKey: 'Local File System Storage' }
 ];
 
 /** Ensures the engine is configured against the run-scoped provider before any assertion. */
@@ -141,7 +144,7 @@ async function refusalOf(call: () => Promise<unknown>): Promise<string | null> {
 }
 
 /** ST8's fixture: a storage account (and, when no credential existed to reuse, the credential it points at). */
-interface AccountFixture {
+export interface AccountFixture {
     Account: MJFileStorageAccountEntity;
     CreatedCredential: MJCredentialEntity | null;
     Permissions: MJFileStorageAccountPermissionEntity[];
@@ -151,7 +154,7 @@ interface AccountFixture {
  * The credential a fixture account points at: an existing one when the deployment has any (it is never decrypted —
  * no driver call succeeds in this bundle), else a fresh fixture credential. Null (with the reason) when neither works.
  */
-async function fixtureCredential(ctx: IntegrationCheckContext): Promise<{ ID: string; Created: MJCredentialEntity | null } | string> {
+export async function FixtureCredential(ctx: IntegrationCheckContext): Promise<{ ID: string; Created: MJCredentialEntity | null } | string> {
     const existing = await new RunView().RunView<{ ID: string }>(
         { EntityName: 'MJ: Credentials', Fields: ['ID'], MaxRows: 1, ResultType: 'simple' }, ctx.User);
     if (existing.Success && existing.Results.length > 0) {
@@ -181,16 +184,20 @@ async function fixtureCredential(ctx: IntegrationCheckContext): Promise<{ ID: st
     return { ID: credential.ID, Created: credential };
 }
 
-/** Creates ST8's fixture account on the AWS S3 provider, or returns why it could not. */
-async function createAccountFixture(ctx: IntegrationCheckContext, engine: FileStorageEngine): Promise<AccountFixture | string> {
-    const credential = await fixtureCredential(ctx);
+/** Creates ST8's fixture account on the given provider (defaulting to the AWS S3 provider), or returns why it could not. */
+export async function CreateAccountFixture(
+    ctx: IntegrationCheckContext,
+    engine: FileStorageEngine,
+    provider?: MJFileStorageProviderEntity
+): Promise<AccountFixture | string> {
+    const credential = await FixtureCredential(ctx);
     if (typeof credential === 'string') {
         return credential;
     }
     const account = await ctx.Provider.GetEntityObject<MJFileStorageAccountEntity>('MJ: File Storage Accounts', ctx.User);
     account.NewRecord();
     account.Name = `mj-it-storage-acl-${Date.now()} ${FIXTURE_TAG}`;
-    account.ProviderID = requireProvider(engine, 'AWS S3 Storage').ID;
+    account.ProviderID = (provider ?? requireProvider(engine, 'AWS S3 Storage')).ID;
     account.CredentialID = credential.ID;
     account.IncludeInGlobalSearch = false;
     if (!(await account.Save())) {
@@ -551,7 +558,7 @@ export const StorageChecks: NamedCheck[] = [
             if (!roleID) {
                 SkipCheck('the context user has no role to restrict the fixture account to.');
             }
-            const fixture = await createAccountFixture(ctx, engine);
+            const fixture = await CreateAccountFixture(ctx, engine);
             if (typeof fixture === 'string') {
                 SkipCheck(`no fixture storage account could be created: ${fixture}`);
             }
@@ -579,7 +586,7 @@ export const StorageChecks: NamedCheck[] = [
                 SkipCheck(!roleID ? 'the context user has no role to restrict the fixture account to.'
                     : 'the File Storage core actions are not in the action catalog; push the core action metadata.');
             }
-            const fixture = await createAccountFixture(ctx, engine);
+            const fixture = await CreateAccountFixture(ctx, engine);
             if (typeof fixture === 'string') {
                 SkipCheck(`no fixture storage account could be created: ${fixture}`);
             }

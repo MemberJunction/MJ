@@ -2190,7 +2190,8 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
 
             let filter = dateFilter;
             if (props.agentName) {
-                filter += ` AND Agent LIKE '%${props.agentName}%'`;
+                const escapedAgentName = String(props.agentName).replace(/'/g, "''");
+                filter += ` AND Agent LIKE '%${escapedAgentName}%'`;
             }
             if (props.status !== 'all') {
                 filter += ` AND Status = '${props.status}'`;
@@ -2219,7 +2220,7 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
         description: "Comprehensive summary of an agent run with step-level metadata (excludes large I/O data)",
         scopeInfo: (props) => ({ scopePath: 'agent:monitor', resource: (props as Record<string, unknown>).runId as string || '*' }),
         parameters: z.object({
-            runId: z.string().describe("The agent run ID to summarize")
+            runId: z.string().uuid().describe("The agent run ID to summarize")
         }),
         async execute(props, activeSessionContext) {
             const sessionUser = (activeSessionContext ?? sessionContext).user;
@@ -2290,7 +2291,7 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
         name: "Get_Agent_Run_Step_Detail",
         description: "Detailed information about a specific step including input/output data with smart truncation",
         parameters: z.object({
-            runId: z.string().describe("The agent run ID"),
+            runId: z.string().uuid().describe("The agent run ID"),
             stepNumber: z.number().describe("The step number to retrieve (1-based)"),
             maxChars: z.number().default(5000).describe("Maximum characters for I/O data (0 = no truncation)")
         }),
@@ -2350,12 +2351,11 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
     // Tool 4: Get Agent Run Step Full Data
     addToolWithFilter({
         name: "Get_Agent_Run_Step_Full_Data",
-        description: "Export complete untruncated step data to JSON file for detailed analysis",
+        description: "Return complete untruncated step data in the MCP response for detailed analysis",
         scopeInfo: (props) => ({ scopePath: 'agent:monitor', resource: (props as Record<string, unknown>).runId as string || '*' }),
         parameters: z.object({
-            runId: z.string().describe("The agent run ID"),
-            stepNumber: z.number().describe("The step number to retrieve (1-based)"),
-            outputFile: z.string().optional().describe("File path to write JSON output (optional)")
+            runId: z.string().uuid().describe("The agent run ID"),
+            stepNumber: z.number().describe("The step number to retrieve (1-based)")
         }),
         async execute(props, activeSessionContext) {
             const sessionUser = (activeSessionContext ?? sessionContext).user;
@@ -2380,35 +2380,21 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
             const step = steps[stepNumber - 1];
             const md = new Metadata(); // global-provider-ok: MCP server bootstrap
             const stepData = BuildAgentRunStepExportData(step, steps, sessionUser, md);
-
-            // Determine output file path
-            const runIdShort = (props.runId as string).substring(0, 8);
-            const defaultFile = `./agent-run-${runIdShort}-step-${stepNumber}.json`;
-            const filePath = path.resolve(process.cwd(), (props.outputFile as string) || defaultFile);
-
-            // Write to file
             const jsonContent = JSON.stringify(stepData, null, 2);
-            await fs.writeFile(filePath, jsonContent, 'utf-8');
 
             const response: Record<string, unknown> = {
                 success: true,
-                message: `Step data exported to file`,
-                filePath: filePath,
-                fileSize: jsonContent.length,
+                message: "Step data retrieved",
+                dataSize: jsonContent.length,
                 stepSummary: {
                     stepNumber: step.StepNumber,
                     stepName: step.StepName,
                     status: step.Status,
                     inputLength: step.InputData?.length || 0,
                     outputLength: step.OutputData?.length || 0
-                }
+                },
+                stepData
             };
-
-            // Include inline data if small enough
-            if (jsonContent.length < 10000) {
-                response.inlineData = stepData;
-                response.note = "Data included inline (file also saved)";
-            }
 
             return JSON.stringify(response);
         }

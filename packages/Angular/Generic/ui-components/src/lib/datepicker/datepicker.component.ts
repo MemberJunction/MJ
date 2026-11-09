@@ -6,7 +6,7 @@ import { MJNamedControlBase } from '../a11y/named-control.base';
 import { WarnIfUnnamed } from '../a11y/unnamed-control-guard';
 
 /**
- * mj-datepicker — Date picker with calendar popup. Replaces `<kendo-datepicker>`.
+ * mj-datepicker — Date picker with calendar popup.
  *
  * Without an accessible name the date field announces as "edit, blank" and its calendar popup as a
  * generic "Calendar" — so a form with a start date and an end date presents two identical grids

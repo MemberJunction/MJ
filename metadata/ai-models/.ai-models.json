@@ -3125,7 +3125,7 @@
       "Name": "Llama 3 70b",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 4,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true,
       "ModelConfiguration": {
         "LLM": {
@@ -3165,7 +3165,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "Priority": 50,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "OpenRouterLLM",
             "APIName": "meta-llama/llama-3-70b-instruct",
             "MaxInputTokens": 8192,
@@ -3224,7 +3224,7 @@
       "Description": "Llama 3.1 405 billion parameters",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 5,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true,
       "ModelConfiguration": {
         "LLM": {
@@ -3264,7 +3264,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "Priority": 50,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "OpenRouterLLM",
             "APIName": "meta-llama/llama-3.1-405b-instruct",
             "MaxInputTokens": 128000,
@@ -5605,7 +5605,7 @@
       "Description": "The o1 reasoning model is designed to solve hard problems across domains. o1-mini is a faster and more affordable reasoning model, but we recommend using the newer o3-mini model that features higher intelligence at the same latency and price as o1-mini.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true,
       "ModelConfiguration": {
         "LLM": {
@@ -5664,7 +5664,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "Priority": 50,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "OpenRouterLLM",
             "APIName": "openai/o1-mini",
             "MaxInputTokens": 200000,
@@ -5819,7 +5819,7 @@
       "Description": "First model of the Claude 3.5 model family",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 5,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true,
       "ModelConfiguration": {
         "LLM": {
@@ -5878,7 +5878,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "Priority": 50,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "OpenRouterLLM",
             "APIName": "anthropic/claude-3.5-sonnet",
             "MaxInputTokens": 200000,
@@ -5918,8 +5918,8 @@
             "ID": "7C026453-4873-454F-B861-3E6CDBAB944F"
           },
           "sync": {
-            "lastModified": "2026-06-05T02:25:05.334Z",
-            "checksum": "d36b7efa806c6e66fd07939514332d64275b85e7e290a190ee481ef113971791"
+            "lastModified": "2026-11-01T22:53:21.463Z",
+            "checksum": "8e3130335d9325b38f69292c94a3880815cbe8642beeb984424aeaf9c6a74da2"
           }
         }
       ]
@@ -6741,7 +6741,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "Priority": 50,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "OpenRouterLLM",
             "APIName": "mistralai/mistral-medium",
             "SupportedResponseFormats": "Any",
@@ -6824,7 +6824,7 @@
       "Description": "MoE Model from Mistral AI",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 2,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true,
       "ModelConfiguration": {
         "LLM": {
@@ -6888,7 +6888,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "Priority": 50,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "OpenRouterLLM",
             "APIName": "mistralai/mixtral-8x7b-instruct",
             "MaxInputTokens": 32000,
@@ -7121,7 +7121,7 @@
       "Description": "Deepseek R1/Llama 3.3 70B Distillation",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 9,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 0,
       "CostRank": 0,
       "InheritTypeModalities": true,
@@ -7184,7 +7184,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "Priority": 50,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "OpenRouterLLM",
             "APIName": "deepseek/deepseek-r1-distill-llama-70b",
             "MaxInputTokens": 128000,
@@ -17398,7 +17398,7 @@
             "Priority": 50,
             "Status": "Active",
             "DriverClass": "OpenRouterLLM",
-            "APIName": "mistralai/mistral-medium-3.5",
+            "APIName": "mistralai/mistral-medium-3-5",
             "MaxInputTokens": 256000,
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
@@ -17606,7 +17606,7 @@
       "PowerRank": 19,
       "Description": "Alibaba Cloud's top-tier flagship Qwen model released April 27, 2026. Proprietary, approximately 1T parameter MoE with 262K token context window. Scores #1 on six coding benchmarks. Highest capability tier in the Qwen 3.6 family. Available via Alibaba's DashScope API.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 7,
       "CostRank": 6,
       "InheritTypeModalities": true,
@@ -17673,7 +17673,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "Priority": 50,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "OpenRouterLLM",
             "APIName": "qwen/qwen3.6-max-preview",
             "MaxInputTokens": 262144,
@@ -17722,16 +17722,17 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "StartedAt": "2026-04-27T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 1.04,
             "OutputPricePerUnit": 6.24,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Qwen 3.6 Max Preview on OpenRouter (passthrough). Source: https://openrouter.ai/qwen/qwen3.6-max-preview",
+            "Comments": "Qwen 3.6 Max Preview on OpenRouter (passthrough). Source: https://openrouter.ai/qwen/qwen3.6-max-preview Expired: OpenRouter retired qwen/qwen3.6-max-preview on 2026-10-09 (announced date); the id is absent from openrouter.ai/api/v1/models as of 2026-10-20.",
             "CacheReadPricePerUnit": null,
-            "CacheWritePricePerUnit": null
+            "CacheWritePricePerUnit": null,
+            "EndedAt": "2026-10-09T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "35E5C2D6-C32A-4D4C-8271-0F909D6F850A"
@@ -18645,7 +18646,7 @@
             "Priority": 50,
             "Status": "Active",
             "DriverClass": "OpenRouterLLM",
-            "APIName": "qwen/qwen3.8-max",
+            "APIName": "qwen/qwen3.8-max-0902",
             "MaxInputTokens": 991800,
             "MaxOutputTokens": 131072,
             "SupportedResponseFormats": "Any",
@@ -20180,7 +20181,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "Priority": 50,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "OpenRouterLLM",
             "APIName": "mistralai/magistral-medium-2509",
             "MaxInputTokens": 128000,
@@ -20228,14 +20229,15 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "StartedAt": "2025-09-18T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 2,
             "OutputPricePerUnit": 5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Magistral Medium 1.2 on OpenRouter (passthrough pricing). Source: OpenRouter Mistral models listing."
+            "Comments": "Magistral Medium 1.2 on OpenRouter (passthrough pricing). Source: OpenRouter Mistral models listing. Expired: mistralai/magistral-medium-2509 is not on openrouter.ai/api/v1/models (2026-10-20) and no Magistral id is listed there; EndedAt is the observation date, not a published sunset date.",
+            "EndedAt": "2026-10-20T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "8EFB2986-9A24-49DD-8CA3-935B2CB02450"
@@ -20356,7 +20358,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "Priority": 50,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "OpenRouterLLM",
             "APIName": "mistralai/magistral-small-2509",
             "MaxInputTokens": 128000,
@@ -20404,14 +20406,15 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "StartedAt": "2025-09-18T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 0.5,
             "OutputPricePerUnit": 1.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Magistral Small 1.2 on OpenRouter (passthrough pricing)."
+            "Comments": "Magistral Small 1.2 on OpenRouter (passthrough pricing). Expired: mistralai/magistral-small-2509 is not on openrouter.ai/api/v1/models (2026-10-20) and no Magistral id is listed there; EndedAt is the observation date, not a published sunset date.",
+            "EndedAt": "2026-10-20T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "148C5D7D-6E0A-4831-BAFF-5B9EF838A8DC"
@@ -23010,7 +23013,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "Priority": 50,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "OpenRouterLLM",
             "APIName": "anthropic/claude-opus-5-fast",
             "MaxInputTokens": 1000000,
@@ -23059,16 +23062,17 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "StartedAt": "2026-07-24T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 10,
             "OutputPricePerUnit": 50,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Opus 5 Fast on OpenRouter (passthrough pricing, 2x standard Opus 5). Source: https://openrouter.ai/anthropic/claude-opus-5-fast",
+            "Comments": "Claude Opus 5 Fast on OpenRouter (passthrough pricing, 2x standard Opus 5). Source: https://openrouter.ai/anthropic/claude-opus-5-fast Expired: anthropic/claude-opus-5-fast is absent from openrouter.ai/api/v1/models as of 2026-10-20 (the listing carried a deprecation notice); EndedAt is the observation date, not a published sunset date.",
             "CacheReadPricePerUnit": null,
-            "CacheWritePricePerUnit": null
+            "CacheWritePricePerUnit": null,
+            "EndedAt": "2026-10-20T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "8EEA0010-913E-4848-8443-8FADDE46B309"
@@ -24977,6 +24981,46 @@
             "checksum": "90e8f9254bfaa3dff4c8430693eb1e4b041911b5a559139c9ae12967845b1707"
           }
         }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/gif,image/webp",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "AE716540-1FAE-4DDD-9F62-B1003C0AC0FF"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.031Z",
+            "checksum": "1ddec9afb6a11edbba5f48279bda146ba6d45de97aa9afc4a207c89adcd75a5e"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=File",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "application/pdf",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "5F9B92B6-CF8D-4081-B966-6DBE0A9F8F81"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.045Z",
+            "checksum": "3b77d9a6f1c579eef20117cdc31dc5639080a3da17720076ceb4fbf776350206"
+          }
+        }
       ]
     },
     "primaryKey": {
@@ -25327,6 +25371,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "StartedAt": "2026-09-02T00:00:00.000Z",
+            "EndedAt": "2027-01-01T00:00:00.000Z",
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
@@ -25334,7 +25379,7 @@
             "OutputPricePerUnit": 3.75,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 3.8 Flash INTRODUCTORY pricing on Google direct as of the September 2, 2026 GA launch: $0.75/1M input, $3.75/1M output, $0.075/1M cached input. INTRO WINDOW: through December 31, 2026. STANDARD PRICING FROM JANUARY 1, 2027: $1.50/1M input, $7.50/1M output, with cached input doubling to $0.15/1M. A reviewer should expire this row and add a standard-rate row before the intro window closes. Google does not charge for cache writes, so CacheWritePricePerUnit is null. Sources: https://ai.google.dev/gemini-api/docs/latest-model ; https://deepmind.google/models/model-cards/gemini-3-8-flash/",
+            "Comments": "Gemini 3.8 Flash INTRODUCTORY pricing on Google direct as of the September 2, 2026 GA launch: $0.75/1M input, $3.75/1M output, $0.075/1M cached input. INTRO WINDOW: through December 31, 2026. STANDARD PRICING FROM JANUARY 1, 2027: $1.50/1M input, $7.50/1M output, with cached input doubling to $0.15/1M. This row is window-closed at 2027-01-01 and the successor row at $1.50/$7.50 takes over automatically (GetModelCost selects on Status='Active' AND the StartedAt/EndedAt window), so the cutover needs no further edit. Window closed 2026-11-09. Google does not charge for cache writes, so CacheWritePricePerUnit is null. Intro-window end and the January 1, 2027 standard rates re-confirmed 2026-11-09; ai.google.dev was not directly reachable from the research environment, so the confirmation is a server-side read of the Gemini API pricing page rather than a direct fetch. Sources: https://ai.google.dev/gemini-api/docs/latest-model ; https://deepmind.google/models/model-cards/gemini-3-8-flash/",
             "CacheReadPricePerUnit": 0.075,
             "CacheWritePricePerUnit": null
           },
@@ -25351,6 +25396,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
             "StartedAt": "2026-09-02T00:00:00.000Z",
+            "EndedAt": "2027-01-01T00:00:00.000Z",
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
@@ -25358,7 +25404,7 @@
             "OutputPricePerUnit": 3.75,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 3.8 Flash INTRODUCTORY pricing on Vertex AI (Gemini Enterprise Agent Platform) as of September 2, 2026 GA. Matches Google direct: $0.75/$3.75 per 1M with $0.075/1M cache read and no cache-write charge. Intro window runs through 2026-12-31; standard $1.50/$7.50 applies from 2027-01-01. Cross-region inference may add a Vertex-side surcharge on top of these figures. Sources: https://cloud.google.com/vertex-ai/generative-ai/pricing ; https://ai.google.dev/gemini-api/docs/latest-model",
+            "Comments": "Gemini 3.8 Flash INTRODUCTORY pricing on Vertex AI (Gemini Enterprise Agent Platform) as of September 2, 2026 GA. Matches Google direct: $0.75/$3.75 per 1M with $0.075/1M cache read and no cache-write charge. Intro window runs through 2026-12-31; standard $1.50/$7.50 applies from 2027-01-01. Cross-region inference may add a Vertex-side surcharge on top of these figures. Intro-window end and the January 1, 2027 standard rates re-confirmed 2026-11-09; ai.google.dev was not directly reachable from the research environment, so the confirmation is a server-side read of the Gemini API pricing page rather than a direct fetch. Sources: https://cloud.google.com/vertex-ai/generative-ai/pricing ; https://ai.google.dev/gemini-api/docs/latest-model",
             "CacheReadPricePerUnit": 0.075,
             "CacheWritePricePerUnit": null
           },
@@ -25368,6 +25414,124 @@
           "sync": {
             "lastModified": "2026-09-10T17:40:34.449Z",
             "checksum": "c04c5558e327ecb53522adf5d3afabf805f83be22ed7bc23f672a89e20186ca6"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2027-01-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.5,
+            "OutputPricePerUnit": 7.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 3.8 Flash (gemini-3.8-flash) standard (post-introductory) pricing on Google direct, effective January 1, 2027: $1.50/1M input, $7.50/1M output, $0.15/1M cached input (output price includes thinking tokens). Exactly 2x the introductory $0.75/$3.75 rate that runs through December 31, 2026. Not selected by GetModelCost until StartedAt passes, so the cutover from the introductory row needs no further edit. Batch is half rate ($0.75/$3.75). Google does not charge for cache writes, so CacheWritePricePerUnit is null. Source: https://ai.google.dev/gemini-api/docs/pricing (read 2026-11-09 via server-side search; the host is not directly reachable from the research environment).",
+            "CacheReadPricePerUnit": 0.15,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "9DFB2970-EE65-4D59-B375-F376C9B1C802"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "StartedAt": "2027-01-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.5,
+            "OutputPricePerUnit": 7.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 3.8 Flash standard (post-introductory) pricing on Vertex AI, effective January 1, 2027: $1.50/1M input, $7.50/1M output, $0.15/1M cached input. Mirrored from the Gemini Developer API pricing page, matching the parity MJ has carried on this pair since the September 2, 2026 GA; the Vertex AI pricing page was not independently readable on 2026-11-09. Cross-region inference may add a Vertex-side surcharge on top of these figures. Sources: https://ai.google.dev/gemini-api/docs/pricing ; https://cloud.google.com/vertex-ai/generative-ai/pricing",
+            "CacheReadPricePerUnit": 0.15,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "75530021-C5C9-4DC7-BFC7-A1BC2F528024"
+          }
+        }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/gif,image/webp",
+            "MaxSizeBytes": 20971520,
+            "MaxCountPerMessage": 10,
+            "Comments": "Matches GeminiLLM.GetFileCapabilities in packages/AI/Providers/Gemini/src/index.ts."
+          },
+          "primaryKey": {
+            "ID": "1E2AAB59-4075-4C9F-A276-7F20C736DFAB"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.286Z",
+            "checksum": "ef3a19d01530422a8905c8f6278211ebce792ebe2c213d9b655e2cf0a44a3046"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "audio/mp3,audio/wav,audio/ogg",
+            "MaxSizeBytes": 20971520,
+            "MaxCountPerMessage": 10,
+            "Comments": "Matches GeminiLLM.GetFileCapabilities in packages/AI/Providers/Gemini/src/index.ts."
+          },
+          "primaryKey": {
+            "ID": "F301C48F-BE96-49F5-AF9A-C9BCF2A1C4F4"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.300Z",
+            "checksum": "bf4242712add585cbf78adaa8f2c7a839740bb3be783c03297dccba55161815a"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Video",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "video/mp4,video/webm",
+            "MaxSizeBytes": 20971520,
+            "MaxCountPerMessage": 10,
+            "Comments": "Matches GeminiLLM.GetFileCapabilities in packages/AI/Providers/Gemini/src/index.ts."
+          },
+          "primaryKey": {
+            "ID": "645E6041-270C-443C-9356-E59A48C892ED"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.315Z",
+            "checksum": "511b268236e57bfe862eaf2873500e02fc8b074f4c294c00db5245d051a5ac99"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=File",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "application/pdf",
+            "MaxSizeBytes": 20971520,
+            "MaxCountPerMessage": 10,
+            "Comments": "Matches GeminiLLM.GetFileCapabilities in packages/AI/Providers/Gemini/src/index.ts."
+          },
+          "primaryKey": {
+            "ID": "8E3003CB-2644-4A55-93B9-48A1FE054703"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.330Z",
+            "checksum": "be915a76c2ab55c495b391ec91e5d6c0f38e4613fb0253817f0af088ff817905"
           }
         }
       ]
@@ -26668,6 +26832,46 @@
             "checksum": "883069baf372dddcefdc409fe613d9939ed2d6f2ed16def6357eec29b062cbdb"
           }
         }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/gif,image/webp",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "4D7FA56D-5EA8-42EC-B680-7460837DBCE2"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.346Z",
+            "checksum": "1ddec9afb6a11edbba5f48279bda146ba6d45de97aa9afc4a207c89adcd75a5e"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=File",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "application/pdf",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "7EAD0516-4D00-446B-AB6C-C43C53C10B6F"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.361Z",
+            "checksum": "3b77d9a6f1c579eef20117cdc31dc5639080a3da17720076ceb4fbf776350206"
+          }
+        }
       ]
     },
     "primaryKey": {
@@ -27910,6 +28114,46 @@
             "checksum": "68da04f4440ca7c8b3ea596210ab58d1d49064d913a6ccc002e06b5a3d73b3cf"
           }
         }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/gif,image/webp",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "8B150E82-F4CD-444D-808D-A3B11D15E458"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.237Z",
+            "checksum": "1ddec9afb6a11edbba5f48279bda146ba6d45de97aa9afc4a207c89adcd75a5e"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=File",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "application/pdf",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "40033019-353B-40A2-BFF2-0FFF317BA7A6"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.252Z",
+            "checksum": "3b77d9a6f1c579eef20117cdc31dc5639080a3da17720076ceb4fbf776350206"
+          }
+        }
       ]
     },
     "primaryKey": {
@@ -28349,7 +28593,7 @@
   {
     "fields": {
       "Name": "Mistral Large 4",
-      "Description": "Mistral AI's largest open-weight model (public preview, October 6, 2026). Granular Mixture-of-Experts: 1.05T total parameters with 52B active, plus a 1.6B vision encoder. Natively multimodal, general purpose, with a 1M token context window. Mistral states weights will be published at the end of October 2026; until then the preview is being red-teamed with cybersecurity partners. Available through the Mistral API and Mistral Studio. Launch pricing is 50% off for two weeks from release; the standard rates are $1.36 input / $0.14 cached input / $4.18 output per 1M tokens.",
+      "Description": "Mistral AI's largest open-weight model (public preview, October 6, 2026). Granular Mixture-of-Experts: 1.05T total parameters with 52B active, plus a 1.6B vision encoder. Natively multimodal, general purpose, with a 1M token context window. Mistral states weights will be published at the end of October 2026; until then the preview is being red-teamed with cybersecurity partners. Available through the Mistral API and Mistral Studio. Launch pricing was 50% off for two weeks from release, then $1.36 input / $0.14 cached input / $4.18 output per 1M tokens from 2026-10-20. On 2026-10-29 Mistral published the weights (Mistral Ecosystem Open-Weight License) and cut the price to $0.70 input / $0.07 cached input / $2.10 output per 1M tokens.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 22,
       "IsActive": true,
@@ -28446,7 +28690,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
             "StartedAt": "2026-10-20T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 1.36,
@@ -28455,14 +28699,39 @@
             "ProcessingType": "Realtime",
             "CacheReadPricePerUnit": 0.14,
             "CacheWritePricePerUnit": null,
-            "Comments": "Mistral Large 4 standard (post-promotion) pricing: $1.36 input / $0.14 cached input / $4.18 output per 1M tokens. These are the pre-discount list figures Mistral published at the 2026-10-06 launch and recorded first-party in MJ on 2026-10-12 from https://mistral.ai/pricing/api/ and https://docs.mistral.ai/resources/changelogs. StartedAt is release + the changelog's \"50% off for two weeks\" term; Mistral published no explicit discount end date, so if the promotion was extended this row starts early and the expired $0.68/$2.09 row should be re-opened. Mistral's own pages were unreachable from the 2026-10-19 research session, so the date was not re-verified that week."
+            "Comments": "Mistral Large 4 standard (post-promotion) pricing: $1.36 input / $0.14 cached input / $4.18 output per 1M tokens. These are the pre-discount list figures Mistral published at the 2026-10-06 launch and recorded first-party in MJ on 2026-10-12 from https://mistral.ai/pricing/api/ and https://docs.mistral.ai/resources/changelogs. StartedAt is release + the changelog's \"50% off for two weeks\" term; Mistral published no explicit discount end date, so if the promotion was extended this row starts early and the expired $0.68/$2.09 row should be re-opened. Mistral's own pages were unreachable from the 2026-10-19 research session, so the date was not re-verified that week. EXPIRED 2026-10-29: Mistral cut Large 4 to $0.70 input / $0.07 cached input / $2.10 output per 1M tokens when it published the open weights, effective 2026-10-29. Superseded by the row starting 2026-10-29. Row preserved for historical pricing lookups. Source: https://docs.mistral.ai/models/mistral-large-4-0 ; https://mistral.ai/news/mistral-large-4-oss/",
+            "EndedAt": "2026-10-29T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "C028672F-4B05-454F-A6EB-CDC57C5D42A8"
           },
           "sync": {
-            "lastModified": "2026-10-20T23:18:42.552Z",
-            "checksum": "f7855827c02d92588913f20184b6970d6a88404b13a4d2913f83ac8f18f08c42"
+            "lastModified": "2026-11-01T22:53:22.066Z",
+            "checksum": "eef7fe088d898d1c0b1ed4ec0a375ca6915aa85b67336759abf6ecf455fe10a3"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "StartedAt": "2026-10-29T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.7,
+            "OutputPricePerUnit": 2.1,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": 0.07,
+            "CacheWritePricePerUnit": null,
+            "Comments": "Mistral Large 4 price cut, effective 2026-10-29 alongside the open-weight release: $0.70 input / $0.07 cached input / $2.10 output per 1M tokens, with no stated end date (reported as permanent). Read first-party on 2026-11-01 from the Mistral model page; matches the Mistral-served endpoints on OpenRouter (mistralai/mistral-large-4-0, $0.70/$2.10, cached $0.07; EU-region endpoint $0.77/$2.31, not modelled). Mistral's general pricing page did not list Large 4 yet. Sources: https://docs.mistral.ai/models/mistral-large-4-0 ; https://mistral.ai/news/mistral-large-4-oss/ ; https://openrouter.ai/api/v1/models/mistralai/mistral-large-4-0/endpoints"
+          },
+          "primaryKey": {
+            "ID": "FC1B61E9-C479-4A09-BCEE-46612170F01B"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.084Z",
+            "checksum": "1edc9eae9b098b4cfeff55db42b07b7fb97d18f90b17d098d4e35429e7603d3e"
           }
         }
       ]
@@ -28471,8 +28740,8 @@
       "ID": "BE2A6CFF-7AC9-4742-851C-04399DA91214"
     },
     "sync": {
-      "lastModified": "2026-10-13T18:59:58.794Z",
-      "checksum": "5c6cd5d8c752dcea24ae1ef3b0bd4647f320a1774fe67bf841b344eef0b2c8d1"
+      "lastModified": "2026-11-01T22:53:21.613Z",
+      "checksum": "7fce7f4338421b23dc281e534a0f4b486154ca2ad19028d2956c86b699f9ad32"
     }
   },
   {
@@ -28747,6 +29016,257 @@
   },
   {
     "fields": {
+      "Name": "FLUX 3 Video",
+      "Description": "Black Forest Labs' FLUX 3 unified audiovisual generation model for video. Supports text-to-video, image-to-video, keyframes, continuation and synchronized audio in 5-20 s clips (vendor-reported, October 2026; checked against docs.bfl.ai on 2026-10-16 (VS-GEN-3)).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Video",
+      "PowerRank": 10,
+      "SpeedRank": 2,
+      "CostRank": 9,
+      "IsActive": true,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "F86417BD-3F9E-4A34-BD5F-A21A0773923E"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.673Z",
+            "checksum": "928d83191557527cd391b99c8d54a972a0ff0b2de9cdc7a4f2894b7669ff0828"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "FLUX3VideoGenerator",
+            "APIName": "flux-3-video",
+            "MaxInputTokens": 10000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "6FFB611C-E418-4EE0-BCE4-28B573FC74AD"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.697Z",
+            "checksum": "915c8b6128a2b176430f45b4d0a0a72710eb33e5906d21e64b5d8bba658f34bc"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "StartedAt": "2026-10-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "InputPricePerUnit": 0,
+            "OutputPricePerUnit": 0.45,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Second",
+            "ProcessingType": "Realtime",
+            "Comments": "Fallback estimate only: the driver records BFL's own cost per call. Per second of output at the highest published rate, video-to-video (continuation) UHD, $0.45/s (45 credits; 1 credit = $0.01). Published range: Draft HD $0.06/s; text/image to video HD $0.15, FHD $0.24, QHD $0.28, UHD $0.41; video to video HD $0.21, FHD $0.27, QHD $0.31, UHD $0.45. MJ: AI Model Costs holds one price per model, so this errs high. Source: https://bfl.ai/pricing, read 2026-10-16.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "7290F8F0-6BB6-4053-A912-5BEDCE835B7C"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.745Z",
+            "checksum": "ce129be5bab32930d73baac0b40fa0487a19a45cdda6e9899cd676a9dbe033dc"
+          }
+        }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/webp",
+            "MaxCountPerMessage": 10,
+            "Comments": "reference images and keyframes, up to 10, vendor-reported"
+          },
+          "primaryKey": {
+            "ID": "EB46428D-AE90-4745-8264-F7710D11CE0A"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.791Z",
+            "checksum": "a02cc24bbf7edcd0d3bd5c183b00d7d227766f1b4df29aebfe81c47952ab4974"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Video",
+            "Direction": "Input",
+            "IsSupported": true,
+            "MaxCountPerMessage": 1,
+            "Comments": "source clip for continuation (v2v)"
+          },
+          "primaryKey": {
+            "ID": "2FEB1262-7E67-46AA-844B-6608EEFEE7F3"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.809Z",
+            "checksum": "63c73c638d49121129968341680035b50a8c9e61742eeb02e7cf0a6f6352e356"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+            "Direction": "Output",
+            "IsSupported": true,
+            "Comments": "synchronized audio"
+          },
+          "primaryKey": {
+            "ID": "0CF82BC5-E82C-4235-9D3B-608605E5CEA4"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.826Z",
+            "checksum": "7788a016f4910b89963c1e10cc97ad9171d138d506a777da7de22d67c2e4c639"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "CC202FFC-2015-4C8C-8A6D-8BB30ADBFE2D"
+    },
+    "sync": {
+      "lastModified": "2026-11-01T22:53:21.345Z",
+      "checksum": "21af9086e48dcaef2d096dd8e777b6153ebad02abfc10b8a4c3a7ff30cb91026"
+    }
+  },
+  {
+    "fields": {
+      "Name": "FLUX 3 Image",
+      "Description": "Black Forest Labs' FLUX 3 image generation and editing model. Supports text-to-image and multi-reference image input (up to 10 reference images, vendor-reported, October 2026; checked against docs.bfl.ai on 2026-10-16 (VS-GEN-3)).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Image Generator",
+      "PowerRank": 11,
+      "SpeedRank": 7,
+      "CostRank": 6,
+      "IsActive": true,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "A16EB867-6ED6-460C-AAB7-EEAB71665918"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.845Z",
+            "checksum": "928d83191557527cd391b99c8d54a972a0ff0b2de9cdc7a4f2894b7669ff0828"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "FLUXImageGenerator",
+            "APIName": "flux-3-image",
+            "MaxInputTokens": 10000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "A55AAC36-729E-46C8-8912-830FF7FA991F"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.862Z",
+            "checksum": "c7b1a01ff4c28a6843480596e39f23ce0957f9a603cc23750d3e0824d5df1d22"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "StartedAt": "2026-10-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "InputPricePerUnit": 0,
+            "OutputPricePerUnit": 0.607,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Image",
+            "ProcessingType": "Realtime",
+            "Comments": "Fallback estimate only: the driver records BFL's own cost per call. Per image at the highest published tier, 4K, $0.607. Published tiers: 768x768 $0.041, 1K $0.048, 1.5K $0.07, 2K $0.10, 4K $0.607. Reference images and prompts are not charged. MJ: AI Model Costs holds one price per model, so this errs high. Source: https://bfl.ai/pricing, read 2026-10-16.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "B024CB0E-7FAA-4455-94A1-764F3C1F11FD"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.876Z",
+            "checksum": "d457b74a0468aeec3f41f4a5eff8e610a1c6133e09a6580354cacdd9953a5789"
+          }
+        }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/webp",
+            "MaxCountPerMessage": 10,
+            "Comments": "reference images, up to 10, vendor-reported"
+          },
+          "primaryKey": {
+            "ID": "33E8D1E4-2B4F-4960-A3A5-EC470C607FD7"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.889Z",
+            "checksum": "b103a806a993d2873776b627d42cc062f501f208d83ce3e52615ff2cce437bbc"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "DADFD72E-77AB-4699-AE68-578AB4EF0534"
+    },
+    "sync": {
+      "lastModified": "2026-11-01T22:53:21.361Z",
+      "checksum": "26ebb994b82846ed76ad8e9b40b1fed0cb41cc08dbc6d3185821d8360cd8381d"
+    }
+  },
+  {
+    "fields": {
       "Name": "Gemini 4 Argon",
       "PowerRank": 28,
       "Description": "Google's flagship Gemini 4 reasoning model (gemini-4-argon), announced September 30, 2026 and globally released October 13, 2026 as the successor to Gemini 3.1 Pro. Built for complex software engineering, multi-step autonomous agents, deep scientific/mathematical problem-solving, and executive knowledge work. Unified 1,000,000-token context window for both input and output (capable of up to 1M output tokens in a single response), tunable thinking effort levels (low, medium, high), function calling, structured outputs, and multimodal inputs. Introductory pricing through November 30, 2026 is $2.00/1M input, $10.00/1M output, and $0.10/1M cached input; standard pricing from December 1, 2026 steps up to $4.00/1M input, $20.00/1M output, and $0.20/1M cached input.",
@@ -28881,6 +29401,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "StartedAt": "2026-10-13T00:00:00.000Z",
+            "EndedAt": "2026-12-01T00:00:00.000Z",
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
@@ -28888,7 +29409,7 @@
             "OutputPricePerUnit": 10,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 4 Argon (gemini-4-argon) introductory pricing on Google direct as of the October 13, 2026 GA launch: $2.00/1M input, $10.00/1M output, $0.10/1M cached input through November 30, 2026. Standard pricing from December 1, 2026 steps up to $4.00/1M input, $20.00/1M output, $0.20/1M cached input.",
+            "Comments": "Gemini 4 Argon (gemini-4-argon) introductory pricing on Google direct as of the October 13, 2026 GA launch: $2.00/1M input, $10.00/1M output, $0.10/1M cached input. Introductory period ends November 30, 2026, so this row is window-closed at 2026-12-01 and the successor row at $4.00/$20.00 takes over automatically (GetModelCost selects on Status='Active' AND the StartedAt/EndedAt window). Confirmed 2026-11-02 against the Gemini Developer API pricing page: https://ai.google.dev/gemini-api/docs/pricing",
             "CacheReadPricePerUnit": 0.1,
             "CacheWritePricePerUnit": null
           },
@@ -28896,8 +29417,8 @@
             "ID": "A4E82C91-71F4-4B83-9D12-8C3A4E5F6006"
           },
           "sync": {
-            "lastModified": "2026-10-20T23:18:42.766Z",
-            "checksum": "7ad33615b5e76d3e7005f894aaa54ee60b9727da9df8664a5b83c4950de8e8d2"
+            "lastModified": "2026-11-03T23:46:02.082Z",
+            "checksum": "0132b76753e68f15f2978b3ace37908bbebc5e929d23cca63bf606e8f67af000"
           }
         },
         {
@@ -28905,6 +29426,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
             "StartedAt": "2026-10-13T00:00:00.000Z",
+            "EndedAt": "2026-12-01T00:00:00.000Z",
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
@@ -28912,7 +29434,7 @@
             "OutputPricePerUnit": 10,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 4 Argon (gemini-4-argon) introductory pricing on Vertex AI at parity with Google direct: $2.00/1M input, $10.00/1M output, $0.10/1M cached input through November 30, 2026 ($4.00/$20.00 standard from December 1, 2026).",
+            "Comments": "Gemini 4 Argon (gemini-4-argon) introductory pricing on Vertex AI at parity with Google direct: $2.00/1M input, $10.00/1M output, $0.10/1M cached input. Window-closed at 2026-12-01 when the introductory period ends; successor row at $4.00/$20.00 takes over automatically. Rate mirrored from the Gemini Developer API pricing page (https://ai.google.dev/gemini-api/docs/pricing) as MJ has carried this pair at parity since launch; the Vertex AI pricing page was not independently readable on 2026-11-02.",
             "CacheReadPricePerUnit": 0.1,
             "CacheWritePricePerUnit": null
           },
@@ -28920,8 +29442,56 @@
             "ID": "A4E82C91-71F4-4B83-9D12-8C3A4E5F6007"
           },
           "sync": {
-            "lastModified": "2026-10-20T23:18:42.778Z",
-            "checksum": "f28f35dc9c3a59eb98d04882fdfa4f12aafd27faada8c80294b08a638cc04bf3"
+            "lastModified": "2026-11-03T23:46:02.089Z",
+            "checksum": "ddb4b8590c0c4da7a500b2a0848cbfb8205188c6c3b03c9eb55d9540e4056a79"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-12-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 4,
+            "OutputPricePerUnit": 20,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 4 Argon (gemini-4-argon) standard (post-introductory) pricing on Google direct, effective December 1, 2026: $4.00/1M input, $20.00/1M output, $0.20/1M cached input (output price includes thinking tokens). Not selected by GetModelCost until StartedAt passes, so the cutover from the $2.00/$10.00 introductory row needs no further edit. Confirmed 2026-11-02 from the Gemini Developer API pricing page: https://ai.google.dev/gemini-api/docs/pricing",
+            "CacheReadPricePerUnit": 0.2,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "00F4F41D-AC4D-48D8-B763-C48FB68D2CB7"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:46:02.153Z",
+            "checksum": "881bfa5241de5dc5d8527ce598ca8525e39aaee93f7381addcc24b2c0050ed7e"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "StartedAt": "2026-12-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 4,
+            "OutputPricePerUnit": 20,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 4 Argon (gemini-4-argon) standard (post-introductory) pricing on Vertex AI, effective December 1, 2026: $4.00/1M input, $20.00/1M output, $0.20/1M cached input. Mirrored from the Gemini Developer API pricing page (https://ai.google.dev/gemini-api/docs/pricing), matching the parity MJ has carried on this pair since launch; the Vertex AI pricing page was not independently readable on 2026-11-02. Note the Developer API page states non-global endpoints run roughly 10% above global.",
+            "CacheReadPricePerUnit": 0.2,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "07DA0DD5-0AEB-4DC3-B795-724B64973AFE"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:46:02.168Z",
+            "checksum": "d7aafc38428fb22ab06eb489c2f944a3406d96bb74633796921a2795516d0341"
           }
         }
       ]
@@ -29223,6 +29793,7 @@
             "DriverClass": "OpenRouterLLM",
             "APIName": "meta/muse-spark-open",
             "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 943718,
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
@@ -29252,7 +29823,7 @@
             "ProcessingType": "Realtime",
             "CacheReadPricePerUnit": 0.15,
             "CacheWritePricePerUnit": null,
-            "Comments": "Muse Spark Open on OpenRouter (meta/muse-spark-open): $1.25/$4.25 per 1M with 1M context, listed as released 2026-10-15. Together AI publishes the same $1.25/$4.25 with $0.15/1M cached input, and the cache-read figure here comes from that Together AI rate card rather than from OpenRouter, which did not publish one — treat it as indicative for this route. MaxOutputTokens is deliberately omitted: no source consulted published an output cap. A cheaper \"Contributor\" tier ($0.10/$0.20) exists on the Muse Spark line in exchange for letting Meta train on your traffic, with a 60 rpm cap; it is a separate SKU and is not modelled. OpenRouter was unreachable from the 2026-10-19 research session, so these figures come from its indexed listing page rather than a live read of /api/v1/models. Source: https://openrouter.ai/meta/muse-spark-open"
+            "Comments": "Muse Spark Open on OpenRouter (meta/muse-spark-open): $1.25/$4.25 per 1M with 1M context, listed as released 2026-10-15. Together AI publishes the same $1.25/$4.25 with $0.15/1M cached input; the cache-read figure was first taken from that Together AI rate card because OpenRouter's indexed listing page did not show one during the 2026-10-19 session. MaxOutputTokens (943,718) is top_provider.max_completion_tokens from a live read of openrouter.ai/api/v1/models on 2026-10-20, which also lists input_cache_read at $0.15/1M, confirming the cache-read figure for this route. A cheaper \"Contributor\" tier ($0.10/$0.20) exists on the Muse Spark line in exchange for letting Meta train on your traffic, with a 60 rpm cap; it is a separate SKU and is not modelled. OpenRouter was unreachable from the 2026-10-19 research session, so the input and output prices recorded that day came from its indexed listing page; the 2026-10-20 live read above supersedes that for MaxOutputTokens and cache read. Source: https://openrouter.ai/meta/muse-spark-open"
           },
           "primaryKey": {
             "ID": "DF04F33C-02C0-414A-8E25-E9612DF356F5"
@@ -29692,6 +30263,29 @@
             "lastModified": "2026-10-28T00:35:14.650Z",
             "checksum": "fc45354cefb4e16f28ecec4a558646bb401bfb8299652671c5c1375d6d3a2be2"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "minimax/minimax-m3.1-flash",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "A9AB1F2F-EA8B-4EBE-BB1F-9509FCF5B528"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.917Z",
+            "checksum": "fb8b00d2a2a9962a4bfd9c8a76a7a5fdcd35bf24e75855303d444fd7a6b727f5"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -29727,6 +30321,846 @@
     "sync": {
       "lastModified": "2026-10-28T00:35:14.177Z",
       "checksum": "17a457ad2f79367c5794f1af6bbd21177c52f704f4093b522c1c413858094761"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GPT-6.1 Terra",
+      "PowerRank": 23,
+      "Description": "OpenAI's GPT-6.1 mid-tier Terra model, released October 26, 2026 as the successor to GPT-5.6 Terra; it sits below GPT-6.1 Sol in the GPT-6.1 series and is aimed at everyday agentic, coding and writing work, with strong screenshot understanding. 1,050,000-token context (922K max input), 128K max output. Text and image input, text output. Reasoning effort none, low, medium (default), high, xhigh and max (unlike GPT-6.1 Sol, it accepts none). Function calling, structured outputs and streaming supported on Chat Completions, Responses and Batch. Priced at $1/$5 per 1M, cached input $0.05, cache writes $1.25 (30-minute retention) or $2.50 (12-hour) - half of GPT-5.6 Terra and GPT-6.1 Sol. A prompt above 272K input tokens re-rates the whole request at 2x input and cache rates and 1.5x output ($2/$7.50, cached $0.10); that long-context tier is not modelled. Available on the OpenAI API, Amazon Bedrock (openai.gpt-6.1-terra, lifecycle start 2026-10-23) and OpenRouter. Microsoft Foundry availability is not confirmed and not modelled. OpenRouter's GPT-6.1 Terra Pro is the same model with reasoning mode set to pro, not a separate OpenAI model id, so it is not modelled. Sources: https://developers.openai.com/api/docs/models/gpt-6.1-terra ; https://openai.com/index/introducing-gpt-6-1-terra/",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 3,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT 5.6-terra",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "805AC0E9-D046-4D1D-968C-B8DB05584A2B"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.105Z",
+            "checksum": "db9988b1fb179ac0486cdcb4e12b30449b84028f060dab24f6d2084074045fe3"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAILLM",
+            "APIName": "gpt-6.1-terra",
+            "MaxInputTokens": 922000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "7BA1A5E1-1F03-461D-817B-96B47A772516"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.122Z",
+            "checksum": "17c9a35f4fe05692417fb9b31a66d28d8d70b957b0cee7c1028513b03ddeb4f0"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "BedrockLLM",
+            "APIName": "openai.gpt-6.1-terra",
+            "MaxInputTokens": 922000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
+          },
+          "primaryKey": {
+            "ID": "72CA6C87-A37C-4017-9D44-A6F52D76CFA6"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.145Z",
+            "checksum": "702a0fc7aaca5b481f1166c7602c372c7f73f84ab65a92e3d0da6c03728b5f82"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/gpt-6.1-terra",
+            "MaxInputTokens": 922000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "59B1AFCF-02F9-4F7D-BE7F-0E397C7244F9"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.163Z",
+            "checksum": "5d18c6f8541d95e01629f4ede29a8179a41486716fdd8edc3ee2aff91f227cad"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-10-26T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1,
+            "OutputPricePerUnit": 5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": 0.05,
+            "CacheWritePricePerUnit": 1.25,
+            "Comments": "GPT-6.1 Terra launch pricing on OpenAI direct (2026-10-26), read first-party from the OpenAI model page on 2026-11-01: $1/$5 per 1M in/out, cached input $0.05, cache write $1.25 (30-minute retention; 12-hour retention is $2.50, not modelled). Long-context tier not modelled: above 272K input tokens the whole request is billed at 2x input and cache rates and 1.5x output ($2/$7.50, cached $0.10). Flex ($0.50/$2.50) and fast ($2/$10) service tiers are not modelled. Source: https://developers.openai.com/api/docs/models/gpt-6.1-terra"
+          },
+          "primaryKey": {
+            "ID": "4BB32781-6B63-47C1-803F-B119CB5F8487"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:22.180Z",
+            "checksum": "95005a3cc4f94ebd4d9adbd7561dc167df817c1654374c8b159b71dda1b9b867"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F2E7DB51-B7EC-42C7-94FF-57BF4A93BA9C"
+    },
+    "sync": {
+      "lastModified": "2026-11-01T22:53:21.938Z",
+      "checksum": "a5f29c7d75b20de130cc3c1756f820a40af8913c8316e400e0bacf27e17f8916"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Muse Wonder",
+      "PowerRank": 26,
+      "Description": "Meta Superintelligence Labs' frontier reasoning model, released October 12, 2026, positioned above Muse Spark 1.3 for complex personal and professional agentic work. API id muse-wonder-1.0 on Meta's Model API (Preview), also served on OpenRouter as meta/muse-wonder, which is the route MJ uses because no Meta driver class exists. 1,048,576-token context; text, image, video, audio and PDF input, text output; reasoning effort minimal through max; tool calling supported on the OpenRouter route. Meta prices it at $4 input / $0.20 cached input / $20 output per 1M tokens with no long-context premium (web search $2.50 per 1,000 queries); no cost row is recorded because MJ does not track OpenRouter prices and has no Meta-direct route. MaxOutputTokens is omitted: Meta publishes no cap and listings disagree (16K, 131K, 943,718). The higher-tier Muse Wonder Full is only in Meta's Muse Code subscriptions and has no API id, so it is not modelled. On Meta's launch table it scores 52 on the Artificial Analysis Index (GPT-6 Astra 53, Claude Opus 5.5 58). Sources: https://openrouter.ai/meta/muse-wonder ; https://www.eesel.ai/blog/meta-muse-wonder",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 9,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Meta",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "7EAD0B0C-B085-4719-A389-9CC6A5EB06D0"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.957Z",
+            "checksum": "12858372c16eb3c3fca41c3ada75a1d466104cabecb517515ad6331ddd0588ac"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "meta/muse-wonder",
+            "MaxInputTokens": 1048576,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "D4CCEAB6-CEDF-4B80-902E-0D663E58365B"
+          },
+          "sync": {
+            "lastModified": "2026-11-01T22:53:21.974Z",
+            "checksum": "8fe1c1d14b4758b96017ef2db7895a9f9a3323205d5be2468a0305106d37438e"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "1C622FDC-9873-4171-978E-596BDF7FEFA8"
+    },
+    "sync": {
+      "lastModified": "2026-11-01T22:53:21.385Z",
+      "checksum": "a61d5c938959adb84a93f63dbcf9c41b7f8332cb6b04e992227fdf5ae2a2b6d3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qwen 3.8 27B",
+      "PowerRank": 15,
+      "Description": "Alibaba's dense 27B-parameter update to the Qwen 3.6 27B open-weights model, and the model Groq names as the direct replacement for `qwen/qwen3.6-27b` on its deprecation schedule (qwen3.6-27b shut down 2026-09-14). Carried here for the Groq route: ~131K-token context with up to 16,384 output tokens, tool calling, structured outputs and vision input. Served on Groq's Preview tier, which Groq documents as intended for evaluation and subject to discontinuation at short notice, so the route is seeded at Preview and is never selected automatically. Reported Groq pricing is $0.80/1M input and $4.00/1M output (against $0.60/$3.00 for qwen3.6-27b), but that figure comes only from third-party aggregators — Groq's own pricing page was unreachable when this record was added on 2026-11-02 — so no cost row is seeded. Add one once the rate is confirmed first-party.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 3,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Qwen 3.6 27B",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "BB40D1F8-7B5C-4DA4-83EB-80EBF19EF710"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:46:01.994Z",
+            "checksum": "98ce0a4e83ae6a9cb3f3b849a20a4cbef8e8d1deb8e82010c412576efe27537a"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10,
+            "Status": "Preview",
+            "DriverClass": "GroqLLM",
+            "APIName": "qwen/qwen3.8-27b",
+            "MaxInputTokens": 131072,
+            "MaxOutputTokens": 16384,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "6D7FAA1D-AB82-4863-8402-9B12F33283AB"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:46:02.028Z",
+            "checksum": "4542af1f839d45787370a99effee818107775aedd42b952debb7bc0fc0e46616"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F85E5A1F-2793-49F2-A850-F6B4B2FCEFBC"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:01.868Z",
+      "checksum": "811d45d3b06d333f89c11121e11fa75d301672d486b5c289da2680fbeafbc3be"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Muse Spark 1.1",
+      "PowerRank": 19,
+      "Description": "Meta's multimodal reasoning model for agentic tasks (snapshot 2026-07-09, listed on OpenRouter 2026-07-16). Features a 1,048,576-token context window and up to 943,718 output tokens. Accepts text, image, video and PDF input and returns text. Reasoning is always on; supports native tool calling and structured outputs. MJ reaches it through OpenRouter.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 4,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Meta",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "208C63C6-5DB2-4F12-B21F-8CA5691B9082"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "meta/muse-spark-1.1",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 943718,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "26D0D942-2013-481A-86DD-0E20DD00FAF9"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-07-16T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.25,
+            "OutputPricePerUnit": 4.25,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": 0.15,
+            "CacheWritePricePerUnit": null,
+            "Comments": "Muse Spark 1.1 on OpenRouter (meta/muse-spark-1.1): $1.25/$4.25 per 1M, cache read $0.15/1M as published in input_cache_read (OpenRouter's absolute rate, no write charge). StartedAt is the OpenRouter listing date. OpenRouter also bills web search at $0.0025 per request, which this schema does not model. Source: live read of https://openrouter.ai/api/v1/models on 2026-10-20."
+          },
+          "primaryKey": {
+            "ID": "C8989DB5-C7C5-42E5-AFD1-7BD8F104C0D3"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "14C6113B-56AB-4640-AF47-BA54275151F6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Muse Spark 1.2",
+      "PowerRank": 20,
+      "Description": "Meta's reasoning model for complex agentic tasks (snapshot and OpenRouter listing 2026-08-05). Features a 1,048,576-token context window and up to 943,718 output tokens. Accepts text, image, video and PDF input and returns text. Reasoning is always on; supports native tool calling and structured outputs. MJ reaches it through OpenRouter.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 4,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Meta",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "611C2B12-EB00-4B3E-AA90-78087BB26B66"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "meta/muse-spark-1.2",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 943718,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "893FCF70-35CE-4262-B3A6-3E7C7A968F03"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-08-05T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.25,
+            "OutputPricePerUnit": 4.25,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": 0.15,
+            "CacheWritePricePerUnit": null,
+            "Comments": "Muse Spark 1.2 on OpenRouter (meta/muse-spark-1.2): $1.25/$4.25 per 1M, cache read $0.15/1M as published in input_cache_read (OpenRouter's absolute rate, no write charge). StartedAt is the OpenRouter listing date. OpenRouter also bills web search at $0.0025 per request, which this schema does not model. Source: live read of https://openrouter.ai/api/v1/models on 2026-10-20."
+          },
+          "primaryKey": {
+            "ID": "57448AEC-1171-478B-BE61-6AD33011C148"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "7A77764D-453C-4630-B3AD-381048C4E1EC"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Claude Mythos 5",
+      "PowerRank": 26,
+      "Description": "Anthropic's Mythos-class Claude 5 flagship, released June 9, 2026 as the companion to Claude Fable 5. Same specifications and rate card as Fable 5 (1M-token context, 128K max output, $10/$50 per 1M tokens) but WITHOUT Fable's safety-classifier routing layer, and therefore limited-availability: access runs through Anthropic's trusted-access programs (Project Glasswing) rather than general API signup. Listed as Active on the Claude API with a tentative retirement not sooner than June 9, 2027. Modelled here per the routine's standing decision on limited-availability models: the Inference Provider route is seeded at Preview so model selection never routes to it automatically; a customer with access flips it to Active.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 10,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "8F5060E3-8E67-4843-AD54-E5AAF21E84B5"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Preview",
+            "DriverClass": "AnthropicLLM",
+            "APIName": "claude-mythos-5",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "79DC4AD7-BB38-4D3A-B482-383A793FD3A6"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "StartedAt": "2026-06-09T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 10,
+            "OutputPricePerUnit": 50,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Mythos 5 pricing on Anthropic direct, identical to Claude Fable 5: $10/$50 per 1M in/out, cache hits and refreshes $1/1M, 5-minute cache writes $12.50/1M, 1-hour cache writes $20/1M (the 1-hour rate is not representable in this schema). Batch API is half rate ($5/$25). Read from Anthropic's own rate card on 2026-11-09; the model is listed there alongside Fable 5 at the same figures, with a limited-availability note. Source: https://platform.claude.com/docs/en/about-claude/pricing",
+            "CacheReadPricePerUnit": 1,
+            "CacheWritePricePerUnit": 12.5
+          },
+          "primaryKey": {
+            "ID": "8AC3C19D-7187-49E0-A8B5-5DF813CEC300"
+          }
+        }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/gif,image/webp",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "FD4EC120-0D8F-46D1-9B43-1877D815838D"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=File",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "application/pdf",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "AAD7834B-DFC3-45FF-AB72-000619B93020"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "158189DA-1957-4AA5-B0ED-86B27BEFAFCE"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Claude Mythos 5.1",
+      "PowerRank": 27,
+      "Description": "Anthropic's Mythos-class Claude 5.1 flagship, released September 1, 2026 as the successor to Claude Mythos 5 and the companion to Claude Fable 5.1. Same specifications and rate card as Fable 5.1 (1M-token context, 128K max output, adaptive thinking with a five-level effort setting, $10/$50 per 1M tokens, cache hits and refreshes at $0.25/1M — 0.025x base input) but WITHOUT Fable's safety-classifier routing layer. Limited-availability: access runs through Anthropic's Cyber Verification and Life Sciences Verification programs (Project Glasswing). Uses the Claude 4.7-and-later tokenizer (~30% more tokens for the same text than Sonnet 4.6 and earlier). Listed as Active on the Claude API with a tentative retirement not sooner than September 1, 2027. Modelled here per the routine's standing decision on limited-availability models: the Inference Provider route is seeded at Preview so model selection never routes to it automatically; a customer with access flips it to Active.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 10,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Claude Mythos 5",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true,
+          "SupportsForcedToolChoice": false
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "481BA057-81EF-4A9B-AF23-A3568ECF95D1"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Preview",
+            "DriverClass": "AnthropicLLM",
+            "APIName": "claude-mythos-5-1",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "A8380285-E5D9-4336-922F-44CB6977C6AE"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "StartedAt": "2026-09-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 10,
+            "OutputPricePerUnit": 50,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Mythos 5.1 pricing on Anthropic direct, identical to Claude Fable 5.1: $10/$50 per 1M in/out, cache hits and refreshes $0.25/1M (0.025x base input), 5-minute cache writes $12.50/1M, 1-hour cache writes $20/1M (the 1-hour rate is not representable in this schema). Batch API is half rate ($5/$25). Read from Anthropic's own rate card on 2026-11-09, where the model is listed with a limited-availability note at the same figures as Fable 5.1. Source: https://platform.claude.com/docs/en/about-claude/pricing",
+            "CacheReadPricePerUnit": 0.25,
+            "CacheWritePricePerUnit": 12.5
+          },
+          "primaryKey": {
+            "ID": "E68A92DA-F23F-45F1-B0EA-FE4B48083A36"
+          }
+        }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/gif,image/webp",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "D936FF80-3B37-4976-BC9C-636B18BF2BAC"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=File",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "application/pdf",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "46091BE1-8995-48E3-A468-4C78F0111043"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "0D385017-0295-4BAD-97E5-CB0AF00092B8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GPT Image 2.6 Sunburst",
+      "PowerRank": 21,
+      "Description": "OpenAI's image generation and editing model, released November 4, 2026 as the engine behind ChatGPT Images 2.6. Sunburst is the higher-detail variant, targeted at detail and cross-generation consistency at medium/high quality; the Flare variant trades that for speed. New in 2.6 over 2.5: animated GIF output, SVG export, markup-guided edits, and a complexity parameter (defaults to high). Quality settings low/medium/high/xhigh/max. Token-billed at $5/1M text input, $8/1M image input ($2/1M cached) and $30/1M image output — unchanged from GPT Image 2.5. MJ never carried the 2.5 generation, so PriorVersionID points at GPT Image 2.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Image Generator",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 8,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT Image 2"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "86ACD7E8-66A2-4D84-81A0-F6A2E00AC966"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAIImageGenerator",
+            "APIName": "gpt-image-2.6-sunburst",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "E7F350B4-8060-47BD-AC08-148AD1D89AE0"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-11-04T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 5,
+            "OutputPricePerUnit": 30,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT Image 2.6 Sunburst (gpt-image-2.6-sunburst) pricing as of the November 4, 2026 launch, recorded in OpenAI's own billing unit (tokens) rather than a derived per-image figure. InputPricePerUnit is the TEXT input rate ($5/1M); OutputPricePerUnit is the IMAGE output rate ($30/1M). The other published rates: image input $8/1M, cached image input $2/1M (recorded in CacheReadPricePerUnit). Rates are unchanged from GPT Image 2.5, which MJ never carried. Batch API is half rate on every meter. Sunburst and Flare are priced identically; they differ in speed/detail trade-off, not rate. Source: https://developers.openai.com/api/docs/pricing (read 2026-11-09 via server-side search; developers.openai.com is not directly reachable from the research environment).",
+            "CacheReadPricePerUnit": 2,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "67BCC5BA-95CB-499A-8DF7-4CA847629DD6"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "D31A5072-FE62-4B8B-9AF0-C414156DC851"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GPT Image 2.6 Flare",
+      "PowerRank": 20,
+      "Description": "OpenAI's speed-optimised image generation and editing model, released November 4, 2026 alongside GPT Image 2.6 Sunburst as the engine behind ChatGPT Images 2.6. Flare generates roughly 50% faster than GPT Image 2.5 (third-party measurement via its OpenRouter listing, which also reports a 400K context); Sunburst is the higher-detail sibling. Shares 2.6's new capabilities: animated GIF output, SVG export, markup-guided edits, and a complexity parameter (defaults to high). Token-billed identically to Sunburst at $5/1M text input, $8/1M image input ($2/1M cached) and $30/1M image output. MJ never carried the 2.5 generation, so PriorVersionID points at GPT Image 2.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Image Generator",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 8,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT Image 2"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "7F5BBA51-848F-422C-976B-6DD130C27236"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAIImageGenerator",
+            "APIName": "gpt-image-2.6-flare",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "41AE6391-2F70-41E4-AACA-547B0CDB184F"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-11-04T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 5,
+            "OutputPricePerUnit": 30,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT Image 2.6 Flare (gpt-image-2.6-flare) pricing as of the November 4, 2026 launch, recorded in OpenAI's own billing unit (tokens) rather than a derived per-image figure. InputPricePerUnit is the TEXT input rate ($5/1M); OutputPricePerUnit is the IMAGE output rate ($30/1M). The other published rates: image input $8/1M, cached image input $2/1M (recorded in CacheReadPricePerUnit). Rates are unchanged from GPT Image 2.5, which MJ never carried. Batch API is half rate on every meter. Sunburst and Flare are priced identically; they differ in speed/detail trade-off, not rate. Source: https://developers.openai.com/api/docs/pricing (read 2026-11-09 via server-side search; developers.openai.com is not directly reachable from the research environment).",
+            "CacheReadPricePerUnit": 2,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "AB24D8DB-039C-414F-AD28-736D99548CA8"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "CA50D4B6-57E6-440E-8579-6DD5D85223F2"
     }
   }
 ]

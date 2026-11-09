@@ -14,6 +14,7 @@ import {
 import { MJArtifactVersionEntity, MJArtifactTypeEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { Subscription } from 'rxjs';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import type { PdfOrientation } from '@memberjunction/ng-react';
 import { Metadata, LogError, RunView, CompositeKey } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { IArtifactViewerComponent } from '../interfaces/artifact-viewer-plugin.interface';
@@ -245,6 +246,22 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
    */
   public AskUserForFeedback(): void {
     this.PluginInstance?.AskUserForFeedback();
+  }
+
+  /**
+   * Whether the loaded plugin can export what it shows as a PDF.
+   * Pass-through to the plugin instance for use by the parent panel wrapper.
+   */
+  public get SupportsPDFExport(): boolean {
+    return this.PluginInstance?.SupportsPDFExport ?? false;
+  }
+
+  /**
+   * Ask the loaded plugin to download what it shows as a PDF.
+   * Pass-through to the plugin instance, called from the parent panel header.
+   */
+  public async ExportPDF(orientation: PdfOrientation = 'portrait'): Promise<void> {
+    await this.PluginInstance?.ExportPDF(orientation);
   }
 
   async ngOnInit(): Promise<void> {

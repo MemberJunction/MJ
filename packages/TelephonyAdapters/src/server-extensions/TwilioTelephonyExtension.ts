@@ -8,7 +8,6 @@ import { LogStatus } from '@memberjunction/core';
 import cors from 'cors';
 import {
     BaseServerExtension,
-    ServerExtensionConfig,
     ServerExtensionPhase,
     ServerExtensionInitContext,
     ExtensionInitResult,
@@ -36,10 +35,8 @@ export class TwilioTelephonyExtension extends BaseServerExtension {
     private config: TwilioTelephonyConfig | null = null;
 
     public async Initialize(
-        contextOrApp: ServerExtensionInitContext,
-        _config?: ServerExtensionConfig
+        context: ServerExtensionInitContext
     ): Promise<ExtensionInitResult> {
-        const context = contextOrApp;
         const rawSettings = context.config.Settings as unknown as Partial<TwilioTelephonyConfig>;
 
         if (!rawSettings?.accountSid || !rawSettings?.streamPublicUrl) {

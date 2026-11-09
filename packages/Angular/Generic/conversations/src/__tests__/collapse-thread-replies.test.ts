@@ -573,6 +573,8 @@ describe('chat area: CollapseThreadReplies', () => {
     // stoppedLastReplyAgent ignores a stopped thread reply and checks the newest main-flow row by Sequence
     open['AllowStopRun'] = true;
     open['_inProgressMessageIds'] = [];
+    // The "Sage" replies (agent-1) are the conversation manager's, so the owner-agent placeholder does not apply.
+    open['conversationManagerAgent'] = { ID: 'agent-1', Name: 'Sage' };
     open['AgentRunsByDetailId'] = new Map([
       ['t-2', { ID: 'run-thread', Agent: 'ThreadHelper', WasStoppedByUser: true }],
       ['a-1', { ID: 'run-1', Agent: 'Sage', WasStoppedByUser: true }],

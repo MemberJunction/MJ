@@ -12,13 +12,13 @@ const REMOTE_OP_PROGRESS_TOPIC = 'RemoteOperationProgress';
 /** Input for the generic Remote Operation transport mutation. */
 @InputType()
 export class ExecuteRemoteOperationInput {
-    @Field()
+    @Field(() => String)
     operationKey: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
-    @Field()
+    @Field(() => String)
     inputJSON: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
-    @Field()
+    @Field(() => String)
     invokeMode: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     /**
@@ -28,16 +28,24 @@ export class ExecuteRemoteOperationInput {
      */
     @Field(() => String, { nullable: true })
     progressChannelId?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
+
+    /**
+     * Optional structural contract fingerprint emitted by CodeGen (or supplied by the caller).
+     * When provided, the server rejects requests whose fingerprint diverges from the server's
+     * active operation contract with `ResultCode = 'CONTRACT_MISMATCH'`.
+     */
+    @Field(() => String, { nullable: true })
+    contractFingerprint?: string;  // case-violation-ok-legacy-back-compat: matches camelCase GraphQL input field convention on ExecuteRemoteOperationInput
 }
 
 /** A single streamed progress envelope delivered over the `RemoteOperationProgress` subscription. */
 @ObjectType()
 export class RemoteOperationProgressNotification {
-    @Field()
+    @Field(() => String)
     ChannelId: string;
 
     /** JSON-serialized {@link RemoteOpProgress}. */
-    @Field()
+    @Field(() => String)
     ProgressJSON: string;
 }
 
@@ -71,7 +79,7 @@ export class ExecuteRemoteOperationResultType {
 export class ExecuteRemoteOperationResolver extends ResolverBase {
     @Mutation(() => ExecuteRemoteOperationResultType)
     async ExecuteRemoteOperation(
-        @Arg('input') input: ExecuteRemoteOperationInput,
+        @Arg('input', () => ExecuteRemoteOperationInput) input: ExecuteRemoteOperationInput,
         @Ctx() ctx: AppContext,
         @PubSub() pubSub: PubSubEngine,
     ): Promise<ExecuteRemoteOperationResultType> {
@@ -111,9 +119,24 @@ export class ExecuteRemoteOperationResolver extends ResolverBase {
                 return fail(invokability.ResultCode ?? 'OPERATION_UNAVAILABLE', invokability.Reason ?? `Operation '${key}' is unavailable`);
             }
 
-            let parsedInput: unknown;
+            // (5) Contract fingerprint gate: when the client sends a contractFingerprint, verify it against
+            // the active server operation's ContractFingerprint (or metadata-derived fingerprint) so stale
+            // client bundles fail loudly with CONTRACT_MISMATCH rather than mis-deserializing.
+            const clientFingerprint = input.contractFingerprint?.trim();
+            if (clientFingerprint) {
+                const expectedFingerprint =
+                    opDecl?.ContractFingerprint ?? RemoteOperationEngineBase.Instance.GetContractFingerprint(key);
+                if (expectedFingerprint && clientFingerprint !== expectedFingerprint) {
+                    return fail(
+                        'CONTRACT_MISMATCH',
+                        `Contract fingerprint mismatch for operation '${key}' (client='${clientFingerprint}', server='${expectedFingerprint}')`,
+                    );
+                }
+            }
+
+            let parsedInput: object | string | number | boolean | null;
             try {
-                parsedInput = input.inputJSON ? JSON.parse(input.inputJSON) : {};
+                parsedInput = input.inputJSON ? (JSON.parse(input.inputJSON) as object | string | number | boolean | null) : {};
             } catch (e) {
                 return fail('INVALID_INPUT_JSON', `Invalid input JSON: ${e instanceof Error ? e.message : String(e)}`);
             }
@@ -127,7 +150,16 @@ export class ExecuteRemoteOperationResolver extends ResolverBase {
                 : undefined;
 
             // Route through the per-request provider (server in-process path; runs the op's Authorize + InternalExecute).
-            const result = await provider.RouteOperation(key, parsedInput, { user, mode: input.invokeMode as RemoteOpInvokeMode, onProgress });
+            const result = await provider.RouteOperation(key, parsedInput, {
+                user,
+                mode: input.invokeMode as RemoteOpInvokeMode,
+                onProgress,
+                contractFingerprint: clientFingerprint,
+                requestOrigin: ctx.RequestOrigin,
+                clientIp: ctx.ClientIp,
+                sessionId: ctx.userPayload?.sessionId,
+                apiKeyHash: ctx.userPayload?.apiKeyHash,
+            });
 
             return {
                 success: result.Success,
