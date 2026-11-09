@@ -2,6 +2,7 @@
  * SchemaEvolution — diff engine for detecting changes between source and existing schema.
  * Compares source fields against existing table columns, produces incremental DDL.
  */
+import { GetDialect } from '@memberjunction/sql-dialect';
 import type {
     ColumnModification,
     DatabasePlatform,
@@ -12,7 +13,7 @@ import type {
     TargetColumnConfig,
     TargetTableConfig,
 } from './interfaces.js';
-import { DDLGenerator } from './DDLGenerator.js';
+import { DDLGenerator, ValidateIdentifier } from './DDLGenerator.js';
 import { TypeMapper } from './TypeMapper.js';
 
 /**
@@ -102,7 +103,89 @@ export class SchemaEvolution {
         // engine's writes to a missing column silently no-op (hasField guard).
         added.push(...this.ensureStandardColumns(existing, platform));
 
-        return { AddedColumns: added, ModifiedColumns: modified, RemovedColumns: removed, Warnings: warnings };
+        const addedIndexes = this.computeAddedIndexes(source, targetConfig, existing, modified);
+
+        return {
+            AddedColumns: added,
+            ModifiedColumns: modified,
+            RemovedColumns: removed,
+            Warnings: warnings,
+            AddedIndexes: addedIndexes,
+        };
+    }
+
+    private computeAddedIndexes(
+        source: SourceObjectInfo,
+        targetConfig: TargetTableConfig,
+        existing: ExistingTableInfo,
+        modified: ColumnModification[]
+    ): Array<{ IndexName: string; Columns: string[] }> {
+        const existingIndexSet = new Set((existing.Indexes ?? []).map(i => i.toLowerCase()));
+        const existingColByName = new Map(existing.Columns.map(c => [c.Name.toLowerCase(), c]));
+        const targetColByName = new Map(targetConfig.Columns.map(c => [c.TargetColumnName.toLowerCase(), c]));
+        const indexedTuples = new Set<string>();
+        const result: Array<{ IndexName: string; Columns: string[] }> = [];
+
+        const isColumnIndexable = (colName: string): boolean => {
+            const lower = colName.toLowerCase();
+            const mod = modified.find(m => m.ColumnName.toLowerCase() === lower);
+            if (mod) {
+                return !/\(\s*max\s*\)|^(ntext|text)$/i.test(mod.NewType.trim());
+            }
+            const ex = existingColByName.get(lower);
+            if (ex) {
+                if (ex.MaxLength === -1) return false;
+                return !/\(\s*max\s*\)|^(ntext|text)$/i.test(ex.SqlType.trim());
+            }
+            return targetColByName.has(lower);
+        };
+
+        const addCandidate = (indexName: string, columns: string[]): void => {
+            if (columns.length === 0) return;
+            const tupleKey = columns.map(c => c.toLowerCase()).join(',');
+            if (indexedTuples.has(tupleKey)) return;
+            if (existingIndexSet.has(indexName.toLowerCase())) return;
+            if (!columns.every(isColumnIndexable)) return;
+            indexedTuples.add(tupleKey);
+            result.push({ IndexName: indexName, Columns: columns });
+        };
+
+        if (targetConfig.PrimaryKeyFields && targetConfig.PrimaryKeyFields.length > 0) {
+            addCandidate(
+                `IX_${targetConfig.SchemaName}_${targetConfig.TableName}_PK`,
+                targetConfig.PrimaryKeyFields
+            );
+        }
+
+        for (const fk of targetConfig.SoftForeignKeys ?? []) {
+            addCandidate(
+                `IX_${targetConfig.SchemaName}_${targetConfig.TableName}_FK_${fk.FieldName}`,
+                [fk.FieldName]
+            );
+        }
+
+        for (const cols of targetConfig.OrganicKeyFields ?? []) {
+            if (cols.length > 0) {
+                addCandidate(
+                    `IX_${targetConfig.SchemaName}_${targetConfig.TableName}_OK_${cols.join('_')}`,
+                    cols
+                );
+            }
+        }
+
+        for (const field of source.Fields ?? []) {
+            if (field.IsUniqueKey && !field.IsPrimaryKey) {
+                const targetCol = targetConfig.Columns.find(c => c.SourceFieldName === field.Name);
+                if (targetCol) {
+                    addCandidate(
+                        `IX_${targetConfig.SchemaName}_${targetConfig.TableName}_OK_${targetCol.TargetColumnName}`,
+                        [targetCol.TargetColumnName]
+                    );
+                }
+            }
+        }
+
+        return result;
     }
 
     /**
@@ -140,14 +223,58 @@ export class SchemaEvolution {
         tableName: string,
         platform: DatabasePlatform
     ): string {
+        const d = GetDialect(platform);
+        const addedIndexes = diff.AddedIndexes ?? [];
+        const indexedColSet = new Set(
+            addedIndexes.flatMap(idx => idx.Columns.map(c => c.toLowerCase()))
+        );
         const statements: string[] = [];
 
         for (const col of diff.AddedColumns) {
-            statements.push(this.DDL.GenerateAlterTableAddColumn(schemaName, tableName, col, platform));
+            let colToEmit = col;
+            if (indexedColSet.has(col.TargetColumnName.toLowerCase())) {
+                const capped = d.CapIndexableType(col.TargetSqlType);
+                if (capped !== col.TargetSqlType) {
+                    colToEmit = { ...col, TargetSqlType: capped };
+                }
+            }
+            statements.push(this.DDL.GenerateAlterTableAddColumn(schemaName, tableName, colToEmit, platform));
         }
 
+        const droppedIndexNames = new Set<string>();
         for (const mod of diff.ModifiedColumns) {
-            statements.push(this.DDL.GenerateAlterTableAlterColumn(schemaName, tableName, mod, platform));
+            let modToEmit = mod;
+            if (indexedColSet.has(mod.ColumnName.toLowerCase())) {
+                for (const idx of addedIndexes) {
+                    if (
+                        idx.Columns.some(c => c.toLowerCase() === mod.ColumnName.toLowerCase()) &&
+                        !droppedIndexNames.has(idx.IndexName.toLowerCase())
+                    ) {
+                        droppedIndexNames.add(idx.IndexName.toLowerCase());
+                        statements.push(d.DropIndexIfExists(schemaName, tableName, idx.IndexName));
+                    }
+                }
+                const capped = d.CapIndexableType(mod.NewType);
+                if (capped !== mod.NewType) {
+                    modToEmit = { ...mod, NewType: capped };
+                }
+            }
+            statements.push(this.DDL.GenerateAlterTableAlterColumn(schemaName, tableName, modToEmit, platform));
+        }
+
+        for (const idx of addedIndexes) {
+            ValidateIdentifier(schemaName, 'schema');
+            ValidateIdentifier(tableName, 'table');
+            idx.Columns.forEach(c => ValidateIdentifier(c, 'index column'));
+            statements.push(
+                d.CreateIndexIfAbsent({
+                    schema: schemaName,
+                    tableName,
+                    indexName: idx.IndexName,
+                    columns: idx.Columns,
+                    unique: false,
+                })
+            );
         }
 
         for (const colName of diff.RemovedColumns) {
