@@ -13573,9 +13573,6 @@ importers:
       validator:
         specifier: ^13.15.26
         version: 13.15.26
-      xlsx:
-        specifier: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
-        version: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
       zod:
         specifier: ^3.25.0
         version: 3.25.76
