@@ -103,7 +103,11 @@ export interface ConfidenceAndDivergenceMetrics {
   readonly ConfidenceDegraded: boolean;
   readonly ConfidenceInsufficientData?: boolean;
   readonly DivergenceInsufficientData?: boolean;
-  /** Pairs with both a champion side and a challenger side (an output, a timeout or an error). */
+  /**
+   * Pairs with a champion output. Only these count anywhere: toward the sample size, the agreement rate, the delta,
+   * latency and the timeout and failure counts. The challenger side is an output, a timeout, an error, or nothing
+   * (a failure too).
+   */
   readonly PairCount: number;
   readonly ChallengerTimeoutCount: number;
   readonly ChallengerFailureCount: number;
@@ -592,7 +596,7 @@ export function ComputeConfidenceAndChallengerDivergence(
   const confidenceDegraded = meanDropExceeded || floorBreached;
 
   const pairs = input.Pairs ?? [];
-  /** Pairs with both sides: a champion output and a challenger output, timeout or error. */
+  /** Pairs with a champion output: the only rows that count, here and in the sample gate below. */
   let pairedCount = 0;
   let labelPairs = 0;
   let labelAgreements = 0;
@@ -603,21 +607,22 @@ export function ComputeConfidenceAndChallengerDivergence(
   const challLatencies: number[] = [];
 
   for (const pair of pairs) {
-    const isTimedOut = pair.TimedOut === true;
-    const hasError = typeof pair.ErrorMessage === 'string' && pair.ErrorMessage.trim().length > 0;
     const hasChampOutput =
       typeof pair.ChampionScore === 'number' || typeof pair.ChampionLabel === 'string';
+    // A challenger row with no champion to compare against says nothing about agreement, failures or latency.
+    if (!hasChampOutput) {
+      continue;
+    }
+    pairedCount++;
+    const isTimedOut = pair.TimedOut === true;
+    const hasError = typeof pair.ErrorMessage === 'string' && pair.ErrorMessage.trim().length > 0;
     const hasChallOutput =
       typeof pair.ChallengerScore === 'number' || typeof pair.ChallengerLabel === 'string';
-    const isMissingChallenger = hasChampOutput && !hasChallOutput;
-    if (hasChampOutput && (hasChallOutput || isTimedOut || hasError)) {
-      pairedCount++;
-    }
 
     if (isTimedOut) {
       challengerTimeoutCount++;
     }
-    if (isTimedOut || hasError || isMissingChallenger) {
+    if (isTimedOut || hasError || !hasChallOutput) {
       challengerFailureCount++;
       labelPairs++;
     } else if (pair.ChampionLabel !== undefined && pair.ChallengerLabel !== undefined) {

@@ -197,6 +197,22 @@ describe('psi-drift-detector', () => {
       );
     });
 
+    it('leaves challenger timeouts and errors with no champion out of the agreement rate and the failure counts, as out of the sample size', () => {
+      const pairs = [
+        ...Array.from({ length: 100 }, (_, i) => ({ RecordID: `paired-${i}`, ChampionLabel: 'Approve', ChallengerLabel: 'Approve' })),
+        // Challenger rows whose champion was not found: they compare against nothing.
+        ...Array.from({ length: 30 }, (_, i) => ({ RecordID: `orphan-timeout-${i}`, TimedOut: true, ChallengerLatencyMs: 9000 })),
+        ...Array.from({ length: 30 }, (_, i) => ({ RecordID: `orphan-error-${i}`, ErrorMessage: 'SHADOW_ERROR: boom' })),
+      ];
+
+      const metrics = ComputeConfidenceAndChallengerDivergence({ Pairs: pairs, MinSampleSize: 100 });
+      expect(metrics.PairCount).toBe(100);
+      expect(metrics.AgreementRate).toBe(1);
+      expect(metrics.ChallengerTimeoutCount).toBe(0);
+      expect(metrics.ChallengerFailureCount).toBe(0);
+      expect(metrics.ChallengerDiverged).toBe(false);
+    });
+
     it('should report DivergenceInsufficientData: true and suppress ChallengerDiverged when pair count is below MinSampleSize (S4)', () => {
       // 10 disagreeing pairs with default MinSampleSize (100)
       const pairs = Array.from({ length: 10 }, (_, i) => ({
