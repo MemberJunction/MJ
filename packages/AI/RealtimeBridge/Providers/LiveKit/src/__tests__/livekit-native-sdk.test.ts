@@ -7,6 +7,12 @@
  * factory, `readNativeConfig` extraction, and the actionable errors (no specifier / module absent).
  */
 import { describe, it, expect, vi } from 'vitest';
+import { ImportFromHost } from '@memberjunction/dynamic-packages';
+
+vi.mock('@memberjunction/dynamic-packages', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/dynamic-packages')>();
+    return { ...actual, ImportFromHost: vi.fn(actual.ImportFromHost) };
+});
 import {
     LiveKitNativeMeetingSdk,
     BindLiveKitNative,
@@ -446,6 +452,13 @@ describe('LiveKitNativeMeetingSdk — config + errors', () => {
         );
     });
 
+    it('DefaultNativeLoader loads a bare specifier through ImportFromHost (#3741)', async () => {
+        const mod = { createRoomClient: () => ({}) };
+        vi.mocked(ImportFromHost).mockResolvedValueOnce(mod);
+        await expect(DefaultNativeLoader('@host/native-addon')).resolves.toBe(mod);
+        expect(ImportFromHost).toHaveBeenCalledWith('@host/native-addon');
+    });
+
     it('DefaultNativeLoader returns a registered module without import(), unwrapping a { default } wrapper', async () => {
         const mod = fakeModule(new FakeNativeClient());
         const specifier = '@test/registered-livekit-room-module';
@@ -459,7 +472,7 @@ describe('LiveKitNativeMeetingSdk — config + errors', () => {
         await expect(DefaultNativeLoader('@test/wrapped-livekit-room-module')).resolves.toBe(mod);
     });
 
-    it('DefaultNativeLoader falls back to import() for an unregistered specifier', async () => {
+    it('DefaultNativeLoader falls back to ImportFromHost for an unregistered specifier', async () => {
         expect(GetRegisteredNativeRoomModule('@nonexistent/unregistered-xyz')).toBeUndefined();
         await expect(DefaultNativeLoader('@nonexistent/unregistered-xyz')).rejects.toThrow(/Underlying error/);
     });

@@ -1,6 +1,6 @@
 import { BaseSingleton, MJGlobal, MJEventType, IsValueEncrypted, ENCRYPTED_SENTINEL } from "@memberjunction/global";
 import { AggregateResult, DatasetItemFilterType, DatasetResultType, IMetadataProvider, ILocalStorageProvider, LocalStorageWriteOptions } from "./interfaces";
-import { AggregateExpression, RunViewParams, IsMaterializedDataSource, NormalizeAlternateBaseViewName } from "../views/runView";
+import { AggregateExpression, RunViewParams, RunViewParametersKey, IsMaterializedDataSource, NormalizeAlternateBaseViewName } from "../views/runView";
 import { GetEffectiveAlternateBaseViewName } from "./alternateBaseViews";
 import { ViewPropertyValuesKey } from "../views/viewProperties";
 import { LogError, LogStatusEx, LogWarning } from "./logging";
@@ -2927,6 +2927,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             parts.push(`vp:${propertyKey}`);
         }
 
+        // Bound-parameter segment (RunViewParams.Parameters). Two calls that share the same
+        // parameterized ExtraFilter template (e.g. `Status = @status`) but supply different bound
+        // values must never share a cache slot, and a parameterized view is a narrowed view
+        // (`hasNarrowingSegment` checks index >= 7). Appended ONLY when at least one defined
+        // parameter is present, so non-parameterized calls keep their exact fingerprint.
+        const paramsKey = RunViewParametersKey(params.Parameters);
+        if (paramsKey.length > 0) {
+            parts.push(`prm:${paramsKey}`);
+        }
+
         // Dataset namespace. `GetDatasetByName` caches each dataset ITEM's rows through this same
         // builder, supplying only entity + the item's WhereClause — and every shipped item has a
         // NULL WhereClause, so without this segment a dataset item emits the identical fingerprint
@@ -4079,9 +4089,19 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * Useful when an entity's data changes and all related caches should be cleared.
      *
      * @param entityName - The entity name to invalidate
+     * @param provider - The metadata provider to resolve the entity against (multi-provider
+     * correctness). Falls back to a default Metadata instance, as the cache-write gate does.
      */
-    public async InvalidateEntityCaches(entityName: string): Promise<void> {
+    public async InvalidateEntityCaches(entityName: string, provider?: IMetadataProvider): Promise<void> {
         if (!this._storageProvider) return;
+
+        // A non-cacheable entity never gets a cache write (see the cache-write gate in
+        // SetRunViewResult), so there is nothing to find — skip the storage lookup and the
+        // registry rewrite. Entries written before AllowCaching was turned off are still in the
+        // local index, so they are still removed below.
+        if (!this.hasLocalFingerprints(entityName) && this.isKnownNonCacheable(entityName, provider)) {
+            return;
+        }
 
         const resolved = await this.resolveFingerprintsForEntity(entityName);
         const toRemove = resolved ? Array.from(resolved) : [];
@@ -4090,18 +4110,44 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             LogStatusEx({ message: `    🗑️ [Cache INVALIDATE-ENTITY] "${entityName}" — removing ${toRemove.length} entries: ${toRemove.map(k => `"${k}"`).join(', ')}`, verboseOnly: true });
         }
 
+        let removed = 0;
         for (const key of toRemove) {
             try {
                 await this._storageProvider.Remove(key, CacheCategory.RunViewCache);
                 this._registry.delete(key);
                 this._lastVerifiedAt.delete(key);
                 this.removeFromEntityIndex(key);
+                removed++;
             } catch (e) {
                 LogError(`LocalCacheManager.InvalidateEntityCaches failed for key ${key}: ${e}`);
             }
         }
 
-        await this.persistRegistry();
+        // Rewriting the registry when nothing changed costs a full storage write per call.
+        if (removed > 0) {
+            await this.persistRegistry();
+        }
+    }
+
+    /** True when this process's entity index holds at least one fingerprint for the entity. */
+    private hasLocalFingerprints(entityName: string): boolean {
+        const local = this._entityFingerprintIndex.get(entityName);
+        return local !== undefined && local.size > 0;
+    }
+
+    /**
+     * True only when the entity resolves in metadata and has AllowCaching = false. An entity
+     * that does not resolve (metadata not loaded yet, or unknown name) is treated as cacheable
+     * so its invalidation still runs.
+     */
+    private isKnownNonCacheable(entityName: string, provider?: IMetadataProvider): boolean {
+        try {
+            const md = provider ?? new Metadata();
+            const entity = md.EntityByName(entityName);
+            return entity !== undefined && entity !== null && !this.IsCachingEnabledForEntity(entity);
+        } catch {
+            return false;
+        }
     }
 
     // ========================================================================
