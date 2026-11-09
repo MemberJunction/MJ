@@ -63,6 +63,7 @@ export * from './Misc/schema-emit'
 export * from './Misc/entity_subclasses_codegen'
 export * from './Misc/action_subclasses_codegen';
 export * from './Misc/remote_operations_codegen';
+export * from './Misc/typed_query_codegen';
 export * from './Misc/graphql_server_codegen'
 
 // Angular exports

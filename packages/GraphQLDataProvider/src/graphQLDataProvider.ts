@@ -18,7 +18,8 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider, ReadableFieldsTransportKey,
          SearchEntityParams, EntitySearchResult, ScoredCandidate, RemoteOpInvokeOptions, RemoteOpResult, RemoteOpProgress,
          GetLocalTimeZone, TIME_ZONE_HEADER, ViewPropertyValues, ResolveMJAPIURL,
-         GetEffectiveAlternateBaseViewName, TelemetryManager, GetDiagnosticContext, IsDiagnosticCaptureSuppressed } from "@memberjunction/core";
+         GetEffectiveAlternateBaseViewName, TelemetryManager, GetDiagnosticContext, IsDiagnosticCaptureSuppressed,
+         CompositeFilter } from "@memberjunction/core";
 import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore, DeserializeValidationErrors } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
@@ -1278,6 +1279,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 }
                 // ExtraFilter/OrderBy are resolved to strings by ProviderBase.PreRunView
                 innerParams.ExtraFilter = params.ExtraFilter ? (params.ExtraFilter as string) : '';
+                const serializedSingleFilter = this.serializeRunViewFilter(params.Filter);
+                if (serializedSingleFilter !== undefined) {
+                    innerParams.Filter = serializedSingleFilter;
+                }
                 innerParams.OrderBy = params.OrderBy ? (params.OrderBy as string) : '';
                 innerParams.UserSearchString = params.UserSearchString ? params.UserSearchString : '';
                 innerParams.Fields = params.Fields; // pass it straight through, either null or array of strings
@@ -1424,6 +1429,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
+    private serializeRunViewFilter(filter: RunViewParams['Filter']): string | undefined {
+        if (!filter) {
+            return undefined;
+        }
+        return filter instanceof CompositeFilter ? filter.ToJSON() : JSON.stringify(filter);
+    }
+
     /**
      * Puts a run's view-property values on its GraphQL input. Only a stored-view run takes them,
      * and `ServerProperties` never leave the server, so either mistake throws rather than being dropped.
@@ -1493,6 +1505,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
                     // ExtraFilter/OrderBy are resolved to strings by ProviderBase.PreRunViews
                     innerParam.ExtraFilter = (param.ExtraFilter as string) || '';
+                    const serializedBatchFilter = this.serializeRunViewFilter(param.Filter);
+                    if (serializedBatchFilter !== undefined) {
+                        innerParam.Filter = serializedBatchFilter;
+                    }
                     innerParam.OrderBy = (param.OrderBy as string) || '';
                     innerParam.UserSearchString = param.UserSearchString || '';
                     // pass it straight through, either null or array of strings
@@ -1638,6 +1654,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     EntityName: item.params.EntityName || '',
                     // ExtraFilter/OrderBy are resolved to strings by ProviderBase
                     ExtraFilter: (item.params.ExtraFilter as string) || '',
+                    ...(item.params.Filter ? { Filter: this.serializeRunViewFilter(item.params.Filter) } : {}),
                     OrderBy: (item.params.OrderBy as string) || '',
                     Fields: item.params.Fields,
                     UserSearchString: item.params.UserSearchString || '',

@@ -3,6 +3,7 @@ import {
   AssertClientInputWritableForUser,
   BaseEntity,
   BaseEntityEvent,
+  CompositeFilterDescriptor,
   CompositeKey,
   DatabaseProviderBase,
   EntityFieldInfo,
@@ -42,7 +43,21 @@ export type RunViewResultWithResolvedView<T = unknown> = RunViewResult<T> & {
   _resolvedViewEntity?: MJUserViewEntityExtended;
 };
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
-import { ClientClauseScreen, UserCache, type EntityBaseViewAllowList } from '@memberjunction/generic-database-provider';
+import {
+  AreEntityFieldValuesDifferent,
+  ClientClauseScreen,
+  ClientOldValueToFieldValue,
+  DatesEqualAtColumnResolution,
+  DetectFieldConcurrencyConflicts,
+  FindEntityFieldByCodeNameOrName,
+  IsFieldOpaqueToClient,
+  JsonStringsEquivalent,
+  RedactEncryptedConflictValues,
+  UserCache,
+  WithoutEchoedOpaqueValues,
+  type ConflictDiagnosticEntry,
+  type EntityBaseViewAllowList,
+} from '@memberjunction/generic-database-provider';
 import { PubSubEngine, AuthorizationError } from 'type-graphql';
 import { GraphQLError } from 'graphql';
 import { RefusalExtensions } from './refusalExtensions.js';
@@ -88,14 +103,6 @@ const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
   'mj: projects',
   'mj: diagnostic sender registrations',
 ]);
-
-/** One field's values in a concurrency-conflict diagnostic. */
-interface ConflictDiagnosticEntry<TValue> {
-  FieldName: string;
-  ClientOldValue?: TValue;
-  ClientNewValue?: TValue;
-  DBValue?: TValue;
-}
 
 interface ActiveEntitySessionListener {
   pubSub: PubSubEngine;
@@ -700,7 +707,8 @@ export class ResolverBase {
           viewInput.AlternateBaseView,
           viewInput.Properties,
           viewInput.SkipTotalRowCount,
-          viewInput.Parameters
+          viewInput.Parameters,
+          viewInput.Filter
         );
       }
       else {
@@ -751,7 +759,8 @@ export class ResolverBase {
         viewInput.AlternateBaseView,
         viewInput.Properties,
         viewInput.SkipTotalRowCount,
-        viewInput.Parameters
+        viewInput.Parameters,
+        viewInput.Filter
       );
     } catch (err) {
       console.log(err);
@@ -803,7 +812,8 @@ export class ResolverBase {
         viewInput.AlternateBaseView,
         undefined,
         viewInput.SkipTotalRowCount,
-        viewInput.Parameters
+        viewInput.Parameters,
+        viewInput.Filter
       );
     } catch (err) {
       console.log(err);
@@ -882,6 +892,7 @@ export class ResolverBase {
           alternateBaseView: viewInput.AlternateBaseView,
           properties: viewInput.Properties,
           parameters: viewInput.Parameters,
+          filter: viewInput.Filter,
         });
       } catch (err) {
         LogError(err);
@@ -1274,6 +1285,32 @@ export class ResolverBase {
   }
 
   /**
+   * Parses a client-supplied JSON string into a {@link CompositeFilterDescriptor}.
+   */
+  protected parseStructuredRunViewFilter(raw: string | undefined | null): CompositeFilterDescriptor | undefined {
+    if (!raw || !raw.trim()) {
+      return undefined;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new Error('Invalid RunView Filter: must be a valid JSON-encoded CompositeFilterDescriptor.');
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('Invalid RunView Filter: must be a JSON object representing a CompositeFilterDescriptor.');
+    }
+    const candidate = parsed as { logic?: unknown; filters?: unknown };
+    if (candidate.logic !== 'and' && candidate.logic !== 'or') {
+      throw new Error("Invalid RunView Filter: root 'logic' must be 'and' or 'or'.");
+    }
+    if (!Array.isArray(candidate.filters)) {
+      throw new Error("Invalid RunView Filter: root 'filters' must be an array.");
+    }
+    return parsed as CompositeFilterDescriptor;
+  }
+
+  /**
    * Optimized RunViewGenericInternal implementation with:
    * - Field filtering at source (Fix #7)
    * - Improved error handling (Fix #9)
@@ -1304,12 +1341,14 @@ export class ResolverBase {
     alternateBaseView?: string,
     properties?: ViewPropertyValues,
     skipTotalRowCount?: boolean,
-    parameters?: RunViewParameters
+    parameters?: RunViewParameters,
+    filter?: string
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
 
       const sanitizedParameters = this.sanitizeRunViewParameters(parameters);
+      const parsedFilter = this.parseStructuredRunViewFilter(filter);
 
       // Prefer the authenticated session's payload user — it is the authoritative per-request
       // identity and (for magic-link sessions) carries the per-session resource scope / synthesized
@@ -1393,6 +1432,7 @@ export class ResolverBase {
           AlternateBaseView: alternateBaseView,
           Properties: properties,
           Parameters: sanitizedParameters,
+          Filter: parsedFilter,
           TimeZone: userPayload?.TimeZone,
           PreserveRestrictedApiCiphertext: true,
         },
@@ -1532,6 +1572,7 @@ export class ResolverBase {
         }
 
         const sanitizedParameters = this.sanitizeRunViewParameters(param.parameters);
+        const parsedFilter = this.parseStructuredRunViewFilter(param.filter);
 
         // Build parameters
         runViewParams.push({
@@ -1562,6 +1603,7 @@ export class ResolverBase {
           AlternateBaseView: param.alternateBaseView,
           Properties: param.properties,
           Parameters: sanitizedParameters,
+          Filter: parsedFilter,
           TimeZone: param.userPayload?.TimeZone,
           PreserveRestrictedApiCiphertext: true,
         });
@@ -2020,6 +2062,7 @@ export class ResolverBase {
       // that hydrates from those values — never loading what the database actually holds.
       const hasNarrowedAuditPayload = this.StripRecordChangePayloadFromClientInput(entityInfo, userInfo, input, clientNewValues);
 
+      let concurrencyBaseline: Record<string, unknown> | undefined;
       if (this.MustLoadTruthFromDatabase(entityInfo, input, hasDeniedReadFields, hasNarrowedAuditPayload, userInfo)) {
         // We get here because the entity tracks record changes, OR the client did not provide OldValues,
         // OR field-level security or an Update row filter is in play — in every case we need the true
@@ -2037,7 +2080,7 @@ export class ResolverBase {
           // load worked, now, only IF we have OldValues, we need to check them against the values in the DB we just loaded.
           if (input.OldValues___) {
             // we DO have OldValues, so we need to do a more in depth analysis
-            await this.TestAndSetClientOldValuesToDBValues(input, clientNewValues, entityObject, userInfo);
+            concurrencyBaseline = await this.TestAndSetClientOldValuesToDBValues(input, clientNewValues, entityObject, userInfo);
           } else {
             // no OldValues, so we can just set the new values from input
             entityObject.SetMany(clientNewValues);
@@ -2051,7 +2094,7 @@ export class ResolverBase {
         }
       } else {
         // we get here if we are NOT tracking changes and we DO have OldValues, so we can load from them
-        const oldValues = {};
+        const oldValues: Record<string, unknown> = {};
         // for each item in the oldValues array, add it to the oldValues object, typed like the field
         input.OldValues___?.forEach((item) => {
           const field = entityObject.EntityInfo.Fields.find((f) => f.CodeName === item.Key);
@@ -2071,7 +2114,15 @@ export class ResolverBase {
 
       this.ListenForEntityMessages(entityObject, pubSub, userPayload);
 
-      if (await entityObject.Save()) {
+      const saveOptions = new EntitySaveOptions();
+      if (Array.isArray(input.OldValues___) && input.OldValues___.length > 0) {
+        saveOptions.ConcurrencyCheck = 'enforce';
+      }
+      if (concurrencyBaseline && Object.keys(concurrencyBaseline).length > 0) {
+        saveOptions.ConcurrencyBaseline = concurrencyBaseline;
+      }
+
+      if (await entityObject.Save(saveOptions)) {
         // save worked, fire afterevent and return all the data
         await this.AfterUpdate(provider, input); // fire event
         // Cache invalidation is now handled globally by the MJGlobal listener in index.ts
@@ -2080,6 +2131,14 @@ export class ResolverBase {
         // fls-guard: MapFieldNamesToCodeNames drops the fields the caller may not read
         return await this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll(), userInfo);
       } else {
+        if (entityObject.LatestResult?.ConcurrencyConflict) {
+          await this.persistSaveInconsistencyErrorLog(entityObject, userInfo, {
+            Message:
+              entityObject.LatestResult.CompleteMessage ??
+              'Concurrent modification conflict detected inside save transaction.',
+            ConflictingFields: entityObject.LatestResult.ConcurrencyConflict.ConflictingFields,
+          });
+        }
         // CompleteMessage, not Message. A validation refusal puts its reasons in `Errors` and leaves
         // `Message` unset, so reading `Message` here fell through to 'Unknown error' and discarded
         // every field-named explanation the entity had just produced. CreateRecord already read
@@ -2310,113 +2369,32 @@ export class ResolverBase {
    * old value becomes an Invalid Date and an unchanged date field reads as edited.
    */
   protected ClientOldValueToFieldValue(field: EntityFieldInfo | undefined, raw: unknown): string | number | boolean | Date | null {
-    let val: unknown = raw;
-    if ((val === null || val === undefined) && field && field.DefaultValue !== null && field.DefaultValue !== undefined && !field.AllowsNull)
-      val = field.DefaultValue; // set default value as the field was never set and it does NOT allow nulls
-    if (val === undefined) val = null;
-    // A null old value stays null, except a boolean, which the comparison has always read as false.
-    if (field?.TSType === EntityFieldTSType.Boolean && val === null) return false;
-    if (val === null) return null;
-    if (!field) {
-      // No field metadata to convert by: pass scalars through, stringify anything else.
-      return typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean' || val instanceof Date ? val : String(val);
-    }
-
-    const text = String(val);
-    switch (field.TSType) {
-      case EntityFieldTSType.Number: {
-        const integer = ['int', 'smallint', 'bigint', 'tinyint'].includes((field.Type as string).toLowerCase());
-        return integer ? parseInt(text) : parseFloat(text);
-      }
-      case EntityFieldTSType.Boolean:
-        return !(text === 'false' || text === '0' || parseInt(text) === 0);
-      case EntityFieldTSType.Date:
-        // Epoch milliseconds (the GraphQL Timestamp form) arrive as a numeric string.
-        return new Date(text.trim() !== '' && !isNaN(Number(text)) ? parseInt(text) : text);
-      default:
-        return text; // already a string
-    }
+    return ClientOldValueToFieldValue(field, raw);
   }
 
-  /**
-   * Compares the client-supplied `OldValues___` array in `input` against the authoritative database
-   * values just loaded onto `entityObject` via `InnerLoad`, checks for overlapping concurrent field
-   * modifications, and then applies `clientNewValues` onto `entityObject` via `SetMany`.
-   *
-   * Supports both full-record and delta-only `OldValues___` payloads: only keys present in
-   * `input.OldValues___` (e.g. primary keys + dirty writable fields) are compared against `dbValues`,
-   * and `entityObject.SetMany(clientNewValues)` mutates only the fields sent in `clientNewValues`
-   * while preserving all untouched DB-loaded fields on `entityObject`.
-   *
-   * ASSUMES: `input` has an `OldValues___` property that is an array of Key/Value pairs representing
-   * the pre-mutation values of the fields the client is updating.
-   */
-  /**
-   * Resolves a field on `entityInfo` by `CodeName` or `Name` in $O(1)$ via `FieldByCodeName` /
-   * `FieldByName` when available on `EntityInfo`, falling back to `.Fields.find()` for test stubs.
-   */
   private findEntityFieldByCodeNameOrName(entityInfo: EntityInfo, key: string): EntityFieldInfo | undefined {
-    if (typeof entityInfo.FieldByCodeName === 'function') {
-      return entityInfo.FieldByCodeName(key) ?? entityInfo.FieldByName(key);
-    }
-    return entityInfo.Fields.find((f) => f.CodeName === key || f.Name === key);
+    return FindEntityFieldByCodeNameOrName(entityInfo, key);
   }
 
-  /**
-   * Whether the API never gives a client this field's stored value: an encrypted field that is not
-   * decrypted for the API reaches the client only as the sentinel or as fresh ciphertext, so the
-   * client's old value for it can never be compared with the database value.
-   */
   private isFieldOpaqueToClient(field: EntityFieldInfo | undefined): boolean {
-    return Boolean(field?.Encrypt && !field.AllowDecryptInAPI);
+    return IsFieldOpaqueToClient(field);
   }
 
-  /**
-   * The client's new values without the opaque fields it only echoed back: the sentinel, or the same
-   * value it received as the old value. Writing either would replace the stored secret.
-   */
   private withoutEchoedOpaqueValues<TOldVal, TNewVal>(
     entityInfo: EntityInfo,
     clientNewValues: Record<string, TNewVal>,
     clientOldValues: Record<string, TOldVal>,
   ): Record<string, TNewVal> {
-    const kept: Record<string, TNewVal> = {};
-    for (const key of Object.keys(clientNewValues)) {
-      const f = this.findEntityFieldByCodeNameOrName(entityInfo, key);
-      const newValue = clientNewValues[key];
-      const unchanged = key in clientOldValues && !this.areEntityFieldValuesDifferent(f, clientOldValues[key], newValue, false);
-      const echoed = this.isFieldOpaqueToClient(f) && (newValue === ENCRYPTED_SENTINEL || unchanged);
-      if (!echoed) {
-        kept[key] = newValue;
-      }
-    }
-    return kept;
+    return WithoutEchoedOpaqueValues(entityInfo, clientNewValues, clientOldValues);
   }
 
-  /**
-   * Copies concurrency-conflict diagnostic entries with every encrypted field's values replaced by
-   * the sentinel, so the console, the error log and `MJ: Error Logs` never hold a secret.
-   */
   private redactEncryptedConflictValues<TValue>(
     entityInfo: EntityInfo,
     entries: ReadonlyArray<ConflictDiagnosticEntry<TValue>>,
   ): ConflictDiagnosticEntry<TValue | string>[] {
-    return entries.map((entry) => {
-      if (!this.findEntityFieldByCodeNameOrName(entityInfo, entry.FieldName)?.Encrypt) {
-        return entry;
-      }
-      const redacted: ConflictDiagnosticEntry<TValue | string> = { FieldName: entry.FieldName };
-      if ('ClientOldValue' in entry) redacted.ClientOldValue = ENCRYPTED_SENTINEL;
-      if ('ClientNewValue' in entry) redacted.ClientNewValue = ENCRYPTED_SENTINEL;
-      if ('DBValue' in entry) redacted.DBValue = ENCRYPTED_SENTINEL;
-      return redacted;
-    });
+    return RedactEncryptedConflictValues(entityInfo, entries);
   }
 
-  /**
-   * Compares two typed entity field values for semantic inequality, handling `Date` epoch equality
-   * (plus optional non-`datetimeoffset` timezone-hour-shift tolerance) and `null`/`undefined` normalization.
-   */
   private areEntityFieldValuesDifferent<TLeft, TRight>(
     field: EntityFieldInfo | undefined,
     left: TLeft,
@@ -2424,90 +2402,15 @@ export class ResolverBase {
     allowTimezoneShiftWarning: boolean,
     fieldKeyForLog?: string
   ): boolean {
-    const normalizedLeft = left === undefined ? null : left;
-    const normalizedRight = right === undefined ? null : right;
-
-    if (normalizedLeft instanceof Date) {
-      const rightDate =
-        normalizedRight instanceof Date
-          ? normalizedRight
-          : field?.TSType === EntityFieldTSType.Date && normalizedRight !== null
-            ? this.ClientOldValueToFieldValue(field, normalizedRight)
-            : null;
-      if (!(rightDate instanceof Date) || isNaN(rightDate.getTime())) {
-        return true;
-      }
-      if (this.datesEqualAtColumnResolution(field, normalizedLeft, rightDate)) {
-        return false;
-      }
-      const sqlType = field?.SQLFullType?.trim().toLowerCase() || '';
-      if (sqlType !== 'datetimeoffset' && IsOnlyTimezoneShift(normalizedLeft, rightDate)) {
-        if (allowTimezoneShiftWarning && fieldKeyForLog) {
-          console.warn(
-            `Timezone hour shift detected on field "${fieldKeyForLog}" (${sqlType || 'datetime'}). ` +
-            `Client: ${normalizedLeft.toISOString()}, DB: ${rightDate.toISOString()}. ` +
-            `Consider using datetimeoffset to avoid timezone ambiguity.`
-          );
-        }
-        return false;
-      }
-      return true;
-    }
-
-    if (normalizedRight instanceof Date && field?.TSType === EntityFieldTSType.Date && normalizedLeft !== null) {
-      const leftDate = this.ClientOldValueToFieldValue(field, normalizedLeft);
-      if (leftDate instanceof Date && !isNaN(leftDate.getTime())) {
-        return !this.datesEqualAtColumnResolution(field, leftDate, normalizedRight);
-      }
-    }
-
-    if (typeof normalizedLeft === 'string' && typeof normalizedRight === 'string' && this.jsonStringsEquivalent(normalizedLeft, normalizedRight)) {
-      return false;
-    }
-
-    return Object.is(normalizedLeft, normalizedRight) ? false : normalizedLeft !== (normalizedRight as never);
+    return AreEntityFieldValuesDifferent(field, left, right, allowTimezoneShiftWarning, fieldKeyForLog);
   }
 
-  /**
-   * True when two instants would be stored as the same value in the field's column: SQL Server
-   * `datetime` resolves to 1/300 s and `smalldatetime` to one minute; every other type keeps milliseconds.
-   */
   private datesEqualAtColumnResolution(field: EntityFieldInfo | undefined, left: Date, right: Date): boolean {
-    return Math.abs(left.getTime() - right.getTime()) < this.dateColumnResolutionMs(field);
+    return DatesEqualAtColumnResolution(field, left, right);
   }
 
-  private dateColumnResolutionMs(field: EntityFieldInfo | undefined): number {
-    switch ((field?.Type ?? '').trim().toLowerCase()) {
-      case 'datetime':
-        return 1000 / 300;
-      case 'smalldatetime':
-        return 60_000;
-      default:
-        return 1;
-    }
-  }
-
-  /**
-   * True when both strings are JSON documents with the same content, ignoring whitespace and key order.
-   */
   private jsonStringsEquivalent(left: string, right: string): boolean {
-    const canonicalLeft = this.canonicalJSONDocument(left);
-    return canonicalLeft !== null && canonicalLeft === this.canonicalJSONDocument(right);
-  }
-
-  /**
-   * Canonical form of a JSON object or array string, or null when the text is not one.
-   */
-  private canonicalJSONDocument(text: string): string | null {
-    const first = text.trimStart().charAt(0);
-    if (first !== '{' && first !== '[') {
-      return null;
-    }
-    try {
-      return Canonicalize(JSON.parse(text));
-    } catch {
-      return null;
-    }
+    return JsonStringsEquivalent(left, right);
   }
 
   protected async TestAndSetClientOldValuesToDBValues<
@@ -2519,7 +2422,7 @@ export class ResolverBase {
     rawClientNewValues: Record<string, TNewVal>,
     entityObject: BaseEntity,
     contextUser: UserInfo
-  ): Promise<void> {
+  ): Promise<Record<string, ReturnType<ResolverBase['ClientOldValueToFieldValue']>>> {
     type ConvertedFieldValue = ReturnType<ResolverBase['ClientOldValueToFieldValue']>;
     const clientOldValues: Record<string, ConvertedFieldValue> = {};
     for (const item of input.OldValues___ ?? []) {
@@ -2532,155 +2435,57 @@ export class ResolverBase {
     // fls-guard: compared on the server only, never returned
     const dbValues = entityObject.GetAll();
 
-    interface DBDifferenceEntry {
-      FieldName: string;
-      ClientOldValue: ConvertedFieldValue;
-      DBValue: ConvertedFieldValue;
-    }
-    interface ClientDifferenceEntry {
-      FieldName: string;
-      ClientOldValue: ConvertedFieldValue;
-      ClientNewValue: TNewVal;
-    }
+    const checkResult = DetectFieldConcurrencyConflicts(
+      entityObject.EntityInfo,
+      clientOldValues,
+      clientNewValues,
+      dbValues,
+    );
 
-    const dbDifferences: DBDifferenceEntry[] = [];
-    const dbDiffByField = new Map<string, DBDifferenceEntry>();
+    if (checkResult.ConflictingFields.length > 0) {
+      const conflictingFields = checkResult.ConflictingFields;
+      const shownClientDifferences = checkResult.ClientDifferences;
+      const shownDBDifferences = checkResult.DBDifferences;
+      const shownOverlap = checkResult.Overlap;
+      const msg = {
+        Message:
+          'Concurrent modification conflict: one or more fields modified by the client were updated in the database since the record was loaded. Save rejected to prevent overwriting concurrent changes.',
+        ClientDifferences: shownClientDifferences,
+        DBDifferences: shownDBDifferences,
+        Overlap: shownOverlap,
+      };
 
-    for (const key of Object.keys(clientOldValues)) {
-      const f = this.findEntityFieldByCodeNameOrName(entityObject.EntityInfo, key);
-      if (this.isFieldOpaqueToClient(f)) {
-        continue;
-      }
-      const dbVal: ConvertedFieldValue = f && f.Name in dbValues ? dbValues[f.Name] : dbValues[key];
-      const different = this.areEntityFieldValuesDifferent(f, clientOldValues[key], dbVal, true, key);
-      if (different && f && !f.ReadOnly) {
-        const entry: DBDifferenceEntry = {
-          FieldName: key,
-          ClientOldValue: clientOldValues[key],
-          DBValue: dbVal,
-        };
-        dbDifferences.push(entry);
-        dbDiffByField.set(key, entry);
-      }
-    }
-
-    let fieldsToPreserveFromDB: Set<string> | undefined;
-
-    if (dbDifferences.length > 0) {
-      const clientDifferences: ClientDifferenceEntry[] = [];
-      const clientDiffFieldNames = new Set<string>();
-
-      for (const key of Object.keys(clientOldValues)) {
-        const f = this.findEntityFieldByCodeNameOrName(entityObject.EntityInfo, key);
-        if (
-          key in clientNewValues &&
-          f &&
-          f.AllowUpdateAPI &&
-          !f.IsPrimaryKey &&
-          this.areEntityFieldValuesDifferent(f, clientOldValues[key], clientNewValues[key], false)
-        ) {
-          clientDifferences.push({
-            FieldName: key,
-            ClientOldValue: clientOldValues[key],
-            ClientNewValue: clientNewValues[key],
-          });
-          clientDiffFieldNames.add(key);
-        }
-      }
-
-      // True conflicting overlap: client modified a field whose authoritative DB value differs from BOTH
-      // ClientOldValue AND ClientNewValue (idempotent concurrent writes to the same value converge cleanly).
-      const overlap = clientDifferences.filter((cd) => {
-        const dd = dbDiffByField.get(cd.FieldName);
-        if (!dd) {
-          return false;
-        }
-        const f = this.findEntityFieldByCodeNameOrName(entityObject.EntityInfo, cd.FieldName);
-        return this.areEntityFieldValuesDifferent(f, cd.ClientNewValue, dd.DBValue, true);
+      console.warn('Entity save concurrency conflict detected — rejecting conflicting update:', JSON.stringify(msg));
+      LogErrorEx({
+        message: `Entity save inconsistency detected: ${JSON.stringify(msg)}`,
+        severity: 'warning',
+        category: 'ResolverBase.TestAndSetClientOldValuesToDBValues',
+        metadata: {
+          entityName: entityObject.EntityInfo.Name,
+          clientDifferences: shownClientDifferences,
+          dbDifferences: shownDBDifferences,
+          overlap: shownOverlap,
+        },
       });
 
-      if (overlap.length > 0) {
-        const conflictingFields = overlap.map((o) => o.FieldName);
-        const entityInfo = entityObject.EntityInfo;
-        const shownClientDifferences = this.redactEncryptedConflictValues<ConvertedFieldValue | TNewVal>(entityInfo, clientDifferences);
-        const shownDBDifferences = this.redactEncryptedConflictValues<ConvertedFieldValue | TNewVal>(entityInfo, dbDifferences);
-        const shownOverlap = this.redactEncryptedConflictValues<ConvertedFieldValue | TNewVal>(entityInfo, overlap);
-        const msg = {
-          Message:
-            'Concurrent modification conflict: one or more fields modified by the client were updated in the database since the record was loaded. Save rejected to prevent overwriting concurrent changes.',
-          ClientDifferences: shownClientDifferences,
-          DBDifferences: shownDBDifferences,
-          Overlap: shownOverlap,
-        };
+      // Persist SAVE_INCONSISTENCY ErrorLog record on the entity's bound provider before rejecting
+      await this.persistSaveInconsistencyErrorLog(entityObject, contextUser, msg);
 
-        console.warn('Entity save concurrency conflict detected — rejecting conflicting update:', JSON.stringify(msg));
-        LogErrorEx({
-          message: `Entity save inconsistency detected: ${JSON.stringify(msg)}`,
-          severity: 'warning',
-          category: 'ResolverBase.TestAndSetClientOldValuesToDBValues',
-          metadata: {
+      throw new GraphQLError(
+        `Concurrent modification conflict on ${entityObject.EntityInfo.Name} for field(s): ${conflictingFields.join(', ')}. Reload the record and retry your changes.`,
+        {
+          extensions: {
+            code: 'CONCURRENT_MODIFICATION_CONFLICT',
             entityName: entityObject.EntityInfo.Name,
-            clientDifferences: shownClientDifferences,
-            dbDifferences: shownDBDifferences,
-            overlap: shownOverlap,
+            conflictingFields,
           },
-        });
-
-        // Persist SAVE_INCONSISTENCY ErrorLog record on the entity's bound provider before rejecting
-        try {
-          const hasEntityObjectFactory = (
-            p: object | null | undefined
-          ): p is Pick<IMetadataProvider, 'GetEntityObject'> => Boolean(p && 'GetEntityObject' in p);
-          const providerCandidate = entityObject.ProviderToUse;
-          if (hasEntityObjectFactory(providerCandidate)) {
-            const errorLogEntity = await providerCandidate.GetEntityObject<MJErrorLogEntity>('MJ: Error Logs', contextUser);
-            // Code is NCHAR(20); a longer value is rejected at the database
-            errorLogEntity.Code = 'SAVE_INCONSISTENCY';
-            errorLogEntity.Message = `Entity save inconsistency detected for ${entityObject.EntityInfo.Name}: ${JSON.stringify(msg)}`;
-            errorLogEntity.Status = 'Warning';
-            errorLogEntity.Category = 'Entity Save';
-            errorLogEntity.CreatedBy = contextUser.Email || contextUser.Name;
-
-            const saveResult = await errorLogEntity.Save();
-            if (!saveResult) {
-              console.error(
-                `Failed to save ErrorLog record for ${entityObject.EntityInfo.Name}: ${errorLogEntity.LatestResult?.CompleteMessage}`
-              );
-            }
-          }
-        } catch (errorLogError) {
-          console.error('Error creating ErrorLog record:', errorLogError);
         }
-
-        throw new GraphQLError(
-          `Concurrent modification conflict on ${entityObject.EntityInfo.Name} for field(s): ${conflictingFields.join(', ')}. Reload the record and retry your changes.`,
-          {
-            extensions: {
-              code: 'CONCURRENT_MODIFICATION_CONFLICT',
-              entityName: entityObject.EntityInfo.Name,
-              conflictingFields,
-            },
-          }
-        );
-      }
-
-      // Non-overlapping concurrent DB edits: preserve any field that changed in the database
-      // when the client itself did NOT modify that field (prevents full-payload clients or forged
-      // OldValues___ from clobbering concurrent DB updates on untouched columns).
-      fieldsToPreserveFromDB = new Set<string>();
-      for (const dd of dbDifferences) {
-        if (!clientDiffFieldNames.has(dd.FieldName)) {
-          fieldsToPreserveFromDB.add(dd.FieldName);
-          const f = this.findEntityFieldByCodeNameOrName(entityObject.EntityInfo, dd.FieldName);
-          if (f) {
-            fieldsToPreserveFromDB.add(f.Name);
-            fieldsToPreserveFromDB.add(f.CodeName);
-          }
-        }
-      }
+      );
     }
 
-    if (fieldsToPreserveFromDB && fieldsToPreserveFromDB.size > 0) {
+    const fieldsToPreserveFromDB = checkResult.FieldsToPreserveFromDB;
+
+    if (fieldsToPreserveFromDB.size > 0) {
       const mergedValues: Record<string, TNewVal> = {};
       for (const key of Object.keys(clientNewValues)) {
         if (!fieldsToPreserveFromDB.has(key)) {
@@ -2690,6 +2495,43 @@ export class ResolverBase {
       entityObject.SetMany(mergedValues);
     } else {
       entityObject.SetMany(clientNewValues);
+    }
+
+    const clientModifiedBaseline: Record<string, ConvertedFieldValue> = {};
+    for (const diff of checkResult.ClientDifferences) {
+      clientModifiedBaseline[diff.FieldName] = clientOldValues[diff.FieldName];
+    }
+    return clientModifiedBaseline;
+  }
+
+  protected async persistSaveInconsistencyErrorLog(
+    entityObject: BaseEntity,
+    contextUser: UserInfo | undefined,
+    diagnosticPayload: Record<string, unknown>,
+  ): Promise<void> {
+    try {
+      const hasEntityObjectFactory = (
+        p: object | null | undefined
+      ): p is Pick<IMetadataProvider, 'GetEntityObject'> => Boolean(p && 'GetEntityObject' in p);
+      const providerCandidate = entityObject.ProviderToUse;
+      if (hasEntityObjectFactory(providerCandidate)) {
+        const errorLogEntity = await providerCandidate.GetEntityObject<MJErrorLogEntity>('MJ: Error Logs', contextUser);
+        // Code is NCHAR(20); a longer value is rejected at the database
+        errorLogEntity.Code = 'SAVE_INCONSISTENCY';
+        errorLogEntity.Message = `Entity save inconsistency detected for ${entityObject.EntityInfo.Name}: ${JSON.stringify(diagnosticPayload)}`;
+        errorLogEntity.Status = 'Warning';
+        errorLogEntity.Category = 'Entity Save';
+        errorLogEntity.CreatedBy = contextUser?.Email || contextUser?.Name || '';
+
+        const saveResult = await errorLogEntity.Save();
+        if (!saveResult) {
+          console.error(
+            `Failed to save ErrorLog record for ${entityObject.EntityInfo.Name}: ${errorLogEntity.LatestResult?.CompleteMessage}`
+          );
+        }
+      }
+    } catch (errorLogError) {
+      console.error('Error creating ErrorLog record:', errorLogError);
     }
   }
 
