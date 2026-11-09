@@ -381,6 +381,29 @@ describe('DurableEntityA2ATaskStore', () => {
             }
         });
 
+        it('keeps streaming a task this replica is still running, however long its row goes unchanged', async () => {
+            vi.useFakeTimers();
+            try {
+                const provider = fakeProvider(db);
+                const store = new DurableEntityA2ATaskStore();
+                await store.SaveTask(task('in_progress'), USER_A, provider);
+                const controller = store.RegisterAbortController(TASK_ID);
+                const onStale = vi.fn();
+                const unsubscribe = store.SubscribeWithPolling(TASK_ID, USER_A, provider, () => undefined, 100, onStale, 1000);
+
+                await vi.advanceTimersByTimeAsync(3000);
+                expect(onStale).not.toHaveBeenCalled();
+
+                // Once the work here has ended without a write, the unchanged row counts again.
+                controller.abort('stopped');
+                await vi.advanceTimersByTimeAsync(1150);
+                expect(onStale).toHaveBeenCalledTimes(1);
+                unsubscribe();
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
         it('keeps polling a task whose row keeps changing', async () => {
             vi.useFakeTimers();
             try {

@@ -795,7 +795,8 @@ export class DurableEntityA2ATaskStore extends TaskStore {
      *
      * Polling stops when the task reaches a terminal status, or when its stored row has not changed for
      * `staleAfterMs` (a task orphaned by a replica that died stays `in_progress` forever); `onStale` is
-     * then called so the caller can end its stream and say why.
+     * then called so the caller can end its stream and say why. A task this replica is still running
+     * (it holds a live abort controller for it) is never stale.
      */
     public SubscribeWithPolling(
         taskId: string,
@@ -831,8 +832,13 @@ export class DurableEntityA2ATaskStore extends TaskStore {
                 // Ignore transient polling errors
             }
             // ponytail: "unchanged for a while" stands in for liveness; a heartbeat column on the row
-            // written by the running replica would tell an orphaned task from a slow one.
-            if (active && Date.now() - lastChangeAt >= staleAfterMs) {
+            // written by the running replica would tell an orphaned task from a slow one. A task this
+            // replica is still running is alive however long it goes without a write, so its clock
+            // starts only once the work here has ended.
+            const runningHere = this._abortControllers.Get(taskId);
+            if (runningHere && !runningHere.signal.aborted) {
+                lastChangeAt = Date.now();
+            } else if (active && Date.now() - lastChangeAt >= staleAfterMs) {
                 cleanup();
                 onStale?.();
             }
