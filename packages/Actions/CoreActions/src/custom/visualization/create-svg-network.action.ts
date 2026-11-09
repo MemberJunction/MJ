@@ -371,7 +371,7 @@ export class CreateSVGNetworkAction extends BaseAction {
         if (enablePanZoom) {
             const panZoomScript = doc.createElementNS(ns, 'script');
             panZoomScript.setAttribute('type', 'text/javascript');
-            panZoomScript.textContent = SVGUtils.generatePanZoomScript('pan-zoom-container', 0.5, 3, showZoomControls).replace(/<script[^>]*>|<\/script>/gi, '');
+            panZoomScript.textContent = SVGUtils.GeneratePanZoomScriptBody('pan-zoom-container', 0.5, 3, showZoomControls);
             svg.appendChild(panZoomScript);
         }
 

@@ -27,7 +27,7 @@ import type { MLInferenceDeps } from '../types';
 const deps: MLInferenceDeps = {
   modelLoader: { async loadModel() { return null; } },
   artifactLoader: new InMemoryArtifactLoader(),
-  sidecar: { async predict() { return { predictions: [] }; } },
+  sidecar: { async predict() { return { predictions: [], classOrder: null }; } },
 };
 
 describe('isMLInferenceWorkType', () => {
