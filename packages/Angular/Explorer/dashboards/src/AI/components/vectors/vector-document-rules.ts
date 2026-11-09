@@ -219,8 +219,8 @@ export interface EntityDocumentSummary {
     Name: string;
     EntityID: string;
     Status: string;
-    /** The Entity Document Type's name (the view's `Type` column). */
-    Type: string;
+    /** The Entity Document Type's name (the view's `Type` column); null when the type row is missing. */
+    Type: string | null;
     __mj_CreatedAt: Date;
 }
 
