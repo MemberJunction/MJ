@@ -491,6 +491,66 @@ describe('MLModelInferenceProcessor — shadow scoring integration (D3, D10, D13
     }
   });
 
+  it('writes the batch\'s champion audit rows before ProcessBatch returns, without waiting for the challengers (P4)', async () => {
+    const { deps } = buildDeps();
+    const championSaves: string[] = [];
+    let challengersFinished = 0;
+    /** A Feature Value row whose save takes 30 ms, like a database write. */
+    const slowFeatureValue = () => {
+      const row: Record<string, unknown> = {
+        NewRecord: () => true,
+        Save: async () => {
+          await new Promise((r) => setTimeout(r, 30));
+          if (row['Role'] === 'Champion') {
+            championSaves.push(String(row['RecordID']));
+          }
+          return true;
+        },
+      };
+      return row;
+    };
+    const emptyRead = { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' };
+    const provider = {
+      GetEntityObject: async <T>() => slowFeatureValue() as T,
+      RunView: async () => emptyRead,
+      RunViews: async (views: unknown[]) => views.map(() => emptyRead),
+    } as unknown as IMetadataProvider;
+
+    const shadowCoordinator = new ShadowScoringCoordinator({
+      ChallengerRunner: {
+        RunChallenger: async () => {
+          await new Promise((r) => setTimeout(r, 300));
+          challengersFinished++;
+          return { Score: 0.5 };
+        },
+      },
+      AuditSink: { RecordShadowAudit: async () => {} },
+    });
+    const proc = new MLModelInferenceProcessor(
+      { modelId: 'model-1', deps, recordProcessId: 'rp-p4', challengerConfig: { ...challengerConfig, MaxLatencyMs: 1000 }, shadowCoordinator },
+      new TestAssembler(new InMemoryDataAccess()),
+    );
+
+    const records = [memberRecord('m1', 10, 1, 'NYC'), memberRecord('m2', 20, 2, 'LA'), memberRecord('m3', 30, 3, 'NYC')];
+    const startedAt = Date.now();
+    const results = await proc.ProcessBatch(records, {
+      ContextUser: { ID: 'user-1' } as UserInfo,
+      Provider: provider,
+      RecordProcessID: 'rp-p4',
+      EntityID: 'ent-members',
+    });
+    const elapsedMs = Date.now() - startedAt;
+
+    expect(results.every((r) => r.Status === 'Succeeded')).toBe(true);
+    expect(championSaves.sort()).toEqual(['m1', 'm2', 'm3']);
+    // The champion path did not wait for the 300 ms challengers.
+    expect(challengersFinished).toBe(0);
+    expect(elapsedMs).toBeLessThan(250);
+
+    await shadowCoordinator.FlushInFlight();
+    expect(challengersFinished).toBe(3);
+  });
+
   it('never fails the champion or mutates the target business entity when the challenger times out or throws (D13)', async () => {
     const { deps } = buildDeps();
     const auditRecords: ShadowFeatureValueAuditRecord[] = [];

@@ -228,7 +228,8 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       }
       const championLatencyMs = Date.now() - startedAt;
       const payload = this.toPayload(model, prediction);
-      this.dispatchShadowIfConfigured(record, model, featureRows[0] ?? {}, prediction, championLatencyMs, context);
+      // The champion audit row is written before the record reports done; the challenger runs on.
+      await this.dispatchShadowIfConfigured(record, model, featureRows[0] ?? {}, prediction, championLatencyMs, context);
       return { Status: 'Succeeded', ResultPayload: payload };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -263,14 +264,20 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       // is comparable to single-record challenger latency for P95 latency-ratio drift checks.
       const perRecordLatencyMs = (Date.now() - startedAt) / Math.max(1, records.length);
       const previousDropped = this.shadowCoordinator?.DroppedCount ?? 0;
+      const championAudits: Promise<void>[] = [];
       const results = records.map((rec, i) => {
         const prediction = response.predictions[i];
         if (!prediction) {
           return { Status: 'Failed' as const, ErrorMessage: 'Sidecar returned no prediction for the record' };
         }
-        this.dispatchShadowIfConfigured(rec, model, featureRows[i] ?? {}, prediction, perRecordLatencyMs, context);
+        championAudits.push(
+          this.dispatchShadowIfConfigured(rec, model, featureRows[i] ?? {}, prediction, perRecordLatencyMs, context),
+        );
         return { Status: 'Succeeded' as const, ResultPayload: this.toPayload(model, prediction) };
       });
+      // The batch's champion audit rows are written before it reports done (at most one per record, so bounded
+      // by the batch); the challengers run on and are never awaited here.
+      await Promise.all(championAudits);
       const currentDropped = this.shadowCoordinator?.DroppedCount ?? 0;
       if (currentDropped > previousDropped) {
         LogError(
@@ -285,6 +292,10 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     }
   }
 
+  /**
+   * Mirrors a sampled record to the challenger. Returns the record's champion audit write (never rejects) for the
+   * caller to await; resolved at once when nothing was dispatched.
+   */
   private dispatchShadowIfConfigured(
     record: RecordRef,
     model: LoadedModel,
@@ -292,25 +303,25 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     prediction: Prediction,
     championLatencyMs: number,
     context: RecordProcessorContext,
-  ): void {
+  ): Promise<void> {
     if (
       !this.shadowCoordinator ||
       !this.challengerConfig ||
       this.challengerConfig.WorkType !== 'ML Model' ||
       context.DryRun
     ) {
-      return;
+      return Promise.resolve();
     }
     try {
       // Sample BEFORE cloning the feature row or constructing the envelope (D3).
       if (!this.shadowCoordinator.ShouldSample(this.challengerConfig)) {
-        return;
+        return Promise.resolve();
       }
       const championConfidence =
         model.problemType === 'classification' && Number.isFinite(prediction.score)
           ? Math.max(prediction.score, 1 - prediction.score)
           : undefined;
-      this.shadowCoordinator.DispatchShadowScore(
+      return this.shadowCoordinator.DispatchShadowScore(
         {
           RecordProcessID: context.RecordProcessID ?? this.recordProcessId,
           ProcessRunID: context.ProcessRunID ?? null,
@@ -330,10 +341,11 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
         context.ContextUser,
         context.Provider,
         { AlreadySampled: true },
-      );
+      ).ChampionAudit;
     } catch (shadowErr: unknown) {
       const msg = shadowErr instanceof Error ? shadowErr.message : String(shadowErr);
       LogError(`MLModelInferenceProcessor: non-fatal shadow dispatch failure for '${record.RecordID}': ${msg}`);
+      return Promise.resolve();
     }
   }
 

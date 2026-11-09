@@ -179,6 +179,17 @@ export interface DispatchShadowScoreOptions {
   readonly AlreadySampled?: boolean;
 }
 
+/** What one {@link ShadowScoringCoordinator.DispatchShadowScore} call started. */
+export interface ShadowDispatchResult {
+  /**
+   * Settles (never rejects) once this record's `Role = 'Champion'` audit row is written. The caller awaits it
+   * before reporting its batch done; it never waits on the challenger.
+   */
+  readonly ChampionAudit: Promise<void>;
+}
+
+const NOT_DISPATCHED: ShadowDispatchResult = { ChampionAudit: Promise.resolve() };
+
 const DEFAULT_MAX_IN_FLIGHT = 64;
 const DEFAULT_MAX_LATENCY_MS = 5000;
 
@@ -246,18 +257,19 @@ export class ShadowScoringCoordinator {
   }
 
   /**
-   * Fire-and-forget shadow dispatch. Defers all publisher and challenger execution to a future tick
-   * so synchronous work inside a runner never blocks the champion write path, and caps concurrent
-   * in-flight tasks at `MaxInFlight`.
+   * Shadow dispatch. Starts the record's champion audit write (returned as `ChampionAudit`, which the caller awaits
+   * before its batch reports done, so those writes are bounded by the batch and never left running), and defers all
+   * publisher and challenger execution to a future tick so synchronous work inside a runner never blocks the
+   * champion path; concurrent challenger tasks are capped at `MaxInFlight`.
    */
   public DispatchShadowScore(
     envelope: ShadowScoreEnvelope,
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
     options?: DispatchShadowScoreOptions,
-  ): void {
+  ): ShadowDispatchResult {
     if (!options?.AlreadySampled && !this.ShouldSample(envelope.ChallengerConfig)) {
-      return;
+      return NOT_DISPATCHED;
     }
 
     // Always persist the champion audit row for every sampled record,
@@ -271,10 +283,11 @@ export class ShadowScoringCoordinator {
         this.inFlightChampionTasks.delete(championTask);
       });
     this.inFlightChampionTasks.add(championTask);
+    const result: ShadowDispatchResult = { ChampionAudit: championTask };
 
     if (this.inFlightTasks.size >= this.maxInFlight) {
       this.droppedCount++;
-      return;
+      return result;
     }
 
     const task: Promise<void> = new Promise<void>((resolve) => {
@@ -290,6 +303,7 @@ export class ShadowScoringCoordinator {
       });
 
     this.inFlightTasks.add(task);
+    return result;
   }
 
   /**
