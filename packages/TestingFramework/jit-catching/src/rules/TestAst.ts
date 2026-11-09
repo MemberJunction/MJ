@@ -112,6 +112,13 @@ export class TestAst {
         return 'public';
     }
 
+    /** True when the innermost receiver's type is declared only in the test file (a class the test declares). */
+    public ReceiverDeclaredInTest(receiver: ts.Expression): boolean {
+        const type = this.Checker.getTypeAtLocation(this.InnermostExpression(receiver));
+        const declarations = type.getSymbol()?.declarations ?? [];
+        return declarations.length > 0 && declarations.every((d) => d.getSourceFile() === this.SourceFile);
+    }
+
     /** Calls whose callee text matches one of `names` exactly (e.g. `expect`, `vi.mock`). */
     public CallsTo(names: string[]): ts.CallExpression[] {
         const out: ts.CallExpression[] = [];
