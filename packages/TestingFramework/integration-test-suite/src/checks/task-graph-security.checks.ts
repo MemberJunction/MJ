@@ -17,6 +17,8 @@
  * - TGS5: the real gate. A tainted one-step graph whose step is `Send Single Message` (shipped with
  *   `Config.disallowWhenTainted`) runs through the real dispatcher configured with MJServer's real
  *   `TaskGraphActionRunner`, which refuses the step before the action runs (see {@link checkRealRunnerRefusesTaintedEgress}).
+ * - TGS6: a person's review clears taint in a real graph, where every Human step is assigned to the submitter
+ *   the graph runs as, and server code completing the same kind of step clears nothing (see {@link checkPersonsReviewClearsTaint}).
  *
  * Fixtures: one start-paused Human-only graph (so no dispatcher picks it up) and the rows the checks
  * create, all removed in teardown, rows that reference another first.
@@ -24,7 +26,7 @@
  * @module @memberjunction/integration-test-suite
  */
 import { randomUUID } from 'crypto';
-import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { RunView, ServerOperationScopeManager, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { MJEnvironmentEntityExtended, MJTaskDependencyEntity, MJTaskEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
 import {
     ParseTaskSecurityEnvelope,
@@ -638,12 +640,154 @@ async function checkRealRunnerRefusesTaintedEgress(ctx: IntegrationCheckContext)
     Assert(cleanupFailures.length === 0, `TGS5: cleanup left rows behind: ${cleanupFailures.join('; ')}`);
 }
 
+/**
+ * TGS6 — a person's review clears taint in a real graph; server code completing the step does not.
+ *
+ * A real graph assigns every Human step to its submitter, who is also the user its agents and actions run as,
+ * so who completed a step cannot tell a person from code: where the completion came from does. A tainted fetch
+ * fans out to two Human steps, both assigned to the submitter (`ctx.User`, also this dispatcher's user). One is
+ * completed as the Tasks UI completes it, a save inside a client CRUD boundary (as `ResolverBase` wraps it); the
+ * other by a plain server-side save as the same user, as an agent or action run would. Each feeds an action step
+ * whose stub runner records the envelope it was handed: the step behind the person's review must run clean, and
+ * the one behind server code tainted. TGS5 proves the real runner refuses a gated action given a tainted
+ * envelope, so the clean envelope is what lets a gated action run after a review.
+ */
+async function checkPersonsReviewClearsTaint(ctx: IntegrationCheckContext): Promise<void> {
+    if (!MutationTierOn(ctx)) {
+        SkipCheck(MUTATION_TIER_OFF_REASON);
+        return;
+    }
+
+    const actionsResult = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ Name: string }>(
+        { EntityName: 'MJ: Actions', Fields: ['Name'], MaxRows: 1, ResultType: 'simple' },
+        ctx.User,
+    );
+    Assert(actionsResult.Success && (actionsResult.Results?.length ?? 0) === 1, 'TGS6: failed to query an action from MJ: Actions');
+    const actionName = actionsResult.Results![0].Name;
+    const FETCH = 'it165 review fetch';
+    const BY_PERSON = 'it165 reviewed by a person';
+    const BY_SERVER = 'it165 completed by server code';
+    const AFTER_PERSON = 'it165 send after the person';
+    const AFTER_SERVER = 'it165 send after server code';
+    const step = (tempId: string, name: string, kind: 'Action' | 'Human', dependsOn: string[]) => ({
+        tempId, name, description: 'fixture', kind, dependsOn,
+        configuration: kind === 'Action' ? { actionName } : { instructions: 'fixture' },
+    });
+
+    const submitted = await new TaskGraphService().Submit(
+        {
+            workflowName: `it165-review-clears-taint-${Date.now()} (mj-integration-test — safe to delete)`,
+            continuation: 'none',
+            tasks: [
+                step('fetch', FETCH, 'Action', []),
+                step('byPerson', BY_PERSON, 'Human', ['fetch']),
+                step('byServer', BY_SERVER, 'Human', ['fetch']),
+                step('afterPerson', AFTER_PERSON, 'Action', ['byPerson']),
+                step('afterServer', AFTER_SERVER, 'Action', ['byServer']),
+            ],
+        } as TaskGraphSpec,
+        {
+            EnvironmentID: MJEnvironmentEntityExtended.DefaultEnvironmentID,
+            Provider: ctx.Provider,
+            ContextUser: ctx.User,
+            SecurityEnvelope: { Version: TASK_SECURITY_ENVELOPE_VERSION, IsRunTainted: false },
+            Debug: { paused: false },
+        },
+    );
+    Assert(submitted.Success && !!submitted.ParentTaskID, `TGS6: failed to submit graph: ${submitted.ErrorMessage ?? ''}`);
+    const parentID = submitted.ParentTaskID!;
+
+    const ranTainted = new Map<string, boolean>();
+    const actionRunner: TaskActionRunner = {
+        EnforcesSecurityEnvelope: true,
+        RunActionForTask: async (params: TaskActionRunParams): Promise<TaskActionRunResult> => {
+            const task = await params.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', params.ContextUser);
+            await task.Load(params.TaskID);
+            if (task.Name === FETCH) {
+                return { Success: true, Output: { page: 'untrusted-data' }, IsOutputTainted: true };
+            }
+            ranTainted.set(task.Name, params.SecurityEnvelope?.IsRunTainted === true);
+            return { Success: true, Output: {} };
+        },
+    };
+    const dispatcher = new TaskGraphDispatcher(
+        providerFactory(ctx),
+        new NoopAgentRunner(),
+        ctx.User as UserInfo,
+        {
+            InstanceID: `it165-review-${randomUUID().slice(0, 8)}`,
+            PollIntervalSeconds: 0.1,
+            ClaimTTLSeconds: 300,
+            ReconciliationIntervalSeconds: 3600,
+            MaxConcurrentTasks: 4,
+        },
+        undefined,
+        undefined,
+        actionRunner,
+    );
+
+    const childByName = async (): Promise<Map<string, MJTaskEntity>> => {
+        const rows = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJTaskEntity>(
+            { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${parentID}'`, ResultType: 'entity_object', BypassCache: true },
+            ctx.User,
+        );
+        return new Map((rows.Results ?? []).map((t) => [t.Name, t]));
+    };
+
+    let cleanupFailures: string[] = [];
+    try {
+        await dispatcher.Start();
+        let fetchDone = false;
+        for (const deadline = Date.now() + 30_000; Date.now() < deadline && !fetchDone;) {
+            await settle(200);
+            fetchDone = (await childByName()).get(FETCH)?.Status === 'Complete';
+        }
+        Assert(fetchDone, `TGS6: the fetch step of graph ${parentID} did not complete within 30s`);
+
+        const children = await childByName();
+        const byPerson = children.get(BY_PERSON);
+        const byServer = children.get(BY_SERVER);
+        Assert(byPerson != null && byServer != null, 'TGS6: the Human step rows were not found');
+        Assert(UUIDsEqual(byPerson!.UserID, ctx.User.ID) && UUIDsEqual(byServer!.UserID, ctx.User.ID), 'TGS6: the Human steps are not assigned to the submitter');
+
+        byPerson!.Status = 'Complete';
+        const savedByPerson = await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() => byPerson!.Save());
+        Assert(savedByPerson, `TGS6: the person's completion was refused: ${byPerson!.LatestResult?.CompleteMessage ?? ''}`);
+        byServer!.Status = 'Complete';
+        Assert(await byServer!.Save(), `TGS6: the server-code completion was refused: ${byServer!.LatestResult?.CompleteMessage ?? ''}`);
+
+        let settledParent: MJTaskEntity | null = null;
+        for (const deadline = Date.now() + 30_000; Date.now() < deadline && !settledParent;) {
+            await settle(200);
+            const p = await loadTask(ctx, parentID);
+            if (p.Status === 'Complete' || p.Status === 'Failed' || p.Status === 'Cancelled' || p.Status === 'Blocked') {
+                settledParent = p;
+            }
+        }
+        Assert(settledParent != null, `TGS6: graph ${parentID} did not settle within 30s`);
+        AssertEqual(settledParent!.Status, 'Complete', 'TGS6: parent graph status');
+
+        const completer = (t: MJTaskEntity | undefined): unknown =>
+            (JSON.parse(t?.Configuration ?? '{}') as { runtime?: { completedByUserID?: string } }).runtime?.completedByUserID;
+        const settled = await childByName();
+        Assert(UUIDsEqual(completer(settled.get(BY_PERSON)) as string, ctx.User.ID), "TGS6: the person's completion was not recorded as theirs");
+        AssertEqual(completer(settled.get(BY_SERVER)), undefined, 'TGS6: a completer was recorded for the server-code completion');
+        AssertEqual(ranTainted.get(AFTER_PERSON), false, "TGS6: the step after the person's review ran tainted");
+        AssertEqual(ranTainted.get(AFTER_SERVER), true, 'TGS6: the step after the server-code completion ran clean');
+    } finally {
+        await dispatcher.Stop();
+        cleanupFailures = await DeleteTaskGraph(ctx.Provider, ctx.User, parentID).catch((e: unknown) => [String(e)]);
+    }
+    Assert(cleanupFailures.length === 0, `TGS6: cleanup left rows behind: ${cleanupFailures.join('; ')}`);
+}
+
 export const TaskGraphSecurityChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.TGS1`, Name: 'TGS1: every row of a submitted graph carries its envelope, and the envelope cannot be edited', Fn: checkEnvelopeOnEveryRowAndImmutable, RequiresMutation: true },
     { Id: `${BUNDLE}.TGS2`, Name: 'TGS2: of two concurrent compensation rows for one forward step, exactly one lands', Fn: checkOneCompensationPerForwardStep, RequiresMutation: true },
     { Id: `${BUNDLE}.TGS3`, Name: 'TGS3: the A2A task store refuses task-graph steps and files A2A tasks under their own type', Fn: checkA2AStoreSeesOnlyA2ARows, RequiresMutation: true },
     { Id: `${BUNDLE}.TGS4`, Name: 'TGS4: a tainted graph through the real dispatcher is gated on taint at a Decision-downstream action, failing the graph and triggering saga compensation', Fn: checkDispatcherTaintGateAndCompensation, RequiresMutation: true },
     { Id: `${BUNDLE}.TGS5`, Name: "TGS5: MJServer's real TaskGraphActionRunner refuses a disallowWhenTainted action on a tainted graph before it runs", Fn: checkRealRunnerRefusesTaintedEgress, RequiresMutation: true },
+    { Id: `${BUNDLE}.TGS6`, Name: "TGS6: the submitter's own review of a Human step clears taint, and server code completing one clears nothing", Fn: checkPersonsReviewClearsTaint, RequiresMutation: true },
 ];
 
 for (const check of TaskGraphSecurityChecks) {
