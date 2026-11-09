@@ -981,8 +981,19 @@ const devAuthSchema = z.object({
   defaultEmail: z.string().optional(),
 }).passthrough();
 
+const eSignatureSchema = z.object({
+  /**
+   * LOCAL DEVELOPMENT ONLY (`ESIGNATURE_ALLOW_UNVERIFIED_WEBHOOKS=true`). The eSignature webhook
+   * (`/esignature/webhook/:driverKey`) is pre-auth, so by default an event for a signature account
+   * with no webhook secret configured is rejected and never changes a request's status. Setting
+   * this to true applies such events without verification. Ignored when NODE_ENV=production.
+   */
+  allowUnverifiedWebhooks: zodBooleanWithTransforms().default(false),
+}).passthrough();
+
 const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
+  eSignature: eSignatureSchema.optional().default({}),
   magicLink: magicLinkSchema.optional().default({}),
   devAuth: devAuthSchema.optional().default({}),
   widget: widgetSchema.optional().default({}),
@@ -1061,6 +1072,7 @@ export type { ServerRole };
 
 export type UserHandlingInfo = z.infer<typeof userHandlingInfoSchema>;
 export type MagicLinkConfig = z.infer<typeof magicLinkSchema>;
+export type ESignatureConfig = z.infer<typeof eSignatureSchema>;
 export type WidgetConfig = z.infer<typeof widgetSchema>;
 export type TelephonyConfig = z.infer<typeof telephonySchema>;
 export type RealtimeConfig = z.infer<typeof realtimeSchema>;
@@ -1259,6 +1271,13 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     evictionSweepIntervalSeconds: 300,
     verboseLogging: false,
     engineSweepIntervalSeconds: 300,
+  },
+
+  // eSignature defaults — unverified webhooks are rejected unless the operator opts in for local
+  // development with ESIGNATURE_ALLOW_UNVERIFIED_WEBHOOKS=true (or eSignature.allowUnverifiedWebhooks
+  // in mj.config.cjs). The env read lives here (the merge base) for the same reason as telemetry above.
+  eSignature: {
+    allowUnverifiedWebhooks: parseBooleanEnv(process.env.ESIGNATURE_ALLOW_UNVERIFIED_WEBHOOKS),
   },
 
   // Logging settings defaults — variables logging is always off unless the operator

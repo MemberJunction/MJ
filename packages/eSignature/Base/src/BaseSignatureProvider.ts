@@ -106,11 +106,11 @@ export abstract class BaseSignatureProvider {
     /**
      * Verify the authenticity of an inbound webhook (HMAC / signature). The eSignature webhook
      * endpoint is unauthenticated and mutates signature-request status, so the engine consults this
-     * before applying any event under a **verify-if-configured** policy:
+     * before applying any event under a **default-strict** policy:
      *   - `Verified`      → a secret is configured and the signature matched → engine accepts.
      *   - `Failed`        → a secret is configured but the signature was missing/invalid → **reject.**
-     *   - `NotConfigured` → no secret configured → engine accepts (logged), so the endpoint works
-     *                       during setup and tightens to strict automatically once a key is set.
+     *   - `NotConfigured` → no secret configured → **reject** (the status is not changed), unless the
+     *                       host explicitly allows unverified webhooks for local development.
      *
      * Default is `NotConfigured`: a driver that doesn't implement verification has no secret to
      * check. Implementations read their shared secret from `this.config` (e.g.

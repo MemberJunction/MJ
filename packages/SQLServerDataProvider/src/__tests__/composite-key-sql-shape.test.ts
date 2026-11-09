@@ -30,22 +30,33 @@ type Host = {
   GetRecordDependencyLinkSQL: (dep: EntityDependency, entity: EntityInfo, relatedEntity: EntityInfo, key: CompositeKey) => string;
   BuildFullPrimaryKeyPredicate: (entity: EntityInfo, key: CompositeKey) => string;
   BuildSiblingRecordChangeSQL: (varName: string, entityInfo: EntityInfo, changesJSON: string, changesDesc: string, pkValue: string, userId: string) => string;
-  executeSQLForUserViewRunLogging: (viewId: number, entityInfo: EntityInfo, effectiveBaseView: string, whereSQL: string, orderBySQL: string, user: UserInfo) => Promise<{ executeViewSQL: string; runID: string }>;
-  ExecuteSQL: (sql: string) => Promise<Array<Record<string, unknown>>>;
+  executeSQLForUserViewRunLogging: (viewId: string, entityInfo: EntityInfo, effectiveBaseView: string, whereSQL: string, orderBySQL: string, user: UserInfo) => Promise<{ executeViewSQL: string; runID: string }>;
+  ExecuteSQL: (sql: string, parameters?: unknown) => Promise<Array<Record<string, unknown>>>;
 };
 
 interface RecordedHost extends Host {
   ExecutedSQL: string[];
+  /** The `parameters` argument of each ExecuteSQL call, index-aligned with ExecutedSQL. */
+  ExecutedParameters: unknown[];
+  /** What the faked run-logging procedure returns as UserViewRunID. */
+  RunIDToReturn: string;
 }
+
+const VIEW_ID = 'B1000000-0000-0000-0000-00000000000A';
+const RUN_ID = 'C2000000-0000-0000-0000-00000000000B';
 
 function makeHost(): RecordedHost {
   const host = Object.create(SQLServerDataProvider.prototype) as Record<string, unknown>;
   Object.defineProperty(host, 'MJCoreSchemaName', { value: '__mj' });
   const executed: string[] = [];
+  const executedParameters: unknown[] = [];
   host.ExecutedSQL = executed;
-  host.ExecuteSQL = async (sql: string) => {
+  host.ExecutedParameters = executedParameters;
+  host.RunIDToReturn = RUN_ID;
+  host.ExecuteSQL = async (sql: string, parameters?: unknown) => {
     executed.push(sql);
-    return [{ UserViewRunID: 'RUN-1' }];
+    executedParameters.push(parameters);
+    return [{ UserViewRunID: host.RunIDToReturn }];
   };
   return host as unknown as RecordedHost;
 }
@@ -197,17 +208,73 @@ describe('BuildSiblingRecordChangeSQL — IS-A sibling read uses the real key co
 describe('executeSQLForUserViewRunLogging — RecordID holds ONE bare key value', () => {
   it('single-column key: logs and re-reads on the real key column name', async () => {
     const host = makeHost();
-    const result = await host.executeSQLForUserViewRunLogging(5, INDIVIDUALS, 'vwIndividuals', "Email LIKE '%@x.org'", 'Email', TEST_USER);
-    expect(result.runID).toBe('RUN-1');
-    expect(host.ExecutedSQL[0]).toContain("INSERT INTO @ViewIDList (ID) (SELECT individual_id FROM [crm].vwIndividuals WHERE (Email LIKE '%@x.org'))");
+    const result = await host.executeSQLForUserViewRunLogging(VIEW_ID, INDIVIDUALS, 'vwIndividuals', "Email LIKE '%@x.org'", 'Email', TEST_USER);
+    expect(result.runID).toBe(RUN_ID);
+    expect(host.ExecutedSQL[0]).toContain("INSERT INTO @ViewIDList (ID) SELECT individual_id FROM [crm].vwIndividuals WHERE (Email LIKE '%@x.org');");
     expect(result.executeViewSQL).toContain('FROM [crm].vwIndividuals WHERE individual_id IN');
-    expect(result.executeViewSQL).toContain('WHERE UserViewRunID=RUN-1');
+    expect(result.executeViewSQL).toContain(`WHERE UserViewRunID='${RUN_ID}'`);
   });
 
   it('composite key: refuses loudly before touching the database', async () => {
     const host = makeHost();
-    await expect(host.executeSQLForUserViewRunLogging(5, ORDER_LINES, 'vwOrderLines', '1=1', '', TEST_USER))
+    await expect(host.executeSQLForUserViewRunLogging(VIEW_ID, ORDER_LINES, 'vwOrderLines', '1=1', '', TEST_USER))
       .rejects.toThrow(/SaveViewResults \(user view run logging\) requires a single-column primary key\. Entity "Order Lines" has 2 primary key columns \(OrderID, LineCode\)\./);
     expect(host.ExecutedSQL).toHaveLength(0);
+  });
+});
+
+// Audit finding (MJ#6240): this statement used to splice the view ID and the user's email straight
+// into `EXEC ...spCreateUserViewRunWithDetail(<viewId>,<email>, @ViewIDLIst)`. It could not parse, so
+// the sink was latent; these pin the rewrite so it stays parameterized once it does run.
+describe('executeSQLForUserViewRunLogging — view ID and email are bound, never spliced', () => {
+  const HOSTILE_EMAIL = "x'; DROP TABLE [__mj].[User]; --@evil.test";
+  const hostileUser = { ...TEST_USER, Email: HOSTILE_EMAIL } as UserInfo;
+
+  it('calls the procedure with named arguments matching its signature and a typed ID list', async () => {
+    const host = makeHost();
+    await host.executeSQLForUserViewRunLogging(VIEW_ID, INDIVIDUALS, 'vwIndividuals', '1=1', '', TEST_USER);
+    const sql = host.ExecutedSQL[0];
+    expect(sql).toContain('DECLARE @ViewIDList [__mj].[IDListTableType];');
+    expect(sql).toContain(
+      'EXEC [__mj].[spCreateUserViewRunWithDetail] @UserViewID=@_uvr_ViewID, @UserEmail=@_uvr_UserEmail, @RecordIDList=@ViewIDList;',
+    );
+  });
+
+  it('binds the view ID and email as parameters; neither value appears in the SQL text', async () => {
+    const host = makeHost();
+    await host.executeSQLForUserViewRunLogging(VIEW_ID, INDIVIDUALS, 'vwIndividuals', '1=1', '', hostileUser);
+    expect(host.ExecutedSQL[0]).not.toContain(HOSTILE_EMAIL);
+    expect(host.ExecutedSQL[0]).not.toContain('DROP TABLE');
+    expect(host.ExecutedSQL[0]).not.toContain(VIEW_ID);
+    expect(host.ExecutedParameters[0]).toEqual([
+      { Name: '_uvr_ViewID', Value: VIEW_ID },
+      { Name: '_uvr_UserEmail', Value: HOSTILE_EMAIL },
+    ]);
+  });
+
+  it("keeps the WHERE clause's own bound parameters alongside its own", async () => {
+    const host = makeHost() as RecordedHost & {
+      executeSQLForUserViewRunLogging: (...args: [string, EntityInfo, string, string, string, UserInfo, string | undefined, Array<{ Name: string; Value: unknown }>]) => Promise<{ runID: string }>;
+    };
+    await host.executeSQLForUserViewRunLogging(VIEW_ID, INDIVIDUALS, 'vwIndividuals', 'Email = @_cf_0', '', TEST_USER, undefined, [{ Name: '_cf_0', Value: 'a@x.org' }]);
+    expect(host.ExecutedParameters[0]).toEqual([
+      { Name: '_cf_0', Value: 'a@x.org' },
+      { Name: '_uvr_ViewID', Value: VIEW_ID },
+      { Name: '_uvr_UserEmail', Value: TEST_USER.Email },
+    ]);
+  });
+
+  it('refuses a view ID that is not a GUID before touching the database', async () => {
+    const host = makeHost();
+    await expect(host.executeSQLForUserViewRunLogging("1; DROP TABLE x", INDIVIDUALS, 'vwIndividuals', '1=1', '', TEST_USER))
+      .rejects.toThrow(/requires a saved view with a GUID ID/);
+    expect(host.ExecutedSQL).toHaveLength(0);
+  });
+
+  it('refuses to build the read-back when the procedure returns something other than a GUID run ID', async () => {
+    const host = makeHost();
+    host.RunIDToReturn = "0 OR 1=1";
+    await expect(host.executeSQLForUserViewRunLogging(VIEW_ID, INDIVIDUALS, 'vwIndividuals', '1=1', '', TEST_USER))
+      .rejects.toThrow(/did not return a run ID/);
   });
 });

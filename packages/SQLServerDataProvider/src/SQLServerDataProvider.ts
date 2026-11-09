@@ -107,7 +107,7 @@ import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
 import type { DatabasePlatform } from '@memberjunction/sql-dialect';
 
-import { EscapeSQLString, IsByteArray, TryBase64ToBytes, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IsByteArray, IsValidUUID, TryBase64ToBytes, UUIDsEqual } from '@memberjunction/global';
 import { SQLServerDialect, SQLDialect } from '@memberjunction/sql-dialect';
 
 /**
@@ -145,6 +145,10 @@ function isStaleConnectionError(error: { message?: string; code?: string }): boo
     code === 'ECONNRESET'
   );
 }
+
+/** Bound-parameter names used by {@link SQLServerDataProvider.executeSQLForUserViewRunLogging}. */
+const USER_VIEW_RUN_VIEW_ID_PARAM = '_uvr_ViewID';
+const USER_VIEW_RUN_USER_EMAIL_PARAM = '_uvr_UserEmail';
 
 /**
  * Builds a sql.Request and binds `parameters`:
@@ -1206,8 +1210,18 @@ export class SQLServerDataProvider
     return results;
   }
 
+  /**
+   * Logs a saved view's run (`RunViewParams.SaveViewResults`) through `spCreateUserViewRunWithDetail`
+   * and returns the SQL that reads the logged rows back.
+   *
+   * SECURITY: the view ID and the user's email are BOUND parameters (`@_uvr_ViewID`,
+   * `@_uvr_UserEmail`) matching the procedure's signature
+   * `(@UserViewID uniqueidentifier, @UserEmail nvarchar(255), @RecordIDList IDListTableType READONLY)`
+   * and are never spliced into the statement text. The two values that must appear as text — the
+   * view ID guard and the run ID in the read-back — are required to be GUIDs first.
+   */
   protected override async executeSQLForUserViewRunLogging(
-    viewId: number,
+    viewId: string,
     entityInfo: EntityInfo,
     effectiveBaseView: string,
     whereSQL: string,
@@ -1224,18 +1238,29 @@ export class SQLServerDataProvider
     // read-back below is `<pk> IN (SELECT RecordID ...)` — a one-column predicate. A composite key has
     // no single column to log or match on, so refuse rather than record (and re-read) a truncated key.
     this.assertSingleColumnPrimaryKey(entityInfo, 'SaveViewResults (user view run logging)');
+    if (!IsValidUUID(viewId)) {
+      throw new Error('SaveViewResults (user view run logging) requires a saved view with a GUID ID.');
+    }
     const pkName = entityInfo.FirstPrimaryKey.Name; // first-pk-ok: guarded above — view-run RecordID holds one bare key value, PrimaryKeys.length === 1 enforced
     const targetSchema = schemaNameOverride ?? entityInfo.SchemaName;
+    const coreSchema = this.MJCoreSchemaName;
     const sSQL = `
-            DECLARE @ViewIDList TABLE ( ID NVARCHAR(255) );
-            INSERT INTO @ViewIDList (ID) (SELECT ${pkName} FROM [${targetSchema}].${effectiveBaseView} WHERE (${whereSQL}))
-            EXEC [${this.MJCoreSchemaName}].spCreateUserViewRunWithDetail(${viewId},${user.Email}, @ViewIDLIst)
+            DECLARE @ViewIDList [${coreSchema}].[IDListTableType];
+            INSERT INTO @ViewIDList (ID) SELECT ${pkName} FROM [${targetSchema}].${effectiveBaseView} WHERE (${whereSQL});
+            EXEC [${coreSchema}].[spCreateUserViewRunWithDetail] @UserViewID=@${USER_VIEW_RUN_VIEW_ID_PARAM}, @UserEmail=@${USER_VIEW_RUN_USER_EMAIL_PARAM}, @RecordIDList=@ViewIDList;
             `;
-    const boundParams = queryParameters && queryParameters.length > 0 ? queryParameters : undefined;
-    const runIDResult = await this.ExecuteSQL(sSQL, boundParams, undefined, user);
-    const runID: string = runIDResult[0].UserViewRunID;
+    const boundParams: NamedQueryParameter[] = [
+      ...(queryParameters ?? []),
+      { Name: USER_VIEW_RUN_VIEW_ID_PARAM, Value: viewId },
+      { Name: USER_VIEW_RUN_USER_EMAIL_PARAM, Value: user.Email },
+    ];
+    const runIDResult: Array<{ UserViewRunID?: string }> | undefined = await this.ExecuteSQL(sSQL, boundParams, undefined, user);
+    const runID = String(runIDResult?.[0]?.UserViewRunID ?? '');
+    if (!IsValidUUID(runID)) {
+      throw new Error('SaveViewResults (user view run logging): spCreateUserViewRunWithDetail did not return a run ID.');
+    }
     const sRetSQL: string = `SELECT * FROM [${targetSchema}].${effectiveBaseView} WHERE ${pkName} IN
-                                    (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE UserViewRunID=${runID})
+                                    (SELECT RecordID FROM [${coreSchema}].vwUserViewRunDetails WHERE UserViewRunID='${runID}')
                                  ${orderBySQL && orderBySQL.length > 0 ? ` ORDER BY ${orderBySQL}` : ''}`;
     return { executeViewSQL: sRetSQL, runID };
   }

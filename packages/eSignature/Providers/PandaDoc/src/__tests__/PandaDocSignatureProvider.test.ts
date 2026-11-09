@@ -326,7 +326,7 @@ describe('PandaDocSignatureProvider', () => {
             expect(provider.VerifyWebhookSignature(Buffer.from('forged'), { 'x-pandadoc-signature': sign(RAW, HMAC_KEY) })).toBe('Failed');
         });
 
-        it('reports NotConfigured without a configured key (verify-if-configured policy)', async () => {
+        it('reports NotConfigured without a configured key (the engine then rejects the event)', async () => {
             await provider.initialize(VALID_CONFIG);
             expect(provider.VerifyWebhookSignature(RAW, { 'x-pandadoc-signature': sign(RAW, HMAC_KEY) })).toBe('NotConfigured');
         });
