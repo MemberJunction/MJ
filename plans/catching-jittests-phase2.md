@@ -24,7 +24,7 @@ Copied from the spec and the repo rules. Every task's requirements include this 
 - Keys only in the orchestrating process; never in a brief, report, ledger line, commit or message. Real runs use `env -u CLAUDECODE` and the three keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`); `PreflightEnv` refuses otherwise.
 - Every file written under a run folder, the store and a ledger passes the redaction check (D32). Ledgers go through `RedactionCheck.AssertClean` before writing.
 - Base and head for a corpus PR: `HeadSHA = M` (the commit that landed the PR on `next`, `mergeCommit.oid` from `gh`), `BaseSHA = M^1` (D33). About 45% of landings on `next` are squash commits with one parent; the same formula holds.
-- Stop points (SDD skill, execution plan §5): the corpus curation (2.9, human judgement), every task that spends money (2.16, 2.17, 2.19), and labels from PR authors (2.18).
+- Stop points (SDD skill, execution plan §5): the corpus curation (2.9, human judgement), every stage that spends money (2.16; 2.17 stages A, B, C; 2.19), and labels from PR authors (2.18). Every real backtest runs with `--max-usd` set to the approved figure.
 
 ---
 
@@ -99,7 +99,7 @@ plans/catching-jittests-spike/GATE1.md   # smoke, tuning, labels, held-out resul
 | 3 | 2.8, 2.11, 2.13 | 2.8 needs 2.6 + 2.7; 2.11 needs 2.7 + 2.10 |
 | 4 | 2.12, 2.14, 2.15 | 2.12 needs 2.11; 2.14 needs 2.11 + 2.13 |
 | 5 | 2.9 (human), 2.16 (spend) | corpus, then smoke |
-| 6 | 2.17 (spend), 2.18 (human), 2.19 (spend) | serial |
+| 6 | 2.17 (spend, staged A→B→C), 2.18 (human), 2.19 (spend) | serial; expected total ≈ 200 USD, ≈ 110 USD when the Opus sample is skipped |
 
 ---
 
@@ -563,11 +563,15 @@ it('system prompt tells the agent that files are type-checked and abstract class
 - [ ] **Step 2:** With keys exported and `env -u CLAUDECODE`, settings file `{ "GeneratorModel": "claude-haiku-5-5" }`: `backtest --corpus corpus/smoke.json --slice Tuning --set Both --model claude-haiku-5-5 --max-usd 5`, then `backtest match`, then `label --run <id>` for a clean run and one `label --catch` with the user's login, then `report --ledger <id> --corpus corpus/smoke.json --out plans/catching-jittests-spike/GATE1.md`.
 - [ ] **Step 3:** Fix what breaks (each fix: failing test first). Record wall time per PR, disk after `clean --all-finished`, and the report in `GATE1.md` under "Smoke". **Commit.**
 
-### Task 2.17: Tuning slice with three generators (stop point: spend)
+### Task 2.17: Tuning slice, cheapest generator first (stop point: spend)
 
-- [ ] **Step 1 (controller, before dispatch):** estimate from the smoke run: cost per PR per model × 60 tuning PRs × 3 models, and wall time (phase 1: 10–19 minutes per PR; serial because of Docker CPU). Ask the user once with the figures. Phase 1 measured ~1.2–1.9 USD per PR with Opus under the old token budget; with D42 expect up to ~3 USD per PR, so about 60 × (3 + 1.5 + 0.3) ≈ 290 USD and 60 × 3 × 12 min ≈ 36 hours of wall time at concurrency 1.
-- [ ] **Step 2:** For each model (`claude-haiku-5-5`, `claude-sonnet-5-5`, `claude-opus-5-5`): `backtest --slice Tuning --set Both --model <m> --max-usd <approved>` in the background (`run_in_background`, log under the scratchpad), then `backtest match`. `clean --all-finished` between models.
-- [ ] **Step 3:** `report` with the three ledgers → `GATE1.md` "Tuning". Record infrastructure failures and their causes.
+The comparison is staged (D24: keep the cheapest model that passes). Each stage is its own spend approval, with the figure re-estimated from the measured cost per PR of the stage before it.
+
+- [ ] **Step 1 (controller):** from the smoke run, compute Haiku's cost per PR and wall time per PR. Ask the user for stage A with the figures (estimate: 60 PRs × ~0.3 USD ≈ 18 USD; phase 1 wall time 10–19 minutes per PR, serial because of Docker CPU).
+- [ ] **Step 2, stage A:** `backtest --corpus corpus/gate1.json --slice Tuning --set Both --model claude-haiku-5-5 --max-usd <approved>` in the background (`run_in_background`, log under the scratchpad), then `backtest match`, then `clean --all-finished`. `report` → `GATE1.md` "Tuning / Haiku".
+- [ ] **Step 3, stage B (unless Haiku passes both gate-1 rates on the tuning slice):** ask the user (estimate: 60 × ~1.5 USD ≈ 90 USD), then the same commands with `claude-sonnet-5-5`. `report` with both ledgers → "Tuning / Sonnet".
+- [ ] **Step 4, stage C:** when Sonnet passes, ask the user for an Opus **sample** of 15 tuning PRs (5 bug + 10 clean, the first of each set in corpus order; `--only <n,n,…>`; estimate 15 × ~3 USD ≈ 45 USD) so the design keeps a three-way comparison; the user may skip it. When Sonnet fails, ask for Opus on the full slice (estimate 60 × ~3 USD ≈ 180 USD). Same commands with `claude-opus-5-5`.
+- [ ] **Step 5:** `report` with every ledger → `GATE1.md` "Tuning". Record infrastructure failures and their causes, and the measured cost per PR per model.
 
 ### Task 2.18: Clean-set labels (human)
 
@@ -577,7 +581,7 @@ it('system prompt tells the agent that files are type-checked and abstract class
 
 - [ ] **Step 1:** From the tuning report: thresholds (§9.3), judge set (drop a judge with no agreement, D49), rule changes (each with a failing test); re-assess the tuning runs with `assess --run <id>` (snapshot, D45) and re-run `report`. No generation spend here; judge calls only.
 - [ ] **Step 2:** Choose the generator: the cheapest model that passes both gate-1 rates on the tuning slice (D24). Record the choice and the reasons in `GATE1.md` and in design §15 (phase 2 row).
-- [ ] **Step 3:** Ask the user (spend ≈ 30 PRs × chosen model). `backtest --slice HeldOut --set Both --model <chosen>`, `backtest match`, labels for held-out clean catches (as 2.18), `report`. Gate 1 passes when the held-out slice meets ≥ 25% caught and ≤ 10% false alarms (§14.1). Write the final `GATE1.md`, set `DEFAULT_SETTINGS.GeneratorModel` to the chosen model, update the design (§15 row "2 Gate 1": done or not, with the numbers), and hand over with superpowers:finishing-a-development-branch.
+- [ ] **Step 3:** Ask the user with the measured cost per PR of the chosen model × 30 held-out PRs (≈ 45 USD for Sonnet, ≈ 9 USD for Haiku, ≈ 90 USD for Opus). `backtest --slice HeldOut --set Both --model <chosen>`, `backtest match`, labels for held-out clean catches (as 2.18), `report`. Gate 1 passes when the held-out slice meets ≥ 25% caught and ≤ 10% false alarms (§14.1). Write the final `GATE1.md`, set `DEFAULT_SETTINGS.GeneratorModel` to the chosen model, update the design (§15 row "2 Gate 1": done or not, with the numbers), and hand over with superpowers:finishing-a-development-branch.
 
 ---
 
