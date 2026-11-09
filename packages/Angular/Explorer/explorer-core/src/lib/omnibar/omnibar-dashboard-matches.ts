@@ -6,7 +6,7 @@ export interface DashboardMatchLike {
     Name: string;
     Description: string | null;
     Category: string | null;
-    User: string;
+    User: string | null;
 }
 
 /**

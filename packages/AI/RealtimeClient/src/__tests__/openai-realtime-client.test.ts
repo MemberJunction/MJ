@@ -854,9 +854,48 @@ describe('OpenAIRealtimeClient', () => {
                 {
                     InputTokens: 120,
                     OutputTokens: 45,
+                    InputTokenDetails: { TextTokens: 80 },
                     Raw: { input_tokens: 120, output_tokens: 45, input_token_details: { text_tokens: 80 } },
                 },
             ]);
+        });
+
+        it('should carry the per-modality split in both directions, leaving the totals unchanged', () => {
+            const usages: RealtimeClientUsage[] = [];
+            client.OnUsage((u) => usages.push(u));
+
+            channel.EmitServer({
+                type: 'response.done',
+                response: {
+                    usage: {
+                        input_tokens: 100,
+                        output_tokens: 50,
+                        input_token_details: { text_tokens: 20, audio_tokens: 80, cached_tokens: 10, cached_tokens_details: { audio_tokens: 6, text_tokens: 4 } },
+                        output_token_details: { text_tokens: 10, audio_tokens: 40 },
+                    },
+                },
+            });
+
+            expect(usages[0]).toMatchObject({
+                InputTokens: 100,
+                OutputTokens: 50,
+                InputTokenDetails: { TextTokens: 20, AudioTokens: 80, CachedTokens: 10, CachedAudioTokens: 6 },
+                OutputTokenDetails: { TextTokens: 10, AudioTokens: 40 },
+            });
+        });
+
+        it('should carry the split from the top-level usage slot xAI uses', () => {
+            const usages: RealtimeClientUsage[] = [];
+            client.OnUsage((u) => usages.push(u));
+
+            channel.EmitServer({
+                type: 'response.done',
+                response: { usage: {} },
+                usage: { input_tokens: 30, output_tokens: 12, output_token_details: { audio_tokens: 12 } },
+            });
+
+            expect(usages[0]).toMatchObject({ InputTokens: 30, OutputTokens: 12, OutputTokenDetails: { AudioTokens: 12 } });
+            expect(usages[0].InputTokenDetails).toBeUndefined();
         });
 
         it('should emit one delta PER completed response (deltas, not cumulative)', () => {

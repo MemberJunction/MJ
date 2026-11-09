@@ -1884,7 +1884,7 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     private async invalidateScheduledJobsCache(after: string): Promise<void> {
         try {
             if (LocalCacheManager.Instance.IsInitialized) {
-                await LocalCacheManager.Instance.InvalidateEntityCaches('MJ: Scheduled Jobs');
+                await LocalCacheManager.Instance.InvalidateEntityCaches('MJ: Scheduled Jobs', this.Base.ProviderToUse);
             }
         } catch (cacheError) {
             this.logError(`Cache invalidation after ${after} failed (non-fatal)`, cacheError);

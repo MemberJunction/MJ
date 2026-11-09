@@ -330,5 +330,53 @@ describe('ListOperations', () => {
       expect(result.Success).toBe(false);
       expect(result.ResultCode).toBe('STALE_DELTA');
     });
+
+    describe('Additive refresh of a target with members the source dropped', () => {
+      // Target {b, x}; source {a, b}. Additive adds a and keeps x, which the delta does not list.
+      function additiveOps(targetAtApply: string[]) {
+        const listCalls = { current: 0 };
+        const ops = makeOps(async (src) => {
+          if (src.kind === 'view') return set('Contacts', ['a', 'b']);
+          listCalls.current++;
+          return set('Contacts', listCalls.current === 1 ? ['b', 'x'] : targetAtApply);
+        });
+        const apply = vi
+          .spyOn(ops as unknown as { applyDeltaMutations: (d: ListDelta) => Promise<ApplyResult> }, 'applyDeltaMutations')
+          .mockResolvedValue({ Success: true, ResultCode: 'SUCCESS', Message: 'ok', Counts: { Added: 1, Removed: 0, Failed: 0 } });
+        return { ops, apply };
+      }
+      const preview = (ops: ListOperations) =>
+        ops.ComputeDelta({ kind: 'list', listId: 'list-1' }, { kind: 'view', viewId: 'v1' }, 'Additive');
+
+      it('counts the kept member in TargetTotal', async () => {
+        const { ops } = additiveOps(['b', 'x']);
+        const delta = await preview(ops);
+        expect(delta.Counts).toMatchObject({ Add: 1, Remove: 0, Unchanged: 1, TargetTotal: 2 });
+      });
+
+      it('applies when the target is unchanged (was STALE_DELTA)', async () => {
+        const { ops, apply } = additiveOps(['b', 'x']);
+        const delta = await preview(ops);
+        const result = await ops.ApplyDelta(delta, { ConfirmDrops: false, DeltaToken: delta.DeltaToken });
+        expect(result.ResultCode).toBe('SUCCESS');
+        expect(apply).toHaveBeenCalledOnce();
+      });
+
+      it('still returns STALE_DELTA when the target gained a member after the preview', async () => {
+        const { ops, apply } = additiveOps(['b', 'x', 'z']);
+        const delta = await preview(ops);
+        const result = await ops.ApplyDelta(delta, { ConfirmDrops: false, DeltaToken: delta.DeltaToken });
+        expect(result.ResultCode).toBe('STALE_DELTA');
+        expect(apply).not.toHaveBeenCalled();
+      });
+
+      it('still returns STALE_DELTA when a listed member left the target after the preview', async () => {
+        const { ops, apply } = additiveOps(['x', 'z']);
+        const delta = await preview(ops);
+        const result = await ops.ApplyDelta(delta, { ConfirmDrops: false, DeltaToken: delta.DeltaToken });
+        expect(result.ResultCode).toBe('STALE_DELTA');
+        expect(apply).not.toHaveBeenCalled();
+      });
+    });
   });
 });

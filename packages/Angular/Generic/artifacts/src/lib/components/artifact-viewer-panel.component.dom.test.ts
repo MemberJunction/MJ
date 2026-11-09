@@ -297,3 +297,56 @@ describe('ArtifactViewerPanelComponent — versions in a conversation scope', ()
     expect(f.componentInstance.PluginVisibleVersionNumbers).toBeNull();
   });
 });
+
+describe('ArtifactViewerPanelComponent (DOM) — PDF export menu', () => {
+  type PluginViewerLike = { SupportsPDFExport: boolean; ExportPDF: (orientation: 'portrait' | 'landscape') => Promise<void> };
+  function renderWithPlugin(plugin: PluginViewerLike, notification = { CreateSimpleNotification: vi.fn() }) {
+    vi.spyOn(ArtifactViewerPanelComponent.prototype as unknown as OnInitProto, 'ngOnInit').mockResolvedValue(undefined);
+    const f = renderComponentFixture(ArtifactViewerPanelComponent, {
+      imports: CHILDREN,
+      declarations: [ArtifactViewerPanelComponent],
+      providers: [{ provide: MJNotificationService, useValue: notification }, { provide: ArtifactFileService, useValue: fileServiceStub }],
+      inputs: { artifactId: 'a1' },
+      setup: (c) => {
+        c.isLoading = false; c.error = null; c.artifact = ARTIFACT; c.allVersions = [VERSION]; c.selectedVersionNumber = 2;
+        // The real plugin viewer is stubbed out, so the @ViewChild finds nothing: pin a plugin that supports
+        // PDF export before the first render, and ignore the query's own (empty) assignment.
+        Object.defineProperty(c, 'PluginViewer', { configurable: true, get: () => plugin, set: () => undefined });
+      },
+    });
+    return { f, notification };
+  }
+
+  it('shows no PDF button when the plugin does not support PDF export', () => {
+    const { f } = renderWithPlugin({ SupportsPDFExport: false, ExportPDF: vi.fn(async () => undefined) });
+    expect(query(f, '.export-pdf-btn')).toBeNull();
+  });
+
+  it('shows the PDF button, with its menu closed, when the plugin supports PDF export', () => {
+    const { f } = renderWithPlugin({ SupportsPDFExport: true, ExportPDF: vi.fn(async () => undefined) });
+    expect(query(f, '.export-pdf-btn')).not.toBeNull();
+    expect(query(f, '.export-pdf-dropdown')).toBeNull();
+  });
+
+  it('opens a Portrait / Landscape menu and exports in the chosen orientation', async () => {
+    const exportPDF = vi.fn(async () => undefined);
+    const { f } = renderWithPlugin({ SupportsPDFExport: true, ExportPDF: exportPDF });
+    (query(f, '.export-pdf-btn') as HTMLButtonElement).click();
+    f.detectChanges();
+    const items = queryAll(f, '.export-pdf-dropdown button');
+    expect(items.map((item) => item.textContent?.trim())).toEqual(['PDF – Portrait', 'PDF – Landscape']);
+    (items[1] as HTMLButtonElement).click();
+    await f.whenStable();
+    expect(exportPDF).toHaveBeenCalledWith('landscape');
+    expect(f.componentInstance.ShowPDFMenu).toBe(false);
+    expect(f.componentInstance.IsExportingPDF).toBe(false);
+  });
+
+  it('reports a failed export and re-enables the button', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { f, notification } = renderWithPlugin({ SupportsPDFExport: true, ExportPDF: vi.fn(async () => { throw new Error('capture failed'); }) });
+    await f.componentInstance.OnExportPDF('portrait');
+    expect(notification.CreateSimpleNotification).toHaveBeenCalledWith(expect.stringContaining('Could not create the PDF'), 'error', 5000);
+    expect(f.componentInstance.IsExportingPDF).toBe(false);
+  });
+});

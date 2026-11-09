@@ -6,6 +6,7 @@ import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 import { TelemetryEnabledDefault } from './telemetryConfigUnits.js';
 import { RealtimeEnabledDefault } from './realtimeConfigUnits.js';
 import { ResolveServerRole, type ServerRole } from './serverRoleConfigUnits.js';
+import { DEFAULT_ROUTE_RATE_LIMITS, type RouteRateLimitName } from './routeRateLimitConfigUnits.js';
 import {
   AgentRunWatchdogDefaultsFromEnv,
   AgentRunWatchdogSchema,
@@ -309,6 +310,13 @@ const cacheSettingsSchema = z.object({
    */
   sharedCacheTTLSeconds: z.number().int().nonnegative().optional(),
   /**
+   * Longest a read from the shared Redis cache waits, in milliseconds, before it is answered as a
+   * cache miss and the server reads the database instead. Writes and invalidations have no limit.
+   * The REDIS_READ_TIMEOUT_MS environment variable overrides it. 0 waits without a limit. When
+   * neither is set, 2000.
+   */
+  redisReadTimeoutMs: z.number().int().nonnegative().optional(),
+  /**
    * How often, in seconds, loaded engines compare their rows with the database and reload what
    * changed without an MJ event (direct SQL, other applications). With a shared cache one server
    * does it per interval. 0 = disabled. Default: 300 (5 minutes).
@@ -420,6 +428,19 @@ const startupSchema = z.object({
   mode: z.enum(['full', 'task']).optional(),
 });
 
+/** One per-route limiter's settings; defaults come from {@link DEFAULT_ROUTE_RATE_LIMITS}. */
+function routeRateLimitSchema(name: RouteRateLimitName) {
+  const defaults = DEFAULT_ROUTE_RATE_LIMITS[name];
+  return z.object({
+    /** When false, the route has no per-route limiter. */
+    enabled: z.boolean().default(defaults.enabled),
+    /** Window length in milliseconds. */
+    windowMs: z.number().default(defaults.windowMs),
+    /** Requests allowed per IP per window. */
+    maxRequests: z.number().default(defaults.maxRequests),
+  }).default({});
+}
+
 const rateLimitSchema = z.object({
   /** Master switch — when false (default), no rate limiting is applied. */
   enabled: z.boolean().default(false),
@@ -442,6 +463,18 @@ const rateLimitSchema = z.object({
     windowMs: z.number().default(60_000),
     /** Maximum GraphQL operations per window per IP. */
     maxRequests: z.number().default(100),
+  }).default({}),
+  /**
+   * Per-route limiters on MJAPI's unauthenticated / capability-token routes. Independent of the
+   * `enabled` master switch above: these are ON by default with generous budgets (see
+   * `DEFAULT_ROUTE_RATE_LIMITS`). Set `<name>.enabled: false` when a gateway in front of MJAPI
+   * already limits the route.
+   */
+  routes: z.object({
+    oauthCallback: routeRateLimitSchema('oauthCallback'),
+    oauthAuthenticated: routeRateLimitSchema('oauthAuthenticated'),
+    mediaUpload: routeRateLimitSchema('mediaUpload'),
+    mediaRead: routeRateLimitSchema('mediaRead'),
   }).default({}),
 });
 
