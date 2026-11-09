@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, symlinkSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ClaudeAgentGenerator, SdkRunner, type AgentMessage } from '../generator/ClaudeAgentGenerator';
+import { ClaudeAgentGenerator, FilterProcessWarnings, SdkRunner, type AgentMessage } from '../generator/ClaudeAgentGenerator';
 import { DEFAULT_SETTINGS } from '../settings';
 import { SessionError } from '../generator/UsageCounter';
 import type { GenerationRequest } from '../types';
@@ -206,5 +206,21 @@ describe('SdkRunner', () => {
     sdk.messages = [init('ANTHROPIC_API_KEY'), assistant('m1', 5), { type: 'result', subtype: 'error_max_turns', total_cost_usd: 0.5, num_turns: 4, usage: { input_tokens: 5, output_tokens: 7, cache_read_input_tokens: 3, cache_creation_input_tokens: 2 }, modelUsage: {} }];
     const out = await collect(SdkRunner('p', 's', runOptions()));
     expect(out.filter((m) => m.Type === 'result')).toEqual([{ Type: 'result', Subtype: 'error_max_turns', CostUSD: 0.5, Turns: 1, Usage: { InputTokens: 7, OutputTokens: 7, CacheReadTokens: 3 } }]);
+  });
+});
+
+describe('FilterProcessWarnings', () => {
+  const original = process.listeners('warning');
+  afterEach(() => {
+    process.removeAllListeners('warning');
+    for (const l of original) process.on('warning', l);
+  });
+  it('drops warnings with a filtered code and writes the others in Node format', async () => {
+    const lines: string[] = [];
+    FilterProcessWarnings(['CLAUDE_SDK_CAN_USE_TOOL_SHADOWED'], (s) => lines.push(s));
+    process.emitWarning('x', { code: 'CLAUDE_SDK_CAN_USE_TOOL_SHADOWED' });
+    process.emitWarning('y', { code: 'OTHER' });
+    await new Promise((r) => setImmediate(r));
+    expect(lines).toEqual([`(node:${process.pid}) [OTHER] Warning: y\n`]);
   });
 });

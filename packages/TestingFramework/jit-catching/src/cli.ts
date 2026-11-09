@@ -28,6 +28,7 @@ import { LoadCorpus } from './corpus/Corpus';
 import { FileCatchStore } from './store/FileCatchStore';
 import { RunDir } from './pipeline/RunDir';
 import { BuildGateReport, RenderMarkdown } from './report/Report';
+import { FilterProcessWarnings } from './generator/ClaudeAgentGenerator';
 
 export const COMMANDS = ['generate', 'execute', 'assess', 'run', 'recheck', 'feedback', 'backtest', 'label', 'report', 'corpus', 'clean'] as const;
 export type CommandName = (typeof COMMANDS)[number];
@@ -90,6 +91,7 @@ const BACKTEST_SETS = ['Bug', 'Clean', 'Both'] as const;
 
 /** Parses argv and dispatches one command. Returns the process exit code: 0 done, 1 failed, 2 usage error. */
 export async function Main(argv: string[], deps: CliDeps = DEFAULT_DEPS): Promise<number> {
+    FilterProcessWarnings(['CLAUDE_SDK_CAN_USE_TOOL_SHADOWED']);
     let p: Parsed;
     try { p = parse(argv); }
     catch (e) {
