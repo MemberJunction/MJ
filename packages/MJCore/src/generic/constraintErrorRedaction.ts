@@ -47,10 +47,44 @@ export function RedactConstraintValues(message: string): string {
     if (!message) {
         return message;
     }
-    return message
-        .split('\n')
-        .map((line) => VALUE_LIST_RULES.reduce((current, rule) => redactLine(current, rule), line))
-        .join('\n');
+    const lines = message.split('\n');
+    const out: string[] = [];
+    for (const line of lines) {
+        const redacted = VALUE_LIST_RULES.reduce((current, rule) => redactLine(current, rule), line);
+        // A value can itself contain a line break, so its list does not close on this line. The
+        // rest of the message may be part of that value, so everything from the opening
+        // character on is withheld.
+        const unclosedAt = findUnclosedValueList(redacted);
+        if (unclosedAt >= 0) {
+            out.push(redacted.slice(0, unclosedAt) + REDACTED_CONSTRAINT_VALUES);
+            break;
+        }
+        out.push(redacted);
+    }
+    return out.join('\n');
+}
+
+/** Where a value list opens on the line without being closed (and not already redacted), or -1. */
+function findUnclosedValueList(line: string): number {
+    let first = -1;
+    for (const rule of VALUE_LIST_RULES) {
+        let searchFrom = 0;
+        while (searchFrom < line.length) {
+            const labelAt = line.indexOf(rule.Label, searchFrom);
+            if (labelAt < 0) {
+                break;
+            }
+            const opened = findValueListOpen(line, labelAt, rule);
+            if (opened.OpenAt >= 0 && !line.startsWith(REDACTED_CONSTRAINT_VALUES, opened.OpenAt)) {
+                if (first < 0 || opened.OpenAt < first) {
+                    first = opened.OpenAt;
+                }
+                break;
+            }
+            searchFrom = opened.ResumeAt;
+        }
+    }
+    return first;
 }
 
 /**
@@ -85,14 +119,13 @@ function redactLine(line: string, rule: ValueListRule): string {
 function findValueListOpen(line: string, labelAt: number, rule: ValueListRule): { OpenAt: number; ResumeAt: number } {
     const afterLabel = labelAt + rule.Label.length;
     if (rule.KeyColumns) {
-        // `Key (<columns>)=(` — the column list ends at its first `)`. Any later label before that
-        // `)` ends its column list at the same place, so the search resumes after it.
-        const columnsClose = line.indexOf(')', afterLabel);
+        // `Key (<columns>)=(` — the column list ends at the first `)=(`, not the first `)`, because
+        // an expression index lists an expression such as `lower(email)` in place of a column.
+        // Any later label before that `)=(` ends its column list at the same place, so the search
+        // resumes after it.
+        const columnsClose = line.indexOf(')=' + rule.Open, afterLabel);
         if (columnsClose < 0) {
             return { OpenAt: -1, ResumeAt: line.length };
-        }
-        if (!line.startsWith(')=' + rule.Open, columnsClose)) {
-            return { OpenAt: -1, ResumeAt: columnsClose + 1 };
         }
         return { OpenAt: columnsClose + 2, ResumeAt: columnsClose + 1 };
     }
@@ -124,7 +157,7 @@ function closeIsFollowedBySuffix(line: string, closeAt: number, suffixes: readon
 }
 
 /**
- * The save-failure message a caller may see: unchanged when field-level security withholds no
+ * The save- or delete-failure message a caller may see (direct or through a transaction group): unchanged when field-level security withholds no
  * column of this entity from them, otherwise without the executed SQL (see
  * {@link StripExecutedSQL}) and with constraint values removed (see {@link RedactConstraintValues}). The full message still belongs in the server log.
  */
@@ -147,6 +180,23 @@ export function StripExecutedSQL(message: string): string {
     if (!message) {
         return message;
     }
+    let cut = message.length;
     const match = /^[ \t]*(?:Query|Parameters):/m.exec(message);
-    return match ? message.slice(0, match.index).trimEnd() : message;
+    if (match) {
+        cut = match.index;
+    }
+    // The provider's own "no rows" save errors put the SQL inline after a fixed lead-in.
+    for (const leadIn of INLINE_SQL_LEAD_INS) {
+        const at = message.indexOf(leadIn);
+        if (at >= 0 && at + leadIn.length < cut) {
+            cut = at + leadIn.length;
+        }
+    }
+    return cut < message.length ? message.slice(0, cut).trimEnd() : message;
 }
+
+/** Lead-ins after which a provider save error carries the executed SQL on the same line. */
+const INLINE_SQL_LEAD_INS: readonly string[] = [
+    'no rows returned from SQL:',
+    'no MATCHING rows found within the database:',
+];

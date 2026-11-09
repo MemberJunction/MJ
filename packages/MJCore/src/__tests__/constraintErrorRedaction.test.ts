@@ -73,12 +73,45 @@ describe('RedactConstraintValues', () => {
         expect(RedactConstraintValues('')).toBe('');
     });
 
+    it('removes a value that contains a line break, and everything after it', () => {
+        const msg = "Cannot insert duplicate key row in object 'dbo.Employee' with unique index 'IX_Employee_Note'. The duplicate key value is (a@example.com, line one\nsecret line two).\nThe statement has been terminated.";
+        const out = RedactConstraintValues(msg);
+        expect(out).toContain('IX_Employee_Note');
+        expect(out).toContain(`The duplicate key value is ${REDACTED_CONSTRAINT_VALUES}`);
+        expect(out).not.toContain('line one');
+        expect(out).not.toContain('secret line two');
+    });
+
+    it('removes a truncated value that contains a line break', () => {
+        const msg = "String or binary data would be truncated in table 'db.dbo.Employee', column 'Notes'. Truncated value: 'first\nconfidential'.";
+        const out = RedactConstraintValues(msg);
+        expect(out).toContain("column 'Notes'");
+        expect(out).not.toContain('first');
+        expect(out).not.toContain('confidential');
+    });
+
+    it('removes PostgreSQL key values of an expression index', () => {
+        const msg = 'duplicate key value violates unique constraint "uq_employee_email"\nKey (lower("Email"::text))=(a@example.com) already exists.';
+        const out = RedactConstraintValues(msg);
+        expect(out).toContain('Key (lower("Email"::text))=' + REDACTED_CONSTRAINT_VALUES + ' already exists.');
+        expect(out).not.toContain('a@example.com');
+    });
+
+    it('withholds a PostgreSQL key value list that has no recognised ending', () => {
+        const msg = 'conflicting key value violates exclusion constraint "ex_booking"\nKey (room, during)=(12, secret) conflicts with existing key (room, during)=(12, other).';
+        const out = RedactConstraintValues(msg);
+        expect(out).toContain('ex_booking');
+        expect(out).not.toContain('secret');
+        expect(out).not.toContain('other');
+    });
+
     it('handles a long run of repeated labels without a closing character', () => {
         for (const msg of ['The duplicate key value is ('.repeat(20000), 'Key (a)=(1) '.repeat(20000), 'Key (Key ('.repeat(20000)]) {
             const started = Date.now();
-            expect(RedactConstraintValues(msg)).toBe(msg);
+            RedactConstraintValues(msg);
             expect(Date.now() - started).toBeLessThan(1000);
         }
+        expect(RedactConstraintValues('Key (Key ('.repeat(20000))).toBe('Key (Key ('.repeat(20000));
     });
 });
 
@@ -110,6 +143,15 @@ function user(roleID: string): UserInfo {
 describe('StripExecutedSQL', () => {
     it('cuts the message at the Query line', () => {
         expect(StripExecutedSQL('Error executing SQL\n    Error: boom\n    Query: SELECT 1\n    Parameters: None')).toBe('Error executing SQL\n    Error: boom');
+    });
+
+    it('cuts the SQL a provider puts inline after a save that returned no rows', () => {
+        expect(StripExecutedSQL("SQL Error: Error updating record, no MATCHING rows found within the database: EXEC spUpdate @Salary=90000")).toBe(
+            'SQL Error: Error updating record, no MATCHING rows found within the database:',
+        );
+        expect(StripExecutedSQL("SQL Error: Error creating new record, no rows returned from SQL: EXEC spCreate @Salary=90000")).toBe(
+            'SQL Error: Error creating new record, no rows returned from SQL:',
+        );
     });
 
     it('leaves a message without SQL unchanged', () => {

@@ -2398,8 +2398,12 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                             } else {
                                 entityResult.Success = false;
                                 if (!entityResult.Message) {
+                                    // The group's failure carries the database message of whichever
+                                    // item failed, so it gets the same redaction as a direct save.
                                     entityResult.Message =
-                                        transactionResult instanceof Error ? transactionResult.message : 'Transaction Failed';
+                                        transactionResult instanceof Error
+                                            ? SaveErrorMessageForUser(transactionResult.message, entity.EntityInfo, user)
+                                            : 'Transaction Failed';
                                 }
                             }
                         },
@@ -2686,7 +2690,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                                 entityResult.Success = false;
                                 if (!entityResult.Message) {
                                     entityResult.Message =
-                                        transactionResult instanceof Error ? transactionResult.message : 'Transaction failed to commit';
+                                        transactionResult instanceof Error
+                                            ? SaveErrorMessageForUser(transactionResult.message, entity.EntityInfo, user)
+                                            : 'Transaction failed to commit';
                                 }
                             }
                         },
@@ -2727,7 +2733,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             }
         } catch (e) {
             LogError(e);
-            entityResult.Message = (e as Error).message;
+            // A delete's SQL writes the full record to the audit trail, and a constraint error can
+            // echo stored values, so the caller gets the same redaction as a failed save.
+            entityResult.Message = SaveErrorMessageForUser((e as Error).message, entity.EntityInfo, user);
             entityResult.Success = false;
             entityResult.EndedAt = new Date();
             return false;
