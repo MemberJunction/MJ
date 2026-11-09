@@ -79,6 +79,7 @@
     "@memberjunction/redis-provider": "6.2.0",
     "@memberjunction/scheduling-engine": "6.2.0",
     "@memberjunction/search-engine": "6.2.0",
+    "@memberjunction/server": "6.2.0",
     "@memberjunction/server-bootstrap-lite": "6.2.0",
     "@memberjunction/sqlserver-dataprovider": "6.2.0",
     "@memberjunction/storage": "6.2.0",

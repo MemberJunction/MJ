@@ -14,6 +14,9 @@
  *   untrusted action propagates through a Decision step to gate a downstream action, failing the graph
  *   and triggering saga compensation of completed compensatable steps. The gate itself is the check's
  *   stub action runner, not MJServer's `TaskGraphActionRunner` (see {@link checkDispatcherTaintGateAndCompensation}).
+ * - TGS5: the real gate. A tainted one-step graph whose step is `Send Single Message` (shipped with
+ *   `Config.disallowWhenTainted`) runs through the real dispatcher configured with MJServer's real
+ *   `TaskGraphActionRunner`, which refuses the step before the action runs (see {@link checkRealRunnerRefusesTaintedEgress}).
  *
  * Fixtures: one start-paused Human-only graph (so no dispatcher picks it up) and the rows the checks
  * create, all removed in teardown, rows that reference another first.
@@ -44,6 +47,8 @@ import {
 import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 // The store's own entry: the package root also starts the A2A server's config load on import.
 import { A2A_TASK_TYPE_NAME, DurableEntityA2ATaskStore, type Task } from '@memberjunction/a2aserver/task-store';
+// The runner's own entry, for the same reason: the server package root loads the server's config on import.
+import { TaskGraphActionRunner } from '@memberjunction/server/task-graph-action-runner';
 import { UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual, IntegrationCheckRegistry, SkipCheck, settle } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
@@ -306,13 +311,11 @@ class NoopAgentRunner implements TaskAgentRunner {
  * the graph and triggering saga compensation.
  *
  * The taint gate is this check's stub `TaskActionRunner`, which refuses the send step whenever its envelope is
- * tainted. It is not MJServer's `TaskGraphActionRunner`: that class is not exported from `@memberjunction/server`
- * (only `StartTaskGraphDispatcher` constructs it), this package does not depend on `@memberjunction/server`, and
- * the real runner would execute whichever `MJ: Actions` rows the check picks. So TGS4 proves the dispatcher's
- * half: the send step receives a tainted envelope through the Decision, a `TAINTED_EGRESS_BLOCKED` result is not
- * retried and fails the graph, and the saga compensates the completed step. The real runner's own gate (refusing
- * a `disallowWhenTainted` action under a tainted envelope) is covered by MJServer's
- * `TaskGraphActionRunner.securityEnvelope.test.ts`.
+ * tainted: the real runner would execute whichever `MJ: Actions` rows the check picks. So TGS4 proves the
+ * dispatcher's half: the send step receives a tainted envelope through the Decision, a `TAINTED_EGRESS_BLOCKED`
+ * result is not retried and fails the graph, and the saga compensates the completed step. The real runner's own
+ * gate (refusing a `disallowWhenTainted` action under a tainted envelope) is TGS5
+ * ({@link checkRealRunnerRefusesTaintedEgress}).
  */
 async function checkDispatcherTaintGateAndCompensation(ctx: IntegrationCheckContext): Promise<void> {
     if (!MutationTierOn(ctx)) {
@@ -534,11 +537,113 @@ async function checkDispatcherTaintGateAndCompensation(ctx: IntegrationCheckCont
     Assert(cleanupFailures.length === 0, `TGS4: cleanup left rows behind: ${cleanupFailures.join('; ')}`);
 }
 
+/** The shipped action TGS5's graph runs: an egress action the metadata marks `disallowWhenTainted`. */
+const TGS5_EGRESS_ACTION = 'Send Single Message';
+
+/**
+ * TGS5 — MJServer's real `TaskGraphActionRunner` refuses a `disallowWhenTainted` action on a tainted node.
+ *
+ * TGS4 proves the dispatcher hands the tainted envelope down, but its stub runner is what refuses. Here the
+ * dispatcher runs with the real runner (imported through `@memberjunction/server/task-graph-action-runner`), and
+ * the graph is one step of {@link TGS5_EGRESS_ACTION}, submitted tainted. The step must fail with the runner's
+ * `TAINTED_EGRESS_BLOCKED` refusal, which it returns before the action engine runs anything, so nothing is sent.
+ * The check first asserts the shipped action row carries `Config.disallowWhenTainted`, so a database without
+ * that metadata fails here rather than passing on a refusal from somewhere else.
+ */
+async function checkRealRunnerRefusesTaintedEgress(ctx: IntegrationCheckContext): Promise<void> {
+    if (!MutationTierOn(ctx)) {
+        SkipCheck(MUTATION_TIER_OFF_REASON);
+        return;
+    }
+
+    const actionResult = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string; Config: string | null }>(
+        { EntityName: 'MJ: Actions', ExtraFilter: `Name='${TGS5_EGRESS_ACTION}'`, Fields: ['ID', 'Config'], ResultType: 'simple', BypassCache: true },
+        ctx.User,
+    );
+    const action = actionResult.Success ? actionResult.Results?.[0] : undefined;
+    Assert(action != null, `TGS5: action "${TGS5_EGRESS_ACTION}" not found`);
+    const config = action!.Config ? (JSON.parse(action!.Config) as { disallowWhenTainted?: boolean }) : {};
+    Assert(config.disallowWhenTainted === true, `TGS5: "${TGS5_EGRESS_ACTION}" does not set Config.disallowWhenTainted (metadata not pushed?)`);
+
+    const submitted = await new TaskGraphService().Submit(
+        {
+            workflowName: `it165-real-taint-gate-${Date.now()} (mj-integration-test — safe to delete)`,
+            continuation: 'none',
+            tasks: [{
+                tempId: 'send',
+                name: 'it165 real-gate send',
+                description: 'fixture egress step on a tainted graph; the runner must refuse it',
+                kind: 'Action',
+                configuration: { actionName: TGS5_EGRESS_ACTION },
+                dependsOn: [],
+            }],
+        },
+        {
+            EnvironmentID: MJEnvironmentEntityExtended.DefaultEnvironmentID,
+            Provider: ctx.Provider,
+            ContextUser: ctx.User,
+            SecurityEnvelope: { Version: TASK_SECURITY_ENVELOPE_VERSION, IsRunTainted: true },
+            Debug: { paused: false },
+        },
+    );
+    Assert(submitted.Success && !!submitted.ParentTaskID, `TGS5: failed to submit graph: ${submitted.ErrorMessage ?? ''}`);
+    const parentID = submitted.ParentTaskID!;
+
+    const dispatcher = new TaskGraphDispatcher(
+        providerFactory(ctx),
+        new NoopAgentRunner(),
+        ctx.User as UserInfo,
+        {
+            InstanceID: `it165-gate-${randomUUID().slice(0, 8)}`,
+            PollIntervalSeconds: 0.1,
+            ClaimTTLSeconds: 300,
+            ReconciliationIntervalSeconds: 3600,
+            MaxConcurrentTasks: 1,
+        },
+        undefined,
+        undefined,
+        new TaskGraphActionRunner(),
+    );
+
+    let cleanupFailures: string[] = [];
+    try {
+        await dispatcher.Start();
+        const deadline = Date.now() + 30_000;
+        let settledParent: MJTaskEntity | null = null;
+        while (Date.now() < deadline && !settledParent) {
+            await settle(200);
+            const p = await loadTask(ctx, parentID);
+            if (p.Status === 'Complete' || p.Status === 'Failed' || p.Status === 'Cancelled' || p.Status === 'Blocked') {
+                settledParent = p;
+            }
+        }
+        Assert(settledParent != null, `TGS5: graph ${parentID} did not settle within 30s`);
+        AssertEqual(settledParent!.Status, 'Failed', 'TGS5: parent graph status after the refused step');
+
+        const children = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ Status: string; ErrorMessage: string | null }>(
+            { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${parentID}'`, Fields: ['Status', 'ErrorMessage'], ResultType: 'simple', BypassCache: true },
+            ctx.User,
+        );
+        const send = children.Results?.[0];
+        Assert(children.Success && children.Results?.length === 1 && send != null, 'TGS5: expected exactly one step row');
+        AssertEqual(send!.Status, 'Failed', 'TGS5: egress step status');
+        Assert(
+            (send!.ErrorMessage ?? '').includes(TAINTED_EGRESS_BLOCKED) && (send!.ErrorMessage ?? '').includes(TGS5_EGRESS_ACTION),
+            `TGS5: the step did not fail with the runner's ${TAINTED_EGRESS_BLOCKED} refusal: ${send!.ErrorMessage ?? '(no error message)'}`,
+        );
+    } finally {
+        await dispatcher.Stop();
+        cleanupFailures = await DeleteTaskGraph(ctx.Provider, ctx.User, parentID).catch((e: unknown) => [String(e)]);
+    }
+    Assert(cleanupFailures.length === 0, `TGS5: cleanup left rows behind: ${cleanupFailures.join('; ')}`);
+}
+
 export const TaskGraphSecurityChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.TGS1`, Name: 'TGS1: every row of a submitted graph carries its envelope, and the envelope cannot be edited', Fn: checkEnvelopeOnEveryRowAndImmutable, RequiresMutation: true },
     { Id: `${BUNDLE}.TGS2`, Name: 'TGS2: of two concurrent compensation rows for one forward step, exactly one lands', Fn: checkOneCompensationPerForwardStep, RequiresMutation: true },
     { Id: `${BUNDLE}.TGS3`, Name: 'TGS3: the A2A task store refuses task-graph steps and files A2A tasks under their own type', Fn: checkA2AStoreSeesOnlyA2ARows, RequiresMutation: true },
     { Id: `${BUNDLE}.TGS4`, Name: 'TGS4: a tainted graph through the real dispatcher is gated on taint at a Decision-downstream action, failing the graph and triggering saga compensation', Fn: checkDispatcherTaintGateAndCompensation, RequiresMutation: true },
+    { Id: `${BUNDLE}.TGS5`, Name: "TGS5: MJServer's real TaskGraphActionRunner refuses a disallowWhenTainted action on a tainted graph before it runs", Fn: checkRealRunnerRefusesTaintedEgress, RequiresMutation: true },
 ];
 
 for (const check of TaskGraphSecurityChecks) {

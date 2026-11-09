@@ -17108,6 +17108,9 @@ importers:
       '@memberjunction/search-engine':
         specifier: 6.2.0
         version: link:../../SearchEngine
+      '@memberjunction/server':
+        specifier: 6.2.0
+        version: link:../../MJServer
       '@memberjunction/server-bootstrap-lite':
         specifier: 6.2.0
         version: link:../../ServerBootstrapLite
