@@ -1138,6 +1138,35 @@ export function stripWhitespace(s: string): string {
   return StripWhitespace(s);
 }
 
+/**
+ * Removes one pair of double quotes that wraps a whole search term: `"Steering Review"` and
+ * `“Steering Review”` both become `Steering Review`.
+ *
+ * In full-text search syntax the quotes mark a phrase, and agents and people write searches that way.
+ * A substring search (SQL `LIKE '%term%'`, or `includes`) has no phrase syntax: it looks for the quote
+ * marks themselves and finds nothing, while the unquoted words, matched as one substring, already are
+ * the phrase.
+ *
+ * Only a wrapping pair is removed, and only when it holds something besides whitespace. A quote inside
+ * the term (`6" pipe`) stays, and `""` or `" "` come back unchanged, so the result is never an empty
+ * pattern that matches everything. Straight and curly double quotes are accepted at either end; single
+ * quotes are not, since they are apostrophes.
+ *
+ * @param term - The search term as typed.
+ * @returns The term without its wrapping quotes, trimmed, or `term` unchanged.
+ *
+ * @example
+ * ```typescript
+ * UnwrapPhraseQuotes('"Executive Steering Review"'); // 'Executive Steering Review'
+ * UnwrapPhraseQuotes('6" pipe');                     // '6" pipe'
+ * UnwrapPhraseQuotes('""');                          // '""'
+ * ```
+ */
+export function UnwrapPhraseQuotes(term: string): string {
+    const inner = /^\s*["“”]([\s\S]*)["“”]\s*$/.exec(term)?.[1].trim();
+    return inner ? inner : term;
+}
+
 
 
 

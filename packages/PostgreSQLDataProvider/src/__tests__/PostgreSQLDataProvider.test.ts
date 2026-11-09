@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PostgreSQLDataProvider } from '../PostgreSQLDataProvider.js';
-import { CompositeKey, EntityInfo, EntityFieldTSType } from '@memberjunction/core';
-import { DoomedTransactionError } from '@memberjunction/generic-database-provider';
+import { CompositeKey, EntityInfo, EntityFieldTSType, type RunViewParameters } from '@memberjunction/core';
+import { DoomedTransactionError, NamedQueryParameter } from '@memberjunction/generic-database-provider';
 
 /**
  * Helper: build a minimal EntityInfo-like object with the given field names.
@@ -30,6 +30,12 @@ type ProviderWithQuoting = {
     quoteFieldNamesInToken(token: string, fieldNames: Set<string>): string;
     coerceBooleanLiteralsInSQL(sql: string, entityInfo: EntityInfo): string;
     TransformExternalSQLClause(clause: string, entityInfo: EntityInfo): string;
+    PrepareExtraFilterSQL(
+        extraFilter: string,
+        entityInfo: EntityInfo,
+        parameters?: RunViewParameters,
+        queryParameters?: NamedQueryParameter[],
+    ): string;
 };
 
 // Mock pg module
@@ -582,6 +588,12 @@ describe('PostgreSQLDataProvider', () => {
             const fields = new Set(['Amount(USD)']);
             expect(quoter.quoteFieldNamesInToken('Amount(USD)', fields)).toBe('Amount(USD)');
         });
+
+        it('does not quote $1 bound parameter tokens and still quotes @FieldName (PG unary abs operator)', () => {
+            const fields = new Set(['Status', 'UserID']);
+            expect(quoter.quoteFieldNamesInToken('UserID=$1', fields)).toBe('"UserID"=$1');
+            expect(quoter.quoteFieldNamesInToken('@Status', fields)).toBe('@"Status"');
+        });
     });
 
     /**
@@ -670,6 +682,36 @@ describe('PostgreSQLDataProvider', () => {
             expect(out).toContain('"IsActive"');
             expect(out).toContain('TRUE');
             expect(out).not.toMatch(/=\s*1\b/); // no bare bit literal remains
+        });
+
+        it('PrepareExtraFilterSQL binds scalar and array parameters to $1..$N, transforms identifiers/booleans, and passes balance checks', () => {
+            const ei = mockEntityInfoTyped([
+                { name: 'Name', tsType: EntityFieldTSType.String },
+                { name: 'IsActive', tsType: EntityFieldTSType.Boolean },
+            ]);
+            const transformer = provider as unknown as ProviderWithQuoting;
+
+            const scalarParams: NamedQueryParameter[] = [];
+            const scalarOut = transformer.PrepareExtraFilterSQL('Name = @Name', ei, { Name: 'Alice' }, scalarParams);
+            expect(scalarOut).toBe('"Name" = $1');
+            expect(scalarParams).toEqual([new NamedQueryParameter('$1', 'Alice')]);
+
+            const listParams: NamedQueryParameter[] = [];
+            const listOut = transformer.PrepareExtraFilterSQL(
+                'Name IN (@names) AND IsActive = 1',
+                ei,
+                { names: ['Alice', 'Bob'] },
+                listParams,
+            );
+            expect(listOut).toBe('("Name" IN ($1, $2)) AND ("IsActive" = TRUE)');
+            expect(listParams).toEqual([
+                new NamedQueryParameter('$1', 'Alice'),
+                new NamedQueryParameter('$2', 'Bob'),
+            ]);
+
+            // Caller-supplied $1 or dollar-quoted strings are still refused before binding
+            expect(() => transformer.PrepareExtraFilterSQL('Name = $1', ei, { Name: 'Alice' }, [])).toThrow(/dollar/);
+            expect(() => transformer.PrepareExtraFilterSQL('Name = $$Alice$$', ei, undefined, [])).toThrow(/dollar/);
         });
     });
 

@@ -154,13 +154,31 @@ describe('decrypt on load with a key this install does not have', () => {
         expect(LogError).not.toHaveBeenCalled();
     });
 
-    it('still logs any other decrypt failure as an error', async () => {
+    it('still logs any other decrypt failure as an error on active rows', async () => {
         decrypt.mockRejectedValue(new Error('auth tag mismatch'));
         const { provider, entity, user } = setup();
 
-        await provider.ProcessEntityRows([{ ID: '1', Values: SEALED }], entity, user);
+        await provider.ProcessEntityRows([{ ID: '1', Values: SEALED, IsActive: true }], entity, user);
 
         expect(report).not.toHaveBeenCalled();
         expect(vi.mocked(LogError).mock.calls[0][0]).toContain('auth tag mismatch');
+    });
+
+    it('suppresses LogError and preserves ciphertext when decrypt fails on inactive rows (IsActive false or 0)', async () => {
+        decrypt.mockRejectedValue(new Error('Invalid IV length: 0 bytes'));
+        const { provider, entity, user } = setup();
+
+        const out = await provider.ProcessEntityRows(
+            [
+                { ID: '1', Values: SEALED, IsActive: false },
+                { ID: '2', Values: SEALED, IsActive: 0 },
+            ],
+            entity,
+            user,
+        );
+
+        expect(out.map((r) => r.Values)).toEqual([SEALED, SEALED]);
+        expect(report).not.toHaveBeenCalled();
+        expect(LogError).not.toHaveBeenCalled();
     });
 });
