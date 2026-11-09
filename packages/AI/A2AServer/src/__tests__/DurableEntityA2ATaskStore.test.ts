@@ -358,6 +358,52 @@ describe('DurableEntityA2ATaskStore', () => {
         });
     });
 
+    describe('resubscribing to a task whose row stops changing', () => {
+        it('stops polling a task orphaned in_progress, and says so once', async () => {
+            vi.useFakeTimers();
+            try {
+                const provider = fakeProvider(db);
+                // Saved in_progress by a replica that then died: nothing will change the row again.
+                await new DurableEntityA2ATaskStore().SaveTask(task('in_progress'), USER_A, provider);
+                const subscriber = new DurableEntityA2ATaskStore();
+                const loads = vi.spyOn(subscriber, 'LoadTaskForUser');
+                const onStale = vi.fn();
+                subscriber.SubscribeWithPolling(TASK_ID, USER_A, provider, () => undefined, 100, onStale, 1000);
+
+                await vi.advanceTimersByTimeAsync(1150);
+                expect(onStale).toHaveBeenCalledTimes(1);
+                const polls = loads.mock.calls.length;
+                await vi.advanceTimersByTimeAsync(1000);
+                expect(loads.mock.calls.length).toBe(polls);
+                expect(onStale).toHaveBeenCalledTimes(1);
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('keeps polling a task whose row keeps changing', async () => {
+            vi.useFakeTimers();
+            try {
+                const provider = fakeProvider(db);
+                const runner = new DurableEntityA2ATaskStore();
+                const running = task('in_progress');
+                await runner.SaveTask(running, USER_A, provider);
+                const onStale = vi.fn();
+                const unsubscribe = new DurableEntityA2ATaskStore().SubscribeWithPolling(TASK_ID, USER_A, provider, () => undefined, 100, onStale, 1000);
+
+                for (let i = 0; i < 6; i++) {
+                    running.messages.push(message(`m${i}`, 3000 + i));
+                    await runner.SaveTask(running, USER_A, provider);
+                    await vi.advanceTimersByTimeAsync(500);
+                }
+                expect(onStale).not.toHaveBeenCalled();
+                unsubscribe();
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+    });
+
     describe('UUID collections and primary key hydration', () => {
         it('deduplicates messages and artifacts case-insensitively using UUID collections', () => {
             const upperID = 'AAAAAAAA-1111-4000-8000-000000000001';

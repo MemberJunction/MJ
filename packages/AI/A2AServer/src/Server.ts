@@ -12,7 +12,7 @@ import { AIEngine } from "@memberjunction/aiengine";
 import { MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { randomUUID } from "crypto";
 import { ShutdownRegistry } from "@memberjunction/global";
-import { CreateA2ATaskStore, DurableEntityA2ATaskStore, TERMINAL_STATUSES, Task, TaskStatus, Message, Artifact } from "./TaskStore.js";
+import { CreateA2ATaskStore, DurableEntityA2ATaskStore, RESUBSCRIBE_STALE_AFTER_MS, TERMINAL_STATUSES, Task, TaskStatus, Message, Artifact } from "./TaskStore.js";
 import { AgentCard, AgentCardAgentCapability, AgentCardEntityCapability, BuildAgentCard, ResolveAgentCardIdentity } from "./AgentCard.js";
 import { CreateTaskOperations } from "./TaskOperations.js";
 import { HandleTaskSend, TASK_NOT_FOUND_MESSAGE, type TaskSendOutcome, type TaskSendRequest } from "./TaskSend.js";
@@ -675,8 +675,23 @@ async function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res
         }
     };
 
+    // A task that stops changing (its replica died) ends the stream with that status instead of polling forever.
+    const subscribedTaskId = task.id;
+    const onStale = () => {
+        res.write(`data: ${JSON.stringify({
+            taskId: subscribedTaskId,
+            status: lastStatus,
+            error: {
+                code: 408,
+                message: `The task has not changed for ${RESUBSCRIBE_STALE_AFTER_MS / 60_000} minutes, so this stream has ended. ` +
+                    'It may still finish: check it with tasks/get or resubscribe.'
+            }
+        })}\n\n`);
+        res.end();
+    };
+
     const unsubscribe = tasks instanceof DurableEntityA2ATaskStore && authenticatedUser
-        ? tasks.SubscribeWithPolling(task.id, authenticatedUser, provider, onUpdate, pollInterval)
+        ? tasks.SubscribeWithPolling(task.id, authenticatedUser, provider, onUpdate, pollInterval, onStale)
         : tasks.Subscribe(task.id, onUpdate);
 
     // Handle client disconnect

@@ -42,6 +42,14 @@ export interface Task {
  */
 export const TERMINAL_STATUSES: ReadonlySet<TaskStatus> = new Set(['completed', 'cancelled', 'failed']);
 
+/**
+ * How long a resubscriber keeps polling a task whose stored row has stopped changing before it gives up
+ * ({@link DurableEntityA2ATaskStore.SubscribeWithPolling}). A task whose replica died mid-run stays
+ * `in_progress` in storage forever, and without this its watcher would poll it for as long as the client
+ * stayed connected.
+ */
+export const RESUBSCRIBE_STALE_AFTER_MS = 30 * 60 * 1000;
+
 export interface TaskStoreOptions {
     /** How often to scan for terminal tasks. Default 5 minutes. */
     sweepIntervalMs?: number; // case-violation-ok-legacy-back-compat: the A2A protocol wire shape — these field names ARE the protocol, serialized to every A2A client
@@ -783,16 +791,24 @@ export class DurableEntityA2ATaskStore extends TaskStore {
     /**
      * In durable mode, subscribes to task updates across replicas by combining in-process events
      * with periodic polling of the stored row in `MJ: Tasks` (S10).
+     *
+     * Polling stops when the task reaches a terminal status, or when its stored row has not changed for
+     * `staleAfterMs` (a task orphaned by a replica that died stays `in_progress` forever); `onStale` is
+     * then called so the caller can end its stream and say why.
      */
     public SubscribeWithPolling(
         taskId: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
         listener: (task: Task) => void,
-        intervalMs: number = 5000
+        intervalMs: number = 5000,
+        onStale?: () => void,
+        staleAfterMs: number = RESUBSCRIBE_STALE_AFTER_MS
     ): () => void {
         const unsubscribeLocal = this.Subscribe(taskId, listener);
         let active = true;
+        let lastSeen = '';
+        let lastChangeAt = Date.now();
 
         const interval = setInterval(async () => {
             if (!active) return;
@@ -802,10 +818,22 @@ export class DurableEntityA2ATaskStore extends TaskStore {
                     listener(stored);
                     if (TERMINAL_STATUSES.has(stored.status)) {
                         cleanup();
+                        return;
+                    }
+                    const seen = `${stored.status}|${stored.updated.getTime()}|${stored.messages.length}|${stored.artifacts.length}`;
+                    if (seen !== lastSeen) {
+                        lastSeen = seen;
+                        lastChangeAt = Date.now();
                     }
                 }
             } catch {
                 // Ignore transient polling errors
+            }
+            // ponytail: "unchanged for a while" stands in for liveness; a heartbeat column on the row
+            // written by the running replica would tell an orphaned task from a slow one.
+            if (active && Date.now() - lastChangeAt >= staleAfterMs) {
+                cleanup();
+                onStale?.();
             }
         }, intervalMs);
 
