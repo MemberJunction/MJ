@@ -101,6 +101,7 @@ describe('SQL logging capture of the same record saved twice (threshold mode)', 
   async function saveTwiceAndCapture(options: { variableBatchThreshold?: number }): Promise<string> {
     const info = makeWidgetEntityInfo();
     const provider = new LoggingTestProvider();
+    provider.ConcurrencyCheck = 'off';
     provider.AttachPool(new MockConnectionPool());
     provider.SetTestEntities([info]);
 
@@ -167,6 +168,7 @@ describe('SQL logging of statements that ran with typed parameters', () => {
 
   async function capture(logRecordChangeMetadata: boolean, run: (provider: LoggingTestProvider) => Promise<void>): Promise<string> {
     const provider = new LoggingTestProvider();
+    provider.ConcurrencyCheck = 'off';
     provider.AttachPool(new MockConnectionPool());
     provider.SetTestEntities([makeRecordChangesEntityInfo()]);
     const file = path.join(dir, 'capture.sql');
