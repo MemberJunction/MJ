@@ -342,8 +342,16 @@ describe('calibration against MJ core entity field names', () => {
         // ceiling sits well below a doubling of the blast radius, so re-adding `tin` (+43)
         // or widening `token` back to a bare substring (+35) fails here rather than
         // silently making the guard unusable again. Raise it only with the same kind of
-        // evidence that lowered it (e.g. +3 from Action saga compensation fields
-        // CompensationAction, CompensationActionID, CompensationInputMapping).
+        // evidence that lowered it.
+        //
+        // Raised from 55 to 60 with that evidence: the Predictive Studio schema adds two
+        // columns the name rule refuses, `FeatureSchemaHash` (matches `hash`: a content hash
+        // of a training snapshot's feature schema) and `AuthoredBy` (matches `auth`: the name
+        // of a unit's author). Neither holds a credential; they are counted, not exempted.
+        //
+        // Raised again for the Action saga compensation fields (`CompensationAction`,
+        // `CompensationActionID`, `CompensationInputMapping`, which match `auth` inside
+        // `Compensation`): no credential either.
         const refused = FIELDS.filter((f) => IsSensitiveFieldName(f));
         expect(refused.length).toBeGreaterThanOrEqual(30);
         expect(refused.length).toBeLessThanOrEqual(65);

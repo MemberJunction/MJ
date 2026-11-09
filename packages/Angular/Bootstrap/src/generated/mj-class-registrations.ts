@@ -36,21 +36,17 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (484 classes)
+// @memberjunction/core-entities (480 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
     AccessControlRuleProvider,
-    AlternateBaseViewEdgeProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
     DashboardPermissionProvider,
-    EntityMetadataEdgeProvider,
     EntityPermissionProvider,
-    ForeignKeyEdgeProvider,
-    JoinEntityEdgeProvider,
     MJAIActionEntity,
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
@@ -352,10 +348,13 @@ import {
     MJMLAlgorithmEntity,
     MJMLAlgorithmUseCaseEntity,
     MJMLAlgorithmUseCaseRankingEntity,
+    MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
     MJMLModelScoringBindingEntity,
+    MJMLPredictionUnitEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
+    MJMLTrainingSnapshotEntity,
     MJMagicLinkInviteAllowedDomainEntity,
     MJMagicLinkInviteAllowedPathEntity,
     MJMagicLinkInviteApplicationEntity,
@@ -517,10 +516,7 @@ import {
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
-    QueryEdgeProvider,
-    QueryMetadataEdgeProvider,
     QueryPermissionProvider,
-    RecordLinkEdgeProvider,
     ResourcePermissionProvider,
 } from '@memberjunction/core-entities';
 
@@ -753,7 +749,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (116 classes)
+// @memberjunction/ng-dashboards (120 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -825,9 +821,13 @@ import {
     MappingWorkspaceComponent,
     ModelManagementComponent,
     OverviewComponent,
+    PSModelEvaluationPanel,
     PSModelsResourceComponent,
+    PSPipelineBindingsPanel,
     PSPredictionsResourceComponent,
+    PSProtocolVersionsPanel,
     PSStudioResourceComponent,
+    PSUnitVersionsPanel,
     PermissionsAuditLogResourceComponent,
     PermissionsResourceAccessResourceComponent,
     PermissionsUserAccessResourceComponent,
@@ -916,16 +916,12 @@ const CLASS_REGISTRATIONS_0: any[] = [
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
     AccessControlRuleProvider,
-    AlternateBaseViewEdgeProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
     DashboardPermissionProvider,
-    EntityMetadataEdgeProvider,
     EntityPermissionProvider,
-    ForeignKeyEdgeProvider,
-    JoinEntityEdgeProvider,
     MJAIActionEntity,
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
@@ -1100,14 +1096,14 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJConversationDetailEntity,
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_1: any[] = [
     MJConversationEntity,
     MJConversationSkillEntity,
     MJConversationWidgetInstanceEntity,
     MJCountryEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_1: any[] = [
     MJCredentialCategoryEntity,
     MJCredentialEntity,
     MJCredentialTypeEntity,
@@ -1231,10 +1227,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMLAlgorithmEntity,
     MJMLAlgorithmUseCaseEntity,
     MJMLAlgorithmUseCaseRankingEntity,
+    MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
     MJMLModelScoringBindingEntity,
+    MJMLPredictionUnitEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
+    MJMLTrainingSnapshotEntity,
     MJMagicLinkInviteAllowedDomainEntity,
     MJMagicLinkInviteAllowedPathEntity,
     MJMagicLinkInviteApplicationEntity,
@@ -1304,11 +1303,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRubricCriterionLevelEntity,
     MJRubricEntity,
     MJRubricEvaluationEntity,
+    MJRubricEvaluationScoreEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
-    MJRubricEvaluationScoreEntity,
     MJRubricScaleEntity,
     MJRubricScaleLevelEntity,
     MJRubricVersionEntity,
@@ -1400,10 +1399,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
-    QueryEdgeProvider,
-    QueryMetadataEdgeProvider,
     QueryPermissionProvider,
-    RecordLinkEdgeProvider,
     ResourcePermissionProvider,
     MJActionEntityExtended,
     MJEntityActionEntityExtended,
@@ -1508,14 +1504,14 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJAIAgentChannelFormComponentExtended,
     MJAIAgentFormComponentExtended,
     MJAIAgentRubricFormComponentExtended,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     MJAIAgentRunFormComponentExtended,
     MJAIAgentSessionFormComponentExtended,
     MJAIPromptFormComponentExtended,
     MJAIPromptRunFormComponentExtended,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     MJActionExecutionLogFormComponentExtended,
     MJActionFormComponentExtended,
     MJEntityActionFormComponentExtended,
@@ -1636,9 +1632,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MappingWorkspaceComponent,
     ModelManagementComponent,
     OverviewComponent,
+    PSModelEvaluationPanel,
     PSModelsResourceComponent,
+    PSPipelineBindingsPanel,
     PSPredictionsResourceComponent,
+    PSProtocolVersionsPanel,
     PSStudioResourceComponent,
+    PSUnitVersionsPanel,
     PermissionsAuditLogResourceComponent,
     PermissionsResourceAccessResourceComponent,
     PermissionsUserAccessResourceComponent,

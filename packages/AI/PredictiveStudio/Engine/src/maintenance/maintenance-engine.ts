@@ -6,21 +6,21 @@
  * scoring inference path via an injected re-score runner, the
  * `MJ: ML Model Scoring Bindings` lineage) into one auditable maintenance flow:
  *
- * 1. **Staleness detection** ({@link MaintenanceEngine.detectStaleness}) — given a
+ * 1. **Staleness detection** ({@link MaintenanceEngine.DetectStaleness}) — given a
  *    binding + its model, decide stale-or-fresh by a configurable
  *    {@link RetrainingPolicy}: **cadence** (last-scored / last-trained older than N
  *    days), **data-volume** (target row count grew > X% since training), and a
  *    **drift** seam ({@link IDriftDetector}).
- * 2. **Scheduled re-scoring** ({@link MaintenanceEngine.rescoreScheduledBinding}) —
+ * 2. **Scheduled re-scoring** ({@link MaintenanceEngine.RescoreScheduledBinding}) —
  *    for a `Mode='Scheduled'` binding, re-run scoring via the injected runner and
  *    stamp `LastScoredAt` / `LastRowCount` on the binding.
- * 3. **Retraining trigger** ({@link MaintenanceEngine.triggerRetrainIfStale}) — when
+ * 3. **Retraining trigger** ({@link MaintenanceEngine.TriggerRetrainIfStale}) — when
  *    a model is stale, retrain via `TrainingEngine.trainModel` against the same
  *    pipeline → a NEW immutable version; compare the challenger's `HoldoutMetrics`
  *    vs the incumbent's; return a **promotion recommendation** (`promote` when the
  *    challenger wins by the configured margin, else `hold`). It NEVER auto-promotes
  *    — promotion is a separate signed-off Action (§6.4 / PS-AGENT-7).
- * 4. A **single pass** ({@link MaintenanceEngine.runMaintenancePass}) the scheduler
+ * 4. A **single pass** ({@link MaintenanceEngine.RunMaintenancePass}) the scheduler
  *    / an Action calls to do all of the above over a set of bindings, isolated
  *    per-binding so one failure never aborts the batch.
  *
@@ -28,13 +28,14 @@
  * is unit-testable with no live database and no live sidecar.
  */
 
-import { LogError, type UserInfo } from '@memberjunction/core';
-import { isErrorMetric } from '@memberjunction/predictive-studio-core';
+import { LogError, LogStatus, type UserInfo } from '@memberjunction/core';
+import { MS_PER_DAY, MetricDirections } from '@memberjunction/predictive-studio-core';
 import type {
   MJMLModelEntity,
   MJMLModelScoringBindingEntity,
 } from '@memberjunction/core-entities';
 import type { TrainModelInput, TrainModelResult } from '../training';
+import { TrainingEngine } from '../training/training-engine';
 
 import type {
   RetrainingPolicy,
@@ -53,8 +54,6 @@ import type {
 } from './types';
 import { DEFAULT_RETRAINING_POLICY, MaintenanceSystemClock } from './types';
 import { ResolveComparisonMetric, ReadMetric } from './metrics';
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
  * Maintenance orchestrator. Stateless across calls; construct once and reuse. The
@@ -100,16 +99,6 @@ export class MaintenanceEngine {
     };
   }
 
-  /** @deprecated Use {@link DetectStaleness}. */
-  public async detectStaleness(
-    binding: MJMLModelScoringBindingEntity,
-    model: MJMLModelEntity,
-    policy: Partial<RetrainingPolicy>,
-    deps: MaintenanceDeps,
-  ): Promise<StalenessResult> {
-    return this.DetectStaleness(binding, model, policy, deps);
-  }
-
   /** Append a cadence reason when the anchor timestamp is older than `cadenceDays`. */
   private pushCadenceReason(
     reasons: StalenessReason[],
@@ -153,7 +142,7 @@ export class MaintenanceEngine {
     if (policy.dataVolumeGrowthThreshold <= 0) {
       return;
     }
-    if (trainedRowCount == null || trainedRowCount <= 0 || currentRowCount == null) {
+    if ((trainedRowCount === null || trainedRowCount === undefined) || trainedRowCount <= 0 || (currentRowCount === null || currentRowCount === undefined)) {
       return;
     }
     const growth = (currentRowCount - trainedRowCount) / trainedRowCount;
@@ -245,15 +234,6 @@ export class MaintenanceEngine {
     return result;
   }
 
-  /** @deprecated Use {@link RescoreScheduledBinding}. */
-  public async rescoreScheduledBinding(
-    binding: MJMLModelScoringBindingEntity,
-    model: MJMLModelEntity,
-    deps: MaintenanceDeps,
-  ): Promise<RescoreResult | null> {
-    return this.RescoreScheduledBinding(binding, model, deps);
-  }
-
   /** Stamp `LastScoredAt` / `LastRowCount` on a binding after a re-score (clock-driven). */
   private async stampScoringRun(
     binding: MJMLModelScoringBindingEntity,
@@ -272,7 +252,8 @@ export class MaintenanceEngine {
    * Retrain when stale: if `staleness.stale`, retrain the binding's model against
    * the SAME pipeline → a new immutable version, then compare the challenger's
    * holdout metric vs the incumbent's and return a promotion RECOMMENDATION
-   * (`promote` / `hold`). Never auto-promotes.
+   * (`promote` / `hold`). Never auto-promotes. A retrain whose gate decision ships no model has no challenger: the
+   * outcome carries the run without a comparison, the incumbent stays, and the stored reason is logged.
    *
    * @param binding the binding whose model may be retrained
    * @param incumbent the current (stale) model
@@ -300,6 +281,11 @@ export class MaintenanceEngine {
 
     const p = this.resolvePolicy(policy);
     const challenger = await this.retrainSamePipeline(incumbent, deps, trainInputOverrides);
+    if (challenger.model === null) {
+      // The retrain's gate decision shipped no artifact: there is no challenger to compare, so the incumbent stays.
+      LogStatus(`MaintenanceEngine: binding ${binding.ID}: the retrain of model ${incumbent.ID} shipped no model (run ${challenger.run.ID}); the incumbent stays. ${TrainingEngine.NoModelReason(challenger)}`);
+      return { bindingId: binding.ID, incumbentModelId: incumbent.ID, retrained: true, stalenessReasons: staleness.reasons, challenger };
+    }
     const comparison = this.CompareChallenger(incumbent, challenger.model, p);
 
     return {
@@ -310,18 +296,6 @@ export class MaintenanceEngine {
       challenger,
       comparison,
     };
-  }
-
-  /** @deprecated Use {@link TriggerRetrainIfStale}. */
-  public async triggerRetrainIfStale(
-    binding: MJMLModelScoringBindingEntity,
-    incumbent: MJMLModelEntity,
-    staleness: StalenessResult,
-    policy: Partial<RetrainingPolicy>,
-    deps: MaintenanceDeps,
-    trainInputOverrides?: Partial<Omit<TrainModelInput, 'pipelineId'>>,
-  ): Promise<RetrainOutcome> {
-    return this.TriggerRetrainIfStale(binding, incumbent, staleness, policy, deps, trainInputOverrides);
   }
 
   /** Retrain the incumbent's pipeline into a new immutable version via the training engine. */
@@ -359,46 +333,55 @@ export class MaintenanceEngine {
     // promote decision uses `improvement`, computed in the metric's NATURAL
     // direction: for error metrics (RMSE/MAE/logloss) lower is better, so an
     // improvement means the incumbent's value minus the challenger's.
-    const delta = incumbentValue != null && challengerValue != null ? challengerValue - incumbentValue : null;
-    const improvement = this.metricImprovement(metric, incumbentValue, challengerValue);
+    const delta = (incumbentValue !== null && incumbentValue !== undefined) && (challengerValue !== null && challengerValue !== undefined) ? challengerValue - incumbentValue : null;
+    // A pinned name wins over 'auto' unvetted (ResolveComparisonMetric), so its direction may be unknown; such a metric
+    // cannot be ranked (MetricDirections.MetricDirectionOf), and the comparison holds instead of guessing a direction.
+    const unranked = this.isPinned(policy) && MetricDirections.MetricDirectionOf(metric) === null && incumbentValue !== null && challengerValue !== null;
+    const improvement = unranked ? null : this.metricImprovement(metric, incumbentValue, challengerValue);
     const recommendation = this.recommendPromotion(improvement, policy.promotionMargin);
+    const detail = unranked && incumbentValue !== null && challengerValue !== null
+      ? this.unknownDirectionDetail(metric, incumbentValue, challengerValue)
+      : this.buildComparisonDetail(metric, incumbentValue, challengerValue, delta, policy.promotionMargin, recommendation);
 
-    return {
-      metric,
-      incumbentValue,
-      challengerValue,
-      delta,
-      margin: policy.promotionMargin,
-      recommendation,
-      detail: this.buildComparisonDetail(metric, incumbentValue, challengerValue, delta, policy.promotionMargin, recommendation),
-    };
+    return { metric, incumbentValue, challengerValue, delta, margin: policy.promotionMargin, recommendation, detail };
   }
 
-  /** @deprecated Use {@link CompareChallenger}. */
-  public compareChallenger(
-    incumbent: MJMLModelEntity,
-    challenger: MJMLModelEntity,
-    policy: RetrainingPolicy,
-  ): ChallengerComparison {
-    return this.CompareChallenger(incumbent, challenger, policy);
+  /** Whether the policy pins a concrete comparison metric rather than letting 'auto' pick one of known direction. */
+  private isPinned(policy: RetrainingPolicy): boolean {
+    return !!policy.comparisonMetric && policy.comparisonMetric !== 'auto';
+  }
+
+  /** The HOLD explanation for a pinned metric whose direction Predictive Studio does not know. */
+  private unknownDirectionDetail(metric: string, incumbentValue: number, challengerValue: number): string {
+    return (
+      `The policy compares on "${metric}", a metric whose direction is unknown: Predictive Studio cannot tell whether higher ` +
+      `or lower is better, so it cannot rank the new model (${challengerValue.toFixed(4)}) against the current model ` +
+      `(${incumbentValue.toFixed(4)}). Recommending HOLD until a human reviews. No promotion was performed.`
+    );
   }
 
   /**
    * How much the challenger improves over the incumbent, in the metric's natural
    * direction (positive = better). Returns `null` when either value is absent.
-   * For error metrics lower is better → improvement = incumbent − challenger;
-   * for higher-is-better metrics → improvement = challenger − incumbent.
+   * The difference of the two normalized scores (`MetricDirections.NormalizedScore`,
+   * the leaderboard's orientation): for error metrics incumbent − challenger, for
+   * higher-is-better metrics challenger − incumbent, for a closer-to-one metric
+   * (calibration slope) |1 − incumbent| − |1 − challenger|. Null too for a metric of
+   * unknown direction, which is never ranked (CompareChallenger holds on a pinned one,
+   * and 'auto' picks only keys of known direction).
    */
   private metricImprovement(metric: string, incumbentValue: number | null, challengerValue: number | null): number | null {
-    if (incumbentValue == null || challengerValue == null) {
+    if ((incumbentValue === null || incumbentValue === undefined) || (challengerValue === null || challengerValue === undefined)) {
       return null;
     }
-    return isErrorMetric(metric) ? incumbentValue - challengerValue : challengerValue - incumbentValue;
+    const challenger = MetricDirections.NormalizedScore(challengerValue, metric);
+    const incumbent = MetricDirections.NormalizedScore(incumbentValue, metric);
+    return challenger === null || incumbent === null ? null : challenger - incumbent;
   }
 
   /** Decide promote-vs-hold from the directional improvement + margin (hold when unknown). */
   private recommendPromotion(improvement: number | null, margin: number): PromotionRecommendation {
-    if (improvement == null) {
+    if ((improvement === null || improvement === undefined)) {
       return 'hold';
     }
     return improvement >= margin ? 'promote' : 'hold';
@@ -413,16 +396,17 @@ export class MaintenanceEngine {
     margin: number,
     recommendation: PromotionRecommendation,
   ): string {
-    if (incumbentValue == null || challengerValue == null) {
+    if ((incumbentValue === null || incumbentValue === undefined) || (challengerValue === null || challengerValue === undefined)) {
       return (
-        `Could not compare on "${metric}" — ${incumbentValue == null ? 'the current model' : 'the new model'} ` +
+        `Could not compare on "${metric}" — ${incumbentValue === null || incumbentValue === undefined ? 'the current model' : 'the new model'} ` +
         `has no holdout value for it. Recommending HOLD until a human reviews. No promotion was performed.`
       );
     }
     const verb = recommendation === 'promote' ? 'beats' : 'does not beat';
+    const direction = MetricDirections.MetricDirectionOf(metric) === 'closer-to-one' ? ' (closer to 1 is better)' : '';
     return (
       `The newly-trained model scores ${challengerValue.toFixed(4)} vs the current model's ${incumbentValue.toFixed(4)} ` +
-      `on "${metric}" (a change of ${(delta ?? 0).toFixed(4)}). It ${verb} the current model by the required ` +
+      `on "${metric}"${direction} (a change of ${(delta ?? 0).toFixed(4)}). It ${verb} the current model by the required ` +
       `${margin.toFixed(4)} margin, so the recommendation is to ${recommendation.toUpperCase()}. ` +
       `Promotion still requires explicit human sign-off — nothing has been promoted automatically.`
     );
@@ -456,16 +440,6 @@ export class MaintenanceEngine {
       entries.push(await this.maintainOne(binding, policy, deps, { rescoreScheduled, retrainStale, trainModelInput: options.trainModelInput }));
     }
     return this.summarizePass(entries);
-  }
-
-  /** @deprecated Use {@link RunMaintenancePass}. */
-  public async runMaintenancePass(
-    bindings: MJMLModelScoringBindingEntity[],
-    policy: Partial<RetrainingPolicy>,
-    deps: MaintenanceDeps,
-    options: MaintenancePassOptions = {},
-  ): Promise<MaintenancePassResult> {
-    return this.RunMaintenancePass(bindings, policy, deps, options);
   }
 
   /** Maintain a single binding end-to-end, capturing any error on the entry. */
@@ -581,22 +555,12 @@ export function RunMaintenancePass(
   deps: MaintenanceDeps,
   options?: MaintenancePassOptions,
 ): Promise<MaintenancePassResult> {
-  return new MaintenanceEngine().runMaintenancePass(bindings, policy, deps, options);
-}
-
-/** @deprecated Use {@link RunMaintenancePass}. */
-export function runMaintenancePass(
-  bindings: MJMLModelScoringBindingEntity[],
-  policy: Partial<RetrainingPolicy>,
-  deps: MaintenanceDeps,
-  options?: MaintenancePassOptions,
-): Promise<MaintenancePassResult> {
-  return RunMaintenancePass(bindings, policy, deps, options);
+  return new MaintenanceEngine().RunMaintenancePass(bindings, policy, deps, options);
 }
 
 /** Parse a possibly-null JSON column, falling back to a default on null/parse error. */
 function parseJson<T>(raw: string | null | undefined, fallback: T): T {
-  if (raw == null || raw.trim().length === 0) {
+  if ((raw === null || raw === undefined) || raw.trim().length === 0) {
     return fallback;
   }
   try {
