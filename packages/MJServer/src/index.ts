@@ -4,7 +4,7 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed } from '@memberjunction/core';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed, SetTypedQueryDriftMode } from '@memberjunction/core';
 import { UserCache, resolveDbPlatformFromEnv, GenericDatabaseProvider, SummarizeSqlParameters } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
@@ -530,6 +530,7 @@ const serveBehindStartupGate = async (
 const setupComplete$ = new ReplaySubject(1);
   const dbType = GetDbType();
   const dataSources: DataSourceInfo[] = [];
+  SetTypedQueryDriftMode(configInfo.databaseSettings.typedQueryDrift ?? 'warn');
 
   // Shared cache first: the database provider loads metadata and startup engines through
   // it, so the first server to start fills it and later servers read it instead of each querying
@@ -614,6 +615,8 @@ const setupComplete$ = new ReplaySubject(1);
       cacheRefreshInterval / 1000, // convert ms to seconds
     );
     pgConfigData.LocalStorageProvider = sharedCache ?? undefined;
+    pgConfigData.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
+    pgConfigData.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
     const provider = new PostgreSQLDataProvider();
     await provider.Config(pgConfigData);
     SetProvider(provider);
@@ -827,6 +830,8 @@ const setupComplete$ = new ReplaySubject(1);
     // cacheRefreshInterval is configured in ms; checkRefreshIntervalSeconds declares seconds — see providerConfigUnits.ts
     const config = new SQLServerProviderConfigData(pool, mj_core_schema, MetadataCacheRefreshIntervalSeconds(cacheRefreshInterval));
     config.LocalStorageProvider = sharedCache ?? undefined;
+    config.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
+    config.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
     // MJAPI is a long-running server, so entry-point default is 'full' engine pre-warm;
     // MJ_STARTUP_MODE / mj.config.cjs startup.mode can override per the shared precedence chain
     const startupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
