@@ -15,12 +15,19 @@ export type HumanLabel = 'Bug' | 'Intended' | 'TestFault';
 
 export interface ModelReport {
     Model: string; Ledgers: string[];
-    /** Caught = run bug PRs whose reported catch matched the fix ÷ run bug PRs with a match result. NotYetMatched = run bug PRs with no match result. */
-    BugSet: { PRs: number; Run: number; Failed: number; Caught: RateWithInterval; AnyWeakMatched: number; NotMatched: number; NoCatch: number; ApplyFailed: number; NotYetMatched: number };
+    /**
+     * Caught = run bug PRs whose reported catch matched the fix ÷ run bug PRs with a match result (progress).
+     * GateCaught = bug PRs whose reported catch matched ÷ every curated bug PR of the slices (the gate value).
+     * NotYetMatched = run bug PRs with no match result.
+     */
+    BugSet: { PRs: number; Run: number; Failed: number; Caught: RateWithInterval; GateCaught: RateWithInterval; AnyWeakMatched: number; NotMatched: number; NoCatch: number; ApplyFailed: number; NotYetMatched: number };
     /** FalseAlarms = run clean PRs with a reported catch labeled Intended or TestFault. */
     CleanSet: { PRs: number; Run: number; Failed: number; Reported: number; Labeled: number; Pending: number; FalseAlarms: RateWithInterval; RealBugs: number };
-    /** UnpricedModels: models with no table price; their recorded cost is used in TableUSD. */
-    Cost: { TotalUSD: number; PerPR: number | null; PerMatchedCatch: number | null; RecordedUSD: number; TableUSD: number; UnpricedModels: string[] };
+    /**
+     * TotalUSD: the ledger cost of every attempt. RecordedUSD and TableUSD: the recorded and the table-priced cost of the tokens of each
+     * entry's current run, also per model in ByModel. UnpricedModels: models with no table price; their recorded cost is used in TableUSD.
+     */
+    Cost: { TotalUSD: number; PerPR: number | null; PerMatchedCatch: number | null; RecordedUSD: number; TableUSD: number; ByModel: Record<string, { RecordedUSD: number; TableUSD: number }>; UnpricedModels: string[] };
     /** Session end reason → count. */
     Sessions: Record<string, number>;
     /** Drop rule → count. */
@@ -96,7 +103,7 @@ function modelReportOf(ledgers: BacktestLedger[], corpus: Corpus, data: Map<stri
     const bug = bugSetOf(entries.filter((e) => e.Set === 'Bug'), corpusPRs(ledgers, corpus, 'Bug'));
     return {
         Model: ledgers[0].Model, Ledgers: ledgers.map((l) => l.ID), BugSet: bug,
-        CleanSet: cleanSetOf(entries.filter((e) => e.Set === 'Clean'), corpusPRs(ledgers, corpus, 'Clean'), data),
+        CleanSet: cleanSetOf(entries.filter((e) => e.Set === 'Clean'), corpusPRs(ledgers, corpus, 'Clean').size, data),
         Cost: costOf(entries, assessed.length, bug.AnyWeakMatched, data, prices),
         Sessions: CountBy(runs.flatMap((r) => r.Sessions.map((s) => s.EndReason))),
         Drops: CountBy(catches.flatMap((c) => (c.DroppedByRule === null ? [] : [c.DroppedByRule]))),
@@ -118,19 +125,20 @@ function runData(e: LedgerEntry, data: Map<string, RunData>): RunData[] {
 }
 
 /** Corpus PRs of the set in the slices the ledgers cover for that set. */
-function corpusPRs(ledgers: BacktestLedger[], corpus: Corpus, set: 'Bug' | 'Clean'): number {
+function corpusPRs(ledgers: BacktestLedger[], corpus: Corpus, set: 'Bug' | 'Clean'): Set<number> {
     const slices = new Set(ledgers.filter((l) => l.Set === set || l.Set === 'Both').map((l) => l.Slice));
-    const prs = set === 'Bug' ? corpus.Bug.filter((b) => slices.has(b.Slice)).map((b) => b.BugPR) : corpus.Clean.filter((c) => slices.has(c.Slice)).map((c) => c.PR);
-    return new Set(prs).size;
+    return new Set(set === 'Bug' ? corpus.Bug.filter((b) => slices.has(b.Slice)).map((b) => b.BugPR) : corpus.Clean.filter((c) => slices.has(c.Slice)).map((c) => c.PR));
 }
 
-function bugSetOf(entries: LedgerEntry[], prs: number): ModelReport['BugSet'] {
+/** The bug set counts; GateCaught counts only the curated bug PRs `prs`. */
+function bugSetOf(entries: LedgerEntry[], prs: Set<number>): ModelReport['BugSet'] {
     const run = entries.filter((e) => e.Status === 'Assessed');
     const matched = run.filter((e) => e.Match !== null);
     const status = (s: string): number => matched.filter((e) => e.Match?.Status === s).length;
+    const reportedMatched = matched.filter((e) => e.Match?.ReportedMatched === true);
     return {
-        PRs: prs, Run: run.length, Failed: entries.filter((e) => e.Status === 'Failed').length,
-        Caught: RateOf(matched.filter((e) => e.Match?.ReportedMatched === true).length, matched.length),
+        PRs: prs.size, Run: run.length, Failed: entries.filter((e) => e.Status === 'Failed').length,
+        Caught: RateOf(reportedMatched.length, matched.length), GateCaught: RateOf(reportedMatched.filter((e) => prs.has(e.PR)).length, prs.size),
         AnyWeakMatched: status('Matched'), NotMatched: status('NotMatched'), NoCatch: status('NoCatch'), ApplyFailed: status('ApplyFailed'),
         NotYetMatched: run.length - matched.length,
     };
@@ -148,15 +156,20 @@ function cleanSetOf(entries: LedgerEntry[], prs: number, data: Map<string, RunDa
     };
 }
 
-/** Recorded cost of every entry, and the cost of the runs' tokens at the table prices. */
+/** The ledger cost of every entry, and the recorded and table-priced cost of the tokens of each entry's current run, in total and per model. */
 function costOf(entries: LedgerEntry[], runPRs: number, matched: number, data: Map<string, RunData>, prices: Settings['Prices']): ModelReport['Cost'] {
-    const recorded = entries.reduce((s, e) => s + e.CostUSD, 0);
+    const total = entries.reduce((s, e) => s + e.CostUSD, 0);
     const runIDs = new Set(entries.flatMap((e) => (e.RunID === null ? [] : [e.RunID])));
     const usage = [...runIDs].flatMap((id) => data.get(id)?.Run?.TokensByModel ?? []);
     const unpriced = [...new Set(usage.filter((u) => !prices[u.Model]).map((u) => u.Model))].sort();
+    const byModel: ModelReport['Cost']['ByModel'] = {};
+    for (const u of usage) {
+        const m = byModel[u.Model] ?? { RecordedUSD: 0, TableUSD: 0 };
+        byModel[u.Model] = { RecordedUSD: m.RecordedUSD + u.CostUSD, TableUSD: m.TableUSD + TableCostOf(u, prices) };
+    }
     return {
-        TotalUSD: recorded, PerPR: runPRs === 0 ? null : recorded / runPRs, PerMatchedCatch: matched === 0 ? null : recorded / matched,
-        RecordedUSD: recorded, TableUSD: usage.reduce((s, u) => s + TableCostOf(u, prices), 0), UnpricedModels: unpriced,
+        TotalUSD: total, PerPR: runPRs === 0 ? null : total / runPRs, PerMatchedCatch: matched === 0 ? null : total / matched,
+        RecordedUSD: usage.reduce((s, u) => s + u.CostUSD, 0), TableUSD: usage.reduce((s, u) => s + TableCostOf(u, prices), 0), ByModel: byModel, UnpricedModels: unpriced,
     };
 }
 
@@ -221,7 +234,8 @@ function renderModel(m: ModelReport): string[] {
     const b = m.BugSet; const c = m.CleanSet;
     return [
         `## ${MarkdownText(m.Model)}`, '', `Ledgers: ${m.Ledgers.map(MarkdownText).join(', ')}`, '',
-        `### Bug set`, '', `- ${prLine(b)}`, `- Caught (reported and matched): ${rate(b.Caught)}`,
+        `### Bug set`, '', `- ${prLine(b)}`, `- Caught (reported and matched, of run PRs with a match result): ${rate(b.Caught)}`,
+        `- Gate caught (reported and matched, of every curated bug PR): ${rate(b.GateCaught)}`, ...(b.PRs > 0 ? [`- ${gateInputs(b)}`] : []),
         `- Any weak catch matched: ${b.AnyWeakMatched}; not matched: ${b.NotMatched}; no catch: ${b.NoCatch}; fix did not apply: ${b.ApplyFailed}`,
         ...(b.NotYetMatched > 0 ? [`- Warning: ${b.NotYetMatched} run PR${b.NotYetMatched === 1 ? ' has' : 's have'} no match result yet; run \`backtest match\` and report again`] : []), '',
         `### Clean set`, '', `- ${prLine(c)}`, `- With a reported catch: ${c.Reported}; labeled ${c.Labeled}; pending ${c.Pending}`,
@@ -232,12 +246,22 @@ function renderModel(m: ModelReport): string[] {
 
 /** PRs in the corpus slices, run, failed, and not run (neither run nor failed). */
 function prLine(s: { PRs: number; Run: number; Failed: number }): string {
-    return `PRs: ${s.PRs}; run ${s.Run}; failed ${s.Failed}; not run ${Math.max(0, s.PRs - s.Run - s.Failed)}`;
+    return `PRs: ${s.PRs}; run ${s.Run}; failed ${s.Failed}; not run ${notRun(s)}`;
+}
+
+function notRun(s: { PRs: number; Run: number; Failed: number }): number { return Math.max(0, s.PRs - s.Run - s.Failed); }
+
+/** What keeps the gate value from being final: failed, not run, not yet matched and apply-failed bug PRs; "gate inputs complete" when there are none. Rendered when the slices hold a bug PR. */
+function gateInputs(b: ModelReport['BugSet']): string {
+    const counts = [b.Failed, notRun(b), b.NotYetMatched, b.ApplyFailed];
+    if (counts.every((n) => n === 0)) return 'gate inputs complete';
+    return `gate blocked: ${counts[0]} failed, ${counts[1]} not run, ${counts[2]} not yet matched, ${counts[3]} apply failed (needs a person)`;
 }
 
 function renderCost(m: ModelReport): string[] {
     const k = m.Cost;
-    return [`### Cost`, '', `- Total: ${usd(k.TotalUSD)} (recorded ${usd(k.RecordedUSD)}; at table prices ${usd(k.TableUSD)})`,
+    const models = Object.entries(k.ByModel).sort(([a], [b]) => a.localeCompare(b)).map(([model, c]) => `- ${MarkdownText(model)}: recorded ${usd(c.RecordedUSD)}; at table prices ${usd(c.TableUSD)}`);
+    return [`### Cost`, '', `- Total, every attempt: ${usd(k.TotalUSD)}; current runs recorded ${usd(k.RecordedUSD)}, at table prices ${usd(k.TableUSD)}`, ...models,
         `- Per run PR: ${k.PerPR === null ? 'n/a' : usd(k.PerPR)}; per matched bug PR: ${k.PerMatchedCatch === null ? 'n/a' : usd(k.PerMatchedCatch)}`,
         ...(k.UnpricedModels.length > 0 ? [`- Unpriced models: ${k.UnpricedModels.map(MarkdownText).join(', ')} (recorded cost used at table prices)`] : []), ''];
 }
