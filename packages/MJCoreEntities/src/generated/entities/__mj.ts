@@ -20135,7 +20135,8 @@ export const MJEntitySchema = z.object({
     BaseTableCodeName: z.string().nullable().describe(`
         * * Field Name: BaseTableCodeName
         * * Display Name: Base Table Code Name
-        * * SQL Data Type: nvarchar(MAX)`),
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Programmatic name of the base table plus NameSuffix, without a schema prefix: GetProgrammaticName(BaseTable + NameSuffix). Used to name generated procedures and triggers. Maintained by trigger; read-only.`),
     ParentEntity: z.string().nullable().describe(`
         * * Field Name: ParentEntity
         * * Display Name: Parent Entity
@@ -21633,7 +21634,8 @@ export const MJEntityFieldSchema = z.object({
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
-        * * SQL Data Type: nvarchar(MAX)`),
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Programmatic name of the field: GetProgrammaticName of the Name with spaces removed. Maintained by trigger; read-only.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
@@ -100704,6 +100706,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     * * Field Name: BaseTableCodeName
     * * Display Name: Base Table Code Name
     * * SQL Data Type: nvarchar(MAX)
+    * * Description: Programmatic name of the base table plus NameSuffix, without a schema prefix: GetProgrammaticName(BaseTable + NameSuffix). Used to name generated procedures and triggers. Maintained by trigger; read-only.
     */
     get BaseTableCodeName(): string | null {
         return this.Get('BaseTableCodeName');
@@ -104509,6 +104512,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     * * Field Name: FieldCodeName
     * * Display Name: Field Code Name
     * * SQL Data Type: nvarchar(MAX)
+    * * Description: Programmatic name of the field: GetProgrammaticName of the Name with spaces removed. Maintained by trigger; read-only.
     */
     get FieldCodeName(): string | null {
         return this.Get('FieldCodeName');
