@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { MatchStep, type MatchDeps } from '../backtest/Match';
@@ -65,13 +65,15 @@ function fakes(o: { catches?: Catch[]; passes?: Record<string, number>; applies?
   return {
     Target: {
       Prepare: vi.fn(async (r: RevisionRef): Promise<PreparedRevision> => ({ Ref: r, RootDir: `/work/head-${r.SHA.slice(0, 1)}` })),
-      ApplyPatch: vi.fn(async () => o.applies ?? true),
       BuildPackages: vi.fn(async () => undefined),
       WriteTests: vi.fn(async (_rev: PreparedRevision, _tests: CandidateTest[]) => undefined),
       Run: run,
       Cleanup: vi.fn(async () => undefined),
     },
-    Repo: { FirstParent: vi.fn(async (s: string) => sha(s === sha('f') ? 'e' : 'b')), Diff: vi.fn(async (base: string, head: string) => `diff ${base.slice(0, 1)}..${head.slice(0, 1)}\n`) },
+    Repo: {
+      FirstParent: vi.fn(async (s: string) => sha(s === sha('f') ? 'e' : 'b')), Diff: vi.fn(async (base: string, head: string) => `diff ${base.slice(0, 1)}..${head.slice(0, 1)}\n`),
+      CommitWithPatch: vi.fn(async (base: string, _patchFile: string, _scratchDir: string) => (o.applies === false ? null : fixedOf(base))),
+    },
     Store: { ListCatches: vi.fn(async () => o.catches ?? weakCatches()) },
     Redaction: redaction,
   } satisfies MatchDeps;
@@ -80,6 +82,9 @@ function fakes(o: { catches?: Catch[]; passes?: Record<string, number>; applies?
 async function match(root: string, corpus: string, deps: MatchDeps): Promise<BacktestLedger> {
   return MatchStep({ LedgerID: LEDGER_ID, CorpusPath: corpus, RepoRoot: root, Settings: DEFAULT_SETTINGS, StoreDir: join(root, 'store'), Deps: deps });
 }
+
+/** The fixed commit the fake repo builds on each head: head a → 7, head c → 8. */
+const fixedOf = (head: string) => sha(head === sha('a') ? '7' : '8');
 
 const record = (over: Partial<MatchRecord>): MatchRecord => ({ Status: 'Matched', ReportedMatched: false, Tests: {}, At: expect.any(String), ...over });
 
@@ -94,17 +99,19 @@ describe('MatchStep', () => {
     expect(file.Read().Entries[0].Match?.Status).toBe('NoCatch');
   });
 
-  it('records ApplyFailed when the fix does not apply on head, runs nothing and cleans head up', async () => {
+  it('records ApplyFailed when the fix does not apply on head, and prepares, builds and runs nothing', async () => {
     const { root, corpus } = setup([entry(1)]);
     const d = fakes({ applies: false });
     const l = await match(root, corpus, d);
     expect(l.Entries[0].Match).toEqual(record({ Status: 'ApplyFailed' }));
-    expect(d.Target.Prepare).toHaveBeenCalledWith({ Kind: 'Head', SHA: sha('a') });
     expect(d.Repo.Diff).toHaveBeenCalledWith(sha('e'), sha('f'));
-    expect(d.Target.ApplyPatch).toHaveBeenCalledWith({ Ref: { Kind: 'Head', SHA: sha('a') }, RootDir: '/work/head-a' }, 'diff e..f\n');
+    const work = join(new RunDir(root, RUN_1, redaction).Path, 'match', 'work');
+    expect(d.Repo.CommitWithPatch).toHaveBeenCalledWith(sha('a'), join(work, 'fix.patch'), join(work, 'fix'));
+    expect(readFileSync(join(work, 'fix.patch'), 'utf8')).toBe('diff e..f\n');
+    expect(d.Target.Prepare).not.toHaveBeenCalled();
     expect(d.Target.BuildPackages).not.toHaveBeenCalled();
     expect(d.Target.Run).not.toHaveBeenCalled();
-    expect(d.Target.Cleanup).toHaveBeenCalledWith({ Ref: { Kind: 'Head', SHA: sha('a') }, RootDir: '/work/head-a' });
+    expect(d.Target.Cleanup).not.toHaveBeenCalled();
   });
 
   it('records Matched with ReportedMatched when the reported catch passes every repeat on the fixed head', async () => {
@@ -112,11 +119,34 @@ describe('MatchStep', () => {
     const d = fakes({ passes: { [ID_A]: 3 } });
     const l = await match(root, corpus, d);
     expect(l.Entries[0].Match).toEqual(record({ Status: 'Matched', ReportedMatched: true, Tests: { [ID_A]: true, [ID_B]: false } }));
-    expect(d.Target.BuildPackages).toHaveBeenCalledWith(expect.objectContaining({ RootDir: '/work/head-a' }), [PKG]);
+    expect(d.Target.Prepare).toHaveBeenCalledWith({ Kind: 'Head', SHA: fixedOf(sha('a')) });
+    expect(d.Target.BuildPackages).toHaveBeenCalledWith(expect.objectContaining({ RootDir: '/work/head-7' }), [PKG]);
     expect(d.Target.WriteTests.mock.calls[0]?.[1].map((t) => t.ID)).toEqual([ID_A, ID_B]);
-    expect(d.Target.Run).toHaveBeenCalledWith(expect.objectContaining({ RootDir: '/work/head-a' }), expect.any(Array), DEFAULT_SETTINGS.Repeats);
+    expect(d.Target.Run).toHaveBeenCalledWith(expect.objectContaining({ RootDir: '/work/head-7' }), expect.any(Array), DEFAULT_SETTINGS.Repeats);
     expect(d.Target.Cleanup).toHaveBeenCalledTimes(1);
     expect(file.Read().Entries[0].Match?.Status).toBe('Matched');
+  });
+
+  it('calls no repository method with the prepared head worktree once head is prepared', async () => {
+    const { root, corpus } = setup([entry(1)]);
+    const d = fakes({ passes: { [ID_A]: 3 } });
+    const repoCalls: string[][] = [];
+    let prepared: string | null = null;
+    const track = (name: string, args: string[]) => { if (prepared !== null) repoCalls.push([name, ...args]); };
+    const repo = {
+      FirstParent: async (s: string) => { track('FirstParent', [s]); return d.Repo.FirstParent(s); },
+      Diff: async (base: string, head: string) => { track('Diff', [base, head]); return d.Repo.Diff(base, head); },
+      CommitWithPatch: async (base: string, patchFile: string, scratchDir: string) => { track('CommitWithPatch', [base, patchFile, scratchDir]); return d.Repo.CommitWithPatch(base, patchFile, scratchDir); },
+      ApplyPatch: async (dir: string, patchFile: string) => { track('ApplyPatch', [dir, patchFile]); return true; },
+    };
+    const target = {
+      ...d.Target,
+      Prepare: async (r: RevisionRef): Promise<PreparedRevision> => { const p = await d.Target.Prepare(r); prepared = p.RootDir; return p; },
+      ApplyPatch: async (rev: PreparedRevision, _patch: string) => repo.ApplyPatch(rev.RootDir, join(rev.RootDir, '..', 'fix.patch')),
+    };
+    await match(root, corpus, { ...d, Repo: repo, Target: target });
+    expect(repoCalls.filter((c) => c.some((a) => prepared !== null && a.startsWith(prepared)))).toEqual([]);
+    expect(prepared).toBe('/work/head-7');
   });
 
   it('records Matched without ReportedMatched when only an unreported catch passes', async () => {
@@ -145,7 +175,7 @@ describe('MatchStep', () => {
 
   it('cleans head up and keeps the entries already written when a run throws', async () => {
     const { root, corpus, file } = setup([entry(1), entry(3)]);
-    const d = fakes({ passes: { [ID_A]: 3 }, runFails: (rev) => rev.Ref.SHA === sha('c') });
+    const d = fakes({ passes: { [ID_A]: 3 }, runFails: (rev) => rev.Ref.SHA === fixedOf(sha('c')) });
     await expect(match(root, corpus, d)).rejects.toThrow('sandbox broke');
     expect(d.Target.Cleanup).toHaveBeenCalledTimes(2);
     expect(file.Read().Entries.map((e) => e.Match?.Status ?? null)).toEqual(['Matched', null]);

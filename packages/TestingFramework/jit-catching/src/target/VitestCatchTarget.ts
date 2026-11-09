@@ -212,14 +212,6 @@ export class VitestCatchTarget extends BaseCatchTarget {
         return out;
     }
 
-    /** Writes the patch to `<WorkRoot>/fix.patch` and applies it in the revision's worktree with the host's git; false when it does not apply. */
-    public async ApplyPatch(revision: PreparedRevision, patch: string): Promise<boolean> {
-        const file = join(this.o.WorkRoot, 'fix.patch');
-        mkdirSync(this.o.WorkRoot, { recursive: true });
-        writeFileSync(file, patch);
-        return this.o.Repo.ApplyPatch(revision.RootDir, file);
-    }
-
     public async Cleanup(revision: PreparedRevision): Promise<void> {
         await this.o.Repo.RemoveWorktree(revision.RootDir).catch(() => rmSync(revision.RootDir, { recursive: true, force: true }));
     }

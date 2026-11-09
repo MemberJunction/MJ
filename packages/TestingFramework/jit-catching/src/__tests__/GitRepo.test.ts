@@ -54,6 +54,29 @@ describe('GitRepo', () => {
     expect(await fake.ApplyPatch('/work/head', '/work/fix.patch')).toBe(false);
     expect(calls).toEqual([{ args: ['-c', 'core.quotePath=false', '-C', '/work/head', 'apply', '--3way', '--whitespace=nowarn', '/work/fix.patch'], cwd: '/repo' }]);
   });
+  it('CommitWithPatch applies the patch in a scratch worktree, commits the tree on the base and removes the worktree', async () => {
+    const calls: string[][] = [];
+    const fake = new GitRepo('/repo', async (args) => { calls.push(args.slice(2)); return args.includes('write-tree') ? 'tree123\n' : args.includes('commit-tree') ? 'commit456\n' : ''; });
+    expect(await fake.CommitWithPatch('base789', '/run/match/work/fix.patch', '/run/match/work/fix')).toBe('commit456');
+    expect(calls).toEqual([
+      ['worktree', 'add', '--detach', '/run/match/work/fix', 'base789'],
+      ['-C', '/run/match/work/fix', 'apply', '--3way', '--whitespace=nowarn', '/run/match/work/fix.patch'],
+      ['-C', '/run/match/work/fix', 'add', '-A'],
+      ['-C', '/run/match/work/fix', 'write-tree'],
+      ['-C', '/run/match/work/fix', 'commit-tree', 'tree123', '-p', 'base789', '-m', 'jit-catch match: base789 + fix'],
+      ['worktree', 'remove', '--force', '/run/match/work/fix'],
+    ]);
+  });
+  it('CommitWithPatch removes the scratch worktree and returns null when the patch does not apply', async () => {
+    const calls: string[][] = [];
+    const fake = new GitRepo('/repo', async (args) => {
+      calls.push(args.slice(2));
+      if (args.includes('apply')) throw Object.assign(new Error('patch does not apply'), { code: 1 });
+      return '';
+    });
+    expect(await fake.CommitWithPatch('base789', '/w/fix.patch', '/w/fix')).toBeNull();
+    expect(calls.map((c) => c.slice(0, 3).join(' '))).toEqual(['worktree add --detach', '-C /w/fix apply', 'worktree remove --force']);
+  });
   it('Subject returns the trimmed subject line of a commit through the runner', async () => {
     const calls: { args: string[]; cwd: string }[] = [];
     const fake = new GitRepo('/repo', async (args, cwd) => { calls.push({ args, cwd }); return '  fix(core): keep the cache per user  \n'; });

@@ -62,6 +62,22 @@ export class GitRepo {
             throw new Error(`git apply ${patchFile} failed: ${(e as Error).message}`);
         }
     }
+    /**
+     * The commit of `baseSHA` plus the patch: applies `patchFile` in a scratch worktree at `scratchDir`, commits its tree
+     * with `baseSHA` as parent and returns the new commit SHA; null when the patch does not apply. The scratch worktree is
+     * removed before this returns.
+     */
+    public async CommitWithPatch(baseSHA: string, patchFile: string, scratchDir: string): Promise<string | null> {
+        await this.AddWorktree(scratchDir, baseSHA);
+        try {
+            if (!(await this.ApplyPatch(scratchDir, patchFile))) return null;
+            await this.git(['-C', scratchDir, 'add', '-A']);
+            const tree = (await this.git(['-C', scratchDir, 'write-tree'])).trim();
+            return (await this.git(['-C', scratchDir, 'commit-tree', tree, '-p', baseSHA, '-m', `jit-catch match: ${baseSHA} + fix`])).trim();
+        } finally {
+            await this.RemoveWorktree(scratchDir);
+        }
+    }
 }
 
 /** True when the error is a process that ran and exited non-zero (a numeric exit `code`), not one that failed to start. */
