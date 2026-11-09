@@ -5,12 +5,17 @@
  */
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Assert, type BundleLifecycle, type IntegrationCheckContext } from '@memberjunction/testing-integration';
-import { RunFixtures, type GateMeasurement, type TruthHarness } from '@memberjunction/predictive-studio-truth-suite';
+import { HarnessSidecar, RunFixtures, type GateMeasurement, type TruthHarness } from '@memberjunction/predictive-studio-truth-suite';
 
 /** The adapter every PS gate bundle uses. */
 export class PsGate {
-  /** The run harness bound to the check's client provider. */
+  /**
+   * The run harness bound to the check's client provider. Before anything else, the sidecar URL defaults to the truth
+   * sidecar's: the process builds one sidecar client, on the first in-process engine call of any gate, so the default
+   * must be in place before the first gate runs, whatever the suite order.
+   */
   public static async Harness(ctx: IntegrationCheckContext): Promise<TruthHarness> {
+    HarnessSidecar.DefaultToSuiteSidecar();
     if (!(ctx.Provider instanceof GraphQLDataProvider)) {
       throw new Error('Predictive Studio gates run on the client transport (Configuration.transport = "client").');
     }

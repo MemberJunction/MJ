@@ -1,6 +1,7 @@
 import { BaseSingleton, GetGlobalObjectStore, WarningManager } from '@memberjunction/global';
 import { LogError } from './logging';
 import { BaseEntity } from './baseEntity';
+import { CompositeFilter } from './filters/compositeFilter';
 // Type-only import — avoids a runtime circular dependency with baseEngine.ts
 // (which imports BaseEngineRegistry). Erased at compile time.
 import type { BaseEnginePropertyConfig } from './baseEngine';
@@ -725,7 +726,15 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
                 const records = cfg.PropertyName ? engineObj[cfg.PropertyName] : undefined;
                 if (!Array.isArray(records)) continue;
 
-                const unfiltered = (!cfg.Filter || cfg.Filter.trim().length === 0)
+                const hasFilter =
+                    typeof cfg.Filter === 'string'
+                        ? cfg.Filter.trim().length > 0
+                        : cfg.Filter != null &&
+                          !(cfg.Filter instanceof CompositeFilter
+                              ? cfg.Filter
+                              : CompositeFilter.FromDescriptor(cfg.Filter)
+                          ).IsEmpty;
+                const unfiltered = !hasFilter
                     && (!cfg.AlternateBaseView || cfg.AlternateBaseView.trim().length === 0);
                 if (options?.unfilteredOnly && !unfiltered) continue;
 

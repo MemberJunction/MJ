@@ -260,28 +260,29 @@ function renderElement(
  */
 function renderFieldInput(field: CuratedFormField): string {
     const baseStyle = 'padding: "8px 10px", border: "1px solid var(--mj-border-default)", borderRadius: 4, background: "var(--mj-bg-surface)", color: "var(--mj-text-primary)", fontFamily: "inherit", fontSize: 13';
-    const name = field.name;
+    // A quoted JS string literal, so a field name containing a quote or backslash stays one string
+    const name = JSON.stringify(field.name);
 
     switch (field.type) {
         case 'boolean':
             return [
                 `{editing`,
-                `    ? <input type="checkbox" checked={!!value("${name}")} onChange={(e) => setField("${name}", e.target.checked)} />`,
-                `    : <div>{value("${name}") ? "Yes" : "No"}</div>}`,
+                `    ? <input type="checkbox" checked={!!value(${name})} onChange={(e) => setField(${name}, e.target.checked)} />`,
+                `    : <div>{value(${name}) ? "Yes" : "No"}</div>}`,
             ].join('\n  ');
 
         case 'datetime':
             return [
                 `{editing`,
-                `    ? <input type="datetime-local" style={{ ${baseStyle} }} value={value("${name}") ? new Date(value("${name}")).toISOString().slice(0, 16) : ""} onChange={(e) => setField("${name}", e.target.value ? new Date(e.target.value).toISOString() : null)} />`,
-                `    : <div>{value("${name}") ? new Date(value("${name}")).toLocaleString() : "—"}</div>}`,
+                `    ? <input type="datetime-local" style={{ ${baseStyle} }} value={value(${name}) ? new Date(value(${name})).toISOString().slice(0, 16) : ""} onChange={(e) => setField(${name}, e.target.value ? new Date(e.target.value).toISOString() : null)} />`,
+                `    : <div>{value(${name}) ? new Date(value(${name})).toLocaleString() : "—"}</div>}`,
             ].join('\n  ');
 
         case 'number':
             return [
                 `{editing`,
-                `    ? <input type="number" style={{ ${baseStyle} }} value={value("${name}") ?? ""} onChange={(e) => setField("${name}", e.target.value === "" ? null : Number(e.target.value))} />`,
-                `    : <div>{value("${name}") ?? "—"}</div>}`,
+                `    ? <input type="number" style={{ ${baseStyle} }} value={value(${name}) ?? ""} onChange={(e) => setField(${name}, e.target.value === "" ? null : Number(e.target.value))} />`,
+                `    : <div>{value(${name}) ?? "—"}</div>}`,
             ].join('\n  ');
 
         case 'enum': {
@@ -290,11 +291,11 @@ function renderFieldInput(field: CuratedFormField): string {
                 .join('\n');
             return [
                 `{editing`,
-                `    ? (<select style={{ ${baseStyle} }} value={value("${name}") ?? ""} onChange={(e) => setField("${name}", e.target.value)}>`,
+                `    ? (<select style={{ ${baseStyle} }} value={value(${name}) ?? ""} onChange={(e) => setField(${name}, e.target.value)}>`,
                 `        <option value="">—</option>`,
                 opts,
                 `      </select>)`,
-                `    : <div>{value("${name}") ?? "—"}</div>}`,
+                `    : <div>{value(${name}) ?? "—"}</div>}`,
             ].join('\n  ');
         }
 
@@ -302,11 +303,11 @@ function renderFieldInput(field: CuratedFormField): string {
             const display = field.references?.displayField ?? 'ID';
             return [
                 `{editing`,
-                `    ? (<select style={{ ${baseStyle} }} value={(value("${name}")?.ID) ?? value("${name}") ?? ""} onChange={(e) => setField("${name}", e.target.value || null)}>`,
+                `    ? (<select style={{ ${baseStyle} }} value={(value(${name})?.ID) ?? value(${name}) ?? ""} onChange={(e) => setField(${name}, e.target.value || null)}>`,
                 `        <option value="">—</option>`,
-                `        {(fkOptions["${name}"] || []).map((o) => <option key={o.ID} value={o.ID}>{o.${safeIdent(display)}}</option>)}`,
+                `        {(fkOptions[${name}] || []).map((o) => <option key={o.ID} value={o.ID}>{o?.${safeIdent(display)}}</option>)}`,
                 `      </select>)`,
-                `    : <div>{(value("${name}")?.${safeIdent(display)}) ?? value("${name}") ?? "—"}</div>}`,
+                `    : <div>{(value(${name})?.${safeIdent(display)}) ?? value(${name}) ?? "—"}</div>}`,
             ].join('\n  ');
         }
 
@@ -316,14 +317,14 @@ function renderFieldInput(field: CuratedFormField): string {
             if (useTextarea) {
                 return [
                     `{editing`,
-                    `    ? <textarea style={{ ${baseStyle}, minHeight: 80, fontFamily: "inherit", resize: "vertical" }} value={value("${name}") ?? ""} onChange={(e) => setField("${name}", e.target.value)} />`,
-                    `    : <div style={{ whiteSpace: "pre-wrap" }}>{value("${name}") || "—"}</div>}`,
+                    `    ? <textarea style={{ ${baseStyle}, minHeight: 80, fontFamily: "inherit", resize: "vertical" }} value={value(${name}) ?? ""} onChange={(e) => setField(${name}, e.target.value)} />`,
+                    `    : <div style={{ whiteSpace: "pre-wrap" }}>{value(${name}) || "—"}</div>}`,
                 ].join('\n  ');
             }
             return [
                 `{editing`,
-                `    ? <input type="text" style={{ ${baseStyle} }} value={value("${name}") ?? ""} onChange={(e) => setField("${name}", e.target.value)} />`,
-                `    : <div>{value("${name}") || "—"}</div>}`,
+                `    ? <input type="text" style={{ ${baseStyle} }} value={value(${name}) ?? ""} onChange={(e) => setField(${name}, e.target.value)} />`,
+                `    : <div>{value(${name}) || "—"}</div>}`,
             ].join('\n  ');
         }
     }
@@ -403,12 +404,12 @@ function escapeJsxAttr(s: string): string {
 
 /**
  * Ensure a display field name is a safe JS identifier. Falls back to
- * bracket access if not. Most MJ display fields are "Name" or "Title" so
+ * bracket access (used after `?.`) if not. Most MJ display fields are "Name" or "Title" so
  * the simple path dominates.
  */
 function safeIdent(name: string): string {
     if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) return name;
-    return `["${name.replace(/"/g, '\\"')}"]`;
+    return `[${JSON.stringify(name)}]`;
 }
 
 function indent(block: string, spaces: number): string {
