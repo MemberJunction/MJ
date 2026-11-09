@@ -338,4 +338,39 @@ describe('typed_query_codegen', () => {
         expect(sig2).toBeDefined();
         expect(sig1).not.toBe(sig2);
     });
+
+    it('emits identical Params interface regardless of query.Parameters array order', () => {
+        const makeQuery = (params: NonNullable<TypedQueryCodeGenQuery['Parameters']>): TypedQueryCodeGenQuery => ({
+            ID: '52E5C84F-6B00-45AA-BCB4-9429B1CE5BA7',
+            Name: 'Entity Records By Tag',
+            Status: 'Approved',
+            Reusable: true,
+            CategoryPath: '/MJ/Tags/',
+            Parameters: params,
+            Fields: [{ Name: 'RecordID', SQLBaseType: 'nvarchar', InAllBranchVariants: true }],
+        });
+
+        const forward = GenerateTypedQueriesFileContent(
+            [
+                makeQuery([
+                    { Name: 'entityName', Type: 'string', IsRequired: true, DefaultValue: null, DetectionMethod: 'Auto' },
+                    { Name: 'tagName', Type: 'string', IsRequired: true, DefaultValue: null, DetectionMethod: 'Auto' },
+                ]),
+            ],
+            sampleEntities,
+            { platform: 'sqlserver' },
+        );
+        const reversed = GenerateTypedQueriesFileContent(
+            [
+                makeQuery([
+                    { Name: 'tagName', Type: 'string', IsRequired: true, DefaultValue: null, DetectionMethod: 'Auto' },
+                    { Name: 'entityName', Type: 'string', IsRequired: true, DefaultValue: null, DetectionMethod: 'Auto' },
+                ]),
+            ],
+            sampleEntities,
+            { platform: 'sqlserver' },
+        );
+        expect(forward).toBe(reversed);
+        expect(forward.indexOf('entityName: string;')).toBeLessThan(forward.indexOf('tagName: string;'));
+    });
 });

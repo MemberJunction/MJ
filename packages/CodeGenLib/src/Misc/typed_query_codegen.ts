@@ -503,7 +503,7 @@ function resolveParametersForQuery(
         docByLower.set(dp.Name.trim().toLowerCase(), dp);
     }
 
-    // Union parameter keys in deterministic order: stored parameters first, then any template parameters.
+    // Union parameter keys in deterministic order (sorted by canonical parameter name).
     const orderedKeys: string[] = [];
     const seen = new Set<string>();
     for (const p of query.Parameters ?? []) {
@@ -520,6 +520,7 @@ function resolveParametersForQuery(
             orderedKeys.push(key);
         }
     }
+    orderedKeys.sort(ordinalCompare);
 
     const results: ResolvedParameterSpec[] = [];
     for (const key of orderedKeys) {
@@ -598,6 +599,7 @@ function resolveParametersForQuery(
         });
     }
 
+    results.sort((a, b) => ordinalCompare(a.Name, b.Name));
     return results;
 }
 
