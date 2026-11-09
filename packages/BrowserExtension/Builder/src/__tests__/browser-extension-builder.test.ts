@@ -147,8 +147,9 @@ describe('@memberjunction/browser-extension-builder', () => {
                 ApplicationName: 'Data Explorer',
             });
             expect(copilot.BrandSlug).toBe('mj-copilot');
-            expect(copilot.BrandName).toBe('MemberJunction Co-Pilot');
-            expect(copilot.ShortName).toBe('MJ Co-Pilot');
+            expect(copilot.BrandName).toBe('MemberJunction Agent');
+            expect(copilot.ShortName).toBe('MJ Agent');
+            expect(copilot.AgentTabLabel).toBe('Agent');
             expect(copilot.ThemeSeeds.primary).toBe('#0076B6');
             expect(copilot.ThemeSeeds.accent).toBe('#5CC0ED');
             expect(copilot.IncludeDebuggerPermission).toBe(true);

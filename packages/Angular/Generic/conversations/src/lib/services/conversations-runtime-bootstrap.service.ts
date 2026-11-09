@@ -142,6 +142,198 @@ export class ConversationsRuntimeBootstrap {
                 });
             }
         });
+
+        this.registerBrowserExtensionClientTools(runtime, voice);
+    }
+
+    /**
+     * Registers the 5 Browser Extension DOM & Coach-Mark client tools on both
+     * `ConversationsRuntime.Instance.Tools` (text agent runs) and
+     * `RealtimeSessionService.RegisterAppClientTools` (voice/realtime co-agent runs)
+     * so `<mj-chat-agents-overlay>` / `<mj-conversation-chat-area>` can inspect,
+     * spotlight, click, and fill elements on the active browser tab.
+     */
+    private registerBrowserExtensionClientTools(
+        runtime: ConversationsRuntime,
+        voice: RealtimeSessionService
+    ): void {
+        const forwardToActiveTab = (
+            commandType: string,
+            commandPayload: Record<string, unknown>
+        ): Promise<Record<string, unknown>> => {
+            return new Promise<Record<string, unknown>>((resolve) => {
+                if (typeof document === 'undefined') {
+                    resolve({ Success: false, ErrorMessage: 'DOM not available' });
+                    return;
+                }
+                const requestId = `mj-ext-tool-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+                const timeout = setTimeout(() => {
+                    document.removeEventListener('mj-ext-response', onResponse);
+                    resolve({
+                        Success: false,
+                        ErrorMessage: 'Timed out waiting for MJ Browser Extension content script response.',
+                    });
+                }, 8_000);
+
+                const onResponse = (ev: Event): void => {
+                    const customEv = ev as CustomEvent<{
+                        RequestId?: string;
+                        Result?: Record<string, unknown>;
+                    }>;
+                    if (customEv.detail?.RequestId !== requestId) {
+                        return;
+                    }
+                    clearTimeout(timeout);
+                    document.removeEventListener('mj-ext-response', onResponse);
+                    resolve(customEv.detail.Result ?? { Success: true });
+                };
+
+                document.addEventListener('mj-ext-response', onResponse);
+                document.dispatchEvent(
+                    new CustomEvent('mj-ext-command', {
+                        detail: {
+                            RequestId: requestId,
+                            Type: 'MJ_EXT_FORWARD_TO_ACTIVE_TAB',
+                            Payload: {
+                                CommandType: commandType,
+                                CommandPayload: commandPayload,
+                            },
+                        },
+                    })
+                );
+            });
+        };
+
+        const toolSpecs: Array<{
+            Name: string;
+            Description: string;
+            ParameterSchema: Record<string, unknown>;
+            CommandType: string;
+        }> = [
+            {
+                Name: 'GetActiveTabPageState',
+                Description:
+                    'Reads the active browser tab URL, title, hostname, OpenGraph metadata, visible text excerpt, and grounded interactive elements.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {},
+                },
+                CommandType: 'MJ_CS_GET_PAGE_STATE',
+            },
+            {
+                Name: 'HighlightElementOnPage',
+                Description:
+                    'Draws a non-intrusive Shadow-DOM Coach-Mark Spotlight ring and floating instruction callout around an element on the active browser tab.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {
+                        Selector: {
+                            type: 'string',
+                            description: 'CSS selector or xpath=... expression of the element to highlight.',
+                        },
+                        Index: {
+                            type: 'number',
+                            description: 'Grounded interactive element index from GetActiveTabPageState.',
+                        },
+                        Label: {
+                            type: 'string',
+                            description: 'Instruction text shown in the floating Coach-Mark callout.',
+                        },
+                        StepBadge: {
+                            type: 'string',
+                            description: 'Optional step badge pill text (e.g. "Step 1 of 3").',
+                        },
+                    },
+                    required: ['Label'],
+                },
+                CommandType: 'MJ_CS_HIGHLIGHT_ELEMENT',
+            },
+            {
+                Name: 'ClearPageHighlights',
+                Description: 'Clears all Coach-Mark Spotlight rings and callouts on the active browser tab.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {},
+                },
+                CommandType: 'MJ_CS_CLEAR_HIGHLIGHTS',
+            },
+            {
+                Name: 'ClickElementOnPage',
+                Description: 'Clicks a grounded interactive element on the active browser tab by Selector or Index.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {
+                        Selector: {
+                            type: 'string',
+                            description: 'CSS selector or xpath=... expression of the element to click.',
+                        },
+                        Index: {
+                            type: 'number',
+                            description: 'Grounded interactive element index from GetActiveTabPageState.',
+                        },
+                    },
+                },
+                CommandType: 'MJ_CS_CLICK_ELEMENT',
+            },
+            {
+                Name: 'FillInputOnPage',
+                Description: 'Fills text into an input or textarea on the active browser tab by Selector or Index.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {
+                        Selector: {
+                            type: 'string',
+                            description: 'CSS selector or xpath=... expression of the input element.',
+                        },
+                        Index: {
+                            type: 'number',
+                            description: 'Grounded interactive element index from GetActiveTabPageState.',
+                        },
+                        Value: {
+                            type: 'string',
+                            description: 'Text value to enter into the input.',
+                        },
+                        PressEnter: {
+                            type: 'boolean',
+                            description: 'Whether to press Enter after filling the input.',
+                        },
+                    },
+                    required: ['Value'],
+                },
+                CommandType: 'MJ_CS_FILL_INPUT',
+            },
+        ];
+
+        for (const spec of toolSpecs) {
+            if (!runtime.Tools.GetTool(spec.Name)) {
+                runtime.Tools.Register({
+                    Name: spec.Name,
+                    Description: spec.Description,
+                    ParameterSchema: spec.ParameterSchema,
+                    Handler: async (params: Record<string, unknown>) => {
+                        const res = await forwardToActiveTab(spec.CommandType, params);
+                        const ok = res['Success'] !== false;
+                        return {
+                            Success: ok,
+                            Data: res,
+                            ErrorMessage: ok ? undefined : String(res['ErrorMessage'] ?? 'Browser tool failed'),
+                        };
+                    },
+                });
+            }
+        }
+
+        voice.RegisterAppClientTools(
+            toolSpecs.map((spec) => ({
+                Name: spec.Name,
+                Description: spec.Description,
+                InputSchema: spec.ParameterSchema,
+                Category: 'Browser Extension',
+                Handler: async (params: Record<string, unknown>) =>
+                    forwardToActiveTab(spec.CommandType, params),
+            })),
+            'browser-extension.tab'
+        );
     }
 
     private injectChatTokens(): void {

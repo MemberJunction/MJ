@@ -643,6 +643,9 @@ describe.runIf(hasPlaywrightChromium)('Headless Playwright E2E Proof — Live Wi
                 timeout: 10000,
             });
 
+            // Expand the Direct OAuth / Server Endpoint details section
+            await sidePanelPage.click('#mj-auth-advanced-details > summary');
+
             // 1. Click "Sign In with Microsoft (MSAL)" and verify real popup window opens to login.microsoftonline.com
             const msalPopupPromise = context!.waitForEvent('page', { timeout: 15000 });
             await sidePanelPage.click('#mj-btn-idp-msal');
@@ -734,8 +737,25 @@ describe.runIf(hasPlaywrightChromium)('Headless Playwright E2E Proof — Live Wi
             // 2. Intercept MJAPI GraphQL endpoint in the Side Panel and serve live Open App (`bizapps-common`) metadata, 360° records, and conversations
             await sidePanelPage.route('**/graphql', async (route) => {
                 const postData = route.request().postDataJSON() as {
+                    query?: string;
                     variables?: { input?: Array<{ EntityName?: string }> };
                 };
+                if (postData?.query?.includes('SearchKnowledge')) {
+                    await route.fulfill({
+                        status: 200,
+                        contentType: 'application/json',
+                        body: JSON.stringify({
+                            data: {
+                                SearchKnowledge: {
+                                    Success: true,
+                                    TotalCount: 0,
+                                    Results: [],
+                                },
+                            },
+                        }),
+                    });
+                    return;
+                }
                 const inputs = postData?.variables?.input || [];
                 const results = inputs.map((item) => {
                     if (item.EntityName === 'MJ: Applications') {
@@ -857,11 +877,18 @@ describe.runIf(hasPlaywrightChromium)('Headless Playwright E2E Proof — Live Wi
                 timeout: 10000,
             });
 
+            // Verify zero-mock behavior before sign-in: honest "Not in MemberJunction" state and zero fake deals/tasks
+            const preAuthText = await sidePanelPage.innerText('#mj-sidepanel-context-view');
+            expect(preAuthText).toContain('Not in MemberJunction');
+            expect(preAuthText).not.toContain('Enterprise License');
+            expect(preAuthText).not.toContain('Review account signals');
+
             // Provide a test JWT token and trigger live MJAPI GraphQL resolution + conversation sync
+            await sidePanelPage.click('#mj-auth-advanced-details > summary');
             await sidePanelPage.fill('#mj-input-api-token', 'eyJhbGciOiJIUzI1NiJ9.eyJuYW1lIjoiQW1pdGggTmFnYXJhamFuIiwiZW1haWwiOiJhbWl0aEBibHVlY3lwcmVzcy5pbyJ9.sig');
             await sidePanelPage.click('#mj-btn-save-auth');
 
-            // Wait for the live MJAPI 360° anchor record to render in the 360° Context tab
+            // Wait for the live MJAPI 360° anchor record to render in the Context tab
             await sidePanelPage.waitForFunction(
                 () => document.body.innerText.includes('Wikimedia Foundation (Live MJ Record)'),
                 undefined,
@@ -872,7 +899,7 @@ describe.runIf(hasPlaywrightChromium)('Headless Playwright E2E Proof — Live Wi
             expect(contextText).toContain('Wikimedia Foundation (Live MJ Record)');
             expect(contextText).toContain('Elena Vance — VP of Knowledge Systems');
 
-            // Switch to Co-Pilot Chat tab and verify the synced MJExplorer conversation is loaded
+            // Switch to Agent tab and verify the synced MJExplorer conversation is loaded
             await sidePanelPage.click('[data-tab="chat"]');
             await sidePanelPage.waitForFunction(
                 () => document.body.innerText.includes('Q4 Executive Pipeline & Renewal Strategy'),

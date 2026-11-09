@@ -347,8 +347,11 @@ export interface ExtensionChatMessage {
 export class MJExtensionSidePanelComponent extends BaseAngularComponent {
     private readonly cdr = inject(ChangeDetectorRef);
 
-    /** Brand assistant display name (`'MJ Co-Pilot'`, `'Betty'`, `'Sidecar'`, etc.). */
-    @Input() public AssistantDisplayName = 'MJ Co-Pilot';
+    /** Brand assistant display name (`'MJ Agent'`, `'Betty'`, `'Sidecar'`, etc.). */
+    @Input() public AssistantDisplayName = 'MJ Agent';
+
+    /** Brandable label for the conversational agent tab (defaults to `'Agent'`). */
+    @Input() public AgentTabLabel = 'Agent';
 
     /** Brand subtitle/tagline displayed beneath the assistant name. */
     @Input() public Tagline = 'Enterprise AI Browser Companion';

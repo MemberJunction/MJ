@@ -159,11 +159,11 @@ export interface ApplyPageEntityDiffsEvent {
                                 @if (match.Facets.length > 0) {
                                     <div class="mj-facets-grid">
                                         @for (facet of match.Facets; track facet.HeaderTitle) {
-                                            <div class="mj-facet-card">
-                                                <div class="mj-facet-header">
+                                            <details open class="mj-facet-card">
+                                                <summary class="mj-facet-header">
                                                     <span class="mj-facet-title">{{ facet.HeaderTitle }}</span>
                                                     <span class="mj-facet-badge">{{ facet.TotalCount }}</span>
-                                                </div>
+                                                </summary>
                                                 @if (facet.Items.length > 0) {
                                                     <ul class="mj-facet-rows">
                                                         @for (item of facet.Items; track item.RecordID) {
@@ -175,7 +175,7 @@ export interface ApplyPageEntityDiffsEvent {
                                                 } @else {
                                                     <p class="mj-facet-empty">No linked records</p>
                                                 }
-                                            </div>
+                                            </details>
                                         }
                                     </div>
                                 }

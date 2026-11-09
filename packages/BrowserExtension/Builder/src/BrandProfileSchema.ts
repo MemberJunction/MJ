@@ -33,6 +33,7 @@ export const ExtensionBrandProfileSchema = z.object({
         .min(10)
         .max(132, 'Chrome Web Store requires Description to be at most 132 characters'),
     AssistantDisplayName: z.string().min(1).max(32),
+    AgentTabLabel: z.string().min(1).max(32).optional(),
     SidePanelHeaderTitle: z.string().min(1).max(60).optional(),
     Tagline: z.string().min(2).max(96),
     DefaultServerUrl: z.string().optional(),

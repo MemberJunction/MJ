@@ -610,8 +610,10 @@ export interface ExtensionBrandProfile {
     Version: string;
     /** Store/package description (max 132 chars). */
     Description: string;
-    /** Assistant persona display name (e.g. `'MJ Co-Pilot'`, `'Betty'`, `'Sidecar'`). */
+    /** Assistant persona display name (e.g. `'MJ Agent'`, `'Betty'`, `'Sidecar'`). */
     AssistantDisplayName: string;
+    /** Brandable label for the conversational agent tab in the Side Panel (defaults to `'Agent'`). */
+    AgentTabLabel?: string;
     /** Optional header title rendered in the Side Panel chrome (defaults to `BrandName`). */
     SidePanelHeaderTitle?: string;
     /** Welcome tagline displayed in the Side Panel header. */
