@@ -15,6 +15,9 @@
 import { RegisterClass, SafeJSONParse, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import {
+    BUILT_IN_CONVERSATION_TYPE_IDS,
+    CONVERSATION_TYPE_CODES,
+    ConversationEngine,
     MJConversationEntity,
     MJEnvironmentEntityExtended,
     MJScheduledJobEntity,
@@ -794,7 +797,9 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', owner);
             conversation.NewRecord();
             conversation.Name = routine.Name;
-            conversation.Type = 'Routine';
+            conversation.TypeID =
+                ConversationEngine.Instance.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.ROUTINE) ??
+                BUILT_IN_CONVERSATION_TYPE_IDS.ROUTINE;
             conversation.UserID = owner.ID;
             conversation.EnvironmentID = routine.EnvironmentID ?? MJEnvironmentEntityExtended.DefaultEnvironmentID;
             conversation.ApplicationScope = 'Application';

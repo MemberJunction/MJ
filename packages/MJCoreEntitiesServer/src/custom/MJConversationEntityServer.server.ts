@@ -10,7 +10,10 @@ import {
 } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
+    BUILT_IN_CONVERSATION_TYPE_IDS,
+    CONVERSATION_TYPE_CODES,
     CanonicalizeConversationAdditionalData,
+    ConversationEngine,
     IsConversationHiddenByFieldSecurity,
     IsInheritingFolderAccess,
     IsInheritingFolderAccessInSQL,
@@ -58,6 +61,16 @@ export class MJConversationEntityServer extends MJConversationEntity {
     }
 
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        if (!this.TypeID) {
+            const defaultCode = this.AnchorType
+                ? CONVERSATION_TYPE_CODES.COMMENT
+                : CONVERSATION_TYPE_CODES.CHAT;
+            this.TypeID =
+                ConversationEngine.Instance.ResolveConversationTypeID(defaultCode) ??
+                (this.AnchorType
+                    ? BUILT_IN_CONVERSATION_TYPE_IDS.COMMENT
+                    : BUILT_IN_CONVERSATION_TYPE_IDS.CHAT);
+        }
         const additionalData = typeof this.GetFieldByName === 'function' ? this.GetFieldByName('AdditionalData') : undefined;
         if (additionalData?.Dirty) {
             const canonical = CanonicalizeConversationAdditionalData(additionalData.Value as string | null);

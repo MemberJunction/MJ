@@ -1,5 +1,5 @@
 import { Base64DecodedByteLength, ClassFactory, ClassRegistration, DeserializeValidationErrors, Float32VectorToBase64, IsValidBase64, IsMemberOverridden, MJEventType, MJGlobal, NormalizeUUID, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, UserCacheKeySegment, WarningManager, ComputeContentHashAsync, EscapeSQLString } from '@memberjunction/global';
-import { GetDataHooks, PreDeleteHook, PreSaveHook } from './dataHooks';
+import { GetDataHooks, PostSaveHook, PreDeleteHook, PreSaveHook } from './dataHooks';
 import { EntityLifecyclePolicyEngine } from './entityLifecyclePolicy';
 import { DocumentNumberingEngine } from './documentNumberingEngine';
 import { CrossEntityPolicyEngine } from './crossEntityPolicyEngine';
@@ -3694,6 +3694,7 @@ export abstract class BaseEntity<T = unknown> {
         const saveSubType: BaseEntityEvent['saveSubType'] = this.IsSaved ? 'update' : 'create';
 
         const changedFieldNames = this.dirtyFieldNames();
+        const postSaveChangedFields = this.computePostSaveChangedFieldNames(saveSubType, changedFieldNames);
 
         // Root: rebase field values and dirty state onto what the database now holds.
         this.init();
@@ -3719,6 +3720,28 @@ export abstract class BaseEntity<T = unknown> {
         this.RegisterResultHistoryEntry(result);
 
         this.RaiseEvent('save', null, saveSubType, changedFieldNames);
+        await this.runPostSaveHooks(postSaveChangedFields, saveSubType ?? 'update');
+    }
+
+    /**
+     * Computes the changed field list for PostSave hooks. On 'update', this equals `dirtyFieldNames()`.
+     * On 'create', `EntityField.Value` records the initial non-null write into `_oldValue` so `Dirty`
+     * is false; include populated writable fields so PostSave observers see newly created field values.
+     */
+    private computePostSaveChangedFieldNames(
+        saveSubType: BaseEntityEvent['saveSubType'],
+        dirtyNames: string[]
+    ): string[] {
+        if (saveSubType !== 'create' && this.IsSaved) {
+            return dirtyNames;
+        }
+        const combined = new Set<string>(dirtyNames);
+        for (const f of this.Fields) {
+            if (!f.ReadOnly && !f.EntityFieldInfo.IsVirtual && (!f.NeverSet || (f.Value !== null && f.Value !== undefined))) {
+                combined.add(f.Name);
+            }
+        }
+        return Array.from(combined);
     }
 
     /**
@@ -4265,12 +4288,22 @@ export abstract class BaseEntity<T = unknown> {
         }
     }
 
+    private _pendingPostSave: {
+        changedFieldNames: string[];
+        saveSubType: 'create' | 'update';
+    } | null = null;
+
     /**
      * The failure path of a save: rolls back the transaction scope this entity holds, if any, then
      * settles this save's part in its unit of work (see {@link settleRollback}). `part` is null when
      * this save took none (see `_innerSave`), and then only the scope is rolled back.
      */
     private async rollbackChainSave(part: UnitOfWorkPart | null): Promise<void> {
+        let cur: BaseEntity | null = this.RootEntity;
+        while (cur) {
+            cur._pendingPostSave = null;
+            cur = cur._childEntity;
+        }
         await this.rollbackEntityTransactionScope();
         BaseEntity.settleRollback(part);
     }
@@ -6314,6 +6347,9 @@ export abstract class BaseEntity<T = unknown> {
                                 }
                                 await this.commitEntityTransactionScope();
                                 BaseEntity.settleCommit(part);
+                                if (!_options.IsParentEntitySave && !_options.ReplayOnly) {
+                                    await this.runChainPostSaveHooks();
+                                }
                             }
                             else {
                                 await this.rollbackChainSave(part);
@@ -6331,6 +6367,11 @@ export abstract class BaseEntity<T = unknown> {
                                         void this.runSubtypeDriverAfterSave(wasNewBeforeFinalize).catch(driverErr => {
                                             LogError(`SubtypeSelector.Driver AfterSave failed after TransactionGroup commit on '${this.EntityInfo?.Name}': ${BaseEntity.errorText(driverErr)}`);
                                         });
+                                        if (!_options.IsParentEntitySave) {
+                                            void this.runChainPostSaveHooks().catch(hookErr => {
+                                                LogError(`PostSave hook failed after TransactionGroup commit on '${this.EntityInfo?.Name}': ${BaseEntity.errorText(hookErr)}`);
+                                            });
+                                        }
                                     }
                                 }
                                 else {
@@ -6371,6 +6412,9 @@ export abstract class BaseEntity<T = unknown> {
                 // empty scope writes nothing; it only releases the transaction.
                 await this.commitEntityTransactionScope();
                 BaseEntity.settleCommit(part);
+                if (!_options.IsParentEntitySave && !_options.ReplayOnly) {
+                    await this.runChainPostSaveHooks();
+                }
                 return true; // nothing to save since we're not dirty
             }
         }
@@ -6666,6 +6710,79 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * Runs all registered PostSave hooks for this single entity after a committed save.
+     * Errors thrown by PostSave hooks are logged and never abort the already-committed save.
+     */
+    private async runPostSaveHooks(
+        changedFieldNames: ReadonlyArray<string>,
+        saveSubType: 'create' | 'update'
+    ): Promise<void> {
+        const postSaveHooks = GetDataHooks<PostSaveHook>('PostSave');
+        if (postSaveHooks.length === 0) {
+            return;
+        }
+        for (const hook of postSaveHooks) {
+            try {
+                await hook(this, this.ActiveUser, changedFieldNames, saveSubType);
+            } catch (hookErr) {
+                LogError(`PostSave hook failed on '${this.EntityInfo?.Name}': ${BaseEntity.errorText(hookErr)}`);
+            }
+        }
+    }
+
+    /**
+     * Runs registered PostSave hooks across every finalized node in this entity's IS-A chain
+     * once the outermost save scope has committed. Propagates inherited dirty field names from
+     * ancestors to live child nodes so observers on either level see modified fields.
+     */
+    private async runChainPostSaveHooks(): Promise<void> {
+        const postSaveHooks = GetDataHooks<PostSaveHook>('PostSave');
+        const chain: BaseEntity[] = [];
+        let cur: BaseEntity | null = this.RootEntity;
+        while (cur) {
+            chain.push(cur);
+            cur = cur._childEntity;
+        }
+
+        const unionChanged = new Set<string>();
+        let chainSaveSubType: 'create' | 'update' | null = null;
+        for (const node of chain) {
+            if (node._pendingPostSave) {
+                for (const name of node._pendingPostSave.changedFieldNames) {
+                    unionChanged.add(name);
+                }
+                if (chainSaveSubType === null) {
+                    chainSaveSubType = node._pendingPostSave.saveSubType;
+                }
+            }
+        }
+
+        const pendingByNode = new Map<BaseEntity, { changedFieldNames: string[]; saveSubType: 'create' | 'update' }>();
+        for (const node of chain) {
+            if (node._pendingPostSave) {
+                pendingByNode.set(node, node._pendingPostSave);
+                node._pendingPostSave = null;
+            }
+        }
+
+        if (postSaveHooks.length === 0 || (pendingByNode.size === 0 && unionChanged.size === 0)) {
+            return;
+        }
+
+        const allChangedArray = Array.from(unionChanged);
+        for (const node of chain) {
+            const ownPending = pendingByNode.get(node);
+            const nodeFieldNames = new Set(node.EntityInfo.Fields.map(f => f.Name));
+            const effectiveChanged = allChangedArray.filter(name => nodeFieldNames.has(name));
+            if (!ownPending && effectiveChanged.length === 0) {
+                continue;
+            }
+            const subType = ownPending?.saveSubType ?? chainSaveSubType ?? 'update';
+            await node.runPostSaveHooks(effectiveChanged, subType);
+        }
+    }
+
+    /**
      * Runs all registered PreDelete hooks. If any hook returns false or a string
      * (error message), the delete is rejected by throwing an Error.
      */
@@ -6741,6 +6858,7 @@ export abstract class BaseEntity<T = unknown> {
         if (data) {
             // The 'save' event names the fields this save wrote; init() below clears every dirty flag.
             const changedFieldNames = this.dirtyFieldNames();
+            const postSaveChangedFields = this.computePostSaveChangedFieldNames(saveSubType, changedFieldNames);
             const effectiveReturnMode = options?.SaveReturnMode ?? this.EntityInfo.SaveReturnMode;
             const hasGetAll = (val: BaseEntity | Record<string, unknown>): val is BaseEntity =>
                 val instanceof BaseEntity || typeof (val as { GetAll?: () => Record<string, unknown> }).GetAll === 'function';
@@ -6786,6 +6904,11 @@ export abstract class BaseEntity<T = unknown> {
 
             // Cache the record name for faster lookups (updates cache with potentially new name)
             this.cacheRecordName();
+
+            this._pendingPostSave = {
+                changedFieldNames: postSaveChangedFields,
+                saveSubType: saveSubType === 'create' ? 'create' : 'update',
+            };
 
             this.RaiseEvent('save', null, saveSubType, changedFieldNames);
 

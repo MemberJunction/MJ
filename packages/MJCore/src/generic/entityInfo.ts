@@ -3782,6 +3782,43 @@ export class EntityInfo extends BaseInfo {
         }
         return true;
     }
+
+    /**
+     * Returns true when a comment of the specified `MJ: Comment Types` code or name is permitted
+     * on records of this entity according to `Configuration.Comments.AllowedCommentTypes`.
+     *
+     * - Returns `false` whenever {@link AllowRecordComments} is `false`.
+     * - When `AllowedCommentTypes` is omitted, plain comments (`'COMMENT'` / `'Comment'`) are
+     *   allowed by default while specialized comment types (such as `'FIELD_SUGGESTION'`) must be
+     *   explicitly enabled by the entity.
+     * - When `AllowedCommentTypes` includes `'*'`, every comment type is permitted.
+     */
+    public IsCommentTypeAllowed(codeOrName: string | null | undefined, alternateName?: string | null): boolean {
+        if (!this.AllowRecordComments) {
+            return false;
+        }
+        const primary = (codeOrName ?? '').trim().toLowerCase();
+        const secondary = (alternateName ?? '').trim().toLowerCase();
+        if (!primary && !secondary) {
+            return true;
+        }
+
+        const configured = this.CommentsConfig?.AllowedCommentTypes;
+        if (!Array.isArray(configured)) {
+            return primary === 'comment' || secondary === 'comment';
+        }
+
+        const allowed = new Set(
+            configured.map((entry) => (entry ?? '').trim().toLowerCase()).filter(Boolean),
+        );
+        if (allowed.has('*')) {
+            return true;
+        }
+        return (
+            (primary.length > 0 && allowed.has(primary)) ||
+            (secondary.length > 0 && allowed.has(secondary))
+        );
+    }
     /**
      * Date and time when this entity was created
      */
