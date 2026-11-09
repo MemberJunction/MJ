@@ -36,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (484 classes)
+// @memberjunction/core-entities (487 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -353,10 +353,13 @@ import {
     MJMLAlgorithmEntity,
     MJMLAlgorithmUseCaseEntity,
     MJMLAlgorithmUseCaseRankingEntity,
+    MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
     MJMLModelScoringBindingEntity,
+    MJMLPredictionUnitEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
+    MJMLTrainingSnapshotEntity,
     MJMagicLinkInviteAllowedDomainEntity,
     MJMagicLinkInviteAllowedPathEntity,
     MJMagicLinkInviteApplicationEntity,
@@ -1097,10 +1100,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMLAlgorithmEntity,
     MJMLAlgorithmUseCaseEntity,
     MJMLAlgorithmUseCaseRankingEntity,
+    MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
     MJMLModelScoringBindingEntity,
+    MJMLPredictionUnitEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
+    MJMLTrainingSnapshotEntity,
     MJMagicLinkInviteAllowedDomainEntity,
     MJMagicLinkInviteAllowedPathEntity,
     MJMagicLinkInviteApplicationEntity,
@@ -1166,13 +1172,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRowLevelSecurityFilterEntity,
     MJRubricBandEntity,
     MJRubricCategoryEntity,
-    MJRubricCriterionEntity,
-    MJRubricCriterionLevelEntity,
-    MJRubricEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRubricCriterionEntity,
+    MJRubricCriterionLevelEntity,
+    MJRubricEntity,
     MJRubricEvaluationEntity,
     MJRubricEvaluationScoreEntity,
     MJRubricScaleEntity,
@@ -1370,13 +1376,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     AIPromptCategoryHierarchyPanel,
     ActionCategoryHierarchyPanel,
     BrandKitAssetsPanelComponent,
-    BrandKitGenerationPolicyPanelComponent,
-    CompanyHeaderPanel,
-    CompanyOverviewPanel,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    BrandKitGenerationPolicyPanelComponent,
+    CompanyHeaderPanel,
+    CompanyOverviewPanel,
     ContentItemHierarchyPanel,
     ConversationHeaderPanel,
     ConversationOverviewPanel,
@@ -1456,7 +1462,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 665;
+export const CLASS_REGISTRATIONS_COUNT = 668;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -1,6 +1,7 @@
 
 export * from './generated/entity_subclasses.js'
 export * from './generated/remote_operations.js'
+export * from './generated/queries/index.js'
 
 export * from "./custom/MJUserViewEntityExtended";
 export * from "./custom/ReadOnlyExternalBaseEntity";

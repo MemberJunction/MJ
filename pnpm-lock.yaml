@@ -1452,6 +1452,9 @@ importers:
 
   packages/AI/PredictiveStudio/Core:
     dependencies:
+      '@memberjunction/global':
+        specifier: 6.2.0
+        version: link:../../../MJGlobal
       zod:
         specifier: ^3.25.0
         version: 3.25.76
@@ -1510,6 +1513,9 @@ importers:
       '@memberjunction/record-set-processor-base':
         specifier: 6.2.0
         version: link:../../../RecordSetProcessor/base
+      '@memberjunction/storage':
+        specifier: 6.2.0
+        version: link:../../../MJStorage
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
@@ -1572,6 +1578,9 @@ importers:
       '@memberjunction/predictive-studio-sidecar':
         specifier: 6.2.0
         version: link:../Sidecar
+      '@memberjunction/storage':
+        specifier: 6.2.0
+        version: link:../../../MJStorage
       '@memberjunction/testing-integration':
         specifier: 6.2.0
         version: link:../../../TestingFramework/testing-integration
@@ -4319,6 +4328,9 @@ importers:
       docx:
         specifier: ^9.5.1
         version: 9.6.1
+      dompurify:
+        specifier: ^3.3.0
+        version: 3.3.1
       exceljs:
         specifier: ^4.4.0
         version: 4.4.0
@@ -13691,6 +13703,9 @@ importers:
       adm-zip:
         specifier: ^0.5.16
         version: 0.5.16
+      cross-spawn:
+        specifier: ^7.0.6
+        version: 7.0.6
       minimatch:
         specifier: ^9.0.5
         version: 9.0.9
@@ -13707,6 +13722,9 @@ importers:
       '@types/adm-zip':
         specifier: ^0.5.7
         version: 0.5.7
+      '@types/cross-spawn':
+        specifier: ^6.0.6
+        version: 6.0.6
       '@types/mssql':
         specifier: ^9.1.9
         version: 9.1.9
@@ -23888,6 +23906,9 @@ packages:
 
   '@types/cors@2.8.19':
     resolution: {integrity: sha512-mFNylyeyqN93lfe/9CSxOGREz8cpzAhH+E93xJ4xWQf62V8sQ/24reV2nyzUWM6H6Xji+GGHpkbLe7pVoUEskg==}
+
+  '@types/cross-spawn@6.0.6':
+    resolution: {integrity: sha512-fXRhhUkG4H3TQk5dBhQ7m/JDdSNHKwR2BBia62lhwEIq9xGiQKLxd6LymNhn47SjXhsUEPmxi+PKw2OkW4LLjA==}
 
   '@types/d3-array@3.2.2':
     resolution: {integrity: sha512-hOLWVbm7uRza0BYXpIIW5pxfrKe0W+D5lrFiAEYR+pb6w3N2SwSMaJbXdUfSEv+dT4MfHBLtn5js0LAWaO6otw==}
@@ -41542,6 +41563,10 @@ snapshots:
       '@types/node': 24.10.11
 
   '@types/cors@2.8.19':
+    dependencies:
+      '@types/node': 24.10.11
+
+  '@types/cross-spawn@6.0.6':
     dependencies:
       '@types/node': 24.10.11
 

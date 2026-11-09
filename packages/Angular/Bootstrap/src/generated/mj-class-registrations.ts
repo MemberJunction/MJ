@@ -36,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (484 classes)
+// @memberjunction/core-entities (487 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -353,10 +353,13 @@ import {
     MJMLAlgorithmEntity,
     MJMLAlgorithmUseCaseEntity,
     MJMLAlgorithmUseCaseRankingEntity,
+    MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
     MJMLModelScoringBindingEntity,
+    MJMLPredictionUnitEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
+    MJMLTrainingSnapshotEntity,
     MJMagicLinkInviteAllowedDomainEntity,
     MJMagicLinkInviteAllowedPathEntity,
     MJMagicLinkInviteApplicationEntity,
@@ -1237,10 +1240,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMLAlgorithmEntity,
     MJMLAlgorithmUseCaseEntity,
     MJMLAlgorithmUseCaseRankingEntity,
+    MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
     MJMLModelScoringBindingEntity,
+    MJMLPredictionUnitEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
+    MJMLTrainingSnapshotEntity,
     MJMagicLinkInviteAllowedDomainEntity,
     MJMagicLinkInviteAllowedPathEntity,
     MJMagicLinkInviteApplicationEntity,
@@ -1306,13 +1312,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRowLevelSecurityFilterEntity,
     MJRubricBandEntity,
     MJRubricCategoryEntity,
-    MJRubricCriterionEntity,
-    MJRubricCriterionLevelEntity,
-    MJRubricEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRubricCriterionEntity,
+    MJRubricCriterionLevelEntity,
+    MJRubricEntity,
     MJRubricEvaluationEntity,
     MJRubricEvaluationScoreEntity,
     MJRubricScaleEntity,
@@ -1510,13 +1516,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     EmployeeHeaderPanel,
     EmployeeOverviewPanel,
     FileCategoryHierarchyPanel,
-    FlowAgentFormSectionComponent,
-    ListCategoryHierarchyPanel,
-    MJAIAgentChannelFormComponentExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    FlowAgentFormSectionComponent,
+    ListCategoryHierarchyPanel,
+    MJAIAgentChannelFormComponentExtended,
     MJAIAgentFormComponentExtended,
     MJAIAgentRubricFormComponentExtended,
     MJAIAgentRunFormComponentExtended,
@@ -1720,7 +1726,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 789;
+export const CLASS_REGISTRATIONS_COUNT = 792;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -1,0 +1,440 @@
+/**
+ * @module holdout-carve
+ *
+ * The locked holdout an Evaluation Protocol declares (`HoldoutSplit`), carved from the unit rows.
+ *
+ * - date-carved: rows whose carve date is on or after the cutoff (and before `holdoutEnd`, when set) are the holdout,
+ *   earlier rows are development, rows on or after `holdoutEnd` are left out and counted. An optional new-entity report
+ *   holds out the newest entities whole.
+ * - seeded-random: a group-hash holdout for units with one fixed decision date (no date to carve on).
+ * - rolling-origin: the last `origins × horizonPeriods` periods of a forecast series.
+ *
+ * Every carve depends only on dates, keys and the protocol, never on the order the rows were read in or on the host's
+ * time zone (every date is read as the UTC day of its `yyyy-mm-dd` date part), so the same rows always give the same
+ * holdout. Browser-safe: no node `crypto` (see {@link HoldoutCarve.SeededRandomCarve} for the hash).
+ */
+import { OrdinalCompare } from '@memberjunction/global';
+import type { HoldoutSplit } from './evaluation-protocol';
+import type { DecisionSpec } from './prediction-unit';
+import type { SnapshotRowKey } from './assembly-contract';
+import { UtcDay } from './utc-day';
+
+type DateCarved = Extract<HoldoutSplit, { readonly kind: 'date-carved' }>;
+type RollingOrigin = Extract<HoldoutSplit, { readonly kind: 'rolling-origin' }>;
+
+/**
+ * The share of rows {@link HoldoutCarve.YearCutoff} leaves at most in the holdout when no share is given. Every caller
+ * that derives a default cutoff reads this constant, so the default exists once.
+ */
+export const DEFAULT_YEAR_CUTOFF_SHARE = 0.25;
+
+/** A date the carve reads (a carve date given to `YearCutoff` or `HoldoutPeriods`) that has no `yyyy-mm-dd` date part. */
+export class HoldoutCarveDateError extends RangeError {
+  constructor(public readonly Value: string) {
+    super(`"${Value}" is not a date (yyyy-mm-dd); the holdout cannot be derived from it.`);
+    this.name = 'HoldoutCarveDateError';
+  }
+}
+
+/** One unit row as the date carve reads it. */
+export interface CarveRow {
+  /** The unit row's id (the snapshot manifest's `rowId`). */
+  readonly RowID: string;
+  /**
+   * The row's value of the unit's group key (the Prediction Unit's `groupKey` field, or the row's entity key when the
+   * unit declares none). The new-entity report holds out whole groups by this key, so it must be the key the inner
+   * folds group by, never the row id of a one-row-per-record unit.
+   */
+  readonly EntityKey: string;
+  /**
+   * The date the protocol carves on (the decision date, or the unit row's `dateColumn`): a `yyyy-mm-dd` day, or a
+   * date-time whose date part is that day. The carve reads only the date part, as a UTC day, so a zone-less date-time
+   * never shifts across midnight with the host's time zone.
+   */
+  readonly CarveDate: string;
+  /** The label as text for classification units; null otherwise. */
+  readonly Label: string | null;
+}
+
+/** A row kept in the snapshot and its role. */
+export interface CarvedRow {
+  /** The unit row's id. */
+  readonly RowID: string;
+  /** `locked-holdout` for a row inside the holdout window, `development` for a row before the cutoff. */
+  readonly Role: 'development' | 'locked-holdout';
+}
+
+/** The deployment carve of a date-carved holdout. */
+export interface DeploymentCarve {
+  /** The rows kept in the snapshot, sorted by row id; rows on or after `holdoutEnd` are not among them. */
+  readonly Rows: readonly CarvedRow[];
+  /** The ids of the rows inside the holdout window, in `Rows` order. */
+  readonly HoldoutRowIDs: readonly string[];
+  /** Rows before the cutoff. */
+  readonly DevelopmentRowCount: number;
+  /** Rows on or after the cutoff and before `holdoutEnd` (every row on or after the cutoff when there is no end). */
+  readonly HoldoutRowCount: number;
+  /** Rows on or after `holdoutEnd`, left out of the snapshot. */
+  readonly ExcludedAfterHoldoutEnd: number;
+  /** Holdout rows per label; null when no holdout row has a label. */
+  readonly HoldoutClassCounts: Readonly<Record<string, number>> | null;
+  /** The carve date of each holdout row, in `HoldoutRowIDs` order (the out-of-time slices are read from them). */
+  readonly HoldoutCarveDates: readonly string[];
+}
+
+/** The new-entity report: the newest groups held out whole, every other group trained on before the cutoff. */
+export interface NewEntityCarve {
+  /** The group keys held out whole: the newest `holdoutFraction` of groups by first carve date, at least one. */
+  readonly HoldoutEntityKeys: readonly string[];
+  /** The other groups' rows before the cutoff. */
+  readonly TrainingRowIDs: readonly string[];
+  /** The held-out groups' rows inside the holdout window. */
+  readonly HoldoutRowIDs: readonly string[];
+  /** Rows in neither set: a held-out group's rows outside the holdout window, another group's rows on or after the cutoff. */
+  readonly ExcludedRowCount: number;
+  /** Group keys present in both sets, counted from the rows; zero when the report is sound. */
+  readonly SharedEntityKeys: number;
+}
+
+/** Why a holdout could not be carved; stored on a refused run (wire names shared with the sidecar). */
+export type CarveRefusal =
+  | { readonly kind: 'unparseable-cutoff'; readonly value: string }  // case-violation-ok-legacy-back-compat: stored carve record field name
+  | { readonly kind: 'unparseable-carve-date'; readonly rowId: string; readonly value: string }  // case-violation-ok-legacy-back-compat: stored carve record field name
+  | { readonly kind: 'missing-carve-date'; readonly rowId: string; readonly column: string }  // case-violation-ok-legacy-back-compat: stored carve record field name
+  | { readonly kind: 'no-development-rows'; readonly cutoff: string }  // case-violation-ok-legacy-back-compat: stored carve record field name
+  | { readonly kind: 'no-holdout-rows'; readonly cutoff: string; readonly holdoutEnd: string | null }  // case-violation-ok-legacy-back-compat: stored carve record field name
+  | {  // case-violation-ok-legacy-back-compat: stored carve record field name
+      readonly kind: 'seeded-random-side-empty'; readonly side: 'development' | 'locked-holdout';  // case-violation-ok-legacy-back-compat: stored carve record field name
+      readonly fraction: number; readonly rows: number;  // case-violation-ok-legacy-back-compat: stored carve record field name
+    }
+  | {  // case-violation-ok-legacy-back-compat: stored carve record field name
+      readonly kind: 'too-few-periods'; readonly periods: number; readonly origins: number;  // case-violation-ok-legacy-back-compat: stored carve record field name
+      readonly horizonPeriods: number; readonly gapPeriods: number; readonly minTrainPeriods: number;  // case-violation-ok-legacy-back-compat: stored carve record field name
+    };
+
+/** The result of a date carve: the deployment carve and, when the protocol declares one, the new-entity report. */
+export type CarveResult =
+  | { readonly Ok: true; readonly Deployment: DeploymentCarve; readonly NewEntity: NewEntityCarve | null }
+  | { readonly Ok: false; readonly Refusal: CarveRefusal };
+
+/** A row to place in a seeded-random carve: its id, and the group key whose hash decides its side. */
+export interface SeededCarveRow {
+  readonly RowID: string;
+  readonly GroupKey: string;
+}
+
+/** The result of a seeded-random carve: every row is in exactly one of the two lists, each sorted by row id. */
+export interface SeededRandomCarveResult {
+  /** The rows whose seeded hash falls below the fraction. */
+  readonly HoldoutRowIDs: readonly string[];
+  /** Every other row. */
+  readonly DevelopmentRowIDs: readonly string[];
+}
+
+/** One row of a forecast series and the period it belongs to (ISO date of the period start). */
+export interface PeriodRow {
+  /** The unit row's id. */
+  readonly RowID: string;
+  /** The ISO date of the start of the row's period. */
+  readonly Period: string;
+}
+
+/** The result of a rolling-origin carve. */
+export type RollingOriginCarveResult =
+  | { readonly Ok: true; readonly HoldoutRowIDs: readonly string[]; readonly HoldoutPeriods: readonly string[] }
+  | { readonly Ok: false; readonly Refusal: CarveRefusal };
+
+/** The new-entity counts of a stored carve. */
+export interface HoldoutCarveNewEntitySummary {
+  /** Groups held out whole. */
+  readonly holdoutEntityKeys: number;  // case-violation-ok-legacy-back-compat: stored carve record field name
+  /** The other groups' rows before the cutoff. */
+  readonly trainingRowCount: number;  // case-violation-ok-legacy-back-compat: stored carve record field name
+  /** The held-out groups' rows inside the holdout window. */
+  readonly holdoutRowCount: number;  // case-violation-ok-legacy-back-compat: stored carve record field name
+  /** Rows in neither set. */
+  readonly excludedRowCount: number;  // case-violation-ok-legacy-back-compat: stored carve record field name
+  /** Group keys in both sets; zero when the report is sound. */
+  readonly sharedEntityKeys: number;  // case-violation-ok-legacy-back-compat: stored carve record field name
+  /**
+   * SHA-256 (lower-case hex) of the held-out group keys: each key as the carve groups rows (the unit row's group key
+   * value, lower-cased by the row reader), sorted with `OrdinalCompare`, joined with `\n` (no trailing newline), UTF-8.
+   */
+  readonly heldGroupKeysSha256: string;  // case-violation-ok-legacy-back-compat: stored carve record field name
+  /** SHA-256 of the distinct group keys of the report's training rows, encoded as `heldGroupKeysSha256`. */
+  readonly trainingGroupKeysSha256: string;  // case-violation-ok-legacy-back-compat: stored carve record field name
+}
+
+/** The carve as stored on the run (`ValidationResults.carve`), read by the gates (holdout class counts, periods) and the UI. */
+export interface HoldoutCarveSummary {
+  /** The protocol's holdout kind. */
+  readonly kind: HoldoutSplit['kind'];  // case-violation-ok-legacy-back-compat: stored carve record field name
+  /** The date-carved cutoff; null for the other kinds. */
+  readonly cutoff: string | null;  // case-violation-ok-legacy-back-compat: stored carve record field name
+  /** The date-carved holdout end; null when there is none. */
+  readonly holdoutEnd: string | null;  // case-violation-ok-legacy-back-compat: stored carve record field name
+  /** Rows the development stage may read. */
+  readonly developmentRowCount: number;  // case-violation-ok-legacy-back-compat: stored carve record field name
+  /** Rows in the locked holdout. */
+  readonly holdoutRowCount: number;  // case-violation-ok-legacy-back-compat: stored carve record field name
+  /** Rows on or after `holdoutEnd`, left out of the snapshot; 0 for the other kinds. */
+  readonly excludedAfterHoldoutEnd: number;  // case-violation-ok-legacy-back-compat: stored carve record field name
+  /** Holdout rows per label for classification units; null otherwise. */
+  readonly holdoutClassCounts: Readonly<Record<string, number>> | null;  // case-violation-ok-legacy-back-compat: stored carve record field name
+  /** Distinct period starts of the holdout rows at the unit's decision period (one out-of-time slice each). */
+  readonly holdoutPeriods: readonly string[];  // case-violation-ok-legacy-back-compat: stored carve record field name
+  /** The new-entity report's counts and group-key hashes; null when the protocol declares no report. */
+  readonly newEntity: HoldoutCarveNewEntitySummary | null;  // case-violation-ok-legacy-back-compat: stored carve record field name
+}
+
+interface DatedRow { readonly Row: CarveRow; readonly Time: number }
+
+interface CarveWindow { readonly Cutoff: number; readonly End: number | null }
+
+/** Where a carve date falls against the holdout window: before the cutoff, inside the window, or on or after its end. */
+type WindowPlace = 'before-cutoff' | 'in-window' | 'after-end';
+
+/**
+ * Locked-holdout carves. Ordering is `OrdinalCompare` from `@memberjunction/global`
+ * (locale-independent), so results never depend on the host's locale.
+ */
+export class HoldoutCarve {
+  /** The date carve: holdout = carve date ≥ cutoff and < holdoutEnd (when set); development = before the cutoff. */
+  public static CarveLockedHoldout(rows: readonly CarveRow[], holdout: DateCarved): CarveResult {
+    const window = HoldoutCarve.parseWindow(holdout);
+    if (!window.Ok) return window;
+    const dated = HoldoutCarve.parseCarveDates(rows);
+    if (!dated.Ok) return dated;
+    const deployment = HoldoutCarve.carveDeployment(dated.Rows, window.Window);
+    if (deployment.DevelopmentRowCount === 0) return { Ok: false, Refusal: { kind: 'no-development-rows', cutoff: holdout.cutoff } };
+    if (deployment.HoldoutRowCount === 0) return { Ok: false, Refusal: { kind: 'no-holdout-rows', cutoff: holdout.cutoff, holdoutEnd: holdout.holdoutEnd } };
+    const report = holdout.newEntityReport;
+    return { Ok: true, Deployment: deployment, NewEntity: report === null ? null : HoldoutCarve.carveNewEntities(dated.Rows, window.Window, report.holdoutFraction) };
+  }
+
+  /**
+   * The holdout is every row whose group key's hash of `<seed>:<groupKey>`, read as a fraction of 2^32, is below
+   * `fraction`. Rows that share a group key (one person's several rows) share one hash, so a group is wholly held out or
+   * wholly in development and never straddles the split. A row's role depends only on the seed and its group key, so it
+   * never changes with the read order or with other rows. Both id lists are sorted by row id.
+   */
+  public static SeededRandomCarve(rows: readonly SeededCarveRow[], fraction: number, seed: number): SeededRandomCarveResult {
+    const hold: string[] = [];
+    const dev: string[] = [];
+    for (const row of [...rows].sort((a, b) => OrdinalCompare(a.RowID, b.RowID))) {
+      (HoldoutCarve.seededRowHash(seed, row.GroupKey) / 4294967296 < fraction ? hold : dev).push(row.RowID);
+    }
+    return { HoldoutRowIDs: hold, DevelopmentRowIDs: dev };
+  }
+
+  /**
+   * The last `origins × horizonPeriods` distinct periods are the holdout (the trainer's outer origins). The series must
+   * keep `minTrainPeriods` periods before the first origin's gap, as the trainer requires of its first origin.
+   */
+  public static RollingOriginCarve(rows: readonly PeriodRow[], holdout: RollingOrigin): RollingOriginCarveResult {
+    const periods = [...new Set(rows.map((r) => r.Period))].sort(OrdinalCompare);
+    const testCount = holdout.origins * holdout.horizonPeriods;
+    if (periods.length - testCount - holdout.gapPeriods < holdout.minTrainPeriods) {
+      return {
+        Ok: false,
+        Refusal: { kind: 'too-few-periods', periods: periods.length, origins: holdout.origins, horizonPeriods: holdout.horizonPeriods, gapPeriods: holdout.gapPeriods, minTrainPeriods: holdout.minTrainPeriods },
+      };
+    }
+    const test = periods.slice(periods.length - testCount);
+    const testSet = new Set(test);
+    return { Ok: true, HoldoutRowIDs: rows.filter((r) => testSet.has(r.Period)).map((r) => r.RowID), HoldoutPeriods: test };
+  }
+
+  /** One plain sentence per carve refusal (run notes, the operation error, the UI). */
+  public static DescribeCarveRefusal(r: CarveRefusal): string {
+    switch (r.kind) {
+      case 'unparseable-cutoff': return `The holdout cutoff "${r.value}" is not a date.`;
+      case 'unparseable-carve-date': return `Row ${r.rowId} has carve date "${r.value}", which is not a date; the holdout cannot be carved.`;
+      case 'missing-carve-date': return `Row ${r.rowId} has no ${r.column}; the holdout is carved on that column.`;
+      case 'no-development-rows': return `No row is dated before the cutoff ${r.cutoff}; nothing would be left to train on. Choose a later cutoff.`;
+      case 'no-holdout-rows': return `No row is dated on or after the cutoff ${r.cutoff}${r.holdoutEnd === null ? '' : ` and before ${r.holdoutEnd}`}; there is nothing to test on. Choose an earlier cutoff.`;
+      case 'seeded-random-side-empty': return r.side === 'development'
+        ? `A seeded-random holdout of fraction ${r.fraction} puts all ${r.rows} rows in the holdout; nothing would be left to train on. Choose a smaller fraction or train on more rows.`
+        : `A seeded-random holdout of fraction ${r.fraction} puts none of the ${r.rows} rows in the holdout; there is nothing to test on. Choose a larger fraction or train on more rows.`;
+      case 'too-few-periods': return `${r.periods} periods cannot hold ${r.origins} origins of ${r.horizonPeriods} periods and a gap of ${r.gapPeriods} periods after ${r.minTrainPeriods} training periods.`;
+    }
+  }
+
+  /**
+   * The earliest 1 January whose trailing block (dates on or after it) holds at most `maxShare` of the rows; at least
+   * the last year's 1 January. Throws {@link HoldoutCarveDateError} on a date it cannot read (a dropped date would
+   * shrink the denominator), and a `RangeError` when there is no date or the cutoff would leave no row before it.
+   */
+  public static YearCutoff(dates: readonly string[], maxShare: number = DEFAULT_YEAR_CUTOFF_SHARE): string {
+    const times = dates.map((d) => HoldoutCarve.requireUtcDay(d));
+    if (times.length === 0) throw new RangeError('YearCutoff needs at least one date.');
+    const years = [...new Set(times.map((t) => new Date(t).getUTCFullYear()))].sort((a, b) => a - b);
+    let best = Date.UTC(years[years.length - 1] || 0, 0, 1);
+    for (let i = years.length - 1; i >= 0; i--) {
+      const start = Date.UTC(years[i] || 0, 0, 1);
+      if (times.filter((t) => t >= start).length / times.length > maxShare) break;
+      best = start;
+    }
+    const earliest = times.reduce((m, t) => (t < m ? t : m), Number.POSITIVE_INFINITY);
+    if (best <= earliest) throw new RangeError('The cutoff would leave no training rows.');
+    return UtcDay.UtcDayIso(new Date(best));
+  }
+
+  /**
+   * The distinct period starts (ISO dates, UTC) of the given dates, in order: one out-of-time slice per period. Weeks
+   * start on Monday, quarters on 1 January, April, July and October. Throws {@link HoldoutCarveDateError} on a date it
+   * cannot read.
+   */
+  public static HoldoutPeriods(dates: readonly string[], period: DecisionSpec['period']): readonly string[] {
+    const starts = new Set<string>();
+    for (const d of dates) starts.add(HoldoutCarve.periodStart(new Date(HoldoutCarve.requireUtcDay(d)), period));
+    return [...starts].sort(OrdinalCompare);
+  }
+
+  /**
+   * The development row ids of a snapshot manifest: the set a scored record's `inTraining` flag reads (a record whose
+   * id is in it was a training row). Row ids, not entity keys: the same rule holds for one-row-per-record units and for
+   * units with a row per record per period.
+   */
+  public static TrainingRowIDs(manifest: readonly SnapshotRowKey[]): ReadonlySet<string> {
+    return new Set(manifest.filter((r) => r.role === 'development').map((r) => r.rowId));
+  }
+
+  private static parseWindow(holdout: DateCarved): { readonly Ok: true; readonly Window: CarveWindow } | { readonly Ok: false; readonly Refusal: CarveRefusal } {
+    const cutoff = UtcDay.ToUtcDay(holdout.cutoff);
+    if (cutoff === null) return { Ok: false, Refusal: { kind: 'unparseable-cutoff', value: holdout.cutoff } };
+    if (holdout.holdoutEnd === null) return { Ok: true, Window: { Cutoff: cutoff.getTime(), End: null } };
+    const end = UtcDay.ToUtcDay(holdout.holdoutEnd);
+    if (end === null) return { Ok: false, Refusal: { kind: 'unparseable-cutoff', value: holdout.holdoutEnd } };
+    return { Ok: true, Window: { Cutoff: cutoff.getTime(), End: end.getTime() } };
+  }
+
+  /** The rows with their parsed carve dates, sorted by row id; the first unparseable date refuses the carve. */
+  private static parseCarveDates(rows: readonly CarveRow[]): { readonly Ok: true; readonly Rows: readonly DatedRow[] } | { readonly Ok: false; readonly Refusal: CarveRefusal } {
+    const dated: DatedRow[] = [];
+    for (const row of rows) {
+      const day = UtcDay.ToUtcDay(row.CarveDate);
+      if (day === null) return { Ok: false, Refusal: { kind: 'unparseable-carve-date', rowId: row.RowID, value: row.CarveDate } };
+      dated.push({ Row: row, Time: day.getTime() });
+    }
+    dated.sort((a, b) => OrdinalCompare(a.Row.RowID, b.Row.RowID));
+    return { Ok: true, Rows: dated };
+  }
+
+  private static carveDeployment(dated: readonly DatedRow[], w: CarveWindow): DeploymentCarve {
+    const kept: CarvedRow[] = [];
+    const held: DatedRow[] = [];
+    let excluded = 0;
+    for (const d of dated) {
+      const place = HoldoutCarve.windowPlace(w, d.Time);
+      if (place === 'after-end') excluded++;
+      else if (place === 'in-window') { kept.push({ RowID: d.Row.RowID, Role: 'locked-holdout' }); held.push(d); }
+      else kept.push({ RowID: d.Row.RowID, Role: 'development' });
+    }
+    return {
+      Rows: kept, HoldoutRowIDs: held.map((d) => d.Row.RowID), DevelopmentRowCount: kept.length - held.length, HoldoutRowCount: held.length,
+      ExcludedAfterHoldoutEnd: excluded, HoldoutClassCounts: HoldoutCarve.classCounts(held.map((d) => d.Row.Label)), HoldoutCarveDates: held.map((d) => d.Row.CarveDate),
+    };
+  }
+
+  /**
+   * Holds out the newest `fraction` of groups (by first carve date) whole, at least one group: their rows inside the
+   * holdout window are the new-entity holdout; every other group's rows before the cutoff are its training rows; every
+   * other row is excluded and counted.
+   *
+   * The reference pipeline (`date_grouped_carve`) holds out a seeded-random 30 % of groups instead. This carve holds out
+   * the newest groups, as the protocol's report is defined here: it measures the model on the groups that appeared most
+   * recently, the ones a deployed model meets first. A gate that compares this report with the reference measures two different
+   * group selections and must read its numbers knowing that.
+   */
+  private static carveNewEntities(dated: readonly DatedRow[], w: CarveWindow, fraction: number): NewEntityCarve {
+    const held = HoldoutCarve.newestEntityKeys(dated, fraction);
+    const training: DatedRow[] = [];
+    const holdout: DatedRow[] = [];
+    for (const d of dated) {
+      const place = HoldoutCarve.windowPlace(w, d.Time);
+      if (held.has(d.Row.EntityKey)) { if (place === 'in-window') holdout.push(d); }
+      else if (place === 'before-cutoff') training.push(d);
+    }
+    const trainingKeys = new Set(training.map((d) => d.Row.EntityKey));
+    return {
+      HoldoutEntityKeys: [...held].sort(OrdinalCompare),
+      TrainingRowIDs: training.map((d) => d.Row.RowID),
+      HoldoutRowIDs: holdout.map((d) => d.Row.RowID),
+      ExcludedRowCount: dated.length - training.length - holdout.length,
+      SharedEntityKeys: new Set(holdout.map((d) => d.Row.EntityKey).filter((k) => trainingKeys.has(k))).size,
+    };
+  }
+
+  /** The newest `fraction` of group keys by first carve date (ties broken by key), at least one. */
+  private static newestEntityKeys(dated: readonly DatedRow[], fraction: number): ReadonlySet<string> {
+    const firstSeen = new Map<string, number>();
+    for (const d of dated) {
+      const prev = firstSeen.get(d.Row.EntityKey);
+      if (prev === undefined || d.Time < prev) firstSeen.set(d.Row.EntityKey, d.Time);
+    }
+    const newestFirst = [...firstSeen.entries()].sort((a, b) => b[1] - a[1] || OrdinalCompare(a[0], b[0]));
+    return new Set(newestFirst.slice(0, Math.max(1, Math.round(fraction * newestFirst.length))).map(([key]) => key));
+  }
+
+  private static classCounts(labels: readonly (string | null)[]): Readonly<Record<string, number>> | null {
+    const counts: Record<string, number> = {};
+    let labelled = 0;
+    for (const l of labels) {
+      if (l === null) continue;
+      labelled++;
+      counts[l] = (counts[l] || 0) + 1;
+    }
+    return labelled === 0 ? null : counts;
+  }
+
+  private static periodStart(date: Date, period: DecisionSpec['period']): string {
+    const y = date.getUTCFullYear();
+    const m = date.getUTCMonth();
+    switch (period) {
+      case 'day': return UtcDay.UtcDayIso(new Date(Date.UTC(y, m, date.getUTCDate())));
+      case 'week': return UtcDay.UtcDayIso(new Date(Date.UTC(y, m, date.getUTCDate() - ((date.getUTCDay() + 6) % 7))));
+      case 'month': return UtcDay.UtcDayIso(new Date(Date.UTC(y, m, 1)));
+      case 'quarter': return UtcDay.UtcDayIso(new Date(Date.UTC(y, m - (m % 3), 1)));
+      case 'year': return UtcDay.UtcDayIso(new Date(Date.UTC(y, 0, 1)));
+    }
+  }
+
+  /**
+   * The 32-bit hash that places a group in or out of a seeded-random holdout: FNV-1a over the UTF-16 code units of
+   * `<seed>:<groupKey>`, then the murmur3 `fmix32` finalizer.
+   *
+   * Why the finalizer: FNV-1a mixes its last input bytes only into the low bits, so on short ids that differ in their
+   * last characters (`r1`, `r2`, … or sequential integer keys) the high bits, which decide the comparison with
+   * `fraction`, are not uniform; on 4,000 ids `r0`–`r3999` at a fraction of 0.25 plain FNV-1a held out 1,119 rows
+   * under seed 42 and 847 under seed 1 (expected 1,000). `fmix32` spreads every input bit over all 32 output bits, so the share matches the fraction for
+   * any key shape. Changing this function re-carves every stored seeded-random holdout.
+   */
+  private static seededRowHash(seed: number, groupKey: string): number {
+    const text = `${seed}:${groupKey}`;
+    let h = 0x811c9dc5;
+    for (let i = 0; i < text.length; i++) {
+      h ^= text.charCodeAt(i);
+      h = Math.imul(h, 0x01000193);
+    }
+    h ^= h >>> 16;
+    h = Math.imul(h, 0x85ebca6b);
+    h ^= h >>> 13;
+    h = Math.imul(h, 0xc2b2ae35);
+    h ^= h >>> 16;
+    return h >>> 0;
+  }
+
+  /** The one holdout window rule both carves read: before the cutoff, on or after it and before `holdoutEnd`, or on or after `holdoutEnd`. */
+  private static windowPlace(w: CarveWindow, time: number): WindowPlace {
+    if (w.End !== null && time >= w.End) return 'after-end';
+    return time >= w.Cutoff ? 'in-window' : 'before-cutoff';
+  }
+
+  /** The UTC midnight (ms) of a date ({@link UtcDay.ToUtcDay}); {@link HoldoutCarveDateError} when it names no calendar day. */
+  private static requireUtcDay(text: string): number {
+    const day = UtcDay.ToUtcDay(text);
+    if (day === null) throw new HoldoutCarveDateError(text);
+    return day.getTime();
+  }
+}

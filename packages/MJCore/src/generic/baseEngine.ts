@@ -19,6 +19,8 @@ import { ProviderBase } from "./providerBase";
 import { DatabaseProviderBase } from "./databaseProviderBase";
 import { TransformSimpleObjectToEntityObject, CanonicalPrimaryKeyValue } from "./util";
 import { WellKnownUserSource } from "./wellKnownUserSource";
+import { CompositeFilter } from "./filters/compositeFilter";
+import type { CompositeFilterDescriptor, FilterDescriptor } from "./filters/filter.types";
 
 /** The primary-key columns a key index is built for. */
 type PrimaryKeyColumn = Pick<EntityFieldInfo, 'Name' | 'IsUniqueIdentifier'>;
@@ -228,8 +230,11 @@ export class BaseEnginePropertyConfig extends BaseInfo {
     Entities?: string[];
     /**
      * Optional, filters to apply to the data load, applies only when type is 'entity'. Use DatasetItemFilters for dataset filters.
+     * Accepts either a SQL WHERE string (passed as `RunViewParams.ExtraFilter`) or a structured
+     * {@link CompositeFilterDescriptor} / {@link CompositeFilter} (passed as `RunViewParams.Filter`
+     * and evaluated in memory on save events for immediate cache mutation).
      */
-    Filter?: string;
+    Filter?: string | CompositeFilterDescriptor | CompositeFilter;
     /**
      * Optional semantic `Name` of a registered `EntityAlternateBaseView` on the target entity
      * (for example, `'Active'`). Applies only when `Type` is `'entity'`.
@@ -1490,6 +1495,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         recordDataJSON: string
     ): Promise<boolean> {
         try {
+            // Pre-check all matching configs before mutating any in-memory array so we never
+            // leave earlier configs half-mutated when a later config requires a full refresh.
+            if (!matchingConfigs.every(config => this.canUseImmediateMutation(config, /*skipAdditionalLoadingCheck*/ true))) {
+                return false;
+            }
+
             const recordData = JSON.parse(recordDataJSON);
             // Use this engine's bound provider (ProviderToUse) instead of `new Metadata()` so
             // multi-provider client setups instantiate entities against the correct server.
@@ -1499,15 +1510,24 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             await entity.LoadFromData(recordData);
 
             for (const config of matchingConfigs) {
-                // Skip the AdditionalLoading check because we call it ourselves after all mutations
-                if (!this.canUseImmediateMutation(config, /*skipAdditionalLoadingCheck*/ true)) {
-                    return false;
-                }
-
                 const currentData = (this as Record<string, unknown>)[config.PropertyName] as BaseEntity[] | undefined;
                 if (!currentData) continue;
 
                 const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
+                if (this.isStructuredFilter(config.Filter)) {
+                    const matches = this.evaluateStructuredConfigFilter(config.Filter, entity);
+                    if (!matches) {
+                        if (index >= 0) {
+                            const removed = currentData[index];
+                            currentData.splice(index, 1);
+                            primaryKeyIndexRemoved(currentData, index, removed);
+                            this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
+                            this.NotifyDataChange(config, currentData, 'delete', entity);
+                            this.emitPropertyChange(config.PropertyName);
+                        }
+                        continue;
+                    }
+                }
                 if (index >= 0) {
                     currentData[index] = entity;
                     primaryKeyIndexReplaced(currentData, index, entity);
@@ -1955,11 +1975,52 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      *   (e.g., applyRemoteRecordData applies all config mutations then calls AdditionalLoading).
      * @returns true if immediate mutation is safe, false if a full view refresh is needed
      */
+    protected isStructuredFilter(
+        filter: BaseEnginePropertyConfig['Filter'],
+    ): filter is CompositeFilterDescriptor | CompositeFilter {
+        return filter != null && typeof filter === 'object';
+    }
+
+    protected evaluateStructuredConfigFilter(
+        filter: CompositeFilterDescriptor | CompositeFilter,
+        entity: BaseEntity,
+    ): boolean {
+        const compiled = filter instanceof CompositeFilter ? filter : CompositeFilter.FromDescriptor(filter);
+        return compiled.Evaluate({ '': entity.GetAll() });
+    }
+
+    /**
+     * Filters the in-memory array stored at `propertyName` using a structured
+     * {@link CompositeFilterDescriptor}, {@link CompositeFilter}, or single {@link FilterDescriptor}.
+     *
+     * Works with both `BaseEntity` instances (reading fields via `GetAll()`) and plain `'simple'`
+     * record objects.
+     */
+    protected Where<E = BaseEntity>(
+        propertyName: string,
+        filter: CompositeFilterDescriptor | CompositeFilter | FilterDescriptor,
+    ): E[] {
+        const items = (this as Record<string, unknown>)[propertyName];
+        if (!Array.isArray(items) || items.length === 0) {
+            return [];
+        }
+        const compiled = filter instanceof CompositeFilter ? filter : CompositeFilter.FromDescriptor(filter);
+        return (items as E[]).filter((item) => {
+            if (item == null || typeof item !== 'object') return false;
+            const maybeEntity = item as unknown as BaseEntity;
+            const row =
+                typeof maybeEntity.GetAll === 'function'
+                    ? maybeEntity.GetAll()
+                    : (item as unknown as Record<string, unknown>);
+            return compiled.Evaluate({ '': row });
+        });
+    }
+
     protected canUseImmediateMutation(config: BaseEnginePropertyConfig, skipAdditionalLoadingCheck: boolean = false): boolean {
-        // If there's a filter, we can't safely do immediate mutations because:
-        // - For creates: the new entity might not match the filter
-        // - For updates: the entity might now match or no longer match the filter
-        if (config.Filter) {
+        // If there's a string SQL filter, we can't safely do immediate mutations in memory because
+        // SQL predicates cannot be evaluated client-side. Structured CompositeFilter configs CAN be
+        // evaluated in memory via CompositeFilter.Evaluate().
+        if (typeof config.Filter === 'string' && config.Filter.trim().length > 0) {
             return false;
         }
 
@@ -2051,6 +2112,27 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const entity = event.baseEntity;
 
         if (event.type === 'save') {
+            if (this.isStructuredFilter(config.Filter)) {
+                const matches = this.evaluateStructuredConfigFilter(config.Filter, entity);
+                if (!matches) {
+                    const existingIndex = this.indexOfEntityByRefOrKey(currentData, entity);
+                    if (existingIndex >= 0) {
+                        const removed = currentData[existingIndex];
+                        currentData.splice(existingIndex, 1);
+                        primaryKeyIndexRemoved(currentData, existingIndex, removed);
+                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
+                        this.NotifyDataChange(config, currentData, 'delete', entity);
+                        this.emitPropertyChange(config.PropertyName);
+                        if (config.CacheLocal) {
+                            this.syncLocalCacheForConfig(config, event).catch(e => {
+                                LogWarning(`BaseEngine: Failed to sync local cache for ${config.EntityName}: ${e}`, 'Cache');
+                            });
+                        }
+                    }
+                    return;
+                }
+            }
+
             // Clone the entity so the cache holds an instance owned by THIS engine's provider,
             // not the saving provider. Falling back to the original entity here would reintroduce
             // the leak, so on clone failure we bail and let the next full refresh fix the cache.
@@ -2215,7 +2297,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             ? new Date(rawUpdatedAt).toISOString()
             : new Date().toISOString();
 
-        if (event.type === 'delete') {
+        if (event.type === 'delete' || (this.isStructuredFilter(config.Filter) && !this.evaluateStructuredConfigFilter(config.Filter, entity))) {
             await LocalCacheManager.Instance.RemoveSingleEntity(
                 fingerprint,
                 key,
@@ -2351,8 +2433,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const entityConfigsToLoad = configsToLoad.filter(c => c.Type === 'entity');
         const datasetConfigsToLoad = configsToLoad.filter(c => c.Type === 'dataset');
 
-        await Promise.all([...datasetConfigsToLoad.map(c => this.LoadSingleDatasetConfig(c, contextUser, bypassCache)),
-                           this.LoadMultipleEntityConfigs(entityConfigsToLoad, contextUser, bypassCache)]);
+        try {
+            await Promise.all([...datasetConfigsToLoad.map(c => this.LoadSingleDatasetConfig(c, contextUser, bypassCache)),
+                               this.LoadMultipleEntityConfigs(entityConfigsToLoad, contextUser, bypassCache)]);
+        } finally {
+            // Runs even when a read threw, so a failed load still starts (or stops) the timed refresh.
+            this.reconcileExpirationTimers();
+        }
 
         // Register cross-server cache change callbacks for entity configs
         this.RegisterCacheChangeCallbacks(entityConfigs);
@@ -2618,10 +2705,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * and field-security segments; see {@link configFingerprint}.
      */
     protected BuildRunViewParamsForConfig(config: BaseEnginePropertyConfig, bypassCache: boolean = false): RunViewParams {
+        const isStructured = this.isStructuredFilter(config.Filter);
         return {
             EntityName: config.EntityName,
             ResultType: config.ResultType || this.EngineDefaultResultType,
-            ExtraFilter: config.Filter,
+            ExtraFilter: typeof config.Filter === 'string' ? config.Filter : undefined,
+            ...(isStructured ? { Filter: config.Filter } : {}),
             OrderBy: config.OrderBy,
             ...(config.AlternateBaseView ? { AlternateBaseView: config.AlternateBaseView } : {}),
             IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
@@ -3706,9 +3795,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             literals.push(literal);
         }
         const keyFilter = `${pkField.Name} IN (${literals.join(', ')})`;
+        const stringFilter = typeof config.Filter === 'string' ? config.Filter.trim() : '';
         const params: RunViewParams = {
             ...this.BuildRunViewParamsForConfig(config, /*bypassCache*/ true),
-            ExtraFilter: config.Filter && config.Filter.trim().length > 0 ? `(${config.Filter}) AND ${keyFilter}` : keyFilter,
+            ExtraFilter: stringFilter.length > 0 ? `(${stringFilter}) AND ${keyFilter}` : keyFilter,
             // A one-off read of a few rows: never worth a cache slot of its own.
             CacheLocal: false,
         };
@@ -4174,8 +4264,61 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (this._expirationTimers.has(propertyName)) {
             clearTimeout(this._expirationTimers.get(propertyName));
         }
-        const timer = setTimeout(() => this.RefreshItem(propertyName), expiration);
+        const timer = setTimeout(() => this.runExpirationRefresh(propertyName, expiration, timer as unknown as number), expiration);
+        // A cache-refresh timer must never keep a Node process alive on its own (CLI tools and
+        // test runners load engines and then expect to exit). Browsers return a number: no-op.
+        if (typeof timer === 'object' && timer !== null && 'unref' in timer && typeof timer.unref === 'function') {
+            timer.unref();
+        }
         this._expirationTimers.set(propertyName, timer as unknown as number);
+    }
+
+    /**
+     * Makes the running timers match the loaded configs: a config with an Expiration and no timer
+     * gets one, and a timer whose config no longer has an Expiration is stopped.
+     *
+     * A successful load arms its own timer from {@link HandleSingleViewResult}, but a failed one does
+     * not — without this a failed first load would leave that property with no refresh until restart.
+     * And a reload that drops the Expiration (an interval set to 0) must stop the timer, which
+     * {@link runExpirationRefresh} would otherwise keep re-arming at the old interval.
+     */
+    private reconcileExpirationTimers(): void {
+        for (const c of this._metadataConfigs) {
+            if (c.Expiration && !this._expirationTimers.has(c.PropertyName)) {
+                this.setExpirationTimer(c.PropertyName, c.Expiration);
+            } else if (!c.Expiration && this._expirationTimers.has(c.PropertyName)) {
+                clearTimeout(this._expirationTimers.get(c.PropertyName));
+                this._expirationTimers.delete(c.PropertyName);
+            }
+        }
+    }
+
+    /**
+     * Runs one timed refresh and keeps the timer alive. A successful load re-arms the timer from
+     * {@link HandleSingleViewResult}; a failed one (an unsuccessful result, or a thrown connection
+     * error) does not, so without this the refresh would stop for good after a single failed read
+     * and the property would keep its last rows indefinitely.
+     * The re-arm uses the config as it is now, so a reload that dropped the Expiration while this
+     * tick was running stops the timer instead of keeping it at the old interval.
+     * @param timer - The handle that fired; if the map no longer holds it, a successful load, a
+     *                {@link reconcileExpirationTimers} or a {@link RemoveDynamicConfig} already
+     *                decided what happens next.
+     */
+    private async runExpirationRefresh(propertyName: string, expiration: number, timer: number): Promise<void> {
+        try {
+            await this.RefreshItem(propertyName);
+        } catch (e) {
+            LogError(`${this.constructor.name}: timed refresh of ${propertyName} failed — ${(e as Error).message}. Retrying in ${expiration} ms.`);
+        }
+        if (this._expirationTimers.get(propertyName) !== timer) {
+            return;
+        }
+        const config = this._metadataConfigs.find(c => c.PropertyName === propertyName) || this._dynamicConfigs.get(propertyName);
+        if (config?.Expiration) {
+            this.setExpirationTimer(propertyName, config.Expiration);
+        } else {
+            this._expirationTimers.delete(propertyName);
+        }
     }
 
     /**
@@ -4217,7 +4360,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     public async RefreshItem(propertyName: string): Promise<void> {
         const config = this._metadataConfigs.find(c => c.PropertyName === propertyName) || this._dynamicConfigs.get(propertyName);
         if (config) {
-            await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ false, /*suppressEmit*/ true);
+            // A config with an Expiration exists to pick up changes made outside this process, which
+            // the local cache never hears about — so its timed refresh must read the database.
+            await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ !!config.Expiration, /*suppressEmit*/ true);
             await this.RebuildDerivedState(this._contextUser);
             this.emitPropertyChange(config.PropertyName);
         }
