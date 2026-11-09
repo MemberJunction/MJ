@@ -229,7 +229,10 @@ export class MJExtensionBridgeService {
               }
             | undefined;
 
-        if (!chromeObj?.runtime?.sendMessage) {
+        if (!chromeObj?.runtime?.sendMessage || !extensionId || extensionId === 'auto') {
+            if (typeof document !== 'undefined' && document.documentElement?.getAttribute('data-mj-extension-content-script') === 'ready') {
+                return this.sendViaDomBridge<TResponse>(message);
+            }
             throw new Error('Chrome runtime external messaging API is not available in this browser context.');
         }
 
@@ -238,11 +241,38 @@ export class MJExtensionBridgeService {
             sendFn(extensionId, message, (response: TResponse) => {
                 const lastErr = chromeObj.runtime?.lastError;
                 if (lastErr?.message) {
+                    if (typeof document !== 'undefined' && document.documentElement?.getAttribute('data-mj-extension-content-script') === 'ready') {
+                        this.sendViaDomBridge<TResponse>(message).then(resolve).catch(reject);
+                        return;
+                    }
                     reject(new Error(lastErr.message));
                     return;
                 }
                 resolve(response);
             });
+        });
+    }
+
+    private sendViaDomBridge<TResponse>(message: ExtensionExternalMessageRequest): Promise<TResponse> {
+        return new Promise<TResponse>((resolve) => {
+            const reqId = 'bridge-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+            const handler = (ev: Event): void => {
+                const customEv = ev as CustomEvent<{ RequestId: string; Result: TResponse }>;
+                if (customEv.detail?.RequestId === reqId) {
+                    document.removeEventListener('mj-ext-response', handler);
+                    resolve(customEv.detail.Result);
+                }
+            };
+            document.addEventListener('mj-ext-response', handler);
+            document.dispatchEvent(
+                new CustomEvent('mj-ext-command', {
+                    detail: {
+                        RequestId: reqId,
+                        Type: message.Type,
+                        Payload: (message.Payload ?? {}) as Record<string, unknown>,
+                    },
+                })
+            );
         });
     }
 }

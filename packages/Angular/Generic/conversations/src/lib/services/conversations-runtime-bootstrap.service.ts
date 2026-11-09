@@ -96,6 +96,52 @@ export class ConversationsRuntimeBootstrap {
         // Inject the chat-token CSS into the document <head> exactly once.
         // Guarded against SSR (no `document` global) and double-injection.
         this.injectChatTokens();
+
+        // Wire bidirectional session & conversation handoff with the MJ Browser Extension
+        // content script via shared DOM attributes and CustomEvents on `document`.
+        this.wireBrowserExtensionBridge(runtime, voice);
+    }
+
+    private wireBrowserExtensionBridge(
+        runtime: ConversationsRuntime,
+        voice: RealtimeSessionService
+    ): void {
+        if (typeof document === 'undefined') return;
+
+        const publishSyncState = (): void => {
+            const conversationId = runtime.Bridge.ActiveConversationID$.value ?? '';
+            const sessionId = voice.CurrentAgentSessionId ?? '';
+            document.documentElement.setAttribute('data-mj-active-conversation-id', conversationId);
+            document.documentElement.setAttribute('data-mj-active-session-id', sessionId);
+            document.dispatchEvent(
+                new CustomEvent('mj-ext-host-sync', {
+                    detail: {
+                        ConversationID: conversationId || null,
+                        LastSessionID: sessionId || null,
+                        UpdatedAt: new Date().toISOString(),
+                    },
+                })
+            );
+        };
+
+        runtime.Bridge.ActiveConversationID$.subscribe(() => publishSyncState());
+        voice.SessionStarted$.subscribe(() => publishSyncState());
+        voice.SessionEnded$.subscribe(() => publishSyncState());
+
+        document.addEventListener('mj-ext-resume-conversation', (ev: Event) => {
+            const customEv = ev as CustomEvent<{
+                ConversationID?: string;
+                MessageID?: string;
+            }>;
+            const convId = customEv.detail?.ConversationID;
+            if (convId) {
+                runtime.Bridge.SwitchToWorkspace(convId);
+                runtime.Bridge.NavigateToConversation({
+                    conversationId: convId,
+                    messageId: customEv.detail?.MessageID,
+                });
+            }
+        });
     }
 
     private injectChatTokens(): void {

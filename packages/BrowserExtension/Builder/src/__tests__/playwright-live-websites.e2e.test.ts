@@ -680,4 +680,212 @@ describe.runIf(hasPlaywrightChromium)('Headless Playwright E2E Proof — Live Wi
             await sidePanelPage.close();
         }
     }, 60000);
+
+    it('E2E 4 (Live MJAPI GraphQL Braiding & Bidirectional MJExplorer Conversation Handoff): syncs active conversation and realtime session with MJExplorer and resolves 360° records + Open App rules via GraphQL RunViews', async () => {
+        expect(context).not.toBeNull();
+        const hostPage = await context!.newPage();
+        const sidePanelPage = await context!.newPage();
+
+        try {
+            // 1. Load live page with Content Script and simulate MJExplorer active conversation + realtime session attributes
+            await hostPage.goto('https://en.wikipedia.org/wiki/Main_Page', {
+                waitUntil: 'domcontentloaded',
+                timeout: 45000,
+            });
+            await hostPage.waitForSelector('html[data-mj-extension-content-script="ready"]', {
+                timeout: 15000,
+            });
+
+            await hostPage.evaluate(() => {
+                document.documentElement.setAttribute('data-mj-active-conversation-id', 'conv-live-001');
+                document.documentElement.setAttribute('data-mj-active-session-id', 'rt-session-99');
+                document.addEventListener('mj-ext-resume-conversation', (ev: Event) => {
+                    const detail = (ev as CustomEvent<{ ConversationID: string }>).detail;
+                    document.documentElement.setAttribute(
+                        'data-test-resumed-conversation',
+                        detail?.ConversationID || ''
+                    );
+                });
+            });
+
+            // Verify Content Script extracts MJExplorer host session state (`MJ_CS_GET_MJ_HOST_SESSION`)
+            const hostSession = await sendCommandToLiveContentScript<{
+                Success: boolean;
+                HasHostSession: boolean;
+                ConversationID: string | null;
+                LastSessionID: string | null;
+            }>(hostPage, 'MJ_CS_GET_MJ_HOST_SESSION');
+
+            expect(hostSession.Success).toBe(true);
+            expect(hostSession.HasHostSession).toBe(true);
+            expect(hostSession.ConversationID).toBe('conv-live-001');
+            expect(hostSession.LastSessionID).toBe('rt-session-99');
+
+            // Verify Content Script dispatches `mj-ext-resume-conversation` back to MJExplorer (`MJ_CS_RESUME_CONVERSATION`)
+            const resumeRes = await sendCommandToLiveContentScript<{
+                Success: boolean;
+                ConversationID: string;
+            }>(hostPage, 'MJ_CS_RESUME_CONVERSATION', { ConversationID: 'conv-live-001' });
+
+            expect(resumeRes.Success).toBe(true);
+            const resumedAttr = await hostPage.getAttribute('html', 'data-test-resumed-conversation');
+            expect(resumedAttr).toBe('conv-live-001');
+
+            // 2. Intercept MJAPI GraphQL endpoint in the Side Panel and serve live Open App (`bizapps-common`) metadata, 360° records, and conversations
+            await sidePanelPage.route('**/graphql', async (route) => {
+                const postData = route.request().postDataJSON() as {
+                    variables?: { input?: Array<{ EntityName?: string }> };
+                };
+                const inputs = postData?.variables?.input || [];
+                const results = inputs.map((item) => {
+                    if (item.EntityName === 'MJ: Applications') {
+                        return {
+                            Success: true,
+                            TotalRowCount: 1,
+                            Results: [
+                                {
+                                    ID: 'app-bizapps-common',
+                                    Name: 'Common Business Apps',
+                                    AgentSettings: JSON.stringify({
+                                        BrowserExtension: {
+                                            ContextRules: [
+                                                {
+                                                    RuleID: 'bizapps-org-domain',
+                                                    RuleName: 'Organization Domain Match',
+                                                    EntityName: 'Organizations',
+                                                    SignalType: 'hostname',
+                                                    MatchPattern: '(?:^|\\.)([a-z0-9-]+\\.[a-z]{2,})$',
+                                                    ExtraFilterTemplate: "Website LIKE '%${1}%'",
+                                                    Priority: 5,
+                                                },
+                                            ],
+                                            EntityFacets: [
+                                                {
+                                                    ParentEntityName: 'Organizations',
+                                                    FacetId: 'org-people',
+                                                    Title: 'People & Contacts',
+                                                    Icon: 'fa-solid fa-users',
+                                                    RelatedEntityName: 'People',
+                                                    ForeignKeyField: 'OrganizationID',
+                                                    MaxRecords: 5,
+                                                },
+                                            ],
+                                        },
+                                    }),
+                                },
+                            ],
+                        };
+                    }
+                    if (item.EntityName === 'Organizations' || item.EntityName === 'MJ: AI Vendors') {
+                        return {
+                            Success: true,
+                            TotalRowCount: 1,
+                            Results: [
+                                {
+                                    ID: 'org-wikimedia-001',
+                                    Name: 'Wikimedia Foundation (Live MJ Record)',
+                                    Status: 'Active Enterprise Member',
+                                    Website: 'wikipedia.org',
+                                },
+                            ],
+                        };
+                    }
+                    if (item.EntityName === 'People' || item.EntityName === 'MJ: AI Models') {
+                        return {
+                            Success: true,
+                            TotalRowCount: 2,
+                            Results: [
+                                {
+                                    ID: 'person-1',
+                                    Name: 'Elena Vance — VP of Knowledge Systems',
+                                    Status: 'Primary Executive Sponsor',
+                                },
+                                {
+                                    ID: 'person-2',
+                                    Name: 'Marcus Chen — Director of Engineering',
+                                    Status: 'Technical Champion',
+                                },
+                            ],
+                        };
+                    }
+                    if (item.EntityName === 'MJ: Conversations') {
+                        return {
+                            Success: true,
+                            TotalRowCount: 1,
+                            Results: [
+                                {
+                                    ID: 'conv-live-001',
+                                    Name: 'Q4 Executive Pipeline & Renewal Strategy',
+                                    Status: 'Available',
+                                },
+                            ],
+                        };
+                    }
+                    if (item.EntityName === 'MJ: Conversation Details') {
+                        return {
+                            Success: true,
+                            TotalRowCount: 2,
+                            Results: [
+                                {
+                                    ID: 'msg-1',
+                                    ConversationID: 'conv-live-001',
+                                    Role: 'User',
+                                    Message: 'Summarize the Wikimedia renewal status from MJExplorer.',
+                                },
+                                {
+                                    ID: 'msg-2',
+                                    ConversationID: 'conv-live-001',
+                                    Role: 'AI',
+                                    Message: 'Wikimedia Foundation is an Active Enterprise Member with 2 key executive contacts.',
+                                },
+                            ],
+                        };
+                    }
+                    return { Success: true, TotalRowCount: 0, Results: [] };
+                });
+
+                await route.fulfill({
+                    status: 200,
+                    contentType: 'application/json',
+                    body: JSON.stringify({ data: { RunViews: results } }),
+                });
+            });
+
+            const sidePanelFileUrl = 'file://' + path.join(unpackedCopilotDir, 'sidepanel.html');
+            await sidePanelPage.goto(sidePanelFileUrl, { waitUntil: 'domcontentloaded' });
+            await sidePanelPage.waitForSelector('#mj-extension-sidepanel-root[data-ready="true"]', {
+                timeout: 10000,
+            });
+
+            // Provide a test JWT token and trigger live MJAPI GraphQL resolution + conversation sync
+            await sidePanelPage.fill('#mj-input-api-token', 'eyJhbGciOiJIUzI1NiJ9.eyJuYW1lIjoiQW1pdGggTmFnYXJhamFuIiwiZW1haWwiOiJhbWl0aEBibHVlY3lwcmVzcy5pbyJ9.sig');
+            await sidePanelPage.click('#mj-btn-save-auth');
+
+            // Wait for the live MJAPI 360° anchor record to render in the 360° Context tab
+            await sidePanelPage.waitForFunction(
+                () => document.body.innerText.includes('Wikimedia Foundation (Live MJ Record)'),
+                undefined,
+                { timeout: 10000 }
+            );
+
+            const contextText = await sidePanelPage.innerText('#mj-sidepanel-context-view');
+            expect(contextText).toContain('Wikimedia Foundation (Live MJ Record)');
+            expect(contextText).toContain('Elena Vance — VP of Knowledge Systems');
+
+            // Switch to Co-Pilot Chat tab and verify the synced MJExplorer conversation is loaded
+            await sidePanelPage.click('[data-tab="chat"]');
+            await sidePanelPage.waitForFunction(
+                () => document.body.innerText.includes('Q4 Executive Pipeline & Renewal Strategy'),
+                undefined,
+                { timeout: 10000 }
+            );
+
+            const chatText = await sidePanelPage.innerText('#mj-sidepanel-context-view');
+            expect(chatText).toContain('Q4 Executive Pipeline & Renewal Strategy');
+            expect(chatText).toContain('Wikimedia Foundation is an Active Enterprise Member');
+        } finally {
+            await hostPage.close();
+            await sidePanelPage.close();
+        }
+    }, 60000);
 });

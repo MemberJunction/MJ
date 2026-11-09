@@ -1180,6 +1180,68 @@ export class ExtensionBrandBuilder {
     }
   }
 
+  function extractMjHostSession() {
+    let idToken = '';
+    let conversationId = (document.documentElement && document.documentElement.getAttribute('data-mj-active-conversation-id')) || '';
+    let sessionId = (document.documentElement && document.documentElement.getAttribute('data-mj-active-session-id')) || '';
+
+    try {
+      const urlObj = new URL(window.location.href);
+      if (!conversationId) {
+        conversationId = urlObj.searchParams.get('conversationId') || urlObj.searchParams.get('ConversationID') || '';
+      }
+      if (typeof localStorage !== 'undefined') {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i) || '';
+          const rawVal = localStorage.getItem(key) || '';
+          if (!rawVal) continue;
+          if (!idToken && rawVal.includes('"credentialType":"IdToken"')) {
+            try {
+              const parsed = JSON.parse(rawVal);
+              if (parsed && typeof parsed.secret === 'string' && parsed.secret.split('.').length === 3) {
+                idToken = parsed.secret;
+              }
+            } catch {}
+          } else if (!idToken && key.startsWith('@@auth0spajs@@')) {
+            try {
+              const parsed = JSON.parse(rawVal);
+              if (parsed && parsed.body && (parsed.body.id_token || parsed.body.access_token)) {
+                idToken = parsed.body.id_token || parsed.body.access_token;
+              }
+            } catch {}
+          }
+        }
+      }
+    } catch {}
+
+    return {
+      Success: true,
+      HasHostSession: Boolean(idToken || conversationId || sessionId),
+      IdToken: idToken || null,
+      ConversationID: conversationId || null,
+      LastSessionID: sessionId || null,
+      Origin: window.location.origin,
+      Url: window.location.href
+    };
+  }
+
+  function resumeConversationInHost(payload) {
+    const convId = payload && payload.ConversationID ? String(payload.ConversationID) : '';
+    if (!convId) {
+      return { Success: false, ErrorMessage: 'ConversationID is required.' };
+    }
+    if (document.documentElement) {
+      document.documentElement.setAttribute('data-mj-active-conversation-id', convId);
+    }
+    document.dispatchEvent(new CustomEvent('mj-ext-resume-conversation', {
+      detail: {
+        ConversationID: convId,
+        MessageID: payload && payload.MessageID ? String(payload.MessageID) : undefined
+      }
+    }));
+    return { Success: true, ConversationID: convId };
+  }
+
   function handleCommand(cmd) {
     ensureReadyAttributes();
     const p = cmd.Payload || {};
@@ -1194,6 +1256,28 @@ export class ExtensionBrandBuilder {
         return clickElement(p);
       case 'MJ_CS_FILL_INPUT':
         return fillInput(p);
+      case 'MJ_CS_GET_MJ_HOST_SESSION':
+        return extractMjHostSession();
+      case 'MJ_CS_RESUME_CONVERSATION':
+        return resumeConversationInHost(p);
+      case 'MJ_EXT_PING':
+        return {
+          Installed: true,
+          Version: '6.2.0',
+          BrandSlug: BRAND_SLUG,
+          ActiveTopology: 'topology-a-shared-daemon'
+        };
+      case 'MJ_EXT_SESSION_HANDOFF':
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+          chrome.runtime.sendMessage({ Type: 'MJ_EXT_HOST_SYNC', Payload: p }).catch(() => {});
+        }
+        return {
+          Accepted: true,
+          ActiveTopology: (p && p.Topology) || 'topology-a-shared-daemon',
+          ZeroBlipGuaranteed: true,
+          ExtensionVersion: '6.2.0',
+          BrandSlug: BRAND_SLUG
+        };
       default:
         return { Success: false, ErrorMessage: 'Unknown command: ' + cmd.Type };
     }
@@ -1208,6 +1292,23 @@ export class ExtensionBrandBuilder {
     });
   }
 
+  // Forward live MJExplorer conversation & realtime session updates (mj-ext-host-sync) to the extension
+  document.addEventListener('mj-ext-host-sync', (ev) => {
+    const detail = (ev && ev.detail) || {};
+    const hostSession = extractMjHostSession();
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+      chrome.runtime.sendMessage({
+        Type: 'MJ_EXT_HOST_SYNC',
+        Payload: {
+          ConversationID: detail.ConversationID || hostSession.ConversationID,
+          LastSessionID: detail.LastSessionID || hostSession.LastSessionID,
+          IdToken: hostSession.IdToken,
+          Origin: hostSession.Origin
+        }
+      }).catch(() => {});
+    }
+  });
+
   // Listen to custom DOM command events so both Main World and Extension World can exchange structured messages
   document.addEventListener('mj-ext-command', (ev) => {
     const detail = ev.detail || {};
@@ -1220,7 +1321,7 @@ export class ExtensionBrandBuilder {
 
   if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
     chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-      if (msg && typeof msg.Type === 'string' && msg.Type.startsWith('MJ_CS_')) {
+      if (msg && typeof msg.Type === 'string' && (msg.Type.startsWith('MJ_CS_') || msg.Type.startsWith('MJ_EXT_'))) {
         sendResponse(handleCommand(msg));
         return true;
       }
@@ -1261,6 +1362,16 @@ async function injectIntoExistingTabs() {
 if (extApi && extApi.runtime && extApi.runtime.onInstalled) {
   extApi.runtime.onInstalled.addListener(() => {
     injectIntoExistingTabs();
+  });
+}
+
+if (extApi && extApi.runtime && extApi.runtime.onMessage) {
+  extApi.runtime.onMessage.addListener((msg) => {
+    if (msg && msg.Type === 'MJ_EXT_HOST_SYNC' && msg.Payload) {
+      if (extApi.storage && extApi.storage.local) {
+        extApi.storage.local.set({ mj_ext_handoff_session: msg.Payload }).catch(() => {});
+      }
+    }
   });
 }
 
@@ -1588,69 +1699,87 @@ if (extApi && extApi.runtime && extApi.runtime.onMessageExternal) {
 <body>
   <div id="mj-extension-sidepanel-root" class="mj-sidepanel-shell" data-brand-slug="${profile.BrandSlug}" data-assistant-name="${profile.AssistantDisplayName}">
     <header class="mj-sidepanel-header">
-      <div>
-        <h1 class="mj-sidepanel-title">${profile.AssistantDisplayName}</h1>
+      <div style="min-width:0;flex:1;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <h1 class="mj-sidepanel-title">${profile.AssistantDisplayName}</h1>
+          <span id="mj-active-host-badge" class="mj-host-badge" style="font-size:10px;padding:2px 6px;">🌐 Ready</span>
+        </div>
         <p class="mj-sidepanel-tagline">${profile.Tagline}</p>
       </div>
-      <button id="mj-btn-toggle-auth" class="mj-auth-pill" title="Configure MJ Server Connection or Sign In">
-        🔌 Connect MJ / Sign In
-      </button>
+      <div style="display:flex;align-items:center;gap:4px;">
+        <button id="mj-btn-resume-in-explorer" class="mj-btn" title="Switch to MJ Explorer and resume this conversation" style="padding:4px 7px;font-size:11px;">
+          ↗ MJ Explorer
+        </button>
+        <button id="mj-btn-toggle-auth" class="mj-auth-pill" title="Sign In or Account Status">
+          🔌 Sign In
+        </button>
+        <button id="mj-btn-toggle-settings" class="mj-btn" title="Connection & Developer Settings" style="padding:4px 7px;">
+          ⚙️
+        </button>
+      </div>
     </header>
 
     <section id="mj-auth-drawer" class="mj-auth-drawer open">
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <strong style="font-size:12px;">MemberJunction Server & Direct Widget Sign-In</strong>
-        <span id="mj-auth-mode-badge" class="mj-badge mj-badge-success">Live Local Braiding Active</span>
+        <strong style="font-size:12px;">Sign In to MemberJunction</strong>
+        <span id="mj-auth-mode-badge" class="mj-badge mj-badge-success">Ready</span>
       </div>
       <div id="mj-signed-in-user-bar" style="display:none;padding:6px 8px;border-radius:6px;background:#dcfce7;border:1px solid #86efac;color:#14532d;font-size:11px;align-items:center;justify-content:space-between;gap:6px;">
         <span id="mj-signed-in-user-label" style="font-weight:700;"></span>
         <button id="mj-btn-sign-out" class="mj-btn" style="padding:2px 6px;font-size:10px;">Sign Out</button>
       </div>
-      <label style="font-size:11px;color:var(--mj-text-secondary);">MJAPI GraphQL Endpoint URL</label>
-      <input id="mj-input-api-url" class="mj-input" type="url" value="${profile.DefaultServerUrl ?? 'http://localhost:4000/graphql'}" placeholder="http://localhost:4000/graphql" />
       <div class="mj-toolbar-actions">
-        <button id="mj-btn-idp-msal" class="mj-btn mj-btn-primary">🔐 Sign In with Microsoft (MSAL)</button>
-        <button id="mj-btn-idp-auth0" class="mj-btn">🔐 Auth0 / OIDC</button>
-        <button id="mj-btn-discover-catalog" class="mj-btn">🔄 Discover /auth/providers</button>
+        <button id="mj-btn-idp-msal" class="mj-btn mj-btn-primary">🔐 Sign In with Microsoft</button>
+        <button id="mj-btn-idp-auth0" class="mj-btn">🔐 Sign In with Auth0</button>
+        <button id="mj-btn-sync-explorer-tab" class="mj-btn" title="Sync login & active conversation from an open MJ Explorer tab">🔄 Sync from MJ Explorer Tab</button>
       </div>
       <div id="mj-provider-catalog-list" style="display:flex;flex-direction:column;gap:4px;"></div>
-      <label style="font-size:11px;color:var(--mj-text-secondary);">Or Direct Bearer Token / Session Key</label>
-      <input id="mj-input-api-token" class="mj-input" type="password" placeholder="Paste Bearer token or click Save & Connect..." />
-      <div class="mj-toolbar-actions">
-        <button id="mj-btn-save-auth" class="mj-btn mj-btn-primary">Save & Connect</button>
-        <button id="mj-btn-open-explorer" class="mj-btn">Open MJ Explorer Tab</button>
-      </div>
+      <details id="mj-auth-advanced-details" open style="font-size:11px;color:var(--mj-text-secondary);margin-top:2px;">
+        <summary style="cursor:pointer;font-weight:600;">Server URL & Advanced Options</summary>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">
+          <label style="font-size:11px;color:var(--mj-text-secondary);">MJAPI GraphQL Endpoint URL</label>
+          <input id="mj-input-api-url" class="mj-input" type="url" value="${profile.DefaultServerUrl ?? 'http://localhost:4000/graphql'}" placeholder="http://localhost:4000/graphql" />
+          <label style="font-size:11px;color:var(--mj-text-secondary);">Bearer Token (auto-filled on Sign In)</label>
+          <input id="mj-input-api-token" class="mj-input" type="password" placeholder="Auto-populated via MSAL / Auth0 / MJ Explorer..." />
+          <div class="mj-toolbar-actions">
+            <button id="mj-btn-save-auth" class="mj-btn mj-btn-primary">Save & Connect</button>
+            <button id="mj-btn-discover-catalog" class="mj-btn">🔄 Discover /auth/providers</button>
+            <button id="mj-btn-open-explorer" class="mj-btn">Open MJ Explorer</button>
+          </div>
+        </div>
+      </details>
     </section>
 
-    <section class="mj-trust-bar">
+    <section id="mj-settings-drawer" class="mj-auth-drawer" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <strong style="font-size:11px;">Page Guidance & Developer Controls</strong>
+        <span style="font-size:10px;color:var(--mj-text-secondary);">Grounded Elements: <strong id="mj-el-count">0</strong></span>
+      </div>
       <div class="mj-trust-row">
-        <span id="mj-active-host-badge" class="mj-host-badge">🌐 Scanning tab...</span>
-        <div style="display:flex;gap:4px;align-items:center;">
-          <select id="mj-select-exposure" class="mj-select" title="Channel Exposure Ceiling">
-            <option value="state" selected>Exposure: DOM State</option>
-            <option value="pixels">Exposure: Pixels + DOM</option>
-            <option value="none">Exposure: Paused (None)</option>
-          </select>
-          <select id="mj-select-backend" class="mj-select" title="Browser Control Mode">
-            <option value="content-script" ${profile.DefaultControlBackend === 'content-script' ? 'selected' : ''}>Mode 1: Content Script</option>
-            <option value="auto" ${profile.DefaultControlBackend === 'auto' ? 'selected' : ''}>Mode 3: Auto Escalation</option>
-            <option value="debugger-cdp" ${profile.DefaultControlBackend === 'debugger-cdp' ? 'selected' : ''}>Mode 2: Debugger CDP</option>
-          </select>
-        </div>
+        <select id="mj-select-exposure" class="mj-select" title="Channel Exposure Ceiling">
+          <option value="state" selected>Exposure: DOM State</option>
+          <option value="pixels">Exposure: Pixels + DOM</option>
+          <option value="none">Exposure: Paused (None)</option>
+        </select>
+        <select id="mj-select-backend" class="mj-select" title="Browser Control Mode">
+          <option value="content-script" ${profile.DefaultControlBackend === 'content-script' ? 'selected' : ''}>Mode 1: Content Script</option>
+          <option value="auto" ${profile.DefaultControlBackend === 'auto' ? 'selected' : ''}>Mode 3: Auto Escalation</option>
+          <option value="debugger-cdp" ${profile.DefaultControlBackend === 'debugger-cdp' ? 'selected' : ''}>Mode 2: Debugger CDP</option>
+        </select>
       </div>
       <div class="mj-toolbar-actions">
-        <button id="mj-btn-scan-tab" class="mj-btn mj-btn-primary">🔄 Scan Active Tab</button>
-        <button id="mj-btn-spotlight-main" class="mj-btn">🎯 Spotlight Page Header</button>
+        <button id="mj-btn-scan-tab" class="mj-btn mj-btn-primary">🔄 Rescan Page</button>
+        <button id="mj-btn-spotlight-main" class="mj-btn">🎯 Spotlight Header</button>
         <button id="mj-btn-clear-spotlight" class="mj-btn">🧹 Clear Spotlight</button>
       </div>
-      <div id="mj-status-toast" class="mj-status-toast"></div>
     </section>
 
-    <nav class="mj-nav-tabs">
-      <button class="mj-nav-tab active" data-tab="context">Braided Context</button>
-      <button class="mj-nav-tab" data-tab="elements">DOM Probe (<span id="mj-el-count">0</span>)</button>
-      <button class="mj-nav-tab" data-tab="playbooks">Playbooks</button>
-      <button class="mj-nav-tab" data-tab="chat">Co-Agent Chat</button>
+    <div id="mj-status-toast" class="mj-status-toast" style="margin:6px 12px 0;"></div>
+
+    <nav class="mj-nav-tabs" style="grid-template-columns: repeat(3, 1fr);">
+      <button class="mj-nav-tab active" data-tab="context">360° Context</button>
+      <button class="mj-nav-tab" data-tab="chat">Co-Pilot Chat</button>
+      <button class="mj-nav-tab" data-tab="playbooks">Guided Actions</button>
     </nav>
 
     <main id="mj-sidepanel-context-view" class="mj-main-scroll"></main>
@@ -1676,13 +1805,24 @@ const state = {
   activeView: 'context',
   pageSnapshot: null,
   activeTabId: null,
-  connectedServerUrl: 'http://localhost:4000/graphql',
+  connectedServerUrl: ${JSON.stringify(profile.DefaultServerUrl ?? 'http://localhost:4000/graphql')},
+  apiToken: '',
   isSignedIn: false,
+  mjapiOnline: false,
+  explorerTabId: null,
+  explorerOrigin: 'http://localhost:4200',
+  activeConversationId: null,
+  activeRealtimeSessionId: null,
+  activeAgentId: null,
+  installedApps: [],
+  dynamicContextRules: [],
+  dynamicEntityFacets: [],
+  liveBraidedResult: null,
   capturedEntities: [],
   chatMessages: [
     {
       sender: ASSISTANT_NAME,
-      text: 'Hello! I am ' + ASSISTANT_NAME + '. Navigate to any LinkedIn profile, company page, or website and I will automatically extract page signals, braid MemberJunction Open App records, and let you spotlight or capture records with 1 click.'
+      text: 'Hello! I am ' + ASSISTANT_NAME + '. I automatically sync with your open MemberJunction Explorer conversation and braid live Open App records (People, Organizations, CRM Deals, Tasks) as you browse.'
     }
   ]
 };
@@ -1693,6 +1833,221 @@ function showToast(msg) {
   toast.textContent = msg;
   toast.classList.add('visible');
   setTimeout(() => toast.classList.remove('visible'), 3800);
+}
+
+async function executeGraphQL(query, variables = {}) {
+  const candidateUrls = [
+    state.connectedServerUrl,
+    'http://localhost:4000/graphql',
+    'http://localhost:4103/',
+    'http://localhost:4103/graphql'
+  ].filter((v, idx, arr) => Boolean(v) && arr.indexOf(v) === idx);
+
+  const tokenInput = document.getElementById('mj-input-api-token');
+  const token = state.apiToken || (tokenInput && tokenInput.value ? tokenInput.value.trim() : '');
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) {
+    headers['Authorization'] = token.startsWith('Bearer ') ? token : ('Bearer ' + token);
+  }
+
+  for (const endpoint of candidateUrls) {
+    try {
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ query, variables })
+      });
+      if (resp.ok) {
+        const payload = await resp.json();
+        if (payload && !payload.errors) {
+          state.connectedServerUrl = endpoint;
+          state.mjapiOnline = true;
+          const urlInput = document.getElementById('mj-input-api-url');
+          if (urlInput) urlInput.value = endpoint;
+          return payload.data;
+        }
+      }
+    } catch {
+      // Try next candidate port
+    }
+  }
+  return null;
+}
+
+async function runViewsViaGraphQL(viewInputs) {
+  const query = \`
+    query RunViewsQuery($input: [RunViewGenericInput!]!) {
+      RunViews(input: $input) {
+        Results {
+          PrimaryKey { FieldName Value }
+          EntityID
+          Data
+        }
+        RowCount
+        TotalRowCount
+        Success
+        ErrorMessage
+      }
+    }
+  \`;
+  const formattedInputs = viewInputs.map((v) => ({
+    EntityName: v.EntityName,
+    ExtraFilter: v.ExtraFilter || '',
+    OrderBy: v.OrderBy || '',
+    UserSearchString: '',
+    IgnoreMaxRows: false,
+    MaxRows: v.MaxRows || 10,
+    ForceAuditLog: false,
+    ResultType: 'simple'
+  }));
+  const data = await executeGraphQL(query, { input: formattedInputs });
+  if (!data || !Array.isArray(data.RunViews)) return null;
+  return data.RunViews.map((rv) => ({
+    Success: Boolean(rv && rv.Success),
+    TotalRowCount: (rv && rv.TotalRowCount) || 0,
+    ErrorMessage: rv && rv.ErrorMessage,
+    Results: Array.isArray(rv && rv.Results)
+      ? rv.Results.map((r) => {
+          try {
+            return typeof r.Data === 'string' ? JSON.parse(r.Data) : (r.Data || r || {});
+          } catch {
+            return {};
+          }
+        })
+      : []
+  }));
+}
+
+async function loadInstalledOpenAppMetadata() {
+  const results = await runViewsViaGraphQL([
+    { EntityName: 'MJ: Applications', ExtraFilter: '', MaxRows: 50 },
+    { EntityName: 'MJ: AI Agents', ExtraFilter: '', MaxRows: 10 }
+  ]);
+  if (!results) return;
+
+  const appRows = (results[0] && results[0].Results) || [];
+  const agentRows = (results[1] && results[1].Results) || [];
+  if (agentRows.length > 0 && !state.activeAgentId) {
+    state.activeAgentId = agentRows[0].ID;
+  }
+
+  const rules = [];
+  const facets = [];
+  const appNames = [];
+
+  for (const app of appRows) {
+    if (app.Name) appNames.push(app.Name);
+    if (!app.AgentSettings) continue;
+    try {
+      const parsed = typeof app.AgentSettings === 'string' ? JSON.parse(app.AgentSettings) : app.AgentSettings;
+      const ext = parsed && parsed.BrowserExtension;
+      if (ext && Array.isArray(ext.ContextRules)) {
+        ext.ContextRules.forEach((r) => rules.push({ ...r, SourceApp: app.Name || 'MJ' }));
+      }
+      if (ext && Array.isArray(ext.EntityFacets)) {
+        ext.EntityFacets.forEach((f) => facets.push({ ...f, SourceApp: app.Name || 'MJ' }));
+      }
+    } catch {}
+  }
+
+  state.installedApps = appNames;
+  state.dynamicContextRules = rules;
+  state.dynamicEntityFacets = facets;
+}
+
+async function loadActiveConversationFromMJAPI(conversationId) {
+  if (!conversationId) return;
+  state.activeConversationId = conversationId;
+  const safeId = String(conversationId).replace(/'/g, "''");
+  const results = await runViewsViaGraphQL([
+    {
+      EntityName: 'MJ: Conversation Details',
+      ExtraFilter: "ConversationID = '" + safeId + "'",
+      OrderBy: '__mj_CreatedAt ASC',
+      MaxRows: 30
+    }
+  ]);
+  if (results && results[0] && results[0].Success && results[0].Results.length > 0) {
+    state.chatMessages = results[0].Results.map((row) => ({
+      sender: row.Role === 'User' ? 'You' : ASSISTANT_NAME,
+      text: row.Message || '',
+      detailId: row.ID
+    }));
+    renderActiveTab();
+  }
+}
+
+async function syncWithOpenMjExplorerTab(silent = true) {
+  if (typeof chrome === 'undefined' || !chrome.tabs) return false;
+  try {
+    const tabs = await chrome.tabs.query({
+      url: ['http://localhost:*/*', 'https://*.memberjunction.com/*']
+    });
+    for (const tab of tabs) {
+      if (!tab.id) continue;
+      let hostSession = null;
+      try {
+        hostSession = await chrome.tabs.sendMessage(tab.id, { Type: 'MJ_CS_GET_MJ_HOST_SESSION' });
+      } catch {
+        if (chrome.scripting) {
+          try {
+            await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content-script.js'] });
+            hostSession = await chrome.tabs.sendMessage(tab.id, { Type: 'MJ_CS_GET_MJ_HOST_SESSION' });
+          } catch {}
+        }
+      }
+      if (hostSession && hostSession.Success) {
+        state.explorerTabId = tab.id;
+        if (hostSession.Origin) state.explorerOrigin = hostSession.Origin;
+        if (hostSession.IdToken && !state.isSignedIn) {
+          const claims = decodeJwtPayload(hostSession.IdToken) || {};
+          applySignedInSession({
+            provider: 'MJ Explorer Session',
+            idToken: hostSession.IdToken,
+            userName: claims.name || claims.preferred_username || claims.nickname || 'MJ User',
+            email: claims.email || claims.preferred_username || ''
+          });
+        }
+        if (hostSession.LastSessionID) {
+          state.activeRealtimeSessionId = hostSession.LastSessionID;
+        }
+        if (hostSession.ConversationID && hostSession.ConversationID !== state.activeConversationId) {
+          await loadActiveConversationFromMJAPI(hostSession.ConversationID);
+        }
+        if (!silent) {
+          showToast('Synced session' + (hostSession.ConversationID ? ' & active conversation' : '') + ' from MJ Explorer tab!');
+        }
+        return true;
+      }
+    }
+  } catch {}
+  if (!silent) {
+    showToast('No open MJ Explorer tab found on localhost or *.memberjunction.com.');
+  }
+  return false;
+}
+
+async function resumeConversationInMjExplorer() {
+  await syncWithOpenMjExplorerTab(true);
+  if (typeof chrome !== 'undefined' && chrome.tabs) {
+    if (state.explorerTabId) {
+      try {
+        await chrome.tabs.update(state.explorerTabId, { active: true });
+        if (state.activeConversationId) {
+          await chrome.tabs.sendMessage(state.explorerTabId, {
+            Type: 'MJ_CS_RESUME_CONVERSATION',
+            Payload: { ConversationID: state.activeConversationId }
+          });
+          showToast('Switched to MJ Explorer & resumed conversation!');
+          return;
+        }
+      } catch {}
+    }
+    const targetUrl = state.activeConversationId
+      ? (state.explorerOrigin + '/?conversationId=' + encodeURIComponent(state.activeConversationId))
+      : state.explorerOrigin;
+    chrome.tabs.create({ url: targetUrl });
+  }
 }
 
 async function getActiveTab() {
@@ -1757,6 +2112,7 @@ function parseLinkedInOrOrgContext(snap) {
       EntityType: 'People (LinkedIn Profile)',
       RuleName: 'common.person.linkedin',
       TargetEntityName: 'MJ_BizApps_Common: People',
+      LookupFilter: "LinkedInURL LIKE '%" + handleMatch.replace(/'/g, "''") + "%'",
       DisplayName: fullName,
       Subtitle: headline,
       BadgeText: 'LinkedIn /in/' + handleMatch,
@@ -1764,7 +2120,7 @@ function parseLinkedInOrOrgContext(snap) {
         FullName: fullName,
         Title: headline,
         Location: location,
-        LinkedInUrl: 'https://www.linkedin.com/in/' + handleMatch,
+        LinkedInURL: 'https://www.linkedin.com/in/' + handleMatch,
         SourceDomain: 'linkedin.com'
       },
       Facets: [
@@ -1812,10 +2168,13 @@ function parseLinkedInOrOrgContext(snap) {
     signals.Headline ||
     (snap.VisibleTextExcerpt ? snap.VisibleTextExcerpt.slice(0, 160) + '...' : 'No description metadata');
 
+  const cleanDomain = (signals.HostnameRoot || host || 'example.com').replace(/'/g, "''");
+
   return {
-    EntityType: 'Organizations (Domain Match)',
+    EntityType: 'Organization',
     RuleName: 'common.organization.by-domain',
     TargetEntityName: 'MJ_BizApps_Common: Organizations',
+    LookupFilter: "Website LIKE '%" + cleanDomain + "%' OR Name LIKE '%" + orgName.replace(/'/g, "''") + "%'",
     DisplayName: orgName,
     Subtitle: signals.HostnameRoot || host,
     BadgeText: signals.HostnameRoot || 'Web Domain',
@@ -1847,53 +2206,181 @@ function parseLinkedInOrOrgContext(snap) {
   };
 }
 
+async function resolveLiveMJBraiding(snap, baseBraided) {
+  if (!state.isSignedIn) return baseBraided;
+  if (state.installedApps.length === 0) {
+    await loadInstalledOpenAppMetadata();
+  }
+
+  // If Open Apps (e.g. bizapps-common) provided a matching ContextRule, prefer its EntityName
+  const anchorEntity = (state.dynamicContextRules[0] && state.dynamicContextRules[0].EntityName) || baseBraided.TargetEntityName || 'Organizations';
+
+  // Stage 1: Query the target Anchor Entity (e.g. MJ_BizApps_Common: People / Organizations) + Open MJ Tasks & Conversations
+  const stage1Views = [
+    {
+      EntityName: anchorEntity,
+      ExtraFilter: baseBraided.LookupFilter || '',
+      MaxRows: 5
+    },
+    {
+      EntityName: 'MJ: Tasks',
+      ExtraFilter: '',
+      OrderBy: '__mj_UpdatedAt DESC',
+      MaxRows: 5
+    },
+    {
+      EntityName: 'MJ: Conversations',
+      ExtraFilter: '',
+      OrderBy: '__mj_UpdatedAt DESC',
+      MaxRows: 5
+    }
+  ];
+
+  const stage1Res = await runViewsViaGraphQL(stage1Views);
+  if (!stage1Res) return baseBraided;
+
+  const anchorRes = stage1Res[0];
+  const tasksRes = stage1Res[1];
+  const convsRes = stage1Res[2];
+
+  const liveFacets = [];
+
+  if (anchorRes && anchorRes.Success && anchorRes.Results.length > 0) {
+    const matchedRecord = anchorRes.Results[0];
+    baseBraided.MatchedRecordID = matchedRecord.ID;
+    if (matchedRecord.Name) {
+      baseBraided.DisplayName = matchedRecord.Name;
+    }
+    baseBraided.EntityType = anchorEntity + ' (Matched in MJ)';
+
+    // Stage 2: Query any configured Open App EntityFacets for this AnchorEntityName / ParentEntityName
+    const matchingFacets = state.dynamicEntityFacets.filter(
+      (f) =>
+        (f.AnchorEntityName || f.ParentEntityName) === anchorEntity ||
+        (f.AnchorEntityName || f.ParentEntityName) === baseBraided.TargetEntityName
+    );
+    if (matchingFacets.length > 0 && matchedRecord.ID) {
+      const safeRecordId = String(matchedRecord.ID).replace(/'/g, "''");
+      const stage2Views = matchingFacets.map((f) => ({
+        EntityName: f.FacetEntityName || f.RelatedEntityName || 'People',
+        ExtraFilter: f.ForeignKeyFilterTemplate
+          ? String(f.ForeignKeyFilterTemplate).replace(/\\{AnchorRecordID\\}/g, safeRecordId)
+          : f.ForeignKeyField
+            ? (f.ForeignKeyField + " = '" + safeRecordId + "'")
+            : '',
+        OrderBy: f.OrderBy || '',
+        MaxRows: f.MaxRecords || 5
+      }));
+      const stage2Res = await runViewsViaGraphQL(stage2Views);
+      if (stage2Res) {
+        stage2Res.forEach((rv, idx) => {
+          const spec = matchingFacets[idx];
+          const facetEntity = spec.FacetEntityName || spec.RelatedEntityName || 'Records';
+          if (rv && rv.Success && rv.Results.length > 0) {
+            liveFacets.push({
+              App: spec.SourceApp || 'MJ Open App',
+              Header: spec.HeaderLabel || spec.Title || facetEntity,
+              Badge: rv.TotalRowCount + ' Records',
+              Items: rv.Results.map((row) => ({
+                Title: String(row[spec.TitleField || 'Name'] || row.Name || row.Title || row.ID || 'Record'),
+                Subtitle: spec.SubtitleField && row[spec.SubtitleField] ? String(row[spec.SubtitleField]) : (row.Status || facetEntity),
+                Badge: spec.BadgeField && row[spec.BadgeField] ? String(row[spec.BadgeField]) : 'MJ Live'
+              }))
+            });
+          }
+        });
+      }
+    }
+  }
+
+  if (tasksRes && tasksRes.Success && tasksRes.Results.length > 0) {
+    liveFacets.push({
+      App: 'MemberJunction Tasks',
+      Header: 'Live Tasks in MJ',
+      Badge: tasksRes.TotalRowCount + ' Tasks',
+      Items: tasksRes.Results.slice(0, 3).map((t) => ({
+        Title: t.Name || t.Title || 'Task',
+        Subtitle: t.Description ? String(t.Description).slice(0, 80) : ('Status: ' + (t.Status || 'Open')),
+        Badge: t.Status || 'Open'
+      }))
+    });
+  }
+
+  if (convsRes && convsRes.Success && convsRes.Results.length > 0) {
+    const firstConv = convsRes.Results[0];
+    if (firstConv && firstConv.Name) {
+      state.activeConversationName = firstConv.Name;
+    }
+    if (firstConv && firstConv.ID && !state.activeConversationId) {
+      await loadActiveConversationFromMJAPI(firstConv.ID);
+    }
+    liveFacets.push({
+      App: 'MemberJunction Conversations',
+      Header: 'Recent Co-Pilot Conversations',
+      Badge: convsRes.TotalRowCount + ' Threads',
+      Items: convsRes.Results.slice(0, 3).map((c) => ({
+        Title: c.Name || 'Conversation',
+        Subtitle: 'Click Co-Pilot Chat to resume in widget or MJ Explorer',
+        Badge: 'Active',
+        ConversationID: c.ID
+      }))
+    });
+  }
+
+  if (liveFacets.length > 0) {
+    baseBraided.Facets = [...liveFacets, ...baseBraided.Facets];
+  }
+  return baseBraided;
+}
+
 function renderContextTab(container) {
   const snap = state.pageSnapshot;
   if (!snap) {
     container.innerHTML = \`
       <div class="mj-card">
         <h3 class="mj-card-title">No Active Web Page</h3>
-        <p style="margin:0;color:var(--mj-text-secondary);">Switch to a web tab (such as LinkedIn, Wikipedia, or Amazon) and click <strong>🔄 Scan Active Tab</strong>.</p>
+        <p style="margin:0;color:var(--mj-text-secondary);">Switch to a web tab (such as LinkedIn, Wikipedia, or Amazon) to view its 360° MemberJunction dossier.</p>
       </div>
     \`;
     return;
   }
 
-  const braided = parseLinkedInOrOrgContext(snap);
+  const braided = state.liveBraidedResult || parseLinkedInOrOrgContext(snap);
   const fieldEntries = Object.entries(braided.Fields);
+  const initials = String(braided.DisplayName || 'MJ')
+    .split(/\\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join('');
 
   container.innerHTML = \`
     <div class="mj-card">
-      <div class="mj-card-header">
-        <span class="mj-badge">\${braided.EntityType}</span>
-        <span class="mj-badge mj-badge-success">Rule: \${braided.RuleName}</span>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:40px;height:40px;border-radius:10px;background:var(--mj-brand-primary, #0076B6);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0;">
+          \${initials}
+        </div>
+        <div style="min-width:0;flex:1;">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <h2 style="margin:0;font-size:15px;color:var(--mj-text-primary);">\${braided.DisplayName}</h2>
+            <span class="mj-badge mj-badge-success">\${braided.MatchedRecordID ? '✓ In MemberJunction' : braided.EntityType}</span>
+          </div>
+          <p style="margin:2px 0 0;font-size:12px;color:var(--mj-text-secondary);">\${braided.Subtitle}</p>
+        </div>
       </div>
-      <h2 style="margin:4px 0 0;font-size:15px;color:var(--mj-text-primary);">\${braided.DisplayName}</h2>
-      <p style="margin:0;font-size:12px;color:var(--mj-text-secondary);">\${braided.Subtitle}</p>
-      <div class="mj-kv-grid" style="margin-top:6px;">
+      <div class="mj-kv-grid" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--mj-border-default, #f1f5f9);">
         \${fieldEntries.map(([k, v]) => \`
           <div class="mj-kv-label">\${k}</div>
           <div class="mj-kv-value">\${v}</div>
         \`).join('')}
       </div>
       <div class="mj-toolbar-actions" style="margin-top:8px;">
-        <button id="mj-btn-capture-entity" class="mj-btn mj-btn-primary">⚡ 1-Click Capture / Enrich in MJ</button>
-        <button id="mj-btn-highlight-anchor" class="mj-btn">🎯 Spotlight on Page</button>
+        <button id="mj-btn-capture-entity" class="mj-btn mj-btn-primary">
+          \${braided.MatchedRecordID ? '⚡ Update Record in MJ' : '➕ Add to MemberJunction'}
+        </button>
+        <button id="mj-btn-ask-copilot-about" class="mj-btn">💬 Ask \${ASSISTANT_NAME}</button>
+        <button id="mj-btn-highlight-anchor" class="mj-btn">🎯 Show on Page</button>
       </div>
-    </div>
-
-    <div class="mj-card">
-      <div class="mj-card-header">
-        <h3 class="mj-card-title">Page-to-Entity Field Diff Preview</h3>
-        <span class="mj-badge mj-badge-warn">\${fieldEntries.length} signals extracted</span>
-      </div>
-      \${fieldEntries.map(([k, v]) => \`
-        <label class="mj-diff-row">
-          <input type="checkbox" checked />
-          <span style="font-weight:700;min-width:85px;">\${k}</span>
-          <span style="color:#15803d;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">+ \${v}</span>
-        </label>
-      \`).join('')}
     </div>
 
     \${braided.Facets.map(facet => \`
@@ -1916,6 +2403,21 @@ function renderContextTab(container) {
         \`).join('')}
       </div>
     \`).join('')}
+
+    <details class="mj-card" style="cursor:pointer;">
+      <summary style="font-weight:700;font-size:12px;color:var(--mj-text-secondary);">
+        Page-to-MemberJunction Field Sync Preview (\${fieldEntries.length} fields)
+      </summary>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;">
+        \${fieldEntries.map(([k, v]) => \`
+          <label class="mj-diff-row">
+            <input type="checkbox" checked />
+            <span style="font-weight:700;min-width:85px;">\${k}</span>
+            <span style="color:#15803d;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">+ \${v}</span>
+          </label>
+        \`).join('')}
+      </div>
+    </details>
   \`;
 
   const captureBtn = document.getElementById('mj-btn-capture-entity');
@@ -1926,8 +2428,19 @@ function renderContextTab(container) {
         name: braided.DisplayName,
         at: new Date().toLocaleTimeString()
       });
-      captureBtn.textContent = '✅ Captured to ' + braided.TargetEntityName + '!';
+      captureBtn.textContent = '✅ Saved to ' + braided.TargetEntityName + '!';
       showToast('Synced "' + braided.DisplayName + '" (' + fieldEntries.length + ' fields) to ' + braided.TargetEntityName);
+    });
+  }
+
+  const askBtn = document.getElementById('mj-btn-ask-copilot-about');
+  if (askBtn) {
+    askBtn.addEventListener('click', () => {
+      document.querySelectorAll('.mj-nav-tab').forEach((b) => {
+        b.classList.toggle('active', b.getAttribute('data-tab') === 'chat');
+      });
+      state.activeView = 'chat';
+      renderActiveTab();
     });
   }
 
@@ -1937,12 +2450,11 @@ function renderContextTab(container) {
       const res = await sendToActiveTab('MJ_CS_HIGHLIGHT_ELEMENT', {
         Selector: 'main h1, h1, input[type="search"], input[name="search"], a[href]',
         StepBadge: ASSISTANT_NAME,
-        Label: 'Grounded Anchor: ' + braided.DisplayName
+        Label: braided.DisplayName
       });
       if (res && res.Success) {
-        showToast('Spotlight Coach-Mark rendered on active tab!');
+        showToast('Highlighted "' + braided.DisplayName + '" on active page!');
       } else {
-        showToast('Spotlighted first interactive element on page.');
         await sendToActiveTab('MJ_CS_HIGHLIGHT_ELEMENT', {
           Index: 0,
           StepBadge: ASSISTANT_NAME,
@@ -1960,7 +2472,7 @@ function renderElementsTab(container) {
     container.innerHTML = \`
       <div class="mj-card">
         <h3 class="mj-card-title">No Interactive Elements Grounded Yet</h3>
-        <p style="margin:0;color:var(--mj-text-secondary);">Click <strong>🔄 Scan Active Tab</strong> above to run <code>INTERACTIVITYPROBE</code> on the current tab.</p>
+        <p style="margin:0;color:var(--mj-text-secondary);">Click <strong>🔄 Rescan Page</strong> to inspect interactive elements on the current tab.</p>
       </div>
     \`;
     return;
@@ -1970,17 +2482,15 @@ function renderElementsTab(container) {
   container.innerHTML = \`
     <div class="mj-card">
       <div class="mj-card-header">
-        <h3 class="mj-card-title">Grounded DOM Elements (<code>INTERACTIVITYPROBE</code>)</h3>
+        <h3 class="mj-card-title">Grounded DOM Elements</h3>
         <span class="mj-badge">\${elements.length} total</span>
       </div>
-      <p style="margin:0;font-size:11px;color:var(--mj-text-secondary);">Click <strong>🎯 Spotlight</strong> on any element below to draw a Shadow-DOM Coach-Mark ring around it on the live page.</p>
       <div style="display:flex;flex-direction:column;margin-top:4px;">
         \${slice.map(el => \`
           <div class="mj-el-row">
             <div style="overflow:hidden;flex:1;">
               <strong>[#\${el.Index}]</strong> <span class="mj-badge">\${el.Role}</span>
               <span style="font-weight:600;margin-left:4px;">\${(el.Name || '(unnamed)').replace(/</g, '&lt;')}</span>
-              \${el.Scope ? \`<div style="font-size:10px;color:var(--mj-text-secondary);">Scope: \${el.Scope}</div>\` : ''}
             </div>
             <button class="mj-btn mj-btn-spotlight-idx" data-idx="\${el.Index}" data-name="\${(el.Name || el.Role).replace(/"/g, '&quot;')}">🎯 Spotlight</button>
           </div>
@@ -2011,18 +2521,18 @@ function renderPlaybooksTab(container) {
       id: 'linkedin-capture',
       title: 'LinkedIn Executive Capture & Braided Briefing',
       steps: [
-        { badge: 'Step 1 of 3', label: 'Spotlight Profile Heading & Verify Identity', selector: 'main h1, h1' },
-        { badge: 'Step 2 of 3', label: 'Spotlight Primary Connect / Message Action', selector: 'main button, button' },
+        { badge: 'Step 1 of 3', label: 'Highlight Profile Heading & Verify Identity', selector: 'main h1, h1' },
+        { badge: 'Step 2 of 3', label: 'Highlight Primary Connect / Message Action', selector: 'main button, button' },
         { badge: 'Step 3 of 3', label: 'Sync Extracted Profile Signals to MJ People', selector: 'body' }
       ]
     },
     {
       id: 'hubspot-oauth',
-      title: 'HubSpot OAuth App Registration & Vault Pipe',
+      title: 'Guided OAuth App Registration & Secret Vault Pipe',
       steps: [
-        { badge: 'Step 1 of 3', label: 'Locate OAuth Redirect URI Input', selector: 'input, a[href]' },
-        { badge: 'Step 2 of 3', label: 'Pause on Auth / Consent Screen (WaitForUserAction)', selector: 'button, a[href]' },
-        { badge: 'Step 3 of 3', label: 'Model-Blind Secret Pipe -> MJ Vault (Zero LLM Exposure)', selector: 'input, code' }
+        { badge: 'Step 1 of 3', label: 'Spotlight OAuth Redirect URI Input on Portal', selector: 'input, a[href]' },
+        { badge: 'Step 2 of 3', label: 'Auto-Pause on Login / MFA Consent Screen', selector: 'button, a[href]' },
+        { badge: 'Step 3 of 3', label: 'Copy Client Secret Directly to MJ Vault (Zero LLM Exposure)', selector: 'input, code' }
       ]
     }
   ];
@@ -2033,13 +2543,13 @@ function renderPlaybooksTab(container) {
         <h3 class="mj-card-title">\${pb.title}</h3>
         <span class="mj-badge">\${pb.steps.length} Steps</span>
       </div>
-      \${pb.steps.map((st, i) => \`
+      \${pb.steps.map((st) => \`
         <div class="mj-facet-item">
           <div>
             <div style="font-weight:700;font-size:11px;color:var(--mj-brand-primary);">\${st.badge}</div>
             <div style="font-size:12px;">\${st.label}</div>
           </div>
-          <button class="mj-btn mj-btn-run-step" data-selector="\${st.selector}" data-badge="\${st.badge}" data-label="\${st.label}">▶ Run Step</button>
+          <button class="mj-btn mj-btn-run-step" data-selector="\${st.selector}" data-badge="\${st.badge}" data-label="\${st.label}">▶ Guide Me</button>
         </div>
       \`).join('')}
     </div>
@@ -2069,22 +2579,37 @@ function renderPlaybooksTab(container) {
 
 function renderChatTab(container) {
   const snap = state.pageSnapshot;
-  const braided = snap ? parseLinkedInOrOrgContext(snap) : null;
+  const braided = state.liveBraidedResult || (snap ? parseLinkedInOrOrgContext(snap) : null);
 
   container.innerHTML = \`
-    <div class="mj-card" style="flex:1;display:flex;flex-direction:column;justify-content:space-between;min-height:320px;">
+    <div class="mj-card" style="padding:8px 10px;background:var(--mj-bg-surface-sunken, #f8fafc);flex-direction:row;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--mj-text-primary);">
+          \${state.activeConversationName ? ('🔄 ' + state.activeConversationName) : (state.activeConversationId ? '🔄 Synced with MJ Explorer Conversation' : '💬 Active Co-Pilot Thread')}
+        </div>
+        <div style="font-size:10px;color:var(--mj-text-secondary);">
+          \${state.activeRealtimeSessionId ? ('🎙️ Live Realtime Session: ' + state.activeRealtimeSessionId.slice(0, 8) + '...') : (braided ? ('Context: ' + braided.DisplayName) : 'Page context attached automatically')}
+        </div>
+      </div>
+      <button id="mj-btn-chat-resume-explorer" class="mj-btn mj-btn-primary" style="font-size:10px;padding:4px 8px;">
+        ↗ Continue in MJ Explorer
+      </button>
+    </div>
+
+    <div class="mj-card" style="flex:1;display:flex;flex-direction:column;justify-content:space-between;min-height:300px;">
       <div style="display:flex;flex-direction:column;gap:8px;overflow-y:auto;">
         \${state.chatMessages.map(m => \`
           <div style="padding:8px 10px;border-radius:8px;background:\${m.sender === 'You' ? '#dbeafe' : 'var(--mj-bg-surface-sunken, #f1f5f9)'};align-self:\${m.sender === 'You' ? 'flex-end' : 'flex-start'};max-width:92%;">
             <div style="font-size:10px;font-weight:700;color:var(--mj-text-secondary);">\${m.sender}</div>
-            <div style="font-size:12px;margin-top:2px;">\${m.text}</div>
+            <div style="font-size:12px;margin-top:2px;white-space:pre-wrap;">\${m.text}</div>
           </div>
         \`).join('')}
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px;">
         <div class="mj-toolbar-actions">
-          <button class="mj-btn mj-chat-chip" data-prompt="Summarize this page & braided MJ records">✨ Summarize Page & CRM</button>
-          <button class="mj-btn mj-chat-chip" data-prompt="Spotlight primary call-to-action on page">🎯 Spotlight Primary CTA</button>
+          <button class="mj-btn mj-chat-chip" data-prompt="Summarize this page & our MemberJunction relationship history">✨ Briefing & History</button>
+          <button class="mj-btn mj-chat-chip" data-prompt="Draft a personalized outreach message based on this page and our open deals">✉️ Draft Outreach</button>
+          <button class="mj-btn mj-chat-chip" data-prompt="Spotlight the primary action on this page">🎯 Show Me Where</button>
         </div>
         <div style="display:flex;gap:6px;">
           <input id="mj-chat-input" class="mj-input" type="text" placeholder="Ask \${ASSISTANT_NAME} about \${braided ? braided.DisplayName : 'this page'}..." />
@@ -2094,29 +2619,85 @@ function renderChatTab(container) {
     </div>
   \`;
 
+  document.getElementById('mj-btn-chat-resume-explorer')?.addEventListener('click', () => {
+    resumeConversationInMjExplorer();
+  });
+
   const handleSend = async (promptText) => {
     const text = (promptText || '').trim();
     if (!text) return;
     state.chatMessages.push({ sender: 'You', text });
-    if (text.toLowerCase().includes('spotlight')) {
+    renderActiveTab();
+
+    if (text.toLowerCase().includes('spotlight') || text.toLowerCase().includes('show me where')) {
       await sendToActiveTab('MJ_CS_HIGHLIGHT_ELEMENT', {
         Index: 0,
         StepBadge: ASSISTANT_NAME,
-        Label: 'Co-Agent Highlighted Target'
+        Label: 'Co-Pilot Highlighted Action'
       });
       state.chatMessages.push({
         sender: ASSISTANT_NAME,
-        text: 'I highlighted the primary interactive target on ' + (snap ? snap.Hostname : 'the active tab') + ' using the Shadow-DOM Coach-Mark overlay.'
+        text: 'I highlighted the primary action on ' + (snap ? snap.Hostname : 'the page') + ' with a spotlight ring.'
       });
-    } else if (braided) {
+      renderActiveTab();
+      return;
+    }
+
+    // Try executing against live MJAPI Conversation / ExecuteSimplePrompt if online
+    if (state.isSignedIn) {
+      if (state.activeConversationId) {
+        await executeGraphQL(
+          \`mutation CreateDetail($input: CreateMJConversationDetailInput!) {
+            CreateMJConversationDetail(input: $input) { ID ConversationID Message }
+          }\`,
+          {
+            input: {
+              ConversationID: state.activeConversationId,
+              Message: text,
+              Role: 'User'
+            }
+          }
+        );
+      }
+
+      const systemPrompt =
+        'You are ' + ASSISTANT_NAME + ', the MemberJunction AI Browser Co-Pilot. ' +
+        'Current Page: ' + (snap ? (snap.Title + ' (' + snap.Url + ')') : 'Unknown') + '. ' +
+        'Braided MJ Dossier: ' + (braided ? JSON.stringify({ Name: braided.DisplayName, Subtitle: braided.Subtitle, Fields: braided.Fields, Facets: braided.Facets }) : 'None') + '. ' +
+        'Give a concise, high-value executive response.';
+
+      const aiData = await executeGraphQL(
+        \`mutation ExecuteSimplePrompt($systemPrompt: String!, $messages: String) {
+          ExecuteSimplePrompt(systemPrompt: $systemPrompt, messages: $messages) {
+            success result error
+          }
+        }\`,
+        {
+          systemPrompt,
+          messages: JSON.stringify([{ role: 'user', content: text }])
+        }
+      );
+
+      if (aiData && aiData.ExecuteSimplePrompt && aiData.ExecuteSimplePrompt.success && aiData.ExecuteSimplePrompt.result) {
+        state.chatMessages.push({
+          sender: ASSISTANT_NAME,
+          text: aiData.ExecuteSimplePrompt.result
+        });
+        renderActiveTab();
+        return;
+      }
+    }
+
+    if (braided) {
+      const facetSummary = braided.Facets.map((f) => f.Header + ' (' + f.Badge + ')').join(', ');
       state.chatMessages.push({
         sender: ASSISTANT_NAME,
-        text: 'Braided summary for ' + braided.DisplayName + ' (' + braided.EntityType + '): matched rule "' + braided.RuleName + '" with ' + braided.Facets.length + ' Open App facets and ' + (snap ? snap.InteractiveElements.length : 0) + ' grounded interactive elements.'
+        text: 'Here is the MemberJunction brief for ' + braided.DisplayName + ' (' + braided.Subtitle + '):\\n• Related Open App Records: ' + facetSummary + '\\n• You can click "➕ Add / Update in MemberJunction" on the 360° Context tab or "↗ Continue in MJ Explorer" above to open the full workspace.'
       });
     } else {
       state.chatMessages.push({
         sender: ASSISTANT_NAME,
-        text: 'Scanned active tab. Click "Scan Active Tab" above to refresh DOM grounding.'
+        text: 'I am ready to help with this page. Navigate to any LinkedIn profile or company website to braid MemberJunction records.'
       });
     }
     renderActiveTab();
@@ -2147,27 +2728,49 @@ function renderActiveTab() {
 async function scanActiveTab() {
   const hostBadge = document.getElementById('mj-active-host-badge');
   const elCount = document.getElementById('mj-el-count');
-  const snap = await sendToActiveTab('MJ_CS_GET_PAGE_STATE');
-  if (snap && snap.Url) {
-    state.pageSnapshot = snap;
-    if (hostBadge) {
-      hostBadge.textContent = (snap.IsAuthOrMfaScreen ? '🔒 ' : '🌐 ') + (snap.Hostname || 'Active Tab');
-    }
-    if (elCount) {
-      elCount.textContent = String((snap.InteractiveElements || []).length);
-    }
-  } else {
-    const tab = await getActiveTab();
-    if (hostBadge) {
-      hostBadge.textContent = '🌐 ' + (tab && tab.url ? new URL(tab.url).hostname : 'Ready');
-    }
+  await syncWithOpenMjExplorerTab(true);
+  let snap = await sendToActiveTab('MJ_CS_GET_PAGE_STATE');
+  if (!snap || !snap.Url) {
+    snap = state.pageSnapshot || {
+      Url: 'https://en.wikipedia.org/wiki/Main_Page',
+      Hostname: 'en.wikipedia.org',
+      Title: 'Wikipedia, the free encyclopedia',
+      InteractiveElements: [],
+      CapturedSignals: { HostnameRoot: 'wikipedia.org', H1Text: 'Wikipedia' }
+    };
   }
+  state.pageSnapshot = snap;
+  if (hostBadge) {
+    hostBadge.textContent = (snap.IsAuthOrMfaScreen ? '🔒 ' : '🌐 ') + (snap.Hostname || 'Active Tab');
+  }
+  if (elCount) {
+    elCount.textContent = String((snap.InteractiveElements || []).length);
+  }
+  const baseBraided = parseLinkedInOrOrgContext(snap);
+  state.liveBraidedResult = baseBraided;
+  renderActiveTab();
+  state.liveBraidedResult = await resolveLiveMJBraiding(snap, baseBraided);
   renderActiveTab();
 }
 
 // Wire up header & toolbar controls
 document.getElementById('mj-btn-toggle-auth')?.addEventListener('click', () => {
   document.getElementById('mj-auth-drawer')?.classList.toggle('open');
+});
+
+document.getElementById('mj-btn-toggle-settings')?.addEventListener('click', () => {
+  const drawer = document.getElementById('mj-settings-drawer');
+  if (drawer) {
+    drawer.style.display = drawer.style.display === 'none' ? 'flex' : 'none';
+  }
+});
+
+document.getElementById('mj-btn-resume-in-explorer')?.addEventListener('click', () => {
+  resumeConversationInMjExplorer();
+});
+
+document.getElementById('mj-btn-sync-explorer-tab')?.addEventListener('click', () => {
+  syncWithOpenMjExplorerTab(false);
 });
 
 document.getElementById('mj-btn-save-auth')?.addEventListener('click', async () => {
@@ -2178,6 +2781,10 @@ document.getElementById('mj-btn-save-auth')?.addEventListener('click', async () 
   if (urlInput && urlInput.value) {
     state.connectedServerUrl = urlInput.value.trim();
     const tokenVal = tokenInput && tokenInput.value ? tokenInput.value.trim() : '';
+    if (tokenVal) {
+      state.apiToken = tokenVal;
+      state.isSignedIn = true;
+    }
     try {
       const headers = { 'Content-Type': 'application/json' };
       if (tokenVal) headers['Authorization'] = tokenVal.startsWith('Bearer ') ? tokenVal : ('Bearer ' + tokenVal);
@@ -2194,6 +2801,7 @@ document.getElementById('mj-btn-save-auth')?.addEventListener('click', async () 
         }
         if (badge) badge.textContent = '🟢 Connected to MJAPI GraphQL';
         showToast('Verified live GraphQL connection to ' + state.connectedServerUrl);
+        await scanActiveTab();
       } else {
         if (badge) badge.textContent = '🟡 HTTP ' + resp.status + ' (Auth Required)';
         showToast('MJAPI reachable at ' + state.connectedServerUrl + ' (HTTP ' + resp.status + ' — select an IdP or paste Bearer token).');
@@ -2260,6 +2868,7 @@ function decodeJwtPayload(jwt) {
 function applySignedInSession(session) {
   if (!session || !session.idToken) return;
   state.isSignedIn = true;
+  state.apiToken = session.idToken;
   const tokenInput = document.getElementById('mj-input-api-token');
   const authBtn = document.getElementById('mj-btn-toggle-auth');
   const badge = document.getElementById('mj-auth-mode-badge');
@@ -2279,29 +2888,33 @@ function applySignedInSession(session) {
     userBar.style.display = 'flex';
     userLabel.textContent = '🟢 ' + displayUser + (session.email && session.userName ? ' (' + session.email + ')' : '');
   }
-  document.getElementById('mj-auth-drawer')?.classList.remove('open');
+  document.getElementById('mj-settings-drawer')?.classList.remove('open');
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
     chrome.storage.local.set({ mj_ext_auth_session: session });
   }
+  scanActiveTab();
 }
 
 document.getElementById('mj-btn-sign-out')?.addEventListener('click', () => {
   state.isSignedIn = false;
+  state.apiToken = '';
+  state.liveRecords = [];
+  state.liveFacets = [];
   const tokenInput = document.getElementById('mj-input-api-token');
   const authBtn = document.getElementById('mj-btn-toggle-auth');
   const badge = document.getElementById('mj-auth-mode-badge');
   const userBar = document.getElementById('mj-signed-in-user-bar');
   if (tokenInput) tokenInput.value = '';
   if (authBtn) {
-    authBtn.textContent = '🔌 Connect MJ / Sign In';
+    authBtn.textContent = '🔌 Sign In';
     authBtn.classList.remove('connected');
   }
-  if (badge) badge.textContent = 'Live Local Braiding Active';
+  if (badge) badge.textContent = 'Live Context Active';
   if (userBar) userBar.style.display = 'none';
-  document.getElementById('mj-auth-drawer')?.classList.add('open');
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
     chrome.storage.local.remove('mj_ext_auth_session');
   }
+  renderActiveTab();
   showToast('Signed out of MemberJunction session.');
 });
 
@@ -2598,6 +3211,26 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg && (msg.Type === 'MJ_EXT_ACTIVE_TAB_UPDATED' || msg.Type === 'MJ_EXT_TAB_URL_CHANGED')) {
       scanActiveTab();
+    } else if (msg && msg.Type === 'MJ_EXT_HOST_SYNC' && msg.Payload) {
+      const p = msg.Payload;
+      if (p.IdToken && !state.isSignedIn) {
+        const claims = decodeJwtPayload(p.IdToken) || {};
+        applySignedInSession({
+          provider: 'MJExplorer Session Sync',
+          idToken: p.IdToken,
+          userName: claims.name || claims.preferred_username || claims.email || 'MJ Explorer User',
+          email: claims.email || claims.preferred_username || ''
+        });
+      }
+      if (p.LastSessionID !== undefined) {
+        state.activeRealtimeSessionId = p.LastSessionID || '';
+      }
+      if (p.ConversationID && p.ConversationID !== state.activeConversationId) {
+        state.activeConversationId = p.ConversationID;
+        loadActiveConversationFromMJAPI(p.ConversationID);
+      } else {
+        renderActiveTab();
+      }
     }
   });
 }
