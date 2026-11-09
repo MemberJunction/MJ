@@ -16,8 +16,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { type IMetadataProvider, type TenantContext, UserInfo } from '@memberjunction/core';
 import type { MJTaskEntity } from '@memberjunction/core-entities';
-import { UUIDMap, UUIDSet } from '@memberjunction/global';
-import { IsHumanTask } from './task-predicates';
+import { UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 
 /** A node's stored constraints, or why they cannot be enforced (the node is then refused). */
 export type NodeSecurity =
@@ -59,8 +58,9 @@ export function ResolveStoredNodeSecurity(
 /**
  * Whether a finished node's output carries taint into the nodes that depend on it.
  *
- * A completed `Human` step never does: a person reviewed what flowed through it, which is the only
- * thing that clears taint inside a graph. Any other node carries what it recorded when it ran
+ * A `Human` step that its assignee completed never does: a person reviewed what flowed through it,
+ * which is the only thing that clears taint inside a graph ({@link HumanReviewClearsTaint}). Any
+ * other node, a Human step completed by anyone else included, carries what it recorded when it ran
  * (`Configuration.runtime.isOutputTainted`, which every node the dispatcher runs writes as its input
  * taint OR its own). A node that recorded nothing — skipped, failed before recording, or written by
  * older code — is never read as clean: it is tainted when the graph is, or when anything it depends
@@ -71,25 +71,45 @@ export function ResolveStoredNodeSecurity(
 export function UpstreamCarriesTaint(
     upstream: UpstreamTaskTaintFields,
     graphTainted: boolean,
+    runUserID: string,
     upstreamOf?: UpstreamTaintLookup,
 ): boolean {
-    return carriesTaint(upstream, newTaintWalk(graphTainted, upstreamOf));
+    return carriesTaint(upstream, newTaintWalk(graphTainted, runUserID, upstreamOf));
 }
 
-function newTaintWalk(graphTainted: boolean, upstreamOf: UpstreamTaintLookup | undefined): TaintWalk {
-    return { GraphTainted: graphTainted, UpstreamOf: upstreamOf, Known: new UUIDMap(), Visiting: new UUIDSet() };
+function newTaintWalk(graphTainted: boolean, runUserID: string, upstreamOf: UpstreamTaintLookup | undefined): TaintWalk {
+    return { GraphTainted: graphTainted, RunUserID: runUserID, UpstreamOf: upstreamOf, Known: new UUIDMap(), Visiting: new UUIDSet() };
 }
 
 /** One taint walk's inputs and memo: each unrecorded node is resolved once, and a cycle fails closed. */
 type TaintWalk = {
     GraphTainted: boolean;
+    RunUserID: string;
     UpstreamOf: UpstreamTaintLookup | undefined;
     Known: UUIDMap<boolean>;
     Visiting: UUIDSet;
 };
 
+/**
+ * Whether a node is a Human step whose review clears taint: `StepType` is `Human` (a row with a null
+ * `StepType` and a `UserID` is not enough), it is `Complete`, and the server recorded its completion
+ * (`Configuration.runtime.completedByUserID`, written by `MJTaskEntityServer` or by the dispatcher from
+ * the answered request, and refused from anyone else) as made by its assignee. A completion by
+ * another user does not count, and nor does one made as the graph's own run user: the graph's agents
+ * run as that user, so it cannot be told apart from an agent completing the step on its own behalf.
+ *
+ * @param runUserID the user the graph's work runs as
+ */
+export function HumanReviewClearsTaint(node: Pick<UpstreamTaskTaintFields, 'StepType' | 'UserID' | 'Status' | 'Configuration'>, runUserID: string): boolean {
+    if (node.StepType !== 'Human' || node.Status !== 'Complete' || !node.UserID) {
+        return false;
+    }
+    const completedBy = runtimeOf(node.Configuration)?.completedByUserID;
+    return typeof completedBy === 'string' && UUIDsEqual(completedBy, node.UserID) && !UUIDsEqual(completedBy, runUserID);
+}
+
 function carriesTaint(node: UpstreamTaskTaintFields, walk: TaintWalk): boolean {
-    if (IsHumanTask(node) && node.Status === 'Complete') {
+    if (HumanReviewClearsTaint(node, walk.RunUserID)) {
         return false;
     }
     const recorded = RecordedOutputTaint(node.Configuration);
@@ -116,12 +136,16 @@ function carriesTaint(node: UpstreamTaskTaintFields, walk: TaintWalk): boolean {
 
 /** The output taint a node recorded when it ran, or `undefined` when it recorded none. */
 export function RecordedOutputTaint(configuration: string | null | undefined): boolean | undefined {
+    const flag = runtimeOf(configuration)?.isOutputTainted;
+    return typeof flag === 'boolean' ? flag : undefined;
+}
+
+/** The `runtime` object of a serialized `Task.Configuration`, or `undefined` when it has none or does not parse. */
+function runtimeOf(configuration: string | null | undefined): Record<string, unknown> | undefined {
     if (!configuration) return undefined;
     try {
         const parsed: unknown = JSON.parse(configuration);
-        if (!isRecord(parsed) || !isRecord(parsed.runtime)) return undefined;
-        const flag = parsed.runtime.isOutputTainted;
-        return typeof flag === 'boolean' ? flag : undefined;
+        return isRecord(parsed) && isRecord(parsed.runtime) ? parsed.runtime : undefined;
     } catch {
         return undefined;
     }
@@ -138,13 +162,15 @@ export function ComputeNodeInputTaint(args: {
     EnvelopeTainted: boolean;
     IsCompensation: boolean;
     Upstream: readonly UpstreamTaskTaintFields[];
+    /** The user the graph's work runs as: a Human step it completed clears nothing ({@link HumanReviewClearsTaint}). */
+    RunUserID: string;
     /** The graph's prerequisites by task, for prerequisites that recorded no taint. Omitted: they read as tainted. */
     UpstreamOf?: UpstreamTaintLookup;
 }): boolean {
     if (args.Upstream.length === 0) {
         return args.EnvelopeTainted;
     }
-    const walk = newTaintWalk(args.EnvelopeTainted, args.UpstreamOf);
+    const walk = newTaintWalk(args.EnvelopeTainted, args.RunUserID, args.UpstreamOf);
     const fromUpstream = args.Upstream.some((u) => carriesTaint(u, walk));
     return fromUpstream || (args.IsCompensation && args.EnvelopeTainted);
 }

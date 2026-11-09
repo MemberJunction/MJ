@@ -57,9 +57,10 @@ import {
     ApplyTaskSecurityEnvelopeToParams,
     SerializeTaskSecurityEnvelope,
     TAINTED_EGRESS_BLOCKED,
+    TASK_GRAPH_RUNTIME_SECURITY_OPERATION,
     type TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
-import { DatabaseProviderBase, IMetadataProvider, IRunQueryProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, IMetadataProvider, IRunQueryProvider, LogError, LogStatus, RunView, ServerOperationScopeManager, UserInfo } from '@memberjunction/core';
 import { EscapeSQLString, GroupByUUID, IShutdownable, IndexByUUID, ShutdownRegistry, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity, MJAIAgentRequestEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 import type { MJActionExecutionLogEntity, MJRecordChangeEntity } from '@memberjunction/core-entities';
@@ -2114,6 +2115,16 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
+     * The ID of the user a graph's work runs as, without resolving it: the submitter {@link graphContext}
+     * reads, or this dispatcher's own user when none is recorded ({@link resolveGraphExecutionUser}).
+     * A Human step completed as this user clears no taint (`HumanReviewClearsTaint`).
+     */
+    private graphRunUserID(graph: GraphState, task?: MJTaskEntity): string {
+        const submittedByUserID = graph.parentMetadata?.submittedByUserID ?? graph.parent?.UserID ?? task?.UserID;
+        return submittedByUserID?.trim() || this.contextUser.ID;
+    }
+
+    /**
      * Resolves the submitting user's `UserInfo` for a task graph so durable node executions
      * (Agent, Action, Prompt, Decision) run under the submitting user's security context
      * rather than the background server daemon's `this.contextUser`.
@@ -2363,7 +2374,8 @@ export class TaskGraphDispatcher implements IShutdownable {
         }
         const graphTainted = stored.Envelope?.IsRunTainted === true;
         const lookup = this.upstreamLookupInGraph(graph);
-        const outputsTainted = [...graph.entityById.values()].some((task) => UpstreamCarriesTaint(task, graphTainted, lookup));
+        const runUserID = this.graphRunUserID(graph);
+        const outputsTainted = [...graph.entityById.values()].some((task) => UpstreamCarriesTaint(task, graphTainted, runUserID, lookup));
         return { Envelope: WithInputTaint(stored.Envelope, graphTainted || outputsTainted) };
     }
 
@@ -3177,9 +3189,13 @@ export class TaskGraphDispatcher implements IShutdownable {
                 // someone who never answered — who may have left the company — is the silent stall
                 // this whole path exists to avoid, and a give-up edge can now route around it.
                 task.ErrorMessage = 'Nobody answered this step before its request expired.';
+            } else {
+                // Who answered: the step's review clears taint only when its assignee gave it
+                // (HumanReviewClearsTaint). The request records its responder server-side when answered.
+                task.Configuration = this.configurationWithCompletedBy(task, request.ResponseByUserID);
             }
 
-            if (!(await task.Save())) {
+            if (!(await this.saveWithRuntimeAuthority(task))) {
                 LogError(
                     `[TaskGraphDispatcher] Could not settle human task ${task.ID}: ` +
                     `${task.LatestResult?.CompleteMessage ?? 'unknown error'}`,
@@ -3282,6 +3298,30 @@ export class TaskGraphDispatcher implements IShutdownable {
                 );
             }
         }
+    }
+
+    /** The step's Configuration with `runtime.completedByUserID` set to `userID` (removed when there is none). */
+    private configurationWithCompletedBy(task: MJTaskEntity, userID: string | null): string {
+        const existing = this.parseConfiguration(task) as TaskStepConfiguration | undefined;
+        const { completedByUserID: _previous, ...runtime } = existing?.runtime ?? {};
+        return JSON.stringify({ ...existing, runtime: { ...runtime, ...(userID ? { completedByUserID: userID } : {}) } });
+    }
+
+    /**
+     * Saves a task inside {@link TASK_GRAPH_RUNTIME_SECURITY_OPERATION}, bound to this dispatcher's user:
+     * the one scope in which `MJTaskEntityServer` accepts a write of a task's runtime security fields.
+     * Only the save runs inside it.
+     */
+    private saveWithRuntimeAuthority(task: MJTaskEntity): Promise<boolean> {
+        return ServerOperationScopeManager.Instance.RunWithAuthority(
+            {
+                operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION,
+                source: 'ServerEngine',
+                allowedEntities: ['MJ: Tasks'],
+                userId: this.contextUser.ID,
+            },
+            () => task.Save(),
+        );
     }
 
     /** The answered (or expired) request for a task, if any. */
@@ -3894,6 +3934,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             EnvelopeTainted: stored?.IsRunTainted === true,
             IsCompensation: IsCompensationTask(task),
             Upstream: prehydrated?.upstreamTasks ?? [],
+            RunUserID: context.ExecutionUser.ID,
             UpstreamOf: prehydrated?.upstreamOf,
         });
         return { Envelope: WithInputTaint(stored, inputTainted) };
@@ -4636,7 +4677,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             return stored;
         }
         const graphTainted = stored.Envelope?.IsRunTainted === true;
-        const forwardTainted = UpstreamCarriesTaint(forwardTask, graphTainted, this.upstreamLookupInGraph(graph));
+        const forwardTainted = UpstreamCarriesTaint(forwardTask, graphTainted, this.graphRunUserID(graph, forwardTask), this.upstreamLookupInGraph(graph));
         return { Envelope: forwardTainted ? WithInputTaint(stored.Envelope, true) : stored.Envelope };
     }
 

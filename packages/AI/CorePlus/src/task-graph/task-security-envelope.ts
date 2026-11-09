@@ -29,11 +29,22 @@ export const TAINTED_EGRESS_BLOCKED = 'TAINTED_EGRESS_BLOCKED';
 
 /**
  * The keys of `MJ: Tasks.Configuration.runtime` the dispatcher's security decisions read: a step's
- * recorded output taint, and the parameters its action was given (what its compensation runs with).
- * The dispatcher records them through its guarded completion procedure, beneath the entity layer;
- * `MJTaskEntityServer` refuses any change to them through the entity layer.
+ * recorded output taint, the parameters its action was given (what its compensation runs with), and
+ * who completed a Human step (whether that completion clears taint). The dispatcher records the first
+ * two through its guarded completion procedure, beneath the entity layer, and the third inside
+ * {@link TASK_GRAPH_RUNTIME_SECURITY_OPERATION}; `MJTaskEntityServer` stamps `completedByUserID` itself
+ * when anyone else completes a Human step, and refuses every other change to them.
  */
-export const TASK_RUNTIME_SECURITY_KEYS: readonly string[] = ['isOutputTainted', 'actionInput'];
+export const TASK_RUNTIME_SECURITY_KEYS: readonly string[] = ['isOutputTainted', 'actionInput', 'completedByUserID'];
+
+/**
+ * Server operation key (`ServerOperationScopeManager`) under which the task-graph dispatcher writes
+ * {@link TASK_RUNTIME_SECURITY_KEYS} through the entity layer: settling a Human step from the answered
+ * request, it records who answered. Client CRUD entry points (GraphQL, REST, transaction groups) run
+ * inside a client CRUD boundary that masks every outer scope, and other server code (an action an agent
+ * calls, Update Record included) never enters it, so only the dispatcher can.
+ */
+export const TASK_GRAPH_RUNTIME_SECURITY_OPERATION = 'TaskGraph.Dispatcher.WriteRuntimeSecurity';
 
 /**
  * The run's validated scope, exactly as `BaseAgent` hands it to each action dispatch

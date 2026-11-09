@@ -3,11 +3,12 @@
  * a node is refused for, who it runs as, and how taint flows from node to node.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { RunView, type IMetadataProvider, type TenantContext, type UserInfo } from '@memberjunction/core';
+import { RunView, ServerOperationScopeManager, type IMetadataProvider, type TenantContext, type UserInfo } from '@memberjunction/core';
 import type { MJTaskEntity } from '@memberjunction/core-entities';
 import {
     SerializeTaskSecurityEnvelope,
     TAINTED_EGRESS_BLOCKED,
+    TASK_GRAPH_RUNTIME_SECURITY_OPERATION,
     TASK_SECURITY_ENVELOPE_VERSION,
     TaskNode,
     type TaskSecurityEnvelope,
@@ -30,6 +31,16 @@ const TEST_USER = { ID: '00000000-0000-4000-8000-000000000001', Name: 'Tester', 
 const ACTION_ID = '33333333-3333-4333-8333-333333333333';
 const PARENT_ID = '44444444-4444-4444-8444-444444444444';
 const TENANT: TenantContext = { TenantID: 'org-A', Source: 'header' };
+/** A Human step's assignee, who is not the user the graph runs as (TEST_USER). */
+const REVIEWER = '00000000-0000-4000-8000-0000000000e7';
+
+/** A completed Human step assigned to `assignee`, recorded as completed by `completedBy`. */
+function reviewedBy(completedBy: string, assignee: string = REVIEWER, id = 'approve'): MJTaskEntity {
+    return makeTask({
+        ID: id, Status: 'Complete', StepType: 'Human', ActionID: null, UserID: assignee,
+        Configuration: JSON.stringify({ runtime: { completedByUserID: completedBy } }),
+    });
+}
 
 function envelope(parts: Partial<TaskSecurityEnvelope> = {}): TaskSecurityEnvelope {
     return { Version: TASK_SECURITY_ENVELOPE_VERSION, IsRunTainted: false, ...parts };
@@ -279,16 +290,35 @@ describe('TaskGraphDispatcher security envelope (WS-4.1)', () => {
             expect(h.actionCalls[0].SecurityEnvelope?.IsRunTainted).toBe(true);
         });
 
-        it('clears taint behind a completed Human step', async () => {
+        it('clears taint behind a Human step its assignee completed', async () => {
             const h = harness({ parent: makeParent(tainted) });
-            const human = makeTask({ ID: 'approve', Status: 'Complete', StepType: 'Human', ActionID: null, UserID: TEST_USER.ID });
-            await h.run(makeTask({ ID: 'after-review', SecurityEnvelope: SerializeTaskSecurityEnvelope(tainted) }), { upstreamTasks: [human] });
+            await h.run(makeTask({ ID: 'after-review', SecurityEnvelope: SerializeTaskSecurityEnvelope(tainted) }), { upstreamTasks: [reviewedBy(REVIEWER)] });
             expect(h.actionCalls[0].SecurityEnvelope?.IsRunTainted).toBe(false);
+        });
+
+        it('keeps taint behind a Human step someone other than its assignee completed', async () => {
+            const h = harness({ parent: makeParent(tainted) });
+            await h.run(makeTask({ ID: 'after-review', SecurityEnvelope: SerializeTaskSecurityEnvelope(tainted) }), { upstreamTasks: [reviewedBy(TEST_USER.ID)] });
+            expect(h.actionCalls[0].SecurityEnvelope?.IsRunTainted).toBe(true);
+        });
+
+        it("keeps taint behind a Human step completed as the graph's own run user, its assignee", async () => {
+            const h = harness({ parent: makeParent(tainted) });
+            const selfApproved = reviewedBy(TEST_USER.ID, TEST_USER.ID);
+            await h.run(makeTask({ ID: 'after-review', SecurityEnvelope: SerializeTaskSecurityEnvelope(tainted) }), { upstreamTasks: [selfApproved] });
+            expect(h.actionCalls[0].SecurityEnvelope?.IsRunTainted).toBe(true);
+        });
+
+        it('keeps taint behind a Human step edited to Complete with no recorded completer', async () => {
+            const h = harness({ parent: makeParent(tainted) });
+            const edited = makeTask({ ID: 'approve', Status: 'Complete', StepType: 'Human', ActionID: null, UserID: REVIEWER });
+            await h.run(makeTask({ ID: 'after-review', SecurityEnvelope: SerializeTaskSecurityEnvelope(tainted) }), { upstreamTasks: [edited] });
+            expect(h.actionCalls[0].SecurityEnvelope?.IsRunTainted).toBe(true);
         });
 
         it('keeps taint when a tainted branch bypasses the Human step', async () => {
             const h = harness({ parent: makeParent(tainted) });
-            const human = makeTask({ ID: 'approve', Status: 'Complete', StepType: 'Human', ActionID: null, UserID: TEST_USER.ID });
+            const human = reviewedBy(REVIEWER);
             const unreviewed = makeTask({ ID: 'side', Status: 'Complete', Configuration: JSON.stringify({ runtime: { isOutputTainted: true } }) });
             await h.run(makeTask({ ID: 'join', SecurityEnvelope: SerializeTaskSecurityEnvelope(tainted) }), { upstreamTasks: [human, unreviewed] });
             expect(h.actionCalls[0].SecurityEnvelope?.IsRunTainted).toBe(true);
@@ -366,10 +396,10 @@ describe('TaskGraphDispatcher security envelope (WS-4.1)', () => {
             expect(send.Status).toBe('Failed');
         });
 
-        it('runs Send Email when a completed Human step reviewed the fetch before the Decision', async () => {
+        it("runs Send Email when the review step's assignee reviewed the fetch before the Decision", async () => {
             const h = harness({ actionResult: runnerResult, decisionRunner });
             const fetch = makeTask({ ID: 'fetch', Status: 'Complete', ActionID: FETCH_ACTION, Configuration: JSON.stringify({ runtime: { isOutputTainted: true } }) });
-            const review = makeTask({ ID: 'review', Status: 'Complete', StepType: 'Human', ActionID: null, UserID: TEST_USER.ID });
+            const review = reviewedBy(REVIEWER, REVIEWER, 'review');
             const lookup = (id: string) => ({ fetch: [], review: [fetch] } as Record<string, MJTaskEntity[]>)[id];
             const decided = await h.run(makeTask(decisionFields), { upstreamTasks: [review], upstreamOf: lookup });
             expect(recordedTaint(decided)).toBe(false);
@@ -479,6 +509,45 @@ describe('TaskGraphDispatcher security envelope (WS-4.1)', () => {
             await deliver(d.deliverer, null, [clean()]);
             expect(d.reinvoked).toHaveLength(1);
             expect(d.reinvoked[0].SecurityEnvelope).toBeUndefined();
+        });
+    });
+
+    describe('settling a Human step from its answered request', () => {
+        afterEach(() => vi.restoreAllMocks());
+
+        async function settle(request: Record<string, unknown>): Promise<{ human: MJTaskEntity; savedInScope: boolean | undefined }> {
+            vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+                RunView: vi.fn(async (p: { EntityName: string; ExtraFilter?: string }) =>
+                    p.EntityName === 'MJ: AI Agent Requests' && p.ExtraFilter?.includes('Status IN')
+                        ? { Success: true, Results: [request] }
+                        : { Success: true, Results: [] }),
+            } as unknown as RunView);
+            const human = makeTask({ ID: 'approve', StepType: 'Human', ActionID: null, UserID: REVIEWER, Configuration: JSON.stringify({ human: { instructions: 'x' } }) });
+            let savedInScope: boolean | undefined;
+            (human as unknown as { Save: () => Promise<boolean> }).Save = vi.fn(async () => {
+                savedInScope = ServerOperationScopeManager.Instance.IsOperationActive([TASK_GRAPH_RUNTIME_SECURITY_OPERATION], 'MJ: Tasks', TEST_USER);
+                return true;
+            });
+            const dispatcher = new TaskGraphDispatcher({ CreateProvider: vi.fn() }, { RunAgentForTask: vi.fn() }, TEST_USER, { InstanceID: 'inst-settle' });
+            await (dispatcher as unknown as {
+                settleAnsweredHumanTasks: (p: IMetadataProvider, id: string, tasks: MJTaskEntity[]) => Promise<number>;
+            }).settleAnsweredHumanTasks({} as IMetadataProvider, PARENT_ID, [human]);
+            return { human, savedInScope };
+        }
+
+        it("records who answered as the step's completer, saving inside the dispatcher's runtime-security scope", async () => {
+            const { human, savedInScope } = await settle({ ID: 'req-1', Status: 'Approved', ResponseData: null, ResponseByUserID: REVIEWER });
+            expect(human.Status).toBe('Complete');
+            const configuration = JSON.parse(human.Configuration!);
+            expect(configuration.runtime.completedByUserID).toBe(REVIEWER);
+            expect(configuration.human).toEqual({ instructions: 'x' });
+            expect(savedInScope).toBe(true);
+        });
+
+        it('records no completer when the request names no responder, so the step clears nothing', async () => {
+            const { human } = await settle({ ID: 'req-2', Status: 'Approved', ResponseData: null, ResponseByUserID: null });
+            expect(human.Status).toBe('Complete');
+            expect(JSON.parse(human.Configuration!).runtime.completedByUserID).toBeUndefined();
         });
     });
 });

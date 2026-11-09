@@ -8,7 +8,8 @@
  * dirtiness and their stored value, so the test exercises only the guards the subclass adds.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { ValidationResult } from '@memberjunction/core';
+import { ServerOperationScopeManager, ValidationResult } from '@memberjunction/core';
+import { TASK_GRAPH_RUNTIME_SECURITY_OPERATION } from '@memberjunction/ai-core-plus';
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/global')>();
@@ -22,6 +23,11 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         public Configuration: string | null = null;
         /** The `Configuration` the row held before this save. */
         public storedConfiguration: string | null = null;
+        public StepType: string | null = 'Action';
+        public Status = 'Pending';
+        /** The `Status` the row held before this save. */
+        public storedStatus = 'Pending';
+        public ContextCurrentUser: { ID: string } | undefined = undefined;
         private saved = false;
         public get IsSaved(): boolean {
             return this.saved;
@@ -32,12 +38,17 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         public GetFieldByName(name: string): { Dirty: boolean; OldValue?: unknown } | undefined {
             if (name === 'SecurityEnvelope') return { Dirty: this.envelopeDirty };
             if (name === 'Configuration') return { Dirty: this.Configuration !== this.storedConfiguration, OldValue: this.storedConfiguration };
+            if (name === 'Status') return { Dirty: this.Status !== this.storedStatus, OldValue: this.storedStatus };
             return undefined;
         }
         public Validate(): ValidationResult {
             const result = new ValidationResult();
             result.Success = true;
             return result;
+        }
+        /** As `BaseEntity.Save`: validates, and writes only when that passes. */
+        public async Save(): Promise<boolean> {
+            return this.Validate().Success;
         }
     }
     return { ...(await importOriginal<object>()), MJTaskEntity: MockMJTaskEntity };
@@ -129,5 +140,79 @@ describe('MJTaskEntityServer.Validate', () => {
     it("passes the dispatcher's own full-row saves, which carry the recorded fields unchanged", () => {
         const stored = { runtime: { isOutputTainted: true, actionInput: { OrderID: 'ORD-42' } } };
         expect(task({ saved: true, stored, next: { ...stored, layout: { x: 10, y: 20 } } }).Validate().Success).toBe(true);
+    });
+});
+
+describe('MJTaskEntityServer: who completed a Human step, and the dispatcher scope', () => {
+    const DISPATCHER = { ID: '00000000-0000-4000-8000-0000000000d1' };
+    const REVIEWER = { ID: '00000000-0000-4000-8000-0000000000e2' };
+    const OTHER = { ID: '00000000-0000-4000-8000-0000000000f3' };
+    type HumanTask = TestTask & { StepType: string | null; Status: string; storedStatus: string; ContextCurrentUser: { ID: string } | undefined };
+
+    /** A Human step assigned to REVIEWER, saved as `user`. */
+    function human(user: { ID: string }, opts: { storedStatus?: string; stored?: object | null; next?: object | null } = {}): HumanTask {
+        const t = task({ saved: true, stored: opts.stored ?? { human: { instructions: 'x' } }, next: opts.next }) as HumanTask;
+        t.StepType = 'Human';
+        t.storedStatus = opts.storedStatus ?? 'Pending';
+        t.Status = 'Complete';
+        t.ContextCurrentUser = user;
+        return t;
+    }
+    const completedBy = (t: TestTask): unknown => (JSON.parse(t.Configuration!) as { runtime?: { completedByUserID?: string } }).runtime?.completedByUserID;
+    const asClient = <T>(fn: () => T): T => ServerOperationScopeManager.Instance.RunInClientCrudBoundary(fn);
+    const asDispatcher = <T>(fn: () => T, userId = DISPATCHER.ID): T => ServerOperationScopeManager.Instance.RunWithAuthority(
+        { operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION, source: 'ServerEngine', allowedEntities: ['MJ: Tasks'], userId },
+        fn,
+    );
+
+    it('records the assignee as the completer when the assignee completes the step', async () => {
+        const t = human(REVIEWER);
+        expect(await asClient(() => t.Save())).toBe(true);
+        expect(completedBy(t)).toBe(REVIEWER.ID);
+        expect(JSON.parse(t.Configuration!).human).toEqual({ instructions: 'x' });
+    });
+
+    it('records the user who saved, never the completer a client or server caller wrote in', async () => {
+        const forged = { human: { instructions: 'x' }, runtime: { completedByUserID: REVIEWER.ID } };
+        const byClient = human(OTHER, { next: forged });
+        expect(await asClient(() => byClient.Save())).toBe(true);
+        expect(completedBy(byClient)).toBe(OTHER.ID);
+
+        const byServerCode = human(OTHER, { next: forged });
+        expect(await byServerCode.Save()).toBe(true);
+        expect(completedBy(byServerCode)).toBe(OTHER.ID);
+    });
+
+    it('refuses editing the recorded completer of a step already complete, by a client or by server code', async () => {
+        const stored = { runtime: { completedByUserID: OTHER.ID } };
+        const edit = { runtime: { completedByUserID: REVIEWER.ID } };
+        expect(await asClient(() => human(OTHER, { storedStatus: 'Complete', stored, next: edit }).Save())).toBe(false);
+        expect(await human(OTHER, { storedStatus: 'Complete', stored, next: edit }).Save()).toBe(false);
+        // A client save inside an outer dispatcher scope is still a client save: the boundary masks the scope.
+        expect(await asDispatcher(() => asClient(() => human(DISPATCHER, { storedStatus: 'Complete', stored, next: edit }).Save()))).toBe(false);
+    });
+
+    it("refuses clearing a step's recorded taint outside the dispatcher scope, by a client or by server code", async () => {
+        const stored = { runtime: { isOutputTainted: true } };
+        const cleared = { runtime: { isOutputTainted: false } };
+        const step = (user: { ID: string }) => {
+            const t = task({ saved: true, stored, next: cleared }) as HumanTask;
+            t.ContextCurrentUser = user;
+            return t;
+        };
+        expect(await asClient(() => step(OTHER).Save())).toBe(false);
+        expect(await step(OTHER).Save()).toBe(false);
+        // A scope bound to another user does not cover this save.
+        expect(await asDispatcher(() => step(OTHER).Save())).toBe(false);
+    });
+
+    it("lets the dispatcher's own writes through inside its scope, recording the responder it names", async () => {
+        const settled = human(DISPATCHER, { next: { human: { instructions: 'x' }, runtime: { completedByUserID: REVIEWER.ID } } });
+        expect(await asDispatcher(() => settled.Save())).toBe(true);
+        expect(completedBy(settled)).toBe(REVIEWER.ID);
+
+        const recorded = task({ saved: true, stored: { runtime: { isOutputTainted: true } }, next: { runtime: { isOutputTainted: false } } }) as HumanTask;
+        recorded.ContextCurrentUser = DISPATCHER;
+        expect(await asDispatcher(() => recorded.Save())).toBe(true);
     });
 });

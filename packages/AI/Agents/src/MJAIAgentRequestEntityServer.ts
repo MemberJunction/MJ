@@ -20,6 +20,10 @@
  * Request run under. `AgentFeedbackCoordinator.CreateFeedbackRequest` saves a feedback request
  * as the system user only when its assignee came from metadata (agent type, category, request
  * type); an assignee the caller chose is held to this rule.
+ *
+ * Responder: `ResponseByUserID` is the server's record of who answered. A save that answers the
+ * request (moves it into a responded status, a create included) sets it to the user the save runs
+ * as, and no other save may change it.
  */
 
 import { BaseEntity, EntitySaveOptions, LogError, LogStatus, Metadata, IMetadataProvider, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
@@ -38,8 +42,32 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.validateOwnership(result);
+        this.validateResponderUnchanged(result);
         result.Success = result.Success && result.Errors.length === 0;
         return result;
+    }
+
+    /** Whether this save answers the request: moves it into a responded status, a create included. */
+    private answersRequest(): boolean {
+        if (!RESPONDED_STATUSES.includes(this.Status)) {
+            return false;
+        }
+        return !this.IsSaved || this.GetFieldByName('Status')?.OldValue !== this.Status;
+    }
+
+    /**
+     * `ResponseByUserID` is the server's record of who answered ({@link Save} sets it when a save answers
+     * the request), so no other save may change it, an Owner-type user's included.
+     */
+    private validateResponderUnchanged(result: ValidationResult): void {
+        if (this.IsSaved && !this.answersRequest() && this.GetFieldByName('ResponseByUserID')?.Dirty) {
+            result.Errors.push(new ValidationErrorInfo(
+                'ResponseByUserID',
+                'ResponseByUserID records who answered the request: the server sets it when the request is answered, and it cannot be changed.',
+                this.ResponseByUserID,
+                ValidationErrorType.Failure
+            ));
+        }
     }
 
     /**
@@ -69,6 +97,12 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
         const wasNewRecord = !this.IsSaved;
         const wasRequested = statusField?.OldValue === 'Requested' || (!this.IsSaved && statusField?.Value === 'Requested');
         const isNowResponded = RESPONDED_STATUSES.includes(this.Status);
+        if (this.answersRequest()) {
+            // The responder is the user this save runs as, whatever the caller wrote. A task-graph Human
+            // step clears taint only when its assignee answered (`HumanReviewClearsTaint` in
+            // @memberjunction/task-graph), so a caller must not be able to name someone else.
+            this.ResponseByUserID = this.ContextCurrentUser?.ID ?? null;
+        }
 
         const saved = await super.Save(options);
         if (!saved) return false;

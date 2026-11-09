@@ -67,6 +67,8 @@ export type TaskStepConfiguration = MJTaskEntity_ITaskStepConfiguration & {
          * the authored input, so this is what a compensation's `input.*` mapping reads.
          */
         actionInput?: Record<string, unknown>;
+        /** Who completed a Human step, recorded server-side (see `HumanReviewClearsTaint`). */
+        completedByUserID?: string;
     };
 };
 

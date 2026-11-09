@@ -28,6 +28,12 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core-entities')>();
     class MockMJAIAgentRequestEntity {
         public RequestForUserID: string | null = null;
+        public Status = 'Requested';
+        public ResponseByUserID: string | null = null;
+        public OriginatingTaskID: string | null = null;
+        public OriginatingAgentRunID: string | null = null;
+        public ResumingAgentRunID: string | null = null;
+        public AgentID: string | null = null;
         public ID = 'QQQQQQQQ-0000-0000-0000-00000000000Q';
         public IsSaved = false;
         public ContextCurrentUser: { ID: string; Type: string | null } | null = null;
@@ -42,6 +48,10 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
             const r = new ValidationResult();
             r.Success = true;
             return r;
+        }
+        /** As `BaseEntity.Save`: validates, and writes only when that passes. */
+        public async Save(): Promise<boolean> {
+            return this.Validate().Success;
         }
     }
     return { ...actual, MJAIAgentRequestEntity: MockMJAIAgentRequestEntity };
@@ -108,5 +118,46 @@ describe('MJAIAgentRequestEntityServer.Validate — ownership', () => {
         r.RequestForUserID = THEM;
         r.ContextCurrentUser = null;
         expect(r.Validate().Success).toBe(true);
+    });
+});
+
+describe('MJAIAgentRequestEntityServer — who answered', () => {
+    /** A task-graph request for ME, answered by this save. */
+    function answered(opts: { saved: boolean; user: { ID: string; Type: string | null } }): MJAIAgentRequestEntityServer & MockHooks {
+        const r = makeRequest();
+        r.IsSaved = opts.saved;
+        r.RequestForUserID = ME;
+        r.OriginatingTaskID = 'task-1';
+        r.Status = 'Approved';
+        if (opts.saved) r.SetFieldState('Status', { Dirty: true, OldValue: 'Requested' });
+        r.ResponseByUserID = THEM;
+        r.ContextCurrentUser = opts.user;
+        return r;
+    }
+
+    it('records the user who answers as the responder, whatever the caller wrote', async () => {
+        const r = answered({ saved: true, user: { ID: ME, Type: 'User' } });
+        expect(await r.Save()).toBe(true);
+        expect(r.ResponseByUserID).toBe(ME);
+    });
+
+    it('records the creator as the responder of a request created already answered', async () => {
+        const r = answered({ saved: false, user: { ID: ME, Type: 'User' } });
+        expect(await r.Save()).toBe(true);
+        expect(r.ResponseByUserID).toBe(ME);
+    });
+
+    it("refuses changing an answered request's responder, an Owner-type user's change included", () => {
+        const r = makeRequest();
+        r.IsSaved = true;
+        r.RequestForUserID = ME;
+        r.Status = 'Approved';
+        r.SetFieldState('Status', { Dirty: false, OldValue: 'Approved' });
+        r.ResponseByUserID = ME;
+        r.SetFieldState('ResponseByUserID', { Dirty: true, OldValue: THEM });
+        r.ContextCurrentUser = { ID: THEM, Type: 'Owner' };
+        const result = r.Validate();
+        expect(result.Success).toBe(false);
+        expect(result.Errors.map((e) => e.Source)).toEqual(['ResponseByUserID']);
     });
 });

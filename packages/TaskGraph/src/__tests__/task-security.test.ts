@@ -5,6 +5,7 @@ import {
     CloneUserWithTenantContext,
     ComputeNodeInputTaint,
     EnvelopeConstrains,
+    HumanReviewClearsTaint,
     RecordedOutputTaint,
     ResolveStoredNodeSecurity,
     UpstreamCarriesTaint,
@@ -25,6 +26,14 @@ function lookup(prereqs: Record<string, UpstreamTaskTaintFields[]>): (id: string
 
 const ranTainted = JSON.stringify({ runtime: { isOutputTainted: true } });
 const ranClean = JSON.stringify({ runtime: { isOutputTainted: false } });
+/** The user the graph's work runs as. */
+const RUN_USER = 'aaaaaaaa-0000-4000-8000-0000000000a1';
+/** A Human step's assignee, who is not the run user. */
+const REVIEWER = 'aaaaaaaa-0000-4000-8000-0000000000b2';
+const completedBy = (userID: string): string => JSON.stringify({ runtime: { completedByUserID: userID } });
+/** A Human step its assignee completed. */
+const reviewed = (fields: Partial<UpstreamTaskTaintFields> = {}): UpstreamTaskTaintFields =>
+    upstream({ StepType: 'Human', UserID: REVIEWER, Configuration: completedBy(REVIEWER), ...fields });
 
 describe('CloneUserWithTenantContext', () => {
     it('stamps the clone, keeps identity and roles, and leaves the shared user untouched', () => {
@@ -46,19 +55,49 @@ describe('CloneUserWithTenantContext', () => {
     });
 });
 
+describe('HumanReviewClearsTaint', () => {
+    it('clears taint when the assignee completed the step', () => {
+        expect(HumanReviewClearsTaint(reviewed(), RUN_USER)).toBe(true);
+    });
+
+    it('does not when someone other than the assignee completed it', () => {
+        expect(HumanReviewClearsTaint(reviewed({ Configuration: completedBy('aaaaaaaa-0000-4000-8000-0000000000c3') }), RUN_USER)).toBe(false);
+    });
+
+    it("does not when it was completed as the graph's own run user, even by the assignee", () => {
+        expect(HumanReviewClearsTaint(reviewed({ UserID: RUN_USER, Configuration: completedBy(RUN_USER) }), RUN_USER)).toBe(false);
+    });
+
+    it('does not when nobody is recorded as completing it (the row was edited to Complete without the server stamp)', () => {
+        expect(HumanReviewClearsTaint(reviewed({ Configuration: null }), RUN_USER)).toBe(false);
+        expect(HumanReviewClearsTaint(reviewed({ Configuration: ranClean }), RUN_USER)).toBe(false);
+    });
+
+    it("counts only StepType 'Human': not a row with a null StepType and a UserID, and not one that is not Complete", () => {
+        expect(HumanReviewClearsTaint(reviewed({ StepType: null }), RUN_USER)).toBe(false);
+        expect(HumanReviewClearsTaint(reviewed({ Status: 'In Progress' }), RUN_USER)).toBe(false);
+    });
+});
+
 describe('UpstreamCarriesTaint', () => {
-    it('never carries taint through a completed Human step', () => {
-        expect(UpstreamCarriesTaint(upstream({ StepType: 'Human', UserID: 'u', Configuration: ranTainted }), true)).toBe(false);
+    it('never carries taint through a Human step its assignee completed', () => {
+        expect(UpstreamCarriesTaint(reviewed(), true, RUN_USER)).toBe(false);
+    });
+
+    it('carries it through a Human step anyone else completed, or the run user did', () => {
+        expect(UpstreamCarriesTaint(reviewed({ Configuration: completedBy(RUN_USER) }), true, RUN_USER)).toBe(true);
+        expect(UpstreamCarriesTaint(reviewed({ UserID: RUN_USER, Configuration: completedBy(RUN_USER) }), true, RUN_USER)).toBe(true);
+        expect(UpstreamCarriesTaint(upstream({ StepType: null, UserID: REVIEWER, Configuration: completedBy(REVIEWER) }), true, RUN_USER)).toBe(true);
     });
 
     it("carries the graph's taint through a step that never ran", () => {
-        expect(UpstreamCarriesTaint(upstream({ Status: 'Skipped' }), true)).toBe(true);
+        expect(UpstreamCarriesTaint(upstream({ Status: 'Skipped' }), true, RUN_USER)).toBe(true);
         // A Human step that never completed reviewed nothing.
-        expect(UpstreamCarriesTaint(upstream({ StepType: 'Human', UserID: 'u', Status: 'Skipped' }), true)).toBe(true);
+        expect(UpstreamCarriesTaint(reviewed({ Status: 'Skipped' }), true, RUN_USER)).toBe(true);
     });
 
     it('never reads a step that recorded nothing as clean when what could reach it is unknown', () => {
-        expect(UpstreamCarriesTaint(upstream({ Status: 'Skipped' }), false)).toBe(true);
+        expect(UpstreamCarriesTaint(upstream({ Status: 'Skipped' }), false, RUN_USER)).toBe(true);
     });
 
     it('follows a step that recorded nothing back to what it depends on, transitively', () => {
@@ -68,47 +107,48 @@ describe('UpstreamCarriesTaint', () => {
         const skipped = upstream({ ID: 'skipped', Status: 'Skipped' });
         const prereqs = lookup({ decision: [fetch], skipped: [decision], 'clean-decision': [clean], root: [] });
 
-        expect(UpstreamCarriesTaint(decision, false, prereqs)).toBe(true);
-        expect(UpstreamCarriesTaint(skipped, false, prereqs)).toBe(true);
-        expect(UpstreamCarriesTaint(upstream({ ID: 'clean-decision', StepType: 'Decision' }), false, prereqs)).toBe(false);
-        expect(UpstreamCarriesTaint(upstream({ ID: 'root', Status: 'Skipped' }), false, prereqs)).toBe(false);
+        expect(UpstreamCarriesTaint(decision, false, RUN_USER, prereqs)).toBe(true);
+        expect(UpstreamCarriesTaint(skipped, false, RUN_USER, prereqs)).toBe(true);
+        expect(UpstreamCarriesTaint(upstream({ ID: 'clean-decision', StepType: 'Decision' }), false, RUN_USER, prereqs)).toBe(false);
+        expect(UpstreamCarriesTaint(upstream({ ID: 'root', Status: 'Skipped' }), false, RUN_USER, prereqs)).toBe(false);
         // A dependency the lookup does not know reads as tainted.
-        expect(UpstreamCarriesTaint(upstream({ ID: 'orphan', StepType: 'Decision' }), false, prereqs)).toBe(true);
+        expect(UpstreamCarriesTaint(upstream({ ID: 'orphan', StepType: 'Decision' }), false, RUN_USER, prereqs)).toBe(true);
     });
 
-    it('stops at a completed Human step on the way back, and fails closed on a cycle', () => {
+    it("stops at an assignee's review on the way back, not at anyone else's, and fails closed on a cycle", () => {
         const fetch = upstream({ ID: 'fetch', Configuration: ranTainted });
-        const review = upstream({ ID: 'review', StepType: 'Human', UserID: 'u', Status: 'Complete' });
         const decision = upstream({ ID: 'decision', StepType: 'Decision' });
-        expect(UpstreamCarriesTaint(decision, false, lookup({ decision: [review], review: [fetch] }))).toBe(false);
+        expect(UpstreamCarriesTaint(decision, false, RUN_USER, lookup({ decision: [reviewed({ ID: 'review' })], review: [fetch] }))).toBe(false);
+        const selfApproved = reviewed({ ID: 'review', UserID: RUN_USER, Configuration: completedBy(RUN_USER) });
+        expect(UpstreamCarriesTaint(decision, false, RUN_USER, lookup({ decision: [selfApproved], review: [fetch] }))).toBe(true);
 
         const a = upstream({ ID: 'a', Status: 'Skipped' });
         const b = upstream({ ID: 'b', Status: 'Skipped' });
-        expect(UpstreamCarriesTaint(a, false, lookup({ a: [b], b: [a] }))).toBe(true);
+        expect(UpstreamCarriesTaint(a, false, RUN_USER, lookup({ a: [b], b: [a] }))).toBe(true);
     });
 
     it('carries what a step that ran recorded', () => {
-        expect(UpstreamCarriesTaint(upstream({ Configuration: ranTainted }), false)).toBe(true);
-        expect(UpstreamCarriesTaint(upstream({ Configuration: ranClean }), true)).toBe(false);
+        expect(UpstreamCarriesTaint(upstream({ Configuration: ranTainted }), false, RUN_USER)).toBe(true);
+        expect(UpstreamCarriesTaint(upstream({ Configuration: ranClean }), true, RUN_USER)).toBe(false);
     });
 });
 
 describe('ComputeNodeInputTaint', () => {
     it("gives a root node the envelope's taint", () => {
-        expect(ComputeNodeInputTaint({ EnvelopeTainted: true, IsCompensation: false, Upstream: [] })).toBe(true);
+        expect(ComputeNodeInputTaint({ EnvelopeTainted: true, IsCompensation: false, Upstream: [], RunUserID: RUN_USER })).toBe(true);
     });
 
     it('taints a node whose only prerequisite is a Decision fed by tainted output', () => {
         const fetch = upstream({ ID: 'fetch', Configuration: ranTainted });
         const decision = upstream({ ID: 'decision', StepType: 'Decision' });
         expect(ComputeNodeInputTaint({
-            EnvelopeTainted: false, IsCompensation: false, Upstream: [decision], UpstreamOf: lookup({ decision: [fetch] }),
+            EnvelopeTainted: false, IsCompensation: false, Upstream: [decision], RunUserID: RUN_USER, UpstreamOf: lookup({ decision: [fetch] }),
         })).toBe(true);
     });
 
     it('lets a compensation task keep the taint it inherited from its forward task', () => {
-        expect(ComputeNodeInputTaint({ EnvelopeTainted: true, IsCompensation: true, Upstream: [upstream({ Configuration: ranClean })] })).toBe(true);
-        expect(ComputeNodeInputTaint({ EnvelopeTainted: true, IsCompensation: false, Upstream: [upstream({ Configuration: ranClean })] })).toBe(false);
+        expect(ComputeNodeInputTaint({ EnvelopeTainted: true, IsCompensation: true, Upstream: [upstream({ Configuration: ranClean })], RunUserID: RUN_USER })).toBe(true);
+        expect(ComputeNodeInputTaint({ EnvelopeTainted: true, IsCompensation: false, Upstream: [upstream({ Configuration: ranClean })], RunUserID: RUN_USER })).toBe(false);
     });
 });
 
