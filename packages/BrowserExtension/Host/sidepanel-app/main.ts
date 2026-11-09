@@ -9,11 +9,15 @@
 import { provideHttpClient } from '@angular/common/http';
 import { bootstrapApplication } from '@angular/platform-browser';
 import { provideAnimations } from '@angular/platform-browser/animations';
+import { InstallExtensionMediaCompat } from './extension-media-compat';
 import { SIDE_PANEL_REGISTERED_CLASS_NAMES } from './generated/class-registrations';
 import { ExtensionSidePanelRootComponent } from './sidepanel-root.component';
 
 // Retain all @RegisterClass decorators across core-entities, ai-core-plus, ng-conversations, and browser-extension-core
 void SIDE_PANEL_REGISTERED_CLASS_NAMES.length;
+
+// Enable MV3-compliant AudioWorklet loading and one-time Side Panel microphone permission popup
+InstallExtensionMediaCompat();
 
 bootstrapApplication(ExtensionSidePanelRootComponent, {
   providers: [provideAnimations(), provideHttpClient()],

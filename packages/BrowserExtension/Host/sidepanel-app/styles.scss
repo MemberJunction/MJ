@@ -26,6 +26,12 @@
 @import '@memberjunction/ng-ui-components/dist/lib/input/chip';
 @import '@memberjunction/ng-ui-components/dist/lib/tabs/tabs';
 
+:root {
+  --mj-ext-sans-stack: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
+  --mj-font-family: var(--mj-ext-sans-stack);
+  --mj-font-family-base: var(--mj-ext-sans-stack);
+}
+
 *,
 *::before,
 *::after {
@@ -41,6 +47,15 @@ body {
   overflow: hidden;
   background: var(--mj-bg-surface, #ffffff);
   color: var(--mj-text-primary, #0f172a);
-  font-family: var(--mj-font-family-base, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+  font-family: var(--mj-font-family, var(--mj-ext-sans-stack));
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+select,
+textarea,
+optgroup {
+  font-family: inherit;
 }

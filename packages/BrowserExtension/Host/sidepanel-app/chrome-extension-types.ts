@@ -61,13 +61,33 @@ export interface ChromeWindowsApi {
     focused?: boolean;
   }): Promise<ChromeWindowCreateResult>;
   remove(windowId: number): Promise<void>;
+  onRemoved?: {
+    addListener(callback: (windowId: number) => void): void;
+    removeListener?(callback: (windowId: number) => void): void;
+  };
+}
+
+export interface ChromeScriptingFileInjection {
+  target: { tabId: number };
+  files: string[];
+}
+
+export interface ChromeScriptingFuncInjection<TResult> {
+  target: { tabId: number };
+  world?: 'ISOLATED' | 'MAIN';
+  func: () => TResult | Promise<TResult>;
+}
+
+export interface ChromeScriptingInjectionResult<TResult> {
+  frameId: number;
+  result?: TResult;
 }
 
 export interface ChromeScriptingApi {
-  executeScript(injection: {
-    target: { tabId: number };
-    files: string[];
-  }): Promise<Array<{ frameId: number }>>;
+  executeScript(injection: ChromeScriptingFileInjection): Promise<Array<{ frameId: number }>>;
+  executeScript<TResult>(
+    injection: ChromeScriptingFuncInjection<TResult>
+  ): Promise<Array<ChromeScriptingInjectionResult<TResult>>>;
 }
 
 export interface PersistedAuthSession {
@@ -101,6 +121,8 @@ export interface ChromeRuntimeInboundMessage {
   Type?: string;
   TabId?: number;
   Url?: string;
+  Granted?: boolean;
+  ErrorMessage?: string;
   Payload?: {
     SessionID?: string;
     LastSessionID?: string;
@@ -113,15 +135,17 @@ export interface ChromeRuntimeInboundMessage {
   };
 }
 
+export type ChromeRuntimeMessageListener = (
+  message: ChromeRuntimeInboundMessage,
+  sender: ChromeRuntimeSender,
+  sendResponse: (response: { Received: boolean }) => void
+) => boolean | void;
+
 export interface ChromeRuntimeApi {
+  getURL?: (path: string) => string;
   onMessage?: {
-    addListener(
-      callback: (
-        message: ChromeRuntimeInboundMessage,
-        sender: ChromeRuntimeSender,
-        sendResponse: (response: { Received: boolean }) => void
-      ) => boolean | void
-    ): void;
+    addListener(callback: ChromeRuntimeMessageListener): void;
+    removeListener?(callback: ChromeRuntimeMessageListener): void;
   };
 }
 
@@ -149,6 +173,8 @@ export interface MjHostSessionExtractResult {
   LastSessionID: string | null;
   Origin: string;
   Url: string;
+  UserName?: string | null;
+  UserEmail?: string | null;
 }
 
 export interface LiveBraidedFacetItem {

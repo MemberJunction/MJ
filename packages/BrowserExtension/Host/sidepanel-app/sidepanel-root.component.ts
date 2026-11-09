@@ -196,33 +196,36 @@ const DEFAULT_OAUTH_CONFIG = {
         </div>
         <div class="mj-header-actions">
           <button
-            id="mj-btn-resume-in-explorer"
-            type="button"
-            class="mj-btn mj-btn-compact"
-            title="Switch to MemberJunction Explorer and resume this conversation"
-            (click)="OnResumeConversationInExplorer()"
-          >
-            ↗ MJ Explorer
-          </button>
-          <button
             id="mj-btn-toggle-auth"
             type="button"
             class="mj-auth-pill"
             [class.connected]="IsSignedIn"
-            title="Sign In or Account Status"
+            title="Account &amp; Connection Status"
             (click)="OnToggleAuthDrawer()"
           >
             @if (IsSignedIn) {
-              🟢 {{ SignedInUserDisplay }}
+              <span class="mj-status-dot" aria-hidden="true"></span>
+              <span class="mj-auth-pill-name">{{ SignedInUserDisplay }}</span>
             } @else {
-              🔌 Sign In
+              <i class="fa-solid fa-plug" aria-hidden="true"></i>
+              <span>Sign In</span>
             }
+          </button>
+          <button
+            id="mj-btn-resume-in-explorer"
+            type="button"
+            class="mj-icon-btn"
+            title="Open in MemberJunction Explorer"
+            aria-label="Open in MemberJunction Explorer"
+            (click)="OnResumeConversationInExplorer()"
+          >
+            <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
           </button>
           <button
             id="mj-btn-toggle-settings"
             type="button"
-            class="mj-btn mj-btn-compact"
-            title="Page Perception & Control Mode Settings"
+            class="mj-icon-btn"
+            title="Page Perception &amp; Control Mode Settings"
             aria-label="Page Perception and Control Mode Settings"
             (click)="OnToggleSettingsDrawer()"
           >
@@ -247,9 +250,9 @@ const DEFAULT_OAUTH_CONFIG = {
             [class.mj-badge-warn]="!IsSignedIn"
           >
             @if (IsSignedIn) {
-              🟢 Signed In ({{ AuthProviderLabel }})
+              Signed In ({{ AuthProviderLabel }})
             } @else if (IsConnectingProvider) {
-              ⏳ Connecting...
+              Connecting...
             } @else {
               Not Signed In
             }
@@ -263,7 +266,8 @@ const DEFAULT_OAUTH_CONFIG = {
         } @else {
           <div id="mj-signed-in-user-bar" class="mj-signed-in-bar">
             <span id="mj-signed-in-user-label" class="mj-signed-in-label">
-              🟢 {{ SignedInUserDisplay }}@if (SignedInUserEmail) { ({{ SignedInUserEmail }}) }
+              <span class="mj-status-dot" aria-hidden="true"></span>
+              {{ SignedInUserDisplay }}@if (SignedInUserEmail) { ({{ SignedInUserEmail }}) }
             </span>
             <button id="mj-btn-sign-out" type="button" class="mj-btn mj-btn-xs" (click)="OnSignOut()">
               Sign Out
@@ -278,7 +282,8 @@ const DEFAULT_OAUTH_CONFIG = {
           [disabled]="IsConnectingProvider"
           (click)="OnSyncFromMjExplorerTab()"
         >
-          ⚡ Sign In via MemberJunction Explorer
+          <i class="fa-solid fa-bolt" aria-hidden="true"></i>
+          <span>{{ IsSignedIn ? 'Refresh Session from MemberJunction Explorer' : 'Sign In via MemberJunction Explorer' }}</span>
         </button>
 
         @if (DiscoveredProviders.length > 0) {
@@ -567,27 +572,30 @@ const DEFAULT_OAUTH_CONFIG = {
             <div class="mj-agent-context-meta">
               <span class="mj-agent-context-dot" aria-hidden="true"></span>
               <span class="mj-agent-context-label" [title]="ActiveTabUrl">
-                Context: <strong>{{ PageDossier?.DisplayName || ActiveHostLabel }}</strong> · 5 Browser Tools
+                <strong>{{ PageDossier?.DisplayName || ActiveHostLabel }}</strong>
+                <span class="mj-agent-tools-count"> · 5 Browser Tools</span>
               </span>
             </div>
             <div class="mj-agent-context-actions">
               @if (IsProviderReady) {
                 <button
                   type="button"
-                  class="mj-btn mj-btn-xs"
+                  class="mj-strip-btn"
                   title="Start a new conversation"
                   (click)="OnStartNewConversation()"
                 >
-                  + New
+                  <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                  <span>New</span>
                 </button>
               }
               <button
                 type="button"
-                class="mj-btn mj-btn-xs"
-                title="Continue this conversation in MemberJunction Explorer"
+                class="mj-strip-btn"
+                title="Open in MemberJunction Explorer"
                 (click)="OnResumeConversationInExplorer()"
               >
-                ↗ Explorer
+                <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                <span>Explorer</span>
               </button>
             </div>
           </div>
@@ -643,19 +651,36 @@ const DEFAULT_OAUTH_CONFIG = {
                 </div>
               </section>
             </div>
-          } @else {
+          } @else if (IsSignedIn) {
             <div class="mj-agent-placeholder">
-              <i class="fa-solid fa-comments mj-placeholder-icon" aria-hidden="true"></i>
-              <strong>Sign in to launch {{ BrandProfile.AssistantDisplayName }}</strong>
+              <i class="fa-solid fa-rotate mj-placeholder-icon" aria-hidden="true"></i>
+              <strong>Reconnect {{ BrandProfile.AssistantDisplayName }} Workspace</strong>
               <p>
-                Click <strong>⚡ Sign In via MemberJunction Explorer</strong> to mount the live MemberJunction Conversations workspace with text, artifacts, and realtime voice.
+                {{ ProviderConnectionError || 'Your saved token expired or the server restarted. Refresh your active session from MemberJunction Explorer.' }}
               </p>
               <button
                 type="button"
                 class="mj-btn mj-btn-primary"
                 (click)="OnSyncFromMjExplorerTab()"
               >
-                ⚡ Sign In via MemberJunction Explorer
+                <i class="fa-solid fa-bolt" aria-hidden="true"></i>
+                <span>Refresh Session from MJ Explorer</span>
+              </button>
+            </div>
+          } @else {
+            <div class="mj-agent-placeholder">
+              <i class="fa-solid fa-comments mj-placeholder-icon" aria-hidden="true"></i>
+              <strong>Sign in to launch {{ BrandProfile.AssistantDisplayName }}</strong>
+              <p>
+                Click <strong>Sign In via MemberJunction Explorer</strong> to mount the live MemberJunction Conversations workspace with text, artifacts, and realtime voice.
+              </p>
+              <button
+                type="button"
+                class="mj-btn mj-btn-primary"
+                (click)="OnSyncFromMjExplorerTab()"
+              >
+                <i class="fa-solid fa-bolt" aria-hidden="true"></i>
+                <span>Sign In via MemberJunction Explorer</span>
               </button>
             </div>
           }
@@ -671,10 +696,12 @@ const DEFAULT_OAUTH_CONFIG = {
               </p>
               <div class="mj-toolbar-actions mj-top-gap">
                 <button type="button" class="mj-btn mj-btn-primary" (click)="OnSpotlightPrimaryElement()">
-                  🎯 Spotlight Primary Element
+                  <i class="fa-solid fa-bullseye" aria-hidden="true"></i>
+                  <span>Spotlight Primary Element</span>
                 </button>
                 <button type="button" class="mj-btn" (click)="OnClearSpotlights()">
-                  🧹 Clear Highlights
+                  <i class="fa-solid fa-eraser" aria-hidden="true"></i>
+                  <span>Clear Highlights</span>
                 </button>
               </div>
             </section>
@@ -709,6 +736,22 @@ const DEFAULT_OAUTH_CONFIG = {
         display: block;
         width: 100%;
         height: 100%;
+        font-family: var(
+          --mj-font-family,
+          Inter,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          system-ui,
+          sans-serif
+        );
+      }
+      button,
+      input,
+      select,
+      textarea {
+        font-family: inherit;
       }
       .mj-sidepanel-shell {
         display: flex;
@@ -718,13 +761,23 @@ const DEFAULT_OAUTH_CONFIG = {
         overflow: hidden;
         background: var(--mj-bg-surface, #ffffff);
         color: var(--mj-text-primary, #0f172a);
+        font-family: var(
+          --mj-font-family,
+          Inter,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          system-ui,
+          sans-serif
+        );
       }
       .mj-sidepanel-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 8px;
-        padding: 10px 12px;
+        padding: 9px 12px;
         border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
         background: var(--mj-bg-surface-card, #ffffff);
         flex-shrink: 0;
@@ -763,13 +816,13 @@ const DEFAULT_OAUTH_CONFIG = {
         margin: 0;
         font-size: 13px;
         font-weight: 700;
+        letter-spacing: -0.01em;
         white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        flex-shrink: 0;
       }
       .mj-sidepanel-tagline {
         margin: 1px 0 0;
-        font-size: 10px;
+        font-size: 10.5px;
         color: var(--mj-text-secondary, #64748b);
         white-space: nowrap;
         overflow: hidden;
@@ -781,11 +834,12 @@ const DEFAULT_OAUTH_CONFIG = {
         gap: 4px;
         font-size: 10px;
         font-weight: 600;
-        padding: 1px 6px;
+        padding: 1.5px 6px;
         border-radius: 999px;
         background: var(--mj-bg-surface-sunken, #f1f5f9);
         color: var(--mj-brand-primary, #0076b6);
-        max-width: 115px;
+        max-width: 110px;
+        min-width: 0;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -793,27 +847,64 @@ const DEFAULT_OAUTH_CONFIG = {
       .mj-header-actions {
         display: flex;
         align-items: center;
-        gap: 4px;
+        gap: 5px;
+        flex-shrink: 0;
+      }
+      .mj-status-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: #16a34a;
+        display: inline-block;
         flex-shrink: 0;
       }
       .mj-auth-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
         font-size: 11px;
         font-weight: 600;
-        padding: 4px 8px;
+        line-height: 1.2;
+        padding: 4px 9px;
         border-radius: 999px;
         border: 1px solid var(--mj-border-default, #cbd5e1);
         background: var(--mj-bg-surface-sunken, #f8fafc);
         color: var(--mj-text-primary, #0f172a);
         cursor: pointer;
-        max-width: 135px;
+        max-width: 132px;
         white-space: nowrap;
         overflow: hidden;
+      }
+      .mj-auth-pill-name {
+        overflow: hidden;
         text-overflow: ellipsis;
+        white-space: nowrap;
       }
       .mj-auth-pill.connected {
         background: #dcfce7;
         border-color: #86efac;
         color: #15803d;
+      }
+      .mj-icon-btn {
+        width: 27px;
+        height: 27px;
+        border-radius: 6px;
+        border: 1px solid var(--mj-border-default, #cbd5e1);
+        background: var(--mj-bg-surface, #ffffff);
+        color: var(--mj-text-secondary, #475569);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11.5px;
+        padding: 0;
+        flex-shrink: 0;
+        transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+      }
+      .mj-icon-btn:hover {
+        background: var(--mj-bg-surface-sunken, #f1f5f9);
+        color: var(--mj-brand-primary, #0076b6);
+        border-color: var(--mj-brand-primary, #0076b6);
       }
       .mj-drawer {
         display: none;
@@ -855,7 +946,10 @@ const DEFAULT_OAUTH_CONFIG = {
         font-size: 11px;
       }
       .mj-signed-in-label {
-        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: 600;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -888,6 +982,7 @@ const DEFAULT_OAUTH_CONFIG = {
       .mj-input,
       .mj-select {
         width: 100%;
+        font-family: inherit;
         font-size: 12px;
         padding: 6px 8px;
         border-radius: 6px;
@@ -908,13 +1003,14 @@ const DEFAULT_OAUTH_CONFIG = {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
         gap: 4px;
-        padding: 6px 10px;
+        padding: 5px 10px;
         background: var(--mj-bg-surface-sunken, #f1f5f9);
         border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
         flex-shrink: 0;
       }
       .mj-nav-tab {
         padding: 6px 4px;
+        font-family: inherit;
         font-size: 12px;
         font-weight: 600;
         text-align: center;
@@ -957,11 +1053,12 @@ const DEFAULT_OAUTH_CONFIG = {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 6px;
+        gap: 8px;
         padding: 6px 10px;
         border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
         background: var(--mj-bg-surface-sunken, #f8fafc);
-        font-size: 11px;
+        font-size: 11.5px;
+        line-height: 1.3;
         flex-shrink: 0;
       }
       .mj-agent-context-meta {
@@ -982,13 +1079,46 @@ const DEFAULT_OAUTH_CONFIG = {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        color: var(--mj-text-secondary, #475569);
+        color: var(--mj-text-primary, #0f172a);
+        font-weight: 500;
+      }
+      .mj-agent-tools-count {
+        color: var(--mj-text-secondary, #64748b);
+        font-weight: 400;
+        font-size: 11px;
       }
       .mj-agent-context-actions {
         display: flex;
         align-items: center;
-        gap: 4px;
+        gap: 5px;
         flex-shrink: 0;
+      }
+      .mj-strip-btn {
+        font-family: inherit;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.2;
+        letter-spacing: -0.005em;
+        padding: 4px 8px;
+        border-radius: 6px;
+        border: 1px solid var(--mj-border-default, #cbd5e1);
+        background: var(--mj-bg-surface, #ffffff);
+        color: var(--mj-text-primary, #1e293b);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        white-space: nowrap;
+        transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+      }
+      .mj-strip-btn i {
+        font-size: 10px;
+        color: var(--mj-brand-primary, #0076b6);
+      }
+      .mj-strip-btn:hover {
+        background: var(--mj-bg-surface-sunken, #f1f5f9);
+        border-color: var(--mj-brand-primary, #0076b6);
+        color: var(--mj-brand-primary, #0076b6);
       }
       .mj-conversations-host {
         flex: 1;
@@ -1136,6 +1266,7 @@ const DEFAULT_OAUTH_CONFIG = {
         color: #475569;
       }
       .mj-btn {
+        font-family: inherit;
         border: 1px solid var(--mj-border-default, #cbd5e1);
         background: var(--mj-bg-surface, #ffffff);
         color: var(--mj-text-primary, #0f172a);
@@ -1143,6 +1274,7 @@ const DEFAULT_OAUTH_CONFIG = {
         padding: 6px 10px;
         font-size: 12px;
         font-weight: 600;
+        line-height: 1.25;
         cursor: pointer;
         display: inline-flex;
         align-items: center;
@@ -1301,11 +1433,12 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
   public ActiveTab: SidePanelTabId = 'context';
 
   // Connection & Auth state
-  public AuthDrawerOpen = true;
+  public AuthDrawerOpen = false;
   public SettingsDrawerOpen = false;
   public IsSignedIn = false;
   public IsConnectingProvider = false;
   public IsProviderReady = false;
+  public ProviderConnectionError: string | null = null;
   public ConnectedServerUrl = 'http://localhost:4115/';
   public ApiTokenInput = '';
   public SignedInUserDisplay = '';
@@ -1952,7 +2085,11 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
         if (p.Origin || p.HostOrigin) {
           this.ExplorerOrigin = p.Origin || p.HostOrigin || this.ExplorerOrigin;
         }
-        if (p.IdToken && !this.IsSignedIn) {
+        const shouldAcceptToken =
+          Boolean(p.IdToken) &&
+          !this.isJwtExpired(p.IdToken!) &&
+          (!this.IsSignedIn || !this.IsProviderReady || p.IdToken !== this.ApiTokenInput);
+        if (shouldAcceptToken && p.IdToken) {
           const claims = this.decodeJwtClaims(p.IdToken);
           void this.applyAuthenticatedSession({
             provider: 'MJ Explorer',
@@ -1994,29 +2131,167 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
 
   private async initializeSessionAndScan(): Promise<void> {
     try {
-      const chromeApi = this.getChromeApi();
-      let restored = false;
+      // 1. Always check open MemberJunction Explorer tabs FIRST so a signed-in MJ Explorer
+      //    user connects immediately with a fresh token (including MSAL v5 encrypted sessions)
+      //    and never sees a stale expired cached token or a redundant sign-in prompt.
+      const syncedFromLiveTab = await this.syncWithOpenMjExplorerTab(true);
 
-      if (chromeApi?.storage?.local) {
-        const stored = await new Promise<PersistedAuthSession | undefined>((resolve) => {
-          chromeApi.storage!.local!.get(['mj_ext_auth_session'], (items) => {
-            resolve(items?.mj_ext_auth_session);
+      // 2. If no open MJ Explorer tab provided a live session, fall back to persisted storage
+      //    only when the stored JWT has not expired.
+      if (!syncedFromLiveTab) {
+        const chromeApi = this.getChromeApi();
+        if (chromeApi?.storage?.local) {
+          const stored = await new Promise<PersistedAuthSession | undefined>((resolve) => {
+            chromeApi.storage!.local!.get(['mj_ext_auth_session'], (items) => {
+              resolve(items?.mj_ext_auth_session);
+            });
           });
-        });
-        if (stored?.idToken) {
-          restored = true;
-          await this.applyAuthenticatedSession(stored);
+          if (stored?.idToken) {
+            if (!this.isJwtExpired(stored.idToken)) {
+              await this.applyAuthenticatedSession(stored);
+            } else {
+              chromeApi.storage.local.remove('mj_ext_auth_session');
+            }
+          }
         }
       }
 
-      if (!restored) {
-        await this.syncWithOpenMjExplorerTab(true);
-      }
       await this.ScanActiveTab();
     } finally {
+      this.AuthDrawerOpen = !this.IsSignedIn;
       this.IsBootstrapped = true;
       this.cdr.markForCheck();
     }
+  }
+
+  /**
+   * Reads the live authenticated `GraphQLDataProvider` directly from an open MJ Explorer tab's
+   * `MAIN` world (`window['___SINGLETON__GraphQLDataProvider']`), automatically invoking its
+   * `RefreshTokenFunction` when near expiry. This works across every auth provider (including
+   * `@azure/msal-browser` v5 AES-GCM encrypted `localStorage`, Auth0, Okta, Cognito, WorkOS,
+   * and Local Dev). Falls back to `content-script.js` (`MJ_CS_GET_MJ_HOST_SESSION`) if needed.
+   */
+  private async extractHostSessionFromTab(
+    tabId: number,
+    tabUrl: string
+  ): Promise<MjHostSessionExtractResult | null> {
+    const chromeApi = this.getChromeApi();
+    if (!chromeApi) {
+      return null;
+    }
+
+    if (chromeApi.scripting) {
+      try {
+        const results = await chromeApi.scripting.executeScript<MjHostSessionExtractResult | null>({
+          target: { tabId },
+          world: 'MAIN',
+          func: async (): Promise<MjHostSessionExtractResult | null> => {
+            interface InPageGlobalStore {
+              ___SINGLETON__GraphQLDataProvider?: {
+                ConfigData?: {
+                  Token?: string;
+                  URL?: string;
+                  WSURL?: string;
+                  RefreshTokenFunction?: () => Promise<string>;
+                };
+                CurrentUser?: {
+                  Name?: string;
+                  Email?: string;
+                };
+              };
+            }
+            const win: Window & InPageGlobalStore = window;
+            const gql = win.___SINGLETON__GraphQLDataProvider;
+            if (!gql?.ConfigData) {
+              return null;
+            }
+            let token = gql.ConfigData.Token || '';
+            if (token) {
+              try {
+                const segs = token.split('.');
+                if (segs.length >= 2) {
+                  const payloadJson = atob(segs[1].replace(/-/g, '+').replace(/_/g, '/'));
+                  const parsed = JSON.parse(payloadJson) as { exp?: number };
+                  if (
+                    parsed.exp &&
+                    parsed.exp * 1000 < Date.now() + 120_000 &&
+                    typeof gql.ConfigData.RefreshTokenFunction === 'function'
+                  ) {
+                    const refreshed = await gql.ConfigData.RefreshTokenFunction();
+                    if (refreshed) {
+                      token = refreshed;
+                    }
+                  }
+                }
+              } catch {
+                // Keep existing in-memory token if decode/refresh fails
+              }
+            }
+            if (!token) {
+              return null;
+            }
+            let convId =
+              (document.documentElement &&
+                document.documentElement.getAttribute('data-mj-active-conversation-id')) ||
+              '';
+            if (!convId) {
+              try {
+                const u = new URL(window.location.href);
+                convId = u.searchParams.get('conversationId') || u.searchParams.get('ConversationID') || '';
+              } catch {
+                convId = '';
+              }
+            }
+            return {
+              Success: true,
+              HasHostSession: true,
+              IdToken: token,
+              GraphQLUrl: gql.ConfigData.URL || null,
+              ConversationID: convId || null,
+              LastSessionID: null,
+              Origin: window.location.origin,
+              Url: window.location.href,
+              UserName: gql.CurrentUser?.Name || null,
+              UserEmail: gql.CurrentUser?.Email || null,
+            };
+          },
+        });
+        const mainResult = results?.[0]?.result ?? null;
+        if (mainResult?.Success && mainResult.IdToken) {
+          return mainResult;
+        }
+      } catch {
+        // Fall through to isolated content-script inspection
+      }
+    }
+
+    if (chromeApi.tabs) {
+      try {
+        return await chromeApi.tabs.sendMessage<MjHostSessionExtractResult>(
+          tabId,
+          { Type: 'MJ_CS_GET_MJ_HOST_SESSION' },
+          { frameId: 0 }
+        );
+      } catch {
+        if (tabUrl.startsWith('http://localhost:42') && chromeApi.scripting) {
+          try {
+            await chromeApi.scripting.executeScript({
+              target: { tabId },
+              files: ['content-script.js'],
+            });
+            return await chromeApi.tabs.sendMessage<MjHostSessionExtractResult>(
+              tabId,
+              { Type: 'MJ_CS_GET_MJ_HOST_SESSION' },
+              { frameId: 0 }
+            );
+          } catch {
+            return null;
+          }
+        }
+      }
+    }
+
+    return null;
   }
 
   private async syncWithOpenMjExplorerTab(silent: boolean): Promise<boolean> {
@@ -2024,7 +2299,20 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
     if (chromeApi?.tabs) {
       try {
         const allTabs = await chromeApi.tabs.query({});
-        for (const tab of allTabs) {
+        // Prioritize localhost:42xx / memberjunction tabs first so scanning is instant
+        const sortedTabs = [...allTabs].sort((a, b) => {
+          const score = (u: string | undefined): number => {
+            if (!u) return 0;
+            if (u.startsWith('http://localhost:42')) return 3;
+            if (u.includes('memberjunction')) return 2;
+            if (u.startsWith('http://localhost:')) return 1;
+            return 0;
+          };
+          return score(b.url) - score(a.url);
+        });
+
+        let fallbackExplorerTabId: number | null = null;
+        for (const tab of sortedTabs) {
           if (!tab.id || !tab.url) {
             continue;
           }
@@ -2036,33 +2324,13 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
             continue;
           }
 
-          let hostSession: MjHostSessionExtractResult | null = null;
-          try {
-            hostSession = await chromeApi.tabs.sendMessage<MjHostSessionExtractResult>(
-              tab.id,
-              { Type: 'MJ_CS_GET_MJ_HOST_SESSION' },
-              { frameId: 0 }
-            );
-          } catch {
-            if (tab.url.startsWith('http://localhost:42') && chromeApi.scripting) {
-              try {
-                await chromeApi.scripting.executeScript({
-                  target: { tabId: tab.id },
-                  files: ['content-script.js'],
-                });
-                hostSession = await chromeApi.tabs.sendMessage<MjHostSessionExtractResult>(
-                  tab.id,
-                  { Type: 'MJ_CS_GET_MJ_HOST_SESSION' },
-                  { frameId: 0 }
-                );
-              } catch {
-                hostSession = null;
-              }
-            }
-          }
+          const hostSession = await this.extractHostSessionFromTab(tab.id, tab.url);
 
           if (hostSession?.Success && (hostSession.HasHostSession || tab.url.startsWith('http://localhost:42'))) {
             this.ExplorerTabId = tab.id;
+            if (tab.url.startsWith('http://localhost:42')) {
+              fallbackExplorerTabId = tab.id;
+            }
             if (hostSession.Origin) {
               this.ExplorerOrigin = hostSession.Origin;
             }
@@ -2073,28 +2341,34 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
               this.ActiveConversationId = hostSession.ConversationID;
               this.IsNewConversation = false;
             }
-            if (hostSession.IdToken) {
+            if (hostSession.IdToken && !this.isJwtExpired(hostSession.IdToken)) {
               const claims = this.decodeJwtClaims(hostSession.IdToken);
               await this.applyAuthenticatedSession({
                 provider: 'MJ Explorer',
                 idToken: hostSession.IdToken,
-                userName: claims.name || claims.preferred_username || claims.nickname || 'MJ User',
-                email: claims.email || claims.preferred_username || '',
+                userName:
+                  hostSession.UserName ||
+                  claims.name ||
+                  claims.preferred_username ||
+                  claims.nickname ||
+                  'MJ User',
+                email: hostSession.UserEmail || claims.email || claims.preferred_username || '',
                 graphQLUrl: hostSession.GraphQLUrl || this.ConnectedServerUrl,
                 explorerOrigin: hostSession.Origin || this.ExplorerOrigin,
                 activeConversationId: hostSession.ConversationID ?? undefined,
               });
               if (!silent) {
-                this.showToast(`Signed in via MemberJunction Explorer (${this.ExplorerOrigin})!`);
+                this.showToast(`Connected via MemberJunction Explorer (${this.ExplorerOrigin})!`);
               }
               return true;
             }
-            if (!silent) {
-              await chromeApi.tabs.update(tab.id, { active: true });
-              this.showToast('Focused MemberJunction Explorer — sign in there and click sync again.');
-              return false;
-            }
           }
+        }
+
+        if (!silent && fallbackExplorerTabId) {
+          await chromeApi.tabs.update(fallbackExplorerTabId, { active: true });
+          this.showToast('Focused MemberJunction Explorer — finish signing in there to connect.');
+          return false;
         }
       } catch {
         // Ignore tab enumeration errors
@@ -2125,20 +2399,11 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
   }
 
   private async refreshTokenFromExplorerTab(): Promise<string> {
-    const chromeApi = this.getChromeApi();
-    if (chromeApi?.tabs && this.ExplorerTabId) {
-      try {
-        const res = await chromeApi.tabs.sendMessage<MjHostSessionExtractResult>(
-          this.ExplorerTabId,
-          { Type: 'MJ_CS_GET_MJ_HOST_SESSION' },
-          { frameId: 0 }
-        );
-        if (res?.IdToken) {
-          this.ApiTokenInput = res.IdToken;
-          return res.IdToken;
-        }
-      } catch {
-        // Ignore refresh error and return existing token
+    if (this.ExplorerTabId) {
+      const refreshed = await this.extractHostSessionFromTab(this.ExplorerTabId, this.ExplorerOrigin);
+      if (refreshed?.IdToken) {
+        this.ApiTokenInput = refreshed.IdToken;
+        return refreshed.IdToken;
       }
     }
     return this.ApiTokenInput;
@@ -2146,6 +2411,7 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
 
   private async applyAuthenticatedSession(session: PersistedAuthSession): Promise<void> {
     this.IsSignedIn = true;
+    this.ProviderConnectionError = null;
     this.ApiTokenInput = session.idToken;
     this.AuthProviderLabel = session.provider || 'MJ Explorer';
     this.SignedInUserDisplay = session.userName || session.email || 'Authenticated User';
@@ -2170,6 +2436,11 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
     this.cdr.markForCheck();
 
     await this.connectMjGraphQLProvider(session.idToken, this.ConnectedServerUrl);
+
+    if (this.CurrentUser) {
+      this.SignedInUserDisplay = this.CurrentUser.Name || this.SignedInUserDisplay;
+      this.SignedInUserEmail = this.CurrentUser.Email || this.SignedInUserEmail;
+    }
 
     this.IsConnectingProvider = false;
     await this.loadInstalledOpenAppMetadata();
@@ -2225,9 +2496,11 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
       }
 
       this.IsProviderReady = Boolean(this.CurrentUser);
-    } catch {
-      // Lightweight RunViews-only mode (e.g. synthetic test route without GetAllMetadata)
+      this.ProviderConnectionError = null;
+    } catch (err) {
+      // Lightweight RunViews-only mode (e.g. synthetic test route without GetAllMetadata) or expired token
       this.IsProviderReady = false;
+      this.ProviderConnectionError = err instanceof Error ? err.message : String(err);
     }
   }
 
@@ -2242,6 +2515,8 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
     ].filter((v, idx, arr) => Boolean(v) && arr.indexOf(v) === idx);
 
     const authHeader = idToken.startsWith('Bearer ') ? idToken : `Bearer ${idToken}`;
+    let firstReachableEndpoint: string | null = null;
+
     for (const endpoint of candidates) {
       try {
         const resp = await fetch(endpoint, {
@@ -2253,13 +2528,22 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
           body: JSON.stringify({ query: 'query { __typename }' }),
         });
         if (resp.ok) {
-          return endpoint;
+          if (!firstReachableEndpoint) {
+            firstReachableEndpoint = endpoint;
+          }
+          const payload = (await resp.json()) as {
+            data?: { __typename?: string };
+            errors?: Array<{ message?: string }>;
+          };
+          if (payload?.data && (!payload.errors || payload.errors.length === 0)) {
+            return endpoint;
+          }
         }
       } catch {
         // Try next candidate
       }
     }
-    return preferredUrl || 'http://localhost:4115/';
+    return firstReachableEndpoint || preferredUrl || 'http://localhost:4115/';
   }
 
   private async executeRawGraphQL<TData>(
@@ -2846,11 +3130,20 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
     return { codeVerifier, codeChallenge };
   }
 
+  private isJwtExpired(jwt: string, bufferSeconds = 30): boolean {
+    const claims = this.decodeJwtClaims(jwt);
+    if (typeof claims.exp === 'number' && claims.exp > 0) {
+      return claims.exp * 1000 < Date.now() + bufferSeconds * 1000;
+    }
+    return false;
+  }
+
   private decodeJwtClaims(jwt: string): {
     name?: string;
     preferred_username?: string;
     nickname?: string;
     email?: string;
+    exp?: number;
   } {
     try {
       const parts = jwt.split('.');
@@ -2869,6 +3162,7 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
         preferred_username?: string;
         nickname?: string;
         email?: string;
+        exp?: number;
       };
     } catch {
       return {};

@@ -952,10 +952,22 @@ describe.runIf(hasPlaywrightChromium)('Headless Playwright E2E Proof — Live Wi
 <body>
   <main>
     <section>
-      <div>Amith Nagarajan, AAiP</div>
-      <div>AI Expert // Association + Non Profit Advocate // 30+ Year Tech Entrepreneur</div>
-      <div>New Orleans, Louisiana, United States · Contact info</div>
-      <div>12,785 followers · 500+ connections</div>
+      <div>
+        <div>Amith Nagarajan, AAiP</div>
+        <div>(he/him)</div>
+        <div>· 1st</div>
+        <div>AI Expert // Association + Non Profit Advocate // 30+ Year Tech Entrepreneur</div>
+        <div style="display:flex;gap:6px;">
+          <div>New Orleans, Louisiana, United States</div>
+          <div>·</div>
+          <div><a href="/in/amithnagarajan/overlay/contact-info/">Contact info</a></div>
+        </div>
+        <div>12,785 followers · 500+ connections</div>
+      </div>
+      <ul>
+        <li>Blue Cypress + 3 more</li>
+        <li>California Polytechnic State University-San Luis Obispo</li>
+      </ul>
     </section>
   </main>
   <iframe id="ricoh-ad-frame" src="https://www.linkedin.com/tscp-serving/dtag?sz=300x250"></iframe>
@@ -996,7 +1008,7 @@ describe.runIf(hasPlaywrightChromium)('Headless Playwright E2E Proof — Live Wi
         }
     }, 60000);
 
-    it('E2E 6 (Standalone Angular 21 Side Panel Architecture): boots native <mj-extension-sidepanel-app> inside chrome-extension:// with zero iframes, zero MJExplorer <mj-shell>, and zero MV3 CSP errors', async () => {
+    it('E2E 6 (Standalone Angular 21 Side Panel Architecture): boots native <mj-extension-sidepanel-app> inside chrome-extension:// with zero iframes, zero MJExplorer <mj-shell>, crisp sans-serif typography, MV3 AudioWorklet compatibility, and zero MV3 CSP errors', async () => {
         expect(context).not.toBeNull();
         const sidePanelPage = await context!.newPage();
         const cspViolations: string[] = [];
@@ -1023,18 +1035,54 @@ describe.runIf(hasPlaywrightChromium)('Headless Playwright E2E Proof — Live Wi
             expect(await sidePanelPage.locator('iframe').count()).toBe(0);
             expect(await sidePanelPage.locator('mj-shell').count()).toBe(0);
 
-            // 2. Switch to Agent tab — still zero iframes and zero MJExplorer shell
+            // 2. Verify button typography inherits sans-serif font stack (never browser-default Times New Roman)
+            const buttonFontFamilies = await sidePanelPage.evaluate(() => {
+                const selectors = ['#mj-btn-resume-in-explorer', '[data-tab="chat"]', '#mj-btn-toggle-auth'];
+                return selectors.map((sel) => {
+                    const el = document.querySelector(sel);
+                    return el ? window.getComputedStyle(el).fontFamily : '';
+                });
+            });
+            for (const ff of buttonFontFamilies) {
+                expect(ff.toLowerCase()).toContain('sans-serif');
+                expect(ff.toLowerCase()).not.toContain('times');
+            }
+
+            // 3. Switch to Agent tab — still zero iframes and zero MJExplorer shell
             await sidePanelPage.click('[data-tab="chat"]');
             expect(await sidePanelPage.locator('iframe').count()).toBe(0);
             expect(await sidePanelPage.locator('mj-shell').count()).toBe(0);
 
-            // 3. Switch to Actions tab — real @memberjunction/ng-browser-extension <mj-extension-playbook-stepper> mounted
+            // 4. Verify MV3 AudioWorklet Blob URL shim allows Realtime Voice capture worklets under script-src 'self'
+            const workletCheck = await sidePanelPage.evaluate(async () => {
+                const ac = new AudioContext({ sampleRate: 16000 });
+                try {
+                    const blobUrl = URL.createObjectURL(
+                        new Blob(['// inline worklet'], { type: 'application/javascript' })
+                    );
+                    try {
+                        await ac.audioWorklet.addModule(blobUrl);
+                    } finally {
+                        URL.revokeObjectURL(blobUrl);
+                    }
+                    const realtimeNode = new AudioWorkletNode(ac, 'mj-realtime-pcm16-capture');
+                    const recorderNode = new AudioWorkletNode(ac, 'mj-pcm-capture');
+                    realtimeNode.disconnect();
+                    recorderNode.disconnect();
+                    return { ok: true };
+                } finally {
+                    await ac.close();
+                }
+            });
+            expect(workletCheck.ok).toBe(true);
+
+            // 5. Switch to Actions tab — real @memberjunction/ng-browser-extension <mj-extension-playbook-stepper> mounted
             await sidePanelPage.click('[data-tab="playbooks"]');
             await sidePanelPage.waitForSelector('mj-extension-playbook-stepper', { timeout: 10000 });
             expect(await sidePanelPage.locator('mj-extension-playbook-stepper').count()).toBe(1);
             expect(await sidePanelPage.locator('iframe').count()).toBe(0);
 
-            // 4. Zero Manifest V3 CSP errors and zero uncaught page errors
+            // 6. Zero Manifest V3 CSP errors and zero uncaught page errors
             expect(cspViolations).toEqual([]);
             expect(pageErrors).toEqual([]);
         } finally {

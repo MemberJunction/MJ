@@ -41,6 +41,29 @@ export interface HydratedExtensionBrandTheme {
     StylesheetCss: string;
 }
 
+const SANS_FALLBACK_STACK = 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif';
+const MONO_FALLBACK_STACK = '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+
+/**
+ * Ensures brand-kit font families (e.g. `"MJ Sans"` or `"Instrument Sans"`) always end
+ * with a cross-platform generic fallback stack so browsers never fall back to Times/serif
+ * when a custom webfont is not installed locally.
+ */
+export function EnsureFontFallbackStack(fontFamily: string | undefined, kind: 'sans' | 'mono'): string {
+    const trimmed = (fontFamily ?? '').trim();
+    if (!trimmed) {
+        return kind === 'mono' ? MONO_FALLBACK_STACK : SANS_FALLBACK_STACK;
+    }
+    const lower = trimmed.toLowerCase();
+    if (kind === 'mono') {
+        return lower.includes('monospace') ? trimmed : `${trimmed}, ${MONO_FALLBACK_STACK}`;
+    }
+    if (lower.includes('sans-serif') || lower.includes('system-ui') || lower.includes('serif')) {
+        return trimmed;
+    }
+    return `${trimmed}, ${SANS_FALLBACK_STACK}`;
+}
+
 /**
  * Hydrates `@memberjunction/theme-engine` token contracts from an {@link ExtensionBrandProfile}
  * or a runtime `MJ: Brand Kits` seed payload.
@@ -50,7 +73,12 @@ export class RuntimeBrandKitHydrator {
      * Derives the full `--mj-*` CSS stylesheet and token maps from an {@link ExtensionBrandProfile}.
      */
     public HydrateFromBrandProfile(profile: ExtensionBrandProfile): HydratedExtensionBrandTheme {
-        const sanitized = SanitizeThemeSeeds(profile.ThemeSeeds) ?? MJ_DEFAULT_SEEDS;
+        const rawSeeds = SanitizeThemeSeeds(profile.ThemeSeeds) ?? MJ_DEFAULT_SEEDS;
+        const sanitized: ThemeSeeds = {
+            ...rawSeeds,
+            fontFamily: EnsureFontFallbackStack(rawSeeds.fontFamily, 'sans'),
+            fontFamilyMono: EnsureFontFallbackStack(rawSeeds.fontFamilyMono, 'mono'),
+        };
         const derived = Derive(sanitized);
         const css = this.BuildExtensionStylesheet(profile.BrandSlug, derived);
 
@@ -83,10 +111,15 @@ export class RuntimeBrandKitHydrator {
             }
         }
 
-        const sanitizedRuntimeSeeds: ThemeSeeds =
+        const rawRuntimeSeeds: ThemeSeeds =
             SanitizeThemeSeeds(parsedSeeds) ??
             SanitizeThemeSeeds(baseProfile.ThemeSeeds) ??
             MJ_DEFAULT_SEEDS;
+        const sanitizedRuntimeSeeds: ThemeSeeds = {
+            ...rawRuntimeSeeds,
+            fontFamily: EnsureFontFallbackStack(rawRuntimeSeeds.fontFamily, 'sans'),
+            fontFamilyMono: EnsureFontFallbackStack(rawRuntimeSeeds.fontFamilyMono, 'mono'),
+        };
 
         const derived = Derive(sanitizedRuntimeSeeds);
         const css = this.BuildExtensionStylesheet(baseProfile.BrandSlug, derived);
@@ -109,10 +142,14 @@ export class RuntimeBrandKitHydrator {
      */
     public BuildExtensionStylesheet(brandSlug: string, derived: DerivedTheme): string {
         const overlayBlock = EmitOverlayCss(brandSlug, derived);
-        const rootVars = Object.entries({
+        const mergedLightVars: Record<string, string> = {
             ...derived.overlayVars,
             ...derived.tokens.light,
-        })
+        };
+        if (mergedLightVars['--mj-font-family'] && !mergedLightVars['--mj-font-family-base']) {
+            mergedLightVars['--mj-font-family-base'] = mergedLightVars['--mj-font-family'];
+        }
+        const rootVars = Object.entries(mergedLightVars)
             .map(([k, v]) => `  ${k}: ${v};`)
             .join('\n');
 

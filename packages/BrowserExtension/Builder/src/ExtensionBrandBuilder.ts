@@ -23,6 +23,7 @@ import * as zlib from 'node:zlib';
 import {
     BrowserControlBackendMode,
     BrowserTarget,
+    EnsureFontFallbackStack,
     ExtensionBrandProfile,
     HydratedExtensionBrandTheme,
     REDACTED_SENTINEL,
@@ -354,8 +355,14 @@ export class ExtensionBrandBuilder {
         const primaryHex = findColor(['Primary', 'Brand'], '#0076B6');
         const accentHex = findColor(['Accent', 'Cyan', 'Secondary'], '#5CC0ED');
         const tertiaryHex = findColor(['Navy', 'Tertiary', 'Cyan'], '#092340');
-        const bodyFont = findFont(['Body', 'Headline'], 'MJ Sans, Inter, system-ui, sans-serif');
-        const monoFont = findFont(['Data', 'Mono'], 'MJ Mono, JetBrains Mono, monospace');
+        const bodyFont = EnsureFontFallbackStack(
+            findFont(['Body', 'Headline'], 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif'),
+            'sans'
+        );
+        const monoFont = EnsureFontFallbackStack(
+            findFont(['Data', 'Mono'], '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace'),
+            'mono'
+        );
 
         const slug = ext.BrandSlug ?? 'mj-copilot';
         const extensionName = ext.ExtensionName ?? matchedBrandKit?.fields?.Name ?? 'MemberJunction Agent';
@@ -376,7 +383,7 @@ export class ExtensionBrandBuilder {
             AgentTabLabel: ext.AgentTabLabel ?? 'Agent',
             SidePanelHeaderTitle: ext.SidePanelHeaderTitle ?? extensionName.slice(0, 45),
             Tagline: ext.SidePanelHeaderTitle ?? extensionName,
-            DefaultServerUrl: ext.DefaultServerUrl ?? 'http://localhost:4000/graphql',
+            DefaultServerUrl: ext.DefaultServerUrl ?? 'http://localhost:4115/',
             DefaultAuthProvider: ext.DefaultAuthProvider ?? 'msal',
             KeyboardShortcut: ext.KeyboardShortcut ?? 'Ctrl+Shift+M',
             FirefoxExtensionID: ext.FirefoxExtensionID ?? `${slug}@memberjunction.org`,
@@ -632,6 +639,21 @@ export class ExtensionBrandBuilder {
         fs.writeFileSync(
             path.join(unpackedDir, 'offscreen-audio.js'),
             this.generateOffscreenAudioScript(profile),
+            'utf8'
+        );
+        fs.writeFileSync(
+            path.join(unpackedDir, 'mj-audio-worklets.js'),
+            this.generateAudioWorkletsScript(),
+            'utf8'
+        );
+        fs.writeFileSync(
+            path.join(unpackedDir, 'mic-permission.html'),
+            this.generateMicPermissionHtml(profile),
+            'utf8'
+        );
+        fs.writeFileSync(
+            path.join(unpackedDir, 'mic-permission.js'),
+            this.generateMicPermissionScript(),
             'utf8'
         );
 
@@ -1038,18 +1060,57 @@ export class ExtensionBrandBuilder {
       const lines = (mainEl ? (mainEl.innerText || '') : '')
         .split('\\n')
         .map((l) => l.trim())
-        .filter((l) => l.length > 1);
+        .filter((l) => l.length > 0);
       const contactInfoIdx = lines.findIndex((l) => l.includes('Contact info'));
       if (contactInfoIdx >= 0) {
-        const locPart = lines[contactInfoIdx].split('Contact info')[0].replace(/[·•|-]+\\s*$/, '').trim();
-        if (locPart && !locationText) {
-          locationText = locPart;
+        const inlineLocPart = lines[contactInfoIdx]
+          .split('Contact info')[0]
+          .replace(/[·•|-]+\\s*$/, '')
+          .trim();
+        let locIdx = contactInfoIdx;
+        if (inlineLocPart) {
+          if (!locationText) {
+            locationText = inlineLocPart;
+          }
+        } else {
+          for (let j = contactInfoIdx - 1; j >= 0; j--) {
+            const candidate = lines[j].replace(/[·•|-]+\\s*$/, '').trim();
+            if (candidate && candidate !== '·' && candidate !== '•') {
+              locIdx = j;
+              if (!locationText) {
+                locationText = candidate;
+              }
+              break;
+            }
+          }
         }
-        if (contactInfoIdx >= 1 && !headlineText) {
-          headlineText = lines[contactInfoIdx - 1];
+        const above = lines
+          .slice(0, locIdx)
+          .map((l) => l.replace(/\\s*[·•]\\s*(1st|2nd|3rd\\+?)$/i, '').trim())
+          .filter(
+            (l) =>
+              l.length > 1 &&
+              l !== '·' &&
+              l !== '•' &&
+              !/^\\(?(he\\/him|she\\/her|they\\/them|he\\/they|she\\/they)\\)?$/i.test(l) &&
+              !/^\\+\\s*\\d+\\s*more$/i.test(l) &&
+              !/^(1st|2nd|3rd\\+?)$/i.test(l),
+          );
+        if (above.length >= 1 && !headlineText) {
+          headlineText = above[above.length - 1];
         }
-        if (contactInfoIdx >= 2 && !h1Text) {
-          h1Text = lines[contactInfoIdx - 2];
+        if (above.length >= 2 && !h1Text) {
+          h1Text = above[above.length - 2];
+        }
+      }
+      if (!h1Text && document.title && !/^(\\(?\\d+\\)?\\s*)?Feed\\b/i.test(document.title)) {
+        const titleName = document.title
+          .replace(/^\\(\\d+\\)\\s*/, '')
+          .split('|')[0]
+          .split(' - ')[0]
+          .trim();
+        if (titleName && titleName.toLowerCase() !== 'linkedin') {
+          h1Text = titleName;
         }
       }
     }
@@ -1235,8 +1296,26 @@ export class ExtensionBrandBuilder {
     }
   }
 
+  function isFreshJwtToken(token) {
+    if (typeof token !== 'string') return false;
+    const parts = token.split('.');
+    if (parts.length !== 3) return false;
+    try {
+      const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+      const payload = JSON.parse(atob(padded));
+      if (payload && typeof payload.exp === 'number') {
+        return payload.exp * 1000 > Date.now() + 15000;
+      }
+      return true;
+    } catch {
+      return true;
+    }
+  }
+
   function extractMjHostSession() {
     let idToken = '';
+    let fallbackToken = '';
     let graphQLUrl = '';
     let conversationId = (document.documentElement && document.documentElement.getAttribute('data-mj-active-conversation-id')) || '';
     let sessionId = (document.documentElement && document.documentElement.getAttribute('data-mj-active-session-id')) || '';
@@ -1246,27 +1325,51 @@ export class ExtensionBrandBuilder {
       if (!conversationId) {
         conversationId = urlObj.searchParams.get('conversationId') || urlObj.searchParams.get('ConversationID') || '';
       }
-      if (typeof localStorage !== 'undefined') {
+      if (typeof sessionStorage !== 'undefined') {
+        const devToken = sessionStorage.getItem('mj_local_dev_token') || '';
+        if (devToken && devToken.split('.').length === 3) {
+          if (isFreshJwtToken(devToken)) {
+            idToken = devToken;
+          } else {
+            fallbackToken = devToken;
+          }
+        }
+      }
+      if (!idToken && typeof localStorage !== 'undefined') {
         for (let i = 0; i < localStorage.length; i++) {
           const key = localStorage.key(i) || '';
           const rawVal = localStorage.getItem(key) || '';
           if (!rawVal) continue;
-          if (!idToken && rawVal.includes('"credentialType":"IdToken"')) {
+          if (rawVal.includes('"credentialType":"IdToken"')) {
             try {
               const parsed = JSON.parse(rawVal);
               if (parsed && typeof parsed.secret === 'string' && parsed.secret.split('.').length === 3) {
-                idToken = parsed.secret;
+                if (isFreshJwtToken(parsed.secret)) {
+                  idToken = parsed.secret;
+                  break;
+                } else if (!fallbackToken) {
+                  fallbackToken = parsed.secret;
+                }
               }
             } catch {}
-          } else if (!idToken && key.startsWith('@@auth0spajs@@')) {
+          } else if (key.startsWith('@@auth0spajs@@')) {
             try {
               const parsed = JSON.parse(rawVal);
-              if (parsed && parsed.body && (parsed.body.id_token || parsed.body.access_token)) {
-                idToken = parsed.body.id_token || parsed.body.access_token;
+              const candidate = parsed && parsed.body && (parsed.body.id_token || parsed.body.access_token);
+              if (typeof candidate === 'string' && candidate.split('.').length === 3) {
+                if (isFreshJwtToken(candidate)) {
+                  idToken = candidate;
+                  break;
+                } else if (!fallbackToken) {
+                  fallbackToken = candidate;
+                }
               }
             } catch {}
           }
         }
+      }
+      if (!idToken && fallbackToken) {
+        idToken = fallbackToken;
       }
       if (typeof performance !== 'undefined' && typeof performance.getEntriesByType === 'function') {
         const entries = performance.getEntriesByType('resource') || [];
@@ -1677,6 +1780,196 @@ window.__MJ_EXTENSION_BRAND_PROFILE__ = ${JSON.stringify(profile, null, 2)};
     private generateOffscreenAudioScript(profile: ExtensionBrandProfile): string {
         return `// Offscreen Audio Daemon for ${profile.BrandName} (${profile.BrandSlug}) — Topology A 0ms Continuity
 window.__MJ_OFFSCREEN_DAEMON_READY__ = true;
+`;
+    }
+
+    /**
+     * Emits Manifest V3 CSP-compliant `mj-audio-worklets.js` bundling the inline AudioWorklet
+     * processors used by `@memberjunction/ai-realtime-client` (`mj-realtime-pcm16-capture`) and
+     * `@memberjunction/ng-conversations` (`mj-pcm-capture`), allowing `AudioWorklet.addModule()`
+     * to run cleanly under `script-src 'self'` inside `chrome-extension://` pages.
+     */
+    private generateAudioWorkletsScript(): string {
+        return `// Generated by @memberjunction/browser-extension-builder — Manifest V3 AudioWorklet processors
+class MJRealtimePcm16Capture extends AudioWorkletProcessor {
+  process(inputs) {
+    const channel = inputs[0] && inputs[0][0];
+    if (channel && channel.length > 0) {
+      this.port.postMessage(channel.slice(0));
+    }
+    return true;
+  }
+}
+
+class MJPcmCaptureProcessor extends AudioWorkletProcessor {
+  process(inputs) {
+    const input = inputs[0];
+    if (input && input[0] && input[0].length > 0) {
+      this.port.postMessage(input[0].slice(0));
+    }
+    return true;
+  }
+}
+
+try {
+  registerProcessor('mj-realtime-pcm16-capture', MJRealtimePcm16Capture);
+} catch {}
+
+try {
+  registerProcessor('mj-pcm-capture', MJPcmCaptureProcessor);
+} catch {}
+`;
+    }
+
+    /**
+     * Emits Manifest V3 CSP-compliant `mic-permission.html` popup page so Chrome can anchor
+     * the one-time microphone permission bubble for `chrome-extension://<id>` (Chrome Side Panels
+     * cannot display initial `getUserMedia` permission bubbles without an extension tab/popup).
+     */
+    private generateMicPermissionHtml(profile: ExtensionBrandProfile): string {
+        return `<!DOCTYPE html>
+<html lang="en" data-theme="light" data-theme-overlay="${profile.BrandSlug}">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Enable Microphone — ${profile.AssistantDisplayName}</title>
+  <link rel="stylesheet" href="brand-theme.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: var(--mj-bg-surface-sunken, #f8fafc);
+      color: var(--mj-text-primary, #0f172a);
+      font-family: var(--mj-font-family, Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif);
+    }
+    .mj-mic-card {
+      background: var(--mj-bg-surface, #ffffff);
+      border: 1px solid var(--mj-border-default, #e2e8f0);
+      border-radius: 14px;
+      padding: 22px 20px;
+      max-width: 360px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+    }
+    .mj-mic-badge {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      margin: 0 auto 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: color-mix(in srgb, var(--mj-brand-primary, #0076b6) 12%, #ffffff);
+      color: var(--mj-brand-primary, #0076b6);
+      font-size: 22px;
+      font-weight: 700;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 16px;
+      font-weight: 700;
+    }
+    p {
+      margin: 0 0 14px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--mj-text-secondary, #475569);
+    }
+    .mj-mic-status {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--mj-brand-primary, #0076b6);
+      margin-bottom: 12px;
+    }
+    .mj-mic-status.error {
+      color: #b91c1c;
+    }
+    button {
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 9px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--mj-brand-primary, #0076b6);
+      background: var(--mj-brand-primary, #0076b6);
+      color: #ffffff;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="mj-mic-card">
+    <div class="mj-mic-badge">🎙️</div>
+    <h1>Enable Microphone for ${profile.AssistantDisplayName}</h1>
+    <p>Click <strong>Allow</strong> in Chrome's permission prompt above to start live realtime voice in the Side Panel.</p>
+    <div id="mj-mic-status" class="mj-mic-status">Requesting microphone access…</div>
+    <button id="mj-mic-retry-btn" type="button" hidden>Grant Microphone Access</button>
+  </div>
+  <script src="mic-permission.js"></script>
+</body>
+</html>
+`;
+    }
+
+    /**
+     * Emits Manifest V3 CSP-compliant `mic-permission.js` external script for `mic-permission.html`.
+     */
+    private generateMicPermissionScript(): string {
+        return `// Generated by @memberjunction/browser-extension-builder — One-time Side Panel microphone permission helper
+(function () {
+  const statusEl = document.getElementById('mj-mic-status');
+  const retryBtn = document.getElementById('mj-mic-retry-btn');
+
+  async function requestMic() {
+    if (statusEl) {
+      statusEl.textContent = 'Click Allow in the browser prompt above…';
+      statusEl.classList.remove('error');
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((t) => t.stop());
+      if (statusEl) {
+        statusEl.textContent = 'Microphone enabled! Returning to Side Panel…';
+      }
+      if (typeof chrome !== 'undefined' && chrome.runtime && typeof chrome.runtime.sendMessage === 'function') {
+        chrome.runtime.sendMessage({ Type: 'MJ_EXT_MIC_PERMISSION_RESULT', Granted: true }, () => {
+          void chrome.runtime.lastError;
+          window.close();
+        });
+      } else {
+        window.close();
+      }
+    } catch (err) {
+      const msg = err && err.message ? String(err.message) : 'Microphone permission was not granted.';
+      if (statusEl) {
+        statusEl.textContent = msg;
+        statusEl.classList.add('error');
+      }
+      if (retryBtn) {
+        retryBtn.hidden = false;
+      }
+      if (typeof chrome !== 'undefined' && chrome.runtime && typeof chrome.runtime.sendMessage === 'function') {
+        chrome.runtime.sendMessage({ Type: 'MJ_EXT_MIC_PERMISSION_RESULT', Granted: false, ErrorMessage: msg }, () => {
+          void chrome.runtime.lastError;
+        });
+      }
+    }
+  }
+
+  if (retryBtn) {
+    retryBtn.addEventListener('click', () => {
+      void requestMic();
+    });
+  }
+
+  void requestMic();
+})();
 `;
     }
 
