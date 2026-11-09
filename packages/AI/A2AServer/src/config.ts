@@ -49,9 +49,10 @@ const a2aServerInfoSchema = z.object({
     "Create and Update permission on MJ: Tasks; a caller without it gets 'The task could not be saved'."
   ),
   userEmail: z.string().optional().describe("Email address of the service user for work done without a caller, such as building the agent card. Tasks run as their authenticated caller, not as this user."),
-  statusPollIntervalMs: z.coerce.number().optional().default(5000).describe(
+  statusPollIntervalMs: z.coerce.number().min(1000).optional().default(5000).describe(
     "In durable mode ('entity'), interval in milliseconds at which a running replica polls stored status " +
-    "to detect cancellation from another replica, and at which an SSE resubscriber polls stored status (default 5000)."
+    "to detect cancellation from another replica, and at which an SSE resubscriber polls stored status (default 5000, " +
+    "at least 1000: each poll is a database read per running or watched task)."
   ),
 });
 
