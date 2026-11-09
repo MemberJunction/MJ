@@ -2279,6 +2279,7 @@ function applySignedInSession(session) {
     userBar.style.display = 'flex';
     userLabel.textContent = '🟢 ' + displayUser + (session.email && session.userName ? ' (' + session.email + ')' : '');
   }
+  document.getElementById('mj-auth-drawer')?.classList.remove('open');
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
     chrome.storage.local.set({ mj_ext_auth_session: session });
   }
@@ -2297,6 +2298,7 @@ document.getElementById('mj-btn-sign-out')?.addEventListener('click', () => {
   }
   if (badge) badge.textContent = 'Live Local Braiding Active';
   if (userBar) userBar.style.display = 'none';
+  document.getElementById('mj-auth-drawer')?.classList.add('open');
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
     chrome.storage.local.remove('mj_ext_auth_session');
   }
