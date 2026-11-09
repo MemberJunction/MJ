@@ -551,6 +551,63 @@ describe('MLModelInferenceProcessor — shadow scoring integration (D3, D10, D13
     expect(challengersFinished).toBe(3);
   });
 
+  it('logs each batch\'s own dropped challenger count when two runs share one coordinator (low: DroppedCount attribution)', async () => {
+    const errorLogs: string[] = [];
+    const origConsoleError = console.error;
+    console.error = (...args: unknown[]) => {
+      errorLogs.push(args.map((a) => String(a)).join(' '));
+    };
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    try {
+      // Champion audit writes take 30 ms, so both runs are awaiting theirs at the same time.
+      const slowRow = () => ({ NewRecord: () => true, Save: async () => { await new Promise((r) => setTimeout(r, 30)); return true; } });
+      const emptyRead = { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' };
+      const provider = {
+        GetEntityObject: async <T>() => slowRow() as T,
+        RunView: async () => emptyRead,
+        RunViews: async (views: unknown[]) => views.map(() => emptyRead),
+      } as unknown as IMetadataProvider;
+      // One shared coordinator with a single in-flight slot, held until the gate opens.
+      const shared = new ShadowScoringCoordinator({
+        MaxInFlight: 1,
+        ChallengerRunner: { RunChallenger: async () => { await gate; return { Score: 0.5 }; } },
+        AuditSink: { RecordShadowAudit: async () => {} },
+      });
+      const run = (recordProcessId: string, processRunId: string, ids: string[]) =>
+        new MLModelInferenceProcessor(
+          { modelId: 'model-1', deps: buildDeps().deps, recordProcessId, challengerConfig: { ...challengerConfig, MaxLatencyMs: 5000 }, shadowCoordinator: shared },
+          new TestAssembler(new InMemoryDataAccess()),
+        ).ProcessBatch(
+          ids.map((id, i) => memberRecord(id, 10 + i, 1, 'NYC')),
+          { ContextUser: { ID: 'user-1' } as UserInfo, Provider: provider, RecordProcessID: recordProcessId, ProcessRunID: processRunId, EntityID: 'ent-members' },
+        );
+
+      // An earlier dispatch holds the only slot, so run A drops all 3 of its challengers and run B, concurrently, both of its 2.
+      shared.DispatchShadowScore(
+        { RecordID: 'prime', ChallengerConfig: challengerConfig, FrozenFeatures: {}, DispatchedAt: new Date().toISOString() },
+      );
+      await Promise.all([run('rp-A', 'run-A', ['a1', 'a2', 'a3']), run('rp-B', 'run-B', ['b1', 'b2'])]);
+
+      const dropCounts = errorLogs
+        .map((m) => /(\d+) shadow (?:score|challenger) task\(s\) dropped/.exec(m)?.[1])
+        .filter((n): n is string => n !== undefined)
+        .map(Number);
+      expect(dropCounts.sort()).toEqual([2, 3]);
+      const dropLogs = errorLogs.filter((m) => m.includes('dropped in this batch'));
+      expect(dropLogs.find((m) => m.includes("'rp-A' run 'run-A'"))).toContain(': 3 shadow challenger task(s) dropped');
+      expect(dropLogs.find((m) => m.includes("'rp-B' run 'run-B'"))).toContain(': 2 shadow challenger task(s) dropped');
+      expect(shared.DroppedCount).toBe(5);
+      release?.();
+      await shared.FlushInFlight();
+    } finally {
+      release?.();
+      console.error = origConsoleError;
+    }
+  });
+
   it('never fails the champion or mutates the target business entity when the challenger times out or throws (D13)', async () => {
     const { deps } = buildDeps();
     const auditRecords: ShadowFeatureValueAuditRecord[] = [];

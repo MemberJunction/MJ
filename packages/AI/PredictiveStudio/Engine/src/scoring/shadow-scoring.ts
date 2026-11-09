@@ -186,9 +186,15 @@ export interface ShadowDispatchResult {
    * before reporting its batch done; it never waits on the challenger.
    */
   readonly ChampionAudit: Promise<void>;
+  /**
+   * True when the challenger task was dropped because `MaxInFlight` tasks were already running. Count these per
+   * caller: {@link ShadowScoringCoordinator.DroppedCount} is shared by every run using the coordinator.
+   */
+  readonly Dropped: boolean;
 }
 
-const NOT_DISPATCHED: ShadowDispatchResult = { ChampionAudit: Promise.resolve() };
+/** The result for a record that was not mirrored to the challenger: no champion audit to wait for, nothing dropped. */
+export const SHADOW_NOT_DISPATCHED: ShadowDispatchResult = Object.freeze({ ChampionAudit: Promise.resolve(), Dropped: false });
 
 const DEFAULT_MAX_IN_FLIGHT = 64;
 const DEFAULT_MAX_LATENCY_MS = 5000;
@@ -226,7 +232,10 @@ export class ShadowScoringCoordinator {
     return this.inFlightTasks.size;
   }
 
-  /** Number of sampled shadow envelopes dropped because `InFlightCount >= MaxInFlight`. */
+  /**
+   * Number of sampled shadow envelopes dropped because `InFlightCount >= MaxInFlight`, across every run using this
+   * coordinator; a run counts its own drops from {@link ShadowDispatchResult.Dropped}.
+   */
   public get DroppedCount(): number {
     return this.droppedCount;
   }
@@ -269,7 +278,7 @@ export class ShadowScoringCoordinator {
     options?: DispatchShadowScoreOptions,
   ): ShadowDispatchResult {
     if (!options?.AlreadySampled && !this.ShouldSample(envelope.ChallengerConfig)) {
-      return NOT_DISPATCHED;
+      return SHADOW_NOT_DISPATCHED;
     }
 
     // Always persist the champion audit row for every sampled record,
@@ -283,11 +292,9 @@ export class ShadowScoringCoordinator {
         this.inFlightChampionTasks.delete(championTask);
       });
     this.inFlightChampionTasks.add(championTask);
-    const result: ShadowDispatchResult = { ChampionAudit: championTask };
-
     if (this.inFlightTasks.size >= this.maxInFlight) {
       this.droppedCount++;
-      return result;
+      return { ChampionAudit: championTask, Dropped: true };
     }
 
     const task: Promise<void> = new Promise<void>((resolve) => {
@@ -303,7 +310,7 @@ export class ShadowScoringCoordinator {
       });
 
     this.inFlightTasks.add(task);
-    return result;
+    return { ChampionAudit: championTask, Dropped: false };
   }
 
   /**
