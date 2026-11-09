@@ -26,9 +26,9 @@
 CREATE TABLE [${flyway:defaultSchema}].[EntityUniqueKey] (
     [ID]               UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_EntityUniqueKey_ID] DEFAULT (newsequentialid()),
     [EntityID]         UNIQUEIDENTIFIER NOT NULL,
-    [Name]             NVARCHAR(255)    NOT NULL,
-    [FieldNames]       NVARCHAR(MAX)    NOT NULL,
-    [FilterDefinition] NVARCHAR(MAX)    NULL,
+    [Name]             NVARCHAR(255)    COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [FieldNames]       NVARCHAR(MAX)    COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [FilterDefinition] NVARCHAR(MAX)    COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     CONSTRAINT [PK_EntityUniqueKey] PRIMARY KEY CLUSTERED ([ID]),
     CONSTRAINT [FK_EntityUniqueKey_Entity] FOREIGN KEY ([EntityID])
         REFERENCES [${flyway:defaultSchema}].[Entity]([ID]),
