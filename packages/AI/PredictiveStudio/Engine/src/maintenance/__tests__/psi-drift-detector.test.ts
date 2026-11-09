@@ -181,6 +181,22 @@ describe('psi-drift-detector', () => {
       expect(metrics.ChallengerDiverged).toBe(true);
     });
 
+    it('counts only pairs with both sides toward MinSampleSize: 100 challenger rows with 3 paired are InsufficientData (P3)', () => {
+      const pairs = [
+        ...Array.from({ length: 3 }, (_, i) => ({ RecordID: `paired-${i}`, ChampionLabel: 'Approve', ChallengerLabel: 'Reject' })),
+        // Challenger rows whose champion was not found
+        ...Array.from({ length: 97 }, (_, i) => ({ RecordID: `orphan-${i}`, ChallengerLabel: 'Reject' })),
+      ];
+
+      const metrics = ComputeConfidenceAndChallengerDivergence({ Pairs: pairs, MinSampleSize: 100 });
+      expect(metrics.PairCount).toBe(3);
+      expect(metrics.DivergenceInsufficientData).toBe(true);
+      expect(metrics.ChallengerDiverged).toBe(false);
+      expect(EvaluateFeatureAndPredictionDrift({ ConfidenceAndDivergence: { Pairs: pairs }, MinSampleSize: 100 }).Summary).toContain(
+        'DivergenceInsufficientData=true (PairCount=3/100)',
+      );
+    });
+
     it('should report DivergenceInsufficientData: true and suppress ChallengerDiverged when pair count is below MinSampleSize (S4)', () => {
       // 10 disagreeing pairs with default MinSampleSize (100)
       const pairs = Array.from({ length: 10 }, (_, i) => ({

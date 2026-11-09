@@ -103,6 +103,7 @@ export interface ConfidenceAndDivergenceMetrics {
   readonly ConfidenceDegraded: boolean;
   readonly ConfidenceInsufficientData?: boolean;
   readonly DivergenceInsufficientData?: boolean;
+  /** Pairs with both a champion side and a challenger side (an output, a timeout or an error). */
   readonly PairCount: number;
   readonly ChallengerTimeoutCount: number;
   readonly ChallengerFailureCount: number;
@@ -591,6 +592,8 @@ export function ComputeConfidenceAndChallengerDivergence(
   const confidenceDegraded = meanDropExceeded || floorBreached;
 
   const pairs = input.Pairs ?? [];
+  /** Pairs with both sides: a champion output and a challenger output, timeout or error. */
+  let pairedCount = 0;
   let labelPairs = 0;
   let labelAgreements = 0;
   let challengerTimeoutCount = 0;
@@ -607,6 +610,9 @@ export function ComputeConfidenceAndChallengerDivergence(
     const hasChallOutput =
       typeof pair.ChallengerScore === 'number' || typeof pair.ChallengerLabel === 'string';
     const isMissingChallenger = hasChampOutput && !hasChallOutput;
+    if (hasChampOutput && (hasChallOutput || isTimedOut || hasError)) {
+      pairedCount++;
+    }
 
     if (isTimedOut) {
       challengerTimeoutCount++;
@@ -672,7 +678,8 @@ export function ComputeConfidenceAndChallengerDivergence(
   const p95Chall = computePercentile(challLatencies, 0.95);
   const p95LatencyRatio = p95Champ !== null && p95Champ > 0 && p95Chall !== null ? p95Chall / p95Champ : null;
 
-  const divergenceInsufficientData = pairs.length > 0 && pairs.length < minSamples;
+  // A challenger row with no champion to compare against is not a sample.
+  const divergenceInsufficientData = pairs.length > 0 && pairedCount < minSamples;
   const agreementBreached = !divergenceInsufficientData && agreementRate !== null && agreementRate < minAgreementRate;
   const deltaBreached = !divergenceInsufficientData && meanAbsoluteScoreDelta !== null && meanAbsoluteScoreDelta > maxMeanAbsScoreDelta;
   const latencyBreached = !divergenceInsufficientData && p95LatencyRatio !== null && p95LatencyRatio > maxP95LatencyRatio;
@@ -685,7 +692,7 @@ export function ComputeConfidenceAndChallengerDivergence(
     ConfidenceDegraded: confidenceDegraded,
     ConfidenceInsufficientData: confidenceInsufficientData,
     DivergenceInsufficientData: divergenceInsufficientData,
-    PairCount: pairs.length,
+    PairCount: pairedCount,
     ChallengerTimeoutCount: challengerTimeoutCount,
     ChallengerFailureCount: challengerFailureCount,
     AgreementRate: agreementRate,
