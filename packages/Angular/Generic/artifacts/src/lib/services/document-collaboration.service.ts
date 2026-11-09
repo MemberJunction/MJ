@@ -140,6 +140,40 @@ export interface DocumentDiffResult {
 }
 
 /**
+ * Contiguous span in a word-level inline redline diff (`equal`, `delete`, or `insert`).
+ */
+export interface DocumentWordDiffSpan {
+  Type: 'equal' | 'delete' | 'insert';
+  Text: string;
+  HunkID?: string;
+}
+
+/**
+ * Granular word/phrase-level tracked edit hunk inside a block, supporting independent
+ * Accept / Reject just like Word Track Changes and Google Docs Suggesting Mode.
+ */
+export interface DocumentWordChangeHunk {
+  HunkID: string;
+  Kind: 'replace' | 'insert' | 'delete';
+  DeletedText: string;
+  InsertedText: string;
+  ContextBefore: string;
+  ContextAfter: string;
+  /** Resulting block Markdown if ONLY this hunk is accepted on top of OriginalMarkdown */
+  AcceptedMarkdown: string;
+  /** Resulting ProposedMarkdown if ONLY this hunk is rejected (reverted to Original) */
+  RejectedProposedMarkdown: string;
+}
+
+/**
+ * Complete word-level redline diff and granular change hunks for a block suggestion.
+ */
+export interface DocumentWordDiffResult {
+  Spans: DocumentWordDiffSpan[];
+  Hunks: DocumentWordChangeHunk[];
+}
+
+/**
  * Active Yjs collaboration session bound to a single artifact.
  */
 export class DocumentCollaborationSession {
@@ -1437,6 +1471,202 @@ export class DocumentCollaborationService {
       RemovedLines: removed,
       UnchangedLines: unchanged,
       Lines: diffLines,
+    };
+  }
+
+  /**
+   * Computes a Word / Google-Docs-style token-level redline diff and granular word/phrase change hunks
+   * between an original block and a proposed block so single-word or phrase edits are highlighted
+   * inline rather than marking the entire paragraph as replaced.
+   */
+  public ComputeWordLevelDiff(oldContent: string, newContent: string): DocumentWordDiffResult {
+    const tokenize = (text: string): string[] =>
+      (text ?? '').replace(/\r\n/g, '\n').match(/[A-Za-z0-9_]+|\s+|[^\sA-Za-z0-9_]+/g) ?? [];
+
+    const oldTokens = tokenize(oldContent);
+    const newTokens = tokenize(newContent);
+    const m = oldTokens.length;
+    const n = newTokens.length;
+
+    const dp: number[][] = Array.from({ length: m + 1 }, () => Array<number>(n + 1).fill(0));
+    for (let i = m - 1; i >= 0; i--) {
+      for (let j = n - 1; j >= 0; j--) {
+        if (oldTokens[i] === newTokens[j]) {
+          dp[i][j] = 1 + dp[i + 1][j + 1];
+        } else {
+          dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
+        }
+      }
+    }
+
+    const rawOps: Array<{ Type: 'equal' | 'delete' | 'insert'; Text: string }> = [];
+    let i = 0;
+    let j = 0;
+    while (i < m && j < n) {
+      if (oldTokens[i] === newTokens[j]) {
+        rawOps.push({ Type: 'equal', Text: oldTokens[i] });
+        i++;
+        j++;
+      } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+        rawOps.push({ Type: 'delete', Text: oldTokens[i] });
+        i++;
+      } else {
+        rawOps.push({ Type: 'insert', Text: newTokens[j] });
+        j++;
+      }
+    }
+    while (i < m) {
+      rawOps.push({ Type: 'delete', Text: oldTokens[i++] });
+    }
+    while (j < n) {
+      rawOps.push({ Type: 'insert', Text: newTokens[j++] });
+    }
+
+    // Coalesce consecutive operations of the same type
+    const coalesced: DocumentWordDiffSpan[] = [];
+    for (const op of rawOps) {
+      const prev = coalesced[coalesced.length - 1];
+      if (prev && prev.Type === op.Type) {
+        prev.Text += op.Text;
+      } else {
+        coalesced.push({ Type: op.Type, Text: op.Text });
+      }
+    }
+
+    // Group adjacent non-equal spans (including single whitespace bridges inside a phrase edit) into granular Hunks
+    interface HunkGroup {
+      HunkID: string;
+      StartIdx: number;
+      EndIdx: number;
+      DeletedText: string;
+      InsertedText: string;
+    }
+
+    const groups: HunkGroup[] = [];
+    let idx = 0;
+    let hunkCounter = 1;
+    while (idx < coalesced.length) {
+      if (coalesced[idx].Type === 'equal') {
+        idx++;
+        continue;
+      }
+      const startIdx = idx;
+      let endIdx = idx;
+      let deletedText = '';
+      let insertedText = '';
+
+      while (endIdx < coalesced.length) {
+        const span = coalesced[endIdx];
+        if (span.Type === 'delete') {
+          deletedText += span.Text;
+          endIdx++;
+          continue;
+        }
+        if (span.Type === 'insert') {
+          insertedText += span.Text;
+          endIdx++;
+          continue;
+        }
+        // If an 'equal' span is purely horizontal whitespace between two edits, absorb it into the phrase hunk
+        if (
+          span.Type === 'equal' &&
+          /^[ \t]+$/.test(span.Text) &&
+          endIdx + 1 < coalesced.length &&
+          coalesced[endIdx + 1].Type !== 'equal'
+        ) {
+          deletedText += span.Text;
+          insertedText += span.Text;
+          endIdx++;
+          continue;
+        }
+        break;
+      }
+
+      const hunkId = `hunk-${hunkCounter++}`;
+      for (let k = startIdx; k < endIdx; k++) {
+        if (coalesced[k].Type !== 'equal') {
+          coalesced[k].HunkID = hunkId;
+        }
+      }
+      groups.push({
+        HunkID: hunkId,
+        StartIdx: startIdx,
+        EndIdx: endIdx,
+        DeletedText: deletedText,
+        InsertedText: insertedText,
+      });
+      idx = endIdx;
+    }
+
+    const hunks: DocumentWordChangeHunk[] = groups
+      .filter((g) => g.DeletedText.trim() !== g.InsertedText.trim())
+      .map((g) => {
+        const delTrim = g.DeletedText.trim();
+        const insTrim = g.InsertedText.trim();
+        const kind: DocumentWordChangeHunk['Kind'] =
+          delTrim && insTrim ? 'replace' : insTrim ? 'insert' : 'delete';
+
+        // Reconstruct text before and after this hunk
+        let beforeText = '';
+        for (let k = 0; k < g.StartIdx; k++) {
+          if (coalesced[k].Type !== 'insert') {
+            beforeText += coalesced[k].Text;
+          }
+        }
+        let afterText = '';
+        for (let k = g.EndIdx; k < coalesced.length; k++) {
+          if (coalesced[k].Type !== 'insert') {
+            afterText += coalesced[k].Text;
+          }
+        }
+
+        // AcceptedMarkdown: apply ONLY this hunk to oldContent
+        let acceptedMd = '';
+        for (let k = 0; k < coalesced.length; k++) {
+          const inCurrentHunk = k >= g.StartIdx && k < g.EndIdx;
+          const s = coalesced[k];
+          if (inCurrentHunk) {
+            if (s.Type === 'equal' || s.Type === 'insert') {
+              acceptedMd += s.Text;
+            }
+          } else {
+            if (s.Type === 'equal' || s.Type === 'delete') {
+              acceptedMd += s.Text;
+            }
+          }
+        }
+
+        // RejectedProposedMarkdown: revert ONLY this hunk in newContent back to oldContent
+        let rejectedProposedMd = '';
+        for (let k = 0; k < coalesced.length; k++) {
+          const inCurrentHunk = k >= g.StartIdx && k < g.EndIdx;
+          const s = coalesced[k];
+          if (inCurrentHunk) {
+            if (s.Type === 'equal' || s.Type === 'delete') {
+              rejectedProposedMd += s.Text;
+            }
+          } else {
+            if (s.Type === 'equal' || s.Type === 'insert') {
+              rejectedProposedMd += s.Text;
+            }
+          }
+        }
+
+        return {
+          HunkID: g.HunkID,
+          Kind: kind,
+          DeletedText: delTrim || g.DeletedText,
+          InsertedText: insTrim || g.InsertedText,
+          ContextBefore: beforeText.slice(-36).replace(/^\S*\s/, ''),
+          ContextAfter: afterText.slice(0, 36).replace(/\s\S*$/, ''),
+          AcceptedMarkdown: acceptedMd,
+          RejectedProposedMarkdown: rejectedProposedMd,
+        };
+      });
+
+    return {
+      Spans: coalesced,
+      Hunks: hunks,
     };
   }
 

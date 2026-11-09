@@ -30,6 +30,8 @@ import {
   type DocumentRenderSegment,
   type DocumentSlashCommand,
   type DocumentSuggestionItem,
+  type DocumentWordChangeHunk,
+  type DocumentWordDiffResult,
 } from '../../services/document-collaboration.service';
 import { DocumentImportExportService } from '../../services/document-import-export.service';
 
@@ -1299,44 +1301,110 @@ export interface DocsPermissionEntry {
                         </div>
                       }
 
-                      <!-- Pending Suggestion Cards attached to this Segment -->
+                      <!-- Pending Suggestion Cards attached to this Segment (Word / Google-Docs Granular Redline) -->
                       @for (sug of GetSuggestionsForBlock(seg.SegmentID); track sug.SuggestionID) {
-                        <div class="mj-docs-suggestion-card" [attr.data-testid]="'suggestion-card-' + sug.SuggestionID">
-                          <div class="mj-docs-suggestion-card__header">
-                            <span>
-                              <i class="fas fa-code-pull-request"></i>
-                              Suggestion by <strong>{{ sug.AuthorName }}</strong>
-                            </span>
-                            <span class="mj-docs-badge">{{ sug.Status }}</span>
-                          </div>
-                          @if (sug.Rationale) {
-                            <div class="mj-docs-suggestion-card__rationale">{{ sug.Rationale }}</div>
-                          }
-                          <div class="mj-docs-suggestion-card__diff">
-                            <div class="mj-docs-suggestion-card__old">- {{ sug.OriginalMarkdown }}</div>
-                            <div class="mj-docs-suggestion-card__new">+ {{ sug.ProposedMarkdown }}</div>
-                          </div>
-                          @if (sug.Status === 'Pending' && CanUserEdit) {
-                            <div class="mj-docs-suggestion-card__actions">
-                              <button
-                                type="button"
-                                class="mj-docs-btn mj-docs-btn--primary"
-                                [attr.data-testid]="'accept-suggestion-btn-' + sug.SuggestionID"
-                                (click)="AcceptSuggestion(sug)"
-                              >
-                                <i class="fas fa-check"></i> Accept
-                              </button>
-                              <button
-                                type="button"
-                                class="mj-docs-btn"
-                                [attr.data-testid]="'reject-suggestion-btn-' + sug.SuggestionID"
-                                (click)="RejectSuggestion(sug)"
-                              >
-                                <i class="fas fa-xmark"></i> Reject
-                              </button>
+                        @if (GetSuggestionWordDiff(sug); as wordDiff) {
+                          <div class="mj-docs-suggestion-card" [attr.data-testid]="'suggestion-card-' + sug.SuggestionID">
+                            <div class="mj-docs-suggestion-card__header">
+                              <span>
+                                <i class="fas fa-code-pull-request"></i>
+                                Suggestion by <strong>{{ sug.AuthorName }}</strong>
+                                @if (wordDiff.Hunks.length > 0) {
+                                  <span class="mj-docs-suggestion-count-pill">
+                                    {{ wordDiff.Hunks.length }} word/phrase {{ wordDiff.Hunks.length === 1 ? 'edit' : 'edits' }}
+                                  </span>
+                                }
+                              </span>
+                              <span class="mj-docs-badge">{{ sug.Status }}</span>
                             </div>
-                          }
-                        </div>
+
+                            <!-- 1. Inline Tracked-Changes Redline Preview in Context -->
+                            <div
+                              class="mj-docs-inline-redline"
+                              [attr.data-testid]="'suggestion-inline-redline-' + sug.SuggestionID"
+                            >
+                              @for (span of wordDiff.Spans; track $index) {
+                                @if (span.Type === 'equal') {
+                                  <span class="mj-docs-redline-eq">{{ span.Text }}</span>
+                                } @else if (span.Type === 'delete') {
+                                  <del class="mj-docs-redline-del">{{ span.Text }}</del>
+                                } @else {
+                                  <ins class="mj-docs-redline-ins">{{ span.Text }}</ins>
+                                }
+                              }
+                            </div>
+
+                            <!-- 2. Google-Docs-Style Granular Word / Phrase Hunk List -->
+                            @if (wordDiff.Hunks.length > 0) {
+                              <div class="mj-docs-hunk-list" [attr.data-testid]="'suggestion-hunks-' + sug.SuggestionID">
+                                @for (hunk of wordDiff.Hunks; track hunk.HunkID) {
+                                  <div class="mj-docs-hunk-item" [attr.data-testid]="'suggestion-hunk-' + hunk.HunkID">
+                                    <div class="mj-docs-hunk-item__summary">
+                                      @if (hunk.Kind === 'replace') {
+                                        <span class="mj-docs-hunk-verb">Replace</span>
+                                        <del class="mj-docs-redline-del">{{ hunk.DeletedText }}</del>
+                                        <span class="mj-docs-hunk-verb">with</span>
+                                        <ins class="mj-docs-redline-ins">{{ hunk.InsertedText }}</ins>
+                                      } @else if (hunk.Kind === 'insert') {
+                                        <span class="mj-docs-hunk-verb">Insert</span>
+                                        <ins class="mj-docs-redline-ins">{{ hunk.InsertedText }}</ins>
+                                      } @else {
+                                        <span class="mj-docs-hunk-verb">Delete</span>
+                                        <del class="mj-docs-redline-del">{{ hunk.DeletedText }}</del>
+                                      }
+                                    </div>
+
+                                    @if (sug.Status === 'Pending' && CanUserEdit && wordDiff.Hunks.length > 1) {
+                                      <div class="mj-docs-hunk-item__actions">
+                                        <button
+                                          type="button"
+                                          class="mj-docs-btn mj-docs-btn--xs mj-docs-btn--primary"
+                                          title="Accept only this word/phrase edit"
+                                          [attr.data-testid]="'accept-hunk-btn-' + sug.SuggestionID + '-' + hunk.HunkID"
+                                          (click)="AcceptSuggestionHunk(sug, hunk)"
+                                        >
+                                          <i class="fas fa-check"></i>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          class="mj-docs-btn mj-docs-btn--xs"
+                                          title="Reject only this word/phrase edit"
+                                          [attr.data-testid]="'reject-hunk-btn-' + sug.SuggestionID + '-' + hunk.HunkID"
+                                          (click)="RejectSuggestionHunk(sug, hunk)"
+                                        >
+                                          <i class="fas fa-xmark"></i>
+                                        </button>
+                                      </div>
+                                    }
+                                  </div>
+                                }
+                              </div>
+                            }
+
+                            @if (sug.Status === 'Pending' && CanUserEdit) {
+                              <div class="mj-docs-suggestion-card__actions">
+                                <button
+                                  type="button"
+                                  class="mj-docs-btn mj-docs-btn--primary"
+                                  [attr.data-testid]="'accept-suggestion-btn-' + sug.SuggestionID"
+                                  (click)="AcceptSuggestion(sug)"
+                                >
+                                  <i class="fas fa-check"></i>
+                                  {{ wordDiff.Hunks.length > 1 ? 'Accept All (' + wordDiff.Hunks.length + ')' : 'Accept' }}
+                                </button>
+                                <button
+                                  type="button"
+                                  class="mj-docs-btn"
+                                  [attr.data-testid]="'reject-suggestion-btn-' + sug.SuggestionID"
+                                  (click)="RejectSuggestion(sug)"
+                                >
+                                  <i class="fas fa-xmark"></i>
+                                  {{ wordDiff.Hunks.length > 1 ? 'Reject All' : 'Reject' }}
+                                </button>
+                              </div>
+                            }
+                          </div>
+                        }
                       }
                     </div>
                   </div>
@@ -2748,8 +2816,104 @@ export interface DocsPermissionEntry {
       .mj-docs-suggestion-card__header {
         display: flex;
         justify-content: space-between;
+        align-items: center;
         font-size: 12px;
-        margin-bottom: 6px;
+        margin-bottom: 8px;
+      }
+
+      .mj-docs-suggestion-card__author {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--mj-text-primary);
+      }
+
+      .mj-docs-suggestion-card__author i {
+        color: var(--mj-brand-primary);
+      }
+
+      .mj-docs-suggestion-card__badge {
+        font-size: 10px;
+        font-weight: 600;
+        padding: 1px 6px;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface));
+        color: var(--mj-brand-primary);
+      }
+
+      .mj-docs-suggestion-card__time {
+        color: var(--mj-text-muted);
+        font-size: 11px;
+      }
+
+      .mj-docs-inline-redline {
+        font-size: 13px;
+        line-height: 1.65;
+        padding: 8px 10px;
+        background: var(--mj-bg-surface);
+        border: 1px solid var(--mj-border-subtle);
+        border-radius: 6px;
+        margin-bottom: 8px;
+        color: var(--mj-text-primary);
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .mj-docs-redline-eq {
+        color: var(--mj-text-secondary);
+      }
+
+      .mj-docs-redline-del {
+        color: var(--mj-status-error);
+        background: color-mix(in srgb, var(--mj-status-error) 14%, transparent);
+        text-decoration: line-through;
+        padding: 1px 3px;
+        border-radius: 3px;
+        font-weight: 500;
+      }
+
+      .mj-docs-redline-ins {
+        color: var(--mj-status-success);
+        background: color-mix(in srgb, var(--mj-status-success) 15%, transparent);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+        padding: 1px 3px;
+        border-radius: 3px;
+        font-weight: 600;
+      }
+
+      .mj-docs-hunk-list {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-bottom: 8px;
+      }
+
+      .mj-docs-hunk-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 5px 8px;
+        border-radius: 5px;
+        background: var(--mj-bg-surface-sunken);
+        border: 1px solid var(--mj-border-subtle);
+        font-size: 12px;
+      }
+
+      .mj-docs-hunk-item__summary {
+        display: inline-flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 4px;
+        color: var(--mj-text-secondary);
+      }
+
+      .mj-docs-hunk-item__actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        flex-shrink: 0;
       }
 
       .mj-docs-suggestion-card__diff {
@@ -3957,12 +4121,32 @@ export class MarkdownArtifactViewerComponent
       this.SlashSearchQuery = '';
       this.ShowSlashMenu = true;
       this.cdr.markForCheck();
-    } else if (trimmed.startsWith('/') && trimmed.length > 1 && !trimmed.includes(' ')) {
+      return;
+    }
+    if (trimmed.startsWith('/') && trimmed.length > 1 && !trimmed.includes(' ')) {
       this.ActiveSlashTargetSegmentID = seg.SegmentID;
       this.SelectedAnchorKey = seg.SegmentID;
       this.SlashSearchQuery = trimmed.slice(1);
       this.ShowSlashMenu = true;
       this.cdr.markForCheck();
+      return;
+    }
+
+    // Live word-level suggestion tracking while typing in Suggest Mode
+    if (this.ViewMode === 'suggest' && this.CanUserEdit && trimmed.length > 0) {
+      let proposedMd = trimmed;
+      if (seg.BlockKind === 'heading') {
+        const level = seg.HeadingLevel ?? 1;
+        proposedMd = `${'#'.repeat(level)} ${trimmed.replace(/\n+/g, ' ')}`;
+      }
+      if (proposedMd === seg.RawMarkdown.trim()) {
+        this.Suggestions = this.Suggestions.filter(
+          (s) => !(s.BlockID === seg.SegmentID && s.Status === 'Pending'),
+        );
+        this.cdr.markForCheck();
+      } else {
+        this.CreateOrUpdatePendingSuggestion(seg.SegmentID, seg.RawMarkdown, proposedMd, 'Suggested edit');
+      }
     }
   }
 
@@ -6097,6 +6281,52 @@ export class MarkdownArtifactViewerComponent
 
   public GetSuggestionsForBlock(blockId: string): DocumentSuggestionItem[] {
     return this.Suggestions.filter((s) => s.BlockID === blockId);
+  }
+
+  /**
+   * Computes the Word / Google-Docs-style inline word-level redline diff and granular change hunks
+   * for a Suggestion Card.
+   */
+  public GetSuggestionWordDiff(sug: DocumentSuggestionItem): DocumentWordDiffResult {
+    return this.collabService.ComputeWordLevelDiff(sug.OriginalMarkdown, sug.ProposedMarkdown);
+  }
+
+  /**
+   * Accepts a single word/phrase hunk within a suggestion card while leaving any other pending word edits
+   * in the same paragraph open for review.
+   */
+  public AcceptSuggestionHunk(sug: DocumentSuggestionItem, hunk: DocumentWordChangeHunk): void {
+    const prevOriginal = sug.OriginalMarkdown;
+    const nextBaseline = hunk.AcceptedMarkdown;
+
+    if (this.MarkdownContent.includes(prevOriginal)) {
+      this.OnMarkdownChanged(this.MarkdownContent.replace(prevOriginal, () => nextBaseline));
+    } else {
+      const seg = this.DocumentSegments.find((s) => s.SegmentID === sug.BlockID);
+      if (seg && this.MarkdownContent.includes(seg.RawMarkdown)) {
+        this.OnMarkdownChanged(this.MarkdownContent.replace(seg.RawMarkdown, () => nextBaseline));
+      }
+    }
+
+    sug.OriginalMarkdown = nextBaseline;
+    if (sug.OriginalMarkdown.trim() === sug.ProposedMarkdown.trim()) {
+      sug.Status = 'Accepted';
+    }
+    this.StatusBannerMessage = `Accepted word edit (${hunk.Kind}).`;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Rejects a single word/phrase hunk within a suggestion card while preserving any other pending word edits
+   * in the same paragraph.
+   */
+  public RejectSuggestionHunk(sug: DocumentSuggestionItem, hunk: DocumentWordChangeHunk): void {
+    sug.ProposedMarkdown = hunk.RejectedProposedMarkdown;
+    if (sug.OriginalMarkdown.trim() === sug.ProposedMarkdown.trim()) {
+      sug.Status = 'Rejected';
+    }
+    this.StatusBannerMessage = `Rejected word edit (${hunk.Kind}).`;
+    this.cdr.markForCheck();
   }
 
   /**

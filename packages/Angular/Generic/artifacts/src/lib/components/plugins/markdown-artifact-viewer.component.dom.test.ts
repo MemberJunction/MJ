@@ -435,16 +435,56 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
     comp.ClosePermissionsModal();
     expect(comp.ShowPermissionsModal).toBe(false);
 
-    // 7. Suggest Mode: pending suggestions enable Save Version and are committed on save
+    // 7. Suggest Mode: word-level redline, per-word hunk accept/reject, and commit on Save Version
+    comp.SetViewMode('edit');
+    const initialParagraphSeg = comp.DocumentSegments.find((s) => s.Kind === 'markdown' && s.BlockKind === 'paragraph')!;
+    expect(initialParagraphSeg).toBeDefined();
+    comp.ApplyInPlaceSegmentChange(
+      initialParagraphSeg,
+      'This paragraph introduces the strategic vision and quarterly milestones.',
+      'Baseline paragraph'
+    );
     comp.SetViewMode('suggest');
-    const firstMdSeg = comp.DocumentSegments.find((s) => s.Kind === 'markdown')!;
-    comp.ApplyInPlaceSegmentChange(firstMdSeg, '# Updated Strategy Title via Suggest', 'Title refinement');
+    const paragraphSeg = comp.DocumentSegments.find((s) => s.Kind === 'markdown' && s.BlockKind === 'paragraph')!;
+    expect(paragraphSeg).toBeDefined();
+
+    // Change two individual words ("strategic" -> "long-term" and "quarterly" -> "annual") in the same paragraph
+    comp.ApplyInPlaceSegmentChange(
+      paragraphSeg,
+      'This paragraph introduces the long-term vision and annual milestones.',
+      'Word-level suggestion'
+    );
+    f.detectChanges();
+
     expect(comp.PendingSuggestionsCount).toBe(1);
     expect(comp.HasUnsavedChanges).toBe(true);
 
+    const activeSug = comp.GetSuggestionsForBlock(paragraphSeg.SegmentID)[0];
+    expect(activeSug).toBeDefined();
+    const wordDiff = comp.GetSuggestionWordDiff(activeSug);
+    expect(wordDiff.Hunks).toHaveLength(2);
+    expect(wordDiff.Hunks[0].Kind).toBe('replace');
+    expect(wordDiff.Hunks[0].DeletedText).toBe('strategic');
+    expect(wordDiff.Hunks[0].InsertedText).toBe('long-term');
+    expect(wordDiff.Hunks[1].Kind).toBe('replace');
+    expect(wordDiff.Hunks[1].DeletedText).toBe('quarterly');
+    expect(wordDiff.Hunks[1].InsertedText).toBe('annual');
+
+    // Accept only the first word hunk ("strategic" -> "long-term"); second hunk ("quarterly" -> "annual") stays pending
+    comp.AcceptSuggestionHunk(activeSug, wordDiff.Hunks[0]);
+    f.detectChanges();
+    const updatedParagraphSeg = comp.DocumentSegments.find((s) => s.Kind === 'markdown' && s.BlockKind === 'paragraph')!;
+    expect(updatedParagraphSeg.RawMarkdown).toBe('This paragraph introduces the long-term vision and quarterly milestones.');
+    expect(comp.PendingSuggestionsCount).toBe(1);
+    const remainingWordDiff = comp.GetSuggestionWordDiff(activeSug);
+    expect(remainingWordDiff.Hunks).toHaveLength(1);
+    expect(remainingWordDiff.Hunks[0].DeletedText).toBe('quarterly');
+    expect(remainingWordDiff.Hunks[0].InsertedText).toBe('annual');
+
+    // Saving version commits the remaining pending suggestion
     await comp.OnSaveDocumentVersion();
     expect(comp.PendingSuggestionsCount).toBe(0);
-    expect(comp.MarkdownContent).toContain('# Updated Strategy Title via Suggest');
+    expect(comp.MarkdownContent).toContain('This paragraph introduces the long-term vision and annual milestones.');
 
     // 8. Read-only mode hides Write, Suggest, Format, Insert, and Save Version buttons
     f.componentRef.setInput('readonly', true);
