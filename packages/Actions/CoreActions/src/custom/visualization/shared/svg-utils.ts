@@ -58,11 +58,18 @@ export class SVGUtils {
     }
 
     /**
-     * Sanitizes SVG string to remove potentially malicious content
-     * - Removes event handlers (on*)
-     * - Removes external image references
-     * - Removes external use references
-     * - Restricts href to # and mailto: only
+     * Sanitizes an SVG string with DOMPurify (SVG and HTML profiles, plus `<use>`), which removes
+     * scripts, event handlers and `javascript:` links. Every chart, diagram and visualization
+     * action's output goes through this. Deviations from DOMPurify's defaults:
+     * - `dominant-baseline` and `pointer-events` are kept; DOMPurify's list lacks them, and
+     *   chart, network and Mermaid output use them to center text and to route tooltip clicks.
+     * - SANITIZE_DOM off: it would drop ids that collide with document properties (`title`,
+     *   `name`, ...), and diagram node ids come from the caller. Nothing reads globals off
+     *   `window` by element id here, so DOM clobbering has no effect.
+     * - A hook empties `href` unless it starts with `#` or `mailto:`, and `xlink:href` unless
+     *   it starts with `#` or `data:`.
+     * Throws when DOMPurify reports it is unsupported in this environment, since it would
+     * otherwise return its input unchanged.
      *
      * @param svgString - Raw SVG XML string
      * @returns Sanitized SVG string
@@ -71,19 +78,23 @@ export class SVGUtils {
         return this.getSvgPurifier().sanitize(svgString, {
             USE_PROFILES: { html: true, svg: true, svgFilters: true },
             ADD_TAGS: ['use'],
+            ADD_ATTR: ['dominant-baseline', 'pointer-events'],
+            SANITIZE_DOM: false,
         });
     }
 
     private static svgPurifier: DOMPurify | null = null;
 
     /**
-     * DOMPurify bound to a jsdom window, created once. Its hook empties every `href` /
-     * `xlink:href` that does not point inside the document (`#`), at a `mailto:` link, or
-     * (for `xlink:href`) at a `data:` URI, so the SVG loads nothing external.
+     * DOMPurify bound to a jsdom window, created once, with a hook that empties every `href`
+     * not starting with `#` or `mailto:` and every `xlink:href` not starting with `#` or `data:`.
      */
     private static getSvgPurifier(): DOMPurify {
         if (!this.svgPurifier) {
             const purifier = createDOMPurify(new JSDOM('').window as unknown as Window & typeof globalThis);
+            if (!purifier.isSupported) {
+                throw new Error('SVGUtils.SanitizeSVG: DOMPurify is not supported in this environment');
+            }
             purifier.addHook('afterSanitizeAttributes', (node: Element) => {
                 for (const name of ['href', 'xlink:href']) {
                     const value = node.getAttribute(name);

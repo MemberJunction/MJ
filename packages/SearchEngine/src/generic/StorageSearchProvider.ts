@@ -28,7 +28,11 @@ import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeC
  */
 type SearchableAccount = StorageAccountWithProvider;
 
-/** Removes `<...>` tags, repeating until none remain so removal cannot leave a new tag behind. */
+/**
+ * Removes `<...>` tags. One global pass already leaves no complete tag (each match runs from the
+ * first remaining `<` to the next `>`); the loop exists so CodeQL's
+ * js/incomplete-multi-character-sanitization check can see the removal repeats to a fixed point.
+ */
 function removeTags(text: string): string {
     let previous: string;
     let current = text;

@@ -26,8 +26,8 @@ export class TextExtractor {
         let text = html;
 
         // Remove script and style elements entirely (end tags may carry spaces or attributes)
-        text = TextExtractor.replaceUntilStable(text, /<script\b[^>]*>[\s\S]*?<\/script[^>]*>/gi, '');
-        text = TextExtractor.replaceUntilStable(text, /<style\b[^>]*>[\s\S]*?<\/style[^>]*>/gi, '');
+        text = TextExtractor.removeElements(text, /<script\b/gi, /<\/script\b/gi);
+        text = TextExtractor.removeElements(text, /<style\b/gi, /<\/style\b/gi);
 
         // Replace block-level elements with newlines
         text = text.replace(/<\/(p|div|h[1-6]|li|tr|br|blockquote|pre)>/gi, '\n');
@@ -35,7 +35,7 @@ export class TextExtractor {
         text = text.replace(/<(p|div|h[1-6]|li|tr|blockquote|pre)[^>]*>/gi, '\n');
 
         // Remove remaining HTML tags
-        text = TextExtractor.replaceUntilStable(text, /<[^>]+>/g, ' ');
+        text = text.replace(/<[^>]+>/g, ' ');
 
         // Decode common HTML entities
         text = TextExtractor.decodeHTMLEntities(text);
@@ -84,15 +84,31 @@ export class TextExtractor {
         return TextExtractor.ExtractFromPlainText(content);
     }
 
-    /** Applies a replacement until the text stops changing, so a removal cannot leave a new match behind. */
-    private static replaceUntilStable(text: string, pattern: RegExp, replacement: string): string {
-        let previous: string;
-        let current = text;
-        do {
-            previous = current;
-            current = current.replace(pattern, replacement);
-        } while (current !== previous);
-        return current;
+    /**
+     * Removes each element from its opening tag through the `>` of its closing tag, in one forward
+     * walk over the string. A regex such as `<script\b[^>]*>[\s\S]*?<\/script[^>]*>` backtracks
+     * polynomially on crafted input; this stays linear. An element with no closing tag is left
+     * for the tag stripper, so its text remains but no tag does.
+     * @param open global, case-insensitive pattern for the start of the opening tag
+     * @param close global, case-insensitive pattern for the start of the closing tag
+     */
+    private static removeElements(text: string, open: RegExp, close: RegExp): string {
+        const kept: string[] = [];
+        let pos = 0;
+        for (;;) {
+            open.lastIndex = pos;
+            const opening = open.exec(text);
+            if (!opening) break;
+            close.lastIndex = opening.index + opening[0].length;
+            const closing = close.exec(text);
+            if (!closing) break;
+            const end = text.indexOf('>', closing.index + closing[0].length);
+            if (end === -1) break;
+            kept.push(text.slice(pos, opening.index));
+            pos = end + 1;
+        }
+        kept.push(text.slice(pos));
+        return kept.join('');
     }
 
     /**

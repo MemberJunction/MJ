@@ -40,6 +40,18 @@ describe('SVGUtils.SanitizeSVG (CodeQL js/bad-tag-filter, js/incomplete-multi-ch
         expect(out).toContain('Label');
         expect(out).toContain('id="n1"');
     });
+
+    it('keeps dominant-baseline and pointer-events', () => {
+        const out = SVGUtils.SanitizeSVG(wrap('<text dominant-baseline="middle" pointer-events="none">T</text>'));
+        expect(out).toContain('dominant-baseline="middle"');
+        expect(out).toContain('pointer-events="none"');
+    });
+
+    it('keeps caller-supplied ids that match document properties', () => {
+        const out = SVGUtils.SanitizeSVG(wrap('<g id="title"><rect/></g><g id="name"><rect/></g>'));
+        expect(out).toContain('id="title"');
+        expect(out).toContain('id="name"');
+    });
 });
 
 describe('SVGUtils.GeneratePanZoomScriptBody', () => {
