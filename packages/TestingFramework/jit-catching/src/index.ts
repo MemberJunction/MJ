@@ -33,3 +33,4 @@ export { GenerateStep, DefaultGenerateDeps, SumTokens, type GenerateDeps, type G
 export { ExecuteStep, type ExecuteDeps, type ExecuteOptions } from './pipeline/Execute';
 export { AssessStep, type AssessDeps, type AssessOptions } from './pipeline/Assess';
 export { RunAll, type RunAllOptions } from './pipeline/Run';
+export { SliceSchema, BugPairSchema, CleanEntrySchema, CorpusSchema, LoadCorpus, AssignSlices, RevisionsOf, type Corpus, type Slice } from './corpus/Corpus';
