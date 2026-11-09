@@ -216,11 +216,20 @@ describe('FilterProcessWarnings', () => {
     for (const l of original) process.on('warning', l);
   });
   it('drops warnings with a filtered code and writes the others in Node format', async () => {
+    vi.stubEnv('NODE_NO_WARNINGS', '0');
     const lines: string[] = [];
     FilterProcessWarnings(['CLAUDE_SDK_CAN_USE_TOOL_SHADOWED'], (s) => lines.push(s));
     process.emitWarning('x', { code: 'CLAUDE_SDK_CAN_USE_TOOL_SHADOWED' });
     process.emitWarning('y', { code: 'OTHER' });
     await new Promise((r) => setImmediate(r));
     expect(lines).toEqual([`(node:${process.pid}) [OTHER] Warning: y\n`]);
+  });
+  it('writes nothing when NODE_NO_WARNINGS is 1', async () => {
+    vi.stubEnv('NODE_NO_WARNINGS', '1');
+    const lines: string[] = [];
+    FilterProcessWarnings(['CLAUDE_SDK_CAN_USE_TOOL_SHADOWED'], (s) => lines.push(s));
+    process.emitWarning('y', { code: 'OTHER' });
+    await new Promise((r) => setImmediate(r));
+    expect(lines).toEqual([]);
   });
 });

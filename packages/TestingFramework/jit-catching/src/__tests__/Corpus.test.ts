@@ -57,9 +57,21 @@ describe('LoadCorpus', () => {
     expect(c.Bug[0].FixPR).toBe(11);
     expect(c.Clean[0].Slice).toBe('HeldOut');
   });
-  it('rejects a PR number that appears in both a bug pair and a clean entry', () => {
-    const p = writeCorpus({ Version: 1, Seed: 3, Bug: [bug], Clean: [{ ...clean, PR: 11 }] });
+  it('rejects a bug PR that is also a clean entry', () => {
+    const p = writeCorpus({ Version: 1, Seed: 3, Bug: [bug], Clean: [{ ...clean, PR: 10 }] });
     expect(() => LoadCorpus(p)).toThrow(/duplicate PR number/);
+  });
+  it('rejects a bug PR that is the fix PR of another pair', () => {
+    const p = writeCorpus({ Version: 1, Seed: 3, Bug: [bug, { ...bug, BugPR: 12, FixPR: 10 }], Clean: [] });
+    expect(() => LoadCorpus(p)).toThrow(/duplicate PR number/);
+  });
+  it('accepts a fix PR that is also a clean entry', () => {
+    const c = LoadCorpus(writeCorpus({ Version: 1, Seed: 3, Bug: [bug], Clean: [{ ...clean, PR: 11 }] }));
+    expect(c.Clean[0].PR).toBe(11);
+  });
+  it('reports a missing file as not found', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'jit-corpus-')); dirs.push(dir);
+    expect(() => LoadCorpus(join(dir, 'missing.json'))).toThrow(/corpus file not found: .*missing\.json/);
   });
   it('rejects a bug pair whose bug and fix PR are the same', () => {
     const p = writeCorpus({ Version: 1, Seed: 3, Bug: [{ ...bug, FixPR: 10 }], Clean: [] });

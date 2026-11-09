@@ -90,9 +90,11 @@ interface Parsed {
 interface BacktestArgs { CorpusPath: string; Slice: Slice; Set: 'Bug' | 'Clean' | 'Both'; Model: string; MaxUsd: number; Only?: number[]; RetryFailed: boolean; }
 const BACKTEST_SETS = ['Bug', 'Clean', 'Both'] as const;
 
+/** Installs the process warning filter that drops the SDK's canUseTool shadow notice. The `jit-catch` bin calls it before `Main`. */
+export function InstallWarningFilter(): void { FilterProcessWarnings(['CLAUDE_SDK_CAN_USE_TOOL_SHADOWED']); }
+
 /** Parses argv and dispatches one command. Returns the process exit code: 0 done, 1 failed, 2 usage error (also a `--model` the settings do not price), 3 backtest stopped early. */
 export async function Main(argv: string[], deps: CliDeps = DEFAULT_DEPS): Promise<number> {
-    FilterProcessWarnings(['CLAUDE_SDK_CAN_USE_TOOL_SHADOWED']);
     let p: Parsed;
     try { p = parse(argv); }
     catch (e) {

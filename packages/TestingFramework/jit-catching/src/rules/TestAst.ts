@@ -114,7 +114,8 @@ export class TestAst {
 
     /**
      * True when `access` is `this.x` or `super.x` with no wrapper on the receiver, inside a class the test declares
-     * whose `extends` chain (test-declared or base-package classes) reaches the class that declares `x`.
+     * whose `extends` chain (test-declared or base-package classes) reaches the class that declares `x`. The declaring class is the
+     * nearest class-like node around `x`, so a member of a class expression never counts as a member of a class around it.
      */
     public ProtectedAccessFromTestSubclass(access: MemberAccess): boolean {
         const node = access.Node;
@@ -122,7 +123,7 @@ export class TestAst {
         const receiverKind = node.expression.kind;
         if (receiverKind !== ts.SyntaxKind.ThisKeyword && receiverKind !== ts.SyntaxKind.SuperKeyword) return false;
         const declaration = this.Checker.getSymbolAtLocation(node.name)?.declarations?.[0];
-        const owner = declaration ? ts.findAncestor(declaration, ts.isClassDeclaration) : undefined;
+        const owner: ts.ClassLikeDeclaration | undefined = declaration ? ts.findAncestor(declaration, ts.isClassLike) : undefined;
         if (!owner) return false;
         const enclosing = ts.findAncestor(node.parent, ts.isClassLike);
         if (!enclosing || !ts.isClassDeclaration(enclosing) || enclosing.getSourceFile() !== this.SourceFile) return false;

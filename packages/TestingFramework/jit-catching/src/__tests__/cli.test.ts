@@ -191,6 +191,24 @@ describe('Main', () => {
   });
 });
 
+describe('Main warning listeners', () => {
+  it('keeps the process warning listeners it was started with', async () => {
+    const original = process.listeners('warning');
+    const mine = (): void => undefined;
+    process.removeAllListeners('warning');
+    process.on('warning', mine);
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      await Main(['generate', '--pr', 'x'], deps());
+      expect(process.listeners('warning')).toEqual([mine]);
+    } finally {
+      process.removeAllListeners('warning');
+      for (const l of original) process.on('warning', l);
+      vi.restoreAllMocks();
+    }
+  });
+});
+
 describe('Main backtest model', () => {
   it('returns 2 and names the priced models when --model has no price in the settings', async () => {
     const stderr: string[] = [];
