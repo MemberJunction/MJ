@@ -1398,6 +1398,14 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      */
     parentActivatedSkillIDs?: readonly string[];
     /**
+     * Set when the PARENT run was tainted (had read untrusted content) when it invoked this sub-agent and
+     * runs outside any task graph. It starts this run tainted, so its memory writes land `Pending` and any
+     * graph it submits carries the taint, but unlike a tainted {@link SecurityEnvelope} it does not turn on
+     * the `disallowWhenTainted` egress gate: a sub-agent of a run outside a graph is held to what its parent
+     * is. Set by `ExecuteSubAgent`; hosts need not. It only ever adds a constraint.
+     */
+    parentRunTainted?: boolean;
+    /**
      * Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents.
      *
      * Its reserved keys (`RESERVED_AGENT_RUN_DATA_KEYS`: `PrimaryScopeEntityName`, `PrimaryScopeEntityID`,

@@ -108,11 +108,12 @@ describe('BaseAgent sub-agents and taint (S2)', () => {
 
     const childEnvelope = (): TaskSecurityEnvelope | undefined => h.childRuns[0].SecurityEnvelope as TaskSecurityEnvelope | undefined;
 
-    it('starts the sub-agent tainted when the parent is tainted', async () => {
+    it('starts the sub-agent of a tainted run outside any graph tainted, with no envelope (T6)', async () => {
         const parent = new TaintableAgent();
         parent.ReadUntrusted();
         await parent.CallSubAgent(paramsWith());
-        expect(childEnvelope()).toEqual({ Version: TASK_SECURITY_ENVELOPE_VERSION, IsRunTainted: true });
+        expect(childEnvelope()).toBeUndefined();
+        expect(h.childRuns[0].parentRunTainted).toBe(true);
     });
 
     it("keeps the parent's node envelope for the sub-agent, tainted once the parent became tainted", async () => {
@@ -126,9 +127,10 @@ describe('BaseAgent sub-agents and taint (S2)', () => {
         expect(childEnvelope()).toEqual({ ...SCOPED_NODE, IsRunTainted: true });
     });
 
-    it('gives a clean parent with no envelope a sub-agent with none', async () => {
+    it('gives a clean parent with no envelope a sub-agent with none, and no taint', async () => {
         await new TaintableAgent().CallSubAgent(paramsWith());
         expect(childEnvelope()).toBeUndefined();
+        expect(h.childRuns[0].parentRunTainted).toBeUndefined();
     });
 
     it("absorbs the sub-agent's taint back into the parent", async () => {
@@ -169,5 +171,50 @@ describe('BaseAgent egress gate on taint gained mid-run (M1)', () => {
         const agent = new TaintableAgent();
         agent.ReadUntrusted();
         expect((await send(agent, paramsWith())).Success).toBe(true);
+    });
+});
+
+describe("BaseAgent sub-agents get the egress gate only under a graph's envelope (T6)", () => {
+    beforeEach(() => {
+        h.childRuns.length = 0;
+        h.dispatched.length = 0;
+    });
+
+    /** The child run as `Execute` would start it from the params its parent handed down. */
+    function startedChild(): { Agent: TaintableAgent; Params: ExecuteAgentParams } {
+        const params = { ...paramsWith(), ...h.childRuns[0] } as ExecuteAgentParams;
+        const agent = new TaintableAgent();
+        const seeds = agent as unknown as { seedTaintFromSecurityEnvelope(p: ExecuteAgentParams): void; seedTaintFromParentRun(p: ExecuteAgentParams): void };
+        seeds.seedTaintFromSecurityEnvelope(params);
+        seeds.seedTaintFromParentRun(params);
+        return { Agent: agent, Params: params };
+    }
+
+    const send = (agent: BaseAgent, params: ExecuteAgentParams) =>
+        agent.ExecuteSingleAction(params, EMAIL, SEND_EMAIL, CALLER, { skipCircuitBreaker: true });
+
+    it('lets the sub-agent of a tainted chat run call what the run itself may, while still starting it tainted', async () => {
+        const parent = new TaintableAgent();
+        parent.ReadUntrusted();
+        expect((await send(parent, paramsWith())).Success).toBe(true);
+
+        await parent.CallSubAgent(paramsWith());
+        const child = startedChild();
+        expect(child.Agent.IsRunTainted).toBe(true);
+        expect((await send(child.Agent, child.Params)).Success).toBe(true);
+        expect(h.dispatched).toHaveLength(2);
+    });
+
+    it("makes the sub-agent of a tainted graph node refuse what the node refuses", async () => {
+        const parent = new TaintableAgent();
+        parent.ReadUntrusted();
+        expect((await send(parent, paramsWith({ SecurityEnvelope: CLEAN_NODE }))).ResultCode).toBe(TAINTED_EGRESS_BLOCKED);
+
+        await parent.CallSubAgent(paramsWith({ SecurityEnvelope: CLEAN_NODE }));
+        const child = startedChild();
+        expect(child.Params.SecurityEnvelope).toEqual({ ...CLEAN_NODE, IsRunTainted: true });
+        expect(child.Agent.IsRunTainted).toBe(true);
+        expect((await send(child.Agent, child.Params)).ResultCode).toBe(TAINTED_EGRESS_BLOCKED);
+        expect(h.dispatched).toHaveLength(0);
     });
 });

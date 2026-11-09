@@ -150,7 +150,6 @@ import {
     BuildTaskSecurityEnvelope,
     MergeTaskSecurityEnvelopes,
     TAINTED_EGRESS_BLOCKED,
-    TASK_SECURITY_ENVELOPE_VERSION,
     TenantContextCarryProblem,
     type TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
@@ -1477,6 +1476,18 @@ export class BaseAgent {
     private seedTaintFromSecurityEnvelope(params: ExecuteAgentParams): void {
         if (params.SecurityEnvelope?.IsRunTainted === true) {
             this.recordTaintedSource(0, 'task-graph:security-envelope', 'Untrusted');
+        }
+    }
+
+    /**
+     * Starts a sub-agent run tainted when its parent, running outside any task graph, was tainted
+     * (`ExecuteAgentParams.parentRunTainted`): it works from the parent's context. A sub-agent of a graph
+     * node is seeded through its envelope instead ({@link seedTaintFromSecurityEnvelope}). Private for
+     * the same reason.
+     */
+    private seedTaintFromParentRun(params: ExecuteAgentParams): void {
+        if (params.parentRunTainted === true) {
+            this.recordTaintedSource(0, 'parent-run', 'Untrusted');
         }
     }
 
@@ -2934,6 +2945,7 @@ export class BaseAgent {
             this._lastSubAgentArtifactDirective = undefined;
             this._taintedSources = [];
             this.seedTaintFromSecurityEnvelope(params);
+            this.seedTaintFromParentRun(params);
             this._messageLifecycleCallback = params.onMessageLifecycle;
             this._catalogNarrowing = undefined;
             this._openingRequest = OpeningRequestText(params.conversationMessages);
@@ -14146,7 +14158,7 @@ The context is now within limits. Please retry your request with the recovered c
                 companyId: params.companyId,
                 SecondaryScopes: params.SecondaryScopes,
                 SearchScopeIDs: params.SearchScopeIDs, // the host's search scopes bound the sub-agent too
-                SecurityEnvelope: this.subAgentSecurityEnvelope(params), // a tainted parent's sub-agent starts tainted
+                ...this.subAgentTaint(params), // a tainted parent's sub-agent starts tainted
                 conversationDetailId: params.conversationDetailId, // propagate conversationDetailId so sub-agent task graphs attach to the chat message
                 onAgentRunCreated: async (agentRunId: string) => {
                     stepEntity.TargetLogID = agentRunId;
@@ -19930,18 +19942,19 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * The envelope a sub-agent run starts under (S2): this run's own envelope (`params.SecurityEnvelope`, when it
-     * runs as a task-graph node), with `IsRunTainted` set when this run is tainted now. A sub-agent works from
-     * this run's context, so it starts tainted exactly as an agent node does (`seedTaintFromSecurityEnvelope`),
-     * refuses egress while tainted, and carries the taint into any graph it submits. `undefined` when this run
-     * has neither an envelope nor taint.
+     * How a sub-agent run inherits this run's taint (S2). A sub-agent works from this run's context, so it
+     * starts tainted when this run is tainted now, and carries the taint into its memory writes and any graph
+     * it submits. When this run executes under a task-graph envelope (`params.SecurityEnvelope`), the
+     * sub-agent gets that envelope with `IsRunTainted` set, and so refuses `disallowWhenTainted` actions as
+     * an agent node does. A run outside any graph hands down only the taint (`parentRunTainted`): its
+     * sub-agent is held to what the run itself is, not to a gate the run is not under.
      */
-    private subAgentSecurityEnvelope(params: ExecuteAgentParams): TaskSecurityEnvelope | undefined {
+    private subAgentTaint(params: ExecuteAgentParams): Pick<ExecuteAgentParams, 'SecurityEnvelope' | 'parentRunTainted'> {
         const tainted = this.IsRunTainted || params.SecurityEnvelope?.IsRunTainted === true;
-        if (!params.SecurityEnvelope && !tainted) {
-            return undefined;
+        if (params.SecurityEnvelope) {
+            return { SecurityEnvelope: { ...params.SecurityEnvelope, IsRunTainted: tainted } };
         }
-        return { ...(params.SecurityEnvelope ?? { Version: TASK_SECURITY_ENVELOPE_VERSION }), IsRunTainted: tainted };
+        return tainted ? { parentRunTainted: true } : {};
     }
 
     /**
