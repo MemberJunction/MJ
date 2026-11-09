@@ -5,7 +5,8 @@
  * executes the outcome; this module only decides — which is what makes every
  * policy below unit-testable without standing up a driver, a browser, or a model.
  */
-import type { OracleResult } from '@memberjunction/testing-engine';
+import type { JudgeCriterionInput, OracleResult } from '@memberjunction/testing-engine';
+import { ReadJudgeCriteriaList } from '@memberjunction/testing-engine';
 import type { ComputerUseStatus, ComputerUseFailureReason, BrowserDiagnosticEvent, ReplayHealPolicy } from '@memberjunction/computer-use';
 import { ComputerUseTestConfig } from './types';
 
@@ -500,4 +501,29 @@ export function mergeComputerUseConfig(
     perTest: ComputerUseTestConfig
 ): ComputerUseTestConfig {
     return MergeComputerUseConfig(suite, perTest);
+}
+
+// ─── Judge criteria ────────────────────────────────────────
+
+/**
+ * The criterion texts the in-run judge receives, from the test's `judgeValidationCriteria`.
+ *
+ * Each entry is a string or `{ criterion, weight }`, read with the same rules the judge oracles use,
+ * so a list they would reject fails here with their message. The in-run judge decides Done per
+ * criterion and takes no weights; the oracles apply them when they score the run. A weight-0
+ * criterion counts for nothing in the oracles' score, so it is left out here too: otherwise it
+ * could stop the run reaching Done while scoring nothing.
+ *
+ * @returns The texts of criteria weighted above 0, in order, or `undefined` when the test sets no criteria
+ * @throws Error with the oracles' message when an entry is malformed or every weight is 0
+ */
+export function ResolveRunValidationCriteria(criteria: readonly JudgeCriterionInput[] | undefined): string[] | undefined {
+    if (!criteria || criteria.length === 0) {
+        return undefined;
+    }
+    const read = ReadJudgeCriteriaList(criteria);
+    if (!read.Success) {
+        throw new Error(`ExpectedOutcomes.judgeValidationCriteria: ${read.ErrorMessage}`);
+    }
+    return read.Value.filter(c => c.Weight > 0).map(c => c.Criterion);
 }

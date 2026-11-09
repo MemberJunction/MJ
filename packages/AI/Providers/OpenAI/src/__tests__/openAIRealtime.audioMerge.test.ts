@@ -24,7 +24,7 @@ vi.mock('@memberjunction/ai', async () => {
   }
   const RealtimeDiagLog = () => { /* no-op in tests */ };
   const { IsTranscriptContinuation } = await import('../../../../Core/src/generic/transcriptContinuation');
-  const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');
+  const { ResolveResponseDoneUsage, MapRealtimeUsageModalityDetail } = await import('../../../../Core/src/generic/realtimeUsage');
   // NormalizeTurnDetectionSettings is the single shared normalizer — run the real one so tests cannot drift from it.
   // turnDetectionSettings.ts is dependency-free BY DESIGN and must stay so: it is loaded from source here, under mocks.
   const { NormalizeTurnDetectionSettings } = await import('../../../../Core/src/generic/turnDetectionSettings');
@@ -32,7 +32,7 @@ vi.mock('@memberjunction/ai', async () => {
   // Same body as the real RealtimeDriverFactsOf (baseRealtime.ts). The real module cannot be imported here: it pulls in
   // @memberjunction/global, which these suites mock. The mocked BaseRealtimeModel has no static, so only drivers declaring their own resolve.
   const RealtimeDriverFactsOf = (driver: object): object => (driver.constructor as { DriverFacts: object }).DriverFacts;
-  return { BaseModel, BaseRealtimeModel, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, NormalizeTurnDetectionSettings, RealtimeDroppedInputReporter, RealtimeDriverFactsOf };
+  return { BaseModel, BaseRealtimeModel, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, MapRealtimeUsageModalityDetail, NormalizeTurnDetectionSettings, RealtimeDroppedInputReporter, RealtimeDriverFactsOf };
 });
 vi.mock('openai/realtime/websocket', () => ({ OpenAIRealtimeWebSocket: vi.fn() }));
 vi.mock('openai', () => ({

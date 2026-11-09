@@ -4,6 +4,7 @@
     "autoCreateMissingRecords": true
   },
   "directoryOrder": [
+    "datasets",
     "tests",
     "test-suites",
     "roles",

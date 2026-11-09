@@ -30,7 +30,8 @@ import {
   WhiteboardWidgetInteractionEvent, WhiteboardWidgetSubmitEvent, WhiteboardWidgetSubmittingEventArgs
 } from './whiteboard-widget-bridge';
 import type { WhiteboardWidgetStep } from './whiteboard-widget-protocol';
-import { NormalizeWhiteboardPenPalette, RealtimeWhiteboardToolbarComponent, SameWhiteboardPenColor, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
+import { NormalizeWhiteboardPenPalette, RealtimeWhiteboardToolbarComponent, SameWhiteboardPenColor } from './whiteboard-toolbar.component';
+import { WHITEBOARD_PEN_COLORS } from './whiteboard-state';
 import { RealtimeWhiteboardZoomComponent } from './whiteboard-zoom.component';
 import { RealtimeWhiteboardAgentSeesPopoverComponent } from './whiteboard-agent-sees-popover.component';
 

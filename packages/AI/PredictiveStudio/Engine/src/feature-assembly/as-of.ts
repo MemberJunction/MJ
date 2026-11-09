@@ -14,7 +14,7 @@
  * date, then compute recency/aggregate features only over the surviving rows.
  */
 
-import type { AsOfStrategy } from '@memberjunction/predictive-studio-core';
+import { MS_PER_DAY, type AsOfStrategy } from '@memberjunction/predictive-studio-core';
 import type { SourceRow } from './data-access';
 
 /** A single dated event/activity row scoped to a target record. */
@@ -55,7 +55,7 @@ export function ResolveAsOfDate(strategy: AsOfStrategy, record: SourceRow, label
       return parsed;
     }
     case 'offset': {
-      if (strategy.OffsetDays == null) {
+      if ((strategy.OffsetDays === null || strategy.OffsetDays === undefined)) {
         throw new Error(`AsOfStrategy.Mode='offset' requires OffsetDays.`);
       }
       if (!labelEventDate) {
@@ -71,11 +71,6 @@ export function ResolveAsOfDate(strategy: AsOfStrategy, record: SourceRow, label
       throw new Error(`Unsupported AsOfStrategy mode: ${String(exhaustive)}`);
     }
   }
-}
-
-/** @deprecated Use {@link ResolveAsOfDate}. */
-export function resolveAsOfDate(strategy: AsOfStrategy, record: SourceRow, labelEventDate?: Date | null): Date | null {
-  return ResolveAsOfDate(strategy, record, labelEventDate);
 }
 
 /**
@@ -95,11 +90,6 @@ export function FilterAsOf(rows: DatedRow[], asOfDate: Date | null): DatedRow[] 
   }
   const cutoff = asOfDate.getTime();
   return rows.filter((r) => r.Date.getTime() <= cutoff);
-}
-
-/** @deprecated Use {@link FilterAsOf}. */
-export function filterAsOf(rows: DatedRow[], asOfDate: Date | null): DatedRow[] {
-  return FilterAsOf(rows, asOfDate);
 }
 
 /**
@@ -131,11 +121,6 @@ export function DaysSinceLastActivityAsOf(rows: DatedRow[], asOfDate: Date | nul
   return Math.floor(diffMs / MS_PER_DAY);
 }
 
-/** @deprecated Use {@link DaysSinceLastActivityAsOf}. */
-export function daysSinceLastActivityAsOf(rows: DatedRow[], asOfDate: Date | null): number | null {
-  return DaysSinceLastActivityAsOf(rows, asOfDate);
-}
-
 /**
  * Counts surviving activity rows as of the cutoff — a generic point-in-time
  * aggregate (e.g. `activity_count_asof`). Only rows at-or-before the cutoff are
@@ -147,14 +132,6 @@ export function daysSinceLastActivityAsOf(rows: DatedRow[], asOfDate: Date | nul
 export function ActivityCountAsOf(rows: DatedRow[], asOfDate: Date | null): number {
   return FilterAsOf(rows, asOfDate).length;
 }
-
-/** @deprecated Use {@link ActivityCountAsOf}. */
-export function activityCountAsOf(rows: DatedRow[], asOfDate: Date | null): number {
-  return ActivityCountAsOf(rows, asOfDate);
-}
-
-/** Milliseconds in one day. */
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
  * Coerces a loosely-typed source value into a `Date`, or `null` when it cannot
