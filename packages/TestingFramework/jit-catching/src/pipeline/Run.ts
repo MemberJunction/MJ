@@ -37,12 +37,14 @@ export async function CleanupBase(dir: RunDir, gen: GenerationFile, cleanup: (r:
 
 /**
  * Copies the base sources of `packageDirs` to `<run dir>/base-src`, records that folder as `BaseSourceDir` in
- * `generation.json`, removes the base worktree, and removes the run's pnpm store and fetch folders.
+ * `generation.json`, removes the base worktree, and removes the run's pnpm store and fetch folders. Writes a stderr
+ * line when the snapshot holds no files.
  */
 export async function FinishRun(dir: RunDir, target: Pick<VitestCatchTarget, 'Cleanup' | 'RemoveStore'>, packageDirs: string[]): Promise<void> {
     const gen = dir.ReadGeneration();
     const dest = join(dir.Path, 'base-src');
-    SnapshotBaseSources(CheckedBaseRootDir(dir, gen.BaseRootDir), packageDirs, dest);
+    const copied = SnapshotBaseSources(CheckedBaseRootDir(dir, gen.BaseRootDir), packageDirs, dest);
+    if (copied === 0) process.stderr.write(`base source snapshot: no files copied to ${dest}; a later assess cannot read base sources\n`);
     dir.WriteGeneration({ ...gen, BaseSourceDir: dest });
     await CleanupBase(dir, gen, (r) => target.Cleanup(r));
     await target.RemoveStore();

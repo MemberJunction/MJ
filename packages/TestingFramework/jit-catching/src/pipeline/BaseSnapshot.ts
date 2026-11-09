@@ -1,5 +1,6 @@
 import { copyFileSync, lstatSync, mkdirSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs';
-import { dirname, isAbsolute, join } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import ts from 'typescript';
 import type { RunDir } from './RunDir';
 
 /** Files copied from each package folder next to its `src/`. */
@@ -9,8 +10,9 @@ const JIT_DIR = join('__tests__', 'jit');
 
 /**
  * Copies each package's `src/` (without `src/__tests__/jit`), `tsconfig.json` and `package.json` from `baseRoot`
- * to the same relative paths under `dest`, after emptying `dest`. Copies regular files only and never goes
- * through a symlink; a package folder that is missing or reached through a symlink is skipped.
+ * to the same relative paths under `dest`, after emptying `dest`, plus every tsconfig file the package tsconfig
+ * `extends` inside `baseRoot`. Copies regular files only and never goes through a symlink; a package folder that is
+ * missing or reached through a symlink is skipped with a stderr line.
  * Returns the copied file count.
  */
 export function SnapshotBaseSources(baseRoot: string, packageDirs: string[], dest: string): number {
@@ -18,8 +20,9 @@ export function SnapshotBaseSources(baseRoot: string, packageDirs: string[], des
     mkdirSync(dest, { recursive: true });
     let count = 0;
     for (const pkg of packageDirs) {
-        if (!isPlainRelative(pkg) || !isRealDirPath(baseRoot, pkg)) continue;
+        if (!isPlainRelative(pkg) || !isRealDirPath(baseRoot, pkg)) { warn(`skipped package folder ${JSON.stringify(pkg)}: not a plain folder in the base worktree`); continue; }
         for (const f of PACKAGE_FILES) count += copyIfRegular(join(baseRoot, pkg, f), join(dest, pkg, f));
+        count += copyExtendsChain(baseRoot, join(pkg, 'tsconfig.json'), dest, new Set());
         if (isRealDirPath(baseRoot, join(pkg, 'src'))) count += copyTree(join(baseRoot, pkg, 'src'), join(dest, pkg, 'src'), '');
     }
     return count;
@@ -36,6 +39,54 @@ export function CheckedBaseSourceDir(dir: RunDir, recorded: string): string {
     if (want === null) throw new Error(`run ${dir.RunID} has no base source snapshot at ${expected}`);
     if (got !== want) throw new Error(`run ${dir.RunID}: recorded base source snapshot ${JSON.stringify(recorded)} is not ${expected}`);
     return recorded;
+}
+
+/** Writes one base source snapshot line to stderr. */
+function warn(message: string): void { process.stderr.write(`base source snapshot: ${message}\n`); }
+
+/**
+ * Copies the configs that the tsconfig at `configRel` (relative to `baseRoot`) `extends`, and theirs in turn, to the
+ * same relative paths under `dest`. Follows relative `extends` only (a bare package name ends the chain); a config
+ * outside `baseRoot`, reached through a symlink or not a regular file is skipped with a stderr line.
+ * Returns the copied file count.
+ */
+function copyExtendsChain(baseRoot: string, configRel: string, dest: string, seen: Set<string>): number {
+    if (seen.has(configRel) || !isRegularInside(baseRoot, configRel)) return 0;
+    seen.add(configRel);
+    let count = 0;
+    for (const ext of extendsOf(join(baseRoot, configRel))) {
+        if (!ext.startsWith('.') && !ext.startsWith('/')) continue;
+        const rel = parentConfigRel(baseRoot, configRel, ext);
+        if (rel === null) { warn(`skipped ${JSON.stringify(ext)} extended by ${configRel}: not a regular file inside the base worktree`); continue; }
+        if (!seen.has(rel)) count += copyIfRegular(join(baseRoot, rel), join(dest, rel));
+        count += copyExtendsChain(baseRoot, rel, dest, seen);
+    }
+    return count;
+}
+
+/** The `extends` entries of a tsconfig file, as a list (empty when it has none or cannot be read). */
+function extendsOf(configPath: string): string[] {
+    const ext: unknown = ts.readConfigFile(configPath, ts.sys.readFile).config?.extends;
+    if (typeof ext === 'string') return [ext];
+    return Array.isArray(ext) ? ext.filter((e): e is string => typeof e === 'string') : [];
+}
+
+/** `ext` resolved from the folder of `configRel` (adding `.json` when TypeScript would), relative to `baseRoot`; null when it is not a regular file inside `baseRoot`. */
+function parentConfigRel(baseRoot: string, configRel: string, ext: string): string | null {
+    const abs = resolve(baseRoot, dirname(configRel), ext);
+    for (const candidate of ext.endsWith('.json') ? [abs] : [abs, `${abs}.json`]) {
+        const rel = relative(baseRoot, candidate);
+        if (isRegularInside(baseRoot, rel)) return rel;
+    }
+    return null;
+}
+
+/** True when `rel` is a plain relative path under `root` whose folders are real folders and which is a regular file. */
+function isRegularInside(root: string, rel: string): boolean {
+    if (!isPlainRelative(rel)) return false;
+    const parent = dirname(rel);
+    if (parent !== '.' && !isRealDirPath(root, parent)) return false;
+    try { return lstatSync(join(root, rel)).isFile(); } catch { return false; }
 }
 
 /** True when `rel` is a relative path with no `..` or empty segment. */

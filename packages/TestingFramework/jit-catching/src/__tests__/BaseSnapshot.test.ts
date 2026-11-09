@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CheckedBaseSourceDir, SnapshotBaseSources } from '../pipeline/BaseSnapshot';
@@ -28,6 +28,21 @@ describe('SnapshotBaseSources', () => {
     expect(existsSync(join(dest, 'packages/X/tsconfig.json'))).toBe(true);
     expect(existsSync(join(dest, 'packages/X/src/__tests__/jit/t.jit.test.ts'))).toBe(false);
     expect(existsSync(join(dest, 'packages/X/src/link.ts'))).toBe(false);
+  });
+});
+
+describe('SnapshotBaseSources tsconfig chain', () => {
+  it('copies the parent tsconfig a package tsconfig extends, at the same relative path', () => {
+    const root = temp('jit-snap-base-'); const pkg = join(root, 'packages/X');
+    mkdirSync(join(pkg, 'src'), { recursive: true }); writeFileSync(join(pkg, 'src/a.ts'), 'export const a = 1;\n');
+    const parent = JSON.stringify({ compilerOptions: { target: 'ES2022', lib: ['ES2022'] } });
+    writeFileSync(join(root, 'tsconfig.server.json'), parent);
+    writeFileSync(join(pkg, 'tsconfig.json'), JSON.stringify({ extends: '../../tsconfig.server.json' }));
+    const dest = join(temp('jit-snap-dest-'), 'base-src');
+
+    SnapshotBaseSources(root, ['packages/X'], dest);
+
+    expect(readFileSync(join(dest, 'tsconfig.server.json'), 'utf8')).toBe(parent);
   });
 });
 
