@@ -652,6 +652,111 @@ describe('InferProcessor Lifecycle Hooks (P1-6)', () => {
         }
     });
 
+    it('caps concurrent challenger prompts at MaxInFlightShadow and holds each slot until a timed-out prompt settles', async () => {
+        const origConfig = AIEngine.Instance.Config;
+        const origPromptsDescriptor =
+            Object.getOwnPropertyDescriptor(AIEngine.Instance, 'Prompts') ??
+            Object.getOwnPropertyDescriptor(Object.getPrototypeOf(AIEngine.Instance), 'Prompts');
+        const origPromptModelsDescriptor =
+            Object.getOwnPropertyDescriptor(AIEngine.Instance, 'PromptModels') ??
+            Object.getOwnPropertyDescriptor(Object.getPrototypeOf(AIEngine.Instance), 'PromptModels');
+        const origRecordFeatureValues = FeatureValueCacheService.Instance.RecordFeatureValues;
+
+        let activeCalls = 0;
+        let maxActiveCalls = 0;
+        const signals: AbortSignal[] = [];
+        /** A prompt call that ignores the abort: it runs 100 ms though its 15 ms timeout fires first. */
+        class SlowPromptInferProcessor extends ShadowTestableInferProcessor {
+            protected override async ExecuteChallengerPrompt(params: AIPromptParams, signal: AbortSignal): Promise<AIPromptRunResult<unknown>> {
+                signals.push(signal);
+                activeCalls++;
+                maxActiveCalls = Math.max(maxActiveCalls, activeCalls);
+                try {
+                    await new Promise((resolve) => setTimeout(resolve, 100));
+                    return super.ExecuteChallengerPrompt(params, signal);
+                } finally {
+                    activeCalls--;
+                }
+            }
+        }
+
+        try {
+            AIEngine.Instance.Config = (async () => {}) as typeof AIEngine.Instance.Config;
+            Object.defineProperty(AIEngine.Instance, 'Prompts', {
+                configurable: true,
+                get: () => [{ ID: 'prompt-challenger-cap', Name: 'Capped Challenger' } as MJAIPromptEntityExtended],
+            });
+            Object.defineProperty(AIEngine.Instance, 'PromptModels', {
+                configurable: true,
+                get: () => [{ PromptID: 'prompt-challenger-cap', ModelID: 'model-challenger-llm', Priority: 1, Status: 'Active' }],
+            });
+            FeatureValueCacheService.Instance.RecordFeatureValues = async () => ({ Upserted: 1, Unchanged: 0, Previous: { StandardTitle: null } });
+
+            const processor = new SlowPromptInferProcessor(
+                'prompt-champion-1',
+                undefined,
+                { Outputs: [{ Name: 'StandardTitle', Ref: '$.StandardTitle', Target: { Mode: 'none' } }] },
+                null,
+            );
+            processor.MaxInFlightShadow = 2;
+            processor.ChallengerConfig = {
+                Enabled: true,
+                SampleRate: 1.0,
+                WorkType: 'Infer',
+                ChallengerPromptID: 'prompt-challenger-cap',
+                MaxLatencyMs: 15,
+            };
+            const provider: Pick<IMetadataProvider, 'EntityByID' | 'GetEntityObject'> = {
+                EntityByID: () => undefined,
+                GetEntityObject: async <T>() => new ChallengerFeatureValueDouble() as T,
+            };
+            const context: RecordProcessorContext = {
+                ContextUser: { ID: 'user-1' } as UserInfo,
+                Provider: provider as IMetadataProvider,
+                RecordProcessID: 'rp-infer-cap',
+                EntityID: 'ent-contacts',
+            };
+            const champion = (recordId: string) =>
+                processor.InvokeWithFeatureValues({
+                    Record: { EntityID: 'ent-contacts', RecordID: recordId, Record: { ID: recordId } },
+                    Context: context,
+                    Payload: { StandardTitle: 'CHAMPION' },
+                    PromptID: 'prompt-champion-1',
+                    ConstraintHash: 'hash-1',
+                    InputHash: `input-${recordId}`,
+                    Pin: { PromptID: 'prompt-champion-1', PromptVersionHash: 'pv-1', AIModelID: 'model-champion-llm', ParametersHash: 'params-1', SpecHash: 'spec-1' },
+                });
+
+            await champion('rec-1');
+            await champion('rec-2');
+            // Both challenger prompts are running, past their timeout.
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            expect(activeCalls).toBe(2);
+            expect(signals.every((signal) => signal.aborted)).toBe(true);
+
+            // Their slots are still held, so the next two are dropped rather than started.
+            await champion('rec-3');
+            await champion('rec-4');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            expect(processor.DroppedShadowCount).toBe(2);
+            expect(maxActiveCalls).toBe(2);
+
+            await processor.FlushShadowInFlight();
+            expect(processor.InFlightShadowCount).toBe(0);
+            expect(processor.ChallengerCalls).toHaveLength(2);
+            expect(maxActiveCalls).toBe(2);
+        } finally {
+            AIEngine.Instance.Config = origConfig;
+            if (origPromptsDescriptor) {
+                Object.defineProperty(AIEngine.Instance, 'Prompts', origPromptsDescriptor);
+            }
+            if (origPromptModelsDescriptor) {
+                Object.defineProperty(AIEngine.Instance, 'PromptModels', origPromptModelsDescriptor);
+            }
+            FeatureValueCacheService.Instance.RecordFeatureValues = origRecordFeatureValues;
+        }
+    });
+
     it('keeps champion prompt inputs only while a challenger can sample them, and drops unused ones when the next batch starts (P13)', async () => {
         const processor = new ShadowTestableInferProcessor(
             'prompt-champion-1',
