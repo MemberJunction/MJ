@@ -31,6 +31,7 @@ export * from './lib/services/agent-state.service';
 export * from './lib/services/conversation-liveness-dom.service';
 export * from './lib/services/conversation-agent.service';
 export * from './lib/services/active-tasks.service';
+export * from './lib/services/conversation-tasks-filter';
 export * from './lib/services/conversation-streaming.service';
 export * from './lib/services/dialog.service';
 export * from './lib/services/export.service';

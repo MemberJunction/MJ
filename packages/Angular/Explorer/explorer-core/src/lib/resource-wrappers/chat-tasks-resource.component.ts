@@ -4,12 +4,12 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
-import { TasksFullViewComponent } from '@memberjunction/ng-conversations';
+import { BuildConversationTasksFilter, TasksFullViewComponent } from '@memberjunction/ng-conversations';
 /**
- * Chat Tasks Resource - displays the tasks full view for tab-based display
- * Extends BaseResourceComponent to work with the resource type system
- * Shows all tasks associated with conversations and artifacts
- * Supports URL deep-linking via taskId query parameter
+ * Chat Agent Activity Resource (`ChatTasksResource`) — displays live multi-agent orchestrations,
+ * step dependency DAGs, and background agent activity launched from conversations.
+ * Extends BaseResourceComponent to work with the resource type system and supports URL
+ * deep-linking via the `taskId` query parameter.
  */
 @RegisterClass(BaseResourceComponent, 'ChatTasksResource')
 @Component({
@@ -22,7 +22,8 @@ import { TasksFullViewComponent } from '@memberjunction/ng-conversations';
           #tasksView
           [environmentId]="environmentId"
           [currentUser]="currentUser"
-          [baseFilter]="'1=1'"
+          [baseFilter]="AgentActivityBaseFilter"
+          [BaseFilterResolver]="AgentActivityFilterResolver"
           [activeTaskId]="activeTaskId"
           (taskSelected)="onTaskSelected($event)"
           (openEntityRecord)="OnOpenEntityRecord($event)"
@@ -73,6 +74,32 @@ export class ChatTasksResource extends BaseResourceComponent implements OnDestro
     this.CurrentUser = value;
   }
   public activeTaskId?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+  /**
+   * Default synchronous fallback filter scoping `MJ: Tasks` to agent- or conversation-originated
+   * roots so human deliverables from `bizapps-tasks` do not bleed into Chat's Agent Activity monitor.
+   */
+  public get AgentActivityBaseFilter(): string {
+    return '(ConversationDetailID IS NOT NULL OR AgentID IS NOT NULL OR AgentRunID IS NOT NULL)';
+  }
+
+  /**
+   * Resolves the user-scoped conversation + agent activity filter for `TasksFullViewComponent`.
+   */
+  public readonly AgentActivityFilterResolver: () => Promise<string> = () =>
+    this.ResolveAgentActivityFilter();
+
+  public async ResolveAgentActivityFilter(): Promise<string> {
+    if (!this.CurrentUser) {
+      return this.AgentActivityBaseFilter;
+    }
+    const userConversationFilter = await BuildConversationTasksFilter(this.ProviderToUse, this.CurrentUser);
+    const tasksEntity = this.ProviderToUse.EntityByName('MJ: Tasks');
+    const childStepClause = tasksEntity
+      ? ` OR ID IN (SELECT [ParentID] FROM [${tasksEntity.SchemaName}].[${tasksEntity.BaseView}] WHERE [ParentID] IS NOT NULL AND ([AgentID] IS NOT NULL OR [AgentRunID] IS NOT NULL OR [ConversationDetailID] IS NOT NULL))`
+      : '';
+    return `(${userConversationFilter}) AND (ConversationDetailID IS NOT NULL OR AgentID IS NOT NULL OR AgentRunID IS NOT NULL${childStepClause})`;
+  }
 
   ngOnInit() {
     super.ngOnInit();
@@ -145,16 +172,16 @@ export class ChatTasksResource extends BaseResourceComponent implements OnDestro
   }
 
   /**
-   * Get the display name for chat tasks
+   * Get the display name for Chat Agent Activity
    */
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
-    return 'Tasks';
+    return data?.Name || 'Agent Activity';
   }
 
   /**
-   * Get the icon class for chat tasks
+   * Get the icon class for Chat Agent Activity
    */
-  async GetResourceIconClass(data: ResourceData): Promise<string> {
-    return 'fa-solid fa-tasks';
+  async GetResourceIconClass(_data: ResourceData): Promise<string> {
+    return 'fa-solid fa-diagram-project';
   }
 }

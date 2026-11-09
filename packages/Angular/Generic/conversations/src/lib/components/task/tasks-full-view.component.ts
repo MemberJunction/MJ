@@ -117,7 +117,7 @@ export interface WorkflowCommandCenterKPIs {
           </div>
           <div class="cc-title-block">
             <div class="cc-title-row">
-              <h1 class="cc-title">AI Agent Workflows &amp; Tasks</h1>
+              <h1 class="cc-title">Agent Activity</h1>
               @if (Kpis.ActiveWorkflows > 0) {
                 <span class="cc-live-pill">
                   <span class="cc-live-dot"></span>
@@ -126,7 +126,7 @@ export interface WorkflowCommandCenterKPIs {
               }
             </div>
             <p class="cc-subtitle">
-              Real-time multi-agent task orchestration, step dependencies &amp; execution telemetry
+              Real-time multi-agent orchestration, step dependencies &amp; execution telemetry
             </p>
           </div>
         </div>
@@ -157,7 +157,7 @@ export interface WorkflowCommandCenterKPIs {
             class="cc-refresh-btn"
             [disabled]="isLoading"
             (click)="LoadTasks()"
-            title="Refresh workflows and tasks">
+            title="Refresh agent activity">
             <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="isLoading"></i>
             <span>Refresh</span>
           </button>

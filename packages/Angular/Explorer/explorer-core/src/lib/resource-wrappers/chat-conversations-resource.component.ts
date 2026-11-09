@@ -1492,6 +1492,19 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
             navItemName: 'Library',
             queryParams: route.Configuration,
           });
+        } else if (route.NavItemName === 'Agent Activity') {
+          void this.navigationService
+            .OpenNavItemByName('Agent Activity', route.Configuration, undefined, {
+              queryParams: route.Configuration,
+            })
+            .then((tabId) => {
+              if (!tabId) {
+                return this.navigationService.OpenNavItemByName('Tasks', route.Configuration, undefined, {
+                  queryParams: route.Configuration,
+                });
+              }
+              return tabId;
+            });
         } else {
           void this.navigationService.OpenNavItemByName(route.NavItemName, route.Configuration);
         }

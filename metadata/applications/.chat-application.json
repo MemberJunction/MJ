@@ -1,7 +1,7 @@
 {
   "fields": {
     "Name": "Chat",
-    "Description": "Agent conversations and tasks",
+    "Description": "Agent conversations and background agent activity",
     "Icon": "fa-solid fa-comments",
     "DefaultForNewUser": true,
     "Color": "#9c27b0",
@@ -19,8 +19,8 @@
         "isDefault": true
       },
       {
-        "Label": "Tasks",
-        "Icon": "fa-solid fa-tasks",
+        "Label": "Agent Activity",
+        "Icon": "fa-solid fa-diagram-project",
         "ResourceType": "Custom",
         "DriverClass": "ChatTasksResource",
         "isDefault": false
