@@ -33,7 +33,8 @@ export interface GenerateDeps {
     ForRun: (dir: RunDir) => GenerateTools;
 }
 /**
- * With `PR` null, `HeadSHA` is required; `BaseSHA` defaults to the merge base of head and `origin/next`.
+ * With `PR` null, `HeadSHA` is required. With `PR` set, `HeadSHA` (when given) replaces the PR's head and the PR still gives the title and body.
+ * `BaseSHA` defaults to the merge base of head and `origin/next`.
  * `Env` is the environment the preflight check reads; it defaults to `process.env`.
  */
 export interface GenerateOptions { PR: number | null; BaseSHA?: string; HeadSHA?: string; Trigger: Trigger; RepoRoot: string; Settings: Settings; Deps?: GenerateDeps; Env?: NodeJS.ProcessEnv; }
@@ -69,13 +70,18 @@ export async function GenerateStep(o: GenerateOptions): Promise<{ RunID: string 
     return { RunID: run.ID };
 }
 
-/** Head from the PR or `HeadSHA`; base from `BaseSHA` or the merge base with `origin/next`, which is fetched only then. */
+/**
+ * Head from `HeadSHA`, else from the PR; base from `BaseSHA` or the merge base with `origin/next`.
+ * A PR with an explicit head is a landing commit on `next`, so `next` is fetched for it; otherwise the PR ref or the head is fetched, and `next` only for the merge base.
+ */
 async function resolveRevisions(o: GenerateOptions, d: GenerateDeps, pr: PullRequestInfo | null): Promise<{ BaseSHA: string; HeadSHA: string }> {
-    const head = pr?.HeadSHA ?? o.HeadSHA;
+    const head = o.HeadSHA ?? pr?.HeadSHA;
     if (!head) throw new Error('generate needs --pr or --head');
-    await d.Repo.Fetch(pr ? `refs/pull/${pr.Number}/head` : head).catch(() => undefined);
+    const landing = pr !== null && o.HeadSHA !== undefined;
+    if (landing) await d.Repo.Fetch('next');
+    else await d.Repo.Fetch(pr ? `refs/pull/${pr.Number}/head` : head).catch(() => undefined);
     if (o.BaseSHA) return { BaseSHA: o.BaseSHA, HeadSHA: head };
-    await d.Repo.Fetch('next');
+    if (!landing) await d.Repo.Fetch('next');
     return { BaseSHA: await d.Repo.MergeBase('origin/next', head), HeadSHA: head };
 }
 

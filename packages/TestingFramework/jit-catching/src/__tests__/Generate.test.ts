@@ -112,6 +112,30 @@ describe('GenerateStep', () => {
     expect(g.Run.TokensByModel).toContainEqual({ ...spent, Role: 'Generator' });
   });
 
+  it('with a PR and an explicit head uses the given base and head, fetches next, and takes the text from the PR', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'jit-gen-')); const redaction = new RedactionCheck([]);
+    const order: string[] = []; const fetches: string[] = []; let pr: { Title: string; Body: string } | null = null;
+    const tools: GenerateTools = {
+      EnsureImage: async () => { order.push('image'); },
+      Target: {
+        Prepare: async (r: RevisionRef): Promise<PreparedRevision> => { order.push(`prepare ${r.Kind} ${r.SHA}`); return { Ref: r, RootDir: '/work/base' }; },
+        BuildPackages: async (_r: PreparedRevision, p: string[]) => { order.push(`build ${p.join(',')}`); },
+      },
+      Analyzer: { Analyze: async (_run, text) => { pr = text; return { ...analysis(), Risks: [] }; }, Usage: { Model: 'a', InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 } },
+      Generator: { Generate: async (): Promise<GenerationResult> => ({ Tests: [], Tokens: { Model: 'm', InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 }, TranscriptPath: null, EndReason: 'success', Turns: 1 }) },
+      PackageMap: { Get: (n: string) => (n === PKG ? { Name: PKG, Dir: PKG_DIR, HasVitest: true, HasTests: true } : null), PackageForPath: () => null },
+    };
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const getPr = vi.fn(async () => ({ Number: 12, Title: 'fix(x): keep Open', Body: 'Open must stay open.', HeadSHA: 'c'.repeat(40), BaseRef: 'next', HeadRepo: 'o/r', Author: 'a' }));
+    const { RunID } = await GenerateStep({ PR: 12, BaseSHA: BASE_SHA, HeadSHA: HEAD_SHA, Trigger: 'Backtest', RepoRoot: root, Settings: DEFAULT_SETTINGS, Env: FULL_ENV,
+      Deps: { GitHub: { GetPullRequest: getPr }, Repo: { Fetch: async (ref: string) => { fetches.push(ref); }, MergeBase: vi.fn(), Subject: vi.fn() }, Redaction: redaction, ForRun: () => tools } });
+
+    expect(order).toEqual(['image', `prepare Base ${BASE_SHA}`, `build ${PKG}`]);
+    expect(fetches).toEqual(['next']);
+    expect(pr).toEqual({ Title: 'fix(x): keep Open', Body: 'Open must stay open.' });
+    expect(new RunDir(root, RunID, redaction).ReadGeneration().Run).toMatchObject({ PRNumber: 12, Trigger: 'Backtest', BaseSHA: BASE_SHA, HeadSHA: HEAD_SHA });
+  });
+
   it('refuses before any GitHub, repo or target call when a key is missing or Claude Code is the parent', async () => {
     const root = mkdtempSync(join(tmpdir(), 'jit-gen-'));
     for (const env of [{ ...FULL_ENV, ANTHROPIC_API_KEY: undefined }, { ...FULL_ENV, CLAUDECODE: '1' }]) {
