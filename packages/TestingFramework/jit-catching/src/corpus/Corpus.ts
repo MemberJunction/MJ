@@ -29,7 +29,7 @@ export function LoadCorpus(path: string): Corpus {
 function random(seed: number): () => number { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 
 /** Deterministic: seeded Fisher–Yates (mulberry32). Held-out size = min(n, max(10, round(n / 3))); the rest is Tuning. */
-export function AssignSlices<T extends { Slice?: Slice }>(entries: T[], seed: number): (T & { Slice: Slice })[] {
+export function AssignSlices<T extends object>(entries: T[], seed: number): (T & { Slice: Slice })[] {
     const n = entries.length;
     const next = random(seed);
     const order = entries.map((_, i) => i);
