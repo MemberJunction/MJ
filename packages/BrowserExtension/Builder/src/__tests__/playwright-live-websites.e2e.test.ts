@@ -631,4 +631,53 @@ describe.runIf(hasPlaywrightChromium)('Headless Playwright E2E Proof — Live Wi
             await page.close();
         }
     }, 60000);
+
+    it('E2E 3 (Side Panel OAuth2 PKCE Popup): clicking MSAL and Auth0 sign-in buttons opens real OAuth2 PKCE popup windows to Microsoft Entra ID and Auth0', async () => {
+        expect(context).not.toBeNull();
+        const sidePanelPage = await context!.newPage();
+
+        try {
+            const sidePanelFileUrl = 'file://' + path.join(unpackedCopilotDir, 'sidepanel.html');
+            await sidePanelPage.goto(sidePanelFileUrl, { waitUntil: 'domcontentloaded' });
+            await sidePanelPage.waitForSelector('#mj-extension-sidepanel-root[data-ready="true"]', {
+                timeout: 10000,
+            });
+
+            // 1. Click "Sign In with Microsoft (MSAL)" and verify real popup window opens to login.microsoftonline.com
+            const msalPopupPromise = context!.waitForEvent('page', { timeout: 15000 });
+            await sidePanelPage.click('#mj-btn-idp-msal');
+            const msalPopup = await msalPopupPromise;
+            await msalPopup.waitForLoadState('domcontentloaded', { timeout: 20000 });
+
+            const msalOAuthUrl = await sidePanelPage.getAttribute(
+                '#mj-extension-sidepanel-root',
+                'data-last-oauth-url'
+            );
+            expect(msalOAuthUrl).toContain(
+                'https://login.microsoftonline.com/ff10ade7-5d03-40a9-be28-cb7ab99670b1/oauth2/v2.0/authorize'
+            );
+            expect(msalOAuthUrl).toContain('client_id=7e6e6ecf-66ff-4733-9c60-1e6def949897');
+            expect(msalOAuthUrl).toContain('code_challenge_method=S256');
+            expect(msalPopup.url()).toContain('login.microsoftonline.com');
+            await msalPopup.close();
+
+            // 2. Click "Auth0 / OIDC" and verify real popup window opens to bluecypress-dev.us.auth0.com
+            const auth0PopupPromise = context!.waitForEvent('page', { timeout: 15000 });
+            await sidePanelPage.click('#mj-btn-idp-auth0');
+            const auth0Popup = await auth0PopupPromise;
+            await auth0Popup.waitForLoadState('domcontentloaded', { timeout: 20000 });
+
+            const auth0OAuthUrl = await sidePanelPage.getAttribute(
+                '#mj-extension-sidepanel-root',
+                'data-last-oauth-url'
+            );
+            expect(auth0OAuthUrl).toContain('https://bluecypress-dev.us.auth0.com/authorize');
+            expect(auth0OAuthUrl).toContain('client_id=uRNpH3B0sFKVc2yrfBGBalfiUphUK5JI');
+            expect(auth0OAuthUrl).toContain('code_challenge_method=S256');
+            expect(auth0Popup.url()).toContain('bluecypress-dev.us.auth0.com');
+            await auth0Popup.close();
+        } finally {
+            await sidePanelPage.close();
+        }
+    }, 60000);
 });

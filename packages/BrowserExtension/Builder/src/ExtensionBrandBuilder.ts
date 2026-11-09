@@ -1597,10 +1597,14 @@ if (extApi && extApi.runtime && extApi.runtime.onMessageExternal) {
       </button>
     </header>
 
-    <section id="mj-auth-drawer" class="mj-auth-drawer">
+    <section id="mj-auth-drawer" class="mj-auth-drawer open">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <strong style="font-size:12px;">MemberJunction Server & Direct Widget Sign-In</strong>
         <span id="mj-auth-mode-badge" class="mj-badge mj-badge-success">Live Local Braiding Active</span>
+      </div>
+      <div id="mj-signed-in-user-bar" style="display:none;padding:6px 8px;border-radius:6px;background:#dcfce7;border:1px solid #86efac;color:#14532d;font-size:11px;align-items:center;justify-content:space-between;gap:6px;">
+        <span id="mj-signed-in-user-label" style="font-weight:700;"></span>
+        <button id="mj-btn-sign-out" class="mj-btn" style="padding:2px 6px;font-size:10px;">Sign Out</button>
       </div>
       <label style="font-size:11px;color:var(--mj-text-secondary);">MJAPI GraphQL Endpoint URL</label>
       <input id="mj-input-api-url" class="mj-input" type="url" value="${profile.DefaultServerUrl ?? 'http://localhost:4000/graphql'}" placeholder="http://localhost:4000/graphql" />
@@ -1651,7 +1655,7 @@ if (extApi && extApi.runtime && extApi.runtime.onMessageExternal) {
 
     <main id="mj-sidepanel-context-view" class="mj-main-scroll"></main>
   </div>
-  <script type="module" src="sidepanel.js"></script>
+  <script src="sidepanel.js"></script>
 </body>
 </html>
 `;
@@ -2201,6 +2205,310 @@ document.getElementById('mj-btn-save-auth')?.addEventListener('click', async () 
   }
 });
 
+const DEFAULT_OAUTH_CONFIG = {
+  msal: {
+    clientId: '7e6e6ecf-66ff-4733-9c60-1e6def949897',
+    authority: 'https://login.microsoftonline.com/ff10ade7-5d03-40a9-be28-cb7ab99670b1',
+    redirectUri: 'http://localhost:4200',
+    scopes: ['openid', 'profile', 'email', 'User.Read']
+  },
+  auth0: {
+    clientId: 'uRNpH3B0sFKVc2yrfBGBalfiUphUK5JI',
+    domain: 'bluecypress-dev.us.auth0.com',
+    redirectUri: 'http://localhost:4200',
+    scopes: ['openid', 'profile', 'email']
+  }
+};
+
+let pendingOAuthFlow = null;
+
+function base64UrlEncode(bytes) {
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');
+}
+
+async function generatePkcePair() {
+  const randomBytes = new Uint8Array(32);
+  crypto.getRandomValues(randomBytes);
+  const codeVerifier = base64UrlEncode(randomBytes);
+  const encoder = new TextEncoder();
+  const digest = await crypto.subtle.digest('SHA-256', encoder.encode(codeVerifier));
+  const codeChallenge = base64UrlEncode(new Uint8Array(digest));
+  return { codeVerifier, codeChallenge };
+}
+
+function decodeJwtPayload(jwt) {
+  try {
+    const parts = String(jwt || '').split('.');
+    if (parts.length < 2) return null;
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const json = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+function applySignedInSession(session) {
+  if (!session || !session.idToken) return;
+  state.isSignedIn = true;
+  const tokenInput = document.getElementById('mj-input-api-token');
+  const authBtn = document.getElementById('mj-btn-toggle-auth');
+  const badge = document.getElementById('mj-auth-mode-badge');
+  const userBar = document.getElementById('mj-signed-in-user-bar');
+  const userLabel = document.getElementById('mj-signed-in-user-label');
+
+  if (tokenInput) tokenInput.value = session.idToken;
+  const displayUser = session.userName || session.email || 'Authenticated User';
+  if (authBtn) {
+    authBtn.textContent = '🟢 ' + displayUser;
+    authBtn.classList.add('connected');
+  }
+  if (badge) {
+    badge.textContent = '🟢 Signed In (' + (session.provider || 'OAuth') + ')';
+  }
+  if (userBar && userLabel) {
+    userBar.style.display = 'flex';
+    userLabel.textContent = '🟢 ' + displayUser + (session.email && session.userName ? ' (' + session.email + ')' : '');
+  }
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    chrome.storage.local.set({ mj_ext_auth_session: session });
+  }
+}
+
+document.getElementById('mj-btn-sign-out')?.addEventListener('click', () => {
+  state.isSignedIn = false;
+  const tokenInput = document.getElementById('mj-input-api-token');
+  const authBtn = document.getElementById('mj-btn-toggle-auth');
+  const badge = document.getElementById('mj-auth-mode-badge');
+  const userBar = document.getElementById('mj-signed-in-user-bar');
+  if (tokenInput) tokenInput.value = '';
+  if (authBtn) {
+    authBtn.textContent = '🔌 Connect MJ / Sign In';
+    authBtn.classList.remove('connected');
+  }
+  if (badge) badge.textContent = 'Live Local Braiding Active';
+  if (userBar) userBar.style.display = 'none';
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    chrome.storage.local.remove('mj_ext_auth_session');
+  }
+  showToast('Signed out of MemberJunction session.');
+});
+
+if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+  chrome.storage.local.get(['mj_ext_auth_session'], (res) => {
+    if (res && res.mj_ext_auth_session && res.mj_ext_auth_session.idToken) {
+      applySignedInSession(res.mj_ext_auth_session);
+    }
+  });
+}
+
+async function handleOAuthRedirectUrl(rawUrl) {
+  if (!pendingOAuthFlow || !rawUrl) return false;
+  if (!rawUrl.startsWith(pendingOAuthFlow.redirectUri)) return false;
+
+  let parsed;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return false;
+  }
+
+  const queryParams = new URLSearchParams(parsed.search);
+  const hashParams = new URLSearchParams(parsed.hash.startsWith('#') ? parsed.hash.slice(1) : parsed.hash);
+  const code = queryParams.get('code') || hashParams.get('code');
+  const directIdToken = hashParams.get('id_token') || queryParams.get('id_token');
+  const error = queryParams.get('error') || hashParams.get('error');
+
+  if (!code && !directIdToken && !error) return false;
+
+  const flow = pendingOAuthFlow;
+  pendingOAuthFlow = null;
+
+  // Close the OAuth popup window/tab automatically
+  if (typeof chrome !== 'undefined') {
+    if (flow.windowId && chrome.windows && chrome.windows.remove) {
+      chrome.windows.remove(flow.windowId).catch(() => {});
+    } else if (flow.tabId && chrome.tabs && chrome.tabs.remove) {
+      chrome.tabs.remove(flow.tabId).catch(() => {});
+    }
+  }
+  if (flow.popupRef && typeof flow.popupRef.close === 'function') {
+    try { flow.popupRef.close(); } catch {}
+  }
+
+  if (error) {
+    const desc = queryParams.get('error_description') || hashParams.get('error_description') || error;
+    showToast('OAuth Sign-In error: ' + desc);
+    return true;
+  }
+
+  if (directIdToken) {
+    const claims = decodeJwtPayload(directIdToken) || {};
+    applySignedInSession({
+      provider: flow.provider,
+      idToken: directIdToken,
+      userName: claims.name || claims.preferred_username || claims.nickname || 'MJ User',
+      email: claims.email || claims.preferred_username || ''
+    });
+    showToast('Signed in via ' + flow.provider.toUpperCase() + '!');
+    return true;
+  }
+
+  // Exchange authorization code + PKCE code_verifier for JWT tokens
+  try {
+    showToast('Exchanging OAuth authorization code via PKCE...');
+    const body = new URLSearchParams({
+      client_id: flow.clientId,
+      grant_type: 'authorization_code',
+      code: code,
+      redirect_uri: flow.redirectUri,
+      code_verifier: flow.codeVerifier
+    });
+    const tokenResp = await fetch(flow.tokenEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    });
+    const tokenData = await tokenResp.json();
+    const jwt = tokenData.id_token || tokenData.access_token;
+    if (jwt) {
+      const claims = decodeJwtPayload(jwt) || {};
+      applySignedInSession({
+        provider: flow.provider,
+        idToken: jwt,
+        accessToken: tokenData.access_token,
+        userName: claims.name || claims.preferred_username || claims.nickname || 'MJ User',
+        email: claims.email || claims.preferred_username || ''
+      });
+      showToast('Signed in as ' + (claims.name || claims.preferred_username || claims.email || 'MJ User') + '!');
+      document.getElementById('mj-btn-save-auth')?.click();
+    } else {
+      showToast('Token exchange returned: ' + (tokenData.error_description || tokenData.error || 'No id_token'));
+    }
+  } catch (err) {
+    showToast('PKCE token exchange failed: ' + (err && err.message ? err.message : String(err)));
+  }
+  return true;
+}
+
+if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.onUpdated) {
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    const candidateUrl = changeInfo.url || (tab && tab.url);
+    if (candidateUrl && pendingOAuthFlow) {
+      handleOAuthRedirectUrl(candidateUrl);
+    }
+  });
+}
+
+async function launchOAuthPkcePopup(providerType, catalogEntry) {
+  const { codeVerifier, codeChallenge } = await generatePkcePair();
+  const stateToken = base64UrlEncode(crypto.getRandomValues(new Uint8Array(16)));
+  const nonceToken = base64UrlEncode(crypto.getRandomValues(new Uint8Array(16)));
+
+  let authorizeUrl = '';
+  let tokenEndpoint = '';
+  let clientId = '';
+  const redirectUri = DEFAULT_OAUTH_CONFIG.msal.redirectUri;
+
+  if (providerType === 'auth0') {
+    clientId = (catalogEntry && catalogEntry.clientId) || DEFAULT_OAUTH_CONFIG.auth0.clientId;
+    const rawDomain = (catalogEntry && (catalogEntry.domain || catalogEntry.issuer)) || DEFAULT_OAUTH_CONFIG.auth0.domain;
+    const cleanDomain = rawDomain.replace(/^https?:\\/\\//, '').replace(/\\/.*$/, '');
+    const scopes = (catalogEntry && Array.isArray(catalogEntry.scopes) && catalogEntry.scopes.length > 0)
+      ? catalogEntry.scopes.join(' ')
+      : DEFAULT_OAUTH_CONFIG.auth0.scopes.join(' ');
+    tokenEndpoint = 'https://' + cleanDomain + '/oauth/token';
+    const params = new URLSearchParams({
+      client_id: clientId,
+      response_type: 'code',
+      redirect_uri: redirectUri,
+      scope: scopes,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
+      state: stateToken,
+      nonce: nonceToken
+    });
+    authorizeUrl = 'https://' + cleanDomain + '/authorize?' + params.toString();
+  } else {
+    clientId = (catalogEntry && catalogEntry.clientId) || DEFAULT_OAUTH_CONFIG.msal.clientId;
+    let authority = (catalogEntry && catalogEntry.clientConfiguration && catalogEntry.clientConfiguration.authority) ||
+      (catalogEntry && catalogEntry.issuer ? catalogEntry.issuer.replace(/\\/v2\\.0\\/?$/, '') : '') ||
+      DEFAULT_OAUTH_CONFIG.msal.authority;
+    authority = authority.replace(/\\/+$/, '');
+    const scopes = (catalogEntry && Array.isArray(catalogEntry.scopes) && catalogEntry.scopes.length > 0)
+      ? catalogEntry.scopes.join(' ')
+      : DEFAULT_OAUTH_CONFIG.msal.scopes.join(' ');
+    tokenEndpoint = authority + '/oauth2/v2.0/token';
+    const params = new URLSearchParams({
+      client_id: clientId,
+      response_type: 'code',
+      redirect_uri: redirectUri,
+      response_mode: 'query',
+      scope: scopes,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
+      state: stateToken,
+      nonce: nonceToken,
+      prompt: 'select_account'
+    });
+    authorizeUrl = authority + '/oauth2/v2.0/authorize?' + params.toString();
+  }
+
+  if (root) {
+    root.setAttribute('data-last-oauth-url', authorizeUrl);
+    root.setAttribute('data-last-oauth-provider', providerType);
+  }
+
+  pendingOAuthFlow = {
+    provider: providerType,
+    clientId,
+    redirectUri,
+    codeVerifier,
+    tokenEndpoint,
+    state: stateToken,
+    windowId: null,
+    tabId: null,
+    popupRef: null
+  };
+
+  showToast('Opening ' + (providerType === 'auth0' ? 'Auth0 / OIDC' : 'Microsoft Entra (MSAL)') + ' Sign-In popup...');
+
+  if (typeof chrome !== 'undefined' && chrome.windows && typeof chrome.windows.create === 'function') {
+    try {
+      const win = await chrome.windows.create({
+        url: authorizeUrl,
+        type: 'popup',
+        width: 520,
+        height: 680,
+        focused: true
+      });
+      if (win && pendingOAuthFlow) {
+        pendingOAuthFlow.windowId = win.id || null;
+        if (win.tabs && win.tabs[0] && win.tabs[0].id) {
+          pendingOAuthFlow.tabId = win.tabs[0].id;
+        }
+      }
+      return;
+    } catch {
+      // Fall through to window.open
+    }
+  }
+
+  const popupRef = window.open(authorizeUrl, 'mj_oauth_pkce_popup', 'popup=yes,width=520,height=680');
+  if (pendingOAuthFlow) {
+    pendingOAuthFlow.popupRef = popupRef;
+  }
+}
+
 document.getElementById('mj-btn-discover-catalog')?.addEventListener('click', async () => {
   const urlInput = document.getElementById('mj-input-api-url');
   const listEl = document.getElementById('mj-provider-catalog-list');
@@ -2214,23 +2522,30 @@ document.getElementById('mj-btn-discover-catalog')?.addEventListener('click', as
       const data = await resp.json();
       const providers = Array.isArray(data.providers) ? data.providers : (Array.isArray(data) ? data : []);
       if (listEl) {
-        listEl.innerHTML = providers.map(p => \`<button class="mj-btn mj-btn-primary" data-idp="\${p.name || p.type}">🔐 Sign In via \${p.displayName || p.name || p.type}</button>\`).join('');
+        listEl.innerHTML = providers.map((p, idx) => \`<button class="mj-btn mj-btn-primary mj-catalog-idp-btn" data-idx="\${idx}">🔐 Sign In via \${p.displayName || p.name || p.driverClass || p.type}</button>\`).join('');
+        listEl.querySelectorAll('.mj-catalog-idp-btn').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const p = providers[Number(btn.getAttribute('data-idx'))];
+            const kind = String((p && (p.driverClass || p.type || p.name)) || 'msal').toLowerCase().includes('auth0') ? 'auth0' : 'msal';
+            launchOAuthPkcePopup(kind, p);
+          });
+        });
       }
       showToast('Discovered ' + providers.length + ' Identity Providers from ' + catalogUrl);
     } else {
       showToast('Catalog endpoint ' + catalogUrl + ' returned HTTP ' + resp.status);
     }
   } catch {
-    showToast('Could not reach ' + catalogUrl + ' (start MJAPI on localhost:4000 to fetch live IdP catalog).');
+    showToast('Could not reach ' + catalogUrl + ' — using built-in MSAL & Auth0 PKCE configuration.');
   }
 });
 
 document.getElementById('mj-btn-idp-msal')?.addEventListener('click', () => {
-  showToast('Launching Microsoft Entra (MSAL) PKCE flow via WebExtensions identity provider...');
+  launchOAuthPkcePopup('msal', null);
 });
 
 document.getElementById('mj-btn-idp-auth0')?.addEventListener('click', () => {
-  showToast('Launching Auth0 / OIDC PKCE flow via WebExtensions identity provider...');
+  launchOAuthPkcePopup('auth0', null);
 });
 
 document.getElementById('mj-btn-open-explorer')?.addEventListener('click', () => {
