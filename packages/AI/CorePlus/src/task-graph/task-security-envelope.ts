@@ -28,6 +28,14 @@ export const TASK_SECURITY_ENVELOPE_VERSION = 1;
 export const TAINTED_EGRESS_BLOCKED = 'TAINTED_EGRESS_BLOCKED';
 
 /**
+ * The keys of `MJ: Tasks.Configuration.runtime` the dispatcher's security decisions read: a step's
+ * recorded output taint, and the parameters its action was given (what its compensation runs with).
+ * The dispatcher records them through its guarded completion procedure, beneath the entity layer;
+ * `MJTaskEntityServer` refuses any change to them through the entity layer.
+ */
+export const TASK_RUNTIME_SECURITY_KEYS: readonly string[] = ['isOutputTainted', 'actionInput'];
+
+/**
  * The run's validated scope, exactly as `BaseAgent` hands it to each action dispatch
  * (`ActionRunScope` in `@memberjunction/actions-base`, which the action runner passes on as `RunScope`).
  */
