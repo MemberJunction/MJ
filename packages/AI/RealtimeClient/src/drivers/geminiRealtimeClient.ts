@@ -42,6 +42,7 @@ import {
     RealtimeClientState,
     REQUESTED_TRACKS_SESSION_KEY,
     type RealtimeClientReconnectContext,
+    type RefreshedRealtimeClientCredential,
 } from '../generic/baseRealtimeClient';
 import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
@@ -67,6 +68,13 @@ const GEMINI_OUTPUT_SAMPLE_RATE = 24000;
 const HELD_MIC_AUDIO_SECONDS = 2;
 /** {@link HELD_MIC_AUDIO_SECONDS} of 16 kHz, 16-bit mono PCM, as the base64 characters the chunks travel in. */
 const MAX_HELD_MIC_AUDIO_BASE64_CHARS = Math.ceil((GEMINI_INPUT_SAMPLE_RATE * 2 * HELD_MIC_AUDIO_SECONDS * 4) / 3);
+/**
+ * How long, after the user's last audible mic chunk, words the connection has not answered yet hold a timed move. Google
+ * sends nothing for an utterance (not even its transcription) until its answer starts, about a second after the user
+ * stops; a move in that gap closes the only connection that heard the words. The hold ends early when a turn opens
+ * (that turn then holds the move), and is a safety net for speech Google never answers (a cough, background noise).
+ */
+export const GEMINI_UNANSWERED_UTTERANCE_HOLD_MS = 5_000;
 
 /** The detail field each Gemini `usageMetadata` modality's token count goes into; other modalities are not kept. */
 const GEMINI_MODALITY_TOKEN_FIELDS: Partial<Record<string, 'TextTokens' | 'AudioTokens' | 'ImageTokens' | 'VideoTokens'>> = {
@@ -323,12 +331,34 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     }
 
     /**
-     * Gemini ephemeral tokens allow `ceil(cap/600)+3` uses until `ExpiresAt`, and relay tickets allow
-     * multiple opens until `ExpiresAt`, so refreshes are driven by `ScheduleCredentialRefresh` / `ExpiresAt`
-     * rather than minting a new token on every reconnect attempt.
+     * Gemini ephemeral tokens open several connections (`SessionConfig.tokenUses`) until `ExpiresAt`, and relay
+     * tickets allow multiple opens until `ExpiresAt`, so refreshes are driven by `ExpiresAt` and the spent uses
+     * ({@link CredentialConnectionLimit}) rather than minting a new token on every reconnect attempt.
      */
     protected override get RequiresFreshTokenPerReconnect(): boolean {
         return false;
+    }
+
+    /**
+     * The connections a minted ephemeral token opens (`tokenUses`, which the server sizes from the effective connection
+     * length). Each resume is a new session to Gemini and spends one; one past the count is refused
+     * "Token has been used too many times". A relay ticket, or a mint that predates the field, has no limit here.
+     */
+    protected override CredentialConnectionLimit(credential: RefreshedRealtimeClientCredential): number | undefined {
+        if (credential.Kind === 'relay') {
+            return undefined;
+        }
+        const uses = credential.SessionConfig?.['tokenUses'];
+        return typeof uses === 'number' && Number.isInteger(uses) && uses > 0 ? uses : undefined;
+    }
+
+    /**
+     * Google closes a connection opened on an ephemeral token when that token's `expireTime` passes ("1011 auth token has
+     * expired"), even after the client holds a refreshed one: the token bounds the sessions it opened, not only their
+     * setup. A relay connection runs on the server's key, and its ticket only gates opening the tunnel.
+     */
+    protected override ConnectionClosesAtCredentialExpiry(credential: RefreshedRealtimeClientCredential): boolean {
+        return credential.Kind !== 'relay';
     }
 
     public override RemoveTrack(descriptor: Pick<RealtimeTrackDescriptor, 'Modality' | 'Direction' | 'SourceID'>): boolean {
@@ -371,6 +401,13 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private heldMicAudioChars = 0;
     /** See {@link IsTurnOpen}. */
     private turnOpen = false;
+    /**
+     * When the mic last carried the user's voice to the connection in use, while no turn holds a move for it; `null` once
+     * a turn opens, the hold times out, or the connection is left. See {@link GEMINI_UNANSWERED_UTTERANCE_HOLD_MS}.
+     */
+    private unansweredSpeechAtMs: number | null = null;
+    /** Ends the {@link unansweredSpeechAtMs} hold once the user has been quiet for the hold time. */
+    private unansweredSpeechTimer: ReturnType<typeof setTimeout> | null = null;
     /** A turn's `turnComplete` came while a tool call was pending: the turn ends once the last pending call's result goes out. */
     private turnEndAwaitsToolResults = false;
     /** Model, config and token of the current connection; a resume reuses them with the new handle. */
@@ -1167,7 +1204,62 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             this.holdMicChunk(base64Pcm16);
             return;
         }
+        if (this.isUserSpeaking()) {
+            this.noteUnansweredSpeech();
+        }
         this.sendAudio(this.session, base64Pcm16);
+    }
+
+    /** The user's voice went to the connection in use: a timed move waits for its answer (bounded). */
+    private noteUnansweredSpeech(): void {
+        this.unansweredSpeechAtMs = Date.now();
+        if (this.unansweredSpeechTimer === null) {
+            this.armUnansweredSpeechTimer(GEMINI_UNANSWERED_UTTERANCE_HOLD_MS);
+        }
+    }
+
+    /** One timer per hold, re-armed for the rest of the hold time when the user spoke since it was set. */
+    private armUnansweredSpeechTimer(delayMs: number): void {
+        this.unansweredSpeechTimer = setTimeout(() => {
+            this.unansweredSpeechTimer = null;
+            if (this.unansweredSpeechAtMs === null) {
+                return;
+            }
+            const quietMs = Date.now() - this.unansweredSpeechAtMs;
+            if (quietMs < GEMINI_UNANSWERED_UTTERANCE_HOLD_MS) {
+                this.armUnansweredSpeechTimer(GEMINI_UNANSWERED_UTTERANCE_HOLD_MS - quietMs);
+                return;
+            }
+            RealtimeDiagLog(
+                `[GeminiRealtimeClient] no answer ${GEMINI_UNANSWERED_UTTERANCE_HOLD_MS} ms after the user stopped speaking; a timed move may go ahead`
+            );
+            this.clearUnansweredSpeech();
+            this.reconnectController.NotifyIdleStateChanged();
+        }, delayMs);
+    }
+
+    /** Ends the hold without re-checking a move: a turn now holds it, or the connection it belongs to is left. */
+    private clearUnansweredSpeech(): void {
+        if (this.unansweredSpeechTimer !== null) {
+            clearTimeout(this.unansweredSpeechTimer);
+            this.unansweredSpeechTimer = null;
+        }
+        this.unansweredSpeechAtMs = null;
+    }
+
+    /** @inheritdoc Here: the user's words wait for their answer, which is the first sign of them Google sends. */
+    protected override holdsHardReconnectPoint(): boolean {
+        return this.unansweredSpeechAtMs !== null;
+    }
+
+    /**
+     * @inheritdoc
+     *
+     * Adds the unanswered words: the meter reads the user only at the instant it is read, not in the second after they
+     * stop and before Google answers.
+     */
+    protected override isTurnActiveForReconnect(): boolean {
+        return this.unansweredSpeechAtMs !== null || super.isTurnActiveForReconnect();
     }
 
     /** Sends one base64 PCM16 mic chunk on `session`; a failed send is logged, not thrown. */
@@ -1310,6 +1402,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         RealtimeDiagLog(`[GeminiRealtimeClient] Resuming the session on a new connection (${reason})`);
         this.connectionReady = false;
         this.currentState = 'connecting';
+        // The hold belongs to the connection being left. The user's words transcribed so far go into conversation memory
+        // now, before the controller builds the seed: their turn never completes on the new connection.
+        this.clearUnansweredSpeech();
+        this.finalizeUserTranscript();
         super.onReconnecting(reason);
     }
 
@@ -1999,6 +2095,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.turnOpen = true;
         this.turnEndAwaitsToolResults = false;
         this.reconnectController.TurnStarted();
+        // The open turn holds a move from here; speech after this starts a hold of its own.
+        this.clearUnansweredSpeech();
     }
 
     /** The turn's `turnComplete` (or true idle): it ends now, or once the results of the tool calls still pending go out. */
@@ -2233,6 +2331,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
 
     /** Resets the per-session response state machine (used on Disconnect). */
     private resetResponseState(): void {
+        this.clearUnansweredSpeech();
         this.pendingAssistantText = '';
         this.pendingUserText = '';
         this.pendingThoughtText = '';

@@ -33,6 +33,9 @@ export interface IRealtimeRtpSender {
 /** The subset of `RTCPeerConnection` this client uses. */
 export interface IRealtimePeerConnection {
     ontrack: ((event: RTCTrackEvent) => void) | null;
+    /** The aggregate ICE/DTLS state; `'disconnected'` and `'failed'` are how a lost network path shows up. */
+    readonly connectionState: RTCPeerConnectionState;
+    onconnectionstatechange: ((event: Event) => void) | null;
     addTrack(track: MediaStreamTrack, stream: MediaStream): IRealtimeRtpSender;
     createDataChannel(label: string): IRealtimeDataChannel;
     createOffer(): Promise<RTCSessionDescriptionInit>;
@@ -68,6 +71,13 @@ export interface IRealtimeAudioSink {
  */
 @RegisterClass(BaseRealtimeClient, 'openai')
 export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
+    /**
+     * How long the peer connection may stay `'disconnected'` before the call is treated as lost. The state can heal on
+     * its own (a short Wi-Fi blip), so it is not acted on at once; a network path that is really gone either stays
+     * `'disconnected'` past this or turns `'failed'`, which is acted on at once.
+     */
+    public static readonly PEER_DISCONNECTED_GRACE_MS = 5_000;
+
     // ── Transport ──────────────────────────────────────────────────────────────
     private peerConnection: IRealtimePeerConnection | null = null;
     /** The senders carrying the mic tracks, kept so {@link ReplaceMicrophone} can move them to a new track. */
@@ -86,6 +96,8 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
      * generation finishes ahead of playback.
      */
     private audioPlaying = false;
+    /** Running while the current peer connection is `'disconnected'`; see {@link PEER_DISCONNECTED_GRACE_MS}. */
+    private disconnectedGraceTimer: ReturnType<typeof setTimeout> | null = null;
 
     protected override get DefaultCallDurationSeconds(): number | undefined {
         return 3600;
@@ -108,6 +120,7 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
 
         const pc = this.createPeerConnection();
         this.peerConnection = pc;
+        pc.onconnectionstatechange = () => this.handlePeerConnectionState(pc);
         this.attachMicrophone(pc, micStream);
         this.attachRemoteAudio(pc);
         this.adoptDataChannel(pc.createDataChannel('oai-events'));
@@ -143,6 +156,7 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
      */
     public async Disconnect(): Promise<void> {
         this.DisposeReconnectTimers();
+        this.clearDisconnectedGrace();
         this.closeAudioMeters();
         this.micStream?.getTracks().forEach((t) => t.stop());
         this.micStream = null;
@@ -153,6 +167,7 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
             this.dataChannel = null;
         }
         if (this.peerConnection) {
+            this.peerConnection.onconnectionstatechange = null;
             try { this.peerConnection.close(); } catch { /* already closing */ }
             this.peerConnection = null;
         }
@@ -237,18 +252,21 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
                 this.handleProtocolMessage(String(e.data));
             }
         };
+        // Each handler fails this attempt while it is in flight, and once the swap adopts the new transport it is the
+        // live call's transport, so a later loss goes through the same handling as the first connection's.
         nextDc.onerror = (e: Event) => {
             failDc?.(new Error(`Data channel error: ${String(e)}`));
-            if (this.dataChannel === nextDc && !this.IsReconnecting) {
-                this.emitError({ Message: `Data channel error: ${String(e)}`, Fatal: true });
-                this.setState('error');
-            }
+            this.handleChannelError(nextDc, e);
         };
         nextDc.onclose = () => {
             failDc?.(new Error('OpenAI data channel closed during reconnect'));
-            if (this.dataChannel === nextDc && !this.IsReconnecting && this.currentState !== 'error') {
-                this.setState('closed');
+            this.handleChannelClose(nextDc);
+        };
+        nextPc.onconnectionstatechange = () => {
+            if (nextPc.connectionState === 'failed') {
+                failDc?.(new Error('OpenAI peer connection failed during reconnect'));
             }
+            this.handlePeerConnectionState(nextPc);
         };
 
         try {
@@ -265,6 +283,7 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
             nextDc.onerror = null;
             nextDc.onclose = null;
             nextPc.ontrack = null;
+            nextPc.onconnectionstatechange = null;
             try { nextDc.close(); } catch { /* ignore */ }
             try { nextPc.close(); } catch { /* ignore */ }
             throw err;
@@ -280,7 +299,10 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
         }
         if (prevPc) {
             prevPc.ontrack = null;
+            prevPc.onconnectionstatechange = null;
         }
+        // A grace timer still running belongs to the old peer connection.
+        this.clearDisconnectedGrace();
 
         this.peerConnection = nextPc;
         this.dataChannel = nextDc;
@@ -291,6 +313,7 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
             this.attachOutputAudioMeter(RealtimeAudioMeter.ForStream(pendingRemoteStream));
             pendingRemoteStream = null;
         }
+        const answerWasInFlight = this.responseActive;
         this.responseActive = false;
         this.confirmedResponseActive = false;
         this.audioPlaying = false;
@@ -299,7 +322,7 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
         try { prevPc?.close(); } catch { /* already closing */ }
 
         this.applySessionConfig(nextDc);
-        this.seedConversationHistory(context.ConversationSeed);
+        this.seedConversationAfterMove(context.ConversationSeed, answerWasInFlight);
         this.setState('listening');
     }
 
@@ -433,17 +456,96 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
         channel.onmessage = (e: MessageEvent) => {
             this.handleProtocolMessage(String(e.data));
         };
-        channel.onerror = (e: Event) => {
-            if (!this.IsReconnecting) {
-                this.emitError({ Message: `Data channel error: ${String(e)}`, Fatal: true });
-                this.setState('error');
-            }
-        };
-        channel.onclose = () => {
-            if (!this.IsReconnecting && this.currentState !== 'error') {
-                this.setState('closed');
-            }
-        };
+        channel.onerror = (e: Event) => this.handleChannelError(channel, e);
+        channel.onclose = () => this.handleChannelClose(channel);
+    }
+
+    /**
+     * A data-channel error. Ignored for a channel that is no longer current (the user's End or a swap already let go
+     * of it). During a live call it starts the `connection-lost` reconnect; otherwise it is fatal.
+     */
+    private handleChannelError(channel: IRealtimeDataChannel, e: Event): void {
+        if (this.dataChannel !== channel || this.IsReconnecting) {
+            return;
+        }
+        if (this.recoverLostTransport(`data channel error: ${String(e)}`)) {
+            return;
+        }
+        this.emitError({ Message: `Data channel error: ${String(e)}`, Fatal: true });
+        this.setState('error');
+    }
+
+    /**
+     * A data-channel close the consumer did not ask for (Disconnect and the swap drop the channel before closing it,
+     * so the identity check filters both). During a live call it starts the `connection-lost` reconnect; a channel
+     * that closes before the call went live ends the session as `'closed'`.
+     */
+    private handleChannelClose(channel: IRealtimeDataChannel): void {
+        if (this.dataChannel !== channel || this.IsReconnecting || this.currentState === 'error') {
+            return;
+        }
+        if (this.recoverLostTransport('data channel closed')) {
+            return;
+        }
+        this.setState('closed');
+    }
+
+    /**
+     * Watches the current peer connection's state. A lost network path often never closes the data channel (SCTP
+     * keeps waiting), so the peer connection's ICE consent checks are the liveness signal: `'failed'` is a loss at
+     * once, `'disconnected'` is one once it outlasts {@link PEER_DISCONNECTED_GRACE_MS}, and `'connected'` (healed)
+     * or a local `'closed'` stops the grace timer.
+     */
+    private handlePeerConnectionState(pc: IRealtimePeerConnection): void {
+        if (this.peerConnection !== pc) {
+            return;
+        }
+        switch (pc.connectionState) {
+            case 'failed':
+                this.clearDisconnectedGrace();
+                this.handlePeerConnectionLost('peer connection failed');
+                break;
+            case 'disconnected':
+                this.disconnectedGraceTimer ??= setTimeout(() => {
+                    this.disconnectedGraceTimer = null;
+                    if (this.peerConnection === pc && pc.connectionState === 'disconnected') {
+                        this.handlePeerConnectionLost(
+                            `peer connection disconnected for ${OpenAIRealtimeClient.PEER_DISCONNECTED_GRACE_MS} ms`
+                        );
+                    }
+                }, OpenAIRealtimeClient.PEER_DISCONNECTED_GRACE_MS);
+                break;
+            case 'connected':
+            case 'closed':
+                this.clearDisconnectedGrace();
+                break;
+            default:
+                // 'new' / 'connecting': still setting up (or re-checking candidates), so a running grace timer stays.
+                break;
+        }
+    }
+
+    /**
+     * The peer connection lost its network path. During a live call this starts the `connection-lost` reconnect;
+     * before that (or when the driver cannot reconnect) the session is unusable, so it ends as a fatal error instead
+     * of sitting silent on a dead transport.
+     */
+    private handlePeerConnectionLost(detail: string): void {
+        if (this.recoverLostTransport(detail)) {
+            return;
+        }
+        if (this.currentState === 'error' || this.currentState === 'closed') {
+            return;
+        }
+        this.emitError({ Message: `OpenAI WebRTC ${detail}`, Fatal: true });
+        this.setState('error');
+    }
+
+    private clearDisconnectedGrace(): void {
+        if (this.disconnectedGraceTimer !== null) {
+            clearTimeout(this.disconnectedGraceTimer);
+            this.disconnectedGraceTimer = null;
+        }
     }
 
     /** Performs the offer/answer SDP exchange (POST seam: {@link postSdpOffer}). */

@@ -11,11 +11,38 @@ export type RealtimeReconnectReason = 'connection-ending' | 'connection-lost' | 
  */
 export type RealtimeReconnectFailureCode = 'reconnect-failed' | 'reconnect-loop-breaker';
 
-/** Default attempt schedule: right away, then after 1 s, then after 3 s. */
+/**
+ * Default start of the attempt schedule: right away, then after 1 s, then after 3 s. These attempts always run; later
+ * ones wait {@link REALTIME_RESUMPTION_MAX_RETRY_DELAY_MS} each, while the recovery window is open.
+ */
 export const REALTIME_RESUMPTION_RETRY_DELAYS_MS: readonly number[] = [0, 1000, 3000];
 
-/** Default limit on one reconnect attempt. */
+/** Default wait between attempts once the listed schedule is used up: the cap of the backoff. */
+export const REALTIME_RESUMPTION_MAX_RETRY_DELAY_MS = 5000;
+
+/**
+ * Default time a reconnect keeps trying after the connection is gone: from the start of the cycle for a lost
+ * connection, and from the end of the old connection (the provider limit, or the end a `goAway` announced) for a planned
+ * move, whose old connection keeps the call going until then. 45 s outlasts the outages a call should survive (Wi-Fi
+ * roaming, a VPN reconnect, a short tunnel: the #6462 smoke's 10 s cut ended the call under the old 4 s schedule), yet
+ * is short enough that the user is not left on "Resuming" for an outage that is not ending.
+ */
+export const REALTIME_RESUMPTION_RECOVERY_WINDOW_MS = 45_000;
+
+/**
+ * Hard cap on attempts in one reconnect cycle, whatever the window: about 2.5 times what the default window and backoff
+ * use for a planned move (40 s of old connection plus 45 s, one attempt per 5 s), so it only stops a misconfiguration.
+ */
+export const MAX_REALTIME_RESUMPTION_ATTEMPTS = 40;
+
+/** Default limit on one reconnect attempt's transport work (`Reconnect`), not counting its `PrepareAttempt`. */
 export const REALTIME_RESUMPTION_ATTEMPT_TIMEOUT_MS = 15000;
+
+/**
+ * Default limit on one attempt's `PrepareAttempt` step (e.g. minting a credential). A separate budget, so a slow
+ * server round trip cannot use up the transport timeout and abort the attempt just after the credential arrives.
+ */
+export const REALTIME_RESUMPTION_PREPARE_TIMEOUT_MS = 15000;
 
 /**
  * Default for the longest margin the helper keeps before an announced connection end (see
@@ -76,7 +103,10 @@ export interface RealtimeReconnectContext {
     readonly Reason: RealtimeReconnectReason;
     /** 1-based attempt number within the current reconnect cycle (1..MaxAttempts). */
     readonly Attempt: number;
-    /** Maximum attempts permitted before the reconnect fails fatally. */
+    /**
+     * The most attempts the cycle can make ({@link MAX_REALTIME_RESUMPTION_ATTEMPTS}). The recovery window usually ends
+     * the cycle sooner, so this is an upper bound, not a promise that a failed attempt is followed by another.
+     */
     readonly MaxAttempts: number;
     /** Elapsed seconds on the current connection when the reconnect began. */
     readonly ElapsedConnectionSeconds: number;
@@ -113,7 +143,17 @@ export interface RealtimeReconnectContext {
 export interface RealtimeReconnectControllerOptions {
     /** Opens a replacement connection using either a native handle or a memory seed and swaps it in. */
     Reconnect: (context: RealtimeReconnectContext) => Promise<void>;
-    /** Invoked once when all retry attempts fail or the rapid-reconnect circuit breaker trips. */
+    /**
+     * Optional work an attempt needs before it opens the transport, such as minting a fresh credential. It runs
+     * on its own `PrepareTimeoutMs` budget, and `Reconnect` starts (with its own `AttemptTimeoutMs`) only when it
+     * resolves in time: an attempt abandoned during preparation never reaches `Reconnect`. A rejection or a
+     * timeout fails the attempt like a `Reconnect` failure, so the retry schedule bounds it.
+     */
+    PrepareAttempt?: (context: RealtimeReconnectContext) => Promise<void>;
+    /**
+     * Invoked once when the cycle gives up (its recovery window closed, or it made {@link MAX_REALTIME_RESUMPTION_ATTEMPTS}
+     * attempts) or the rapid-reconnect circuit breaker trips.
+     */
     OnReconnectFailed: (error: Error, code: RealtimeReconnectFailureCode) => void;
     /** Invoked when a reconnect cycle begins. */
     OnReconnecting?: (reason: RealtimeReconnectReason) => void;
@@ -123,6 +163,14 @@ export interface RealtimeReconnectControllerOptions {
     BuildSeed: () => RealtimeMemorySeed | null;
     /** Returns true when no turn is open and no tool calls are in flight. */
     IsIdle?: () => boolean;
+    /**
+     * Returns true when the user has said something the current connection has not answered yet and no turn is open for
+     * it: a provider that opens the turn only when its answer starts (Gemini) would otherwise lose those words at the hard
+     * point. The hard-point move then waits as it does for an open turn (see `deferHardMoveToTurnEnd`); the driver calls
+     * {@link RealtimeReconnectController.NotifyIdleStateChanged} when the hold ends without a turn. Omitted: only an open
+     * turn holds the hard point.
+     */
+    HoldsHardMove?: () => boolean;
     /** Returns true when native resumption handles are trusted on the current session/topology. */
     TrustsNativeResumption?: () => boolean;
     /**
@@ -132,10 +180,23 @@ export interface RealtimeReconnectControllerOptions {
      * rather than resuming from the pre-turn handle.
      */
     RequiresPostTurnHandle?: () => boolean;
-    /** Retry delay schedule in milliseconds (default `[0, 1000, 3000]`). */
+    /**
+     * Start of the attempt schedule in milliseconds (default `[0, 1000, 3000]`). These attempts always run; after them,
+     * attempts wait `MaxRetryDelayMs` each while the recovery window is open.
+     */
     RetryDelaysMs?: readonly number[];
-    /** Per-attempt timeout in milliseconds (default `15000`). */
+    /** Wait in milliseconds between attempts after `RetryDelaysMs` is used up (default `5000`). */
+    MaxRetryDelayMs?: number;
+    /**
+     * How long in milliseconds a cycle keeps trying once the connection is gone (default `45000`); see
+     * {@link REALTIME_RESUMPTION_RECOVERY_WINDOW_MS}. `0` limits a lost connection to the `RetryDelaysMs` attempts, and a
+     * planned move to the life left on its old connection.
+     */
+    RecoveryWindowMs?: number;
+    /** Per-attempt timeout in milliseconds for `Reconnect` (default `15000`). */
     AttemptTimeoutMs?: number;
+    /** Per-attempt timeout in milliseconds for `PrepareAttempt` (default `15000`). */
+    PrepareTimeoutMs?: number;
     /** Maximum deadline margin in milliseconds for `ConnectionEnding` notices (default `10000`). */
     DeadlineMarginMs?: number;
     /** Maximum rapid reconnects allowed within `RapidReconnectWindowMs` (default `5`). */
@@ -156,12 +217,15 @@ interface ActiveAttemptState {
  *
  * Unifies:
  * 1. Provider resumption handle tracking (`RecordHandle`, `InvalidateHandle`) with post-turn handle awareness,
- * 2. Proactive connection duration timers (soft turn-boundary window + hard buffer deadline),
+ * 2. Proactive connection duration timers (soft turn-boundary window + hard buffer deadline, which an answer in
+ *    progress may extend to just before the provider limit),
  * 3. Independent credential/relay refresh timer (`ScheduleCredentialRefresh`),
  * 4. Provider `ConnectionEnding(timeLeftMs)` notice (`goAway` / `session.going_away`) with scaled `1/3` margin,
  * 5. Reactive `ConnectionLost()` trigger,
- * 6. Bounded retry loop with per-attempt timeout, `Abandoned` + `AbortSignal` cancellation, and Attempt-2
- *    automatic fallback from native handle to `RealtimeConversationMemory` seed,
+ * 6. Retry loop bounded by a recovery window (a planned move's window starts when its old connection ends) and
+ *    {@link MAX_REALTIME_RESUMPTION_ATTEMPTS}, with capped backoff, an early retry on {@link NotifyNetworkOnline},
+ *    per-attempt timeout, `Abandoned` + `AbortSignal` cancellation, and Attempt-2 automatic fallback from native handle
+ *    to `RealtimeConversationMemory` seed,
  * 7. Rapid-reconnect sliding-window circuit breaker (`reconnect-loop-breaker`).
  */
 export class RealtimeReconnectController {
@@ -176,10 +240,20 @@ export class RealtimeReconnectController {
     private _exhausted = false;
     private _disposed = false;
     private _connectionOpenedAtMs: number | null = null;
+    /** When the current connection hits its provider limit (from `ArmDurationTimers`), or `null` when unknown. */
+    private _connectionLimitAtMs: number | null = null;
+    /** When a `goAway` said the current connection ends, or `null` when none came or it gave no time. */
+    private _announcedEndAtMs: number | null = null;
     private _softTimer: ReturnType<typeof setTimeout> | null = null;
     private _hardTimer: ReturnType<typeof setTimeout> | null = null;
+    /** The last-call move armed when the hard point came during an answer; see {@link deferHardMoveToTurnEnd}. */
+    private _limitTimer: ReturnType<typeof setTimeout> | null = null;
+    /** Margin a deferred hard move keeps before the provider limit, fixed by the buffer when the timers are armed. */
+    private _hardMoveMarginMs = 0;
     private _deadlineTimer: ReturnType<typeof setTimeout> | null = null;
     private _retryTimer: ReturnType<typeof setTimeout> | null = null;
+    /** Ends the wait for the pending retry timer early (network back, or `Dispose`). */
+    private _wakeRetry: (() => void) | null = null;
     private _credentialRefreshTimer: ReturnType<typeof setTimeout> | null = null;
     private _currentAttempt: ActiveAttemptState | null = null;
     private _reconnectPromise: Promise<boolean> | null = null;
@@ -212,9 +286,9 @@ export class RealtimeReconnectController {
         return this._inSoftWindow || this._endingAnnounced;
     }
 
-    /** True while either the soft or hard connection-duration timer is armed. */
+    /** True while any connection-duration timer (soft, hard, or the deferred hard move's last call) is armed. */
     public get HasDurationTimersArmed(): boolean {
-        return this._softTimer !== null || this._hardTimer !== null;
+        return this._softTimer !== null || this._hardTimer !== null || this._limitTimer !== null;
     }
 
     /** Records a provider resumption handle and whether the provider marked this point resumable. */
@@ -243,7 +317,10 @@ export class RealtimeReconnectController {
         this._resumableNow = false;
     }
 
-    /** Marks a turn as open so soft-window and `ConnectionEnding` moves wait for the turn boundary. */
+    /**
+     * Marks a turn as open so soft-window and `ConnectionEnding` moves wait for the turn boundary, and a hard-point move
+     * waits for it until shortly before the provider limit.
+     */
     public TurnStarted(): void {
         this._turnOpen = true;
         this._resumableNow = false;
@@ -321,6 +398,9 @@ export class RealtimeReconnectController {
             return;
         }
         this._endingAnnounced = true;
+        if (timeLeftMs !== undefined) {
+            this._announcedEndAtMs = Date.now() + timeLeftMs;
+        }
         if (this.isIdle() && !this._awaitingPostToolTurn && !this.shouldWaitForPostTurnHandle()) {
             void this.TriggerReconnect('connection-ending');
             return;
@@ -333,11 +413,16 @@ export class RealtimeReconnectController {
      * Re-arming mid-connection (for example when a dynamic video cap engages or clears) measures
      * remaining time against when the current connection opened and preserves any active
      * `ConnectionEnding` (`goAway`) deadline.
+     *
+     * @param connectionDeadlineAtMs When the provider ends this connection regardless of its duration limit (epoch ms),
+     *   such as the expiry of the credential a Gemini connection opened on. The earlier of the two is the limit the soft
+     *   window, the hard point and the hard move's last call measure from.
      */
     public ArmDurationTimers(
-        durationSeconds: number | undefined,
+        connectionLimitSeconds: number | undefined,
         bufferSeconds: number,
-        softLeadCapSeconds: number = DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS
+        softLeadCapSeconds: number = DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS,
+        connectionDeadlineAtMs?: number
     ): void {
         this.clearDurationTimers();
         if (this._disposed) {
@@ -348,10 +433,13 @@ export class RealtimeReconnectController {
             this._connectionOpenedAtMs = now;
         }
         this._inSoftWindow = false;
+        this._connectionLimitAtMs = null;
 
-        if (typeof durationSeconds !== 'number' || !Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+        const durationSeconds = this.effectiveDurationSeconds(connectionLimitSeconds, connectionDeadlineAtMs, this._connectionOpenedAtMs);
+        if (durationSeconds === undefined) {
             return;
         }
+        this._connectionLimitAtMs = this._connectionOpenedAtMs + durationSeconds * 1000;
 
         const elapsedMs = Math.max(0, now - this._connectionOpenedAtMs);
         const bufferSec = Math.min(bufferSeconds, Math.max(1, Math.floor(durationSeconds / 2)));
@@ -366,6 +454,7 @@ export class RealtimeReconnectController {
         );
         const totalSoftMs = Math.max(50, (durationSeconds - softWindowSec) * 1000);
         const remainingHardMs = Math.max(0, totalHardMs - elapsedMs);
+        this._hardMoveMarginMs = this.deadlineMarginFor(Math.max(0, durationSeconds * 1000 - totalHardMs));
         const remainingSoftMs = Math.max(0, totalSoftMs - elapsedMs);
 
         if (totalSoftMs < totalHardMs) {
@@ -386,8 +475,57 @@ export class RealtimeReconnectController {
             if (this._disposed || this._exhausted || this._reconnecting) {
                 return;
             }
+            if (this._turnOpen || this.options.HoldsHardMove?.() === true) {
+                this.deferHardMoveToTurnEnd();
+                return;
+            }
             void this.TriggerReconnect('duration-expiry');
         }, remainingHardMs);
+    }
+
+    /**
+     * The connection's duration: its limit, narrowed to the time from its open to `deadlineAtMs` when that comes first.
+     * `undefined` when neither bounds it. A deadline already past leaves one second, so the move happens at once
+     * (through the same idle and hold rules) instead of the connection running with no timer at all.
+     */
+    private effectiveDurationSeconds(
+        durationSeconds: number | undefined,
+        deadlineAtMs: number | undefined,
+        openedAtMs: number
+    ): number | undefined {
+        const limit =
+            typeof durationSeconds === 'number' && Number.isFinite(durationSeconds) && durationSeconds > 0 ? durationSeconds : undefined;
+        if (typeof deadlineAtMs !== 'number' || !Number.isFinite(deadlineAtMs)) {
+            return limit;
+        }
+        const untilDeadline = Math.max(1, (deadlineAtMs - openedAtMs) / 1000);
+        return limit === undefined ? untilDeadline : Math.min(limit, untilDeadline);
+    }
+
+    /**
+     * The hard point came while the model is answering. The buffer before the provider limit exists for this: rather
+     * than cut the answer, the move waits for the turn to end and the session to be idle (as a soft-window move does,
+     * so the audio tail plays out too), but only until the limit less the margin a reconnect needs. That margin scales
+     * with the buffer as for a `goAway` notice ({@link deadlineMarginFor}): a 10 s buffer leaves the answer 6.7 s.
+     * Only an open turn, or a driver's `HoldsHardMove` (a user utterance the connection has not answered yet, on a
+     * provider whose turn opens only when the answer starts), defers it: anything else that holds a soft-window move
+     * (a tool call, or a pending utterance a driver tracks for the soft window only) has its own bound, and the hard
+     * point stays the deadline for it.
+     */
+    private deferHardMoveToTurnEnd(): void {
+        const timeLeftMs = this._connectionLimitAtMs === null ? 0 : this._connectionLimitAtMs - Date.now();
+        const lastCallMs = Math.max(0, timeLeftMs - this._hardMoveMarginMs);
+        this._inSoftWindow = true;
+        this.options.Log?.(
+            `[RealtimeReconnectController] hard reconnect point reached mid-answer; waiting up to ${lastCallMs} ms for the turn to end`
+        );
+        this._limitTimer = setTimeout(() => {
+            this._limitTimer = null;
+            if (!this._disposed && !this._exhausted && !this._reconnecting) {
+                this.options.Log?.('[RealtimeReconnectController] provider limit is near; moving mid-answer');
+                void this.TriggerReconnect('duration-expiry');
+            }
+        }, lastCallMs);
     }
 
     /**
@@ -479,12 +617,23 @@ export class RealtimeReconnectController {
         return promise;
     }
 
+    /**
+     * The host reports the network is back (a browser `online` event): a reconnect waiting out a retry delay starts its
+     * next attempt now instead of at the end of the delay. Does nothing when no retry is waiting.
+     */
+    public NotifyNetworkOnline(): void {
+        if (this._wakeRetry) {
+            this.options.Log?.('[RealtimeReconnectController] network is back; retrying now');
+            this.wakeRetry();
+        }
+    }
+
     /** Cancels all timers, abandons any in-flight attempt, and prevents further reconnects. */
     public Dispose(): void {
         this._disposed = true;
         this.clearDurationTimers();
         this.clearDeadline();
-        this.clearRetry();
+        this.wakeRetry();
         this.ClearCredentialRefresh();
         if (this._currentAttempt) {
             this.abandonAttempt(this._currentAttempt);
@@ -505,6 +654,8 @@ export class RealtimeReconnectController {
         this._resumableNow = false;
         this._handle = null;
         this._connectionOpenedAtMs = null;
+        this._connectionLimitAtMs = null;
+        this._announcedEndAtMs = null;
         this._rapidReconnectTimestamps = [];
     }
 
@@ -539,29 +690,24 @@ export class RealtimeReconnectController {
         }
     }
 
+    /**
+     * Makes attempts until one succeeds, the cycle's recovery deadline passes ({@link recoveryDeadlineFor}), or it has
+     * made {@link MAX_REALTIME_RESUMPTION_ATTEMPTS}; either limit ends it with `reconnect-failed`. No attempt starts
+     * after the deadline, but one already running is allowed to finish (its own timeouts bound it).
+     */
     private async runReconnectLoop(reason: RealtimeReconnectReason, elapsedSeconds: number): Promise<boolean> {
-        const delays = this.retryDelays();
-        const maxAttempts = delays.length;
+        const deadlineMs = this.recoveryDeadlineFor(reason);
         let lastError: Error = new Error('Realtime session reconnect failed');
         let forceSeedFallback = false;
 
-        for (let i = 0; i < maxAttempts; i++) {
+        for (let attempt = 1; attempt <= MAX_REALTIME_RESUMPTION_ATTEMPTS; attempt++) {
+            const delayMs = this.retryDelayBefore(attempt);
+            if (delayMs > 0) {
+                await this.waitBeforeRetry(delayMs);
+            }
             if (this._disposed) {
                 this._reconnecting = false;
                 return false;
-            }
-            const delayMs = delays[i] ?? 0;
-            if (delayMs > 0) {
-                await new Promise<void>((resolve) => {
-                    this._retryTimer = setTimeout(() => {
-                        this._retryTimer = null;
-                        resolve();
-                    }, delayMs);
-                });
-                if (this._disposed) {
-                    this._reconnecting = false;
-                    return false;
-                }
             }
 
             const canUseNative = !forceSeedFallback && this.trustsNativeResumption() && this._handle !== null;
@@ -575,8 +721,8 @@ export class RealtimeReconnectController {
             const controllerSelf = this;
             const context: RealtimeReconnectContext = {
                 Reason: reason,
-                Attempt: i + 1,
-                MaxAttempts: maxAttempts,
+                Attempt: attempt,
+                MaxAttempts: MAX_REALTIME_RESUMPTION_ATTEMPTS,
                 ElapsedConnectionSeconds: elapsedSeconds,
                 ResumptionHandle: handleToUse,
                 UseNativeResumption: canUseNative,
@@ -588,7 +734,7 @@ export class RealtimeReconnectController {
             };
 
             try {
-                await this.withTimeout(this.options.Reconnect(context), attemptState);
+                await this.runAttempt(context, attemptState);
                 if (this._disposed || attemptState.Abandoned) {
                     this.abandonAttempt(attemptState);
                     this._reconnecting = false;
@@ -596,19 +742,21 @@ export class RealtimeReconnectController {
                 }
                 this._reconnecting = false;
                 this._endingAnnounced = false;
+                this._announcedEndAtMs = null;
                 this._inSoftWindow = false;
                 this._resumableNow = false;
                 this._turnOpen = false;
                 this._awaitingPostToolTurn = false;
                 this._toolResultSentDuringOpenTurn = false;
                 this._connectionOpenedAtMs = Date.now();
+                this._connectionLimitAtMs = null;
                 this.options.OnReconnected?.(canUseNative);
                 return true;
             } catch (err) {
                 this.abandonAttempt(attemptState);
                 lastError = err instanceof Error ? err : new Error(String(err));
                 this.options.Log?.(
-                    `[RealtimeReconnectController] attempt ${i + 1}/${maxAttempts} failed (${reason}): ${lastError.message}`
+                    `[RealtimeReconnectController] attempt ${attempt} failed (${reason}): ${lastError.message}`
                 );
                 if (canUseNative) {
                     forceSeedFallback = true;
@@ -618,6 +766,12 @@ export class RealtimeReconnectController {
                 if (this._currentAttempt === attemptState) {
                     this._currentAttempt = null;
                 }
+            }
+
+            const stop = this.whyStopAfter(attempt, deadlineMs);
+            if (stop) {
+                this.options.Log?.(`[RealtimeReconnectController] giving up (${reason}): ${stop}`);
+                break;
             }
         }
 
@@ -629,14 +783,96 @@ export class RealtimeReconnectController {
         return false;
     }
 
-    private withTimeout(work: Promise<void>, attemptState: ActiveAttemptState): Promise<void> {
+    /**
+     * When the cycle stops starting attempts. A lost connection gets the recovery window from now. A planned move still
+     * has its old connection until the provider limit or the announced end, so its window starts there: a failed
+     * refresh or attempt is retried on the healthy connection, and the call ends only once it is truly gone.
+     */
+    private recoveryDeadlineFor(reason: RealtimeReconnectReason): number {
+        const now = Date.now();
+        const windowMs = this.options.RecoveryWindowMs ?? REALTIME_RESUMPTION_RECOVERY_WINDOW_MS;
+        const oldConnectionEndsAtMs =
+            reason === 'duration-expiry'
+                ? this._connectionLimitAtMs
+                : reason === 'connection-ending'
+                  ? this._announcedEndAtMs
+                  : null;
+        return Math.max(now, oldConnectionEndsAtMs ?? now) + windowMs;
+    }
+
+    /** The wait before `attempt`: the listed schedule first, then the backoff cap. */
+    private retryDelayBefore(attempt: number): number {
+        const delays = this.retryDelays();
+        return attempt <= delays.length
+            ? (delays[attempt - 1] ?? 0)
+            : (this.options.MaxRetryDelayMs ?? REALTIME_RESUMPTION_MAX_RETRY_DELAY_MS);
+    }
+
+    /** Why the cycle stops after a failed `attempt`, or `null` to go on. The listed schedule always runs in full. */
+    private whyStopAfter(attempt: number, deadlineMs: number): string | null {
+        if (attempt >= MAX_REALTIME_RESUMPTION_ATTEMPTS) {
+            return `made the maximum of ${MAX_REALTIME_RESUMPTION_ATTEMPTS} attempts`;
+        }
+        const next = attempt + 1;
+        if (next > this.retryDelays().length && Date.now() + this.retryDelayBefore(next) > deadlineMs) {
+            return `the recovery window closed after ${attempt} attempts`;
+        }
+        return null;
+    }
+
+    /** Waits `delayMs`, or less when {@link NotifyNetworkOnline} or {@link Dispose} ends the wait. */
+    private waitBeforeRetry(delayMs: number): Promise<void> {
+        return new Promise<void>((resolve) => {
+            this._wakeRetry = resolve;
+            this._retryTimer = setTimeout(() => this.wakeRetry(), delayMs);
+        });
+    }
+
+    private wakeRetry(): void {
+        const wake = this._wakeRetry;
+        this._wakeRetry = null;
+        if (this._retryTimer) {
+            clearTimeout(this._retryTimer);
+            this._retryTimer = null;
+        }
+        wake?.();
+    }
+
+    /** Runs the attempt's optional preparation, then its transport work, each under its own timeout. */
+    private async runAttempt(context: RealtimeReconnectContext, attemptState: ActiveAttemptState): Promise<void> {
+        const prepare = this.options.PrepareAttempt;
+        if (prepare) {
+            const prepareTimeoutMs = this.options.PrepareTimeoutMs ?? REALTIME_RESUMPTION_PREPARE_TIMEOUT_MS;
+            await this.withTimeout(prepare(context), attemptState, prepareTimeoutMs, 'preparation');
+            if (this._disposed || attemptState.Abandoned) {
+                return;
+            }
+        }
         const timeoutMs = this.options.AttemptTimeoutMs ?? REALTIME_RESUMPTION_ATTEMPT_TIMEOUT_MS;
-        work.catch(() => undefined);
+        await this.withTimeout(this.options.Reconnect(context), attemptState, timeoutMs, 'attempt');
+    }
+
+    private withTimeout(
+        work: Promise<void>,
+        attemptState: ActiveAttemptState,
+        timeoutMs: number,
+        phase: 'preparation' | 'attempt'
+    ): Promise<void> {
+        // After a timeout nobody awaits `work`; log a later failure instead of leaving it unhandled.
+        work.catch((err: unknown) => {
+            if (attemptState.Abandoned) {
+                this.options.Log?.(
+                    `[RealtimeReconnectController] reconnect ${phase} failed after its attempt was abandoned: ${
+                        err instanceof Error ? err.message : String(err)
+                    }`
+                );
+            }
+        });
         let timer: ReturnType<typeof setTimeout> | null = null;
         const timeout = new Promise<never>((_resolve, reject) => {
             timer = setTimeout(() => {
                 this.abandonAttempt(attemptState);
-                reject(new Error(`reconnect attempt timed out after ${timeoutMs} ms`));
+                reject(new Error(`reconnect ${phase} timed out after ${timeoutMs} ms`));
             }, timeoutMs);
         });
         return Promise.race([work, timeout]).finally(() => {
@@ -680,6 +916,10 @@ export class RealtimeReconnectController {
             clearTimeout(this._hardTimer);
             this._hardTimer = null;
         }
+        if (this._limitTimer) {
+            clearTimeout(this._limitTimer);
+            this._limitTimer = null;
+        }
     }
 
     private clearDeadline(): void {
@@ -689,12 +929,6 @@ export class RealtimeReconnectController {
         }
     }
 
-    private clearRetry(): void {
-        if (this._retryTimer) {
-            clearTimeout(this._retryTimer);
-            this._retryTimer = null;
-        }
-    }
 }
 
 

@@ -44,6 +44,7 @@ import {
   RealtimeClientUsage,
   type RealtimeClientTokenRefreshOptions,
   type RefreshedRealtimeClientCredential,
+  type RealtimeClientTimingFields,
   VideoSourceArbiter,
   type DisplayCaptureOptions,
   type MediaVideoSource,
@@ -92,6 +93,7 @@ import { RecordingShardQueue } from './RecordingShardQueue';
 import { RecordingShardWindow, type RecordingShard } from './RecordingShardWindow';
 import { CreateRecordingShardStore, type IRecordingShardStore } from './RecordingShardStore';
 import type { IRecordingTransport } from './RecordingTransport';
+import { CreateSessionCloseBeaconForProvider, type ISessionCloseBeacon } from './SessionCloseBeacon';
 import { CreateRecordingTransportForProvider, DeleteStoredRecordingShard, DrainStoredRecordingShardsOnce, MAX_DRAINED_SHARDS_PER_LOAD, type RecordingShardDrainPass } from './RecordingShardDrain';
 
 /**
@@ -136,6 +138,12 @@ interface RecordingShardPipeline {
    * `resendUnacknowledgedWithKeepalive`.
    */
   FinalTerminal?: { LastSealedIndex: number; Acked: Promise<boolean> };
+}
+
+/** Options of {@link RealtimeSessionRuntime.SendPageHideSignals}. */
+export interface PageHideSignalOptions {
+  /** The `pagehide` event's `persisted` flag: true when the page enters the back/forward cache and may come back. */
+  Persisted: boolean;
 }
 
 /** Options of {@link RealtimeSessionRuntime.SendRecordingTerminal}. */
@@ -553,6 +561,36 @@ export interface StartRealtimeClientSessionResult {
    * so it is a credential: never log it. A host that mints for itself must pass it on for a relay session.
    */
   RelayUrl?: string | null;
+  /**
+   * OPTIONAL — the catalog timing the server resolved for this session (`ModelConfiguration.Realtime` on the model and
+   * model-vendor rows, narrowed to the driver's provider ceiling; `TrustNativeResumption` forced `false` for zero data
+   * retention). The runtime hands them to the client driver on the typed `ClientRealtimeSessionConfig` fields, because
+   * the server deliberately keeps them out of `SessionConfigJson`. Absent or null from a server that predates them and
+   * from a host that mints for itself and does not pass them on; the driver then uses its own defaults.
+   */
+  ConnectionMaxSeconds?: number | null;
+  SessionMaxSeconds?: number | null;
+  ReconnectBufferSeconds?: number | null;
+  TrustNativeResumption?: boolean | null;
+}
+
+/** The fields of a mint or refresh result that carry the session's catalog timing (see {@link StartRealtimeClientSessionResult}). */
+type RealtimeTimingResultFields = Pick<
+  StartRealtimeClientSessionResult,
+  'ConnectionMaxSeconds' | 'SessionMaxSeconds' | 'ReconnectBufferSeconds' | 'TrustNativeResumption'
+>;
+
+/**
+ * The timing fields a mint or refresh result carries, as `ClientRealtimeSessionConfig` fields. GraphQL answers an unset
+ * nullable field with `null`; those are left out so the client driver keeps its own value.
+ */
+function timingFieldsOf(result: RealtimeTimingResultFields): RealtimeClientTimingFields {
+  return {
+    ...(result.ConnectionMaxSeconds != null ? { ConnectionMaxSeconds: result.ConnectionMaxSeconds } : {}),
+    ...(result.SessionMaxSeconds != null ? { SessionMaxSeconds: result.SessionMaxSeconds } : {}),
+    ...(result.ReconnectBufferSeconds != null ? { ReconnectBufferSeconds: result.ReconnectBufferSeconds } : {}),
+    ...(result.TrustNativeResumption != null ? { TrustNativeResumption: result.TrustNativeResumption } : {}),
+  };
 }
 
 /**
@@ -1754,7 +1792,9 @@ export class RealtimeSessionRuntime {
    *
    * @param result The minted session — the same ten fields the `StartRealtimeClientSession`
    *   mutation returns. `EphemeralToken` and `Provider` are what actually open the call; a relay
-   *   session opens with its `Transport` and `RelayUrl` instead, so a host must pass those on.
+   *   session opens with its `Transport` and `RelayUrl` instead, so a host must pass those on. A host
+   *   should pass on the catalog timing too (`ConnectionMaxSeconds` and the rest), or the driver
+   *   reconnects on its own defaults.
    * @param options Host-side inputs the result cannot carry; see {@link RealtimeSessionRunOptions}.
    *   Every field defaults exactly as its {@link StartRealtimeSession} counterpart does.
    */
@@ -1883,7 +1923,9 @@ export class RealtimeSessionRuntime {
 
       const clientConfig = this.BuildClientConfig(session);
       client.ApplySessionConfigTiming(clientConfig);
-      client.SetTokenRefreshCallback(() => this.refreshClientSessionCredential(session));
+      // Forward the driver's options: the Gemini relay seed-fallback asks for AllowFreshReopen, and
+      // only that flag makes the server re-arm the relay's handle-less reopen window.
+      client.SetTokenRefreshCallback((options) => this.refreshClientSessionCredential(session, options));
       const connectError = await this.connectClient(client, clientConfig, microphone.Stream);
       if (this.startGeneration !== generation) {
         await this.unwindAbandonedStart(session, client, lease);
@@ -2625,6 +2667,15 @@ export class RealtimeSessionRuntime {
     return CreateRecordingTransportForProvider(this.Provider);
   }
 
+  /**
+   * Builds the beacon {@link SendPageHideSignals} closes the session with. The default posts a
+   * `keepalive` `CloseAgentSession` to the session's GraphQL provider with the same credentials as the
+   * GraphQL client; null when the provider has no URL. Override to supply another beacon.
+   */
+  protected createSessionCloseBeacon(): ISessionCloseBeacon | null {
+    return CreateSessionCloseBeaconForProvider(this.Provider);
+  }
+
 
   /**
    * Builds the durable local shard store. The default is IndexedDB where the host has it and a no-op
@@ -2922,6 +2973,47 @@ export class RealtimeSessionRuntime {
       void this.dispatchRecordingTerminal(pipeline, sealed, tail, true, final);
     } catch (error) {
       console.warn(`[RealtimeSession] Failed to send the recording terminal for session ${pipeline.SessionID}:`, error);
+    }
+  }
+
+  /**
+   * Whether {@link SendPageHideSignals} closes the live session. True by default. A host that closes the
+   * session from `pagehide` itself (the `<mj-realtime-widget>` element) turns it off: two concurrent
+   * `CloseAgentSession` calls for one session both run the server's close work.
+   */
+  public ClosesSessionOnPageHide = true;
+
+  /**
+   * The page-lifecycle `pagehide` handler: the page is being hidden for navigation or unload. Sends the
+   * final recording terminal ({@link SendRecordingTerminal}), then, when the page is going away for good
+   * (`persisted` false, so not entering the back/forward cache, from which it may come back), closes the
+   * live server session with a `keepalive` `CloseAgentSession` ({@link ISessionCloseBeacon}). An
+   * ordinary close is cancelled on unload, so without it a closed tab left the session `Active` until
+   * the server janitor's idle sweep.
+   *
+   * Synchronous, like {@link SendRecordingTerminal}: everything is dispatched before it returns. The
+   * terminal goes first so the recording keeps priority on the browser's ~64 KiB per-page keepalive
+   * budget; the recording uses at most {@link recordingKeepaliveBudgetBytes} of it, and the close body
+   * (a few hundred bytes) fits in the remainder reserved for exactly such a close. Never throws.
+   *
+   * Only for `pagehide`: a hidden tab (`visibilitychange`) must not close the session, the user may
+   * come back. A host that sends its own close beacon turns {@link ClosesSessionOnPageHide} off.
+   */
+  public SendPageHideSignals(options: PageHideSignalOptions): void {
+    this.SendRecordingTerminal({ Final: true });
+    const agentSessionId = this.agentSessionId;
+    if (options.Persisted || !agentSessionId || !this.ClosesSessionOnPageHide) {
+      return;
+    }
+    try {
+      const beacon = this.createSessionCloseBeacon();
+      if (!beacon) {
+        console.warn(`[RealtimeSession] Page closed with session ${agentSessionId} live, but the provider has no endpoint to close it on; the server janitor closes it.`);
+        return;
+      }
+      void beacon.SendClose(agentSessionId, 'Explicit');
+    } catch (error) {
+      console.warn(`[RealtimeSession] Failed to send the page-close CloseAgentSession for session ${agentSessionId}:`, error);
     }
   }
 
@@ -4231,7 +4323,8 @@ export class RealtimeSessionRuntime {
    * Aggregates the tracks active channels source and sink under {@link REQUESTED_TRACKS_SESSION_KEY} so the
    * driver can negotiate them (e.g., inbound video for Whiteboard / RemoteBrowser, outbound video for a
    * channel that shows the agent's video). A track the model does not support resolves to `'unsupported'`.
-   * The session's transport and relay URL go to the driver as minted (an unknown transport is left out: direct).
+   * The session's transport and relay URL go to the driver as minted (an unknown transport is left out: direct), and so
+   * does the catalog timing, on the typed fields.
    */
   public BuildClientConfig(session: StartRealtimeClientSessionResult): ClientRealtimeSessionConfig {
     const sessionConfig = this.parseSessionConfig(session.SessionConfigJson);
@@ -4268,6 +4361,7 @@ export class RealtimeSessionRuntime {
       ExpiresAt: session.ExpiresAt,
       ...(transport ? { Transport: transport } : {}),
       ...(session.RelayUrl ? { RelayUrl: session.RelayUrl } : {}),
+      ...timingFieldsOf(session),
       SessionConfig: sessionConfig
     };
   }
@@ -4321,6 +4415,10 @@ export class RealtimeSessionRuntime {
           ExpiresAt
           RelayUrl
           SessionConfigJson
+          ConnectionMaxSeconds
+          SessionMaxSeconds
+          ReconnectBufferSeconds
+          TrustNativeResumption
         }
       }
     `
@@ -4333,6 +4431,10 @@ export class RealtimeSessionRuntime {
           ExpiresAt
           RelayUrl
           SessionConfigJson
+          ConnectionMaxSeconds
+          SessionMaxSeconds
+          ReconnectBufferSeconds
+          TrustNativeResumption
         }
       }
     `;
@@ -4346,7 +4448,7 @@ export class RealtimeSessionRuntime {
           ExpiresAt?: string;
           RelayUrl?: string | null;
           SessionConfigJson?: string | null;
-        };
+        } & RealtimeTimingResultFields;
       };
       let response: RefreshGraphQLPayload;
       if (allowFreshReopen) {
@@ -4389,6 +4491,7 @@ export class RealtimeSessionRuntime {
         EphemeralToken: result.EphemeralToken ?? '',
         ExpiresAt: result.ExpiresAt ?? initialSession.ExpiresAt,
         ...(effectiveRelayUrl ? { RelayUrl: effectiveRelayUrl } : {}),
+        ...timingFieldsOf(result),
         SessionConfig: this.parseSessionConfig(result.SessionConfigJson ?? initialSession.SessionConfigJson),
       };
     } catch (error) {

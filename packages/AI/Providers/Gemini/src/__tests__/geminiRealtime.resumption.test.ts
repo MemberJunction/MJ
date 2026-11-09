@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { LiveServerContent, LiveServerMessage, Blob as GeminiBlob, Content, FunctionResponse } from '@google/genai';
 import {
     REALTIME_MEMORY_CONTINUITY_PREAMBLE,
+    REALTIME_RESUMPTION_RECOVERY_WINDOW_MS,
     type IRealtimeSession,
     type RealtimeSessionError,
     type RealtimeSessionParams,
@@ -174,11 +175,13 @@ describe('GeminiRealtime server-bridged session resumption', () => {
             expect(errors[0].Message).toContain('closed unexpectedly');
         });
 
-        it('fails once with a fatal error when every attempt fails', async () => {
+        it('retries through the recovery window, then fails once with a fatal error when every attempt fails', async () => {
             driver.EmitOn(0, RESUMABLE('h1'));
-            driver.FailConnects = 3;
+            driver.FailConnects = Number.POSITIVE_INFINITY;
             driver.CloseOn(0);
-            await vi.advanceTimersByTimeAsync(5000);
+            await vi.advanceTimersByTimeAsync(REALTIME_RESUMPTION_RECOVERY_WINDOW_MS - 5000);
+            expect(errors).toEqual([]);
+            await vi.advanceTimersByTimeAsync(10_000);
 
             expect(errors).toHaveLength(1);
             expect(errors[0].Fatal).toBe(true);

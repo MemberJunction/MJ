@@ -526,6 +526,14 @@ export interface RefreshClientSessionCredentialResult {
     ExpiresAt?: string;
     RelayUrl?: string;
     SessionConfigJson?: string;
+    /**
+     * The catalog timing re-stamped on a re-minted credential (the same rules as at mint). Absent when the relay
+     * grant was extended in place: the session's timing is unchanged, so the client keeps what it has.
+     */
+    ConnectionMaxSeconds?: number;
+    SessionMaxSeconds?: number;
+    ReconnectBufferSeconds?: number;
+    TrustNativeResumption?: boolean;
     ErrorMessage?: string;
 }
 
@@ -1343,6 +1351,10 @@ export class RealtimeClientSessionService {
                 ExpiresAt: clientConfig.ExpiresAt,
                 RelayUrl: clientConfig.RelayUrl,
                 SessionConfigJson: JSON.stringify(clientConfig.SessionConfig),
+                ConnectionMaxSeconds: clientConfig.ConnectionMaxSeconds,
+                SessionMaxSeconds: clientConfig.SessionMaxSeconds,
+                ReconnectBufferSeconds: clientConfig.ReconnectBufferSeconds,
+                TrustNativeResumption: clientConfig.TrustNativeResumption,
             };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);

@@ -3,10 +3,11 @@ import type { LiveServerContent, LiveServerMessage } from '@google/genai';
 import {
     REALTIME_CONNECTION_SETUP_TIMEOUT_MS,
     REALTIME_MEMORY_CONTINUITY_PREAMBLE,
+    REALTIME_RESUMPTION_RECOVERY_WINDOW_MS,
     type ClientRealtimeSessionConfig,
     type JSONObject,
 } from '@memberjunction/ai';
-import type { GeminiClientConnectArgs, GeminiLiveClientSession } from '../drivers/geminiRealtimeClient';
+import { GEMINI_UNANSWERED_UTTERANCE_HOLD_MS, type GeminiClientConnectArgs, type GeminiLiveClientSession } from '../drivers/geminiRealtimeClient';
 import {
     collect,
     ConfirmGeminiSetup,
@@ -73,6 +74,14 @@ class MultiConnectionClient extends GeminiTestClient {
     /** Fires connection `index`'s error callback. */
     public ErrorOn(index: number): void {
         this.Connections[index].Args.OnError({ message: 'network', error: null } as ErrorEvent);
+    }
+
+    /** The level the fake mic meter reads (0 = silence); a test sets it to have the user talk. */
+    public MicLevel = 0;
+
+    /** Attaches a fake mic meter that reads {@link MicLevel} (the fakes have no Web Audio, so none is attached). */
+    public MeterMic(): void {
+        this.attachInputAudioMeter({ Level: () => this.MicLevel, Bins: () => [], Close: () => undefined });
     }
 }
 
@@ -205,11 +214,14 @@ describe('GeminiRealtimeClient session resumption', () => {
             expect(emitted.errors).toEqual([]);
         });
 
-        it('retries, then fails the session once when every attempt fails', async () => {
+        it('retries through the recovery window, then fails the session once when every attempt fails', async () => {
             client.EmitOn(0, RESUMABLE('h1'));
-            client.FailConnects = 3;
+            client.FailConnects = Number.POSITIVE_INFINITY;
             client.CloseOn(0, 1006);
-            await vi.advanceTimersByTimeAsync(5000);
+            await vi.advanceTimersByTimeAsync(REALTIME_RESUMPTION_RECOVERY_WINDOW_MS - 5000);
+            expect(emitted.errors).toEqual([]);
+            expect(emitted.states[emitted.states.length - 1]).toBe('connecting');
+            await vi.advanceTimersByTimeAsync(10_000);
 
             expect(emitted.errors).toHaveLength(1);
             expect(emitted.errors[0].Message).toContain('could not be resumed');
@@ -897,5 +909,255 @@ describe('GeminiRealtimeClient session resumption', () => {
             expect(entEmitted.states.at(-1)).toBe('listening');
         });
     });
-});
 
+    // Each connection spends one use of the minted token (`SessionConfig.tokenUses`). Live (#6462 smoke, F4): with a 45 s
+    // connection cap the 7th connection on a 6-use token was refused "Token has been used too many times" and only
+    // attempt 2 recovered. Dropped connections spend uses the same way, which no mint-time count can bound, so the client
+    // must count its opens and re-mint BEFORE it opens a connection the token has no use left for.
+    describe('token uses (#6462 F4)', () => {
+        const TOKEN_USES = 6;
+
+        function usesByToken(c: MultiConnectionClient): Map<string, number> {
+            const counts = new Map<string, number>();
+            for (const { Args } of c.Connections) {
+                counts.set(Args.EphemeralToken, (counts.get(Args.EphemeralToken) ?? 0) + 1);
+            }
+            return counts;
+        }
+
+        async function connectWithUses(): Promise<{ c: MultiConnectionClient; out: CollectedEmissions; refreshes: () => number }> {
+            const c = new MultiConnectionClient();
+            const out = collect(c);
+            let refreshCount = 0;
+            c.SetTokenRefreshCallback(async () => {
+                refreshCount++;
+                return {
+                    EphemeralToken: `auth_tokens/refreshed-${refreshCount}`,
+                    ExpiresAt: new Date(Date.now() + 1800_000).toISOString(),
+                    SessionConfig: {
+                        model: 'gemini-3.8-live',
+                        config: { responseModalities: ['AUDIO'], sessionResumption: {} },
+                        tokenUses: TOKEN_USES,
+                    },
+                };
+            });
+            await c.Connect(
+                {
+                    ...sessionConfig({ tokenUses: TOKEN_USES }),
+                    ExpiresAt: new Date(Date.now() + 1800_000).toISOString(),
+                },
+                new FakeMediaStream([new FakeTrack()])
+            );
+            return { c, out, refreshes: () => refreshCount };
+        }
+
+        function expectNoTokenOverspent(c: MultiConnectionClient): void {
+            for (const [token, used] of usesByToken(c)) {
+                expect(used, `connections opened on ${token}`).toBeLessThanOrEqual(TOKEN_USES);
+            }
+        }
+
+        it('re-mints before the 7th timed connection instead of opening it on a spent token', async () => {
+            const { c, out, refreshes } = await connectWithUses();
+            for (let i = 0; i < TOKEN_USES; i++) {
+                c.EmitOn(c.Connections.length - 1, RESUMABLE(`h${i}`));
+                expect(await c.TriggerReconnect('duration-expiry')).toBe(true);
+                await vi.advanceTimersByTimeAsync(45_000);
+            }
+            expect(c.Connections).toHaveLength(TOKEN_USES + 1);
+            expectNoTokenOverspent(c);
+            expect(c.Connections[TOKEN_USES - 1].Args.EphemeralToken).toBe('auth_tokens/ephemeral-abc');
+            expect(c.Connections[TOKEN_USES].Args.EphemeralToken).toBe('auth_tokens/refreshed-1');
+            expect(refreshes()).toBe(1);
+            expect(out.errors).toEqual([]);
+        });
+
+        it('counts connections reopened after drops against the same token', async () => {
+            const { c, out } = await connectWithUses();
+            for (let i = 0; i < TOKEN_USES; i++) {
+                const last = c.Connections.length - 1;
+                c.EmitOn(last, RESUMABLE(`h${i}`));
+                c.CloseOn(last, 1006);
+                await vi.advanceTimersByTimeAsync(60_000);
+            }
+            expect(c.Connections).toHaveLength(TOKEN_USES + 1);
+            expectNoTokenOverspent(c);
+            expect(out.errors).toEqual([]);
+        });
+
+        // F10: a lost connection now retries through a recovery window of tens of seconds, and each failed open counts
+        // as a use. The cycle's one refresh (on attempt 2) is not enough: the client must re-mint once that token is
+        // spent too, or every later attempt in the outage opens on a token Google refuses.
+        it('re-mints again when failed attempts in a long outage spend the token the cycle refreshed (F10)', async () => {
+            const { c, out, refreshes } = await connectWithUses();
+            const last = c.Connections.length - 1;
+            c.EmitOn(last, RESUMABLE('h0'));
+            c.FailConnects = 10; // about 40 s of outage at the capped backoff
+            c.CloseOn(last, 1006);
+            await vi.advanceTimersByTimeAsync(60_000);
+
+            expect(out.errors).toEqual([]);
+            expect(c.Connections).toHaveLength(2);
+            expect(refreshes()).toBeGreaterThanOrEqual(2);
+            expect(c.Connections[1].Args.EphemeralToken).toBe(`auth_tokens/refreshed-${refreshes()}`);
+        });
+
+        it('keeps the token while uses remain: no re-mint for the first five reconnects', async () => {
+            const { c, refreshes } = await connectWithUses();
+            for (let i = 0; i < TOKEN_USES - 1; i++) {
+                c.EmitOn(c.Connections.length - 1, RESUMABLE(`h${i}`));
+                expect(await c.TriggerReconnect('duration-expiry')).toBe(true);
+                await vi.advanceTimersByTimeAsync(45_000);
+            }
+            expect(refreshes()).toBe(0);
+            expect(new Set(c.Connections.map(({ Args }) => Args.EphemeralToken))).toEqual(new Set(['auth_tokens/ephemeral-abc']));
+        });
+    });
+
+    // Live (#6462 smoke, F16): with a 45 s cap and a 10 s buffer, the user spoke until just before the hard point (35 s
+    // after the connect). Gemini transcribes an utterance only once its answer starts, so nothing on the client said a turn
+    // was open, and the move at the hard point closed the connection that held the audio: no transcript, no seed entry,
+    // no answer. A user utterance the connection has not answered yet must hold the hard move too, as an answer does.
+    describe('a user utterance in flight at a timed move (#6462 F16)', () => {
+        const SPEECH = 0.3;
+        let c: MultiConnectionClient;
+
+        beforeEach(async () => {
+            c = new MultiConnectionClient();
+            c.SetTokenRefreshCallback(async () => ({
+                EphemeralToken: 'auth_tokens/refreshed',
+                ExpiresAt: new Date(Date.now() + 1800_000).toISOString(),
+                SessionConfig: { model: 'gemini-3.8-live', config: { responseModalities: ['AUDIO'], sessionResumption: {} } },
+            }));
+            await c.Connect(
+                { ...sessionConfig(), ConnectionMaxSeconds: 45, ReconnectBufferSeconds: 10, TrustNativeResumption: false },
+                new FakeMediaStream([new FakeTrack()])
+            );
+            c.MeterMic();
+            c.EmitOn(0, HEARD('Hi, my name is Nora.'));
+            c.EmitOn(0, SAID('Okay.'));
+            c.EmitOn(0, TURN_COMPLETE);
+        });
+
+        /** Streams mic chunks every 100 ms for `ms`, at `level`, as the worklet does. */
+        async function micFor(ms: number, level: number): Promise<void> {
+            c.MicLevel = level;
+            for (let elapsed = 0; elapsed < ms; elapsed += 100) {
+                c.OnPcmChunk?.('AAAA');
+                await vi.advanceTimersByTimeAsync(100);
+            }
+            c.MicLevel = 0;
+        }
+
+        /** Every text the seed sent on connection `index` carries. */
+        function seedTexts(index: number): string[] {
+            return c.Connections[index].Session.ClientContents.flatMap((content) =>
+                (content.turns ?? []).flatMap((turn) => (turn.parts ?? []).map((part) => part.text ?? ''))
+            );
+        }
+
+        it('holds the hard move until Gemini answers the words the user just finished, then seeds them', async () => {
+            await micFor(28_700, 0);
+            await micFor(5_800, SPEECH); // the user talks until 34.5 s
+            await micFor(1_000, 0); // the hard point (35 s) passes in the silence before Gemini answers
+            expect(c.Connections).toHaveLength(1);
+
+            c.EmitOn(0, HEARD('My favorite color is teal.'));
+            c.EmitOn(0, SAID('Teal is a lovely color.'));
+            await vi.advanceTimersByTimeAsync(0);
+            expect(c.Connections).toHaveLength(1); // the answer holds the move now
+            c.EmitOn(0, TURN_COMPLETE);
+            await vi.advanceTimersByTimeAsync(0);
+
+            expect(c.Connections).toHaveLength(2);
+            expect(seedTexts(1).slice(-2)).toEqual(['My favorite color is teal.', 'Teal is a lovely color.']);
+        });
+
+        it('lets the move go ahead when no answer comes a few seconds after the user stops', async () => {
+            await micFor(28_700, 0);
+            await micFor(5_800, SPEECH);
+            await micFor(1_000, 0);
+            expect(c.Connections).toHaveLength(1);
+
+            await vi.advanceTimersByTimeAsync(GEMINI_UNANSWERED_UTTERANCE_HOLD_MS);
+            expect(c.Connections).toHaveLength(2);
+        });
+
+        it('a user who talks through the hard point holds the move only until shortly before the provider limit', async () => {
+            await micFor(28_700, 0);
+            // 35 s + (10 s buffer - its third, the reconnect margin) = 41.667 s
+            await micFor(12_900, SPEECH);
+            expect(c.Connections).toHaveLength(1);
+            await micFor(200, SPEECH);
+            expect(c.Connections).toHaveLength(2);
+        });
+
+        it('seeds words Google transcribed before a move that comes before their answer', async () => {
+            await micFor(28_700, 0);
+            await micFor(5_800, SPEECH);
+            await micFor(1_000, 0);
+            c.EmitOn(0, HEARD('My favorite color is teal.'));
+            await vi.advanceTimersByTimeAsync(7_000); // no answer by the provider limit's last call
+
+            expect(c.Connections).toHaveLength(2);
+            expect(seedTexts(1)).toContain('My favorite color is teal.');
+        });
+
+        it('with the user silent, still moves at the start of the soft window (29 s)', async () => {
+            await micFor(28_900, 0);
+            expect(c.Connections).toHaveLength(1);
+            await micFor(200, 0);
+            expect(c.Connections).toHaveLength(2);
+        });
+    });
+
+    // Live (#6462 smoke, F14, L1): Google closes a connection opened on an ephemeral token when that token expires
+    // ("1011 auth token has expired"), even after the client refreshed the token 60 s earlier. The call dropped at 30:00
+    // and recovered through connection-lost, cutting any answer in progress. A refreshed token must move the call before.
+    describe('a connection opened on a token that expires before the connection limit (#6462 F14)', () => {
+        const TOKEN_LIFETIME_MS = 300_000;
+
+        async function connectOnExpiringToken(transport: 'direct' | 'relay'): Promise<MultiConnectionClient> {
+            const c = new MultiConnectionClient();
+            c.SetTokenRefreshCallback(async () =>
+                transport === 'relay'
+                    ? { Kind: 'relay', EphemeralToken: '', ExpiresAt: new Date(Date.now() + 1800_000).toISOString(), RelayUrl: 'wss://relay.example/realtime-proxy?ticket=relay-2' }
+                    : {
+                          EphemeralToken: 'auth_tokens/refreshed',
+                          ExpiresAt: new Date(Date.now() + 1800_000).toISOString(),
+                          SessionConfig: { model: 'gemini-3.8-live', config: { responseModalities: ['AUDIO'], sessionResumption: {} } },
+                      }
+            );
+            await c.Connect(
+                {
+                    ...sessionConfig(),
+                    ExpiresAt: new Date(Date.now() + TOKEN_LIFETIME_MS).toISOString(),
+                    ConnectionMaxSeconds: 600,
+                    ReconnectBufferSeconds: 10,
+                    TrustNativeResumption: false,
+                    ...(transport === 'relay' ? { Transport: 'relay' as const, RelayUrl: 'wss://relay.example/realtime-proxy?ticket=relay-1' } : {}),
+                },
+                new FakeMediaStream([new FakeTrack()])
+            );
+            c.EmitOn(0, HEARD('Hi, my name is Priya.'));
+            c.EmitOn(0, SAID('Hello Priya.'));
+            c.EmitOn(0, TURN_COMPLETE);
+            return c;
+        }
+
+        it('moves onto the refreshed token before the old token expires', async () => {
+            const c = await connectOnExpiringToken('direct');
+            await vi.advanceTimersByTimeAsync(TOKEN_LIFETIME_MS - 1);
+
+            expect(c.Connections).toHaveLength(2);
+            expect(c.Connections[1].Args.EphemeralToken).toBe('auth_tokens/refreshed');
+        });
+
+        it('keeps a relay connection: the relay ticket only gates opening it', async () => {
+            const c = await connectOnExpiringToken('relay');
+            await vi.advanceTimersByTimeAsync(TOKEN_LIFETIME_MS + 60_000);
+
+            expect(c.Connections).toHaveLength(1);
+        });
+    });
+});

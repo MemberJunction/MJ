@@ -402,8 +402,10 @@ export class GeminiRealtime extends BaseRealtimeModel {
      *
      * Expiry: the token opens connections (the first, and each resume, which Gemini counts as a new
      * session) until the session cap plus {@link GEMINI_CLIENT_TOKEN_CAP_SKEW_SECONDS} (at most
-     * {@link GEMINI_CLIENT_TOKEN_EXPIRY_MS}), one per {@link GEMINI_LIVE_CONNECTION_SECONDS} of the cap plus
-     * {@link GEMINI_CLIENT_TOKEN_RESUME_MARGIN}; the session's ability to send messages dies with it.
+     * {@link GEMINI_CLIENT_TOKEN_EXPIRY_MS}), one per effective connection length (`ConnectionMaxSeconds`, at most
+     * {@link GEMINI_LIVE_CONNECTION_SECONDS}) of the cap plus {@link GEMINI_CLIENT_TOKEN_RESUME_MARGIN}; the session's
+     * ability to send messages dies with it. The count rides `SessionConfig.tokenUses` so the browser refreshes before
+     * it spends the last use.
      *
      * @param params Session configuration (model, system prompt, tools, config bag).
      * @returns The minted {@link ClientRealtimeSessionConfig} the browser authenticates + applies.
@@ -422,7 +424,10 @@ export class GeminiRealtime extends BaseRealtimeModel {
         // and opens only enough connections for that cap: a leaked token cannot outlast the host's deadline.
         const capSeconds = maxSessionSeconds ?? GEMINI_CLIENT_TOKEN_EXPIRY_MS / 1000;
         const lifetimeMs = Math.min(GEMINI_CLIENT_TOKEN_EXPIRY_MS, (capSeconds + GEMINI_CLIENT_TOKEN_CAP_SKEW_SECONDS) * 1000);
-        const uses = Math.ceil(capSeconds / GEMINI_LIVE_CONNECTION_SECONDS) + GEMINI_CLIENT_TOKEN_RESUME_MARGIN;
+        // One use per connection the browser opens, and it opens one per EFFECTIVE connection length (the catalog cap
+        // narrowed to Gemini's ceiling), not per 10-minute ceiling: a 45 s cap needs 40 opens for a 30-minute call.
+        const connectionSeconds = resolvedTiming.ConnectionMaxSeconds ?? GEMINI_LIVE_CONNECTION_SECONDS;
+        const uses = Math.ceil(capSeconds / connectionSeconds) + GEMINI_CLIENT_TOKEN_RESUME_MARGIN;
         const now = Date.now();
         const expireTime = new Date(now + lifetimeMs).toISOString();
         const token = await this.mintAuthToken({
@@ -455,7 +460,9 @@ export class GeminiRealtime extends BaseRealtimeModel {
             ExpiresAt: expireTime,
             // The browser passes the full config to live.connect; the token lock above makes its
             // values authoritative even if a client tampers.
-            SessionConfig: this.SessionPactFor(params.Model, config),
+            // `tokenUses`: the connections this token opens. Drops and the 120 s uncompressed-video cap spend uses no
+            // mint-time count can bound, so the browser counts its opens and re-mints before it would open one too many.
+            SessionConfig: { ...this.SessionPactFor(params.Model, config), tokenUses: uses },
             ...(avatarStatus ? { AvatarStatus: avatarStatus } : {}),
             MaxSessionSeconds: maxSessionSeconds,
             ConnectionMaxSeconds: resolvedTiming.ConnectionMaxSeconds,

@@ -3613,6 +3613,31 @@ describe('RealtimeClientSessionService.RefreshClientSessionCredential', () => {
         expect(svc.Model.LastParams?.MaxSessionSeconds).toBe(900);
     });
 
+    it('returns the re-stamped catalog timing on a re-mint refresh, so the browser client can apply it (F1)', async () => {
+        const svc = new TestableService();
+        const sessionId = '44444444-0000-4000-8000-0000000000f1';
+        const prep = await svc.PrepareClientSession(
+            makePrepInput({
+                AgentSessionID: sessionId,
+                Config: { connectionMaxSeconds: 45, sessionMaxSeconds: 1200, reconnectBufferSeconds: 7, trustNativeResumption: true },
+            }),
+            contextUser,
+            provider,
+        );
+        expect(prep.Success).toBe(true);
+
+        const refreshed = await svc.RefreshClientSessionCredential(
+            { AgentSessionID: sessionId, CoAgentID: 'co-1', RemainingSessionSeconds: 900 },
+            contextUser,
+            provider,
+        );
+        expect(refreshed.Success).toBe(true);
+        expect(refreshed.ConnectionMaxSeconds).toBe(45);
+        expect(refreshed.SessionMaxSeconds).toBe(1200);
+        expect(refreshed.ReconnectBufferSeconds).toBe(7);
+        expect(refreshed.TrustNativeResumption).toBe(true);
+    });
+
     it('extends an active MJAPI relay ticket via RealtimeProxyRegistry.ExtendRelaySession and returns Kind: relay without re-running prompt rendering', async () => {
         const { RealtimeProxyRegistry } = await import('@memberjunction/ai');
         const grant = RealtimeProxyRegistry.Instance.IssueRelaySession({

@@ -8,7 +8,7 @@ import {
     IRealtimePeerConnection,
     OpenAIRealtimeClient,
 } from '../drivers/openAIRealtimeClient';
-import { IOpenAIProtocolClientSocket } from '../generic/openAIProtocolClient';
+import { IOpenAIProtocolClientSocket, PENDING_USER_UTTERANCE_MAX_AGE_MS } from '../generic/openAIProtocolClient';
 import { xAIRealtimeClient } from '../drivers/xaiRealtimeClient';
 import {
     ElevenLabsRealtimeClient,
@@ -52,6 +52,8 @@ class FakeDataChannel implements IRealtimeDataChannel {
 
 class FakePeerConnection implements IRealtimePeerConnection {
     public ontrack: ((event: RTCTrackEvent) => void) | null = null;
+    public connectionState: RTCPeerConnectionState = 'new';
+    public onconnectionstatechange: ((event: Event) => void) | null = null;
     public Channel = new FakeDataChannel();
     public Closed = false;
 
@@ -934,5 +936,409 @@ describe('Slice 5 — Client driver long-call reconnects and history seeding', (
         expect(errors).toEqual([]);
         await client.Disconnect();
     });
-});
 
+    describe('typed text during an OpenAI reconnect (F12)', () => {
+        /** An OpenAI client whose reconnect handshakes wait until the test releases them. */
+        class HeldHandshakeOpenAIClient extends OpenAIRealtimeClient {
+            public PeerConnections: FakePeerConnection[] = [];
+            private releaseHandshake: (() => void) | null = null;
+            protected override createPeerConnection(): IRealtimePeerConnection {
+                const pc = new FakePeerConnection();
+                this.PeerConnections.push(pc);
+                queueMicrotask(() => pc.Channel.Open());
+                return pc;
+            }
+            protected override createAudioSink(): IRealtimeAudioSink {
+                return new FakeAudioSink();
+            }
+            protected override async postSdpOffer(): Promise<string> {
+                if (this.PeerConnections.length > 1) {
+                    await new Promise<void>((resolve) => {
+                        this.releaseHandshake = resolve;
+                    });
+                }
+                return 'FAKE_ANSWER_SDP';
+            }
+            public ReleaseHandshake(): void {
+                const release = this.releaseHandshake;
+                this.releaseHandshake = null;
+                release?.();
+            }
+        }
+
+        async function connectHeldClient(): Promise<HeldHandshakeOpenAIClient> {
+            const client = new HeldHandshakeOpenAIClient();
+            const mic = new FakeMediaStream([new FakeTrack()]) as unknown as MediaStream;
+            const connectPromise = client.Connect(
+                {
+                    Provider: 'openai',
+                    Model: 'gpt-realtime-2.1',
+                    EphemeralToken: 'tok-f12',
+                    ExpiresAt: new Date(Date.now() + 600_000).toISOString(),
+                    SessionConfig: { type: 'realtime', instructions: 'System prompt' },
+                },
+                mic
+            );
+            await vi.advanceTimersByTimeAsync(1);
+            await connectPromise;
+            return client;
+        }
+
+        async function reconnect(client: HeldHandshakeOpenAIClient, duringMove?: () => void): Promise<void> {
+            const reconnected = client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(1);
+            duringMove?.();
+            client.ReleaseHandshake();
+            await vi.advanceTimersByTimeAsync(1);
+            expect(await reconnected).toBe(true);
+        }
+
+        function userTexts(channel: FakeDataChannel): string[] {
+            return channel
+                .SentEvents()
+                .filter((e) => e.type === 'conversation.item.create')
+                .flatMap((e) => {
+                    const item = e['item'] as { role?: string; content?: Array<{ text?: string }> };
+                    return item.role === 'user' ? (item.content ?? []).map((c) => c.text ?? '') : [];
+                });
+        }
+
+        it('holds SendText while reconnecting and delivers it on the new data channel after the seed, not on the closing one', async () => {
+            const client = await connectHeldClient();
+            const oldChannel = client.PeerConnections[0].Channel;
+            const sentBefore = oldChannel.Sent.length;
+
+            await reconnect(client, () => client.SendText('Please say the word banana.'));
+
+            expect(oldChannel.Sent.slice(sentBefore)).toEqual([]);
+            const newEvents = client.PeerConnections[1].Channel.SentEvents();
+            const textIndex = newEvents.findIndex(
+                (e) => e.type === 'conversation.item.create' && JSON.stringify(e).includes('banana')
+            );
+            expect(textIndex).toBeGreaterThan(-1);
+            expect(newEvents[0]?.type).toBe('session.update');
+            expect(newEvents.slice(textIndex + 1).some((e) => e.type === 'response.create')).toBe(true);
+            await client.Disconnect();
+        });
+
+        it('records typed text in conversation memory so a later reseed carries it', async () => {
+            const client = await connectHeldClient();
+            client.SendText('My account number is 4411.');
+
+            await reconnect(client);
+
+            expect(userTexts(client.PeerConnections[1].Channel).join('\n')).toContain('My account number is 4411.');
+            await client.Disconnect();
+        });
+
+        it('a text held across one move is in the seed of the next move, once', async () => {
+            const client = await connectHeldClient();
+            await reconnect(client, () => client.SendText('Please say the word banana.'));
+            await reconnect(client);
+
+            const seededTexts = userTexts(client.PeerConnections[2].Channel).join('\n');
+            expect(seededTexts.split('Please say the word banana.').length - 1).toBe(1);
+            await client.Disconnect();
+        });
+
+        it('drops held text when the call ends during the move', async () => {
+            const client = await connectHeldClient();
+            const reconnected = client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(1);
+            client.SendText('Never delivered.');
+            await client.Disconnect();
+            client.ReleaseHandshake();
+            // The ended cycle still waits out its retry delay before it sees the disposal.
+            await vi.advanceTimersByTimeAsync(60_000);
+            expect(await reconnected).toBe(false);
+
+            for (const pc of client.PeerConnections) {
+                expect(userTexts(pc.Channel).join('\n')).not.toContain('Never delivered.');
+            }
+        });
+    });
+
+    describe('user speech across a timed OpenAI-protocol reconnect (F12b)', () => {
+        // ConnectionMaxSeconds 120 with a 10 s buffer: the soft window opens at 92 s and the hard deadline is 110 s.
+        const SOFT_WINDOW_OPENS_MS = 92_000;
+        const HARD_DEADLINE_MS = 110_000;
+
+        class TimedOpenAIClient extends OpenAIRealtimeClient {
+            public PeerConnections: FakePeerConnection[] = [];
+            protected override createPeerConnection(): IRealtimePeerConnection {
+                const pc = new FakePeerConnection();
+                this.PeerConnections.push(pc);
+                queueMicrotask(() => pc.Channel.Open());
+                return pc;
+            }
+            protected override createAudioSink(): IRealtimeAudioSink {
+                return new FakeAudioSink();
+            }
+            protected override async postSdpOffer(): Promise<string> {
+                return 'FAKE_ANSWER_SDP';
+            }
+            /** Injects a server event on the connection the call is on now. */
+            public Emit(event: object): void {
+                this.PeerConnections[this.PeerConnections.length - 1].Channel.EmitServer(event);
+            }
+            /** Whether a soft-window move would be held right now. */
+            public IsHoldingReconnect(): boolean {
+                return this.isTurnActiveForReconnect();
+            }
+        }
+
+        class TimedXAIClient extends xAIRealtimeClient {
+            public Sockets: FakeProtocolSocket[] = [];
+            protected override createSocket(): IOpenAIProtocolClientSocket {
+                const sock = new FakeProtocolSocket();
+                this.Sockets.push(sock);
+                queueMicrotask(() => sock.onopen?.());
+                return sock;
+            }
+            protected override async createMicCapture(): Promise<IPcmMicCapture> {
+                return new FakeMicCapture();
+            }
+            protected override createPlayback(): IRealtimePcmPlayback {
+                return new FakePlayback();
+            }
+            public Emit(event: object): void {
+                this.Sockets[this.Sockets.length - 1].onmessage?.(JSON.stringify(event));
+            }
+        }
+
+        async function connectTimedOpenAI(): Promise<TimedOpenAIClient> {
+            const client = new TimedOpenAIClient();
+            const mic = new FakeMediaStream([new FakeTrack()]) as unknown as MediaStream;
+            const connectPromise = client.Connect(
+                {
+                    Provider: 'openai',
+                    Model: 'gpt-realtime-2.1',
+                    EphemeralToken: 'tok-f12b',
+                    ExpiresAt: new Date(Date.now() + 600_000).toISOString(),
+                    ConnectionMaxSeconds: 120,
+                    ReconnectBufferSeconds: 10,
+                    SessionConfig: { type: 'realtime', instructions: 'System prompt' },
+                },
+                mic
+            );
+            await vi.advanceTimersByTimeAsync(1);
+            await connectPromise;
+            return client;
+        }
+
+        /** Moves the fake clock to `atMs` since the test started (Connect took the first 1 ms). */
+        async function advanceTo(atMs: number): Promise<void> {
+            await vi.advanceTimersByTimeAsync(atMs - Date.now() + startedAtMs);
+        }
+
+        function seedText(channel: FakeDataChannel): string {
+            return JSON.stringify(channel.SentEvents().filter((e) => e.type === 'conversation.item.create'));
+        }
+
+        let startedAtMs = 0;
+        beforeEach(() => {
+            startedAtMs = Date.now();
+        });
+
+        it('defers a soft-window swap while the user is mid-utterance, then swaps once the answer has been given', async () => {
+            const client = await connectTimedOpenAI();
+            await advanceTo(91_000);
+            client.Emit({ type: 'input_audio_buffer.speech_started', item_id: 'u_1' });
+
+            await advanceTo(SOFT_WINDOW_OPENS_MS + 1_000);
+            expect(client.PeerConnections).toHaveLength(1);
+
+            client.Emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'u_1' });
+            client.Emit({ type: 'input_audio_buffer.committed', item_id: 'u_1' });
+            client.Emit({ type: 'response.created' });
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'u_1', transcript: 'What is my balance?' });
+            await vi.advanceTimersByTimeAsync(1);
+            expect(client.PeerConnections).toHaveLength(1);
+
+            client.Emit({ type: 'response.output_audio_transcript.delta', delta: 'It is ' });
+            client.Emit({ type: 'response.output_audio_transcript.done', transcript: 'It is forty dollars.' });
+            client.Emit({ type: 'response.done' });
+            await vi.advanceTimersByTimeAsync(1);
+
+            expect(client.PeerConnections).toHaveLength(2);
+            expect(Date.now() - startedAtMs).toBeLessThan(HARD_DEADLINE_MS);
+            const seeded = seedText(client.PeerConnections[1].Channel);
+            expect(seeded).toContain('What is my balance?');
+            expect(seeded).toContain('It is forty dollars.');
+            await client.Disconnect();
+        });
+
+        it('holds the swap for a committed utterance that gets no auto-reply until its transcript is in memory (create_response:false)', async () => {
+            const client = await connectTimedOpenAI();
+            await advanceTo(91_000);
+            client.Emit({ type: 'input_audio_buffer.speech_started', item_id: 'u_2' });
+            client.Emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'u_2' });
+            client.Emit({ type: 'input_audio_buffer.committed', item_id: 'u_2' });
+
+            await advanceTo(SOFT_WINDOW_OPENS_MS + 1_000);
+            expect(client.PeerConnections).toHaveLength(1);
+
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'u_2', transcript: 'Note the meeting room.' });
+            await vi.advanceTimersByTimeAsync(1);
+
+            expect(client.PeerConnections).toHaveLength(2);
+            expect(seedText(client.PeerConnections[1].Channel)).toContain('Note the meeting room.');
+            await client.Disconnect();
+        });
+
+        it('a failed transcription releases the hold too', async () => {
+            const client = await connectTimedOpenAI();
+            await advanceTo(91_000);
+            client.Emit({ type: 'input_audio_buffer.speech_started', item_id: 'u_f' });
+            client.Emit({ type: 'input_audio_buffer.committed', item_id: 'u_f' });
+            await advanceTo(SOFT_WINDOW_OPENS_MS + 1_000);
+            expect(client.PeerConnections).toHaveLength(1);
+
+            client.Emit({ type: 'conversation.item.input_audio_transcription.failed', item_id: 'u_f' });
+            await vi.advanceTimersByTimeAsync(1);
+
+            expect(client.PeerConnections).toHaveLength(2);
+            await client.Disconnect();
+        });
+
+        it('input_audio_buffer.cleared releases an uncommitted utterance', async () => {
+            const client = await connectTimedOpenAI();
+            await advanceTo(91_000);
+            client.Emit({ type: 'input_audio_buffer.speech_started', item_id: 'u_c' });
+            await advanceTo(SOFT_WINDOW_OPENS_MS + 1_000);
+            expect(client.PeerConnections).toHaveLength(1);
+
+            client.Emit({ type: 'input_audio_buffer.cleared' });
+            await vi.advanceTimersByTimeAsync(1);
+
+            expect(client.PeerConnections).toHaveLength(2);
+            await client.Disconnect();
+        });
+
+        it('an utterance with no closing event stops holding the swap after the bounded max age', async () => {
+            const client = await connectTimedOpenAI();
+            await advanceTo(85_000);
+            client.Emit({ type: 'input_audio_buffer.speech_started', item_id: 'u_3' });
+
+            await advanceTo(85_000 + PENDING_USER_UTTERANCE_MAX_AGE_MS - 1_000);
+            expect(client.PeerConnections).toHaveLength(1);
+
+            await advanceTo(85_000 + PENDING_USER_UTTERANCE_MAX_AGE_MS + 1);
+            expect(client.PeerConnections).toHaveLength(2);
+            expect(Date.now() - startedAtMs).toBeLessThan(HARD_DEADLINE_MS);
+            await client.Disconnect();
+        });
+
+        it('a pending utterance never holds the swap past the hard deadline', async () => {
+            const client = await connectTimedOpenAI();
+            // Keep the soft window busy with an open model turn, then start speaking close to the hard deadline.
+            await advanceTo(90_000);
+            client.Emit({ type: 'response.created' });
+            client.Emit({ type: 'response.output_audio_transcript.delta', delta: 'Let me explain ' });
+            await advanceTo(105_000);
+            client.Emit({ type: 'input_audio_buffer.speech_started', item_id: 'u_4' });
+            client.Emit({ type: 'response.done' });
+
+            await advanceTo(HARD_DEADLINE_MS - 1_000);
+            expect(client.PeerConnections).toHaveLength(1);
+
+            await advanceTo(HARD_DEADLINE_MS + 1);
+            expect(client.PeerConnections).toHaveLength(2);
+            // The old connection's utterance must not hold the new connection's moves.
+            expect(client.IsHoldingReconnect()).toBe(false);
+            await client.Disconnect();
+        });
+
+        describe('an answer the move cuts off (F2)', () => {
+            // The provider limit is 120 s; a hard-point move that waits for an answer keeps a 3333 ms margin before it.
+            const LAST_CALL_MS = 120_000 - 3_333;
+
+            function sentAfterSeed(channel: FakeDataChannel): string[] {
+                return channel.SentEvents().map((e) => e.type);
+            }
+
+            async function askQuestion(client: TimedOpenAIClient, atMs: number): Promise<void> {
+                await advanceTo(atMs);
+                client.Emit({ type: 'input_audio_buffer.speech_started', item_id: 'u_q' });
+                client.Emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'u_q' });
+                client.Emit({ type: 'input_audio_buffer.committed', item_id: 'u_q' });
+                client.Emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'u_q', transcript: 'What is the capital of Peru?' });
+                client.Emit({ type: 'response.created' });
+                client.Emit({ type: 'response.output_audio_transcript.delta', delta: 'The capital of ' });
+            }
+
+            it('the hard point does not cut an answer that ends before the provider limit', async () => {
+                const client = await connectTimedOpenAI();
+                await askQuestion(client, 91_000);
+                await advanceTo(HARD_DEADLINE_MS + 3_000);
+                expect(client.PeerConnections).toHaveLength(1);
+
+                client.Emit({ type: 'response.output_audio_transcript.done', transcript: 'The capital of Peru is Lima.' });
+                client.Emit({ type: 'response.done' });
+                await vi.advanceTimersByTimeAsync(1);
+
+                expect(client.PeerConnections).toHaveLength(2);
+                expect(seedText(client.PeerConnections[1].Channel)).toContain('The capital of Peru is Lima.');
+                // The answer was given in full, so the new connection is not asked for it again.
+                expect(sentAfterSeed(client.PeerConnections[1].Channel)).not.toContain('response.create');
+                await client.Disconnect();
+            });
+
+            it('re-requests an answer cut off near the provider limit, once, after the seed', async () => {
+                const client = await connectTimedOpenAI();
+                await askQuestion(client, 91_000);
+                await advanceTo(LAST_CALL_MS - 1);
+                expect(client.PeerConnections).toHaveLength(1);
+                await advanceTo(LAST_CALL_MS + 10);
+
+                expect(client.PeerConnections).toHaveLength(2);
+                const types = sentAfterSeed(client.PeerConnections[1].Channel);
+                expect(types.filter((t) => t === 'response.create')).toHaveLength(1);
+                const lastSeedItem = types.lastIndexOf('conversation.item.create');
+                expect(types.indexOf('response.create')).toBeGreaterThan(lastSeedItem);
+                expect(seedText(client.PeerConnections[1].Channel)).toContain('What is the capital of Peru?');
+                await client.Disconnect();
+            });
+
+            it('does not re-request after a move with no answer in flight', async () => {
+                const client = await connectTimedOpenAI();
+                await advanceTo(SOFT_WINDOW_OPENS_MS + 1_000);
+                expect(client.PeerConnections).toHaveLength(2);
+                expect(sentAfterSeed(client.PeerConnections[1].Channel)).not.toContain('response.create');
+                await client.Disconnect();
+            });
+        });
+
+        it('xAI: a streamed transcript does not release the hold before the commit; the committed transcript does', async () => {
+            const client = new TimedXAIClient();
+            const mic = new FakeMediaStream([new FakeTrack()]) as unknown as MediaStream;
+            const connectPromise = client.Connect(
+                {
+                    Provider: 'xai',
+                    Model: 'grok-2-realtime',
+                    EphemeralToken: 'tok-xai-f12b',
+                    ExpiresAt: new Date(Date.now() + 600_000).toISOString(),
+                    ConnectionMaxSeconds: 120,
+                    ReconnectBufferSeconds: 10,
+                    SessionConfig: { instructions: 'Grok prompt' },
+                },
+                mic
+            );
+            await vi.advanceTimersByTimeAsync(1);
+            await connectPromise;
+
+            await advanceTo(91_000);
+            client.Emit({ type: 'input_audio_buffer.speech_started', item_id: 'x_1' });
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'x_1', transcript: 'Book a' });
+            await advanceTo(SOFT_WINDOW_OPENS_MS + 1_000);
+            expect(client.Sockets).toHaveLength(1);
+
+            client.Emit({ type: 'input_audio_buffer.committed', item_id: 'x_1' });
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'x_1', transcript: 'Book a room.' });
+            await vi.advanceTimersByTimeAsync(1);
+
+            expect(client.Sockets).toHaveLength(2);
+            await client.Disconnect();
+        });
+    });
+});

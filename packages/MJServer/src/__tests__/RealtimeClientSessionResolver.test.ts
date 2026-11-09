@@ -4650,7 +4650,7 @@ describe('RealtimeClientSessionResolver.RefreshRealtimeClientSessionToken', () =
         });
     });
 
-    it('enforces the per-session rate limit (default 6 calls per 10m window, scaled upward for short ConnectionMaxSeconds)', async () => {
+    it('enforces the per-session rate limit (8 mints per 10m window with no known connection length, scaled upward for short ConnectionMaxSeconds)', async () => {
         const sessionId = '33333333-0000-4000-8000-000000000003';
         const session = makeSessionEntity({
             ID: sessionId,
@@ -4665,15 +4665,15 @@ describe('RealtimeClientSessionResolver.RefreshRealtimeClientSessionToken', () =
         });
         const resolver = makeResolver();
 
-        for (let i = 0; i < 6; i++) {
+        for (let i = 0; i < 8; i++) {
             const ok = await resolver.RefreshRealtimeClientSessionToken(sessionId, makeCtx());
             expect(ok.Success).toBe(true);
         }
 
-        const seventh = await resolver.RefreshRealtimeClientSessionToken(sessionId, makeCtx());
-        expect(seventh.Success).toBe(false);
-        expect(seventh.ErrorMessage).toMatch(/rate limit/i);
-        expect(refreshClientSessionCredentialMock).toHaveBeenCalledTimes(6);
+        const ninth = await resolver.RefreshRealtimeClientSessionToken(sessionId, makeCtx());
+        expect(ninth.Success).toBe(false);
+        expect(ninth.ErrorMessage).toMatch(/rate limit/i);
+        expect(refreshClientSessionCredentialMock).toHaveBeenCalledTimes(8);
 
         // With a 45 s ConnectionMaxSeconds test override, 10 refreshes within 10 minutes are allowed (#10):
         const shortSessionId = '33333333-0000-4000-8000-000000000045';
@@ -4697,6 +4697,122 @@ describe('RealtimeClientSessionResolver.RefreshRealtimeClientSessionToken', () =
             const ok = await resolver.RefreshRealtimeClientSessionToken(shortSessionId, makeCtx());
             expect(ok.Success).toBe(true);
         }
+    });
+
+    describe('refresh rate limit sizing (F13)', () => {
+        /** A session whose mint snapshot carries `connectionMaxSeconds` (omitted when undefined). */
+        function sessionWithConnection(id: string, connectionMaxSeconds: number | undefined) {
+            return makeSessionEntity({
+                ID: id,
+                AgentID: 'co-agent-1',
+                Config_: JSON.stringify({
+                    targetAgentID: 'target-1',
+                    realtimeMintSnapshot: {
+                        coAgentID: 'co-agent-1',
+                        modelID: 'm-1',
+                        driverClass: 'OpenAIRealtime',
+                        credentialScope: 'Any',
+                        ...(connectionMaxSeconds !== undefined ? { connectionMaxSeconds } : {}),
+                        sessionParams: { Model: 'gpt-realtime', SystemPrompt: 'prompt' },
+                    },
+                }),
+            });
+        }
+
+        async function refreshTimes(sessionId: string, times: number): Promise<boolean[]> {
+            const resolver = makeResolver();
+            const results: boolean[] = [];
+            for (let i = 0; i < times; i++) {
+                results.push((await resolver.RefreshRealtimeClientSessionToken(sessionId, makeCtx())).Success);
+            }
+            return results;
+        }
+
+        it('allows every planned move of a short connection: a 45 s connection moves at its soft window (~every 29 s), 21 times in 10 minutes', async () => {
+            const sessionId = '33333333-0000-4000-8000-0000000f1301';
+            currentProvider = makeProvider(() => sessionWithConnection(sessionId, 45));
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: true, EphemeralToken: 'ek', ExpiresAt: '2026-12-01T00:00:00Z' });
+
+            // 20 soft-window moves (OpenAI/xAI mint a fresh token on each) plus one connection drop.
+            const results = await refreshTimes(sessionId, 21);
+
+            expect(results.filter((ok) => !ok)).toHaveLength(0);
+        });
+
+        it('allows several connection drops in 10 minutes on a long OpenAI/xAI connection (each drop mints a token)', async () => {
+            const sessionId = '33333333-0000-4000-8000-0000000f1302';
+            currentProvider = makeProvider(() => sessionWithConnection(sessionId, 7200));
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: true, EphemeralToken: 'ek', ExpiresAt: '2026-12-01T00:00:00Z' });
+
+            // One proactive refresh, one planned move, and six drops (more than one burst the client's rapid-reconnect breaker allows).
+            const results = await refreshTimes(sessionId, 8);
+
+            expect(results.filter((ok) => !ok)).toHaveLength(0);
+        });
+
+        it('does not spend the budget on failed refreshes: a refresh retried through a provider mint outage succeeds once the provider recovers', async () => {
+            const sessionId = '33333333-0000-4000-8000-0000000f1303';
+            currentProvider = makeProvider(() => sessionWithConnection(sessionId, 3600));
+            // An 85 s planned-move recovery window retries every 5 s: about 17 failed mints before the provider is back.
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: false, ErrorMessage: 'provider mint failed (503)' });
+            const resolver = makeResolver();
+            for (let i = 0; i < 17; i++) {
+                const failed = await resolver.RefreshRealtimeClientSessionToken(sessionId, makeCtx());
+                expect(failed.ErrorMessage).toBe('provider mint failed (503)');
+            }
+
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: true, EphemeralToken: 'ek_back', ExpiresAt: '2026-12-01T00:00:00Z' });
+            const recovered = await resolver.RefreshRealtimeClientSessionToken(sessionId, makeCtx());
+
+            expect(recovered.ErrorMessage).toBeUndefined();
+            expect(recovered.Success).toBe(true);
+        });
+
+        it('a refresh that throws does not spend the mint budget either', async () => {
+            const sessionId = '33333333-0000-4000-8000-0000000f1304';
+            currentProvider = makeProvider(() => sessionWithConnection(sessionId, 3600));
+            refreshClientSessionCredentialMock.mockRejectedValue(new Error('mint transport error'));
+            const resolver = makeResolver();
+            for (let i = 0; i < 12; i++) {
+                await expect(resolver.RefreshRealtimeClientSessionToken(sessionId, makeCtx())).rejects.toThrow('mint transport error');
+            }
+
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: true, EphemeralToken: 'ek_back', ExpiresAt: '2026-12-01T00:00:00Z' });
+            expect((await resolver.RefreshRealtimeClientSessionToken(sessionId, makeCtx())).Success).toBe(true);
+        });
+
+        it('still refuses a runaway client minting tokens in a loop', async () => {
+            const sessionId = '33333333-0000-4000-8000-0000000f1305';
+            currentProvider = makeProvider(() => sessionWithConnection(sessionId, 7200));
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: true, EphemeralToken: 'ek', ExpiresAt: '2026-12-01T00:00:00Z' });
+
+            const results = await refreshTimes(sessionId, 60);
+
+            const firstRefusal = results.indexOf(false);
+            expect(firstRefusal).toBeGreaterThan(0);
+            expect(firstRefusal).toBeLessThan(15);
+            expect(results.slice(firstRefusal).every((ok) => !ok)).toBe(true);
+            expect(refreshClientSessionCredentialMock).toHaveBeenCalledTimes(firstRefusal);
+        });
+
+        it('still refuses a runaway client whose refreshes keep failing, before it reaches the provider without bound', async () => {
+            const sessionId = '33333333-0000-4000-8000-0000000f1306';
+            currentProvider = makeProvider(() => sessionWithConnection(sessionId, 7200));
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: false, ErrorMessage: 'provider mint failed (400)' });
+
+            const resolver = makeResolver();
+            let refusedAt = -1;
+            for (let i = 0; i < 200 && refusedAt < 0; i++) {
+                const result = await resolver.RefreshRealtimeClientSessionToken(sessionId, makeCtx());
+                if (result.ErrorMessage?.match(/rate limit/i)) {
+                    refusedAt = i;
+                }
+            }
+
+            expect(refusedAt).toBeGreaterThan(17);
+            expect(refusedAt).toBeLessThan(100);
+            expect(refreshClientSessionCredentialMock).toHaveBeenCalledTimes(refusedAt);
+        });
     });
 
     it('Caliber zero-change compatibility: preserves a single stable AgentSessionId across multiple token refreshes and transcript/tool relays', async () => {
@@ -4761,3 +4877,46 @@ describe('RealtimeClientSessionResolver.RefreshRealtimeClientSessionToken', () =
     });
 });
 
+
+describe('RealtimeClientSessionResolver — catalog timing reaches the browser (F1)', () => {
+    const TIMING = { ConnectionMaxSeconds: 45, SessionMaxSeconds: 1200, ReconnectBufferSeconds: 7, TrustNativeResumption: false };
+
+    it('returns the typed ClientConfig timing fields on the StartRealtimeClientSession result', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        currentProvider = makeProvider(() => makeSessionEntity());
+        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-f1', ConversationID: 'conv-f1' }));
+        prepareClientSessionMock.mockResolvedValue({
+            Success: true,
+            ClientConfig: {
+                Provider: 'gemini', Model: 'gemini-live', EphemeralToken: 'ek', ExpiresAt: '2099-01-01T00:00:00Z',
+                SessionConfig: {}, ...TIMING,
+            },
+        });
+
+        const result = await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-f1');
+
+        expect(result.ConnectionMaxSeconds).toBe(45);
+        expect(result.SessionMaxSeconds).toBe(1200);
+        expect(result.ReconnectBufferSeconds).toBe(7);
+        expect(result.TrustNativeResumption).toBe(false);
+    });
+
+    it('returns the timing fields on the RefreshRealtimeClientSessionToken result', async () => {
+        const sessionId = 'f1f1f1f1-0000-4000-8000-0000000000f1';
+        const session = makeSessionEntity({
+            ID: sessionId,
+            AgentID: 'co-agent-1',
+            Config_: JSON.stringify({ targetAgentID: 'target-1' }),
+        });
+        currentProvider = makeProvider(() => session);
+        hasPermissionMock.mockResolvedValue(true);
+        refreshClientSessionCredentialMock.mockResolvedValue({
+            Success: true, Kind: 'token', EphemeralToken: 'ek2', ExpiresAt: '2099-01-01T00:00:00Z', SessionConfigJson: '{}',
+            ...TIMING,
+        });
+
+        const result = await makeResolver().RefreshRealtimeClientSessionToken(sessionId, makeCtx());
+
+        expect(result).toMatchObject({ Success: true, ...TIMING });
+    });
+});

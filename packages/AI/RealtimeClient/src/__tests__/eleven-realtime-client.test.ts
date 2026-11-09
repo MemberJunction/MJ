@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
 import { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
 import { BaseRealtimeClient } from '../generic/baseRealtimeClient';
@@ -165,10 +165,12 @@ describe('ElevenRealtimeClient', () => {
         await expect(promise).rejects.toThrow('closed during connect');
     });
 
-    it('brands an unexpected close after connect as a fatal Eleven Realtime error', async () => {
+    it('hands an unexpected close of the live call to the connection-lost reconnect instead of ending it', async () => {
         const { errors } = collect(client);
         await connect(client);
+        const reconnect = vi.spyOn(client, 'TriggerReconnect').mockResolvedValue(true);
         client.Fake.onclose?.();
-        expect(errors.at(-1)).toEqual({ Message: 'Eleven Realtime connection closed unexpectedly', Fatal: true });
+        expect(reconnect).toHaveBeenCalledWith('connection-lost');
+        expect(errors).toEqual([]);
     });
 });

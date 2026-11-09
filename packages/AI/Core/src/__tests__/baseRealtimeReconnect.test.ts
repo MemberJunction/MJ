@@ -17,6 +17,7 @@ import {
     type RealtimeTranscript,
     type RealtimeUsage,
 } from '../generic/baseRealtime';
+import { REALTIME_RESUMPTION_RECOVERY_WINDOW_MS } from '../generic/realtimeSessionResumption';
 
 class TestRealtimeSession extends BaseRealtimeSession {
     public readonly ReconnectContexts: RealtimeReconnectContext[] = [];
@@ -206,7 +207,7 @@ describe('BaseRealtimeModel & BaseRealtimeSession — long-call reconnect contra
         await session.Close();
     });
 
-    it('surfaces Fatal: true error after all 3 attempts fail', async () => {
+    it('surfaces Fatal: true error once the attempts fail for the whole recovery window (F10)', async () => {
         const model = new TestRealtimeModel('test-key');
         const session = (await model.StartSession({
             Model: 'test',
@@ -218,11 +219,14 @@ describe('BaseRealtimeModel & BaseRealtimeSession — long-call reconnect contra
         };
 
         const promise = session.TriggerReconnect('connection-lost');
-        await vi.advanceTimersByTimeAsync(5_000);
+        // Still retrying well past the initial 0 / 1 / 3 s schedule: an outage of tens of seconds can recover.
+        await vi.advanceTimersByTimeAsync(40_000);
+        expect(session.Errors).toHaveLength(0);
+        await vi.advanceTimersByTimeAsync(REALTIME_RESUMPTION_RECOVERY_WINDOW_MS);
         const ok = await promise;
 
         expect(ok).toBe(false);
-        expect(session.ReconnectContexts).toHaveLength(3);
+        expect(session.ReconnectContexts.length).toBeGreaterThan(3);
         expect(session.Errors).toHaveLength(1);
         expect(session.Errors[0].Error.Fatal).toBe(true);
         expect(session.Errors[0].Code).toBe('reconnect-failed');

@@ -7,18 +7,30 @@ export const REALTIME_MEMORY_TRUNCATED_TAIL = '…[truncated]';
 
 /** One final turn (or tool exchange) of a realtime conversation. */
 export type RealtimeMemoryEntry =
-    | { Kind: 'user'; Text: string; ReplacesPrevious?: boolean }
+    | {
+          Kind: 'user';
+          Text: string;
+          ReplacesPrevious?: boolean;
+          /**
+           * The provider's conversation item id. When `ReserveUserTurn` reserved a place for this id, the text fills that
+           * place (or replaces its earlier text) instead of being appended. Not kept in the seed.
+           */
+          ItemId?: string;
+      }
     | { Kind: 'assistant'; Text: string; ReplacesPrevious?: boolean }
     | { Kind: 'note'; Text: string }
     | { Kind: 'toolCall'; Name: string; ArgumentsJson: string }
     | { Kind: 'toolResult'; Name: string; OutputJson: string };
+
+/** Most reserved user turns that may wait for their text at once; the oldest is given up beyond this. */
+export const REALTIME_MEMORY_MAX_PENDING_USER_TURNS = 8;
 
 export interface RealtimeConversationMemoryOptions {
     /** Cap on total seed characters, measured as rendered: see {@link RealtimeMemorySeed.Chars}. Default `REALTIME_MEMORY_MAX_SEED_CHARS`. */
     MaxSeedChars?: number;
     /** Cap on one entry's raw payload, before any escaping. Default `REALTIME_MEMORY_MAX_ENTRY_CHARS`. */
     MaxEntryChars?: number;
-    /** Receives one line when `Record` truncates an entry. Never carries content. */
+    /** Receives one line when `Record` truncates an entry or a reserved user turn is given up. Never carries content. */
     Log?: (message: string) => void;
 }
 
@@ -33,15 +45,30 @@ export interface RealtimeMemorySeed {
 }
 
 /**
+ * One place in the conversation. `Entry` is null while a reserved user turn waits for its text: it holds the turn's
+ * position, and is left out of the seed, the counts and the size.
+ */
+interface MemorySlot {
+    Entry: RealtimeMemoryEntry | null;
+    readonly ItemId?: string;
+}
+
+/**
  * Provider-neutral notebook of final turns. A realtime provider that loses its
  * session (for example Gemini Live at its connection limit) reseeds the new
  * session from `Seed()`. Pure data: no I/O, no timers.
+ *
+ * Entries are kept in conversation order, which is not always the order their text is final in: a provider that
+ * transcribes the user's speech asynchronously (OpenAI) can finish the transcript after the model has answered or
+ * called a tool. Such a driver reserves the user turn's place with `ReserveUserTurn` when the provider commits the
+ * audio, and the transcript fills that place later. Without it, the seed would put the request after its answer, and
+ * the resumed model could act on the request a second time.
  */
 export class RealtimeConversationMemory {
     private readonly maxSeedChars: number;
     private readonly maxEntryChars: number;
     private readonly log?: (message: string) => void;
-    private entries: RealtimeMemoryEntry[] = [];
+    private slots: MemorySlot[] = [];
     private droppedCount = 0;
 
     constructor(options: RealtimeConversationMemoryOptions = {}) {
@@ -50,9 +77,9 @@ export class RealtimeConversationMemory {
         this.log = options.Log;
     }
 
-    /** Number of entries currently retained in memory (bounded by `MaxSeedChars`). */
+    /** Number of entries currently retained in memory (bounded by `MaxSeedChars`). Reserved turns still waiting for text do not count. */
     public get EntryCount(): number {
-        return this.entries.length;
+        return this.slots.filter((slot) => slot.Entry !== null).length;
     }
 
     /** Number of older entries evicted so far to stay within `MaxSeedChars`. */
@@ -60,69 +87,147 @@ export class RealtimeConversationMemory {
         return this.droppedCount;
     }
 
-    /** Adds an entry. Blank text is ignored; long payloads are truncated and older entries exceeding `MaxSeedChars` are trimmed immediately. */
+    /**
+     * Reserves the conversation position of a user turn whose text is not final yet (for example audio the provider
+     * committed but has not transcribed). A later `Record` of a user entry with the same `ItemId` fills it. A reserved
+     * turn that never gets text is left out of the seed; at most `REALTIME_MEMORY_MAX_PENDING_USER_TURNS` wait at once.
+     * Reserving an id that is already in memory does nothing.
+     */
+    public ReserveUserTurn(itemId: string): void {
+        if (itemId.trim().length === 0) {
+            throw new Error('RealtimeConversationMemory.ReserveUserTurn: itemId must be a non-empty provider item id');
+        }
+        if (this.findSlot(itemId) >= 0) return;
+        this.slots.push({ Entry: null, ItemId: itemId });
+        this.giveUpOldestPendingBeyondCap();
+    }
+
+    /** Gives up a reserved user turn that will get no text (for example its transcription failed). A filled turn stays. */
+    public ReleaseUserTurn(itemId: string): void {
+        const index = this.findSlot(itemId);
+        if (index >= 0 && this.slots[index].Entry === null) {
+            this.slots.splice(index, 1);
+        }
+    }
+
+    /**
+     * Adds an entry. Blank text is ignored (and releases the user turn reserved for its `ItemId`); long payloads are
+     * truncated and older entries exceeding `MaxSeedChars` are trimmed immediately.
+     */
     public Record(entry: RealtimeMemoryEntry): void {
+        if (entry.Kind === 'user' && entry.ItemId !== undefined && this.recordIntoReservedTurn(entry, entry.ItemId)) {
+            this.trimToSeedCap();
+            return;
+        }
         if (entry.Kind === 'user' || entry.Kind === 'assistant' || entry.Kind === 'note') {
             if (entry.Text.trim().length === 0) return;
             const truncatedText = this.truncate(entry.Text, entry.Kind);
             if ((entry.Kind === 'user' || entry.Kind === 'assistant') && entry.ReplacesPrevious) {
-                for (let i = this.entries.length - 1; i >= 0; i--) {
-                    if (this.entries[i].Kind === entry.Kind) {
-                        this.entries[i] = { Kind: entry.Kind, Text: truncatedText };
-                        this.trimToSeedCap();
-                        return;
-                    }
+                const previous = this.findLastFilled(entry.Kind, this.slots.length);
+                if (previous >= 0) {
+                    this.slots[previous] = { Entry: { Kind: entry.Kind, Text: truncatedText }, ItemId: this.slots[previous].ItemId };
+                    this.trimToSeedCap();
+                    return;
                 }
             }
-            this.entries.push({ Kind: entry.Kind, Text: truncatedText });
+            this.slots.push({ Entry: { Kind: entry.Kind, Text: truncatedText }, ...(entry.Kind === 'user' && entry.ItemId !== undefined ? { ItemId: entry.ItemId } : {}) });
             this.trimToSeedCap();
             return;
         }
         if (entry.Kind === 'toolCall') {
-            this.entries.push({ Kind: 'toolCall', Name: entry.Name, ArgumentsJson: this.truncate(entry.ArgumentsJson, `toolCall ${entry.Name}`) });
+            this.slots.push({ Entry: { Kind: 'toolCall', Name: entry.Name, ArgumentsJson: this.truncate(entry.ArgumentsJson, `toolCall ${entry.Name}`) } });
             this.trimToSeedCap();
             return;
         }
-        this.entries.push({ Kind: 'toolResult', Name: entry.Name, OutputJson: this.truncate(entry.OutputJson, `toolResult ${entry.Name}`) });
+        this.slots.push({ Entry: { Kind: 'toolResult', Name: entry.Name, OutputJson: this.truncate(entry.OutputJson, `toolResult ${entry.Name}`) } });
         this.trimToSeedCap();
     }
 
     /** The newest entries that fit `MaxSeedChars`, oldest first. Does not change the notebook. */
     public Seed(): RealtimeMemorySeed {
-        let chars = 0;
-        let firstKept = this.entries.length;
-        // Newest to oldest: stop at the first entry that overflows, so the kept run is contiguous.
-        for (let i = this.entries.length - 1; i >= 0; i--) {
-            const size = entryChars(this.entries[i]);
-            if (chars + size > this.maxSeedChars) break;
-            chars += size;
-            firstKept = i;
-        }
+        const firstKept = this.firstKeptSlot();
+        const kept = this.slots.slice(firstKept).flatMap((slot) => (slot.Entry === null ? [] : [slot.Entry]));
         return {
-            Entries: this.entries.slice(firstKept),
-            DroppedEntries: this.droppedCount + firstKept,
-            Chars: chars,
+            Entries: kept,
+            DroppedEntries: this.droppedCount + countFilled(this.slots.slice(0, firstKept)),
+            Chars: kept.reduce((sum, entry) => sum + entryChars(entry), 0),
         };
     }
 
     /** Forgets everything. */
     public Clear(): void {
-        this.entries = [];
+        this.slots = [];
         this.droppedCount = 0;
     }
 
-    private trimToSeedCap(): void {
+    /**
+     * Writes a user transcript into the place reserved (or already filled) for its item. Returns false when the item
+     * has no place in memory, so the caller appends it as a new turn.
+     */
+    private recordIntoReservedTurn(entry: Extract<RealtimeMemoryEntry, { Kind: 'user' }>, itemId: string): boolean {
+        const index = this.findSlot(itemId);
+        if (index < 0) return false;
+        const slot = this.slots[index];
+        if (entry.Text.trim().length === 0) {
+            // An empty transcript (a VAD false positive) means no turn: give the place up, keep text already there.
+            if (slot.Entry === null) this.slots.splice(index, 1);
+            return true;
+        }
+        if (slot.Entry === null && entry.ReplacesPrevious) {
+            // The new item continues the previous user utterance (a streamed transcript the provider split in two):
+            // its text holds the earlier words too, so the earlier turn goes.
+            const previous = this.findLastFilled('user', index);
+            if (previous >= 0) {
+                this.slots.splice(previous, 1);
+            }
+        }
+        slot.Entry = { Kind: 'user', Text: this.truncate(entry.Text, 'user') };
+        return true;
+    }
+
+    private findSlot(itemId: string): number {
+        return this.slots.findIndex((slot) => slot.ItemId === itemId);
+    }
+
+    /** Index of the newest filled entry of `kind` before `before`, or -1. */
+    private findLastFilled(kind: 'user' | 'assistant', before: number): number {
+        for (let i = before - 1; i >= 0; i--) {
+            if (this.slots[i].Entry?.Kind === kind) return i;
+        }
+        return -1;
+    }
+
+    /** A transcript that never came (a dropped connection, a provider that sends none) must not hold places forever. */
+    private giveUpOldestPendingBeyondCap(): void {
+        const pending = this.slots.filter((slot) => slot.Entry === null);
+        if (pending.length <= REALTIME_MEMORY_MAX_PENDING_USER_TURNS) return;
+        const oldest = pending[0];
+        this.slots = this.slots.filter((slot) => slot !== oldest);
+        this.log?.(
+            `RealtimeConversationMemory: gave up the oldest reserved user turn; more than ${REALTIME_MEMORY_MAX_PENDING_USER_TURNS} were waiting for a transcript`
+        );
+    }
+
+    /** Index of the oldest slot in the newest contiguous run that fits `MaxSeedChars`. */
+    private firstKeptSlot(): number {
         let chars = 0;
-        let firstKept = this.entries.length;
-        for (let i = this.entries.length - 1; i >= 0; i--) {
-            const size = entryChars(this.entries[i]);
+        let firstKept = this.slots.length;
+        // Newest to oldest: stop at the first entry that overflows, so the kept run is contiguous.
+        for (let i = this.slots.length - 1; i >= 0; i--) {
+            const entry = this.slots[i].Entry;
+            const size = entry === null ? 0 : entryChars(entry);
             if (chars + size > this.maxSeedChars) break;
             chars += size;
             firstKept = i;
         }
+        return firstKept;
+    }
+
+    private trimToSeedCap(): void {
+        const firstKept = this.firstKeptSlot();
         if (firstKept > 0) {
-            this.droppedCount += firstKept;
-            this.entries = this.entries.slice(firstKept);
+            this.droppedCount += countFilled(this.slots.slice(0, firstKept));
+            this.slots = this.slots.slice(firstKept);
         }
     }
 
@@ -131,6 +236,10 @@ export class RealtimeConversationMemory {
         this.log?.(`RealtimeConversationMemory: truncated ${label} entry from ${payload.length} to ${this.maxEntryChars} chars`);
         return payload.slice(0, this.maxEntryChars) + REALTIME_MEMORY_TRUNCATED_TAIL;
     }
+}
+
+function countFilled(slots: readonly MemorySlot[]): number {
+    return slots.filter((slot) => slot.Entry !== null).length;
 }
 
 function entryChars(entry: RealtimeMemoryEntry): number {

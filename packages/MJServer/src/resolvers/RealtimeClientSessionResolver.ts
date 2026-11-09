@@ -81,7 +81,13 @@ import {
     type RealtimeChannelCandidate,
     type RealtimeSessionClientPolicy
 } from '@memberjunction/ai-core-plus';
-import { ChatMessage, ExtractRealtimeTimingConfig, RealtimeToolDefinition } from '@memberjunction/ai';
+import {
+    ChatMessage,
+    ExtractRealtimeTimingConfig,
+    MAX_REALTIME_RESUMPTION_ATTEMPTS,
+    REALTIME_MAX_SOFT_WINDOW_DURATION_SHARE,
+    RealtimeToolDefinition,
+} from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { GetReadWriteProvider } from '../util.js';
@@ -374,6 +380,30 @@ export class StartRealtimeClientSessionResult {
      */
     @Field(() => String, { nullable: true })
     AvatarStatusJson?: string;
+
+    /**
+     * Seconds one provider connection lasts before the browser must reconnect: the catalog value
+     * (`ModelConfiguration.Realtime` on the model / model-vendor rows) narrowed to the driver's provider ceiling.
+     * Carried as its own field because the server keeps framework timing out of `SessionConfigJson` (that bag goes
+     * to the provider verbatim). Null when neither the catalog nor the driver knows one.
+     */
+    @Field(() => Int, { nullable: true })
+    ConnectionMaxSeconds?: number;
+
+    /** Credential / relay-ticket lifetime in seconds that the browser schedules its refresh by. Null when not configured. */
+    @Field(() => Int, { nullable: true })
+    SessionMaxSeconds?: number;
+
+    /** Seconds before {@link StartRealtimeClientSessionResult.ConnectionMaxSeconds} at which the browser reconnects. */
+    @Field(() => Int, { nullable: true })
+    ReconnectBufferSeconds?: number;
+
+    /**
+     * Whether the browser may resume with the provider's native resumption handle. Always `false` for a zero data
+     * retention session, whatever the driver's default.
+     */
+    @Field(() => Boolean, { nullable: true })
+    TrustNativeResumption?: boolean;
 }
 
 /**
@@ -479,13 +509,46 @@ export class RefreshRealtimeClientSessionTokenResult {
     @Field(() => String, { nullable: true })
     SessionConfigJson?: string;
 
+    /** The re-stamped catalog timing (see {@link StartRealtimeClientSessionResult.ConnectionMaxSeconds}); null on an in-place relay extension. */
+    @Field(() => Int, { nullable: true })
+    ConnectionMaxSeconds?: number;
+
+    @Field(() => Int, { nullable: true })
+    SessionMaxSeconds?: number;
+
+    @Field(() => Int, { nullable: true })
+    ReconnectBufferSeconds?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    TrustNativeResumption?: boolean;
+
     @Field(() => String, { nullable: true })
     ErrorMessage?: string;
 }
 
-const REFRESH_RATE_LIMIT_MAX_CALLS = 6;
 const REFRESH_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
-const refreshRateLimitBuckets = new MJLruCache<string, number[]>({
+/**
+ * Mints per window allowed on top of the planned connection moves: reconnects after a lost connection (OpenAI and xAI
+ * mint a fresh token on each), the proactive refresh before a credential expires, and slack. It covers one burst the
+ * client's rapid-reconnect breaker lets through (5) plus a few more drops, and still stops a client minting in a loop.
+ * It is also the whole limit when the session's connection length is unknown.
+ */
+const REFRESH_RATE_LIMIT_DROP_ALLOWANCE = 8;
+/**
+ * Refresh calls per window allowed beyond the mint limit, so failed refreshes stay bounded too. One full reconnect
+ * cycle can retry a failing refresh on every attempt, so the allowance is the client's per-cycle attempt cap.
+ */
+const REFRESH_RATE_LIMIT_FAILED_CALL_ALLOWANCE = MAX_REALTIME_RESUMPTION_ATTEMPTS;
+
+/** The refresh history of one session within the rate-limit window. */
+interface RefreshRateLimitBucket {
+    /** Every refresh call admitted, failed or not. */
+    Calls: number[];
+    /** Refreshes that minted a credential, plus those still in flight (released if they fail). */
+    Mints: number[];
+}
+
+const refreshRateLimitBuckets = new MJLruCache<string, RefreshRateLimitBucket>({
     maxSize: 5000,
     ttlMs: REFRESH_RATE_LIMIT_WINDOW_MS,
 });
@@ -702,29 +765,41 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         }
 
         const config = this.readSessionConfig(session);
-        const maxCalls = this.resolveRefreshRateLimit(session.ID, config);
-        if (!this.allowRefreshUnderRateLimit(session.ID, maxCalls)) {
+        const maxMints = this.resolveRefreshRateLimit(session.ID, config);
+        const reservedAtMs = this.reserveRefreshUnderRateLimit(session.ID, maxMints);
+        if (reservedAtMs === null) {
             return {
                 Success: false,
                 ErrorMessage: 'Rate limit exceeded: too many token refreshes for this session.',
             };
         }
 
-        await this.assertCanRunTarget(config.targetAgentID, contextUser, provider);
+        // A refresh that mints nothing gives its mint slot back: a reconnect retries a failing refresh on each attempt,
+        // and those failures must not use up the budget the call needs once the provider recovers.
+        let minted = false;
+        let refreshed: Awaited<ReturnType<RealtimeClientSessionService['RefreshClientSessionCredential']>>;
+        try {
+            await this.assertCanRunTarget(config.targetAgentID, contextUser, provider);
 
-        const runUser = ResolveScopedAnonymousRunUser(contextUser);
-        const remainingSeconds = RemainingSessionSeconds(session.Config_);
-        const refreshed = await this.clientSessionService.RefreshClientSessionCredential(
-            {
-                AgentSessionID: session.ID,
-                CoAgentID: session.AgentID,
-                ...(config.realtimeMintSnapshot ? { PersistedMintSnapshot: config.realtimeMintSnapshot } : {}),
-                RemainingSessionSeconds: remainingSeconds,
-                ...(allowFreshReopen === true ? { AllowFreshReopen: true } : {}),
-            },
-            runUser,
-            provider,
-        );
+            const runUser = ResolveScopedAnonymousRunUser(contextUser);
+            const remainingSeconds = RemainingSessionSeconds(session.Config_);
+            refreshed = await this.clientSessionService.RefreshClientSessionCredential(
+                {
+                    AgentSessionID: session.ID,
+                    CoAgentID: session.AgentID,
+                    ...(config.realtimeMintSnapshot ? { PersistedMintSnapshot: config.realtimeMintSnapshot } : {}),
+                    RemainingSessionSeconds: remainingSeconds,
+                    ...(allowFreshReopen === true ? { AllowFreshReopen: true } : {}),
+                },
+                runUser,
+                provider,
+            );
+            minted = refreshed.Success;
+        } finally {
+            if (!minted) {
+                this.releaseRefreshMint(session.ID, reservedAtMs);
+            }
+        }
 
         if (refreshed.Success) {
             await this.sessionManager.Heartbeat(agentSessionId, contextUser, provider);
@@ -737,13 +812,20 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             ...(refreshed.ExpiresAt !== undefined ? { ExpiresAt: refreshed.ExpiresAt } : {}),
             ...(refreshed.RelayUrl !== undefined ? { RelayUrl: refreshed.RelayUrl } : {}),
             ...(refreshed.SessionConfigJson !== undefined ? { SessionConfigJson: refreshed.SessionConfigJson } : {}),
+            ...(refreshed.ConnectionMaxSeconds !== undefined ? { ConnectionMaxSeconds: refreshed.ConnectionMaxSeconds } : {}),
+            ...(refreshed.SessionMaxSeconds !== undefined ? { SessionMaxSeconds: refreshed.SessionMaxSeconds } : {}),
+            ...(refreshed.ReconnectBufferSeconds !== undefined ? { ReconnectBufferSeconds: refreshed.ReconnectBufferSeconds } : {}),
+            ...(refreshed.TrustNativeResumption !== undefined ? { TrustNativeResumption: refreshed.TrustNativeResumption } : {}),
             ...(refreshed.ErrorMessage !== undefined ? { ErrorMessage: refreshed.ErrorMessage } : {}),
         };
     }
 
     /**
-     * Derives the per-window refresh rate limit from the session's effective `ConnectionMaxSeconds`
-     * so short connection durations (e.g. a 45 s test override) do not trip the default 6-call ceiling.
+     * The credential mints one session may make per rate-limit window. A connection with a known length is moved before
+     * it ends: at the earliest, once its soft window opens, which the client never lets start before
+     * `REALTIME_MAX_SOFT_WINDOW_DURATION_SHARE` of the connection has passed. So the planned moves per window are sized
+     * from that shortest cadence (a 45 s connection moves about every 29 s, not every 45 s), and
+     * {@link REFRESH_RATE_LIMIT_DROP_ALLOWANCE} is added for drops and proactive refreshes.
      */
     private resolveRefreshRateLimit(sessionID: string, config: RealtimeSessionConfig): number {
         const snapshot = RealtimeMintSnapshotRegistry.Instance.Get(sessionID) ?? config.realtimeMintSnapshot;
@@ -751,32 +833,46 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             snapshot?.connectionMaxSeconds ??
             ExtractRealtimeTimingConfig(snapshot?.sessionParams?.Config).ConnectionMaxSeconds;
         if (!connectionMaxSeconds || connectionMaxSeconds <= 0) {
-            return REFRESH_RATE_LIMIT_MAX_CALLS;
+            return REFRESH_RATE_LIMIT_DROP_ALLOWANCE;
         }
-        const windowSeconds = REFRESH_RATE_LIMIT_WINDOW_MS / 1000;
-        const expectedCycles = Math.ceil(windowSeconds / connectionMaxSeconds);
-        return Math.max(REFRESH_RATE_LIMIT_MAX_CALLS, expectedCycles + 4);
+        const shortestMoveSeconds = connectionMaxSeconds * (1 - REALTIME_MAX_SOFT_WINDOW_DURATION_SHARE);
+        const plannedMoves = Math.ceil(REFRESH_RATE_LIMIT_WINDOW_MS / 1000 / shortestMoveSeconds);
+        return plannedMoves + REFRESH_RATE_LIMIT_DROP_ALLOWANCE;
     }
 
     /**
-     * Enforces a rolling 10-minute window rate limit of credential refreshes per session.
+     * Admits one refresh under the session's rolling-window limits and reserves a mint slot for it: at most `maxMints`
+     * mints (counting refreshes in flight), and at most `maxMints + REFRESH_RATE_LIMIT_FAILED_CALL_ALLOWANCE` calls in
+     * all, so a client whose refreshes keep failing is stopped too.
+     *
+     * @returns The reservation's timestamp, to pass to {@link releaseRefreshMint} if the refresh mints nothing; or
+     *   `null` when the refresh is refused.
      */
-    private allowRefreshUnderRateLimit(
-        sessionID: string,
-        maxCalls: number = REFRESH_RATE_LIMIT_MAX_CALLS,
-        nowMs: number = Date.now(),
-    ): boolean {
+    private reserveRefreshUnderRateLimit(sessionID: string, maxMints: number, nowMs: number = Date.now()): number | null {
         const key = NormalizeUUID(sessionID);
-        const existing = refreshRateLimitBuckets.Get(key) ?? [];
         const cutoff = nowMs - REFRESH_RATE_LIMIT_WINDOW_MS;
-        const recent = existing.filter((ts) => ts > cutoff);
-        if (recent.length >= maxCalls) {
-            refreshRateLimitBuckets.Set(key, recent);
-            return false;
+        const existing = refreshRateLimitBuckets.Get(key);
+        const bucket: RefreshRateLimitBucket = {
+            Calls: (existing?.Calls ?? []).filter((ts) => ts > cutoff),
+            Mints: (existing?.Mints ?? []).filter((ts) => ts > cutoff),
+        };
+        const refused =
+            bucket.Mints.length >= maxMints || bucket.Calls.length >= maxMints + REFRESH_RATE_LIMIT_FAILED_CALL_ALLOWANCE;
+        if (!refused) {
+            bucket.Calls.push(nowMs);
+            bucket.Mints.push(nowMs);
         }
-        recent.push(nowMs);
-        refreshRateLimitBuckets.Set(key, recent);
-        return true;
+        refreshRateLimitBuckets.Set(key, bucket);
+        return refused ? null : nowMs;
+    }
+
+    /** Gives back the mint slot {@link reserveRefreshUnderRateLimit} reserved for a refresh that minted nothing. */
+    private releaseRefreshMint(sessionID: string, reservedAtMs: number): void {
+        const bucket = refreshRateLimitBuckets.Get(NormalizeUUID(sessionID));
+        const index = bucket?.Mints.indexOf(reservedAtMs) ?? -1;
+        if (bucket && index >= 0) {
+            bucket.Mints.splice(index, 1);
+        }
     }
 
     /**
@@ -2046,6 +2142,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             EffectiveConfigJson: prep.EffectiveConfig ? JSON.stringify(prep.EffectiveConfig) : undefined,
             ClientPolicyJson: prep.ClientPolicy ? JSON.stringify(prep.ClientPolicy) : undefined,
             AvatarStatusJson: prep.AvatarStatus ? JSON.stringify(prep.AvatarStatus) : undefined,
+            ConnectionMaxSeconds: cfg.ConnectionMaxSeconds,
+            SessionMaxSeconds: cfg.SessionMaxSeconds,
+            ReconnectBufferSeconds: cfg.ReconnectBufferSeconds,
+            TrustNativeResumption: cfg.TrustNativeResumption,
         };
     }
 

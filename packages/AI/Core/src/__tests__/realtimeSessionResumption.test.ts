@@ -4,7 +4,11 @@ import {
     RealtimeReconnectController,
     REALTIME_RESUMPTION_DEADLINE_MARGIN_MS,
     REALTIME_RESUMPTION_MIN_DEADLINE_MARGIN_MS,
+    REALTIME_RESUMPTION_RECOVERY_WINDOW_MS,
+    MAX_REALTIME_RESUMPTION_ATTEMPTS,
+    type RealtimeReconnectControllerOptions,
     type RealtimeReconnectContext,
+    type RealtimeReconnectFailureCode,
     type RealtimeReconnectReason,
 } from '../generic/realtimeSessionResumption';
 
@@ -25,25 +29,36 @@ describe('ParseDurationToMs', () => {
 /** Records every callback the controller makes; `Reconnect` succeeds unless told to fail. */
 class Harness {
     public Reconnects: Array<string | null> = [];
+    public AttemptTimes: number[] = [];
     public Reconnecting: RealtimeReconnectReason[] = [];
     public Reconnected = 0;
     public Failures: Error[] = [];
+    public FailureCodes: RealtimeReconnectFailureCode[] = [];
     public FailNext = 0;
+    /** `Reconnect` fails while the fake clock is before this time (a network outage). */
+    public FailUntilMs = 0;
     public TrustsNative = true;
     public RequiresPostTurn = true;
     public Idle = true;
     public Resumption: RealtimeReconnectController;
 
-    constructor(retryDelaysMs?: readonly number[]) {
+    constructor(retryDelaysMs?: readonly number[], extra: Partial<RealtimeReconnectControllerOptions> = {}) {
         this.Resumption = new RealtimeReconnectController({
             Reconnect: async (context) => {
                 this.Reconnects.push(context.ResumptionHandle);
+                this.AttemptTimes.push(Date.now());
                 if (this.FailNext > 0) {
                     this.FailNext--;
                     throw new Error(`connect failed for ${context.ResumptionHandle ?? 'seed'}`);
                 }
+                if (Date.now() < this.FailUntilMs) {
+                    throw new Error('network unreachable');
+                }
             },
-            OnReconnectFailed: (error) => this.Failures.push(error),
+            OnReconnectFailed: (error, code) => {
+                this.Failures.push(error);
+                this.FailureCodes.push(code);
+            },
             OnReconnecting: (reason) => this.Reconnecting.push(reason),
             OnReconnected: () => this.Reconnected++,
             BuildSeed: () => null,
@@ -51,6 +66,7 @@ class Harness {
             TrustsNativeResumption: () => this.TrustsNative,
             RequiresPostTurnHandle: () => this.RequiresPostTurn,
             RetryDelaysMs: retryDelaysMs,
+            ...extra,
         });
     }
 }
@@ -397,6 +413,202 @@ describe('RealtimeReconnectController', () => {
         });
     });
 
+    // F14: Google closes a Gemini connection opened on an ephemeral token when the token expires. A deadline before the
+    // connection limit is the connection's real end, so the soft window, hard point and last call measure from it.
+    describe('a connection deadline before the connection limit (F14)', () => {
+        function seedHarness(): Harness {
+            const h = new Harness();
+            h.TrustsNative = false;
+            h.RequiresPostTurn = false;
+            return h;
+        }
+
+        it('opens the soft window before the deadline, not before the connection limit', async () => {
+            const h = seedHarness();
+            const t0 = Date.now();
+            // 300 s left: soft window (10 s buffer + 30 s lead) at 260 s, instead of at 560 s for the 600 s limit.
+            h.Resumption.ArmDurationTimers(600, 10, 30, t0 + 300_000);
+            await vi.advanceTimersByTimeAsync(259_999);
+            expect(h.Reconnecting).toEqual([]);
+            await vi.advanceTimersByTimeAsync(1);
+            expect(h.Reconnecting).toEqual(['duration-expiry']);
+        });
+
+        it('holds the move for an answer only until the margin before the deadline', async () => {
+            const h = seedHarness();
+            const t0 = Date.now();
+            h.Resumption.ArmDurationTimers(600, 10, 30, t0 + 300_000);
+            await vi.advanceTimersByTimeAsync(250_000);
+            h.Resumption.TurnStarted();
+            await vi.advanceTimersByTimeAsync(46_000); // past the hard point (290 s): the answer holds it
+            expect(h.Reconnecting).toEqual([]);
+            await vi.advanceTimersByTimeAsync(1_000); // 300 s - 3333 ms margin = 296.667 s
+            expect(h.Reconnecting).toEqual(['duration-expiry']);
+        });
+
+        it('a deadline after the connection limit changes nothing', async () => {
+            const h = seedHarness();
+            const t0 = Date.now();
+            h.Resumption.ArmDurationTimers(600, 10, 30, t0 + 1_800_000);
+            await vi.advanceTimersByTimeAsync(559_999);
+            expect(h.Reconnecting).toEqual([]);
+            await vi.advanceTimersByTimeAsync(1);
+            expect(h.Reconnecting).toEqual(['duration-expiry']);
+        });
+    });
+
+    // ConnectionMaxSeconds 45 with a 10 s buffer, as in the #6462 smoke: soft window at 29 s, hard point at 35 s,
+    // provider limit at 45 s. The margin kept before the limit scales with the buffer like a goAway notice: 3333 ms.
+    describe('the hard point during an answer (F2)', () => {
+        const HARD_POINT_MS = 35_000;
+        const LIMIT_MS = 45_000;
+        const MARGIN_MS = 3_333;
+
+        let t0 = 0;
+        beforeEach(() => {
+            t0 = Date.now();
+        });
+        /** Moves the fake clock to `ms` after the connection opened. */
+        async function advanceTo(ms: number): Promise<void> {
+            await vi.advanceTimersByTimeAsync(t0 + ms - Date.now());
+        }
+
+        function seedHarness(): Harness {
+            const h = new Harness();
+            h.TrustsNative = false;
+            h.RequiresPostTurn = false;
+            return h;
+        }
+
+        it('does not swap at the hard point while the model is answering, and swaps when the answer ends', async () => {
+            const h = seedHarness();
+            h.Resumption.ArmDurationTimers(45, 10);
+            h.Idle = false; // the user is still talking when the soft window opens, so it waits
+            await vi.advanceTimersByTimeAsync(34_000);
+            h.Resumption.TurnStarted();
+
+            await advanceTo(HARD_POINT_MS + 2_000);
+            expect(h.Reconnecting).toEqual([]);
+
+            h.Idle = true;
+            h.Resumption.TurnEnded();
+            await vi.advanceTimersByTimeAsync(0);
+            expect(h.Reconnecting).toEqual(['duration-expiry']);
+            expect(h.AttemptTimes[0] - t0).toBe(HARD_POINT_MS + 2_000);
+        });
+
+        it('after the answer, still waits for the rest of the turn (audio tail) to be idle', async () => {
+            const h = seedHarness();
+            h.Resumption.ArmDurationTimers(45, 10);
+            h.Idle = false; // the user is still talking when the soft window opens, so it waits
+            await vi.advanceTimersByTimeAsync(34_000);
+            h.Resumption.TurnStarted();
+            await vi.advanceTimersByTimeAsync(2_000);
+
+            h.Resumption.TurnEnded(); // the response is done, its audio still plays
+            await vi.advanceTimersByTimeAsync(1_000);
+            expect(h.Reconnecting).toEqual([]);
+
+            h.Idle = true;
+            h.Resumption.NotifyIdleStateChanged();
+            await vi.advanceTimersByTimeAsync(0);
+            expect(h.Reconnecting).toEqual(['duration-expiry']);
+        });
+
+        it('cuts an answer that outlasts the buffer only when the provider limit is near', async () => {
+            const h = seedHarness();
+            h.Resumption.ArmDurationTimers(45, 10);
+            h.Idle = false; // the user is still talking when the soft window opens, so it waits
+            await vi.advanceTimersByTimeAsync(30_000);
+            h.Resumption.TurnStarted();
+
+            await advanceTo(LIMIT_MS - MARGIN_MS - 1);
+            expect(h.Reconnecting).toEqual([]);
+            await vi.advanceTimersByTimeAsync(2);
+            expect(h.Reconnecting).toEqual(['duration-expiry']);
+        });
+
+        it('still swaps at the hard point when no turn is open', async () => {
+            const h = seedHarness();
+            h.Resumption.ArmDurationTimers(45, 10);
+            h.Idle = false; // something else (a pending utterance, a tool) holds the soft window
+            await advanceTo(HARD_POINT_MS + 1);
+            expect(h.Reconnecting).toEqual(['duration-expiry']);
+            expect(h.AttemptTimes[0] - t0).toBe(HARD_POINT_MS);
+        });
+
+        // F16: Gemini opens the turn only once the answer starts, so a driver holds the hard point for the user's words
+        // the connection has not answered yet; the hold has the same bound as an open turn.
+        it('a driver hold (HoldsHardMove) defers the hard point like an open turn, until the hold ends', async () => {
+            let holding = true;
+            const h = new Harness(undefined, { HoldsHardMove: () => holding });
+            h.TrustsNative = false;
+            h.RequiresPostTurn = false;
+            h.Resumption.ArmDurationTimers(45, 10);
+            h.Idle = false; // the unanswered words hold the soft window too
+            await advanceTo(HARD_POINT_MS + 2_000);
+            expect(h.Reconnecting).toEqual([]);
+
+            holding = false;
+            h.Idle = true;
+            h.Resumption.NotifyIdleStateChanged();
+            await vi.advanceTimersByTimeAsync(0);
+            expect(h.Reconnecting).toEqual(['duration-expiry']);
+            expect(h.AttemptTimes[0] - t0).toBe(HARD_POINT_MS + 2_000);
+        });
+
+        it('a driver hold that never ends still moves when the provider limit is near', async () => {
+            const h = new Harness(undefined, { HoldsHardMove: () => true });
+            h.TrustsNative = false;
+            h.RequiresPostTurn = false;
+            h.Resumption.ArmDurationTimers(45, 10);
+            h.Idle = false;
+            await advanceTo(LIMIT_MS - MARGIN_MS - 1);
+            expect(h.Reconnecting).toEqual([]);
+            await vi.advanceTimersByTimeAsync(2);
+            expect(h.Reconnecting).toEqual(['duration-expiry']);
+        });
+
+        it('a waiting hard move keeps the F10 retry window until the old connection ends', async () => {
+            let failUntil = Number.POSITIVE_INFINITY;
+            const h = new Harness(undefined, {
+                RecoveryWindowMs: 0,
+                PrepareAttempt: async () => {
+                    if (Date.now() < failUntil) {
+                        throw new Error('token refresh failed');
+                    }
+                },
+            });
+            h.TrustsNative = false;
+            h.RequiresPostTurn = false;
+            h.Resumption.ArmDurationTimers(45, 10);
+            h.Idle = false; // the user is still talking when the soft window opens, so it waits
+            await vi.advanceTimersByTimeAsync(34_000);
+            h.Resumption.TurnStarted();
+            await vi.advanceTimersByTimeAsync(3_000);
+            h.Idle = true;
+            h.Resumption.TurnEnded();
+            failUntil = Date.now() + 2_000;
+            await advanceTo(LIMIT_MS);
+            expect(h.Failures).toEqual([]);
+            expect(h.Reconnected).toBe(1);
+        });
+
+        it('re-arming the timers while the hard move waits recomputes it against the same connection', async () => {
+            const h = seedHarness();
+            h.Resumption.ArmDurationTimers(45, 10);
+            h.Idle = false; // the user is still talking when the soft window opens, so it waits
+            await vi.advanceTimersByTimeAsync(34_000);
+            h.Resumption.TurnStarted();
+            await vi.advanceTimersByTimeAsync(2_000);
+            h.Resumption.ArmDurationTimers(45, 10);
+            await advanceTo(LIMIT_MS - MARGIN_MS - 1);
+            expect(h.Reconnecting).toEqual([]);
+            await vi.advanceTimersByTimeAsync(2);
+            expect(h.Reconnecting).toEqual(['duration-expiry']);
+        });
+    });
+
     describe('connection lost & retries', () => {
         it('reconnects with the last handle and reports success', async () => {
             const h = new Harness();
@@ -412,7 +624,8 @@ describe('RealtimeReconnectController', () => {
         });
 
         it('retries on the delay schedule, falling back from native handle to seed on Attempt 2, then reports failure once and stops', async () => {
-            const h = new Harness([0, 1000, 3000]);
+            // No recovery window: only the listed schedule runs.
+            const h = new Harness([0, 1000, 3000], { RecoveryWindowMs: 0 });
             h.FailNext = 3;
             h.Resumption.RecordHandle('h1', true);
             void h.Resumption.TriggerReconnect('connection-lost');
@@ -430,6 +643,69 @@ describe('RealtimeReconnectController', () => {
             expect(await h.Resumption.TriggerReconnect('connection-lost')).toBe(false);
         });
 
+        // Live (#6462 smoke, F10): a 10 s network cut ended the call at ~4 s, because the only attempts were at
+        // 0 / 1 / 3 s. Wi-Fi roaming, a VPN reconnect or a tunnel lasts longer than that.
+        it('recovers from a 10 s outage by retrying past the initial schedule, inside the recovery window (F10)', async () => {
+            const h = new Harness();
+            h.FailUntilMs = Date.now() + 10_000;
+            h.Resumption.RecordHandle('h1', true);
+            const result = h.Resumption.TriggerReconnect('connection-lost');
+            await vi.advanceTimersByTimeAsync(20_000);
+            expect(await result).toBe(true);
+            expect(h.Failures).toEqual([]);
+            expect(h.Reconnected).toBe(1);
+            expect(h.Reconnects.length).toBeGreaterThan(3);
+        });
+
+        it('ends with reconnect-failed once an outage outlasts the recovery window (F10)', async () => {
+            const startedAt = Date.now();
+            const h = new Harness();
+            h.FailUntilMs = Number.POSITIVE_INFINITY;
+            const result = h.Resumption.TriggerReconnect('connection-lost');
+            await vi.advanceTimersByTimeAsync(40_000);
+            expect(h.Failures).toEqual([]);
+            expect(h.Resumption.IsReconnecting).toBe(true);
+            await vi.advanceTimersByTimeAsync(10_000);
+            expect(await result).toBe(false);
+            expect(h.FailureCodes).toEqual(['reconnect-failed']);
+            expect(h.Failures[0].message).toBe('network unreachable');
+            // Attempts went on past the old 0 / 1 / 3 s schedule, and none started after the window closed.
+            expect(h.AttemptTimes.length).toBeGreaterThan(3);
+            expect(h.AttemptTimes.at(-1)! - startedAt).toBeLessThanOrEqual(REALTIME_RESUMPTION_RECOVERY_WINDOW_MS);
+        });
+
+        it('stops at MAX_REALTIME_RESUMPTION_ATTEMPTS however long the window is (F10)', async () => {
+            const h = new Harness([0], { RecoveryWindowMs: 24 * 3600_000, MaxRetryDelayMs: 1 });
+            h.FailUntilMs = Number.POSITIVE_INFINITY;
+            const result = h.Resumption.TriggerReconnect('connection-lost');
+            await vi.advanceTimersByTimeAsync(60_000);
+            expect(await result).toBe(false);
+            expect(h.Reconnects).toHaveLength(MAX_REALTIME_RESUMPTION_ATTEMPTS);
+            expect(h.FailureCodes).toEqual(['reconnect-failed']);
+        });
+
+        it('starts the next attempt at once when the host reports the network is back (F10)', async () => {
+            const h = new Harness([0], { MaxRetryDelayMs: 5000 });
+            h.FailUntilMs = Date.now() + 2000;
+            const result = h.Resumption.TriggerReconnect('connection-lost');
+            await vi.advanceTimersByTimeAsync(2500);
+            expect(h.Reconnects).toHaveLength(1);
+            h.Resumption.NotifyNetworkOnline();
+            await vi.advanceTimersByTimeAsync(0);
+            expect(h.Reconnects).toHaveLength(2);
+            expect(await result).toBe(true);
+        });
+
+        it('ends a reconnect waiting out a retry delay when disposed', async () => {
+            const h = new Harness([0, 5000]);
+            h.FailNext = 1;
+            const result = h.Resumption.TriggerReconnect('connection-lost');
+            await vi.advanceTimersByTimeAsync(100);
+            h.Resumption.Dispose();
+            expect(await result).toBe(false);
+            expect(h.Reconnects).toHaveLength(1);
+        });
+
         it('does not start a second reconnect while one is running', async () => {
             const h = new Harness([0, 1000]);
             h.FailNext = 1;
@@ -441,6 +717,56 @@ describe('RealtimeReconnectController', () => {
             expect(await p1).toBe(true);
             expect(h.Reconnecting).toEqual(['connection-lost']);
             expect(h.Reconnects).toHaveLength(2);
+        });
+    });
+
+    // Live (#6462 smoke, F10, A6/A9/R6): a timed move starts while the old connection still has time left (on a 600 s
+    // cap, 40 s). When the token refresh failed 3 times in 4 s the call ended, though the old connection was healthy.
+    describe('a planned move whose attempts fail while the old connection is still open (F10)', () => {
+        function plannedHarness(extra: Partial<RealtimeReconnectControllerOptions>, failPrepareUntilMs: () => number): Harness {
+            const h = new Harness(undefined, {
+                PrepareAttempt: async () => {
+                    if (Date.now() < failPrepareUntilMs()) {
+                        throw new Error('token refresh failed');
+                    }
+                },
+                ...extra,
+            });
+            h.TrustsNative = false;
+            h.RequiresPostTurn = false;
+            return h;
+        }
+
+        it('keeps retrying when the refresh fails for 5 s at the soft window, and moves once it succeeds', async () => {
+            let failUntil = Number.POSITIVE_INFINITY;
+            const h = plannedHarness({}, () => failUntil);
+            h.Resumption.ArmDurationTimers(600, 10); // soft window at 560 s, provider limit at 600 s
+            await vi.advanceTimersByTimeAsync(560_000);
+            expect(h.Reconnecting).toEqual(['duration-expiry']);
+            failUntil = Date.now() + 5000;
+            await vi.advanceTimersByTimeAsync(15_000);
+            expect(h.Failures).toEqual([]);
+            expect(h.Reconnected).toBe(1);
+        });
+
+        it('retries until the provider limit even with no recovery window, then ends with reconnect-failed', async () => {
+            const h = plannedHarness({ RecoveryWindowMs: 0 }, () => Number.POSITIVE_INFINITY);
+            h.Resumption.ArmDurationTimers(600, 10);
+            await vi.advanceTimersByTimeAsync(560_000 + 35_000);
+            expect(h.Failures).toEqual([]);
+            expect(h.Resumption.IsReconnecting).toBe(true);
+            await vi.advanceTimersByTimeAsync(10_000);
+            expect(h.FailureCodes).toEqual(['reconnect-failed']);
+            expect(h.Failures[0].message).toBe('token refresh failed');
+        });
+
+        it('retries until the end a goAway announced, not only the initial schedule', async () => {
+            const h = plannedHarness({ RecoveryWindowMs: 0 }, () => Number.POSITIVE_INFINITY);
+            h.Resumption.ConnectionEnding(30_000);
+            await vi.advanceTimersByTimeAsync(25_000);
+            expect(h.Failures).toEqual([]);
+            await vi.advanceTimersByTimeAsync(10_000);
+            expect(h.FailureCodes).toEqual(['reconnect-failed']);
         });
     });
 
@@ -469,6 +795,55 @@ describe('RealtimeReconnectController', () => {
             await vi.advanceTimersByTimeAsync(1000);
             expect(attempts).toHaveLength(2);
             expect(resumption.IsReconnecting).toBe(false);
+        });
+
+        it('times PrepareAttempt on its own budget, so a slow preparation does not shorten the transport attempt (F5)', async () => {
+            const reconnects: RealtimeReconnectContext[] = [];
+            const resumption = new RealtimeReconnectController({
+                PrepareAttempt: () => new Promise<void>((resolve) => setTimeout(resolve, 4000)),
+                Reconnect: (ctx) => {
+                    reconnects.push(ctx);
+                    return new Promise<void>((resolve) => setTimeout(resolve, 4000));
+                },
+                OnReconnectFailed: () => undefined,
+                BuildSeed: () => null,
+                RetryDelaysMs: [0],
+                PrepareTimeoutMs: 5000,
+                AttemptTimeoutMs: 5000,
+            });
+            const result = resumption.TriggerReconnect('connection-lost');
+            await vi.advanceTimersByTimeAsync(8000);
+            // 4 s + 4 s fits two 5 s budgets, though it overruns either one alone.
+            expect(await result).toBe(true);
+            expect(reconnects).toHaveLength(1);
+            expect(reconnects[0].Abandoned).toBe(false);
+        });
+
+        it('never calls Reconnect for an attempt whose PrepareAttempt timed out, even when it resolves later (F5)', async () => {
+            const reconnects: RealtimeReconnectContext[] = [];
+            const prepared: RealtimeReconnectContext[] = [];
+            const failures: Error[] = [];
+            const resumption = new RealtimeReconnectController({
+                PrepareAttempt: (ctx) => {
+                    prepared.push(ctx);
+                    return new Promise<void>((resolve) => setTimeout(resolve, 7000));
+                },
+                Reconnect: (ctx) => {
+                    reconnects.push(ctx);
+                    return Promise.resolve();
+                },
+                OnReconnectFailed: (err) => failures.push(err),
+                BuildSeed: () => null,
+                RetryDelaysMs: [0],
+                RecoveryWindowMs: 0,
+                PrepareTimeoutMs: 5000,
+            });
+            const result = resumption.TriggerReconnect('connection-lost');
+            await vi.advanceTimersByTimeAsync(10_000);
+            expect(await result).toBe(false);
+            expect(prepared[0].Abandoned).toBe(true);
+            expect(reconnects).toHaveLength(0);
+            expect(failures[0].message).toBe('reconnect preparation timed out after 5000 ms');
         });
 
         it('marks an attempt in flight as abandoned and cancels pending timers on Dispose', async () => {
