@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { ResourceTypeEngine, type MJResourceTypeEntity } from '@memberjunction/core-entities';
 import { ActionEngineServer } from '@memberjunction/actions';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import type { ActionInfo } from '@memberjunction/actions-base';
 import {
     EVALUATE_DRIFT_DRIVER_CLASS,
@@ -42,6 +44,7 @@ function buildInMemoryHarness() {
     let seq = 1;
     const featureValueRows: MockRecord[] = [];
     const notificationRows: MockRecord[] = [];
+    const recordProcessRows: MockRecord[] = [];
 
     const makeEntity = (entityName: string): MockRecord => {
         const rec: MockRecord = {
@@ -62,6 +65,10 @@ function buildInMemoryHarness() {
                 } else if (entityName === 'MJ: User Notifications') {
                     if (!notificationRows.includes(this)) {
                         notificationRows.push(this);
+                    }
+                } else if (entityName === 'MJ: Record Processes') {
+                    if (!recordProcessRows.includes(this)) {
+                        recordProcessRows.push(this);
                     }
                 }
                 return true;
@@ -153,8 +160,11 @@ function buildInMemoryHarness() {
             });
             return { Success: true, Results: results };
         }
-        if (params.EntityName === 'MJ: User Notifications') {
-            return { Success: true, Results: [...notificationRows] };
+        if (params.EntityName === 'MJ: User Notifications' || params.EntityName === 'MJ: Record Processes') {
+            // Reads by `ID = '…'` or `ID IN ('…', …)`
+            const ids = [...(params.ExtraFilter ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1]);
+            const rows = params.EntityName === 'MJ: User Notifications' ? notificationRows : recordProcessRows;
+            return { Success: true, Results: rows.filter((r) => r.IsSaved && ids.includes(r.ID)) };
         }
         return { Success: true, Results: [] };
     };
@@ -167,19 +177,28 @@ function buildInMemoryHarness() {
             }) as unknown as RunView,
     );
 
-    const user = {
-        ID: 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E',
-        Name: 'System',
-        Email: 'system@memberjunction.org',
-    } as unknown as UserInfo;
+    // The harness runs as an Owner (BootstrapIntegrationServer's resolveContextUser), not as the system user.
+    const user = new UserInfo(null, {
+        ID: 'A6F3D2C1-4B5E-4F70-8A9B-0C1D2E3F4A5B',
+        Name: 'Integration Owner',
+        Email: 'integration-owner@example.com',
+        Type: 'Owner',
+        IsActive: true,
+    });
+    UserCache.Instance.SetUsers([user]);
+    vi.spyOn(ResourceTypeEngine.Instance, 'Config').mockResolvedValue(undefined);
+    vi.spyOn(ResourceTypeEngine.Instance, 'ByName').mockImplementation((name: string) =>
+        name === 'Records' ? ({ ID: 'rt-records', Name: 'Records' } as MJResourceTypeEntity) : undefined,
+    );
     const ctx = { Provider: provider, User: user } as unknown as IntegrationCheckContext;
 
-    return { ctx, featureValueRows, notificationRows, runViewCalls, runViewSpy };
+    return { ctx, featureValueRows, notificationRows, recordProcessRows, runViewCalls, runViewSpy };
 }
 
 describe('PredictiveShadowDriftChecks and IT166 metadata (R1, R3, R6)', () => {
     afterEach(() => {
         vi.restoreAllMocks();
+        UserCache.Instance.SetUsers([]);
         EvaluateFeatureAndPredictionDriftAction.SetDefaultAlertEmitter(null);
     });
 
@@ -240,7 +259,7 @@ describe('PredictiveShadowDriftChecks and IT166 metadata (R1, R3, R6)', () => {
         const source = fs.readFileSync(CHECKS_SOURCE, 'utf8');
         expect(source).not.toContain('6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A00');
 
-        const { ctx } = buildInMemoryHarness();
+        const { ctx, notificationRows } = buildInMemoryHarness();
         const psd2 = PredictiveShadowDriftChecks.find((c) => c.Id === 'predictive-shadow-drift.PSD2');
         expect(psd2).toBeDefined();
 
@@ -263,5 +282,7 @@ describe('PredictiveShadowDriftChecks and IT166 metadata (R1, R3, R6)', () => {
 
         await expect(psd2!.Fn(ctx)).resolves.toBeUndefined();
         expect(runActionSpy).toHaveBeenCalledTimes(3);
+        // A non-system caller is notified without NotifyUserID too; the check cleaned both alerts up.
+        expect(notificationRows).toHaveLength(0);
     });
 });

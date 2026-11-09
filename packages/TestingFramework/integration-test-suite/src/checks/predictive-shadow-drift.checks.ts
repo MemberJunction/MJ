@@ -16,6 +16,7 @@ import {
 import { ActionEngineServer, BaseAction } from '@memberjunction/actions';
 import { RunActionParams } from '@memberjunction/actions-base';
 import { FeatureValueCacheService } from '@memberjunction/feature-pipelines';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { RecordProcessorRegistry } from '@memberjunction/record-set-processor-base';
 import {
     EVALUATE_DRIFT_DRIVER_CLASS,
@@ -348,7 +349,7 @@ export const PredictiveShadowDriftChecks: NamedCheck[] = [
             const user = ctx.User;
             const createdFeatureValues: MJFeatureValueEntity[] = [];
             let recordProcess: MJRecordProcessEntity | null = null;
-            let createdAlertId: string | undefined;
+            const createdAlertIds: string[] = [];
 
             try {
                 const targetEntityId = await resolveFirstId('MJ: Entities', user, md);
@@ -467,40 +468,49 @@ export const PredictiveShadowDriftChecks: NamedCheck[] = [
                 AssertEqual(insufficientSeverity, 'None', 'Expected OverallSeverity=None at MinSampleSize=100');
                 AssertEqual(insufficientAlert, false, 'Expected AlertEmitted=false at MinSampleSize=100');
 
-                // 2. MinSampleSize=10 as system user without NotifyUserID: drift detected (Critical), alert suppressed
-                const suppressedParams = new RunActionParams();
-                suppressedParams.Action = driftAction!;
-                suppressedParams.ContextUser = user;
-                suppressedParams.Provider = md;
-                suppressedParams.SkipActionLog = true;
-                suppressedParams.Params = [
+                // 2. MinSampleSize=10 without NotifyUserID: drift detected (Critical). The caller is notified,
+                //    except the system user, who notifies no one without a NotifyUserID.
+                const callerIsSystem = UUIDsEqual(user.ID, UserCache.Instance.GetSystemUser()?.ID);
+                const callerParams = new RunActionParams();
+                callerParams.Action = driftAction!;
+                callerParams.ContextUser = user;
+                callerParams.Provider = md;
+                callerParams.SkipActionLog = true;
+                callerParams.Params = [
                     { Name: 'RecordProcessID', Type: 'Input', Value: recordProcess.ID },
                     { Name: 'MinSampleSize', Type: 'Input', Value: 10 },
                     { Name: 'EmitAlertOnDrift', Type: 'Input', Value: true },
                 ];
 
-                const suppressedResult = await ActionEngineServer.Instance.RunAction(suppressedParams);
+                const callerResult = await ActionEngineServer.Instance.RunAction(callerParams);
                 Assert(
-                    suppressedResult.Success,
-                    `Evaluate Feature and Prediction Drift (system user without NotifyUserID) failed: ${suppressedResult.Message}`,
+                    callerResult.Success,
+                    `Evaluate Feature and Prediction Drift (no NotifyUserID) failed: ${callerResult.Message}`,
                 );
                 AssertEqual(
-                    suppressedParams.Params.find((p) => p.Name === 'OverallSeverity' && p.Type === 'Output')?.Value,
+                    callerParams.Params.find((p) => p.Name === 'OverallSeverity' && p.Type === 'Output')?.Value,
                     'Critical',
                     'Expected OverallSeverity=Critical without NotifyUserID',
                 );
                 AssertEqual(
-                    suppressedParams.Params.find((p) => p.Name === 'ShouldAlert' && p.Type === 'Output')?.Value,
+                    callerParams.Params.find((p) => p.Name === 'ShouldAlert' && p.Type === 'Output')?.Value,
                     true,
                     'Expected ShouldAlert=true without NotifyUserID',
                 );
                 AssertEqual(
-                    suppressedParams.Params.find((p) => p.Name === 'AlertEmitted' && p.Type === 'Output')?.Value,
-                    false,
-                    'Expected AlertEmitted=false when executed by system user without NotifyUserID',
+                    callerParams.Params.find((p) => p.Name === 'AlertEmitted' && p.Type === 'Output')?.Value,
+                    !callerIsSystem,
+                    callerIsSystem
+                        ? 'Expected AlertEmitted=false for the system user without NotifyUserID'
+                        : 'Expected AlertEmitted=true: a caller without NotifyUserID is notified themselves',
                 );
+                const callerAlertId = callerParams.Params.find((p) => p.Name === 'AlertID' && p.Type === 'Output')?.Value;
+                if (typeof callerAlertId === 'string') {
+                    createdAlertIds.push(callerAlertId);
+                }
 
-                // 3. MinSampleSize=10 with explicit NotifyUserID: OverallSeverity='Critical', AlertEmitted=true
+                // 3. MinSampleSize=10 with NotifyUserID = the caller: honoured for the system user or an Owner,
+                //    and the caller is the fallback for anyone else, so the alert reaches this user either way.
                 const runParams = new RunActionParams();
                 runParams.Action = driftAction!;
                 runParams.ContextUser = user;
@@ -525,24 +535,40 @@ export const PredictiveShadowDriftChecks: NamedCheck[] = [
                 const alertEmitted = runParams.Params.find(
                     (p) => p.Name === 'AlertEmitted' && p.Type === 'Output',
                 )?.Value;
-                createdAlertId = runParams.Params.find(
+                const alertId = runParams.Params.find(
                     (p) => p.Name === 'AlertID' && p.Type === 'Output',
-                )?.Value as string | undefined;
+                )?.Value;
 
                 AssertEqual(overallSeverity, 'Critical', 'Expected OverallSeverity=Critical');
                 AssertEqual(shouldAlert, true, 'Expected ShouldAlert=true');
                 AssertEqual(alertEmitted, true, 'Expected AlertEmitted=true');
+                Assert(typeof alertId === 'string' && alertId.length > 0, 'Expected AlertID output parameter');
+                createdAlertIds.push(alertId as string);
+
+                // The saved alert is addressed to the caller and titled from the stored Record Process name.
+                const alertRes = await RunView.FromMetadataProvider(md).RunView<MJUserNotificationEntity>(
+                    {
+                        EntityName: 'MJ: User Notifications',
+                        ExtraFilter: `ID = '${alertId as string}'`,
+                        ResultType: 'entity_object',
+                        BypassCache: true,
+                    },
+                    user,
+                );
+                const alert = alertRes.Results?.[0];
+                Assert(!!alert, 'Expected the drift alert to be readable as its recipient');
+                Assert(UUIDsEqual(alert!.UserID, user.ID), 'Expected the drift alert to be addressed to the caller');
                 Assert(
-                    typeof createdAlertId === 'string' && createdAlertId.length > 0,
-                    'Expected AlertID output parameter',
+                    (alert!.Title ?? '').includes(recordProcess!.Name),
+                    `Expected the alert title to name the stored Record Process, got '${alert!.Title}'`,
                 );
             } finally {
-                if (createdAlertId) {
+                if (createdAlertIds.length > 0) {
                     const rv = RunView.FromMetadataProvider(md);
                     const notifRes = await rv.RunView<MJUserNotificationEntity>(
                         {
                             EntityName: 'MJ: User Notifications',
-                            ExtraFilter: `ID = '${createdAlertId}'`,
+                            ExtraFilter: `ID IN (${createdAlertIds.map((id) => `'${id}'`).join(', ')})`,
                             ResultType: 'entity_object',
                             BypassCache: true,
                         },
