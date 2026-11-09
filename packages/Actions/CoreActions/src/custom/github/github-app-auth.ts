@@ -98,11 +98,29 @@ export function ReadGitHubAppFromEnv(env: NodeJS.ProcessEnv = process.env): GitH
 }
 
 function base64url(input: Buffer | string): string {
-    return Buffer.from(input)
-        .toString('base64')
-        .replace(/=+$/g, '')
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_');
+    return Buffer.from(input).toString('base64url');
+}
+
+/**
+ * Removes trailing `/` characters in linear $O(n)$ time (avoids polynomial ReDoS on `/\/+$/`).
+ */
+export function TrimTrailingSlashes(value: string): string {
+    let end = value.length;
+    while (end > 0 && value.charCodeAt(end - 1) === 47 /* / */) {
+        end--;
+    }
+    return end === value.length ? value : value.slice(0, end);
+}
+
+/**
+ * Removes leading and trailing `/` characters in linear $O(n)$ time (avoids polynomial ReDoS on `/^\/+|\/+$/g`).
+ */
+export function TrimSlashes(value: string): string {
+    let start = 0;
+    let end = value.length;
+    while (start < end && value.charCodeAt(start) === 47 /* / */) start++;
+    while (end > start && value.charCodeAt(end - 1) === 47 /* / */) end--;
+    return start === 0 && end === value.length ? value : value.slice(start, end);
 }
 
 /**
@@ -203,7 +221,7 @@ export async function MintGitHubInstallationToken(
     }
 
     const jwt = BuildGitHubAppJwt(config.AppId, config.PrivateKey, options?.NowSeconds);
-    const baseUrl = (config.ApiBaseUrl ?? 'https://api.github.com').replace(/\/+$/, '');
+    const baseUrl = TrimTrailingSlashes(config.ApiBaseUrl ?? 'https://api.github.com');
     const url = `${baseUrl}/app/installations/${encodeURIComponent(config.InstallationId)}/access_tokens`;
 
     const bodyPayload: Record<string, unknown> = {};
@@ -362,14 +380,6 @@ export function ResolveInstallationRepositoryScope(
     return explicitRepos.length > 0 ? explicitRepos : undefined;
 }
 
-function trimSlashesLinear(value: string): string {
-    let start = 0;
-    let end = value.length;
-    while (start < end && value.charCodeAt(start) === 47 /* / */) start++;
-    while (end > start && value.charCodeAt(end - 1) === 47 /* / */) end--;
-    return value.slice(start, end);
-}
-
 /**
  * Parses a GitHub repository reference in any of the following forms:
  * - Full URL: `https://github.com/MemberJunction/MJ` or `https://github.com/MemberJunction/Integrations/CRM/HubSpot`
@@ -405,7 +415,7 @@ export function ParseGitHubRepository(
         const hIdx = afterHost.indexOf('#');
         if (hIdx >= 0 && hIdx < endIdx) endIdx = hIdx;
 
-        const pathPart = trimSlashesLinear(afterHost.slice(0, endIdx));
+        const pathPart = TrimSlashes(afterHost.slice(0, endIdx));
         const firstSlash = pathPart.indexOf('/');
         if (firstSlash <= 0) return null;
 
@@ -416,11 +426,11 @@ export function ParseGitHubRepository(
         const repo = rawRepo.endsWith('.git') ? rawRepo.slice(0, -4) : rawRepo;
         if (!owner || !repo) return null;
 
-        let rawSubpath = secondSlash >= 0 ? trimSlashesLinear(remainder.slice(secondSlash + 1)) : '';
+        let rawSubpath = secondSlash >= 0 ? TrimSlashes(remainder.slice(secondSlash + 1)) : '';
         if (rawSubpath.startsWith('blob/') || rawSubpath.startsWith('tree/')) {
             const afterPrefix = rawSubpath.slice(5);
             const refSlash = afterPrefix.indexOf('/');
-            rawSubpath = refSlash >= 0 ? trimSlashesLinear(afterPrefix.slice(refSlash + 1)) : '';
+            rawSubpath = refSlash >= 0 ? TrimSlashes(afterPrefix.slice(refSlash + 1)) : '';
         }
         return {
             Owner: owner,
@@ -430,7 +440,7 @@ export function ParseGitHubRepository(
     }
 
     // Check for owner/repo shorthand
-    const cleaned = trimSlashesLinear(candidate);
+    const cleaned = TrimSlashes(candidate);
     const slashIdx = cleaned.indexOf('/');
     if (slashIdx > 0) {
         const owner = cleaned.slice(0, slashIdx).trim();
@@ -439,7 +449,7 @@ export function ParseGitHubRepository(
         const rawRepo = nextSlash >= 0 ? rest.slice(0, nextSlash) : rest;
         const repo = rawRepo.endsWith('.git') ? rawRepo.slice(0, -4) : rawRepo;
         if (!owner || !repo) return null;
-        const subpath = nextSlash >= 0 ? trimSlashesLinear(rest.slice(nextSlash + 1)) : '';
+        const subpath = nextSlash >= 0 ? TrimSlashes(rest.slice(nextSlash + 1)) : '';
         return {
             Owner: owner,
             Repo: repo,

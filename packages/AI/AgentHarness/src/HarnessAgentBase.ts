@@ -10,6 +10,7 @@ import {
     MJCredentialEntity,
 } from '@memberjunction/core-entities';
 import { BaseHarnessAdapter } from './adapters/BaseHarnessAdapter.js';
+import { ApplyGitHubEnvironmentConventions, ExtractHarnessCredentialSecret } from './HarnessCredentialResolver.js';
 import { ISandboxProvider, SandboxHandle, WorkspaceKey } from './sandbox/ISandboxProvider.js';
 import { LocalDirectorySandboxProvider } from './sandbox/LocalDirectorySandboxProvider.js';
 import { DockerSandboxProvider } from './sandbox/DockerSandboxProvider.js';

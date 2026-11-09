@@ -18,6 +18,7 @@
 import { LogError, RunView, type UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntityType } from '@memberjunction/core-entities';
 import { CredentialEngine } from '@memberjunction/credentials';
+import { IndexByUUID } from '@memberjunction/global';
 import {
     DEFAULT_GITHUB_WRITE_PERMISSIONS,
     IsRepositoryAllowed,
@@ -26,6 +27,7 @@ import {
     ParseAllowedRepositories,
     ReadGitHubAppFromEnv,
     ResolveInstallationRepositoryScope,
+    TrimTrailingSlashes,
 } from './github-app-auth.js';
 import type {
     GitHubAuthSource,
@@ -117,7 +119,7 @@ export async function HydrateGitHubAuthFromValues(
     const defaultPRMode = parsePRMode(values.defaultPRMode);
     const apiBaseUrl =
         typeof values.apiBaseUrl === 'string' && values.apiBaseUrl.trim().length > 0
-            ? values.apiBaseUrl.trim().replace(/\/+$/, '')
+            ? TrimTrailingSlashes(values.apiBaseUrl.trim())
             : 'https://api.github.com';
 
     // Check for GitHub App shape first
@@ -300,7 +302,7 @@ async function resolveUserDelegated3LO(
         delegated = await engineWith3LO.GetUserDelegatedCredential('GitHub', contextUser);
     } else if (contextUser?.ID) {
         try {
-            delegated = await CredentialEngine.Instance.getCredential<Record<string, unknown>>(
+            delegated = await CredentialEngine.Instance.getCredential<Record<string, string>>(
                 `UserOAuth3LO:GitHub:${contextUser.ID}`,
                 {
                     contextUser,
@@ -396,18 +398,17 @@ async function resolveDefaultGitHubCredential(
 ): Promise<GitHubResolvedAuth | null> {
     try {
         await CredentialEngine.Instance.Config(false, contextUser);
+        const defaultByTypeId = IndexByUUID(
+            CredentialEngine.Instance.Credentials.filter((c) => c.IsActive !== false && c.IsDefault === true),
+            (c) => c.CredentialTypeID,
+        );
         for (const typeName of ['GitHub App', 'GitHub Personal Access Token']) {
             const credType = CredentialEngine.Instance.CredentialTypes.find(
                 (t) => t.Name.trim().toLowerCase() === typeName.toLowerCase(),
             );
             if (!credType) continue;
 
-            const defaultCred = CredentialEngine.Instance.Credentials.find(
-                (c) =>
-                    c.CredentialTypeID.toLowerCase() === credType.ID.toLowerCase() &&
-                    c.IsActive !== false &&
-                    c.IsDefault === true,
-            );
+            const defaultCred = defaultByTypeId.Get(credType.ID);
             if (!defaultCred) continue;
 
             const resolved = await CredentialEngine.Instance.getCredential<Record<string, string>>(defaultCred.Name, {
@@ -439,7 +440,7 @@ async function resolveFromEnvironment(
     const defaultOwner = env.GITHUB_DEFAULT_OWNER?.trim() || undefined;
     const allowMerge = parseBoolFlag(env.GITHUB_ALLOW_MERGE, false);
     const defaultPRMode = parsePRMode(env.GITHUB_DEFAULT_PR_MODE);
-    const apiBaseUrl = (env.GITHUB_API_URL ?? 'https://api.github.com').trim().replace(/\/+$/, '');
+    const apiBaseUrl = TrimTrailingSlashes((env.GITHUB_API_URL ?? 'https://api.github.com').trim());
 
     if (hydrateOpts.targetRepository) {
         const { owner, repo } = hydrateOpts.targetRepository;

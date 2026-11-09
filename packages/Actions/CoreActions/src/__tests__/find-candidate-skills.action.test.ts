@@ -4,16 +4,16 @@
  *   - FindBestSkillAction (`Find Best Skill`)
  *   - GetSkillDetailsAction (`Get Skill Details`)
  */
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach } from 'vitest';
 import assert from 'node:assert/strict';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { Metadata } from '@memberjunction/core';
 import type { MJAISkillEntity } from '@memberjunction/core-entities';
 import type { RunActionParams } from '@memberjunction/actions-base';
-import { FindCandidateSkillsAction } from '../custom/ai/find-candidate-skills.action.ts';
-import { FindBestSkillAction } from '../custom/ai/find-best-skill.action.ts';
-import { GetSkillDetailsAction } from '../custom/ai/get-skill-details.action.ts';
+import { FindCandidateSkillsAction } from '../custom/ai/find-candidate-skills.action.js';
+import { FindBestSkillAction } from '../custom/ai/find-best-skill.action.js';
+import { GetSkillDetailsAction } from '../custom/ai/get-skill-details.action.js';
 
 interface MockSkill {
     ID: string;

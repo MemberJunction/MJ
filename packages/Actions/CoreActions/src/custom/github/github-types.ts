@@ -68,7 +68,7 @@ export interface GitHubInstallationPermissions {
     pull_requests?: 'read' | 'write';
     issues?: 'read' | 'write';
     actions?: 'read' | 'write';
-    Checks?: 'read' | 'write';
+    checks?: 'read' | 'write';
     metadata?: 'read';
     [scope: string]: 'read' | 'write' | undefined;
 }

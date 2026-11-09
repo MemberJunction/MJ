@@ -1864,7 +1864,12 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
         const signature = signer.sign(normalizedPem, 'base64url');
         const jwt = `${header}.${payload}.${signature}`;
 
-        const base = (apiBaseUrl ?? 'https://api.github.com').replace(/\/+$/, '');
+        const rawBase = apiBaseUrl ?? 'https://api.github.com';
+        let baseEnd = rawBase.length;
+        while (baseEnd > 0 && rawBase.charCodeAt(baseEnd - 1) === 47) {
+            baseEnd--;
+        }
+        const base = baseEnd === rawBase.length ? rawBase : rawBase.slice(0, baseEnd);
         const response = await fetch(
             `${base}/app/installations/${encodeURIComponent(installationId.trim())}/access_tokens`,
             {

@@ -171,10 +171,7 @@ export function ApplyGitHubEnvironmentConventions(
     }
 
     const cleanAgentName = (agentName ?? 'MemberJunction Agent').trim() || 'MemberJunction Agent';
-    const slug = cleanAgentName
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '') || 'mj-agent';
+    const slug = trimHyphens(cleanAgentName.toLowerCase().replace(/[^a-z0-9]+/g, '-')) || 'mj-agent';
 
     const agentDisplay = `${cleanAgentName} (MJ Agent)`;
     const agentEmail = `${slug}@agents.memberjunction.local`;
@@ -235,7 +232,7 @@ async function MintSandboxGitHubAppToken(
     const signature = signer.sign(normalizedPem, 'base64url');
     const jwt = `${header}.${payload}.${signature}`;
 
-    const baseUrl = (config.apiBaseUrl ?? 'https://api.github.com').replace(/\/+$/, '');
+    const baseUrl = trimTrailingSlashes(config.apiBaseUrl ?? 'https://api.github.com');
     const url = `${baseUrl}/app/installations/${encodeURIComponent(config.installationId)}/access_tokens`;
 
     // Scope installation token to specific repository names when allowedRepositories contains exact repos
@@ -309,4 +306,24 @@ function ExtractExactRepoNames(rawAllowlist: unknown): string[] | undefined {
     }
 
     return repoNames.length > 0 ? repoNames : undefined;
+}
+
+function trimHyphens(value: string): string {
+    let start = 0;
+    let end = value.length;
+    while (start < end && value.charCodeAt(start) === 45) {
+        start++;
+    }
+    while (end > start && value.charCodeAt(end - 1) === 45) {
+        end--;
+    }
+    return start === 0 && end === value.length ? value : value.slice(start, end);
+}
+
+function trimTrailingSlashes(value: string): string {
+    let end = value.length;
+    while (end > 0 && value.charCodeAt(end - 1) === 47) {
+        end--;
+    }
+    return end === value.length ? value : value.slice(0, end);
 }

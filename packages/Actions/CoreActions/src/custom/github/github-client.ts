@@ -13,7 +13,7 @@
  * @module @memberjunction/core-actions/github
  */
 
-import { IsRepositoryAllowed } from './github-app-auth';
+import { IsRepositoryAllowed, TrimSlashes, TrimTrailingSlashes } from './github-app-auth';
 import type {
     GitHubCommitFilesParams,
     GitHubCommitFilesResult,
@@ -238,7 +238,7 @@ export class GitHubRestClient {
                 'GET',
                 `/repos/${encOwner}/${encRepo}/git/trees/${encodeURIComponent(defaultBranch)}`
             ).catch(() => ({ tree: [] })),
-            this.FetchReadmePreview(owner, repo, defaultBranch),
+            this.fetchReadmePreview(owner, repo, defaultBranch),
             this.RequestJson<Array<Record<string, unknown>>>('GET', `/repos/${encOwner}/${encRepo}/releases?per_page=5`).catch(
                 () => []
             ),
@@ -373,7 +373,7 @@ export class GitHubRestClient {
             tree?: GitHubTreeEntry[];
         }>('GET', `/repos/${encOwner}/${encRepo}/git/trees/${encodeURIComponent(effectiveRef)}?recursive=1`);
 
-        const cleanPrefix = pathPrefix ? pathPrefix.replace(/^\/+|\/+$/g, '') : '';
+        const cleanPrefix = pathPrefix ? TrimSlashes(pathPrefix) : '';
         const globRegex = globPattern ? GlobToRegExp(globPattern) : null;
 
         const matched = (treeResponse.tree ?? []).filter((entry) => {
@@ -1130,7 +1130,7 @@ export class GitHubRestClient {
 
             let logTail: string | undefined;
             if (includeLogs && (conclusion === 'failure' || failedSteps.length > 0)) {
-                logTail = await this.FetchJobLogTail(params.Owner, params.Repo, jobId, maxLogChars);
+                logTail = await this.fetchJobLogTail(params.Owner, params.Repo, jobId, maxLogChars);
             }
 
             jobs.push({
@@ -1168,7 +1168,7 @@ export class GitHubRestClient {
     // Internal HTTP Transport & Retry Helpers
     // ------------------------------------------------------------------------
 
-    private async FetchReadmePreview(owner: string, repo: string, ref: string): Promise<string | null> {
+    private async fetchReadmePreview(owner: string, repo: string, ref: string): Promise<string | null> {
         try {
             const data = await this.RequestJson<{ content?: string; encoding?: string }>(
                 'GET',
@@ -1184,10 +1184,10 @@ export class GitHubRestClient {
         }
     }
 
-    private async FetchJobLogTail(owner: string, repo: string, jobId: number, maxChars: number): Promise<string | undefined> {
+    private async fetchJobLogTail(owner: string, repo: string, jobId: number, maxChars: number): Promise<string | undefined> {
         try {
             const endpoint = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/actions/jobs/${jobId}/logs`;
-            const response = await this.RequestRaw('GET', endpoint);
+            const response = await this.requestRaw('GET', endpoint);
             const text = await response.text();
             if (!text) return undefined;
             return text.length > maxChars ? text.slice(-maxChars) : text;
@@ -1202,7 +1202,7 @@ export class GitHubRestClient {
         body?: unknown,
         acceptHeader: string = 'application/vnd.github+json'
     ): Promise<T> {
-        const response = await this.RequestRaw(method, endpoint, body, acceptHeader);
+        const response = await this.requestRaw(method, endpoint, body, acceptHeader);
         if (response.status === 204) {
             return {} as T;
         }
@@ -1213,7 +1213,7 @@ export class GitHubRestClient {
         return JSON.parse(text) as T;
     }
 
-    private async RequestRaw(
+    private async requestRaw(
         method: string,
         endpoint: string,
         body?: unknown,
@@ -1221,7 +1221,7 @@ export class GitHubRestClient {
     ): Promise<Response> {
         const url = endpoint.startsWith('http')
             ? endpoint
-            : `${this.auth.ApiBaseUrl.replace(/\/+$/, '')}/${endpoint.replace(/^\/+/, '')}`;
+            : `${TrimTrailingSlashes(this.auth.ApiBaseUrl)}/${endpoint.replace(/^\/+/, '')}`;
 
         let lastError: unknown;
         for (let attempt = 0; attempt <= this.maxRetries; attempt++) {

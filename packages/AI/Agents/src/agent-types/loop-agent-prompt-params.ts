@@ -746,6 +746,8 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     enableHandoff: false,
     maxSubAgentsInPrompt: -1,
     maxActionsInPrompt: -1,
+    maxSkillsInPrompt: -1,
+    maxSkillDecisionCandidates: 30,
     clientToolResultMaxChars: -1,
     decisionDiscovery: false,
     untrustedActionNames: [],

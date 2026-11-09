@@ -378,7 +378,7 @@ export class GitHubGetPullRequestContextAction extends GitHubBaseAction {
 
             const { client, coordinate } = await this.resolveClientAndRepo(params, {
                 requireRepo: true,
-                permissions: { contents: 'read', pull_requests: 'read', Checks: 'read', metadata: 'read' },
+                permissions: { contents: 'read', pull_requests: 'read', checks: 'read', metadata: 'read' },
             });
 
             const includePatches = this.getBooleanParam(params, 'IncludePatches', true) ?? true;

@@ -14,7 +14,7 @@
  *      against a mocked GitHub REST API using a 3LO user-delegated token, verifying protected-branch
  *      enforcement, atomic Git tree creation, and PR opening.
  */
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach } from 'vitest';
 import assert from 'node:assert/strict';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
@@ -28,13 +28,13 @@ import {
     RankSkillsByHybridRelevance,
     ResolveCatalogNarrowingLimits,
     type CatalogNarrowingCandidate,
-} from '../catalog-narrowing.ts';
+} from '@memberjunction/ai-agents';
 import {
     FindCandidateSkillsAction,
     GetSkillDetailsAction,
     GitHubGetRepositoryContextAction,
     GitHubCommitFilesAndCreatePRAction,
-} from '@memberjunction/core-actions';
+} from '../index.js';
 
 const GITHUB_SKILL_ID = '99999999-0000-4000-8000-000000000250';
 const PINNED_SKILL_ID = '99999999-0000-4000-8000-000000000001';
@@ -155,6 +155,19 @@ describe('Integration: Multi-Step Agent Run with Skill Scaling + GitHub PR Workf
         // Mock 3LO user-scoped OAuth credential for user-42
         const credEngine = CredentialEngine.Instance as unknown as Record<string, unknown>;
         credEngine.Config = async () => {};
+        credEngine.GetUserDelegatedCredential = async (providerName: string, user?: { ID: string }) => {
+            if (providerName === 'GitHub' && user?.ID === 'user-42') {
+                return {
+                    values: {
+                        accessToken: 'ghu_alice_3lo_token_xyz',
+                        allowedRepositories: 'MemberJunction/*',
+                        defaultPRMode: 'draft',
+                    },
+                    credential: { ID: 'cred-3lo-alice' },
+                };
+            }
+            return null;
+        };
         credEngine.getCredential = async (name: string, options?: { contextUser?: { ID: string } }) => {
             if (name === 'UserOAuth3LO:GitHub:user-42' && options?.contextUser?.ID === 'user-42') {
                 return {

@@ -12859,16 +12859,18 @@ The context is now within limits. Please retry your request with the recovered c
         const requiredActionIDs = AIEngine.Instance.AgentActions
             .filter(aa => UUIDsEqual(aa.AgentID, agent.ID) && aa.Status === 'Active' && (aa.MinExecutionsPerRun ?? 0) > 0)
             .map(aa => aa.ActionID);
-        const assignedSkillIDs = (AIEngine.Instance.AgentSkills ?? [])
-            .filter(as => UUIDsEqual(as.AgentID, agent.ID) && as.Status === 'Active')
-            .map(as => as.SkillID);
-        const hasUnpinnedSkills = skills.some(s => !assignedSkillIDs.some(id => UUIDsEqual(id, s.ID)));
+        const assignedSkillIDs = new UUIDSet(
+            (AIEngine.Instance.AgentSkills ?? [])
+                .filter(as => UUIDsEqual(as.AgentID, agent.ID) && as.Status === 'Active')
+                .map(as => as.SkillID)
+        );
+        const hasUnpinnedSkills = skills.some(s => !assignedSkillIDs.Has(s.ID));
         const candidate = (kind: CatalogNarrowingKind, item: { ID: string; Name: string; Description: string | null }, pinned: boolean): CatalogNarrowingCandidate =>
             ({ Kind: kind, ID: item.ID, Name: item.Name, Description: item.Description ?? '', Pinned: pinned });
         return [
             ...actions.map(a => candidate('action', a, IsAlwaysShownAction(a.Name) || requiredActionIDs.some(id => UUIDsEqual(id, a.ID)))),
             ...subAgents.filter(s => !!s).map(s => candidate('agent', s, (s.MinExecutionsPerRun ?? 0) > 0)),
-            ...skills.map(s => candidate('skill', s, hasUnpinnedSkills && assignedSkillIDs.some(id => UUIDsEqual(id, s.ID)))),
+            ...skills.map(s => candidate('skill', s, hasUnpinnedSkills && assignedSkillIDs.Has(s.ID))),
         ];
     }
 
