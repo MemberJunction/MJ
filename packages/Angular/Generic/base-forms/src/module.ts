@@ -39,6 +39,7 @@ import { MjRecordLinkDirective } from './lib/links/record-link.directive';
 import { MjRecordLinkComponent } from './lib/links/record-link.component';
 import { MjRecordPreviewPopoverComponent } from './lib/preview-popover/record-preview-popover.component';
 import { MjRecordCommentsComponent } from './lib/comments/record-comments.component';
+import { MjFoldedSubtypeSectionComponent } from './lib/subtype-ui-driver/folded-subtype-section.component';
 
 /**
  * BaseFormsModule - Form components and base classes for rendering and editing MemberJunction entity records.
@@ -86,7 +87,8 @@ import { MjRecordCommentsComponent } from './lib/comments/record-comments.compon
     MjRecordLinkDirective,
     MjRecordLinkComponent,
     MjRecordPreviewPopoverComponent,
-    MjRecordCommentsComponent
+    MjRecordCommentsComponent,
+    MjFoldedSubtypeSectionComponent
   ],
   imports: [
     CommonModule,
@@ -136,7 +138,8 @@ import { MjRecordCommentsComponent } from './lib/comments/record-comments.compon
     MjRecordLinkDirective,
     MjRecordLinkComponent,
     MjRecordPreviewPopoverComponent,
-    MjRecordCommentsComponent
+    MjRecordCommentsComponent,
+    MjFoldedSubtypeSectionComponent
   ]
 })
 export class BaseFormsModule { }

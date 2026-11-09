@@ -75,6 +75,8 @@ export * from './lib/explorer-entity-data-grid.component';
 export * from './lib/isa-related-panel/isa-hierarchy-utils';
 export * from './lib/isa-related-panel/isa-related-card.component';
 export * from './lib/isa-related-panel/isa-related-panel.component';
+export * from './lib/subtype-ui-driver/entity-subtype-ui-driver';
+export * from './lib/subtype-ui-driver/folded-subtype-section.component';
 export * from './lib/links/record-links.component';
 export * from './lib/links/record-links-drawer.component';
 export * from './lib/links/record-link-utils';

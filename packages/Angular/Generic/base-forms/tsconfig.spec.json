@@ -69,7 +69,8 @@
     "src/lib/links/record-links.component.dom.test.ts",
     "src/lib/preview-popover/record-preview-popover.component.ts",
     "src/lib/field/form-field-live-merge.component.dom.test.ts",
-    "src/lib/container/live-edit-mode-merge.component.dom.test.ts"
+    "src/lib/container/live-edit-mode-merge.component.dom.test.ts",
+    "src/lib/subtype-ui-driver/**/*.ts"
   ],
   "exclude": [
     "node_modules",
