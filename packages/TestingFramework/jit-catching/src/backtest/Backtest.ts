@@ -8,6 +8,7 @@ import { FileCatchStore } from '../store/FileCatchStore';
 import { RedactTail, type RedactionCheck } from '../sandbox/Redaction';
 import { DefaultRedaction } from '../pipeline/Deps';
 import { RunAll, RunAllError } from '../pipeline/Run';
+import { PreflightEnv } from '../pipeline/Preflight';
 import { IsValidRunID, RunDir } from '../pipeline/RunDir';
 import { LoadCorpus, RevisionsOf, type Corpus, type Slice } from '../corpus/Corpus';
 import { LedgerFile, LedgerID, type BacktestLedger, type LedgerEntry } from './Ledger';
@@ -33,7 +34,15 @@ export interface BacktestDeps {
 export interface BacktestOptions {
     CorpusPath: string; Slice: Slice; Set: 'Bug' | 'Clean' | 'Both'; Model: string; MaxUsd: number; Only?: number[]; RetryFailed?: boolean;
     RepoRoot: string; Settings: Settings; StoreDir: string; Deps?: BacktestDeps;
+    /** The environment the preflight check reads; `process.env` when not given. */
+    Env?: NodeJS.ProcessEnv;
 }
+
+/** Why the run stopped before every Pending entry ran: the spending cap, the failure limit, or null when it did not stop early. */
+export type BacktestStop = 'cap' | 'failures' | null;
+
+/** The ledger after the run and why the run stopped early, if it did. */
+export interface BacktestResult { Ledger: BacktestLedger; Stopped: BacktestStop; }
 
 /** A run the ledger does not name and the USD cost its generation file records. */
 export interface OrphanRun { RunID: string; CostUSD: number; }
@@ -42,8 +51,8 @@ export interface OrphanRun { RunID: string; CostUSD: number; }
 interface SelectedPR { PR: number; Set: 'Bug' | 'Clean'; MergeSHA: string; }
 
 /**
- * Refuses a model without a price in the settings. Creates or resumes the ledger; runs each Pending entry serially with Settings.GeneratorModel = Model and Trigger 'Backtest';
- * records each run's cost from the injected cost lookup; stops with a message when the ledger's cost reaches MaxUsd. Returns the ledger.
+ * Refuses a model without a price in the settings, then checks the keys of every step once. Creates or resumes the ledger; runs each Pending entry serially with Settings.GeneratorModel = Model and Trigger 'Backtest';
+ * records each run's cost from the injected cost lookup; stops with a message when the ledger's cost reaches MaxUsd. Returns the ledger and why the run stopped early, if it did.
  *
  * Resume: refuses a ledger made for another corpus path, model, slice or set. Appends a Pending entry for each corpus PR of the
  * slice and set that the ledger lacks; entries whose PR left the slice stay as recorded and are named on stderr. A Pending entry
@@ -52,9 +61,10 @@ interface SelectedPR { PR: number; Set: 'Bug' | 'Clean'; MergeSHA: string; }
  * The cap counts the cost of the whole ledger, including every attempt of a retried entry, and is checked before each run, so the last run can take the total above it.
  * The run stops after 3 Failed entries in a row and leaves the rest Pending.
  */
-export async function BacktestStep(o: BacktestOptions): Promise<BacktestLedger> {
+export async function BacktestStep(o: BacktestOptions): Promise<BacktestResult> {
     const unpriced = UnpricedModel(o.Settings.Prices, o.Model);
     if (unpriced) throw new Error(unpriced);
+    PreflightEnv(o.Settings, o.Env ?? process.env, 'Assess');
     const deps = o.Deps ?? defaultDeps(o);
     await deps.Repo.Fetch('next');
     const file = new LedgerFile(o.RepoRoot, LedgerID(o.CorpusPath, o.Slice, o.Set, o.Model), deps.Redaction);
@@ -64,8 +74,7 @@ export async function BacktestStep(o: BacktestOptions): Promise<BacktestLedger> 
     if (o.RetryFailed) retryFailed(ledger, o.Only);
     reportSkipped(ledger, o.Only);
     file.Write(ledger);
-    await runPending(ledger, file, o, deps);
-    return ledger;
+    return { Ledger: ledger, Stopped: await runPending(ledger, file, o, deps) };
 }
 
 /** A message naming the priced models when `model` has no price in `prices`; null when it has one. */
@@ -193,15 +202,15 @@ function reportSkipped(ledger: BacktestLedger, only: number[] | undefined): void
     }
 }
 
-/** Runs the Pending entries (within `Only`) one at a time, writing the ledger after each, until the cap or the failure limit stops it. */
-async function runPending(ledger: BacktestLedger, file: LedgerFile, o: BacktestOptions, deps: BacktestDeps): Promise<void> {
+/** Runs the Pending entries (within `Only`) one at a time, writing the ledger after each, until the cap or the failure limit stops it. Returns which one stopped it, or null. */
+async function runPending(ledger: BacktestLedger, file: LedgerFile, o: BacktestOptions, deps: BacktestDeps): Promise<BacktestStop> {
     let failedInRow = 0;
     for (const entry of ledger.Entries.filter((e) => e.Status === 'Pending' && (!o.Only || o.Only.includes(e.PR)))) {
         if (failedInRow >= MAX_FAILED_IN_ROW) {
             process.stderr.write(`backtest ${ledger.ID}: stopped after ${MAX_FAILED_IN_ROW} failed runs in a row; the rest stay Pending\n`);
-            return;
+            return 'failures';
         }
-        if (stopForSpend(ledger, o.MaxUsd)) return;
+        if (stopForSpend(ledger, o.MaxUsd)) return 'cap';
         entry.StartedAt = new Date().toISOString();
         file.Write(ledger);
         await runOne(entry, o, deps);
@@ -209,6 +218,7 @@ async function runPending(ledger: BacktestLedger, file: LedgerFile, o: BacktestO
         report(ledger, entry);
         failedInRow = entry.Status === 'Failed' ? failedInRow + 1 : 0;
     }
+    return null;
 }
 
 function totalCost(ledger: BacktestLedger): number { return ledger.Entries.reduce((s, e) => s + e.CostUSD, 0); }

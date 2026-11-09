@@ -39,6 +39,6 @@ export { LabelCatch, LabelPacket, IsLabelAnswer, LABEL_ANSWERS, type LabelAnswer
 export { SliceSchema, BugPairSchema, CleanEntrySchema, CorpusSchema, LoadCorpus, AssignSlices, RevisionsOf, type Corpus, type Slice } from './corpus/Corpus';
 export { MineClean, MineBugs, IsEligibleSource, PullRequestNumberOf, RemovedRangesByFile, MonthWindows, type CleanCandidate, type BugCandidate, type MinerDeps, type LineRange } from './corpus/Miner';
 export { LedgerFile, LedgerID, MatchRecordSchema, LedgerEntrySchema, BacktestLedgerSchema, type MatchRecord, type LedgerEntry, type BacktestLedger } from './backtest/Ledger';
-export { BacktestStep, DefaultCostOfRun, DefaultOrphanRunCost, type BacktestOptions, type BacktestDeps, type OrphanRun } from './backtest/Backtest';
+export { BacktestStep, DefaultCostOfRun, DefaultOrphanRunCost, type BacktestOptions, type BacktestDeps, type BacktestResult, type BacktestStop, type OrphanRun } from './backtest/Backtest';
 export { WilsonInterval, RateOf, type RateWithInterval } from './report/Stats';
 export { BuildGateReport, RenderMarkdown, LatestLabel, TableCostOf, MarkdownText, type GateReport, type GateReportOptions, type ModelReport, type HumanLabel, type AgreementResult } from './report/Report';
