@@ -69,6 +69,9 @@ const databaseSettingsInfoSchema = z.object({
   metadataCacheRefreshInterval: z.number(),
   dbReadOnlyUsername: z.string().optional(),
   dbReadOnlyPassword: z.string().optional(),
+  concurrencyCheck: z.enum(['off', 'log', 'enforce']).optional().default('off'),
+  deltaUpdates: z.boolean().optional().default(true),
+  typedQueryDrift: z.enum(['warn', 'throw']).optional().default('warn'),
   connectionPool: z.object({
     max: z.number().optional().default(50),
     min: z.number().optional().default(5),
@@ -1161,6 +1164,9 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     metadataCacheRefreshInterval: isFinite(Number(process.env.METADATA_CACHE_REFRESH_INTERVAL))
       ? Number(process.env.METADATA_CACHE_REFRESH_INTERVAL)
       : 180000,
+    concurrencyCheck: 'off',
+    deltaUpdates: true,
+    typedQueryDrift: 'warn',
     connectionPool: {
       max: 50,
       min: 5,

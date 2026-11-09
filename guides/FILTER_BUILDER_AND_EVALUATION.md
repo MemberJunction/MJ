@@ -6,9 +6,9 @@ Related: [Remote Operations](REMOTE_OPERATIONS_GUIDE.md) (`Authorization.Check`)
 
 ---
 
-## 1. One JSON, two runtimes
+## 1. One JSON, three runtimes
 
-Staff build filters in **`mj-filter-builder`** (`@memberjunction/ng-filter-builder`). The portable payload is a Kendo **`CompositeFilterDescriptor`**:
+Staff build filters in **`mj-filter-builder`** (`@memberjunction/ng-filter-builder`), and developers author them in TypeScript with **`FilterOf<T>()`** (`@memberjunction/core`). The portable payload is a Kendo **`CompositeFilterDescriptor`**:
 
 ```json
 {
@@ -21,10 +21,54 @@ Staff build filters in **`mj-filter-builder`** (`@memberjunction/ng-filter-build
 
 | Runtime | Who | How |
 |---|---|---|
-| **SQL** | User Views | `MJUserViewEntityExtended.GenerateWhereClause` → `WHERE` on **one** entity |
-| **In-memory** | Prices, processes, Open Apps | `CompositeFilter.FromJSON(json).Evaluate(context)` in `@memberjunction/core` |
+| **Parameterized SQL (`RunView`)** | `RunViewParams.Filter` | `CompositeFilterSQLCompiler.Compile` → parameterized `@f0, @f1` (SQL Server) / `$1, $2` (PostgreSQL) `WHERE` clause with FLS enforcement |
+| **Literal SQL (User Views)** | `MJUserViewEntityExtended.GenerateWhereClause` | `CompositeFilterSQLCompiler.CompileLiteral` → quote-safe, `LIKE`-escaped literal `WHERE` persisted on the view |
+| **In-memory** | `BaseEnginePropertyConfig.Filter`, `BaseEngine.Where()`, Prices, Processes, Open Apps | `CompositeFilter.FromJSON(json).Evaluate(context)` in `@memberjunction/core` |
 
 Do **not** invent a second tree (custom `scope` / `groups` / `rules`). Do **not** ask staff to type `SafeExpression` strings. `SafeExpressionEvaluator` (`@memberjunction/global`) stays the sandbox for *authored* JS-like expressions (Flow agents). Filter JSON is data; `CompositeFilter` walks it.
+
+### Supported operators (`FilterOperator`)
+
+| Operator | Value | SQL & In-Memory Semantics |
+|---|---|---|
+| `eq` / `neq` | scalar or `null` | `=` / `<>` (`IS NULL` / `IS NOT NULL` when value is `null`) |
+| `gt` / `gte` / `lt` / `lte` | number, `Date`, or ISO string | `>`, `>=`, `<`, `<=` |
+| `contains` / `doesnotcontain` | string | `LIKE '%…%'` / `NOT LIKE '%…%'` with wildcard escaping (`%`, `_`, `[`) |
+| `startswith` / `endswith` | string | `LIKE '…%'` / `LIKE '%…'` with wildcard escaping |
+| `isnull` / `isnotnull` | `null` | Strictly `IS NULL` / `IS NOT NULL` |
+| `isempty` / `isnotempty` | `null` | `col IS NULL OR col = ''` / `col IS NOT NULL AND col <> ''` (string fields); `IS NULL` / `IS NOT NULL` (non-string fields) |
+| `in` / `notin` | non-empty scalar array (max 500) | `col IN (@f0, @f1, …)` / `col NOT IN (@f0, @f1, …)` |
+| `between` | `[low, high]` two-element tuple | `col BETWEEN @f0 AND @f1` (inclusive on both ends) |
+
+### Typed authoring with `FilterOf<T>()`
+
+Use `FilterOf<T>()` from `@memberjunction/core` to build compile-time-checked filters for `RunViewParams.Filter`, `BaseEnginePropertyConfig.Filter`, or `BaseEngine.Where()`:
+
+```ts
+import { FilterOf, RunView } from '@memberjunction/core';
+import type { MJUserEntity, MJUserEntityType } from '@memberjunction/core-entities';
+
+const f = FilterOf<MJUserEntityType>();
+const rv = new RunView();
+const result = await rv.RunView<MJUserEntity>({
+  EntityName: 'MJ: Users',
+  Filter: f.And(
+    f.Eq('IsActive', true),
+    f.In('Type', ['Owner', 'User']),
+    f.Or(f.Contains('Email', '@example.com'), f.IsNotEmpty('Title')),
+  ),
+  ResultType: 'entity_object',
+});
+```
+
+When both `Filter` and `ExtraFilter` are provided on `RunViewParams`, they are combined as `(<compiled Filter>) AND (<ExtraFilter>)`.
+
+### Using structured `Filter` in `BaseEngine`
+
+`BaseEnginePropertyConfig.Filter` accepts either a SQL string or a `CompositeFilterDescriptor` / `CompositeFilter`. When a structured `Filter` is used:
+- Initial load passes `Filter` directly to `RunViewParams.Filter` (parameterized SQL).
+- Live `BaseEntity` save events evaluate the structured filter in memory via `CompositeFilter.Evaluate()` — adding newly matching records, updating matching records in place, and evicting records that no longer match without a database round trip.
+- Subclasses can also filter any cached array property on demand via `this.Where<T>('PropertyName', filter)`.
 
 ---
 
@@ -140,7 +184,9 @@ Product prices store this JSON in `ProductPrice.Applicability`. The resolver bui
 
 | Piece | Package |
 |---|---|
-| `CompositeFilterDescriptor` + `CompositeFilter` (`FromJSON`, `Evaluate`, `SummaryText` / `SummaryHTML`) | `@memberjunction/core` → `generic/filters/` |
+| `CompositeFilterDescriptor` + `CompositeFilter` (`FromJSON`, `Evaluate`, `SummaryText` / `SummaryHTML`) | `@memberjunction/core` → `generic/filters/compositeFilter.ts` |
+| `CompositeFilterSQLCompiler` (`Compile`, `CompileLiteral`, `AssertFieldsAllowed`) + `CanonicalCompositeFilterKey` | `@memberjunction/core` → `generic/filters/compositeFilterSQL.ts` |
+| `FilterOf<T>()` typed builder | `@memberjunction/core` → `generic/filters/filterBuilder.ts` |
 | UI | `@memberjunction/ng-filter-builder` |
-| View SQL | `MJUserViewEntityExtended.GenerateWhereClause` (strips prefix) |
+| View SQL | `MJUserViewEntityExtended.GenerateWhereClause` (delegates to `CompositeFilterSQLCompiler.CompileLiteral`) |
 | Authored JS expressions | `@memberjunction/global` `SafeExpressionEvaluator` — **not** this JSON |
