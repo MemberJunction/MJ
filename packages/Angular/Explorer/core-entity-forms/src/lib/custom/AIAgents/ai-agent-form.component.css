@@ -2805,6 +2805,52 @@
     background: var(--mj-bg-page);
 }
 
+/* Phone section picker: hidden until the 768px rule swaps it in for the tab nav */
+.agent-tabbar .phone-section-picker {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .agent-tabbar {
+        padding: 4px 8px;
+        border-bottom: 1px solid var(--mj-border-default);
+    }
+
+    .agent-tabbar mj-tab-nav {
+        display: none;
+    }
+
+    .agent-tabbar .phone-section-picker {
+        display: block;
+    }
+}
+
+/* Phone hero (6A): one identity row, icon beside the name and status, instead of the older
+   phone rule's icon-above-name stack. Scoped to .phone-hero so edit mode keeps that layout. */
+@media (max-width: 768px) {
+    .agent-header.phone-hero.hero-view .agent-overview {
+        flex-direction: row;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+    }
+
+    .agent-header.phone-hero.hero-view .agent-info {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .agent-header.phone-hero.hero-view .agent-name {
+        overflow-wrap: anywhere;
+    }
+
+    .agent-header.phone-hero.hero-view .agent-meta {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+}
+
 .agent-pane {
     flex: 1;
     min-height: 0;

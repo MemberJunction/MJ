@@ -40,6 +40,15 @@ describe('LiveKitTokenService', () => {
     expect(metadata.mjRole).toBe('agent');
   });
 
+  it('lets an agent bot update its own attributes (to say its avatar was taken down), and no one else', async () => {
+    const svc = new LiveKitTokenService(CONFIG);
+    const bot = decodePayload((await svc.MintBotToken('room-42', 'agent-x', 'Sage', { 'mj.agentAvatar': 'on' })).Token);
+    expect((bot.video as Record<string, unknown>).canUpdateOwnMetadata).toBe(true);
+    expect(bot.attributes).toEqual({ 'mj.agentAvatar': 'on' });
+    const person = decodePayload((await svc.MintClientToken('room-42', 'user-1', 'Ada')).Token);
+    expect((person.video as Record<string, unknown>).canUpdateOwnMetadata).toBeUndefined();
+  });
+
   it('throws a clear error when minting without configuration', async () => {
     const svc = new LiveKitTokenService({ ServerUrl: '', ApiKey: '', ApiSecret: '' });
     await expect(svc.MintClientToken('r', 'i')).rejects.toThrow(/not configured/i);

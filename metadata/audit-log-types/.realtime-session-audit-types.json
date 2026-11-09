@@ -1,0 +1,28 @@
+[
+  {
+    "fields": {
+      "Name": "Realtime Identity Verified",
+      "Description": "A person proved control of an email address during a realtime agent session (emailed link or typed code). Written by the realtime identity-verification service for the session's owner; RecordID is the AI Agent Session."
+    },
+    "primaryKey": {
+      "ID": "76CF3040-4B61-44F5-BD62-57EAB3445558"
+    },
+    "sync": {
+      "lastModified": "2026-10-13T18:59:56.641Z",
+      "checksum": "a2e31b7f26b0b6da795ca0e81c6f15b11aa20f3dcb6d3b478d7772fbd795a9a0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Realtime Agent Vision Consent",
+      "Description": "A person chose whether agents may see their camera and shared screen in a meeting room: allowed, or stopped allowing. Written by MJAPI when it sets the person's mj.agentCanSee LiveKit attribute, including when LiveKit refuses (Status Failed). UserID and RecordID are the person; Details carries the room and the choice."
+    },
+    "primaryKey": {
+      "ID": "5E569E46-F80A-4272-9E9A-F360DCB54C66"
+    },
+    "sync": {
+      "lastModified": "2026-10-13T18:59:56.665Z",
+      "checksum": "d4336256cbcf6385a59ee02e274e2f0d772a8f7314c412f58f1b90d451af9ea1"
+    }
+  }
+]

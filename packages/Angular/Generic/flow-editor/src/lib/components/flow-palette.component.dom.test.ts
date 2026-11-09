@@ -4,6 +4,7 @@ import { CommonModule } from '@angular/common';
 import { FFlowModule } from '@foblex/flow';
 import { FlowPaletteComponent } from './flow-palette.component';
 import type { FlowNodeTypeConfig } from '../interfaces/flow-types';
+import { AGENT_STEP_TYPE_CONFIGS } from '../agent-editor/agent-flow-transformer.service';
 
 /**
  * DOM tests for FlowPaletteComponent.
@@ -101,5 +102,13 @@ describe('FlowPaletteComponent (DOM)', () => {
     const title = items(fixture)[0].getAttribute('title') ?? '';
     expect(title).toContain('Click');
     expect(title).toContain('drag');
+  });
+
+  it('renders Decision step item when AGENT_STEP_TYPE_CONFIGS is supplied', () => {
+    const fixture = render({ NodeTypes: AGENT_STEP_TYPE_CONFIGS });
+    const decisionBtn = items(fixture).find(el => el.textContent?.includes('Decision'));
+    expect(decisionBtn).toBeDefined();
+    const icon = decisionBtn?.querySelector('i');
+    expect(icon?.className).toContain('fa-scale-balanced');
   });
 });

@@ -1,0 +1,60 @@
+{
+  "url": "https://api.peopledatalabs.com/v5/autocomplete?field=school&text=Harvard%20Kennedy%20School&size=5",
+  "status": 200,
+  "headers": {
+    "x-ratelimit-limit": "{\"minute\": 60, \"day\": 1000}",
+    "x-ratelimit-remaining": "{\"minute\": 58, \"day\": 998}",
+    "x-ratelimit-reset": "2026-10-12 21:53:52"
+  },
+  "body": {
+    "data": [
+      {
+        "name": "harvard kennedy school",
+        "count": 43406,
+        "meta": {
+          "id": "wFf8bchauioIdYC6xBTKBA_0000",
+          "website": "hks.harvard.edu",
+          "location_name": "[location_name]"
+        }
+      },
+      {
+        "name": "harvard university kennedy school of government",
+        "count": 3108,
+        "meta": {
+          "id": "G398zdpqicxVS24Sk5iEGg_0000",
+          "website": "ksg.harvard.edu"
+        }
+      },
+      {
+        "name": "harvard kennedy school executive education",
+        "count": 2178,
+        "meta": {
+          "id": "0Kc9UMEWDFBNrYCv-Gacpg_0000",
+          "website": "exed.hks.harvard.edu",
+          "location_name": "[location_name]"
+        }
+      },
+      {
+        "name": "institute of politics at harvard kennedy school",
+        "count": 515,
+        "meta": {
+          "id": "3jD227z-2kZssoB1H0jeeQ_0000",
+          "website": "iop.harvard.edu",
+          "location_name": "[location_name]"
+        }
+      },
+      {
+        "name": "peruvian caucus a student organization at harvard kennedy school",
+        "count": 318,
+        "meta": {
+          "id": "7WXvEHW0BmVdFO0wCdcEXQ_0000",
+          "location_name": "[location_name]"
+        }
+      }
+    ],
+    "fields": [
+      "education.school.name"
+    ],
+    "status": 200
+  }
+}

@@ -358,6 +358,11 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
     return this.ClearSearch();
   }
 
+  /** True when a message hit sits in a fork rather than in Main. */
+  public IsInFork(result: SearchResult): boolean {
+    return result.type === 'message' && result.branchId != null;
+  }
+
   /**
    * Select a result
    */

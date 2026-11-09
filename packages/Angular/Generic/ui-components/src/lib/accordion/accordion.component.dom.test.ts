@@ -133,6 +133,55 @@ describe('MJAccordionPanelComponent (DOM)', () => {
     const fixture = render();
     expect(fixture.nativeElement.querySelector('.mj-accordion-actions')).toBeNull();
   });
+
+  it('keeps the toggle a direct child of the header row, with no heading, when HeadingLevel is not set', () => {
+    const fixture = render();
+    const header = headerOf(fixture);
+    expect(header.parentElement?.classList.contains('mj-accordion-header-row')).toBe(true);
+    expect(fixture.nativeElement.querySelector('.mj-accordion-heading')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[role="heading"]')).toBeNull();
+  });
+
+  it('wraps the toggle in a heading of the given level when HeadingLevel is set', () => {
+    const fixture = TestBed.createComponent(MJAccordionPanelComponent);
+    fixture.componentRef.setInput('HeadingLevel', 2);
+    fixture.detectChanges();
+    const header = headerOf(fixture);
+    const heading = header.parentElement as HTMLElement;
+
+    expect(heading.classList.contains('mj-accordion-heading')).toBe(true);
+    expect(heading.getAttribute('role')).toBe('heading');
+    expect(heading.getAttribute('aria-level')).toBe('2');
+    expect(heading.parentElement?.classList.contains('mj-accordion-header-row')).toBe(true);
+    // The button keeps its ids, so the region is still labelled by it
+    expect(regionOf(fixture).getAttribute('aria-labelledby')).toBe(header.getAttribute('id'));
+    expect(header.getAttribute('aria-controls')).toBe(regionOf(fixture).getAttribute('id'));
+  });
+
+  it('still toggles from the wrapped button', () => {
+    const fixture = TestBed.createComponent(MJAccordionPanelComponent);
+    fixture.componentRef.setInput('HeadingLevel', 3);
+    fixture.detectChanges();
+    let emitted: boolean | undefined;
+    fixture.componentInstance.ExpandedChange.subscribe((v: boolean) => (emitted = v));
+
+    headerOf(fixture).click();
+    fixture.detectChanges();
+
+    expect(emitted).toBe(true);
+    expect(headerOf(fixture).getAttribute('aria-expanded')).toBe('true');
+    expect(fixture.nativeElement.querySelector('[role="heading"]')?.getAttribute('aria-level')).toBe('3');
+  });
+
+  it('removes the heading when HeadingLevel goes back to null', () => {
+    const fixture = TestBed.createComponent(MJAccordionPanelComponent);
+    fixture.componentRef.setInput('HeadingLevel', 2);
+    fixture.detectChanges();
+    fixture.componentRef.setInput('HeadingLevel', null);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[role="heading"]')).toBeNull();
+    expect(headerOf(fixture).parentElement?.classList.contains('mj-accordion-header-row')).toBe(true);
+  });
 });
 
 /**
@@ -199,6 +248,33 @@ describe('MJAccordionPanelComponent header actions slot (DOM)', () => {
     fixture.componentRef.setInput('open', false);
     fixture.detectChanges();
     expect(body()).not.toBeNull();
+  });
+
+  it('keeps the actions and the chevron outside the heading, so the heading holds only the title', () => {
+    @Component({
+      standalone: true,
+      imports: [MJAccordionPanelComponent, MJAccordionActionsDirective],
+      template: `
+        <mj-accordion-panel Title="Connection" [HeadingLevel]="2">
+          <ng-template mjAccordionActions>
+            <button class="host-edit-btn" type="button">edit</button>
+          </ng-template>
+          <p>body</p>
+        </mj-accordion-panel>
+      `,
+    })
+    class HostComponent {}
+
+    const fixture = TestBed.createComponent(HostComponent);
+    fixture.detectChanges();
+
+    const row = fixture.nativeElement.querySelector('.mj-accordion-header-row') as HTMLElement;
+    const heading = fixture.nativeElement.querySelector('[role="heading"]') as HTMLElement;
+    expect(heading.textContent?.trim()).toBe('Connection');
+    expect(heading.contains(fixture.nativeElement.querySelector('.host-edit-btn'))).toBe(false);
+    expect(heading.contains(fixture.nativeElement.querySelector('.mj-accordion-chevron'))).toBe(false);
+    expect(row.firstElementChild).toBe(heading);
+    expect(row.lastElementChild?.classList.contains('mj-accordion-chevron')).toBe(true);
   });
 
   it('keeps the chevron as the rightmost header element, after the actions slot', () => {

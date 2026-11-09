@@ -38,6 +38,18 @@ export class EntityDependencyResolver {
   }
 }
 
+@InputType()
+export class RecordDependencyOptionsInput {
+  @Field(() => String, { nullable: true })
+  LinkType?: 'both' | 'hard' | 'soft';
+
+  @Field(() => Boolean, { nullable: true })
+  IncludeSystemEntities?: boolean;
+
+  @Field(() => [String], { nullable: true })
+  EntityNames?: string[];
+}
+
 @ObjectType()
 export class RecordDependencyResult {
   @Field(() => String)
@@ -49,8 +61,21 @@ export class RecordDependencyResult {
   @Field(() => String)
   FieldName: string; // required
 
+  @Field(() => String, { nullable: true })
+  FieldDisplayName?: string;
+
   @Field(() => CompositeKeyOutputType)
+  PrimaryKey: CompositeKey;
+
+  /** The same key under its pre-6.2 name, so older clients keep working. */
+  @Field(() => CompositeKeyOutputType, { deprecationReason: 'Use PrimaryKey. CompositeKey will be removed in a future release.' })
   CompositeKey: CompositeKey;
+
+  @Field(() => Boolean, { nullable: true })
+  IsSoftLink?: boolean;
+
+  @Field(() => String, { nullable: true })
+  EntityIDFieldName?: string;
 }
 
 @Resolver(RecordDependencyResult)
@@ -60,19 +85,27 @@ export class RecordDependencyResolver {
     @Arg('entityName', () => String) entityName: string,
     @Arg('CompositeKey', () => CompositeKeyInputType) ckInput: CompositeKeyInputType,
     @Ctx() { dataSource, userPayload, providers }: AppContext,
-    @PubSub() pubSub: PubSubEngine
+    @PubSub() pubSub: PubSubEngine,
+    @Arg('options', () => RecordDependencyOptionsInput, { nullable: true }) options?: RecordDependencyOptionsInput
   ) {
     try {
       const md = GetReadOnlyProvider(providers);
       const ck = new CompositeKey(ckInput.KeyValuePairs);
-      const result = await md.GetRecordDependencies(entityName, ck);
+      const contextUser = userPayload?.userRecord;
+      const result =
+        options !== undefined || contextUser !== undefined
+          ? await md.GetRecordDependencies(entityName, ck, contextUser, options)
+          : await md.GetRecordDependencies(entityName, ck);
       
-      // Map PrimaryKey to CompositeKey for GraphQL response
       return result.map(dep => ({
         EntityName: dep.EntityName,
         RelatedEntityName: dep.RelatedEntityName,
         FieldName: dep.FieldName,
-        CompositeKey: dep.PrimaryKey // Map PrimaryKey to CompositeKey
+        FieldDisplayName: dep.FieldDisplayName,
+        PrimaryKey: dep.PrimaryKey,
+        CompositeKey: dep.PrimaryKey,
+        IsSoftLink: dep.IsSoftLink,
+        EntityIDFieldName: dep.EntityIDFieldName,
       }));
     } catch (e) {
       LogError(e);

@@ -14,7 +14,17 @@ vi.mock('@memberjunction/ai', async () => {
             this._apiKey = apiKey;
         }
     }
-    class BaseRealtimeModel extends BaseModel {}
+    class BaseRealtimeModel extends BaseModel {
+        // Same body as the real BaseRealtimeModel.ClampSessionSeconds (the real module cannot be imported here; see RealtimeDriverFactsOf below).
+        protected ClampSessionSeconds(...candidates: ReadonlyArray<number | undefined>): number | undefined {
+            let smallest: number | undefined;
+            for (const c of candidates) {
+                if (typeof c !== 'number' || !Number.isInteger(c) || c <= 0) continue;
+                if (smallest === undefined || c < smallest) smallest = c;
+            }
+            return smallest;
+        }
+    }
     // RealtimeDiagLog is a verbose-gated console logger used by the realtime session; a no-op suffices.
     const RealtimeDiagLog = () => { /* no-op in tests */ };
     // IsTranscriptContinuation is a PURE, dependency-free helper — pull in the REAL implementation
@@ -26,8 +36,16 @@ vi.mock('@memberjunction/ai', async () => {
     // let this test restate that rule and drift from reality, which is exactly how the xAI
     // top-level-usage bug survived: the sibling xAI test asserted against a hand-written
     // OpenAI-shaped frame and passed while real Grok sessions recorded nothing.
-    const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');
-    return { BaseModel, BaseRealtimeModel, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage };
+    const { ResolveResponseDoneUsage, MapRealtimeUsageModalityDetail } = await import('../../../../Core/src/generic/realtimeUsage');
+    // NormalizeTurnDetectionSettings is the single shared normalizer — run the real one so tests cannot drift from it.
+    // turnDetectionSettings.ts is dependency-free BY DESIGN and must stay so: it is loaded from source here, under mocks.
+    const { NormalizeTurnDetectionSettings } = await import('../../../../Core/src/generic/turnDetectionSettings');
+    // Same for RealtimeDroppedInputReporter: dependency-free, and the drop tests assert its real once-per-type report.
+    const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
+    // Same body as the real RealtimeDriverFactsOf (baseRealtime.ts). The real module cannot be imported here: it pulls in
+    // @memberjunction/global, which these suites mock. The mocked BaseRealtimeModel has no static, so only drivers declaring their own resolve.
+    const RealtimeDriverFactsOf = (driver: object): object => (driver.constructor as { DriverFacts: object }).DriverFacts;
+    return { BaseModel, BaseRealtimeModel, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, MapRealtimeUsageModalityDetail, NormalizeTurnDetectionSettings, RealtimeDroppedInputReporter, RealtimeDriverFactsOf };
 });
 
 // Mock the SDK WebSocket so importing the driver never touches the network. The driver's
@@ -43,7 +61,7 @@ vi.mock('openai', () => ({
     }),
 }));
 
-import { OpenAIRealtime, OpenAIRealtimeSession, IOpenAIRealtimeConnection, MapEffortLevelToOpenAIRealtime, OPENAI_REALTIME_PROFILE, MapUsageModalityDetail, MapNormalizedTurnDetection, ExtractRealtimeFeatures } from '../models/openAIRealtime';
+import { OpenAIRealtime, OpenAIRealtimeSession, IOpenAIRealtimeConnection, MapEffortLevelToOpenAIRealtime, OPENAI_REALTIME_PROFILE, MapNormalizedTurnDetection, ExtractRealtimeFeatures } from '../models/openAIRealtime';
 import type { OpenAIRealtimeError } from 'openai/realtime/index';
 import type { RealtimeServerEvent, RealtimeClientEvent } from 'openai/resources/realtime/realtime';
 import type { ClientSecretCreateParams, ClientSecretCreateResponse } from 'openai/resources/realtime/client-secrets';
@@ -198,6 +216,17 @@ describe('OpenAIRealtime client-direct (CreateClientSession)', () => {
 });
 
 describe('OpenAIRealtime', () => {
+    it('carries the 3600s provider cap as MaxSessionSeconds when the host sets nothing, and the smaller host cap otherwise', async () => {
+        const unset = await new ClientDirectTestable('k').CreateClientSession({ Model: 'gpt-realtime-2', SystemPrompt: 'hi' });
+        expect(unset.MaxSessionSeconds).toBe(3600);
+        const host = await new ClientDirectTestable('k').CreateClientSession({ Model: 'gpt-realtime-2', SystemPrompt: 'hi', MaxSessionSeconds: 900 });
+        expect(host.MaxSessionSeconds).toBe(900);
+        const over = await new ClientDirectTestable('k').CreateClientSession({ Model: 'gpt-realtime-2', SystemPrompt: 'hi', MaxSessionSeconds: 9000 });
+        expect(over.MaxSessionSeconds).toBe(3600);
+    });
+});
+
+describe('OpenAIRealtime', () => {
     let driver: TestableOpenAIRealtime;
 
     beforeEach(() => {
@@ -334,11 +363,32 @@ describe('OpenAIRealtime', () => {
         it('SendInput appends base64 audio', async () => {
             const session = await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' });
             const bytes = new Uint8Array([1, 2, 3, 4]);
-            session.SendInput(bytes.buffer);
+            session.SendInput({ Data: bytes.buffer, Kind: 'audio' });
             const append = driver.Fake.Sent.find((e) => e.type === 'input_audio_buffer.append');
             expect(append).toBeDefined();
             if (append?.type === 'input_audio_buffer.append') {
                 expect(append.audio).toBe(Buffer.from(bytes).toString('base64'));
+            }
+        });
+
+        it('SendInput drops a video frame instead of appending it as audio, reports it once, and still appends audio (#5091)', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            try {
+                const session = await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' });
+                driver.Fake.Sent = [];
+                const jpeg = new Uint8Array([0xff, 0xd8, 0xff]);
+                session.SendInput({ Data: jpeg.buffer, Kind: 'video', MimeType: 'image/jpeg' });
+                session.SendInput({ Data: jpeg.buffer, Kind: 'video', MimeType: 'image/jpeg' });
+
+                expect(driver.Fake.Sent).toEqual([]);
+                const drops = warn.mock.calls.filter((call) => String(call[0]).startsWith('[openaiRealtime] Dropped video input of type image/jpeg'));
+                expect(drops).toHaveLength(1);
+
+                const audio = new Uint8Array([1, 2, 3, 4]);
+                session.SendInput({ Data: audio.buffer, Kind: 'audio' });
+                expect(driver.Fake.Sent).toEqual([{ type: 'input_audio_buffer.append', audio: Buffer.from(audio).toString('base64') }]);
+            } finally {
+                warn.mockRestore();
             }
         });
 
@@ -388,7 +438,7 @@ describe('OpenAIRealtime', () => {
             expect(driver.Fake.Sent.some((e) => e.type === 'response.create')).toBe(false);
         });
 
-        it('RequestSpokenUpdate sends response.create with per-response instructions when idle', async () => {
+        it('RequestSpokenUpdate sends response.create carrying the session prompt AHEAD of the direction', async () => {
             const session = (await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
             driver.Fake.Sent = [];
             session.RequestSpokenUpdate('Briefly say the report agent is drafting.');
@@ -396,7 +446,43 @@ describe('OpenAIRealtime', () => {
             const respond = driver.Fake.Sent[0];
             expect(respond.type).toBe('response.create');
             if (respond.type === 'response.create') {
-                expect(respond.response?.instructions).toBe('Briefly say the report agent is drafting.');
+                expect(respond.response?.instructions).toBe('sys\n\nBriefly say the report agent is drafting.');
+            }
+        });
+
+        /**
+         * #4591 · bizapps-caliber#397 — the identity half of the rule the BLANK case already knew.
+         *
+         * `response.instructions` is a full override of the session prompt, so a non-blank direction
+         * wipes the co-agent identity exactly as `''` would. The visible symptom downstream was an
+         * interviewer opening a hiring assessment as "ChatGPT" on the one turn that rides this method,
+         * while every other turn in the same session gave her configured name.
+         */
+        it('RequestSpokenUpdate never sends a direction that would wipe the session identity', async () => {
+            const session = (await driver.StartSession({
+                Model: 'gpt-realtime',
+                SystemPrompt: 'You are Sam Rivera, Support Team Lead.',
+            })) as OpenAIRealtimeSession;
+            driver.Fake.Sent = [];
+            session.RequestSpokenUpdate('Open the conversation: greet them and introduce yourself.');
+            const respond = driver.Fake.Sent[0];
+            expect(respond.type).toBe('response.create');
+            if (respond.type === 'response.create') {
+                expect(respond.response?.instructions).toContain('Sam Rivera');
+                // The direction stays LAST — the most recent line is the one the model weights hardest.
+                expect(respond.response?.instructions).toMatch(/Sam Rivera[\s\S]*Open the conversation/);
+            }
+        });
+
+        it('RequestSpokenUpdate sends the direction alone when the session carried no prompt', async () => {
+            const session = (await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: '' })) as OpenAIRealtimeSession;
+            driver.Fake.Sent = [];
+            session.RequestSpokenUpdate('progress update');
+            const respond = driver.Fake.Sent[0];
+            expect(respond.type).toBe('response.create');
+            if (respond.type === 'response.create') {
+                // Nothing to preserve, so nothing is prepended — a leading blank line would be noise.
+                expect(respond.response?.instructions).toBe('progress update');
             }
         });
 
@@ -1075,11 +1161,17 @@ describe('OpenAIRealtime config extraction hardening', () => {
         expect((blank.audio as { output?: unknown }).output).toBeUndefined();
     });
 
-    it('scrubs MJ-side transport keys (endpoint/sampleRate/proxyBaseUrl) even on OpenAI', async () => {
-        const session = await startAndGetSession({ endpoint: 'ws://x:1/v1/realtime', sampleRate: 24000, proxyBaseUrl: 'https://p' });
+    it('scrubs MJ-side transport keys (endpoint/sampleRate/proxyBaseUrl/brokerBaseUrl) even on OpenAI', async () => {
+        const session = await startAndGetSession({
+            endpoint: 'ws://x:1/v1/realtime',
+            sampleRate: 24000,
+            proxyBaseUrl: 'https://p',
+            brokerBaseUrl: 'https://b',
+        });
         expect(session.endpoint).toBeUndefined();
         expect(session.sampleRate).toBeUndefined();
         expect(session.proxyBaseUrl).toBeUndefined();
+        expect(session.brokerBaseUrl).toBeUndefined();
     });
 
     it('honors a per-session inputTranscriptionModel override from the Config bag', async () => {
@@ -1204,7 +1296,8 @@ describe('QA hardening regressions (plan A-items)', () => {
     describe('A2: profile-gated live reconfigure', () => {
         it('OpenAI still advertises and performs live reconfigure with its transcription model', async () => {
             const session = (await driver.StartSession({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
-            expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: true, SupportsDynamicToolSet: true });
+            expect(session.Capabilities).toEqual({ ProviderMaxSessionSeconds: 3600, SupportedTurnSettings: { Mode: 'exact', Eagerness: 'exact', SilenceDurationMs: 'exact', Threshold: 'exact' }, CanReconfigureTurnMode: true, SupportsDynamicToolSet: true });
+            expect(session.Capabilities?.ProviderMaxSessionSeconds).toBe(OpenAIRealtime.DriverFacts.ProviderMaxSessionSeconds);
             const before = driver.Fake.Sent.length;
             session.Reconfigure({ DisableAutoResponse: true });
             const frame = driver.Fake.Sent.slice(before)[0];
@@ -1221,7 +1314,7 @@ describe('QA hardening regressions (plan A-items)', () => {
                 ...OPENAI_REALTIME_PROFILE,
                 supportsLiveReconfigure: false,
             });
-            expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: false, SupportsDynamicToolSet: true });
+            expect(session.Capabilities).toEqual({ ProviderMaxSessionSeconds: 3600, SupportedTurnSettings: { Mode: 'exact', Eagerness: 'exact', SilenceDurationMs: 'exact', Threshold: 'exact' }, CanReconfigureTurnMode: false, SupportsDynamicToolSet: true });
             const before = driver.Fake.Sent.length;
             session.Reconfigure({ DisableAutoResponse: true });
             expect(driver.Fake.Sent.length).toBe(before);
@@ -1361,7 +1454,7 @@ describe('C2: per-modality usage detail mapping', () => {
                 usage: {
                     input_tokens: 100,
                     output_tokens: 50,
-                    input_token_details: { text_tokens: 20, audio_tokens: 70, cached_tokens: 10 },
+                    input_token_details: { text_tokens: 20, audio_tokens: 70, cached_tokens: 10, cached_tokens_details: { audio_tokens: 7, text_tokens: 3 } },
                     output_token_details: { text_tokens: 10, audio_tokens: 40 },
                 },
             },
@@ -1369,7 +1462,7 @@ describe('C2: per-modality usage detail mapping', () => {
         expect(usage[0]).toEqual({
             InputTokens: 100,
             OutputTokens: 50,
-            InputTokenDetails: { TextTokens: 20, AudioTokens: 70, CachedTokens: 10 },
+            InputTokenDetails: { TextTokens: 20, AudioTokens: 70, CachedTokens: 10, CachedAudioTokens: 7 },
             OutputTokenDetails: { TextTokens: 10, AudioTokens: 40 },
         });
     });
@@ -1381,13 +1474,6 @@ describe('C2: per-modality usage detail mapping', () => {
         driver.Fake.Fire({ type: 'response.done', response: { usage: { input_tokens: 7, output_tokens: 3 } } } as unknown as RealtimeServerEvent);
         expect(usage[0]).toEqual({ InputTokens: 7, OutputTokens: 3 });
         expect(usage[0].InputTokenDetails).toBeUndefined();
-    });
-
-    it('MapUsageModalityDetail: partial blocks map only the present fields; empty blocks map to undefined', () => {
-        expect(MapUsageModalityDetail({ audio_tokens: 5 })).toEqual({ AudioTokens: 5 });
-        expect(MapUsageModalityDetail({ image_tokens: 2, cached_tokens: 0 })).toEqual({ ImageTokens: 2, CachedTokens: 0 });
-        expect(MapUsageModalityDetail({})).toBeUndefined();
-        expect(MapUsageModalityDetail(undefined)).toBeUndefined();
     });
 });
 
@@ -1454,6 +1540,7 @@ describe('SEAM-4: config-tuning bag → driver session payload (end-to-end shape
             parallelToolCalls: true,
             mcpTools: [{ type: 'mcp', server_label: 'kb', server_url: 'https://mcp.example.com', require_approval: 'never' }],
             inputTranscriptionModel: 'whisper-1',
+            transcriptionLanguages: ['en-US'],
         };
         const driver = new TestableOpenAIRealtime('k');
         await driver.StartSession({
@@ -1471,7 +1558,8 @@ describe('SEAM-4: config-tuning bag → driver session payload (end-to-end shape
             expect(tools).toHaveLength(2); // function + mcp
             expect(tools[1]).toMatchObject({ type: 'mcp', server_label: 'kb' });
             const audio = session.audio as { input?: { transcription?: { model?: string } } };
-            expect(audio.input?.transcription?.model).toBe('whisper-1');
+            expect(audio.input?.transcription).toEqual({ model: 'whisper-1' });
+            expect(session.transcriptionLanguages).toBeUndefined(); // not mapped for this family; never sent raw
         } else {
             throw new Error('expected realtime session.update');
         }

@@ -23,6 +23,7 @@ vi.mock('chalk', () => {
 
 import { FormattingService } from '../services/FormattingService';
 import type { ValidationResult, ValidationError, ValidationWarning } from '../types/validation';
+import type { RecordChangeDetail } from '../services/PushService';
 
 describe('FormattingService', () => {
   let formatter: FormattingService;
@@ -337,6 +338,38 @@ describe('FormattingService', () => {
 
       expect(typeof output).toBe('string');
       expect(output).toContain('3');
+    });
+
+    it('titles the box "Dry Run Summary" on a dry run', () => {
+      const stats = { created: 1, updated: 1, deleted: 0, skipped: 0, errors: 0, duration: 100 };
+      expect(formatter.FormatSyncSummary('push', stats, true)).toContain(' Dry Run Summary ');
+      expect(formatter.FormatSyncSummary('push', stats, true)).not.toContain('Push Summary');
+      expect(formatter.FormatSyncSummary('push', stats)).toContain(' Push Summary ');
+    });
+  });
+
+  describe('FormatChangesRecap and FormatChangesReport', () => {
+    const changes: RecordChangeDetail[] = [
+      { entityName: 'TestEntity', primaryKey: 'new', Operation: 'created', fields: [] },
+      {
+        entityName: 'TestEntity',
+        primaryKey: 'ID: 1',
+        Operation: 'updated',
+        fields: [{ field: 'Name', oldValue: '"Old"', newValue: '"New"' }],
+      },
+    ];
+
+    it('labels a dry run in the recap header', () => {
+      expect(formatter.FormatChangesRecap(changes, true)).toContain('DRY RUN · Changes a push would make (2)');
+      expect(formatter.FormatChangesRecap(changes)).toContain('── Changes (2) ');
+      expect(formatter.FormatChangesRecap(changes)).not.toContain('DRY RUN');
+    });
+
+    it('labels a dry run in the change report', () => {
+      const dry = formatter.FormatChangesReport(changes, '2026-10-05T00:00:00.000Z', true);
+      expect(dry.split('\n')[1]).toBe('DRY RUN — the changes a push would make. Nothing was written.');
+      expect(dry).toContain('[CREATED] TestEntity  (new)');
+      expect(formatter.FormatChangesReport(changes, '2026-10-05T00:00:00.000Z')).not.toContain('DRY RUN');
     });
   });
 });

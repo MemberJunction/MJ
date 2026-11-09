@@ -737,8 +737,8 @@ export class TasksDropdownComponent implements OnInit, OnDestroy {
    */
   GetAgentIconClass(agentName: string): string {
     // Look up agent from AIEngineBase cache by name
-    if (AIEngineBase.Instance?.Agents) {
-      const agent = AIEngineBase.Instance.Agents.find(a => a.Name === agentName);
+    if (AIEngineBase.Instance.ReadableAgents.length) {
+      const agent = AIEngineBase.Instance.ReadableAgents.find(a => a.Name === agentName);
       if (agent?.IconClass) {
         return agent.IconClass;
       }
@@ -759,8 +759,8 @@ export class TasksDropdownComponent implements OnInit, OnDestroy {
    */
   GetAgentLogoUrl(agentName: string): string | null {
     // Look up agent from AIEngineBase cache by name
-    if (AIEngineBase.Instance?.Agents) {
-      const agent = AIEngineBase.Instance.Agents.find(a => a.Name === agentName);
+    if (AIEngineBase.Instance.ReadableAgents.length) {
+      const agent = AIEngineBase.Instance.ReadableAgents.find(a => a.Name === agentName);
       if (agent?.LogoURL) {
         return agent.LogoURL;
       }

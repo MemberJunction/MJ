@@ -2,6 +2,15 @@ import type { BaseEntity } from '@memberjunction/core';
 import { ValidationErrorInfo } from '@memberjunction/global';
 
 /**
+ * Host-supplied callback for switching between the entity's default (custom) form
+ * and its CodeGen standard form when a standard alternative exists.
+ */
+export interface FormModeSwitch {
+  Mode: 'default' | 'standard';
+  Switch: (mode: 'default' | 'standard') => boolean;
+}
+
+/**
  * Width mode for the form panels container.
  * - 'centered': Max-width constrained and centered (default, good for readability)
  * - 'full-width': No max-width constraint, uses full available width
@@ -117,6 +126,19 @@ export interface FormContext {
   showRelatedEntities?: boolean;
   hiddenSectionKeys?: string[];
   visibleSectionKeys?: string[];
+  /**
+   * Fields a form contribution stands in for, so no section draws them. The panel that
+   * made the claim renders at the top of the section that held the field.
+   *
+   * Field-level, where `hiddenSectionKeys` is section-level: one removes an input from
+   * inside a card, the other removes the card.
+   */
+  claimedFieldNames?: string[];
+  /**
+   * Field names to omit from the form. A draft evaluation uses this to hide
+   * cohort figures until the viewer submits.
+   */
+  hiddenFieldNames?: string[];
 }
 
 /**

@@ -14,6 +14,7 @@ import {
   type SpecValidationIssue,
   ValidateSpec,
 } from '../spec/data-feature-spec.js';
+import { OutputTargets } from '../spec/output-target.js';
 import type { ValueConstraint } from '../spec/value-constraint.js';
 
 /** Minimal field metadata abstraction compatible with EntityFieldInfo without requiring full classes. */
@@ -124,7 +125,7 @@ export function ValidateMaterializationTargets(
     const out = spec.Outputs[i];
     const basePath = `Outputs[${i}]`;
 
-    if (!out.Target) {
+    if (!OutputTargets.HasWriteTarget(out)) {
       continue;
     }
 

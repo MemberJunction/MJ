@@ -159,6 +159,9 @@ describe('TaskGraphRunViewComponent (DOM)', () => {
         const { provider } = graphProvider();
         const f = render(provider, 'parent-1');
         await settle(f);
+        // Auto-selects the first In Progress step (t2) on load so the Variables pane isn't blank
+        expect(f.componentInstance.SelectedTaskID).toBe('t2');
+        f.componentInstance.SelectedTaskID = null;
         f.componentRef.setInput('AllowBreakpointEditing', true);
         f.detectChanges();
         expect(host(f).querySelector('.run-view-bp')).toBeNull();
@@ -172,6 +175,33 @@ describe('TaskGraphRunViewComponent (DOM)', () => {
         expect(toggle?.getAttribute('aria-pressed')).toBe('false');
         expect(host(f).querySelector('.run-view-bp-name')?.textContent).toContain('Summarize');
         expect(host(f).textContent).not.toContain('Break on');
+    });
+
+    it('auto-selects the first In Progress task (or first task) on project() and resets SelectedTaskID + LiveActivity when ParentTaskID changes', async () => {
+        const { provider } = graphProvider();
+        const f = render(provider, 'parent-1');
+        await settle(f);
+
+        // t2 ('Summarize') is In Progress, so it is auto-selected over t1 ('Gather', Complete)
+        expect(f.componentInstance.SelectedTaskID).toBe('t2');
+        expect(f.componentInstance.SelectedTask?.Name).toBe('Summarize');
+
+        // Record live activity on parent-1 and manually select t1
+        f.componentInstance.LiveFrame = { kind: 'NodeProgress', taskId: 't2', progressMessage: 'Working...' };
+        expect(f.componentInstance.LiveActivity.size).toBe(1);
+        f.componentInstance.SelectedTaskID = 't1';
+
+        // Switch to a settled parent where no task is In Progress -> should reset and then select first task
+        const settledTasks = [row('s1', 'First Settled', 'Complete'), row('s2', 'Second Settled', 'Complete')];
+        const { provider: settledProvider } = graphProvider(settledTasks, []);
+        f.componentRef.setInput('Provider', settledProvider);
+        f.componentRef.setInput('ParentTaskID', 'parent-2');
+        expect(f.componentInstance.SelectedTaskID).toBeNull();
+        expect(f.componentInstance.LiveActivity.size).toBe(0);
+
+        await settle(f);
+        expect(f.componentInstance.SelectedTaskID).toBe('s1');
+        expect(f.componentInstance.SelectedTask?.Name).toBe('First Settled');
     });
 
     it('hands the host the WHOLE task row on selection, so no host re-reads a row this component holds', async () => {
@@ -236,5 +266,27 @@ describe('TaskGraphRunViewComponent (DOM)', () => {
         f.componentInstance.LiveFrame = { kind: 'GraphSettled' };
         f.detectChanges();
         expect(settled).toBe(1);
+    });
+
+    it('enables ShowVariables by default and opens the Step Inputs & Outputs inspector pane when a step is clicked', async () => {
+        const { provider } = graphProvider();
+        const f = render(provider, 'parent-1');
+        await settle(f);
+
+        expect(f.componentInstance.ShowVariables).toBe(true);
+        if (f.componentInstance.InvocationPaneOpen) {
+            f.componentInstance.OnToggleInvocation();
+            f.detectChanges();
+        }
+        expect(f.componentInstance.InvocationPaneOpen).toBe(false);
+
+        const node = f.componentInstance.Spec!.tasks.find((t) => t.tempId === 't1')!;
+        f.componentInstance.OnSelectionChanged(new TaskGraphSelectionChangedEventArgs(node));
+        f.detectChanges();
+
+        expect(f.componentInstance.InvocationPaneOpen).toBe(true);
+        expect(host(f).querySelector('.run-view-vars-step-name')?.textContent).toBe('Gather');
+        expect(host(f).querySelector('.run-view-vars-status')?.textContent).toBe('Complete');
+        expect(host(f).querySelector('mj-task-graph-variables')).toBeTruthy();
     });
 });

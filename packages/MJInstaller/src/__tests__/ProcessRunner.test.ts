@@ -24,11 +24,14 @@ function createMockChild(): MockChildProcess {
 }
 
 const mockSpawn = vi.fn(() => createMockChild());
-const mockExecSync = vi.fn();
+const mockExecFileSync = vi.fn();
+
+vi.mock('cross-spawn', () => ({
+  default: (...args: unknown[]) => mockSpawn(...args),
+}));
 
 vi.mock('node:child_process', () => ({
-  spawn: (...args: unknown[]) => mockSpawn(...args),
-  execSync: (...args: unknown[]) => mockExecSync(...args),
+  execFileSync: (...args: unknown[]) => mockExecFileSync(...args),
 }));
 
 // Import AFTER mock is installed
@@ -115,7 +118,7 @@ describe('ProcessRunner', () => {
     });
 
     it('should set TimedOut: true and kill the process tree on timeout', async () => {
-      // On Windows, killTree uses execSync('taskkill ...')
+      // On Windows, killTree runs taskkill
       const originalPlatform = process.platform;
       Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
 
@@ -125,9 +128,10 @@ describe('ProcessRunner', () => {
       // Advance past the timeout
       vi.advanceTimersByTime(5001);
 
-      // The timeout handler should have called killTree, which calls execSync
-      expect(mockExecSync).toHaveBeenCalledWith(
-        expect.stringContaining('taskkill'),
+      // The timeout handler should have called killTree, which runs taskkill
+      expect(mockExecFileSync).toHaveBeenCalledWith(
+        'taskkill',
+        ['/F', '/T', '/PID', '12345'],
         expect.anything()
       );
 
@@ -171,39 +175,21 @@ describe('ProcessRunner', () => {
       );
     });
 
-    it('should spawn with shell: true on Windows', async () => {
+    it('should never spawn through a shell, on Windows or Unix', async () => {
       const originalPlatform = process.platform;
-      Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+      for (const platform of ['win32', 'linux']) {
+        Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+        mockSpawn.mockClear();
 
-      const promise = runner.Run('npm', ['install']);
-      const child = lastSpawnedChild;
-      child.emit('close', 0);
-      await promise;
+        const promise = runner.Run('npm', ['install', 'a&b']);
+        lastSpawnedChild.emit('close', 0);
+        await promise;
 
-      expect(mockSpawn).toHaveBeenCalledWith(
-        'npm',
-        ['install'],
-        expect.objectContaining({ shell: true })
-      );
-
-      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
-    });
-
-    it('should spawn with shell: false on non-Windows', async () => {
-      const originalPlatform = process.platform;
-      Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
-
-      const promise = runner.Run('npm', ['install']);
-      const child = lastSpawnedChild;
-      child.emit('close', 0);
-      await promise;
-
-      expect(mockSpawn).toHaveBeenCalledWith(
-        'npm',
-        ['install'],
-        expect.objectContaining({ shell: false })
-      );
-
+        // cross-spawn resolves .cmd shims and escapes 'a&b' for cmd.exe itself; shell: true would not.
+        const options = mockSpawn.mock.calls[0][2] as { shell?: boolean };
+        expect(mockSpawn).toHaveBeenCalledWith('npm', ['install', 'a&b'], expect.anything());
+        expect(options.shell).toBeUndefined();
+      }
       Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
     });
 
@@ -338,17 +324,17 @@ describe('ProcessRunner', () => {
   describe('killTree', () => {
     beforeEach(() => {
       // Clear any calls from previous test groups (e.g. timeout tests calling killTree)
-      mockExecSync.mockClear();
+      mockExecFileSync.mockClear();
     });
 
     it('should be a no-op when pid is undefined', () => {
       runner.killTree(undefined);
-      expect(mockExecSync).not.toHaveBeenCalled();
+      expect(mockExecFileSync).not.toHaveBeenCalled();
     });
 
     it('should be a no-op when pid is 0', () => {
       runner.killTree(0);
-      expect(mockExecSync).not.toHaveBeenCalled();
+      expect(mockExecFileSync).not.toHaveBeenCalled();
     });
 
     it('should call taskkill on Windows', () => {
@@ -357,8 +343,9 @@ describe('ProcessRunner', () => {
 
       runner.killTree(9999);
 
-      expect(mockExecSync).toHaveBeenCalledWith(
-        'taskkill /F /T /PID 9999',
+      expect(mockExecFileSync).toHaveBeenCalledWith(
+        'taskkill',
+        ['/F', '/T', '/PID', '9999'],
         expect.objectContaining({ stdio: 'ignore' })
       );
 
@@ -381,7 +368,7 @@ describe('ProcessRunner', () => {
     it('should not throw if the process has already exited', () => {
       const originalPlatform = process.platform;
       Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
-      mockExecSync.mockImplementationOnce(() => {
+      mockExecFileSync.mockImplementationOnce(() => {
         throw new Error('process not found');
       });
 
@@ -394,52 +381,76 @@ describe('ProcessRunner', () => {
 
   describe('killByPort', () => {
     beforeEach(() => {
-      mockExecSync.mockClear();
+      mockExecFileSync.mockClear();
     });
 
     it('should call netstat and taskkill on Windows', () => {
       const originalPlatform = process.platform;
       Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
 
-      mockExecSync.mockReturnValueOnce(
+      mockExecFileSync.mockReturnValueOnce(
         '  TCP    0.0.0.0:4000    0.0.0.0:0    LISTENING    5678\n'
       );
 
       runner.killByPort(4000);
 
-      // First call: netstat to find the PID
-      expect(mockExecSync).toHaveBeenCalledWith(
-        expect.stringContaining('netstat'),
-        expect.anything()
-      );
-      // Second call: taskkill to kill the PID
-      expect(mockExecSync).toHaveBeenCalledWith(
-        'taskkill /F /T /PID 5678',
+      expect(mockExecFileSync).toHaveBeenCalledWith('netstat', ['-ano'], expect.anything());
+      expect(mockExecFileSync).toHaveBeenCalledWith(
+        'taskkill',
+        ['/F', '/T', '/PID', '5678'],
         expect.objectContaining({ stdio: 'ignore' })
       );
 
       Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
     });
 
-    it('should call lsof on Unix', () => {
+    it('should match only the exact local port among netstat rows on Windows', () => {
       const originalPlatform = process.platform;
-      Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+      Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+
+      mockExecFileSync.mockReturnValueOnce(
+        [
+          '  TCP    0.0.0.0:40001      0.0.0.0:0          LISTENING       1111',
+          '  TCP    127.0.0.1:5555     127.0.0.1:4000     ESTABLISHED     2222',
+          '  TCP    [::]:4000          [::]:0             LISTENING       3333',
+          '  UDP    0.0.0.0:4000       *:*                                4444',
+        ].join('\n')
+      );
 
       runner.killByPort(4000);
 
-      expect(mockExecSync).toHaveBeenCalledWith(
-        expect.stringContaining('lsof'),
-        expect.anything()
-      );
+      const killed = mockExecFileSync.mock.calls
+        .filter((call: unknown[]) => call[0] === 'taskkill')
+        .map((call: unknown[]) => (call[1] as string[])[3]);
+      expect(killed).toEqual(['3333']);
 
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    });
+
+    it('should only target listening sockets on Unix, never client connections', () => {
+      const originalPlatform = process.platform;
+      Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      mockExecFileSync.mockReturnValueOnce(`5678\n${process.pid}\n`);
+
+      runner.killByPort(4000);
+
+      // Without -sTCP:LISTEN, lsof also returns processes holding a client socket to the
+      // port — the installer itself after its health check — and SIGKILL takes it down.
+      expect(mockExecFileSync).toHaveBeenCalledWith('lsof', ['-ti', 'tcp:4000', '-sTCP:LISTEN'], expect.anything());
+      expect(killSpy).toHaveBeenCalledWith(5678, 'SIGKILL');
+      expect(killSpy).not.toHaveBeenCalledWith(process.pid, 'SIGKILL');
+
+      killSpy.mockRestore();
       Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
     });
 
     it('should not throw if no process is listening on the port', () => {
       const originalPlatform = process.platform;
-      Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
-      mockExecSync.mockImplementationOnce(() => {
-        throw new Error('no output');
+      Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+      // lsof exits 1 when nothing matches, which execFileSync turns into a throw
+      mockExecFileSync.mockImplementationOnce(() => {
+        throw new Error('Command failed: lsof');
       });
 
       expect(() => runner.killByPort(4000)).not.toThrow();
@@ -451,16 +462,13 @@ describe('ProcessRunner', () => {
       const originalPlatform = process.platform;
       Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
 
-      mockExecSync.mockReturnValueOnce(
+      mockExecFileSync.mockReturnValueOnce(
         '  TCP    0.0.0.0:4000    0.0.0.0:0    LISTENING    0\n'
       );
 
       runner.killByPort(4000);
 
-      // Should call netstat but NOT taskkill (PID 0 is filtered out)
-      const taskkillCalls = mockExecSync.mock.calls.filter(
-        (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('taskkill')
-      );
+      const taskkillCalls = mockExecFileSync.mock.calls.filter((call: unknown[]) => call[0] === 'taskkill');
       expect(taskkillCalls).toHaveLength(0);
 
       Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });

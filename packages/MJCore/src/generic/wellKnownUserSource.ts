@@ -1,4 +1,4 @@
-import { MJGlobal } from "@memberjunction/global";
+import { GetGlobalObjectStore, MJGlobal } from "@memberjunction/global";
 // Type-only imports: erased at compile time, so this module has no runtime dependency on the
 // rest of MJCore. That matters because entityInfo consumes it, and a runtime import back into
 // interfaces/securityInfo would close an import cycle.
@@ -32,10 +32,11 @@ import type { UserInfo } from "./securityInfo";
  * own named methods rather than as variations smuggled into the existing ones.
  */
 export class WellKnownUserSource {
-    private static _instance: WellKnownUserSource | null = null;
+    private static readonly _globalStoreKey = '___SINGLETON__WellKnownUserSource';
 
     /**
-     * The registered source for this process, resolved once through the class factory.
+     * The registered source for this process, resolved once through the class factory and
+     * stored in the Global Object Store so bundler duplication cannot split the cached instance.
      *
      * Cached because {@link IsSystemUser} sits behind permission checks that run per entity and
      * per user; resolving (and allocating) on every call would be needless churn. Registrations
@@ -44,12 +45,17 @@ export class WellKnownUserSource {
      * Tests that register a source after first use should call {@link ResetInstance}.
      */
     public static get Instance(): WellKnownUserSource {
-        if (!WellKnownUserSource._instance) {
-            WellKnownUserSource._instance =
-                MJGlobal.Instance.ClassFactory.CreateInstance<WellKnownUserSource>(WellKnownUserSource)
-                ?? new WellKnownUserSource();
+        const g = GetGlobalObjectStore();
+        if (g) {
+            if (!g[WellKnownUserSource._globalStoreKey]) {
+                g[WellKnownUserSource._globalStoreKey] =
+                    MJGlobal.Instance.ClassFactory.CreateInstance<WellKnownUserSource>(WellKnownUserSource)
+                    ?? new WellKnownUserSource();
+            }
+            return g[WellKnownUserSource._globalStoreKey] as WellKnownUserSource;
         }
-        return WellKnownUserSource._instance;
+        return MJGlobal.Instance.ClassFactory.CreateInstance<WellKnownUserSource>(WellKnownUserSource)
+            ?? new WellKnownUserSource();
     }
 
     /**
@@ -57,7 +63,10 @@ export class WellKnownUserSource {
      * factory. Intended for tests that register a source after the cache was populated.
      */
     public static ResetInstance(): void {
-        WellKnownUserSource._instance = null;
+        const g = GetGlobalObjectStore();
+        if (g) {
+            delete g[WellKnownUserSource._globalStoreKey];
+        }
     }
 
     /**

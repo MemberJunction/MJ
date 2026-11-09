@@ -34,6 +34,7 @@
  */
 import { LogError, LogStatus } from '@memberjunction/core';
 import { ApolloRESTEndpoint } from '../config.js';
+import { ApolloRequest } from '../http/ApolloHttp.js';
 import type {
     ApolloAccount,
     ApolloAccountSearchFilter,
@@ -154,15 +155,28 @@ function mapContact(item: Record<string, unknown>, idToName: Map<string, string>
     };
 }
 
+/**
+ * `api_search` pagination. Since 2026 the endpoint answers `{ total_entries, people }` with no
+ * `pagination` envelope (seen on free and paid keys alike); the envelope is still honoured when
+ * present, and otherwise the shape is filled from the top-level total and the requested page size.
+ */
+function mapPeoplePagination(data: Record<string, unknown>, page: number, perPage: number): ApolloPagination {
+    if (isRecord(data.pagination) && Object.keys(data.pagination).length > 0) return mapPagination(data.pagination);
+    const totalEntries = numberOr(data.total_entries, 0);
+    return { page, perPage, totalEntries, totalPages: perPage > 0 ? Math.ceil(totalEntries / perPage) : 0 };
+}
+
 function mapPerson(item: Record<string, unknown>): ApolloPerson {
     const org = isRecord(item.organization) ? item.organization : {};
     return {
         id: stringOr(item.id, ''),
         firstName: stringOr(item.first_name, ''),
         lastName: stringOr(item.last_name, ''),
+        lastNameObfuscated: stringOr(item.last_name_obfuscated, ''),
         name: stringOr(item.name, ''),
         title: stringOr(item.title, ''),
         linkedinUrl: stringOr(item.linkedin_url, ''),
+        hasEmail: typeof item.has_email === 'boolean' ? item.has_email : null,
         organizationId: stringOrNull(item.organization_id) ?? stringOrNull(org.id),
         organizationName: stringOr(item.organization_name, stringOr(org.name, '')),
     };
@@ -207,6 +221,8 @@ export class ApolloRESTClient implements IApolloRESTClient {
      * method, path, status and whatever detail Apollo supplied; a 403 on a
      * master-key operation throws the master-key explanation instead (quirk #4).
      * Nothing is swallowed — a body that will not parse still surfaces its text.
+     * The HTTP plumbing itself lives in ../http/ApolloHttp.ts, shared with the
+     * people client.
      */
     private async request(args: {
         method: 'GET' | 'POST' | 'PATCH';
@@ -216,58 +232,17 @@ export class ApolloRESTClient implements IApolloRESTClient {
         /** When true, a 403 is reported as the master-key requirement (quirk #4). */
         masterKeyOp?: boolean;
     }): Promise<unknown> {
-        const { method, path, context, body, masterKeyOp } = args;
-        const url = `${ApolloRESTEndpoint}${path}`;
-        const headers: Record<string, string> = {
-            'X-Api-Key': this.apiKey,
-            accept: 'application/json',
-        };
-        if (body !== undefined) {
-            headers['Content-Type'] = 'application/json';
-        }
-
-        const response = await this.fetchImpl(url, {
-            method,
-            headers,
-            body: body !== undefined ? JSON.stringify(body) : undefined,
+        const response = await ApolloRequest({
+            ApiKey: this.apiKey,
+            FetchImpl: this.fetchImpl,
+            BaseURL: ApolloRESTEndpoint,
+            Method: args.method,
+            Path: args.path,
+            Context: `ApolloRESTClient.${args.context}`,
+            Body: args.body,
+            MasterKeyOp: args.masterKeyOp,
         });
-
-        if (!response.ok) {
-            let rawText = '';
-            let detail = '';
-            try {
-                rawText = await response.text();
-                const parsed: unknown = JSON.parse(rawText);
-                if (isRecord(parsed)) {
-                    detail = stringOr(parsed.error, stringOr(parsed.message, ''));
-                }
-            } catch {
-                // Body was not JSON. The error thrown below still carries rawText,
-                // so nothing is lost here.
-            }
-            if (response.status === 403 && masterKeyOp) {
-                const message =
-                    `ApolloRESTClient.${context}: ${method} ${path} returned HTTP 403. ` +
-                    `This endpoint requires a MASTER Apollo API key — scoped keys 403 on label reads/writes ` +
-                    `and on account/contact updates.` +
-                    (detail ? ` (${detail})` : '');
-                LogError(message);
-                throw new Error(message);
-            }
-            const fallback = detail || rawText.slice(0, 500);
-            const message = `ApolloRESTClient.${context}: ${method} ${path} failed with HTTP ${response.status}${fallback ? ` — ${fallback}` : ''}`;
-            LogError(message);
-            throw new Error(message);
-        }
-
-        try {
-            return (await response.json()) as unknown;
-        } catch (error: unknown) {
-            const msg = error instanceof Error ? error.message : String(error);
-            const message = `ApolloRESTClient.${context}: ${method} ${path} returned a non-JSON body: ${msg}`;
-            LogError(message);
-            throw new Error(message);
-        }
+        return response.Body;
     }
 
     // ─── Labels ──────────────────────────────────────────────────────────────
@@ -451,14 +426,16 @@ export class ApolloRESTClient implements IApolloRESTClient {
         if (filter.organizationIds && filter.organizationIds.length > 0) body.organization_ids = filter.organizationIds;
         if (filter.titles && filter.titles.length > 0) body.person_titles = filter.titles;
         if (filter.seniorities && filter.seniorities.length > 0) body.person_seniorities = filter.seniorities;
+        if (filter.locations && filter.locations.length > 0) body.person_locations = filter.locations;
+        if (filter.keywords && filter.keywords.trim().length > 0) body.q_keywords = filter.keywords.trim();
 
         const data = await this.request({ method: 'POST', path: '/mixed_people/api_search', context: 'searchPeople', body });
         if (!isRecord(data)) {
-            throw new Error('ApolloRESTClient.searchPeople: unexpected response shape — expected an object with people + pagination');
+            throw new Error('ApolloRESTClient.searchPeople: unexpected response shape — expected an object with people');
         }
         // Matches arrive under `people`, and historically under `contacts`.
         const rows = Array.isArray(data.people) ? data.people : Array.isArray(data.contacts) ? data.contacts : [];
-        return { people: rows.filter(isRecord).map(mapPerson), pagination: mapPagination(data.pagination) };
+        return { people: rows.filter(isRecord).map(mapPerson), pagination: mapPeoplePagination(data, page, perPage) };
     }
 
     // ─── Label writes: the two-step, label-preserving move ───────────────────

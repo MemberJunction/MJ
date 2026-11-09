@@ -1,5 +1,5 @@
 /**
- * app-wiring.checks.ts — the 'app-wiring' bundle (AW1–AW10): the "every shipped app is wired
+ * app-wiring.checks.ts — the 'app-wiring' bundle (AW1–AW11): the "every shipped app is wired
  * correctly" contract, asserted over the real GraphQL wire (CLIENT-FIRST transport).
  *
  * Covers Domain 12 (G1–G9, S1, S2, S7) of packages/TestingFramework/integration-test-suite/docs/test-catalog.md.
@@ -36,6 +36,7 @@ interface AppRow {
     AgentSettings: string | null;
     DefaultForNewUser: boolean;
     DefaultSequence: number;
+    SchemaAutoAddNewEntities: string | null;
 }
 
 /** UUIDs arrive uppercase on SQL Server and lowercase on PostgreSQL — normalize for set keys. */
@@ -52,7 +53,7 @@ function sample(items: string[], max = 5): string {
 async function loadApps(user: UserInfo): Promise<AppRow[]> {
     const r = await new RunView().RunView<AppRow>({
         EntityName: 'MJ: Applications',
-        Fields: ['ID', 'Name', 'Status', 'Path', 'DefaultNavItems', 'AgentSettings', 'DefaultForNewUser', 'DefaultSequence'],
+        Fields: ['ID', 'Name', 'Status', 'Path', 'DefaultNavItems', 'AgentSettings', 'DefaultForNewUser', 'DefaultSequence', 'SchemaAutoAddNewEntities'],
         OrderBy: 'Name',
         ResultType: 'simple'
     }, user);
@@ -181,7 +182,7 @@ export const AppWiringChecks: NamedCheck[] = [
             const custom = navPairs(apps).filter(p => p.item.ResourceType === 'Custom');
             Assert(custom.length > 0, "No ResourceType='Custom' nav items found — DriverClass contract cannot be asserted");
 
-            const owners = new Map<string, string[]>();
+            const owners = new Map<string, Array<{ scope: string; label: string }>>();
             const empty: string[] = [];
             for (const { app, item } of custom) {
                 const dc = (item.DriverClass ?? '').trim();
@@ -190,13 +191,14 @@ export const AppWiringChecks: NamedCheck[] = [
                     continue;
                 }
                 const key = dc.toLowerCase();
-                owners.set(key, [...(owners.get(key) ?? []), `${app.Name}/${item.Label}`]);
+                const scope = (app.SchemaAutoAddNewEntities ?? '').trim().toLowerCase() || `app:${normId(app.ID)}`;
+                owners.set(key, [...(owners.get(key) ?? []), { scope, label: `${app.Name}/${item.Label}` }]);
             }
             Assert(empty.length === 0, `AW4: ${empty.length} Custom nav item(s) have an empty DriverClass: ${sample(empty)}`);
 
             const collisions = [...owners.entries()]
-                .filter(([, uses]) => uses.length > 1)
-                .map(([dc, uses]) => `'${dc}' used by ${uses.length}: ${uses.join(', ')}`);
+                .filter(([, uses]) => new Set(uses.map(u => u.scope)).size > 1)
+                .map(([dc, uses]) => `'${dc}' used by ${uses.length}: ${uses.map(u => u.label).join(', ')}`);
             Assert(collisions.length === 0,
                 `AW4: ${collisions.length} DriverClass collision(s) — two apps resolving the same component is the catalog's latent risk #1: ${sample(collisions)}`);
             console.log(`      → ${owners.size} distinct DriverClass values across ${custom.length} Custom nav items, no collisions`);
@@ -364,6 +366,84 @@ export const AppWiringChecks: NamedCheck[] = [
             const bleed = active.filter(a => a.Status !== 'Active').map(a => a.Name);
             Assert(bleed.length === 0, `AW10: Active filter returned a non-Active app: ${sample(bleed)}`);
             console.log(`      → ${nonActive.length} non-Active app(s) correctly excluded from new-user fan-out`);
+        }
+    },
+    {
+        Id: 'app-wiring.AW11',
+        Name: 'AW11: NavItem.* Application Settings are app-scoped, well-formed nav items with a unique Label and DriverClass',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const apps = await loadApps(ctx.User);
+            const appsById = new Map(apps.map(a => [normId(a.ID), a]));
+
+            const r = await new RunView().RunView<{ ApplicationID: string | null; Name: string; Value: string }>({
+                EntityName: 'MJ: Application Settings',
+                ExtraFilter: `Name LIKE 'NavItem.%'`,
+                Fields: ['ApplicationID', 'Name', 'Value'],
+                ResultType: 'simple'
+            }, ctx.User);
+            Assert(r.Success, `Could not load 'MJ: Application Settings': ${r.ErrorMessage}`);
+            const rows = r.Results ?? [];
+            if (rows.length === 0) {
+                console.log('      → no NavItem.* application settings installed (nothing to assert)');
+                return;
+            }
+
+            // DriverClass owners across every Active app's own nav items, so an extension cannot
+            // reuse another app's component (the AW4 collision contract, extended to extensions).
+            const driverOwners = new Map<string, string>();
+            for (const { app, item } of navPairs(activeApps(apps))) {
+                const dc = (item.DriverClass ?? '').trim().toLowerCase();
+                if (dc) {
+                    driverOwners.set(dc, `${app.Name}/${item.Label}`);
+                }
+            }
+
+            const bad: string[] = [];
+            const labelsByApp = new Map<string, Set<string>>();
+            for (const row of rows) {
+                const app = row.ApplicationID ? appsById.get(normId(row.ApplicationID)) : undefined;
+                if (!app) {
+                    bad.push(`${row.Name}: not scoped to an existing application (a global NavItem.* setting is never read)`);
+                    continue;
+                }
+                let item: MJApplicationEntity_IDefaultNavItem;
+                try {
+                    const parsed: unknown = JSON.parse(row.Value);
+                    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                        bad.push(`${app.Name}/${row.Name}: Value is not a JSON object`);
+                        continue;
+                    }
+                    item = parsed as MJApplicationEntity_IDefaultNavItem;
+                } catch (e) {
+                    bad.push(`${app.Name}/${row.Name}: Value is not parseable JSON — ${e instanceof Error ? e.message : String(e)}`);
+                    continue;
+                }
+                const label = (item.Label ?? '').trim();
+                if (!label || !(item.ResourceType ?? '').trim()) {
+                    bad.push(`${app.Name}/${row.Name}: nav item needs a Label and a ResourceType`);
+                    continue;
+                }
+                const appKey = normId(app.ID);
+                const labels = labelsByApp.get(appKey) ?? new Set((parseNavItems(app) ?? []).map(i => i.Label));
+                labelsByApp.set(appKey, labels);
+                if (labels.has(label)) {
+                    bad.push(`${app.Name}/${row.Name}: Label '${label}' is already a nav item of the application`);
+                }
+                labels.add(label);
+                if (item.ResourceType === 'Custom') {
+                    const dc = (item.DriverClass ?? '').trim();
+                    const owner = driverOwners.get(dc.toLowerCase());
+                    if (!dc) {
+                        bad.push(`${app.Name}/${row.Name}: ResourceType='Custom' without DriverClass`);
+                    } else if (owner) {
+                        bad.push(`${app.Name}/${row.Name}: DriverClass '${dc}' is already used by ${owner}`);
+                    } else {
+                        driverOwners.set(dc.toLowerCase(), `${app.Name}/${row.Name}`);
+                    }
+                }
+            }
+            Assert(bad.length === 0, `AW11: ${bad.length} malformed NavItem.* setting(s): ${sample(bad)}`);
+            console.log(`      → ${rows.length} NavItem.* setting(s) are well-formed nav items with unique labels and DriverClass values`);
         }
     }
 ];

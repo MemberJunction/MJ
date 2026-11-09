@@ -23,6 +23,7 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'proceduresDeletion', sectionName: 'Procedures & Deletion', isExpanded: true },
             { sectionKey: 'rowStatistics', sectionName: 'Row Statistics', isExpanded: true },
             { sectionKey: 'externalIntegration', sectionName: 'External Integration', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJApplicationEntities', sectionName: 'Application Entities', isExpanded: false },
             { sectionKey: 'mJAuditLogs', sectionName: 'Audit Logs', isExpanded: false },
@@ -102,6 +103,19 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJFormChromeRulesEntityID', sectionName: 'Form Chrome Rules (Parent Entity)', isExpanded: false },
             { sectionKey: 'mJFormChromeRulesRelatedEntityID', sectionName: 'Form Chrome Rules (Related Entity)', isExpanded: false },
             { sectionKey: 'mJIdentityClaims', sectionName: 'Identity Claims', isExpanded: false },
+            { sectionKey: 'mJRecordCloneLogItems', sectionName: 'Record Clone Log Items', isExpanded: false },
+            { sectionKey: 'mJEntityFormContributionsEntityID', sectionName: 'Entity Form Contributions (Parent Entity)', isExpanded: false },
+            { sectionKey: 'mJRecordCloneLogs', sectionName: 'Record Clone Logs', isExpanded: false },
+            { sectionKey: 'mJRubricEvaluationsSubjectEntityID', sectionName: 'Rubric Evaluations (Subject Entity ID)', isExpanded: false },
+            { sectionKey: 'mJEntityFormContributionsRelatedEntityID', sectionName: 'Entity Form Contributions (Related Entity)', isExpanded: false },
+            { sectionKey: 'mJRubricEvaluationsContextEntityID', sectionName: 'Rubric Evaluations (Context Entity ID)', isExpanded: false },
+            { sectionKey: 'mJScopedNotificationConfigs', sectionName: 'Scoped Notification Configs', isExpanded: false },
+            { sectionKey: 'mJInteractionLinks', sectionName: 'Interaction Links', isExpanded: false },
+            { sectionKey: 'mJCalendarEventLinks', sectionName: 'Calendar Event Links', isExpanded: false },
+            { sectionKey: 'mJEntityAlternateBaseViews', sectionName: 'Entity Alternate Base Views', isExpanded: false },
+            { sectionKey: 'mJGraphEdgeTypeEndpoints', sectionName: 'Graph Edge Type Endpoints', isExpanded: false },
+            { sectionKey: 'mJGraphEdgesSourceEntityID', sectionName: 'Graph Edges (Source Entity ID)', isExpanded: false },
+            { sectionKey: 'mJGraphEdgesTargetEntityID', sectionName: 'Graph Edges (Target Entity ID)', isExpanded: false },
             { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false }
         ]);
     }

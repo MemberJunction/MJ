@@ -1,0 +1,19 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio Gates — Feature Pipelines",
+      "Description": "The four Feature Pipeline gates (C1 -> C2.1, C2.2, C2.3, C2.5) and the live job-title consistency measurement. Needs bizapps-common installed (its job-title Feature Pipeline is the gate subject). Run with MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1.",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: Test Suite Tests": [
+        { "fields": { "SuiteID": "@parent:ID", "TestID": "@lookup:MJ: Tests.Name=C1 -> C2.1", "Sequence": 1, "Status": "Active" }, "primaryKey": { "ID": "F373635F-989D-492C-B8B7-C6EE09D47ACD" } },
+        { "fields": { "SuiteID": "@parent:ID", "TestID": "@lookup:MJ: Tests.Name=C1 -> C2.2", "Sequence": 2, "Status": "Active" }, "primaryKey": { "ID": "7311A216-EE5B-4BE7-BCA4-4DB22AE6D5EA" } },
+        { "fields": { "SuiteID": "@parent:ID", "TestID": "@lookup:MJ: Tests.Name=C1 -> C2.3", "Sequence": 3, "Status": "Active" }, "primaryKey": { "ID": "C149F05C-405E-42E9-878E-4F4E2DB165B6" } },
+        { "fields": { "SuiteID": "@parent:ID", "TestID": "@lookup:MJ: Tests.Name=C1 -> C2.5", "Sequence": 4, "Status": "Active" }, "primaryKey": { "ID": "4472A16F-4057-40C8-A4A1-7A227E151EEE" } },
+        { "fields": { "SuiteID": "@parent:ID", "TestID": "@lookup:MJ: Tests.Name=IT125 - Job-title classifier consistency (live)", "Sequence": 5, "Status": "Active" }, "primaryKey": { "ID": "86797EFC-29B6-4ABC-BC7F-BFA1FF6A096E" } }
+      ]
+    },
+    "primaryKey": { "ID": "226B334D-3CC1-4424-91D4-3B8A5425BD9C" }
+  }
+]

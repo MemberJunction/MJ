@@ -7,7 +7,7 @@
  */
 
 import { Injectable } from '@angular/core';
-import { LogError, LogStatus, Metadata, RunView } from '@memberjunction/core';
+import { LogError, LogStatus, LogStatusEx, Metadata, RunView, IsTransportError as CoreIsTransportError, DescribeTransportError } from '@memberjunction/core';
 import { MJThemeEntity } from '@memberjunction/core-entities';
 import { setupGraphQLClient, GraphQLProviderConfigData, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-auth-services';
@@ -16,6 +16,14 @@ import { ThemeService } from '@memberjunction/ng-shared';
 import { StartupValidationService } from '@memberjunction/ng-explorer-core';
 import { WorkspaceEnvironment, WorkspaceInitResult, WorkspaceInitError } from '../models/workspace-types';
 import { lastValueFrom } from 'rxjs';
+
+/**
+ * The server's permission error for a user who cannot read their own roles. The entity is named
+ * `MJ: User Roles` since v5 (older servers say `User Roles`). SetupGraphQLClient appends it to its
+ * own message when the boot's metadata download fails for that reason (#4887). Intentionally
+ * duplicated in ng-bootstrap's MJInitializationService, which classifies the same boot error.
+ */
+const NO_USER_ROLES_PERMISSION_TEXT = /does not have read permissions on (MJ: )?User Roles/;
 
 @Injectable({
   providedIn: 'root'
@@ -66,16 +74,19 @@ export class WorkspaceInitializerService {
         environment.MJ_CORE_SCHEMA_NAME
       );
       config.OnAuthenticationError = (error: Error) => this.handleSessionExpired(error);
+      if (environment.MJAPI_URI) {
+        config.MJAPIURL = environment.MJAPI_URI;
+      }
 
       await setupGraphQLClient(config);
       const end = Date.now();
-      console.log(`[Workspace] GraphQL client setup complete: ${end - start}ms`);
+      LogStatus(`[Workspace] GraphQL client setup complete: ${end - start}ms`);
 
       // Subscribe to cross-server cache invalidation events via GraphQL WebSocket
       // This enables real-time data refresh when other servers modify entities
       if (GraphQLDataProvider.Instance) {
           GraphQLDataProvider.Instance.SubscribeToCacheInvalidation();
-          console.log('✓ Cache invalidation subscription active');
+          LogStatus('✓ Cache invalidation subscription active');
       }
 
       // 2. Load metadata and validate user
@@ -174,12 +185,13 @@ export class WorkspaceInitializerService {
       };
     }
 
-    // Network errors
-    if (err.message?.includes('network') || err.message?.includes('fetch')) {
+    // Network / transport errors — see IsTransportError for why this is not a
+    // two-word substring test any more.
+    if (WorkspaceInitializerService.IsTransportError(err)) {
       return {
         type: 'network',
-        message: err.message,
-        userMessage: 'Network error. Please check your connection and try again.',
+        message: err.message || WorkspaceInitializerService.describeTransportError(err),
+        userMessage: 'We could not reach the server. Please check your connection and try again.',
         shouldRetry: true
       };
     }
@@ -199,6 +211,30 @@ export class WorkspaceInitializerService {
   }
 
   /**
+   * True when the error describes the transport failing rather than the server refusing.
+   *
+   * One definition, shared with the metadata provider in `@memberjunction/core`
+   * ({@link CoreIsTransportError}), so a shape that counts as transport for the bootstrap
+   * banner counts as transport for the provider's cache fallback too — and a refusal (a key
+   * without the scope, a user without the role) is "not transport" in both places.
+   *
+   * Static and public so the classification can be tested directly and reused without
+   * standing up the service's four injected dependencies.
+   */
+  public static IsTransportError(err: unknown): boolean {
+    return CoreIsTransportError(err);
+  }
+
+  /**
+   * A message for a transport error that carries no `message` of its own — a bare
+   * `{ response: { status: 504 } }`, for example. Without this the surfaced text would be
+   * empty and the banner would show nothing at all.
+   */
+  private static describeTransportError(err: unknown): string {
+    return DescribeTransportError(err);
+  }
+
+  /**
    * Org theming bootstrap: after metadata + ThemeService are ready, apply
    * the brand theme the user last chose (a starred theme they swapped to), falling back
    * to the org default. Derives the overlay via the theme engine and applies it always-on
@@ -214,20 +250,33 @@ export class WorkspaceInitializerService {
         EntityName: 'MJ: Themes',
         ExtraFilter: selectedId ? `ID = '${selectedId}' AND Status = 'Active'` : "IsDefault = 1 AND Status = 'Active'",
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'entity_object',
       });
       let theme = result.Success ? result.Results?.[0] : undefined;
+      let everyQuerySucceeded = result.Success;
       // User's selection is gone/inactive — fall back to the org default.
       if (!theme && selectedId) {
         result = await rv.RunView<MJThemeEntity>({
           EntityName: 'MJ: Themes',
           ExtraFilter: "IsDefault = 1 AND Status = 'Active'",
           MaxRows: 1,
+          SkipTotalRowCount: true,
           ResultType: 'entity_object',
         });
         theme = result.Success ? result.Results?.[0] : undefined;
+        everyQuerySucceeded = everyQuerySucceeded && result.Success;
       }
       if (!theme) {
+        // The org has no active brand (and the user's selection is gone). A brand restored from
+        // localStorage before bootstrap (RestorePersistedBrandOverlay) would otherwise keep
+        // painting forever — a retired brand on the sign-in page and through the session, for
+        // every browser that ever loaded it. Clear it only when EVERY query above succeeded: a
+        // failed selection query followed by an empty org-default query proves nothing about the
+        // selection, and a transient read failure must not wipe a perfectly good cached brand.
+        if (everyQuerySucceeded) {
+          this.themeService.ClearBrandOverlay();
+        }
         return;
       }
       this.themeService.RegisterBrandTheme({
@@ -246,7 +295,7 @@ export class WorkspaceInitializerService {
       });
       await this.themeService.ApplyBrandOverlay(theme.ID);
     } catch (err) {
-      LogStatus(`Org brand theme bootstrap skipped: ${err instanceof Error ? err.message : String(err)}`);
+      LogStatusEx({ message: `Org brand theme bootstrap skipped: ${err instanceof Error ? err.message : String(err)}`, verboseOnly: true });
     }
   }
 
@@ -263,14 +312,13 @@ export class WorkspaceInitializerService {
       if (err.response && Array.isArray(err.response.errors)) {
         return err.response.errors.some((e: any) =>
           e && e.message && typeof e.message === 'string' &&
-          e.message.includes('does not have read permissions on User Roles')
+          NO_USER_ROLES_PERMISSION_TEXT.test(e.message)
         );
       }
 
       // Check for error message directly on the error object
       if (err.message && typeof err.message === 'string') {
-        const message = err.message;
-        return message.includes('does not have read permissions on User Roles');
+        return NO_USER_ROLES_PERMISSION_TEXT.test(err.message);
       }
 
       // Check for nested error object

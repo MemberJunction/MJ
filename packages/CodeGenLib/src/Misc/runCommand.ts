@@ -195,8 +195,9 @@ export class RunCommandsBase {
 
       if (command.timeout && command.timeout > 0) {
         const { timeout } = command;
+        let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
         const timeoutPromise = new Promise<CommandExecutionResult>((resolve) => {
-          setTimeout(() => {
+          timeoutHandle = setTimeout(() => {
             const elapsedTime = new Date().getTime() - startTime.getTime();
             // A daemon has no exit of its own — staying up for the whole budget is
             // the pass. Anything else that reaches the timeout has hung.
@@ -221,10 +222,17 @@ export class RunCommandsBase {
           }, timeout);
         });
 
-        return Promise.race([
-          commandExecution,
-          timeoutPromise,
-        ]);
+        try {
+          return await Promise.race([
+            commandExecution,
+            timeoutPromise,
+          ]);
+        }
+        finally {
+          // The command finished first: drop the timer so it can't kill a dead (possibly
+          // recycled) PID later or keep the event loop alive for the whole budget.
+          clearTimeout(timeoutHandle);
+        }
       }
       else
         return commandExecution

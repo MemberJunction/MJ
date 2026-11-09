@@ -15,7 +15,8 @@
  * @module @memberjunction/ai-vector-dupe
  */
 
-import { BaseEmbeddings, GetAIAPIKey } from "@memberjunction/ai";
+import { GetAIAPIKey } from "@memberjunction/ai";
+import { AIEmbeddingRunner } from "@memberjunction/ai-prompts";
 import {
     PotentialDuplicateRequest,
     PotentialDuplicateResponse,
@@ -27,6 +28,7 @@ import {
     LogStatus,
     RecordMergeRequest,
     EntityInfo,
+    EntityFieldInfo,
     PotentialDuplicate,
     DuplicateDetectionOptions,
     DuplicateDetectionProgress,
@@ -42,18 +44,35 @@ import {
     KnowledgeHubMetadataEngine,
 } from "@memberjunction/core-entities";
 import { VectorBase } from "@memberjunction/ai-vectors";
-import { EntityVectorSyncer, VectorizeEntityParams } from "@memberjunction/ai-vector-sync";
+import { CombineExtraFilters, EntityDocumentTemplateDataBuilder, EntityVectorSyncer, GetEntityDocumentRecordFilter, VectorizeEntityParams } from "@memberjunction/ai-vector-sync";
+import { AIEngine } from "@memberjunction/aiengine";
 import { EntityDocumentTemplateParser } from "@memberjunction/entity-documents";
 import { TemplateEngineServer } from "@memberjunction/templates";
 import type { MJTemplateEntityExtended, MJTemplateContentEntity } from "@memberjunction/core-entities";
-import { DuplicateReasoningProvider } from "./reasoning/DuplicateReasoningProvider";
+import {
+    DuplicateReasoningProvider,
+    DECISION_REASONING_PROVIDER_KEY,
+    DECISION_THEN_PROMPT_REASONING_PROVIDER_KEY,
+} from "./reasoning/DuplicateReasoningProvider";
 import {
     DuplicateReasoningInput,
     DuplicateReasoningOutput,
+    DuplicateReasoningCandidateVerdict,
     ReasoningCandidate,
     ReasoningFieldDelta,
 } from "./reasoning/DuplicateReasoningTypes";
 import { MatchedSetDeltaBuilder } from "./reasoning/MatchedSetDeltaBuilder";
+import type { DecisionReasoningProvider, DuplicateCandidateProbability } from "./reasoning/DecisionReasoningProvider";
+import {
+    DUPLICATE_ENTRY_CHECK_MAX_DECISION_FIELDS,
+    DUPLICATE_ENTRY_CHECK_MAX_FIELD_TEXT_LENGTH,
+    DUPLICATE_ENTRY_CHECK_SERVER_BUDGET_MS,
+    DuplicateEntryCandidate,
+    DuplicateEntryCheckOptions,
+    DuplicateEntryCheckResult,
+    DuplicateEntryCheckStatus,
+} from "./duplicateEntryCheckTypes";
+import { EntryCheckDeadline, EntryCheckStoppedError } from "./entryCheckDeadline";
 
 /** Default number of nearest neighbors to retrieve per record */
 const DEFAULT_TOP_K = 5;
@@ -70,8 +89,43 @@ const DEFAULT_BATCH_SIZE = 500;
  */
 const VECTOR_QUERY_BATCH_SIZE = 100;
 
+/**
+ * Upper bound on how many per-record results {@link DuplicateRecordDetector.GetDuplicateRecords}
+ * keeps in memory for the returned response.
+ *
+ * The run itself is batched, but the RESULTS were previously accumulated for its whole duration —
+ * O(records), not O(batch). On a 61,671-record entity that alone exhausted an 8 GB heap and the
+ * process died before the run could finish, so whole-entity detection could not complete at all.
+ *
+ * Retaining them was never load-bearing: every result is already persisted per batch as
+ * `Duplicate Run Detail` / `Duplicate Run Detail Match` rows, so the array is a second copy of
+ * durable data. It is capped rather than removed so small runs keep returning what they always
+ * did; past the cap, `ResultsTruncated` says so and the database is the source of truth.
+ */
+const MAX_RETAINED_RESULTS = 1000;
+
 /** Default batch size for parallel database saves */
 const SAVE_BATCH_SIZE = 20;
+
+/**
+ * How many times TopK to query for when the entity document has a record filter. Candidates that
+ * fail the filter are dropped after the query, so asking for only TopK would let them take slots
+ * that a genuine duplicate should have had; the result is trimmed back to TopK afterwards.
+ *
+ * A heuristic: when most of a record's nearest neighbors fail the filter, fewer than TopK can
+ * survive. Those neighbors are vectors sync stored before the filter excluded their records;
+ * once stale vectors are removed from the index (#5201), the over-fetch should rarely matter.
+ */
+const RECORD_FILTER_TOPK_FACTOR = 3;
+
+/**
+ * The entity-document ReasoningModes that turn on the entry-time check. Both carry a typed
+ * decision, which is fast enough to answer while a person types.
+ */
+const ENTRY_CHECK_REASONING_MODES: ReadonlySet<string> = new Set([
+    DECISION_REASONING_PROVIDER_KEY,
+    DECISION_THEN_PROMPT_REASONING_PROVIDER_KEY,
+]);
 
 /**
  * Metadata structure returned by vector DB for each matched record.
@@ -98,6 +152,8 @@ interface RecordQueryResult {
     SourceKey: CompositeKey;
     TemplateText: string;
     Duplicates: PotentialDuplicateResult;
+    /** Matches the vector DB returned before any filtering; undefined when the query failed. */
+    RawMatchCount?: number;
 }
 
 /**
@@ -114,27 +170,70 @@ interface SetReasoning {
 }
 
 /**
+ * What the entry-time check carries into its decision step: the unsaved record, its vector
+ * candidates narrowed to those the context user can read, and their display names.
+ */
+interface EntryCheckCandidates {
+    EntityInfo: EntityInfo;
+    EntityDocument: MJEntityDocumentEntity;
+    /** The unsaved record built from the entered values. */
+    Record: BaseEntity;
+    /** The vector query result, holding only the readable candidates. */
+    Query: RecordQueryResult;
+    /** Display name by normalized compact record id, for every readable candidate. */
+    DisplayNames: Map<string, string>;
+    ContextUser: UserInfo;
+    /** The check's budget and cancellation. */
+    Deadline: EntryCheckDeadline;
+}
+
+/** The entry-time decision's outcome: the flagged candidates, or why there are none. */
+type EntryCheckDecision = { Candidates: DuplicateEntryCandidate[] } | { Error: string };
+
+/**
  * Modernized duplicate record detection engine.
  *
  * Supports:
  * - List-based batch detection (getDuplicateRecords)
  * - View/filter/full-entity batch detection (vector-first approach)
  * - Single-record duplicate check (CheckSingleRecord)
+ * - Entry-time check of a new record's unsaved values, flag only (CheckRecordValues)
  * - Hybrid search via RRF when vector DB supports it
  * - Optional post-retrieval reranking via MJ's BaseReranker
  * - Configurable topK, thresholds, and progress reporting
  */
 export class DuplicateRecordDetector extends VectorBase {
     private vectorDB: VectorDBBase;
-    private embedding: BaseEmbeddings;
+    private _embeddingRunner: AIEmbeddingRunner | null = null;
+    private embeddingModelID: string | null = null;
+    /**
+     * Protected getter/setter for the AIEmbeddingRunner instance used by duplicate detection.
+     */
+    protected get EmbeddingRunner(): AIEmbeddingRunner {
+        if (!this._embeddingRunner) {
+            this._embeddingRunner = new AIEmbeddingRunner();
+        }
+        return this._embeddingRunner;
+    }
+    protected set EmbeddingRunner(value: AIEmbeddingRunner) {
+        this._embeddingRunner = value;
+    }
     /**
      * The embedding model's API identifier (e.g. 'Xenova/gte-small', 'text-embedding-3-small'),
-     * resolved from the entity document's AIModel. Passed to `EmbedTexts` — required by local
-     * providers (which load the named ONNX pipeline) and honored by cloud providers.
+     * resolved from the entity document's AIModel.
      */
     private embeddingModelAPIName: string | null = null;
     /** The Pinecone/pgvector/Qdrant index name resolved from the entity document's VectorIndex */
     private indexName: string;
+    /**
+     * The width of the vectors in that index (`MJ: Vector Indexes.Dimensions`), passed as
+     * `Dimensions` to every `RunEmbedding` call (the runner forwards it to the provider's
+     * `EmbedTexts`). Entity vector sync embeds at this width when it fills the index, so the
+     * probe must match it: a 512-wide index probed with 1,536-wide vectors rejects every query,
+     * and the run completes with no matches. Undefined when the index sets no width; the model's
+     * default then applies on both paths.
+     */
+    private embeddingDimensions: number | undefined = undefined;
     /**
      * The EntityDocumentID for this run. Passed as the vector query `id` for providers that key
      * by EntityDocumentID (the in-process SimpleVectorServiceProvider — see
@@ -208,13 +307,21 @@ export class DuplicateRecordDetector extends VectorBase {
         if (!entityInfo) {
             response.ErrorMessage = `Entity not found for ID ${entityDocument.EntityID}`;
             response.Status = 'Error';
+            duplicateRun.ProcessingStatus = 'Failed';
+            duplicateRun.ProcessingErrorMessage = response.ErrorMessage;
+            duplicateRun.EndedAt = new Date();
+            await this.SaveEntity(duplicateRun);
             return response;
         }
 
-        const recordIDs = await this.LoadRecordIDsToCheck(params, entityInfo);
+        const recordIDs = await this.LoadRecordIDsToCheck(params, entityInfo, this.GetRecordFilter(entityDocument));
         if (recordIDs.length === 0) {
             response.ErrorMessage = 'No records found to check for duplicates';
             response.Status = 'Error';
+            duplicateRun.ProcessingStatus = 'Failed';
+            duplicateRun.ProcessingErrorMessage = response.ErrorMessage;
+            duplicateRun.EndedAt = new Date();
+            await this.SaveEntity(duplicateRun);
             return response;
         }
 
@@ -236,6 +343,12 @@ export class DuplicateRecordDetector extends VectorBase {
             LogStatus(`Duplicate detection: resuming from offset ${resumeOffset}`);
         }
 
+        // Carried across batches instead of the full result set. The queue holds only candidates
+        // that can actually auto-merge; the counter keeps the response's total honest once
+        // PotentialDuplicateResult is capped.
+        const autoMergeQueue: PotentialDuplicateResult[] = [];
+        let totalRecordsWithDuplicates = 0;
+
         for (let offset = resumeOffset; offset < recordIDs.length; offset += batchSize) {
             // Check for cancellation between batches
             await duplicateRun.Load(duplicateRun.ID);
@@ -253,7 +366,25 @@ export class DuplicateRecordDetector extends VectorBase {
                 batchIDs, entityInfo, entityDocument, templateParser, duplicateRun.ID,
                 topK, concurrency, options, startTime, recordIDs.length, offset, totalMatchesFound, contextUser
             );
-            response.PotentialDuplicateResult.push(...batchResults.Results);
+            // Retain a bounded sample for the response, and collect the auto-merge queue.
+            // Everything in batchResults.Results is already persisted (processBatch writes the
+            // Detail and Detail Match rows), so dropping the overflow loses no data — only the
+            // in-memory copy that used to grow for the whole run.
+            totalRecordsWithDuplicates += batchResults.Results.length;
+            for (const result of batchResults.Results) {
+                if (response.PotentialDuplicateResult.length < MAX_RETAINED_RESULTS) {
+                    response.PotentialDuplicateResult.push(result);
+                } else {
+                    response.ResultsTruncated = true;
+                }
+                // Auto-merge still runs AFTER the full pass (below), so detection continues to
+                // see the pre-merge dataset exactly as before. Only the eligible candidates are
+                // carried, which is a small fraction of results by definition — they must clear
+                // the absolute threshold.
+                if (this.resultHasAutoMergeCandidate(result, entityDocument, options)) {
+                    autoMergeQueue.push(result);
+                }
+            }
             totalMatchesFound += batchResults.MatchesFound;
 
             // Update cursor for resume support
@@ -272,7 +403,8 @@ export class DuplicateRecordDetector extends VectorBase {
 
         // Step 8: Auto-merge high-confidence matches
         this.reportProgress(options, 'Merging', recordIDs.length, recordIDs.length, totalMatchesFound, startTime);
-        await this.ProcessAutoMerges(response, entityDocument, options);
+        response.TotalRecordsWithDuplicates = totalRecordsWithDuplicates;
+        await this.ProcessAutoMerges(autoMergeQueue, entityDocument, options);
 
         response.Status = 'Success';
         LogStatus(`Duplicate detection complete: ${recordIDs.length} records checked, ${totalMatchesFound} matches found`);
@@ -316,17 +448,8 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         const record = records.Results[0];
-        const templateParser = EntityDocumentTemplateParser.CreateInstance();
-        const templateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, [record], ContextUser);
-        const embedResult = await this.embedding.EmbedTexts({ texts: templateTexts, model: this.embeddingModelAPIName });
-
-        const topK = options.TopK ?? DEFAULT_TOP_K;
-        const queryResults = await this.QueryDuplicatesForRecords(
-            [record], embedResult.vectors, templateTexts, entityDocument, topK, options,
-            this.GetQueryConcurrency(entityDocument)
-        );
-
-        if (queryResults.length === 0) {
+        const single = await this.QueryCandidatesForRecord(record, entityDocument, options, ContextUser);
+        if (!single) {
             return new PotentialDuplicateResult();
         }
 
@@ -334,12 +457,388 @@ export class DuplicateRecordDetector extends VectorBase {
         // has it enabled and the set clears the gate — same gate as the batch path. There are no
         // match rows to stamp run ids onto here; the verdict rides on the returned result so a
         // real-time "is this a duplicate?" caller gets recommendation + resolved field map too.
-        const single = queryResults[0];
         const reasoning = await this.RunReasoningForSet(single, entityInfo, entityDocument, ContextUser);
         if (reasoning) {
             this.applyReasoningToResult(single.Duplicates, reasoning.Output, reasoning.FieldMap);
         }
         return single.Duplicates;
+    }
+
+    /**
+     * Check values a person is entering for a new record against the entity's existing records, and
+     * flag the plausible duplicates. It only flags: nothing is saved, merged or blocked.
+     *
+     * 1. **The switch.** The check runs only for an entity with an Active entity document that has
+     *    `EnableLLMReasoning` on and whose `ReasoningMode` is `'Decision'` or `'DecisionThenPrompt'`
+     *    (see {@link FindEntryCheckDocument}). Without one the result is `NotConfigured` and nothing
+     *    else runs.
+     * 2. **Candidates.** The values, each text cut to {@link DUPLICATE_ENTRY_CHECK_MAX_FIELD_TEXT_LENGTH},
+     *    become an unsaved entity object, rendered by the document's template, embedded, and queried
+     *    with the same TopK and threshold as {@link CheckSingleRecord}.
+     * 3. **Permission.** The vector index does not know who is asking, so the candidates are narrowed
+     *    to those the context user can read, with one RunView as that user.
+     * 4. **Decision.** One {@link DecisionReasoningProvider.DecideCandidates} call over the readable
+     *    candidates, in either mode: the prompt half of `'DecisionThenPrompt'` is too slow for entry,
+     *    and it can recommend a merge. Its state is bounded by
+     *    {@link DUPLICATE_ENTRY_CHECK_MAX_DECISION_FIELDS} and the field-text limit. A candidate is
+     *    flagged when the provider bands it `Uncertain`, by its own threshold, on the probability
+     *    calibrated for the model that answered. A candidate the decision gave no answer for is
+     *    flagged. A failed decision flags nothing, and neither does a decision from a model with no
+     *    calibration: its probabilities can't be banded, and flagging every candidate would be the
+     *    vector threshold alone. Both give a `Failed` result with the reason.
+     *
+     * **Budget.** The whole check is bounded by `options.TimeoutMS`
+     * ({@link DUPLICATE_ENTRY_CHECK_SERVER_BUDGET_MS} by default) and by `options.CancellationToken`.
+     * No step starts once either has fired, the check stops waiting for a running step, and the
+     * decision call receives both, so the model call is aborted. A stopped check is `Failed`.
+     *
+     * Never throws: any failure is a `Failed` result with the reason.
+     *
+     * @param entityName the entity the new record belongs to
+     * @param values the entered values by field name; fields the entity does not have are ignored
+     * @param contextUser the person entering the record. Required: the candidates are narrowed to the
+     *   records this user can read, and without a user the check fails rather than skip that step.
+     * @param options overrides for TopK and the potential-match threshold, the budget and cancellation
+     * @returns the flagged candidates, most probable first, or why there are none
+     */
+    public async CheckRecordValues(
+        entityName: string,
+        values: Record<string, unknown>,
+        contextUser: UserInfo,
+        options?: DuplicateEntryCheckOptions
+    ): Promise<DuplicateEntryCheckResult> {
+        const startTime = Date.now();
+        if (!contextUser) {
+            return this.entryCheckResult('Failed', startTime, [],
+                'A context user is required: the check shows only the records that user can read');
+        }
+        this.CurrentUser = contextUser;
+        const deadline = new EntryCheckDeadline(
+            options?.TimeoutMS ?? DUPLICATE_ENTRY_CHECK_SERVER_BUDGET_MS, options?.CancellationToken
+        );
+        try {
+            return await this.runEntryCheck(entityName, values, options ?? {}, contextUser, deadline, startTime);
+        } catch (e) {
+            if (e instanceof EntryCheckStoppedError) {
+                // Running out of the budget, or being cancelled, is how an abandoned check ends: not a fault.
+                return this.entryCheckResult('Failed', startTime, [], e.message);
+            }
+            const message = e instanceof Error ? e.message : String(e);
+            LogError(`Duplicate entry check for ${entityName} failed: ${message}`);
+            return this.entryCheckResult('Failed', startTime, [], message);
+        } finally {
+            deadline.Dispose();
+        }
+    }
+
+    /**
+     * Render one record with the entity document's template, embed it, and query the vector index
+     * for its candidates. Shared by {@link CheckSingleRecord} (a saved record) and
+     * {@link CheckRecordValues} (an unsaved one).
+     *
+     * @param deadline bounds each step, for the entry-time check; without one the steps are unbounded
+     * @returns the record's query result, or null when the query produced none
+     */
+    protected async QueryCandidatesForRecord(
+        record: BaseEntity,
+        entityDocument: MJEntityDocumentEntity,
+        options: DuplicateDetectionOptions,
+        contextUser?: UserInfo,
+        deadline?: EntryCheckDeadline
+    ): Promise<RecordQueryResult | null> {
+        const step = <T>(name: string, work: () => Promise<T>): Promise<T> => deadline ? deadline.Run(name, work) : work();
+        const templateParser = EntityDocumentTemplateParser.CreateInstance();
+        const templateTexts = await step('rendering the template',
+            () => this.GenerateTemplateTexts(templateParser, entityDocument, [record], contextUser));
+        const embedResult = await step('embedding the record', () => this.EmbeddingRunner.RunEmbedding({
+            Texts: templateTexts,
+            ModelID: this.embeddingModelID ?? undefined,
+            Dimensions: this.embeddingDimensions,
+            ContextUser: contextUser,
+            Description: `Duplicate detection single record (${entityDocument.Name})`
+        }));
+        if (!embedResult.Success || !embedResult.Vectors || embedResult.Vectors.length === 0) {
+            throw new Error(`Embedding failed for duplicate detection: ${embedResult.ErrorMessage ?? 'Unknown error'}`);
+        }
+        const vectors = embedResult.Vectors;
+
+        const topK = options.TopK ?? DEFAULT_TOP_K;
+        const recordFilter = this.GetRecordFilter(entityDocument);
+        const queryResults = await step('querying the vector index', () => this.QueryDuplicatesForRecords(
+            [record], vectors, templateTexts, entityDocument, this.CandidateQueryTopK(topK, recordFilter), options,
+            this.GetQueryConcurrency(entityDocument)
+        ));
+        if (recordFilter) {
+            await step('applying the record filter', () => this.FilterNonExistentMatches(queryResults, record.EntityInfo, recordFilter));
+        }
+        this.TrimToTopK(queryResults, topK);
+        return queryResults[0] ?? null;
+    }
+
+    // ─────────────────────────────────────────────
+    // Entry-Time Check
+    // ─────────────────────────────────────────────
+
+    /**
+     * The entity document that turns the entry-time check on for an entity: an Active document with
+     * `EnableLLMReasoning` on whose `ReasoningMode` is `'Decision'` or `'DecisionThenPrompt'`. The
+     * check makes a decision-model call on every pause in typing, so switching reasoning off on the
+     * document turns the check off too, as it turns off reasoning in batch runs
+     * ({@link IsReasoningGateOpen}). When several qualify, the oldest wins (earliest
+     * `__mj_CreatedAt`, then lowest ID), so adding a document never silently changes which one an
+     * entity uses.
+     *
+     * @returns the document, or null when the check is not configured for the entity
+     */
+    protected async FindEntryCheckDocument(entityName: string): Promise<MJEntityDocumentEntity | null> {
+        await KnowledgeHubMetadataEngine.Instance.Config(false, this.CurrentUser);
+        const documents = KnowledgeHubMetadataEngine.Instance.GetEntityDocumentsForEntity(entityName)
+            .filter(d => d.Status === 'Active' && d.EnableLLMReasoning && ENTRY_CHECK_REASONING_MODES.has(d.ReasoningMode));
+        return documents.sort(compareOldestFirst)[0] ?? null;
+    }
+
+    /**
+     * Build an unsaved entity object holding the entered values, so the entity document's template
+     * renders it as it renders a saved record. Values for fields the entity does not have are ignored,
+     * and text longer than {@link DUPLICATE_ENTRY_CHECK_MAX_FIELD_TEXT_LENGTH} is cut, so the
+     * template, the embedding and the decision state never see more of a field than that.
+     */
+    protected async BuildUnsavedRecord(
+        entityInfo: EntityInfo,
+        values: Record<string, unknown>,
+        contextUser: UserInfo
+    ): Promise<BaseEntity> {
+        const record = await this.Metadata.GetEntityObject<BaseEntity>(entityInfo.Name, contextUser);
+        record.NewRecord();
+        record.SetMany(boundEnteredValues(values), true);
+        return record;
+    }
+
+    /**
+     * The display names of the candidates the context user can read, from one RunView over the
+     * candidate keys run as that user, so entity permissions and row-level security apply. A
+     * candidate missing from the map must not be shown. When the RunView fails the map is empty:
+     * a candidate is shown only when the user is known to be able to read it.
+     *
+     * @param contextUser the person the candidates are narrowed for; the RunView runs as this user
+     * @returns display name by normalized compact record id ({@link NormalizeUUID})
+     */
+    protected async LoadReadableCandidateNames(
+        candidates: PotentialDuplicate[],
+        entityInfo: EntityInfo,
+        contextUser: UserInfo
+    ): Promise<Map<string, string>> {
+        const names = new Map<string, string>();
+        if (candidates.length === 0) {
+            return names;
+        }
+        const nameFields = this.DisplayNameFields(entityInfo);
+        const result = await this.RunView.RunView<Record<string, unknown>>({
+            EntityName: entityInfo.Name,
+            ExtraFilter: candidates.map(c => `(${c.ToWhereClause()})`).join(' OR '),
+            Fields: [...new Set([...entityInfo.PrimaryKeys.map(pk => pk.Name), ...nameFields.map(f => f.Name)])],
+            ResultType: 'simple',
+            MaxRows: candidates.length,
+            SkipTotalRowCount: true,
+        }, contextUser);
+        if (!result.Success) {
+            LogError(`Duplicate entry check: could not confirm which ${entityInfo.Name} candidates are readable: ${result.ErrorMessage}`);
+            return names;
+        }
+        for (const row of result.Results) {
+            const recordID = CompositeKey.FromEntityRecord(entityInfo, row).ToCompactURLSegment();
+            names.set(NormalizeUUID(recordID), this.rowDisplayName(row, nameFields) || recordID);
+        }
+        return names;
+    }
+
+    /**
+     * The decision provider the entry-time check asks: whatever the class factory holds for the
+     * `'Decision'` mode, which is {@link DecisionReasoningProvider} unless an app registers a
+     * subclass. Null when that registration is not a decision provider.
+     */
+    protected ResolveEntryDecisionProvider(): DecisionReasoningProvider | null {
+        const provider = MJGlobal.Instance.ClassFactory.CreateInstance<DuplicateReasoningProvider>(
+            DuplicateReasoningProvider, DECISION_REASONING_PROVIDER_KEY
+        );
+        return isDecisionReasoningProvider(provider) ? provider : null;
+    }
+
+    /**
+     * The fields whose values make up a record's display name: every `IsNameField` field in
+     * Sequence order, or the entity's single `NameField` when none is flagged.
+     */
+    protected DisplayNameFields(entityInfo: EntityInfo): EntityFieldInfo[] {
+        const nameFields = entityInfo.Fields
+            .filter(f => f.IsNameField)
+            .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
+
+        // Fall back to singular NameField if no IsNameField flags
+        if (nameFields.length === 0 && entityInfo.NameField) {
+            nameFields.push(entityInfo.NameField);
+        }
+        return nameFields;
+    }
+
+    /**
+     * The steps of {@link CheckRecordValues} after it has recorded the start time, each bounded by
+     * the deadline. May throw, {@link EntryCheckStoppedError} included.
+     */
+    private async runEntryCheck(
+        entityName: string,
+        values: Record<string, unknown>,
+        options: DuplicateDetectionOptions,
+        contextUser: UserInfo,
+        deadline: EntryCheckDeadline,
+        startTime: number
+    ): Promise<DuplicateEntryCheckResult> {
+        const entityDocument = await deadline.Run('finding the entity document', () => this.FindEntryCheckDocument(entityName));
+        if (!entityDocument) {
+            return this.entryCheckResult('NotConfigured', startTime);
+        }
+        const entityInfo = this.Metadata.EntityByID(entityDocument.EntityID);
+        if (!entityInfo) {
+            return this.entryCheckResult('Failed', startTime, [], `Entity not found for ID ${entityDocument.EntityID}`);
+        }
+        await deadline.Run('loading the embedding and vector providers', () => this.InitializeProviders(entityDocument));
+        const record = await deadline.Run('building the unsaved record', () => this.BuildUnsavedRecord(entityInfo, values, contextUser));
+        const query = await this.QueryCandidatesForRecord(record, entityDocument, options, contextUser, deadline);
+        if (!query) {
+            return this.entryCheckResult('Checked', startTime);
+        }
+        const displayNames = await this.keepReadableCandidates(query, entityInfo, contextUser, deadline);
+        if (query.Duplicates.Duplicates.length === 0) {
+            return this.entryCheckResult('Checked', startTime);
+        }
+        const decision = await this.decideEntryCandidates({
+            EntityInfo: entityInfo, EntityDocument: entityDocument, Record: record, Query: query,
+            DisplayNames: displayNames, ContextUser: contextUser, Deadline: deadline,
+        });
+        return 'Error' in decision
+            ? this.entryCheckResult('Failed', startTime, [], decision.Error)
+            : this.entryCheckResult('Checked', startTime, decision.Candidates);
+    }
+
+    /** Narrow a query result's candidates, in place, to those the context user can read. */
+    private async keepReadableCandidates(
+        query: RecordQueryResult,
+        entityInfo: EntityInfo,
+        contextUser: UserInfo,
+        deadline: EntryCheckDeadline
+    ): Promise<Map<string, string>> {
+        const names = await deadline.Run('checking which candidates the user can read',
+            () => this.LoadReadableCandidateNames(query.Duplicates.Duplicates, entityInfo, contextUser));
+        query.Duplicates.Duplicates = query.Duplicates.Duplicates.filter(
+            d => names.has(NormalizeUUID(d.ToCompactURLSegment()))
+        );
+        return names;
+    }
+
+    /**
+     * Ask the decision about the readable candidates, with the unsaved record's own values as the
+     * source, and flag the ones the provider bands `Uncertain`. The decision call gets the deadline's
+     * signal and remaining time, so the model call is aborted when the check must stop.
+     */
+    private async decideEntryCandidates(state: EntryCheckCandidates): Promise<EntryCheckDecision> {
+        const provider = this.ResolveEntryDecisionProvider();
+        if (!provider) {
+            return { Error: `No DecisionReasoningProvider is registered for the '${DECISION_REASONING_PROVIDER_KEY}' reasoning mode` };
+        }
+        const input = await state.Deadline.Run('loading the candidates\' field values', () => this.BuildReasoningInput(
+            state.Query, state.EntityInfo, state.EntityDocument, state.ContextUser, state.Record
+        ));
+        const decision = await state.Deadline.Run('asking the decision model', () => provider.DecideCandidates(
+            this.BoundEntryDecisionInput(input), {
+                Provider: this._provider,
+                ContextUser: state.ContextUser,
+                CancellationToken: state.Deadline.Signal,
+                TimeoutMS: state.Deadline.RemainingMS,
+            }
+        ));
+        if (!decision.Success) {
+            const message = `Decision failed: ${decision.ErrorMessage ?? 'unknown error'}`;
+            LogError(`Duplicate entry check for ${state.EntityInfo.Name}: ${message}. Nothing is flagged.`);
+            return { Error: message };
+        }
+        if (decision.UncalibratedModel) {
+            // Not logged here: the provider logs a missing calibration once per model, not per check.
+            return { Error: `The decision model "${decision.UncalibratedModel}" has no calibration, so nothing is flagged` };
+        }
+        return { Candidates: this.flagEntryCandidates(provider, decision.Candidates, state) };
+    }
+
+    /**
+     * The entry-time decision's input, bounded: at most {@link DUPLICATE_ENTRY_CHECK_MAX_DECISION_FIELDS}
+     * differing fields, the ones the person entered first, and every value and label cut to
+     * {@link DUPLICATE_ENTRY_CHECK_MAX_FIELD_TEXT_LENGTH}. A candidate's stored values are cut too:
+     * a long Notes field on an existing record would otherwise reach the model in full.
+     */
+    protected BoundEntryDecisionInput(input: DuplicateReasoningInput): DuplicateReasoningInput {
+        const sourceID = input.SourceRecord.RecordID;
+        const entered = (delta: ReasoningFieldDelta): boolean => delta.Values.some(
+            v => this.recordIdMatches(v.RecordID, sourceID) && v.Value != null && v.Value.trim().length > 0
+        );
+        const fields = [...input.FieldDeltas.filter(entered), ...input.FieldDeltas.filter(d => !entered(d))]
+            .slice(0, DUPLICATE_ENTRY_CHECK_MAX_DECISION_FIELDS)
+            .map(delta => ({
+                FieldName: delta.FieldName,
+                Values: delta.Values.map(v => ({ RecordID: v.RecordID, Value: v.Value == null ? null : truncateText(v.Value) })),
+            }));
+        return {
+            ...input,
+            SourceRecord: { ...input.SourceRecord, Label: truncateText(input.SourceRecord.Label) },
+            Candidates: input.Candidates.map(c => ({ ...c, Label: truncateText(c.Label) })),
+            FieldDeltas: fields,
+        };
+    }
+
+    /**
+     * The candidates the provider bands `Uncertain` (they cannot be ruled out), most probable first.
+     * The decision answers in input order, so each answer lines up with the query's candidate at the
+     * same index.
+     */
+    private flagEntryCandidates(
+        provider: DecisionReasoningProvider,
+        answers: DuplicateCandidateProbability[],
+        state: EntryCheckCandidates
+    ): DuplicateEntryCandidate[] {
+        const flagged: DuplicateEntryCandidate[] = [];
+        answers.forEach((answer, index) => {
+            const duplicate = state.Query.Duplicates.Duplicates[index];
+            if (!duplicate || provider.BandCandidate(answer).Recommendation !== 'Uncertain') {
+                return;
+            }
+            const recordID = duplicate.ToCompactURLSegment();
+            flagged.push({
+                RecordID: recordID,
+                DisplayName: state.DisplayNames.get(NormalizeUUID(recordID)) ?? recordID,
+                VectorScore: duplicate.ProbabilityScore,
+                Probability: answer.Probability,
+            });
+        });
+        return flagged.sort(compareMostProbableFirst);
+    }
+
+    /** A row's name-field values joined with spaces; empty when it has none the user may read. */
+    private rowDisplayName(row: Record<string, unknown>, nameFields: EntityFieldInfo[]): string {
+        return nameFields
+            .map(f => row[f.Name])
+            .filter(v => v != null && String(v).trim() !== '')
+            .map(v => String(v))
+            .join(' ');
+    }
+
+    private entryCheckResult(
+        status: DuplicateEntryCheckStatus,
+        startTime: number,
+        candidates: DuplicateEntryCandidate[] = [],
+        errorMessage?: string
+    ): DuplicateEntryCheckResult {
+        const result: DuplicateEntryCheckResult = { Status: status, Candidates: candidates, ElapsedMs: Date.now() - startTime };
+        if (errorMessage) {
+            result.ErrorMessage = errorMessage;
+        }
+        return result;
     }
 
     // ─────────────────────────────────────────────
@@ -404,34 +903,51 @@ export class DuplicateRecordDetector extends VectorBase {
 
         // 6d: Sub-batch embedding + vector queries in chunks of VECTOR_QUERY_BATCH_SIZE
         //     to keep API payload sizes and memory bounded
+        const recordFilter = this.GetRecordFilter(entityDocument);
+        const queryTopK = this.CandidateQueryTopK(topK, recordFilter);
         const allQueryResults: RecordQueryResult[] = [];
         const subBatches = chunkArray(records, VECTOR_QUERY_BATCH_SIZE);
 
+        let subBatchOffset = 0;
         for (let i = 0; i < subBatches.length; i++) {
             const subRecords = subBatches[i];
 
             // Embed this sub-batch
-            this.reportProgress(options, 'Embedding', totalRecords, processedSoFar, matchesSoFar, startTime);
+            this.reportProgress(options, 'Embedding', totalRecords, processedSoFar + subBatchOffset, matchesSoFar, startTime);
             const subTemplateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, subRecords, contextUser);
-            const subEmbedResult = await this.embedding.EmbedTexts({ texts: subTemplateTexts, model: this.embeddingModelAPIName });
+            const subEmbedResult = await this.EmbeddingRunner.RunEmbedding({
+                Texts: subTemplateTexts,
+                ModelID: this.embeddingModelID ?? undefined,
+                Dimensions: this.embeddingDimensions,
+                ContextUser: contextUser,
+                Description: `Duplicate detection batch (${entityDocument.Name})`
+            });
+            if (!subEmbedResult.Success || !subEmbedResult.Vectors || subEmbedResult.Vectors.length === 0) {
+                throw new Error(`Embedding failed for duplicate detection batch: ${subEmbedResult.ErrorMessage ?? 'Unknown error'}`);
+            }
 
             // Query vector DB for each record in the sub-batch with concurrency control
-            this.reportProgress(options, 'Querying', totalRecords, processedSoFar, matchesSoFar, startTime);
+            this.reportProgress(options, 'Querying', totalRecords, processedSoFar + subBatchOffset, matchesSoFar, startTime);
             const subQueryResults = await this.QueryDuplicatesForRecords(
-                subRecords, subEmbedResult.vectors, subTemplateTexts, entityDocument, topK, options, concurrency
+                subRecords, subEmbedResult.Vectors, subTemplateTexts, entityDocument, queryTopK, options, concurrency
             );
             allQueryResults.push(...subQueryResults);
+            subBatchOffset += subRecords.length;
         }
+        this.AssertDocumentVectorsFound(allQueryResults);
 
         // 6d.5: Drop matches that point to records which no longer exist in the source
         //       entity (stale "ghost" vectors left behind when records are deleted or
-        //       re-seeded with new IDs). See FilterNonExistentMatches() for the why.
-        await this.FilterNonExistentMatches(allQueryResults, entityInfo);
+        //       re-seeded with new IDs), or that fail the entity document's record filter.
+        //       See FilterNonExistentMatches() for the why.
+        await this.FilterNonExistentMatches(allQueryResults, entityInfo, recordFilter);
+        this.TrimToTopK(allQueryResults, topK);
 
         // 6e: Persist match results and update run details
-        this.reportProgress(options, 'Matching', totalRecords, processedSoFar + records.length, matchesSoFar, startTime);
+        this.reportProgress(options, 'Matching', totalRecords, processedSoFar, matchesSoFar, startTime);
         const results = await this.PersistMatchResults(
-            allQueryResults, duplicateRunDetails, entityInfo, entityDocument, options, startTime, contextUser
+            allQueryResults, duplicateRunDetails, entityInfo, entityDocument, options, startTime, contextUser,
+            totalRecords, processedSoFar, matchesSoFar
         );
 
         const batchMatches = results.reduce((sum, r) => sum + r.Duplicates.length, 0);
@@ -451,16 +967,39 @@ export class DuplicateRecordDetector extends VectorBase {
      * a single-column key (whatever the column is called), `F1|v1||F2|v2` for a composite key —
      * which is the form `MJ: List Details.RecordID` already holds; `CompositeKey.FromURLSegment`
      * rebuilds the real key from it for any entity.
+     *
+     * Every loader reads with `IgnoreMaxRows`. Without it RunView falls back to the entity's
+     * `UserViewMaxRows` (1,000 by default) and returns only the first page of ids. The run then sets
+     * `TotalItemCount` from that page, so it checks a fraction of the records and still reports
+     * itself complete: "1000 of 1000" on a 61,671-record entity.
      */
-    protected async LoadRecordIDsToCheck(params: PotentialDuplicateRequest, entityInfo: EntityInfo): Promise<string[]> {
+    protected async LoadRecordIDsToCheck(params: PotentialDuplicateRequest, entityInfo: EntityInfo, recordFilter?: string | null): Promise<string[]> {
         if (params.ListID) {
-            return this.LoadRecordIDsFromList(params.ListID);
+            return this.KeepRecordIDsPassingFilter(await this.LoadRecordIDsFromList(params.ListID), entityInfo, recordFilter);
         }
         if (params.ViewID) {
-            return this.LoadRecordIDsFromView(params.ViewID, entityInfo);
+            return this.KeepRecordIDsPassingFilter(await this.LoadRecordIDsFromView(params.ViewID, entityInfo), entityInfo, recordFilter);
         }
-        // ExtraFilter or all records
-        return this.LoadRecordIDsFromEntity(entityInfo, params.ExtraFilter);
+        // ExtraFilter or all records, narrowed by the record filter
+        return this.LoadRecordIDsFromEntity(entityInfo, CombineExtraFilters(params.ExtraFilter, recordFilter));
+    }
+
+    /**
+     * Narrow a list's or view's record ids to those that pass the entity document's record filter,
+     * so a record the filter excludes is never checked whatever the run's source.
+     *
+     * @returns the ids unchanged when there is no filter, otherwise those that pass it, in order
+     */
+    protected async KeepRecordIDsPassingFilter(ids: string[], entityInfo: EntityInfo, recordFilter?: string | null): Promise<string[]> {
+        if (!recordFilter || ids.length === 0) {
+            return ids;
+        }
+        const passing = await this.LoadExistingRecordIDs(entityInfo, entityInfo.FirstPrimaryKey.Name, ids, recordFilter); // first-pk-ok: LoadExistingRecordIDs reads pkField only when PrimaryKeys.length === 1; composite keys are rebuilt from the segment
+        const kept = ids.filter(id => passing.has(NormalizeUUID(id)));
+        if (kept.length < ids.length) {
+            LogStatus(`Duplicate detection: ${ids.length - kept.length} of ${ids.length} record(s) excluded by the entity document's record filter`);
+        }
+        return kept;
     }
 
     /**
@@ -473,6 +1012,7 @@ export class DuplicateRecordDetector extends VectorBase {
             ExtraFilter: `ListID = '${sanitizedListID}'`,
             Fields: ['RecordID'],
             ResultType: 'simple',
+            IgnoreMaxRows: true, // every member, not the first UserViewMaxRows (see LoadRecordIDsToCheck)
         }, this.CurrentUser);
 
         if (!viewResults.Success) {
@@ -500,6 +1040,7 @@ export class DuplicateRecordDetector extends VectorBase {
             ViewID: viewID,
             Fields: entityInfo.PrimaryKeys.map(pk => pk.Name),
             ResultType: 'simple',
+            IgnoreMaxRows: true, // every row of the view, not the first UserViewMaxRows (see LoadRecordIDsToCheck)
         }, this.CurrentUser);
 
         if (!viewResults.Success) {
@@ -518,6 +1059,7 @@ export class DuplicateRecordDetector extends VectorBase {
             ExtraFilter: extraFilter,
             Fields: entityInfo.PrimaryKeys.map(pk => pk.Name),
             ResultType: 'simple',
+            IgnoreMaxRows: true, // every matching row, not the first UserViewMaxRows (see LoadRecordIDsToCheck)
         }, this.CurrentUser);
 
         if (!viewResults.Success) {
@@ -551,7 +1093,7 @@ export class DuplicateRecordDetector extends VectorBase {
      */
     protected async InitializeProviders(entityDocument: MJEntityDocumentEntity): Promise<void> {
         // Skip re-initialization if providers are already set for this entity document
-        if (this.embedding && this.vectorDB && this.indexName) {
+        if (this._embeddingRunner && this.vectorDB && this.indexName) {
             return;
         }
 
@@ -563,34 +1105,26 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         const aiModel = this.GetAIModel(entityDocument.AIModelID);
-        // The embedding model's API name (e.g. 'Xenova/gte-small') — local providers REQUIRE it
-        // to load the right ONNX pipeline; cloud providers fall back to their own default if absent.
+        this.embeddingModelID = entityDocument.AIModelID;
         this.embeddingModelAPIName = aiModel.APIName;
         // Captured for the vector query id when the provider keys by EntityDocumentID (SVS).
         this.entityDocumentID = entityDocument.ID;
         const vectorDB = this.GetVectorDatabase(entityDocument.VectorDatabaseID);
 
-        // Resolve API keys. Empty/null is legitimate for local providers — local
-        // embeddings (ONNX runtime) and the in-process SimpleVectorServiceProvider need
-        // no remote credential — so we don't pre-throw on a missing key. Whether the vector
-        // DB genuinely needs one is decided AFTER instantiation via VectorDBBase.RequiresAPIKey;
-        // a cloud provider that truly needs a key will otherwise fail at the inference call
-        // with a more actionable provider-level error. Mirrors EntityVectorSyncer.
-        const embeddingAPIKey = GetAIAPIKey(aiModel.DriverClass) || '';
+        // Only the vector DB key is resolved here. AIEmbeddingRunner resolves embedding
+        // credentials on each call and runs a keyless driver (LocalEmbedding) without one.
+        // An empty vector-DB key is legitimate for in-process and colocated providers, so we
+        // don't pre-throw; whether the DB genuinely needs one is decided AFTER instantiation
+        // via VectorDBBase.RequiresAPIKey. Mirrors EntityVectorSyncer.
         const vectorDBAPIKey = GetAIAPIKey(vectorDB.ClassKey) || '';
 
-        this.embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
-            BaseEmbeddings, aiModel.DriverClass, embeddingAPIKey
-        );
+        this._embeddingRunner = new AIEmbeddingRunner();
         // Sentinel when keyless so the base ctor's non-empty requirement is satisfied for
         // local providers (which authenticate via the host process, not a key).
         this.vectorDB = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(
             VectorDBBase, vectorDB.ClassKey, vectorDBAPIKey || 'colocated'
         );
 
-        if (!this.embedding) {
-            throw new Error(`Failed to create Embeddings instance for ${aiModel.DriverClass}`);
-        }
         if (!this.vectorDB) {
             throw new Error(`Failed to create VectorDB instance for ${vectorDB.ClassKey}`);
         }
@@ -599,11 +1133,12 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         // Resolve the vector index name from the entity document's VectorIndexID
-        // Uses KnowledgeHubMetadataEngine cache instead of a RunView query
+        // Uses the AIEngine vector index cache instead of a RunView query
         if (entityDocument.VectorIndexID) {
-            const vectorIndex = KnowledgeHubMetadataEngine.Instance.GetVectorIndexByID(entityDocument.VectorIndexID);
+            const vectorIndex = AIEngine.Instance.GetVectorIndexByID(entityDocument.VectorIndexID);
             if (vectorIndex) {
-                this.indexName = vectorIndex.Name;
+                this.indexName = AIEngine.Instance.GetProviderIndexName(vectorIndex);
+                this.embeddingDimensions = vectorIndex.Dimensions ?? undefined;
             }
         }
         if (!this.indexName) {
@@ -697,6 +1232,7 @@ export class DuplicateRecordDetector extends VectorBase {
         const dupeRun = await this.Metadata.GetEntityObject<MJDuplicateRunEntity>('MJ: Duplicate Runs', this.CurrentUser);
         dupeRun.NewRecord();
         dupeRun.EntityID = entityDocument.EntityID;
+        dupeRun.EntityDocumentID = entityDocument.ID;
         dupeRun.StartedByUserID = this.CurrentUser?.ID;
         dupeRun.StartedAt = new Date();
         dupeRun.ProcessingStatus = 'In Progress';
@@ -802,10 +1338,16 @@ export class DuplicateRecordDetector extends VectorBase {
     // ─────────────────────────────────────────────
 
     /**
-     * Generate human-readable template text for each record using the entity document template.
+     * Generate the template text for each record: the text that is embedded and queried with.
      *
-     * Loads the template from TemplateEngineServer and renders it via Nunjucks,
-     * matching the same approach used by the vectorization pipeline.
+     * It must be the text vector sync embedded for the record, or the query vector describes a
+     * different document than the stored one and genuine duplicates fall below the threshold. So
+     * the template is rendered exactly as sync renders it: from the row RunView returns for the
+     * record ({@link LoadTemplateRows}), with every `Entity` param's related rows (a person's
+     * Phones, Emails...), through the same {@link EntityDocumentTemplateDataBuilder} sync uses.
+     *
+     * @throws when a related param's rows can't be loaded: a query rendered without them can't
+     * match the stored text, and would quietly miss the duplicates the run exists to find
      */
     protected async GenerateTemplateTexts(
         templateParser: ReturnType<typeof EntityDocumentTemplateParser.CreateInstance>,
@@ -817,15 +1359,30 @@ export class DuplicateRecordDetector extends VectorBase {
         const template = this.loadTemplate(entityDocument);
         const templateContent = template.Content[0] as MJTemplateContentEntity;
         TemplateEngineServer.Instance.SetupNunjucks();
+        if (records.length === 0) {
+            return [];
+        }
+
+        const entityInfo = records[0].EntityInfo;
+        const rows = await this.LoadTemplateRows(records, entityInfo);
+        const dataBuilder = new EntityDocumentTemplateDataBuilder(this.RunView, contextUser ?? this.CurrentUser, this.Provider);
+        // Only saved records have related rows: a new record's key, even a client-generated one, has none yet.
+        const savedRows = rows.filter((_, index) => records[index].IsSaved);
+        const relatedData = await dataBuilder.LoadRelatedData(entityInfo, savedRows, template);
+        const missingParams = dataBuilder.MissingRelatedParams(template, relatedData);
+        if (missingParams.length > 0) {
+            throw new Error(`Duplicate detection could not load the related rows for template param(s) ${missingParams.join(', ')} ` +
+                `of entity document '${entityDocument.Name}'; without them the query text would not match the text vector sync stored`);
+        }
 
         const templateTexts: string[] = [];
-        for (const record of records) {
-            // NEW convention: main entity fields are TOP-LEVEL variables (no Entity. prefix).
-            // Spread record fields directly into root context so templates use {{FieldName}}.
-            const data: Record<string, unknown> = { ...record.GetAll() };
+        for (const [index, record] of records.entries()) {
+            const data = dataBuilder.BuildTemplateData(entityInfo, rows[index], template, relatedData);
 
+            // Skip validation and suppress its warnings, as sync does: records commonly have null
+            // fields, and the templates handle them with {% if %} conditionals.
             const result = await TemplateEngineServer.Instance.RenderTemplate(
-                template, templateContent, data, true
+                template, templateContent, data, true, true, { ContextUser: contextUser ?? this.CurrentUser }
             );
 
             if (result.Success) {
@@ -836,6 +1393,35 @@ export class DuplicateRecordDetector extends VectorBase {
             }
         }
         return templateTexts;
+    }
+
+    /**
+     * Each record's row as vector sync reads it — RunView with `ResultType: 'simple'` and every
+     * column — in the order of `records`, so the template renders the values sync rendered.
+     * `BaseEntity.GetAll()` differs: it turns date fields into `Date` objects, for one.
+     *
+     * An unsaved record (the entry-time check), or one whose row is no longer there, renders from its own values.
+     */
+    protected async LoadTemplateRows(records: BaseEntity[], entityInfo: EntityInfo): Promise<Record<string, unknown>[]> {
+        const saved = records.filter(r => r.IsSaved);
+        const rowsByKey = new Map<string, Record<string, unknown>>();
+        if (saved.length > 0) {
+            const result = await this.RunView.RunView<Record<string, unknown>>({
+                EntityName: entityInfo.Name,
+                ExtraFilter: this.BuildExtraFilter(saved.map(r => r.PrimaryKey)),
+                ResultType: 'simple',
+                IgnoreMaxRows: true, // bounded by the key filter; an entity's UserViewMaxRows can be smaller than a sub-batch
+            }, this.CurrentUser);
+            if (!result.Success) {
+                throw new Error(`Failed to load ${entityInfo.Name} rows for template rendering: ${result.ErrorMessage}`);
+            }
+            for (const row of result.Results) {
+                rowsByKey.set(NormalizeUUID(CompositeKey.FromEntityRecord(entityInfo, row).ToCompactURLSegment()), row);
+            }
+        }
+        return records.map(r =>
+            (r.IsSaved ? rowsByKey.get(NormalizeUUID(r.PrimaryKey.ToCompactURLSegment())) : undefined) ?? r.GetAll()
+        );
     }
 
     /**
@@ -907,7 +1493,9 @@ export class DuplicateRecordDetector extends VectorBase {
                 return { SourceKey: compositeKey, TemplateText: templateText, Duplicates: emptyResult };
             }
 
+            const rawMatchCount = Array.isArray(queryResponse.data?.matches) ? queryResponse.data.matches.length : 0;
             const dupeResult = this.ParseVectorMatches(queryResponse, compositeKey);
+            this.ProjectCandidateMetadata(dupeResult.Duplicates, record.EntityInfo);
             dupeResult.Duplicates = this.FilterSelfMatches(dupeResult.Duplicates, compositeKey);
             const potentialThreshold = options.PotentialMatchThreshold ?? entityDocument.PotentialMatchThreshold;
             dupeResult.Duplicates = dupeResult.Duplicates.filter(
@@ -916,7 +1504,7 @@ export class DuplicateRecordDetector extends VectorBase {
             dupeResult.EntityID = entityDocument.EntityID;
             dupeResult.RecordCompositeKey = compositeKey;
 
-            return { SourceKey: compositeKey, TemplateText: templateText, Duplicates: dupeResult };
+            return { SourceKey: compositeKey, TemplateText: templateText, Duplicates: dupeResult, RawMatchCount: rawMatchCount };
         });
 
         return RunWithConcurrency(tasks, concurrency);
@@ -935,6 +1523,7 @@ export class DuplicateRecordDetector extends VectorBase {
         // SimpleVectorServiceProvider) need the EntityDocumentID as the query id; external/
         // colocated providers key by the logical index name. See VectorDBBase.QueryKeyIsEntityDocumentID.
         const queryId = this.vectorDB.QueryKeyIsEntityDocumentID ? this.entityDocumentID : this.indexName;
+        const filter = this.BuildDocumentScopeFilter();
 
         if (this.vectorDB.SupportsHybridSearch && templateText) {
             return this.vectorDB.HybridQuery({
@@ -945,6 +1534,7 @@ export class DuplicateRecordDetector extends VectorBase {
                 FusionMethod: options.FusionMethod ?? 'rrf',
                 includeMetadata: true,
                 includeValues: false,
+                ...(filter ? { filter } : {}),
             }, this.CurrentUser);
         }
 
@@ -954,7 +1544,48 @@ export class DuplicateRecordDetector extends VectorBase {
             topK,
             includeMetadata: true,
             includeValues: false,
+            ...(filter ? { filter } : {}),
         }, this.CurrentUser);
+    }
+
+    /**
+     * The metadata filter that scopes a vector query to this run's entity document, in the
+     * provider's native syntax — or undefined when the provider already scopes by document
+     * ({@link VectorDBBase.QueryKeyIsEntityDocumentID}). Without it, an index shared by several
+     * documents returns the other documents' vectors, which point at other entities' records, as
+     * candidates and lets them take TopK slots.
+     */
+    protected BuildDocumentScopeFilter(): object | undefined {
+        if (!this.ScopesQueriesByMetadataFilter) {
+            return undefined;
+        }
+        return this.vectorDB.BuildMetadataFilter({ EntityDocumentIDs: [this.entityDocumentID] });
+    }
+
+    /** True when queries reach this document's vectors through a metadata filter, not the query key. */
+    protected get ScopesQueriesByMetadataFilter(): boolean {
+        return !this.vectorDB.QueryKeyIsEntityDocumentID;
+    }
+
+    /**
+     * Fails a run when every document-scoped query in a batch came back empty. Every synced record
+     * is its own nearest neighbour, so an all-empty batch means the index holds no vectors tagged
+     * with this document: in practice, vectors synced before sync stored `EntityDocumentID`, which
+     * the scope filter cannot see. A clear error beats a run that silently finds no duplicates.
+     */
+    protected AssertDocumentVectorsFound(queryResults: RecordQueryResult[]): void {
+        if (!this.ScopesQueriesByMetadataFilter) {
+            return;
+        }
+        const answered = queryResults.filter(qr => qr.RawMatchCount !== undefined);
+        if (answered.length === 0 || answered.some(qr => (qr.RawMatchCount ?? 0) > 0)) {
+            return;
+        }
+        throw new Error(
+            `No vectors in index "${this.indexName}" are tagged with entity document ${this.entityDocumentID}. ` +
+            `Vectors synced before the document ID was stored with each vector cannot be matched to it: ` +
+            `re-sync this document's vectors, then run detection again.`
+        );
     }
 
     /**
@@ -990,6 +1621,23 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         return result;
+    }
+
+    /**
+     * Remove from each candidate's `VectorMetadata` the fields of `entityInfo` the current user may not
+     * read. The metadata was written by the sync under another identity and is returned to this user for
+     * display, so it is projected here the same way their own reads are. Mutates the candidates.
+     */
+    protected ProjectCandidateMetadata(candidates: PotentialDuplicate[], entityInfo: EntityInfo | undefined): void {
+        if (!entityInfo || !this.CurrentUser) return;
+        const denied = entityInfo.GetDeniedReadFields(this.CurrentUser);
+        if (denied.size === 0) return;
+        for (const candidate of candidates) {
+            if (!candidate.VectorMetadata) continue;
+            candidate.VectorMetadata = Object.fromEntries(
+                Object.entries(candidate.VectorMetadata).filter(([key]) => !denied.has(key.toLowerCase()))
+            );
+        }
     }
 
     /**
@@ -1039,63 +1687,66 @@ export class DuplicateRecordDetector extends VectorBase {
      */
     protected buildSourceMetadataMap(records: BaseEntity[], entityInfo: EntityInfo): Map<string, string> {
         const metadataMap = new Map<string, string>();
-
-        // Combine all IsNameField fields in Sequence order for the display name
-        const nameFields = entityInfo.Fields
-            .filter(f => f.IsNameField)
-            .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
-
-        // Fall back to singular NameField if no IsNameField flags
-        if (nameFields.length === 0 && entityInfo.NameField) {
-            nameFields.push(entityInfo.NameField);
-        }
-
-        // Use DefaultInView fields for display, plus IsNameField fields
-        const internalNames = new Set(['ID', '__mj_CreatedAt', '__mj_UpdatedAt']);
-        const displayFields = entityInfo.Fields
-            .filter(f => f.DefaultInView && !f.IsPrimaryKey && !internalNames.has(f.Name))
-            .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
-
+        // Fields the user may not read are left out: the records were loaded for this user, and the
+        // map is shown to them. Reading them as absent also keeps Get() from refusing them.
+        const readable = (fieldName: string) => entityInfo.IsFieldReadableByUser(fieldName, this.CurrentUser);
         for (const record of records) {
             // Keyed by the same compact segment the batch ids use, so CreateRunDetailRecords can
             // look the metadata up by record id for single-column and composite keys alike.
             const id = record.PrimaryKey.ToCompactURLSegment();
-            const meta: Record<string, string> = {
-                Entity: entityInfo.Name,
-            };
-            if (entityInfo.Icon) {
-                meta['EntityIcon'] = entityInfo.Icon;
-            }
-
-            // Store combined name from all IsNameField fields
-            const nameParts = nameFields
-                .map(f => record.Get(f.Name))
-                .filter(v => v != null && String(v).trim() !== '')
-                .map(v => String(v));
-            if (nameParts.length > 0) {
-                meta['Name'] = nameParts.join(' ');
-            }
-
-            // Store all IsNameField values individually for downstream resolution
-            for (const nf of nameFields) {
-                const val = record.Get(nf.Name);
-                if (val != null) meta[nf.Name] = String(val);
-            }
-
-            // Store DefaultInView fields for rich display
-            for (const field of displayFields) {
-                if (!meta[field.Name]) { // Don't overwrite name fields
-                    const val = record.Get(field.Name);
-                    if (val != null) {
-                        const str = String(val);
-                        meta[field.Name] = str.length > 200 ? str.substring(0, 197) + '...' : str;
-                    }
-                }
-            }
-
-            metadataMap.set(id, JSON.stringify(meta));
+            metadataMap.set(id, JSON.stringify(this.BuildRecordMetadata(fieldName => (readable(fieldName) ? record.Get(fieldName) : undefined), entityInfo)));
         }
         return metadataMap;
+    }
+
+    /**
+     * The record metadata a run stores for display: the entity name and icon, the combined
+     * display name (every `IsNameField` value in Sequence order) as `Name`, each name field on its
+     * own, and the entity's `DefaultInView` fields (long values truncated to 200 characters).
+     *
+     * @param getValue reads one field's value off the record, whatever form the record is in
+     */
+    protected BuildRecordMetadata(getValue: (fieldName: string) => unknown, entityInfo: EntityInfo): Record<string, string> {
+        const nameFields = this.DisplayNameFields(entityInfo);
+        const meta: Record<string, string> = {
+            Entity: entityInfo.Name,
+        };
+        if (entityInfo.Icon) {
+            meta['EntityIcon'] = entityInfo.Icon;
+        }
+
+        const nameParts = nameFields
+            .map(f => getValue(f.Name))
+            .filter(v => v != null && String(v).trim() !== '')
+            .map(v => String(v));
+        if (nameParts.length > 0) {
+            meta['Name'] = nameParts.join(' ');
+        }
+
+        // Each name field on its own, for downstream resolution
+        for (const nf of nameFields) {
+            const val = getValue(nf.Name);
+            if (val != null) meta[nf.Name] = String(val);
+        }
+
+        for (const field of this.RecordMetadataDisplayFields(entityInfo)) {
+            if (!meta[field.Name]) { // Don't overwrite name fields
+                const val = getValue(field.Name);
+                if (val != null) {
+                    const str = String(val);
+                    meta[field.Name] = str.length > 200 ? str.substring(0, 197) + '...' : str;
+                }
+            }
+        }
+        return meta;
+    }
+
+    /** The `DefaultInView` fields record metadata carries besides the name fields, in Sequence order. */
+    protected RecordMetadataDisplayFields(entityInfo: EntityInfo): EntityFieldInfo[] {
+        const internalNames = new Set(['ID', '__mj_CreatedAt', '__mj_UpdatedAt']);
+        return entityInfo.Fields
+            .filter(f => f.DefaultInView && !f.IsPrimaryKey && !internalNames.has(f.Name))
+            .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
     }
 
     protected FilterSelfMatches(duplicates: PotentialDuplicate[], sourceKey: CompositeKey): PotentialDuplicate[] {
@@ -1121,9 +1772,14 @@ export class DuplicateRecordDetector extends VectorBase {
      * batched query and drop any that don't resolve. Keys are compared in compact URL-segment
      * form, so this works for a single-column key of any name and for composite keys.
      *
+     * With the entity document's record filter, a match whose record fails the filter is dropped
+     * the same way: its vector may predate the filter, or the record may have changed since sync.
+     *
      * Mutates `queryResults` in place.
+     *
+     * @param recordFilter the entity document's record filter ({@link GetRecordFilter}), if any
      */
-    protected async FilterNonExistentMatches(queryResults: RecordQueryResult[], entityInfo: EntityInfo): Promise<void> {
+    protected async FilterNonExistentMatches(queryResults: RecordQueryResult[], entityInfo: EntityInfo, recordFilter?: string | null): Promise<void> {
         // Collect every distinct match key across the batch, in the same compact segment form
         // LoadExistingRecordIDs reads back off the live rows.
         const matchIds = new Set<string>();
@@ -1139,7 +1795,8 @@ export class DuplicateRecordDetector extends VectorBase {
             return;
         }
 
-        const existing = await this.LoadExistingRecordIDs(entityInfo, entityInfo.FirstPrimaryKey.Name, [...matchIds]); // first-pk-ok: LoadExistingRecordIDs reads pkField only when PrimaryKeys.length === 1; composite keys are rebuilt from the segment
+        const matchRows = new Map<string, Record<string, unknown>>();
+        const existing = await this.LoadExistingRecordIDs(entityInfo, entityInfo.FirstPrimaryKey.Name, [...matchIds], recordFilter, matchRows); // first-pk-ok: LoadExistingRecordIDs reads pkField only when PrimaryKeys.length === 1; composite keys are rebuilt from the segment
 
         // Drop ghost (non-existent) matches in place.
         for (const qr of queryResults) {
@@ -1147,9 +1804,39 @@ export class DuplicateRecordDetector extends VectorBase {
             qr.Duplicates.Duplicates = qr.Duplicates.Duplicates.filter(
                 (d) => existing.has(NormalizeUUID(d.ToCompactURLSegment()))
             );
+            this.FillMissingMatchMetadata(qr.Duplicates.Duplicates, matchRows, entityInfo);
             const removed = before - qr.Duplicates.Duplicates.length;
             if (removed > 0) {
-                LogStatus(`Duplicate detection: dropped ${removed} stale match(es) for source ${qr.SourceKey.ToString()} (records no longer exist — likely orphaned vectors)`);
+                const reason = recordFilter
+                    ? 'records no longer exist or fail the entity document\'s record filter'
+                    : 'records no longer exist — likely orphaned vectors';
+                LogStatus(`Duplicate detection: dropped ${removed} match(es) for source ${qr.SourceKey.ToString()} (${reason})`);
+            }
+        }
+    }
+
+    /**
+     * Gives each match that has no display name the same record metadata a run detail carries.
+     * What a vector store returns as match metadata depends on the store: the in-memory store
+     * returns only the record id, so without this every such match would show as a bare id. A
+     * match whose vector metadata already names the record keeps it; the record's metadata is
+     * laid over whatever else it had.
+     *
+     * @param matchRows the existing matches' rows, keyed by normalized compact record id (see
+     * {@link LoadExistingRecordIDs})
+     */
+    protected FillMissingMatchMetadata(
+        duplicates: PotentialDuplicate[],
+        matchRows: Map<string, Record<string, unknown>>,
+        entityInfo: EntityInfo
+    ): void {
+        for (const dupe of duplicates) {
+            if (dupe.VectorMetadata?.['Name']) {
+                continue;
+            }
+            const row = matchRows.get(NormalizeUUID(dupe.ToCompactURLSegment()));
+            if (row) {
+                dupe.VectorMetadata = { ...dupe.VectorMetadata, ...this.BuildRecordMetadata(fieldName => row[fieldName], entityInfo) };
             }
         }
     }
@@ -1162,26 +1849,51 @@ export class DuplicateRecordDetector extends VectorBase {
      *
      * @param pkField the single key column — read only when the entity has exactly one primary
      * key; a composite key's columns come from `entityInfo.PrimaryKeys`.
+     * @param recordFilter the entity document's record filter, if any: only records that also pass
+     * it count as existing
+     * @param rowsOut when given, the query also reads the fields record metadata carries (see
+     * {@link BuildRecordMetadata}), and each existing record's row lands here under the same
+     * normalized key the returned set uses
+     * @throws when a record filter is set and can't be applied — failing open would let the records
+     * it excludes through
      */
-    protected async LoadExistingRecordIDs(entityInfo: EntityInfo, pkField: string, ids: string[]): Promise<Set<string>> {
+    protected async LoadExistingRecordIDs(
+        entityInfo: EntityInfo,
+        pkField: string,
+        ids: string[],
+        recordFilter?: string | null,
+        rowsOut?: Map<string, Record<string, unknown>>
+    ): Promise<Set<string>> {
         const existing = new Set<string>();
         const singleColumn = entityInfo.PrimaryKeys.length === 1;
         const keyFields = entityInfo.PrimaryKeys.map(pk => pk.Name);
+        const fields = rowsOut
+            ? [...new Set([
+                ...keyFields,
+                ...this.DisplayNameFields(entityInfo).map(f => f.Name),
+                ...this.RecordMetadataDisplayFields(entityInfo).map(f => f.Name),
+            ])]
+            : keyFields;
         for (const chunk of chunkArray(ids, DEFAULT_BATCH_SIZE)) {
-            const filter = singleColumn
+            const keyFilter = singleColumn
                 ? `${pkField} IN (${chunk.map((id) => `'${String(id).replace(/'/g, "''")}'`).join(',')})`
                 : chunk.map((id) => `(${CompositeKey.FromURLSegment(entityInfo, id).ToWhereClause()})`).join(' OR ');
             const rv = await this.RunView.RunView<Record<string, unknown>>({
                 EntityName: entityInfo.Name,
-                ExtraFilter: filter,
-                Fields: keyFields,
+                ExtraFilter: CombineExtraFilters(keyFilter, recordFilter),
+                Fields: fields,
                 ResultType: 'simple',
+                IgnoreMaxRows: true, // bounded by the key filter; an entity's UserViewMaxRows can be smaller than a chunk
             }, this.CurrentUser);
 
             if (rv.Success) {
                 for (const r of rv.Results) {
-                    existing.add(NormalizeUUID(CompositeKey.FromEntityRecord(entityInfo, r).ToCompactURLSegment()));
+                    const key = NormalizeUUID(CompositeKey.FromEntityRecord(entityInfo, r).ToCompactURLSegment());
+                    existing.add(key);
+                    rowsOut?.set(key, r);
                 }
+            } else if (recordFilter) {
+                throw new Error(`Failed to apply the entity document's record filter (${recordFilter}) to ${entityInfo.Name}: ${rv.ErrorMessage}`);
             } else {
                 // Fail open: if we can't verify existence, don't silently delete every match.
                 LogError(`FilterNonExistentMatches: failed to verify record existence for ${entityInfo.Name}: ${rv.ErrorMessage}`);
@@ -1191,6 +1903,36 @@ export class DuplicateRecordDetector extends VectorBase {
             }
         }
         return existing;
+    }
+
+    /**
+     * The entity document's record filter (`Configuration.recordFilter.extraFilter`): the records
+     * that take part in duplicate detection. A batch run checks only records that pass it, and every
+     * run offers only candidates that pass it. {@link CheckSingleRecord} and the entry-time check
+     * still check the record they are given, since the caller asked about that record. Vector sync
+     * applies the same filter to the records it vectorizes.
+     *
+     * @returns the predicate, or null when none is set
+     */
+    protected GetRecordFilter(entityDocument: MJEntityDocumentEntity): string | null {
+        return GetEntityDocumentRecordFilter(entityDocument);
+    }
+
+    /**
+     * How many neighbors to query for so that TopK survive the record filter: TopK times
+     * {@link RECORD_FILTER_TOPK_FACTOR} when a filter is set, TopK otherwise.
+     */
+    protected CandidateQueryTopK(topK: number, recordFilter: string | null): number {
+        return recordFilter ? topK * RECORD_FILTER_TOPK_FACTOR : topK;
+    }
+
+    /** Keep at most TopK candidates per result, in the order the query ranked them. Mutates in place. */
+    protected TrimToTopK(queryResults: RecordQueryResult[], topK: number): void {
+        for (const qr of queryResults) {
+            if (qr.Duplicates.Duplicates.length > topK) {
+                qr.Duplicates.Duplicates = qr.Duplicates.Duplicates.slice(0, topK);
+            }
+        }
     }
 
     // ─────────────────────────────────────────────
@@ -1253,7 +1995,10 @@ export class DuplicateRecordDetector extends VectorBase {
         entityDocument: MJEntityDocumentEntity,
         options: DuplicateDetectionOptions,
         startTime: number,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        totalRecords?: number,
+        processedSoFar: number = 0,
+        matchesSoFar: number = 0
     ): Promise<PotentialDuplicateResult[]> {
         const results: PotentialDuplicateResult[] = [];
         let matchesFound = 0;
@@ -1273,7 +2018,10 @@ export class DuplicateRecordDetector extends VectorBase {
 
             await this.persistDetailMatches(qr, duplicateRunDetails, reasoning?.Output);
 
-            this.reportProgress(options, 'Matching', queryResults.length, results.length, matchesFound, startTime);
+            const effectiveTotal = totalRecords ?? queryResults.length;
+            const effectiveProcessed = totalRecords != null ? processedSoFar + results.length : results.length;
+            const effectiveMatches = matchesSoFar + matchesFound;
+            this.reportProgress(options, 'Matching', effectiveTotal, effectiveProcessed, effectiveMatches, startTime, qr.SourceKey.Values());
         }
 
         return results;
@@ -1376,7 +2124,8 @@ export class DuplicateRecordDetector extends VectorBase {
      * independently), so a false-positive candidate reads NotDuplicate even when another candidate
      * in the same set is a confident Merge. Falls back to the set-level summary only when the
      * reasoner returned no per-candidate verdict for this record. The proposed survivor + field
-     * map stay set-level (they describe the merge of the set's true duplicates).
+     * map stay set-level (they describe the merge of the set's true duplicates). The run id is
+     * the set's, unless this candidate's verdict came from a run of its own.
      *
      * @param candidateRecordID this candidate's record id (matches the input candidate RecordID)
      */
@@ -1385,7 +2134,7 @@ export class DuplicateRecordDetector extends VectorBase {
         reasoning: DuplicateReasoningOutput,
         candidateRecordID: string
     ): void {
-        const verdict = reasoning.CandidateVerdicts.find(v => this.recordIdMatches(v.RecordID, candidateRecordID));
+        const verdict = this.findCandidateVerdict(reasoning, candidateRecordID);
         match.LLMRecommendation = verdict ? verdict.Recommendation : reasoning.Recommendation;
         match.LLMConfidence = verdict ? verdict.Confidence : reasoning.Confidence;
         match.LLMReasoning = (verdict?.Reasoning || reasoning.Reasoning) || null;
@@ -1393,8 +2142,33 @@ export class DuplicateRecordDetector extends VectorBase {
         match.LLMProposedFieldMap = reasoning.FieldChoices.length > 0
             ? JSON.stringify(reasoning.FieldChoices)
             : null;
+        this.applyRunIDsToMatch(match, reasoning, verdict);
+    }
+
+    /**
+     * Point the match row at the run that produced its verdict: the verdict's own prompt run when
+     * it carries one (a candidate `DecisionThenPrompt`'s decision dropped), else the set's run.
+     */
+    private applyRunIDsToMatch(
+        match: MJDuplicateRunDetailMatchEntity,
+        reasoning: DuplicateReasoningOutput,
+        verdict: DuplicateReasoningCandidateVerdict | undefined
+    ): void {
+        if (verdict?.AIPromptRunID) {
+            match.AIPromptRunID = verdict.AIPromptRunID;
+            match.AIAgentRunID = null;
+            return;
+        }
         match.AIPromptRunID = reasoning.AIPromptRunID ?? null;
         match.AIAgentRunID = reasoning.AIAgentRunID ?? null;
+    }
+
+    /** This candidate's own verdict, matched by record id, or undefined when the reasoner returned none for it. */
+    private findCandidateVerdict(
+        reasoning: DuplicateReasoningOutput,
+        candidateRecordID: string
+    ): DuplicateReasoningCandidateVerdict | undefined {
+        return reasoning.CandidateVerdicts.find(v => this.recordIdMatches(v.RecordID, candidateRecordID));
     }
 
     // ─────────────────────────────────────────────
@@ -1533,19 +2307,23 @@ export class DuplicateRecordDetector extends VectorBase {
     /**
      * Assemble the reasoning input for a matched set: source description, candidate
      * descriptions, and the differing-field deltas loaded for the whole set.
+     *
+     * @param unsavedSource the source record when it is not saved yet (the entry-time check): its
+     *   in-memory values stand in for the database row the delta load cannot find
      */
     protected async BuildReasoningInput(
         qr: RecordQueryResult,
         entityInfo: EntityInfo,
         entityDocument: MJEntityDocumentEntity,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        unsavedSource?: BaseEntity
     ): Promise<DuplicateReasoningInput> {
         // Load the field deltas first — the same pass yields a record-id → name label map, which
         // gives BOTH the source and the candidates real names (loaded from the records) instead of
         // raw GUIDs. The vector-metadata name is a weaker fallback; the GUID is the last resort.
         const deltaBuilder = new MatchedSetDeltaBuilder(this.RunView);
         const allKeys = [qr.SourceKey, ...qr.Duplicates.Duplicates];
-        const { FieldDeltas: fieldDeltas, Labels: labels } = await deltaBuilder.Build(entityInfo, allKeys, contextUser);
+        const { FieldDeltas: fieldDeltas, Labels: labels } = await deltaBuilder.Build(entityInfo, allKeys, contextUser, unsavedSource);
 
         const candidates: ReasoningCandidate[] = qr.Duplicates.Duplicates.map(d => ({
             RecordID: d.Values(),
@@ -1597,11 +2375,12 @@ export class DuplicateRecordDetector extends VectorBase {
     }
 
     /**
-     * Carry the set-level verdict + resolved survivor field map onto the result so the
-     * auto-merge step (AutoMergeAboveAbsolute) can consult the recommendation and apply the
-     * literal {FieldName, Value} overrides via {@link RecordMergeRequest.FieldMap}. The UI
-     * still reads the persisted per-row {@link MJDuplicateRunDetailMatchEntity.LLMProposedFieldMap}
-     * (the raw choices) and lets the reviewer override before a manual merge.
+     * Carry the set-level verdict + resolved survivor field map onto the result, and each
+     * candidate's own verdict onto its {@link PotentialDuplicate}, so the auto-merge step
+     * (AutoMergeAboveAbsolute) can consult both recommendations and apply the literal
+     * {FieldName, Value} overrides via {@link RecordMergeRequest.FieldMap}. The UI still reads
+     * the persisted per-row {@link MJDuplicateRunDetailMatchEntity.LLMProposedFieldMap} (the raw
+     * choices) and lets the reviewer override before a manual merge.
      */
     protected applyReasoningToResult(
         result: PotentialDuplicateResult,
@@ -1614,6 +2393,9 @@ export class DuplicateRecordDetector extends VectorBase {
         result.ReasoningRecommendation = output.Recommendation;
         result.ReasoningFieldMap = fieldMap.length > 0 ? fieldMap : undefined;
         result.ReasoningText = output.Reasoning?.trim() ? output.Reasoning : undefined;
+        for (const dupe of result.Duplicates) {
+            dupe.ReasoningRecommendation = this.findCandidateVerdict(output, dupe.Values())?.Recommendation;
+        }
     }
 
     // ─────────────────────────────────────────────
@@ -1624,7 +2406,7 @@ export class DuplicateRecordDetector extends VectorBase {
      * Automatically merge records that meet the absolute match threshold.
      */
     protected async ProcessAutoMerges(
-        response: PotentialDuplicateResponse,
+        results: PotentialDuplicateResult[],
         entityDocument: MJEntityDocumentEntity,
         options: DuplicateDetectionOptions = {}
     ): Promise<void> {
@@ -1639,7 +2421,7 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         const absoluteThreshold = options.AbsoluteMatchThreshold ?? entityDocument.AbsoluteMatchThreshold;
-        for (const dupeResult of response.PotentialDuplicateResult) {
+        for (const dupeResult of results) {
             for (const [index, dupe] of dupeResult.Duplicates.entries()) {
                 if (!this.IsAutoMergeEligible(dupe, dupeResult, entityDocument, absoluteThreshold)) {
                     continue;
@@ -1647,6 +2429,29 @@ export class DuplicateRecordDetector extends VectorBase {
                 await this.executeAutoMerge(dupe, dupeResult, entityDocument, index);
             }
         }
+    }
+
+    /**
+     * True when a result carries at least one candidate that {@link ProcessAutoMerges} could act
+     * on. Used to decide what the run must carry across batches: results with no eligible
+     * candidate are already persisted and are never read again, so holding them only grows the
+     * heap.
+     *
+     * Deliberately reuses {@link IsAutoMergeEligible}, so a subclass that narrows eligibility
+     * narrows what is retained too, and the two can never disagree.
+     */
+    protected resultHasAutoMergeCandidate(
+        result: PotentialDuplicateResult,
+        entityDocument: MJEntityDocumentEntity,
+        options: DuplicateDetectionOptions = {}
+    ): boolean {
+        const entityInfo = this.Metadata.EntityByName(entityDocument.Entity);
+        if (entityInfo && !entityInfo.AllowRecordMerge) {
+            return false;
+        }
+        const absoluteThreshold = options.AbsoluteMatchThreshold ?? entityDocument.AbsoluteMatchThreshold;
+        return result.Duplicates.some((dupe) =>
+            this.IsAutoMergeEligible(dupe, result, entityDocument, absoluteThreshold));
     }
 
     /**
@@ -1658,7 +2463,9 @@ export class DuplicateRecordDetector extends VectorBase {
      * Reasoning path (EnableLLMReasoning = true): `AutomationLevel` governs.
      *   - ReviewAll / LLMGated → never auto-merge (everything goes to human review).
      *   - AutoMergeAboveAbsolute → at/above the absolute threshold AND the set's LLM
-     *     recommendation is 'Merge'.
+     *     recommendation is 'Merge' AND this candidate's own verdict is 'Merge'. A set-level
+     *     'Merge' only says that SOME candidate is a duplicate, so it never merges a candidate
+     *     the reasoner judged otherwise, or returned no verdict for.
      */
     protected IsAutoMergeEligible(
         dupe: PotentialDuplicate,
@@ -1673,7 +2480,9 @@ export class DuplicateRecordDetector extends VectorBase {
         if (entityDocument.AutomationLevel !== 'AutoMergeAboveAbsolute') {
             return false;
         }
-        return aboveAbsolute && dupeResult.ReasoningRecommendation === 'Merge';
+        return aboveAbsolute
+            && dupeResult.ReasoningRecommendation === 'Merge'
+            && dupe.ReasoningRecommendation === 'Merge';
     }
 
     /**
@@ -1770,6 +2579,55 @@ function chunkArray<T>(array: T[], chunkSize: number): T[][] {
         chunks.push(array.slice(i, i + chunkSize));
     }
     return chunks;
+}
+
+/**
+ * Whether a reasoning provider is a decision provider. Checked by shape, not `instanceof`, so this
+ * module need not load the decision provider and the AI engine behind it; the package index
+ * registers the provider, as it does every other reasoning mode's.
+ */
+function isDecisionReasoningProvider(provider: DuplicateReasoningProvider | null): provider is DecisionReasoningProvider {
+    return provider != null
+        && 'DecideCandidates' in provider && typeof provider.DecideCandidates === 'function'
+        && 'BandCandidate' in provider && typeof provider.BandCandidate === 'function';
+}
+
+/**
+ * The entered values with every string cut to {@link DUPLICATE_ENTRY_CHECK_MAX_FIELD_TEXT_LENGTH}.
+ * Other values pass through as they are.
+ */
+function boundEnteredValues(values: Record<string, unknown>): Record<string, unknown> {
+    const bounded: Record<string, unknown> = {};
+    for (const [name, value] of Object.entries(values)) {
+        bounded[name] = typeof value === 'string' ? truncateText(value) : value;
+    }
+    return bounded;
+}
+
+/**
+ * Text cut to at most `max` characters; a cut text ends with an ellipsis, so a reader (the decision
+ * model included) can tell it was cut.
+ */
+function truncateText(text: string, max: number = DUPLICATE_ENTRY_CHECK_MAX_FIELD_TEXT_LENGTH): string {
+    return text.length <= max ? text : `${text.slice(0, max - 1)}\u2026`;
+}
+
+/**
+ * Orders entity documents oldest first: by `__mj_CreatedAt`, then by ID, so the order is total
+ * and stable across calls.
+ */
+function compareOldestFirst(a: MJEntityDocumentEntity, b: MJEntityDocumentEntity): number {
+    const byAge = (a.__mj_CreatedAt?.getTime() ?? 0) - (b.__mj_CreatedAt?.getTime() ?? 0);
+    return byAge !== 0 ? byAge : NormalizeUUID(a.ID).localeCompare(NormalizeUUID(b.ID));
+}
+
+/**
+ * Orders flagged candidates most probable first. A candidate the decision gave no answer for sorts
+ * after every answered one; ties fall back to the vector score.
+ */
+function compareMostProbableFirst(a: DuplicateEntryCandidate, b: DuplicateEntryCandidate): number {
+    const byProbability = (b.Probability ?? -1) - (a.Probability ?? -1);
+    return byProbability !== 0 ? byProbability : b.VectorScore - a.VectorScore;
 }
 
 /**

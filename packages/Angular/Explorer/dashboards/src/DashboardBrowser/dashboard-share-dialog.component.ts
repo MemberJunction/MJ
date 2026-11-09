@@ -9,7 +9,7 @@ import { DashboardShareAdapter } from './dashboard-share-adapter';
 
 /**
  * Public re-export kept for backward compatibility with existing call sites
- * ({@link DashboardBrowserResourceComponent}, `DashboardResource` wrapper).
+ * (the `DashboardResource` wrapper in `@memberjunction/ng-explorer-core`).
  * The new abstraction lives in `@memberjunction/ng-resource-permissions`.
  */
 export type ShareDialogResult = ResourceShareDialogResult & { Dashboard?: MJDashboardEntity };

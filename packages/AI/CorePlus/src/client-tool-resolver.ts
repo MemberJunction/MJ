@@ -11,10 +11,18 @@
  * Static-tier data is **injected** (never fetched here) so this module stays in the
  * client-safe `@memberjunction/ai-core-plus` package.
  *
+ * There is deliberately no prompt *renderer* here. A markdown tool-section formatter once lived in
+ * this module with the stated aim of giving async and realtime "one wording"; neither ever adopted
+ * it (the async path words its own section, and realtime renders tools as compact signatures via
+ * {@link FormatAppContextNote} on purpose — voice prompts are token-sensitive and a JSON-schema dump
+ * per tool is not what a speaking model wants), so it was removed rather than left as a second,
+ * tempting wording with no caller.
+ *
  * @module @memberjunction/ai-core-plus
  */
 
 import { ClientToolMetadata } from './agent-types';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * A source of statically-declared (metadata) tools for an agent — e.g. the
@@ -77,41 +85,115 @@ export function ResolveClientTools(input: ResolveClientToolsInput): ClientToolMe
 }
 
 /**
- * Render a resolved tool set as the markdown section injected into an agent's system
- * prompt (async) or realtime framing. Single wording so async and realtime read
- * identically. Returns '' when there are no tools.
+ * The structural slice of an `MJ: AI Client Tool Definitions` row the mappers below read. Declared
+ * structurally (rather than importing the entity) so this module stays a pure, client-safe function
+ * library; `MJAIClientToolDefinitionEntity` satisfies it as-is.
  */
-export function FormatClientToolsForPrompt(tools: ClientToolMetadata[]): string {
-    if (!tools || tools.length === 0) {
-        return '';
+export interface ClientToolDefinitionLike {
+    /** The definition's primary key. */
+    ID: string;
+    /** The tool name the model calls. */
+    Name: string;
+    /** What the tool does — what the model reads to decide when to use it. */
+    Description: string;
+    /** JSON text of the input JSON Schema, or `null` when none was authored. */
+    InputSchemaJSON: string | null;
+    /** JSON text of the output JSON Schema, or `null`. */
+    OutputSchemaJSON: string | null;
+    /** Grouping label, or `null`. */
+    Category: string | null;
+    /** Per-tool timeout override in ms, or `null`. */
+    DefaultTimeoutMs: number | null;
+}
+
+/** Parses a stored schema column, returning `undefined` for blank or malformed text (never throws). */
+function parseSchemaColumn(text: string | null): Record<string, unknown> | undefined {
+    if (typeof text !== 'string' || text.trim().length === 0) {
+        return undefined;
     }
-
-    const lines: string[] = ['## Available Client Tools', ''];
-    lines.push(
-        'You can invoke these client-side tools. Each runs in the user\'s app and returns a result you can use.',
-        '',
-    );
-
-    // Group by Category for readability; uncategorized tools go last under "General".
-    const byCategory = new Map<string, ClientToolMetadata[]>();
-    for (const tool of tools) {
-        const cat = tool.Category && tool.Category.trim().length > 0 ? tool.Category : 'General';
-        const bucket = byCategory.get(cat) ?? [];
-        bucket.push(tool);
-        byCategory.set(cat, bucket);
+    try {
+        const parsed: unknown = JSON.parse(text);
+        return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : undefined;
+    } catch {
+        return undefined;
     }
+}
 
-    for (const [category, group] of byCategory) {
-        lines.push(`### ${category}`);
-        for (const tool of group) {
-            lines.push(`- **${tool.Name}** — ${tool.Description}`);
-            lines.push(`  - Input schema: \`${JSON.stringify(tool.InputSchema)}\``);
-            if (tool.OutputSchema) {
-                lines.push(`  - Output schema: \`${JSON.stringify(tool.OutputSchema)}\``);
-            }
+/**
+ * Maps a stored client-tool definition to the {@link ClientToolMetadata} the resolver and the
+ * prompt/manifest renderers consume. Tolerant by design: a hand-edited, malformed schema column
+ * yields an empty `InputSchema` (the tool is still callable, just unconstrained) instead of
+ * throwing out of session start.
+ *
+ * @param definition The definition row (or anything structurally like it).
+ */
+export function ClientToolMetadataFromDefinition(definition: ClientToolDefinitionLike): ClientToolMetadata {
+    return {
+        Name: definition.Name,
+        Description: definition.Description,
+        InputSchema: parseSchemaColumn(definition.InputSchemaJSON) ?? {},
+        OutputSchema: parseSchemaColumn(definition.OutputSchemaJSON),
+        Category: definition.Category || undefined,
+        DefaultTimeoutMs: definition.DefaultTimeoutMs || undefined,
+    };
+}
+
+/** One entry of `Application.AgentSettings.ClientTools`: a reference to a catalog definition. */
+export interface AppClientToolReference {
+    /** References `MJ: AI Client Tool Definitions` by ID (preferred)… */
+    ClientToolDefinitionID?: string | null;
+    /** …or by Name. */
+    Name?: string | null;
+    /** App-level priority for first-match-wins resolution; LOWER number = higher priority (MJ convention). */
+    Priority?: number | null;
+}
+
+/**
+ * Resolves an app's `AgentSettings.ClientTools` references against the client-tool catalog into the
+ * **app tier** of {@link ResolveClientTools}.
+ *
+ * Entries resolve by `ClientToolDefinitionID` (preferred) or `Name` (case-insensitive); an entry
+ * naming nothing in the catalog is skipped and reported through `onUnresolved` — a stale reference
+ * must not take the app's other tools down with it. Output is ordered by `Priority` ascending (an
+ * absent priority sorts last), then by declaration order, so first-match-wins resolution honors the
+ * author's intent.
+ *
+ * @param references The app's `ClientTools` entries.
+ * @param definitions The catalog (e.g. `AIEngine.Instance.ClientToolDefinitions`).
+ * @param onUnresolved Optional callback invoked once per entry that matched no definition.
+ */
+export function ResolveAppClientToolMetadata(
+    references: ReadonlyArray<AppClientToolReference> | null | undefined,
+    definitions: ReadonlyArray<ClientToolDefinitionLike>,
+    onUnresolved?: (reference: AppClientToolReference) => void,
+): ClientToolMetadata[] {
+    const resolved: Array<{ Tool: ClientToolMetadata; Priority: number; Order: number }> = [];
+    (references ?? []).forEach((reference, order) => {
+        const definition = findDefinition(reference, definitions);
+        if (!definition) {
+            onUnresolved?.(reference);
+            return;
         }
-        lines.push('');
-    }
+        resolved.push({
+            Tool: ClientToolMetadataFromDefinition(definition),
+            Priority: typeof reference.Priority === 'number' ? reference.Priority : Number.MAX_SAFE_INTEGER,
+            Order: order,
+        });
+    });
+    return resolved.sort((a, b) => a.Priority - b.Priority || a.Order - b.Order).map((r) => r.Tool);
+}
 
-    return lines.join('\n').trimEnd();
+/** Finds the catalog definition a reference points at (ID first, then Name). */
+function findDefinition(
+    reference: AppClientToolReference,
+    definitions: ReadonlyArray<ClientToolDefinitionLike>,
+): ClientToolDefinitionLike | undefined {
+    if (reference.ClientToolDefinitionID) {
+        const byId = definitions.find((d) => UUIDsEqual(d.ID, reference.ClientToolDefinitionID));
+        if (byId) {
+            return byId;
+        }
+    }
+    const name = reference.Name?.trim().toLowerCase();
+    return name ? definitions.find((d) => d.Name.trim().toLowerCase() === name) : undefined;
 }

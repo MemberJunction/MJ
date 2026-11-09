@@ -13,8 +13,8 @@
         <div class="template-main-area" style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto;">
 
             <!-- Header Section -->
-            <div class="template-header-area">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
+            <div class="template-header-area phone-hero" [class.hero-view]="!EditMode" [class.hero-compact]="!EditMode && !HeroDetailsOpen">
+                <div class="hero-header-row">
 
                     <!-- Left: Template Info -->
                     <div style="flex: 1; min-width: 0;">
@@ -72,11 +72,11 @@
                                       placeholder="Enter template description..."
                                       style="width: 100%; max-width: 600px; margin-bottom: 12px;"></textarea>
                         } @else if (record.Description) {
-                            <p class="description-text">{{ record.Description }}</p>
+                            <p class="description-text phone-hero-detail">{{ record.Description }}</p>
                         }
 
                         <!-- Quick Info Row -->
-                        <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                        <div class="phone-hero-detail" style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
                             @if (record.Category) {
                                 <div style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
                                     <i class="fa-solid fa-folder meta-icon"></i>
@@ -94,9 +94,9 @@
                     </div>
 
                     <!-- Right: Action Buttons -->
-                    <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
+                    <div class="action-buttons">
                         @if (record.IsSaved) {
-                            <button class="run-template-btn"
+                            <button class="run-template-btn phone-hero-run"
                                     (click)="runTemplate()"
                                     title="Run Template">
                                 <i class="fa-solid fa-play"></i> Run
@@ -104,13 +104,21 @@
                         }
                     </div>
                 </div>
+              @if (!EditMode && HeroSummary) {
+                <button type="button" class="phone-hero-summary" [attr.aria-expanded]="HeroDetailsOpen" (click)="ToggleHeroDetails()">
+                  <span class="phone-hero-summary-text">{{ HeroSummary }}</span>
+                  <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                </button>
+              }
             </div>
 
             <!-- Configuration Sections with Expansion Panels -->
             <div class="configuration-sections">
+                <!-- Phone: one section at a time behind a picker; desktop keeps the accordions -->
+                <mj-accordion-sections [Enabled]="Phone.IsPhone" [ActiveKey]="Phone.Section" (ActiveKeyChange)="Phone.Pick($event)">
 
                 <!-- Template Editor Section -->
-                <mj-accordion-panel
+                <mj-accordion-panel SectionKey="editor" SectionTitle="Template Editor" SectionIcon="fa-solid fa-code"
                     [Expanded]="true"
                     style="margin-bottom: 12px;">
                     <ng-template mjAccordionTitle>
@@ -123,8 +131,9 @@
                         </span>
                     </ng-template>
 
-                    <div style="padding: 8px; min-height: 400px;">
+                    <div class="phone-flush-x" style="padding: 8px; min-height: 400px;">
                         <mj-template-editor
+                            #templateEditor
                             [template]="record"
                             [config]="templateEditorConfig"
                             (contentChange)="onSharedTemplateContentChange($event)"
@@ -135,7 +144,7 @@
                 </mj-accordion-panel>
 
                 <!-- Details Section -->
-                <mj-accordion-panel
+                <mj-accordion-panel SectionKey="details" SectionTitle="Details" SectionIcon="fa-solid fa-cogs"
                     [Expanded]="false"
                     style="margin-bottom: 12px;">
                     <ng-template mjAccordionTitle>
@@ -145,7 +154,7 @@
                         </span>
                     </ng-template>
 
-                    <div style="padding: 16px;">
+                    <div class="phone-flush-x" style="padding: 16px;">
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                             <!-- Left Column -->
                             <div>
@@ -225,7 +234,7 @@
 
                 <!-- Template Parameters Section -->
                 @if (record.IsSaved) {
-                    <mj-accordion-panel
+                    <mj-accordion-panel SectionKey="parameters" SectionTitle="Parameters" SectionIcon="fa-solid fa-sliders"
                         [Expanded]="false"
                         style="margin-bottom: 12px;">
                         <ng-template mjAccordionTitle>
@@ -246,7 +255,7 @@
 
                 <!-- AI Prompts Section -->
                 @if (record.IsSaved) {
-                    <mj-accordion-panel
+                    <mj-accordion-panel SectionKey="prompts" SectionTitle="AI Prompts" SectionIcon="fa-solid fa-robot"
                         [Expanded]="false"
                         style="margin-bottom: 12px;">
                         <ng-template mjAccordionTitle>
@@ -269,7 +278,7 @@
 
                 <!-- Entity Documents Section -->
                 @if (record.IsSaved) {
-                    <mj-accordion-panel
+                    <mj-accordion-panel SectionKey="documents" SectionTitle="Entity Documents" SectionIcon="fa-solid fa-file-text"
                         [Expanded]="false"
                         style="margin-bottom: 12px;">
                         <ng-template mjAccordionTitle>
@@ -289,6 +298,7 @@
                         </div>
                     </mj-accordion-panel>
                 }
+                </mj-accordion-sections>
             </div>
         </div>
         </form>

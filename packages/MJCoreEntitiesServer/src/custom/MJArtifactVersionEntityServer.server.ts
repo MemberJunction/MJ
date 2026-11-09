@@ -40,7 +40,7 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
 
         // Automatically load attributes for this version
         try {
-            const rv = new RunView();
+            const rv = new RunView(this.RunViewProviderToUse);
             const result = await rv.RunView<MJArtifactVersionAttributeEntity>({
                 EntityName: 'MJ: Artifact Version Attributes',
                 ExtraFilter: `ArtifactVersionID='${this.ID}'`,
@@ -196,7 +196,7 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
         const savedAttributes: MJArtifactVersionAttributeEntity[] = [];
 
         // Load existing attributes for this version
-        const rv = new RunView();
+        const rv = new RunView(this.RunViewProviderToUse);
         const existingAttrsResult = await rv.RunView<MJArtifactVersionAttributeEntity>({
             EntityName: 'MJ: Artifact Version Attributes',
             ExtraFilter: `ArtifactVersionID='${this.ID}'`,

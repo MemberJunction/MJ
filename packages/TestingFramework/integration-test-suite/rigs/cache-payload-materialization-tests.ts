@@ -32,8 +32,13 @@
  * never landed, the array would still hold the entities `Config(true)` put there and an
  * `instanceof BaseEntity` assertion would pass for the wrong reason. So the replay rewrites the
  * `Note` TEXT to a marker and asserts the marker is present — proving the event actually
- * committed — while leaving every date value exactly as captured. Shape and serialization are
- * untouched; only one string field's value differs.
+ * committed. It also moves `__mj_UpdatedAt` forward, as any real save does: an engine skips a
+ * payload whose (primary key, `__mj_UpdatedAt`) pairs match what it holds, so a
+ * text change with an unchanged stamp — which real traffic never produces — would be skipped.
+ * `__mj_CreatedAt`, the value under test, stays exactly as captured, still a string.
+ *
+ * IDENTICAL PAYLOADS (NW4). Republishing NW2's bytes unchanged must be skipped: the engine keeps
+ * the same array and notifies no observer.
  *
  * REQUIRES: `REDIS_URL` plus the usual DB_* env. Seeds and deletes two `MJ: AI Agent Notes` rows
  * through `BaseEntity.Save()`/`.Delete()` (never raw DML), so it is a MUTATING rig — not part of
@@ -65,6 +70,8 @@ const NOTES_ENTITY = 'MJ: AI Agent Notes';
 const SETTLE_MS = 1500;
 /** Marks the replayed rows so NW2 can prove the event actually committed. */
 const REPLAY_MARKER = 'IT wire-replay marker';
+/** The `__mj_UpdatedAt` NW2's replay stamps on every row — later than anything a real load returns. */
+const REPLAY_UPDATED_AT = new Date(Date.now() + 60_000).toISOString();
 
 const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -106,6 +113,8 @@ async function main(): Promise<void> {
     const captured: CapturedEvent[] = [];
     /** The captured publish for the agent-notes cache entry — the payload under test. */
     let notesEvent: CapturedEvent | undefined;
+    /** The exact message NW2 published, republished unchanged by NW4. */
+    let nw2Message: string | undefined;
 
     const runner = new TestRunner('Cache payload materialization (real Redis wire)');
 
@@ -196,16 +205,21 @@ async function main(): Promise<void> {
         runner.Test('NW2: replaying those exact bytes from a foreign server leaves entities with Date fields', async () => {
             Assert(!!notesEvent, 'NW1 must have captured the notes publish');
 
-            // Rewrite ONLY the Note text, so a landed event is distinguishable from a no-op.
-            // Every date value stays exactly as captured.
-            const rows = parsePayloadRows(notesEvent!).map(row => ({ ...row, Note: `${REPLAY_MARKER} ${String(row.ID)}` }));
+            // Rewrite the Note text so a landed event is distinguishable from a no-op, and move
+            // __mj_UpdatedAt forward the way a real save would. __mj_CreatedAt stays as captured.
+            const rows = parsePayloadRows(notesEvent!).map(row => ({
+                ...row,
+                Note: `${REPLAY_MARKER} ${String(row.ID)}`,
+                __mj_UpdatedAt: REPLAY_UPDATED_AT,
+            }));
             const replay: CacheChangedEvent = {
                 ...notesEvent!,
                 SourceServerId: 'it-foreign-process-00000000-0000-4000-b000-000000000001',
                 Data: JSON.stringify({ results: rows, totalRowCount: rows.length }),
             };
 
-            await rawPublisher!.publish(PUB_SUB_CHANNEL, JSON.stringify(replay));
+            nw2Message = JSON.stringify(replay);
+            await rawPublisher!.publish(PUB_SUB_CHANNEL, nw2Message);
             await sleep(SETTLE_MS);
 
             const notes = AIEngine.Instance.AgentNotes;
@@ -238,6 +252,27 @@ async function main(): Promise<void> {
                 );
             }
             console.log('      → unguarded .getTime() sort over wire-delivered AgentNotes is safe');
+        });
+
+        runner.Test('NW4: republishing identical bytes is skipped — same AgentNotes array, no observer notified', async () => {
+            Assert(!!nw2Message, 'NW2 must have published its replay');
+            const held = AIEngine.Instance.AgentNotes;
+            let emissions = 0;
+            let replayed = false;
+            const sub = AIEngineBase.Instance.ObserveProperty('_agentNotes').subscribe(() => {
+                if (replayed) emissions++;
+                replayed = true;
+            });
+            replayed = true;
+            try {
+                await rawPublisher!.publish(PUB_SUB_CHANNEL, nw2Message!);
+                await sleep(SETTLE_MS);
+                Assert(AIEngine.Instance.AgentNotes === held, 'identical bytes must not replace the AgentNotes array');
+                AssertEqual(emissions, 0, 'identical bytes must not notify AgentNotes observers');
+            } finally {
+                sub.unsubscribe();
+            }
+            console.log('      → identical wire payload skipped');
         });
 
         const failed = await runner.Run();

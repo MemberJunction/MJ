@@ -1,0 +1,133 @@
+@if (Visible) {
+  <mj-dialog [Visible]="true" Size="md" [Title]="DialogTitle" (Close)="Cancel()">
+    <div class="part-dialog">
+      <section>
+        <div class="part-dialog__label" id="part-dialog-type-label">Part type</div>
+        <div class="part-dialog__types" role="group" aria-labelledby="part-dialog-type-label">
+          @for (partType of TypeTiles; track partType.ID) {
+            <button type="button" class="part-dialog__type"
+                    [class.part-dialog__type--selected]="IsSelected(partType)"
+                    [attr.aria-pressed]="IsSelected(partType)"
+                    [attr.data-autofocus]="Mode === 'add' && IsSelected(partType) ? '' : null"
+                    [disabled]="Mode === 'edit' && !IsSelected(partType)"
+                    (click)="SelectPartType(partType)">
+              <i [class]="partType.Icon || 'fa-solid fa-puzzle-piece'" aria-hidden="true"></i>
+              <span class="part-dialog__type-label">{{ TileLabel(partType) }}</span>
+              <span class="part-dialog__type-desc">{{ TileDescription(partType) }}</span>
+            </button>
+          }
+        </div>
+        @if (TypeTiles.length === 0) {
+          <mj-empty-state Size="compact" Variant="warning" Title="No part types available"
+                          Message="Dashboard part types have not been set up in this system." />
+        }
+      </section>
+
+      @if (SelectedPartType) {
+        @if (HasSettingsPanel) {
+          <section>
+            <div class="part-dialog__label">Source</div>
+            @if (IsLoadingPanel) {
+              <mj-loading Text="Loading..." Size="small"></mj-loading>
+            }
+            @if (LoadError) {
+              <p class="part-dialog__warning">{{ LoadError }}</p>
+            }
+            <ng-container #configPanelContainer></ng-container>
+            @for (error of Errors; track $index) {
+              <p class="part-dialog__error"><i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i> {{ error }}</p>
+            }
+          </section>
+        }
+
+        @if (IsLoadingInputs) {
+          <section>
+            <div class="part-dialog__label">Inputs</div>
+            <mj-loading Text="Loading inputs..." Size="small"></mj-loading>
+          </section>
+        } @else if (InputsLoadError) {
+          <section>
+            <div class="part-dialog__label">Inputs</div>
+            <p class="part-dialog__warning">{{ InputsLoadError }}</p>
+          </section>
+        }
+        @if (!IsLoadingInputs && !InputsLoadError && HasInputs && InputsEditor; as editor) {
+          <section class="part-dialog__inputs">
+            <div class="part-dialog__label">Inputs</div>
+            <p class="part-dialog__hint">Feed an input from a dashboard property, fix it with a default, or leave it to its own default.</p>
+            @for (row of editor.Rows; track row.Input.Name) {
+              <div class="part-dialog__input">
+                <div class="part-dialog__input-name">
+                  {{ row.Input.Name }}
+                  <span class="part-dialog__input-type">{{ row.Input.Type }}</span>
+                  @if (row.Input.IsRequired) {
+                    <span class="part-dialog__input-required" title="Required">*</span>
+                  }
+                </div>
+                @if (row.Input.ServerSet) {
+                  <span class="part-dialog__input-note"><i class="fa-solid fa-lock" aria-hidden="true"></i> Set by server</span>
+                } @else if (!editor.CanMap(row)) {
+                  <span class="part-dialog__input-note">Can't be mapped: a dashboard property can't fill a {{ row.Input.Type }} input</span>
+                } @else {
+                  <div class="part-dialog__input-controls">
+                    <select class="mj-input" [attr.aria-label]="'Dashboard property for ' + row.Input.Name"
+                            [ngModel]="row.Property ?? ''" (ngModelChange)="SetInputProperty(row, $event)">
+                      <option value="">No dashboard property</option>
+                      @for (name of PropertyChoices(row); track name) {
+                        <option [value]="name">{{ name }}</option>
+                      }
+                    </select>
+                    <mj-property-default-editor [Default]="row.Default" [Type]="editor.DefaultType(row)"
+                        [Label]="'Default for ' + row.Input.Name"
+                        [NoneLabel]="row.Property ? 'No fallback' : 'Its own default'"
+                        (DefaultChange)="SetInputDefault(row, $event)"></mj-property-default-editor>
+                  </div>
+                }
+              </div>
+            }
+            @for (orphan of editor.Orphans; track $index) {
+              <div class="part-dialog__input part-dialog__input--broken">
+                <span><i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i> "{{ orphan.Input }}" is mapped but is not an input of this part</span>
+                <button mjButton Variant="flat" Size="sm" type="button" (click)="RemoveOrphan($index)">Remove</button>
+              </div>
+            }
+          </section>
+        }
+
+        <section>
+          <label class="part-dialog__label" for="part-dialog-title">Title</label>
+          <input id="part-dialog-title" class="mj-input" type="text" [(ngModel)]="Title" [placeholder]="TitlePlaceholder">
+        </section>
+
+        @if (!HasSettingsPanel) {
+          @for (error of Errors; track $index) {
+            <p class="part-dialog__error"><i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i> {{ error }}</p>
+          }
+        }
+
+        @if (IsQuery) {
+          <section class="part-dialog__options">
+            <label class="part-dialog__option">
+              <input type="checkbox" class="mj-checkbox" [(ngModel)]="ShowParameterControls"> Show parameter controls
+            </label>
+            <label class="part-dialog__option">
+              <input type="checkbox" class="mj-checkbox" [(ngModel)]="AutoRefreshEnabled"> Refresh automatically every
+              <select class="mj-input part-dialog__refresh" [(ngModel)]="AutoRefreshSeconds" [disabled]="!AutoRefreshEnabled" aria-label="Refresh interval in seconds">
+                @for (seconds of RefreshChoices; track seconds) {
+                  <option [ngValue]="seconds">{{ seconds }}</option>
+                }
+              </select>
+              seconds
+            </label>
+          </section>
+        }
+      }
+    </div>
+    <mj-dialog-actions>
+      <button mjButton Variant="primary" type="button" [disabled]="!CanSubmit" (click)="Submit()">
+        <i [class]="SubmitIcon" aria-hidden="true"></i> {{ SubmitLabel }}
+      </button>
+      <button mjButton Variant="secondary" type="button" (click)="Cancel()">Cancel</button>
+    </mj-dialog-actions>
+  </mj-dialog>
+}

@@ -29,9 +29,13 @@ import { SchemaValidatorOracle } from '../oracles/SchemaValidatorOracle';
 import { TraceValidatorOracle } from '../oracles/TraceValidatorOracle';
 import { TraceSubAgentValidatorOracle } from '../oracles/TraceSubAgentValidatorOracle';
 import { AgentDecisionOracle, ResponseWellFormedOracle } from '../oracles/AgentDecisionOracle';
+import { DecisionLabelMatchOracle } from '../oracles/DecisionLabelMatchOracle';
+import { DiscoveryLabelMatchOracle } from '../oracles/DiscoveryLabelMatchOracle';
 import { LLMJudgeOracle } from '../oracles/LLMJudgeOracle';
+import { DecisionJudgeOracle } from '../oracles/DecisionJudgeOracle';
 import { ExactMatchOracle } from '../oracles/ExactMatchOracle';
 import { SQLValidatorOracle } from '../oracles/SQLValidatorOracle';
+import { RubricOracle } from '../oracles/RubricOracle';
 import {
     TestRunOptions,
     SuiteRunOptions,
@@ -49,6 +53,8 @@ import {
     GetMachineIdentifier
 } from '../utils/execution-context';
 import { VariableResolver, VariableResolutionError } from '../utils/variable-resolver';
+import { MeanExecutedScore } from '../utils/result-formatter';
+import { AssignTestsToShard, EstimateTestWeightSeconds, FilterTestsByTransport } from '../utils/suite-sharding';
 
 /**
  * Main testing engine that orchestrates test execution.
@@ -388,9 +394,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             const passedTests = testResults.filter(r => r.status === 'Passed').length;
             const failedTests = testResults.filter(r => r.status === 'Failed' || r.status === 'Error' || r.status === 'Timeout').length;
             const skippedTests = testResults.filter(r => r.status === 'Skipped').length;
-            const executed = testResults.filter(r => r.status !== 'Skipped');
-            const totalScore = executed.reduce((sum, r) => sum + r.score, 0);
-            const avgScore = executed.length > 0 ? totalScore / executed.length : 0;
+            const avgScore = MeanExecutedScore(testResults);
 
             const result: TestSuiteRunResult = {
                 suiteRunId: suiteRun.ID,
@@ -656,9 +660,13 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         this.RegisterOracle(new TraceSubAgentValidatorOracle());
         this.RegisterOracle(new AgentDecisionOracle());
         this.RegisterOracle(new ResponseWellFormedOracle());
+        this.RegisterOracle(new DecisionLabelMatchOracle());
+        this.RegisterOracle(new DiscoveryLabelMatchOracle());
         this.RegisterOracle(new LLMJudgeOracle());
+        this.RegisterOracle(new DecisionJudgeOracle());
         this.RegisterOracle(new ExactMatchOracle());
         this.RegisterOracle(new SQLValidatorOracle());
+        this.RegisterOracle(new RubricOracle());
     }
 
     /**
@@ -814,6 +822,39 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             this.log(`Filtered to ${filteredTests.length} tests by sequence numbers [${options.sequence.join(', ')}]`, options.verbose);
         }
 
+        // Filter by transport ('server' | 'client' | 'all') if provided
+        if (options.transport && options.transport !== 'all') {
+            filteredTests = FilterTestsByTransport(filteredTests, options.transport);
+            this.log(`Filtered to ${filteredTests.length} tests by transport '${options.transport}'`, options.verbose);
+        }
+
+        // Partition by deterministic LPT shard if provided
+        if (options.shard) {
+            // Canonicalize tied-Sequence ordering by Name then ID before sharding so separate
+            // worker processes connected to different database clones always see the identical
+            // candidate order regardless of SQL row scan order.
+            filteredTests.sort((a, b) => {
+                const seqA = testSequenceMap.get(a.ID) ?? Number.MAX_SAFE_INTEGER;
+                const seqB = testSequenceMap.get(b.ID) ?? Number.MAX_SAFE_INTEGER;
+                if (seqA !== seqB) {
+                    return seqA - seqB;
+                }
+                const nameCmp = (a.Name ?? '').localeCompare(b.Name ?? '');
+                if (nameCmp !== 0) {
+                    return nameCmp;
+                }
+                return (a.ID ?? '').localeCompare(b.ID ?? '');
+            });
+
+            const beforeShardCount = filteredTests.length;
+            filteredTests = AssignTestsToShard(filteredTests, options.shard);
+            const estSeconds = filteredTests.reduce((sum, t) => sum + EstimateTestWeightSeconds(t), 0);
+            this.log(
+                `Shard ${options.shard.index}/${options.shard.total}: selected ${filteredTests.length}/${beforeShardCount} test(s) (est. weight ~${estSeconds}s)`,
+                false
+            );
+        }
+
         return filteredTests;
     }
 
@@ -927,7 +968,8 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         testRun.FailedChecks = result.failedChecks;
         testRun.TotalChecks = result.totalChecks;
         testRun.TargetType = result.targetType;
-        testRun.TargetLogID = result.targetLogId;
+        // A driver with no target (nothing ran) returns an empty string; the column is a nullable FK
+        testRun.TargetLogID = result.targetLogId || null;
         // Set the proper Entity FK for target linkage
         if (result.targetLogEntityId) {
             testRun.TargetLogEntityID = result.targetLogEntityId;
@@ -1074,6 +1116,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         suiteRun.TotalCostUSD = testResults.reduce((sum, r) => sum + r.totalCost, 0);
         suiteRun.TotalDurationSeconds = (Date.now() - startTime) / 1000;
         suiteRun.CompletedAt = new Date();
+        suiteRun.Score = MeanExecutedScore(testResults);
 
         const saved = await suiteRun.Save();
         if (!saved) {
@@ -1102,6 +1145,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
 
         this.log(`Running test ${repeatCount} times for statistical analysis`, options.verbose);
 
+        // Each iteration creates its own test run, so a rubric oracle records a separate evaluation.
         for (let iteration = 1; iteration <= repeatCount; iteration++) {
             this.log(`Running iteration ${iteration} of ${repeatCount}`, options.verbose);
 

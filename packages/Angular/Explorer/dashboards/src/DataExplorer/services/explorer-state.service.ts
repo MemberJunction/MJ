@@ -940,18 +940,18 @@ export class ExplorerStateService {
   }
 
   /**
-   * Load recent records from User Record Logs with batch record name lookup using UserInfoEngine
+   * Load recent records from User Record Logs with batch record name lookup
    */
   private async loadRecentRecords(): Promise<void> {
     try {
       const userId = this.metadata.CurrentUser?.ID;
       if (!userId) return;
 
-      // Use UserInfoEngine for cached access to user record logs
-      const engine = UserInfoEngine.Instance;
-
-      // Get recent records, limited to MAX_RECENT_RECORDS
-      const userRecordLogs = engine.UserRecordLogs.slice(0, MAX_RECENT_RECORDS);
+      const userRecordLogs = await UserInfoEngine.Instance.LoadRecentRecordLogs(
+        MAX_RECENT_RECORDS,
+        this.metadata.CurrentUser,
+        this.metadata,
+      );
 
       const recentRecords: RecentRecordAccess[] = [];
       const recordNameInputs: EntityRecordNameInput[] = [];

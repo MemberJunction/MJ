@@ -16,7 +16,7 @@ try {
  * metrics, and promote/archive actions behind a confirm modal). The engine is an @Input; a minimal fake
  * exposes `Models` (the array `buildModels` reads) plus `ModelDisplayName` / `AlgorithmName`. Metrics /
  * feature-importance are parsed from the model's JSON fields, so we supply real JSON. Draft → Validated
- * transitions gate the action buttons. Clicking an action opens the shared <ps-confirm-modal> (no Remote
+ * transitions gate the action buttons. Clicking an action opens <ps-model-detail>'s own confirm modal (no Remote
  * Op runs). Standalone.
  */
 

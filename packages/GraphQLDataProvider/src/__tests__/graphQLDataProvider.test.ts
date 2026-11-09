@@ -22,12 +22,17 @@ vi.mock('uuid', () => ({
 
 vi.mock('rxjs', () => ({
   Observable: vi.fn(),
-  Subject: vi.fn().mockImplementation(() => ({
-    next: vi.fn(),
-    complete: vi.fn(),
-    subscribe: vi.fn(),
-    asObservable: vi.fn(),
-  })),
+  // A class, not `vi.fn().mockImplementation(...)`: an arrow-returning mock is not
+  // constructable, so any `new Subject()` in a field initializer throws
+  // "is not a constructor" before the provider is even built. Mirrors the
+  // BehaviorSubject mock directly below.
+  Subject: class {
+    next = vi.fn();
+    error = vi.fn();
+    complete = vi.fn();
+    subscribe = vi.fn();
+    asObservable = vi.fn();
+  },
   BehaviorSubject: class {
     value: unknown;
     constructor(initialValue: unknown) { this.value = initialValue; }
@@ -50,6 +55,11 @@ vi.mock('@memberjunction/core', () => {
   return {
     BaseEntity: vi.fn(),
     ProviderBase: MockProviderBase,
+    EntityRecordNameCache: class {
+      Get() { return undefined; }
+      Has() { return false; }
+      Set() {}
+    },
     ProviderConfigDataBase: class {
       Data: Record<string, unknown> = {};
       constructor(data: Record<string, unknown>) { this.Data = data; }
@@ -364,5 +374,57 @@ describe('GraphQLDataProvider - refresh policy after a metadata member change', 
     // Coalesce, never re-arm: with a window this long, re-arming would let steady org-wide
     // write activity postpone the refresh forever.
     expect((provider as unknown as { MetadataMemberRefreshRearmsOnNewEvents: boolean }).MetadataMemberRefreshRearmsOnNewEvents).toBe(false);
+  });
+});
+
+describe('GraphQLDataProvider - dataset failure status preservation (MJ#6106)', () => {
+  it('preserves DatasetID and Status when GetDatasetByName returns Success=false', async () => {
+    const provider = Object.create(GraphQLDataProvider.prototype) as GraphQLDataProvider;
+    (provider as unknown as { ExecuteGQL: unknown }).ExecuteGQL = vi.fn().mockResolvedValue({
+      GetDatasetByName: {
+        DatasetID: 'DS-TEMPLATE',
+        DatasetName: 'Template_Metadata',
+        Success: false,
+        Status: 'User restricted@example.com does not have read permissions on MJ: Templates',
+        LatestUpdateDate: null,
+        Results: null,
+      },
+    });
+
+    const result = await provider.GetDatasetByName('Template_Metadata');
+    expect(result).toEqual({
+      DatasetID: 'DS-TEMPLATE',
+      DatasetName: 'Template_Metadata',
+      Success: false,
+      Status: 'User restricted@example.com does not have read permissions on MJ: Templates',
+      LatestUpdateDate: null,
+      Results: null,
+    });
+  });
+
+  it('preserves DatasetID and Status when executeDatasetStatusByName returns Success=false', async () => {
+    const provider = Object.create(GraphQLDataProvider.prototype) as GraphQLDataProvider;
+    (provider as unknown as { ExecuteGQL: unknown }).ExecuteGQL = vi.fn().mockResolvedValue({
+      GetDatasetStatusByName: {
+        DatasetID: 'DS-TEMPLATE',
+        DatasetName: 'Template_Metadata',
+        Success: false,
+        Status: 'User restricted@example.com does not have read permissions on MJ: Templates',
+        LatestUpdateDate: null,
+        EntityUpdateDates: null,
+      },
+    });
+
+    const result = await (
+      provider as unknown as { executeDatasetStatusByName(name: string): Promise<unknown> }
+    ).executeDatasetStatusByName('Template_Metadata');
+    expect(result).toEqual({
+      DatasetID: 'DS-TEMPLATE',
+      DatasetName: 'Template_Metadata',
+      Success: false,
+      Status: 'User restricted@example.com does not have read permissions on MJ: Templates',
+      LatestUpdateDate: null,
+      EntityUpdateDates: null,
+    });
   });
 });

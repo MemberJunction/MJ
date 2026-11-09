@@ -42,7 +42,7 @@ function makeDeleteRecord(id: string): FlattenedRecord {
     path: `test/${id}`,
     dependencies: new Set<string>(),
     id,
-    originalIndex: 0
+    originalIndex: 0, graphId: id
   };
 }
 

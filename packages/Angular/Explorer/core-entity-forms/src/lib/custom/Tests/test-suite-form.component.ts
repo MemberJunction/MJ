@@ -9,14 +9,15 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
-import { MJConfirmService } from '@memberjunction/ng-ui-components';
+import { MJConfirmService, SectionPickerItem } from '@memberjunction/ng-ui-components';
 import { MJTestSuiteFormComponent } from '../../generated/Entities/MJTestSuite/mjtestsuite.form.component';
 import {
   TestingDialogService,
   TagsHelper,
   TestRunComparison,
   EvaluationPreferencesService,
-  EvaluationPreferences
+  EvaluationPreferences,
+  RubricPickerOptions
 } from '@memberjunction/ng-testing';
 
 /** Settings key for keyboard shortcuts visibility */
@@ -404,6 +405,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     this.IsSaving = value;
   }
   ParentSuiteOptions: MJTestSuiteEntity[] = [];
+  RubricOptions: { id: string; name: string }[] = [];
 
   /** @deprecated Use {@link ParentSuiteOptions}. */
   get parentSuiteOptions(): MJTestSuiteEntity[] {
@@ -548,6 +550,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     this.loadShortcutsSetting();
     // Fire-and-forget: parent suite list for the edit form
     this.loadParentSuiteOptions();
+    void this.loadRubricOptions();
 
     // Subscribe to evaluation preferences
     this.evalPrefsService.preferences$
@@ -586,6 +589,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
   }
 
   ngOnDestroy() {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -644,6 +648,22 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     if (!el) return false;
     const tag = el.tagName;
     return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el as HTMLElement).isContentEditable;
+  }
+
+  /** The tab strip as `mj-section-picker` items: strip order, a count once that tab's data has loaded. */
+  get SectionPickerItems(): SectionPickerItem[] {
+    return [
+      { Key: 'overview', Title: 'Overview', Icon: 'fas fa-th-large' },
+      { Key: 'tests', Title: 'Tests', Icon: 'fas fa-flask', Count: this.TestsLoaded ? this.SuiteTests.length : null },
+      { Key: 'runs', Title: 'Runs', Icon: 'fas fa-history', Count: this.RunsLoaded ? this.SuiteRuns.length : null },
+      { Key: 'analytics', Title: 'Analytics', Icon: 'fas fa-chart-line' },
+      { Key: 'compare', Title: 'Compare', Icon: 'fas fa-balance-scale' },
+    ];
+  }
+
+  /** A pick from the phone section sheet; goes through ChangeTab so lazy loads fire. An unknown key is ignored. */
+  OnSectionPicked(key: string): void {
+    if (this.SectionPickerItems.some((i) => i.Key === key)) this.ChangeTab(key);
   }
 
   ChangeTab(tab: string) {
@@ -2715,6 +2735,17 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
    * Load all suites for the Parent Suite dropdown. Excludes the current
    * suite (a suite cannot be its own parent).
    */
+  private async loadRubricOptions(): Promise<void> {
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const result = await rv.RunView({ EntityName: 'MJ: Rubrics', ExtraFilter: `Status='Active'`, OrderBy: 'Name', ResultType: 'simple', MaxRows: 500 });
+      this.RubricOptions = RubricPickerOptions((result.Results ?? []) as { ID: string; Name: string; Status: string }[]);
+      this.cdr.markForCheck();
+    } catch (error) {
+      console.warn('Failed to load rubric options:', error);
+    }
+  }
+
   private async loadParentSuiteOptions() {
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);

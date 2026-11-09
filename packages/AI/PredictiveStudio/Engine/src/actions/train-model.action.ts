@@ -16,17 +16,18 @@
 
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RegisterClass } from '@memberjunction/global';
-import { LogError } from '@memberjunction/core';
+import { LogError, Metadata } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
 
 import { TrainingEngine } from '../training/training-engine';
-import { MetadataEntityFactory, RunViewRecordLoader, MJSidecarTrainer } from '../training/seams';
-import { ResolveActiveFileStorageProviderId, BuildArtifactStore } from '../training/artifact-store';
 import type { TrainingDeps, TrainModelResult } from '../training/types';
+import { BuildTrainingDeps } from '../operations/delegation';
 import { BasePredictiveStudioAction } from './base-predictive-studio.action';
+import { PredictiveStudioRefusals } from '../operations/refusals';
 
 /** The driver-class key this action registers under (matches the metadata row). */
-export const TRAIN_MODEL_DRIVER_CLASS = 'PredictiveStudioTrainModelAction';
+export { TRAIN_MODEL_DRIVER_CLASS } from './driver-classes';
+import { TRAIN_MODEL_DRIVER_CLASS } from './driver-classes';
 
 /**
  * Trains a model from a `MJ: ML Training Pipelines` definition and surfaces the
@@ -54,7 +55,9 @@ export class PredictiveStudioTrainModelAction extends BasePredictiveStudioAction
       return this.mapResult(params, result);
     } catch (e) {
       LogError(e);
-      return this.fail('TRAINING_FAILED', `Training failed: ${e instanceof Error ? e.message : String(e)}`);
+      const error = e instanceof Error ? e : new Error(String(e));
+      // A refusal keeps its typed code (the same one the operation returns), so agents never parse the message.
+      return this.fail(PredictiveStudioRefusals.CodeOf(error) || 'TRAINING_FAILED', `Training failed: ${error.message}`);
     }
   }
 
@@ -94,22 +97,12 @@ export class PredictiveStudioTrainModelAction extends BasePredictiveStudioAction
   /**
    * Build the engine's production dependency bundle from the action's run params
    * (threading `ContextUser` + `Provider` for isolation/multi-provider
-   * correctness). Resolves the active File Storage Provider once and picks the
-   * artifact-store family accordingly (MJ-Files when a provider is active, local
-   * disk when none is — the dev/on-prem fallback; see
-   * {@link resolveActiveFileStorageProviderId}). Async so the provider lookup is
-   * part of the wiring; overridable so tests inject in-memory seams.
+   * correctness) through {@link BuildTrainingDeps} — the same wiring the Train
+   * Model operation uses, so both surfaces pick the artifact-store family the same
+   * way. Overridable so tests inject in-memory seams.
    */
   protected async buildDeps(params: RunActionParams): Promise<TrainingDeps> {
-    const entityFactory = new MetadataEntityFactory(params.Provider);
-    const providerId = await ResolveActiveFileStorageProviderId(params.ContextUser, params.Provider);
-    return {
-      entityFactory,
-      recordLoader: new RunViewRecordLoader(),
-      sidecar: new MJSidecarTrainer(),
-      artifactStore: BuildArtifactStore(providerId, entityFactory),
-      contextUser: params.ContextUser,
-      provider: params.Provider,
-    };
+    const provider = params.Provider || Metadata.Provider; // global-provider-ok: RunActionParams.Provider is optional; ActionEngine contract falls back to the global provider (ActionEngine-Base.ts:413-419)
+    return BuildTrainingDeps(provider, params.ContextUser);
   }
 }

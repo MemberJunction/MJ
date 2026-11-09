@@ -88,13 +88,21 @@ See [Filter Builder & Evaluation](../../../../../guides/FILTER_BUILDER_AND_EVALU
 import { FilterFieldInfo } from '@memberjunction/ng-filter-builder';
 
 filterFields: FilterFieldInfo[] = [
-  { name: 'Name', displayName: 'Name', type: 'string' },
-  { name: 'Age', displayName: 'Age', type: 'number' },
-  { name: 'IsActive', displayName: 'Active', type: 'boolean' },
+  { name: 'Name', displayName: 'Name', type: 'string', description: 'Full display name of the contact' },
+  { name: 'Age', displayName: 'Age', type: 'number', description: 'Age in years' },
+  { name: 'IsActive', displayName: 'Active', type: 'boolean', description: 'Whether the record is currently active' },
   { name: 'CreatedAt', displayName: 'Created Date', type: 'date' },
   { name: 'CategoryID', displayName: 'Category', type: 'lookup', lookupEntityName: 'Categories' }
 ];
 ```
+
+### Rich Searchable Field Picker (`description` & Viewport Flip-Up)
+
+`FilterRuleComponent` intentionally uses a purpose-built, fixed-positioned searchable field picker (`role="listbox"` / `role="option"`) instead of a native `<select>` or single-line `<mj-combobox>`:
+- **Multi-Line Field Descriptions**: When `FilterFieldInfo.description` is populated (for example from `EntityField.Description`), each option renders a secondary description line alongside the field's display name and data-type badge.
+- **Two-Pane Multi-Entity Source Picker**: When `sources` has multiple entities, the dropdown renders a two-pane layout (entity source list on the left, searchable field list on the right).
+- **Automatic Viewport Flip-Up (`dropUp`)**: Measures available viewport space below and above the trigger (accounting for transformed ancestor containers) and automatically opens upward when near the bottom of the screen.
+- **Contained Keyboard Navigation**: Supports `ArrowDown`, `ArrowUp`, `Enter`, and `Escape` (closing only the open field menu via `event.stopPropagation()` + `event.preventDefault()` so parent modal dialogs remain open).
 
 ### Configuration Options
 

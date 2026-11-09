@@ -13,6 +13,7 @@ import {
 import { CreateCollapsibleHeadingsExtension } from '../extensions/collapsible-headings.extension.js';
 import { CreateSvgRendererExtension } from '../extensions/svg-renderer.extension.js';
 import { CreateHtmlBlockRepairExtension } from '../extensions/html-block-repair.extension.js';
+import { CreateMathExtension } from '../extensions/math.extension.js';
 import { EscapeHtml } from '../helpers/escape.js';
 
 /**
@@ -31,7 +32,7 @@ export interface ConfigureMarkedOptions {
  * Framework-agnostic markdown engine.
  *
  * Owns the `marked` configuration and the MemberJunction custom extensions
- * (SVG code blocks, collapsible headings, GitHub alerts, heading ids,
+ * (SVG code blocks, TeX math, collapsible headings, GitHub alerts, heading ids,
  * smartypants). It produces either:
  *
  * - an **HTML string** via {@link parseToHtml} — consumed by the Angular
@@ -57,7 +58,7 @@ export class MarkdownEngine {
    * (Re)build the internal marked instance from the given configuration.
    *
    * Each call constructs a **fresh** `Marked` instance and re-applies the full
-   * extension chain in a fixed order (html-block-repair → svg → highlight →
+   * extension chain in a fixed order (html-block-repair → math → svg → highlight →
    * heading ids → alerts → collapsible headings → smartypants). Ordering matters:
    * the SVG renderer must run before the highlighter so `svg` fences are not
    * highlighted as code.
@@ -91,6 +92,12 @@ export class MarkdownEngine {
     // raw HTML renders instead of showing as an escaped code block. Always on -
     // precisely scoped to misparsed HTML, leaves prose and fenced code untouched.
     extensions.push(CreateHtmlBlockRepairExtension());
+
+    // TeX math. Tokenized before everything else inline, so `_` and `*` inside a formula
+    // never become emphasis.
+    if (this.currentConfig.enableMath) {
+      extensions.push(CreateMathExtension());
+    }
 
     // SVG code block renderer - MUST be before syntax highlighting
     // so it can intercept svg blocks before the highlighter processes them.

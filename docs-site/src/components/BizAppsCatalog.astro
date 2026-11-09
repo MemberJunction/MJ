@@ -1,0 +1,885 @@
+---
+/**
+ * The live BizApps page (/guides/bizapps/): an interactive dependency map, one
+ * card per app, the cross-app stories, and the hand-picked "also in the org"
+ * repos. scripts/ingest.mjs writes the page (guides/bizapps.mdx) with the
+ * catalog embedded, read from GitHub on every docs build — see
+ * scripts/lib/bizapps-source.mjs and bizapps-catalog.mjs for what is in it.
+ *
+ * Everything is laid out at build time (src/lib/bizapps-layout.mjs) and ships as
+ * plain SVG and HTML. The one script below only adds highlighting: hover or
+ * focus an app to trace what it builds on and what builds on it.
+ *
+ * Icons and color come from each app: the Font Awesome icon its mj-app.json
+ * declares (resolved to SVG by scripts/lib/fa-icons.mjs) and its `color`, which
+ * tints the icon tile and the card's top edge. An app with no color wears the
+ * site accent. Color is identity only and never the only signal: every tile
+ * sits beside the app's name, and levels are carried by the labelled columns.
+ * The glyph is mixed toward black (light) or white (dark) so a pale brand color
+ * keeps its contrast against its own tint.
+ */
+import { layoutMap } from '../lib/bizapps-layout.mjs';
+import { layerLabel } from '../../scripts/lib/bizapps-catalog.mjs';
+
+const { catalog, related = [], builtAt, guideUrl } = Astro.props;
+
+const byId = new Map(catalog.apps.map((app) => [app.id, app]));
+const layout = layoutMap(catalog);
+const nodeById = new Map(layout.nodes.map((node) => [node.id, node]));
+const released = catalog.apps.filter((app) => app.status === 'released').length;
+const directEdges = catalog.edges.filter((edge) => !edge.implied).length;
+/** Inline custom property for an app's own color; unset falls back to the accent (see .mjb). */
+const appStyle = (item) => (item.color ? `--mjb-app: ${item.color}` : undefined);
+const initial = (name) => name.trim().charAt(0).toUpperCase();
+
+const anchor = (id) => `app-${id}`;
+const nameOf = (id) => byId.get(id)?.name ?? id;
+const statusText = (app) =>
+  app.status === 'released' ? `v${app.version}` : app.status === 'unavailable' ? 'Status unknown' : 'In development';
+const listNames = (ids) => (ids.length === 0 ? '' : ids.map(nameOf).join(', '));
+const nodeLabel = (app) => {
+  const parts = [`${app.name}, ${app.status === 'released' ? `released, version ${app.version}` : 'in development'}.`];
+  parts.push(app.dependsOn.length ? `Builds on ${listNames(app.dependsOn)}.` : 'Builds on MemberJunction core only.');
+  if (app.usedBy.length) parts.push(`Used by ${listNames(app.usedBy)}.`);
+  return parts.join(' ');
+};
+const npmUrl = (name) => `https://www.npmjs.com/package/${name}`;
+/** Names longer than this drop a size inside a map node (e.g. "Secure Messaging"). */
+const LONG_NAME = 14;
+/** Manifest categories worth showing: "Business" is on nearly every app, and the level is already named. */
+const categoriesOf = (app) =>
+  app.categories.filter((c) => c !== 'Business' && c.toLowerCase() !== layerLabel(app.layer).toLowerCase());
+const TIER_LABEL = { server: 'Server', client: 'Client', shared: 'Shared' };
+
+/** Everything the highlight script needs, keyed by app id. Never rendered as text. */
+const graph = Object.fromEntries(
+  catalog.apps.map((app) => [
+    app.id,
+    { name: app.name, summary: app.summary, status: statusText(app), deps: app.dependsOn, users: app.usedBy },
+  ]),
+);
+const graphJson = JSON.stringify(graph).replace(/</g, '\\u003c');
+---
+
+<div class="mjb not-content">
+  <dl class="mjb-stats">
+    <div><dt>BizApps</dt><dd>{catalog.apps.length}</dd></div>
+    <div><dt>Released</dt><dd>{released}</dd></div>
+    <div><dt>In development</dt><dd>{catalog.apps.length - released}</dd></div>
+    <div><dt>Levels</dt><dd>{catalog.layers.length}</dd></div>
+  </dl>
+
+  <figure class="mjb-map" data-bizapps-map>
+    <div class="mjb-map__scroll">
+      <svg
+        class="mjb-map__svg"
+        viewBox={`0 0 ${layout.width} ${layout.height}`}
+        width={layout.width}
+        height={layout.height}
+        role="group"
+        aria-label={`Dependency map of ${catalog.apps.length} BizApps, foundation on the left. ${directEdges} direct links.`}
+      >
+        <defs>
+          <marker id="mjb-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0 0 L8 4 L0 8 z" class="mjb-arrow"></path>
+          </marker>
+          <marker id="mjb-arrow-on" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0 0 L8 4 L0 8 z" class="mjb-arrow mjb-arrow--on"></path>
+          </marker>
+        </defs>
+
+        {layout.columns.map((column) => (
+          <g class="mjb-col" aria-hidden="true">
+            <rect class="mjb-col__band" x={column.x - 14} y={6} width={column.width + 28} height={layout.height - 12} rx="14"></rect>
+            <text class="mjb-col__label" x={column.x + column.width / 2} y={30} text-anchor="middle">{layerLabel(column.layer)}</text>
+          </g>
+        ))}
+
+        <g class="mjb-edges" aria-hidden="true">
+          {layout.edges.map((edge) => (
+            <path class="mjb-edge" d={edge.d} data-from={edge.from} data-to={edge.to}></path>
+          ))}
+        </g>
+
+        {catalog.apps.map((app) => {
+          const node = nodeById.get(app.id);
+          if (!node) return null;
+          return (
+            <a
+              class="mjb-node"
+              href={`#${anchor(app.id)}`}
+              data-id={app.id}
+              data-status={app.status}
+              aria-label={nodeLabel(app)}
+              style={appStyle(app)}
+            >
+              <rect class="mjb-node__box" x={node.x} y={node.y} width={node.width} height={node.height} rx="10"></rect>
+              <rect class="mjb-tile" x={node.x + 11} y={node.y + 11} width="30" height="30" rx="8"></rect>
+              {app.glyph ? (
+                <svg class="mjb-glyph" x={node.x + 18} y={node.y + 18} width="16" height="16" viewBox={app.glyph.viewBox} aria-hidden="true">
+                  <path d={app.glyph.path}></path>
+                </svg>
+              ) : (
+                <text class="mjb-glyph mjb-glyph--letter" x={node.x + 26} y={node.y + 31} text-anchor="middle">{initial(app.name)}</text>
+              )}
+              <text class:list={['mjb-node__name', app.name.length > LONG_NAME && 'mjb-node__name--long']} x={node.x + 50} y={node.y + 23}>{app.name}</text>
+              <text class="mjb-node__meta" x={node.x + 50} y={node.y + 40}>{statusText(app)}</text>
+            </a>
+          );
+        })}
+      </svg>
+    </div>
+
+    <p class="mjb-map__scroll-hint">Scroll sideways to see the whole map.</p>
+    <figcaption class="mjb-map__caption">
+      <p class="mjb-map__live" aria-live="polite" data-bizapps-caption>
+        <span class="mjb-map__hint">Hover or focus an app to trace what it builds on and what builds on it. Select it to jump to its details.</span>
+      </p>
+      <ul class="mjb-legend">
+        <li><span class="mjb-legend__tile" aria-hidden="true"></span>icon and color from each app's <code>mj-app.json</code></li>
+        <li><span class="mjb-legend__edge" aria-hidden="true"></span>builds on (direct links only)</li>
+        <li><span class="mjb-legend__dev" aria-hidden="true"></span>in development</li>
+      </ul>
+    </figcaption>
+    <script is:inline type="application/json" data-bizapps-graph set:html={graphJson}></script>
+  </figure>
+</div>
+
+{catalog.stories.length > 0 && (
+  <>
+    <h2 id="how-they-fit-together">How they fit together</h2>
+    {catalog.stories.map((story) => (
+      <div class="mjb not-content mjb-story">
+        <h3 class="mjb-story__title">{story.title}</h3>
+        <ol class="mjb-flow">
+          {story.steps.map((step) => (
+            <li>
+              <a class="mjb-flow__step" href={`#${anchor(step.repo)}`}>
+                <span class="mjb-flow__app">{step.name}</span>
+                <span class="mjb-flow__what">{step.label}</span>
+              </a>
+            </li>
+          ))}
+          {story.end && (
+            <li>
+              <span class="mjb-flow__step mjb-flow__step--end">
+                <span class="mjb-flow__app">{story.end}</span>
+                <span class="mjb-flow__what">General ledger</span>
+              </span>
+            </li>
+          )}
+        </ol>
+        <p class="mjb-story__summary">{story.summary}</p>
+      </div>
+    ))}
+  </>
+)}
+
+<h2 id="the-apps">The apps</h2>
+<p>Every public <code>bizapps-*</code> repository in the <a href={`https://github.com/${catalog.org}`}>{catalog.org}</a> organization, in alphabetical order. Each card is read from the app's own <code>mj-app.json</code>.</p>
+
+<div class="mjb not-content mjb-cards">
+  {catalog.apps.map((app) => (
+    <article class="mjb-card" id={anchor(app.id)} data-status={app.status} style={appStyle(app)}>
+      <header class="mjb-card__head">
+        <span class="mjb-icon" aria-hidden="true">
+          {app.glyph ? <svg viewBox={app.glyph.viewBox}><path d={app.glyph.path}></path></svg> : <span class="mjb-icon__letter">{initial(app.name)}</span>}
+        </span>
+        <div class="mjb-card__title">
+          <h3 class="mjb-card__name">{app.name}</h3>
+          {/* The non-breaking space keeps "·" with the categories when the line wraps. */}
+          <p class="mjb-card__layer">{layerLabel(app.layer)}{categoriesOf(app).length > 0 && ` ·\u00a0${categoriesOf(app).join(', ')}`}</p>
+        </div>
+        <span class:list={['mjb-pill', app.status === 'released' ? 'mjb-pill--released' : 'mjb-pill--dev']}>
+          {app.status === 'released' ? `v${app.version}` : statusText(app)}
+        </span>
+      </header>
+      {app.description && <p class="mjb-card__desc">{app.description}</p>}
+      <dl class="mjb-card__facts">
+        <div>
+          <dt>Builds on</dt>
+          <dd>
+            {app.dependsOn.length > 0
+              ? app.dependsOn.map((id) => <a class="mjb-chip" href={`#${anchor(id)}`}>{nameOf(id)}</a>)
+              : <span class="mjb-muted">MemberJunction core only</span>}
+            {app.dependsOnExternal.map((dep) => <span class="mjb-chip mjb-chip--external" title="Outside this catalog">{dep.name}</span>)}
+          </dd>
+        </div>
+        {app.usedBy.length > 0 && (
+          <div>
+            <dt>Used by</dt>
+            <dd>{app.usedBy.map((id) => <a class="mjb-chip" href={`#${anchor(id)}`}>{nameOf(id)}</a>)}</dd>
+          </div>
+        )}
+        {app.schema && (
+          <div>
+            <dt>Schema</dt>
+            <dd><code>{app.schema}</code></dd>
+          </div>
+        )}
+        {app.packages.length > 0 && (
+          <div>
+            <dt>Packages</dt>
+            <dd>
+              <details class="mjb-packages">
+                <summary>{app.packages.length} npm {app.packages.length === 1 ? 'package' : 'packages'}</summary>
+                <ul>
+                  {app.packages.map((pkg) => (
+                    <li>
+                      {app.status === 'released' ? <a href={npmUrl(pkg.name)}><code>{pkg.name}</code></a> : <code>{pkg.name}</code>}
+                      <span class="mjb-muted"> {TIER_LABEL[pkg.tier]}</span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            </dd>
+          </div>
+        )}
+      </dl>
+      <footer class="mjb-card__links">
+        <a href={app.repoUrl}>GitHub</a>
+        <a href={`${app.repoUrl}#readme`}>README</a>
+        {app.manifestUrl && <a href={app.manifestUrl}>mj-app.json</a>}
+      </footer>
+    </article>
+  ))}
+</div>
+
+{catalog.featured.length > 0 && (
+  <>
+    <h2 id="also-in-the-org">Also in the {catalog.org} org</h2>
+    <p>Not BizApps, but worth knowing about. These are picked by hand and are never added to the catalog automatically.</p>
+    <div class="mjb not-content mjb-featured">
+      {catalog.featured.map((item) => (
+        <article class:list={['mjb-feature', item.highlight && 'mjb-feature--highlight']} id={`org-${item.id}`} style={appStyle(item)}>
+          <header class="mjb-feature__head">
+            <span class="mjb-icon" aria-hidden="true">
+              {item.glyph ? <svg viewBox={item.glyph.viewBox}><path d={item.glyph.path}></path></svg> : <span class="mjb-icon__letter">{initial(item.title)}</span>}
+            </span>
+            <div>
+              <p class="mjb-feature__kind">{item.kind}</p>
+              <h3 class="mjb-feature__title">{item.title}</h3>
+            </div>
+          </header>
+          <p class="mjb-feature__desc">{item.description}</p>
+          {item.composes.length > 0 && (
+            <div class="mjb-feature__composes">
+              <p class="mjb-feature__label">Builds on {item.composes.length} BizApps</p>
+              <p>{item.composes.map((id) => <a class="mjb-chip" href={`#${anchor(id)}`}>{nameOf(id)}</a>)}</p>
+            </div>
+          )}
+          <p class="mjb-card__links">
+            <a href={item.repoUrl}>GitHub</a>
+            {item.links.map((link) => <a href={link.url}>{link.label}</a>)}
+          </p>
+        </article>
+      ))}
+    </div>
+  </>
+)}
+
+<h2 id="about-this-page">About this page</h2>
+<p>
+  This page is built from GitHub every time the documentation site is deployed (last read {builtAt}). It lists every public repository in the {catalog.org} organization whose name starts with <code>bizapps-</code>; an app counts as released once its <code>mj-app.json</code> is on the repository's <code>main</code> branch at a real version. To add a BizApp, create a public <code>bizapps-&lt;name&gt;</code> repository with an <code>mj-app.json</code> at its root. It appears here on the next deploy with no documentation change.
+</p>
+<p>A plain-markdown copy is kept in the MJ repository as <a href={guideUrl}><code>guides/BIZAPPS_GUIDE.md</code></a> and refreshed automatically when the catalog changes.</p>
+{related.length > 0 && (
+  <p>
+    Related guides:{' '}
+    {related.map((guide, index) => (
+      <>
+        {index > 0 && ' · '}
+        <a href={guide.href}>{guide.label}</a>{guide.note && ` (${guide.note})`}
+      </>
+    ))}
+  </p>
+)}
+
+<script>
+  /**
+   * Hover / focus highlighting for the map. Lit = the active app, everything it
+   * builds on (transitively) and everything that builds on it. An edge is lit
+   * when it lies on one of those chains.
+   */
+  const map = document.querySelector<HTMLElement>('[data-bizapps-map]');
+  const data = map?.querySelector<HTMLScriptElement>('[data-bizapps-graph]');
+  const caption = map?.querySelector<HTMLElement>('[data-bizapps-caption]');
+
+  type Entry = { name: string; summary: string; status: string; deps: string[]; users: string[] };
+
+  if (map && data && caption) {
+    const graph: Record<string, Entry> = JSON.parse(data.textContent ?? '{}');
+    const nodes = Array.from(map.querySelectorAll<SVGAElement>('.mjb-node'));
+    const edges = Array.from(map.querySelectorAll<SVGPathElement>('.mjb-edge'));
+    const hint = caption.innerHTML;
+
+    const closure = (start: string, next: (id: string) => string[]) => {
+      const seen = new Set<string>();
+      const stack = [...next(start)];
+      while (stack.length > 0) {
+        const id = stack.pop()!;
+        if (seen.has(id) || !graph[id]) continue;
+        seen.add(id);
+        stack.push(...next(id));
+      }
+      return seen;
+    };
+
+    const text = (value: string) => {
+      const span = document.createElement('span');
+      span.textContent = value;
+      return span.innerHTML;
+    };
+
+    const activate = (id: string) => {
+      const entry = graph[id];
+      if (!entry) return;
+      const up = closure(id, (n) => graph[n]?.deps ?? []);
+      const down = closure(id, (n) => graph[n]?.users ?? []);
+      map.classList.add('is-tracing');
+      for (const node of nodes) {
+        const nodeId = node.dataset.id ?? '';
+        node.classList.toggle('is-active', nodeId === id);
+        node.classList.toggle('is-lit', up.has(nodeId) || down.has(nodeId));
+      }
+      for (const edge of edges) {
+        const from = edge.dataset.from ?? '';
+        const to = edge.dataset.to ?? '';
+        const upstream = up.has(from) && (to === id || up.has(to));
+        const downstream = down.has(to) && (from === id || down.has(from));
+        edge.classList.toggle('is-lit', upstream || downstream);
+      }
+      const parts = [`<strong>${text(entry.name)}</strong> <span class="mjb-map__status">${text(entry.status)}</span>`];
+      if (entry.summary) parts.push(text(entry.summary));
+      parts.push(
+        `<span class="mjb-map__rel">Builds on: ${text(entry.deps.map((d) => graph[d]?.name ?? d).join(', ') || 'MemberJunction core only')}` +
+          (entry.users.length ? ` · Used by: ${text(entry.users.map((u) => graph[u]?.name ?? u).join(', '))}` : '') +
+          '</span>',
+      );
+      caption.innerHTML = parts.join(' ');
+    };
+
+    const reset = () => {
+      map.classList.remove('is-tracing');
+      for (const el of [...nodes, ...edges]) el.classList.remove('is-active', 'is-lit');
+      caption.innerHTML = hint;
+    };
+
+    for (const node of nodes) {
+      const id = node.dataset.id ?? '';
+      node.addEventListener('mouseenter', () => activate(id));
+      node.addEventListener('focus', () => activate(id));
+      node.addEventListener('mouseleave', () => {
+        if (document.activeElement !== node) reset();
+      });
+      node.addEventListener('blur', reset);
+    }
+
+    // Arriving at a card from the map: flash it so the eye lands in the right place.
+    window.addEventListener('hashchange', () => {
+      const target = location.hash.startsWith('#app-') ? document.getElementById(location.hash.slice(1)) : null;
+      if (!target) return;
+      target.classList.remove('is-arrived');
+      void target.offsetWidth;
+      target.classList.add('is-arrived');
+    });
+  }
+</script>
+
+<style>
+  /*
+   * The map needs ~66rem to draw at full size, and Starlight's reading column is
+   * 45rem. This page has no table of contents, so it takes the room the right
+   * sidebar would have used. Scoped by :has() so only this page widens.
+   */
+  :global(html:has(.mjb-map)) {
+    --sl-content-width: 66rem;
+  }
+
+  /* ── App identity: icon tile + edge in the app's own color ──────────────── */
+  .mjb {
+    --mjb-radius: 0.75rem;
+    --mjb-edge: var(--sl-color-gray-4);
+    --mjb-app: var(--sl-color-accent);
+    --mjb-tint: color-mix(in srgb, var(--mjb-app) 16%, var(--sl-color-bg));
+    --mjb-ink: color-mix(in oklab, var(--mjb-app) 80%, black);
+  }
+  :global(:root[data-theme='dark']) .mjb {
+    --mjb-edge: var(--sl-color-gray-3);
+  }
+  /* Set on every element that may carry its own --mjb-app, so the mix uses that app's color. */
+  .mjb-node,
+  .mjb-card,
+  .mjb-feature {
+    --mjb-tint: color-mix(in srgb, var(--mjb-app) 16%, var(--sl-color-bg));
+    --mjb-ink: color-mix(in oklab, var(--mjb-app) 80%, black);
+  }
+  :global(:root[data-theme='dark']) .mjb,
+  :global(:root[data-theme='dark']) .mjb-node,
+  :global(:root[data-theme='dark']) .mjb-card,
+  :global(:root[data-theme='dark']) .mjb-feature {
+    --mjb-tint: color-mix(in srgb, var(--mjb-app) 24%, var(--sl-color-bg));
+    --mjb-ink: color-mix(in oklab, var(--mjb-app) 62%, white);
+  }
+  .mjb-tile { fill: var(--mjb-tint); }
+  .mjb-glyph { fill: var(--mjb-ink); }
+  .mjb-glyph--letter { font-size: 14px; font-weight: 700; }
+  .mjb-icon {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.65rem;
+    background: var(--mjb-tint);
+    color: var(--mjb-ink);
+  }
+  .mjb-icon svg {
+    width: 1.2rem;
+    height: 1.2rem;
+    fill: currentColor;
+  }
+  .mjb-icon__letter { font-weight: 700; font-size: var(--sl-text-lg); }
+
+  /* ── Stats strip ────────────────────────────────────────────────────────── */
+  .mjb-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin: 0 0 1.5rem;
+  }
+  .mjb-stats > div {
+    border: 1px solid var(--sl-color-hairline);
+    border-radius: var(--mjb-radius);
+    padding: 0.75rem 1rem;
+    background: var(--sl-color-bg-nav);
+  }
+  .mjb-stats dt {
+    font-size: var(--sl-text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--sl-color-gray-3);
+  }
+  .mjb-stats dd {
+    margin: 0.15rem 0 0;
+    font-size: var(--sl-text-2xl);
+    font-weight: 700;
+    color: var(--sl-color-white);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Map ────────────────────────────────────────────────────────────────── */
+  .mjb-map {
+    margin: 0;
+    border: 1px solid var(--sl-color-hairline);
+    border-radius: calc(var(--mjb-radius) + 4px);
+    background: var(--sl-color-bg);
+    overflow: hidden;
+  }
+  .mjb-map__scroll {
+    overflow-x: auto;
+    padding: 0.5rem;
+  }
+  .mjb-map__svg {
+    display: block;
+    width: 100%;
+    min-width: 46rem;
+    height: auto;
+    font-family: var(--sl-font);
+  }
+  .mjb-col__band {
+    fill: var(--sl-color-gray-6);
+    opacity: 0.55;
+  }
+  .mjb-col__label {
+    fill: var(--sl-color-gray-3);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .mjb-edge {
+    fill: none;
+    stroke: var(--mjb-edge);
+    stroke-width: 1.5;
+    marker-end: url(#mjb-arrow);
+    transition: opacity 120ms ease, stroke 120ms ease;
+  }
+  .mjb-arrow { fill: var(--mjb-edge); }
+  .mjb-arrow--on { fill: var(--sl-color-accent); }
+
+  .mjb-node { cursor: pointer; outline: none; }
+  .mjb-node__box {
+    fill: var(--sl-color-bg);
+    stroke: var(--sl-color-gray-5);
+    stroke-width: 1;
+    transition: stroke 120ms ease, opacity 120ms ease;
+  }
+  .mjb-node[data-status='in-development'] .mjb-node__box,
+  .mjb-node[data-status='no-manifest'] .mjb-node__box,
+  .mjb-node[data-status='unavailable'] .mjb-node__box {
+    stroke-dasharray: 5 4;
+    stroke: var(--sl-color-gray-4);
+  }
+  .mjb-node__name {
+    fill: var(--sl-color-white);
+    font-size: 14px;
+    font-weight: 650;
+  }
+  .mjb-node__name--long { font-size: 12.5px; }
+  .mjb-node__meta {
+    fill: var(--sl-color-gray-3);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .mjb-node:hover .mjb-node__box,
+  .mjb-node:focus-visible .mjb-node__box,
+  .mjb-node.is-active .mjb-node__box {
+    stroke: var(--sl-color-accent);
+    stroke-width: 2;
+  }
+  .mjb-node:focus-visible .mjb-node__box { stroke-width: 3; }
+  .mjb-node.is-active .mjb-node__box {
+    fill: color-mix(in srgb, var(--sl-color-accent) 10%, var(--sl-color-bg));
+  }
+
+  .mjb-map.is-tracing .mjb-node:not(.is-active):not(.is-lit) { opacity: 0.28; }
+  .mjb-map.is-tracing .mjb-edge { opacity: 0.12; }
+  .mjb-map.is-tracing .mjb-edge.is-lit {
+    opacity: 1;
+    stroke: var(--sl-color-accent);
+    stroke-width: 2;
+    marker-end: url(#mjb-arrow-on);
+  }
+  .mjb-map.is-tracing .mjb-node.is-lit .mjb-node__box { stroke: var(--sl-color-accent); }
+
+  .mjb-map__scroll-hint {
+    display: none;
+    margin: 0;
+    padding: 0 1.1rem 0.6rem;
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-3);
+  }
+  /* Matches the svg's min-width: below it the map scrolls inside its frame. */
+  @media (max-width: 50rem) {
+    .mjb-map__scroll-hint { display: block; }
+  }
+  .mjb-map__caption {
+    border-top: 1px solid var(--sl-color-hairline);
+    padding: 0.85rem 1.1rem 1rem;
+    background: var(--sl-color-bg-nav);
+  }
+  .mjb-map__live {
+    margin: 0;
+    /* Room for name + a two-line summary + the relations line, so hovering never shifts the page. */
+    min-height: 4.8em;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-2);
+  }
+  .mjb-map__live :global(strong) { color: var(--sl-color-white); }
+  .mjb-map__hint { color: var(--sl-color-gray-3); }
+  .mjb-map__live :global(.mjb-map__status) {
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-3);
+    margin-inline-end: 0.35rem;
+  }
+  .mjb-map__live :global(.mjb-map__rel) {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--sl-color-gray-3);
+  }
+  .mjb-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.4rem;
+    margin: 0.6rem 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-3);
+  }
+  .mjb-legend li { display: inline-flex; align-items: center; gap: 0.45rem; }
+  .mjb-legend__tile {
+    width: 0.9rem;
+    height: 0.9rem;
+    border-radius: 0.25rem;
+    background: var(--mjb-tint);
+    box-shadow: inset 0 0 0 1.5px var(--mjb-ink);
+  }
+  .mjb-legend code { font-size: 0.95em; }
+  .mjb-legend__edge {
+    width: 1.6rem;
+    height: 0;
+    border-top: 1.5px solid var(--mjb-edge);
+    position: relative;
+  }
+  .mjb-legend__edge::after {
+    content: '';
+    position: absolute;
+    right: -1px;
+    top: -4.5px;
+    border: 4px solid transparent;
+    border-left: 6px solid var(--mjb-edge);
+    border-right: 0;
+  }
+  .mjb-legend__dev {
+    width: 1.6rem;
+    height: 0.8rem;
+    border: 1px dashed var(--sl-color-gray-4);
+    border-radius: 3px;
+  }
+
+  /* ── Story ──────────────────────────────────────────────────────────────── */
+  .mjb-story {
+    margin-top: 1rem;
+    border: 1px solid var(--sl-color-hairline);
+    border-radius: var(--mjb-radius);
+    padding: 1rem 1.1rem;
+    background: var(--sl-color-bg-nav);
+  }
+  .mjb-story__title {
+    margin: 0 0 0.75rem;
+    font-size: var(--sl-text-lg);
+    color: var(--sl-color-white);
+  }
+  .mjb-flow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 0.5rem 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .mjb-flow li { display: flex; align-items: center; }
+  .mjb-flow li + li::before {
+    content: '→';
+    padding: 0 0.55rem;
+    color: var(--sl-color-gray-3);
+  }
+  .mjb-flow__step {
+    display: flex;
+    flex-direction: column;
+    padding: 0.45rem 0.75rem;
+    border: 1px solid var(--sl-color-hairline-light);
+    border-radius: 0.6rem;
+    background: var(--sl-color-bg);
+    text-decoration: none;
+    color: inherit;
+  }
+  a.mjb-flow__step:hover { border-color: var(--sl-color-accent); }
+  .mjb-flow__step--end { border-style: dashed; }
+  .mjb-flow__app { font-weight: 650; color: var(--sl-color-white); font-size: var(--sl-text-sm); }
+  .mjb-flow__what { font-size: var(--sl-text-xs); color: var(--sl-color-gray-3); }
+  .mjb-story__summary {
+    margin: 0.85rem 0 0;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-2);
+  }
+
+  /* ── Cards ──────────────────────────────────────────────────────────────── */
+  .mjb-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+    gap: 1rem;
+    margin-top: 1.25rem;
+  }
+  .mjb-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--sl-color-hairline);
+    border-radius: var(--mjb-radius);
+    padding: 1rem 1.1rem 0.9rem;
+    background: var(--sl-color-bg);
+    scroll-margin-top: calc(var(--sl-nav-height) + 1.5rem);
+    overflow: hidden;
+  }
+  .mjb-card::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    background: var(--mjb-app);
+  }
+  .mjb-card[data-status='in-development'],
+  .mjb-card[data-status='no-manifest'] { border-style: dashed; }
+  .mjb-card:target,
+  .mjb-card.is-arrived { animation: mjb-arrive 1.4s ease-out; }
+  @keyframes mjb-arrive {
+    0% { box-shadow: 0 0 0 3px var(--sl-color-accent); }
+    100% { box-shadow: 0 0 0 3px transparent; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .mjb-card:target,
+    .mjb-card.is-arrived { animation: none; box-shadow: 0 0 0 2px var(--sl-color-accent); }
+  }
+  .mjb-card__head {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .mjb-card__title { flex: 1; min-width: 0; }
+  .mjb-card__name {
+    margin: 0;
+    font-size: var(--sl-text-lg);
+    line-height: 1.25;
+    color: var(--sl-color-white);
+  }
+  .mjb-pill {
+    flex: none;
+    align-self: flex-start;
+    font-size: var(--sl-text-xs);
+    font-variant-numeric: tabular-nums;
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .mjb-pill--released {
+    color: var(--sl-color-accent-high);
+    background: var(--sl-color-accent-low);
+  }
+  .mjb-pill--dev {
+    color: var(--sl-color-gray-2);
+    border: 1px dashed var(--sl-color-gray-4);
+  }
+  .mjb-card__layer {
+    margin: 0.1rem 0 0;
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-3);
+  }
+  .mjb-card__desc {
+    margin: 0.7rem 0 0;
+    font-size: var(--sl-text-sm);
+    line-height: 1.55;
+    color: var(--sl-color-gray-2);
+  }
+  .mjb-card__facts {
+    margin: 0.85rem 0 0;
+    display: grid;
+    gap: 0.5rem;
+    font-size: var(--sl-text-sm);
+  }
+  .mjb-card__facts > div {
+    display: grid;
+    grid-template-columns: 5.5rem 1fr;
+    gap: 0.75rem;
+    align-items: baseline;
+  }
+  .mjb-card__facts dt {
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-3);
+  }
+  .mjb-card__facts dd { margin: 0; display: flex; flex-wrap: wrap; gap: 0.3rem; min-width: 0; }
+  .mjb-card code,
+  .mjb-feature code {
+    font-size: 0.85em;
+    overflow-wrap: anywhere;
+  }
+  .mjb-chip {
+    display: inline-block;
+    padding: 0.05rem 0.55rem;
+    border: 1px solid var(--sl-color-hairline-light);
+    border-radius: 999px;
+    font-size: var(--sl-text-xs);
+    line-height: 1.6;
+    color: var(--sl-color-white);
+    text-decoration: none;
+    background: var(--sl-color-bg-nav);
+  }
+  a.mjb-chip:hover { border-color: var(--sl-color-accent); color: var(--sl-color-text-accent); }
+  .mjb-chip--external { border-style: dashed; color: var(--sl-color-gray-3); }
+  .mjb-muted { color: var(--sl-color-gray-3); }
+  .mjb-packages summary {
+    cursor: pointer;
+    color: var(--sl-color-gray-2);
+  }
+  .mjb-packages ul {
+    margin: 0.4rem 0 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 0.2rem;
+  }
+  .mjb-card__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin: auto 0 0;
+    padding-top: 0.9rem;
+    font-size: var(--sl-text-sm);
+  }
+  .mjb-card__links a {
+    color: var(--sl-color-text-accent);
+    text-decoration: none;
+  }
+  .mjb-card__links a:hover { text-decoration: underline; }
+  .mjb-card__links a::after { content: ' ↗'; font-size: 0.85em; }
+
+  /* ── Featured ───────────────────────────────────────────────────────────── */
+  .mjb-featured {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin-top: 1.25rem;
+  }
+  .mjb-feature {
+    border: 1px solid var(--sl-color-hairline);
+    border-radius: var(--mjb-radius);
+    padding: 1rem 1.15rem;
+    background: var(--sl-color-bg);
+    display: flex;
+    flex-direction: column;
+  }
+  .mjb-feature--highlight {
+    grid-column: 1 / -1;
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--mjb-app) 16%, transparent), transparent 62%),
+      var(--sl-color-bg-nav);
+    border-color: color-mix(in srgb, var(--mjb-app) 40%, var(--sl-color-hairline));
+    padding: 1.25rem 1.4rem;
+  }
+  .mjb-feature__head {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+  }
+  .mjb-feature--highlight .mjb-icon {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 0.8rem;
+  }
+  .mjb-feature--highlight .mjb-icon svg { width: 1.5rem; height: 1.5rem; }
+  .mjb-feature__kind {
+    margin: 0;
+    font-size: var(--sl-text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--mjb-ink);
+    font-weight: 600;
+  }
+  .mjb-feature__title {
+    margin: 0.1rem 0 0;
+    font-size: var(--sl-text-xl);
+    color: var(--sl-color-white);
+  }
+  .mjb-feature--highlight .mjb-feature__title { font-size: var(--sl-text-2xl); }
+  .mjb-feature__desc {
+    margin: 0.55rem 0 0;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-2);
+    line-height: 1.55;
+  }
+  .mjb-feature__composes { margin-top: 0.85rem; }
+  .mjb-feature__composes p { margin: 0; display: flex; flex-wrap: wrap; gap: 0.3rem; }
+  .mjb-feature__composes .mjb-feature__label {
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-3);
+    margin-bottom: 0.35rem;
+  }
+
+  @media (max-width: 50rem) {
+    .mjb-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .mjb-featured { grid-template-columns: 1fr; }
+  }
+</style>

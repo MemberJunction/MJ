@@ -39,12 +39,12 @@ export interface CachedComponentInfo {
   // so the URL reflects the component's preserved state.
   savedQueryParams?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
-  // Agent context reported by this component via NavigationService.SetAgentContext()
-  // Cached so it can be restored when the component becomes active again.
+  // Not written or read by the cache manager. Tools are replayed on reattach by
+  // NavigationService.NotifyResourceReattached; a component that publishes agent context keeps
+  // it itself and publishes it again on reattach (NavigationService.ResourceReattached$).
   AgentContext?: Record<string, unknown>;
 
-  // Agent client tools registered by this component via NavigationService.SetAgentClientTools()
-  // Cached so they can be re-registered when the component becomes active again.
+  // Not written or read by the cache manager; see AgentContext.
   AgentClientTools?: { Name: string; Description: string; ParameterSchema: Record<string, unknown>; Handler: (params: Record<string, unknown>) => Promise<unknown> }[];
 }
 
@@ -109,10 +109,26 @@ export class ComponentCacheManager {
       normalizedRecordId = discriminator ? `__new__::${discriminator}` : '__no_record__';
     } else if (discriminator && ComponentCacheManager.IsDynamicViewMarker(recordId)) {
       normalizedRecordId = `dynamic::${discriminator}`;
+    } else if (discriminator && discriminator.includes('abv:')) {
+      normalizedRecordId = `${recordId}::${discriminator}`;
     } else {
       normalizedRecordId = recordId;
     }
     return `${appId}::${resourceType}::${normalizedRecordId}`;
+  }
+
+  /**
+   * Computes the cache discriminator for a resource configuration, combining `Entity` and any
+   * `AlternateBaseView` override so dynamic or saved views opened with different `?abv=` values
+   * do not collide in the component cache.
+   */
+  public static GetCacheDiscriminator(configuration?: Record<string, unknown> | null): string | undefined {
+    const entity = configuration?.Entity as string | undefined;
+    const abv = (configuration?.AlternateBaseView ?? configuration?.alternateBaseView) as string | undefined;
+    if (entity && abv) {
+      return `${entity}|abv:${abv}`;
+    }
+    return entity || (abv ? `abv:${abv}` : undefined);
   }
 
   /**
@@ -178,9 +194,8 @@ export class ComponentCacheManager {
     const resolvedResourceType = resourceData.Configuration?.resourceTypeDriverClass
       || resourceData.Configuration?.driverClass
       || resourceData.ResourceType;
-    // Entity name discriminates between distinct "new record" tabs (empty recordId).
-    // For non-Records resource types this is undefined, leaving the key unchanged.
-    const discriminator = resourceData.Configuration?.Entity as string | undefined;
+    // Entity name (plus any AlternateBaseView) discriminates between distinct "new record" or dynamic view tabs.
+    const discriminator = ComponentCacheManager.GetCacheDiscriminator(resourceData.Configuration);
     const key = this.getCacheKey(
       resolvedResourceType,
       resourceData.ResourceRecordID || '',

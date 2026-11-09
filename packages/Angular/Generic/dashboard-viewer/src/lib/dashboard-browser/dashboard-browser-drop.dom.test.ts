@@ -6,12 +6,13 @@
  * The drop handlers used to run a nested `UUIDsEqual` scan (dashboards × dragged IDs). They now
  * each build a normalized ID Set once; these specs hold the emitted `DashboardMove` steady across that.
  *
- * Constructed directly: the constructor takes only a change detector, and the behaviour under
- * test is what one handler emits.
+ * Constructed directly: the constructor takes a change detector and the confirm service, which the
+ * drop handlers never use, and the behaviour under test is what one handler emits.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { ChangeDetectorRef } from '@angular/core';
 import type { MJDashboardEntity } from '@memberjunction/core-entities';
+import type { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { DashboardBrowserComponent, type DashboardMoveEvent } from './dashboard-browser.component';
 
 /** The handlers under test only ever call markForCheck; the double is checked against the members it claims. */
@@ -39,7 +40,7 @@ describe('DashboardBrowserComponent drops', () => {
     let moves: DashboardMoveEvent[];
 
     beforeEach(() => {
-        browser = new DashboardBrowserComponent(cdrStub);
+        browser = new DashboardBrowserComponent(cdrStub, {} as MJConfirmService);
         browser.AllowDragDrop = true;
         browser.Dashboards = [dashboard(SALES, 'Sales'), dashboard(OPS, 'Ops'), dashboard(HR, 'HR')];
         moves = [];

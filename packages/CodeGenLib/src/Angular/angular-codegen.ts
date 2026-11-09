@@ -156,13 +156,23 @@ export class AngularClientGeneratorBase {
     /**
      * Removes orphaned Angular entity form directories that no longer correspond to existing entities.
      * This handles cleanup when entities are renamed or deleted.
+     * Out of scope means untouched, not deleted (#3384): `entities` is this run's scope-narrowed list,
+     * so a directory whose entity sits in an excluded schema is kept. Only directories matching no
+     * in-scope entity of this pass and no out-of-scope entity are removed.
      * @param entityPath The path to the Entities directory containing entity form subdirectories
      * @param entities Array of current EntityInfo objects that should have form directories
+     * @param outOfScopeEntities Known entities outside this run's scope; defaults to the loaded
+     *        metadata's entities in `configInfo.excludeSchemas`. When that cannot be read, nothing is removed.
      */
-    protected cleanupOrphanedEntityDirectories(entityPath: string, entities: EntityInfo[]): void {
+    protected cleanupOrphanedEntityDirectories(entityPath: string, entities: EntityInfo[], outOfScopeEntities?: EntityInfo[]): void {
         try {
             if (!fs.existsSync(entityPath)) {
                 return; // Nothing to clean up if directory doesn't exist
+            }
+            outOfScopeEntities = outOfScopeEntities ?? this.outOfScopeEntities() ?? undefined;
+            if (!outOfScopeEntities) {
+                LogWarning(`   Skipped orphaned entity form cleanup in ${entityPath}: metadata is not loaded, so out-of-scope entities cannot be told apart from deleted ones`);
+                return;
             }
 
             // Get the set of valid entity ClassNames (these should have directories)
@@ -171,6 +181,9 @@ export class AngularClientGeneratorBase {
                     .filter(e => e.PrimaryKeys && e.PrimaryKeys.length > 0 && e.IncludeInAPI)
                     .map(e => e.ClassName)
             );
+            for (const e of outOfScopeEntities) {
+                validClassNames.add(e.ClassName);
+            }
 
             // Read all subdirectories in the Entities folder
             const existingDirs = fs.readdirSync(entityPath, { withFileTypes: true })
@@ -192,6 +205,29 @@ export class AngularClientGeneratorBase {
             }
         } catch (err) {
             logError(`Error cleaning up orphaned entity directories: ${err}`);
+        }
+    }
+
+    /**
+     * Loaded entities whose schema is in `configInfo.excludeSchemas` (case-insensitive), or null when
+     * the metadata cannot be read: no provider loaded, or a provider with no entities yet. An empty
+     * list would read as "nothing is out of scope" and let the caller delete their directories.
+     */
+    protected outOfScopeEntities(): EntityInfo[] | null {
+        const excluded = new Set((configInfo.excludeSchemas ?? []).map(s => s.trim().toLowerCase()));
+        if (excluded.size === 0) {
+            return [];
+        }
+        try {
+            const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+            const entities = md.Entities ?? [];
+            if (entities.length === 0) {
+                return null;
+            }
+            return entities.filter(e => excluded.has((e.SchemaName ?? '').trim().toLowerCase()));
+        }
+        catch {
+            return null;
         }
     }
 
@@ -661,13 +697,30 @@ export class ${entity.ClassName}FormComponent extends BaseFormComponent {
           let index = startIndex;
           const sortedFields = SortBySequenceAndCreatedAt(entity.Fields);
           for (const field of sortedFields) {
-              if (field.IncludeInGeneratedForm) {
-                  if (field.GeneratedFormSectionType === GeneratedFormSectionType.Category && field.Category && field.Category !== ''  && field.IncludeInGeneratedForm)
+              // A section exists because a RENDERED field lands in it. Use the same predicate the
+              // HTML walk uses, so a section whose only members are skipped (a binary column, an
+              // FK's virtual name field) is never created — the HTML and the component's section
+              // list both come from this array, so an empty panel here would also be a dangling key.
+              if (this.isFieldRenderedInForm(entity, field)) {
+                  if (field.GeneratedFormSectionType === GeneratedFormSectionType.Category && field.Category && field.Category !== '')
                       this.AddSectionIfNeeded(entity, sections, GeneratedFormSectionType.Category, field.Category, field.Sequence);
                   else if (field.GeneratedFormSectionType === GeneratedFormSectionType.Details)
                       this.AddSectionIfNeeded(entity, sections, GeneratedFormSectionType.Details, "Details", field.Sequence);
                   else if (field.GeneratedFormSectionType === GeneratedFormSectionType.Top)
                       this.AddSectionIfNeeded(entity, sections, GeneratedFormSectionType.Top, "Top", field.Sequence);
+              }
+          }
+          // Section ORDER is unchanged by the rule above: a skipped field still contributes its
+          // sequence to a section that exists (it always did), so an FK's virtual name field or a
+          // binary column that happens to be first in its section keeps that section where it was.
+          for (const field of sortedFields) {
+              if (!field.IncludeInGeneratedForm || this.isFieldRenderedInForm(entity, field)) continue;
+              const type = field.GeneratedFormSectionType;
+              const name = type === GeneratedFormSectionType.Category ? field.Category : type === GeneratedFormSectionType.Details ? 'Details' : type === GeneratedFormSectionType.Top ? 'Top' : null;
+              if (!name) continue;
+              const section = sections.find(s => s.Name === name && s.Type === type);
+              if (section && field.Sequence != null && (section.MinSequence == null || field.Sequence < section.MinSequence)) {
+                  section.MinSequence = field.Sequence;
               }
           }
 
@@ -769,7 +822,7 @@ ${indentedFormHTML}
           section.Fields = [];
           const sortedFields = SortBySequenceAndCreatedAt(entity.Fields);
           for (const field of sortedFields) {
-              if (field.IncludeInGeneratedForm) {
+              if (this.isFieldRenderedInForm(entity, field)) {
                   let bMatch: boolean = false;
                   if (field.GeneratedFormSectionType === GeneratedFormSectionType.Top && section.Type === GeneratedFormSectionType.Top) {
                       // match, include the field in the output
@@ -783,13 +836,7 @@ ${indentedFormHTML}
                       // match, include the field in the output
                       bMatch = true;
                   }
-                  if (bMatch && field.Name.toLowerCase() !== 'id') {
-                      // Skip virtual fields that are the name-field-map of an FK field.
-                      // The FK field itself will display the name via RelatedEntityNameFieldMap
-                      // at runtime, so emitting the virtual field would be redundant.
-                      if (field.IsVirtual && this.isVirtualNameFieldForFK(entity, field)) {
-                          continue;
-                      }
+                  if (bMatch) {
                       section.Fields.push(field) // add the field to the section fields array
                   }
               }
@@ -859,6 +906,29 @@ ${indentedFormHTML}
           }
       
           return html;
+      }
+
+      /**
+       * Whether a field is rendered on the generated form at all. This is the single rule behind
+       * both section derivation ({@link generateAngularAdditionalSections}) and field placement
+       * ({@link generateSectionHTMLForAngular}): a section is created only for fields that pass,
+       * so no section is ever emitted empty.
+       *
+       * Excluded:
+       *  - fields not flagged `IncludeInGeneratedForm`, and the `ID` column;
+       *  - virtual fields that are the name-field-map of an FK on the same entity — the FK field
+       *    shows the name at runtime via `RelatedEntityNameFieldMap`, so this would be redundant;
+       *  - binary fields (varbinary / bytea / binary / image). Their value is base64-encoded data —
+       *    an embedding, a file — that a form can neither display nor edit meaningfully, and
+       *    rendering it would put kilobytes of base64 in a textarea.
+       */
+      protected isFieldRenderedInForm(entity: EntityInfo, field: EntityFieldInfo): boolean {
+          if (!field.IncludeInGeneratedForm) return false;
+          if (field.Status === 'Deprecated' || field.Status === 'Disabled') return false;
+          if (field.Name.toLowerCase() === 'id') return false;
+          if (field.IsVirtual && this.isVirtualNameFieldForFK(entity, field)) return false;
+          if (field.IsBinaryFieldType) return false;
+          return true;
       }
 
       /**
@@ -942,7 +1012,7 @@ ${indentedFormHTML}
                 if (!re.DisplayInForm || isaChildIDs.has(re.RelatedEntityID)) {
                     return false;
                 }
-                const targetEntity = md.Entities.find(e => UUIDsEqual(e.ID, re.RelatedEntityID));
+                const targetEntity = md.EntityByID(re.RelatedEntityID);
                 if (targetEntity && excludedSchemas.has(targetEntity.SchemaName.toLowerCase())) {
                     return false;
                 }
@@ -963,7 +1033,7 @@ ${indentedFormHTML}
             }
             // If no custom icon, try to use the related entity's icon
             else {
-                const re: EntityInfo | undefined = md.Entities.find(e => UUIDsEqual(e.ID, relatedEntity.RelatedEntityID))
+                const re: EntityInfo | undefined = md.EntityByID(relatedEntity.RelatedEntityID)
                 if (re && re.Icon && re.Icon.length > 0) {
                     icon = `<span class="${re.Icon} tab-header-icon"></span>`;
                     iconClass = re.Icon;
@@ -1055,7 +1125,7 @@ ${componentCodeWithIndent}
         let index = startIndex;
         for (const organicKey of organicKeys) {
             for (const relatedEntity of organicKey.RelatedEntities) {
-                const re: EntityInfo | undefined = md.Entities.find(e => UUIDsEqual(e.ID, relatedEntity.RelatedEntityID));
+                const re: EntityInfo | undefined = md.EntityByID(relatedEntity.RelatedEntityID);
                 if (re && excludedSchemas.has(re.SchemaName.toLowerCase())) {
                     continue;
                 }
@@ -1355,9 +1425,12 @@ ${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
 
         // Slot markers — dynamic injection points for BaseFormPanel registrations.
         // See @memberjunction/ng-base-forms PANELS.md for the authoring guide.
-        // Every generated form gets all four slots so registered panels can target
-        // any position WITHOUT requiring CodeGen to know about the panel ahead of
-        // time. Empty slots have zero rendering cost (anchor only).
+        // Every generated form gets these three slots so registered panels can target a
+        // position WITHOUT requiring CodeGen to know about the panel ahead of time. Empty
+        // slots have zero rendering cost (anchor only). `after-everything` is not emitted
+        // here — the container always terminates the fallback chain with it — and
+        // `top-area` is not emitted at all, so a panel registered there falls through to
+        // the bottom of the form.
         const slot = (slotKey: string): string =>
             `    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="${slotKey}" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>`;
 

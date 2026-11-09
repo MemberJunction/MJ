@@ -98,7 +98,7 @@ describe('IntegrationEngine.LoadAllRecordMaps', () => {
 
         for (const c of calls) {
             expect(c.MaxRows).toBe(PAGE_SIZE);
-            expect(c.IgnoreMaxRows).toBe(true);      // the entity cap is exactly what we defeat
+            expect(c.IgnoreMaxRows).toBeUndefined(); // IgnoreMaxRows drops MaxRows too — one page would be the whole map
             expect(c.OrderBy).toBe('ID ASC');        // keyset requires the sort to be the PK alone
             expect(c.BypassCache).toBe(true);        // sync decisions need committed state
             expect(c.Fields).toContain('ID');        // the seek key must come back with each page
@@ -139,6 +139,20 @@ describe('IntegrationEngine.LoadAllRecordMaps', () => {
             Object.defineProperty(IntegrationEngine, 'RecordMapPageSize', { value: realPageSize, configurable: true });
         }
     }, 30_000);
+
+    it('survives a provider that ignores MaxRows and returns the whole map in one page', async () => {
+        // 150k rows in one page: spreading them into push() overflows the call stack. Seen on a
+        // HubSpot portal with ~126k contacts, where every full sync failed in the orphan sweep.
+        const huge = rows(150_000);
+        mockRunViewFn
+            .mockResolvedValueOnce({ Success: true, Results: huge })
+            .mockResolvedValueOnce({ Success: true, Results: [] });
+
+        const result = await loadAllRecordMaps(engine);
+
+        expect(result.Complete).toBe(true);
+        expect(result.Rows).toHaveLength(150_000);
+    });
 
     it('stops after one read when the first page is short', async () => {
         mockRunViewFn.mockResolvedValueOnce({ Success: true, Results: rows(3) });

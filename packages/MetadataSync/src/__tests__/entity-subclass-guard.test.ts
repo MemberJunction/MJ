@@ -18,10 +18,25 @@ describe('describeMissingEntitySubclass', () => {
   });
 
   it('phrases the consequence conditionally under dry-run and names both package sources', () => {
-    const message = DescribeMissingEntitySubclass('MJ_Test: DryRun Widgets', { dryRun: true });
+    const message = DescribeMissingEntitySubclass('MJ_Test: DryRun Widgets', { DryRun: true });
     expect(message).toMatch(/would be written/);
     expect(message).toMatch(/codeGeneration\.packages\.entities/);
     expect(message).toMatch(/dynamicPackages\.server/);
+  });
+
+  it('describes the pull consequence — missing computed values, not skipped Save() logic — for a pull', () => {
+    const message = DescribeMissingEntitySubclass('MJ_Test: Pulled Widgets', { Operation: 'pull' });
+    expect(message).toMatch(/records are read through the generic BaseEntity/);
+    expect(message).toMatch(/virtual properties/);
+    expect(message).not.toMatch(/Save\(\)/);
+    expect(message).toMatch(/dynamicPackages\.server/);
+  });
+
+  it('still gives the push warning for an entity already reported by a pull', () => {
+    expect(DescribeMissingEntitySubclass('MJ_Test: Round-trip Widgets', { Operation: 'pull' })).toMatch(/virtual properties/);
+    expect(DescribeMissingEntitySubclass('MJ_Test: Round-trip Widgets', { Operation: 'push' })).toMatch(/will NOT run/);
+    expect(DescribeMissingEntitySubclass('MJ_Test: Round-trip Widgets')).toBeNull();
+    expect(DescribeMissingEntitySubclass('MJ_Test: Round-trip Widgets', { Operation: 'pull' })).toBeNull();
   });
 
   it('returns null for an entity whose subclass is registered', () => {

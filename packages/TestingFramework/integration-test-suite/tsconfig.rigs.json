@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["rigs/feature-pipelines/**/*.ts", "rigs/schema-mutating/**/*.ts"],
+  "exclude": ["node_modules"]
+}

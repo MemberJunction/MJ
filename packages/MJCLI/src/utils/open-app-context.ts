@@ -16,6 +16,7 @@ import { createRequire } from 'node:module';
 import { UserInfo, type DatabaseProviderBase } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { initializeProvider, cleanupProvider } from '@memberjunction/metadata-sync';
+import type { GitHubClientOptions, GitHubTokenSource } from '@memberjunction/open-app-engine';
 import { GetValidatedConfig } from '../config.js';
 
 type ResolvedConfig = ReturnType<typeof GetValidatedConfig>;
@@ -32,7 +33,7 @@ type ResolvedConfig = ReturnType<typeof GetValidatedConfig>;
  * configured platform, by adapting MJCLI's config to the `MJConfig` shape that
  * MetadataSync's shared `initializeProvider` consumes.
  */
-async function ensureProviderInitialized(): Promise<DatabaseProviderBase> {
+export async function EnsureProviderInitialized(): Promise<DatabaseProviderBase> {
   return initializeProvider(toMJConfig(GetValidatedConfig()));
 }
 
@@ -120,7 +121,7 @@ function getSystemUserInfo(): UserInfo {
  * Initializes the MJ runtime and returns the system user.
  */
 export async function BuildContextUser(): Promise<UserInfo> {
-  await ensureProviderInitialized();
+  await EnsureProviderInitialized();
   return getSystemUserInfo();
 }
 
@@ -138,7 +139,7 @@ export async function BuildOrchestratorContext(
   interactive: boolean = true,
 ): Promise<OrchestratorContextShape> {
   const config = GetValidatedConfig();
-  const provider = await ensureProviderInitialized();
+  const provider = await EnsureProviderInitialized();
   const contextUser = getSystemUserInfo();
   const spinner = verbose ? ora() : undefined;
   // Only wire interactive prompt callbacks when this run is actually allowed to prompt.
@@ -273,17 +274,23 @@ interface OrchestratorContextShape {
  */
 export function BuildGitHubOptions(config: {
   openApps?: { github?: { token?: string; tokens?: Record<string, string | undefined> } };
-}): { Token?: string; TokenMap?: Record<string, string> } {
+}): GitHubClientOptions {
+  const configToken = config.openApps?.github?.token;
+  const envToken = process.env.GITHUB_TOKEN;
+  // Recorded so a "cannot read this repository" message names the token that was actually used:
+  // a config token silently beats GITHUB_TOKEN, so exporting a fresh one changes nothing.
+  const tokenSource: GitHubTokenSource | undefined = configToken != null ? 'Config' : envToken != null ? 'Environment' : undefined;
   return {
-    Token: config.openApps?.github?.token ?? process.env.GITHUB_TOKEN,
+    Token: configToken ?? envToken,
     TokenMap: filterDefinedTokens(config.openApps?.github?.tokens),
+    TokenSource: tokenSource,
   };
 }
 
 /** @deprecated Use {@link BuildGitHubOptions}. */
 export function buildGitHubOptions(config: {
   openApps?: { github?: { token?: string; tokens?: Record<string, string | undefined> } };
-}): { Token?: string; TokenMap?: Record<string, string> } {
+}): GitHubClientOptions {
   return BuildGitHubOptions(config);
 }
 

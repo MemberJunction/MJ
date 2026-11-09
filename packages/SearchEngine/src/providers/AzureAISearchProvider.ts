@@ -12,7 +12,7 @@
  *   - `endpoint` — full HTTPS endpoint URL (e.g. `https://my.search.windows.net`)
  *   - `apiKey` — query or admin key (sent via `api-key` header)
  *   - `apiVersion` — API version, default `2024-07-01`
- *   - `defaultIndex` — fallback index when no scope ExternalIndexes
+ *   - `defaultIndex` — the index an UNSCOPED search queries (a scoped search queries only its own rows)
  *   - `defaultSearchFields` — comma-separated `searchFields` (when omitted,
  *     Azure searches all searchable fields)
  *
@@ -22,6 +22,7 @@
 import { LogError, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider, SearchProviderConfig } from '../generic/ISearchProvider';
+import type { LaneKind } from '../generic/ScopeExplanation';
 import { CheckScopeStringFilter } from '../generic/ScopeFilterGuard';
 import {
     SearchSource,
@@ -52,6 +53,9 @@ interface AzureProviderConfig {
 @RegisterClass(BaseSearchProvider, 'AzureAISearchProvider')
 export class AzureAISearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'fulltext';
+
+    /** Reads the scope's `AzureAISearch` external-index rows (see `BaseSearchProvider.ConsumesLaneKinds`). */
+    public override readonly ConsumesLaneKinds: readonly LaneKind[] = ['ExternalIndex'];
 
     private parsedConfig: AzureProviderConfig | null = null;
     private available = false;
@@ -105,11 +109,11 @@ export class AzureAISearchProvider extends BaseSearchProvider {
         const effectiveQuery = scopeConstraints?.QueryTransforms?.[this.SourceType] ?? query;
         const apiVersion = this.parsedConfig.apiVersion ?? '2024-07-01';
 
-        const scopedAzureRows = scopeConstraints?.ExternalIndexes
-            ?.filter(r => r.IndexType === 'AzureAISearch' && r.ExternalIndexName) ?? [];
-        const targets = scopedAzureRows.length > 0
-            ? scopedAzureRows
-            : (this.parsedConfig.defaultIndex
+        // A scoped search queries only the scope's Azure rows — none means nothing. The default index is
+        // for an UNSCOPED search alone; using it here would search it with no scope filter.
+        const scopedAzureRows = this.ScopedExternalIndexRows(scopeConstraints, 'AzureAISearch');
+        const targets = scopedAzureRows
+            ?? (this.parsedConfig.defaultIndex
                 ? [{
                     IndexType: 'AzureAISearch' as const,
                     ExternalIndexName: this.parsedConfig.defaultIndex,

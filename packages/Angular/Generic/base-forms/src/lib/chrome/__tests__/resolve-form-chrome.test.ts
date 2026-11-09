@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { EntityInfo, type FormRole } from '@memberjunction/core';
-import { DETAILS_SECTION_KEY, MORE_SECTION_KEY, HumanizeEntityTitle, IsAccordionFormChrome, IsAlwaysMoreSection, IsDetailsSectionKey, DetailsCardEdges } from '../form-chrome';
-import { ApplyFormChromeRuleTitles, ApplyUserChromeMembership, BuildDefaultChromeSpec, MoveChromeGroupInSectionOrder, OrderChromeGroups, OrderMoreSectionKeys, OverlayChromeSectionOrder, ResolveFormChrome, StabilizeFirstClassGroupOrder, TakeDecoratedChrome } from '../resolve-form-chrome';
+import { DETAILS_SECTION_KEY, MORE_SECTION_KEY, HumanizeEntityTitle, IsAccordionFormChrome, IsAlwaysMoreSection, IsDetailsSectionKey, DetailsCardEdges, ReplacedSectionChromeGroup, DefaultContributionChromeGroup, FieldGroupsInDetails, RailGroupSectionKeys, SlotChromeGroup, SectionDrawingAnyField } from '../form-chrome';
+import { ApplyEmptySectionBehavior, ApplyFormChromeRuleTitles, ApplyUserChromeMembership, BuildDefaultChromeSpec, MoveChromeGroupInSectionOrder, OrderChromeGroups, OrderMoreSectionKeys, OverlayChromeSectionOrder, ResolveFormChrome, StabilizeFirstClassGroupOrder, TakeDecoratedChrome } from '../resolve-form-chrome';
 import type { FormChromeGroup, FormChromeSpec } from '../form-chrome';
 import { FormChromeCoordinator } from '../form-chrome-coordinator.service';
 
@@ -27,6 +27,31 @@ describe('HumanizeEntityTitle', () => {
     it('leaves ordinary section names alone', () => {
         expect(HumanizeEntityTitle('Personal Identity')).toBe('Personal Identity');
         expect(HumanizeEntityTitle('Order Headers (Bill To Person)')).toBe('Order Headers (Bill To Person)');
+    });
+
+    it('matches the regular expression it replaced on a generated corpus', () => {
+        const replaced = (name: string): string => {
+            const trimmed = (name ?? '').trim();
+            const match = trimmed.match(/^[A-Za-z][A-Za-z0-9_]*:\s+(.+)$/);
+            return match?.[1]?.trim() || trimmed;
+        };
+        const alphabet = ['A', 'z', '_', '7', ':', ' ', '\t', '\n', '\r', '\u2028', '\u00a0', 'x', '(', ')', '-'];
+        let seed = 42;
+        const next = (): number => {
+            seed = (seed * 1103515245 + 12345) % 2147483648;
+            return seed;
+        };
+        for (let i = 0; i < 20000; i++) {
+            const length = next() % 14;
+            let name = '';
+            for (let c = 0; c < length; c++) name += alphabet[next() % alphabet.length];
+            expect(HumanizeEntityTitle(name), JSON.stringify(name)).toBe(replaced(name));
+        }
+    });
+
+    it('stays linear on the repeated-whitespace input the old expression was slow on', () => {
+        const name = 'A:\t' + '\t\t'.repeat(200000) + 'x\ny';
+        expect(HumanizeEntityTitle(name)).toBe(name);
     });
 });
 
@@ -1160,5 +1185,332 @@ describe('EntityInfo ConfigurationObject', () => {
             }),
         });
         expect(entity.ConfigurationObject?.UI?.Form?.PrimaryRelatedBudget).toBe(4);
+    });
+});
+
+
+/**
+ * The Organizations form: four field sections folded into one Details tab, one of them
+ * generated with the key `details`. A panel that replaces that section used to be lifted
+ * into a first-class rail item of its own, so the tab quietly lost a section and the form
+ * gained a tab named after the panel — neither of which the user asked for.
+ */
+describe('ReplacedSectionChromeGroup', () => {
+    it('puts a panel replacing a field section into the Details tab that section was in', () => {
+        expect(ReplacedSectionChromeGroup('details', { SectionName: 'Details' })).toBe('details');
+        expect(ReplacedSectionChromeGroup('organizationIdentity', { SectionName: 'Organization Identity' }))
+            .toBe('details');
+    });
+
+    it('puts a panel replacing a leftover audit section into More', () => {
+        expect(ReplacedSectionChromeGroup('systemMetadata', { SectionName: 'System Metadata' })).toBe('more');
+    });
+
+    // A related claim already inherits the grid's rail item through the relationship.
+    it('leaves a related grid alone', () => {
+        expect(ReplacedSectionChromeGroup('contactMethods', { Variant: 'related-entity' })).toBeNull();
+    });
+
+    it('leaves a panel that replaces nothing, or a section not on the form, first-class', () => {
+        expect(ReplacedSectionChromeGroup('', { SectionName: 'x' })).toBeNull();
+        expect(ReplacedSectionChromeGroup(undefined, { SectionName: 'x' })).toBeNull();
+        expect(ReplacedSectionChromeGroup('gone', undefined)).toBeNull();
+    });
+
+    // The whole-tab mode. The group has no panel to look up, and a panel standing in for
+    // it has nowhere else to be, so this must not depend on the row also setting ChromeGroup.
+    it('puts a panel replacing the whole Details group into that group', () => {
+        expect(ReplacedSectionChromeGroup(DETAILS_SECTION_KEY, undefined)).toBe('details');
+        expect(ReplacedSectionChromeGroup(DETAILS_SECTION_KEY, { SectionName: 'Details' })).toBe('details');
+    });
+});
+
+/**
+ * End to end over the grouping: the replaced section is gone from Panels (the container
+ * hides it first), and the panel that replaced it has to land inside Details rather than
+ * beside it.
+ */
+describe('BuildDefaultChromeSpec — a panel that replaced a field section', () => {
+    const panels = [
+        { SectionKey: 'panel:OrgMemberOverviewPanel', SectionName: 'Organization Member Overview', Variant: 'default' },
+        { SectionKey: 'organizationIdentity', SectionName: 'Organization Identity', Variant: 'default' },
+        { SectionKey: 'hierarchyAndStructure', SectionName: 'Hierarchy and Structure', Variant: 'default' },
+        { SectionKey: 'contactInformation', SectionName: 'Contact Information', Variant: 'default' },
+    ];
+    const contributions = ['panel:OrgMemberOverviewPanel'];
+
+    it('joins the Details tab when the section it replaced was in that tab', () => {
+        const spec = BuildDefaultChromeSpec(
+            panels, new Map(), null, contributions,
+            new Map([['panel:OrgMemberOverviewPanel', 'details' as const]]),
+        );
+        const details = spec.Groups.find((g) => g.Key === DETAILS_SECTION_KEY);
+        expect(details?.SectionKeys).toContain('panel:OrgMemberOverviewPanel');
+        expect(spec.Groups.map((g) => g.Title)).not.toContain('Organization Member Overview');
+    });
+
+    // The behaviour before the fix, kept as the contrast: no group, its own rail item.
+    it('takes a rail item of its own when it replaced nothing', () => {
+        const spec = BuildDefaultChromeSpec(panels, new Map(), null, contributions, new Map());
+        expect(spec.Groups.map((g) => g.Title)).toContain('Organization Member Overview');
+        expect(spec.Groups.find((g) => g.Key === DETAILS_SECTION_KEY)?.SectionKeys)
+            .not.toContain('panel:OrgMemberOverviewPanel');
+    });
+});
+
+
+/**
+ * The Organizations form, as the probe sees it: the installed contribution renders as an
+ * ordinary panel, and System Metadata renders beside the field sections though the rail
+ * files it under More. Offering either as a field group "inside the Details tab" counts
+ * things the tab does not hold, and the count the dialog quotes goes wrong with it.
+ */
+describe('FieldGroupsInDetails', () => {
+    const panels = [
+        { SectionKey: 'panel:OrgMemberOverviewPanel', SectionName: 'Organization Member Overview', Variant: 'default' },
+        { SectionKey: 'organizationIdentity', SectionName: 'Organization Identity', Variant: 'default' },
+        { SectionKey: 'hierarchyAndStructure', SectionName: 'Hierarchy and Structure', Variant: 'default' },
+        { SectionKey: 'contactInformation', SectionName: 'Contact Information', Variant: 'default' },
+        { SectionKey: 'details', SectionName: 'Details', Variant: 'default' },
+        { SectionKey: 'systemMetadata', SectionName: 'System Metadata', Variant: 'default' },
+        { SectionKey: 'memberProfiles', SectionName: 'Member Profiles', Variant: 'related-entity' },
+    ];
+    const groups: FormChromeGroup[] = [
+        { Key: DETAILS_SECTION_KEY, Title: 'Details', Icon: 'fa fa-id-card',
+          SectionKeys: ['organizationIdentity', 'hierarchyAndStructure', 'contactInformation', 'details'], IsMore: false },
+        { Key: 'panel:OrgMemberOverviewPanel', Title: 'Organization Member Overview', Icon: 'fa fa-table',
+          SectionKeys: ['panel:OrgMemberOverviewPanel'], IsMore: false },
+        { Key: MORE_SECTION_KEY, Title: 'More', Icon: 'fa fa-folder', SectionKeys: ['systemMetadata'], IsMore: true },
+    ];
+
+    it('offers exactly what the Details tab holds, in document order', () => {
+        expect(FieldGroupsInDetails(panels, groups).map((g) => g.Title)).toEqual([
+            'Organization Identity', 'Hierarchy and Structure', 'Contact Information', 'Details',
+        ]);
+    });
+
+    it('leaves out an installed contribution, which is replaced by naming the panel', () => {
+        expect(FieldGroupsInDetails(panels, groups).map((g) => g.Key))
+            .not.toContain('panel:OrgMemberOverviewPanel');
+    });
+
+    it('leaves out a section the rail files under More', () => {
+        expect(FieldGroupsInDetails(panels, groups).map((g) => g.Key)).not.toContain('systemMetadata');
+    });
+
+    // No Details item means no such tab; the grids are still not field groups.
+    it('falls back to every non-grid panel when the form has no Details tab', () => {
+        const flat = groups.filter((g) => g.Key !== DETAILS_SECTION_KEY);
+        expect(FieldGroupsInDetails(panels, flat).map((g) => g.Key)).not.toContain('memberProfiles');
+        expect(FieldGroupsInDetails(panels, flat)).toHaveLength(6);
+    });
+});
+
+
+/**
+ * Standing in for a whole tab is not a Details-only capability. The chrome layer has to
+ * expand whichever tab key a contribution names, because no tab has a panel of its own to
+ * match: Details and More are assembled from their members, and a related item can be
+ * several grids merged under one title.
+ */
+describe('RailGroupSectionKeys', () => {
+    const panels = [
+        { SectionKey: 'panel:Hero', SectionName: 'Health Strip', Variant: 'default' },
+        { SectionKey: 'organizationIdentity', SectionName: 'Organization Identity', Variant: 'default' },
+        { SectionKey: 'details', SectionName: 'Details', Variant: 'default' },
+        { SectionKey: 'systemMetadata', SectionName: 'System Metadata', Variant: 'default' },
+        { SectionKey: 'relationshipsTo', SectionName: 'MJ_BizApps_Common: Relationships', Variant: 'related-entity' },
+        { SectionKey: 'relationshipsFrom', SectionName: 'MJ_BizApps_Common: Relationships', Variant: 'related-entity' },
+        { SectionKey: 'memberProfiles', SectionName: 'Member Profiles', Variant: 'related-entity' },
+    ];
+    const contributions = ['panel:Hero'];
+
+    it('expands Details to the field sections it is assembled from', () => {
+        expect(RailGroupSectionKeys(panels, contributions, DETAILS_SECTION_KEY))
+            .toEqual(['organizationIdentity', 'details']);
+    });
+
+    it('expands More to the audit leftovers filed under it', () => {
+        expect(RailGroupSectionKeys(panels, contributions, MORE_SECTION_KEY)).toEqual(['systemMetadata']);
+    });
+
+    // Two relationships to the same entity are one rail item, so naming it means both.
+    it('expands a merged related item to every grid under that one title', () => {
+        expect(RailGroupSectionKeys(panels, contributions, 'relationshipsTo'))
+            .toEqual(['relationshipsTo', 'relationshipsFrom']);
+    });
+
+    it('expands a single related item to just its grid', () => {
+        expect(RailGroupSectionKeys(panels, contributions, 'memberProfiles')).toEqual(['memberProfiles']);
+    });
+
+    it('expands an installed contribution’s own item to itself', () => {
+        expect(RailGroupSectionKeys(panels, contributions, 'panel:Hero')).toEqual(['panel:Hero']);
+    });
+
+    it('never reaches beyond the tab that was named', () => {
+        const details = RailGroupSectionKeys(panels, contributions, DETAILS_SECTION_KEY);
+        expect(details).not.toContain('memberProfiles');
+        expect(details).not.toContain('systemMetadata');
+        expect(details).not.toContain('panel:Hero');
+    });
+
+    it('expands an unknown key to nothing', () => {
+        expect(RailGroupSectionKeys(panels, contributions, 'nope')).toEqual([]);
+        expect(RailGroupSectionKeys(panels, contributions, '')).toEqual([]);
+    });
+});
+
+
+/**
+ * A slot is a position in the form body, and the rail groups that body, so the slot has
+ * to decide the group when nothing more specific does. It did not: every contribution
+ * that claimed nothing became a tab of its own, so choosing `before-fields` put the panel
+ * at the bottom of the rail and the choice changed nothing anyone could see.
+ */
+describe('SlotChromeGroup', () => {
+    it('files a panel positioned among the field sections into the tab they make up', () => {
+        expect(SlotChromeGroup('before-fields')).toBe('details');
+        expect(SlotChromeGroup('after-fields')).toBe('details');
+    });
+
+    // These are positions relative to things that are tabs in their own right.
+    it('leaves a panel positioned outside the fields as a tab of its own', () => {
+        expect(SlotChromeGroup('top-area')).toBeNull();
+        expect(SlotChromeGroup('after-related')).toBeNull();
+        expect(SlotChromeGroup('after-everything')).toBeNull();
+    });
+
+    it('treats an unknown or missing slot as its own tab', () => {
+        expect(SlotChromeGroup('')).toBeNull();
+        expect(SlotChromeGroup(null)).toBeNull();
+        expect(SlotChromeGroup('made-up')).toBeNull();
+    });
+});
+
+/**
+ * The slot is a default for a contribution that says nothing more specific. A declared L1
+ * `inclusion` is more specific: an Overview registered `inclusion: 'Primary'` at
+ * `before-fields` must lead the rail, not be pinned inside the Details tab it should precede.
+ * (That an unpinned Primary contribution leads is covered by the Overview resolver test above.)
+ */
+describe('DefaultContributionChromeGroup', () => {
+    it('keeps the slot default when the contribution declares no inclusion', () => {
+        expect(DefaultContributionChromeGroup('before-fields', false)).toBe('details');
+        expect(DefaultContributionChromeGroup('after-fields', false)).toBe('details');
+        expect(DefaultContributionChromeGroup('after-related', false)).toBeNull();
+    });
+
+    it('lets a declared inclusion outrank the slot so it is never pinned into Details', () => {
+        expect(DefaultContributionChromeGroup('before-fields', true)).toBeNull();
+        expect(DefaultContributionChromeGroup('after-fields', true)).toBeNull();
+    });
+
+});
+
+/**
+ * A panel standing in for fields renders inside the section drawing them, so the rail has
+ * to file it there. Without this it is filed as a contribution in its own right and the
+ * rail lifts it out of the group it is visibly sitting in — the panel reads as appearing
+ * twice, once in the group and once as a tab of its own.
+ */
+describe('SectionDrawingAnyField', () => {
+    const panels = [
+        {
+            SectionKey: 'details', SectionName: 'Details', Variant: 'default',
+            Fields: [{ Name: 'Name', Label: 'Name' }, { Name: 'Description', Label: 'Description' }],
+        },
+        {
+            SectionKey: 'address', SectionName: 'Address', Variant: 'default',
+            Fields: [{ Name: 'Street', Label: 'Street' }, { Name: 'City', Label: 'City' }],
+        },
+        { SectionKey: 'orders', SectionName: 'Orders', Variant: 'related-entity' },
+    ];
+
+    it('finds the section drawing the claimed fields', () => {
+        expect(SectionDrawingAnyField(panels, ['Street', 'City'])).toBe('address');
+    });
+
+    it('finds it from one surviving field when another has left the form', () => {
+        expect(SectionDrawingAnyField(panels, ['Retired', 'City'])).toBe('address');
+    });
+
+    it('finds nothing when the form draws none of them', () => {
+        expect(SectionDrawingAnyField(panels, ['Retired', 'AlsoGone'])).toBeUndefined();
+    });
+
+    it('finds nothing for a claim that names no field', () => {
+        expect(SectionDrawingAnyField(panels, [])).toBeUndefined();
+        expect(SectionDrawingAnyField(panels, ['  '])).toBeUndefined();
+    });
+
+    it('ignores a section with no fields of its own, such as a related grid', () => {
+        expect(SectionDrawingAnyField([panels[2]], ['Street'])).toBeUndefined();
+    });
+});
+
+describe('ApplyEmptySectionBehavior', () => {
+    const spec = (): FormChromeSpec => ({
+        Layout: 'left-nav',
+        Groups: [
+            { Key: DETAILS_SECTION_KEY, Title: 'Details', Icon: 'fa fa-id-card', SectionKeys: ['identity'], IsMore: false },
+            { Key: 'tasks', Title: 'Tasks', Icon: 'fa fa-list', SectionKeys: ['tasks'], IsMore: false },
+            { Key: 'orders', Title: 'Orders', Icon: 'fa fa-cart', SectionKeys: ['ordersBillTo', 'ordersShipTo'], IsMore: false },
+            { Key: 'deals', Title: 'Deals', Icon: 'fa fa-handshake', SectionKeys: ['deals'], IsMore: false },
+            { Key: MORE_SECTION_KEY, Title: 'More', Icon: 'fa fa-folder', SectionKeys: ['systemMetadata', 'notes'], IsMore: true },
+        ],
+        RelatedRoles: new Map(),
+        MoreSectionKeys: ['systemMetadata', 'notes'],
+    });
+
+    it('is a no-op with no behaviour', () => {
+        const s = spec();
+        expect(ApplyEmptySectionBehavior(s, new Map()).Groups).toHaveLength(5);
+    });
+
+    it("removes 'hide' sections from first-class groups and from More", () => {
+        const s = ApplyEmptySectionBehavior(spec(), new Map([['tasks', 'hide'], ['notes', 'hide']]));
+        expect(s.Groups.find((g) => g.Key === 'tasks')).toBeUndefined();
+        expect(s.MoreSectionKeys).toEqual(['systemMetadata']);
+        expect(s.Layout).toBe('left-nav');
+    });
+
+    it("moves a group into More only when every section in it is empty-'more'", () => {
+        const partial = ApplyEmptySectionBehavior(spec(), new Map([['ordersBillTo', 'more'], ['deals', 'more']]));
+        expect(partial.Groups.find((g) => g.Key === 'orders')?.SectionKeys).toEqual(['ordersBillTo', 'ordersShipTo']);
+        expect(partial.MoreSectionKeys).toContain('deals');
+        expect(partial.Groups.find((g) => g.Key === 'deals')).toBeUndefined();
+
+        const full = ApplyEmptySectionBehavior(spec(), new Map([['ordersBillTo', 'more'], ['ordersShipTo', 'more']]));
+        expect(full.MoreSectionKeys).toEqual(expect.arrayContaining(['ordersBillTo', 'ordersShipTo']));
+    });
+
+    it('is applied by ResolveFormChrome without changing the chosen layout', () => {
+        const relatedId = '99999999-9999-9999-9999-999999999999';
+        const entity = new EntityInfo({
+            Name: 'MJ_BizApps_Common: People',
+            SchemaName: 'MJ_BizApps_Common',
+            RelatedEntities: [{
+                ID: '11111111-1111-1111-1111-111111111111',
+                RelatedEntity: 'MJ_BizApps_Tasks: Tasks',
+                RelatedEntityID: relatedId,
+                RelatedEntityJoinField: 'PersonID',
+                DisplayInForm: true,
+                Configuration: JSON.stringify({ UI: { inclusion: 'Primary' } }),
+            }],
+        });
+        const base = {
+            Entity: entity,
+            Panels: [
+                { SectionKey: 'identity', SectionName: 'Identity', Variant: 'default' as const },
+                { SectionKey: 'mJBizAppsTasksTasks', SectionName: 'Tasks', Variant: 'related-entity' as const },
+            ],
+            RelatedSchemaByEntityId: new Map([[relatedId, 'MJ_BizApps_Tasks']]),
+        };
+        const before = ResolveFormChrome(base);
+        const after = ResolveFormChrome({ ...base, EmptySectionBehavior: new Map([['mJBizAppsTasksTasks', 'hide' as const]]) });
+        expect(before.Spec.Groups.some((g) => g.SectionKeys.includes('mJBizAppsTasksTasks'))).toBe(true);
+        expect(after.Spec.Groups.some((g) => g.SectionKeys.includes('mJBizAppsTasksTasks'))).toBe(false);
+        expect(after.Spec.Layout).toBe(before.Spec.Layout);
     });
 });

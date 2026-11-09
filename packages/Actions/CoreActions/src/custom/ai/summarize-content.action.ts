@@ -264,6 +264,9 @@ export class SummarizeContentAction extends BaseAction {
                 format: options.format
             };
             promptParams.contextUser = params.ContextUser;
+            // The calling run's credential scope. This action is never handed the run's keys, so under
+            // 'RuntimeOnly' the prompt finds no usable model and fails instead of spending the platform's.
+            promptParams.CredentialScope = params.CredentialScope;
             promptParams.cleanValidationSyntax = true;
             promptParams.attemptJSONRepair = true;
 

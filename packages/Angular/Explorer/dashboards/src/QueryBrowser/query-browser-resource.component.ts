@@ -1,17 +1,19 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, ElementRef, NgZone, HostListener, ViewChild } from '@angular/core';
 import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { Subject } from 'rxjs';
-import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
+import { GroupByUUID, IndexByUUID, RegisterClass , UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { Metadata, CompositeKey, RunQuery, RunQueryResult } from '@memberjunction/core';
 import { TreeBranchConfig } from '@memberjunction/ng-trees';
-import { ResourceData, UserInfoEngine, MJQueryEntityExtended, MJQueryCategoryEntity, QueryEngine } from '@memberjunction/core-entities';
+import { ResourceData, UserInfoEngine, MJQueryEntityExtended, MJQueryCategoryEntity, QueryEngine, ParseQuerySaveMessage } from '@memberjunction/core-entities';
+import type { QueryDiagnosticLine } from '@memberjunction/core-entities';
 import {
     QueryEntityLinkClickEvent,
     QueryRowClickEvent
 } from '@memberjunction/ng-query-viewer';
 import { CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
+import type { QueryRefreshScope } from '@memberjunction/ng-query-viewer';
 import { ValidateStringParam, BoundNameList } from '../shared/agent-tool-validation';
 import {
     DEFAULT_QUERY_MAX_ROWS,
@@ -96,6 +98,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     private static readonly DEFAULT_PANEL_WIDTH = 320;
     private static readonly MIN_PANEL_WIDTH = 200;
     private static readonly MAX_PANEL_WIDTH = 600;
+    private static treePanelCount = 0;
 
     public isLoading = true;
     public Categories: MJQueryCategoryEntity[] = [];
@@ -162,6 +165,8 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     }
     public PanelWidth = QueryBrowserResourceComponent.DEFAULT_PANEL_WIDTH;
     public IsResizing = false;
+    /** Unique id of the query list panel, which the splitter names in aria-controls. */
+    public readonly TreePanelId = `query-tree-panel-${++QueryBrowserResourceComponent.treePanelCount}`;
 
     /** Status filter toggles — which statuses to show in the tree */
     public StatusFilters: Record<string, boolean> = {
@@ -227,6 +232,8 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     public IsSavingDrawer = false;
     public DrawerNameError = false;
     public DrawerSaveError: string | null = null;
+    /** Why the drawer's last save was refused, one finding per rule the SQL broke. */
+    public DrawerSaveDiagnostics: QueryDiagnosticLine[] = [];
 
     /** Ordered status options for the drawer dropdown — all valid Query statuses */
     public readonly DrawerStatuses: Array<'Pending' | 'Approved' | 'Rejected' | 'Expired'> =
@@ -804,10 +811,11 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
         // Use filtered queries (status + search filters applied)
         const visibleQueries = this.FilteredQueries;
+        const queriesByCategory = GroupByUUID(visibleQueries, q => q.CategoryID);
 
         // Create nodes for all categories, restoring expanded state
         for (const category of this.Categories) {
-            const queriesInCategory = visibleQueries.filter(q => UUIDsEqual(q.CategoryID, category.ID));
+            const queriesInCategory = queriesByCategory.Get(category.ID) ?? [];
             categoryMap.set(category.ID, {
                 category,
                 children: [],
@@ -1289,6 +1297,93 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         return entity.GetUserPermisions(this.metadata.CurrentUser).CanCreate;
     }
 
+    // ========================================
+    // Refresh metadata (the selected query, a category, or all)
+    // ========================================
+
+    public ShowRefreshDialog = false;
+    public RefreshScope: QueryRefreshScope | null = null;
+    public RefreshScopeLabel = '';
+
+    /** Refreshes the metadata of one query (the selected one). */
+    public OpenRefreshForQuery(query: MJQueryEntityExtended): void {
+        this.openRefresh({ Kind: 'Queries', QueryIDs: [query.ID] }, `Query “${query.Name}”`);
+    }
+
+    /** Refreshes the metadata of every query in a category and the categories below it. */
+    public OpenRefreshForCategory(node: CategoryNode, event?: Event): void {
+        event?.stopPropagation();
+        const path = this.categoryPathOf(node.category);
+        if (!path) return;
+        this.openRefresh({ Kind: 'Category', CategoryPath: path }, `Category “${path}” and its subcategories`);
+    }
+
+    /** Refreshes the metadata of every query the user can read. */
+    public OpenRefreshForAll(): void {
+        this.openRefresh({ Kind: 'All' }, 'All queries');
+    }
+
+    public OnRefreshDialogClosed(): void {
+        this.ShowRefreshDialog = false;
+        this.cdr.markForCheck();
+    }
+
+    /** A refresh was applied: reload the list, keeping the selected query selected. */
+    public async OnRefreshApplied(): Promise<void> {
+        const selectedID = this.SelectedQuery?.ID ?? null;
+        await this.loadData(true);
+        if (selectedID) {
+            const refreshed = this.Queries.find(q => UUIDsEqual(q.ID, selectedID));
+            if (refreshed) this.SelectedQuery = refreshed;
+        }
+        this.cdr.markForCheck();
+    }
+
+    /** A query named in the refresh report: close the dialog and select it. */
+    public OnRefreshOpenQuery(queryID: string): void {
+        const query = this.Queries.find(q => UUIDsEqual(q.ID, queryID));
+        this.ShowRefreshDialog = false;
+        if (query) {
+            this.expandCategoryForQuery(query);
+            this.SelectQuery(query);
+        }
+        this.cdr.markForCheck();
+    }
+
+    private openRefresh(scope: QueryRefreshScope, label: string): void {
+        this.RefreshScope = scope;
+        this.RefreshScopeLabel = label;
+        this.ShowRefreshDialog = true;
+        this.cdr.markForCheck();
+    }
+
+    /** A category's full path (`Parent/Child`), as the refresh operation selects categories. */
+    private categoryPathOf(category: MJQueryCategoryEntity): string {
+        const byID = IndexByUUID(this.Categories);
+        const segments: string[] = [];
+        const seen = new UUIDSet();
+        let current: MJQueryCategoryEntity | undefined = category;
+        while (current && !seen.Has(current.ID)) {
+            seen.Add(current.ID);
+            segments.unshift(current.Name);
+            current = current.ParentID ? byID.Get(current.ParentID) : undefined;
+        }
+        return segments.join('/');
+    }
+
+    /**
+     * Shows why a drawer save failed: the server's findings (rule code, line, column, fix) when the
+     * query's rules refused it, otherwise the server's message.
+     */
+    private showDrawerSaveFailure(message: string | null | undefined): void {
+        const parsed = ParseQuerySaveMessage(message);
+        const isRuleRefusal = parsed.Diagnostics.some(d => d.Code !== null);
+        this.DrawerSaveDiagnostics = isRuleRefusal ? [...parsed.Diagnostics] : [];
+        this.DrawerSaveError = isRuleRefusal
+            ? (parsed.Headline ?? 'The query was not saved:')
+            : (message?.trim() || 'Save failed. Please check your inputs and try again.');
+    }
+
     /** True when the current user has permission to edit queries. */
     public get CanEditQuery(): boolean {
         const entity = this.metadata.EntityByName('MJ: Queries');
@@ -1321,6 +1416,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         this.DrawerReusable = false;
         this.DrawerNameError = false;
         this.DrawerSaveError = null;
+        this.DrawerSaveDiagnostics = [];
         this.captureDrawerSnapshot();
         this.ShowQueryDrawer = true;
         this.cdr.markForCheck();
@@ -1343,6 +1439,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         this.DrawerReusable = query.Reusable ?? false;
         this.DrawerNameError = false;
         this.DrawerSaveError = null;
+        this.DrawerSaveDiagnostics = [];
         this.captureDrawerSnapshot();
         this.ShowQueryDrawer = true;
         this.cdr.markForCheck();
@@ -1410,6 +1507,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     public async SaveDrawer(): Promise<void> {
         this.DrawerNameError = !this.DrawerName.trim();
         this.DrawerSaveError = null;
+        this.DrawerSaveDiagnostics = [];
         if (this.DrawerNameError) {
             this.cdr.markForCheck();
             return;
@@ -1448,7 +1546,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
                     this.UpdateQueryParams({ queryId: refreshed.ID });
                 }
             } else {
-                this.DrawerSaveError = 'Save failed. Please check your inputs and try again.';
+                this.showDrawerSaveFailure(entity.LatestResult?.Message || entity.LatestResult?.CompleteMessage);
             }
         } catch (e) {
             console.error('Error saving query:', e);
@@ -1630,6 +1728,42 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         });
     }
 
+    /** Arrow keys nudge the splitter; Home/End jump to the bounds. */
+    public OnResizeKeydown(event: KeyboardEvent): void {
+        const step = event.shiftKey ? 40 : 8;
+        switch (event.key) {
+            case 'ArrowLeft':  this.setPanelWidth(this.PanelWidth - step); break;
+            case 'ArrowRight': this.setPanelWidth(this.PanelWidth + step); break;
+            case 'Home':       this.setPanelWidth(this.MinPanelWidth); break;
+            case 'End':        this.setPanelWidth(this.MaxPanelWidth); break;
+            default: return;
+        }
+        event.preventDefault();
+        this.persistPanelWidth();
+    }
+
+    /** Exposed for the splitter's aria-valuemin/max. */
+    public get MinPanelWidth(): number {
+        return QueryBrowserResourceComponent.MIN_PANEL_WIDTH;
+    }
+
+    public get MaxPanelWidth(): number {
+        return QueryBrowserResourceComponent.MAX_PANEL_WIDTH;
+    }
+
+    /** Single clamp+assign for both the drag and keyboard paths. */
+    private setPanelWidth(width: number): void {
+        this.PanelWidth = Math.max(this.MinPanelWidth, Math.min(this.MaxPanelWidth, width));
+        this.cdr.markForCheck();
+    }
+
+    private persistPanelWidth(): void {
+        UserInfoEngine.Instance.SetSettingDebounced(
+            QueryBrowserResourceComponent.SETTINGS_KEY,
+            this.PanelWidth.toString()
+        );
+    }
+
     /** @deprecated Use {@link OnResizeStart}. */
     public onResizeStart(event: MouseEvent): void {
       return this.OnResizeStart(event);
@@ -1641,14 +1775,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         const containerRect = this.elementRef.nativeElement.querySelector('.query-browser-container')?.getBoundingClientRect();
         if (!containerRect) return;
 
-        const newWidth = event.clientX - containerRect.left;
-        const clamped = Math.max(
-            QueryBrowserResourceComponent.MIN_PANEL_WIDTH,
-            Math.min(QueryBrowserResourceComponent.MAX_PANEL_WIDTH, newWidth)
-        );
-
-        this.PanelWidth = clamped;
-        this.zone.run(() => this.cdr.markForCheck());
+        this.zone.run(() => this.setPanelWidth(event.clientX - containerRect.left));
     }
 
     private onResizeEnd(): void {
@@ -1658,12 +1785,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         document.removeEventListener('mousemove', this.boundOnResizeMove);
         document.removeEventListener('mouseup', this.boundOnResizeEnd);
 
-        // Persist width with debouncing
-        UserInfoEngine.Instance.SetSettingDebounced(
-            QueryBrowserResourceComponent.SETTINGS_KEY,
-            this.PanelWidth.toString()
-        );
-
+        this.persistPanelWidth();
         this.zone.run(() => this.cdr.markForCheck());
     }
 

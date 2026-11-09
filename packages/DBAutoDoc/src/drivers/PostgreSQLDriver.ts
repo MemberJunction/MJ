@@ -5,7 +5,9 @@
 
 import { Pool, PoolClient, PoolConfig } from 'pg';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseAutoDocDriver } from './BaseAutoDocDriver.js';
+import { BaseAutoDocDriver, DriverProbeOutcome, ProbeNormalization, ProbeNormalizationPair } from './BaseAutoDocDriver.js';
+import { DescribeProbeFailure, ExtractSqlState } from './probeErrors.js';
+import { POSTGRESQL_INDEX_QUERY, PostgreSQLIndexRow, MapPostgreSQLIndexRows } from './IndexCatalog.js';
 import {
   AutoDocSchema,
   AutoDocTable,
@@ -19,7 +21,8 @@ import {
   AutoDocTableFilter,
   AutoDocColumnStatistics,
   AutoDocValueDistribution,
-  AutoDocExistingDescription
+  AutoDocExistingDescription,
+  AutoDocIndex
 } from '../types/driver.js';
 
 /**
@@ -298,6 +301,17 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
     }));
   }
 
+  /**
+   * Get every existing index on the tables of one schema (primary-key indexes included).
+   */
+  public async GetIndexes(schemaName: string): Promise<AutoDocIndex[]> {
+    const result = await this.executeQuery<PostgreSQLIndexRow>(POSTGRESQL_INDEX_QUERY, 3, [schemaName]);
+    if (!result.success) {
+      throw new Error(`Failed to read indexes for schema ${schemaName}: ${result.errorMessage}`);
+    }
+    return MapPostgreSQLIndexRows(result.data ?? []);
+  }
+
   public async getExistingDescriptions(
     schemaName: string,
     tableName: string
@@ -538,23 +552,34 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
     schemaName: string,
     tableName: string
   ): Promise<AutoDocForeignKey[]> {
+    // Read pg_constraint and pair each source column with its referenced column by position
+    // (conkey[i] -> confkey[i]). information_schema cannot do this: constraint_column_usage does not
+    // say which referenced column pairs with which source column, so joining it to key_column_usage
+    // turns an N-column composite key into N x N pairs. Its table_schema is also the referenced
+    // table's schema, so joining it on the source schema dropped every cross-schema foreign key.
+    // A foreign key into a partitioned table also has an internal clone (conparentid <> 0) aimed at
+    // each partition, which would read as extra FKs; those are skipped. A partition of a referencing
+    // partitioned table keeps its inherited FK, which is also a clone but targets the parent table.
     const query = `
       SELECT
-        kcu.column_name,
-        ccu.table_schema as referenced_schema,
-        ccu.table_name as referenced_table,
-        ccu.column_name as referenced_column,
-        tc.constraint_name
-      FROM information_schema.table_constraints tc
-      JOIN information_schema.key_column_usage kcu
-        ON tc.constraint_name = kcu.constraint_name
-        AND tc.table_schema = kcu.table_schema
-      JOIN information_schema.constraint_column_usage ccu
-        ON ccu.constraint_name = tc.constraint_name
-        AND ccu.table_schema = tc.table_schema
-      WHERE tc.constraint_type = 'FOREIGN KEY'
-        AND tc.table_schema = $1
-        AND tc.table_name = $2
+        a.attname AS column_name,
+        rn.nspname AS referenced_schema,
+        rc.relname AS referenced_table,
+        ra.attname AS referenced_column,
+        con.conname AS constraint_name
+      FROM pg_catalog.pg_constraint con
+      JOIN pg_catalog.pg_class c ON c.oid = con.conrelid
+      JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+      JOIN pg_catalog.pg_class rc ON rc.oid = con.confrelid
+      JOIN pg_catalog.pg_namespace rn ON rn.oid = rc.relnamespace
+      CROSS JOIN LATERAL UNNEST(con.conkey, con.confkey) WITH ORDINALITY AS cols(attnum, ref_attnum, position)
+      JOIN pg_catalog.pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = cols.attnum
+      JOIN pg_catalog.pg_attribute ra ON ra.attrelid = con.confrelid AND ra.attnum = cols.ref_attnum
+      WHERE con.contype = 'f'
+        AND (con.conparentid = 0 OR NOT rc.relispartition)
+        AND n.nspname = $1
+        AND c.relname = $2
+      ORDER BY con.conname, cols.position
     `;
 
     const result = await this.executeQuery<{
@@ -838,7 +863,15 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
   }
 
   /**
-   * Test value overlap between source and target columns
+   * Test value overlap between source and target columns.
+   *
+   * The sample is a plain `DISTINCT … LIMIT`, like the SQL Server driver's `DISTINCT TOP n`.
+   * `ORDER BY RANDOM()` on a `SELECT DISTINCT` is not valid PostgreSQL (the sort expression is not
+   * in the select list), and randomising in an outer query would sort every distinct value before
+   * the LIMIT applies, once per FK candidate. The sample is biased by physical order, which is
+   * acceptable for a containment question: do these values exist in the parent at all.
+   * Both sides are compared as text so a key stored as text can be checked against a uuid (or other
+   * typed) column, which `text = uuid` would otherwise refuse.
    */
   public async testValueOverlap(
     sourceTable: string,
@@ -853,14 +886,13 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
 
       const query = `
         WITH source_sample AS (
-          SELECT DISTINCT ${this.escapeIdentifier(sourceColumn)} as value
+          SELECT DISTINCT ${this.escapeIdentifier(sourceColumn)}::text as value
           FROM ${this.escapeIdentifier(sourceSchema)}.${this.escapeIdentifier(sourceTableName)}
           WHERE ${this.escapeIdentifier(sourceColumn)} IS NOT NULL
-          ORDER BY RANDOM()
           LIMIT ${sampleSize}
         ),
         target_values AS (
-          SELECT DISTINCT ${this.escapeIdentifier(targetColumn)} as value
+          SELECT DISTINCT ${this.escapeIdentifier(targetColumn)}::text as value
           FROM ${this.escapeIdentifier(targetSchema)}.${this.escapeIdentifier(targetTableName)}
           WHERE ${this.escapeIdentifier(targetColumn)} IS NOT NULL
         )
@@ -877,6 +909,9 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
       }>(query);
 
       if (!result.success || !result.data || result.data.length === 0) {
+        // A failed probe is reported as 0% overlap, which the FK detector treats as a rejection.
+        // Say so, so a query failure is not mistaken for a measured absence of overlap.
+        console.warn(`[PostgreSQLDriver] Value overlap check failed for ${sourceTable}.${sourceColumn} -> ${targetTable}.${targetColumn}: ${result.errorMessage ?? 'no result'}`);
         return 0;
       }
 
@@ -890,7 +925,105 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
 
       return matchingCount / totalSource;
     } catch (error) {
+      console.warn(`[PostgreSQLDriver] Value overlap check failed for ${sourceTable}.${sourceColumn} -> ${targetTable}.${targetColumn}: ${(error as Error).message}`);
       return 0;
+    }
+  }
+
+  /**
+   * Probe whether a candidate key's child values exist in the parent column.
+   *
+   * Returns two integers and nothing else. Three PostgreSQL specifics:
+   *
+   *  - **Compared as text.** `child = parent` raises `42883 operator does not
+   *    exist: text = uuid` for the single most common soft-key shape — a connector
+   *    storing another system's uuid in a varchar column. `testValueOverlap`
+   *    swallows that as 0% overlap, so the strongest real cross-schema key in a
+   *    tenant is reported as a refutation. Casting both sides to text makes the
+   *    comparison possible, which is what lets that key be *found*. It does not
+   *    weaken refutation: a product-namespaced `'AA:1000000'` still does not equal
+   *    a bare `'1000000'`.
+   *  - **No `ORDER BY RANDOM()`** — see {@link testValueOverlap}.
+   *  - **`statement_timeout`** is set on a dedicated client and reset in `finally`,
+   *    so a slow probe is abandoned server-side instead of stalling the run, and
+   *    the setting never leaks back into the pool.
+   *
+   * Each side is normalized as the key will be at match time (see {@link probeValueExpression}).
+   * PostgreSQL compares text case-sensitively, so without this an email key normalized with
+   * `LowerCaseTrim` measures 0% whenever one side stores mixed case.
+   */
+  public async ProbeJoinContainment(
+    child: { Schema: string; Table: string; Column: string },
+    parent: { Schema: string; Table: string; Column: string },
+    sampleSize: number,
+    timeoutMs: number,
+    normalization: ProbeNormalizationPair = { Child: 'ExactMatch', Parent: 'ExactMatch' }
+  ): Promise<DriverProbeOutcome> {
+    let client: PoolClient | null = null;
+    try {
+      if (!this.pool) {
+        await this.connect();
+      }
+      if (!this.pool) {
+        return { Ok: false, Reason: 'no PostgreSQL connection pool available' };
+      }
+      client = await this.pool.connect();
+
+      const childCol = this.escapeIdentifier(child.Column);
+      const parentCol = this.escapeIdentifier(parent.Column);
+      const query = `
+        WITH child_sample AS (
+          SELECT DISTINCT ${this.probeValueExpression(childCol, normalization.Child)} AS v
+          FROM ${this.escapeIdentifier(child.Schema)}.${this.escapeIdentifier(child.Table)}
+          WHERE ${childCol} IS NOT NULL
+          LIMIT ${Math.max(1, Math.floor(sampleSize))}
+        ),
+        parent_values AS (
+          SELECT DISTINCT ${this.probeValueExpression(parentCol, normalization.Parent)} AS v
+          FROM ${this.escapeIdentifier(parent.Schema)}.${this.escapeIdentifier(parent.Table)}
+          WHERE ${parentCol} IS NOT NULL
+        )
+        SELECT COUNT(*)::bigint AS sampled_values,
+               COUNT(p.v)::bigint AS matched_values
+        FROM child_sample c
+        LEFT JOIN parent_values p ON c.v = p.v
+      `;
+
+      await client.query(`SET statement_timeout = ${Math.max(1, Math.floor(timeoutMs))}`);
+      const result = await client.query<{ sampled_values: string; matched_values: string }>(query);
+      const row = result.rows[0];
+      if (!row) {
+        return { Ok: false, Reason: 'probe returned no rows' };
+      }
+      return {
+        Ok: true,
+        SampledValues: Number(row.sampled_values),
+        MatchedValues: Number(row.matched_values)
+      };
+    } catch (error) {
+      return { Ok: false, Reason: DescribeProbeFailure(error), Code: ExtractSqlState(error) };
+    } finally {
+      if (client) {
+        try {
+          await client.query('RESET statement_timeout');
+        } catch {
+          // The client is being discarded anyway; a failed RESET must not mask the probe result.
+        }
+        client.release();
+      }
+    }
+  }
+
+  /** A probe side's value as text, with the key's match-time normalization applied. */
+  private probeValueExpression(column: string, normalization: ProbeNormalization): string {
+    const asText = `${column}::text`;
+    switch (normalization) {
+      case 'LowerCaseTrim':
+        return `lower(btrim(${asText}))`;
+      case 'Trim':
+        return `btrim(${asText})`;
+      case 'ExactMatch':
+        return asText;
     }
   }
 
@@ -958,3 +1091,4 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
     return [parts[0], parts[1]];
   }
 }
+

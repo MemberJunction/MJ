@@ -18,9 +18,10 @@
  * @module @memberjunction/encryption
  */
 
-import { IMetadataProvider, IStartupSink, LogStatusEx, Metadata, RegisterForStartup, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, IStartupSink, LogStatusEx, LogWarning, Metadata, RegisterForStartup, UserInfo } from '@memberjunction/core';
 import { BaseSingleton } from '@memberjunction/global';
 import { EncryptionEngine } from './EncryptionEngine';
+import { EncryptionKeyUnavailableError, ReportEncryptionKeyUnavailable } from './EncryptionKeyUnavailableError';
 
 /**
  * Validates encryption key configuration at server startup.
@@ -60,16 +61,24 @@ export class EncryptionStartupValidator extends BaseSingleton<EncryptionStartupV
             hasErrors = true;
         }
 
-        // Phase 2: Validate all active keys have accessible key material
+        // Phase 2: Validate all active keys have accessible key material. A key an entity field
+        // encrypts with is required: saves through that field fail without it. Any other key only
+        // decrypts values encrypted elsewhere (an app ships credentials under its own key, given only
+        // to some installs), so a problem with one is reported as a warning, not a failure.
         const activeKeys = engine.ActiveEncryptionKeys;
         if (activeKeys.length > 0) {
             const results = await engine.ValidateAllKeys(contextUser);
+            const fieldKeyIds = this.findFieldEncryptionKeyIds(provider);
             const failures = results.filter(r => !r.IsAccessible);
+            const required = failures.filter(r => fieldKeyIds.has(r.KeyId.toUpperCase()));
 
-            if (failures.length > 0) {
-                this.logKeyValidationFailures(failures, results.length);
+            for (const f of failures.filter(r => !fieldKeyIds.has(r.KeyId.toUpperCase()))) {
+                this.reportReadOnlyKeyFailure(f);
+            }
+            if (required.length > 0) {
+                this.logKeyValidationFailures(required, results.length);
                 hasErrors = true;
-            } else {
+            } else if (failures.length === 0) {
                 LogStatusEx({ message: `  ✓ All ${results.length} encryption key(s) validated successfully`, verboseOnly: true });
             }
         }
@@ -81,6 +90,35 @@ export class EncryptionStartupValidator extends BaseSingleton<EncryptionStartupV
                 'The server will continue to start, but encrypted field operations may fail.'
             );
         }
+    }
+
+    /** IDs (upper-cased) of the keys entity fields encrypt with. */
+    private findFieldEncryptionKeyIds(provider?: IMetadataProvider): Set<string> {
+        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
+        const ids = new Set<string>();
+        for (const entity of md.Entities) {
+            for (const field of entity.Fields) {
+                if (field.Encrypt && field.EncryptionKeyID) ids.add(field.EncryptionKeyID.toUpperCase());
+            }
+        }
+        return ids;
+    }
+
+    /**
+     * A key no field encrypts with, failing validation. Not configured at all: the same one
+     * warning decryption gives (it is deduplicated with it). Configured but unusable: a warning
+     * with the source's own message, since values encrypted with it can't be read until it's fixed.
+     */
+    private reportReadOnlyKeyFailure(f: { KeyName: string; KeyId: string; SourceType: string; LookupValue: string; IsConfigured?: boolean; Error?: string }): void {
+        if (f.IsConfigured === false) {
+            ReportEncryptionKeyUnavailable(new EncryptionKeyUnavailableError(f.KeyId, f.KeyName, f.SourceType, f.LookupValue));
+            return;
+        }
+        LogWarning(
+            `Encryption key "${f.KeyName}" (used by no entity field) cannot be used: ${f.Error ?? 'unknown error'} ` +
+                'Values encrypted with it stay encrypted until it is fixed.',
+            'Encryption'
+        );
     }
 
     /**

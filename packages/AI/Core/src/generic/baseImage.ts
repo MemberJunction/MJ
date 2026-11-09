@@ -1,4 +1,5 @@
 import { BaseModel, BaseResult, ModelUsage } from "./baseModel";
+import { BuildCancellationErrorInfo, DescribeCancellation } from "./cancellation.js";
 
 /**
  * Represents a single generated image from an image generation request.
@@ -191,7 +192,57 @@ export class ImageGenerationParams {
      * Provider-specific additional parameters
      */
     providerOptions?: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+    /**
+     * Optional reference images used to guide style, subject, or composition during generation.
+     * Providers that do not support reference-guided generation may ignore this field.
+     */
+    ReferenceImages?: MediaInput[];
+
+    /**
+     * Optional signal for cancelling the request. The driver is responsible for honoring it: it
+     * should refuse the call when the signal is already aborted and hand it to the provider's HTTP
+     * client, so an abort tears the request down. A call the signal ends resolves with
+     * `success: false` and an `errorInfo` that classifies a caller cancellation as `Cancelled`,
+     * which is never failed over (see `BaseImageGenerator.CancelledResult`).
+     */
+    CancellationToken?: AbortSignal;
 }
+
+/**
+ * Shared media input reference for image and video generation parameters (such as
+ * `ReferenceImages`, `Keyframes[].Image`, and `SourceVideo`). Callers supply either
+ * inline binary/base64 `Data` paired with its `MimeType`, or a remote `URL`.
+ */
+export type MediaInput =
+    | {
+          /**
+           * Inline media payload as a binary `Buffer` or base64-encoded string.
+           */
+          Data: Buffer | string;
+          /**
+           * MIME type of the inline media payload (for example, `'image/png'` or `'video/mp4'`).
+           */
+          MimeType: string;
+          /**
+           * Omitted when inline `Data` is supplied.
+           */
+          URL?: undefined;
+      }
+    | {
+          /**
+           * HTTP(S) URL pointing to the media asset.
+           */
+          URL: string;
+          /**
+           * Optional MIME type hint when known alongside the URL.
+           */
+          MimeType?: string;
+          /**
+           * Omitted when `URL` is supplied.
+           */
+          Data?: undefined;
+      };
 
 /**
  * Parameters for image editing/inpainting
@@ -243,6 +294,15 @@ export class ImageEditParams {
      * Provider-specific additional parameters
      */
     providerOptions?: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+    /**
+     * Optional signal for cancelling the request. The driver is responsible for honoring it: it
+     * should refuse the call when the signal is already aborted and hand it to the provider's HTTP
+     * client, so an abort tears the request down. A call the signal ends resolves with
+     * `success: false` and an `errorInfo` that classifies a caller cancellation as `Cancelled`,
+     * which is never failed over (see `BaseImageGenerator.CancelledResult`).
+     */
+    CancellationToken?: AbortSignal;
 }
 
 /**
@@ -289,6 +349,15 @@ export class ImageVariationParams {
      * Provider-specific additional parameters
      */
     providerOptions?: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+    /**
+     * Optional signal for cancelling the request. The driver is responsible for honoring it: it
+     * should refuse the call when the signal is already aborted and hand it to the provider's HTTP
+     * client, so an abort tears the request down. A call the signal ends resolves with
+     * `success: false` and an `errorInfo` that classifies a caller cancellation as `Cancelled`,
+     * which is never failed over (see `BaseImageGenerator.CancelledResult`).
+     */
+    CancellationToken?: AbortSignal;
 }
 
 /**
@@ -391,6 +460,22 @@ export abstract class BaseImageGenerator extends BaseModel {
      * @returns Array of supported method names
      */
     public abstract GetSupportedMethods(): Promise<string[]>;
+
+    /**
+     * The result for a request its `CancellationToken` ended, before or during the provider call. A
+     * caller cancellation is classified `Cancelled`, Fatal and never failed over; an abort caused by
+     * a timeout reads as a retriable network error.
+     *
+     * @param signal The request's cancellation signal, read for why it was aborted.
+     * @param error The error the abort raised, if any.
+     */
+    protected CancelledResult(signal: AbortSignal | undefined, error?: unknown): ImageGenerationResult {
+        const now = new Date();
+        const result = new ImageGenerationResult(false, now, now);
+        result.errorMessage = DescribeCancellation(signal, 'Image request');
+        result.errorInfo = BuildCancellationErrorInfo({ error, signal, provider: this.constructor.name });
+        return result;
+    }
 
     /**
      * Helper method to convert image input (Buffer, base64, or URL) to the format

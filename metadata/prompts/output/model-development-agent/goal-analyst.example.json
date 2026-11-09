@@ -10,7 +10,7 @@
         "TargetVariable": "LapsedWithin90Days",
         "ProblemType": "classification",
         "SuccessMetric": "AUC",
-        "AsOfStrategy": { "Mode": "offset", "OffsetDays": 90 }
+        "AsOfStrategy": { "Mode": "none" }
       }
     }
   }

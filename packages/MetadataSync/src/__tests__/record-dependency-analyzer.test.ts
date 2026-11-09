@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { RecordDependencyAnalyzer, GroupRecordsByGraphId } from '../lib/record-dependency-analyzer';
+import { RecordDependencyAnalyzer, GroupRecordsByGraphId, type FlattenedRecord } from '../lib/record-dependency-analyzer';
 import type { RecordData } from '../lib/sync-engine';
 
 /**
@@ -103,5 +103,50 @@ describe('RecordDependencyAnalyzer.flattenFileRecords', () => {
     expect(() => analyzer.flattenFileRecords(records, 'MJ: Component Registries')).toThrow(
       /missing required "fields" property/,
     );
+  });
+});
+
+/**
+ * Delete order (#4935): dependents delete before what they depend on, whatever order the records
+ * arrive in.
+ */
+describe('RecordDependencyAnalyzer.ReverseTopologicalSort', () => {
+  const record = (id: string, deps: string[] = []): FlattenedRecord => ({
+    id,
+    entityName: id,
+    dependencies: new Set(deps),
+    record: { fields: {} },
+    depth: 0,
+    path: id,
+    originalIndex: 0,
+    graphId: id,
+  });
+  const T = record('Template');
+  const C = record('Content', ['Template']);
+  const P = record('Prompt', ['Template']);
+  const M = record('Model', ['Prompt']);
+  const sort = (records: FlattenedRecord[]) =>
+    new RecordDependencyAnalyzer().ReverseTopologicalSort(records).map((level) => level.map((r) => r.id));
+
+  /** The first level index that holds `id`. */
+  const levelOf = (levels: string[][], id: string) => levels.findIndex((level) => level.includes(id));
+
+  it('gives the same levels for every input order', () => {
+    const expected = [['Model'], ['Content', 'Prompt'], ['Template']];
+    expect(sort([T, C, P, M])).toEqual(expected);
+    // The order from the issue: a dependent before its dependency, which has a second-level dependency
+    const adversarial = sort([M, T, C, P]);
+    expect(adversarial.map((level) => [...level].sort())).toEqual(expected.map((level) => [...level].sort()));
+    expect(levelOf(adversarial, 'Model')).toBeLessThan(levelOf(adversarial, 'Prompt'));
+    expect(levelOf(adversarial, 'Prompt')).toBeLessThan(levelOf(adversarial, 'Template'));
+  });
+
+  it('ignores a dependency outside the records being deleted', () => {
+    expect(sort([record('Child', ['NotDeleted'])])).toEqual([['Child']]);
+  });
+
+  it('still returns every record when the records form a cycle', () => {
+    const levels = sort([record('A', ['B']), record('B', ['A'])]);
+    expect(levels.flat().sort()).toEqual(['A', 'B']);
   });
 });

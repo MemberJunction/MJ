@@ -18,7 +18,9 @@ const {
     mockCreateTaggedItem: vi.fn(),
 }));
 
-vi.mock('@memberjunction/global', () => ({
+vi.mock('@memberjunction/global', async (importOriginal) => ({
+    // Real codec: TagEngine persists fresh vectors in both JSON and binary (base64 float32) form.
+    Float32VectorToBase64: (await importOriginal<typeof import('@memberjunction/global')>()).Float32VectorToBase64,
     BaseSingleton: class BaseSingleton<T> {
         public static getInstance<T>(): T { return new (this as unknown as new () => T)(); }
     },
@@ -39,7 +41,10 @@ vi.mock('@memberjunction/global', () => ({
     RequiresSubclass: () => (target: unknown) => target,
 }));
 
-vi.mock('@memberjunction/core', () => ({
+vi.mock('@memberjunction/core', async () => ({
+    // The real SharedLoad, so Config's load sharing runs as it does in production. Imported from its
+    // own module: the whole of @memberjunction/core would load the @memberjunction/global mocked here.
+    SharedLoad: (await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core/dist/generic/sharedLoad.js')).SharedLoad,
     UserInfo: class {},
     LogError: vi.fn(),
     LogStatus: vi.fn(),
@@ -68,8 +73,8 @@ vi.mock('@memberjunction/core-entities', () => ({
     KnowledgeHubMetadataEngine: { Instance: { Config: vi.fn() } },
 }));
 
-vi.mock('@memberjunction/ai-prompts', () => ({
-    AIModelRunner: class {
+vi.mock('@memberjunction/ai-prompts', () => {
+    class MockEmbeddingRunner {
         async RunEmbedding(params: { Texts: string[] }) {
             // Generate dummy vectors (one per input text) so embedding succeeds
             const vectors = (params.Texts || []).map((_: string, i: number) =>
@@ -77,13 +82,17 @@ vi.mock('@memberjunction/ai-prompts', () => ({
             );
             return { Success: true, Vectors: vectors, PromptRunID: null, TokensUsed: 0, Cost: 0, ErrorMessage: null, ExecutionTimeMs: 0 };
         }
-    },
-    AIPromptRunner: class {
-        async ExecutePrompt() {
-            return { success: true, result: { taxonomy: [] }, errorMessage: null };
-        }
-    },
-}));
+    }
+    return {
+        AIModelRunner: MockEmbeddingRunner,
+        AIEmbeddingRunner: MockEmbeddingRunner,
+        AIPromptRunner: class {
+            async ExecutePrompt() {
+                return { success: true, result: { taxonomy: [] }, errorMessage: null };
+            }
+        },
+    };
+});
 
 // SeedTaxonomy imports AIPromptParams (ai-core-plus) and the clustering engine.
 // Mock them so the real CorePlus module (which needs BaseEntity/MJAIPromptEntity) is
@@ -145,14 +154,17 @@ vi.mock('@memberjunction/tag-engine-base', () => ({
     TagTreeNode: class {},
 }));
 
-vi.mock('@memberjunction/ai-vectors-memory', () => {
+vi.mock('@memberjunction/ai-vectors-memory', async () => {
+    const { ReadStoredVectorStub } = await import('./helpers/readStoredVectorStub');
     class MockSimpleVectorService {
         LoadVectors = mockLoadVectors;
         FindNearest = mockFindNearest;
+        FindNearestAsync = (...args: Parameters<typeof mockFindNearest>) => Promise.resolve(mockFindNearest(...args));
         AddVector = mockAddVector;
     }
     return {
         SimpleVectorService: MockSimpleVectorService,
+        ReadStoredVector: ReadStoredVectorStub,
         VectorEntry: class {},
     };
 });
@@ -171,7 +183,7 @@ vi.mock('@memberjunction/aiengine', () => ({
             Loaded: true,
             Prompts: [],
             Models: [
-                { ID: 'model-1', Name: 'text-embedding-3-small', AIModelType: 'Embeddings', InputTokenLimit: 8191, DriverClass: 'OpenAIEmbeddings', APIName: 'text-embedding-3-small' },
+                { ID: 'model-1', Name: 'text-embedding-3-small', IsActive: true, AIModelType: 'Embeddings', InputTokenLimit: 8191, DriverClass: 'OpenAIEmbeddings', APIName: 'text-embedding-3-small' },
             ],
             ModelVendors: [
                 { ModelID: 'model-1', Status: 'Active', DriverClass: 'OpenAIEmbeddings', APIName: 'text-embedding-3-small', Priority: 1 },
@@ -190,7 +202,6 @@ describe('TagEngine', () => {
         engine = TagEngine.Instance;
         // Reset internal state for each test
         (engine as unknown as { _loaded: boolean })._loaded = false;
-        (engine as unknown as { _loading: boolean })._loading = false;
         (engine as unknown as { _tagVectorService: null })._tagVectorService = null;
 
         // Set up embedding instance creation

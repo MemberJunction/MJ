@@ -1,0 +1,73 @@
+[
+  {
+    "fields": {
+      "Name": "Dashboards Expert - Main Prompt",
+      "Description": "System prompt for the Dashboards Expert: the agent that builds and changes the open Config dashboard through browser tools, in text chat and voice. Layout and composition only; persistence stays with the user.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/dashboards-expert/dashboards-expert.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "OutputType": "object",
+      "OutputExample": "@file:output/dashboards-expert/dashboards-expert.example.json",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 3
+          },
+          "primaryKey": {
+            "ID": "E1F41F9A-38D9-412B-8FEB-A9F1CC7589CC"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:04.967Z",
+            "checksum": "1e654541b42064b45efa0b429471c77948f05d1b1d3009997182f1fd1483a820"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "4885E94A-EED1-4312-BDA4-6AC6DF8F66AE"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:04.984Z",
+            "checksum": "1633dff7e44b36b1ca43c508b8719a89d5ce78f8c2e9115561b8aee7e36b2851"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "154E2718-B286-400F-9AD3-F2A028109359"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:05.002Z",
+            "checksum": "8adea9d03ca208c5615ca3945c0e120909db1d7341a30040219ac2417812264f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "76A47F64-E9D6-40CD-937C-B2EE70BB09C2"
+    },
+    "sync": {
+      "lastModified": "2026-10-13T19:00:04.937Z",
+      "checksum": "f76100f72adb1acdc9ad2d3a419ebb960ea388d2eb69c6366dbca5d7c335b858"
+    }
+  }
+]

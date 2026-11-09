@@ -46,7 +46,11 @@ export class ArtifactFileResolver extends ResolverBase {
         return this.buildDownloadUrl(artifactVersion.FileID, user, p);
     }
 
-    /** Load the File + its storage account/provider and generate a signed URL. */
+    /**
+     * Load the File (as the caller) and generate a signed URL — after the storage gate: the caller must be able to read
+     * the account the file's provider resolves to and every `MJ: Files` row that tracks its object
+     * (`FileStorageEngine.ResolveFileObject`), so an artifact cannot sign an object in an account the caller is refused.
+     */
     private async buildDownloadUrl(
         fileId: string,
         user: ReturnType<ResolverBase['GetUserFromPayload']>,
@@ -58,14 +62,11 @@ export class ArtifactFileResolver extends ResolverBase {
             throw new Error(`File record ${fileId} not found`);
         }
 
-        // Find the storage account for this file's provider using cached metadata
-        await FileStorageEngine.Instance.Config(false, user!);
-        const matchingAccounts = FileStorageEngine.Instance.GetAccountsByProviderID(fileEntity.ProviderID);
-        if (matchingAccounts.length === 0) {
+        // Resolve the storage account for this file's provider, gated for the caller (throws on refusal)
+        const resolved = await FileStorageEngine.Instance.ResolveFileObject(fileEntity, user!, 'Read', provider);
+        if (!resolved) {
             throw new Error(`No FileStorageAccount found for ProviderID ${fileEntity.ProviderID}. Cannot generate download URL.`);
         }
-
-        const driver = await FileStorageEngine.Instance.GetDriver(matchingAccounts[0].ID, user!);
-        return driver.CreatePreAuthDownloadUrl(fileEntity.ProviderKey ?? fileEntity.Name);
+        return resolved.Driver.CreatePreAuthDownloadUrl(resolved.ObjectKey);
     }
 }

@@ -1,0 +1,23 @@
+{
+  "id": "T1p",
+  "namespace": "81cdd222-886d-43df-845a-c3d18a0c366f",
+  "seed": 2206,
+  "description": "Planted single-series forecast twin of T1: linear trend + 12-month seasonality + AR(1) errors.",
+  "kind": "series",
+  "nPeriods": 240,
+  "testPeriods": 12,
+  "startYear": 2005,
+  "level": 100.0,
+  "trend": 0.5,
+  "seasonAmp": 10.0,
+  "phi": 0.6,
+  "sigma": 3.0,
+  "features": {},
+  "betas": {},
+  "intercept": null,
+  "sizingNote": "240 monthly periods (20 years; Ruling Q9: >= 240 months), monthly rather than daily because the planted seasonality is 12-month and the real T1 twin (MoreCheese monthly attendance or dues) is monthly. Forecast scores use a rolling origin with K = 12 non-overlapping 12-month windows (144 scored forecasts, first origin after 96 training months), because a single 12-point test window measures RMSE with a relative SE of 0.396 while the 12 origins bring it to 0.114 (between-origin spread; evidence/logs/P2/recovery.txt). Paired per-origin comparison of a last-value naive forecast against the oracle OriginMean gives t = 5.31, so method differences of that size are detectable. The lag-1 autocorrelation SE is sqrt((1-phi^2)/n) = 0.052.",
+  "rollingOrigin": {
+    "K": 12,
+    "H": 12
+  }
+}

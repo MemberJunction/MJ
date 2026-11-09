@@ -31,6 +31,7 @@ import path from 'node:path';
 const SENSITIVE_FIELDS: ReadonlySet<string> = new Set([
   'CodeGenPassword',
   'APIPassword',
+  'DatabaseAdminPassword',
   'BaseEncryptionKey',
   'OpenAIKey',
   'AnthropicKey',
@@ -58,6 +59,7 @@ const SENSITIVE_ENV_PATTERNS: ReadonlyArray<string | RegExp> = [
   /^(GITHUB|GITLAB|BITBUCKET)_TOKEN/,
   'MJ_INSTALL_CODEGEN_PASSWORD',
   'MJ_INSTALL_API_PASSWORD',
+  'MJ_INSTALL_DB_ADMIN_PASSWORD',
   'MJ_INSTALL_OPENAI_KEY',
   'MJ_INSTALL_ANTHROPIC_KEY',
   'MJ_INSTALL_MISTRAL_KEY',

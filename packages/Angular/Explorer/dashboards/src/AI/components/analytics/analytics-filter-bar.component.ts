@@ -6,7 +6,7 @@
  * Each section shows/hides filters via boolean inputs.
  */
 
-import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
+import { Component, ChangeDetectionStrategy, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GlobalFilterState } from '../../interfaces/analytics-preferences.interface';
 
@@ -18,6 +18,7 @@ interface FilterOption {
 
 @Component({
     standalone: false,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     selector: 'app-analytics-filter-bar',
     template: `
         <div class="filter-bar">
@@ -28,9 +29,10 @@ interface FilterOption {
                     (ClearAllRequested)="ClearAllFilters()">
                     <div class="popover-fields">
                         @if (ShowModelFilter) {
-                            <label class="popover-field">
+                            <div class="popover-field">
                                 <span class="popover-field-label">Model</span>
                                 <mj-dropdown
+                                    AriaLabel="Model filter"
                                     [Data]="ModelOptions"
                                     TextField="text"
                                     ValueField="value"
@@ -40,12 +42,13 @@ interface FilterOption {
                                     Placeholder="All Models"
                                     (ValueChange)="OnModelChange($event)">
                                 </mj-dropdown>
-                            </label>
+                            </div>
                         }
                         @if (ShowAgentFilter) {
-                            <label class="popover-field">
+                            <div class="popover-field">
                                 <span class="popover-field-label">Agent</span>
                                 <mj-dropdown
+                                    AriaLabel="Agent filter"
                                     [Data]="AgentOptions"
                                     TextField="text"
                                     ValueField="value"
@@ -55,12 +58,13 @@ interface FilterOption {
                                     Placeholder="All Agents"
                                     (ValueChange)="OnAgentChange($event)">
                                 </mj-dropdown>
-                            </label>
+                            </div>
                         }
                         @if (ShowPromptFilter) {
-                            <label class="popover-field">
+                            <div class="popover-field">
                                 <span class="popover-field-label">Prompt</span>
                                 <mj-dropdown
+                                    AriaLabel="Prompt filter"
                                     [Data]="PromptOptions"
                                     TextField="text"
                                     ValueField="value"
@@ -70,12 +74,13 @@ interface FilterOption {
                                     Placeholder="All Prompts"
                                     (ValueChange)="OnPromptChange($event)">
                                 </mj-dropdown>
-                            </label>
+                            </div>
                         }
                         @if (ShowStatusFilter) {
-                            <label class="popover-field">
+                            <div class="popover-field">
                                 <span class="popover-field-label">Status</span>
                                 <mj-dropdown
+                                    AriaLabel="Status filter"
                                     [Data]="StatusOptions"
                                     TextField="text"
                                     ValueField="value"
@@ -84,7 +89,7 @@ interface FilterOption {
                                     Placeholder="All Statuses"
                                     (ValueChange)="OnStatusChange($event)">
                                 </mj-dropdown>
-                            </label>
+                            </div>
                         }
                     </div>
                 </mj-filter-popover>
@@ -92,8 +97,11 @@ interface FilterOption {
 
             @if (ShowCompareToggle) {
                 <button
-                    class="compare-btn"
-                    [class.active]="compareActive"
+                    mjButton
+                    variant="secondary"
+                    size="sm"
+                    [toggleable]="true"
+                    [selected]="compareActive"
                     (click)="ToggleCompare()">
                     <i class="fa-solid fa-code-compare"></i>
                     Compare
@@ -101,7 +109,7 @@ interface FilterOption {
             }
 
             @if (ShowExportButton) {
-                <button class="export-btn" (click)="ExportClicked.emit()">
+                <button mjButton variant="secondary" size="sm" (click)="ExportClicked.emit()">
                     <i class="fa-solid fa-download"></i>
                     Export
                 </button>
@@ -109,12 +117,11 @@ interface FilterOption {
 
             <div class="time-chips">
                 @for (option of TimeRangeOptions; track option) {
-                    <button
-                        class="time-chip"
-                        [class.active]="TimeRange === option"
-                        (click)="OnTimeRangeSelect(option)">
-                        {{ option }}
-                    </button>
+                    <mj-filter-chip
+                        [Label]="option"
+                        [Active]="TimeRange === option"
+                        (Clicked)="OnTimeRangeSelect(option)">
+                    </mj-filter-chip>
                 }
             </div>
         </div>
@@ -148,41 +155,15 @@ interface FilterOption {
             letter-spacing: 0.04em;
         }
 
-        .popover-field :host ::ng-deep mj-dropdown,
-        :host ::ng-deep .popover-field mj-dropdown {
+        /* The dropdowns are in this component's own template (projected into the popover), so
+           they carry its encapsulation attribute and a plain scoped selector reaches them. */
+        .popover-field mj-dropdown {
             display: block;
             width: 100%;
             min-width: 0;
             max-width: none;
         }
 
-        .compare-btn,
-        .export-btn {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 5px 12px;
-            border: 1px solid var(--mj-border-default);
-            border-radius: 6px;
-            background: var(--mj-bg-surface);
-            color: var(--mj-text-secondary);
-            font-size: 13px;
-            cursor: pointer;
-            white-space: nowrap;
-            transition: background 0.15s, color 0.15s, border-color 0.15s;
-        }
-
-        .compare-btn:hover,
-        .export-btn:hover {
-            background: var(--mj-bg-surface-hover);
-            color: var(--mj-text-primary);
-        }
-
-        .compare-btn.active {
-            background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
-            color: var(--mj-brand-primary);
-            border-color: var(--mj-brand-primary);
-        }
 
         .time-chips {
             display: flex;

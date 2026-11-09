@@ -3,7 +3,8 @@ import type { Subscription } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
 import { CHANNEL_INBOUND_VIDEO_TRACK, JSONValue, RealtimeToolDefinition, RealtimeTrack, RealtimeTrackDescriptor } from '@memberjunction/ai';
 import { ChannelInboundVideoBridge, IChannelFrameProvider } from '@memberjunction/ai-realtime-client';
-import { BaseRealtimeChannelClient, ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
+import { REALTIME_CHANNEL_CONTRACT_VERSION, type RealtimeChannelDescriptor } from '@memberjunction/ai-core-plus';
+import { BaseRealtimeChannelClient, BuildToolBackedVerbs, ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
 import { RemoteBrowserHumanInputEvent, RemoteBrowserSnapshotView, RemoteBrowserSurfaceComponent } from './remote-browser-surface.component';
 import {
   MapToolToAction,
@@ -23,16 +24,20 @@ const EXECUTE_REMOTE_BROWSER_ACTION_MUTATION = `
   mutation ExecuteRemoteBrowserAction(
     $agentSessionID: String!, $kind: String!, $url: String, $selector: String,
     $x: Float, $y: Float, $text: String, $key: String,
-    $deltaX: Float, $deltaY: Float, $ms: Float
+    $deltaX: Float, $deltaY: Float, $ms: Float,
+    $ref: String, $valuesJson: String
   ) {
     ExecuteRemoteBrowserAction(
       agentSessionID: $agentSessionID, kind: $kind, url: $url, selector: $selector,
       x: $x, y: $y, text: $text, key: $key,
-      deltaX: $deltaX, deltaY: $deltaY, ms: $ms
+      deltaX: $deltaX, deltaY: $deltaY, ms: $ms,
+      ref: $ref, valuesJson: $valuesJson
     ) {
       Success
       CurrentUrl
       Detail
+      ObservationJson
+      FilledJson
     }
   }
 `;
@@ -43,6 +48,8 @@ interface ExecuteRemoteBrowserActionResult {
     Success: boolean;
     CurrentUrl: string | null;
     Detail: string | null;
+    ObservationJson?: string | null;
+    FilledJson?: string | null;
   } | null;
 }
 
@@ -260,6 +267,10 @@ interface RemoteBrowserToolResult {
   currentUrl?: string;
   /** Human-readable detail (e.g. extracted page text for `browser_GetPageText`, or an error). */
   detail?: string;
+  /** Structured DOM observation when `browser_Inspect` succeeds. */
+  observation?: JSONValue;
+  /** Per-field fill verification results when `browser_Fill` succeeds. */
+  filled?: JSONValue;
   /** Error description when `success` is false. */
   error?: string;
 }
@@ -400,6 +411,42 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     return RemoteBrowserSurfaceComponent;
   }
 
+  /**
+   * The remote browser's self-description: a real, server-hosted web browser the user can watch, with
+   * every `browser_*` tool as a verb (so a tool a subclass adds shows up here too). The model is shown
+   * its pixels (page frames), so the exposure ceiling is `pixels`.
+   */
+  public override GetDescriptor(): RealtimeChannelDescriptor {
+    return {
+      Key: this.ChannelName,
+      Version: REALTIME_CHANNEL_CONTRACT_VERSION,
+      DisplayName: this.TabTitle,
+      OwningPackage: '@memberjunction/ng-conversations',
+      Instructions:
+        'A live web browser you can drive while the user watches: open pages, click, type, scroll and ' +
+        'read what is on screen. Narrate what you are doing; do not announce each tiny step.',
+      Nouns: [
+        {
+          Name: 'page',
+          Description: 'The page the browser is currently showing (its URL and title).',
+          Schema: { type: 'object' }
+        }
+      ],
+      // Reading the page is what exposure limits: its text is the page's state, and what the vision model makes of the
+      // screenshot (or where it finds an element) is derived from its pixels. A goal's result reports what the browser found.
+      Verbs: BuildToolBackedVerbs(this.GetToolDefinitions(), this.ToolNamePrefix, 'agent', {
+        [REMOTE_BROWSER_TOOL_NAMES.Inspect]: 'state',
+        [REMOTE_BROWSER_TOOL_NAMES.GetPageText]: 'state',
+        [REMOTE_BROWSER_TOOL_NAMES.DescribePage]: 'pixels',
+        [REMOTE_BROWSER_TOOL_NAMES.LocateElement]: 'pixels',
+        [REMOTE_BROWSER_TOOL_NAMES.AchieveGoal]: 'state',
+      }),
+      DisplayPolicy: 'open-on-start',
+      DefaultAvailability: 'all-sessions',
+      MaxExposure: 'pixels'
+    };
+  }
+
   /** First-run intro shown the first time the user opens the Browser tab (once per user). */
   public override GetOnboardingDetails(): ChannelOnboardingDetails {
     return {
@@ -428,7 +475,13 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
 
   private ensureVideoBridge(): ChannelInboundVideoBridge | null {
     if (!this.videoBridge && this.Context) {
-      this.videoBridge = new ChannelInboundVideoBridge(() => this.Context?.Client, this);
+      const descriptor = this.GetDescriptor();
+      this.videoBridge = new ChannelInboundVideoBridge(() => this.Context?.Client, this, {
+        SourceID: `${descriptor.Key}#${this.InstanceId}`,
+        Label: descriptor.DisplayName,
+        Kind: 'surface',
+        ChannelKey: descriptor.Key,
+      });
     }
     if (this.videoBridge && !this.videoBridge.IsActive && this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
       this.videoBridge.Start?.();
@@ -465,6 +518,13 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     this.audioMutedSub = instance.AudioMutedChange.subscribe((muted) => this.audioPlayer?.SetMuted(muted));
     void this.startScreencast(instance);
     void this.startAudioStream(instance);
+  }
+
+  /** Pauses the surface's snapshot poll while it is out of sight; the screencast and the audio keep running. */
+  public override OnSurfaceVisibilityChange(visible: boolean): void {
+    if (this.surface) {
+      this.surface.Visible = visible;
+    }
   }
 
   public override UnbindSurface(): void {
@@ -562,7 +622,7 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   /**
    * Forwards one PUSHED screencast frame to the bound surface's canvas. Called by the session service
    * when a `RemoteBrowserScreencastFrame` arrives on the push-status stream for THIS session. No-op when
-   * the channel isn't streaming or has no bound surface (e.g. the tab pane is collapsed).
+   * the channel isn't streaming or has no bound surface (e.g. its tab has not been shown yet).
    *
    * Under streaming the surface's snapshot poll is stopped, so this is the ONLY thing that sees the
    * page while frames are being pushed — which is why the frame now carries the URL (#3496). Without
@@ -901,7 +961,7 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       // PERCEPTION: tell the agent where the page is now (background — no spoken reply), and refresh
       // the live-view bar, which in streaming mode has no poll feeding it.
       this.notePageChange(result.CurrentUrl, 'agent');
-      return this.ok(result.CurrentUrl, result.Detail);
+      return this.ok(result.CurrentUrl, result.Detail, result.ObservationJson, result.FilledJson);
     });
   }
 
@@ -919,6 +979,8 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       deltaX: action.DeltaX ?? null,
       deltaY: action.DeltaY ?? null,
       ms: action.Ms ?? null,
+      ...(action.Ref !== undefined ? { ref: action.Ref } : {}),
+      ...(action.ValuesJson !== undefined ? { valuesJson: action.ValuesJson } : {}),
     };
   }
 
@@ -1068,13 +1130,32 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   }
 
   /** Builds a successful tool-result JSON string for the model. */
-  private ok(currentUrl: string | null, detail: string | null): string {
+  private ok(
+    currentUrl: string | null,
+    detail: string | null,
+    observationJson?: string | null,
+    filledJson?: string | null,
+  ): string {
     const result: RemoteBrowserToolResult = { success: true };
     if (currentUrl) {
       result.currentUrl = currentUrl;
     }
     if (detail) {
       result.detail = detail;
+    }
+    if (observationJson) {
+      try {
+        result.observation = JSON.parse(observationJson) as JSONValue;
+      } catch {
+        // Ignore malformed observation JSON
+      }
+    }
+    if (filledJson) {
+      try {
+        result.filled = JSON.parse(filledJson) as JSONValue;
+      } catch {
+        // Ignore malformed filled JSON
+      }
     }
     return JSON.stringify(result);
   }

@@ -128,4 +128,18 @@ describe('JoinGridComponent (DOM — toolbar + loading gating)', () => {
     expect(query(f, 'table.grid')).toBeNull();
     await flush();
   });
+
+  it('unsubscribes the MJGlobal event listener in ngOnDestroy (MJ-NG-6)', async () => {
+    installGlobal({ runViewResults: [], entityByName: (name) => fakeEntityInfo(name) });
+    const f = renderComponentFixture(JoinGridComponent, {
+      ...MODULE,
+      inputs: { Provider: inputProvider(), ...DATA_INPUTS },
+    });
+    const internal = f.componentInstance as unknown as { _mjGlobalSub: { closed: boolean } | null };
+    expect(internal._mjGlobalSub).not.toBeNull();
+    expect(internal._mjGlobalSub?.closed).toBe(false);
+    f.destroy();
+    expect(internal._mjGlobalSub).toBeNull();
+    await flush();
+  });
 });

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { renderComponentFixture, query, queryAll, text, capture } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, text, capture, StubEmptyStateComponent } from '@memberjunction/ng-test-utils';
+import { MJClickableDirective } from '@memberjunction/ng-ui-components';
 import { LiveExecutionWidgetComponent } from './live-execution-widget.component';
 import type { LiveExecution } from '../../services/ai-instrumentation.service';
 
@@ -17,6 +18,7 @@ const exec = (over: Partial<LiveExecution> = {}): LiveExecution =>
 const render = (executions: LiveExecution[], maxVisible = 8) =>
   renderComponentFixture(LiveExecutionWidgetComponent, {
     declarations: [LiveExecutionWidgetComponent],
+    imports: [MJClickableDirective, StubEmptyStateComponent],
     inputs: { executions, maxVisible },
   });
 
@@ -24,6 +26,7 @@ describe('LiveExecutionWidgetComponent (DOM)', () => {
   it('shows the empty-state (no items) when there are no executions', () => {
     const fixture = render([]);
     expect(query(fixture, '.no-executions')).not.toBeNull();
+    expect(text(fixture, '.no-executions .stub-empty')).toBe('No recent executions');
     expect(queryAll(fixture, '.execution-item').length).toBe(0);
   });
 
@@ -49,7 +52,7 @@ describe('LiveExecutionWidgetComponent (DOM)', () => {
     const many = Array.from({ length: 5 }, (_, i) => exec({ id: `x${i}`, name: `X${i}` }));
     const fixture = render(many, 2);
     expect(queryAll(fixture, '.execution-item').length).toBe(2);
-    expect(text(fixture, '.show-more-btn')).toContain('Show All (5)');
+    expect(text(fixture, '.show-more button')).toContain('Show All (5)');
   });
 
   it('emits executionClick with the clicked execution', () => {
@@ -58,5 +61,16 @@ describe('LiveExecutionWidgetComponent (DOM)', () => {
     (query(fixture, '.execution-item') as HTMLElement).click();
     expect(clicks.length).toBe(1);
     expect(clicks[0].id).toBe('clicked');
+  });
+
+  it('makes each execution row keyboard-accessible and names it', () => {
+    const fixture = render([exec({ id: 'k', name: 'Keyboard', type: 'agent' })]);
+    const row = query(fixture, '.execution-item') as HTMLElement;
+    expect(row.getAttribute('role')).toBe('button');
+    expect(row.getAttribute('tabindex')).toBe('0');
+    expect(row.getAttribute('aria-label')).toBe('Open agent Keyboard');
+    const clicks = capture(fixture.componentInstance.executionClick);
+    row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(clicks.length).toBe(1);
   });
 });

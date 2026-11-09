@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { BaseEntity, EntityInfo } from '@memberjunction/core';
+import type { BaseEntity, EntityInfo, IMetadataProvider } from '@memberjunction/core';
 import type { RecordRef, RecordProcessorContext, RecordResult } from '@memberjunction/record-set-processor-base';
 
 import { ProductionScoreRecordSetRunner } from '../score-record-set.runner';
@@ -73,7 +73,7 @@ class TestableWriteBackRunner extends ProductionScoreRecordSetRunner {
     results: RecordResult[],
     request: ScoreRecordSetRequest,
   ): Promise<{ wroteBack: boolean; failedIndexes: Set<number> }> {
-    const ctx = { contextUser: { ID: 'u1' }, provider: {} } as unknown as RecordProcessorContext;
+    const ctx = { ContextUser: { ID: 'u1' }, Provider: {} } as unknown as RecordProcessorContext;
     return (this as unknown as {
       applyWriteBack(
         r: RecordRef[],
@@ -105,9 +105,18 @@ function ref(id: string): RecordRef {
   return { EntityID: 'ent-members', RecordID: id };
 }
 function succeeded(score: number, klass?: string): RecordResult {
-  const payload: MLInferenceResultPayload = { modelId: 'm1', target: 'Renewed', problemType: 'classification', score, class: klass };
+  const payload: MLInferenceResultPayload = {
+    modelId: 'm1',
+    target: 'Renewed',
+    problemType: 'classification',
+    score,
+    class: klass,
+    scoredAt: '2026-10-23T00:00:00.000Z',
+  };
   return { Status: 'Succeeded', ResultPayload: payload };
 }
+/** Test double: write-back resolves targets through `resolveTargetEntity` (overridden above), never the provider. */
+const PROVIDER = { Name: 'writeback-test' } as unknown as IMetadataProvider;
 const MAPPING = { OutputMapping: { fields: { RenewalScore: '$.score', RenewalClass: '$.class' } } };
 
 describe('ProductionScoreRecordSetRunner write-back — Saves mapped fields', () => {
@@ -118,7 +127,7 @@ describe('ProductionScoreRecordSetRunner write-back — Saves mapped fields', ()
 
     const records = [ref('m1')];
     const results = [succeeded(0.83, 'renew')];
-    const request: ScoreRecordSetRequest = { modelId: 'm1', scope: { records: ['m1'] }, writeBack: MAPPING };
+    const request: ScoreRecordSetRequest = { modelId: 'm1', scope: { records: ['m1'] }, writeBack: MAPPING, provider: PROVIDER };
 
     const wb = await runner.applyWriteBackPublic(records, results, request);
 
@@ -145,7 +154,7 @@ describe('ProductionScoreRecordSetRunner write-back — Saves mapped fields', ()
 
     const records = [ref('ok'), ref('bad')];
     const results = [succeeded(0.9, 'renew'), succeeded(0.1, 'lapse')];
-    const request: ScoreRecordSetRequest = { modelId: 'm1', scope: { records: ['ok', 'bad'] }, writeBack: MAPPING };
+    const request: ScoreRecordSetRequest = { modelId: 'm1', scope: { records: ['ok', 'bad'] }, writeBack: MAPPING, provider: PROVIDER };
 
     const wb = await runner.applyWriteBackPublic(records, results, request);
 
@@ -167,7 +176,7 @@ describe('ProductionScoreRecordSetRunner write-back — dryRun & validation', ()
 
     const records = [ref('m1')];
     const results = [succeeded(0.83, 'renew')];
-    const request: ScoreRecordSetRequest = { modelId: 'm1', scope: { records: ['m1'] }, writeBack: MAPPING, dryRun: true };
+    const request: ScoreRecordSetRequest = { modelId: 'm1', scope: { records: ['m1'] }, writeBack: MAPPING, dryRun: true, provider: PROVIDER };
 
     const wb = await runner.applyWriteBackPublic(records, results, request);
 
@@ -188,7 +197,7 @@ describe('ProductionScoreRecordSetRunner write-back — dryRun & validation', ()
 
     const records = [ref('m1')];
     const results = [succeeded(0.83, 'renew')];
-    const request: ScoreRecordSetRequest = { modelId: 'm1', scope: { records: ['m1'] }, writeBack: MAPPING };
+    const request: ScoreRecordSetRequest = { modelId: 'm1', scope: { records: ['m1'] }, writeBack: MAPPING, provider: PROVIDER };
 
     const wb = await runner.applyWriteBackPublic(records, results, request);
 
@@ -206,7 +215,7 @@ describe('ProductionScoreRecordSetRunner write-back — dryRun & validation', ()
 
     const records = [ref('m1')];
     const results = [succeeded(0.83, 'renew')];
-    const request: ScoreRecordSetRequest = { modelId: 'm1', scope: { records: ['m1'] }, writeBack: true };
+    const request: ScoreRecordSetRequest = { modelId: 'm1', scope: { records: ['m1'] }, writeBack: true, provider: PROVIDER };
 
     const wb = await runner.applyWriteBackPublic(records, results, request);
 

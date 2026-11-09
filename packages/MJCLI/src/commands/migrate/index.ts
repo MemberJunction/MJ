@@ -1,19 +1,23 @@
 import path from 'node:path';
 import { Command, Flags } from '@oclif/core';
 import { Skyway } from '@memberjunction/skyway-core';
-import type { MigrateResult, MigrationExecutionResult, ResolvedMigration, SkywayConfig } from '@memberjunction/skyway-core';
+import type { MigrateResult, MigrationExecutionResult, MigrationStatus, ResolvedMigration, SkywayConfig } from '@memberjunction/skyway-core';
 import ora from 'ora-classic';
-import { GetValidatedConfig, GetSkywayConfig, type MJConfig } from '../../config';
+import { GetValidatedConfig, GetSkywayConfig, GetRawConfig, type MJConfig } from '../../config';
 import { FetchMigrationSlice, ResolveGitRef, type MigrationFetchResult } from '../../lib/migration-fetch';
 import { VerifyDatabaseConnection } from '../../lib/db-preflight';
-import { ReadCurrentDbVersion } from '../../lib/db-version';
+import { ReadAppliedMigrationState, type AppliedMigrationState } from '../../lib/db-version';
+import { DecideOutOfOrder, FindOutOfOrderPending, ReadExplicitOutOfOrder, ShouldProbeOutOfOrder } from '../../lib/out-of-order';
 import { executeOpenAppMetadataRefresh, isOpenAppSchema } from '@memberjunction/open-app-engine';
+import { ClearSharedCacheAfterWrite, MigrationChangedDatabase, SKIP_CACHE_CLEAR_ENV } from '../../lib/shared-cache';
+import { FindAppManifestSchema } from '../../lib/app-manifest-schema';
+import { DEFAULT_MIGRATION_REQUEST_TIMEOUT_MS, MigrationTimeoutHint } from '../../lib/migration-timeout';
 
 /** Skyway's default history table — matches `@memberjunction/skyway-core`'s config default. */
 const HISTORY_TABLE = 'flyway_schema_history';
 
 export default class Migrate extends Command {
-  static description = 'Migrate MemberJunction database to latest version. Open App migrates also run the core metadata-heal procs (same work as R__RefreshMetadata) scoped to the app schema, on SQL Server and PostgreSQL.';
+  static description = 'Migrate MemberJunction database to latest version. Open App migrates also run the core metadata-heal procs (same work as R__RefreshMetadata) scoped to the app schema, on SQL Server and PostgreSQL. Each database request may run for up to 30 minutes by default; set MJ_MIGRATION_REQUEST_TIMEOUT (milliseconds) or dbRequestTimeout in mj.config.cjs to change it.';
 
   static examples = [
     `<%= config.bin %> <%= command.id %>
@@ -27,10 +31,16 @@ export default class Migrate extends Command {
   static flags = {
     verbose: Flags.boolean({ char: 'v', description: 'Enable additional logging' }),
     tag: Flags.string({ char: 't', description: 'Version tag to use for running remote migrations' }),
-    schema: Flags.string({ char: 's', description: 'Target schema (overrides coreSchema from config)' }),
+    schema: Flags.string({
+      char: 's',
+      description: 'Target schema (overrides coreSchema from config). When omitted for local migrations, the schema declared by an mj-app.json in --dir (or its parents) or the current directory is used',
+    }),
     dir: Flags.string({ description: 'Migration source directory (overrides migrationsLocation from config)' }),
     'check-connection': Flags.boolean({
       description: 'Verify the database connection (including TLS) and exit without migrating',
+    }),
+    'skip-cache-clear': Flags.boolean({
+      description: `Do not clear the shared Redis cache (REDIS_URL) after migrating. Also: ${SKIP_CACHE_CLEAR_ENV}=1`,
     }),
   };
 
@@ -44,22 +54,26 @@ export default class Migrate extends Command {
     await this.preflightConnection(config, flags['check-connection']);
     if (flags['check-connection']) return;
 
-    // For a remote ref we read the DB's current migration version, then fetch only the
-    // slice needed to reach the target — versioned migrations after the current version
-    // for an existing DB, or baseline + tail for a fresh one — into a temp dir handed to
-    // Skyway. cleanup() runs on every exit path.
+    // For a remote ref we read what the DB has applied, then fetch only the slice needed
+    // to reach the target — the versioned migrations it has not applied (above its baseline
+    // floor) for an existing DB, or baseline + tail for a fresh one — into a temp dir handed
+    // to Skyway. cleanup() runs on every exit path.
     //
     // Explicit --tag wins; otherwise the install-pinned version (mjRepoVersion) drives
     // the fetch so migrate stays consistent with the installed code. An explicit --dir
     // override (without --tag) keeps using the local filesystem and skips fetching, so
     // monorepo developers are unaffected.
     const ref = flags.tag ?? (flags.dir ? undefined : config.mjRepoVersion);
-    const fetched = ref ? await this.fetchSliceForRef(config, ref, flags.schema) : null;
+    // A remote ref fetches core MJ migrations from mjRepoUrl, so only a local run takes its schema
+    // from an Open App manifest.
+    const schema = flags.schema ?? (ref ? undefined : this.schemaFromAppManifest(flags.dir));
+    const fetched = ref ? await this.fetchSliceForRef(config, ref, schema) : null;
 
     try {
       const sourceDir = this.resolveSourceDir(fetched, flags.dir);
-      const skywayConfig = await GetSkywayConfig(config, undefined, flags.schema, sourceDir);
+      const skywayConfig = await GetSkywayConfig(config, undefined, schema, sourceDir);
       this.logFetchSummary(flags.verbose, fetched);
+      await this.applyOutOfOrderPolicy(config, skywayConfig, schema, sourceDir);
       await this.executeMigration(config, flags, skywayConfig);
     } finally {
       if (fetched) await fetched.Cleanup();
@@ -67,37 +81,117 @@ export default class Migrate extends Command {
   }
 
   /**
-   * Reads the database's current migration version, logs it, then fetches the minimal
-   * slice to reach `ref`: versioned migrations after the current version for an existing
-   * database, or baseline + tail for a fresh one.
+   * The schema an Open App's `mj-app.json` declares, used when `--schema` is omitted (#4771).
+   * Without it, migrating an app's migrations validates them against the core schema's history,
+   * where none of them appear, and reports every one as unapplied.
+   */
+  private schemaFromAppManifest(dir: string | undefined): string | undefined {
+    let found: ReturnType<typeof FindAppManifestSchema>;
+    try {
+      found = FindAppManifestSchema(dir, process.cwd());
+    } catch (error: unknown) {
+      this.error(error instanceof Error ? error.message : String(error));
+    }
+    if (!found?.SchemaName) {
+      return undefined;
+    }
+    this.log(`Using schema ${found.SchemaName} from ${found.ManifestPath} (pass --schema to override).`);
+    return found.SchemaName;
+  }
+
+  /**
+   * Reads what the database has applied, logs it, then fetches the minimal slice to reach
+   * `ref`: the versioned migrations not yet applied (above the baseline floor) for an
+   * existing database, or baseline + tail for a fresh one.
    */
   private async fetchSliceForRef(config: MJConfig, ref: string, schema: string | undefined): Promise<MigrationFetchResult> {
-    const currentVersion = await this.readInstalledVersion(config, schema);
-    this.logInstalledVersion(currentVersion);
+    const applied = await this.readAppliedState(config, schema);
+    this.logInstalledVersion(applied);
     return FetchMigrationSlice({
       repoUrl: config.mjRepoUrl,
       ref: ResolveGitRef(ref),
       dialect: config.dbPlatform,
-      currentVersion,
+      applied,
     });
   }
 
   /**
-   * Connects to read the highest migration version already applied (from Skyway's
-   * history table). Returns null for a fresh database (no history table yet).
+   * Connects to read the applied versions and baseline floor from Skyway's history table.
+   * Returns null for a fresh database (no history table yet).
    */
-  private async readInstalledVersion(config: MJConfig, schema: string | undefined): Promise<string | null> {
+  private async readAppliedState(config: MJConfig, schema: string | undefined): Promise<AppliedMigrationState | null> {
     // A throwaway config just to obtain a provider — the migration location is irrelevant here.
     const probe = await GetSkywayConfig(config, undefined, schema, undefined);
-    return ReadCurrentDbVersion(probe.Provider, probe.Migrations.DefaultSchema, HISTORY_TABLE);
+    return ReadAppliedMigrationState(probe.Provider, probe.Migrations.DefaultSchema, HISTORY_TABLE);
   }
 
   /** Surfaces the detected installed version so the user sees what's being upgraded from. */
-  private logInstalledVersion(currentVersion: string | null): void {
-    if (currentVersion === null) {
+  private logInstalledVersion(applied: AppliedMigrationState | null): void {
+    if (applied === null) {
       this.log('No prior migration history detected — treating as a fresh install (baseline + later migrations).');
-    } else {
-      this.log(`Detected installed migration version: ${currentVersion} — fetching only migrations newer than it.`);
+      return;
+    }
+    const floor = applied.BaselineFloor ? ` (baseline floor ${applied.BaselineFloor})` : '';
+    this.log(
+      `Detected installed migration version: ${applied.HighestVersion ?? '(none)'}${floor} — fetching every migration not yet applied.`,
+    );
+  }
+
+  /**
+   * Turns on `outOfOrder` for this run when the core schema has pending migrations older
+   * than its highest applied version and the config file does not set `outOfOrder`. That
+   * is the normal state of a database upgraded from a release line, where backported
+   * migrations were applied ahead of older files that only exist on the newer line.
+   * Each such file is logged. An explicit `outOfOrder` in config is honoured as written.
+   *
+   * SIDE EFFECTS: reads the history table through a separate provider; mutates
+   * `skywayConfig.Migrations.OutOfOrder`.
+   */
+  private async applyOutOfOrderPolicy(config: MJConfig, skywayConfig: SkywayConfig, schema: string | undefined, sourceDir: string | undefined): Promise<void> {
+    const explicitSetting = ReadExplicitOutOfOrder(GetRawConfig().config);
+    const isCoreSchema = !isOpenAppSchema(skywayConfig.Migrations.DefaultSchema, config.coreSchema ?? '__mj');
+    if (!ShouldProbeOutOfOrder(explicitSetting, isCoreSchema)) return;
+
+    const outOfOrderPending = await this.probeOutOfOrderPending(config, schema, sourceDir);
+    if (outOfOrderPending === null) return;
+
+    const decision = DecideOutOfOrder({ ExplicitSetting: explicitSetting, IsCoreSchema: isCoreSchema, OutOfOrderPending: outOfOrderPending });
+    if (decision.EnabledAutomatically) {
+      skywayConfig.Migrations.OutOfOrder = true;
+      this.log(`Applying ${outOfOrderPending.length} migration(s) older than the database's newest applied migration (outOfOrder enabled for this run):`);
+      this.logOutOfOrderFiles(outOfOrderPending);
+    } else if (decision.BlockedByExplicitSetting) {
+      this.warn(
+        `${outOfOrderPending.length} pending migration(s) are older than the database's newest applied migration, ` +
+          'and the config file sets outOfOrder: false, so Skyway will refuse them. Remove the setting or set it to true to apply them:',
+      );
+      this.logOutOfOrderFiles(outOfOrderPending);
+    }
+  }
+
+  /**
+   * Asks Skyway which versioned files it would refuse as out of order (State IGNORED).
+   * Returns null when the probe fails; the run then proceeds with the configured setting
+   * and Skyway reports any problem itself.
+   */
+  private async probeOutOfOrderPending(config: MJConfig, schema: string | undefined, sourceDir: string | undefined): Promise<MigrationStatus[] | null> {
+    const probeConfig = await GetSkywayConfig(config, undefined, schema, sourceDir);
+    probeConfig.Migrations.OutOfOrder = false;
+    const probe = new Skyway(probeConfig);
+    try {
+      return FindOutOfOrderPending(await probe.Info());
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.warn(`Could not check for out-of-order migrations: ${message}`);
+      return null;
+    } finally {
+      await probe.Close();
+    }
+  }
+
+  private logOutOfOrderFiles(files: readonly MigrationStatus[]): void {
+    for (const file of files) {
+      this.log(`  ${file.Version} — ${file.Script}`);
     }
   }
 
@@ -139,7 +233,7 @@ export default class Migrate extends Command {
   }
 
   /** Runs Skyway against the prepared config and reports the outcome. */
-  private async executeMigration(config: MJConfig, flags: { verbose: boolean; tag?: string }, skywayConfig: SkywayConfig): Promise<void> {
+  private async executeMigration(config: MJConfig, flags: { verbose: boolean; tag?: string; 'skip-cache-clear'?: boolean }, skywayConfig: SkywayConfig): Promise<void> {
     const targetSchema = skywayConfig.Migrations.DefaultSchema;
     const skyway = new Skyway(skywayConfig);
 
@@ -184,6 +278,12 @@ export default class Migrate extends Command {
       const message = err instanceof Error ? err.message : String(err);
       this.logToStderr(`\nMigration error: ${message}\n`);
       this.printCallbackErrors(failedMigrations, lastMigrationStarted, errorLog);
+      this.printTimeoutHint(skywayConfig, [message, ...errorLog]);
+      // A throw used to end the run with the fleet still holding pre-migration rows. Whatever had
+      // already been applied was committed, so the cache is stale whether or not the run finished.
+      await this.clearSharedCache(flags['skip-cache-clear'], MigrationChangedDatabase({
+        Threw: true, Succeeded: false, MigrationsApplied: 0, StartedApplying: lastMigrationStarted !== undefined,
+      }));
       this.error('Migrations failed');
     } finally {
       await skyway.Close();
@@ -201,9 +301,23 @@ export default class Migrate extends Command {
         }
       }
       await this.refreshMetadataAfterOpenAppMigrate(config, targetSchema, flags.verbose);
+      // Only when the database actually changed: a run that found nothing pending used to make the
+      // whole fleet drop its cache and reload every engine for no reason.
+      await this.clearSharedCache(flags['skip-cache-clear'], MigrationChangedDatabase({
+        Threw: false, Succeeded: true, MigrationsApplied: result.MigrationsApplied, StartedApplying: lastMigrationStarted !== undefined,
+      }));
     } else {
       spinner.fail();
       this.logToStderr(`\nMigration failed: ${result.ErrorMessage ?? 'unknown error'}\n`);
+
+      // Clear for the whole failure branch, not only when the detail list happens to name a
+      // succeeded migration. `Details` can be empty precisely because the run died before
+      // assembling it, and a migration that began and failed can still have committed statements —
+      // DDL is not transactional across batches on SQL Server.
+      await this.clearSharedCache(flags['skip-cache-clear'], MigrationChangedDatabase({
+        Threw: false, Succeeded: false, MigrationsApplied: result.MigrationsApplied,
+        StartedApplying: lastMigrationStarted !== undefined,
+      }));
 
       if (result.Details.length > 0) {
         // We have per-migration details — show them
@@ -231,9 +345,33 @@ export default class Migrate extends Command {
         // Fall back to errors captured by OnProgress callbacks.
         this.printCallbackErrors(failedMigrations, lastMigrationStarted, errorLog);
       }
+      this.printTimeoutHint(skywayConfig, [
+        result.ErrorMessage,
+        ...result.Details.map((d) => d.Error?.message),
+        ...failedMigrations.map((r) => r.Error?.message),
+        ...errorLog,
+      ]);
 
       this.error('Migrations failed');
     }
+  }
+
+  /**
+   * Running servers never hear about a schema or data change made here, and a server-side cache
+   * hit is never re-validated, so without this they keep serving pre-migration rows (#4083).
+   * No-op without REDIS_URL. A failed clear is reported, not fatal: the migration succeeded.
+   *
+   * @param wroteSomething - False when the run changed nothing (no migrations applied), in which
+   *   case no server can be holding stale rows and the fleet is left alone.
+   */
+  private async clearSharedCache(skip: boolean | undefined, wroteSomething: boolean): Promise<void> {
+    if (!wroteSomething) {
+      return;
+    }
+    const report = await ClearSharedCacheAfterWrite('mj migrate', skip);
+    if (!report) return;
+    if (report.Ok) this.log(report.Message);
+    else this.warn(report.Message);
   }
 
   /**
@@ -331,6 +469,12 @@ export default class Migrate extends Command {
         this.logToStderr('      ...');
       }
     }
+  }
+
+  /** Prints a hint naming MJ_MIGRATION_REQUEST_TIMEOUT when the failure was a request timeout. */
+  private printTimeoutHint(skywayConfig: SkywayConfig, texts: ReadonlyArray<string | undefined>): void {
+    const hint = MigrationTimeoutHint(texts, skywayConfig.Database.Options?.RequestTimeout ?? DEFAULT_MIGRATION_REQUEST_TIMEOUT_MS);
+    if (hint) this.logToStderr(`\n  Hint: ${hint}\n`);
   }
 
   /**

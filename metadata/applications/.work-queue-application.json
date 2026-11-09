@@ -1,0 +1,105 @@
+{
+  "fields": {
+    "Name": "Work Queue",
+    "Description": "Operate the durable work queue: topology overview with live stats, dead letters with replay and discard, blocked partition keys, and binding validation. Topics, subscriptions and transports open as standard entity forms.",
+    "Icon": "fa-solid fa-layer-group",
+    "DefaultForNewUser": false,
+    "Color": "#0e7490",
+    "DefaultSequence": 1300,
+    "DefaultNavItems": [
+      {
+        "Label": "Operations",
+        "Icon": "fa-solid fa-layer-group",
+        "ResourceType": "Custom",
+        "DriverClass": "WorkQueueDashboard",
+        "isDefault": true
+      }
+    ]
+  },
+  "relatedEntities": {
+    "MJ: Application Entities": [
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Work Queue Topics",
+          "Sequence": 1,
+          "DefaultForNewUser": true
+        },
+        "primaryKey": {
+          "ID": "E97BB8CC-98DF-4E52-9AEC-B39DCE664C8F"
+        },
+        "sync": {
+          "lastModified": "2026-10-06T20:21:56.242Z",
+          "checksum": "c6f723b405492aaca9582151bcc91b954b9d26cfd81f5baa211c0137688051ec"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Work Queue Subscriptions",
+          "Sequence": 2,
+          "DefaultForNewUser": true
+        },
+        "primaryKey": {
+          "ID": "B2AAB0F1-EDC8-492E-9FB0-C0BFEFB2D36A"
+        },
+        "sync": {
+          "lastModified": "2026-10-06T20:21:56.255Z",
+          "checksum": "ce98e951120064b6f92fa779baeda30aebcac59cb7bb62fcd8cad2b67e38b8d0"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Work Queue Transports",
+          "Sequence": 3,
+          "DefaultForNewUser": true
+        },
+        "primaryKey": {
+          "ID": "E2223683-AE6C-4E02-BBB6-22C2C9F21D74"
+        },
+        "sync": {
+          "lastModified": "2026-10-06T20:21:56.267Z",
+          "checksum": "f0de2c5f3383c0fc1f6111ccd379ec45422530d48b6987888e03e39d651ec823"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Work Queue Deliveries",
+          "Sequence": 4,
+          "DefaultForNewUser": false
+        },
+        "primaryKey": {
+          "ID": "E20613EE-2EEB-4A97-BB30-0514123C9575"
+        },
+        "sync": {
+          "lastModified": "2026-10-06T20:21:56.278Z",
+          "checksum": "7b242a33969c1822e291dda2e1b82b9603bd3f1a75407a609c63acd5a1c6a998"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Work Queue Messages",
+          "Sequence": 5,
+          "DefaultForNewUser": false
+        },
+        "primaryKey": {
+          "ID": "B41B1444-CE6D-4A57-9E0D-C858DEBFCD02"
+        },
+        "sync": {
+          "lastModified": "2026-10-06T20:21:56.290Z",
+          "checksum": "e3f1f109bbd072ffe88ff45e0109973a51707c6dd21731ab2c71fc14fa7bf341"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "85157260-1D41-4B23-88A3-D2816531388C"
+  },
+  "sync": {
+    "lastModified": "2026-10-06T20:21:56.218Z",
+    "checksum": "7d4f6bc8b4a5e3b923f7de91867be6c9965f7154524dd643b38abe4bd69d1119"
+  }
+}

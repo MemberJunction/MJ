@@ -148,6 +148,21 @@ describe('ConvertTaskGraphToAgentSpec — losses are reported, never silent', ()
         expect(result.Losses.find((l) => l.Kind === 'UnknownAgent')).toMatchObject({ TempId: 'b' });
     });
 
+    it('reports an unresolvable action rather than saving a step that runs nothing', () => {
+        const g = graph({
+            tasks: [
+                { tempId: 'a', name: 'Send', description: 'send it', kind: 'Action' as const, configuration: { actionName: 'Send Email' }, dependsOn: [] },
+                { tempId: 'b', name: 'Gone', description: 'gone', kind: 'Action' as const, configuration: { actionName: 'Deleted Action' }, dependsOn: ['a'] },
+            ],
+        });
+        const result = ConvertTaskGraphToAgentSpec(g, optionsOf({ ResolveActionID: (name) => (name === 'Send Email' ? 'id-send' : null) }));
+        expect(result.Losses).toEqual([
+            { Kind: 'UnknownAction', TempId: 'b', Detail: expect.stringContaining('Action "Deleted Action" could not be resolved') },
+        ]);
+        // Still saved: its mappings and place in the flow are the author's work.
+        expect(result.Spec!.Steps!.map((s) => [s.Name, s.ActionID])).toEqual([['Send', 'id-send'], ['Gone', undefined]]);
+    });
+
     it('flags run-specific input rather than baking it into a reusable workflow', () => {
         // A saved workflow that replays last week's literal inputs answers last week's question
         // forever — the exact opposite of what "make this reusable" means.

@@ -98,3 +98,77 @@ describe('ResolveWatchdogIntervalMs', () => {
         expect(ResolveWatchdogIntervalMs('-4')).toBe(0);
     });
 });
+
+describe('DiscoveryWatchdog — evicting what is too old to be believed', () => {
+    /** A watchdog with an injected clock and log sink, and eviction at 1000ms. */
+    function harness(staleAfterMs = 1_000) {
+        const lines: string[] = [];
+        let now = 0;
+        const w = DiscoveryWatchdog.Instance;
+        w.Reset();
+        w.Configure({
+            IntervalMs: 0,                 // no real ticker; tests drive Tick() directly
+            Now: () => now,
+            Log: (m: string) => lines.push(m),
+            StaleAfterMs: staleAfterMs,
+        });
+        return { w, lines, advance: (ms: number) => { now += ms; } };
+    }
+
+    it('keeps an entry that is merely slow', () => {
+        const { w, advance } = harness();
+        w.Start('Orders');
+        advance(999);
+        expect(w.EvictStale()).toBe(0);
+        expect(w.BuildReport()).toContain('Orders');
+    });
+
+    it('evicts an entry whose owner never unwound', () => {
+        // End() is called in a finally, so surviving that means the owner did not unwind at all.
+        // The entry is not a slow object; it is a dead one.
+        const { w, advance } = harness();
+        w.Start('Orders');
+        advance(1_000);
+        expect(w.EvictStale()).toBe(1);
+        expect(w.BuildReport()).toBeNull();
+    });
+
+    it('says so loudly rather than letting the sample just disappear', () => {
+        // Vanishing silently would read as completion, which is the opposite of what happened.
+        const { w, lines, advance } = harness();
+        w.Start('Orders');
+        advance(5_000);
+        w.EvictStale();
+        expect(lines.join('\n')).toContain('evicting "Orders"');
+        expect(lines.join('\n')).toContain('abandoned, not running');
+    });
+
+    it('evicts BEFORE reporting, so one tick cannot both report and bury the same entry', () => {
+        const { w, lines, advance } = harness();
+        w.Start('Ghost');
+        advance(2_000);
+        w.Tick();
+        const out = lines.join('\n');
+        expect(out).toContain('evicting "Ghost"');
+        expect(out).not.toContain('still in flight');
+    });
+
+    it('leaves a live entry alone while evicting a dead one in the same pass', () => {
+        const { w, lines, advance } = harness();
+        w.Start('Dead');
+        advance(1_500);
+        w.Start('Alive');
+        w.Tick();
+        const out = lines.join('\n');
+        expect(out).toContain('evicting "Dead"');
+        expect(out).toContain('"Alive"');
+    });
+
+    it('eviction can be switched off, and then nothing is ever removed', () => {
+        const { w, advance } = harness(0);
+        w.Start('Forever');
+        advance(10_000_000);
+        expect(w.EvictStale()).toBe(0);
+        expect(w.BuildReport()).toContain('Forever');
+    });
+});

@@ -37,6 +37,9 @@ vi.mock('@memberjunction/config', () => ({
 }));
 
 import { parseBooleanEnv } from '@memberjunction/config';
+import { z } from 'zod';
+import { DEFAULT_CODEGEN_CONFIG } from '../Config/config';
+import { IntegrityCheckConfigSchema } from '../Config/integrity-check-schema';
 
 describe('Config Types', () => {
     describe('parseBooleanEnv (utility function)', () => {
@@ -52,6 +55,35 @@ describe('Config Types', () => {
         it('should parse "false" string', () => {
             expect(parseBooleanEnv('false', true)).toBe(false);
         });
+    });
+});
+
+describe('integrityChecks defaults', () => {
+    // The checks run by default. This is the half that makes the reporting in `runCodeGen` reach
+    // anybody: a repo that ships with `enabled: false` gets the 'none-ran' warning rather than a
+    // pass, but it also gets no verification, so the default has to be on.
+    it('runs the integrity checks by default', () => {
+        expect(DEFAULT_CODEGEN_CONFIG.integrityChecks?.enabled).toBe(true);
+        expect(DEFAULT_CODEGEN_CONFIG.integrityChecks?.entityFieldsSequenceCheck).toBe(true);
+    });
+
+    // There is deliberately no `failOnError`-style opt-out. A failing integrity check always fails
+    // the run. The knob is an easy thing to add in good faith ("let people keep building while they
+    // fix the drift"), and its default would decide whether every existing repo silently stops
+    // failing. If a future change wants one, it has to change this test and argue with the reason.
+    //
+    // What this pins: every key the integrityChecks schema accepts is a switch that decides whether
+    // checks RUN — the master `enabled`, or a per-check `<name>Check` toggle. Turning those off lands
+    // in the 'none-ran' warning, not a pass. It reads the schema, not DEFAULT_CODEGEN_CONFIG, so an
+    // optional knob with no default is caught too; and a new `*Check` toggle passes, so adding a
+    // check does not trip it. It is a naming convention, not a proof: a knob named `xyzCheck` that
+    // swallows failures would slip through.
+    it('accepts only switches that decide whether checks run', () => {
+        const shape = IntegrityCheckConfigSchema.shape;
+        for (const [key, field] of Object.entries(shape)) {
+            expect(key, `integrityChecks.${key} is not a run switch`).toMatch(/^enabled$|Check$/);
+            expect(field, `integrityChecks.${key} is not a boolean`).toBeInstanceOf(z.ZodBoolean);
+        }
     });
 });
 

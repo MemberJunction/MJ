@@ -78,6 +78,23 @@ export abstract class ExternalDataSourceReadRouter {
   ): Promise<number>;
 
   /**
+   * The key of the SQL dialect an external data source speaks (as `@memberjunction/sql-dialect`
+   * registers it: `'mysql'`, `'snowflake'`, `'databricks'`, …), so a query on that source renders
+   * its template values with the source's own literal rules. Null for a source with no SQL
+   * dialect (a document store) or when the router cannot tell; the query then renders with the
+   * calling provider's platform.
+   *
+   * The base implementation returns null; the External Data Sources engine overrides it.
+   */
+  public async GetQueryDialectKey(
+    _externalDataSourceID: string,
+    _contextUser?: UserInfo,
+    _provider?: IMetadataProvider,
+  ): Promise<string | null> {
+    return null;
+  }
+
+  /**
    * Introspect the schema of an external data source (its tables/views/collections and their
    * columns), delegating to the resolved driver's `IntrospectSchema`. Used by CodeGen to
    * generate/sync `EntityField` metadata for external-backed entities — the remote analogue of

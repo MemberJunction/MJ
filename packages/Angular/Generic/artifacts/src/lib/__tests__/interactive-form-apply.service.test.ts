@@ -13,46 +13,202 @@
  * regress silently — the unit tests on the actions wouldn't notice.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { CompositeKey } from '@memberjunction/core';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
+import type { FormContributionSpec } from '@memberjunction/interactive-component-types/forms';
+import type {
+    FieldGroupsInDetails, FormCompositionRegistry, FormCompositionSnapshot, FormPlacementContext, FormPlacementDecision,
+    FormPlacementState, MjFormPlacementDialogComponent, HumanizeEntityTitle, PlacementStateFromContribution, ResolveContributionKey, ResolveFormContributionWinners,
+} from '@memberjunction/ng-base-forms';
 
 // ─── Hoisted state buckets the mocks read/write ──────────────────────────
 
 const hoisted = vi.hoisted(() => ({
     dialogResult: 'apply' as 'apply' | 'cancel',
+    /** The yes/no confirm's answer when it differs from the placement dialog's. */
+    confirmResult: null as 'apply' | 'cancel' | null,
     actionResponses: new Map<string, { Success: boolean; Message?: string; ResultCode?: string }>(),
     actionCalls: [] as Array<{ id: string; params: unknown }>,
     runViewResponses: [] as Array<{ Success: boolean; Results: Array<{ ID: string }>; ErrorMessage?: string }>,
     notifications: [] as Array<{ message: string; type: string }>,
+    /**
+     * Opt-in: resolve an action's ID to its own Name instead of consuming the
+     * positional `runViewResponses` queue. The original tests depend on the queue
+     * running dry (an unresolvable ID is how they assert an action is never reached),
+     * so this stays off unless a test asks for it.
+     */
+    resolveActionIdsByName: false,
+    /**
+     * What the placement dialog returns. Placement is the user's answer now, so a panel test
+     * states it here rather than hiding it in the spec it applies.
+     */
+    placement: {
+        contribution: { slot: 'after-fields', presentation: 'panel', title: 'Lifetime value' } as Record<string, unknown>,
+        activateNow: true,
+    },
+    /**
+     * Opt-in: the placement dialog applies the answers its seed produced, as a user who changes
+     * nothing does, instead of `placement`.
+     */
+    applySeededAnswers: false,
+    /** The context the dialog was handed — what the user was actually offered. */
+    placementContext: null as Record<string, unknown> | null,
+    /** The record the dialog's preview was told to show. */
+    placementRecordKey: null as CompositeKey | null,
+    /** The placement dialog instance the service last opened. */
+    placementDialog: null as Record<string, unknown> | null,
+    /** Registrations the collector reports. */
+    registrations: [] as Array<{ Priority: number; Source: 'class' | 'metadata'; Title?: string; Metadata: Record<string, unknown> }>,
+    /** Registrations the collector reports only when asked for the ones the user hid. */
+    hiddenRegistrations: [] as Array<{ Priority: number; Source: 'class' | 'metadata'; Title?: string; Metadata: Record<string, unknown> }>,
+    /** What happened, in order: the forms engine loading and the collector being read. */
+    events: [] as string[],
+    /** The text of each yes/no confirm the service showed. */
+    confirmTexts: [] as string[],
+    /** Entities whose probed form shape the service dropped. */
+    forgotten: [] as string[],
 }));
 
 // ─── Module mocks ────────────────────────────────────────────────────────
 
+/**
+ * Action-ID lookup. A queued `runViewResponses` entry wins, so the original tests keep
+ * their positional control; otherwise the action's own Name becomes its ID, which lets
+ * the newer tests key `actionResponses` by name and assert on the call sequence.
+ */
+function resolveRunView(params: { ExtraFilter?: string }): { Success: boolean; Results: Array<{ ID: string }>; ErrorMessage?: string } {
+    if (hoisted.runViewResponses.length > 0) return hoisted.runViewResponses.shift()!;
+    if (!hoisted.resolveActionIdsByName) return { Success: true, Results: [] };
+    const match = /Name='([^']*)'/.exec(params?.ExtraFilter ?? '');
+    return match ? { Success: true, Results: [{ ID: match[1] }] } : { Success: true, Results: [] };
+}
+
+
 vi.mock('@angular/core', () => ({
     Injectable: () => (target: Function) => target,
+    // What the compiled FormCompositionRegistry calls when its module loads.
+    ɵɵdefineInjectable: () => undefined,
+    ɵsetClassMetadata: () => undefined,
     inject: (token: { Instance?: unknown } | typeof Object) => {
         // Return the mock singletons by class identity.
         const name = (token as { name?: string }).name ?? '';
         if (name === 'MJDialogService') return mockDialog;
         if (name === 'MJNotificationService') return mockNotifications;
+        if (name === 'FormSlotProbeService') return mockProbe;
+        if (name === 'FormCompositionRegistry') return registry.current;
         return {};
     },
 }));
 
+/**
+ * The real service opens two kinds of dialog: a yes/no confirm (a string message plus
+ * actions) and the placement dialog (a component class). They are told apart the same way
+ * MJDialogService tells them apart — by whether `content` is a component.
+ */
 const mockDialog = {
-    Open: () => ({
+    Open: (settings?: { content?: unknown }) => {
+        if (typeof settings?.content === 'function') {
+            const instance = {
+                ComponentName: '',
+                Proposal: null as unknown,
+                set Context(value: Record<string, unknown>) { hoisted.placementContext = value; },
+                get Context(): Record<string, unknown> { return hoisted.placementContext ?? {}; },
+                set RecordKey(value: CompositeKey | null) { hoisted.placementRecordKey = value; },
+                get RecordKey(): CompositeKey | null { return hoisted.placementRecordKey; },
+                Applied: {
+                    subscribe: (cb: (d: unknown) => void) => {
+                        if (hoisted.dialogResult !== 'apply') return;
+                        cb(hoisted.applySeededAnswers
+                            ? seededDecision(instance as unknown as { Context: FormPlacementContext; Proposal: FormContributionSpec | null })
+                            : { Contribution: { ...hoisted.placement.contribution }, ActivateNow: hoisted.placement.activateNow });
+                    },
+                },
+                Cancelled: {
+                    subscribe: (cb: () => void) => { if (hoisted.dialogResult !== 'apply') cb(); },
+                },
+            };
+            hoisted.placementDialog = instance;
+            return { Content: { instance }, Result: { subscribe: () => { /* closed via the outputs */ } }, Close: () => { /* no DOM */ } };
+        }
+        if (typeof settings?.content === 'string') hoisted.confirmTexts.push(settings.content);
+        return {
         // The real MJDialogRef.Result emits the clicked MJDialogAction object
         // ({ text, primary }) — the service detects intent via `action.primary`.
         // Map the test's 'apply'/'cancel' intent onto that shape.
-        Result: {
-            subscribe: (cb: (r: { text: string; primary?: boolean }) => void) => {
-                cb(
-                    hoisted.dialogResult === 'apply'
-                        ? { text: 'Apply', primary: true }
-                        : { text: 'Cancel' },
-                );
+            Result: {
+                subscribe: (cb: (r: { text: string; primary?: boolean }) => void) => {
+                    cb(
+                        (hoisted.confirmResult ?? hoisted.dialogResult) === 'apply'
+                            ? { text: 'Apply', primary: true }
+                            : { text: 'Cancel' },
+                    );
+                },
             },
+        };
+    },
+};
+
+/**
+ * The placement dialog is an Angular component; importing the package root here would drag
+ * the framework into a node-preset suite. `ApplyDecisionToSpec` is reproduced exactly so the
+ * test still asserts the real merge. The chrome, key and placement helpers are pure and
+ * framework-free, so the built ones run. The collector reads the ClassFactory, so it reports
+ * what a test sets.
+ */
+vi.mock('@memberjunction/ng-base-forms', async () => {
+    // Loads from ng-base-forms' dist, so that package must be built first.
+    const chrome = await vi.importActual<{
+        FieldGroupsInDetails: typeof FieldGroupsInDetails;
+        HumanizeEntityTitle: typeof HumanizeEntityTitle;
+    }>('@memberjunction/ng-base-forms/dist/lib/chrome/form-chrome.js');
+    const keys = await vi.importActual<{
+        ResolveContributionKey: typeof ResolveContributionKey;
+        ResolveFormContributionWinners: typeof ResolveFormContributionWinners;
+    }>('@memberjunction/ng-base-forms/dist/lib/panel-slot/form-contribution.js');
+    const compositions = await vi.importActual<{ FormCompositionRegistry: typeof FormCompositionRegistry }>(
+        '@memberjunction/ng-base-forms/dist/lib/chrome/form-composition-registry.js');
+    const placement = await vi.importActual<{ PlacementStateFromContribution: typeof PlacementStateFromContribution }>(
+        '@memberjunction/ng-base-forms/dist/lib/apply/form-placement.js');
+    return {
+        FormCompositionRegistry: compositions.FormCompositionRegistry,
+        MjFormPlacementDialogComponent: class MjFormPlacementDialogComponent {},
+        ApplyDecisionToSpec: (spec: Record<string, unknown>, decision: { Contribution: unknown }) =>
+            ({ ...spec, formContribution: decision.Contribution }),
+        FieldGroupsInDetails: chrome.FieldGroupsInDetails,
+        HumanizeEntityTitle: chrome.HumanizeEntityTitle,
+        PlacementStateFromContribution: placement.PlacementStateFromContribution,
+        ResolveContributionKey: keys.ResolveContributionKey,
+        ResolveFormContributionWinners: keys.ResolveFormContributionWinners,
+        CollectFormContributionRegistrations: (_entity: unknown, _provider: unknown, options?: { IncludeHidden?: boolean }) => {
+            hoisted.events.push('collect');
+            return options?.IncludeHidden ? [...hoisted.registrations, ...hoisted.hiddenRegistrations] : hoisted.registrations;
         },
-    }),
+        FormSlotProbeService: class FormSlotProbeService {},
+    };
+});
+
+/** The rows the collector reads come from the forms engine, which has to be loaded first. */
+vi.mock('@memberjunction/core-entities', async () => ({
+    // The same-key tie-break the collapse uses; pure, so the real one decides. Loads from
+    // core-entities' dist, so that package must be built first.
+    FormContributionOutranks: (await vi.importActual<{ FormContributionOutranks: unknown }>(
+        '@memberjunction/core-entities/dist/custom/FormScope/FormScopeRules.js')).FormContributionOutranks,
+    InteractiveFormsEngine: {
+        Instance: {
+            Config: async () => { hoisted.events.push('engine'); },
+        },
+    },
+}));
+
+/**
+ * The open forms' snapshots, as the record form containers publish them. A test opens a form by
+ * publishing its snapshot here; the service reads it by the entity and record a reference names.
+ */
+const registry = vi.hoisted(() => ({ current: null as FormCompositionRegistry | null }));
+
+/** Records which entities' probed form shapes the service dropped. */
+const mockProbe = {
+    Forget: (entityName: string) => { hoisted.forgotten.push(entityName); },
 };
 
 const mockNotifications = {
@@ -84,15 +240,11 @@ vi.mock('@memberjunction/core', async () => {
         // globally-constructed RunView, so the mock answers the static factory too.
         RunView: Object.assign(
             class {
-                async RunView() {
-                    return hoisted.runViewResponses.shift() ?? { Success: true, Results: [] };
-                }
+                async RunView(p: { ExtraFilter?: string }) { return resolveRunView(p); }
             },
             {
                 FromMetadataProvider: () => ({
-                    async RunView() {
-                        return hoisted.runViewResponses.shift() ?? { Success: true, Results: [] };
-                    },
+                    async RunView(p: { ExtraFilter?: string }) { return resolveRunView(p); },
                 }),
             },
         ),
@@ -102,8 +254,56 @@ vi.mock('@memberjunction/core', async () => {
 // ─── Test setup ──────────────────────────────────────────────────────────
 
 import { InteractiveFormApplyService } from '../services/interactive-form-apply.service';
+import { FormCompositionRegistry as RealFormCompositionRegistry } from '@memberjunction/ng-base-forms';
 
-function mockProvider(overrides: Partial<{ EntityByName: () => unknown; CurrentUser: unknown }> = {}) {
+/**
+ * The pure placement rules, from ng-base-forms' dist. The dialog derives its guards and its
+ * decision from them, so the fake dialog the seed runs against does the same.
+ */
+const placementRules = await vi.importActual<typeof import('@memberjunction/ng-base-forms/dist/lib/apply/form-placement.js')>(
+    '@memberjunction/ng-base-forms/dist/lib/apply/form-placement.js');
+
+/**
+ * The dialog members the service's seed reads and writes, typed from the real class so a renamed
+ * or retyped member fails the type check.
+ */
+type SeedTarget = Pick<MjFormPlacementDialogComponent, 'Context' | 'CanReplaceField' | 'PlaceableSections' | 'RailTabs' | 'DroppedProposalClaim'>
+    & { State?: FormPlacementState };
+
+/**
+ * A stand-in for the placement dialog with the guards MjFormPlacementDialogComponent derives
+ * from its context. The dialog itself is an Angular component this node suite does not load.
+ */
+function fakeDialog(context: FormPlacementContext): SeedTarget {
+    return {
+        Context: context,
+        State: undefined,
+        CanReplaceField: placementRules.SectionsWithFields(context).length > 0,
+        PlaceableSections: context.Sections,
+        RailTabs: placementRules.ReplaceableRailTabs(context),
+        DroppedProposalClaim: null,
+    };
+}
+
+/** The fake dialog after the seed the service handed the dialog has run against `context`. */
+function seededDialog(context: FormPlacementContext): SeedTarget {
+    const dialog = hoisted.placementDialog as { SeedState: (d: unknown) => void };
+    const fake = fakeDialog(context);
+    dialog.SeedState(fake);
+    return fake;
+}
+
+/** The answers the seed the service handed the dialog produces against `context`. */
+function seededState(context: FormPlacementContext): FormPlacementState {
+    return seededDialog(context).State!;
+}
+
+/** What the dialog emits when the user applies the seeded answers unchanged. */
+function seededDecision(dialog: { Context: FormPlacementContext; Proposal: FormContributionSpec | null }): FormPlacementDecision {
+    return placementRules.ResolvePlacementDecision(seededState(dialog.Context), dialog.Context, dialog.Proposal);
+}
+
+function mockProvider(overrides: Partial<{ EntityByName: (name: string) => unknown; CurrentUser: unknown }> = {}) {
     return {
         EntityByName: () => ({ ID: 'ENT-1', Name: 'MJ: Apps' }),
         CurrentUser: { ID: 'U1', Name: 'Test' },
@@ -117,7 +317,18 @@ function spec(over: Partial<ComponentSpec> = {}): ComponentSpec {
 }
 
 beforeEach(() => {
+    registry.current = new RealFormCompositionRegistry();
     hoisted.dialogResult = 'apply';
+    hoisted.confirmResult = null;
+    hoisted.resolveActionIdsByName = false;
+    hoisted.placementRecordKey = null;
+    hoisted.placementDialog = null;
+    hoisted.applySeededAnswers = false;
+    hoisted.registrations = [];
+    hoisted.hiddenRegistrations = [];
+    hoisted.events = [];
+    hoisted.confirmTexts = [];
+    hoisted.forgotten = [];
     hoisted.actionResponses.clear();
     hoisted.actionCalls.length = 0;
     hoisted.runViewResponses.length = 0;
@@ -189,13 +400,14 @@ describe('InteractiveFormApplyService', () => {
         expect(hoisted.notifications.some(n => n.type === 'success')).toBe(true);
     });
 
-    it('existing Active override → calls Modify Interactive Form (Pending sibling produced)', async () => {
+    it('a new version of the SAME form → calls Modify Interactive Form (Pending sibling produced)', async () => {
         hoisted.runViewResponses.push({ Success: true, Results: [{ ID: 'ACT-GET-ACTIVE' }] });
         hoisted.runViewResponses.push({ Success: true, Results: [{ ID: 'ACT-MODIFY' }] });
         hoisted.actionResponses.set('ACT-GET-ACTIVE', {
             Success: true,
             Message: JSON.stringify({
-                Active: { OverrideID: 'OVER-EXISTING', ComponentID: 'COMP-EXISTING', ComponentVersion: '1.0.0' },
+                // Same component name as the incoming spec, so this IS that form's next version.
+                Active: { OverrideID: 'OVER-EXISTING', ComponentID: 'COMP-EXISTING', ComponentName: 'Form', ComponentVersion: '1.0.0' },
                 Variants: [],
             }),
         });
@@ -221,7 +433,7 @@ describe('InteractiveFormApplyService', () => {
             Success: true,
             Message: JSON.stringify({
                 Active: null,
-                Variants: [{ OverrideID: 'OVER-PENDING', ComponentID: 'COMP-PENDING', ComponentVersion: '1.0.0', Status: 'Pending' }],
+                Variants: [{ OverrideID: 'OVER-PENDING', ComponentID: 'COMP-PENDING', ComponentName: 'Form', ComponentVersion: '1.0.0', Status: 'Pending' }],
             }),
         });
         hoisted.actionResponses.set('ACT-MODIFY', {
@@ -236,6 +448,103 @@ describe('InteractiveFormApplyService', () => {
         expect(result.Mode).toBe('modify-in-place');
         const calls = hoisted.actionCalls.map(c => c.id);
         expect(calls).toEqual(['ACT-GET-ACTIVE', 'ACT-MODIFY']);
+    });
+
+    /**
+     * Two custom forms for one entity are alternatives, not revisions of each other.
+     * Forcing a differently-named form into the incumbent's version history was a merge:
+     * it renamed the new form and buried the old one inside the new one's lineage. Now
+     * each keeps its own lineage and activation decides which one is live.
+     */
+    it('a DIFFERENT form → creates its own override and swaps, rather than merging', async () => {
+        hoisted.runViewResponses.push({ Success: true, Results: [{ ID: 'ACT-GET-ACTIVE' }] });
+        hoisted.runViewResponses.push({ Success: true, Results: [{ ID: 'ACT-CREATE' }] });
+        hoisted.runViewResponses.push({ Success: true, Results: [{ ID: 'ACT-ACTIVATE' }] });
+        hoisted.actionResponses.set('ACT-GET-ACTIVE', {
+            Success: true,
+            Message: JSON.stringify({
+                Active: { OverrideID: 'OVER-EXISTING', ComponentID: 'COMP-EXISTING', ComponentName: 'OpsForm', ComponentVersion: '1.0.0' },
+                Variants: [],
+            }),
+        });
+        hoisted.actionResponses.set('ACT-CREATE', {
+            Success: true,
+            Message: JSON.stringify({ ComponentID: 'NEW-COMP', OverrideID: 'NEW-OVER', Version: '1.0.0' }),
+        });
+        hoisted.actionResponses.set('ACT-ACTIVATE', { Success: true, Message: '{}' });
+
+        const svc = new InteractiveFormApplyService();
+        const result = await svc.ConfirmAndApply(spec({ name: 'FinanceForm' }), 'MJ: Apps', mockProvider());
+
+        expect(result.Success).toBe(true);
+        expect(result.Mode).toBe('create');
+        expect(result.OverrideID).toBe('NEW-OVER');
+        // The incoming spec keeps its own name — nothing was aligned onto the incumbent.
+        expect(hoisted.actionCalls.map(c => c.id)).not.toContain('ACT-MODIFY');
+    });
+
+    /**
+     * Modify refuses a Role or Global form, so a form shared with the user is never modified: the
+     * user gets a form of their own, which outranks the shared one for them alone.
+     */
+    describe('a form shared with the user', () => {
+        const sharedForm = { OverrideID: 'OVER-G', ComponentID: 'COMP-G', ComponentName: 'Form', ComponentVersion: '2.0.0', Status: 'Active', Scope: 'Global' };
+
+        beforeEach(() => {
+            hoisted.resolveActionIdsByName = true;
+            hoisted.actionResponses.set('Create Interactive Form', {
+                Success: true, Message: JSON.stringify({ ComponentID: 'NEW-COMP', OverrideID: 'NEW-OVER', Version: '1.0.0' }),
+            });
+            hoisted.actionResponses.set('Activate Interactive Form Version', { Success: true, Message: '{}' });
+            hoisted.actionResponses.set('Modify Interactive Form', {
+                Success: true, Message: JSON.stringify({ Mode: 'in-place', ComponentID: 'COMP-MINE', OverrideID: 'OVER-MINE', Version: '1.0.0' }),
+            });
+        });
+
+        it('creates the user\'s own form, even under the shared form\'s name, and never modifies the shared one', async () => {
+            hoisted.actionResponses.set('Get Active Form For Entity', {
+                Success: true, Message: JSON.stringify({ Active: sharedForm, Variants: [sharedForm] }),
+            });
+            const svc = new InteractiveFormApplyService();
+            const result = await svc.ConfirmAndApply(spec(), 'MJ: Apps', mockProvider());
+            expect(result).toMatchObject({ Success: true, Mode: 'create', OverrideID: 'NEW-OVER' });
+            expect(hoisted.actionCalls.map(c => c.id)).toEqual([
+                'Get Active Form For Entity', 'Create Interactive Form', 'Activate Interactive Form Version',
+            ]);
+            expect(hoisted.confirmTexts[0]).toContain('shared with you');
+        });
+
+        it('versions the user\'s own draft in place while the shared form is live', async () => {
+            const myDraft = { OverrideID: 'OVER-MINE', ComponentID: 'COMP-MINE', ComponentName: 'Form', Status: 'Pending', Scope: 'User' };
+            hoisted.actionResponses.set('Get Active Form For Entity', {
+                Success: true, Message: JSON.stringify({ Active: sharedForm, Variants: [myDraft, sharedForm] }),
+            });
+            const svc = new InteractiveFormApplyService();
+            const result = await svc.ConfirmAndApply(spec(), 'MJ: Apps', mockProvider());
+            expect(result.Mode).toBe('modify-in-place');
+            const modify = hoisted.actionCalls.find(c => c.id === 'Modify Interactive Form')!;
+            expect((modify.params as Array<{ Name: string; Value: string }>).find(p => p.Name === 'OverrideID')?.Value).toBe('OVER-MINE');
+        });
+
+        it('never modifies a shared draft', async () => {
+            const sharedDraft = { ...sharedForm, OverrideID: 'OVER-GD', Status: 'Pending' };
+            hoisted.actionResponses.set('Get Active Form For Entity', {
+                Success: true, Message: JSON.stringify({ Active: null, Variants: [sharedDraft] }),
+            });
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(spec(), 'MJ: Apps', mockProvider());
+            expect(hoisted.actionCalls.map(c => c.id)).not.toContain('Modify Interactive Form');
+            expect(hoisted.actionCalls.map(c => c.id)).toContain('Create Interactive Form');
+        });
+
+        it('drops the placement dialog\'s reading of the form once the form is written', async () => {
+            hoisted.actionResponses.set('Get Active Form For Entity', {
+                Success: true, Message: JSON.stringify({ Active: sharedForm, Variants: [sharedForm] }),
+            });
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(spec(), 'MJ: Apps', mockProvider());
+            expect(hoisted.forgotten).toEqual(['MJ: Apps']);
+        });
     });
 
     it('Get Active failure short-circuits with an error', async () => {
@@ -268,5 +577,859 @@ describe('InteractiveFormApplyService', () => {
         const result = await svc.ConfirmAndApply(spec(), 'MJ: Apps', mockProvider());
         expect(result.Success).toBe(false);
         expect(hoisted.notifications.some(n => n.type === 'error')).toBe(true);
+    });
+});
+
+/**
+ * Form panels take a different route than whole forms: the contribution action family,
+ * plus two confirmations driven by the live composition snapshot — a `replacesSectionKey`
+ * that matches no section, and an installed compiled contribution holding the same key.
+ */
+describe('InteractiveFormApplyService — form-panel specs', () => {
+    const ENTITY = 'MJ_BizApps_Common: People';
+
+    function panelSpec(formContribution: Record<string, unknown> = {}): ComponentSpec {
+        return {
+            name: 'PersonLtvStrip', title: 'Lifetime value', componentRole: 'form-panel',
+            location: 'embedded', code: 'function PersonLtvStrip(){return null;}',
+            formContribution: {
+                slot: 'before-fields', presentation: 'bare', title: 'Lifetime value',
+                contributionKey: 'header', replacesSectionKey: 'details', ...formContribution,
+            },
+        } as unknown as ComponentSpec;
+    }
+
+    /** Opens a form: its snapshot goes into the registry, and the snapshot names it. */
+    function snapshot(over: Record<string, unknown> = {}) {
+        const opened = {
+            Entity: ENTITY, Layout: 'accordion',
+            FormChoice: { FullCustomForm: false, OverrideID: null, Label: 'Default form' },
+            Sections: [{ Key: 'details', Title: 'Details', Variant: 'default', Group: null, Hidden: false }],
+            Related: [], Contributions: [], SlotsPresent: ['before-fields'], ChromeRuleCount: 0,
+            ...over,
+        } as unknown as FormCompositionSnapshot;
+        registry.current!.Publish({}, opened);
+        return opened as never;
+    }
+
+    /** Resolves the form's entity and any related entity a claim names, in registered casing. */
+    const provider = () => mockProvider({
+        EntityByName: (name: string) => (name.toLowerCase() === ENTITY.toLowerCase()
+            ? { ID: 'ENT-PEOPLE', Name: ENTITY, PrimaryKeys: [{ Name: 'ID' }] }
+            : { ID: `ENT-${name}`, Name: name, PrimaryKeys: [{ Name: 'ID' }] }),
+    });
+
+    /** The spec the Create action actually received, which is the spec that gets persisted. */
+    function sentSpec(): { formContribution: Record<string, string | undefined> } {
+        const create = hoisted.actionCalls.find(c => c.id === 'Create Form Contribution')!;
+        const raw = (create.params as Array<{ Name: string; Value: string }>).find(p => p.Name === 'Spec')!.Value;
+        return JSON.parse(raw) as { formContribution: Record<string, string | undefined> };
+    }
+
+    beforeEach(() => {
+        hoisted.resolveActionIdsByName = true;
+        hoisted.actionResponses.set('Get Form Contributions For Entity', {
+            Success: true, Message: JSON.stringify({ EntityName: ENTITY, Contributions: [] }),
+        });
+        hoisted.actionResponses.set('Create Form Contribution', {
+            Success: true, Message: JSON.stringify({ ContributionID: 'ROW-1', ComponentID: 'COMP-1', Version: '1.0.0' }),
+        });
+        hoisted.actionResponses.set('Activate Form Contribution Version', {
+            Success: true, Message: JSON.stringify({ ContributionID: 'ROW-1' }),
+        });
+        hoisted.actionResponses.set('Get Form Composition For Entity', {
+            Success: true, Message: JSON.stringify({
+                Entity: ENTITY,
+                Sections: [{ Key: 'details', Title: 'Details' }],
+                Related: [],
+                Contributions: [],
+                SlotsPresent: ['before-fields', 'after-fields', 'after-related'],
+                FullCustomForm: false,
+            }),
+        });
+        hoisted.placement = {
+            contribution: { slot: 'after-fields', presentation: 'panel', title: 'Lifetime value' },
+            activateNow: true,
+        };
+        hoisted.placementContext = null;
+    });
+
+    it('routes to Create then Activate, and reports Kind contribution', async () => {
+        const svc = new InteractiveFormApplyService();
+        const result = await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+        expect(result.Success).toBe(true);
+        expect(result.Kind).toBe('contribution');
+        expect(result.ContributionID).toBe('ROW-1');
+        expect(hoisted.actionCalls.map(c => c.id)).toEqual([
+            'Get Form Contributions For Entity', 'Create Form Contribution', 'Activate Form Contribution Version',
+        ]);
+    });
+
+    it('never runs the whole-form actions for a panel spec', async () => {
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+        const ids = hoisted.actionCalls.map(c => c.id);
+        expect(ids).not.toContain('Get Active Form For Entity');
+        expect(ids).not.toContain('Create Interactive Form');
+    });
+
+    it('passes incumbent + 1 as Precedence when the user stands in for a compiled contribution', async () => {
+        hoisted.placement.contribution = {
+            slot: 'after-fields', presentation: 'panel', title: 'Lifetime value', contributionKey: 'header',
+        };
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot({
+            Contributions: [{ Key: 'header', Slot: 'before-fields', Source: 'class', Title: 'Header', Presentation: 'bare', Hidden: false, Precedence: 3 }],
+        }));
+        const create = hoisted.actionCalls.find(c => c.id === 'Create Form Contribution')!;
+        const precedence = (create.params as Array<{ Name: string; Value: string }>).find(p => p.Name === 'Precedence');
+        expect(precedence?.Value).toBe('4');
+    });
+
+    it('cancels without writing when the user declines to replace a compiled contribution', async () => {
+        hoisted.dialogResult = 'cancel';
+        const svc = new InteractiveFormApplyService();
+        const result = await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot({
+            Contributions: [{ Key: 'header', Slot: 'before-fields', Source: 'class', Title: 'Header', Presentation: 'bare', Hidden: false, Precedence: 3 }],
+        }));
+        expect(result).toMatchObject({ Success: false, Kind: 'contribution' });
+        expect(hoisted.actionCalls).toHaveLength(0);
+    });
+
+    it('writes the placement the user chose, not the one the spec proposed', async () => {
+        hoisted.placement.contribution = { slot: 'top-area', presentation: 'bare', title: 'Lifetime value' };
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+        const sent = sentSpec();
+        expect(sent.formContribution.slot).toBe('top-area');
+        expect(sent.formContribution.presentation).toBe('bare');
+        expect(sent.formContribution.replacesSectionKey).toBeUndefined();
+        expect(sent.formContribution.contributionKey).toBeUndefined();
+    });
+
+    it('starts the dialog from the panel\'s proposed claims', async () => {
+        const panel = panelSpec();
+        const proposal = (panel as unknown as { formContribution: { presentation: string } }).formContribution;
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panel, ENTITY, provider(), snapshot());
+        const dialog = hoisted.placementDialog as { SeedState?: (d: never) => void };
+        const context = hoisted.placementContext as unknown as FormPlacementContext;
+        expect(typeof dialog.SeedState).toBe('function');
+        const state = seededState({ ...context, FullCustomForm: false });
+        expect(state.Presentation).toBe(proposal.presentation);
+        expect(state.ReplaceMode).toBe('section');
+    });
+
+    it('does not read the proposal\'s key or sort order as claims', async () => {
+        hoisted.dialogResult = 'cancel';
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec({ replacesSectionKey: undefined, sortKey: 90 }), ENTITY, provider(), snapshot({
+            Contributions: [{ Key: 'header', Slot: 'before-fields', Source: 'class', Title: 'Header', Presentation: 'bare', Hidden: false, Precedence: 3 }],
+        }));
+        const context = hoisted.placementContext as unknown as FormPlacementContext;
+        expect(context.Existing.map((e) => e.Key)).toContain('header');
+        const seeded = seededDialog(context);
+        expect(seeded.State!.ReplaceMode).toBe('none');
+        expect(seeded.State!.SortKey).toBeNull();
+        expect(seeded.DroppedProposalClaim).toBeNull();
+    });
+
+    /**
+     * The seed reads a proposal as it reads a saved row, which keeps a claim it cannot check on a
+     * form that has not been read. The dialog does not offer such a claim, so the seed drops it,
+     * hands it to the dialog for the summary to report, and the row is written without it.
+     */
+    describe('a proposed claim the dialog does not offer', () => {
+        /** The server's composition, as `Get Form Composition For Entity` returns it. */
+        function composition(over: Record<string, unknown>): void {
+            hoisted.actionResponses.set('Get Form Composition For Entity', {
+                Success: true,
+                Message: JSON.stringify({ Sections: [], Related: [], Contributions: [], SlotsPresent: [], FullCustomForm: false, ...over }),
+            });
+        }
+
+        /** Applies the proposal against the server's composition, as a user who changes nothing. */
+        async function applyUnchanged(formContribution: Record<string, unknown>, open: FormCompositionSnapshot | null = null) {
+            hoisted.applySeededAnswers = true;
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(formContribution), ENTITY, provider(), open);
+            const seeded = seededDialog(hoisted.placementContext as unknown as FormPlacementContext);
+            return {
+                state: seeded.State!,
+                dropped: seeded.DroppedProposalClaim,
+                sent: sentSpec().formContribution as unknown as FormContributionSpec,
+            };
+        }
+
+        it('drops a field claim on a full custom form, so the row claims no field', async () => {
+            composition({ FullCustomForm: true });
+            const { state, dropped, sent } = await applyUnchanged({ replacesSectionKey: undefined, replacesFieldNames: ['Bogus', 'Password'] });
+            expect(state.ReplaceMode).toBe('none');
+            expect(state.ReplaceFieldNames).toEqual([]);
+            expect(dropped).toEqual({ Kind: 'field', FieldNames: ['Bogus', 'Password'] });
+            expect(sent.replacesFieldNames).toBeUndefined();
+            expect(sent.configuration?.fields).toBeUndefined();
+        });
+
+        it('drops a field claim on fields taken from entity metadata rather than read from the form', async () => {
+            composition({ Sections: [{ Key: 'details', Title: 'Details', Fields: [{ Name: 'Password', Label: 'Password' }] }] });
+            const { state, dropped, sent } = await applyUnchanged({ replacesSectionKey: undefined, replacesFieldNames: ['Bogus', 'Password'] });
+            expect(state.ReplaceMode).toBe('none');
+            expect(dropped).toEqual({ Kind: 'field', FieldNames: ['Password'] });
+            expect(sent.replacesFieldNames).toBeUndefined();
+            expect(sent.configuration?.fields).toBeUndefined();
+        });
+
+        it('drops a claim on a section the dialog does not list', async () => {
+            composition({ FullCustomForm: true });
+            const { state, dropped, sent } = await applyUnchanged({ replacesSectionKey: 'contactInfo' });
+            expect(state.ReplaceMode).toBe('none');
+            expect(dropped).toEqual({ Kind: 'section', SectionKeys: ['contactInfo'] });
+            expect(sent.replacesSectionKey).toBeUndefined();
+            expect(sent.replacesSectionKeys).toBeUndefined();
+        });
+
+        it('drops a claim on a whole tab when the dialog offers no tab', async () => {
+            composition({ FullCustomForm: true });
+            const { state, dropped, sent } = await applyUnchanged({ presentation: 'panel', replacesSectionKey: '__mj_form_details' });
+            expect(state.ReplaceMode).toBe('none');
+            expect(dropped).toEqual({ Kind: 'rail-tab', RailKey: '__mj_form_details' });
+            expect(sent.replacesSectionKey).toBeUndefined();
+            expect(sent.chromeGroup).toBeUndefined();
+        });
+
+        it('drops a place inside a section the dialog does not list', async () => {
+            composition({ FullCustomForm: true });
+            const { state, dropped, sent } = await applyUnchanged({ replacesSectionKey: undefined, inSectionKey: 'details', sectionPosition: 'end' });
+            expect(state.InSectionKey).toBe('');
+            expect(dropped).toEqual({ Kind: 'in-section', SectionKey: 'details' });
+            expect(sent.inSectionKey).toBeUndefined();
+            expect(sent.sectionPosition).toBeUndefined();
+        });
+
+        it('keeps a field claim on fields the open form reported', async () => {
+            const open = snapshot({
+                Sections: [{ Key: 'details', Title: 'Details', Variant: 'default', Group: null, Hidden: false, Fields: [{ Name: 'Email', Label: 'Email' }] }],
+            });
+            const { state, dropped, sent } = await applyUnchanged({ replacesSectionKey: undefined, replacesFieldNames: ['Email'] }, open);
+            expect(state.ReplaceMode).toBe('field');
+            expect(dropped).toBeNull();
+            expect(sent.replacesFieldNames).toEqual(['Email']);
+            expect(sent.configuration?.fields).toEqual(['Email']);
+        });
+
+        it('keeps a section claim on a section the open form reported', async () => {
+            const { state, dropped, sent } = await applyUnchanged({ replacesSectionKey: 'details' }, snapshot());
+            expect(state.ReplaceMode).toBe('section');
+            expect(dropped).toBeNull();
+            expect(sent.replacesSectionKey).toBe('details');
+        });
+
+        it('keeps a place inside a section the open form reported', async () => {
+            const { state, dropped, sent } = await applyUnchanged({ replacesSectionKey: undefined, inSectionKey: 'details' }, snapshot());
+            expect(state.InSectionKey).toBe('details');
+            expect(dropped).toBeNull();
+            expect(sent.inSectionKey).toBe('details');
+        });
+
+        it('restores the claim when it seeds again against the form once the dialog reads it', async () => {
+            composition({ Sections: [{ Key: 'details', Title: 'Details', Fields: [{ Name: 'Email', Label: 'Email' }] }] });
+            hoisted.dialogResult = 'cancel';
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec({ replacesSectionKey: undefined, replacesFieldNames: ['Email'] }), ENTITY, provider(), null);
+            const derived = hoisted.placementContext as unknown as FormPlacementContext;
+            expect(seededState(derived).ReplaceMode).toBe('none');
+            const read = seededState({ ...derived, TargetsVerified: true });
+            expect(read.ReplaceMode).toBe('field');
+            expect(read.ReplaceFieldNames).toEqual(['Email']);
+        });
+    });
+
+    it('offers the sections the live form actually has', async () => {
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+        expect(hoisted.placementContext).toMatchObject({
+            EntityName: ENTITY,
+            Sections: [{ Key: 'details', Title: 'Details' }],
+        });
+        expect(hoisted.actionCalls.map(c => c.id)).not.toContain('Get Form Composition For Entity');
+    });
+
+    it('reads the open form\'s snapshot by the entity and record the agent context names', async () => {
+        snapshot({ RecordPrimaryKey: 'ID|person-7', Sections: [{ Key: 'notes', Title: 'Notes', Variant: 'default', Group: null, Hidden: false, Fields: [] }] });
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), { Entity: ENTITY, RecordPrimaryKey: 'ID|person-7' });
+        expect(hoisted.actionCalls.some(c => c.id === 'Get Form Composition For Entity')).toBe(false);
+        expect((hoisted.placementContext?.Sections as Array<{ Key: string }>).map(s => s.Key)).toEqual(['notes']);
+    });
+
+    it('asks the server when no open form matches the record the agent context names', async () => {
+        snapshot({ RecordPrimaryKey: 'ID|person-7' });
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), { Entity: ENTITY, RecordPrimaryKey: 'ID|someone-else' });
+        expect(hoisted.actionCalls.some(c => c.id === 'Get Form Composition For Entity')).toBe(true);
+    });
+
+    it('asks the server for the composition when there is no snapshot', async () => {
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+        expect(hoisted.actionCalls.map(c => c.id)).toContain('Get Form Composition For Entity');
+        expect(hoisted.placementContext).toMatchObject({ Sections: [{ Key: 'details', Title: 'Details' }] });
+    });
+
+    it('ignores a snapshot taken on a different entity and asks the server instead', async () => {
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot({ Entity: 'MJ: Something Else', Sections: [] }));
+        expect(hoisted.actionCalls.map(c => c.id)).toContain('Get Form Composition For Entity');
+    });
+
+    it('tells the user when a full custom form would swallow the panel', async () => {
+        hoisted.actionResponses.set('Get Form Composition For Entity', {
+            Success: true, Message: JSON.stringify({
+                Sections: [], Related: [], Contributions: [], SlotsPresent: [], FullCustomForm: true,
+            }),
+        });
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+        expect(hoisted.placementContext).toMatchObject({ FullCustomForm: true });
+    });
+
+    /** A full custom form hides every panel, so the seed starts one there as a draft. */
+    describe('the seeded start', () => {
+        function fullCustomForm(): void {
+            hoisted.actionResponses.set('Get Form Composition For Entity', {
+                Success: true, Message: JSON.stringify({
+                    Sections: [], Related: [], Contributions: [], SlotsPresent: [], FullCustomForm: true,
+                }),
+            });
+        }
+
+        it('starts a full custom form\'s panel as a draft and a standard form\'s panel switched on', async () => {
+            hoisted.dialogResult = 'cancel';
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+            const context = hoisted.placementContext as unknown as FormPlacementContext;
+            expect(seededState({ ...context, FullCustomForm: true }).ActivateNow).toBe(false);
+            expect(seededState({ ...context, FullCustomForm: false }).ActivateNow).toBe(true);
+        });
+
+        it('leaves the row a draft on a full custom form and says so', async () => {
+            fullCustomForm();
+            hoisted.applySeededAnswers = true;
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+            expect(hoisted.actionCalls.map(c => c.id)).not.toContain('Activate Form Contribution Version');
+            expect(hoisted.notifications.at(-1)?.message).toMatch(/saved as a draft/);
+        });
+
+        it('switches the row on for a standard form and says where it is', async () => {
+            hoisted.applySeededAnswers = true;
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+            expect(hoisted.actionCalls.map(c => c.id)).toContain('Activate Form Contribution Version');
+            expect(hoisted.notifications.at(-1)?.message)
+                .toBe('"Lifetime value" is now on your MJ_BizApps_Common: People form at before-fields.');
+        });
+    });
+
+    it('reads a full custom form from the open form\'s form choice, not from its slots', async () => {
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot({
+            FormChoice: { FullCustomForm: true, OverrideID: 'OV-1', Label: 'My form' }, SlotsPresent: ['before-fields'],
+        }));
+        expect(hoisted.placementContext).toMatchObject({ FullCustomForm: true });
+    });
+
+    it('does not take an open standard form with no slots for a full custom form', async () => {
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot({ SlotsPresent: [] }));
+        expect(hoisted.placementContext).toMatchObject({ FullCustomForm: false });
+    });
+
+    it('saves a draft without activating when the user did not turn it on', async () => {
+        hoisted.placement.activateNow = false;
+        const svc = new InteractiveFormApplyService();
+        const result = await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+        expect(result.Success).toBe(true);
+        expect(hoisted.actionCalls.map(c => c.id)).not.toContain('Activate Form Contribution Version');
+        expect(hoisted.notifications.at(-1)?.message).toContain('draft');
+    });
+
+    it('routes to Modify when the caller already has a Pending row with the same key', async () => {
+        hoisted.placement.contribution = {
+            slot: 'after-fields', presentation: 'panel', title: 'Lifetime value', contributionKey: 'header',
+        };
+        hoisted.actionResponses.set('Get Form Contributions For Entity', {
+            Success: true,
+            Message: JSON.stringify({ EntityName: ENTITY, Contributions: [
+                { ContributionID: 'ROW-9', ContributionKey: 'header', Status: 'Pending', Scope: 'User', ComponentName: 'OldName' },
+            ] }),
+        });
+        hoisted.actionResponses.set('Modify Form Contribution', {
+            Success: true, Message: JSON.stringify({ ContributionID: 'ROW-9', ComponentID: 'COMP-9', Version: '1.0.0', Mode: 'in-place' }),
+        });
+        const svc = new InteractiveFormApplyService();
+        const result = await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+        const ids = hoisted.actionCalls.map(c => c.id);
+        expect(ids).toContain('Modify Form Contribution');
+        expect(ids).not.toContain('Create Form Contribution');
+        expect(result.Mode).toBe('modify-in-place');
+        const modify = hoisted.actionCalls.find(c => c.id === 'Modify Form Contribution')!;
+        const bump = (modify.params as Array<{ Name: string; Value: string }>).find(p => p.Name === 'VersionBumpKind');
+        expect(bump?.Value).toBe('in-place');
+    });
+
+    // Create's duplicate check compares keys the way SQL Server does, ignoring case and padding.
+    it('routes to Modify when the caller\'s row key differs only by case or padding', async () => {
+        hoisted.placement.contribution = {
+            slot: 'after-fields', presentation: 'panel', title: 'Lifetime value', contributionKey: 'header',
+        };
+        hoisted.actionResponses.set('Get Form Contributions For Entity', {
+            Success: true,
+            Message: JSON.stringify({ EntityName: ENTITY, Contributions: [
+                { ContributionID: 'ROW-9', ContributionKey: ' Header ', Status: 'Pending', Scope: 'User', ComponentName: 'OldName' },
+            ] }),
+        });
+        hoisted.actionResponses.set('Modify Form Contribution', {
+            Success: true, Message: JSON.stringify({ ContributionID: 'ROW-9', ComponentID: 'COMP-9', Version: '1.0.0', Mode: 'in-place' }),
+        });
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+        const ids = hoisted.actionCalls.map(c => c.id);
+        expect(ids).toContain('Modify Form Contribution');
+        expect(ids).not.toContain('Create Form Contribution');
+    });
+
+    it('bumps a minor version when the existing row is Active', async () => {
+        hoisted.placement.contribution = {
+            slot: 'after-fields', presentation: 'panel', title: 'Lifetime value', contributionKey: 'header',
+        };
+        hoisted.actionResponses.set('Get Form Contributions For Entity', {
+            Success: true,
+            Message: JSON.stringify({ EntityName: ENTITY, Contributions: [
+                { ContributionID: 'ROW-9', ContributionKey: 'header', Status: 'Active', Scope: 'User', ComponentName: 'OldName' },
+            ] }),
+        });
+        hoisted.actionResponses.set('Modify Form Contribution', {
+            Success: true, Message: JSON.stringify({ ContributionID: 'ROW-10', ComponentID: 'COMP-10', Version: '1.1.0', Mode: 'new-version' }),
+        });
+        const svc = new InteractiveFormApplyService();
+        const result = await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+        expect(result.Mode).toBe('modify-new-version');
+        const modify = hoisted.actionCalls.find(c => c.id === 'Modify Form Contribution')!;
+        const bump = (modify.params as Array<{ Name: string; Value: string }>).find(p => p.Name === 'VersionBumpKind');
+        expect(bump?.Value).toBe('minor');
+    });
+
+    it('derives the same related-grid key the write path persists', async () => {
+        const spec = panelSpec();
+        hoisted.placement.contribution = {
+            slot: 'after-fields', presentation: 'panel', title: 'Lifetime value',
+            relatedEntity: 'MJ_BizApps_Orders: Event Order Lines', relatedJoinField: '[PersonID]',
+        };
+        hoisted.actionResponses.set('Get Form Contributions For Entity', {
+            Success: true,
+            Message: JSON.stringify({ EntityName: ENTITY, Contributions: [
+                { ContributionID: 'ROW-7', ContributionKey: 'related:MJ_BizApps_Orders: Event Order Lines:PersonID', Status: 'Active', Scope: 'User' },
+            ] }),
+        });
+        hoisted.actionResponses.set('Modify Form Contribution', {
+            Success: true, Message: JSON.stringify({ ContributionID: 'ROW-7', ComponentID: 'C', Version: '1.1.0' }),
+        });
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(spec, ENTITY, provider(), snapshot());
+        expect(hoisted.actionCalls.map(c => c.id)).toContain('Modify Form Contribution');
+    });
+
+    it('reports success as a Pending draft when activation fails', async () => {
+        hoisted.actionResponses.set('Activate Form Contribution Version', { Success: false, Message: 'nope' });
+        const svc = new InteractiveFormApplyService();
+        const result = await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+        expect(result.Success).toBe(true);
+        expect(hoisted.notifications.at(-1)?.message).toMatch(/saved as a draft/);
+    });
+
+    it('surfaces a Create failure', async () => {
+        hoisted.actionResponses.set('Create Form Contribution', { Success: false, Message: 'LINT_FAILED' });
+        const svc = new InteractiveFormApplyService();
+        const result = await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+        expect(result).toMatchObject({ Success: false, Kind: 'contribution' });
+        expect(hoisted.notifications.at(-1)?.type).toBe('error');
+    });
+
+    describe('re-applying the same panel', () => {
+        /** A spec that declares no identity — the shape a generator emits when it skips the key. */
+        function keylessSpec(): ComponentSpec {
+            const spec = panelSpec() as unknown as { formContribution: Record<string, unknown> };
+            delete spec.formContribution.contributionKey;
+            delete spec.formContribution.replacesSectionKey;
+            return spec as unknown as ComponentSpec;
+        }
+
+        /** An installed row, shaped the way Create writes it: a keyless panel carries `panel:<name>`. */
+        function installed(over: Record<string, unknown>) {
+            return {
+                Success: true,
+                Message: JSON.stringify({
+                    EntityName: ENTITY,
+                    Contributions: [{
+                        ContributionID: 'ROW-EXISTING', ContributionKey: 'panel:PersonLtvStrip', Status: 'Active',
+                        Scope: 'User', Name: 'Lifetime value', ComponentName: 'PersonLtvStrip', ...over,
+                    }],
+                }),
+            };
+        }
+
+        const ids = () => hoisted.actionCalls.map(c => c.id);
+
+        it('versions the installed row instead of adding a second copy when no key is declared', async () => {
+            hoisted.actionResponses.set('Get Form Contributions For Entity', installed({}));
+            const svc = new InteractiveFormApplyService();
+
+            await svc.ConfirmAndApply(keylessSpec(), ENTITY, provider(), snapshot());
+
+            expect(ids()).toContain('Modify Form Contribution');
+            expect(ids()).not.toContain('Create Form Contribution');
+            const modify = hoisted.actionCalls.find(c => c.id === 'Modify Form Contribution')!;
+            expect((modify.params as Array<{ Name: string; Value: string }>).find(p => p.Name === 'ContributionID')?.Value)
+                .toBe('ROW-EXISTING');
+        });
+
+        it('still creates when the installed row is a different component', async () => {
+            hoisted.actionResponses.set('Get Form Contributions For Entity',
+                installed({ ContributionKey: 'panel:SomeOtherStrip', ComponentName: 'SomeOtherStrip' }));
+            const svc = new InteractiveFormApplyService();
+
+            await svc.ConfirmAndApply(keylessSpec(), ENTITY, provider(), snapshot());
+
+            expect(ids()).toContain('Create Form Contribution');
+        });
+
+        it('does not take over a row of the same component that claims something else', async () => {
+            hoisted.actionResponses.set('Get Form Contributions For Entity',
+                installed({ ContributionKey: 'skip:something-else' }));
+            const svc = new InteractiveFormApplyService();
+
+            await svc.ConfirmAndApply(keylessSpec(), ENTITY, provider(), snapshot());
+
+            expect(ids()).toContain('Create Form Contribution');
+        });
+
+        // Modify keeps a panel's key when it renames the component, so the row's key names the old one.
+        it('finds a row whose key predates a rename of its component', async () => {
+            hoisted.actionResponses.set('Get Form Contributions For Entity',
+                installed({ ContributionKey: 'panel:PersonLifetimeValue' }));
+            const svc = new InteractiveFormApplyService();
+
+            await svc.ConfirmAndApply(keylessSpec(), ENTITY, provider(), snapshot());
+
+            expect(ids()).toContain('Modify Form Contribution');
+            expect(ids()).not.toContain('Create Form Contribution');
+        });
+
+        it('treats a spec under another component name as a new panel', async () => {
+            hoisted.actionResponses.set('Get Form Contributions For Entity', installed({}));
+            const renamed = { ...keylessSpec(), name: 'PersonValueStrip' } as ComponentSpec;
+            const svc = new InteractiveFormApplyService();
+
+            await svc.ConfirmAndApply(renamed, ENTITY, provider(), snapshot());
+
+            expect(ids()).toContain('Create Form Contribution');
+        });
+    });
+
+    describe('what the dialog is offered from the open form', () => {
+        const openForm = () => snapshot({
+            RecordPrimaryKey: 'ID|person-7',
+            Sections: [
+                { Key: 'details', Title: 'Details', Variant: 'default', Group: '__mj_form_details', Hidden: false,
+                  Fields: [{ Name: 'FirstName', Label: 'First name' }] },
+                { Key: 'eventOrderLines', Title: 'MJ_BizApps_Orders: Event Order Lines', Variant: 'related-entity',
+                  Group: 'eventOrderLines', Hidden: false, Fields: [] },
+                { Key: 'panel:PersonLtvStrip', Title: 'Lifetime value', Variant: 'contribution', Group: null, Hidden: false, Fields: [] },
+                { Key: 'systemMetadata', Title: 'System Metadata', Variant: 'default', Group: null, Hidden: false, Fields: [] },
+            ],
+            Related: [{ Entity: 'MJ_BizApps_Orders: Event Order Lines', JoinField: 'PersonID', SectionKey: 'eventOrderLines', Inclusion: 'Auto', Source: 'baked' }],
+            Rail: [
+                { Key: '__mj_form_details', Title: 'Details', Icon: 'fa fa-id-card', SectionKeys: ['details'], IsMore: false },
+                { Key: 'eventOrderLines', Title: 'Event Order Lines', Icon: 'fa fa-table', SectionKeys: ['eventOrderLines'], IsMore: false },
+                { Key: '__mj_form_more', Title: 'More', Icon: 'fa fa-folder', SectionKeys: ['systemMetadata'], IsMore: true },
+            ],
+        });
+
+        it('offers only the field groups, not grids, panels or system metadata', async () => {
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), openForm());
+            expect((hoisted.placementContext?.Sections as Array<{ Key: string }>).map(s => s.Key)).toEqual(['details']);
+        });
+
+        it('names a grid the way its rail item is titled', async () => {
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), openForm());
+            expect(hoisted.placementContext?.Related).toEqual([
+                { Entity: 'MJ_BizApps_Orders: Event Order Lines', JoinField: 'PersonID', DisplayName: 'Event Order Lines' },
+            ]);
+        });
+
+        it('previews the record the user has open', async () => {
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), openForm());
+            expect(hoisted.placementRecordKey?.KeyValuePairs).toEqual([{ FieldName: 'ID', Value: 'person-7' }]);
+        });
+
+        it('previews a sample record when the snapshot names none', async () => {
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot({ RecordPrimaryKey: '' }));
+            expect(hoisted.placementRecordKey).toBeNull();
+        });
+
+        it('previews a sample record for a record not saved yet', async () => {
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot({ RecordPrimaryKey: null }));
+            expect(hoisted.placementRecordKey).toBeNull();
+        });
+
+        it('previews a sample record when the key names fields that are not the entity\'s key', async () => {
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot({ RecordPrimaryKey: 'Email|a@b.c' }));
+            expect(hoisted.placementRecordKey).toBeNull();
+        });
+    });
+
+    describe('replacing an installed panel with no open form', () => {
+        const header = (priority: number, source: 'class' | 'metadata', entity = ENTITY) =>
+            ({ Priority: priority, Source: source, Title: 'Header', Metadata: { entity, slot: 'before-fields', contributionKey: 'header' } });
+        const precedenceSent = () => {
+            const create = hoisted.actionCalls.find(c => c.id === 'Create Form Contribution')!;
+            return (create.params as Array<{ Name: string; Value: string }>).find(p => p.Name === 'Precedence')?.Value;
+        };
+
+        beforeEach(() => {
+            hoisted.placement.contribution = {
+                slot: 'after-fields', presentation: 'panel', title: 'Lifetime value', contributionKey: 'header',
+            };
+            hoisted.registrations = [header(3, 'class'), header(9, 'class', 'Some Other Entity')];
+        });
+
+        it('ranks the new row one above the compiled panel holding its key', async () => {
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+            expect(precedenceSent()).toBe('4');
+        });
+
+        it('ranks it above the compiled override that wins the key, not the one it overrides', async () => {
+            hoisted.registrations = [header(3, 'class'), header(7, 'class')];
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+            expect(precedenceSent()).toBe('8');
+        });
+
+        it('does not ask about a panel registered for another entity, whatever its rank', async () => {
+            hoisted.registrations = [header(9, 'class', 'Some Other Entity')];
+            hoisted.confirmResult = 'cancel';
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+            expect(precedenceSent()).toBe('0');
+        });
+
+        it('counts a compiled panel registered for every entity that holds the key', async () => {
+            hoisted.registrations = [header(5, 'class', '*')];
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+            expect(precedenceSent()).toBe('6');
+        });
+
+        it('counts a compiled panel the user has hidden, which still holds its key', async () => {
+            hoisted.registrations = [];
+            hoisted.hiddenRegistrations = [header(3, 'class')];
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+            expect(precedenceSent()).toBe('4');
+        });
+
+        it('does not ask again when the user\'s own row already wins the key', async () => {
+            hoisted.registrations = [header(3, 'class'), header(4, 'metadata')];
+            hoisted.actionResponses.set('Get Form Contributions For Entity', {
+                Success: true,
+                Message: JSON.stringify({ EntityName: ENTITY, Contributions: [
+                    { ContributionID: 'ROW-MINE', ContributionKey: 'header', Status: 'Active', Scope: 'User', ComponentName: 'PersonLtvStrip' },
+                ] }),
+            });
+            hoisted.actionResponses.set('Modify Form Contribution', {
+                Success: true, Message: JSON.stringify({ ContributionID: 'ROW-NEXT', ComponentID: 'C', Version: '1.1.0', Mode: 'new-version' }),
+            });
+            // A replace confirm would cancel, so reaching Modify shows it was not asked.
+            hoisted.confirmResult = 'cancel';
+            const svc = new InteractiveFormApplyService();
+            const result = await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+            expect(result.Success).toBe(true);
+            expect(hoisted.actionCalls.map(c => c.id)).toContain('Modify Form Contribution');
+        });
+
+        it('cancels without writing when the user declines', async () => {
+            hoisted.confirmResult = 'cancel';
+            const svc = new InteractiveFormApplyService();
+            const result = await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+            expect(result).toMatchObject({ Success: false, Message: 'Cancelled by user.' });
+            expect(hoisted.actionCalls.map(c => c.id)).not.toContain('Create Form Contribution');
+        });
+
+        it('loads the forms engine before it looks for the incumbent', async () => {
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+            expect(hoisted.events.slice(0, 2)).toEqual(['engine', 'collect']);
+        });
+
+        it('reads the open form instead, with no need for the engine', async () => {
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+            expect(hoisted.events).toEqual([]);
+        });
+    });
+
+    /**
+     * Modify refuses a Role or Global row, so a panel shared with the user is never modified. The
+     * user's own row is created above it instead, and outranks it for them alone.
+     */
+    describe('a panel shared with the user holds the key', () => {
+        const params = (id: string) => (hoisted.actionCalls.find(c => c.id === id)?.params ?? []) as Array<{ Name: string; Value: string }>;
+        const rows = (contributions: Array<Record<string, unknown>>) => hoisted.actionResponses.set('Get Form Contributions For Entity', {
+            Success: true, Message: JSON.stringify({ EntityName: ENTITY, Contributions: contributions }),
+        });
+
+        beforeEach(() => {
+            hoisted.placement.contribution = {
+                slot: 'after-fields', presentation: 'panel', title: 'Lifetime value', contributionKey: 'header',
+            };
+            hoisted.actionResponses.set('Modify Form Contribution', {
+                Success: true, Message: JSON.stringify({ ContributionID: 'ROW-NEXT', ComponentID: 'C', Version: '1.1.0', Mode: 'new-version' }),
+            });
+        });
+
+        it('creates the user\'s own row one above the shared row, rather than modifying it', async () => {
+            rows([{ ContributionID: 'ROW-G', ContributionKey: 'header', Status: 'Active', Scope: 'Global', Precedence: 3, ComponentName: 'PersonLtvStrip' }]);
+            const svc = new InteractiveFormApplyService();
+            const result = await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+            expect(result.Success).toBe(true);
+            const ids = hoisted.actionCalls.map(c => c.id);
+            expect(ids).toContain('Create Form Contribution');
+            expect(ids).not.toContain('Modify Form Contribution');
+            expect(params('Create Form Contribution').find(p => p.Name === 'Precedence')?.Value).toBe('4');
+        });
+
+        it('ranks above the highest of several shared rows', async () => {
+            rows([
+                { ContributionID: 'ROW-R', ContributionKey: 'header', Status: 'Active', Scope: 'Role', Precedence: 6 },
+                { ContributionID: 'ROW-G', ContributionKey: 'header', Status: 'Active', Scope: 'Global', Precedence: 2 },
+                { ContributionID: 'ROW-OFF', ContributionKey: 'header', Status: 'Inactive', Scope: 'Global', Precedence: 50 },
+            ]);
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+            expect(params('Create Form Contribution').find(p => p.Name === 'Precedence')?.Value).toBe('7');
+        });
+
+        it('lifts the user\'s own row above a shared row that outranks it', async () => {
+            rows([
+                { ContributionID: 'ROW-MINE', ContributionKey: 'header', Status: 'Active', Scope: 'User', Precedence: 0, ComponentName: 'PersonLtvStrip' },
+                { ContributionID: 'ROW-G', ContributionKey: 'header', Status: 'Active', Scope: 'Global', Precedence: 3 },
+            ]);
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+            expect(params('Modify Form Contribution').find(p => p.Name === 'ContributionID')?.Value).toBe('ROW-MINE');
+            expect(params('Modify Form Contribution').find(p => p.Name === 'Precedence')?.Value).toBe('4');
+        });
+
+        it('leaves the user\'s own row\'s rank alone when nothing outranks it', async () => {
+            rows([{ ContributionID: 'ROW-MINE', ContributionKey: 'header', Status: 'Active', Scope: 'User', Precedence: 5, ComponentName: 'PersonLtvStrip' }]);
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+            expect(params('Modify Form Contribution').find(p => p.Name === 'Precedence')).toBeUndefined();
+        });
+    });
+
+    /** The placement dialog reads the form once per entity, so a write drops that reading. */
+    describe('the placement dialog\'s reading of the form', () => {
+        it('is dropped after the panel is written', async () => {
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+            expect(hoisted.forgotten).toEqual([ENTITY]);
+        });
+
+        it('is kept when the write fails', async () => {
+            hoisted.actionResponses.set('Create Form Contribution', { Success: false, Message: 'boom' });
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+            expect(hoisted.forgotten).toEqual([]);
+        });
+    });
+});
+
+/**
+ * A generated form emits whichever slots CodeGen knew about when it last ran. The dialog can
+ * only warn about a slot the form lacks if the slot list reaches it, so the service is what
+ * carries it — from the open form when there is one, from the server derivation otherwise.
+ */
+describe('InteractiveFormApplyService — slot availability reaches the dialog', () => {
+    const ENTITY = 'MJ_BizApps_Common: People';
+    const provider = () => mockProvider({ EntityByName: () => ({ ID: 'ENT-PEOPLE', Name: ENTITY }) });
+
+    function panelSpec(): ComponentSpec {
+        return {
+            name: 'PersonLtvStrip', title: 'Lifetime value', componentRole: 'form-panel',
+            location: 'embedded', code: 'function PersonLtvStrip(){return null;}',
+            formContribution: { slot: 'before-fields', presentation: 'bare', title: 'Lifetime value' },
+        } as unknown as ComponentSpec;
+    }
+
+    beforeEach(() => {
+        hoisted.resolveActionIdsByName = true;
+        hoisted.actionResponses.set('Get Form Contributions For Entity', {
+            Success: true, Message: JSON.stringify({ EntityName: ENTITY, Contributions: [] }),
+        });
+        hoisted.actionResponses.set('Create Form Contribution', {
+            Success: true, Message: JSON.stringify({ ContributionID: 'ROW-1', ComponentID: 'COMP-1', Version: '1.0.0' }),
+        });
+        hoisted.actionResponses.set('Activate Form Contribution Version', { Success: true, Message: '{}' });
+        hoisted.placement = {
+            contribution: { slot: 'after-fields', presentation: 'panel', title: 'Lifetime value' },
+            activateNow: true,
+        };
+        hoisted.placementContext = null;
+    });
+
+    it('carries the slots the open form reported', async () => {
+        const snapshot = {
+            Entity: ENTITY, Layout: 'accordion', Sections: [], Related: [], Contributions: [],
+            FormChoice: { FullCustomForm: false, OverrideID: null, Label: 'Default form' },
+            SlotsPresent: ['before-fields', 'after-fields', 'after-related'], ChromeRuleCount: 0,
+        } as never;
+        registry.current!.Publish({}, snapshot);
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot);
+        expect(hoisted.placementContext).toMatchObject({
+            SlotsPresent: ['before-fields', 'after-fields', 'after-related'],
+            SlotsVerified: true,
+            TargetsVerified: true,
+        });
+    });
+
+    it('carries the generated slot set when there is no form to read', async () => {
+        hoisted.actionResponses.set('Get Form Composition For Entity', {
+            Success: true, Message: JSON.stringify({
+                Sections: [], Related: [], Contributions: [],
+                SlotsPresent: ['before-fields', 'after-fields', 'after-related', 'after-everything'],
+                FullCustomForm: false,
+            }),
+        });
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+        // Known without opening the form, but assumed rather than observed — the dialog
+        // marks top-area absent and says where the list came from.
+        // Assumed, so the dialog probes the form to replace it.
+        expect(hoisted.placementContext).toMatchObject({
+            SlotsPresent: ['before-fields', 'after-fields', 'after-related', 'after-everything'],
+            SlotsVerified: false,
+            TargetsVerified: false,
+        });
     });
 });

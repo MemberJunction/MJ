@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import type { Mermaid } from 'mermaid';
+import katex from 'katex';
 import { MarkdownService } from './markdown.service';
 
 /**
@@ -18,6 +19,9 @@ type UnwrapAccessor = { unwrapMiscodedHtml(html: string): string };
 
 /** Same private-member reach-in, for the lazily-loaded mermaid engine (see `loadMermaid`). */
 type MermaidLoaderAccessor = { loadMermaid(): Promise<Mermaid> };
+
+/** And for the lazily-loaded KaTeX engine (see `loadKatex`). */
+type KatexLoaderAccessor = { loadKatex(): Promise<unknown> };
 
 describe('MarkdownService (DOM)', () => {
   let service: MarkdownService;
@@ -174,6 +178,190 @@ describe('MarkdownService (DOM)', () => {
 
       expect(result).toBe(false);
       expect(loads).toBe(0);
+    });
+  });
+
+  describe('RenderMath', () => {
+    /** Parse through the real pipeline (sanitizer included) and mount it, as the component does. */
+    const mount = (markdown: string): HTMLElement => {
+      const container = document.createElement('div');
+      container.innerHTML = service.Parse(markdown);
+      return container;
+    };
+
+    const stubLoader = (impl: () => Promise<unknown>): void => {
+      (service as unknown as KatexLoaderAccessor).loadKatex = impl;
+    };
+
+    it('typesets inline and display math as MathML with the real engine', async () => {
+      const container = mount('Energy $E = mc^2$ where\n\n$$\n\\frac{a}{b}\n$$');
+
+      expect(await service.RenderMath(container)).toBe(true);
+
+      const formulas = container.querySelectorAll('math');
+      expect(formulas.length).toBe(2);
+      expect(formulas[0].getAttribute('display')).toBeNull();
+      expect(formulas[1].getAttribute('display')).toBe('block');
+      expect(container.querySelector('mfrac')).not.toBeNull();
+      expect(container.querySelector('annotation')?.textContent).toBe('E = mc^2');
+      expect(container.querySelector('code.mj-math')).toBeNull();
+    });
+
+    it('spells styled letters with Unicode math characters, which Chrome renders (it ignores mathvariant)', async () => {
+      const container = mount('$\\mathbf{E} \\in \\mathbb{R}^3, \\mathcal{L}, \\mathfrak{H}, \\mathbf{0}, \\boldsymbol{\\alpha}$');
+
+      await service.RenderMath(container);
+
+      const identifiers = Array.from(container.querySelectorAll('mi, mn')).map((n) => n.textContent);
+      expect(identifiers).toEqual(expect.arrayContaining(['𝐄', 'ℝ', 'ℒ', 'ℌ', '𝟎']));
+      expect(container.querySelector('mi[mathvariant="bold"], mi[mathvariant="double-struck"]')).toBeNull();
+      // Greek has no Unicode form here: it keeps the attribute for the CSS bold fallback.
+      expect(container.querySelector('mi[mathvariant="bold-italic"]')?.textContent).toBe('α');
+      // The TeX source in the annotation is untouched.
+      expect(container.querySelector('annotation')?.textContent).toContain('\\mathbf{E}');
+    });
+
+    it('leaves TeX it cannot parse visible as source, and still typesets the rest', async () => {
+      const container = mount('Broken $\\frac{a$ but fine $x^2$');
+
+      expect(await service.RenderMath(container)).toBe(true);
+
+      const broken = container.querySelector('code.mj-math.mj-math-error');
+      expect(broken?.textContent).toBe('\\frac{a');
+      expect(broken?.getAttribute('title')).toBeTruthy();
+      expect(container.querySelectorAll('math').length).toBe(1);
+    });
+
+    it('leaves a formula that defines macros as source (expansion bombs)', async () => {
+      const container = mount('$\\def\\a{x x x}\\a\\a$ and $y$');
+
+      await service.RenderMath(container);
+
+      const kept = container.querySelector('code.mj-math.mj-math-error');
+      expect(kept?.textContent).toBe('\\def\\a{x x x}\\a\\a');
+      expect(kept?.getAttribute('title')).toContain('macros');
+      expect(container.querySelectorAll('math').length).toBe(1);
+    });
+
+    it('caps user sizes', async () => {
+      const container = mount('$\\rule{100000em}{100000em}$');
+
+      await service.RenderMath(container);
+
+      const rule = container.querySelector('mspace');
+      expect(parseFloat(rule?.getAttribute('width') ?? '0')).toBeLessThanOrEqual(20);
+      expect(parseFloat(rule?.getAttribute('height') ?? '0')).toBeLessThanOrEqual(20);
+    });
+
+    it('skips placeholders a newer render replaced while KaTeX was loading', async () => {
+      let release: (engine: unknown) => void = () => undefined;
+      stubLoader(() => new Promise((resolve) => (release = resolve)));
+      const container = mount('$x^2$');
+
+      const pending = service.RenderMath(container);
+      container.innerHTML = service.Parse('$y^2$'); // the next streamed chunk
+      release(katex);
+
+      expect(await pending).toBe(false);
+      expect(container.querySelector('math')).toBeNull();
+      expect(container.querySelector('code.mj-math')?.textContent).toBe('y^2');
+    });
+
+    it('keeps \\href inert (trust is off)', async () => {
+      const container = mount('$\\href{javascript:alert(1)}{x}$');
+
+      await service.RenderMath(container);
+
+      // No link anywhere: the command shows as an unrendered "\href". The URL survives only
+      // as text inside <annotation>, which is the TeX source and never a link.
+      expect(container.querySelector('a, [href]')).toBeNull();
+      expect(container.querySelector('mtext')?.textContent).toBe('\\href');
+    });
+
+    it('never loads the engine when the document has no math', async () => {
+      let loads = 0;
+      stubLoader(async () => {
+        loads++;
+        throw new Error('the engine must not be fetched for a math-free document');
+      });
+
+      expect(await service.RenderMath(mount('It costs $5 and $10.'))).toBe(false);
+      expect(loads).toBe(0);
+    });
+
+    it('leaves the source showing when the lazy chunk cannot be loaded', async () => {
+      stubLoader(() => Promise.reject(new Error('chunk fetch failed')));
+      const container = mount('$x^2$');
+
+      expect(await service.RenderMath(container)).toBe(false);
+      expect(container.querySelector('code.mj-math')?.textContent).toBe('x^2');
+    });
+
+    it('does nothing at all when math is disabled by config', async () => {
+      let loads = 0;
+      stubLoader(async () => {
+        loads++;
+        throw new Error('the engine must not be fetched when math is disabled');
+      });
+      service.ConfigureMarked({ enableMath: false });
+
+      const container = mount('$x^2$');
+
+      expect(await service.RenderMath(container)).toBe(false);
+      expect(loads).toBe(0);
+      expect(container.textContent?.trim()).toBe('$x^2$');
+    });
+  });
+
+  describe('MathML markup', () => {
+    const MATHML_NS = 'http://www.w3.org/1998/Math/MathML';
+    const mount = (markdown: string): HTMLElement => {
+      const container = document.createElement('div');
+      container.innerHTML = service.Parse(markdown);
+      return container;
+    };
+
+    it('keeps a JATS formula as real MathML elements, prefixes removed', () => {
+      const c = mount('Loss <mml:math display="inline"><mml:mn>7</mml:mn><mml:mo>×</mml:mo><mml:msup><mml:mn>10</mml:mn><mml:mn>13</mml:mn></mml:msup></mml:math> per pulse.');
+      const msup = c.querySelector('msup');
+      expect(msup?.namespaceURI).toBe(MATHML_NS);
+      expect(msup?.textContent).toBe('1013');
+      expect(c.textContent).toContain('per pulse.');
+    });
+
+    it('keeps a table\'s column alignment and spacing (DOMPurify misspells one, lacks the other)', () => {
+      const c = mount('<math display="block"><mtable columnalign="right left" columnspacing="0em 2em"><mtr><mtd><mi>a</mi></mtd><mtd><mo>=</mo><mi>b</mi></mtd></mtr></mtable></math>');
+      const table = c.querySelector('mtable');
+      expect(table?.getAttribute('columnalign')).toBe('right left');
+      expect(table?.getAttribute('columnspacing')).toBe('0em 2em');
+    });
+
+    it('shows the formula once when MathML carries its TeX in an annotation (MathJax, Pandoc, Word)', () => {
+      const c = mount('<math><semantics><mrow><msup><mi>x</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">x^2</annotation></semantics></math>');
+      expect(c.querySelector('msup')).not.toBeNull();
+      expect(c.textContent?.trim()).toBe('x2');
+    });
+
+    it('spells styled letters with Unicode math characters, as for typeset TeX', async () => {
+      const c = mount('<math><mi mathvariant="bold">E</mi><mo>∈</mo><msup><mi mathvariant="double-struck">R</mi><mn>3</mn></msup></math>');
+      await service.RenderMath(c);
+      expect(Array.from(c.querySelectorAll('mi')).map((n) => n.textContent)).toEqual(['𝐄', 'ℝ']);
+    });
+
+    // Known DOMPurify bypass shapes through MathML, plus the plain attribute and handler routes.
+    it.each([
+      ['javascript: href on a MathML element', '<math href="javascript:alert(1)"><mi xlink:href="javascript:alert(1)">x</mi></math>'],
+      ['maction with a script link', '<math><maction actiontype="statusline" xlink:href="javascript:alert(1)"><mi>x</mi></maction></math>'],
+      ['HTML inside annotation-xml', '<math><annotation-xml encoding="text/html"><img src="x" onerror="alert(1)"></annotation-xml></math>'],
+      ['mglyph/style namespace confusion', '<math><mtext><table><mglyph><style><img src="x" onerror="alert(1)">'],
+      ['form/math nesting confusion', '<form><math><mtext></form><form><mglyph><style></math><img src="x" onerror="alert(1)">'],
+      ['handlers on MathML elements', '<math onclick="alert(1)"><mi onmouseover="alert(1)">x</mi></math>'],
+    ])('strips %s', (_name, payload) => {
+      const c = mount(payload);
+      const attributes = Array.from(c.querySelectorAll('*')).flatMap((el) => Array.from(el.attributes));
+      expect(attributes.filter((a) => a.name.startsWith('on'))).toEqual([]);
+      expect(attributes.filter((a) => /javascript:/i.test(a.value))).toEqual([]);
+      expect(c.querySelector('script')).toBeNull();
     });
   });
 

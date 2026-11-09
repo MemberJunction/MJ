@@ -16,6 +16,14 @@ import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-
 import { SharedService } from '@memberjunction/ng-shared';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT, MJStartupValidationService, MJ_STARTUP_VALIDATION } from '../bootstrap.types';
 
+/**
+ * The server's permission error for a user who cannot read their own roles. The entity is named
+ * `MJ: User Roles` since v5 (older servers say `User Roles`). SetupGraphQLClient appends it to its
+ * own message when the boot's metadata download fails for that reason (#4887). Intentionally
+ * duplicated in the Explorer WorkspaceInitializerService, which classifies the same boot error.
+ */
+const NO_USER_ROLES_PERMISSION_TEXT = /does not have read permissions on (MJ: )?User Roles/;
+
 export interface InitializationResult {
   success: boolean;
   error?: {
@@ -117,14 +125,11 @@ export class MJInitializationService {
   }
 
   /**
-   * Navigate to initial route after successful login.
+   * Navigate to the initial route after a successful login. A deep link is replayed
+   * through the router; a bare `/` is left to the router's default route (the Home app).
    *
-   * `'/'` is left to the shell's own default landing. The branch that used to handle it
-   * queried a nav element that no longer exists, so it matched nothing and was already a
-   * no-op when it was removed.
-   *
-   * @param _document no longer used. Retained so the signature stays source-compatible for
-   *                  callers; drop it at the next major.
+   * @param _document No longer used; kept so existing callers (`AuthShellComponent`) and
+   *                  the deprecated alias keep compiling.
    */
   NavigateToInitialRoute(initialPath: string, _document: Document): void {
     localStorage.removeItem('jwt-retry-ts');
@@ -150,7 +155,7 @@ export class MJInitializationService {
       if (err.response && Array.isArray(err.response.errors)) {
         return err.response.errors.some((e: any) =>
           e && e.message && typeof e.message === 'string' &&
-          e.message.includes('does not have read permissions on User Roles')
+          NO_USER_ROLES_PERMISSION_TEXT.test(e.message)
         );
       }
 
@@ -165,7 +170,7 @@ export class MJInitializationService {
       // Check for error message directly on the error object
       if (err.message && typeof err.message === 'string') {
         const message = err.message;
-        return message.includes('does not have read permissions on User Roles') ||
+        return NO_USER_ROLES_PERMISSION_TEXT.test(message) ||
                message.includes("Cannot read properties of undefined (reading 'ResourceTypes')");
       }
 

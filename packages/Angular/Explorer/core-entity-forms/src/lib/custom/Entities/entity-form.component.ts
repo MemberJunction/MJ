@@ -18,16 +18,18 @@ import {
     CompositeKey,
     RunView,
     type IEntityConfiguration,
+    type IEntityCloneConfiguration,
     type IEntityFormConfiguration,
     type RelatedFormRoleCandidate,
 } from '@memberjunction/core';
 import { MJEntityEntity } from '@memberjunction/core-entities';
 import { ERDCompositeState } from '@memberjunction/ng-entity-relationship-diagram';
-import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, RegisterClass, UUIDMap, UUIDsEqual } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { RecordOpenedEvent } from '@memberjunction/ng-entity-viewer';
 import { MJEntityFormComponent } from '../../generated/Entities/MJEntity/mjentity.form.component';
+import { SectionPickerItem, IsPhoneViewport, WatchPhoneViewport } from '@memberjunction/ng-ui-components';
 
 export type ExplorerSection =
     | 'overview'
@@ -174,6 +176,22 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
     /** @deprecated Use {@link AllEntities}. */
     public set allEntities(value: EntityInfo[]) {
       this.AllEntities = value;
+    }
+
+    private allEntitiesIndexSource: EntityInfo[] | null = null;
+    private allEntitiesIndex = new UUIDMap<EntityInfo>();
+
+    /**
+     * AllEntities keyed by ID. Rebuilt only when AllEntities is replaced (it is never mutated in
+     * place), so per-render callers such as FormChromeCandidates look entities up in O(1) instead
+     * of scanning every entity once per relationship.
+     */
+    private get allEntitiesByID(): UUIDMap<EntityInfo> {
+      if (this.allEntitiesIndexSource !== this.AllEntities) {
+        this.allEntitiesIndex = IndexByUUID(this.AllEntities);
+        this.allEntitiesIndexSource = this.AllEntities;
+      }
+      return this.allEntitiesIndex;
     }
 
     /** All entity fields (flattened from all entities) for ERD details panel */
@@ -522,11 +540,33 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
     private get _metadata() { return this.ProviderToUse; }
     override async ngOnInit(): Promise<void> {
         await super.ngOnInit();
+        this.ApplyPhoneDefaults(IsPhoneViewport());
+        this.stopPhoneWatch = WatchPhoneViewport(() => this.SyncPhoneViewport());
         this.setupStateManagement();
         this.loadExplorerData();
     }
 
+    /**
+     * Phone-width defaults, applied at init and whenever the breakpoint is crossed into phone width: Relations opens as the list, since the ERD is a
+     * desktop experience (pan, zoom, depth) that a 375px canvas cannot carry. The user can still
+     * switch to the diagram from the section header.
+     */
+    public ApplyPhoneDefaults(isPhone: boolean): void {
+        if (isPhone) this.RelationshipViewMode = 'list';
+    }
+
+    /** Stops following the breakpoint; set at init, called from ngOnDestroy. */
+    private stopPhoneWatch: () => void = () => undefined;
+
+    /** Re-reads the breakpoint and re-applies the phone defaults (rotation, resize). */
+    public SyncPhoneViewport(): void {
+        this.ApplyPhoneDefaults(IsPhoneViewport());
+        this.cdr.markForCheck();
+    }
+
     ngOnDestroy(): void {
+        super.ngOnDestroy();
+        this.stopPhoneWatch();
         this.destroy$.next();
         this.destroy$.complete();
     }
@@ -604,7 +644,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
             if (result.Success) {
                 this.Stats = {
                     ...this.Stats,
-                    rowCount: result.TotalRowCount
+                    rowCount: result.TotalRowCount ?? 0
                 };
             }
         } catch (err) {
@@ -853,7 +893,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
                 if (existing) {
                     existing.fields.push(field);
                 } else {
-                    const relatedEntity = this.AllEntities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID));
+                    const relatedEntity = this.allEntitiesByID.Get(field.RelatedEntityID);
                     outgoingMap.set(field.RelatedEntityID, {
                         entityId: field.RelatedEntityID,
                         entityName: relatedEntity?.Name || field.RelatedEntity || 'Unknown',
@@ -903,7 +943,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         this.OrganicKeysOutgoing = this.entity.OrganicKeys.map(ok => ({
             OrganicKey: ok,
             RelatedEntities: ok.RelatedEntities.map(re => {
-                const relEntity = this.AllEntities.find(e => UUIDsEqual(e.ID, re.RelatedEntityID));
+                const relEntity = this.allEntitiesByID.Get(re.RelatedEntityID);
                 return {
                     Info: re,
                     EntityName: re.RelatedEntity || relEntity?.Name || 'Unknown',
@@ -967,6 +1007,17 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
 
     // === Public Methods ===
 
+    /** The rail's items as `mj-section-picker` items: same order, the badge as the count. */
+    public get SectionPickerItems(): SectionPickerItem[] {
+        return this.NavItems.map((item) => ({ Key: item.id, Title: item.label, Icon: item.icon, Count: item.badge ?? null }));
+    }
+
+    /** A pick from the phone section sheet; a key that names no rail item is ignored. */
+    public OnSectionPicked(key: string): void {
+        const item = this.NavItems.find((i) => i.id === key);
+        if (item) this.SetActiveSection(item.id);
+    }
+
     public SetActiveSection(section: ExplorerSection): void {
         this.ActiveSection = section;
         this.CloseDetailPanel();
@@ -989,7 +1040,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
             RelatedEntity: rel.RelatedEntity,
             RelatedEntityID: rel.RelatedEntityID,
             RelatedEntityJoinField: rel.RelatedEntityJoinField,
-            RelatedEntitySchemaName: this.AllEntities.find((e) => UUIDsEqual(e.ID, rel.RelatedEntityID))?.SchemaName ?? '',
+            RelatedEntitySchemaName: this.allEntitiesByID.Get(rel.RelatedEntityID)?.SchemaName ?? '',
             DisplayInForm: rel.DisplayInForm,
             DisplayLocation: rel.DisplayLocation,
             DisplayComponentID: rel.DisplayComponentID,
@@ -1008,6 +1059,38 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
             ...current,
             UI: { ...(current.UI ?? {}), Form: form },
         };
+        this.cdr.markForCheck();
+    }
+
+    /** The entity's `Configuration.Clone` bag, edited by the Record cloning settings panel. */
+    public get CloneConfig(): IEntityCloneConfiguration | null {
+        return this.record?.ConfigurationObject?.Clone ?? null;
+    }
+
+    public IsSavingCloneConfig = false;
+    public CloneConfigSaveError = '';
+
+    /** Saves the entity record (and with it the clone configuration) and leaves edit mode. */
+    public async SaveCloneConfig(): Promise<void> {
+        this.IsSavingCloneConfig = true;
+        this.CloneConfigSaveError = '';
+        this.cdr.markForCheck();
+        try {
+            const saved = await this.SaveRecord(true);
+            if (!saved) {
+                this.CloneConfigSaveError = this.record?.LatestResult?.CompleteMessage || 'The configuration could not be saved.';
+            }
+        } finally {
+            this.IsSavingCloneConfig = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    public OnCloneConfigChange(clone: IEntityCloneConfiguration | null): void {
+        if (!this.record) return;
+        const next: IEntityConfiguration = { ...(this.record.ConfigurationObject ?? {}) };
+        if (clone) next.Clone = clone; else delete next.Clone;
+        this.record.ConfigurationObject = Object.keys(next).length > 0 ? next : null;
         this.cdr.markForCheck();
     }
 

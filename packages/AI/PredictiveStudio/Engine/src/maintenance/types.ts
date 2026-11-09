@@ -159,13 +159,13 @@ export interface IRowCounter {
    * @param entityName the target entity (model's training-unit entity)
    * @param extraFilter optional filter narrowing the population (mirrors the pipeline scope)
    * @param contextUser request user — required server-side for isolation/audit
-   * @param provider optional provider for multi-provider correctness
+   * @param provider the provider the count goes through (required: no fallback to the global provider)
    */
   countRows(  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     entityName: string,
-    extraFilter?: string,
-    contextUser?: UserInfo,
-    provider?: IMetadataProvider,
+    extraFilter: string | undefined,
+    contextUser: UserInfo | undefined,
+    provider: IMetadataProvider,
   ): Promise<number>;
 }
 
@@ -182,20 +182,20 @@ export interface IMaintenanceLoader {
    */
   loadBinding(  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     bindingId: string,
-    contextUser?: UserInfo,
-    provider?: IMetadataProvider,
+    contextUser: UserInfo | undefined,
+    provider: IMetadataProvider,
   ): Promise<MJMLModelScoringBindingEntity | null>;
 
   /**
    * Load every scoring binding in a given {@link RetrainingPolicy}-relevant `Mode`
    * (e.g. all `Scheduled` bindings for the scheduled-rescore pass).
    *
-   * @param mode the binding mode to filter on (omit for ALL bindings)
+   * @param mode the binding mode to filter on (`undefined` for ALL bindings)
    */
   loadBindings(  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
-    mode?: MaintenanceBindingMode,
-    contextUser?: UserInfo,
-    provider?: IMetadataProvider,
+    mode: MaintenanceBindingMode | undefined,
+    contextUser: UserInfo | undefined,
+    provider: IMetadataProvider,
   ): Promise<MJMLModelScoringBindingEntity[]>;
 
   /**
@@ -205,8 +205,8 @@ export interface IMaintenanceLoader {
    */
   loadModel(  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     modelId: string,
-    contextUser?: UserInfo,
-    provider?: IMetadataProvider,
+    contextUser: UserInfo | undefined,
+    provider: IMetadataProvider,
   ): Promise<MJMLModelEntity | null>;
 }
 
@@ -241,8 +241,8 @@ export interface RescoreRequest {
   maxRows?: number;
   /** Request user. */
   contextUser?: UserInfo;
-  /** Optional provider. */
-  provider?: IMetadataProvider;
+  /** The provider every scoring read and write goes through (the score runner has no global fallback). */
+  provider: IMetadataProvider;
 }
 
 /** Result of an {@link IRescoreRunner.rescore} call. */
@@ -292,8 +292,8 @@ export interface MaintenanceDeps {
   clock?: IMaintenanceClock;
   /** Request user — threaded through every entity op for isolation/audit. */
   contextUser?: UserInfo;
-  /** Optional provider for multi-provider correctness. */
-  provider?: IMetadataProvider;
+  /** The provider every entity read and the rescore pass go through; required because the score runner has no global fallback. */
+  provider: IMetadataProvider;
 }
 
 /** The promotion verdict produced after a retrain+compare. */

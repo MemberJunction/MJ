@@ -66,3 +66,95 @@ describe('FormPanelSlotComponent (DOM)', () => {
     expect(query(f, '.fake-slot')).toBeNull();
   });
 });
+
+/**
+ * Strict entity matching (A4/A7). The slot host used to strip an `MJ: ` prefix and
+ * lowercase before comparing, so a panel registered as `'Users'` mounted on the
+ * `'MJ: Users'` form — while the container, which has always compared strictly,
+ * ignored that same panel's inclusion and chrome group. One predicate now serves both.
+ */
+const PREFIXED_ENTITY = 'MJ: ZZZ_SlotStrictEntity';
+
+@RegisterClassEx(BaseFormPanel, { metadata: { entity: 'ZZZ_SlotStrictEntity', slot: 'after-fields' } })
+@Component({ standalone: true, selector: 'test-loose-panel', template: `<div class="loose-slot">loose</div>` })
+class LooseNamedPanel extends BaseFormPanel {}
+
+describe('FormPanelSlotComponent (DOM) — strict entity matching', () => {
+  it('registers the loosely named panel (guard)', () => {
+    expect(LooseNamedPanel).toBeDefined();
+  });
+
+  it('does not mount a registration whose entity name only matches after prefix-stripping', () => {
+    const f = render(PREFIXED_ENTITY);
+    expect(query(f, '.loose-slot')).toBeNull();
+  });
+
+  it('warns once, naming the registration that will not mount', () => {
+    const warnings: string[] = [];
+    const original = console.warn;
+    console.warn = (...args: unknown[]) => { warnings.push(args.map(String).join(' ')); };
+    try {
+      render(PREFIXED_ENTITY);
+    } finally {
+      console.warn = original;
+    }
+    expect(warnings.some(w => w.includes('ZZZ_SlotStrictEntity') && w.includes('will not mount'))).toBe(true);
+  });
+});
+
+/**
+ * A full custom entity form owns its whole body, so it bars every contribution. The
+ * check belongs here rather than in the form template: the container always emits an
+ * `after-everything` slot, which would otherwise catch every panel the form declined
+ * to position and render the lot at the bottom.
+ */
+describe('FormPanelSlotComponent (DOM) — host form owns its body', () => {
+  const BODY_OWNING_FORM = { OwnsEntireFormBody: true } as unknown as BaseFormComponent;
+
+  it('mounts nothing when the host form renders its own body', () => {
+    const f = renderComponentFixture(FormPanelSlotComponent, {
+      declarations: [FormPanelSlotComponent],
+      inputs: { Entity: TEST_ENTITY, Slot: 'after-fields', Record: RECORD, FormComponent: BODY_OWNING_FORM },
+    });
+    f.componentRef.setInput('FormContext', {});
+    f.detectChanges();
+    expect(query(f, '.fake-slot')).toBeNull();
+  });
+
+  it('still mounts the same panel on a form that does not own its body', () => {
+    expect(query(render(TEST_ENTITY), '.fake-slot')).not.toBeNull();
+  });
+});
+
+/**
+ * A field claim is hosted by the section drawing its fields, not by a slot. It still carries
+ * a slot, because every registration does — so a slot host going by slot alone put the same
+ * panel on the form twice: once inside the group, once as a section of its own at the bottom.
+ */
+const FIELD_CLAIM_ENTITY = 'ZZZ_SlotFieldClaimEntity';
+
+@RegisterClassEx(BaseFormPanel, {
+  metadata: {
+    entity: FIELD_CLAIM_ENTITY,
+    slot: 'after-fields',
+    replacesFieldNames: ['Street', 'City'],
+  },
+})
+@Component({ standalone: true, selector: 'test-field-claim-panel', template: `<div class="fake-field-claim">claim</div>` })
+class FakeFieldClaimPanel extends BaseFormPanel {}
+
+describe('FormPanelSlotComponent (DOM) — a contribution that stands in for fields', () => {
+  it('registers the fake panel exactly once (guard)', () => {
+    expect(FakeFieldClaimPanel).toBeDefined();
+  });
+
+  it('does not mount it, because the section hosting its fields does', () => {
+    const f = render(FIELD_CLAIM_ENTITY);
+    expect(query(f, '.fake-field-claim')).toBeNull();
+  });
+
+  it('still mounts a contribution that claims no field', () => {
+    const f = render(TEST_ENTITY);
+    expect(query(f, '.fake-slot')).not.toBeNull();
+  });
+});

@@ -59,6 +59,10 @@ export const DOMAIN_PROFILES: Readonly<Record<string, DomainProfile>> = {
     Summary: 'Run and inspect AI agents, prompts, and actions from the terminal.',
     Runtime: { class: 'variable', note: 'a listing is instant; an agent run is bounded only by the agent itself' },
   },
+  queue: {
+    Summary: 'Operate the durable work queue — stats, backlog, dead letters, replay and discard, container-job workers, cloud bindings.',
+    Runtime: { class: 'moderate', typicalSeconds: 15, note: 'dominated by MJ bootstrap; each operation is a few queries or cloud API calls' },
+  },
   app: {
     Summary: 'Install, upgrade, enable, and remove Open Apps.',
     Runtime: { class: 'slow', typicalSeconds: 180, note: 'installs run migrations and package installs' },
@@ -78,6 +82,10 @@ export const DOMAIN_PROFILES: Readonly<Record<string, DomainProfile>> = {
   bundle: {
     Summary: 'Bundle interactive component source for distribution.',
     Runtime: { class: 'moderate', typicalSeconds: 20 },
+  },
+  cache: {
+    Summary: 'Inspect and clear the shared (Redis) server cache.',
+    Runtime: { class: 'fast', note: 'one SCAN per category; scales with the Redis keyspace' },
   },
   clean: {
     Summary: 'Remove build artifacts and generated output.',
@@ -102,6 +110,10 @@ export const DOMAIN_PROFILES: Readonly<Record<string, DomainProfile>> = {
   plugin: {
     Summary: 'Register third-party CLI plugins in mj-cli-plugins.json.',
     Runtime: { class: 'fast' },
+  },
+  query: {
+    Summary: 'Refresh saved queries\' extracted parameters, fields and entities from their SQL.',
+    Runtime: { class: 'moderate', typicalSeconds: 30, note: 'scales with the number of queries; each is described on the database server' },
   },
   querygen: {
     Summary: 'Generate, validate, and export stored queries.',

@@ -6,7 +6,7 @@
 
 **Why** — Node is poor at ML training; Python is excellent. So MJ (TypeScript) assembles the feature matrix and orchestrates, and this sidecar does the CPU-bound **fitting** (`/train`) and **inference** (`/predict`). Keeping it self-managing means a developer needs zero infrastructure to train a model locally.
 
-**How it fits** — in the four-layer Predictive Studio architecture (data → feature → **model** → inference) this is the *model/inference compute* tier. It follows the [`@memberjunction/sqlglot-ts`](../../../SQLGlotTS) **bundled-microservice** pattern: the Python service ships *inside* this npm package (`src/python/`) and `MLSidecar` spawns it as a child process on demand. **Managed spawn is the default and needs no Docker** — it just works once the bundled venv exists (`npm run setup:python`). A remote/containerized topology is opt-in, not a prerequisite.
+**How it fits** — in the four-layer Predictive Studio architecture (data → feature → **model** → inference) this is the *model/inference compute* tier. It follows the [`@memberjunction/sqlglot-ts`](../../../SQLGlotTS) **bundled-microservice** pattern: the Python service ships *inside* this npm package (`src/python/`) and `MLSidecar` spawns it as a child process on demand. **Managed spawn is the default and needs no Docker** — it just works once the bundled venv exists (`pnpm --filter @memberjunction/predictive-studio-sidecar run setup:python`). A remote/containerized topology is opt-in, not a prerequisite.
 
 For the full architecture, read the
 **[Predictive Studio Guide](../../../../guides/PREDICTIVE_STUDIO_GUIDE.md)** (§2 covers this package); for the design record, [`plans/predictive-studio.md`](../../../../plans/predictive-studio.md).
@@ -83,19 +83,18 @@ package.
 
 ## Setting up the bundled Python environment
 
-The managed mode spawns a Python interpreter. Create the bundled venv + install the
-pinned requirements once:
+**One-time setup (fresh clone).** Predictive Studio's packages depend on other workspace packages, so build them
+together, never one by one (a per-package `tsc` on a fresh clone fails with `TS2307 Cannot find module
+'@memberjunction/core'`):
 
-```bash
-cd packages/AI/PredictiveStudio/Sidecar
-npm run setup:python      # creates .venv and pip-installs src/python/requirements.txt
-```
+    pnpm install                                                      # repo root
+    npx turbo run build --filter=@memberjunction/predictive-studio...  # PS + everything it depends on
+    pnpm --filter @memberjunction/predictive-studio-sidecar run setup:python
 
-**macOS:** xgboost / lightgbm need an OpenMP runtime. Install it once:
-
-```bash
-brew install libomp
-```
+`setup:python` needs CPython 3.11 or 3.12 (numpy 1.26.4 has no wheels for 3.13+); it tries `python3.11`, `python3.12`,
+`python3`, `python` and stops with the list it probed if none fits. Pass `--python <path>` to choose one. On macOS
+also `brew install libomp` (XGBoost/LightGBM). To run the sidecar or its tests on another interpreter, set
+`PREDICTIVE_STUDIO_PYTHON=<path to python>`.
 
 `MLSidecar` automatically appends `DYLD_LIBRARY_PATH=/opt/homebrew/opt/libomp/lib`
 to the spawn environment on `darwin`, so the venv finds libomp at runtime. On Linux
@@ -107,8 +106,8 @@ If you prefer your own interpreter, pass `pythonPath` or set
 ## Running the Python tests
 
 ```bash
-npm run setup:python
-npm run test:python       # runs pytest (19 tests) against the bundled venv
+pnpm --filter @memberjunction/predictive-studio-sidecar run setup:python
+pnpm --filter @memberjunction/predictive-studio-sidecar run test:python   # runs the pytest suite against the bundled venv
 ```
 
 ## The anti-skew core (why this exists)

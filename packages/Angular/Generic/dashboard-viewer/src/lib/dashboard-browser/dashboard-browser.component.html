@@ -5,7 +5,7 @@
     <!-- Breadcrumb Navigation -->
     <mj-dashboard-breadcrumb
       [Categories]="Categories"
-      [CurrentCategoryId]="SelectedCategoryId"
+      [CurrentCategoryId]="FlatMode ? null : SelectedCategoryId"
       [RootIcon]="IconClass"
       [RootLabel]="Title"
       [AllowDragDrop]="AllowDragDrop && (DraggingId !== null || IsSelectionMode)"
@@ -179,70 +179,30 @@
       }
       <!-- Dashboard Cards -->
       @for (dashboard of FilteredDashboards; track TrackByDashboard($index, dashboard)) {
-        <div
-          class="dashboard-card"
-          [class.selected]="IsSelected(dashboard.ID)"
+        <mj-dashboard-card
+          class="dashboard-card-host"
           [class.dragging]="DraggingId === dashboard.ID"
           [draggable]="AllowDragDrop"
-          (click)="OnDashboardClick(dashboard, $event)"
-          (dblclick)="OnDashboardDoubleClick(dashboard, $event)"
+          [Dashboard]="dashboard"
+          [IsFavorite]="IsFavorite(dashboard.ID)"
+          [ShowFavorite]="ShowFavorites"
+          [IsShared]="IsShared(dashboard.ID)"
+          [OwnerLabel]="OwnerLabel(dashboard)"
+          [CategoryPath]="CardCategoryPath(dashboard)"
+          [HighlightQuery]="SearchText"
+          [Selectable]="IsSelectionMode"
+          [Selected]="IsSelected(dashboard.ID)"
+          [CanEdit]="CanEdit(dashboard.ID)"
+          [CanDelete]="CanDelete(dashboard.ID)"
+          (CardClick)="OnDashboardClick(dashboard, $event.MouseEvent)"
+          (CardDoubleClick)="OnDashboardDoubleClick(dashboard, $event.MouseEvent)"
+          (ToggleFavorite)="OnToggleFavorite(dashboard)"
+          (SelectionToggle)="ToggleSelection(dashboard.ID)"
+          (Edit)="OnEditDashboard(dashboard)"
+          (Delete)="OnDeleteDashboard(dashboard)"
           (dragstart)="OnDragStart(dashboard, $event)"
           (dragend)="OnDragEnd()">
-          <!-- Selection checkbox in top-right corner -->
-          @if (IsSelectionMode) {
-            <div
-              class="card-select-area"
-              (click)="ToggleSelection(dashboard.ID); $event.stopPropagation()">
-              <input
-                type="checkbox"
-                [checked]="IsSelected(dashboard.ID)"
-                (change)="$event.stopPropagation()">
-            </div>
-          }
-          <div class="card-header">
-            <div class="card-icon">
-              <i class="fa-solid fa-chart-line"></i>
-            </div>
-            <div class="card-actions">
-              @if (CanEdit(dashboard.ID)) {
-                <button
-                  class="action-btn"
-                  title="Edit"
-                  (click)="OnEditDashboard(dashboard, $event)">
-                  <i class="fa-solid fa-edit"></i>
-                </button>
-              }
-              @if (CanDelete(dashboard.ID)) {
-                <button
-                  class="action-btn danger"
-                  title="Delete"
-                  (click)="OnDeleteDashboard(dashboard, $event)">
-                  <i class="fa-solid fa-trash"></i>
-                </button>
-              }
-            </div>
-          </div>
-          <div class="card-content">
-            <h3 class="card-title">
-              <span [innerHTML]="HighlightMatch(dashboard.Name)"></span>
-              @if (IsShared(dashboard.ID)) {
-                <span class="shared-badge" title="Shared with you">
-                  <i class="fa-solid fa-share-nodes"></i>
-                </span>
-              }
-            </h3>
-            @if (dashboard.Description) {
-              <p class="card-description" [innerHTML]="HighlightMatch(dashboard.Description)">
-              </p>
-            }
-            <div class="card-meta">
-              <span class="meta-item">
-                <i class="fa-solid fa-clock"></i>
-                {{ FormatDate(dashboard.__mj_UpdatedAt) }}
-              </span>
-            </div>
-          </div>
-        </div>
+        </mj-dashboard-card>
       }
     </div>
   }
@@ -358,8 +318,8 @@
 
   <!-- Empty State -->
   @if (FilteredDashboards.length === 0 && FilteredChildCategories.length === 0 && !IsLoading) {
-    <!-- First-time user experience (no dashboards at all) -->
-    @if (IsAtRoot && Dashboards.length === 0) {
+    <!-- First-time user experience: no dashboards at all, or a flat list whose host asks for it -->
+    @if (ShowWelcome) {
       <mj-empty-state
         class="dashboard-empty"
         Size="large"
@@ -385,28 +345,39 @@
         </div>
       </mj-empty-state>
     }
-    <!-- Folder is empty -->
-    @if (!IsAtRoot && !SearchText) {
-      <mj-empty-state
-        class="dashboard-empty"
-        Variant="warning"
-        Icon="fa-solid fa-folder-open"
-        Title="This folder is empty"
-        Message="Add dashboards or create sub-folders to organize your content."
-        [ActionText]="ShowCreateButton ? 'Create Dashboard' : ''"
-        ActionIcon="fa-solid fa-plus"
-        (Action)="OnCreateDashboard()" />
-    }
-    <!-- Root has dashboards but none uncategorized -->
-    @if (IsAtRoot && Dashboards.length > 0 && !SearchText) {
-      <mj-empty-state
-        class="dashboard-empty"
-        Icon="fa-solid fa-folder-tree"
-        Title="No uncategorized dashboards"
-        Message="All your dashboards are organized into folders. Browse the folders above or create a new dashboard here."
-        [ActionText]="ShowCreateButton ? 'Create Dashboard' : ''"
-        ActionIcon="fa-solid fa-plus"
-        (Action)="OnCreateDashboard()" />
+    @if (FlatMode) {
+      <!-- Flat list has nothing to show: the host's empty state -->
+      @if (!SearchText && !FlatEmptyWelcome) {
+        <mj-empty-state
+          class="dashboard-empty"
+          [Icon]="FlatEmptyIcon"
+          [Title]="FlatEmptyTitle"
+          [Message]="FlatEmptyMessage" />
+      }
+    } @else {
+      <!-- Folder is empty -->
+      @if (!IsAtRoot && !SearchText) {
+        <mj-empty-state
+          class="dashboard-empty"
+          Variant="warning"
+          Icon="fa-solid fa-folder-open"
+          Title="This folder is empty"
+          Message="Add dashboards or create sub-folders to organize your content."
+          [ActionText]="ShowCreateButton ? 'Create Dashboard' : ''"
+          ActionIcon="fa-solid fa-plus"
+          (Action)="OnCreateDashboard()" />
+      }
+      <!-- Root has dashboards but none uncategorized -->
+      @if (IsAtRoot && Dashboards.length > 0 && !SearchText) {
+        <mj-empty-state
+          class="dashboard-empty"
+          Icon="fa-solid fa-folder-tree"
+          Title="No uncategorized dashboards"
+          Message="All your dashboards are organized into folders. Browse the folders above or create a new dashboard here."
+          [ActionText]="ShowCreateButton ? 'Create Dashboard' : ''"
+          ActionIcon="fa-solid fa-plus"
+          (Action)="OnCreateDashboard()" />
+      }
     }
     <!-- Search returned no results -->
     @if (SearchText) {
@@ -451,20 +422,6 @@
       </div>
     </div>
   }
-
-  <!-- Delete Confirmation Dialog -->
-  <mj-confirm-dialog
-    [visible]="ShowDeleteConfirm"
-    type="danger"
-    title="Delete Dashboard{{ DashboardsPendingDelete.length > 1 ? 's' : '' }}"
-        [message]="DashboardsPendingDelete.length === 1
-            ? 'Are you sure you want to delete \'' + DashboardsPendingDelete[0].Name + '\'? This action cannot be undone.'
-            : 'Are you sure you want to delete ' + DashboardsPendingDelete.length + ' dashboards? This action cannot be undone.'"
-    confirmText="Delete"
-    cancelText="Cancel"
-    (confirmed)="ConfirmDelete()"
-    (cancelled)="CloseDeleteConfirm()">
-  </mj-confirm-dialog>
 
   <!-- Move to Folder Dialog -->
   @if (ShowMoveDialog) {

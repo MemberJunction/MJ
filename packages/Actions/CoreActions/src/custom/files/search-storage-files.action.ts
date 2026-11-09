@@ -71,7 +71,7 @@ export class SearchStorageFilesAction extends BaseFileStorageAction {
         }
 
         // Get storage driver (uses StorageAccount parameter via base class)
-        const { driver, error } = await this.getDriverFromParams(params);
+        const { driver, account, error } = await this.getDriverFromParams(params);
         if (error) {
             return error;
         }
@@ -140,11 +140,16 @@ export class SearchStorageFilesAction extends BaseFileStorageAction {
                 searchOptions.modifiedBefore = modifiedBefore;
             }
 
-            // Perform the search
+            // Perform the search, then drop hits behind an MJ: Files row the caller cannot read (matched on path and object ID)
             const searchResults = await driver!.SearchFiles(query, searchOptions);
+            const unreadable = await this.UnreadableObjectKeys(
+                account!, driver!, searchResults.results.flatMap(f => [f.path, f.objectId]), params.ContextUser
+            );
+            const visible = searchResults.results.filter(f => !unreadable.has(f.path) && !(f.objectId && unreadable.has(f.objectId)));
+            const dropped = searchResults.results.length - visible.length;
 
             // Format results for output
-            const formattedResults = searchResults.results.map((file: FileSearchResult) => ({
+            const formattedResults = visible.map((file: FileSearchResult) => ({
                 Path: file.path,
                 Name: file.name,
                 Size: file.size,
@@ -167,12 +172,13 @@ export class SearchStorageFilesAction extends BaseFileStorageAction {
                 },
                 {
                     Name: 'ResultCount',
-                    Value: searchResults.results.length,
+                    Value: visible.length,
                     Type: 'Output'
                 },
                 {
+                    // The provider's total counts the hits dropped above, so it is withheld once any were dropped
                     Name: 'TotalMatches',
-                    Value: searchResults.totalMatches,
+                    Value: dropped > 0 ? undefined : searchResults.totalMatches,
                     Type: 'Output'
                 },
                 {
@@ -190,7 +196,7 @@ export class SearchStorageFilesAction extends BaseFileStorageAction {
             return {
                 Success: true,
                 ResultCode: "SUCCESS",
-                Message: `Found ${searchResults.results.length} file(s) matching query '${query}'`,
+                Message: `Found ${visible.length} file(s) matching query '${query}'`,
                 Params: outputParams
             } as ActionResultSimple;
 

@@ -63,14 +63,31 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
   @Input() SelectedViewID: string | null = null;
 
   /**
+   * Currently active Alternate Base View name when on the default view (null = standard BaseView)
+   */
+  @Input() SelectedAlternateBaseView: string | null = null;
+
+  /**
    * Whether the current view has unsaved modifications
    */
   @Input() ViewModified: boolean = false;
 
   /**
+   * Whether to render the Export icon button in the selector bar. Defaults to `true` for standalone
+   * usage; `mj-view-workspace` sets this to `false` when the active view type (such as Grid) already
+   * provides an Export button in its own toolbar.
+   */
+  @Input() ShowExportButton: boolean = true;
+
+  /**
    * Emitted when a view is selected
    */
   @Output() ViewSelected = new EventEmitter<ViewSelectedEvent>();
+
+  /**
+   * Emitted when an Alternate Base View is selected from the dropdown (or cleared back to Default)
+   */
+  @Output() AlternateBaseViewSelected = new EventEmitter<string | null>();
 
   /**
    * Emitted when user requests to save the current view
@@ -287,6 +304,10 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
     if (this.SelectedView) {
       return this.SelectedView.Name;
     }
+    if (this.SelectedAlternateBaseView && this.Entity) {
+      const abv = this.Entity.GetAlternateBaseView(this.SelectedAlternateBaseView);
+      return abv?.EffectiveDisplayName ?? this.SelectedAlternateBaseView;
+    }
     return '(Default)';
   }
 
@@ -312,6 +333,9 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
    */
   SelectDefault(): void {
     this.SelectedView = null;
+    if (this.SelectedAlternateBaseView) {
+      this.AlternateBaseViewSelected.emit(null);
+    }
     this.ViewSelected.emit({ ViewID: null, View: null });
     this.CloseDropdown();
   }
@@ -338,6 +362,15 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
    */
   OnSaveAsNewView(): void {
     this.QuickSaveRequested.emit(true);
+    this.CloseDropdown();
+  }
+
+  /**
+   * Create a brand-new view directly in the Unified View Studio slide-over panel
+   * without an intermediate modal dialog.
+   */
+  OnCreateNewView(): void {
+    this.SaveViewRequested.emit({ SaveAsNew: true });
     this.CloseDropdown();
   }
 
@@ -511,6 +544,18 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
   }
 
   /**
+   * Get display label for the alternate base view configured on a view, if any.
+   */
+  GetViewAlternateBaseViewLabel(view: ViewListItem): string {
+    const abvName = view.entity.AlternateBaseView;
+    if (!abvName) {
+      return '';
+    }
+    const abvInfo = this.Entity?.GetAlternateBaseView(abvName);
+    return abvInfo?.EffectiveDisplayName ?? abvName;
+  }
+
+  /**
    * Select a specific view and open the config panel for it
    */
   OnConfigureViewById(viewId: string, event: MouseEvent): void {
@@ -539,5 +584,21 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
    */
   OnResetToDefault(): void {
     this.SelectDefault();
+  }
+
+  /**
+   * Switch to the (Default) view if needed and open the View Studio in Personal Default Layout mode.
+   */
+  OnConfigureDefaultLayout(event?: MouseEvent): void {
+    event?.stopPropagation();
+    if (this.SelectedViewID || this.SelectedAlternateBaseView) {
+      this.SelectedView = null;
+      if (this.SelectedAlternateBaseView) {
+        this.AlternateBaseViewSelected.emit(null);
+      }
+      this.ViewSelected.emit({ ViewID: null, View: null });
+    }
+    this.ConfigureViewRequested.emit();
+    this.CloseDropdown();
   }
 }

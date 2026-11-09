@@ -26,7 +26,7 @@ import { TreeBranchConfig, TreeLeafConfig } from '@memberjunction/ng-trees';
 import { ResourceData, KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceTypeEntity_IContentSourceTypeField, MJScheduledJobEntity, MJContentItemDuplicateEntity, UserInfoEngine, MJTagEntity, MJTagSynonymEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
 import { BuildSingleStaticParamConfiguration, ResolveActionJobTypeID } from '../../../shared/action-scheduled-job';
 import { TagEngineBase } from '@memberjunction/tag-engine-base';
-import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { IndexByUUID, RegisterClass, UUIDMap, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
 import { MJLeftNavItem, MJLeftNavSection, TabConfig, MJConfirmService } from '@memberjunction/ng-ui-components';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
@@ -1085,8 +1085,9 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         this.cdr.detectChanges();
 
         // Tags dashboard's default landing is the Tag Library — load that data
-        // (and the entity-record-document cache used by drill-down) up front.
-        await Promise.all([this.loadTagLibraryData(), this.loadEntityRecordDocCache()]);
+        // first, then populate the entity-record-document cache for referenced items.
+        await this.loadTagLibraryData();
+        await this.loadEntityRecordDocCache();
         this.tabDataLoaded.add('tags');
 
         // If preferences/config set a non-default initial tab, load it eagerly.
@@ -1438,8 +1439,8 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             const [sourcesResult, itemsResult, runsResult, tagsResult, sourceTypesResult, contentTypesResult] = await rv.RunViews([
                 { EntityName: 'MJ: Content Sources', OrderBy: 'Name', ResultType: 'simple' },
                 { EntityName: 'MJ: Content Items', OrderBy: '__mj_UpdatedAt DESC', MaxRows: 200, ResultType: 'simple', Fields: ['ID', 'Name', 'ContentSourceID', 'ContentSourceTypeID', 'ContentSource', 'ContentSourceType', 'ContentType', 'ContentFileType', 'URL', 'Text', 'Checksum', 'EntityRecordDocumentID', '__mj_CreatedAt', '__mj_UpdatedAt'] },
-                { EntityName: 'MJ: Content Process Runs', OrderBy: 'StartTime DESC', MaxRows: 100, ResultType: 'simple' },
-                { EntityName: 'MJ: Content Item Tags', ResultType: 'simple', Fields: ['ID', 'ItemID', 'Item', 'Tag', 'TagID', 'Weight', '__mj_CreatedAt'] },
+                { EntityName: 'MJ: Content Process Runs', OrderBy: 'StartTime DESC', MaxRows: 100, ResultType: 'simple', Fields: ['ID', 'SourceID', 'Source', 'Status', 'StartTime', 'EndTime', 'ProcessedItems', 'ErrorCount'] },
+                { EntityName: 'MJ: Content Item Tags', MaxRows: 2000, ResultType: 'simple', Fields: ['ID', 'ItemID', 'Item', 'Tag', 'TagID', 'Weight', '__mj_CreatedAt'] },
                 { EntityName: 'MJ: Content Source Types', ResultType: 'simple' },
                 { EntityName: 'MJ: Content Types', ResultType: 'simple' }
             ]);
@@ -1453,8 +1454,8 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
 
             // Use TotalRowCount for accurate KPI/badge counts (the Results arrays are
             // capped by MaxRows for feed display, but TotalRowCount reflects the full DB count)
-            this.totalContentItemCount = itemsResult.Success ? itemsResult.TotalRowCount : 0;
-            this.totalContentTagCount = tagsResult.Success ? tagsResult.TotalRowCount : 0;
+            this.totalContentItemCount = itemsResult.Success ? itemsResult.TotalRowCount ?? 0 : 0;
+            this.totalContentTagCount = tagsResult.Success ? tagsResult.TotalRowCount ?? 0 : 0;
 
             // Load Scheduled Job entities referenced by sources so cron descriptions are available
             await this.loadScheduledJobsForSources();
@@ -2403,6 +2404,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             Fields: ['ID'],
             ResultType: 'simple',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         });
         if (result.Success && result.Results.length > 0) {
             return result.Results[0].ID;
@@ -3016,11 +3018,13 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             // Use KnowledgeHubMetadataEngine for cached reference data — instant, no RunView needed
             const engine = KnowledgeHubMetadataEngine.Instance;
             await engine.Config(false); // no-op if already loaded
+            // Vector indexes are cached by AIEngineBase (deferred at startup) — ensure it is loaded.
+            await AIEngineBase.Instance.EnsureLoaded();
 
             this.SourceTypeOptions = engine.ContentSourceTypes.map(t => ({ ID: t.ID, Name: t.Name }));
             this.ContentTypeOptions = engine.ContentTypes.map(t => ({ ID: t.ID, Name: t.Name }));
             this.FileTypeOptions = engine.ContentFileTypes.map(t => ({ ID: t.ID, Name: t.Name }));
-            this.VectorIndexOptions = engine.VectorIndexes.map(vi => ({ ID: vi.ID, Name: vi.Name }));
+            this.VectorIndexOptions = AIEngineBase.Instance.VectorIndexes.map(vi => ({ ID: vi.ID, Name: vi.Name }));
 
             // AI Models from AIEngineBase (already cached)
             if (this.AIModelOptions.length === 0) {
@@ -3234,12 +3238,23 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     /** Cache: EntityRecordDocument ID → RecordID */
     private entityRecordDocCache = new Map<string, string>();
 
-    /** Load ERD RecordIDs for entity-sourced content items */
+    /** Load ERD RecordIDs for entity-sourced content items referenced by loaded items */
     private async loadEntityRecordDocCache(): Promise<void> {
-        if (this.entityRecordDocCache.size > 0) return;
+        const erdIds = Array.from(
+            new Set(
+                this.contentItemsRaw
+                    .map(item => item['EntityRecordDocumentID'] as string | null)
+                    .filter((id): id is string => !!id)
+                    .map(id => NormalizeUUID(id))
+                    .filter(id => !this.entityRecordDocCache.has(id))
+            )
+        );
+        if (erdIds.length === 0) return;
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const filter = erdIds.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
         const result = await rv.RunView<{ ID: string; RecordID: string }>({
             EntityName: 'MJ: Entity Record Documents',
+            ExtraFilter: `ID IN (${filter})`,
             ResultType: 'simple',
             Fields: ['ID', 'RecordID'],
         });
@@ -3485,8 +3500,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
 
     private resolveVectorIndexName(indexId: string): string {
         if (!indexId) return 'System default';
-        const engine = KnowledgeHubMetadataEngine.Instance;
-        const idx = engine.GetVectorIndexByID(indexId);
+        const idx = AIEngineBase.Instance.GetVectorIndexByID(indexId);
         return idx ? idx.Name : 'Unknown';
     }
 
@@ -3545,7 +3559,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
 
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const [taggedItemsResult, auditResult] = await rv.RunViews([
-                { EntityName: 'MJ: Tagged Items', ResultType: 'simple' },
+                { EntityName: 'MJ: Tagged Items', Fields: ['ID', 'TagID'], MaxRows: 5000, ResultType: 'simple' },
                 { EntityName: 'MJ: Tag Audit Logs', OrderBy: '__mj_CreatedAt DESC', MaxRows: 200, ResultType: 'simple' }
             ]);
 
@@ -3615,8 +3629,9 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
      */
     private populateOrphansFromSuggestions(): void {
         const lows = this.SuggestionRows.filter(s => s.Reason === 'LowUsage' && s.BestMatchTagID);
+        const tagsByID = this.indexTagsByID();
         this.TaxOrphans = lows.map(s => {
-            const tag = this.TagsRaw.find(t => UUIDsEqual(t['ID'] as string, s.BestMatchTagID!));
+            const tag = tagsByID.Get(s.BestMatchTagID!);
             return {
                 ID: s.BestMatchTagID!,
                 Name: tag ? (tag['Name'] as string) : s.ProposedName,
@@ -4399,36 +4414,20 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
 
     public async MergeTags(sourceTagId: string, targetTagId: string, sourceName: string, targetName: string): Promise<void> {
         if (this.IsMerging) return; // Prevent duplicate calls from button spam
+        const provider = this.ProviderToUse as GraphQLDataProvider;
+        if (!provider) return;
         this.IsMerging = true;
         this.cdr.detectChanges();
 
         try {
-            // Re-parent tagged items from source to target
-            const itemsToMove = this.taggedItemsRaw.filter(ti => (ti['TagID'] as string) === sourceTagId);
-            const md = this.ProviderToUse;
-            for (const ti of itemsToMove) {
-                const entity = await md.GetEntityObject<BaseEntity>('MJ: Tagged Items');
-                await entity.InnerLoad(CompositeKey.FromID(ti['ID'] as string));
-                entity.Set('TagID', targetTagId);
-                await entity.Save();
+            const aiClient = new GraphQLAIClient(provider);
+            const res = await aiClient.MergeTags({
+                sourceTagIDs: [sourceTagId],
+                survivingTagID: targetTagId,
+            });
+            if (!res.Success) {
+                throw new Error(res.ErrorMessage ?? 'Merge failed');
             }
-
-            // Re-parent children of source under target
-            const childTags = this.TagsRaw.filter(t => (t['ParentID'] as string) === sourceTagId);
-            for (const child of childTags) {
-                const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-                await entity.InnerLoad(CompositeKey.FromID(child['ID'] as string));
-                entity.Set('ParentID', targetTagId);
-                await entity.Save();
-            }
-
-            // Clean up co-occurrence records before delete (FK constraint)
-            await this.cleanupTagReferences(sourceTagId);
-
-            // Delete source tag (original behavior — hard delete)
-            const sourceEntity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-            await sourceEntity.InnerLoad(CompositeKey.FromID(sourceTagId));
-            await sourceEntity.Delete();
 
             this.addTaxAuditEntry('merged', `${sourceName} into ${targetName}`);
             MJNotificationService.Instance.CreateSimpleNotification(`Merged "${sourceName}" into "${targetName}"`, 'success', 3000);
@@ -4782,6 +4781,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                 let deletedCount = 0;
                 for (const orphan of this.TaxOrphans) {
                     try {
+                        await this.cleanupTagReferences(orphan.ID);
                         const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
                         await entity.InnerLoad(CompositeKey.FromID(orphan.ID));
                         if (await entity.Delete()) {
@@ -5415,9 +5415,10 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                 MJNotificationService.Instance.CreateSimpleNotification(`Failed to load suggestions: ${sugsResult.ErrorMessage}`, 'error', 5000);
                 this.SuggestionRows = [];
             } else {
+                const tagsByID = this.indexTagsByID();
                 this.SuggestionRows = sugsResult.Results.map(r => {
                     const matchID = (r['BestMatchTagID'] as string) ?? null;
-                    const matchTag = matchID ? this.TagsRaw.find(t => UUIDsEqual(t['ID'] as string, matchID)) : null;
+                    const matchTag = matchID ? tagsByID.Get(matchID) ?? null : null;
                     const matchName = matchTag ? (matchTag['Name'] as string) : null;
                     return {
                         ID: r['ID'] as string,
@@ -5425,7 +5426,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                         Reason: r['Reason'] as string,
                         BestMatchTagID: matchID,
                         BestMatchName: matchName,
-                        BestMatchPath: matchTag ? this.computeTagPath(matchTag) : null,
+                        BestMatchPath: matchTag ? this.computeTagPath(matchTag, tagsByID) : null,
                         BestMatchScore: (r['BestMatchScore'] as number) ?? null,
                         SourceContentSourceID: (r['SourceContentSourceID'] as string) ?? null,
                         SourceContentItemID: (r['SourceContentItemID'] as string) ?? null,
@@ -5454,13 +5455,18 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     }
 
     /** Walk the parent chain to build a › -separated breadcrumb for a tag. */
-    private computeTagPath(tag: Record<string, unknown>): string {
+    /** TagsRaw keyed by tag ID, for callers that look up many tags (one scan instead of one per lookup). */
+    private indexTagsByID(): UUIDMap<Record<string, unknown>> {
+        return IndexByUUID(this.TagsRaw, t => t['ID'] as string);
+    }
+
+    private computeTagPath(tag: Record<string, unknown>, tagsByID: UUIDMap<Record<string, unknown>>): string {
         const parts: string[] = [tag['Name'] as string];
         let cursorID = (tag['ParentID'] as string) ?? null;
         const guard = new Set<string>();
         while (cursorID && !guard.has(cursorID) && parts.length < 8) {
             guard.add(cursorID);
-            const next = this.TagsRaw.find(t => UUIDsEqual(t['ID'] as string, cursorID!));
+            const next = tagsByID.Get(cursorID);
             if (!next) break;
             parts.unshift(next['Name'] as string);
             cursorID = (next['ParentID'] as string) ?? null;

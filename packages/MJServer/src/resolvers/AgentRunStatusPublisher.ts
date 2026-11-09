@@ -1,0 +1,228 @@
+/**
+ * Publishes one agent run's live status on the caller's session.
+ *
+ * `RunAIAgentResolver` uses this for every status it sends. A host whose
+ * `AgentTurnHandler` answers with an In-Progress reply uses the same publisher,
+ * on that caller's session, so the chat follows the turn: significant-step
+ * progress, streamed text, the partial result, and the completion. When the
+ * turn throws instead of returning a result, call `PublishFailure` with the
+ * reply row's id and the error.
+ */
+import type { PubSubEngine } from 'type-graphql';
+import type {
+    AgentExecutionProgressCallback,
+    AgentExecutionStreamingCallback,
+    ExecuteAgentResult,
+} from '@memberjunction/ai-core-plus';
+import type { EntityInfo } from '@memberjunction/core';
+import type { UserPayload } from '../types.js';
+import { PublishStatusUpdate, StatusUpdateOwnerID } from '../generic/PushStatusResolver.js';
+import { ProjectEntityObjectForCaller, ProjectValuesForCaller } from '../generic/fieldSecurityTransport.js';
+
+const SIGNIFICANT_STEPS = ['prompt_execution', 'action_execution', 'subagent_execution', 'decision_processing'];
+
+/** The run fields the published messages read. Entities and test fakes both satisfy this. */
+interface StatusRun {
+    ID?: string;
+    AgentID?: string;
+    Agent?: string | null;
+    ParentRunID?: string | null;
+    Status?: string;
+    ConversationID?: string | null;
+    ConversationDetailID?: string;
+    ErrorMessage?: string;
+    Steps?: Array<{ StepName?: string }>;
+    EntityInfo?: EntityInfo | null;
+    GetAll?: () => Record<string, unknown>;
+}
+
+/** The run fields a streamed chunk carries. */
+type RunSummary = Pick<StatusRun, 'ID' | 'AgentID' | 'Agent' | 'ParentRunID' | 'Status' | 'ConversationID' | 'ConversationDetailID'>;
+
+export class AgentRunStatusPublisher {
+    private run: StatusRun | null = null;
+
+    /**
+     * @param sessionId Session stamped on the message body. Defaults to the payload's session.
+     *   The push itself is always addressed to `userPayload.sessionId`, matching the resolver.
+     * @param conversationDetailId The run's reply row. When set, every message carries it as
+     *   `conversationDetailId`, not only the completion, so a client that reconnects mid-run can
+     *   find its row. When omitted, messages are as before.
+     */
+    constructor(
+        private readonly pubSub: PubSubEngine,
+        private readonly userPayload: UserPayload,
+        private readonly sessionId: string = userPayload.sessionId,
+        private readonly conversationDetailId?: string,
+    ) {}
+
+    /** Latest run observed from a progress event, including steps that are not published. */
+    public get AgentRun(): StatusRun | null {
+        return this.run;
+    }
+
+    /** AgentRunner's progress callback. Noise steps are kept for {@link AgentRun} and not published. */
+    public get OnProgress(): AgentExecutionProgressCallback {
+        return (progress) => {
+            const fromEvent = progress.metadata?.agentRun as StatusRun | undefined;
+            if (fromEvent) {
+                this.run = fromEvent;
+            }
+            if (!SIGNIFICANT_STEPS.includes(progress.step)) {
+                return;
+            }
+            const agentRun = fromEvent || this.run;
+            if (!agentRun?.ID) {
+                // A host that streams before the first progress event otherwise sees nothing and no reason.
+                console.error('❌ No agent run available for progress callback');
+                return;
+            }
+            this.publish('ExecutionProgress', {
+                sessionId: this.sessionId,
+                agentRunId: agentRun.ID,
+                type: 'progress',
+                ...this.replyRow(),
+                agentRun: this.runValues(agentRun),
+                progress: {
+                    currentStep: progress.step,
+                    percentage: progress.percentage,
+                    message: progress.message,
+                    agentName: progress.metadata?.agentName,
+                    agentType: progress.metadata?.agentType,
+                    stepCount: progress.metadata?.stepCount,
+                    hierarchicalStep: progress.metadata?.hierarchicalStep,
+                },
+                timestamp: new Date(),
+            });
+        };
+    }
+
+    /** AgentRunner's streaming callback. Publishes nothing until a progress event has carried the run. */
+    public get OnStreaming(): AgentExecutionStreamingCallback {
+        return (chunk) => {
+            const agentRun = this.run;
+            if (!agentRun?.ID) {
+                console.error('❌ No agent run available for streaming callback');
+                return;
+            }
+            this.publish('StreamingContent', {
+                sessionId: this.sessionId,
+                agentRunId: agentRun.ID,
+                type: 'streaming',
+                ...this.replyRow(),
+                agentRun: this.runSummary(agentRun),
+                streaming: {
+                    content: chunk.content,
+                    isPartial: !chunk.isComplete,
+                    stepName: chunk.stepType,
+                    agentName: chunk.modelName,
+                    kind: chunk.kind,
+                },
+                timestamp: new Date(),
+            });
+        };
+    }
+
+    /**
+     * The partial result, then the completion. `conversationDetailId` is the reply row the
+     * chat should update. When omitted, the completion uses the run's own detail id.
+     */
+    public PublishFinal(result: ExecuteAgentResult, conversationDetailId?: string, resultJson?: string): void {
+        const agentRun = result.agentRun as StatusRun | undefined;
+        if (agentRun?.ID) {
+            let lastStep = 'Completed';
+            const steps = agentRun.Steps;
+            if (steps && steps.length > 0) {
+                lastStep = steps[steps.length - 1]?.StepName || 'Completed';
+            }
+            this.publish('StreamingContent', {
+                sessionId: this.sessionId,
+                agentRunId: agentRun.ID,
+                type: 'partial_result',
+                ...this.replyRow(),
+                partialResult: {
+                    currentStep: lastStep,
+                    partialOutput: result.payload || undefined,
+                },
+                timestamp: new Date(),
+            });
+        }
+        this.publish('StreamingContent', {
+            sessionId: this.sessionId,
+            agentRunId: agentRun?.ID || 'unknown',
+            type: 'complete',
+            timestamp: new Date(),
+            conversationDetailId: conversationDetailId || agentRun?.ConversationDetailID || this.conversationDetailId,
+            success: result.success,
+            errorMessage: agentRun?.ErrorMessage || undefined,
+            result: resultJson || undefined,
+        });
+    }
+
+    /**
+     * Completion for a failure that has no run result. `executeAIAgent` sends it when the run
+     * throws (the agent could not start, the run failed, or its reply could not be saved), so a
+     * fire-and-forget client learns the reason. A host uses it the same way: when the turn throws
+     * instead of returning a result, call `PublishFailure` with the reply row's id
+     * and the error. That completion is what tells the chat the reply finished.
+     */
+    public PublishFailure(conversationDetailId: string | undefined, errorMessage: string): void {
+        this.publish('StreamingContent', {
+            sessionId: this.sessionId,
+            agentRunId: 'unknown',
+            type: 'complete',
+            timestamp: new Date(),
+            conversationDetailId,
+            success: false,
+            errorMessage,
+            result: JSON.stringify({ success: false, errorMessage }),
+        });
+    }
+
+    /** `{ conversationDetailId }` when this run has a reply row, otherwise nothing, so the message keeps its old shape. */
+    private replyRow(): { conversationDetailId?: string } {
+        return this.conversationDetailId ? { conversationDetailId: this.conversationDetailId } : {};
+    }
+
+    /**
+     * The run's field values as the recipient may read them. The run object comes from the agent
+     * engine, which is not bound to this session's user, so it is projected here.
+     */
+    private runValues(agentRun: StatusRun): unknown {
+        if (!agentRun.GetAll) {
+            return agentRun;
+        }
+        const getAll = agentRun.GetAll;
+        return ProjectEntityObjectForCaller({ EntityInfo: agentRun.EntityInfo, GetAll: () => getAll.call(agentRun) }, this.userPayload?.userRecord);
+    }
+
+    /**
+     * The run's identifying fields as the recipient may read them. A streamed chunk carries only
+     * these: the run's `GetAll()` holds every step and prompt run, and a run streams many chunks.
+     */
+    private runSummary(agentRun: StatusRun): RunSummary {
+        const summary: RunSummary = {
+            ID: agentRun.ID,
+            AgentID: agentRun.AgentID,
+            Agent: agentRun.Agent,
+            ParentRunID: agentRun.ParentRunID,
+            Status: agentRun.Status,
+            ConversationID: agentRun.ConversationID,
+            ConversationDetailID: agentRun.ConversationDetailID,
+        };
+        return ProjectValuesForCaller(agentRun.EntityInfo, summary, this.userPayload?.userRecord);
+    }
+
+    private publish(type: 'ExecutionProgress' | 'StreamingContent', data: unknown): void {
+        PublishStatusUpdate(this.pubSub, {
+            sessionId: this.userPayload.sessionId,
+            ownerUserId: StatusUpdateOwnerID(this.userPayload),
+            message: JSON.stringify({
+                resolver: 'RunAIAgentResolver',
+                type,
+                status: 'ok',
+                data,
+            }),
+        });
+    }
+}

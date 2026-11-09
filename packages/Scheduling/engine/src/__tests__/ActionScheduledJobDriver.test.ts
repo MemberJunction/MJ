@@ -71,6 +71,7 @@ vi.mock('@memberjunction/core-entities', () => ({
     MJScheduledJobTypeEntity: class {}
 }));
 
+import type { IMetadataProvider } from '@memberjunction/core';
 import { ActionScheduledJobDriver } from '../drivers/ActionScheduledJobDriver';
 
 describe('ActionScheduledJobDriver', () => {
@@ -188,7 +189,8 @@ describe('ActionScheduledJobDriver', () => {
             const context = {
                 Schedule: { ID: 'schedule-1', Name: 'Test Job' },
                 Run: {},
-                ContextUser: {}
+                ContextUser: {},
+                Provider: {} as IMetadataProvider
             };
             const result = {
                 Success: true,
@@ -207,7 +209,8 @@ describe('ActionScheduledJobDriver', () => {
             const context = {
                 Schedule: { ID: 'schedule-1', Name: 'Failing Job' },
                 Run: {},
-                ContextUser: {}
+                ContextUser: {},
+                Provider: {} as IMetadataProvider
             };
             const result = {
                 Success: false,
@@ -228,7 +231,8 @@ describe('ActionScheduledJobDriver', () => {
             const context = {
                 Schedule: { ID: 'schedule-abc', Name: 'Metadata Job' },
                 Run: {},
-                ContextUser: {}
+                ContextUser: {},
+                Provider: {} as IMetadataProvider
             };
             const result = {
                 Success: true,

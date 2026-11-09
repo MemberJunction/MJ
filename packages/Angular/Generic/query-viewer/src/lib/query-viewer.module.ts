@@ -19,6 +19,10 @@ import { QueryParameterFormComponent } from './query-parameter-form/query-parame
 import { QueryViewerComponent } from './query-viewer/query-viewer.component';
 import { QueryRowDetailComponent } from './query-row-detail/query-row-detail.component';
 import { QueryInfoPanelComponent } from './query-info-panel/query-info-panel.component';
+import { QueryPivotComponent } from './query-pivot/query-pivot.component';
+import { QueryDiagnosticsComponent } from './query-diagnostics/query-diagnostics.component';
+import { QueryRefreshReportComponent } from './query-refresh/query-refresh-report.component';
+import { QueryRefreshDialogComponent } from './query-refresh/query-refresh-dialog.component';
 
 @NgModule({
     declarations: [
@@ -26,7 +30,8 @@ import { QueryInfoPanelComponent } from './query-info-panel/query-info-panel.com
         QueryParameterFormComponent,
         QueryViewerComponent,
         QueryRowDetailComponent,
-        QueryInfoPanelComponent
+        QueryInfoPanelComponent,
+        QueryPivotComponent
     ],
     imports: [
         CommonModule,
@@ -38,14 +43,21 @@ import { QueryInfoPanelComponent } from './query-info-panel/query-info-panel.com
         MarkdownModule,
         CodeEditorModule,
         MJEmptyStateComponent,
-        MJAccordionModule
+        MJAccordionModule,
+        QueryDiagnosticsComponent,
+        QueryRefreshReportComponent,
+        QueryRefreshDialogComponent
     ],
     exports: [
         QueryDataGridComponent,
         QueryParameterFormComponent,
         QueryViewerComponent,
         QueryRowDetailComponent,
-        QueryInfoPanelComponent
+        QueryInfoPanelComponent,
+        QueryPivotComponent,
+        QueryDiagnosticsComponent,
+        QueryRefreshReportComponent,
+        QueryRefreshDialogComponent
     ]
 })
 export class QueryViewerModule { }

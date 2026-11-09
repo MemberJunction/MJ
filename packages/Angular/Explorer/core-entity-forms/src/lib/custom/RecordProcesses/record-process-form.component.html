@@ -123,6 +123,7 @@
                 <mj-feature-pipeline-builder
                     [Record]="record"
                     [EntityID]="record.EntityID"
+                    [Provider]="ProviderToUse"
                     (SpecChange)="OnPipelineSpecChange()"
                     (ValidChange)="OnPipelineValidChange($event)">
                 </mj-feature-pipeline-builder>

@@ -25,7 +25,7 @@
                 <div class="version-option"
                      [class.selected]="version.VersionNumber === selectedVersionNumber"
                      (click)="selectVersion(version); $event.stopPropagation()">
-                  <span class="version-number">v{{ version.VersionNumber }}</span>
+                  <span class="version-number">{{ GetVersionLabel(version.VersionNumber) }}</span>
                   <span class="version-date">{{ version.__mj_CreatedAt | date:'short' }}</span>
                   @if (version.VersionNumber === selectedVersionNumber) {
                     <i class="fas fa-check"></i>
@@ -41,6 +41,28 @@
                   title="Inspect & rate components">
             <i class="fas fa-star-half-stroke"></i>
           </button>
+        }
+        @if (pluginViewer?.SupportsPDFExport) {
+          <div class="export-pdf-menu" (click)="$event.stopPropagation()">
+            <button class="export-pdf-btn"
+                    (click)="TogglePDFMenu()"
+                    [disabled]="IsExportingPDF"
+                    aria-haspopup="menu"
+                    [attr.aria-expanded]="ShowPDFMenu"
+                    [title]="IsExportingPDF ? 'Preparing PDF…' : 'Export as PDF'">
+              <i class="fas" [ngClass]="IsExportingPDF ? 'fa-spinner fa-spin' : 'fa-file-pdf'"></i>
+            </button>
+            @if (ShowPDFMenu) {
+              <div class="export-pdf-dropdown" role="menu">
+                <button type="button" role="menuitem" (click)="OnExportPDF('portrait')">
+                  <i class="fas fa-file"></i> PDF – Portrait
+                </button>
+                <button type="button" role="menuitem" (click)="OnExportPDF('landscape')">
+                  <i class="fas fa-file fa-rotate-90"></i> PDF – Landscape
+                </button>
+              </div>
+            }
+          </div>
         }
         @if (showSaveToCollection) {
           <button class="save-to-collection-btn"
@@ -95,6 +117,13 @@
         Size="compact" />
     }
 
+    @if (!isLoading && !error && artifact && ScopeNotice) {
+      <div class="scope-notice" role="status">
+        <i class="fas fa-code-branch" aria-hidden="true"></i>
+        <span class="scope-notice-text">{{ ScopeNotice }}</span>
+      </div>
+    }
+
     @if (!isLoading && !error && artifact) {
       <div class="artifact-content-wrapper" [class.no-tabs]="!showTabs">
         <!-- Tab Navigation (Dynamic) - Hidden when showTabs is false -->
@@ -123,6 +152,7 @@
                 [artifactTypeName]="artifactTypeName"
                 [contentType]="contentType"
                 [readonly]="true"
+                [VisibleVersionNumbers]="PluginVisibleVersionNumbers"
                 (openEntityRecord)="onOpenEntityRecord($event)"
                 (navigationRequest)="onNavigationRequest($event)"
                 (pluginLoaded)="onPluginLoaded()"

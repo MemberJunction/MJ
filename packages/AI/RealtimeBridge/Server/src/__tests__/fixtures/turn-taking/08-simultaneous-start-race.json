@@ -1,0 +1,27 @@
+{
+  "Name": "simultaneous-start-race",
+  "Description": "A question that names nobody makes all three full-duplex agents start answering in the same instant. Exactly one wins the floor; the other two are denied. Two agents never start at once.",
+  "Agents": [
+    { "Id": "sage", "Names": ["Sage"] },
+    { "Id": "demo", "Names": ["Demo Loop"] },
+    { "Id": "scout", "Names": ["Scout"] }
+  ],
+  "Events": [
+    { "Type": "HumanSpeech", "AtMs": 0, "DurationMs": 2000, "Text": "Can someone take the first pass at the summary?",
+      "ExpectDecisions": { "sage": "Silent", "demo": "Silent", "scout": "Silent" } },
+    { "Type": "AgentSpeech", "AtMs": 3000, "Agent": "sage", "DurationMs": 5000, "Text": "I can take the first pass at the summary now." },
+    { "Type": "AgentSpeech", "AtMs": 3000, "Agent": "demo", "DurationMs": 5000, "Text": "I can take the first pass at the summary now." },
+    { "Type": "AgentSpeech", "AtMs": 3000, "Agent": "scout", "DurationMs": 5000, "Text": "Happy to start the summary as well." }
+  ],
+  "Expect": {
+    "Speeches": [
+      { "Agent": "sage", "Kind": "Turn", "Granted": true, "Reason": "FloorFree" },
+      { "Agent": "demo", "Kind": "Turn", "Granted": false, "Reason": "HeldByOtherAgent" },
+      { "Agent": "scout", "Kind": "Turn", "Granted": false, "Reason": "HeldByOtherAgent" }
+    ],
+    "Preempted": [],
+    "BackchannelCount": 0,
+    "LoopCapReached": false,
+    "FinalFloorHolder": null
+  }
+}

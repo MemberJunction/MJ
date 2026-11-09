@@ -30,7 +30,7 @@ async function run(agentHistoryFrom?: Date | null): Promise<{ document: string; 
     const { provider, executeGQL } = makeProvider();
     const client = new GraphQLAIClient(provider);
     await client.RunAIAgentFromConversationDetail({
-        conversationDetailId: 'cd-1',
+        userMessageId: 'user-msg-1',
         agentId: 'agent-1',
         ...(agentHistoryFrom !== undefined ? { agentHistoryFrom } : {}),
     } as RunParams);
@@ -62,7 +62,7 @@ describe('GraphQLAIClient.RunAIAgentFromConversationDetail — agentHistoryFrom'
         expect(args).not.toContain('agentHistoryFrom');
         expect(variables).not.toHaveProperty('agentHistoryFrom');
         // The rest of the document is unchanged — every argument an older server knows is still sent.
-        expect(args).toContain('conversationDetailId');
+        expect(args).toContain('userMessageId');
         expect(args).toContain('fireAndForget');
     });
 

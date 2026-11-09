@@ -169,8 +169,8 @@ export interface PromptEvent {
   Type: 'prompt';
   /** Unique identifier for this prompt (e.g., `'db-host'`, `'version-select'`). */
   PromptId: string;
-  /** Type of input expected from the user. */
-  PromptType: 'input' | 'confirm' | 'select';
+  /** Type of input expected from the user. `'password'` is free text the frontend must not echo. */
+  PromptType: 'input' | 'confirm' | 'select' | 'password';
   /** Question or instruction to display to the user. */
   Message: string;
   /** Available choices (present only for `'select'` prompts). */

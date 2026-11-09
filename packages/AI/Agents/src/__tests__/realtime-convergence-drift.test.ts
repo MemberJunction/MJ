@@ -140,6 +140,40 @@ describe('Realtime convergence — drift protection', () => {
         it('returns null when nothing is overridden (cascade stays at its lower layers)', () => {
             expect(BuildRealtimeOverridesJson(null, null)).toBeNull();
             expect(BuildRealtimeOverridesJson('  ', '  ')).toBeNull();
+            expect(BuildRealtimeOverridesJson('  ', '  ', '  ')).toBeNull();
+        });
+
+        it("carries a picked avatar as realtime.video, leaving video to the agent's setting (the same literal the client pins)", () => {
+            // Pinned byte for byte in ng-conversations' realtime-pairing.test.ts: the two builders must not drift.
+            expect(BuildRealtimeOverridesJson('m', 'Puck', ' Ben ')).toBe(
+                '{"realtime":{"modelPreference":"m","voice":{"default":{"voice":"Puck"}},"video":{"avatarId":"Ben"}}}',
+            );
+            expect(JSON.parse(BuildRealtimeOverridesJson(null, null, 'Ben')!)).toEqual({
+                realtime: { video: { avatarId: 'Ben' } },
+            });
+            // No avatar, no video block: a voice pick alone leaves the agent's own video setting alone.
+            expect(JSON.parse(BuildRealtimeOverridesJson('m', 'Puck', '  ')!)).toEqual({
+                realtime: { modelPreference: 'm', voice: { default: { voice: 'Puck' } } },
+            });
+        });
+
+        it('a picked avatar beats the agents’ avatar in the cascade, and keeps their video setting and other video keys', () => {
+            const off = JSON.stringify({ realtime: { video: { enabled: false, avatarId: 'Other', watchMeetings: true } } });
+            const offEff = ResolveEffectiveRealtimeConfig(null, null, BuildRealtimeOverridesJson(null, 'Puck', 'Ben'), off);
+            expect(offEff.realtime?.video).toEqual({ enabled: false, avatarId: 'Ben', watchMeetings: true });
+            const on = JSON.stringify({ realtime: { video: { enabled: true, avatarId: 'Other' } } });
+            const onEff = ResolveEffectiveRealtimeConfig(null, null, BuildRealtimeOverridesJson(null, 'Puck', 'Ben'), on);
+            expect(onEff.realtime?.video).toEqual({ enabled: true, avatarId: 'Ben' });
+        });
+
+        it('a runtime override cannot turn video on: only the layers below it (the agents, the app) can', () => {
+            const crafted = JSON.stringify({ realtime: { video: { enabled: true, avatarId: 'Ben' } } });
+            expect(ResolveEffectiveRealtimeConfig(null, null, crafted).realtime?.video?.enabled).toBeUndefined();
+            const off = JSON.stringify({ realtime: { video: { enabled: false } } });
+            expect(ResolveEffectiveRealtimeConfig(null, null, crafted, off).realtime?.video?.enabled).toBe(false);
+            // It can still turn video off.
+            const on = JSON.stringify({ realtime: { video: { enabled: true } } });
+            expect(ResolveEffectiveRealtimeConfig(null, null, off, on).realtime?.video?.enabled).toBe(false);
         });
 
         it('round-trips through the cascade as the highest-precedence layer', () => {

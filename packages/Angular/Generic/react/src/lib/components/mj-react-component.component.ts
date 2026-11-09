@@ -45,6 +45,7 @@ import { LogError, CompositeKey, KeyValuePair, Metadata, RunView, RunViewParams,
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ComponentMetadataEngine, UserInfoEngine } from '@memberjunction/core-entities';
 import { ComponentUtilities, SimpleRunView, SimpleRunQuery } from '@memberjunction/interactive-component-types';
+import { ExportComponentToPDF, PdfOrientation } from '../export/component-pdf-export';
 
 /**
  * A captured RunView/RunQuery result with its original parameters.
@@ -552,6 +553,19 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
    * Only populated after successful component initialization.
    */
   public ResolvedComponentSpec: ComponentSpec | null = null;
+
+  /**
+   * Downloads the rendered component as a PDF: everything it shows in its current state (filters,
+   * selections, grid pages), including content behind inner scrollbars, laid out at the A4 page's
+   * printable width in the given orientation. Content in portals (antd modals, drawers) is not included.
+   *
+   * @param orientation A4 portrait (default) or landscape.
+   * @param title File name stem; defaults to the component spec's title or name.
+   */
+  public async CapturePDF(orientation: PdfOrientation = 'portrait', title?: string): Promise<void> {
+    const spec = this.ResolvedComponentSpec;
+    await ExportComponentToPDF(this.Container.nativeElement, title ?? spec?.title ?? spec?.name, orientation);
+  }
 
   /** @deprecated Use {@link ResolvedComponentSpec}. */
   public get resolvedComponentSpec(): ComponentSpec | null {
@@ -1496,10 +1510,11 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
   }
 
   /**
-   * Public method to refresh the component
-   * @deprecated Components manage their own state and data now
+   * Refreshes the component: calls the component's own `refresh()` when it registered one, otherwise re-renders it.
+   * Hosts that drive a component from outside (an agent operating it through a realtime channel) use this; a
+   * component that manages its own data does not need it.
    */
-  refresh() {
+  Refresh(): void {
     // Check if the component has registered a refresh method
     if (this.compiledComponent?.refresh) {
       this.compiledComponent.refresh();
@@ -1507,6 +1522,11 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
       // Fallback: trigger a re-render if needed
       this.renderComponent();
     }
+  }
+
+  /** @deprecated Use {@link Refresh}. */
+  refresh(): void {
+    this.Refresh();
   }
 
   /**

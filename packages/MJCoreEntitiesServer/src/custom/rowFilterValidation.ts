@@ -8,13 +8,17 @@
  * - MJRowLevelSecurityFilterEntityServer — re-validate a filter's FilterText
  *   against EVERY current referrer when the text changes (without this second
  *   enforcement point, rule-save validation is bypassable by editing the
- *   filter after attaching it).
+ *   filter after attaching it). A filter referenced ONLY by role permission rows is a role
+ *   filter and is instead compiled against each referencing entity
+ *   ({@link ValidateRoleRowFilterText}).
  *
  * All checks fail closed: anything unresolvable rejects the save.
  */
 import {
+    DatabaseProviderBase,
     EntityInfo,
     IMetadataProvider,
+    RowLevelSecurityFilterInfo,
     RunView,
     UserInfo,
     ValidationErrorInfo,
@@ -52,6 +56,20 @@ const SQL_BARE_KEYWORDS: ReadonlySet<string> = new Set([
     'TRUE', 'FALSE', 'DISTINCT', 'SOME', 'ANY', 'ALL', 'AS'
 ]);
 
+/** True when `token` (the name inside `{{...}}`) is in the registered row-filter vocabulary. */
+export function IsRegisteredRowFilterToken(token: string): boolean {
+    return EXACT_REGISTERED_TOKENS.has(token) || USER_TOKEN_PATTERN.test(token);
+}
+
+/** The refusal message for a `{{token}}` outside the registered vocabulary. */
+function UnregisteredTokenMessage(token: string): string {
+    return (
+        `Token {{${token}}} is not in the registered vocabulary ` +
+        `({{User*}}, {{ScopeResourceID}}, {{ScopeResourceType}}, {{ActingOrganizationID}}, ` +
+        `{{ActingPersonID}}, {{ActingScopeID}}, {{ActingCompanyIDs}}).`
+    );
+}
+
 /** Result of a row-filter text validation. */
 export interface RowFilterTextValidationResult {
     valid: boolean;
@@ -86,12 +104,8 @@ export function ValidateRowFilterTextAgainstEntity(filterText: string, entity: E
     // 1. Token vocabulary check, then strip tokens so their contents don't hit
     //    the identifier scan.
     let stripped = filterText.replace(/\{\{(\w+)\}\}/g, (_full, token: string) => {
-        if (!EXACT_REGISTERED_TOKENS.has(token) && !USER_TOKEN_PATTERN.test(token)) {
-            errors.push(
-                `Token {{${token}}} is not in the registered vocabulary ` +
-                `({{User*}}, {{ScopeResourceID}}, {{ScopeResourceType}}, {{ActingOrganizationID}}, ` +
-                `{{ActingPersonID}}, {{ActingScopeID}}, {{ActingCompanyIDs}}).`
-            );
+        if (!IsRegisteredRowFilterToken(token)) {
+            errors.push(UnregisteredTokenMessage(token));
         }
         return "''"; // replace with an empty string literal so surrounding quotes stay balanced
     });
@@ -149,12 +163,21 @@ export function IsExactResourceName(pattern: string | null): pattern is string {
     );
 }
 
+/**
+ * Which table a referrer of a RowLevelSecurityFilter record lives in: a role permission row
+ * (`EntityPermission`, via its four `*RLSFilterID` columns) or an API-key / API-application
+ * scope rule (via `RowFilterID`).
+ */
+export type RowFilterReferrerKind = 'EntityPermission' | 'APIKeyScope' | 'APIApplicationScope';
+
 /** One referrer of a RowLevelSecurityFilter record, resolved to its entity. */
 export interface RowFilterReferrer {
     /** Human-readable description of the referring row, for error messages. */
     Description: string;
     /** The entity the referrer binds the filter to, or null when unresolvable. */
     Entity: EntityInfo | null;
+    /** Which table the referrer lives in. */
+    Kind: RowFilterReferrerKind;
 }
 
 /**
@@ -206,14 +229,16 @@ export async function CollectRowFilterReferrers(
         const entity = (row.EntityID ? md.EntityByID(row.EntityID) : undefined) ?? null;
         referrers.push({
             Description: `Entity Permission ${row.ID} (entity ${entity?.Name ?? row.EntityID})`,
-            Entity: entity
+            Entity: entity,
+            Kind: 'EntityPermission'
         });
     }
 
     const addScopeReferrers = (
         rows: { ID: string; ResourcePattern: string | null }[],
         entityName: string,
-        label: string
+        label: string,
+        kind: RowFilterReferrerKind
     ): void => {
         for (const row of rows) {
             if (exclude && exclude.entityName === entityName && UUIDsEqual(exclude.rowId, row.ID)) {
@@ -222,13 +247,14 @@ export async function CollectRowFilterReferrers(
             const entity = IsExactResourceName(row.ResourcePattern) ? (md.EntityByName(row.ResourcePattern) ?? null) : null;
             referrers.push({
                 Description: `${label} ${row.ID} (resource '${row.ResourcePattern ?? ''}')`,
-                Entity: entity
+                Entity: entity,
+                Kind: kind
             });
         }
     };
 
-    addScopeReferrers(keyScopes.Results as { ID: string; ResourcePattern: string | null }[], 'MJ: API Key Scopes', 'API Key Scope rule');
-    addScopeReferrers(appScopes.Results as { ID: string; ResourcePattern: string | null }[], 'MJ: API Application Scopes', 'API Application Scope rule');
+    addScopeReferrers(keyScopes.Results as { ID: string; ResourcePattern: string | null }[], 'MJ: API Key Scopes', 'API Key Scope rule', 'APIKeyScope');
+    addScopeReferrers(appScopes.Results as { ID: string; ResourcePattern: string | null }[], 'MJ: API Application Scopes', 'API Application Scope rule', 'APIApplicationScope');
 
     return referrers;
 }
@@ -255,6 +281,127 @@ export function BuildSameEntityErrors(referrers: RowFilterReferrer[], targetEnti
                 `binds it to '${targetEntity.Name}'. Every referrer of a filter must resolve to the same entity — ` +
                 `use a separate filter record per entity.`
             );
+        }
+    }
+    return errors;
+}
+
+/**
+ * Substituted for a token that marking up with the saving user leaves unresolved (a null user
+ * property, or an `{{Acting*}}` token, which only API-key sessions carry). A GUID-shaped literal
+ * keeps the usual quoted shape (`Col = '{{Token}}'`) valid SQL for the compile probe.
+ */
+const UNRESOLVED_TOKEN_PLACEHOLDER = '00000000-0000-0000-0000-000000000000';
+
+/** The provider members the compile probe uses. */
+export type RowFilterProbeProvider = Pick<DatabaseProviderBase, 'ExecuteSQL' | 'QuoteIdentifier' | 'QuoteSchemaAndView'>;
+
+/** Upper bound for one compile probe. The probe reads no rows; this only bounds a pathological plan. */
+const ROLE_FILTER_PROBE_TIMEOUT_MS = 15000;
+
+/**
+ * True when every referrer of a filter is a role permission row, so the filter is a ROLE
+ * row-level-security filter that no API-key or API-application scope rule depends on.
+ * False for a filter with no referrers.
+ */
+export function IsRoleOnlyReferrerSet(referrers: RowFilterReferrer[]): boolean {
+    return referrers.length > 0 && referrers.every(r => r.Kind === 'EntityPermission');
+}
+
+/**
+ * Screens a ROLE filter's text before it is compiled. Role filters legitimately use subqueries
+ * and database functions (e.g. "rows of the organizations this user belongs to"), so unlike
+ * {@link ValidateRowFilterTextAgainstEntity} this allows `SELECT` and any function call; the
+ * compile probe proves the objects they reference exist. Everything else the shared
+ * `SQLExpressionValidator` blocks — DDL/DML/EXEC, comments, semicolons, system catalogs — is
+ * still refused, and every `{{Token}}` must be in the registered vocabulary.
+ */
+export function ScreenRoleRowFilterText(filterText: string): string[] {
+    const errors: string[] = [];
+    const calledFunctions = [...filterText.matchAll(/\b([A-Za-z_][A-Za-z0-9_]*)\s*\(/g)].map(m => m[1]);
+    const screen = SQLExpressionValidator.Instance.validate(filterText, {
+        context: 'where_clause',
+        allowSubqueries: true,
+        additionalAllowed: calledFunctions
+    });
+    if (!screen.valid) {
+        errors.push(screen.error ?? 'FilterText failed SQL expression validation.');
+    }
+    const tokens = new Set([...filterText.matchAll(/\{\{(\w+)\}\}/g)].map(m => m[1]));
+    for (const token of tokens) {
+        if (!IsRegisteredRowFilterToken(token)) {
+            errors.push(UnregisteredTokenMessage(token));
+        }
+    }
+    return errors;
+}
+
+/**
+ * Compiles a ROLE filter against one entity's base view — the view role RLS is applied to at
+ * query time — by running `SELECT 1 FROM <BaseView> WHERE 1 = 0 AND (<filter>)`. Tokens are
+ * marked up with the saving user exactly as at query time. `1 = 0` means no row is read, but
+ * the database still binds every column, table and function the filter names, so a bad
+ * reference fails here instead of on every read. Returns the refusal message, or null.
+ */
+export async function ProbeRoleRowFilterAgainstEntity(
+    filterText: string,
+    entity: EntityInfo,
+    provider: RowFilterProbeProvider,
+    contextUser: UserInfo
+): Promise<string | null> {
+    const predicate = new RowLevelSecurityFilterInfo({ FilterText: filterText })
+        .MarkupFilterText(contextUser)
+        .replace(/\{\{\w+\}\}/g, () => UNRESOLVED_TOKEN_PLACEHOLDER);
+    const sql =
+        `SELECT 1 AS ${provider.QuoteIdentifier('Probe')} ` +
+        `FROM ${provider.QuoteSchemaAndView(entity.SchemaName, entity.BaseView)} ` +
+        `WHERE 1 = 0 AND (${predicate})`;
+    try {
+        await provider.ExecuteSQL<{ Probe: number }>(sql, undefined, {
+            description: `Compile check of a row-level-security filter against ${entity.Name}`,
+            ignoreLogging: true,
+            readOnlyTransaction: true,
+            timeoutMs: ROLE_FILTER_PROBE_TIMEOUT_MS
+        }, contextUser);
+        return null;
+    } catch (e) {
+        const reason = e instanceof Error ? e.message : String(e);
+        return `FilterText does not compile against entity '${entity.Name}' (${entity.SchemaName}.${entity.BaseView}): ${reason}`;
+    }
+}
+
+/**
+ * Validates a new FilterText for a ROLE filter (see {@link IsRoleOnlyReferrerSet}) against every
+ * entity that references it. The API-key rules — plain columns only, one entity per filter — do
+ * not apply: a role filter may use subqueries and may be shared across entities, as long as it
+ * compiles against each one. Referrers that do not resolve to an entity reject (fail closed),
+ * and text that fails the screen is never sent to the database.
+ */
+export async function ValidateRoleRowFilterText(
+    filterText: string,
+    referrers: RowFilterReferrer[],
+    provider: RowFilterProbeProvider,
+    contextUser: UserInfo
+): Promise<string[]> {
+    const errors = ScreenRoleRowFilterText(filterText);
+    for (const referrer of referrers.filter(r => !r.Entity)) {
+        errors.push(
+            `${referrer.Description} references this filter but does not resolve to an entity — the new ` +
+            `FilterText cannot be validated against it; rejecting (fail closed).`
+        );
+    }
+    if (errors.length > 0) {
+        return errors;
+    }
+
+    const entities = new Map<string, EntityInfo>();
+    for (const referrer of referrers) {
+        entities.set(referrer.Entity!.ID.toLowerCase(), referrer.Entity!);
+    }
+    for (const entity of entities.values()) {
+        const failure = await ProbeRoleRowFilterAgainstEntity(filterText, entity, provider, contextUser);
+        if (failure) {
+            errors.push(failure);
         }
     }
     return errors;

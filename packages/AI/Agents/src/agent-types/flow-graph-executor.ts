@@ -22,10 +22,13 @@
 import { UUIDsEqual } from '@memberjunction/global';
 import {
     CompileFlowToTaskGraph,
+    FormatValidationErrors,
     type FlowCompileResult,
     type FlowCompilerOptions,
     type FlowCompilerPath,
     type FlowCompilerStep,
+    type TaskGraphSpec,
+    type TaskGraphValidationError,
 } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
@@ -117,4 +120,28 @@ export function CompileFlowAgentToTaskGraph(
 export function FormatFlowCompileErrors(result: FlowCompileResult): string {
     if (result.Errors.length === 0) return '';
     return result.Errors.map((e) => `[${e.Code}] ${e.Message}`).join('\n');
+}
+
+/**
+ * Renders the task-graph validator's refusals of a compiled workflow for its author.
+ *
+ * A compiled graph's tempIds are step IDs, so the validator's messages name steps by ID where the
+ * author knows them by name: an incomplete Choice fork, for one, is reported by its exclusive group,
+ * which is its origin step's ID. Every step ID in a message becomes that step's name.
+ *
+ * One pass over the message, so a name just written in is never searched again: a step whose name
+ * happens to contain another step's ID keeps its name.
+ */
+export function FormatFlowValidationErrors(errors: readonly TaskGraphValidationError[], spec: TaskGraphSpec): string {
+    const nameByID = new Map<string, string>();
+    for (const task of spec.tasks) {
+        if (task.tempId && task.name) nameByID.set(task.tempId.toLowerCase(), task.name);
+    }
+    if (nameByID.size === 0) return FormatValidationErrors(errors);
+
+    // Longest first, so an ID that is a prefix of another never wins the match.
+    const ids = [...nameByID.keys()].sort((a, b) => b.length - a.length).map((id) => id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const anyID = new RegExp(ids.join('|'), 'gi');
+    const named = (message: string): string => message.replace(anyID, (id) => nameByID.get(id.toLowerCase()) ?? id);
+    return FormatValidationErrors(errors.map((e) => ({ ...e, Message: named(e.Message) })));
 }

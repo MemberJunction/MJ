@@ -10,7 +10,7 @@
  * Per CLAUDE.md "transport-layer architecture", the operation is a THIN adapter —
  * it carries no training logic. The actual orchestration (locked-holdout carve,
  * sidecar `/train`, immutable model persist, leakage flag) lives in the engine, and
- * the production wiring is shared with the Train action via {@link trainModelViaEngine}.
+ * the production wiring is shared with the Train action via {@link TrainModelViaEngine}.
  *
  * Marked `LongRunning` (training can take a while): it emits coarse start/finish
  * progress through the server context. The engine does not expose a per-epoch
@@ -19,7 +19,7 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { IMetadataProvider, RemoteOpResult, UserInfo } from '@memberjunction/core';
 import { BaseRemotableOperation, type RemoteOpServerContext } from '@memberjunction/core';
 import {
   PredictiveStudioTrainModelOperation,
@@ -27,9 +27,11 @@ import {
   type PredictiveStudioTrainModelOutput,
 } from '@memberjunction/core-entities';
 
+import { AsOfSettingHasNoEffectError } from '../training/as-of-refusal';
 import type { TrainModelInput } from '../training/types';
 import { TrainingEngine } from '../training/training-engine';
 import { TrainModelViaEngine, WasTrainingLeakageFlagged } from './delegation';
+import { PredictiveStudioRefusals } from './refusals';
 
 /**
  * Server implementation of `PredictiveStudio.TrainModel`. Extends the CodeGen-emitted
@@ -39,6 +41,18 @@ import { TrainModelViaEngine, WasTrainingLeakageFlagged } from './delegation';
  */
 @RegisterClass(BaseRemotableOperation, 'PredictiveStudio.TrainModel')
 export class PredictiveStudioTrainModelServerOperation extends PredictiveStudioTrainModelOperation {
+  /** Returns refusals as typed `ResultCode`s (see `PredictiveStudioRefusals`). */
+  public override async ExecuteServer(
+    input: PredictiveStudioTrainModelInput,
+    context: RemoteOpServerContext,
+  ): Promise<RemoteOpResult<PredictiveStudioTrainModelOutput>> {
+    return PredictiveStudioRefusals.ExecuteServer(
+      () => this.Authorize(input, context.user),
+      () => this.InternalExecute(input, context.provider, context.user, context),
+      this.OperationKey,
+    );
+  }
+
   /** @inheritdoc */
   protected async InternalExecute(
     input: PredictiveStudioTrainModelInput,
@@ -48,6 +62,9 @@ export class PredictiveStudioTrainModelServerOperation extends PredictiveStudioT
   ): Promise<PredictiveStudioTrainModelOutput> {
     if (!input?.pipelineId) {
       throw new Error('pipelineId is required');
+    }
+    if (AsOfSettingHasNoEffectError.WouldBeIgnored(input.asOf)) {
+      throw new AsOfSettingHasNoEffectError('train-input', input.asOf.Mode, input.pipelineId);
     }
 
     context.emitProgress({

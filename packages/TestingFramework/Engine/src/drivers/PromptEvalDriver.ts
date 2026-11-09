@@ -4,6 +4,7 @@
  */
 
 import type { ControlToolRole } from '../eval/decision';
+import { ControlToolMapFor } from './control-tool-map';
 import { EncodeHistoryForArm } from '../eval/history';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { RunView } from '@memberjunction/core';
@@ -19,6 +20,7 @@ import { BaseTestDriver } from './BaseTestDriver';
 import { DriverExecutionContext, DriverExecutionResult, OracleInput, ValidationResult } from '../types';
 import type { OracleResult } from '@memberjunction/testing-engine-base';
 import type { PromptEvalActualOutput } from '../oracles/AgentDecisionOracle';
+import { OraclesWithNamedRubric } from '../oracles/rubric-resolution.js';
 
 /** One oracle to run, as it appears in the test's `Configuration`. */
 export interface PromptEvalOracleConfig {
@@ -289,20 +291,12 @@ export class PromptEvalDriver extends BaseTestDriver {
         }
         return {
             params: this.applyCellOverrides(params, config, context),
-            // Action bindings only: control-flow tools (sub-agents, payload_change_request, ask_user)
+            // Action bindings only: control-flow tools (sub-agents, payload_change_request, ask_user, complete_task)
             // are mapped separately into the decision vocabulary by `controlToolMap` (Task 8).
             toolNameMap: Object.fromEntries(
                 [...(composer.NativeToolBindings ?? [])].flatMap(([toolName, binding]) =>
                     binding.kind === 'action' ? [[toolName, binding.action.Name] as const] : [])),
-            controlToolMap: Object.fromEntries(
-                [...(composer.NativeToolBindings ?? [])].flatMap(([toolName, binding]): Array<readonly [string, ControlToolRole]> => {
-                    switch (binding.kind) {
-                        case 'subAgent': return [[toolName, { kind: 'subAgent', name: binding.agent.Name ?? toolName }] as const];
-                        case 'payloadChange': return [[toolName, { kind: 'payloadChange' }] as const];
-                        case 'askUser': return [[toolName, { kind: 'chat' }] as const];
-                        default: return [];
-                    }
-                }))
+            controlToolMap: ControlToolMapFor(composer.NativeToolBindings ?? [])
         };
     }
 
@@ -439,7 +433,12 @@ export class PromptEvalDriver extends BaseTestDriver {
         context: DriverExecutionContext
     ): Promise<OracleResult[]> {
         const results: OracleResult[] = [];
-        for (const oracleConfig of config.oracles ?? []) {
+        const oracles = OraclesWithNamedRubric(config.oracles, {
+            runRubricId: context.options.rubricId,
+            runVersionId: context.options.rubricVersionId,
+            testRubricId: context.test.RubricID,
+        });
+        for (const oracleConfig of oracles) {
             const oracle = context.oracleRegistry.get(oracleConfig.type);
             if (!oracle) {
                 results.push({
@@ -452,6 +451,7 @@ export class PromptEvalDriver extends BaseTestDriver {
             }
             const oracleInput: OracleInput = {
                 test: context.test,
+                testRunId: context.testRun.ID,
                 expectedOutput: expected,
                 actualOutput,
                 targetEntity: result.promptRun,

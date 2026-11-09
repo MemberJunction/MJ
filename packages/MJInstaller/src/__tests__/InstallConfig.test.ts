@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   InstallConfigDefaults,
+  ParseDatabasePlatform,
   ResolveFromEnvironment,
   LoadConfigFile,
   MergeConfigs,
@@ -43,6 +44,7 @@ describe('InstallConfigDefaults', () => {
 
 describe('resolveFromEnvironment', () => {
   const ENV_KEYS = [
+    'MJ_INSTALL_DB_PLATFORM',
     'MJ_INSTALL_DB_HOST',
     'MJ_INSTALL_DB_PORT',
     'MJ_INSTALL_DB_NAME',
@@ -210,6 +212,27 @@ describe('resolveFromEnvironment', () => {
 /* ================================================================== */
 /*  loadConfigFile                                                     */
 /* ================================================================== */
+
+describe('database platform', () => {
+  afterEach(() => {
+    delete process.env.MJ_INSTALL_DB_PLATFORM;
+  });
+
+  it('reads MJ_INSTALL_DB_PLATFORM, case-insensitively', () => {
+    process.env.MJ_INSTALL_DB_PLATFORM = 'PostgreSQL';
+    expect(ResolveFromEnvironment().DatabasePlatform).toBe('postgresql');
+    process.env.MJ_INSTALL_DB_PLATFORM = 'sqlserver';
+    expect(ResolveFromEnvironment().DatabasePlatform).toBe('sqlserver');
+  });
+
+  it('rejects values MemberJunction itself would reject', () => {
+    for (const bad of ['postgres', 'pg', 'mssql', 'mysql']) {
+      expect(() => ParseDatabasePlatform(bad)).toThrow(/Use 'sqlserver' or 'postgresql'/);
+    }
+    process.env.MJ_INSTALL_DB_PLATFORM = 'postgres';
+    expect(() => ResolveFromEnvironment()).toThrow(/Invalid database platform 'postgres'/);
+  });
+});
 
 describe('loadConfigFile', () => {
   let tempDir: string;

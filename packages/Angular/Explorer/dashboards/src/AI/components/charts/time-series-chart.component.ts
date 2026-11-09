@@ -1,5 +1,6 @@
-import { Component, Input, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef, OnChanges, SimpleChanges, Output, EventEmitter } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef, Output, EventEmitter, ViewEncapsulation } from '@angular/core';
 import * as d3 from 'd3';
+import { AxisTickFormat, CreateTimeScale, IsDailyBucketSeries, TooltipTimeFormat } from './time-series-axis';
 import { TrendData } from '../../services/ai-instrumentation.service';
 
 export interface TimeSeriesConfig {
@@ -19,6 +20,14 @@ export interface DataPointClickEvent {
   event: MouseEvent;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
+/**
+ * The top of a y domain. An all-zero series would give [0, 0], which d3 maps to the vertical
+ * middle — a flat line drawn across the centre of the chart with a single "0" tick.
+ */
+function nonZeroMax(max: number): number {
+  return max > 0 ? max : 1;
+}
+
 @Component({
   standalone: false,
   selector: 'app-time-series-chart',
@@ -27,19 +36,21 @@ export interface DataPointClickEvent {
       @if (title) {
         <div class="chart-header">
           <h4 class="chart-title">{{ title }}</h4>
-          @if (showLegend) {
+          @if (ShowLegend) {
             <div class="chart-legend">
-              @for (metric of visibleMetrics; track metric) {
-                <div 
+              @for (metric of VisibleMetrics; track metric) {
+                <div
                   class="legend-item"
-                  (click)="toggleMetric(metric)"
-                  [class.legend-item--disabled]="!isMetricVisible(metric)"
+                  [mjClickable]="(IsMetricVisible(metric) ? 'Hide ' : 'Show ') + GetMetricLabel(metric)"
+                  [attr.aria-pressed]="IsMetricVisible(metric)"
+                  (click)="ToggleMetric(metric)"
+                  [class.legend-item--disabled]="!IsMetricVisible(metric)"
                 >
-                  <div 
+                  <div
                     class="legend-color"
-                    [style.background-color]="getMetricColor(metric)"
+                    [style.background-color]="GetMetricColor(metric)"
                   ></div>
-                  <span class="legend-label">{{ getMetricLabel(metric) }}</span>
+                  <span class="legend-label">{{ GetMetricLabel(metric) }}</span>
                 </div>
               }
             </div>
@@ -53,157 +64,188 @@ export interface DataPointClickEvent {
       </div>
     </div>
   `,
+  // ViewEncapsulation.None: the SVG nodes are created by D3 at runtime, so they never carry
+  // Angular's emulated-encapsulation attribute and component-scoped rules cannot reach them.
+  // Every selector below is therefore rooted at the host tag, which keeps them local without
+  // ::ng-deep.
+  encapsulation: ViewEncapsulation.None,
   styles: [`
-    .time-series-chart {
+    app-time-series-chart .time-series-chart {
       background: var(--mj-bg-surface);
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-      padding: 12px;
+      border-radius: var(--mj-radius-md);
+      box-shadow: var(--mj-shadow-sm);
+      padding: var(--mj-space-3);
       height: 100%;
       display: flex;
       flex-direction: column;
       overflow: hidden; /* Ensure content doesn't overflow */
     }
 
-    .chart-header {
+    app-time-series-chart .chart-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 8px;
+      margin-bottom: var(--mj-space-2);
       flex-wrap: wrap;
-      gap: 12px;
+      gap: var(--mj-space-3);
       flex-shrink: 0; /* Prevent header from being squeezed */
     }
 
-    .chart-title {
+    app-time-series-chart .chart-title {
       margin: 0;
-      font-size: 14px;
-      font-weight: 600;
+      font-size: var(--mj-text-sm);
+      font-weight: var(--mj-font-semibold);
       color: var(--mj-text-primary);
     }
 
-    .chart-legend {
+    app-time-series-chart .chart-legend {
       display: flex;
-      gap: 16px;
+      gap: var(--mj-space-4);
       flex-wrap: wrap;
     }
 
-    .legend-item {
+    app-time-series-chart .legend-item {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: var(--mj-space-1);
       cursor: pointer;
       transition: opacity 0.2s ease;
-      font-size: 11px;
+      font-size: var(--mj-text-xs);
+      border-radius: var(--mj-radius-sm);
     }
 
-    .legend-item--disabled {
+    app-time-series-chart .legend-item:focus-visible {
+      outline: none;
+      box-shadow: var(--mj-focus-ring);
+    }
+
+    app-time-series-chart .legend-item--disabled {
       opacity: 0.4;
     }
 
-    .legend-color {
+    app-time-series-chart .legend-color {
       width: 12px;
       height: 12px;
       border-radius: 2px;
     }
 
-    .legend-label {
+    app-time-series-chart .legend-label {
       color: var(--mj-text-muted);
-      font-weight: 500;
+      font-weight: var(--mj-font-medium);
     }
 
-    .chart-container {
+    app-time-series-chart .chart-container {
       flex: 1;
       position: relative;
       overflow: hidden;
       min-height: 0; /* Important: allows flex child to shrink below content size */
     }
 
-    .chart-container svg {
+    app-time-series-chart .chart-container svg {
       width: 100%;
       height: 100%;
     }
 
-    .chart-tooltip {
+    /* An elevated surface with primary text: both flip together in dark mode. (A fixed
+       rgba(0,0,0,.8) background with --mj-text-inverse text went dark-on-black in dark mode.) */
+    app-time-series-chart .chart-tooltip {
       position: absolute;
-      background: rgba(0, 0, 0, 0.8);
-      color: var(--mj-text-inverse);
-      padding: 8px 12px;
-      border-radius: 4px;
-      font-size: 12px;
+      background: var(--mj-bg-surface-elevated);
+      color: var(--mj-text-primary);
+      border: 1px solid var(--mj-border-default);
+      box-shadow: var(--mj-shadow-md);
+      padding: var(--mj-space-2) var(--mj-space-3);
+      border-radius: var(--mj-radius-sm);
+      font-size: var(--mj-text-xs);
+      font-weight: var(--mj-font-normal);
+      line-height: var(--mj-leading-snug);
       pointer-events: none;
-      z-index: 1000;
-      max-width: 200px;
+      z-index: var(--mj-z-tooltip);
+      max-width: 220px;
     }
 
+    app-time-series-chart .chart-tooltip__hint {
+      margin-top: var(--mj-space-2);
+      padding-top: var(--mj-space-2);
+      border-top: 1px solid var(--mj-border-subtle);
+      color: var(--mj-text-muted);
+    }
 
-    /* Chart styles */
-    :host ::ng-deep .chart-line {
+    /* D3-rendered chart nodes */
+    app-time-series-chart .chart-line {
       fill: none;
       stroke-width: 2;
     }
 
-    :host ::ng-deep .chart-area {
+    app-time-series-chart .chart-area {
       fill-opacity: 0.1;
     }
 
-    :host ::ng-deep .chart-dot {
+    app-time-series-chart .chart-dot {
       transition: r 0.1s ease;
     }
 
-    :host ::ng-deep .chart-dot:hover {
+    app-time-series-chart .chart-dot:hover {
       filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.3));
     }
 
-    :host ::ng-deep .grid-line {
-      stroke: var(--mj-bg-surface-sunken);
+    app-time-series-chart .grid-line {
+      stroke: var(--mj-border-subtle);
       stroke-width: 1;
     }
 
-    :host ::ng-deep .axis {
+    app-time-series-chart .axis {
       font-size: 11px;
       color: var(--mj-text-muted);
     }
 
-    :host ::ng-deep .axis path {
+    app-time-series-chart .axis path {
       stroke: var(--mj-border-default);
     }
 
-    :host ::ng-deep .axis .tick line {
+    app-time-series-chart .axis .tick line {
       stroke: var(--mj-border-default);
     }
 
-    :host ::ng-deep .axis-y-left {
+    app-time-series-chart .axis-y-left {
       color: var(--mj-brand-primary);
     }
 
-    :host ::ng-deep .axis-y-right {
+    app-time-series-chart .axis-y-right {
       color: var(--mj-status-success);
     }
 
-    :host ::ng-deep .axis-label {
-      font-weight: 500;
+    app-time-series-chart .axis-label {
+      font-weight: var(--mj-font-medium);
     }
 
     @media (max-width: 768px) {
-      .chart-header {
+      app-time-series-chart .chart-header {
         flex-direction: column;
         align-items: flex-start;
       }
-      
-      .chart-legend {
+
+      app-time-series-chart .chart-legend {
         width: 100%;
         justify-content: flex-start;
-      }
-      
-      .chart-controls {
-        flex-wrap: wrap;
       }
     }
   `]
 })
-export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewInit, OnChanges {
-  @Input() Data: TrendData[] = [];
+export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewInit {
+  private _data: TrendData[] = [];
+  private _config: TimeSeriesConfig = {};
+  private viewReady = false;
+
+  @Input() set Data(value: TrendData[]) {
+    this._data = value ?? [];
+    if (this.viewReady) {
+      this.updateChart();
+    }
+  }
+  get Data(): TrendData[] {
+    return this._data;
+  }
 
   /** @deprecated Use {@link Data}. */
   @Input() set data(value: TrendData[]) {
@@ -214,7 +256,32 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
     return this.Data;
   }
   @Input() title?: string;
-  @Input() config: TimeSeriesConfig = {};
+  private _bucketSizeMs: number | null = null;
+  /**
+   * Width of each bucket in the series, in ms, from the caller that built it. It decides whether the
+   * series is daily UTC buckets (UTC axis, UTC dates) and is the only way to classify a one-point
+   * series. When unset, the gap between the first two points is used.
+   */
+  @Input() set BucketSizeMs(value: number | null) {
+    this._bucketSizeMs = value ?? null;
+    if (this.viewReady) {
+      this.updateChart();
+    }
+  }
+  get BucketSizeMs(): number | null {
+    return this._bucketSizeMs;
+  }
+
+  @Input() set config(value: TimeSeriesConfig) {
+    this._config = value ?? {};
+    this.applyConfig();
+    if (this.viewReady) {
+      this.updateChart();
+    }
+  }
+  get config(): TimeSeriesConfig {
+    return this._config;
+  }
   @Input() ShowLegend = true;
 
   /** @deprecated Use {@link ShowLegend}. */
@@ -312,27 +379,18 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   private getDefaultColors(): string[] {
     const style = getComputedStyle(document.documentElement);
     return [
-      style.getPropertyValue('--mj-brand-primary').trim() || '#0076b6',
-      style.getPropertyValue('--mj-status-success').trim() || '#22c55e',
-      style.getPropertyValue('--mj-status-warning').trim() || '#f59e0b',
-      style.getPropertyValue('--mj-status-error').trim() || '#ef4444',
-      style.getPropertyValue('--mj-brand-primary').trim() || '#8b5cf6',
-    ];
+      '--mj-brand-primary',
+      '--mj-status-success',
+      '--mj-status-warning',
+      '--mj-status-error',
+      '--mj-viz-5',
+    ].map(token => style.getPropertyValue(token).trim());
   }
 
   ngAfterViewInit() {
     this.initChart();
+    this.viewReady = true;
     this.updateChart();
-  }
-
-  ngOnChanges(changes: SimpleChanges) {
-    if (changes['data'] && !changes['data'].firstChange) {
-      this.updateChart();
-    }
-    if (changes['config'] && !changes['config'].firstChange) {
-      this.applyConfig();
-      this.updateChart();
-    }
   }
 
   ngOnDestroy() {
@@ -386,7 +444,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
       .attr('transform', `translate(${this.margin.left},${this.margin.top})`);
 
     // Create scales
-    const xScale = d3.scaleTime()
+    const xScale = CreateTimeScale(this.isDailyBuckets())
       .domain(d3.extent(this.Data, d => d.timestamp) as [Date, Date])
       .range([0, this.width]);
 
@@ -415,20 +473,23 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
       // Dual axis mode: Left axis (cost, avgTime), Right axis (executions, tokens, errors)
       const leftAxisMetrics = ['cost', 'avgTime'];
       const rightAxisMetrics = ['executions', 'tokens', 'errors'];
+      // Each axis is sized to the series still shown on it: hiding Tokens (millions) must let
+      // Executions (hundreds) use the axis instead of staying flat on the baseline. An axis whose
+      // series are all hidden gets no scale, so it is not drawn.
+      const shown = (metrics: string[]) => metrics.filter(m => !this.hiddenMetrics.has(m));
 
-      // Create left axis scale (cost and time)
-      const leftValues = leftAxisMetrics.flatMap(metric =>
-        this.Data.map(d => {
-          const value = this.getMetricValue(d, metric);
-          // Normalize avgTime to seconds for better scale comparison with cost
-          return metric === 'avgTime' ? (value || 0) / 1000 : (value || 0);
-        }).filter((v): v is number => v != null)
+      // Create left axis scale (cost and time). Nulls (unpriced cost, empty-bucket latency) are
+      // dropped before the ms-to-seconds conversion, not coerced to 0 by it.
+      const leftValues = shown(leftAxisMetrics).flatMap(metric =>
+        this.Data.map(d => this.getMetricValue(d, metric))
+          .filter((v): v is number => v != null)
+          .map(v => metric === 'avgTime' ? v / 1000 : v)
       );
 
       if (leftValues.length > 0) {
         const maxLeftValue = Math.max(...leftValues);
         const leftScale = d3.scaleLinear()
-          .domain([0, maxLeftValue])
+          .domain([0, nonZeroMax(maxLeftValue)])
           .range([this.height, 0])
           .nice();
 
@@ -436,14 +497,14 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
       }
 
       // Create right axis scale (count-based metrics)
-      const rightValues = rightAxisMetrics.flatMap(metric =>
+      const rightValues = shown(rightAxisMetrics).flatMap(metric =>
         this.Data.map(d => this.getMetricValue(d, metric)).filter((v): v is number => v != null)
       );
 
       if (rightValues.length > 0) {
         const maxRightValue = Math.max(...rightValues);
         const rightScale = d3.scaleLinear()
-          .domain([0, maxRightValue])
+          .domain([0, nonZeroMax(maxRightValue)])
           .range([this.height, 0])
           .nice();
 
@@ -466,7 +527,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
         if (allValues.length > 0) {
           const maxValue = Math.max(...allValues);
           const scale = d3.scaleLinear()
-            .domain([0, maxValue])
+            .domain([0, nonZeroMax(maxValue)])
             .range([this.height, 0])
             .nice();
 
@@ -592,10 +653,13 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
       const scale = scales[metric];
 
       // Create line generator with proper value transformation
+      // A missing value (an unpriced bucket's cost is null) is a GAP, never a zero.
+      const hasValue = (d: TrendData) => this.getMetricValue(d, metric) != null;
       const line = d3.line<TrendData>()
+        .defined(hasValue)
         .x(d => xScale(d.timestamp))
         .y(d => {
-          const value = this.getMetricValue(d, metric) || 0;
+          const value = this.getMetricValue(d, metric) ?? 0;
           // Normalize avgTime to seconds if using dual axis
           const transformedValue = (this.config.useDualAxis !== false && metric === 'avgTime') 
             ? value / 1000 : value;
@@ -605,10 +669,11 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
 
       // Create area generator with proper value transformation
       const area = d3.area<TrendData>()
+        .defined(hasValue)
         .x(d => xScale(d.timestamp))
         .y0(this.height)
         .y1(d => {
-          const value = this.getMetricValue(d, metric) || 0;
+          const value = this.getMetricValue(d, metric) ?? 0;
           // Normalize avgTime to seconds if using dual axis
           const transformedValue = (this.config.useDualAxis !== false && metric === 'avgTime') 
             ? value / 1000 : value;
@@ -665,7 +730,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
         .attr('stroke', color)
         .attr('stroke-width', 2)
         .attr('fill', 'var(--mj-bg-surface)')
-        .style('cursor', 'pointer')
+        .style('cursor', this.IsDrillDownEnabled ? 'pointer' : 'default')
         .style('pointer-events', 'all') // Ensure clicks are captured
         .style('z-index', 1000) // Ensure dots are on top
         .attr('data-metric', metric) // Add data attribute for debugging
@@ -718,24 +783,45 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
 
   private showTooltip(event: MouseEvent, data: TrendData) {
     const tooltip = d3.select(this.Tooltip.nativeElement);
-    
+
+    const costDisplay = data.cost !== null && data.cost !== undefined ? `$${data.cost.toFixed(4)}` : '\u2014 (unpriced)';
+    const when = TooltipTimeFormat(this.isDailyBuckets())(data.timestamp);
     const content = `
-      <div><strong>${d3.timeFormat('%H:%M')(data.timestamp)}</strong></div>
+      <div><strong>${when}</strong></div>
       <div>Executions: ${data.executions.toLocaleString()}</div>
-      <div>Cost: $${data.cost.toFixed(4)}</div>
+      <div>Cost: ${costDisplay}</div>
       <div>Tokens: ${data.tokens.toLocaleString()}</div>
-      <div>Avg Time: ${(data.avgTime / 1000).toFixed(1)}s</div>
+      <div>Avg Time: ${data.avgTime != null ? (data.avgTime / 1000).toFixed(1) + 's' : '\u2014'}</div>
       <div>Errors: ${data.errors}</div>
-      <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid color-mix(in srgb, var(--mj-bg-surface) 30%, transparent); font-size: 11px; color: color-mix(in srgb, var(--mj-bg-surface) 80%, transparent);">
-        Click data points to drill down
-      </div>
+      ${this.IsDrillDownEnabled ? '<div class="chart-tooltip__hint">Click a point to drill down</div>' : ''}
     `;
 
+    tooltip.style('display', 'block').html(content);
+
+    // Position relative to the container and flip left/up rather than letting the container's
+    // overflow clip it.
+    const container = this.Tooltip.nativeElement.parentElement!;
+    const [x, y] = d3.pointer(event, container);
+    const tip = this.Tooltip.nativeElement;
+    const offset = 12;
+    const left = x + offset + tip.offsetWidth > container.clientWidth ? x - offset - tip.offsetWidth : x + offset;
+    const top = y + offset + tip.offsetHeight > container.clientHeight ? y - offset - tip.offsetHeight : y + offset;
     tooltip
-      .style('display', 'block')
-      .html(content)
-      .style('left', (event.offsetX + 10) + 'px')
-      .style('top', (event.offsetY - 10) + 'px');
+      .style('left', Math.max(0, left) + 'px')
+      .style('top', Math.max(0, top) + 'px');
+  }
+
+  /** True when consecutive points are a day or more apart, i.e. the trend is bucketed by UTC day. */
+  private isDailyBuckets(): boolean {
+    return IsDailyBucketSeries(this.Data.map(d => d.timestamp), this.BucketSizeMs);
+  }
+
+  /**
+   * True when a parent handles DataPointClick. The Executive Summary uses this chart without a
+   * handler, so it must not advertise a drill-down (or show a pointer) that does nothing.
+   */
+  get IsDrillDownEnabled(): boolean {
+    return this.DataPointClick.observed;
   }
 
   private hideTooltip() {
@@ -805,31 +891,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   }
   
   private getTimeFormat(): (date: Date) => string {
-    if (this.Data.length < 2) {
-      return d3.timeFormat('%H:%M');
-    }
-    
-    // Calculate the time span of the data
-    const firstDate = this.Data[0].timestamp;
-    const lastDate = this.Data[this.Data.length - 1].timestamp;
-    const timeDiff = lastDate.getTime() - firstDate.getTime();
-    const hours = timeDiff / (1000 * 60 * 60);
-    const days = hours / 24;
-    
-    // Choose format based on time span
-    if (hours <= 24) {
-      // For up to 24 hours, show hours and minutes
-      return d3.timeFormat('%H:%M');
-    } else if (days <= 7) {
-      // For up to 7 days, show day and time
-      return d3.timeFormat('%a %H:%M'); // e.g., "Mon 14:00"
-    } else if (days <= 30) {
-      // For up to 30 days, show month/day
-      return d3.timeFormat('%m/%d'); // e.g., "06/13"
-    } else {
-      // For longer periods, show month/day/year
-      return d3.timeFormat('%m/%d/%y'); // e.g., "06/13/25"
-    }
+    return AxisTickFormat(this.Data.map(d => d.timestamp), this.isDailyBuckets());
   }
   
   private getOptimalTickCount(): number {

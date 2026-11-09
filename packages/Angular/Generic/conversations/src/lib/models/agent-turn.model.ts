@@ -14,19 +14,25 @@ import type { ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 /**
  * When a message starts an agent turn.
  *
- * - `Always` (the default): every message does, as it always has.
- * - `MentionOnly`: only a message that tags an agent does. Any other message is posted with no
- *   turn at all: no reply row, no placeholder and no turn events.
+ * - `Always` (the default): every message starts a turn unless it is addressed to another person
+ *   (`@Person`, a `ParentID` reply to another person's message, or a `NoAgent` routing decision).
+ * - `MentionOnly`: a message starts a turn only when it tags an agent (`Mention`), replies
+ *   (`ParentID`) directly to an agent's message (`ThreadReply`), or is sent to an active agent by a
+ *   confident routing decision (`DecisionRouted`, when `EnableDecisionRouting` is on). Any other
+ *   message is posted with no turn at all: no reply row, no placeholder and no turn events.
  */
 export type AgentReplyMode = 'Always' | 'MentionOnly';
 
 /**
  * How the turn's agent was chosen. MJ tries the routes in this order and takes the first that
- * applies; under `MentionOnly`, only `Mention` applies.
+ * applies; under `MentionOnly`, only `Mention`, `ThreadReply`, and `DecisionRouted` apply.
  *
  * - `Mention`: the message tags the agent.
+ * - `ThreadReply`: the message replies (`ParentID`) directly to an earlier message from the agent.
  * - `Continuity`: the last agent that answered in the conversation, other than the
  *   conversation manager.
+ * - `DecisionRouted`: an agent in the conversation that a confident routing decision chose for an
+ *   unmentioned follow-up message. Only with the chat's `EnableDecisionRouting` on.
  * - `ConversationDefault`: the agent pinned on the conversation (`Conversation.DefaultAgentID`).
  * - `HostDefault`: the host's `DefaultAgentId` input.
  * - `ConversationManager`: MJ's conversation manager agent (Sage unless configured otherwise),
@@ -35,7 +41,9 @@ export type AgentReplyMode = 'Always' | 'MentionOnly';
  */
 export type AgentTurnRoute =
     | 'Mention'
+    | 'ThreadReply'
     | 'Continuity'
+    | 'DecisionRouted'
     | 'ConversationDefault'
     | 'HostDefault'
     | 'ConversationManager'
@@ -64,6 +72,11 @@ export interface AgentTurnInfo extends AgentTurnTarget {
 export interface AgentTurnRequest {
     /** The conversation the message was posted in. */
     ConversationId: string;
+    /**
+     * The fork the turn's rows go to; null is Main. A handler that writes conversation rows sets this
+     * BranchID on them.
+     */
+    BranchID: string | null;
     /** The person's saved message (`MJ: Conversation Details`, Role `User`). */
     UserMessageId: string;
     /** The message text, with mentions in their stored JSON form. */
@@ -89,6 +102,12 @@ export interface AgentTurnRequest {
     RequestedSkillIDs: string[];
     /** Whether Plan Mode is on for the conversation. */
     PlanMode: boolean;
+    /**
+     * The artifact version (`MJ: Artifact Versions.ID`) the message modifies, when the chat's
+     * routing decision (`EnableDecisionRouting`) confidently named one this agent produced. MJ's
+     * own path continues from that version instead of the agent's latest output. Null otherwise.
+     */
+    TargetArtifactVersionId: string | null;
 }
 
 /** What an {@link AgentTurnHandler} reports back to the chat area. */
@@ -100,7 +119,9 @@ export interface AgentTurnResult {
     /**
      * The rows the host wrote for the turn, oldest first: the agent's reply and any status rows.
      * The chat area loads and shows them. A row still `In-Progress` is followed like any other
-     * in-progress reply.
+     * in-progress reply. The host reports that row's live status through `AgentRunStatusPublisher`
+     * (`@memberjunction/server`) on the caller's session: significant-step progress, streamed text,
+     * the partial result, and the completion. The completion's `conversationDetailId` is the reply row.
      */
     ReplyDetailIds?: string[];
     /** The agent run, when the host has one. Carried on `AfterAgentTurn`. */

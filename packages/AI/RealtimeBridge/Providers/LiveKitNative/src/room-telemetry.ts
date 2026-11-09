@@ -1,0 +1,196 @@
+/**
+ * @fileoverview Media-plane telemetry shared by the in-process {@link LiveKitRtcNodeRoomClient} and the
+ * worker-thread media plane: inbound inter-frame gap histograms, outbound capture/underrun counters, participant-video
+ * counters, and the per-thread event-loop delay monitor.
+ *
+ * Kept free of any room/worker imports so both sides can depend on it without an import cycle.
+ *
+ * @module @memberjunction/ai-bridge-livekit-native
+ */
+
+import { monitorEventLoopDelay, type IntervalHistogram } from 'node:perf_hooks';
+import type { NativeRoomClient } from '@memberjunction/ai-bridge-livekit';
+
+/** Inbound inter-frame gap histogram per participant. */
+export interface InboundFrameGapHistogram {
+    /** Inter-frame gap < 10ms. */
+    lt10ms: number;
+    /** Inter-frame gap 10ms <= t < 20ms. */
+    b10_20ms: number;
+    /** Inter-frame gap 20ms <= t < 30ms. */
+    b20_30ms: number;
+    /** Inter-frame gap 30ms <= t < 50ms. */
+    b30_50ms: number;
+    /** Inter-frame gap 50ms <= t < 100ms. */
+    b50_100ms: number;
+    /** Inter-frame gap >= 100ms. */
+    gte100ms: number;
+    /** Total frames measured. */
+    totalFrames: number;
+    /** Timestamp of the last frame received in ms (`performance.now()`). */
+    lastFrameMs?: number;
+}
+
+/** Outbound audio telemetry stats. */
+export interface OutboundAudioTelemetry {
+    /** Total frames captured and sent to the audio source. */
+    captureCount: number;
+    /** Number of buffer underruns detected (when audio queue starved while actively speaking). */
+    underrunCount: number;
+    /** Last observed queuedDuration from AudioSource (in ms or seconds, depending on driver). */
+    lastQueuedDuration?: number;
+}
+
+/**
+ * Where participant video is encoded: on the encode worker's own thread, or on the thread that hosts the room (the
+ * fallback, or with the encode worker turned off).
+ */
+export type VideoEncodeLocation = 'worker' | 'in-process';
+
+/**
+ * Participant-video telemetry: what the bot read from people's cameras and screens, and what it cost. Present while the
+ * bot watches the meeting (the client was created with video options).
+ */
+export interface RoomVideoTelemetry {
+    /** Frames decoded from the selected sources (every frame is drained, sampled or not). */
+    framesReceived: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Frames encoded and handed to the bridge. */
+    framesSent: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Frames dropped because the source's next frame was not due yet (pacing to the session's rate). */
+    framesSkippedNotDue: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Duration of the most recent encode (scale, rotate, JPEG), in ms, on the thread that encoded it. */
+    encodeMsLast?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Longest encode so far, in ms. */
+    encodeMsMax: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** JPEG bytes handed to the bridge. */
+    bytesSent: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Sources selected now (being read, or subscribed and waiting for their track). */
+    selectedSources: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Where frames are encoded now. */
+    encoder?: VideoEncodeLocation;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /**
+     * Most recent time from sending a frame to the encoder to its reply, in ms, on the room's thread: queueing behind other
+     * rooms' frames, the hops between threads, and the encode.
+     */
+    encodeRoundTripMsLast?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Longest round trip so far, in ms. */
+    encodeRoundTripMsMax?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /**
+     * Longest cost to the room's thread of sending one sampled frame, in ms: the copy and the post to the encode worker,
+     * or the whole encode when frames are encoded in-process.
+     */
+    encodeDispatchMsMax?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** This room's frames being encoded now: its queue depth. */
+    encodeInFlight?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Due frames dropped because the source's previous frame was still being encoded. */
+    framesSkippedEncoding?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Frames encoded, then dropped: consent withdrawn, the source ended or the bot left while they were encoded. */
+    framesDroppedAfterEncode?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Frames that failed to encode: a rejected frame, a request that timed out, or the encode worker failing with it in flight. */
+    encodeFailures?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Frames sent to the encode worker and not answered yet, from every room on this thread. */
+    encodeQueueDepth?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Encode worker failures on this thread since the process started. */
+    encodeWorkerRestarts?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /**
+     * Sources the ranking replaced while they could still be read: a screen was shared, or a speaker took the view. Not
+     * counted: a source that ended (an opt-out, a leave, an unpublish, a mute, its stream ending).
+     */
+    sourceSwitches?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Changes the hold delayed (a speaker who had not led long enough, a camera inside its dwell), each counted once. */
+    switchesHeld?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Active-speaker updates LiveKit sent the bot. */
+    activeSpeakerUpdates?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /**
+     * Most recent time from picking a source to its first frame reaching the bridge, in ms (subscription, first keyframe,
+     * sampling, encode): after a switch, how long the model saw nothing.
+     */
+    switchGapMsLast?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Longest such gap so far, in ms. */
+    switchGapMsMax?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+}
+
+/** Telemetry snapshot for the room client. */
+export interface RoomAudioTelemetrySnapshot {
+    /** Participant-video telemetry; absent when the bot does not watch the meeting. */
+    video?: RoomVideoTelemetry;  // case-violation-ok-legacy-back-compat: matches the snapshot's existing camelCase fields
+    /** Inbound inter-frame gap histogram per participant identity. */
+    inboundGaps: Record<string, InboundFrameGapHistogram>;
+    /** Outbound telemetry. */
+    outbound: OutboundAudioTelemetry;
+    /**
+     * Event-loop delay p99 (ms) of the thread that hosts the native room client: the main thread for the
+     * in-process client, the media worker thread inside a worker session. Prefer the two explicit fields
+     * below when reading a worker-backed client's snapshot.
+     */
+    eventLoopDelayP99Ms?: number;
+    /** Elapsed window duration in ms over which {@link eventLoopDelayP99Ms} was sampled. */
+    eventLoopWindowMs?: number;
+    /** Main-thread (MJAPI) event-loop delay p99 in ms. Populated by the worker-backed client. */
+    mainEventLoopDelayP99Ms?: number;
+    /** Media-worker-thread event-loop delay p99 in ms. Populated by the worker-backed client. */
+    workerEventLoopDelayP99Ms?: number;
+    /** Audio (ms) waiting in the worker's pacing queue when the snapshot was taken. */
+    pacerQueuedMs?: number;
+}
+
+/** A {@link NativeRoomClient} that can also report audio telemetry. */
+export type TelemetryRoomClient = NativeRoomClient & {
+    /** Returns the current audio telemetry snapshot. */
+    GetTelemetry(): RoomAudioTelemetrySnapshot;
+};
+
+/** One reading of this thread's event-loop delay monitor. */
+export interface EventLoopReading {
+    /** p99 delay in ms. */
+    P99Ms: number;
+    /** Window (ms) the histogram has covered since its last reset. */
+    WindowMs: number;
+}
+
+/** Lazily initialized per-thread event-loop monitor (shared across connections to prevent leaks). */
+let moduleEventLoopMonitor: IntervalHistogram | null = null;
+let monitorWindowStartedAt = Date.now();
+let monitorResetTimer: NodeJS.Timeout | null = null;
+
+/** Returns this thread's shared event-loop delay monitor, creating it on first use (best-effort). */
+export function GetModuleEventLoopMonitor(): IntervalHistogram | null {
+    if (!moduleEventLoopMonitor) {
+        try {
+            moduleEventLoopMonitor = monitorEventLoopDelay({ resolution: 20 });
+            moduleEventLoopMonitor.enable();
+            monitorWindowStartedAt = Date.now();
+            if (!monitorResetTimer) {
+                // Reset the shared histogram on a fixed 30s owner timer so individual per-room
+                // GetTelemetry() readers don't wipe it out under concurrent access.
+                monitorResetTimer = setInterval(() => {
+                    try {
+                        moduleEventLoopMonitor?.reset();
+                        monitorWindowStartedAt = Date.now();
+                    } catch {
+                        // Intentionally best-effort: a failed reset only widens the sampling window
+                    }
+                }, 30_000);
+                monitorResetTimer.unref?.();
+            }
+        } catch {
+            // Intentionally best-effort: environment may not support monitorEventLoopDelay
+            moduleEventLoopMonitor = null;
+        }
+    }
+    return moduleEventLoopMonitor;
+}
+
+/** Reads this thread's event-loop p99 (ms) and window, or `undefined` when the monitor is unavailable. */
+export function ReadEventLoop(): EventLoopReading | undefined {
+    const monitor = GetModuleEventLoopMonitor();
+    if (!monitor) {
+        return undefined;
+    }
+    try {
+        return { P99Ms: monitor.percentile(99) / 1e6, WindowMs: Date.now() - monitorWindowStartedAt };
+    } catch {
+        // Intentionally best-effort telemetry
+        return undefined;
+    }
+}

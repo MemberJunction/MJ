@@ -1,5 +1,6 @@
 import { Observable, Subject } from 'rxjs';
 import { UUIDsEqual } from '@memberjunction/global';
+import { WHITEBOARD_WIDGET_STATE_MAX_CHARS } from './whiteboard-widget-protocol';
 
 /**
  * WHITEBOARD — typed board model + state engine.
@@ -50,6 +51,29 @@ export type WhiteboardStickyTint = 'amber' | 'amber-light';
 export const WHITEBOARD_FONT_SIZES: readonly number[] = [12, 14, 18, 24, 32];
 
 /**
+ * The one color syntax the whiteboard accepts from outside: `#rgb` or `#rrggbb`, either case.
+ * Shared by the agent tools (`Whiteboard_AddText` color) and the host's `PenPalette` so both
+ * entry points hold the same line. A color string is painted into `style.background` on the
+ * toolbar swatches and `style.color` on text items, and Angular does not sanitize style
+ * bindings, so a `url(...)` or `image-set(...)` that got through would make the browser fetch
+ * it. Named colors, `rgb()` and `var()` are rejected on purpose: ink items persist the chosen
+ * string, and a `var()` would make a saved board theme-dependent.
+ */
+export const WHITEBOARD_HEX_COLOR = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+/** Whether `value` is a hex color the whiteboard accepts (see {@link WHITEBOARD_HEX_COLOR}). */
+export function IsWhiteboardHexColor(value: string): boolean {
+  return WHITEBOARD_HEX_COLOR.test(value);
+}
+
+/**
+ * The user pen palette (tuned for MJ's dark board). Never includes violet: violet ink is the
+ * agent's. Lives here, not in the toolbar, so the Angular-free state engine can default an ink
+ * stroke whose persisted `Color` is not a hex color.
+ */
+export const WHITEBOARD_PEN_COLORS: readonly string[] = ['#cbd5e1', '#fbbf24', '#5cc0ed', '#4ade80', '#f87171'];
+
+/**
  * Font family choices for text labels / stickies. The keys are mapped to token-friendly
  * font stacks in the board CSS (`wb-font-serif`, `wb-font-mono`; sans is the default).
  */
@@ -57,6 +81,16 @@ export type WhiteboardFontFamily = 'sans' | 'serif' | 'mono';
 
 /** Font weights for text labels / stickies (regular or bold). */
 export type WhiteboardFontWeight = 400 | 700;
+
+/** True when `value` is one of the {@link WhiteboardFontWeight} literals. */
+export function IsWhiteboardFontWeight(value: unknown): value is WhiteboardFontWeight {
+  return value === 400 || value === 700;
+}
+
+/** True when `value` is one of the {@link WhiteboardFontFamily} keys. */
+export function IsWhiteboardFontFamily(value: unknown): value is WhiteboardFontFamily {
+  return value === 'sans' || value === 'serif' || value === 'mono';
+}
 
 /** A point in board (content) coordinates. */
 export interface WhiteboardPoint {
@@ -72,6 +106,72 @@ export interface WhiteboardItemBase {
   Author: WhiteboardAuthor;
   /** Render order (higher renders on top). Assigned by the engine. */
   Z: number;
+  /**
+   * Optional free-form role tag (`'slot'`, `'heading'`, `'step-done'`). It carries no behavior:
+   * the board lands it on the item's wrapper as a `wb-tag-<slug>` class (see
+   * {@link WhiteboardTagClass}) so a host restyling the board from outside can tell two ROLES of
+   * one kind apart — a shape used as a section head vs an empty "fill this in" slot — which the
+   * DOM could not distinguish before (CSS cannot select on label text). Persisted with the item;
+   * the agent's scene view carries it as `tag`.
+   */
+  Tag?: string;
+}
+
+/** Longest tag the slug keeps — anything past it is noise in a class name. */
+export const WHITEBOARD_TAG_MAX_CHARS = 32;
+
+/**
+ * A tag as stored on an item: trimmed, and `undefined` when blank — so clearing a tag drops the
+ * key instead of persisting `"Tag": ""`, and the scene view / class hook see one "unset" shape.
+ */
+export function NormalizeWhiteboardTag(tag: string | undefined | null): string | undefined {
+  const trimmed = tag?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+/**
+ * The wrapper class for an item's {@link WhiteboardItemBase.Tag}: `wb-tag-<slug>`, where the slug
+ * is lower-cased, every run of characters outside `a-z0-9` becomes one dash, leading/trailing
+ * dashes are dropped and the result is capped at {@link WHITEBOARD_TAG_MAX_CHARS}. An empty or
+ * whitespace-only tag yields `''` (no class), so templates can append the result unconditionally.
+ */
+export function WhiteboardTagClass(tag: string | undefined | null): string {
+  if (!tag) {
+    return '';
+  }
+  // Memoized: the board calls this from its template for every item on every change-detection
+  // pass, and a board has few distinct tags. Bounded so a stream of unique tags cannot grow it
+  // without limit; past the bound the map is simply dropped and rebuilt.
+  const hit = tagClassMemo.get(tag);
+  if (hit !== undefined) {
+    return hit;
+  }
+  const cls = computeTagClass(tag);
+  if (tagClassMemo.size >= TAG_CLASS_MEMO_MAX) {
+    tagClassMemo.clear();
+  }
+  tagClassMemo.set(tag, cls);
+  return cls;
+}
+
+const TAG_CLASS_MEMO_MAX = 512;
+const tagClassMemo = new Map<string, string>();
+
+function computeTagClass(tag: string): string {
+  // The collapse is linear (the class excludes '-', so no run can backtrack). The edge trims
+  // are index walks rather than `^-+|-+$` regexes: those backtrack polynomially on a long run of
+  // dashes, and a tag is library input (agent tool arguments) — CodeQL js/polynomial-redos.
+  const collapsed = tag.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  let start = 0;
+  while (start < collapsed.length && collapsed[start] === '-') {
+    start++;
+  }
+  let end = Math.min(collapsed.length, start + WHITEBOARD_TAG_MAX_CHARS);
+  while (end > start && collapsed[end - 1] === '-') {
+    end--;
+  }
+  const slug = collapsed.slice(start, end);
+  return slug ? `wb-tag-${slug}` : '';
 }
 
 /** A sticky note. */
@@ -227,6 +327,8 @@ export type WhiteboardItemInput = DistributiveOmit<WhiteboardItem, 'ID' | 'Z' | 
 
 /** Patchable fields for {@link WhiteboardState.UpdateItem} (kind/identity fields excluded). */
 export interface WhiteboardItemPatch {
+  /** Re-tag the item (see {@link WhiteboardItemBase.Tag}); `''` clears it. */
+  Tag?: string;
   X?: number;
   Y?: number;
   W?: number;
@@ -419,6 +521,22 @@ export interface WhiteboardBoardLoadedEventArgs {
   ItemCount: number;
 }
 
+/**
+ * AFTER-event args for {@link WhiteboardState.WidgetStateChanged$} — an HTML widget's saved
+ * runtime state was set or cleared via {@link WhiteboardState.SetWidgetState}, or the whole
+ * side map was replaced by {@link WhiteboardState.LoadWidgetStates} (one event per affected
+ * item). Widget state is runtime data, not board content: this event is NOT a
+ * {@link WhiteboardState.Changed$} emission and nothing is journaled or undoable.
+ */
+export class WhiteboardWidgetStateChangedEventArgs {
+  /** The HTML widget item whose state changed. */
+  public readonly ItemID: string;
+
+  constructor(itemId: string) {
+    this.ItemID = itemId;
+  }
+}
+
 // ────────────────────────────────────────────── pages
 
 /**
@@ -579,6 +697,8 @@ export interface WhiteboardCompactItem {
   fontFamily?: WhiteboardFontFamily;
   bold?: boolean;
   color?: string;
+  /** The item's role tag, when set (see {@link WhiteboardItemBase.Tag}). */
+  tag?: string;
 }
 
 /**
@@ -655,16 +775,18 @@ export function IsResizableKind(kind: WhiteboardItemKind): boolean {
  * The patch a COMMITTED resize gesture applies for an item kind, given the gesture's
  * final bounds:
  *  - full-box kinds (`shape`, `highlight`, `html`) commit X / Y / W / H;
- *  - content-driven-height kinds (`sticky`, `text`, `image`, `markdown`) commit
- *    X / Y / W only — their rendered height stays content-driven (markdown's optional
- *    `H` max-height cap is set by tools/agents, never by the drag gesture);
+ *  - `markdown` commits X / Y / W / H too: its `H` is a max-height cap (agents set one when
+ *    they add a panel), and content beyond it is clipped — so the user must be able to drag
+ *    the cap taller to reveal it, or shorter to compact the panel (the board applies `H`
+ *    only when a top / bottom handle moved, so a side handle never caps an uncapped panel);
+ *  - content-driven-height kinds (`sticky`, `text`, `image`) commit X / Y / W only;
  *  - non-resizable kinds (`ink`, `connector`) return `null` (nothing to commit).
  */
 export function BuildResizeCommitPatch(kind: WhiteboardItemKind, bounds: WhiteboardBounds): WhiteboardItemPatch | null {
-  if (kind === 'shape' || kind === 'highlight' || kind === 'html') {
+  if (kind === 'shape' || kind === 'highlight' || kind === 'html' || kind === 'markdown') {
     return { X: bounds.X, Y: bounds.Y, W: bounds.W, H: bounds.H };
   }
-  if (kind === 'sticky' || kind === 'text' || kind === 'image' || kind === 'markdown') {
+  if (kind === 'sticky' || kind === 'text' || kind === 'image') {
     return { X: bounds.X, Y: bounds.Y, W: bounds.W };
   }
   return null;
@@ -906,6 +1028,22 @@ export class WhiteboardState {
   private pageRemoved = new Subject<WhiteboardPageRemovedEventArgs>();
   /** AFTER event: a page (and all of its items) was removed from the board. */
   public readonly PageRemoved$: Observable<WhiteboardPageRemovedEventArgs> = this.pageRemoved.asObservable();
+
+  /**
+   * Per-widget runtime state (item ID → opaque JSON string), kept OUTSIDE the board model:
+   * never part of `snapshot()` / `restore()` / {@link ToJSON} / {@link LoadFromJSON}, never
+   * journaled, never on {@link Changed$}. So Undo/Redo don't rewind it, and LiveKit peers and
+   * Save-to-artifact never see it. See {@link SetWidgetState}.
+   */
+  private widgetStates = new Map<string, string>();
+
+  private widgetStateChanged = new Subject<WhiteboardWidgetStateChangedEventArgs>();
+  /**
+   * AFTER event: a widget's runtime state was set, cleared or replaced. Fires per affected
+   * item; never accompanied by a {@link Changed$} emission (no frames, scene deltas or
+   * LiveKit broadcasts per keystroke).
+   */
+  public readonly WidgetStateChanged$: Observable<WhiteboardWidgetStateChangedEventArgs> = this.widgetStateChanged.asObservable();
 
   /**
    * The MULTI-selection, in selection order (last entry is the primary selection).
@@ -1183,6 +1321,9 @@ export class WhiteboardState {
     }
     this.beforeMutate();
     const item = { ...adding.Input, ID: this.nextId(adding.Input.Kind), Z: ++this.zCounter, Author: author } as WhiteboardItem;
+    WhiteboardState.normalizeTag(item);
+    // restore() resets idCounter, so an undone ID can be re-minted: a fresh item never inherits it
+    this.widgetStates.delete(item.ID);
     this.items.set(item.ID, item);
     this.record('add', item.ID, author, `added ${WhiteboardState.describe(item)}`);
     this.itemAdded.next({ Item: item, Author: author });
@@ -1222,12 +1363,25 @@ export class WhiteboardState {
         (target as Record<string, typeof value>)[key] = value;
       }
     }
+    if (effective.Tag !== undefined) {
+      WhiteboardState.normalizeTag(item);
+    }
     this.record('update', id, author, `updated ${WhiteboardState.describe(item)}`);
     this.itemUpdated.next({ Item: item, Operation: 'update', Author: author });
     if (isContent) {
       this.contentChanged.next({ Item: item, Patch: effective, Author: author });
     }
     return true;
+  }
+
+  /** Store a blank tag as "no tag" (see {@link NormalizeWhiteboardTag}). */
+  private static normalizeTag(item: WhiteboardItemBase): void {
+    const tag = NormalizeWhiteboardTag(item.Tag);
+    if (tag === undefined) {
+      delete item.Tag;
+    } else {
+      item.Tag = tag;
+    }
   }
 
   /** Whether a patch touches CONTENT fields (drives the ContentChanging/Changed pair). */
@@ -1424,6 +1578,7 @@ export class WhiteboardState {
     }
     const count = this.items.size;
     this.beforeMutate();
+    this.pruneWidgetStates(Array.from(this.items.keys()));
     this.items = new Map<string, WhiteboardItem>();
     this.changeSelection(null);
     this.record('replace', '', author, 'cleared the board');
@@ -1626,6 +1781,7 @@ export class WhiteboardState {
       return false;
     }
     this.beforeMutate();
+    this.pruneWidgetStates(Array.from(target.Items.keys()));
     const index = this.pages.indexOf(target);
     this.pages.splice(index, 1);
     let activated: WhiteboardPageInfo | null = null;
@@ -1639,6 +1795,108 @@ export class WhiteboardState {
     this.record('replace', '', author, `removed page "${target.Name}"`);
     this.pageRemoved.next({ Page: removingInfo, ActivatedPage: activated, Author: author });
     return true;
+  }
+
+  // ────────────────────────────────────────────── widget runtime state
+
+  /**
+   * The saved runtime state of an HTML widget (opaque JSON string), or null when none is
+   * held. Entries survive item removal in memory, so Undo-of-remove gets its state back.
+   */
+  public GetWidgetState(id: string): string | null {
+    return this.widgetStates.get(id) ?? null;
+  }
+
+  /**
+   * Set (or, with `null`, clear) a widget's runtime state and fire
+   * {@link WidgetStateChanged$}. No undo snapshot, no journal, no {@link Changed$}.
+   * Values longer than {@link WHITEBOARD_WIDGET_STATE_MAX_CHARS} are refused (ignored), never
+   * clipped. A no-op (same value, or clearing an absent entry) fires nothing.
+   */
+  public SetWidgetState(id: string, json: string | null): void {
+    if (!id) {
+      return;
+    }
+    if (json === null) {
+      if (this.widgetStates.delete(id)) {
+        this.widgetStateChanged.next(new WhiteboardWidgetStateChangedEventArgs(id));
+      }
+      return;
+    }
+    if (typeof json !== 'string' || json.length > WHITEBOARD_WIDGET_STATE_MAX_CHARS || this.widgetStates.get(id) === json) {
+      return;
+    }
+    this.widgetStates.set(id, json);
+    this.widgetStateChanged.next(new WhiteboardWidgetStateChangedEventArgs(id));
+  }
+
+  /**
+   * The widget states of items that still exist on ANY page, as a plain record (for the
+   * session channel's save payload). Entries for removed items are left out.
+   */
+  public WidgetStatesToJSON(): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const [id, json] of this.widgetStates) {
+      if (this.itemExistsOnAnyPage(id)) {
+        out[id] = json;
+      }
+    }
+    return out;
+  }
+
+  /**
+   * REPLACE (never merge) every widget state with `record` — typically right after
+   * {@link LoadFromJSON} when a session resumes. Non-string or oversize values are dropped.
+   * Fires {@link WidgetStateChanged$} once per item whose entry was added, changed or removed.
+   */
+  public LoadWidgetStates(record: Record<string, string>): void {
+    const next = WhiteboardState.normalizeWidgetStates(record);
+    const affected = new Set<string>([...this.widgetStates.keys(), ...next.keys()]);
+    const previous = this.widgetStates;
+    this.widgetStates = next;
+    for (const id of affected) {
+      if (previous.get(id) !== next.get(id)) {
+        this.widgetStateChanged.next(new WhiteboardWidgetStateChangedEventArgs(id));
+      }
+    }
+  }
+
+  /** Validate a persisted widget-state record: string keys → strings within the size cap. */
+  private static normalizeWidgetStates(record: Record<string, string>): Map<string, string> {
+    const next = new Map<string, string>();
+    if (!record || typeof record !== 'object' || Array.isArray(record)) {
+      return next;
+    }
+    for (const [id, value] of Object.entries(record)) {
+      if (id && typeof value === 'string' && value.length <= WHITEBOARD_WIDGET_STATE_MAX_CHARS) {
+        next.set(id, value);
+      }
+    }
+    return next;
+  }
+
+  /** Drop the widget states of items that are being removed for good (Clear / RemovePage). */
+  private pruneWidgetStates(ids: string[]): void {
+    for (const id of ids) {
+      if (this.widgetStates.delete(id)) {
+        this.widgetStateChanged.next(new WhiteboardWidgetStateChangedEventArgs(id));
+      }
+    }
+  }
+
+  /** True when an item with this ID lives on any page (not just the active one). */
+  private itemExistsOnAnyPage(id: string): boolean {
+    return this.pages.some(page => page.Items.has(id));
+  }
+
+  /**
+   * The page (ID and name) holding the item with this ID, searching EVERY page — not just the
+   * active one — or null when no page holds it. Lets a caller tell "on another page" (switch
+   * pages) from "gone".
+   */
+  public FindItemPage(itemId: string): { ID: string; Name: string } | null {
+    const page = this.pages.find(p => p.Items.has(itemId));
+    return page ? { ID: page.ID, Name: page.Name } : null;
   }
 
   /**
@@ -1856,7 +2114,7 @@ export class WhiteboardState {
           name,
           // additive authorship field — tolerated absent (pre-garnish payloads → 'user')
           author: p['author'] === 'agent' ? 'agent' : 'user',
-          items: Array.isArray(p['items']) ? (p['items'] as WhiteboardItem[]) : []
+          items: Array.isArray(p['items']) ? WhiteboardState.normalizePersistedItems(p['items'] as unknown[]) : []
         });
       }
       if (pages.length === 0) {
@@ -1882,10 +2140,46 @@ export class WhiteboardState {
         zCounter: num(raw['zCounter'], 0),
         pageCounter: 1,
         activePageId: 'page-1',
-        pages: [{ id: 'page-1', name: 'Page 1', items: raw['items'] as WhiteboardItem[] }]
+        pages: [{ id: 'page-1', name: 'Page 1', items: WhiteboardState.normalizePersistedItems(raw['items'] as unknown[]) }]
       };
     }
     return null;
+  }
+
+  /**
+   * Coerce the closed-set item fields of persisted items so hostile values from a shared
+   * board never enter state: `Author` becomes `'agent'` or `'user'`, and a `FontWeight` /
+   * `FontFamily` outside its literal set is dropped (the item falls back to the CSS
+   * default). A `Color` that is not a hex color ({@link IsWhiteboardHexColor}) is dropped,
+   * or for ink (where it is required) replaced with the first user pen color, because it is
+   * painted into style and SVG attributes where a `url(...)` would be fetched. Non-object
+   * entries are dropped (restore would skip them anyway).
+   */
+  private static normalizePersistedItems(entries: unknown[]): WhiteboardItem[] {
+    const items: WhiteboardItem[] = [];
+    for (const entry of entries) {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        continue;
+      }
+      const item = { ...(entry as Record<string, unknown>) };
+      item['Author'] = item['Author'] === 'agent' ? 'agent' : 'user';
+      if ('FontWeight' in item && !IsWhiteboardFontWeight(item['FontWeight'])) {
+        delete item['FontWeight'];
+      }
+      if ('FontFamily' in item && !IsWhiteboardFontFamily(item['FontFamily'])) {
+        delete item['FontFamily'];
+      }
+      const color = item['Color'];
+      if (item['Kind'] === 'ink') {
+        if (typeof color !== 'string' || !IsWhiteboardHexColor(color)) {
+          item['Color'] = WHITEBOARD_PEN_COLORS[0];
+        }
+      } else if ('Color' in item && (typeof color !== 'string' || !IsWhiteboardHexColor(color))) {
+        delete item['Color'];
+      }
+      items.push(item as unknown as WhiteboardItem);
+    }
+    return items;
   }
 
   /**
@@ -2094,6 +2388,9 @@ export class WhiteboardState {
         }
         c.text = clip(item.Html, 200);
         break;
+    }
+    if (item.Tag) {
+      c.tag = item.Tag;
     }
     return c;
   }

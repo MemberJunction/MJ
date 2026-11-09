@@ -9,7 +9,7 @@
  * Version-agnostic: supports semver ranges, pnpm catalog:, and workspace:*.
  */
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { resolve, dirname, basename, join } from 'node:path';
 import type { ManifestPackageEntry } from '../manifest/manifest-schema.js';
 import { ResolveServerPackagePath, ResolveClientPackagePath } from './workspace-paths.js';
@@ -50,7 +50,14 @@ export interface PackageManagerOptions {
   ServerPackages: ManifestPackageEntry[];
   /** Client packages to add/remove */
   ClientPackages: ManifestPackageEntry[];
-  /** Shared packages (added to both server and client) */
+  /**
+   * Shared packages — dependency DECLARATION is added to both server and client `package.json`,
+   * deliberately not platform-routed. Declaring a dependency is not the same as bundling it: a
+   * Node-only shared package may still need to be a declared client dependency for type-only
+   * imports even though it must never be BUNDLED into the client. `dynamicPackages.client`
+   * (see `GetClientPackagesFromManifest`) is what decides bundling, filtered by platform (#4428);
+   * this list is not.
+   */
   SharedPackages: ManifestPackageEntry[];
   /** Package version (used as the semver range for each package) */
   Version: string;
@@ -106,7 +113,8 @@ export interface PackageOperationResult {
  * Distributes packages by role:
  * - Server packages -> server workspace(s)
  * - Client packages -> client workspace(s)
- * - Shared packages -> all workspaces
+ * - Shared packages -> all workspaces (dependency DECLARATION only — see `SharedPackages` on
+ *   {@link PackageManagerOptions}; this is intentional, not a missed platform-routing call site)
  *
  * @param options - Package manager configuration
  * @returns Operation result
@@ -114,6 +122,9 @@ export interface PackageOperationResult {
 export function AddAppPackages(options: PackageManagerOptions): PackageOperationResult {
   const added: string[] = [];
   const versionStr = resolveVersionString(options);
+  // Original text of each package.json, taken before its first write, so a failure on a later
+  // target puts the earlier ones back instead of leaving a half-written workspace (#3796).
+  const snapshots = new Map<string, string>();
 
   try {
     const targets = buildTargetList(options);
@@ -124,6 +135,7 @@ export function AddAppPackages(options: PackageManagerOptions): PackageOperation
       const pkgs = target.Role === 'server' ? serverPkgs : clientPkgs;
       if (pkgs.length > 0) {
         const pkgJsonPath = resolve(options.RepoRoot, target.Path, 'package.json');
+        SnapshotPackageJson(snapshots, pkgJsonPath);
         AddDependenciesToPackageJson(pkgJsonPath, pkgs, versionStr);
         added.push(...pkgs.map((p) => p.name));
       }
@@ -132,8 +144,36 @@ export function AddAppPackages(options: PackageManagerOptions): PackageOperation
     return { Success: true, Added: [...new Set(added)], Removed: [] };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    return { Success: false, Added: added, Removed: [], ErrorMessage: message };
+    return { Success: false, Added: [], Removed: [], ErrorMessage: `${message}${RestorePackageJsonSnapshots(snapshots)}` };
   }
+}
+
+/** Records a package.json's current text the first time it is about to be written. An unreadable file is left to the write to report. */
+function SnapshotPackageJson(snapshots: Map<string, string>, pkgJsonPath: string): void {
+  if (snapshots.has(pkgJsonPath)) return;
+  try {
+    snapshots.set(pkgJsonPath, readFileSync(pkgJsonPath, 'utf-8'));
+  } catch {
+    // nothing to restore — the parse in AddDependenciesToPackageJson throws the path-qualified error
+  }
+}
+
+/**
+ * Writes every snapshotted package.json back to its original text. Returns a sentence to append
+ * to the failure message: which files were restored, or which could not be and need a hand edit.
+ */
+function RestorePackageJsonSnapshots(snapshots: Map<string, string>): string {
+  if (snapshots.size === 0) return '';
+  const unrestored: string[] = [];
+  for (const [pkgJsonPath, original] of snapshots) {
+    try {
+      writeFileSync(pkgJsonPath, original, 'utf-8');
+    } catch {
+      unrestored.push(pkgJsonPath);
+    }
+  }
+  if (unrestored.length === 0) return ` No package.json was changed (${snapshots.size} file(s) restored).`;
+  return ` Could not restore ${unrestored.join(', ')}: remove the app's packages from its dependencies by hand.`;
 }
 
 /**
@@ -266,6 +306,92 @@ function ValidateRegistryUrl(url: string): { Valid: boolean; Reason?: string } {
 }
 
 /**
+ * True when `url` points at the public npm registry itself. Compares the parsed host — a
+ * substring test would also accept `https://evil.example/registry.npmjs.org` and
+ * `https://registry.npmjs.org.evil.example`. An unparseable URL is not the default, so it goes
+ * on to {@link ValidateRegistryUrl}, which rejects it.
+ */
+export function IsDefaultNpmRegistry(url: string): boolean {
+  try {
+    return new URL(url).hostname.toLowerCase() === 'registry.npmjs.org';
+  } catch {
+    return false;
+  }
+}
+
+/** Default ceiling for one package install run by the app engine: 30 minutes. */
+export const DEFAULT_PACKAGE_INSTALL_TIMEOUT_MS = 30 * 60 * 1000;
+
+/**
+ * Environment variable that overrides {@link DEFAULT_PACKAGE_INSTALL_TIMEOUT_MS}, in milliseconds.
+ * A first install on a cold package store or a slow registry can legitimately take many minutes;
+ * an app whose packages were not installed is left Disabled, so a ceiling that is too low turns a
+ * slow-but-healthy install into a broken one.
+ */
+export const PACKAGE_INSTALL_TIMEOUT_ENV_VAR = 'MJ_APP_PACKAGE_INSTALL_TIMEOUT_MS';
+
+/** Resolves the package-install timeout: the env override when it is a positive number, else the default. */
+export function ResolvePackageInstallTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env[PACKAGE_INSTALL_TIMEOUT_ENV_VAR];
+  const parsed = raw ? Number(raw) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_PACKAGE_INSTALL_TIMEOUT_MS;
+}
+
+/** What one package install will run, worked out before anything is spawned. */
+interface PackageInstallPlan {
+  Target: ReturnType<typeof ResolveInstallRoot>;
+  Bin: string;
+  Argv: string[];
+}
+
+/**
+ * Builds the install command: resolves where it runs and with which package manager, and
+ * validates a custom registry. Returns an error message instead of a plan when the registry is bad.
+ */
+function BuildPackageInstallPlan(
+  repoRoot: string,
+  verbose: boolean | undefined,
+  registryUrl: string | undefined,
+  packageManager: PackageManagerType | undefined,
+): PackageInstallPlan | { ErrorMessage: string } {
+  const target = ResolveInstallRoot(repoRoot, packageManager);
+  const pm = target.PackageManager;
+
+  // Only pass --registry for non-default registries. The standard npm registry
+  // (https://registry.npmjs.org) is already the default, and passing it explicitly
+  // overrides scoped registry + auth token settings in .npmrc, breaking private packages.
+  const isCustomRegistry = !!registryUrl && !IsDefaultNpmRegistry(registryUrl);
+
+  // Defense-in-depth: validate the registry URL is a clean http(s) URL before using it. It is
+  // passed as a literal argv element (no shell), but a malformed URL / wrong protocol is
+  // still worth rejecting up front (B40).
+  if (isCustomRegistry) {
+    const validation = ValidateRegistryUrl(registryUrl!);
+    if (!validation.Valid) {
+      return { ErrorMessage: `Invalid custom registry URL: ${validation.Reason}` };
+    }
+  }
+
+  // The argv is an ARRAY run with no shell, so the registry URL — and every other argument —
+  // is a single literal element that a shell can never interpret (B40). On Windows the
+  // package-manager binaries are `.cmd` shims, which only resolve when the name carries the extension.
+  const argv: string[] = ['install'];
+  if (pm === 'npm' && !verbose) argv.push('--loglevel=warn');
+  if (isCustomRegistry) argv.push(`--registry=${registryUrl}`);
+  // All package managers natively read .npmrc / .pnpmrc / .yarnrc.yml for scoped registries,
+  // auth tokens, and other settings — running in the right `cwd` is all they need.
+  return { Target: target, Bin: process.platform === 'win32' ? `${pm}.cmd` : pm, Argv: argv };
+}
+
+function InstallSucceeded(target: PackageInstallPlan['Target']): PackageOperationResult {
+  return { Success: true, Added: [], Removed: [], InstallRoot: target.Root, DevWorkspaceParent: target.DevWorkspaceParent };
+}
+
+function InstallFailed(message: string, target?: PackageInstallPlan['Target']): PackageOperationResult {
+  return { Success: false, Added: [], Removed: [], ErrorMessage: message, InstallRoot: target?.Root, DevWorkspaceParent: target?.DevWorkspaceParent };
+}
+
+/**
  * Runs package install from the monorepo root using the appropriate package manager —
  * or, when the repo is a member of an `mj dev workspace`, from that workspace's parent
  * with pnpm (see {@link ResolveInstallRoot}); the result says where it ran.
@@ -275,65 +401,113 @@ function ValidateRegistryUrl(url: string): { Valid: boolean; Reason?: string } {
  * 2. Scoped registry from .npmrc / .pnpmrc (automatic — package managers read these natively)
  * 3. Default registry for the package manager
  *
+ * Synchronous: it blocks the calling thread until the install finishes. Long-running hosts
+ * (the install orchestrator, anything holding database connections) should use
+ * {@link RunPackageInstallAsync}, which keeps the event loop free.
+ *
  * @param repoRoot - Absolute path to the monorepo root
  * @param verbose - Enable verbose output
  * @param registryUrl - Optional custom registry URL (overrides .npmrc/.pnpmrc for this run)
  * @param packageManager - Package manager to use (auto-detected if not provided)
  */
 export function RunPackageInstall(repoRoot: string, verbose?: boolean, registryUrl?: string, packageManager?: PackageManagerType): PackageOperationResult {
-  const target = ResolveInstallRoot(repoRoot, packageManager);
-  const pm = target.PackageManager;
-
-  // Only pass --registry for non-default registries. The standard npm registry
-  // (https://registry.npmjs.org) is already the default, and passing it explicitly
-  // overrides scoped registry + auth token settings in .npmrc, breaking private packages.
-  const isCustomRegistry = registryUrl && !registryUrl.includes('registry.npmjs.org');
-
-  // Defense-in-depth: validate the registry URL is a clean http(s) URL before using it. It is
-  // now passed as a literal argv element (no shell), but a malformed URL / wrong protocol is
-  // still worth rejecting up front (B40).
-  if (isCustomRegistry) {
-    const validation = ValidateRegistryUrl(registryUrl!);
-    if (!validation.Valid) {
-      return { Success: false, Added: [], Removed: [], ErrorMessage: `Invalid custom registry URL: ${validation.Reason}` };
-    }
-  }
-
+  const plan = BuildPackageInstallPlan(repoRoot, verbose, registryUrl, packageManager);
+  if ('ErrorMessage' in plan) return InstallFailed(plan.ErrorMessage);
   try {
-    // Build the argv as an ARRAY and run via execFileSync (no shell). The registry URL — and
-    // every other argument — is passed as a single literal argv element, so a hostile value can
-    // never be interpreted by a shell. This removes shell interpolation as a class of risk on
-    // top of ValidateRegistryUrl (B40). On Windows the package-manager binaries are `.cmd`
-    // shims, which execFileSync only resolves when the name carries the extension.
-    const argv: string[] = ['install'];
-    switch (pm) {
-      case 'pnpm':
-      case 'yarn': {
-        if (isCustomRegistry) argv.push(`--registry=${registryUrl}`);
-        break;
-      }
-      default: {
-        if (!verbose) argv.push('--loglevel=warn');
-        if (isCustomRegistry) argv.push(`--registry=${registryUrl}`);
-        break;
-      }
-    }
-    const bin = process.platform === 'win32' ? `${pm}.cmd` : pm;
-
-    // All package managers natively read .npmrc / .pnpmrc / .yarnrc.yml for
-    // scoped registries, auth tokens, and other settings. We don't need to
-    // parse these files — just ensure `cwd` is set correctly so they're found.
-    execFileSync(bin, argv, {
-      cwd: target.Root,
+    execFileSync(plan.Bin, plan.Argv, {
+      cwd: plan.Target.Root,
       encoding: 'utf-8',
-      timeout: 300000,
+      timeout: ResolvePackageInstallTimeoutMs(),
       stdio: verbose ? 'inherit' : 'pipe',
     });
-    return { Success: true, Added: [], Removed: [], InstallRoot: target.Root, DevWorkspaceParent: target.DevWorkspaceParent };
+    return InstallSucceeded(plan.Target);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    return { Success: false, Added: [], Removed: [], ErrorMessage: `${pm} install failed: ${message}`, InstallRoot: target.Root, DevWorkspaceParent: target.DevWorkspaceParent };
+    return InstallFailed(`${plan.Target.PackageManager} install failed: ${message}`, plan.Target);
   }
+}
+
+/** How much of the installer's stderr to keep for the error message. */
+const STDERR_TAIL_CHARS = 4000;
+
+/**
+ * Async form of {@link RunPackageInstall}: same command, same result, but the package manager
+ * runs as a child process the event loop keeps servicing.
+ *
+ * The synchronous form froze the whole host for the length of the install — every timer,
+ * socket and in-flight database request stalled with it. Inside `mj app install` a dependency
+ * chain runs one install per app, and a first install on a cold store can take many minutes.
+ *
+ * @param timeoutMs - Ceiling for the run; defaults to {@link ResolvePackageInstallTimeoutMs}.
+ */
+export async function RunPackageInstallAsync(
+  repoRoot: string,
+  verbose?: boolean,
+  registryUrl?: string,
+  packageManager?: PackageManagerType,
+  timeoutMs: number = ResolvePackageInstallTimeoutMs(),
+): Promise<PackageOperationResult> {
+  const plan = BuildPackageInstallPlan(repoRoot, verbose, registryUrl, packageManager);
+  if ('ErrorMessage' in plan) return InstallFailed(plan.ErrorMessage);
+  const outcome = await RunChildProcess(plan.Bin, plan.Argv, plan.Target.Root, verbose === true, timeoutMs);
+  if (outcome.Kind === 'ok') return InstallSucceeded(plan.Target);
+  const pm = plan.Target.PackageManager;
+  if (outcome.Kind === 'spawn-error') return InstallFailed(`${pm} install could not start: ${outcome.Message}`, plan.Target);
+  const detail = outcome.StderrTail ? `\n${outcome.StderrTail}` : '';
+  switch (outcome.Kind) {
+    case 'timeout':
+      return InstallFailed(
+        `${pm} install did not finish within ${Math.round(timeoutMs / 60000)} minute(s) and was stopped. ` +
+          `Run '${pm} install' in ${plan.Target.Root} to finish it, or raise ${PACKAGE_INSTALL_TIMEOUT_ENV_VAR}.${detail}`,
+        plan.Target,
+      );
+    default:
+      return InstallFailed(`${pm} install failed (exit code ${outcome.ExitCode ?? 'unknown'}).${detail}`, plan.Target);
+  }
+}
+
+type ChildProcessOutcome =
+  | { Kind: 'ok'; Stdout: string }
+  | { Kind: 'exit'; ExitCode: number | null; StderrTail: string; Stdout: string }
+  | { Kind: 'timeout'; StderrTail: string }
+  | { Kind: 'spawn-error'; Message: string };
+
+/**
+ * Spawns a command (no shell) and resolves when it exits, is stopped by the timeout, or fails
+ * to start. Output streams to the console when verbose; stderr's tail is kept either way.
+ * With `captureStdout`, stdout is collected (its tail) instead of streamed or discarded.
+ */
+function RunChildProcess(bin: string, argv: string[], cwd: string, verbose: boolean, timeoutMs: number, captureStdout = false): Promise<ChildProcessOutcome> {
+  return new Promise((resolvePromise) => {
+    let stderrTail = '';
+    let stdoutTail = '';
+    let timedOut = false;
+    let settled = false;
+    const finish = (outcome: ChildProcessOutcome): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolvePromise(outcome);
+    };
+    const child = spawn(bin, argv, { cwd, stdio: ['ignore', captureStdout ? 'pipe' : verbose ? 'inherit' : 'ignore', 'pipe'] });
+    child.stdout?.on('data', (chunk: Buffer) => {
+      stdoutTail = (stdoutTail + chunk.toString('utf-8')).slice(-STDERR_TAIL_CHARS);
+    });
+    child.stderr?.on('data', (chunk: Buffer) => {
+      if (verbose) process.stderr.write(chunk);
+      stderrTail = (stderrTail + chunk.toString('utf-8')).slice(-STDERR_TAIL_CHARS);
+    });
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill('SIGTERM');
+    }, timeoutMs);
+    child.on('error', (error: Error) => finish({ Kind: 'spawn-error', Message: error.message }));
+    child.on('close', (code: number | null) => {
+      if (timedOut) finish({ Kind: 'timeout', StderrTail: stderrTail.trim() });
+      else if (code === 0) finish({ Kind: 'ok', Stdout: stdoutTail.trim() });
+      else finish({ Kind: 'exit', ExitCode: code, StderrTail: stderrTail.trim(), Stdout: stdoutTail.trim() });
+    });
+  });
 }
 
 /**
@@ -344,6 +518,174 @@ export function RunNpmInstall(repoRoot: string, verbose?: boolean, registryUrl?:
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Registry preflight (#3796, #5517)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Ceiling for one `npm view` registry check. */
+export const PACKAGE_PREFLIGHT_TIMEOUT_MS = 60 * 1000;
+
+/**
+ * Outcome of checking one package against the registry:
+ * - 'OK': the registry has a version matching the spec
+ * - 'AuthFailed': the registry answered 401/403, or npm has no credentials for it
+ * - 'NotPublished': 404 — the name or a matching version is not published, or this login cannot see it
+ * - 'Unknown': the check itself could not complete (network, timeout, npm missing)
+ */
+export type PackagePreflightStatus = 'OK' | 'AuthFailed' | 'NotPublished' | 'Unknown';
+
+/** One package's registry check. */
+export interface PackagePreflightCheck {
+  /** What was asked of the registry: `name@range`, or the bare name for the catalog strategy */
+  Spec: string;
+  Status: PackagePreflightStatus;
+  /** npm's error output, when the check did not pass */
+  Detail?: string;
+}
+
+/** Options for {@link PreflightAppPackages}. Same fields as an install, so the check asks for what will be written. */
+export type PackagePreflightOptions = Pick<
+  PackageManagerOptions,
+  'RepoRoot' | 'ServerPackages' | 'ClientPackages' | 'SharedPackages' | 'Version' | 'PackageManager' | 'VersionStrategy'
+> & {
+  /** Custom registry from the manifest, passed to `npm view` as it is to the install */
+  RegistryUrl?: string;
+  /** Per-check ceiling (default {@link PACKAGE_PREFLIGHT_TIMEOUT_MS}) */
+  TimeoutMs?: number;
+};
+
+/** Result of {@link PreflightAppPackages}. */
+export interface PackagePreflightResult {
+  /** False when any package failed auth or is not published — the caller must stop before changing anything */
+  Success: boolean;
+  Checks: PackagePreflightCheck[];
+  /** Why the check did not run (workspace strategy, `mj dev workspace` member) */
+  SkippedReason?: string;
+  /** Checks that could not complete; they do not fail the preflight */
+  Warnings: string[];
+  ErrorMessage?: string;
+}
+
+/**
+ * Checks every package an install or upgrade will write into package.json against the registry,
+ * BEFORE anything changes: `npm view <name>@<range> version --json`, run as an argv array in the
+ * repo root so `.npmrc` scoped registries and tokens apply exactly as they will for the install.
+ *
+ * An expired token or an unpublished package otherwise surfaces only after package.json, the
+ * config files and (on upgrade) the schema have already moved (#3796, #5517).
+ *
+ * Skipped for the 'workspace' strategy (packages come from the workspace, not a registry) and when
+ * the repo is a member of an `mj dev workspace` (the parent links sibling checkouts).
+ */
+export async function PreflightAppPackages(options: PackagePreflightOptions): Promise<PackagePreflightResult> {
+  const skippedReason = PreflightSkipReason(options);
+  if (skippedReason) return { Success: true, Checks: [], SkippedReason: skippedReason, Warnings: [] };
+
+  const registryArgs = BuildPreflightRegistryArgs(options.RegistryUrl);
+  if ('ErrorMessage' in registryArgs) return { Success: false, Checks: [], Warnings: [], ErrorMessage: registryArgs.ErrorMessage };
+
+  const versionStr = resolveVersionString(options);
+  const names = [...new Set([...options.ServerPackages, ...options.ClientPackages, ...options.SharedPackages].map((p) => p.name))];
+  const specs = names.map((name) => (versionStr === 'catalog:' ? name : `${name}@${versionStr}`));
+  const timeoutMs = options.TimeoutMs ?? PACKAGE_PREFLIGHT_TIMEOUT_MS;
+  const checks = await Promise.all(specs.map((spec) => CheckPackageInRegistry(spec, options.RepoRoot, registryArgs.Args, timeoutMs)));
+  return SummarizePreflight(checks);
+}
+
+/** Returns why the preflight does not apply, or undefined when it should run. */
+function PreflightSkipReason(options: PackagePreflightOptions): string | undefined {
+  if (options.VersionStrategy === 'workspace') return "the 'workspace' version strategy resolves packages from the workspace, not a registry";
+  const root = ResolveInstallRoot(options.RepoRoot, options.PackageManager);
+  if (root.DevWorkspaceParent) return `this repo is a member of the mj dev workspace at ${root.DevWorkspaceParent}, which links sibling checkouts`;
+  return undefined;
+}
+
+/** `--registry` for a custom, valid registry; nothing for the default one (so .npmrc scopes still apply). */
+function BuildPreflightRegistryArgs(registryUrl: string | undefined): { Args: string[] } | { ErrorMessage: string } {
+  if (!registryUrl || IsDefaultNpmRegistry(registryUrl)) return { Args: [] };
+  const validation = ValidateRegistryUrl(registryUrl);
+  if (!validation.Valid) return { ErrorMessage: `Invalid custom registry URL: ${validation.Reason}` };
+  return { Args: [`--registry=${registryUrl}`] };
+}
+
+/** Runs `npm view <spec> version --json` and classifies the outcome. */
+async function CheckPackageInRegistry(spec: string, repoRoot: string, registryArgs: string[], timeoutMs: number): Promise<PackagePreflightCheck> {
+  const bin = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  const outcome = await RunChildProcess(bin, ['view', spec, 'version', '--json', ...registryArgs], repoRoot, false, timeoutMs, true);
+  switch (outcome.Kind) {
+    case 'ok':
+      // Older npm exits 0 with no output when no published version matches the range.
+      return IsEmptyNpmViewOutput(outcome.Stdout) ? { Spec: spec, Status: 'NotPublished', Detail: 'no published version matches' } : { Spec: spec, Status: 'OK' };
+    case 'exit':
+      return { Spec: spec, Status: ClassifyNpmViewFailure(`${outcome.Stdout}\n${outcome.StderrTail}`), Detail: FirstNpmErrorLine(outcome.StderrTail, outcome.Stdout) };
+    case 'timeout':
+      return { Spec: spec, Status: 'Unknown', Detail: `npm view did not answer within ${Math.round(timeoutMs / 1000)}s` };
+    default:
+      return { Spec: spec, Status: 'Unknown', Detail: `npm could not start: ${outcome.Message}` };
+  }
+}
+
+function IsEmptyNpmViewOutput(stdout: string): boolean {
+  const text = stdout.trim();
+  return text === '' || text === '[]' || text === '""';
+}
+
+/**
+ * Classifies a failed `npm view` from its output. npm reports the HTTP status as an error code
+ * (`E401`, `E403`, `E404`) both in its `--json` error object and on stderr; `ENEEDAUTH` means no
+ * credentials are configured for the registry at all.
+ */
+export function ClassifyNpmViewFailure(output: string): PackagePreflightStatus {
+  if (/\bE40[13]\b|\bENEEDAUTH\b/.test(output)) return 'AuthFailed';
+  if (/\bE404\b/.test(output)) return 'NotPublished';
+  return 'Unknown';
+}
+
+/** The `--json` error summary when present, else the first stderr line, for the message. */
+function FirstNpmErrorLine(stderr: string, stdout: string): string | undefined {
+  const summary = /"summary":\s*"((?:[^"\\]|\\.)*)"/.exec(stdout)?.[1];
+  if (summary) return summary;
+  return stderr.split('\n').map((line) => line.trim()).find((line) => line.length > 0);
+}
+
+/** Builds the overall result: auth failures first (they explain any 404s too), then unpublished packages. */
+function SummarizePreflight(checks: PackagePreflightCheck[]): PackagePreflightResult {
+  const warnings = checks
+    .filter((c) => c.Status === 'Unknown')
+    .map((c) => `Could not verify ${c.Spec} against the registry (${c.Detail ?? 'unknown error'}); continuing — the package install will report a real problem.`);
+  const authFailed = checks.filter((c) => c.Status === 'AuthFailed');
+  const notPublished = checks.filter((c) => c.Status === 'NotPublished');
+  if (authFailed.length > 0) {
+    return { Success: false, Checks: checks, Warnings: warnings, ErrorMessage: DescribeAuthFailure(authFailed) };
+  }
+  if (notPublished.length > 0) {
+    return { Success: false, Checks: checks, Warnings: warnings, ErrorMessage: DescribeNotPublished(notPublished) };
+  }
+  return { Success: true, Checks: checks, Warnings: warnings };
+}
+
+function DescribeAuthFailure(checks: PackagePreflightCheck[]): string {
+  const scopes = [...new Set(checks.map((c) => ScopeOf(c.Spec)).filter((s): s is string => s !== undefined))];
+  const scopeHint = scopes.length > 0 ? ` (scope ${scopes.join(', ')})` : '';
+  return (
+    `npm authentication failed for ${checks.map((c) => c.Spec).join(', ')}${scopeHint}: ${checks[0].Detail ?? 'the registry refused the credentials'}. ` +
+    `Run 'npm login' for the registry that serves these packages (an expired or missing token in .npmrc is the usual cause) and retry. Nothing has been changed.`
+  );
+}
+
+function DescribeNotPublished(checks: PackagePreflightCheck[]): string {
+  return (
+    `These app packages are not published at the requested version, or this npm login cannot see them (the registry answers 404 for both): ` +
+    `${checks.map((c) => `${c.Spec}${c.Detail ? ` (${c.Detail})` : ''}`).join('; ')}. ` +
+    `Publish them, or check the npm login and registry settings in .npmrc, then retry. Nothing has been changed.`
+  );
+}
+
+/** `@scope` of a scoped package spec, else undefined. */
+function ScopeOf(spec: string): string | undefined {
+  return spec.startsWith('@') ? spec.split('/')[0] : undefined;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Internal helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -351,7 +693,7 @@ export function RunNpmInstall(repoRoot: string, verbose?: boolean, registryUrl?:
  * Builds the full list of workspace targets from options.
  * Combines the primary server/client paths with any additional targets.
  */
-function buildTargetList(options: PackageManagerOptions): WorkspaceTarget[] {
+function buildTargetList(options: PackageStepFileOptions): WorkspaceTarget[] {
   const targets: WorkspaceTarget[] = [
     { Path: ResolveServerPackagePath(options.RepoRoot, options.ServerPackagePath), Role: 'server' },
     { Path: ResolveClientPackagePath(options.RepoRoot, options.ClientPackagePath), Role: 'client' },
@@ -367,7 +709,7 @@ function buildTargetList(options: PackageManagerOptions): WorkspaceTarget[] {
 /**
  * Resolves the version string to write into package.json based on the strategy.
  */
-function resolveVersionString(options: PackageManagerOptions): string {
+function resolveVersionString(options: Pick<PackageManagerOptions, 'RepoRoot' | 'Version' | 'PackageManager' | 'VersionStrategy'>): string {
   const strategy = options.VersionStrategy ?? 'auto';
 
   switch (strategy) {
@@ -494,6 +836,40 @@ export function BumpPrefixedDependencies(repoRoot: string, prefix: string, bareV
   }
 
   return updatedCount;
+}
+
+/** Where the package step of an install or upgrade writes: the workspace layout and package manager. */
+export type PackageStepFileOptions = Pick<
+  PackageManagerOptions,
+  'RepoRoot' | 'ServerPackagePath' | 'ClientPackagePath' | 'AdditionalTargets' | 'PackageManager'
+>;
+
+/** Lockfiles a package install can rewrite at its install root. */
+const LOCKFILE_NAMES = ['pnpm-lock.yaml', 'package-lock.json'] as const;
+
+/**
+ * Every file the package step can write, as absolute paths: the server/client (and additional)
+ * workspace `package.json` files {@link AddAppPackages} edits, every workspace `package.json`
+ * {@link BumpPrefixedDependencies} may edit, and the lockfiles at the repo root and at the root
+ * {@link RunPackageInstallAsync} installs from (an `mj dev workspace` parent, when the repo is a
+ * member of one). A lockfile that does not exist yet is listed too, so a caller can tell one the
+ * install created. Read-only. `node_modules` is not listed: it cannot be snapshotted.
+ */
+export function ListPackageStepFiles(options: PackageStepFileOptions): string[] {
+  const files = new Set<string>();
+  for (const target of buildTargetList(options)) {
+    files.add(resolve(options.RepoRoot, target.Path, 'package.json'));
+  }
+  for (const pkgJson of findWorkspacePackageJsonFiles(options.RepoRoot)) {
+    files.add(pkgJson);
+  }
+  const installRoot = ResolveInstallRoot(options.RepoRoot, options.PackageManager).Root;
+  for (const root of new Set([resolve(options.RepoRoot), resolve(installRoot)])) {
+    for (const lockfile of LOCKFILE_NAMES) {
+      files.add(join(root, lockfile));
+    }
+  }
+  return [...files];
 }
 
 /**

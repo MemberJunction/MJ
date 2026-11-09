@@ -8,8 +8,7 @@
  * file runs the REAL OpenAILLM driver on the REAL BaseLLM template method and mocks ONLY the
  * vendor seam: the `openai` SDK client instance is replaced with a scriptable fake at the exact
  * surface the driver calls (`client.chat.completions.create(body, { signal })`). The seam's
- * AbortError-named abort error exercises OpenAILLM's `error.name === 'AbortError'` cancellation
- * fallback (its instanceof APIUserAbortError check is SDK-internal).
+ * AbortError-named abort error is recognized as a cancellation by BaseLLM's shared abort check.
  */
 import {
     RunLLMConformanceSuite,
@@ -24,7 +23,6 @@ RunLLMConformanceSuite({
     ProviderName: 'OpenRouter',
     SupportsStreaming: true,
     NonStreamingFailureMode: 'throws',
-    PreAbortedStreamingBehavior: 'rejectsErrorResult',
     CreateLLM: () => {
         const llm = new OpenRouterLLM('conformance-test-key');
         // Swap the private OpenAI SDK client for the scriptable seam (same boundary the SDK owns).

@@ -8,8 +8,8 @@ SELECT
     COALESCE(rc.ChangeCount, 0) AS RecentChanges,
     rc.LatestChange
 FROM
-    {{query:"Demos/Active Users"}} au
-    LEFT JOIN {{query:"Demos/Recent Entity Changes(lookbackDays='30')"}} rc
+    {{query:"MJ/Demos/Active Users"}} au
+    LEFT JOIN {{query:"MJ/Demos/Recent Entity Changes(lookbackDays='30')"}} rc
         ON rc.EntityName IN (
             SELECT e.Name
             FROM __mj.vwEntities e

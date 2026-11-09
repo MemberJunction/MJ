@@ -14,6 +14,7 @@ export * from './lib/types';
 // Components
 export * from './lib/entity-cards/entity-cards.component';
 export * from './lib/entity-viewer/entity-viewer.component';
+export * from './lib/entity-viewer/view-property-chips';
 export * from './lib/entity-record-detail-panel/entity-record-detail-panel.component';
 export * from './lib/pill/pill.component';
 
@@ -24,6 +25,7 @@ export * from './lib/entity-data-grid/events/grid-events';
 
 // View Config Panel (sliding panel for view configuration)
 export * from './lib/view-config-panel/view-config-panel.component';
+export * from './lib/view-properties-editor/view-properties-editor.component';
 
 // Aggregate Panel (card-based aggregate display)
 export * from './lib/aggregate-panel/aggregate-panel.component';
@@ -64,6 +66,7 @@ export * from './lib/recycle-bin/events/recycle-bin-events';
 export * from './lib/utils/highlight.util';
 export * from './lib/utils/record.util';
 export * from './lib/utils/aggregate-field.util';
+export * from './lib/utils/export-column.util';
 
 // View-Type Plugin Architecture (contracts, engine, built-in descriptors)
 export * from './lib/view-types';
@@ -74,6 +77,9 @@ export * from './lib/view-types/renderers/grid-view-renderer.component';
 export * from './lib/view-types/renderers/cards-view-renderer.component';
 export * from './lib/view-types/renderers/timeline-view-renderer.component';
 export * from './lib/view-types/renderers/map-view-renderer.component';
+export * from './lib/view-types/renderers/calendar-view-renderer.component';
+export * from './lib/view-types/renderers/calendar-view-prop-sheet.component';
+export * from './lib/view-types/renderers/calendar-placement';
 
 // Geo support exports
 export const ENTITY_VIEWER_GEO_VERSION = 1;

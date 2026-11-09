@@ -4,8 +4,10 @@
  * @module @memberjunction/feature-pipelines
  */
 
+import type { MJFeaturePipelineVersionEntity } from '@memberjunction/core-entities';
 import type { ValueConstraint, ResolvedConstraint } from './value-constraint.js';
-import type { OutputTarget } from './output-target.js';
+import { OutputTargets, type OutputTarget } from './output-target.js';
+import { ConfidenceFloor, type LowConfidencePolicy } from './confidence-floor.js';
 
 export interface DataFeatureSpec {
   Name: string;
@@ -23,6 +25,11 @@ export interface DataFeatureSpec {
     Fields?: string[];
     /** Optional value remap layered on whatever the above produced. */
     InputMapping?: Record<string, string>;
+    /**
+     * Opt-in, LLM pipelines with `Fields` only: send the `Fields` values as one JSON user message, the template as the
+     * system message, so a value holding an instruction stays data.
+     */
+    RecordAsUserMessage?: boolean;
   };
 
   /** The prompt. User-visible and user-editable (D11). */
@@ -54,7 +61,63 @@ export interface DataFeatureSpec {
 
   /** Optional subclass hook registration (P1-6). */
   ProcessorExtensionKey?: string;
+
+  /** The name of an `MJ: Feature Pipeline Types` row. Absent means `LLM`. */
+  PipelineType?: string;
+
+  /** Decision pipelines only: re-run records the decision model is unsure of through an LLM pipeline. */
+  Escalation?: {
+    /** The `MJ: Record Processes` ID of the LLM Feature Pipeline to escalate to. */
+    PipelineID: string;
+    /** A record escalates when ANY of its outputs' confidence is below this (0 < floor < 1). */
+    BelowConfidence: number;
+  };
+
+  /** When set, the pipeline is gated on a stored golden-set result. */
+  Activation?: DataFeatureActivation;
+
+  /** Unattended version-change handling (default: both on). */
+  Unattended?: DataFeatureUnattended;
 }
+
+/** How version changes complete without a person. Outside the spec hash: changing it is not a new version. */
+export interface DataFeatureUnattended {
+  /** The steward runs the golden-set test of a gated pipeline's unevaluated version (default true). */
+  AutoEvaluate?: boolean;
+  /** The steward runs the one backfill of a changed version (default true). */
+  AutoBackfill?: boolean;
+}
+
+/** A pipeline's activation gate: a version runs only after its golden-set result meets the threshold. */
+export interface DataFeatureActivation {
+  /** The MJ: Tests row (type "Feature Pipeline Golden Set") that evaluates this pipeline. */
+  GoldenSetTestID: string;
+  /** The golden-set metric; the version row's CHECK-constrained `Metric` values. */
+  Metric: NonNullable<MJFeaturePipelineVersionEntity['Metric']>;
+  /** 0 < Threshold <= 1. */
+  Threshold: number;
+}
+
+/** Every Activation.Metric value; typed by the entity union, so a CHECK change that drops one is a compile error. */
+const ACTIVATION_METRICS: ReadonlyArray<DataFeatureActivation['Metric']> = ['accuracy'];
+
+/** The pipeline type a spec without `PipelineType` runs as. */
+export const LLM_PIPELINE_TYPE = 'LLM';
+
+/** The pipeline type that answers typed questions on a decision model, and the only one that may escalate. */
+export const DECISION_PIPELINE_TYPE = 'Decision';
+
+/** Whether a spec's `PipelineType` means `LLM`: absent (or a JSON `null`) does; a name is matched case-insensitively, trimmed. */
+export function IsLLMPipelineType(pipelineType: string | null | undefined): boolean {
+  return pipelineType == null || pipelineType.trim().toLowerCase() === LLM_PIPELINE_TYPE.toLowerCase();
+}
+
+/** Whether a spec's `PipelineType` names the `Decision` type (case-insensitive, trimmed). */
+export function IsDecisionPipelineType(pipelineType: string | null | undefined): boolean {
+  return typeof pipelineType === 'string' && pipelineType.trim().toLowerCase() === DECISION_PIPELINE_TYPE.toLowerCase();
+}
+
+export type FeatureKind = 'numeric' | 'categorical' | 'embedding' | 'llm-derived' | 'decision-derived';
 
 export interface DataFeatureOutput {
   /** Result path, e.g. "$.seniority". */
@@ -64,9 +127,18 @@ export interface DataFeatureOutput {
   /** Narrowing/policy ON TOP of what field metadata already implies (D23). */
   Constraint?: ValueConstraint;
   /** Where this output lands (D19). */
-  Target: OutputTarget;
+  /** Where the value is written. Absent = feature value only: the value lives only in MJ: Feature Values. */
+  Target?: OutputTarget;
   /** How Predictive Studio should treat it when consumed as a model feature. */
-  FeatureKind?: 'numeric' | 'categorical' | 'embedding' | 'llm-derived';
+  FeatureKind?: FeatureKind;
+  /** Optional human-readable description / instructions for this output. */
+  Description?: string;
+  /** Result path of this output's confidence (0..1), e.g. "$.SeniorityConfidence"; for drivers that return none. */
+  ConfidenceRef?: string;
+  /** The confidence floor (0 < floor <= 1), set with {@link OnLowConfidence}; an LLM pipeline also needs ConfidenceRef. */
+  MinConfidence?: number;
+  /** What a below-floor answer does: `null` leaves this output unwritten ({@link LowConfidencePolicy}). */
+  OnLowConfidence?: LowConfidencePolicy;
 }
 
 /** Structured validation issue surfaced by validateSpec. */
@@ -86,7 +158,7 @@ export interface FieldMetadataStub {
   AllowsNull?: boolean;
   RelatedEntity?: string;
   RelatedEntityID?: string;
-  EntityFieldValues?: Array<{ Value: string; Code?: string }>;
+  EntityFieldValues?: Array<{ Value: string; Code?: string; Description?: string }>;
 }
 
 /** Minimal entity metadata stub decoupled from @memberjunction/core. */
@@ -125,6 +197,16 @@ export function ValidateSpec(
       Severity: 'error',
     });
   }
+
+  const pipelineTypeIssue = validatePipelineType(spec);
+  if (pipelineTypeIssue) {
+    issues.push(pipelineTypeIssue);
+  }
+
+  issues.push(...validateRecordAsUserMessage(spec));
+  issues.push(...validateEscalation(spec));
+  issues.push(...validateActivation(spec));
+  issues.push(...validateUnattended(spec));
 
   if (!spec.Outputs || spec.Outputs.length === 0) {
     issues.push({
@@ -165,6 +247,9 @@ export function ValidateSpec(
   // Validate Outputs
   if (spec.Outputs && spec.Outputs.length > 0) {
     const seenNames = new Set<string>();
+    // A PipelineType that is not a string is reported by validatePipelineType; here it is simply not the LLM type
+    const pipelineType: unknown = spec.PipelineType;
+    const isLLMPipeline = (pipelineType === undefined || pipelineType === null || typeof pipelineType === 'string') && IsLLMPipelineType(spec.PipelineType);
 
     for (let i = 0; i < spec.Outputs.length; i++) {
       const out = spec.Outputs[i];
@@ -209,124 +294,173 @@ export function ValidateSpec(
       }
 
       // Target mode validation
-      if (!out.Target) {
-        issues.push({
-          Path: `${basePath}.Target`,
-          Message: `Output '${out.Name || i}' is missing a Target configuration.`,
-          FixRecommendation: 'Configure a target Mode: "field", "child", or "tags".',
-          Severity: 'error',
-        });
-        continue;
-      }
-
-      interface TargetWithMode {
-        Mode?: string;
-      }
-      const targetWithMode: TargetWithMode = out.Target;
-      const validModes: ReadonlyArray<string> = ['field', 'child', 'tags'];
-      if (!targetWithMode.Mode || !validModes.includes(targetWithMode.Mode)) {
-        issues.push({
-          Path: `${basePath}.Target.Mode`,
-          Message: `Output '${out.Name || i}' has an invalid or missing target Mode '${targetWithMode.Mode ?? ''}'. Expected one of: ${validModes.join(', ')}.`,
-          FixRecommendation: 'Configure Target.Mode as "field", "child", or "tags".',
-          Severity: 'error',
-        });
-        continue;
-      }
-
-      if (out.Target.Mode === 'field') {
-        const targetField = out.Target.EntityFieldName;
-        if (!targetField || targetField.trim().length === 0) {
+      if (!OutputTargets.HasWriteTarget(out)) {
+        const name = out.Name || String(i);
+        const c = out.Constraint;
+        if (c?.Type === 'enum' && c.FromFieldMetadata) {
           issues.push({
-            Path: `${basePath}.Target.EntityFieldName`,
-            Message: `Field target for output '${out.Name}' must specify EntityFieldName.`,
-            FixRecommendation: 'Specify the name of the column on the entity to write to.',
+            Path: `${basePath}.Constraint`,
+            Message: `Output '${name}' has no write target, so its enum constraint cannot read a field's value list: list Constraint.Values, or give the output a field target.`,
+            FixRecommendation: 'List Constraint.Values, or give the output a field target.',
             Severity: 'error',
           });
-        } else if (entityInfo || fieldResolver) {
-          const field = resolveField(targetField);
-          if (!field) {
+        }
+        if (c?.Type === 'lookup' && !c.Entity) {
+          issues.push({
+            Path: `${basePath}.Constraint`,
+            Message: `Output '${name}' has no write target, so its lookup constraint has no entity: set Constraint.Entity, or give the output a field target.`,
+            FixRecommendation: 'Set Constraint.Entity, or give the output a field target.',
+            Severity: 'error',
+          });
+        }
+      }
+
+      if (OutputTargets.HasWriteTarget(out)) {
+        interface TargetWithMode {
+          Mode?: string;
+        }
+        const targetWithMode: TargetWithMode = out.Target;
+        const validModes: ReadonlyArray<string> = ['field', 'child', 'tags'];
+        if (!targetWithMode.Mode || !validModes.includes(targetWithMode.Mode)) {
+          issues.push({
+            Path: `${basePath}.Target.Mode`,
+            Message: `Output '${out.Name || i}' has an invalid or missing target Mode '${targetWithMode.Mode ?? ''}'. Expected one of: ${validModes.join(', ')}.`,
+            FixRecommendation: 'Configure Target.Mode as "field", "child", or "tags".',
+            Severity: 'error',
+          });
+        }
+
+        if (out.Target.Mode === 'field') {
+          const targetField = out.Target.EntityFieldName;
+          if (!targetField || targetField.trim().length === 0) {
             issues.push({
-              Field: targetField,
               Path: `${basePath}.Target.EntityFieldName`,
-              Message: `Target field '${targetField}' does not exist on entity '${entityInfo?.Name ?? 'unknown'}'.`,
-              FixRecommendation: `Target an existing column on the entity or create a migration to add it.`,
+              Message: `Field target for output '${out.Name}' must specify EntityFieldName.`,
+              FixRecommendation: 'Specify the name of the column on the entity to write to.',
               Severity: 'error',
             });
-          } else {
-            // Check virtual column
-            if (field.IsVirtual) {
+          } else if (entityInfo || fieldResolver) {
+            const field = resolveField(targetField);
+            if (!field) {
               issues.push({
                 Field: targetField,
                 Path: `${basePath}.Target.EntityFieldName`,
-                Message: `Target field '${targetField}' is a virtual/view column and cannot be written to.`,
-                FixRecommendation: `Target a base-table column on this entity or write to a child entity instead.`,
+                Message: `Target field '${targetField}' does not exist on entity '${entityInfo?.Name ?? 'unknown'}'.`,
+                FixRecommendation: `Target an existing column on the entity or create a migration to add it.`,
                 Severity: 'error',
               });
-            }
-
-            // Check FK resolution
-            const isFK = Boolean(field.RelatedEntity || field.RelatedEntityID);
-            if (isFK && out.Target.LookupMatchField === '') {
-              issues.push({
-                Field: targetField,
-                Path: `${basePath}.Target.LookupMatchField`,
-                Message: `Foreign key field '${targetField}' has an empty LookupMatchField.`,
-                FixRecommendation: `Specify the column on the related entity to match against (default is 'Name').`,
-                Severity: 'error',
-              });
-            }
-
-            // Check type compatibility
-            if (out.Constraint && field.TSType) {
-              const typeIssue = checkTypeCompatibility(out.Constraint, field.TSType, targetField);
-              if (typeIssue) {
+            } else {
+              // Check virtual column
+              if (field.IsVirtual) {
                 issues.push({
                   Field: targetField,
-                  Path: `${basePath}.Constraint`,
-                  Message: typeIssue.message,
-                  FixRecommendation: typeIssue.fix,
+                  Path: `${basePath}.Target.EntityFieldName`,
+                  Message: `Target field '${targetField}' is a virtual/view column and cannot be written to.`,
+                  FixRecommendation: `Target a base-table column on this entity or write to a child entity instead.`,
                   Severity: 'error',
                 });
               }
+
+              // Check FK resolution
+              const isFK = Boolean(field.RelatedEntity || field.RelatedEntityID);
+              if (isFK && out.Target.LookupMatchField === '') {
+                issues.push({
+                  Field: targetField,
+                  Path: `${basePath}.Target.LookupMatchField`,
+                  Message: `Foreign key field '${targetField}' has an empty LookupMatchField.`,
+                  FixRecommendation: `Specify the column on the related entity to match against (default is 'Name').`,
+                  Severity: 'error',
+                });
+              }
+
+              // Check type compatibility
+              if (out.Constraint && field.TSType) {
+                const typeIssue = checkTypeCompatibility(out.Constraint, field.TSType, targetField);
+                if (typeIssue) {
+                  issues.push({
+                    Field: targetField,
+                    Path: `${basePath}.Constraint`,
+                    Message: typeIssue.message,
+                    FixRecommendation: typeIssue.fix,
+                    Severity: 'error',
+                  });
+                }
+              }
             }
           }
+        } else if (out.Target.Mode === 'child') {
+          if (!out.Target.EntityName || out.Target.EntityName.trim().length === 0) {
+            issues.push({
+              Path: `${basePath}.Target.EntityName`,
+              Message: `Child target for output '${out.Name}' must specify EntityName.`,
+              FixRecommendation: 'Specify the child entity to insert rows into.',
+              Severity: 'error',
+            });
+          }
+          if (!out.Target.ParentField || out.Target.ParentField.trim().length === 0) {
+            issues.push({
+              Path: `${basePath}.Target.ParentField`,
+              Message: `Child target for output '${out.Name}' must specify ParentField.`,
+              FixRecommendation: 'Specify the foreign key field on the child entity linking back to the parent record.',
+              Severity: 'error',
+            });
+          }
+          if (!out.Target.Map || Object.keys(out.Target.Map).length === 0) {
+            issues.push({
+              Path: `${basePath}.Target.Map`,
+              Message: `Child target for output '${out.Name}' must specify at least one field mapping in Map.`,
+              FixRecommendation: 'Map at least one field from the result to the child record.',
+              Severity: 'error',
+            });
+          }
+        } else if (out.Target.Mode === 'tags') {
+          if (!out.Target.RootTagID || out.Target.RootTagID.trim().length === 0) {
+            issues.push({
+              Path: `${basePath}.Target.RootTagID`,
+              Message: `Tag target for output '${out.Name}' requires a RootTagID.`,
+              FixRecommendation: 'Specify the root tag UUID to constrain tag creation/matching to a valid taxonomy subtree.',
+              Severity: 'error',
+            });
+          }
         }
-      } else if (out.Target.Mode === 'child') {
-        if (!out.Target.EntityName || out.Target.EntityName.trim().length === 0) {
+      }
+
+      if (out.FeatureKind !== undefined) {
+        const validFeatureKinds: ReadonlyArray<string> = ['numeric', 'categorical', 'embedding', 'llm-derived', 'decision-derived'];
+        if (!validFeatureKinds.includes(out.FeatureKind)) {
           issues.push({
-            Path: `${basePath}.Target.EntityName`,
-            Message: `Child target for output '${out.Name}' must specify EntityName.`,
-            FixRecommendation: 'Specify the child entity to insert rows into.',
-            Severity: 'error',
-          });
-        }
-        if (!out.Target.ParentField || out.Target.ParentField.trim().length === 0) {
-          issues.push({
-            Path: `${basePath}.Target.ParentField`,
-            Message: `Child target for output '${out.Name}' must specify ParentField.`,
-            FixRecommendation: 'Specify the foreign key field on the child entity linking back to the parent record.',
-            Severity: 'error',
-          });
-        }
-        if (!out.Target.Map || Object.keys(out.Target.Map).length === 0) {
-          issues.push({
-            Path: `${basePath}.Target.Map`,
-            Message: `Child target for output '${out.Name}' must specify at least one field mapping in Map.`,
-            FixRecommendation: 'Map at least one field from the result to the child record.',
-            Severity: 'error',
-          });
-        }
-      } else if (out.Target.Mode === 'tags') {
-        if (!out.Target.RootTagID || out.Target.RootTagID.trim().length === 0) {
-          issues.push({
-            Path: `${basePath}.Target.RootTagID`,
-            Message: `Tag target for output '${out.Name}' requires a RootTagID.`,
-            FixRecommendation: 'Specify the root tag UUID to constrain tag creation/matching to a valid taxonomy subtree.',
+            Path: `${basePath}.FeatureKind`,
+            Message: `Output '${out.Name}' has invalid FeatureKind '${out.FeatureKind}'.`,
+            FixRecommendation: `Specify one of: ${validFeatureKinds.join(', ')}.`,
             Severity: 'error',
           });
         }
       }
+
+      // A result path names a property of the result: "$." or "$[" after the root, never "$" alone or "$name"
+      if (out.ConfidenceRef !== undefined && (typeof out.ConfidenceRef !== 'string' || !/^\$(\.|\[)./.test(out.ConfidenceRef))) {
+        issues.push({
+          Path: `${basePath}.ConfidenceRef`,
+          Message: `Output '${out.Name}' has an invalid ConfidenceRef '${String(out.ConfidenceRef)}'.`,
+          FixRecommendation: 'Use a result path such as "$.confidence" or "$.items[0].confidence".',
+          Severity: 'error',
+        });
+      }
+
+      issues.push(...ConfidenceFloor.Validate(out, basePath, isLLMPipeline, spec.Outputs.length));
+
+      // The validator writes each item's canonical value back at ItemRef, so it must be one property of the item
+      const itemRef = out.Constraint && (out.Constraint.Type === 'enum' || out.Constraint.Type === 'lookup') ? out.Constraint.ItemRef : undefined;
+      if (itemRef !== undefined && !/^\$\.[A-Za-z0-9_]+$/.test(itemRef)) {
+        issues.push({
+          Path: `${basePath}.Constraint.ItemRef`,
+          Message: `Output '${out.Name}' has an ItemRef '${itemRef}' that is not one property of the item.`,
+          FixRecommendation: 'Use one property of each item, such as "$.JobFunctionID".',
+          Severity: 'error',
+        });
+      }
+
+
 
       // Constraint bounds validation
       if (out.Constraint) {
@@ -339,6 +473,20 @@ export function ValidateSpec(
               Severity: 'error',
             });
           }
+          if (out.Constraint.ValueDescriptions !== undefined) {
+            if (
+              typeof out.Constraint.ValueDescriptions !== 'object' ||
+              out.Constraint.ValueDescriptions === null ||
+              Array.isArray(out.Constraint.ValueDescriptions)
+            ) {
+              issues.push({
+                Path: `${basePath}.Constraint.ValueDescriptions`,
+                Message: `Enum constraint ValueDescriptions on output '${out.Name}' must be an object mapping enum values to string descriptions.`,
+                FixRecommendation: 'Provide an object mapping each allowed value to its description.',
+                Severity: 'error',
+              });
+            }
+          }
         } else if (out.Constraint.Type === 'numeric' || out.Constraint.Type === 'money') {
           if (out.Constraint.Min !== undefined && out.Constraint.Max !== undefined && out.Constraint.Min > out.Constraint.Max) {
             issues.push({
@@ -347,6 +495,32 @@ export function ValidateSpec(
               FixRecommendation: 'Ensure Min is less than or equal to Max.',
               Severity: 'error',
             });
+          }
+          if (out.Constraint.Type === 'numeric' && out.Constraint.Levels !== undefined) {
+            if (
+              !Array.isArray(out.Constraint.Levels) ||
+              out.Constraint.Levels.length < 2 ||
+              out.Constraint.Levels.length > 10 ||
+              out.Constraint.Levels.some(l => typeof l !== 'string' || l.trim().length === 0)
+            ) {
+              issues.push({
+                Path: `${basePath}.Constraint.Levels`,
+                Message: `Numeric constraint Levels on output '${out.Name}' must be an array of 2 to 10 non-empty strings.`,
+                FixRecommendation: 'Provide between 2 and 10 level descriptions, e.g. ["Low", "Medium", "High"].',
+                Severity: 'error',
+              });
+            }
+          }
+        } else if (out.Constraint.Type === 'boolean') {
+          if (out.Constraint.Threshold !== undefined) {
+            if (typeof out.Constraint.Threshold !== 'number' || isNaN(out.Constraint.Threshold) || out.Constraint.Threshold < 0 || out.Constraint.Threshold > 1) {
+              issues.push({
+                Path: `${basePath}.Constraint.Threshold`,
+                Message: `Boolean constraint Threshold on output '${out.Name}' must be a number between 0 and 1.`,
+                FixRecommendation: 'Provide a number between 0 and 1, or omit to default to 0.5.',
+                Severity: 'error',
+              });
+            }
           }
         }
 
@@ -363,6 +537,155 @@ export function ValidateSpec(
   }
 
   return issues;
+}
+
+/**
+ * PipelineType is optional, but when a spec names one it must be a non-empty string. The spec is
+ * parsed from JSON, so the value is read as `unknown` and narrowed. A JSON `null` counts as absent,
+ * as it does where the processor resolves the type.
+ */
+function validatePipelineType(spec: DataFeatureSpec): SpecValidationIssue | null {
+  const pipelineType: unknown = spec.PipelineType;
+  if (pipelineType === undefined || pipelineType === null) {
+    return null;
+  }
+  if (typeof pipelineType === 'string' && pipelineType.trim().length > 0) {
+    return null;
+  }
+  return {
+    Path: 'PipelineType',
+    Message: 'DataFeatureSpec PipelineType, when present, must be a non-empty string.',
+    FixRecommendation: 'Name an MJ: Feature Pipeline Types row (for example "LLM"), or remove PipelineType to use LLM.',
+    Severity: 'error',
+  };
+}
+
+/**
+ * Escalation is optional. When a spec names one, the pipeline must be a Decision pipeline, the target
+ * pipeline must be named, and the floor must lie strictly between 0 and 1. The spec is parsed from
+ * JSON, so each value is read as `unknown` and narrowed; a JSON `null` counts as absent. This stays
+ * pure: it does not load the target pipeline, which the processor checks when a record first escalates.
+ */
+function validateEscalation(spec: DataFeatureSpec): SpecValidationIssue[] {
+  const escalation = spec.Escalation;
+  if (escalation === undefined || escalation === null) {
+    return [];
+  }
+  if (typeof escalation !== 'object' || Array.isArray(escalation)) {
+    return [{
+      Path: 'Escalation',
+      Message: 'DataFeatureSpec Escalation, when present, must be an object with PipelineID and BelowConfidence.',
+      FixRecommendation: 'Set Escalation to { "PipelineID": "<LLM pipeline ID>", "BelowConfidence": 0.7 }, or remove it.',
+      Severity: 'error',
+    }];
+  }
+  const issues: SpecValidationIssue[] = [];
+  if (!IsDecisionPipelineType(spec.PipelineType)) {
+    issues.push(escalationOnNonDecisionIssue(spec.PipelineType));
+  }
+  const pipelineID: unknown = escalation.PipelineID;
+  if (typeof pipelineID !== 'string' || pipelineID.trim().length === 0) {
+    issues.push({
+      Path: 'Escalation.PipelineID',
+      Message: 'DataFeatureSpec Escalation.PipelineID is required: it names the LLM Feature Pipeline that borderline records escalate to.',
+      FixRecommendation: 'Set Escalation.PipelineID to the MJ: Record Processes ID of an LLM Feature Pipeline on the same entity, or remove Escalation.',
+      Severity: 'error',
+    });
+  }
+  // The spec is parsed JSON: a floor of the wrong type is reported here, not trusted to be a number
+  const floor: unknown = escalation.BelowConfidence;
+  if (typeof floor !== 'number' || !Number.isFinite(floor) || floor <= 0 || floor >= 1) {
+    issues.push({
+      Path: 'Escalation.BelowConfidence',
+      Message: `DataFeatureSpec Escalation.BelowConfidence must be a number greater than 0 and less than 1, but is ${describeFloor(floor)}.`,
+      FixRecommendation: 'Set the confidence floor between 0 and 1 (for example 0.7). A record escalates when any output\'s confidence is below it.',
+      Severity: 'error',
+    });
+  }
+  return issues;
+}
+
+/** `Context.RecordAsUserMessage`, when present, is a boolean; `true` needs an LLM pipeline and `Context.Fields`. */
+function validateRecordAsUserMessage(spec: DataFeatureSpec): SpecValidationIssue[] {
+  // The spec is parsed JSON: a flag of the wrong type is reported here, not trusted to be a boolean
+  const flag: unknown = spec.Context?.RecordAsUserMessage;
+  if (flag === undefined) {
+    return [];
+  }
+  const path = 'Context.RecordAsUserMessage';
+  if (typeof flag !== 'boolean') {
+    return [{ Path: path, Message: 'Context.RecordAsUserMessage must be true or false.', FixRecommendation: 'Use true to send the record\'s context fields as the user message, or remove it.', Severity: 'error' }];
+  }
+  if (!flag) {
+    return [];
+  }
+  const issues: SpecValidationIssue[] = [];
+  // A PipelineType that is not a string is reported by validatePipelineType; here it is simply not the LLM type
+  const pipelineType: unknown = spec.PipelineType;
+  if (!((pipelineType === undefined || pipelineType === null || typeof pipelineType === 'string') && IsLLMPipelineType(spec.PipelineType))) {
+    issues.push({ Path: path, Message: 'Context.RecordAsUserMessage is only honoured by an LLM pipeline, which builds the prompt\'s messages.', FixRecommendation: 'Remove Context.RecordAsUserMessage, or make the pipeline an LLM pipeline.', Severity: 'error' });
+  }
+  if (!spec.Context?.Fields || spec.Context.Fields.length === 0) {
+    issues.push({ Path: path, Message: 'Context.RecordAsUserMessage needs Context.Fields: they are the values the user message carries.', FixRecommendation: 'List the record fields to send in Context.Fields.', Severity: 'error' });
+  }
+  return issues;
+}
+
+/** An Activation names its golden-set test, a known metric and a threshold in (0, 1] (a JSON `null` is reported). */
+function validateActivation(spec: DataFeatureSpec): SpecValidationIssue[] {
+  const a = spec.Activation;
+  if (a === undefined) {
+    return [];
+  }
+  const issues: SpecValidationIssue[] = [];
+  if (!a || typeof a.GoldenSetTestID !== 'string' || a.GoldenSetTestID.trim() === '') {
+    issues.push({ Path: 'Activation.GoldenSetTestID', Message: 'Activation needs the ID of its golden-set MJ: Tests row.', FixRecommendation: 'Set Activation.GoldenSetTestID, or remove Activation.', Severity: 'error' });
+  }
+  if (!a || !ACTIVATION_METRICS.includes(a.Metric)) {
+    issues.push({ Path: 'Activation.Metric', Message: `Activation.Metric must be one of ${ACTIVATION_METRICS.join(', ')}.`, FixRecommendation: "Use 'accuracy'.", Severity: 'error' });
+  }
+  if (!a || typeof a.Threshold !== 'number' || !(a.Threshold > 0 && a.Threshold <= 1)) {
+    issues.push({ Path: 'Activation.Threshold', Message: 'Activation.Threshold must be greater than 0 and at most 1.', FixRecommendation: 'For example 0.9.', Severity: 'error' });
+  }
+  return issues;
+}
+
+/** Unattended, when present, is an object whose fields are booleans. */
+function validateUnattended(spec: DataFeatureSpec): SpecValidationIssue[] {
+  const u = spec.Unattended;
+  if (u === undefined) {
+    return [];
+  }
+  if (!u || typeof u !== 'object') {
+    return [{ Path: 'Unattended', Message: 'Unattended must be an object.', FixRecommendation: 'Set { "AutoEvaluate": false } or { "AutoBackfill": false } to opt out, or remove Unattended.', Severity: 'error' }];
+  }
+  const issues: SpecValidationIssue[] = [];
+  if (u.AutoEvaluate !== undefined && typeof u.AutoEvaluate !== 'boolean') {
+    issues.push({ Path: 'Unattended.AutoEvaluate', Message: 'Unattended.AutoEvaluate must be true or false.', FixRecommendation: 'Use false to opt out of the steward\'s golden-set evaluation, or remove the field.', Severity: 'error' });
+  }
+  if (u.AutoBackfill !== undefined && typeof u.AutoBackfill !== 'boolean') {
+    issues.push({ Path: 'Unattended.AutoBackfill', Message: 'Unattended.AutoBackfill must be true or false.', FixRecommendation: 'Use false to opt out of the steward\'s backfill, or remove the field.', Severity: 'error' });
+  }
+  return issues;
+}
+
+/** Renders an invalid floor for a message: numbers as written (NaN too), anything else as JSON, and absence as "missing". */
+function describeFloor(floor: unknown): string {
+  if (floor === undefined) {
+    return 'missing';
+  }
+  return typeof floor === 'number' ? String(floor) : JSON.stringify(floor);
+}
+
+/** The issue for an Escalation on a pipeline whose type is not Decision. */
+function escalationOnNonDecisionIssue(pipelineType: unknown): SpecValidationIssue {
+  const typeName = typeof pipelineType === 'string' && pipelineType.trim().length > 0 ? pipelineType.trim() : LLM_PIPELINE_TYPE;
+  return {
+    Path: 'Escalation',
+    Message: `DataFeatureSpec Escalation is only valid on a Decision pipeline, but this pipeline's type is '${typeName}'.`,
+    FixRecommendation: `Remove Escalation, or set PipelineType to '${DECISION_PIPELINE_TYPE}'.`,
+    Severity: 'error',
+  };
 }
 
 /** @deprecated Use {@link ValidateSpec}. */
@@ -425,13 +748,21 @@ export function ResolveConstraint(
   if (c) {
     if (c.Type === 'enum') {
       let allowedValues = c.Values ?? [];
+      const valueDescriptions: Record<string, string> = { ...(c.ValueDescriptions ?? {}) };
       if (c.FromFieldMetadata && field?.EntityFieldValues && field.EntityFieldValues.length > 0) {
         allowedValues = field.EntityFieldValues.map(v => v.Value);
+        for (const efv of field.EntityFieldValues) {
+          if (efv.Description && !valueDescriptions[efv.Value]) {
+            valueDescriptions[efv.Value] = efv.Description;
+          }
+        }
       }
       return {
         Type: 'enum',
         OnViolation: c.OnViolation,
         AllowedValues: allowedValues,
+        ValueDescriptions: Object.keys(valueDescriptions).length > 0 ? valueDescriptions : undefined,
+        ItemRef: c.ItemRef,
       };
     }
     if (c.Type === 'numeric') {
@@ -441,6 +772,7 @@ export function ResolveConstraint(
         Min: c.Min,
         Max: c.Max,
         Integer: c.Integer,
+        Levels: c.Levels,
       };
     }
     if (c.Type === 'money') {
@@ -464,6 +796,7 @@ export function ResolveConstraint(
       return {
         Type: 'boolean',
         OnViolation: c.OnViolation,
+        Threshold: c.Threshold,
       };
     }
     if (c.Type === 'lookup') {
@@ -471,7 +804,10 @@ export function ResolveConstraint(
         Type: 'lookup',
         OnViolation: c.OnViolation,
         RelatedEntityName: c.Entity ?? field?.RelatedEntity,
-        LookupMatchField: c.MatchField ?? (output.Target.Mode === 'field' ? output.Target.LookupMatchField : undefined) ?? 'Name',
+        LookupMatchField: c.MatchField ?? (output.Target?.Mode === 'field' ? output.Target.LookupMatchField : undefined) ?? 'Name',
+        DisplayFields: c.DisplayFields,
+        Filter: c.Filter,
+        ItemRef: c.ItemRef,
       };
     }
     if (c.Type === 'freetext') {
@@ -484,12 +820,19 @@ export function ResolveConstraint(
   }
 
   // 2. Implicit constraint derived from field metadata if target is Mode: 'field'
-  if (output.Target.Mode === 'field' && field) {
+  if (output.Target?.Mode === 'field' && field) {
     if (field.EntityFieldValues && field.EntityFieldValues.length > 0) {
+      const valueDescriptions: Record<string, string> = {};
+      for (const efv of field.EntityFieldValues) {
+        if (efv.Description) {
+          valueDescriptions[efv.Value] = efv.Description;
+        }
+      }
       return {
         Type: 'enum',
         OnViolation: 'fail',
         AllowedValues: field.EntityFieldValues.map(v => v.Value),
+        ValueDescriptions: Object.keys(valueDescriptions).length > 0 ? valueDescriptions : undefined,
       };
     }
     if (field.TSType === 'boolean') {
@@ -513,6 +856,7 @@ export function resolveConstraint(
 
 /**
  * Pure function to render the exact constraint block text injected into prompts and shown in UI previews.
+ * `resolvedConstraints` (by output name) supplies a field's value list and a lookup's loaded rows.
  */
 export function RenderConstraintBlock(
   outputs: DataFeatureOutput[],
@@ -538,7 +882,10 @@ export function RenderConstraintBlock(
     switch (resolved.Type) {
       case 'enum':
         if (resolved.AllowedValues && resolved.AllowedValues.length > 0) {
-          lines.push(`  Allowed values (MUST be exactly one of the following):`);
+          // Without ItemRef the line is unchanged, so an existing enum pipeline keeps its prompt version hash
+          lines.push(resolved.ItemRef
+            ? `  For each item, ${resolved.ItemRef} MUST be exactly one of the following values:`
+            : `  Allowed values (MUST be exactly one of the following):`);
           for (const val of resolved.AllowedValues) {
             lines.push(`  * "${val}"`);
           }
@@ -581,7 +928,16 @@ export function RenderConstraintBlock(
         lines.push(`  Date value in ISO-8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ssZ).`);
         break;
       case 'lookup':
-        lines.push(`  Must match an existing ${resolved.RelatedEntityName || 'record'} by ${resolved.LookupMatchField || 'Name'}.`);
+        // The loaded rows are the taxonomy: the model sees every allowed value, with its display text when it has one
+        if (resolved.AllowedValues && resolved.AllowedValues.length > 0) {
+          lines.push(`  ${resolved.ItemRef ? `For each item, ${resolved.ItemRef} MUST` : 'MUST'} be exactly one of the following values:`);
+          for (const val of resolved.AllowedValues) {
+            const display = resolved.ValueDisplays?.[val];
+            lines.push(display ? `  * "${val}" — ${display}` : `  * "${val}"`);
+          }
+        } else {
+          lines.push(`  Must match an existing ${resolved.RelatedEntityName || 'record'} by ${resolved.LookupMatchField || 'Name'}.`);
+        }
         break;
       case 'freetext':
         if (resolved.MaxLength) {
@@ -594,6 +950,59 @@ export function RenderConstraintBlock(
   }
 
   return lines.join('\n');
+}
+
+/**
+ * A Feature Pipeline run refused because its prompt template does not render the output constraints
+ * ({@link ConstraintPromptTemplate.DescribeMissingBlock}).
+ */
+export class ConstraintBlockMissingError extends Error {
+  /**
+   * @param PromptName - The pipeline's AI Prompt, whose template must render the block.
+   * @param message - What is wrong and how to fix it.
+   */
+  constructor(public readonly PromptName: string, message: string) {
+    super(message);
+    this.name = 'ConstraintBlockMissingError';
+  }
+}
+
+/**
+ * Prompt-template checks of a Feature Pipeline spec: the constraint block is the only place an LLM pipeline's model
+ * sees the allowed values. Used by `InferProcessor.Preflight` and the server save check.
+ */
+export class ConstraintPromptTemplate {
+  /** Whether a prompt template renders the constraint block InferProcessor passes as `ConstraintBlock` / `constraints`. */
+  public static RendersConstraintBlock(templateText: string | null | undefined): boolean {
+    return /\{\{-?\s*(ConstraintBlock|constraints)\b/.test(templateText || '');
+  }
+
+  /**
+   * Whether the spec's prompt template must render the constraint block: an LLM pipeline (only it renders a prompt)
+   * with at least one constrained output.
+   */
+  public static RequiresConstraintBlock(spec: Pick<DataFeatureSpec, 'Outputs' | 'PipelineType'> | null | undefined): boolean {
+    const constrained = (spec?.Outputs || []).some((o) => !!o.Constraint);
+    return constrained && IsLLMPipelineType(spec?.PipelineType);
+  }
+
+  /**
+   * Why the pipeline's prompt cannot run with this spec, naming the prompt and the placeholder to add; null when the
+   * template renders the block or the spec does not need it ({@link RequiresConstraintBlock}).
+   */
+  public static DescribeMissingBlock(
+    spec: Pick<DataFeatureSpec, 'Outputs' | 'PipelineType'> | null | undefined,
+    promptName: string,
+    templateText: string | null | undefined
+  ): string | null {
+    if (!ConstraintPromptTemplate.RequiresConstraintBlock(spec) || ConstraintPromptTemplate.RendersConstraintBlock(templateText)) {
+      return null;
+    }
+    return (
+      `Feature Pipeline prompt '${promptName}' does not render its output constraints. ` +
+      `Add {{ ConstraintBlock }} to the prompt template, or remove the constraints from the pipeline's outputs.`
+    );
+  }
 }
 
 /** @deprecated Use {@link RenderConstraintBlock}. */

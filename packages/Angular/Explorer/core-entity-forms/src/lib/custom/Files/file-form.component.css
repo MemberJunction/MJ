@@ -44,6 +44,8 @@
 .mj-file-color-audio { color: var(--mj-status-warning, #f59e0b); }
 .mj-file-color-text { color: var(--mj-status-info, #3b82f6); }
 .mj-file-color-generic { color: var(--mj-text-muted, #94a3b8); }
+.mj-file-color-word { color: var(--mj-status-info, #2b579a); }
+.mj-file-color-excel { color: var(--mj-status-success, #217346); }
 
 .mj-file-viewer-title-group {
   display: flex;
@@ -110,7 +112,7 @@
   flex: 1;
   position: relative;
   overflow: auto;
-  background: var(--mj-bg-surface-sunken, #0f172a);
+  background: var(--mj-bg-surface-sunken, #f1f5f9);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -121,7 +123,7 @@
   position: absolute;
   inset: 0;
   z-index: 10;
-  background: var(--mj-bg-surface-sunken, #0f172a);
+  background: var(--mj-bg-surface-sunken, #f1f5f9);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -362,4 +364,19 @@
   padding: 8px 16px;
   background: var(--mj-bg-surface);
   border-bottom: 1px solid var(--mj-border-default);
+}
+
+/* Word and Excel previews fill the stage; the shared components scroll inside it */
+.mj-file-media-office-box {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.mj-file-media-office-box > mj-docx-preview,
+.mj-file-media-office-box > mj-xlsx-preview {
+  flex: 1;
+  min-height: 0;
+  display: block;
 }

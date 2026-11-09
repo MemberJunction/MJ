@@ -16,7 +16,41 @@ import {
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { MarkdownService } from '../services/markdown.service';
 import { MarkdownConfig, DEFAULT_MARKDOWN_CONFIG, MarkdownRenderEvent, HeadingInfo } from '@memberjunction/markdown-core';
+import { MountDiagramViewer, type DiagramViewerInstance } from '@memberjunction/ai-diagrams/viewer';
+
+/** A rendered image the reader clicked or activated: what a host needs to show it full size. */
+export class ImageClickedEventArgs {
+  constructor(
+    /** The image's `src`, as rendered (absolute). */
+    public readonly Src: string,
+    /** Its alt text; '' when it has none. */
+    public readonly Alt: string,
+  ) {}
+}
 // Collapsible section toggle is handled inline in setupCollapsibleListeners
+
+/** Inputs whose change re-parses the markdown, by camelCase name. */
+const RERENDER_INPUTS = new Set([
+  'data',
+  'enableHighlight',
+  'enableMermaid',
+  'enableMath',
+  'enableCodeCopy',
+  'enableCollapsibleHeadings',
+  'collapsibleHeadingLevel',
+  'collapsibleDefaultExpanded',
+  'autoExpandLevels',
+  'enableAlerts',
+  'enableSmartypants',
+  'enableSvgRenderer',
+  'enableHtml',
+  'enableJavaScript',
+  'enableHeadingIds',
+  'headingIdPrefix',
+  'mermaidTheme',
+  'sanitize',
+  'openLinksInNewTab',
+]);
 
 /**
  * Angular component for rendering markdown content.
@@ -90,6 +124,11 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   get enableMermaid(): boolean {
     return this.EnableMermaid;
   }
+
+  /**
+   * Enable TeX math (`$…$`, `$$…$$`, `\(…\)`, `\[…\]`), typeset as MathML
+   */
+  @Input() EnableMath: boolean = DEFAULT_MARKDOWN_CONFIG.enableMath;
 
   /**
    * Enable copy button on code blocks
@@ -328,6 +367,13 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   }
 
   /**
+   * Whether links open in a new browser tab (`target="_blank"` with `rel="noopener noreferrer"`).
+   * In-page fragment links (`#heading`) and non-navigational schemes (`mailto:`, `tel:`, `sms:`)
+   * stay in the current tab. Default `false`.
+   */
+  @Input() OpenLinksInNewTab: boolean = false;
+
+  /**
    * Emitted when rendering is complete
    */
   @Output() Rendered = new EventEmitter<MarkdownRenderEvent>();
@@ -370,6 +416,14 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   @Output() codeCopied = this.CodeCopied;
 
   /**
+   * Emitted when a rendered image is clicked (or focused and activated with Enter or Space), so a
+   * host can show it full size; a chat opens its image viewer. Images react only while something
+   * is bound to this output, so a host that does not listen keeps inert images. An image inside a
+   * link keeps the link's behaviour and is not reported.
+   */
+  @Output() ImageClicked = new EventEmitter<ImageClickedEventArgs>();
+
+  /**
    * The sanitized HTML content to display
    */
   public RenderedContent: SafeHtml = '';
@@ -398,8 +452,12 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
 
   private renderStartTime: number = 0;
   private hasMermaid: boolean = false;
+  private hasMath: boolean = false;
   private hasCodeBlocks: boolean = false;
   private themeObserver: MutationObserver | null = null;
+  private diagramViewers: DiagramViewerInstance[] = [];
+  private renderSeq = 0;
+  private isDestroyed = false;
 
   constructor(
     private elementRef: ElementRef<HTMLElement>,
@@ -409,25 +467,11 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
-    // Check if any relevant input changed
-    const needsRerender =
-      changes['data'] ||
-      changes['enableHighlight'] ||
-      changes['enableMermaid'] ||
-      changes['enableCodeCopy'] ||
-      changes['enableCollapsibleHeadings'] ||
-      changes['collapsibleHeadingLevel'] ||
-      changes['collapsibleDefaultExpanded'] ||
-      changes['autoExpandLevels'] ||
-      changes['enableAlerts'] ||
-      changes['enableSmartypants'] ||
-      changes['enableSvgRenderer'] ||
-      changes['enableHtml'] ||
-      changes['enableJavaScript'] ||
-      changes['enableHeadingIds'] ||
-      changes['headingIdPrefix'] ||
-      changes['mermaidTheme'] ||
-      changes['sanitize'];
+    // Each input binds under its PascalCase name and a deprecated camelCase alias (Data / data),
+    // and SimpleChanges keys by whichever name the template bound, so compare camelCased names.
+    const needsRerender = Object.keys(changes).some((name) =>
+      RERENDER_INPUTS.has(name.charAt(0).toLowerCase() + name.slice(1))
+    );
 
     if (needsRerender) {
       this.render();
@@ -437,22 +481,34 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   ngAfterViewInit(): void {
     // Initial render if data was provided
     if (this.Data) {
-      this.postRenderProcessing();
+      void this.postRenderProcessing(this.renderSeq);
     }
 
     this.setupThemeObserver();
   }
 
   ngOnDestroy(): void {
+    this.isDestroyed = true;
+    this.renderSeq++;
     this.themeObserver?.disconnect();
     this.themeObserver = null;
+    this.destroyDiagramViewers();
     this.cleanupEventListeners();
+  }
+
+  private destroyDiagramViewers(): void {
+    for (const v of this.diagramViewers) {
+      v.Destroy();
+    }
+    this.diagramViewers = [];
   }
 
   /**
    * Render the markdown content
    */
   private render(): void {
+    const seq = ++this.renderSeq;
+    this.destroyDiagramViewers();
     if (!this.Data) {
       this.RenderedContent = '';
       this.cdr.markForCheck();
@@ -465,6 +521,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     const config: MarkdownConfig = {
       enableHighlight: this.EnableHighlight,
       enableMermaid: this.EnableMermaid,
+      enableMath: this.EnableMath,
       enableCodeCopy: this.EnableCodeCopy,
       enableCollapsibleHeadings: this.EnableCollapsibleHeadings,
       collapsibleHeadingLevel: this.CollapsibleHeadingLevel,
@@ -488,6 +545,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     // Check for mermaid and code blocks
     this.hasMermaid = html.includes('language-mermaid') || html.includes('class="mermaid"');
     this.hasCodeBlocks = html.includes('<pre>') && html.includes('<code');
+    this.hasMath = html.includes('class="mj-math') || /<math[\s>]/.test(html);
 
     // Sanitize if enabled
     // Note: We bypass Angular's sanitizer when SVG renderer or HTML passthrough is enabled
@@ -499,7 +557,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     }
 
     // When Angular's sanitizer is bypassed, the HTML has already been sanitized by
-    // MarkdownService.parse() (DOMPurify, HTML + SVG profiles) unless enableJavaScript
+    // MarkdownService.parse() (DOMPurify, HTML, SVG and MathML profiles) unless enableJavaScript
     // opted out. Nothing further to do here.
 
     // Trust the HTML for display
@@ -507,16 +565,22 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     this.cdr.markForCheck();
 
     // Schedule post-render processing for next tick (after DOM update)
-    Promise.resolve().then(() => this.postRenderProcessing());
+    Promise.resolve().then(() => this.postRenderProcessing(seq));
   }
 
   /**
    * Process rendered content after DOM update
-   * Handles syntax highlighting, mermaid rendering, copy buttons, etc.
+   * Handles syntax highlighting, mermaid rendering, interactive MJ diagrams, copy buttons, etc.
    */
-  private async postRenderProcessing(): Promise<void> {
+  private async postRenderProcessing(seq = this.renderSeq): Promise<void> {
+    if (this.isDestroyed || seq !== this.renderSeq) return;
     const container = this.elementRef.nativeElement.querySelector('.mj-markdown-container');
     if (!container) return;
+
+    // Open external/inline links in a new tab when opted in
+    if (this.OpenLinksInNewTab) {
+      this.applyLinkTargets(container as HTMLElement);
+    }
 
     // Add copy buttons to code blocks
     if (this.EnableCodeCopy && this.hasCodeBlocks) {
@@ -529,10 +593,26 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
       this.setupCollapsibleListeners(container as HTMLElement);
     }
 
+    // Typeset TeX math (async: KaTeX loads on first use). With math off, MathML that arrived as
+    // markup still renders, so it still gets the styled-letter fix.
+    if (this.hasMath) {
+      if (this.EnableMath) {
+        await this.markdownService.RenderMath(container as HTMLElement);
+        if (this.isDestroyed || seq !== this.renderSeq) return;
+      } else {
+        this.markdownService.UseUnicodeMathLetters(container as HTMLElement);
+      }
+    }
+
     // Render mermaid diagrams (async)
     if (this.EnableMermaid && this.hasMermaid) {
       await this.markdownService.renderMermaid(container as HTMLElement);
+      if (this.isDestroyed || seq !== this.renderSeq) return;
     }
+
+    // Upgrade any MJ Interactive Diagram SVGs (`svg[data-mj-diagram="1"]`) embedded in markdown
+    await this.mountEmbeddedInteractiveDiagrams(container as HTMLElement, seq);
+    if (this.isDestroyed || seq !== this.renderSeq) return;
 
     // Setup heading click listeners
     if (this.EnableHeadingIds) {
@@ -542,6 +622,11 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     // Setup code copy listeners for custom event emission
     if (this.EnableCodeCopy) {
       this.setupCodeCopyListeners(container as HTMLElement);
+    }
+
+    // Setup image click listeners, only when a host listens
+    if (this.ImageClicked.observed) {
+      this.setupImageClickListeners(container as HTMLElement);
     }
 
     // Emit rendered event
@@ -554,6 +639,85 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
       hasMermaid: this.hasMermaid,
       hasCodeBlocks: this.hasCodeBlocks,
       headingIds,
+    });
+  }
+
+  /**
+   * Stamp `target="_blank"` and `rel="noopener noreferrer"` on rendered HTML links when
+   * {@link OpenLinksInNewTab} is enabled. In-page fragment links (`#section`), non-navigational
+   * protocol-handler links (`mailto:`, `tel:`, `sms:`), SVG diagram links, and anchors that
+   * already declare an explicit `target` keep their behaviour.
+   */
+  private applyLinkTargets(container: HTMLElement): void {
+    container.querySelectorAll<HTMLAnchorElement>('a[href]').forEach((anchor) => {
+      if (anchor.closest('svg')) {
+        return;
+      }
+      const href = (anchor.getAttribute('href') || '').trim();
+      if (!href || href.startsWith('#') || /^(mailto|tel|sms|javascript|vbscript|data):/i.test(href)) {
+        return;
+      }
+      if (!anchor.hasAttribute('target')) {
+        anchor.setAttribute('target', '_blank');
+      }
+      if (anchor.getAttribute('target') === '_blank') {
+        const existingRel = (anchor.getAttribute('rel') || '').trim();
+        const tokens = existingRel ? existingRel.split(/\s+/) : [];
+        if (!tokens.includes('noopener')) {
+          tokens.push('noopener');
+        }
+        if (!tokens.includes('noreferrer')) {
+          tokens.push('noreferrer');
+        }
+        anchor.setAttribute('rel', tokens.join(' '));
+      }
+    });
+  }
+
+  /**
+   * Loads the MJ diagram renderer on demand when a fenced ```mj-diagram block is encountered.
+   */
+  public LoadDiagramRenderer(): Promise<typeof import('@memberjunction/ai-diagrams')> {
+    // MEASURED BUNDLE DEFERRAL: load @memberjunction/ai-diagrams (and @dagrejs/dagre) only when an mj-diagram fence is present
+    return import('@memberjunction/ai-diagrams');
+  }
+
+  /**
+   * Upgrades rendered MJ diagram SVGs (`svg[data-mj-diagram="1"]`) and fenced ```mj-diagram JSON spec
+   * blocks in place into interactive diagram viewers.
+   */
+  private async mountEmbeddedInteractiveDiagrams(container: HTMLElement, seq: number): Promise<void> {
+    if (!this.EnableSvgRenderer) return;
+    const fences = container.querySelectorAll<HTMLElement>('pre > code.language-mj-diagram');
+    if (fences.length > 0) {
+      try {
+        const { RenderDiagram } = await this.LoadDiagramRenderer();
+        if (this.isDestroyed || seq !== this.renderSeq) return;
+        fences.forEach((codeEl) => {
+          const pre = codeEl.parentElement;
+          const raw = codeEl.textContent?.trim();
+          if (!pre || !raw) return;
+          try {
+            const rendered = RenderDiagram(JSON.parse(raw));
+            if (rendered.Success) {
+              const wrapper = document.createElement('div');
+              wrapper.className = 'svg-rendered';
+              wrapper.innerHTML = this.markdownService.SanitizeHtml(rendered.Svg);
+              pre.replaceWith(wrapper);
+            }
+          } catch {
+            // Leave malformed JSON blocks as code
+          }
+        });
+      } catch (error: unknown) {
+        console.warn('Failed to load the MJ diagram renderer:', error);
+      }
+    }
+    if (this.isDestroyed || seq !== this.renderSeq) return;
+    container.querySelectorAll<SVGSVGElement>('svg[data-mj-diagram="1"]').forEach((svg) => {
+      if (!svg.closest('.mjd-shell')) {
+        this.diagramViewers.push(MountDiagramViewer(svg));
+      }
     });
   }
 
@@ -731,6 +895,28 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
           level,
           raw: text,
         });
+      });
+    });
+  }
+
+  /**
+   * Report clicks on rendered images, except those inside a link or marked decorative
+   * (`role="presentation"`, e.g. a mention badge's avatar), and make them reachable by keyboard. The class lets the stylesheet show them as zoomable, and marks an image already wired:
+   * post-render processing can run twice over the same DOM (ngAfterViewInit and the render
+   * microtask on first render), and a second listener would report every click twice.
+   */
+  private setupImageClickListeners(container: HTMLElement): void {
+    container.querySelectorAll<HTMLImageElement>('img:not([role="presentation"])').forEach((img) => {
+      if (img.closest('a') || img.classList.contains('mj-markdown-image-clickable')) return;
+      img.classList.add('mj-markdown-image-clickable');
+      img.tabIndex = 0;
+      img.setAttribute('role', 'button');
+      const report = () => this.ImageClicked.emit(new ImageClickedEventArgs(img.src, img.alt));
+      img.addEventListener('click', report);
+      img.addEventListener('keydown', (event: KeyboardEvent) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        report();
       });
     });
   }

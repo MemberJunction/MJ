@@ -2,6 +2,8 @@ import { Hook } from '@oclif/core';
 import figlet from 'figlet';
 import { INTERACTIVE_ENV, ResolveOutputFormat, ShouldSuppressChrome } from '@memberjunction/cli-core';
 import { LIGHT_COMMANDS } from '../light-commands.js';
+import chalk from 'chalk';
+import { KeepAwakeForCommand, SleepNoticeForCommand } from '../lib/keep-awake.js';
 
 /**
  * Mirror of `DYNAMIC_PACKAGES_MODE_ENV_VAR` from @memberjunction/dynamic-packages, inlined so
@@ -39,6 +41,8 @@ function readFormatArg(argv: string[]): string | undefined {
 
 const hook: Hook<'prerun'> = async function (options) {
   const argv = options.argv ?? [];
+  // Long database commands must not be interrupted by the machine sleeping — see keep-awake.ts.
+  const keptAwake = KeepAwakeForCommand(options.Command.id ?? '');
 
   // `--interactive` / `--no-interactive` override the terminal detection that decides
   // whether a command may prompt. Like `--no-banner` they must work on every command,
@@ -119,6 +123,12 @@ const hook: Hook<'prerun'> = async function (options) {
   // be a terse domain map — skip the userAgent line so text-mode stdout stays clean.
   if (options.Command.id !== 'version' && !isUsageCommand) {
     options.context.log(options.config.userAgent + '\n');
+  }
+
+  // Said once, up front, while the user is still watching. stderr, so it never mixes into output.
+  const sleepNotice = SleepNoticeForCommand(options.Command.id ?? '', keptAwake);
+  if (sleepNotice) {
+    process.stderr.write(chalk.yellow(`\u26a0 ${sleepNotice}\n\n`));
   }
 
   await maybeLoadBootstrap(options, verbose);

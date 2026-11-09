@@ -55,11 +55,21 @@ export {
 export {
     ConversationStreaming,
     type CompletionEvent,
+    type TaskGraphStreamEvent,
     type MessageProgressUpdate,
     type MessageProgressMetadata,
     type MessageProgressCallback,
     type StreamingConnectionStatus,
 } from './streaming/ConversationStreaming';
+export {
+    ConversationLiveness,
+    RECONCILE_THROTTLE_MS,
+    type ReconciliationReason,
+} from './streaming/ConversationLiveness';
+export {
+    ConversationTail,
+    type ConversationTailResult,
+} from './streaming/ConversationTail';
 export {
     ConversationAgentRunner,
     type ProcessMessageInput,

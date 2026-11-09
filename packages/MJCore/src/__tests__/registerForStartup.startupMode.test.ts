@@ -151,6 +151,13 @@ describe('StartupManager startup modes', () => {
         expect(LocalCacheManager.Instance.IsInitialized).toBe(true);
     });
 
+    it('initializes LocalCacheManager with the cache settings the host passes', async () => {
+        registerFakeEngine('SyncEngine');
+        await StartupManager.Instance.Startup(false, undefined, provider, { mode: 'task', cacheManagerConfig: { maxSizeBytes: 12345, verboseLogging: true } });
+        expect(LocalCacheManager.Instance.Config.maxSizeBytes).toBe(12345);
+        expect(LocalCacheManager.Instance.Config.verboseLogging).toBe(true);
+    });
+
     it('engineFilter restricts the execution set in full mode', async () => {
         const keepSpy = registerFakeEngine('KeepEngine');
         const dropSpy = registerFakeEngine('DropEngine');

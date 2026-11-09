@@ -1,0 +1,244 @@
+[
+  {
+    "fields": {
+      "Name": "Run Decision",
+      "Description": "Answers typed questions about a state with a decision model, in one fast call: a Likelihood (the probability a statement is true), a Choice (one option from a described set) or a Score (a position on a rubric), each with probabilities. Use it for routing, gating and classification steps in agents and flows. It writes no text. Branch on a Choice or Score Value; treat probabilities as information until thresholds are calibrated.",
+      "DriverClass": "Run Decision",
+      "Type": "Custom",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "State",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "The state the questions are asked about: text, or a JSON object. Keep it narrow. Only what the questions need.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "79AA35A2-A3A6-4EC1-8B16-26E645499FFE"
+          },
+          "sync": {
+            "lastModified": "2026-09-28T23:36:50.312Z",
+            "checksum": "825b2766570b2258656808a55df4c98dc4ee8e1ea851a90c205e0ad5a7289a57"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Questions",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "The typed questions, as an object mapping each question key to { Kind, Instructions, Options?, Levels? }. Kind is Likelihood, Choice or Score. A Choice lists Options as { Value, Description }; a Score lists Levels, lowest first, each written as a description.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "0A14A069-A073-417B-BECF-146878209FC4"
+          },
+          "sync": {
+            "lastModified": "2026-09-28T23:36:50.337Z",
+            "checksum": "370ad398b1c0c848d6795e256b3a496c3a8a644e63100e4fd21507d4b3be3be1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DecisionPromptName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The decision prompt whose model bindings choose the decision model. Defaults to Default Decision.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "EDEC7031-F612-47E0-B0F1-33ECE38234E6"
+          },
+          "sync": {
+            "lastModified": "2026-09-28T23:36:50.362Z",
+            "checksum": "61e974724d9c9df37abf2d1b416beca31db4bba2cd0e71d393195190b8977b09"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Answers",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "The answers by question key: a Likelihood's Probability; a Choice's Value, Confidence and Probabilities; a Score's Value, Confidence and Probabilities."
+          },
+          "primaryKey": {
+            "ID": "3DD1A2B2-EA98-4309-B9BE-8C8D1E55F3DC"
+          },
+          "sync": {
+            "lastModified": "2026-09-28T23:36:50.386Z",
+            "checksum": "19750125ac1f5d35bc4a164c06e7f50c69eba7f737429d822560a0efa06ba7bc"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ModelName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The decision model that answered."
+          },
+          "primaryKey": {
+            "ID": "05F1259E-E76F-4D19-9CEB-B05E954C4DFA"
+          },
+          "sync": {
+            "lastModified": "2026-09-28T23:36:50.411Z",
+            "checksum": "da002f93f58ae31824e39f8adb3561a994ea8a996be6d573411b96556560a9f5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResolvedModel",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The dated model version the vendor resolved, when it reports one."
+          },
+          "primaryKey": {
+            "ID": "89C67808-4089-456E-9E5A-2B247631078D"
+          },
+          "sync": {
+            "lastModified": "2026-09-28T23:36:50.437Z",
+            "checksum": "23d33e08cdbe140f919d4674c34dcba2b8b77cf128abe5544cb29bb1161c2ecc"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PromptRunID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The MJ: AI Prompt Runs record for this decision."
+          },
+          "primaryKey": {
+            "ID": "8DEAD98B-B9C8-4CD5-9679-50D0D79AA633"
+          },
+          "sync": {
+            "lastModified": "2026-09-28T23:36:50.462Z",
+            "checksum": "654498c69efd05477785bdd7795460b735152532d081449fc746f39736fc4eb2"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "Description": "The decision was answered."
+          },
+          "primaryKey": {
+            "ID": "6176D262-F898-4097-B719-2BE54DBB4D65"
+          },
+          "sync": {
+            "lastModified": "2026-09-28T23:36:50.494Z",
+            "checksum": "94545151f6a7780d1c4b34dd5535869c8379ab53c78b7f3f7ef07ea402f7d97d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_STATE",
+            "Description": "State was missing or empty."
+          },
+          "primaryKey": {
+            "ID": "A6DFCAE0-4240-4082-A93E-A4A401193D4F"
+          },
+          "sync": {
+            "lastModified": "2026-09-28T23:36:50.512Z",
+            "checksum": "e0bc7170b8ae8e227382e810ee44599abc6ff3e9940e31bccbe4ca0042e1e202"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_QUESTIONS",
+            "Description": "Questions was missing or malformed."
+          },
+          "primaryKey": {
+            "ID": "7A9F323D-A258-4341-A49F-A3282BFE7673"
+          },
+          "sync": {
+            "lastModified": "2026-09-28T23:36:50.530Z",
+            "checksum": "1d328734865280eb2dc204ee1d6c40f2e7acdb349782266492a1cd0e34197fbf"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROMPT_NOT_FOUND",
+            "Description": "The decision prompt was not found."
+          },
+          "primaryKey": {
+            "ID": "9723C912-5250-4325-9D83-380440991A69"
+          },
+          "sync": {
+            "lastModified": "2026-09-28T23:36:50.550Z",
+            "checksum": "0b69e2f268a5f278960b6751af6a047262589f5e615bb4d16ae29dadd9551253"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROMPT_NOT_ACTIVE",
+            "Description": "The decision prompt is not active."
+          },
+          "primaryKey": {
+            "ID": "54A35C51-A794-4C31-9502-C4E4A4C8EF41"
+          },
+          "sync": {
+            "lastModified": "2026-09-28T23:36:50.569Z",
+            "checksum": "09f904f418129a022631271ebc8d1f03d9e78b5aebe707b9d970707a2a29cb0a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "DECISION_FAILED",
+            "Description": "The decision model could not answer; the message says why."
+          },
+          "primaryKey": {
+            "ID": "D733C598-C565-429F-8CDF-26D0BCAE2053"
+          },
+          "sync": {
+            "lastModified": "2026-09-28T23:36:50.588Z",
+            "checksum": "e56cb1a801be03467b39ff65027b9ac90acfb75d685d3d16eec9bee3512d57cd"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EXECUTION_ERROR",
+            "Description": "An unexpected error occurred."
+          },
+          "primaryKey": {
+            "ID": "22014922-9502-4891-AF2A-84D63F4D6EC1"
+          },
+          "sync": {
+            "lastModified": "2026-09-28T23:36:50.607Z",
+            "checksum": "4e04326f397d52242c902d6fecc689f67c5601c95c2ecb3f55acebc19f17f6d8"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "53EF76AC-F1FA-4C01-84BD-9A8EE0AA52F6"
+    },
+    "sync": {
+      "lastModified": "2026-09-28T23:36:50.267Z",
+      "checksum": "f2dffc0ed252251e947ab4a565c5c04726cb7cdafbef3026bea2337d941857dd"
+    }
+  }
+]

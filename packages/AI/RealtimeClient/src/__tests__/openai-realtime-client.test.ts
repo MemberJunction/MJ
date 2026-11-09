@@ -15,6 +15,8 @@ import {
     IRealtimePeerConnection,
     OpenAIRealtimeClient,
 } from '../drivers/openAIRealtimeClient';
+import { FakeRtpSender } from './helpers/realtime-fakes';
+import { DescribeWebRtcMicrophoneReplacement } from './helpers/microphone-replacement';
 
 // ── Fakes (no network, no WebRTC) ──────────────────────────────────────────────
 
@@ -57,14 +59,19 @@ class FakeDataChannel implements IRealtimeDataChannel {
 class FakePeerConnection implements IRealtimePeerConnection {
     public ontrack: ((event: RTCTrackEvent) => void) | null = null;
     public AddedTracks: MediaStreamTrack[] = [];
+    /** The sender handed back for each added track. */
+    public Senders: FakeRtpSender[] = [];
     public Channel = new FakeDataChannel();
     public ChannelLabel = '';
     public LocalDescription: RTCSessionDescriptionInit | null = null;
     public RemoteDescription: RTCSessionDescriptionInit | null = null;
     public Closed = false;
 
-    public addTrack(track: MediaStreamTrack, _stream: MediaStream): void {
+    public addTrack(track: MediaStreamTrack, _stream: MediaStream): FakeRtpSender {
         this.AddedTracks.push(track);
+        const sender = new FakeRtpSender(track);
+        this.Senders.push(sender);
+        return sender;
     }
     public createDataChannel(label: string): IRealtimeDataChannel {
         this.ChannelLabel = label;
@@ -250,6 +257,14 @@ describe('OpenAIRealtimeClient', () => {
             expect(states).toEqual(['listening']);
         });
 
+        it('should keep the client-side requestedTracks hint out of session.update (OpenAI rejects unknown session params)', () => {
+            const tracks = [{ Direction: 'Inbound', Modality: 'Video' }];
+            client.InitChannel(channel, { instructions: 'voice co-agent', tools: [], requestedTracks: tracks });
+            channel.Open();
+
+            expect(channel.SentEvents()[0]).toEqual({ type: 'session.update', session: { instructions: 'voice co-agent', tools: [] } });
+        });
+
         it('should NOT send an empty session.update when no config was supplied', () => {
             client.InitChannel(channel, {});
             channel.Open();
@@ -327,12 +342,100 @@ describe('OpenAIRealtimeClient', () => {
             channel.Sent = [];
         });
 
-        it('should send response.create with the given instructions and mark the client busy', () => {
+        it('should send response.create carrying the session identity AND the direction, and mark the client busy', () => {
+            // `InitChannel`'s default config is `{ instructions: 'test agent' }` — the co-agent
+            // identity the session was minted with.
             client.RequestSpokenUpdate('Say one short first-person sentence.');
             expect(channel.SentEvents()).toEqual([
-                { type: 'response.create', response: { instructions: 'Say one short first-person sentence.' } },
+                {
+                    type: 'response.create',
+                    response: { instructions: 'test agent\n\nSay one short first-person sentence.' },
+                },
             ]);
             expect(client.IsBusy).toBe(true);
+        });
+
+        it('RequestSpokenTurn sends the same response.create but tags the reply normal (MJ#4591)', () => {
+            client.RequestSpokenUpdate('Open the conversation now: greet them.');
+            const updateFrames = channel.SentEvents();
+            // Back to idle so the turn is not skipped by the collision rule.
+            channel.EmitServer({ type: 'response.created' });
+            channel.EmitServer({ type: 'response.done' });
+            channel.Sent = [];
+
+            const { transcripts } = collect(client);
+            client.RequestSpokenTurn('Open the conversation now: greet them.');
+            expect(channel.SentEvents()).toEqual(updateFrames);
+            expect(client.IsBusy).toBe(true);
+
+            channel.EmitServer({ type: 'response.created' });
+            channel.EmitServer({ type: 'response.output_audio_transcript.done', transcript: 'Hello there.' });
+            expect(transcripts).toEqual([{ Role: 'Assistant', Text: 'Hello there.', IsFinal: true, Kind: 'normal' }]);
+        });
+
+        it('should keep the session instructions on a spoken update — OpenAI treats response.instructions as a REPLACEMENT', () => {
+            // Seen live: the opener ("greet them, introduce yourself…") was spoken with no persona at all,
+            // as "Hi, I'm ChatGPT", because the per-response instructions displaced the session's.
+            const persona = new ChannelTestClient();
+            const personaChannel = new FakeDataChannel();
+            persona.InitChannel(personaChannel, { instructions: 'You are Nadia Whitfield, a talent partner.' });
+            personaChannel.Open();
+            personaChannel.Sent = [];
+
+            persona.RequestSpokenUpdate('Open the conversation now: greet them.');
+
+            expect(personaChannel.SentEvents()).toEqual([
+                { type: 'response.create', response: { instructions: 'You are Nadia Whitfield, a talent partner.\n\nOpen the conversation now: greet them.' } },
+            ]);
+        });
+
+        /**
+         * MJ/#4591 · bizapps-caliber#397 — the interviewer introduced herself as "ChatGPT".
+         *
+         * `response.create`'s `response.instructions` is a FULL OVERRIDE of the session system
+         * prompt for that response — not an addition to it. The server-side twin of this driver
+         * (`openAIRealtime.ts`) already says so in a comment, and guards the BLANK case for exactly
+         * that reason: forwarding `''` "would wipe the co-agent identity framing". The non-blank
+         * case was never guarded, so every caller that supplied a real direction wiped it too.
+         *
+         * Live consequence, on the one turn that rides this method: the model has no persona for
+         * that response, falls back to its vendor default, and opens a hiring interview with
+         * "I'm ChatGPT, your friendly voice companion" while every other turn in the same session
+         * correctly says "I'm Sam Rivera, Support Team Lead".
+         *
+         * The direction stays LAST so it is the most recent thing the model reads, and the identity
+         * is not restated by the caller — a stage direction is not the place to carry a persona.
+         */
+        it('should never send a direction that would wipe the session identity (#397)', () => {
+            client.RequestSpokenUpdate('Open the conversation now: greet them and introduce yourself.');
+            const sent = channel.SentEvents();
+            expect(sent).toHaveLength(1);
+            const response = (sent[0] as { response?: { instructions?: string } }).response;
+            expect(response?.instructions).toContain('test agent');
+            expect(response?.instructions).toMatch(/test agent[\s\S]*Open the conversation now/);
+        });
+
+        it('should send a BARE response.create when the direction is blank — the session prompt governs', () => {
+            // The meeting-mode bridge trigger passes `''` to mean "respond now, under the session
+            // prompt". An `instructions: ''` override would wipe the identity outright; the server
+            // twin already special-cases this and the client must agree.
+            client.RequestSpokenUpdate('   ');
+            expect(channel.SentEvents()).toEqual([{ type: 'response.create' }]);
+        });
+
+        it('should send the direction alone when the session carried no instructions', () => {
+            // A session minted with no instructions has no identity to lose, so there is nothing to
+            // prepend — and prepending "undefined" or an empty line would be worse than nothing.
+            const bare = new ChannelTestClient();
+            const bareChannel = new FakeDataChannel();
+            bare.InitChannel(bareChannel, { tools: [] });
+            bareChannel.Open();
+            bareChannel.Sent = [];
+
+            bare.RequestSpokenUpdate('progress update');
+            expect(bareChannel.SentEvents()).toEqual([
+                { type: 'response.create', response: { instructions: 'progress update' } },
+            ]);
         });
 
         it('should SKIP the update while a response is in flight (queue-or-skip rule; narration is disposable)', () => {
@@ -608,6 +711,46 @@ describe('OpenAIRealtimeClient', () => {
             expect(states).toEqual(['listening']); // still reflects the user holding the floor
         });
 
+        it('invokes the OnUserSpeechStart handler on input_audio_buffer.speech_started', () => {
+            let count = 0;
+            client.OnUserSpeechStart(() => { count++; });
+            channel.EmitServer({ type: 'input_audio_buffer.speech_started' });
+            expect(count).toBe(1);
+            channel.EmitServer({ type: 'input_audio_buffer.speech_started' });
+            expect(count).toBe(2);
+        });
+
+        it('raises OnUserSpeechStart alongside the interruption, before the listening state change', () => {
+            const log: string[] = [];
+            client.OnUserSpeechStart(() => log.push('userSpeechStart'));
+            client.OnInterruption(() => log.push('interruption'));
+            client.OnStateChange((s) => log.push(`state:${s}`));
+            channel.EmitServer({ type: 'response.created' });
+            log.length = 0; // ignore state changes from the response starting
+            channel.EmitServer({ type: 'input_audio_buffer.speech_started' });
+            expect(log).toContain('userSpeechStart');
+            expect(log).toContain('interruption');
+            expect(log.indexOf('userSpeechStart')).toBeLessThan(log.indexOf('state:listening'));
+        });
+
+        it('forwards item_id from input_audio_buffer.speech_started to OnUserSpeechStart and carries it as ItemId on the completed user transcript', () => {
+            const startedIds: Array<string | undefined> = [];
+            const { transcripts } = collect(client);
+            client.OnUserSpeechStart((itemId) => startedIds.push(itemId));
+
+            channel.EmitServer({ type: 'input_audio_buffer.speech_started', item_id: 'item_abc' });
+            channel.EmitServer({
+                type: 'conversation.item.input_audio_transcription.completed',
+                transcript: 'Hello from item abc',
+                item_id: 'item_abc',
+            });
+
+            expect(startedIds).toEqual(['item_abc']);
+            expect(transcripts).toEqual([
+                { Role: 'User', Text: 'Hello from item abc', IsFinal: true, Kind: 'normal', ItemId: 'item_abc' },
+            ]);
+        });
+
         it('should NOT emit on the cleared frame that follows a self-initiated cancel', () => {
             const { interruptions } = collect(client);
             channel.EmitServer({ type: 'response.created' });
@@ -711,9 +854,48 @@ describe('OpenAIRealtimeClient', () => {
                 {
                     InputTokens: 120,
                     OutputTokens: 45,
+                    InputTokenDetails: { TextTokens: 80 },
                     Raw: { input_tokens: 120, output_tokens: 45, input_token_details: { text_tokens: 80 } },
                 },
             ]);
+        });
+
+        it('should carry the per-modality split in both directions, leaving the totals unchanged', () => {
+            const usages: RealtimeClientUsage[] = [];
+            client.OnUsage((u) => usages.push(u));
+
+            channel.EmitServer({
+                type: 'response.done',
+                response: {
+                    usage: {
+                        input_tokens: 100,
+                        output_tokens: 50,
+                        input_token_details: { text_tokens: 20, audio_tokens: 80, cached_tokens: 10, cached_tokens_details: { audio_tokens: 6, text_tokens: 4 } },
+                        output_token_details: { text_tokens: 10, audio_tokens: 40 },
+                    },
+                },
+            });
+
+            expect(usages[0]).toMatchObject({
+                InputTokens: 100,
+                OutputTokens: 50,
+                InputTokenDetails: { TextTokens: 20, AudioTokens: 80, CachedTokens: 10, CachedAudioTokens: 6 },
+                OutputTokenDetails: { TextTokens: 10, AudioTokens: 40 },
+            });
+        });
+
+        it('should carry the split from the top-level usage slot xAI uses', () => {
+            const usages: RealtimeClientUsage[] = [];
+            client.OnUsage((u) => usages.push(u));
+
+            channel.EmitServer({
+                type: 'response.done',
+                response: { usage: {} },
+                usage: { input_tokens: 30, output_tokens: 12, output_token_details: { audio_tokens: 12 } },
+            });
+
+            expect(usages[0]).toMatchObject({ InputTokens: 30, OutputTokens: 12, OutputTokenDetails: { AudioTokens: 12 } });
+            expect(usages[0].InputTokenDetails).toBeUndefined();
         });
 
         it('should emit one delta PER completed response (deltas, not cumulative)', () => {
@@ -832,3 +1014,13 @@ describe('OpenAIRealtimeClient', () => {
         });
     });
 });
+
+DescribeWebRtcMicrophoneReplacement(
+    async () => {
+        const client = new ConnectTestClient();
+        const track = new FakeTrack();
+        await client.Connect(makeConfig(), new FakeMediaStream([track]));
+        return { Client: client, Track: track, Senders: client.Pc.Senders };
+    },
+    () => new ConnectTestClient()
+);

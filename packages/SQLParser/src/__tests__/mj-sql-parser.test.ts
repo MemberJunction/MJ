@@ -600,10 +600,19 @@ describe('extractSelectColumns', () => {
         expect(changeCount.TableQualifier).toBe('changes');
     });
 
-    it('should return empty array for empty/invalid SQL', () => {
+    it('should return empty array for empty SQL', () => {
         expect(extractSelectColumns('')).toHaveLength(0);
         expect(extractSelectColumns('   ')).toHaveLength(0);
-        expect(extractSelectColumns('NOT VALID SQL AT ALL %%%')).toHaveLength(0);
+    });
+
+    // Decided: a parse failure is distinguishable from an empty result, through an additive checked sibling;
+    // the deprecated ExtractSelectColumns keeps returning [] (COMPAT-MAP §1.2 ExtractSelectColumns; DISCUSSION §6,
+    // 2026-10-27, O2). P7, #5683. Inverted from "should return empty array for empty/invalid SQL", which asserted
+    // the [] as correct. Before the redesign: [] for the invalid SQL, the same as for a valid statement with no select list.
+    it('should tell invalid SQL apart from a valid statement with no select list', () => {
+        expect(extractSelectColumns('NOT VALID SQL AT ALL %%%')).toEqual([]);
+        expect(SQLParser.ExtractSelectColumnsChecked('NOT VALID SQL AT ALL %%%', tsqlDialect).Complete).toBe(false);
+        expect(SQLParser.ExtractSelectColumnsChecked('SELECT ID FROM Users', tsqlDialect).Complete).toBe(true);
     });
 });
 
@@ -699,5 +708,38 @@ describe('substituteTemplateVariable', () => {
         const result = substituteTemplateVariable(sql, 'region', "'West'");
         expect(result).toContain("'West'");
         expect(result).toContain('{{ regionCode | sqlString }}');
+    });
+});
+
+describe('template variables inside block tags', () => {
+    it('renames a variable read in {% if %} and {% elif %}', () => {
+        const sql = "WHERE 1=1{% if region %} AND r = {{ region | sqlString }}{% elif not region %} AND r IS NULL{% endif %}";
+        expect(renameTemplateVariable(sql, 'region', 'userRegion')).toBe(
+            "WHERE 1=1{% if userRegion %} AND r = {{userRegion | sqlString}}{% elif not userRegion %} AND r IS NULL{% endif %}"
+        );
+    });
+
+    it('substitutes a template literal in tags when one is given', () => {
+        const sql = "WHERE 1=1{% if region == 'West' %} AND r = {{ region | sqlString }}{% endif %}";
+        expect(substituteTemplateVariable(sql, 'region', "'West'", '"West"')).toBe(
+            `WHERE 1=1{% if "West" == 'West' %} AND r = 'West'{% endif %}`
+        );
+    });
+
+    it('leaves tags alone when no template literal is given', () => {
+        const sql = "{% if region %}r = {{ region }}{% endif %}";
+        expect(substituteTemplateVariable(sql, 'region', "'West'")).toBe("{% if region %}r = 'West'{% endif %}");
+    });
+
+    it('rewrites reads but not the variable a set tag assigns or a for tag declares', () => {
+        const sql = "{% set region = region | upper %}{% for region in regions %}{% endfor %}{% for r in region %}{% endfor %}";
+        expect(renameTemplateVariable(sql, 'region', 'outer')).toBe(
+            "{% set region = outer | upper %}{% for region in regions %}{% endfor %}{% for r in outer %}{% endfor %}"
+        );
+    });
+
+    it('leaves attribute names, function names and string contents alone', () => {
+        const sql = "{% if opts.region or region('x') or \"region\" == 'region' %}{% endif %}";
+        expect(renameTemplateVariable(sql, 'region', 'outer')).toBe(sql);
     });
 });

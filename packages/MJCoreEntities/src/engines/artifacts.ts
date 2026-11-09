@@ -162,6 +162,7 @@ export class ArtifactMetadataEngine extends BaseEngine<ArtifactMetadataEngine> {
 
         const rvProvider = (provider as unknown as IRunViewProvider) ?? this.RunViewProviderToUse;
         const rv = new RunView(rvProvider);
+        // conversation-scope: artifact-wide cache; conversation-scoped consumers filter the result to their scope
         const result = await rv.RunView<MJArtifactVersionEntity>({
             EntityName: 'MJ: Artifact Versions',
             ExtraFilter: `ArtifactID='${artifactId.replace(/'/g, "''")}'`,

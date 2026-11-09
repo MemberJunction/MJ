@@ -3,6 +3,9 @@
        Consuming apps that added their own skip link should remove it on upgrade. -->
   <a class="mj-skip-link" href="#mj-main-content" (click)="skipToMainContent($event)">Skip to main content</a>
 
+  <!-- Diagnostic Recording Banner — inside the clipped shell container so its Stop control is visible -->
+  <mj-diagnostic-recording-banner></mj-diagnostic-recording-banner>
+
   <!-- Header -->
   <header class="shell-header">
     <!-- MJ Logo -->
@@ -339,11 +342,14 @@
     </div>
   </div>
 
-  <!-- Tab Container - with dynamic tab bar visibility -->
+  <!-- Tab Container - with dynamic tab bar visibility. A call's Share menu offers it as "Main content" under
+       "This panel", except to a call inside it. -->
   <mj-tab-container
     id="mj-main-content"
     role="main"
     tabindex="-1"
+    mjSharePanel="Main content"
+    mjSharePanelIcon="fa-solid fa-table-cells-large"
     [class.hide-tab-bar]="!tabBarVisible"
     (firstResourceLoadComplete)="onFirstResourceLoadComplete()"
     (layoutInitError)="handleLayoutError()">
@@ -370,6 +376,10 @@
         <p class="loading-reset-hint">
           This can happen after updates or due to cached data issues.
         </p>
+        <button class="loading-reset-btn" (click)="DownloadPreResetDiagnostics()" style="margin-right: 8px;">
+          <i class="fa-solid fa-box-archive"></i>
+          Download Diagnostic Bundle
+        </button>
         <button class="loading-reset-btn" (click)="ResetApplication()">
           <i class="fa-solid fa-arrows-rotate"></i>
           Reset
@@ -427,3 +437,9 @@
     </div>
   </div>
 }
+
+<!-- Report Problem Dialog -->
+<mj-diagnostic-report-problem-dialog
+  [IsVisible]="DiagnosticDialogOpen"
+  (Closed)="DiagnosticDialogOpen = false">
+</mj-diagnostic-report-problem-dialog>

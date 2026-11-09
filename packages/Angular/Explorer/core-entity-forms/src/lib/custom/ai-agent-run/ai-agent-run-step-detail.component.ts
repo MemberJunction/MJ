@@ -1,8 +1,9 @@
-import { Component, Input, Output, EventEmitter, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { TimelineItem } from './ai-agent-run-timeline.component';
 import { MJAIAgentRunStepEntity, MJAIAgentRunStepEntity_AgentSkillInvocation } from '@memberjunction/core-entities';
 import { ResolveTaskGraphPositions, type TaskGraphSpec } from '@memberjunction/ai-core-plus';
 import type { FlowPosition } from '@memberjunction/ng-flow-editor';
+import { TaskGraphRunViewComponent } from '@memberjunction/ng-task-graph-editor';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import type { IMetadataProvider } from '@memberjunction/core';
 
@@ -35,6 +36,8 @@ export class AIAgentRunStepDetailComponent {
   }
   /** The provider the host is on, so the run view reads through the right one. */
   @Input() Provider: IMetadataProvider | null = null;
+  /** True while the host is persisting the workflow via WorkflowSaveOperation. */
+  @Input() SavingWorkflow = false;
   @Output() ClosePanel = new EventEmitter<void>();
 
   /**
@@ -114,11 +117,68 @@ export class AIAgentRunStepDetailComponent {
     this.ScratchpadSubTab = value;
   }
 
+  private static readonly EMPTY_SKILL_INVOCATIONS: MJAIAgentRunStepEntity_AgentSkillInvocation[] = [];
+  private _cacheFingerprint: string | null = null;
+  private _cachedSelectedItem: TimelineItem | null = null;
+  private _stepNoticeCache: { Variant: 'info' | 'warning' | 'error'; Message: string } | null = null;
+  private _selectedItemJsonCache = '{}';
+  private _showStepPayloadDiffCache = false;
+  private _stepPayloadAtStartObjectCache: ReturnType<typeof ParseJSONRecursive> | null = null;
+  private _stepPayloadAtEndObjectCache: ReturnType<typeof ParseJSONRecursive> | null = null;
+  private _stepSkillInvocationsCache: MJAIAgentRunStepEntity_AgentSkillInvocation[] =
+    AIAgentRunStepDetailComponent.EMPTY_SKILL_INVOCATIONS;
+  private _stepTaskGraphCache: TaskGraphSpec | null = null;
+  private _stepTaskGraphPositionsCache: Map<string, FlowPosition> | null = null;
+  private _stepTaskGraphParentTaskIdCache: string | null = null;
+  private _stepTaskGraphWasFoldedCache = false;
+  private _stepScratchpadInputCache: ScratchpadSnapshotView | null = null;
+  private _stepScratchpadOutputCache: ScratchpadSnapshotView | null = null;
+  private _scratchpadTaskChangeCountCache = 0;
+
   constructor(private cdr: ChangeDetectorRef) {}
 
+  private computeCacheFingerprint(item: TimelineItem | null): string {
+    if (!item) {
+      return '';
+    }
+    const d = item.data ?? {};
+    return `${item.id ?? ''}|${item.type ?? ''}|${item.status ?? ''}|${d.StepType ?? ''}|${Boolean(d.IsWorkflowStep)}|${d.PayloadAtStart ?? ''}|${d.PayloadAtEnd ?? ''}|${typeof d.Skills === 'string' ? d.Skills : JSON.stringify(d.Skills ?? '')}|${typeof d.InputData === 'string' ? d.InputData : JSON.stringify(d.InputData ?? '')}|${typeof d.OutputData === 'string' ? d.OutputData : JSON.stringify(d.OutputData ?? '')}`;
+  }
+
+  private ensureStepDetailCache(): void {
+    const item = this.SelectedTimelineItem;
+    const fp = this.computeCacheFingerprint(item);
+    if (this._cachedSelectedItem === item && this._cacheFingerprint === fp) {
+      return;
+    }
+    this._cachedSelectedItem = item;
+    this._cacheFingerprint = fp;
+
+    this._stepNoticeCache = this.computeStepNotice(item);
+    this._selectedItemJsonCache = this.computeSelectedItemJson(item);
+    this._showStepPayloadDiffCache = this.computeShowStepPayloadDiff(item);
+    this._stepPayloadAtStartObjectCache = this.computeStepPayloadObject(item, 'PayloadAtStart');
+    this._stepPayloadAtEndObjectCache = this.computeStepPayloadObject(item, 'PayloadAtEnd');
+    this._stepSkillInvocationsCache = this.computeStepSkillInvocations(item);
+    this._stepTaskGraphCache = this.computeStepTaskGraph(item);
+    this._stepTaskGraphPositionsCache = this._stepTaskGraphCache
+      ? ResolveTaskGraphPositions(this._stepTaskGraphCache)
+      : null;
+    this._stepTaskGraphParentTaskIdCache = this.computeStepTaskGraphParentTaskID(item);
+    this._stepTaskGraphWasFoldedCache = this.computeStepTaskGraphWasFolded(item);
+    this._stepScratchpadInputCache = this.extractScratchpadFromField('InputData');
+    this._stepScratchpadOutputCache = this.extractScratchpadFromField('OutputData');
+    this._scratchpadTaskChangeCountCache = this.computeScratchpadTaskChangeCount(
+      this._stepScratchpadInputCache,
+      this._stepScratchpadOutputCache
+    );
+    this.SelectedItemJsonString = this._selectedItemJsonCache;
+  }
+
   ngOnChanges() {
+    this._cacheFingerprint = null;
+    this.ensureStepDetailCache();
     if (this.SelectedTimelineItem) {
-      this.SelectedItemJsonString = this.GetSelectedItemJson();
       // Default to diff tab if step has payload diff, skills for Skill steps (the activation IS
       // the story there), scratchpad if available, otherwise json
       if (this.ShowStepPayloadDiff) {
@@ -157,7 +217,13 @@ export class AIAgentRunStepDetailComponent {
    * half-broken.
    */
   get StepNotice(): { Variant: 'info' | 'warning' | 'error'; Message: string } | null {
-    const item = this.SelectedTimelineItem;
+    this.ensureStepDetailCache();
+    return this._stepNoticeCache;
+  }
+
+  private computeStepNotice(
+    item: TimelineItem | null
+  ): { Variant: 'info' | 'warning' | 'error'; Message: string } | null {
     if (!item?.data?.IsWorkflowStep) return null;
 
     switch (item.status) {
@@ -187,15 +253,20 @@ export class AIAgentRunStepDetailComponent {
   }
 
   GetSelectedItemJson(): string {
-    if (!this.SelectedTimelineItem) return '{}';
+    this.ensureStepDetailCache();
+    return this._selectedItemJsonCache;
+  }
+
+  private computeSelectedItemJson(item: TimelineItem | null): string {
+    if (!item) return '{}';
     
     // Get all the data from the entity
-    let data;
-    if (this.SelectedTimelineItem.data instanceof MJAIAgentRunStepEntity) {
+    let data: unknown;
+    if (item.data instanceof MJAIAgentRunStepEntity) {
       // If it's a step entity, we need to get the full run data
-      data = this.SelectedTimelineItem.data.GetAll();
+      data = item.data.GetAll();
     } else {
-      data = this.SelectedTimelineItem.data;
+      data = item.data;
     }
     
     // Apply recursive JSON parsing to the entire data object
@@ -218,11 +289,16 @@ export class AIAgentRunStepDetailComponent {
    * Check if selected timeline item is a step with payload changes
    */
   get ShowStepPayloadDiff(): boolean {
-    if (!this.SelectedTimelineItem || this.SelectedTimelineItem.type !== 'step') {
+    this.ensureStepDetailCache();
+    return this._showStepPayloadDiffCache;
+  }
+
+  private computeShowStepPayloadDiff(item: TimelineItem | null): boolean {
+    if (!item || item.type !== 'step') {
       return false;
     }
     
-    const stepData = this.SelectedTimelineItem.data;
+    const stepData = item.data;
     if (stepData && (stepData.PayloadAtStart?.trim().length > 0 
                  || stepData.PayloadAtEnd?.trim().length > 0)) {
       return stepData.PayloadAtStart !== stepData.PayloadAtEnd;
@@ -239,61 +315,47 @@ export class AIAgentRunStepDetailComponent {
   /**
    * Get parsed PayloadAtStart for the selected step
    */
-  get StepPayloadAtStartObject(): any {
-    if (!this.SelectedTimelineItem || this.SelectedTimelineItem.type !== 'step') {
-      return null;
-    }
-    
-    const stepData = this.SelectedTimelineItem.data;
-    if (!stepData?.PayloadAtStart) return null;
-    
-    try {
-      // First, check if PayloadAtStart is a JSON string that needs to be parsed
-      let payloadData = stepData.PayloadAtStart;
-      try {
-        // If PayloadAtStart is a JSON string, parse it first
-        payloadData = JSON.parse(stepData.PayloadAtStart);
-      } catch {
-        // If it's not valid JSON, use it as-is
-        payloadData = stepData.PayloadAtStart;
-      }
-      
-      const parseOptions: ParseJSONOptions = {
-        extractInlineJson: true,
-        maxDepth: 100,
-        debug: false
-      };
-      return ParseJSONRecursive(payloadData, parseOptions);
-    } catch (e) {
-      return null;
-    }
+  get StepPayloadAtStartObject(): ReturnType<typeof ParseJSONRecursive> | null {
+    this.ensureStepDetailCache();
+    return this._stepPayloadAtStartObjectCache;
   }
 
   /** @deprecated Use {@link StepPayloadAtStartObject}. */
-  get stepPayloadAtStartObject(): any {
+  get stepPayloadAtStartObject(): ReturnType<typeof ParseJSONRecursive> | null {
     return this.StepPayloadAtStartObject;
   }
 
   /**
    * Get parsed PayloadAtEnd for the selected step
    */
-  get StepPayloadAtEndObject(): any {
-    if (!this.SelectedTimelineItem || this.SelectedTimelineItem.type !== 'step') {
+  get StepPayloadAtEndObject(): ReturnType<typeof ParseJSONRecursive> | null {
+    this.ensureStepDetailCache();
+    return this._stepPayloadAtEndObjectCache;
+  }
+
+  /** @deprecated Use {@link StepPayloadAtEndObject}. */
+  get stepPayloadAtEndObject(): ReturnType<typeof ParseJSONRecursive> | null {
+    return this.StepPayloadAtEndObject;
+  }
+
+  private computeStepPayloadObject(
+    item: TimelineItem | null,
+    field: 'PayloadAtStart' | 'PayloadAtEnd'
+  ): ReturnType<typeof ParseJSONRecursive> | null {
+    if (!item || item.type !== 'step') {
       return null;
     }
     
-    const stepData = this.SelectedTimelineItem.data;
-    if (!stepData?.PayloadAtEnd) return null;
+    const stepData = item.data;
+    const rawPayload = stepData?.[field];
+    if (!rawPayload) return null;
     
     try {
-      // First, check if PayloadAtEnd is a JSON string that needs to be parsed
-      let payloadData = stepData.PayloadAtEnd;
+      let payloadData: unknown = rawPayload;
       try {
-        // If PayloadAtEnd is a JSON string, parse it first
-        payloadData = JSON.parse(stepData.PayloadAtEnd);
+        payloadData = JSON.parse(rawPayload);
       } catch {
-        // If it's not valid JSON, use it as-is
-        payloadData = stepData.PayloadAtEnd;
+        payloadData = rawPayload;
       }
       
       const parseOptions: ParseJSONOptions = {
@@ -302,14 +364,9 @@ export class AIAgentRunStepDetailComponent {
         debug: false
       };
       return ParseJSONRecursive(payloadData, parseOptions);
-    } catch (e) {
+    } catch {
       return null;
     }
-  }
-
-  /** @deprecated Use {@link StepPayloadAtEndObject}. */
-  get stepPayloadAtEndObject(): any {
-    return this.StepPayloadAtEndObject;
   }
 
   OnClosePanel() {
@@ -358,16 +415,25 @@ export class AIAgentRunStepDetailComponent {
    * JSON column. Empty array when the step has no skill linkage or the JSON is malformed.
    */
   get StepSkillInvocations(): MJAIAgentRunStepEntity_AgentSkillInvocation[] {
-    if (!this.SelectedTimelineItem || this.SelectedTimelineItem.type !== 'step') {
-      return [];
+    this.ensureStepDetailCache();
+    return this._stepSkillInvocationsCache;
+  }
+
+  private computeStepSkillInvocations(
+    item: TimelineItem | null
+  ): MJAIAgentRunStepEntity_AgentSkillInvocation[] {
+    if (!item || item.type !== 'step') {
+      return AIAgentRunStepDetailComponent.EMPTY_SKILL_INVOCATIONS;
     }
-    const raw = this.SelectedTimelineItem.data?.Skills;
-    if (!raw) return [];
+    const raw = item.data?.Skills;
+    if (!raw) return AIAgentRunStepDetailComponent.EMPTY_SKILL_INVOCATIONS;
     try {
       const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-      return Array.isArray(parsed) ? parsed : [];
+      return Array.isArray(parsed)
+        ? (parsed as MJAIAgentRunStepEntity_AgentSkillInvocation[])
+        : AIAgentRunStepDetailComponent.EMPTY_SKILL_INVOCATIONS;
     } catch {
-      return [];
+      return AIAgentRunStepDetailComponent.EMPTY_SKILL_INVOCATIONS;
     }
   }
 
@@ -404,10 +470,15 @@ export class AIAgentRunStepDetailComponent {
    * a malformed or absent payload simply means no tab rather than a broken panel.
    */
   get StepTaskGraph(): TaskGraphSpec | null {
-    if (!this.SelectedTimelineItem || this.SelectedTimelineItem.type !== 'step') return null;
-    if (this.SelectedTimelineItem.data?.StepType !== 'TaskGraph') return null;
+    this.ensureStepDetailCache();
+    return this._stepTaskGraphCache;
+  }
 
-    for (const raw of [this.SelectedTimelineItem.data?.InputData, this.SelectedTimelineItem.data?.OutputData]) {
+  private computeStepTaskGraph(item: TimelineItem | null): TaskGraphSpec | null {
+    if (!item || item.type !== 'step') return null;
+    if (item.data?.StepType !== 'TaskGraph') return null;
+
+    for (const raw of [item.data?.InputData, item.data?.OutputData]) {
       if (!raw) continue;
       try {
         const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
@@ -436,9 +507,8 @@ export class AIAgentRunStepDetailComponent {
    * carries the arrangement its author dragged into place, on every node.
    */
   get StepTaskGraphPositions(): Map<string, FlowPosition> | null {
-    const spec = this.StepTaskGraph;
-    if (!spec) return null;
-    return ResolveTaskGraphPositions(spec);
+    this.ensureStepDetailCache();
+    return this._stepTaskGraphPositionsCache;
   }
 
   /** @deprecated Use {@link StepTaskGraphPositions}. */
@@ -460,7 +530,12 @@ export class AIAgentRunStepDetailComponent {
    * drawn as one.
    */
   get StepTaskGraphParentTaskID(): string | null {
-    const raw = this.SelectedTimelineItem?.data?.OutputData;
+    this.ensureStepDetailCache();
+    return this._stepTaskGraphParentTaskIdCache;
+  }
+
+  private computeStepTaskGraphParentTaskID(item: TimelineItem | null): string | null {
+    const raw = item?.data?.OutputData;
     if (!raw) return null;
     try {
       const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
@@ -478,8 +553,13 @@ export class AIAgentRunStepDetailComponent {
 
   /** True when the recorded graph was constant-folded rather than dispatched (D9). */
   get StepTaskGraphWasFolded(): boolean {
-    if (!this.SelectedTimelineItem) return false;
-    const raw = this.SelectedTimelineItem.data?.InputData;
+    this.ensureStepDetailCache();
+    return this._stepTaskGraphWasFoldedCache;
+  }
+
+  private computeStepTaskGraphWasFolded(item: TimelineItem | null): boolean {
+    if (!item) return false;
+    const raw = item.data?.InputData;
     if (!raw) return false;
     try {
       const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
@@ -494,9 +574,12 @@ export class AIAgentRunStepDetailComponent {
     return this.StepTaskGraphWasFolded;
   }
 
+  @ViewChild(TaskGraphRunViewComponent)
+  public TaskGraphRunView?: TaskGraphRunViewComponent;
+
   /** Asks the host to save this run's graph as a reusable workflow. */
   public RequestSaveAsWorkflow(): void {
-    const spec = this.StepTaskGraph;
+    const spec = this.StepTaskGraph ?? this.TaskGraphRunView?.Spec ?? null;
     if (spec) this.SaveAsWorkflowRequested.emit(spec);
   }
 
@@ -519,7 +602,8 @@ export class AIAgentRunStepDetailComponent {
    * Parse scratchpad snapshot from InputData JSON
    */
   get StepScratchpadInput(): ScratchpadSnapshotView | null {
-    return this.extractScratchpadFromField('InputData');
+    this.ensureStepDetailCache();
+    return this._stepScratchpadInputCache;
   }
 
   /** @deprecated Use {@link StepScratchpadInput}. */
@@ -531,7 +615,8 @@ export class AIAgentRunStepDetailComponent {
    * Parse scratchpad snapshot from OutputData JSON
    */
   get StepScratchpadOutput(): ScratchpadSnapshotView | null {
-    return this.extractScratchpadFromField('OutputData');
+    this.ensureStepDetailCache();
+    return this._stepScratchpadOutputCache;
   }
 
   /** @deprecated Use {@link StepScratchpadOutput}. */
@@ -543,8 +628,14 @@ export class AIAgentRunStepDetailComponent {
    * Number of tasks that changed between input and output scratchpad snapshots
    */
   get ScratchpadTaskChangeCount(): number {
-    const input = this.StepScratchpadInput;
-    const output = this.StepScratchpadOutput;
+    this.ensureStepDetailCache();
+    return this._scratchpadTaskChangeCountCache;
+  }
+
+  private computeScratchpadTaskChangeCount(
+    input: ScratchpadSnapshotView | null,
+    output: ScratchpadSnapshotView | null
+  ): number {
     if (!input && !output) return 0;
     if (!input || !output) return (output?.tasks?.length ?? 0) + (input?.tasks?.length ?? 0);
 

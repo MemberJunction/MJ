@@ -3,6 +3,9 @@ import { RegisterClass } from '@memberjunction/global';
 import {
     BaseRealtimeModel,
     RealtimeDiagLog,
+    RealtimeDroppedInputReporter,
+    RealtimeDriverFactsOf,
+    type RealtimeDriverFacts,
     IRealtimeSession,
     RealtimeSessionCapabilities,
     RealtimeSessionParams,
@@ -18,9 +21,13 @@ import {
     RealtimeVoiceOption,
     RealtimeProxyRegistry,
     REALTIME_SDP_EXCHANGE_PATH,
+    ResolveRealtimeProxyBaseHttpUrl,
     RealtimeToolBatchBarrier,
+    MapRealtimeUsageModalityDetail,
+    ReadRealtimeTurnDetection,
+    DescribeUnappliedTurnDetection,
+    type RealtimeInputFrame,
 } from '@memberjunction/ai';
-import { MapUsageModalityDetail } from './openAIRealtime.js';
 
 /**
  * Default backend reasoning/planning model used by OpenAI Live when in `responses` delegation mode
@@ -38,6 +45,23 @@ export interface ILiveWebSocketLike {
     addEventListener(type: 'close', listener: (event: { code?: number; reason?: string }) => void): void;
     send(data: string): void;
     close(code?: number, reason?: string): void;
+}
+
+/**
+ * Describes the normalized `turnDetection` settings a GPT-Live session cannot apply. Its `session.start` frame (see
+ * {@link LiveClientEvent}) carries model, instructions, audio format, voice, parallel tool calls and delegation, and
+ * no turn-detection block, so every requested setting is left to the model's own turn-taking.
+ *
+ * @param config The session's config bag.
+ * @returns The launch warning, or `undefined` when nothing was requested.
+ */
+export function DescribeOpenAILiveTurnDetection(config: Record<string, unknown> | undefined): string | undefined {
+    const requested = ReadRealtimeTurnDetection(config?.['turnDetection']);
+    if (!requested) {
+        return undefined;
+    }
+    return DescribeUnappliedTurnDetection('OpenAILiveRealtime', requested, ['Mode', 'Eagerness', 'Threshold', 'SilenceDurationMs', 'Coverage'],
+        'the GPT-Live session.start frame has no turn-detection settings, so the model\'s own turn-taking applies');
 }
 
 /** Wire client events for OpenAI Live Realtime API. */
@@ -204,6 +228,9 @@ export class OpenAILiveSession implements IRealtimeSession {
     private _currentTaskRevision = 0;
     private _toolBatchBarrier = new RealtimeToolBatchBarrier();
 
+    /** Reports the frames {@link SendInput} drops, once per kind and type. */
+    private readonly _droppedInput = new RealtimeDroppedInputReporter('OpenAILiveRealtime', 'this session sends audio only');
+
     private _outputHandlers: Array<(chunk: ArrayBuffer) => void> = [];
     private _transcriptHandlers: Array<(t: RealtimeTranscript) => void> = [];
     private _toolCallHandlers: Array<(call: RealtimeToolCall) => void> = [];
@@ -212,7 +239,12 @@ export class OpenAILiveSession implements IRealtimeSession {
     private _interruptionHandlers: Array<() => void> = [];
     private _closeHandlers: Array<() => void> = [];
 
-    constructor(socket: ILiveWebSocketLike, params: RealtimeSessionParams, options: OpenAILiveSessionOptions = {}) {
+    constructor(
+        socket: ILiveWebSocketLike,
+        params: RealtimeSessionParams,
+        options: OpenAILiveSessionOptions = {},
+        driverFacts: Readonly<RealtimeDriverFacts> = OpenAILiveRealtime.DriverFacts,
+    ) {
         this._socket = socket;
         this._params = params;
         this._options = options;
@@ -224,9 +256,11 @@ export class OpenAILiveSession implements IRealtimeSession {
         this.AudioFormat = { Codec: codec, SampleRate: rate };
 
         this.Capabilities = {
+            ...driverFacts,
             CanReconfigureTurnMode: false,
             SupportedReasoningPlanes: ['local', 'remote'],
             CanReconfigureDelegationMode: false,
+            FullDuplex: true,
             EmitsUserInterruptionSignal: false,
             EmitsProviderCutoffSignal: true,
             EmitsResponseComplete: false,
@@ -315,6 +349,10 @@ export class OpenAILiveSession implements IRealtimeSession {
     }
 
     private sendSessionStart(): void {
+        const turnDetectionWarning = DescribeOpenAILiveTurnDetection(this._params.Config as Record<string, unknown> | undefined);
+        if (turnDetectionWarning) {
+            console.warn(turnDetectionWarning);
+        }
         const compiledInstructions = this.buildInitialInstructions();
         const wireAudioFormat = this.resolveWireAudioFormat();
         const plane = this._options.reasoningPlane ?? 'local';
@@ -620,8 +658,8 @@ export class OpenAILiveSession implements IRealtimeSession {
                             InputTokens: resp.usage.input_tokens ?? 0,
                             OutputTokens: resp.usage.output_tokens ?? 0,
                             DurationSeconds: this._lastReportedSeconds,
-                            InputTokenDetails: MapUsageModalityDetail(resp.usage.input_token_details),
-                            OutputTokenDetails: MapUsageModalityDetail(resp.usage.output_token_details),
+                            InputTokenDetails: MapRealtimeUsageModalityDetail(resp.usage.input_token_details),
+                            OutputTokenDetails: MapRealtimeUsageModalityDetail(resp.usage.output_token_details),
                         };
                         for (const handler of this._usageHandlers) {
                             handler(u);
@@ -699,10 +737,19 @@ export class OpenAILiveSession implements IRealtimeSession {
 
     // ─── IRealtimeSession Implementation ──────────────────────────────────────────
 
-    public SendInput(chunk: ArrayBuffer, kind?: 'audio' | 'video'): void {
-        if (kind === 'video') {
-            return; // Audio-only driver ignores video frames
+    /**
+     * @inheritdoc
+     *
+     * Appends an audio frame to the session's input audio (`session.input_audio.append`). The session sends audio only,
+     * so a frame of another kind (a camera or screen frame) is dropped, never appended as audio, and reported once per
+     * kind and type.
+     */
+    public SendInput(frame: RealtimeInputFrame): void {
+        if (frame.Kind !== 'audio') {
+            this._droppedInput.Report(frame);
+            return;
         }
+        const chunk = frame.Data;
         if (this._closed) {
             return;
         }
@@ -841,9 +888,26 @@ export class OpenAILiveSession implements IRealtimeSession {
         this._usageHandlers.push(handler);
     }
 
+    /**
+     * Drops all registered callback handlers and per-response bookkeeping so a closed session
+     * can't keep the caller's dispatch/UI context reachable through a stale closure. Mirrors
+     * `OpenAISession.clearHandlers()` in openAIRealtime.ts.
+     */
+    private clearHandlers(): void {
+        this._outputHandlers = [];
+        this._transcriptHandlers = [];
+        this._toolCallHandlers = [];
+        this._errorHandlers = [];
+        this._usageHandlers = [];
+        this._interruptionHandlers = [];
+        this._closeHandlers = [];
+        this._countedResponseIds.clear();
+    }
+
     public async Close(): Promise<void> {
         this._toolBatchBarrier.Clear();
         if (this._closed) {
+            this.clearHandlers();
             return;
         }
         this._closeRequested = true;
@@ -858,8 +922,9 @@ export class OpenAILiveSession implements IRealtimeSession {
         });
 
         // Race graceful server close against safety timer (5s)
+        let safetyTimer: ReturnType<typeof setTimeout> | undefined;
         const timeoutPromise = new Promise<void>((resolve) => {
-            setTimeout(() => {
+            safetyTimer = setTimeout(() => {
                 try {
                     this._socket.close(1000, 'Close timeout');
                 } catch {
@@ -869,8 +934,14 @@ export class OpenAILiveSession implements IRealtimeSession {
             }, 5000);
         });
 
-        await Promise.race([this._closePromise, timeoutPromise]);
-        this._closed = true;
+        try {
+            await Promise.race([this._closePromise, timeoutPromise]);
+        } finally {
+            // Don't leave the 5s safety timer armed (and pinning this session) once the graceful close won the race.
+            clearTimeout(safetyTimer);
+            this._closed = true;
+            this.clearHandlers();
+        }
     }
 }
 
@@ -879,6 +950,9 @@ export class OpenAILiveSession implements IRealtimeSession {
  */
 @RegisterClass(BaseRealtimeModel, 'OpenAILiveRealtime')
 export class OpenAILiveRealtime extends BaseRealtimeModel {
+    /** GPT-Live's session ceiling is not documented in-repo, so it stays unknown. */
+    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = {};
+
     public static override readonly SupportsDynamicToolSet = true;
 
     private _endpoint: string;
@@ -986,7 +1060,7 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
             backchannelPolicy: typeof config?.['backchannelPolicy'] === 'string' ? config['backchannelPolicy'] : undefined,
         };
 
-        const session = new OpenAILiveSession(socket, params, options);
+        const session = new OpenAILiveSession(socket, params, options, RealtimeDriverFactsOf(this));
         await session.WaitForStarted();
         return session;
     }
@@ -1067,6 +1141,10 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
             | undefined;
 
         const plane = reasoningConfig?.Plane ?? 'local';
+        const turnDetectionWarning = DescribeOpenAILiveTurnDetection(config);
+        if (turnDetectionWarning) {
+            console.warn(turnDetectionWarning);
+        }
         const mappedTools = params.Tools?.map((t) => ({
             type: 'function' as const,
             name: t.Name,
@@ -1168,6 +1246,7 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
             EphemeralToken: brokerUrl,
             ExpiresAt: ticket.ExpiresAt,
             SessionConfig: sessionPayload as JSONObject,
+            MaxSessionSeconds: this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds),
         };
     }
 
@@ -1181,19 +1260,20 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
     }
 
     /**
-     * Resolves the browser-facing HTTP(S) broker URL for the OpenAI Live WebRTC SDP exchange.
+     * Resolves the browser-facing URL of MJAPI's WebRTC SDP broker for one ticket:
+     * `<MJAPI origin>/realtime/sdp-exchange?ticket=<id>`.
+     *
+     * The origin comes from the shared {@link ResolveRealtimeProxyBaseHttpUrl} (`@memberjunction/ai`), so this driver
+     * finds MJAPI the way the relay and proxy drivers do: an explicit `Config.proxyBaseUrl`, else this driver's own
+     * `Config.brokerBaseUrl`, then `MJAPI_PUBLIC_URL`, then `GRAPHQL_BASE_URL` + `GRAPHQL_PORT`. With nothing set
+     * that is `http://localhost:4000`, MJAPI's default port. Only the origin is kept, because MJAPI serves the broker
+     * at its root, not under the GraphQL path.
      */
     protected resolveBrokerUrl(params: RealtimeSessionParams, ticketId: string): string {
-        const override = params.Config?.['proxyBaseUrl'] ?? params.Config?.['brokerBaseUrl'];
-        const source =
-            (typeof override === 'string' && override.trim().length > 0 ? override.trim() : '') ||
-            process.env['MJAPI_PUBLIC_URL'] ||
-            `${process.env['GRAPHQL_BASE_URL'] ?? 'http://localhost'}:${process.env['GRAPHQL_PORT'] ?? '4103'}`;
-        let end = source.length;
-        while (end > 0 && source.charCodeAt(end - 1) === 47 /* '/' */) {
-            end--;
-        }
-        const baseUrl = source.slice(0, end);
+        const override = [params.Config?.['proxyBaseUrl'], params.Config?.['brokerBaseUrl']].find(
+            (value) => typeof value === 'string' && value.trim().length > 0
+        );
+        const baseUrl = ResolveRealtimeProxyBaseHttpUrl({ Config: override === undefined ? {} : { proxyBaseUrl: override } });
         return `${baseUrl}${REALTIME_SDP_EXCHANGE_PATH}?ticket=${encodeURIComponent(ticketId)}`;
     }
 

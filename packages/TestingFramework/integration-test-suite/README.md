@@ -109,7 +109,7 @@ gates the one-process catalog can't provide, and they are **not** dispatched by 
 
 | Rig | Needs |
 |---|---|
-| `cross-server-invalidation-tests.ts` | TWO MJAPI processes + shared Redis (`RUN_CROSS_SERVER=1`, `MJAPI_A_URL`/`MJAPI_B_URL`) |
+| `cross-server-invalidation-tests.ts` | TWO MJAPI processes + shared Redis (`RUN_CROSS_SERVER=1`, `MJAPI_A_URL`/`MJAPI_B_URL`, `MJ_API_KEY`) — XS1–XS4 cover cache **invalidation** (XS3: metadata, XS4: transaction groups), XS5–XS7 cover **payload materialization** (that cross-server rows arrive as real BaseEntity instances, not prototype-less JSON); **mutates** (touches a query's `Feedback`, always restored) |
 | `cache-payload-materialization-tests.ts` | one process + real Redis (`REDIS_URL`) — captures a real cache publish off the wire and replays it as a foreign server; **mutates** (seeds/deletes agent notes) |
 | `agent-memory-tests.ts` | live-model gate (`RUN_AGENT_TESTS=1`) |
 | `runview-matrix-tests.ts` | running MJAPI + `MJ_API_KEY` — client-first RunView sweep across every entity |
@@ -119,6 +119,13 @@ gates the one-process catalog can't provide, and they are **not** dispatched by 
 ```bash
 npx tsx packages/TestingFramework/integration-test-suite/rigs/runview-matrix-tests.ts
 ```
+
+### Golden-label-quality rig (`rigs/feature-pipelines/`)
+
+`golden-label-quality.ts` labels the job-title golden set with two vendors' models, adjudicates against labeler A and
+writes the set with its label-quality record (usage and exit codes in its header; live model calls, capped by
+`--max-cost`). The rigs sit outside the package's `tsconfig`, so `pnpm run check:rigs` (`tsconfig.rigs.json`)
+type-checks this folder; the package's `pnpm test` runs it too.
 
 ## Further reading
 

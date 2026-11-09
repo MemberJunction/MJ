@@ -1,5 +1,5 @@
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { GroupByUUID, RegisterClass } from '@memberjunction/global';
 import { BaseAction } from '@memberjunction/actions';
 import { RunView } from '@memberjunction/core';
 import { MJScheduledJobRunEntity } from '@memberjunction/core-entities';
@@ -129,6 +129,7 @@ export class GetScheduledJobStatisticsAction extends BaseJobAction {
 
             // Calculate derived statistics
             const statistics: JobStatistics[] = [];
+            const runsByJob = GroupByUUID(jobRuns, r => r.ScheduledJobID);
 
             for (const stats of jobStatsMap.values()) {
                 // Calculate success rate
@@ -137,8 +138,7 @@ export class GetScheduledJobStatisticsAction extends BaseJobAction {
                 }
 
                 // Calculate average duration
-                const completedRuns = jobRuns.filter(r =>
-                    UUIDsEqual(r.ScheduledJobID, stats.JobID) &&
+                const completedRuns = (runsByJob.Get(stats.JobID) ?? []).filter(r =>
                     r.Status === 'Completed' &&
                     r.StartedAt &&
                     r.CompletedAt

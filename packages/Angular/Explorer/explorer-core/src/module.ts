@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { NgModule } from '@angular/core';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { RouterModule, RouteReuseStrategy } from '@angular/router';
+import { AngularSplitModule } from 'angular-split';
 
 // Services
 import { SystemValidationService } from './lib/services/system-validation.service';
@@ -39,6 +40,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ResourceContainerComponent } from './lib/generic/resource-container-component';
 import { DashboardPreferencesDialogComponent } from './lib/dashboard-preferences-dialog/dashboard-preferences-dialog.component';
 import { DashboardResource } from './lib/resource-wrappers/dashboard-resource.component';
+import { DashboardAddToMenuComponent } from './lib/resource-wrappers/dashboard-add-to-menu.component';
 import { QueryResource } from './lib/resource-wrappers/query-resource.component';
 import { EntityRecordResource } from './lib/resource-wrappers/record-resource.component';
 import { SearchResultsResource } from './lib/resource-wrappers/search-results-resource.component';
@@ -63,19 +65,30 @@ import { ArtifactResource } from './lib/resource-wrappers/artifact-resource.comp
 import { NotificationsResource } from './lib/resource-wrappers/notifications-resource.component';
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
 import { ClaimRedeemComponent } from './lib/identity-claims/claim-redeem.component';
+import { OfficeConnectComponent } from './lib/office/office-connect.component';
 import { SearchModule } from '@memberjunction/ng-search';
 import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
 import { PaginationComponent } from '@memberjunction/ng-pagination';
 import { ConversationFeedbackResource } from './lib/conversation-feedback';
 import { LiveKitRoomResource } from './lib/resource-wrappers/livekit-room-resource.component';
-import { MJLiveKitRoomComponent } from '@memberjunction/ng-mj-livekit-room';
+import { HumanHandoffConsoleResource } from './lib/resource-wrappers/human-handoff-console-resource.component';
+import { MeetingsResource } from './lib/resource-wrappers/meetings-resource.component';
+import { MJConversationOffersComponent } from '@memberjunction/ng-conversation-offers';
+import {
+  MJLiveKitRoomComponent,
+  MJMeetingListComponent,
+  MJMeetingScheduleFormComponent,
+  MJMeetingLobbyComponent,
+} from '@memberjunction/ng-mj-livekit-room';
 
 @NgModule({
   declarations: [
     OAuthCallbackComponent,
     ClaimRedeemComponent,
+    OfficeConnectComponent,
     ResourceContainerComponent,
     DashboardResource,
+    DashboardAddToMenuComponent,
     EntityRecordResource,
     SearchResultsResource,
     UserViewResource,
@@ -99,6 +112,8 @@ import { MJLiveKitRoomComponent } from '@memberjunction/ng-mj-livekit-room';
     DashboardPreferencesDialogComponent,
     ConversationFeedbackResource,
     LiveKitRoomResource,
+    HumanHandoffConsoleResource,
+    MeetingsResource,
   ],
   imports: [
     MarkdownModule,
@@ -116,6 +131,7 @@ import { MJLiveKitRoomComponent } from '@memberjunction/ng-mj-livekit-room';
     ConversationsModule,
     CoreDashboardsModule,
     DashboardViewerModule,
+    AngularSplitModule,
     ExplorerSettingsModule,
     FileStorageModule,
     EntityFormDialogModule,
@@ -141,6 +157,10 @@ import { MJLiveKitRoomComponent } from '@memberjunction/ng-mj-livekit-room';
     MJWindowTitlebarComponent,
     PaginationComponent,
     MJLiveKitRoomComponent,
+    MJMeetingListComponent,
+    MJMeetingScheduleFormComponent,
+    MJMeetingLobbyComponent,
+    MJConversationOffersComponent,
     MJEmptyStateComponent,
     MJAlertComponent
   ],
@@ -160,7 +180,8 @@ import { MJLiveKitRoomComponent } from '@memberjunction/ng-mj-livekit-room';
     UserNotificationsComponent,
     ListDetailResource,
     DashboardPreferencesDialogComponent,
-    ConversationFeedbackResource
+    ConversationFeedbackResource,
+    MeetingsResource
   ],
   providers: [
     { provide: RouteReuseStrategy, useClass: CustomReuseStrategy },

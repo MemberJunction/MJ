@@ -41,6 +41,8 @@ class MentionEditorStub implements ControlValueAccessor {
   getPlainTextWithJsonMentions(): string { return 'hi [json]'; }
   hasAttachments(): boolean { return false; }
   clear(): void { /* no-op */ }
+  // read by the skills button's SkillsActive binding
+  IsTriggerOpen(): boolean { return false; }
   // CVA
   writeValue(): void { /* no-op */ }
   registerOnChange(): void { /* no-op */ }
@@ -114,5 +116,95 @@ describe('MessageInputBoxComponent (DOM)', () => {
     const out = capture(f.componentInstance.ValueChange);
     f.componentInstance.OnValueChange('typed');
     expect(out).toContain('typed');
+  });
+
+  // ── The send slot as a stop control ─────────────────────────────────────────────────────
+  describe('send slot modes', () => {
+    it('in stop mode the same button is a live stop control carrying the host\'s label', () => {
+      const f = render({ Value: '', SendSlotMode: 'stop', StopLabel: 'Stop Sage' });
+      const btn = query(f, '.send-button-icon') as HTMLButtonElement;
+      expect(btn.classList.contains('send-button-icon--stop')).toBe(true);
+      expect(btn.disabled).toBe(false); // live even with nothing typed
+      expect(btn.getAttribute('aria-label')).toBe('Stop Sage');
+      expect(btn.title).toBe('Stop Sage');
+      expect(query(f, '.send-button-icon .fa-stop')).not.toBeNull();
+      expect(query(f, '.send-slot-label')).toBeNull(); // the square alone at one
+    });
+
+    it('a click in stop mode emits StopClicked and never submits', () => {
+      const f = render({ Value: 'draft', SendSlotMode: 'stop' });
+      const stops = capture(f.componentInstance.StopClicked);
+      const sends = capture(f.componentInstance.TextSubmitted);
+      (query(f, '.send-button-icon') as HTMLElement).click();
+      expect(stops.length).toBe(1);
+      expect(sends.length).toBe(0);
+    });
+
+    it('above one, the slot reads "Stop all" with the count', () => {
+      const f = render({ SendSlotMode: 'stop', StopCount: 2, StopLabel: 'Stop all 2 runs' });
+      const btn = query(f, '.send-button-icon') as HTMLElement;
+      expect(btn.classList.contains('send-button-icon--stop-all')).toBe(true);
+      expect((query(f, '.send-slot-label') as HTMLElement).textContent).toBe('Stop all');
+      expect((query(f, '.send-slot-count') as HTMLElement).textContent).toBe('2');
+    });
+
+    it('while stopping the slot is disabled, busy, and a click does nothing', () => {
+      const f = render({ Value: 'draft', SendSlotMode: 'stopping' });
+      const btn = query(f, '.send-button-icon') as HTMLButtonElement;
+      expect(btn.disabled).toBe(true);
+      expect(btn.getAttribute('aria-busy')).toBe('true');
+      expect(btn.getAttribute('aria-label')).toBe('Stopping');
+      expect(btn.classList.contains('send-button-icon--stopping')).toBe(true);
+      const stops = capture(f.componentInstance.StopClicked);
+      const sends = capture(f.componentInstance.TextSubmitted);
+      f.componentInstance.OnSendSlotClick();
+      expect(stops.length + sends.length).toBe(0);
+    });
+
+    it('in send mode StopClicked never fires and the send gate is unchanged', () => {
+      const f = render({ Value: 'hi', SendSlotMode: 'send' });
+      const stops = capture(f.componentInstance.StopClicked);
+      const sends = capture(f.componentInstance.TextSubmitted);
+      (query(f, '.send-button-icon') as HTMLElement).click();
+      expect(stops.length).toBe(0);
+      expect(sends).toEqual(['hi [json]']);
+    });
+
+    it('renders the status line as a polite live region, with the elapsed time hidden from it', () => {
+      const f = render({ StatusText: 'Sage is working', StatusElapsed: '41s' });
+      const line = query(f, '.send-slot-status') as HTMLElement;
+      expect(line.getAttribute('aria-live')).toBe('polite');
+      expect((query(f, '.send-slot-status-text') as HTMLElement).textContent).toBe('Sage is working');
+      const elapsed = query(f, '.send-slot-status-elapsed') as HTMLElement;
+      expect(elapsed.getAttribute('aria-hidden')).toBe('true');
+      expect(elapsed.textContent?.trim()).toBe('41s'); // a pill of its own: no comma joining it to the text
+      expect(line.textContent).not.toContain(',');
+    });
+
+    it('hides the status line when there is no status text', () => {
+      const f = render({ StatusText: null });
+      expect(query(f, '.send-slot-status')).toBeNull();
+    });
+  });
+});
+
+describe('MessageInputBoxComponent (DOM) — action row layout', () => {
+  it('puts every action button in its own row after the editor, not over it', () => {
+    const f = render({ EnableAttachments: true, EnableRealtime: true, EnablePlanMode: true, EnableSkills: true });
+    const editor = query(f, 'mj-mention-editor') as HTMLElement;
+    const row = query(f, '.composer-actions') as HTMLElement;
+    expect(row).not.toBeNull();
+    expect(editor.nextElementSibling).toBe(row);
+    expect(row.querySelector('.attach-buttons')).not.toBeNull();
+    expect(row.querySelector('.send-button-icon')).not.toBeNull();
+    expect(row.querySelectorAll('.attach-button-icon').length).toBe(5); // skills, plan, attach, voice, voice options
+  });
+
+  it('keeps the row (with just the send button) when every optional control is off', () => {
+    const f = render({ EnableAttachments: false, EnableRealtime: false, EnablePlanMode: false, EnableSkills: false });
+    const row = query(f, '.composer-actions') as HTMLElement;
+    expect(row.querySelector('.attach-buttons')).toBeNull();
+    expect(row.children.length).toBe(1);
+    expect(row.firstElementChild?.classList.contains('send-button-icon')).toBe(true);
   });
 });

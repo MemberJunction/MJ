@@ -4,24 +4,29 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ResolveStartupMode } from '@memberjunction/core';
-import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed } from '@memberjunction/core';
+import { UserCache, resolveDbPlatformFromEnv, GenericDatabaseProvider, SummarizeSqlParameters } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
+import { ImportResolverModules } from './resolverModuleImport.js';
 import { registerIntegrationCustomColumnPromoter, IntegrationCustomColumnPromoter } from './integration/CustomColumnPromoter.js';
 import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, selectFieldsToMap } from './integration/EntityMapLifecycle.js';
+import { RSUPostRestartProgressSession } from './integration/RSUPostRestartProgress.js';
+import type { RSUPostRestartProgress } from './integration/RSUPostRestartProgress.js';
+import { IntrospectInCatalogScope } from './integration/PostRestartIntrospect.js';
 import { default as BodyParser } from 'body-parser';
 import compression from 'compression'; // Add compression middleware
 import cors from 'cors';
 import express, { Application } from 'express';
 import { default as fg } from 'fast-glob';
 import { useServer } from 'graphql-ws/lib/use/ws';
-import { createServer } from 'node:http';
+import { createServer, type Server as HttpServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { Session as InspectorSession } from 'node:inspector';
-import { sep } from 'node:path';
+import { join, sep } from 'node:path';
 import 'reflect-metadata';
 import { ReplaySubject } from 'rxjs';
 import { BuildSchemaOptions, buildSchemaSync, getMetadataStorage, GraphQLTimestamp, PubSubEngine } from 'type-graphql';
@@ -30,24 +35,31 @@ import sql from 'mssql';
 import { WebSocketServer } from 'ws';
 import { RealtimeProxyServer } from './realtimeProxy/RealtimeProxyServer.js';
 import buildApolloServer from './apolloServer/index.js';
-import { configInfo, configFilePath, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions } from './config.js';
+import { configInfo, configFilePath, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions, userEmailMap } from './config.js';
+import { DescribeUserEmailMap } from './auth/loginEmailResolution.js';
+import { TranslateBracketsToPG } from './postgresqlCompat.js';
+import { BuildPostgreSQLConnectionConfig, DescribeReadOnlyLoginOverreach, PostgreSQLReadOnlyPool, ResolvePostgreSQLEndpoint, ResolvePostgreSQLReadOnlyCredentials, ToPGPoolConfig } from './postgresqlPoolSettings.js';
 import { default as jwt } from 'jsonwebtoken';
-import { contextFunction, CreateUnifiedAuthMiddleware, getUserPayload } from './context.js';
+import { contextFunction, CreateReadOnlyProvider, CreateUnifiedAuthMiddleware, getUserPayload } from './context.js';
 import { UserPayload } from './types.js';
 import { requireSystemUserDirective, publicDirective } from './directives/index.js';
-import { variablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
+import { ApplyRootVariablesLoggingMiddleware, variablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
 import { auditResolversForUndecoratedArgs } from './logging/bootAudit.js';
 import { StartupLogger } from './logging/StartupLogger.js';
+import { MJServerStartupState } from './startupState.js';
+import { CreateStartupGate, ListenOnPort, RejectUpgradeWhileStarting } from './startupGate.js';
 import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
-import { createOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
-import { createSignatureWebhookHandler } from './rest/SignatureWebhookHandler.js';
-import { createMediaStreamRouter } from './rest/MediaStreamHandler.js';
-import { createRealtimeSdpBrokerRouter } from './rest/RealtimeSdpBrokerHandler.js';
-import { REALTIME_SDP_EXCHANGE_PATH } from '@memberjunction/ai';
-import { createMagicLinkHandler, createMagicLinkJwksRouter, registerMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
-import { createWidgetHandler, WIDGET_MOUNT_PATH } from './realtimeWidget/index.js';
+import { CreateRealtimeRecordingRouter, REALTIME_RECORDING_MOUNT_PATH } from './rest/RealtimeRecordingHandler.js';
+import { LoadOwnedRealtimeSession } from './realtimeSessions/ownedRealtimeSession.js';
+import { AuthorizeAnonymousRoomSessions, AuthorizeLoadedSession } from './realtimeSessions/sessionAccess.js';
+import { RecordingAssemblyScheduler } from './realtimeSessions/RecordingAssemblyScheduler.js';
+import {
+  RealtimeSessionEventService,
+  ParseReplicatedRealtimeSessionEvent,
+  type RealtimeSessionEventTopicPayload,
+} from './realtimeSessions/index.js';
 import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';
 
@@ -56,17 +68,30 @@ import { ScheduledJobsService } from './services/ScheduledJobsService.js';
 import { IntegrationSyncWorkerService } from './services/IntegrationSyncWorkerService.js';
 import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, LogStatus, LogError, SetVerboseLogging } from '@memberjunction/core';
 import { getSystemUser, validateAuthProvidersRegistered } from './auth/index.js';
-import { createAuthProviderCatalogRouter, AUTH_CATALOG_MOUNT_PATH } from './auth/AuthProviderCatalogRouter.js';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
-import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
-import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
+import { ActionEngineServer } from '@memberjunction/actions';
+import { CreateAdhocSQLAuthorizer } from './resolvers/AdhocQueryResolver.js';
+import { CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, StartEngineSweeper, StartMetadataSweep, StartUserCacheChecks, WarmupLeaseMsFromSettings, WirePushStatusFanOut, WireSharedCacheEvents } from './sharedCache.js';
 import { PubSubManager } from './generic/PubSubManager.js';
-import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
+import { StartOrphanedConversationDetailReconciler } from './generic/OrphanedConversationDetailReconciler.js';
+import {
+  HANDOFF_OFFER_FANOUT_CHANNEL,
+  HANDOFF_OFFER_TOPIC,
+  SetHandoffOfferPublishHook,
+  ParseReplicatedHandoffOfferUpdate,
+} from './resolvers/HumanHandoffResolver.js';
+import { RoomAuthorizationService, RoomHandoffEngine } from '@memberjunction/livekit-room-server';
+// Type-only: the provider is built in ./sharedCache.ts. Still needed here because the handoff-offer
+// fan-out below stays in this file — see the note at its call site.
+import type { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
+import { IntegrationProgressEmitter, SweepInterruptedRuns } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
-import { ClientToolRequestManager, AgentRunWatchdog } from '@memberjunction/ai-agents';
-import { SessionJanitor } from './agentSessions/index.js';
+import { ClientToolRequestManager, AgentRunWatchdog, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
+import { BindBridgeEngineHostInstance, SessionJanitor, SetHostInstancePort, StartBridgeOrphanReconciliation } from './agentSessions/index.js';
+import { ApplyHandoffOfferExpirySettings } from './agentSessions/HandoffOfferExpiry.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
+import { MJServerWorkQueueProviderSource, StartWorkQueueHost } from './services/WorkQueueHostService.js';
 import { GetAttachmentService } from '@memberjunction/aiengine';
 import { MJStorageBlobStore } from './services/MJStorageBlobStore.js';
 import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData, ConfigureRecordDataBroadcast } from './generic/CacheInvalidationResolver.js';
@@ -79,14 +104,35 @@ import {
   MJCompanyIntegrationFieldMapEntity,
   MJScheduledJobEntity,
 } from '@memberjunction/core-entities';
-import { ServerExtensionLoader, ServerExtensionConfig, mergeServerExtensionConfigs, prepareServerExtensionConfigs, describeServerExtensionMount, InstallMediaUpgradeDispatcher, IsGraphQLWsPath } from '@memberjunction/server-extensions-core';
-import { coreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
+import {
+  ServerExtensionLoader,
+  ServerExtensionConfig,
+  SERVER_EXTENSION_CORE_SERVICE_KEYS,
+  type IServerExtensionHostRuntimeService,
+  mergeServerExtensionConfigs,
+  prepareServerExtensionConfigs,
+  describeServerExtensionMount,
+  InstallMediaUpgradeDispatcher,
+  IsGraphQLWsPath,
+  GetCorsOwningServerExtensionRoots,
+} from '@memberjunction/server-extensions-core';
+import { CreateIsolatedProvider } from './isolatedProvider.js';
+import { ResolveConfiguredPrincipal } from './auth/principals.js';
+import { CreateExtensionOwnedPreflightFallback, CreateGlobalCorsMiddleware } from './globalCors.js';
+import { CoreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
+import { ApiRoute, ApiRootPath, ConfiguredPublicUrl } from './apiRoot.js';
+import { MountHealthcheckRoute, MountPublicCoreRoutes, MountExtensionHealthRoute, MountAuthCatalogRoute, MountAuthenticatedCoreRoutes } from './coreRoutes.js';
 import { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
 import { CreateMetadataRefreshSignalHandler, METADATA_REFRESH_SIGNAL } from './metadataRefreshSignal.js';
+import { CacheInvalidationBroadcastManager } from './broadcast/index.js';
+import { ResolveServerRole, ShouldRunBackgroundWorkers } from './serverRoleConfigUnits.js';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
 export { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
+export * from './serverRoleConfigUnits.js';
+export * from './broadcast/index.js';
+export { ApplyRootVariablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
 
 /**
  * Returns the configured database platform from the `DB_PLATFORM` environment
@@ -116,7 +162,9 @@ export * from 'type-graphql';
 // later importers, which makes schema build fail on ViewResult.RowCount.
 export { Int, Float, ID } from 'type-graphql';
 export { NewUserBase } from './auth/newUsers.js';
+export { CreateIsolatedProvider } from './isolatedProvider.js';
 export { configInfo, DEFAULT_SERVER_CONFIG } from './config.js';
+export { ApiRoute, ApiRootPath, ConfiguredPublicUrl, JoinApiRoute, NormalizeApiRootPath, type ApiRouteOptions } from './apiRoot.js';
 export { ServerExtensionLoader, BaseServerExtension, DefaultServerExtensionServiceRegistry } from '@memberjunction/server-extensions-core';
 export type {
     ServerExtensionConfig,
@@ -131,6 +179,7 @@ export * from './directives/index.js';
 export { NoLog, hasNoLogParameter, getNoLogFields } from './logging/NoLog.js';
 export * from './entitySubclasses/MJEntityPermissionEntityServer.server.js';
 export * from './types.js';
+export * from './requestOrigin.js';
 export {
     getSystemUser,
     getSigningKeys,
@@ -167,7 +216,9 @@ export * from './generic/refusalExtensions.js';
 export * from './generic/RunViewResolver.js';
 export * from './resolvers/RunTemplateResolver.js';
 export * from './resolvers/RunAIPromptResolver.js';
+export * from './resolvers/RunDecisionResolver.js';
 export * from './resolvers/RunAIAgentResolver.js';
+export { AgentRunStatusPublisher } from './resolvers/AgentRunStatusPublisher.js';
 export * from './resolvers/VectorizeEntityResolver.js';
 export * from './resolvers/SearchKnowledgeResolver.js';
 export * from './resolvers/SearchKnowledgeStreamResolver.js';
@@ -178,6 +229,8 @@ export * from './resolvers/GenerateSeedTaxonomyResolver.js';
 export * from './resolvers/PipelineProgressResolver.js';
 export * from './resolvers/IntegrationProgressResolver.js';
 export * from './resolvers/IdentityClaimRedemptionResolver.js';
+export * from './resolvers/UserAvatarResolver.js';
+export * from './resolvers/avatarInputValidation.js';
 export * from './resolvers/ClientToolRequestResolver.js';
 export * from './resolvers/AutotagPipelineResolver.js';
 export * from './resolvers/TagGovernanceResolver.js';
@@ -222,8 +275,11 @@ export * from './resolvers/FileCategoryResolver.js';
 export * from './resolvers/FileResolver.js';
 export * from './rest/MediaAccessKeys.js';
 export * from './rest/MediaStreamHandler.js';
+export * from './routeRateLimitConfigUnits.js';
+export * from './rest/RealtimeRecordingHandler.js';
 export * from './resolvers/InfoResolver.js';
 export * from './resolvers/PotentialDuplicateRecordResolver.js';
+export * from './resolvers/DuplicateEntryCheckResolver.js';
 export * from './resolvers/RunTestResolver.js';
 export * from './resolvers/SearchEntitiesResolver.js';
 export * from './resolvers/UserFavoriteResolver.js';
@@ -234,6 +290,10 @@ export * from './resolvers/CurrentUserContextResolver.js';
 export * from './resolvers/RSUResolver.js';
 export * from './resolvers/AgentSessionResolver.js';
 export * from './resolvers/RealtimeClientSessionResolver.js';
+export * from './resolvers/RealtimeSessionEventsResolver.js';
+export * from './resolvers/RealtimeSessionVerificationResolver.js';
+export * from './realtimeSessions/index.js';
+export * from './resolvers/MeetingResolver.js';
 export * from './resolvers/RemoteBrowserActionResolver.js';
 export * from './agentSessions/index.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
@@ -243,13 +303,19 @@ export * from './multiTenancy/index.js';
 export * from './middleware/index.js';
 
 import { RegisterDataHook } from '@memberjunction/core';
+import { EnsureAnchoredConversationReadHookRegistered } from '@memberjunction/core-entities-server';
 import type { RequestHandler, ErrorRequestHandler } from 'express';
 import type { ApolloServerPlugin } from '@apollo/server';
 import type { GraphQLSchema } from 'graphql';
-import { BaseServerMiddleware } from './middleware/BaseServerMiddleware.js';
+import { BaseServerMiddleware, ServerMiddlewareContext } from './middleware/BaseServerMiddleware.js';
 import { SuppressTaskGraphSubmission } from '@memberjunction/ai-core-plus';
 
 export type MJServerOptions = {
+  /**
+   * Runs at the end of the bootstrap, before any request reaches the app. The port is already bound
+   * by then (Serve binds it first), but until this returns every request is answered by the startup
+   * gate (503, or the health endpoints), never by the app.
+   */
   onBeforeServe?: () => void | Promise<void>;
   restApiOptions?: Partial<RESTApiOptions>; // Options for REST API configuration
   /**
@@ -269,7 +335,15 @@ const localPath = (p: string) => {
   return resolvedPath;
 };
 
-export const CreateApp = (): Application => express();
+/**
+ * Creates the Express application MJServer serves on. `X-Powered-By` is disabled: it only
+ * advertises the framework to scanners. {@link Serve} disables it again on a host-supplied app.
+ */
+export const CreateApp = (): Application => {
+  const app = express();
+  app.disable('x-powered-by');
+  return app;
+};
 
 /** @deprecated Use {@link CreateApp}. */
 export const createApp = CreateApp;
@@ -287,8 +361,87 @@ function resolveServerVersion(): string | undefined {
     const pkgPath = fileURLToPath(new URL('../package.json', import.meta.url));
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version?: string };
     return pkg.version;
-  } catch {
+  } catch (err) {
+    LogError('Failed to resolve server version from package.json', undefined, err);
     return undefined;
+  }
+}
+
+
+/**
+ * Replicate handoff-offer updates across server instances over Redis.
+ *
+ * Outbound: every locally-published offer change is forwarded on a shared Redis channel.
+ * Inbound: a message from another instance is republished onto THIS instance's local GraphQL
+ * topic (where the subscription filter scopes to the target user) and delivered to RoomHandoffEngine
+ * so the call-hosting instance can transition its local flow (e.g. wait for the user to join the room).
+ */
+async function wireHandoffOfferFanOut(redisProvider: RedisLocalStorageProvider, startupLog: StartupLogger): Promise<void> {
+  try {
+    await redisProvider.SubscribeToChannel(HANDOFF_OFFER_FANOUT_CHANNEL, (raw: string) => {
+      try {
+        const payload = ParseReplicatedHandoffOfferUpdate(raw, MJGlobal.Instance.ProcessUUID);
+        if (!payload) {
+          return;
+        }
+        PubSubManager.Instance.Publish(HANDOFF_OFFER_TOPIC, {
+          UserID: payload.UserID,
+          Kind: payload.Kind,
+          Offer: payload.Offer,
+        });
+        RoomHandoffEngine.Instance.OnRemoteOfferChange(payload);
+      } catch (err) {
+        // A malformed message on a shared channel must not take down the subscriber.
+        LogError('Error processing handoff-offer fan-out message', undefined, err);
+      }
+    });
+
+    SetHandoffOfferPublishHook((payload) => {
+      redisProvider.PublishMessage(HANDOFF_OFFER_FANOUT_CHANNEL, JSON.stringify(payload));
+    });
+
+    console.log('[MJAPI] Handoff-offer updates: cross-instance fan-out enabled via Redis');
+    startupLog.LogIf('verbose', 'Handoff-offer updates: cross-instance fan-out enabled via Redis');
+  } catch (err) {
+    console.warn(`Handoff-offer fan-out unavailable: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/** Redis channel carrying replicated realtime session events between server instances. */
+const REALTIME_SESSION_EVENTS_FANOUT_CHANNEL = 'realtime-session-events';
+
+/**
+ * Replicate realtime session events across server instances over Redis.
+ *
+ * Behind a load balancer the browser's WebSocket (the `RealtimeSessionEvents` subscription) lives on one
+ * replica while the request that raises the event — typically the public verify-link redemption — can be
+ * handled by another. The session-events topic is an in-process PubSub, so without this an
+ * `identity.verified` published on replica B never reaches the subscriber on replica A.
+ *
+ * Inbound messages are republished onto THIS instance's local topic only (never back through the
+ * replication hook, so there is no loop) and are still judged by the subscription filter against the
+ * connection's identity — a replica has no say in who sees what. The durable
+ * `RealtimeSessionVerificationStatus` query remains the backstop if Redis is down.
+ */
+async function wireRealtimeSessionEventFanOut(redisProvider: RedisLocalStorageProvider): Promise<void> {
+  try {
+    await redisProvider.SubscribeToChannel(REALTIME_SESSION_EVENTS_FANOUT_CHANNEL, (raw: string) => {
+      try {
+        const payload = ParseReplicatedRealtimeSessionEvent(raw, MJGlobal.Instance.ProcessUUID);
+        if (payload) {
+          RealtimeSessionEventService.Instance.PublishReplicated(payload);
+        }
+      } catch (err) {
+        LogError(`Realtime session event fan-out: dropping a malformed replicated event: ${(err as Error).message}`);
+      }
+    });
+    RealtimeSessionEventService.Instance.SetReplicationHook((payload: RealtimeSessionEventTopicPayload) => {
+      redisProvider.PublishMessage(REALTIME_SESSION_EVENTS_FANOUT_CHANNEL, JSON.stringify(payload));
+    });
+    console.log('[MJAPI] Realtime session events: cross-instance fan-out enabled via Redis');
+  } catch (err) {
+    // Single-instance delivery still works and the status query covers the rest: degraded, not broken.
+    console.warn(`Realtime session event fan-out unavailable: ${(err as Error).message}`);
   }
 }
 
@@ -303,8 +456,53 @@ function resolveServerVersion(): string | undefined {
 // there is no ordering hazard in binding this early.
 GetAttachmentService().BlobStore = new MJStorageBlobStore();
 
+/**
+ * Starts MJServer. The port is bound first, behind a startup gate: until the bootstrap finishes,
+ * `/healthcheck` answers 503 with the current phase, `/healthcheck/live` answers 200, and every
+ * other request gets 503 with `Retry-After`. A port already in use therefore fails at the start of
+ * boot, not the end. A bootstrap that throws marks the server `failed` (the health endpoint keeps
+ * saying so if the process stays up), logs the phase it failed in, and rethrows.
+ */
 export const Serve = async (resolverPaths: Array<string>, app: Application = CreateApp(), options?: MJServerOptions): Promise<void> => {
+  const startup = MJServerStartupState.Instance;
+  startup.Begin();
+  const httpServer = createServer(CreateStartupGate(app, startup));
+  // Until the upgrade router is installed, every WebSocket upgrade is refused with a 503.
+  httpServer.on('upgrade', (_request, socket) => {
+    RejectUpgradeWhileStarting(startup, socket);
+  });
+  try {
+    await ListenOnPort(httpServer, graphqlPort);
+    await serveBehindStartupGate(httpServer, startup, resolverPaths, app, options);
+  } catch (err) {
+    // A throw after the gate opened leaves the server serving, as it did before the gate existed.
+    if (!startup.IsReady) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      startup.MarkFailed(error);
+      console.error(`❌ MJServer startup failed during "${startup.Phase}": ${error.message}`);
+    }
+    throw err;
+  }
+};
+
+/** The bootstrap {@link Serve} runs once its port is bound; requests stay behind the startup gate until it returns. */
+const serveBehindStartupGate = async (
+  httpServer: HttpServer,
+  startup: MJServerStartupState,
+  resolverPaths: Array<string>,
+  app: Application,
+  options?: MJServerOptions
+): Promise<void> => {
   const t0 = performance.now();
+  // Name this MJAPI instance by its port before anything stamps a session row with its identity, so the janitor's
+  // startup recovery closes only the sessions an earlier boot of this instance left, never those of another MJAPI on
+  // the same host (#5309).
+  SetHostInstancePort(graphqlPort);
+  // The realtime bridge engine stamps its bridge rows with the same identity and reconciles orphans by it (#5310).
+  BindBridgeEngineHostInstance();
+  // An anonymous visitor may join only the LiveKit agent-session room it owns by scope; the room gate cannot import
+  // this package's session-access decision, so it is handed in here, before any resolver runs (MJ#6044).
+  RoomAuthorizationService.Instance.SetAnonymousSessionOwnerCheck(AuthorizeAnonymousRoomSessions);
   // Level-gated startup logger. Resolves verbosity from telemetry.level (single
   // operator knob). At `standard` (default), per-phase timings are collapsed into
   // the one-line summary; at `verbose`+ each phase prints inline as before.
@@ -333,36 +531,69 @@ const setupComplete$ = new ReplaySubject(1);
   const dbType = GetDbType();
   const dataSources: DataSourceInfo[] = [];
 
+  // Shared cache first: the database provider loads metadata and startup engines through
+  // it, so the first server to start fills it and later servers read it instead of each querying
+  // the database and broadcasting what they loaded. Subscribed before engines load so they hear
+  // other servers while they start.
+  const sharedCache = CreateSharedCacheFromEnvironment(configInfo.cacheSettings);
+  if (sharedCache) {
+    await WireSharedCacheEvents(sharedCache, () => (Metadata.Provider instanceof ProviderBase ? Metadata.Provider : undefined)); // global-provider-ok: bootstrap
+    // The cross-instance fan-outs ride this connection. Push-status moved into sharedCache.ts
+    // with the rest of the Redis wiring; the handoff and realtime-session ones stay here deliberately —
+    // they reach into RoomHandoffEngine and RealtimeSessionEventService, and the cache module should not
+    // acquire a dependency on either.
+    await WirePushStatusFanOut(sharedCache);
+    await wireHandoffOfferFanOut(sharedCache, startupLog);
+    await wireRealtimeSessionEventFanOut(sharedCache);
+    const safeRedisUrl = (process.env.REDIS_URL ?? '').replace(/:\/\/[^@]+@/, '://***@');
+    startupLog.LogIf('verbose', `Redis cache provider connected: ${safeRedisUrl}`);
+  }
+  const cacheManagerConfig = CacheManagerConfigFromSettings(configInfo.cacheSettings);
+  const warmupLeaseMs = WarmupLeaseMsFromSettings(configInfo.cacheSettings);
+
   if (dbType === 'postgresql') {
     // ─── PostgreSQL Path ───────────────────────────────────────────
     startupLog.BeginPhase('Connecting to database');
     startupLog.LogIf('verbose', 'Database type: PostgreSQL');
     const pg = await import('pg');
-    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
+    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData, MJPostgresTypes } = await import('@memberjunction/postgresql-dataprovider');
 
-    const pgHost = process.env.PG_HOST || process.env.DB_HOST || 'localhost';
-    const pgPort = parseInt(process.env.PG_PORT || process.env.DB_PORT || '5432', 10);
-    const pgUser = process.env.PG_USERNAME || process.env.DB_USERNAME || 'postgres';
-    const pgPass = process.env.PG_PASSWORD || process.env.DB_PASSWORD || '';
-    const pgDatabase = process.env.PG_DATABASE || process.env.DB_DATABASE || '';
-
-    const pgPool = new pg.default.Pool({
-      host: pgHost,
-      port: pgPort,
-      user: pgUser,
-      password: pgPass,
-      database: pgDatabase,
-      max: configInfo.databaseSettings.connectionPool?.max ?? 50,
-      min: configInfo.databaseSettings.connectionPool?.min ?? 5,
-      idleTimeoutMillis: configInfo.databaseSettings.connectionPool?.idleTimeoutMillis ?? 30000,
-      connectionTimeoutMillis: configInfo.databaseSettings.connectionPool?.acquireTimeoutMillis ?? 30000,
-    });
+    const pgEndpoint = ResolvePostgreSQLEndpoint();
+    const { Host: pgHost, Port: pgPort, User: pgUser, Database: pgDatabase } = pgEndpoint;
+    // Every API pool carries the statement and idle-in-transaction timeouts from connection #1.
+    const pgConnectionConfig = BuildPostgreSQLConnectionConfig(pgEndpoint, configInfo.databaseSettings, 'api');
+    const pgPool = new pg.default.Pool(ToPGPoolConfig(pgConnectionConfig));
+    // An idle connection the server drops is emitted on the pool; without a listener Node exits.
+    pgPool.on('error', (err) => console.error('[PostgreSQL pool] Idle connection error (connection evicted):', err.message));
 
     // Verify connection
     const testClient = await pgPool.connect();
     await testClient.query('SELECT 1');
     testClient.release();
     startupLog.LogIf('verbose', `PostgreSQL pool connected to ${pgHost}:${pgPort}/${pgDatabase}`);
+
+    // A read-only pool opened with the read-only login, as SQL Server has. Read-only per-request
+    // providers (TestQuerySQL and other caller-supplied SQL) share it instead of the primary pool.
+    const pgReadOnlyCredentials = ResolvePostgreSQLReadOnlyCredentials(configInfo);
+    if (pgReadOnlyCredentials) {
+      // A pool a provider runs on must carry the provider's type parsers, so BIGINT and NUMERIC
+      // come back as numbers here as they do on the provider's own pool.
+      const readOnlyPgPool = new pg.default.Pool({
+        ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig({ ...pgEndpoint, ...pgReadOnlyCredentials }, configInfo.databaseSettings, 'read-only')),
+        types: MJPostgresTypes,
+      });
+      readOnlyPgPool.on('error', (err) => console.error('[PostgreSQL read-only pool] Idle connection error (connection evicted):', err.message));
+      const readOnlyTestClient = await readOnlyPgPool.connect();
+      try {
+        for (const warning of await DescribeReadOnlyLoginOverreach(readOnlyTestClient, mj_core_schema)) {
+          LogStatus(`WARNING: ${warning}`);
+        }
+      } finally {
+        readOnlyTestClient.release();
+      }
+      PostgreSQLReadOnlyPool.Instance.Pool = readOnlyPgPool;
+      startupLog.LogIf('verbose', 'Read-only PostgreSQL pool has been initialized.');
+    }
 
     // Create a DataSourceInfo with a MSSQL-compatible wrapper around pg.Pool
     // This allows existing code (types, util, context) to work without changes
@@ -377,20 +608,12 @@ const setupComplete$ = new ReplaySubject(1);
     }));
 
     // Set up the PostgreSQL provider
-    const pgConnectionConfig = {
-      Host: pgHost,
-      Port: pgPort,
-      Database: pgDatabase,
-      User: pgUser,
-      Password: pgPass,
-      MaxConnections: configInfo.databaseSettings.connectionPool?.max ?? 50,
-      MinConnections: configInfo.databaseSettings.connectionPool?.min ?? 5,
-    };
     const pgConfigData = new PostgreSQLProviderConfigData(
       pgConnectionConfig,
       mj_core_schema,
       cacheRefreshInterval / 1000, // convert ms to seconds
     );
+    pgConfigData.LocalStorageProvider = sharedCache ?? undefined;
     const provider = new PostgreSQLDataProvider();
     await provider.Config(pgConfigData);
     SetProvider(provider);
@@ -402,7 +625,7 @@ const setupComplete$ = new ReplaySubject(1);
     const sysUser = UserCache.Instance.GetSystemUser();
     const backupSysUser = UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
     const pgStartupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
-    await StartupManagerImport.Instance.Startup(false, sysUser || backupSysUser, provider, { mode: pgStartupMode.mode });
+    await StartupManagerImport.Instance.Startup(false, sysUser || backupSysUser, provider, { mode: pgStartupMode.mode, cacheManagerConfig, warmupLeaseMs });
 
     // Both provider sources have now had their turn — config/env at module load, metadata via
     // AuthProviderEngine's startup hook — so "no providers at all" is finally a meaningful check.
@@ -419,9 +642,39 @@ const setupComplete$ = new ReplaySubject(1);
       if (poolAny._pgPool) {
         const thePgPool = poolAny._pgPool as import('pg').Pool;
         // Translate SQL Server bracket syntax to PostgreSQL double-quote syntax
-        const pgQuery = translateBracketsToPG(query);
-        const result = await thePgPool.query(pgQuery);
-        return result.rows;
+        const pgQuery = TranslateBracketsToPG(query);
+        const startTime = performance.now();
+        try {
+          const result = await thePgPool.query(pgQuery);
+          if (!IsDiagnosticCaptureSuppressed() && GenericDatabaseProvider.HasSqlObservers()) {
+            GenericDatabaseProvider.NotifySqlObservers({
+              ts: Date.now(),
+              sql: pgQuery,
+              parameterSummaries: SummarizeSqlParameters(parameters),
+              durationMs: performance.now() - startTime,
+              rowCount: result.rows?.length ?? 0,
+              isMutation: false,
+              description: 'ExecuteSQLWithPool(PG)',
+              diagnosticContext: GetDiagnosticContext(),
+            });
+          }
+          return result.rows;
+        } catch (err) {
+          if (!IsDiagnosticCaptureSuppressed() && GenericDatabaseProvider.HasSqlObservers()) {
+            GenericDatabaseProvider.NotifySqlObservers({
+              ts: Date.now(),
+              sql: pgQuery,
+              parameterSummaries: SummarizeSqlParameters(parameters),
+              durationMs: performance.now() - startTime,
+              rowCount: 0,
+              isMutation: false,
+              errorMessage: err instanceof Error ? err.message : String(err),
+              description: 'ExecuteSQLWithPool(PG)',
+              diagnosticContext: GetDiagnosticContext(),
+            });
+          }
+          throw err;
+        }
       }
       return origExecuteSQLWithPool.call(this, pool, query, parameters, contextUser);
     };
@@ -438,23 +691,33 @@ const setupComplete$ = new ReplaySubject(1);
     const pgCodegenPass = process.env.CODEGEN_DB_PASSWORD;
     if (pgCodegenUser && pgCodegenPass) {
       try {
-        const codegenPgPool = new pg.default.Pool({
-          host: pgHost,
-          port: pgPort,
-          user: pgCodegenUser,
-          password: pgCodegenPass,
-          database: pgDatabase,
-          max: 10,
-        });
+        // CodeGen and DDL work runs long statements across every entity, so this pool gets the
+        // long CodeGen timeout rather than the API one, as the SQL Server CodeGen pool does.
+        const codegenPgConnectionConfig = BuildPostgreSQLConnectionConfig(
+          { ...pgEndpoint, User: pgCodegenUser, Password: pgCodegenPass },
+          configInfo.databaseSettings,
+          'codegen',
+        );
+        const codegenPgPool = new pg.default.Pool(ToPGPoolConfig(codegenPgConnectionConfig));
+        codegenPgPool.on('error', (err) => console.error('[PostgreSQL CodeGen pool] Idle connection error (connection evicted):', err.message));
         const codegenTestClient = await codegenPgPool.connect();
         await codegenTestClient.query('SELECT 1');
         codegenTestClient.release();
 
         const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
+        // Adopt the already-loaded global Metadata.Provider catalog (ignoreExistingMetadata = false)
+        // so boot does not pay a second full metadata load. The refresh interval stays non-zero on
+        // PostgreSQL on purpose: PostgreSQLDataProvider.AllowRefresh is `CheckRefreshIntervalSeconds > 0`,
+        // so an interval of 0 would make every later codegenPgProvider.Refresh() — the one RSU CodeGen
+        // issues after DDL — return without reloading, leaving this provider frozen at the boot catalog.
+        // (SQL Server's AllowRefresh is independent of the interval, so its codegen provider can use 0.)
         const codegenPgConfigData = new PostgreSQLProviderConfigData(
-          { Host: pgHost, Port: pgPort, Database: pgDatabase, User: pgCodegenUser, Password: pgCodegenPass },
+          codegenPgConnectionConfig,
           mj_core_schema,
           cacheRefreshInterval / 1000, // ms → seconds
+          undefined,
+          undefined,
+          false,
         );
         const codegenPgProvider = new PostgreSQLDataProvider();
         await codegenPgProvider.Config(codegenPgConfigData); // separate pool (per-instance manager); does NOT touch the global API provider
@@ -484,7 +747,7 @@ const setupComplete$ = new ReplaySubject(1);
           startupLog.LogIf('verbose', 'RSU in-process CodeGen runner initialized (PostgreSQL).');
 
           // Inject CodeGen output paths for targeted git staging
-          const { initializeConfig } = await import('@memberjunction/codegen-lib');
+          const { initializeConfig, ResolveAdditionalSchemaInfoPath } = await import('@memberjunction/codegen-lib');
           const cgConfig = initializeConfig(rsuWorkDir);
           const outputPaths = (cgConfig.output ?? []).map((o: { directory: string }) => o.directory);
           RuntimeSchemaManager.Instance.SetCodeGenOutputPaths(outputPaths);
@@ -493,9 +756,12 @@ const setupComplete$ = new ReplaySubject(1);
           // Point RSU's soft PK/FK writer at the SAME file CodeGen reads (mj.config.cjs
           // `additionalSchemaInfo`), or RSU writes soft PKs to its own default path while
           // CodeGen reads a different one and skips integration tables with "No primary key found".
-          if (cgConfig.additionalSchemaInfo) {
-            RuntimeSchemaManager.Instance.SetAdditionalSchemaInfoPath(cgConfig.additionalSchemaInfo);
-            startupLog.LogIf('verbose', `RSU additionalSchemaInfo path: ${cgConfig.additionalSchemaInfo}`);
+          // Inject the ABSOLUTE path CodeGen resolves (env override, else relative to the mj.config
+          // file's directory) so RSU, the resolvers and CodeGen agree whatever their cwd (#5858).
+          const resolvedSchemaInfoPath = ResolveAdditionalSchemaInfoPath();
+          if (resolvedSchemaInfoPath) {
+            RuntimeSchemaManager.Instance.SetAdditionalSchemaInfoPath(resolvedSchemaInfoPath);
+            startupLog.LogIf('verbose', `RSU additionalSchemaInfo path: ${resolvedSchemaInfoPath}`);
           } else if (RuntimeSchemaManager.Instance.IsEnabled) {
             // U5 — boot-time assert: RSU is enabled but CodeGen has NO additionalSchemaInfo path
             // configured, so RSU's soft-PK/FK writes land in a file CodeGen never reads. Every
@@ -503,7 +769,7 @@ const setupComplete$ = new ReplaySubject(1);
             // named, and actionable — grep for RSU_ADDITIONAL_SCHEMA_INFO_DIVERGENCE.
             console.error(
               `[RSU_ADDITIONAL_SCHEMA_INFO_DIVERGENCE] Runtime Schema Update is ENABLED but mj.config.cjs has no ` +
-              `'additionalSchemaInfo' setting — RSU writes soft PK/FK definitions to '${process.env.RSU_ADDITIONAL_SCHEMA_INFO_PATH ?? 'additionalSchemaInfo.json'}' ` +
+              `'additionalSchemaInfo' setting (and RSU_ADDITIONAL_SCHEMA_INFO_PATH is unset) — RSU writes soft PK/FK definitions to '${RuntimeSchemaManager.Instance.AdditionalSchemaInfoPath}' ` +
               `while CodeGen reads none, so resolved soft primary keys will be silently LOST at codegen time. ` +
               `Set 'additionalSchemaInfo' in mj.config.cjs to the same file so the write path and read path agree.`
             );
@@ -560,10 +826,11 @@ const setupComplete$ = new ReplaySubject(1);
 
     // cacheRefreshInterval is configured in ms; checkRefreshIntervalSeconds declares seconds — see providerConfigUnits.ts
     const config = new SQLServerProviderConfigData(pool, mj_core_schema, MetadataCacheRefreshIntervalSeconds(cacheRefreshInterval));
+    config.LocalStorageProvider = sharedCache ?? undefined;
     // MJAPI is a long-running server, so entry-point default is 'full' engine pre-warm;
     // MJ_STARTUP_MODE / mj.config.cjs startup.mode can override per the shared precedence chain
     const startupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
-    await setupSQLServerClient(config, { mode: startupMode.mode });
+    await setupSQLServerClient(config, { mode: startupMode.mode, cacheManagerConfig, warmupLeaseMs });
 
     // See the note on the PostgreSQL path above: this is the first point at which both the
     // config/env providers and the metadata catalog have been registered.
@@ -598,8 +865,18 @@ const setupComplete$ = new ReplaySubject(1);
         await codegenPool.connect();
 
         const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
-        // Same ms→seconds seam as the main provider config above — see providerConfigUnits.ts
-        const codegenConfig = new SQLServerProviderConfigData(codegenPool, mj_core_schema, MetadataCacheRefreshIntervalSeconds(cacheRefreshInterval));
+        // Adopt the already-loaded global Metadata.Provider catalog (ignoreExistingMetadata = false)
+        // and disable a duplicate background refresh timer (0): avoids a second full metadata load
+        // on boot while explicit codegenProvider.Refresh() after DDL still reloads from the DB
+        // (SQLServerDataProvider.AllowRefresh does not depend on the interval; PostgreSQL's does — see above).
+        const codegenConfig = new SQLServerProviderConfigData(
+          codegenPool,
+          mj_core_schema,
+          0,
+          undefined,
+          undefined,
+          false,
+        );
         const codegenProvider = new SQLServerDataProvider();
         await codegenProvider.Config(codegenConfig);
         RuntimeSchemaManager.Instance.SetDDLProvider(codegenProvider);
@@ -628,7 +905,7 @@ const setupComplete$ = new ReplaySubject(1);
           startupLog.LogIf('verbose', 'RSU in-process CodeGen runner initialized.');
 
           // Inject CodeGen output paths for targeted git staging
-          const { initializeConfig } = await import('@memberjunction/codegen-lib');
+          const { initializeConfig, ResolveAdditionalSchemaInfoPath } = await import('@memberjunction/codegen-lib');
           const codegenConfig = initializeConfig(rsuWorkDir);
           const outputPaths = (codegenConfig.output ?? []).map((o: { directory: string }) => o.directory);
           RuntimeSchemaManager.Instance.SetCodeGenOutputPaths(outputPaths);
@@ -638,14 +915,17 @@ const setupComplete$ = new ReplaySubject(1);
           // `additionalSchemaInfo`). Without this, RSU writes soft PKs to its own default
           // path while CodeGen reads a different one and skips every integration table
           // with "No primary key found".
-          if (codegenConfig.additionalSchemaInfo) {
-            RuntimeSchemaManager.Instance.SetAdditionalSchemaInfoPath(codegenConfig.additionalSchemaInfo);
-            startupLog.LogIf('verbose', `RSU additionalSchemaInfo path: ${codegenConfig.additionalSchemaInfo}`);
+          // Inject the ABSOLUTE path CodeGen resolves (env override, else relative to the mj.config
+          // file's directory) so RSU, the resolvers and CodeGen agree whatever their cwd (#5858).
+          const resolvedSchemaInfoPath = ResolveAdditionalSchemaInfoPath();
+          if (resolvedSchemaInfoPath) {
+            RuntimeSchemaManager.Instance.SetAdditionalSchemaInfoPath(resolvedSchemaInfoPath);
+            startupLog.LogIf('verbose', `RSU additionalSchemaInfo path: ${resolvedSchemaInfoPath}`);
           } else if (RuntimeSchemaManager.Instance.IsEnabled) {
             // U5 — boot-time assert: write path ≠ read path (see the PostgreSQL branch for detail).
             console.error(
               `[RSU_ADDITIONAL_SCHEMA_INFO_DIVERGENCE] Runtime Schema Update is ENABLED but mj.config.cjs has no ` +
-              `'additionalSchemaInfo' setting — RSU writes soft PK/FK definitions to '${process.env.RSU_ADDITIONAL_SCHEMA_INFO_PATH ?? 'additionalSchemaInfo.json'}' ` +
+              `'additionalSchemaInfo' setting (and RSU_ADDITIONAL_SCHEMA_INFO_PATH is unset) — RSU writes soft PK/FK definitions to '${RuntimeSchemaManager.Instance.AdditionalSchemaInfoPath}' ` +
               `while CodeGen reads none, so resolved soft primary keys will be silently LOST at codegen time. ` +
               `Set 'additionalSchemaInfo' in mj.config.cjs to the same file so the write path and read path agree.`
             );
@@ -688,73 +968,32 @@ const setupComplete$ = new ReplaySubject(1);
     startupLog.LogIf('verbose', 'Server telemetry disabled');
   }
 
-  // Optionally inject Redis as the shared storage provider for cross-server cache invalidation
-  if (process.env.REDIS_URL) {
-    const redisProvider = new RedisLocalStorageProvider({
-      url: process.env.REDIS_URL,
-      keyPrefix: process.env.REDIS_KEY_PREFIX || 'mj',
-      enablePubSub: true,
-      enableLogging: configInfo.cacheSettings?.verboseLogging ?? false,
-    });
-    (Metadata.Provider as GenericDatabaseProvider).SetLocalStorageProvider(redisProvider); // global-provider-ok: bootstrap (Redis cache wiring)
-    await redisProvider.StartListening();
-
-    // Connect Redis pub/sub events to LocalCacheManager callback dispatch
-    // so cross-server cache invalidation messages are routed to registered callbacks
-    redisProvider.OnCacheChanged((event) => {
-        const sourceShort = event.SourceServerId ? event.SourceServerId.substring(0, 8) : 'unknown';
-        console.log(`[MJAPI] Redis pub/sub → DispatchCacheChange: ${event.Action} for "${event.CacheKey}" from server ${sourceShort}`);
-        LocalCacheManager.Instance.DispatchCacheChange(event);
-
-        // Also broadcast to connected browser clients via GraphQL subscription
-        // Extract entity name from the cache key (format: EntityName|Filter|OrderBy|...)
-        const entityName = event.CacheKey ? event.CacheKey.split('|')[0] : '';
-        if (entityName) {
-            PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
-                entityName,
-                primaryKeyValues: null, // entity-level invalidation
-                action: event.Action || 'save',
-                sourceServerId: event.SourceServerId || 'unknown',
-                timestamp: new Date(),
-            });
-        }
-    });
-
-    startupLog.LogIf('verbose', `Redis cache provider connected: ${process.env.REDIS_URL}`);
+  // The database provider already initialized LocalCacheManager from inside its own Config(), with
+  // no settings — this call is what makes `cacheSettings` take effect (Initialize merges a config
+  // handed to it later). Unconditional on purpose: the guard that used to sit here
+  // skipped exactly the case that needed it.
+  await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider, cacheManagerConfig); // global-provider-ok: bootstrap
+  if (sharedCache) {
+    await LocalCacheManager.Instance.SetStorageProvider(sharedCache);
   }
-
-  // If Redis is available, swap LocalCacheManager's storage provider to Redis.
-  // LocalCacheManager may have already been initialized (with in-memory provider)
-  // during engine loading. SetStorageProvider migrates cached data to Redis.
-  if (process.env.REDIS_URL) {
-    await LocalCacheManager.Instance.SetStorageProvider(Metadata.Provider.LocalStorageProvider); // global-provider-ok: bootstrap
-    startupLog.LogIf('verbose', 'LocalCacheManager: storage provider swapped to Redis');
-  }
-  // Ensure LocalCacheManager is initialized (no-op if already done during engine loading)
-  if (!LocalCacheManager.Instance.IsInitialized) {
-    // Build cache config from mj.config.cjs cacheSettings
-    const cs = configInfo.cacheSettings;
-    const cacheConfig = {
-      maxSizeBytes: (cs.maxMemoryMB ?? 150) * 1024 * 1024,
-      maxPercentOfCachePerEntity: cs.maxPercentOfCachePerEntity ?? 50,
-      defaultTTLMs: (cs.defaultTTLSeconds ?? 0) * 1000,
-      evictionSweepIntervalMs: (cs.evictionSweepIntervalSeconds ?? 300) * 1000,
-      verboseLogging: cs.verboseLogging ?? false,
-    };
-    await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider, cacheConfig); // global-provider-ok: bootstrap
-    if (startupLog.IsAtLeast('verbose')) {
-      // eslint-disable-next-line no-console
-      console.log('LocalCacheManager initialized with cache config:', JSON.stringify({
-        maxMemoryMB: cs.maxMemoryMB ?? 150,
-        maxPercentOfCachePerEntity: cs.maxPercentOfCachePerEntity ?? 50,
-        evictionSweepIntervalSeconds: cs.evictionSweepIntervalSeconds ?? 300,
-      }));
-    }
-  }
+  // The derived per-entry ceiling, so the boot log says what the largest cacheable entry actually is.
+  startupLog.LogIf('verbose', `LocalCacheManager: largest cacheable entry ${Math.floor(LocalCacheManager.Instance.MaxEntrySizeBytes / 1024 / 1024)} MB (maxEntryPercentOfCache: ${configInfo.cacheSettings?.maxEntryPercentOfCache ?? 'auto'})`);
+  const engineSweepMs = StartEngineSweeper(configInfo.cacheSettings);
+  startupLog.LogIf('verbose', engineSweepMs > 0 ? `Engine/database sweep every ${engineSweepMs / 1000}s` : 'Engine/database sweep disabled');
+  const userCacheCheckMs = StartUserCacheChecks(configInfo.cacheSettings);
+  startupLog.LogIf('verbose', userCacheCheckMs > 0 ? `User cache staleness check every ${userCacheCheckMs / 1000}s` : 'User cache staleness check disabled');
+  // Costs nothing unless a metadata entity declares TrustServerCacheCompletely = false.
+  const metadataSweepMs = StartMetadataSweep(configInfo.cacheSettings, () => (Metadata.Provider instanceof ProviderBase ? Metadata.Provider : undefined)); // global-provider-ok: bootstrap (this process's one provider)
+  startupLog.LogIf('verbose', metadataSweepMs > 0 ? `Metadata/database sweep every ${metadataSweepMs / 1000}s (only for entities declaring drift)` : 'Metadata/database sweep disabled');
 
   // Initialize APIKeyEngine singleton — reads apiKeyGeneration from mj.config.cjs automatically
   // This must happen before any request handler calls GetAPIKeyEngine()
   GetAPIKeyEngine();
+
+  // Actions that run caller-supplied SQL (Run Ad-hoc Query) run only on the read-only login, with
+  // ExecuteAdhocQuery's table check and timeout limit.
+  ActionEngineServer.Instance.SetReadOnlyProviderFactory(() => CreateReadOnlyProvider(dataSources));
+  ActionEngineServer.Instance.SetAdhocSQLAuthorizer(CreateAdhocSQLAuthorizer(configInfo.databaseSettings.requestTimeout));
 
   setupComplete$.next(true);
   raiseEvent('setupComplete', dataSources, null,  this);
@@ -777,17 +1016,7 @@ const setupComplete$ = new ReplaySubject(1);
   lap('Telemetry + Cache + APIKey Init', tServe);
   tServe = startupLog.BeginPhase('Discovering resolvers');
 
-  const dynamicModules = await Promise.all(
-    paths.map((modulePath) => {
-      try {
-        const module = import(isWindows ? `file://${modulePath}` : modulePath);
-        return module;
-      } catch (e) {
-        console.error(`Error loading dynamic module at '${modulePath}'`, e);
-        throw e;
-      }
-    })
-  );
+  const dynamicModules = await ImportResolverModules(paths, isWindows, 'Error loading dynamic module');
   const resolvers = dynamicModules.flatMap((module) =>
     Object.values(module).filter((value) => typeof value === 'function')
   ) as BuildSchemaOptions['resolvers'];
@@ -820,8 +1049,9 @@ const setupComplete$ = new ReplaySubject(1);
   }
 
   // Initialize all middleware
+  const middlewareContext: ServerMiddlewareContext = { ApiRoute: (subpath, options) => ApiRoute(subpath, options) };
   for (const mw of middlewares) {
-      await mw.Initialize();
+      await mw.Initialize(middlewareContext);
       startupLog.LogIf('verbose', `  [Middleware] ${mw.Label}`);
   }
 
@@ -843,7 +1073,7 @@ const setupComplete$ = new ReplaySubject(1);
 
       // Express app configuration escape hatch
       if (mw.ConfigureExpressApp) {
-          await mw.ConfigureExpressApp(app);
+          await mw.ConfigureExpressApp(app, middlewareContext);
       }
 
       // Extract hook methods and register in the global hook store
@@ -852,6 +1082,7 @@ const setupComplete$ = new ReplaySubject(1);
       RegisterDataHook('PostRunView', mw.PostRunView.bind(mw));
       RegisterDataHook('PreSave', mw.PreSave.bind(mw));
   }
+  EnsureAnchoredConversationReadHookRegistered();
 
   // ─── Resolve middleware-contributed resolver paths and merge into resolvers ───
   let allResolvers = resolvers;
@@ -859,16 +1090,7 @@ const setupComplete$ = new ReplaySubject(1);
       const mwGlobs = mwResolverPaths.flatMap((p) => (isWindows ? p.replace(/\\/g, '/') : p));
       const mwResolverFiles = fg.globSync(mwGlobs);
       if (mwResolverFiles.length > 0) {
-          const mwModules = await Promise.all(
-              mwResolverFiles.map((modulePath) => {
-                  try {
-                      return import(isWindows ? `file://${modulePath}` : modulePath);
-                  } catch (e) {
-                      console.error(`Error loading middleware resolver at '${modulePath}'`, e);
-                      throw e;
-                  }
-              })
-          );
+          const mwModules = await ImportResolverModules(mwResolverFiles, isWindows, 'Error loading middleware resolver');
           const mwResolvers = mwModules.flatMap((module) =>
               Object.values(module).filter((value) => typeof value === 'function')
           );
@@ -922,6 +1144,7 @@ const setupComplete$ = new ReplaySubject(1);
   // config.ts loads and validates at module scope, so importing it there would pull full config
   // validation into every import chain that touches the resolver, unit tests included.
   ConfigureRecordDataBroadcast(configInfo.cacheSettings?.recordDataBroadcastEntities);
+  CacheInvalidationBroadcastManager.Instance.Configure(configInfo.cacheSettings?.broadcast);
 
   // Global listener: broadcast CACHE_INVALIDATION to all browser clients whenever
   // ANY BaseEntity save/delete occurs on this server — regardless of whether it
@@ -944,7 +1167,8 @@ const setupComplete$ = new ReplaySubject(1);
           // fires for server-internal saves too (agents, actions, orchestrator), which are exactly
           // the ones no browser session asked for.
           recordData:
-            beEvent.type === 'save' && MayBroadcastRecordData(entityName)
+            beEvent.type === 'save' && MayBroadcastRecordData(entityName, beEvent.baseEntity.EntityInfo)
+              // fls-guard: MayBroadcastRecordData refuses FLS entities and Record Changes
               ? JSON.stringify(beEvent.baseEntity.GetAll())
               : undefined,
         });
@@ -995,7 +1219,6 @@ const setupComplete$ = new ReplaySubject(1);
     scalarsMap: [{ type: Date, scalar: GraphQLTimestamp }],
     emitSchemaFile: websiteRunFromPackage !== 1,
     pubSub,
-    globalMiddlewares: [variablesLoggingMiddleware],
   });
   const buildMs = performance.now() - tBuild;
 
@@ -1003,7 +1226,7 @@ const setupComplete$ = new ReplaySubject(1);
     const profile = await new Promise<unknown>((res, rej) =>
       profSession!.post('Profiler.stop', (e, r) => (e ? rej(e) : res((r as { profile: unknown }).profile)))
     );
-    const outPath = `/tmp/mjapi_schema_build_${process.pid}.cpuprofile`;
+    const outPath = join(mkdtempSync(join(tmpdir(), 'mjapi-schema-')), `mjapi_schema_build_${process.pid}.cpuprofile`);
     writeFileSync(outPath, JSON.stringify(profile));
     profSession.disconnect();
     // eslint-disable-next-line no-console
@@ -1022,6 +1245,7 @@ const setupComplete$ = new ReplaySubject(1);
   auditResolversForUndecoratedArgs();
 
   const tTransform = performance.now();
+  schema = ApplyRootVariablesLoggingMiddleware(schema);
   schema = requireSystemUserDirective.transformer(schema);
   schema = publicDirective.transformer(schema);
 
@@ -1044,7 +1268,9 @@ const setupComplete$ = new ReplaySubject(1);
   lap('Schema Build', tServe);
   tServe = startupLog.BeginPhase('Starting HTTP server');
 
-  const httpServer = createServer(app);
+  // The HTTP server was created and bound at the top of Serve (behind the startup gate); the startup
+  // gate's upgrade listener is replaced by the router below, which checks readiness itself.
+  httpServer.removeAllListeners('upgrade');
 
   // `noServer` so we own the HTTP `upgrade` routing ourselves (below) and can dispatch by path between
   // the graphql-ws server and the realtime proxy. (In `{ server, path }` mode, ws destroys any socket whose
@@ -1054,11 +1280,14 @@ const setupComplete$ = new ReplaySubject(1);
   // Single upgrade router: the realtime proxy claims its own path first (an authenticated byte-tunnel that
   // lets self-hosted realtime providers — e.g. HuggingFace speech-to-speech — run the shipped client-direct
   // audio topology without the internal endpoint ever being exposed to the browser); everything on the
-  // graphql path goes to graphql-ws; anything else is rejected. Must be registered before httpServer.listen().
+  // graphql path goes to graphql-ws; anything else is rejected. Until the server is ready, every upgrade is refused (503).
   // Path acceptance (including the bare-root/`/graphql` alias) is centralized in `IsGraphQLWsPath` — see
   // its doc comment for why the alias exists — so this listener and `InstallMediaUpgradeDispatcher`'s
   // telephony-active replacement listener can never disagree on what counts as "the GraphQL path."
   httpServer.on('upgrade', (request, socket, head) => {
+    if (RejectUpgradeWhileStarting(startup, socket)) {
+      return;
+    }
     if (RealtimeProxyServer.Instance.TryHandleUpgrade(request, socket, head as Buffer)) {
       return;
     }
@@ -1074,6 +1303,15 @@ const setupComplete$ = new ReplaySubject(1);
       socket.destroy();
     }
   });
+
+  // graphql-ws's ws integration takes its keepalive as a THIRD POSITIONAL argument to useServer,
+  // defaulting to 12_000 when omitted. That default was doing real work here while being invisible
+  // at the call site: the server pings every 12s and terminates the socket after an unanswered
+  // pong, which is why MJAPI notices a half-open link in ~12-24s while the browser — whose
+  // graphql-ws client does nothing on an unanswered pong — noticed nothing at all (MJ #4222).
+  // Stated explicitly so the behaviour is visible and tunable, and so the next reader does not
+  // conclude from the call site that no server-side heartbeat exists. Value unchanged.
+  const WS_SERVER_KEEPALIVE_MS = 12_000;
 
   // Track per-connection expiry timers so we can clean them up on close
   const expiryTimers = new WeakMap<object, ReturnType<typeof setTimeout>>();
@@ -1133,6 +1371,7 @@ const setupComplete$ = new ReplaySubject(1);
       },
       // context() now just reads the already-validated payload — no I/O, no logging
       context: async (ctx) => {
+        // No RequestOrigin here: the upgrade request's Origin is not carried onto subscription contexts.
         return { userPayload: ctx.extra.userPayload as UserPayload };
       },
       onClose: (ctx) => {
@@ -1149,7 +1388,8 @@ const setupComplete$ = new ReplaySubject(1);
         console.error('WebSocket error:', errors);
       },
     },
-    webSocketServer
+    webSocketServer,
+    WS_SERVER_KEEPALIVE_MS
   );
 
   const apolloServer = buildApolloServer(
@@ -1160,6 +1400,9 @@ const setupComplete$ = new ReplaySubject(1);
   await apolloServer.start();
   
   // Fix #8: Add compression for better throughput performance
+  // Never advertise the framework (`X-Powered-By: Express`) — the host may have passed its own app.
+  app.disable('x-powered-by');
+
   app.use(compression({
     // Don't compress responses smaller than 1KB
     threshold: 1024,
@@ -1178,119 +1421,63 @@ const setupComplete$ = new ReplaySubject(1);
     },
     // High compression level (good balance between CPU and compression ratio)
     level: 6
-  }));
+  }) as object as express.RequestHandler);
 
-  // Health check endpoint - registered before auth middleware so cloud
-  // platform probes (Azure App Service, AWS ALB, k8s, etc.) don't
-  // generate noisy auth errors in the logs. CORS is enabled so browser-based
-  // clients (e.g. MJExplorer's connectivity poller) can read the response.
-  app.get('/healthcheck', cors<cors.CorsRequest>(), (_req, res) => {
-    res.status(200).json({ status: 'ok' });
-  });
+  // Health check — before every middleware contribution and the auth middleware, so cloud platform
+  // probes never generate auth noise. Every core route mounts under MJAPI_BASE_PATH (see apiRoot.ts).
+  MountHealthcheckRoute(app);
 
   // Apply middleware-contributed pre-auth handlers (after compression, before routes)
   for (const mw of mwPreAuth) {
     app.use(mw);
   }
 
-  // ─── OAuth callback routes (unauthenticated, registered BEFORE auth) ─────
-  const oauthPublicUrl = configInfo.publicUrl || `${configInfo.baseUrl}:${configInfo.graphqlPort}${configInfo.graphqlRootPath || ''}`;
+  // ─── Public core routes (unauthenticated, registered BEFORE auth) ─────
+  // OAuth callback, eSignature, media, realtime SDP broker, magic-link, widget, realtime verify — see
+  // coreRoutes.ts. New custom routes belong in Server Extensions, never in serve().
+  // oauthPublicUrl is the configured public URL, derived as it always was; it is also the magic-link JWT
+  // issuer, so it stays untrimmed. Outward links use ApiRoute(…, { absolute: true }) instead.
+  const oauthPublicUrl = ConfiguredPublicUrl();
   startupLog.LogIf('verbose', `[OAuth] publicUrl: ${oauthPublicUrl}`);
-
-  let oauthAuthenticatedRouter: ReturnType<typeof createOAuthCallbackHandler>['authenticatedRouter'] | undefined;
-  if (oauthPublicUrl) {
-    const { callbackRouter, authenticatedRouter } = createOAuthCallbackHandler({
-      publicUrl: oauthPublicUrl,
-      successRedirectUrl: `${oauthPublicUrl}/oauth/success`,
-      errorRedirectUrl: `${oauthPublicUrl}/oauth/error`,
-      // Constrains where a caller-supplied frontendReturnUrl may point (open-redirect guard).
-      allowedFrontendOrigins: configInfo.cors?.allowedOrigins ?? ['*']
-    });
-    oauthAuthenticatedRouter = authenticatedRouter;
-
-    const oauthCors = cors<cors.CorsRequest>();
-
-    // OAuth callback is unauthenticated (called by external auth server)
-    app.use('/oauth', oauthCors, callbackRouter);
-    startupLog.LogIf('verbose', '[OAuth] Callback route registered at /oauth/callback');
-  }
-
-  // ─── Core HTTP Routes (Static Core Infrastructure) ─────────────────────────
-  // IMPORTANT ARCHITECTURAL NOTE:
-  // The route mounts below are strictly reserved for core framework infrastructure (OAuth, eSignature,
-  // media streaming, realtime WebRTC broker, magic-link, widgets).
-  // ALL new custom routes, external webhooks, vendor adapters, and application integrations MUST be
-  // implemented as Server Extensions (subclasses of BaseServerExtension in @memberjunction/server-extensions-core)
-  // mounted via ServerExtensionLoader — NEVER hardcoded as ad-hoc app.use() in serve().
-  // See guides/SERVER_EXTENSIONS_GUIDE.md for complete patterns and best practices.
-
-  // ─── eSignature webhook (unauthenticated, registered BEFORE auth) ─────
-  // Called by external signature providers (DocuSign Connect, etc.) without an MJ bearer token.
-  // The provider DRIVER verifies the payload signature/HMAC; MJ auth does not apply here.
-  app.use('/esignature', cors<cors.CorsRequest>(), createSignatureWebhookHandler());
-  startupLog.LogIf('verbose', '[eSignature] Webhook route registered at /esignature/webhook/:driverKey');
-
-  // ─── Authenticated media streaming (token-gated, registered BEFORE auth) ─────
-  // The `?token=` query param (minted by CreateMediaAccessToken after a per-user permission
-  // check) is the capability — the route verifies it itself, so it does NOT use the MJ bearer
-  // auth middleware (an <audio>/<video> element can't send Authorization headers).
-  app.use('/media', cors<cors.CorsRequest>(), createMediaStreamRouter());
-  startupLog.LogIf('verbose', '[Media] Streaming route registered at /media/:fileId');
-
-  // ─── Realtime WebRTC SDP broker (ticket-gated, registered BEFORE auth) ───────
-  if (configInfo.realtime?.enabled) {
-    app.use(REALTIME_SDP_EXCHANGE_PATH, cors<cors.CorsRequest>(), createRealtimeSdpBrokerRouter());
-    startupLog.LogIf('verbose', `[Realtime] WebRTC SDP broker registered at ${REALTIME_SDP_EXCHANGE_PATH}`);
-  }
-
-  // ─── Magic-link routes (MJ-issued, app-scoped external access) ───────────
-  // Public router (JWKS + redeem) mounts BEFORE the auth middleware; the
-  // authenticated invite-creation router mounts AFTER it (see below).
-  let widgetAuthenticatedRouter: ReturnType<typeof createWidgetHandler>['authenticatedRouter'] | undefined;
-  let magicLinkAuthenticatedRouter: ReturnType<typeof createMagicLinkHandler>['authenticatedRouter'] | undefined;
-  if (configInfo.magicLink?.enabled) {
-    const { publicRouter, authenticatedRouter } = createMagicLinkHandler(oauthPublicUrl, configInfo.magicLink);
-    magicLinkAuthenticatedRouter = authenticatedRouter;
-    registerMagicLinkAuthProvider(oauthPublicUrl, configInfo.magicLink);
-    app.use(MAGIC_LINK_MOUNT_PATH, cors<cors.CorsRequest>(), publicRouter);
-    startupLog.LogIf('verbose', `[MagicLink] Public routes registered at ${MAGIC_LINK_MOUNT_PATH}/redeem and ${MAGIC_LINK_MOUNT_PATH}/jwks.json`);
-  }
-
-  // ─── Public web widget: guest-session mint (PUBLIC, before auth mw) ───────
-  // Visitors hold no MJ JWT yet, so POST /widget/session is public. It reuses the
-  // magic-link RS256 key + `magic-link` auth provider (ensured idempotently inside
-  // createWidgetHandler), so it stands on its own even if magicLink.enabled is false.
-  if (configInfo.widget?.enabled) {
-    const { publicRouter: widgetRouter, authenticatedRouter: widgetAuthRouter } = createWidgetHandler(oauthPublicUrl, configInfo.widget);
-    widgetAuthenticatedRouter = widgetAuthRouter;
-    app.use(WIDGET_MOUNT_PATH, cors<cors.CorsRequest>(), widgetRouter);
-    // The widget reuses the magic-link RS256 key + auth provider to validate guest
-    // tokens, which validates by fetching the JWKS at MAGIC_LINK_MOUNT_PATH/jwks.json.
-    // When magic-link itself is disabled its public router (which serves JWKS) never
-    // mounts, so publish the key here — otherwise every guest token fails validation
-    // (the auth middleware can't fetch the public key) and the widget 401s.
-    if (!configInfo.magicLink?.enabled) {
-      app.use(MAGIC_LINK_MOUNT_PATH, cors<cors.CorsRequest>(), createMagicLinkJwksRouter());
-      startupLog.LogIf('verbose', `[Widget] Published reused signing key at ${MAGIC_LINK_MOUNT_PATH}/jwks.json (magic-link flow disabled)`);
-    }
-    startupLog.LogIf('verbose', `[Widget] Public routes registered at ${WIDGET_MOUNT_PATH}/session and ${WIDGET_MOUNT_PATH}/session/refresh`);
-  }
+  const coreAuthenticatedRouters = MountPublicCoreRoutes(app, oauthPublicUrl, startupLog);
 
   // ─── Server extensions loader & shared service registry ───────────────────
   const extensionLoader = new ServerExtensionLoader();
   _currentExtensionLoader = extensionLoader;
 
+  const hostRuntimeService: IServerExtensionHostRuntimeService = {
+    CreateIsolatedProvider,
+    GetSystemUser: () => getSystemUser(),
+    ResolvePrincipal: (configuredEmailOrId, subsystemLabel) => ResolveConfiguredPrincipal(configuredEmailOrId, subsystemLabel),
+  };
+  extensionLoader.Services.RegisterService(SERVER_EXTENSION_CORE_SERVICE_KEYS.HostRuntime, hostRuntimeService);
+  if (coreAuthenticatedRouters.MagicLinkService) {
+    extensionLoader.Services.RegisterService(
+      SERVER_EXTENSION_CORE_SERVICE_KEYS.MagicLink,
+      coreAuthenticatedRouters.MagicLinkService,
+    );
+  }
+
   // Open App packages publish their extensions; host mj.config.cjs overlays by DriverClass
   // Backwards-compatibility shim: synthesize ServerExtensionConfig entries from legacy configInfo.telephony
   const telephonyExtensionConfigs: ServerExtensionConfig[] = [];
   if (configInfo.telephony?.enabled) {
+    // Settings every carrier shares (inbound run-as user, call cap, outbound policy). Each carrier's own block is
+    // spread AFTER them, so a carrier can override one explicitly.
+    const sharedTelephonySettings: Record<string, unknown> = {
+      inboundRunAsUserEmail: configInfo.telephony.inboundRunAsUserEmail,
+      maxCallSeconds: configInfo.telephony.maxCallSeconds,
+      maxConcurrentCalls: configInfo.telephony.maxConcurrentCalls,
+      transferTargets: configInfo.telephony.transferTargets,
+      outbound: configInfo.telephony.outbound,
+    };
     if (configInfo.telephony.twilio) {
       telephonyExtensionConfigs.push({
         Enabled: true,
         DriverClass: 'TwilioTelephonyExtension',
         RootPath: '/telephony/twilio',
         Phase: 'pre-auth',
-        Settings: configInfo.telephony.twilio as unknown as Record<string, unknown>,
+        Settings: { ...sharedTelephonySettings, ...configInfo.telephony.twilio },
       });
     }
     if (configInfo.telephony.vonage) {
@@ -1299,7 +1486,7 @@ const setupComplete$ = new ReplaySubject(1);
         DriverClass: 'VonageTelephonyExtension',
         RootPath: '/telephony/vonage',
         Phase: 'pre-auth',
-        Settings: configInfo.telephony.vonage as unknown as Record<string, unknown>,
+        Settings: { ...sharedTelephonySettings, ...configInfo.telephony.vonage },
       });
     }
     if (configInfo.telephony.ringcentral) {
@@ -1308,7 +1495,16 @@ const setupComplete$ = new ReplaySubject(1);
         DriverClass: 'RingCentralTelephonyExtension',
         RootPath: '/telephony/ringcentral',
         Phase: 'pre-auth',
-        Settings: configInfo.telephony.ringcentral as unknown as Record<string, unknown>,
+        Settings: { ...sharedTelephonySettings, ...configInfo.telephony.ringcentral },
+      });
+    }
+    if (configInfo.telephony.livekitSip) {
+      telephonyExtensionConfigs.push({
+        Enabled: true,
+        DriverClass: 'LiveKitSipExtension',
+        RootPath: '/telephony/livekit-sip',
+        Phase: 'pre-auth',
+        Settings: { ...sharedTelephonySettings, ...configInfo.telephony.livekitSip },
       });
     }
     if (configInfo.telephony.teams?.enabled) {
@@ -1327,9 +1523,9 @@ const setupComplete$ = new ReplaySubject(1);
 
   // Open App packages publish their extensions; host mj.config.cjs overlays by DriverClass
   // (and remains the only source for host-only extensions such as Slack/Teams).
-  // extraReservedRoots is derived from the mounts registered above plus graphqlRootPath
-  // so a new pre-auth app.use(...) in serve() must also be added to
-  // coreReservedServerExtensionRoots() — otherwise an Open App can claim it.
+  // Every RootPath is relative to MJAPI_BASE_PATH: apiRootPath composes the real mount path, and
+  // extraReservedRoots (also relative) must list every core mount in coreRoutes.ts, otherwise an
+  // Open App can claim it.
   const extensionConfigs = prepareServerExtensionConfigs(
     mergeServerExtensionConfigs(
       options?.serverExtensions ?? [],
@@ -1338,7 +1534,8 @@ const setupComplete$ = new ReplaySubject(1);
     {
       onInvalid: (message) => LogError(message),
       onOverlap: (message) => LogStatus(message),
-      extraReservedRoots: coreReservedServerExtensionRoots(graphqlRootPath),
+      extraReservedRoots: CoreReservedServerExtensionRoots(),
+      apiRootPath: ApiRootPath(),
     },
   );
   for (const cfg of extensionConfigs) {
@@ -1349,27 +1546,14 @@ const setupComplete$ = new ReplaySubject(1);
   // Without this, the browser blocks 401 responses from the auth middleware
   // because they lack Access-Control-Allow-Origin headers, preventing the
   // client from reading the error code and triggering token refresh.
-  const corsAllowed = configInfo.cors?.allowedOrigins ?? ['*'];
-  const corsWildcard = corsAllowed.includes('*');
-  // SECURITY: never combine credentials with a wildcard/reflect-any-origin policy. When
-  // allowedOrigins is ['*'] the origin callback reflects the caller's Origin, and pairing that
-  // with Access-Control-Allow-Credentials: true lets any site a signed-in user visits make
-  // credentialed cross-origin reads. MJ's primary auth is a Bearer token (not auto-sent
-  // cross-origin), so dropping credentials under the wildcard default is safe; deployments that
-  // genuinely need credentialed CORS must configure an explicit allowedOrigins list.
-  app.use(cors<cors.CorsRequest>({
-    origin: (origin, callback) => {
-      // Allow all origins when ['*'] (default/backward-compatible),
-      // or when no Origin header (server-to-server calls).
-      if (corsWildcard || !origin || corsAllowed.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error(`Origin ${origin} not allowed by CORS`));
-      }
-    },
-    credentials: corsWildcard ? false : (configInfo.cors?.allowCredentials ?? true),
-    maxAge: configInfo.cors?.maxAge ?? 86400,
-  }));
+  // Extensions that declare `OwnsCORS: true` (ServerExtensionConfig) are exempt: the global
+  // middleware skips their RootPaths so it neither reflects an origin onto their responses nor
+  // answers their preflights — the extension's own OPTIONS handling and origin policy run instead.
+  const corsOwnedExtensionRoots = GetCorsOwningServerExtensionRoots(extensionConfigs);
+  if (corsOwnedExtensionRoots.length > 0) {
+    LogStatus(`Global CORS skips extension-owned roots: ${corsOwnedExtensionRoots.join(', ')}`);
+  }
+  app.use(CreateGlobalCorsMiddleware(configInfo.cors, corsOwnedExtensionRoots));
 
   // ─── Pre-auth server extensions (before auth — extensions handle their own auth) ─────
   // Slack uses HMAC signature verification, Teams uses Bot Framework JWT validation.
@@ -1380,25 +1564,19 @@ const setupComplete$ = new ReplaySubject(1);
       phase: 'pre-auth',
       httpServer,
       publicUrl: oauthPublicUrl,
+      apiRootPath: ApiRootPath(),
     });
   }
 
-  // Extension health endpoint (always available, returns empty array if no extensions)
-  app.get('/health/extensions', async (_req, res) => {
-    const results = await extensionLoader.HealthCheckAll();
-    const allHealthy = results.length === 0 || results.every(r => r.Healthy);
-    res.status(allHealthy ? 200 : 503).json({ extensions: results });
-  });
-
-  // ─── Public authentication-provider catalog (PUBLIC, before auth mw) ──────
-  // The browser needs the provider list BEFORE it holds a token, so this is necessarily
-  // unauthenticated and must mount ahead of the auth middleware. It publishes only the
-  // non-secret allow-list (see AuthProviderEngine.GetPublicCatalog) — the same values a
-  // single-provider SPA already compiled into its bundle.
-  app.use(AUTH_CATALOG_MOUNT_PATH, cors<cors.CorsRequest>(), createAuthProviderCatalogRouter());
-  startupLog.LogIf('verbose', `[Auth] Public provider catalog registered at ${AUTH_CATALOG_MOUNT_PATH}/providers`);
+  MountExtensionHealthRoute(app, extensionLoader);
+  MountAuthCatalogRoute(app, startupLog);
 
   // ─── Unified auth middleware (replaces both REST authMiddleware and contextFunction auth) ─────
+  // Always shown, whatever the log level: a configured map makes logins run as other people's records
+  const userEmailMapWarning = DescribeUserEmailMap(userEmailMap);
+  if (userEmailMapWarning) {
+    console.warn(userEmailMapWarning);
+  }
   app.use(CreateUnifiedAuthMiddleware(dataSources));
 
   // ─── Post-auth middleware from BaseServerMiddleware plugins ─────
@@ -1409,25 +1587,16 @@ const setupComplete$ = new ReplaySubject(1);
     app.use(mw);
   }
 
-  // ─── OAuth authenticated routes (auth already handled by unified middleware) ─────
-  if (oauthAuthenticatedRouter) {
-    const oauthCors = cors<cors.CorsRequest>();
-    app.use('/oauth', oauthCors, BodyParser.json(), oauthAuthenticatedRouter);
-    startupLog.LogIf('verbose', '[OAuth] Authenticated routes registered at /oauth/status, /oauth/initiate, and /oauth/exchange');
-  }
+  // ─── Authenticated core routes: OAuth status/initiate/exchange, magic-link create, widget resolve-identity ─────
+  MountAuthenticatedCoreRoutes(app, coreAuthenticatedRouters, startupLog);
 
-  // ─── Magic-link authenticated route (invite creation) ─────────────────────
-  if (magicLinkAuthenticatedRouter) {
-    app.use(MAGIC_LINK_MOUNT_PATH, cors<cors.CorsRequest>(), magicLinkAuthenticatedRouter);
-    startupLog.LogIf('verbose', `[MagicLink] Authenticated route registered at ${MAGIC_LINK_MOUNT_PATH}/create`);
-  }
-
-  // ─── Widget authenticated route (RV4 resolve-identity) ────────────────────
-  // Mounts after the unified auth middleware so a verified visitor (post magic-link upgrade) can
-  // promote their anonymous returning-visitor trail to the verified record.
-  if (widgetAuthenticatedRouter) {
-    app.use(WIDGET_MOUNT_PATH, cors<cors.CorsRequest>(), widgetAuthenticatedRouter);
-    startupLog.LogIf('verbose', `[Widget] Authenticated route registered at ${WIDGET_MOUNT_PATH}/resolve-identity`);
+  // ─── Realtime recording shards + terminal signal (authenticated, owner-gated) ─────
+  // The browser uploads a client-direct call's recording as Opus shards and a keepalive terminal request;
+  // assembly runs off the request path on the scheduler. Needs a SQL provider: the ledger calls procs.
+  if (configInfo.realtime?.enabled) {
+    if (mountRealtimeRecordingRoutes(app)) {
+      startupLog.LogIf('verbose', `[Realtime] Recording routes registered at ${ApiRoute(REALTIME_RECORDING_MOUNT_PATH)}/:agentSessionId/shard/:index and /end`);
+    }
   }
 
   // ─── Post-auth server extensions ──────────────────────────────────────────
@@ -1438,7 +1607,15 @@ const setupComplete$ = new ReplaySubject(1);
       phase: 'post-auth',
       httpServer,
       publicUrl: oauthPublicUrl,
+      apiRootPath: ApiRootPath(),
     });
+  }
+
+  // Every extension has now had its chance at the request: a preflight under an extension-owned
+  // root that none of them answered is refused here, instead of falling through to the GraphQL
+  // mount's cors(), which would approve it for every origin.
+  if (corsOwnedExtensionRoots.length > 0) {
+    app.use(CreateExtensionOwnedPreflightFallback(corsOwnedExtensionRoots));
   }
 
   // ─── Cross-extension lifecycle hook: OnAllExtensionsMounted ───────────────
@@ -1447,6 +1624,7 @@ const setupComplete$ = new ReplaySubject(1);
   await extensionLoader.NotifyAllExtensionsMounted({
     httpServer,
     publicUrl: oauthPublicUrl,
+    apiRootPath: ApiRootPath(),
   });
 
   // Install the single path-routing WebSocket-upgrade dispatcher AFTER all extensions across both
@@ -1455,7 +1633,7 @@ const setupComplete$ = new ReplaySubject(1);
   // media sockets cannot coexist as separate {server} servers — this strips the auto-listeners and
   // routes upgrades by path. No-op when no media routes registered (telephony off).
   InstallMediaUpgradeDispatcher(httpServer, webSocketServer, graphqlRootPath, (req, socket, head) => {
-    return RealtimeProxyServer.Instance.TryHandleUpgrade(req, socket, head);
+    return RejectUpgradeWhileStarting(startup, socket) || RealtimeProxyServer.Instance.TryHandleUpgrade(req, socket, head);
   });
 
   // ─── REST API endpoints (auth already handled by unified middleware) ─────
@@ -1492,11 +1670,29 @@ const setupComplete$ = new ReplaySubject(1);
   // ─── GraphQL middleware (contextFunction reads req.userPayload, no re-auth) ─────
   app.use(
     graphqlRootPath,
-    cors<cors.CorsRequest>(),
+    cors<cors.CorsRequest>({
+      exposedHeaders: ['X-MJ-Cache-Seq', 'X-MJ-Server-ID', 'X-MJ-Trace-ID', 'X-MJ-Diagnostic-Trigger'],
+    }),
     BodyParser.json({ limit: '50mb' }),
     // Express 5 leaves req.body as undefined for non-JSON or empty bodies;
     // Apollo Server's expressMiddleware requires req.body to be defined.
-    (req, _res, next) => { if (req.body === undefined) req.body = {}; next(); },
+    // Also piggyback the latest monotonic cache invalidation sequence and server process ID
+    // onto every GraphQL HTTP response so clients can detect and recover missed invalidations.
+    (req, res, next) => {
+      if (req.body === undefined) req.body = {};
+      const broadcastProvider = CacheInvalidationBroadcastManager.Instance.Provider;
+      res.setHeader('X-MJ-Cache-Seq', String(broadcastProvider.CurrentSequence));
+      res.setHeader('X-MJ-Server-ID', broadcastProvider.ServerProcessID);
+      const originalWriteHead = res.writeHead.bind(res);
+      res.writeHead = ((...args: Parameters<typeof res.writeHead>) => {
+        if (!res.headersSent) {
+          res.setHeader('X-MJ-Cache-Seq', String(broadcastProvider.CurrentSequence));
+          res.setHeader('X-MJ-Server-ID', broadcastProvider.ServerProcessID);
+        }
+        return originalWriteHead(...args);
+      }) as typeof res.writeHead;
+      next();
+    },
     expressMiddleware(apolloServer, {
       context: contextFunction({
                                  setupComplete$,
@@ -1511,9 +1707,41 @@ const setupComplete$ = new ReplaySubject(1);
     app.use(mw);
   }
 
+  const serverRole = ResolveServerRole(configInfo.serverRole ?? process.env.MJ_SERVER_ROLE);
+  const runBackgroundWorkers = ShouldRunBackgroundWorkers(serverRole);
+  if (!runBackgroundWorkers) {
+    LogStatus(`[ServerRole] Running in '${serverRole}' mode — background worker services are disabled on this replica.`);
+  }
+
+  // Every role runs agents, so every role's watchdog takes the configured intervals (before any run starts).
+  AgentRunWatchdog.Instance.Configure(configInfo.agentRunWatchdog);
+  // The handoff offer registry starts its own expiry sweep when it loads, on every role; apply the host's setting.
+  ApplyHandoffOfferExpirySettings(configInfo.agentSessions.handoffOfferExpiry);
+
+  // Close out run artifacts a dead process left open, BEFORE anything below can start a new run.
+  //
+  // A killed process (OOM killer, SIGKILL, host reboot) never writes its run's terminal result, so
+  // the run reads as in-flight forever: the wizard spins, the active-operations panel shows a step
+  // that will never advance, and no failure is reported anywhere. Sound only before the first new
+  // run: artifacts are process-local, so anything still in flight as THIS process starts belongs
+  // to a process that no longer exists. That is why it runs here, ahead of the scheduler, the
+  // integration sync worker (its Start() polls immediately), the HTTP listener (a request can
+  // start a discovery) and pending RSU work, and why it is awaited. It needs none of them.
+  //
+  // One exception: an RSU run killed inside its own RestartMJAPI step is not dead — THIS process is
+  // its continuation, and processRSUPendingWork below re-attaches to it. Those are left in flight
+  // (and named in `Skipped`); whichever of them nothing re-attaches to is closed out afterwards by
+  // RSUPostRestartProgressSession.SweepUnattached. On a replica that runs no background workers
+  // nothing would ever resume them, so there they are swept like any other.
+  const bootSweep = await SweepInterruptedRuns(
+    undefined,
+    msg => console.warn(msg),
+    runBackgroundWorkers ? RSUPostRestartProgressSession.WasKilledAtRestart : undefined
+  );
+
   // Initialize and start scheduled jobs service if enabled
   let scheduledJobsService: ScheduledJobsService | null = null;
-  if (configInfo.scheduledJobs?.enabled) {
+  if (runBackgroundWorkers && configInfo.scheduledJobs?.enabled) {
     try {
       scheduledJobsService = new ScheduledJobsService(configInfo.scheduledJobs);
       await scheduledJobsService.Initialize();
@@ -1527,7 +1755,7 @@ const setupComplete$ = new ReplaySubject(1);
   // Initialize and start the integration sync worker if enabled (PR 1 item 8).
   // Off by default — deployments that don't opt in keep running syncs inline.
   let integrationSyncWorker: IntegrationSyncWorkerService | null = null;
-  if (configInfo.integrationSyncWorker?.enabled) {
+  if (runBackgroundWorkers && configInfo.integrationSyncWorker?.enabled) {
     try {
       integrationSyncWorker = new IntegrationSyncWorkerService(configInfo.integrationSyncWorker);
       await integrationSyncWorker.Initialize();
@@ -1548,7 +1776,8 @@ const setupComplete$ = new ReplaySubject(1);
 
   lap('Apollo + Express Setup', tServe);
 
-  await new Promise<void>((resolve) => httpServer.listen({ port: graphqlPort }, resolve));
+  // The port was bound at the top of Serve; from here on requests reach the app.
+  startup.MarkReady();
   // The summary headline reports TRUE wall-clock since process start (see
   // StartupLogger.buildStartupLine), so we don't push a synthetic "total" phase row
   // (that double-counted the headline). Keep a verbose-only line for the serve()-scoped span.
@@ -1565,31 +1794,53 @@ const setupComplete$ = new ReplaySubject(1);
   }
   startupLog.PrintSummary();
 
-  // Process pending RSU work from pre-restart (entity maps, field maps, sync)
-  processRSUPendingWork().catch(err => console.warn(`RSU pending work processing failed: ${err}`));
-
-  // Resume any integration syncs that were orphaned by the previous process restart
   const resumeUser = UserCache.Instance.GetSystemUser();
-  if (resumeUser) {
-    IntegrationEngine.Instance.ResumeOrphanedSyncs(resumeUser)
-      .catch(err => console.warn(`[IntegrationEngine] Orphaned sync resume failed: ${err}`));
-  }
 
-  // Force-fail any agent runs left 'Running' by a process that died (restart/crash/OOM) or whose
-  // terminal-state write never landed. Staleness-based, so it never touches runs another healthy
-  // instance is still heart-beating. The watchdog also self-registers for graceful-shutdown
-  // cancellation (via ShutdownRegistry) once it begins tracking this process's first live run.
-  if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
-    AgentRunWatchdog.SweepOrphanedRuns(Metadata.Provider, resumeUser) // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
-      .catch(err => console.warn(`[AgentRunWatchdog] Startup sweep failed: ${err}`));
-  }
+  if (runBackgroundWorkers) {
+    // Process pending RSU work from pre-restart (entity maps, field maps, sync)
+    processRSUPendingWork().catch(err => console.warn(`RSU pending work processing failed: ${err}`))
+      .finally(() =>
+        RSUPostRestartProgressSession.SweepUnattached(bootSweep.Skipped, undefined, msg => console.warn(msg)).catch(err =>
+          console.warn(`RSU leftover run sweep failed: ${err}`)
+        )
+      );
 
-  // Launch the AI Agent Session janitor: run own-host orphan recovery once at boot, then keep a
-  // periodic staleness sweep running. Self-registers with ShutdownRegistry, so its timer is cleared
-  // by the gracefulShutdown drain below (no explicit Stop() wiring needed here).
-  if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — boot-time session janitor uses the server's own provider
-    SessionJanitor.Instance.Start(Metadata.Provider, resumeUser) // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
-      .catch(err => console.warn(`[SessionJanitor] Startup failed: ${err}`));
+    // Resume any integration syncs that were orphaned by the previous process restart
+    if (resumeUser) {
+      IntegrationEngine.Instance.ResumeOrphanedSyncs(resumeUser)
+        .catch(err => console.warn(`[IntegrationEngine] Orphaned sync resume failed: ${err}`));
+    }
+
+    // Force-fail any agent runs left 'Running' by a process that died (restart/crash/OOM) or whose
+    // terminal-state write never landed. Staleness-based, so it never touches runs another healthy
+    // instance is still heart-beating. The watchdog also self-registers for graceful-shutdown
+    // cancellation (via ShutdownRegistry) once it begins tracking this process's first live run.
+    if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
+      const sweepUser = resumeUser;
+      const sweepProvider = Metadata.Provider; // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
+      AgentRunWatchdog.SweepOrphanedRuns(sweepProvider, sweepUser, configInfo.agentRunWatchdog)
+        .catch(err => console.warn(`[AgentRunWatchdog] Startup sweep failed: ${err}`));
+
+      // The watchdog repairs the RUN; nothing repaired the conversation detail, which is the row the
+      // chat actually renders from (MJ #4222). A process that dies mid-run leaves a terminal run
+      // beside a message that still claims to be generating, and it spins forever for anyone who
+      // opens it. Runs at boot (closes restart orphans) and, unless `conversationDetailReconciler.enabled`
+      // is false, on a timer (closes mid-life orphans), mirroring the watchdog's own two-phase shape.
+      StartOrphanedConversationDetailReconciler(sweepProvider, sweepUser, configInfo.conversationDetailReconciler);
+    }
+
+    // Launch the AI Agent Session janitor: run own-host orphan recovery once at boot, then a periodic tick
+    // that closes stale and over-deadline sessions and rebuilds lost realtime recordings from their
+    // crash-recovery shards (storage reads and writes). Self-registers with ShutdownRegistry, so its timer
+    // is cleared by the gracefulShutdown drain below (no explicit Stop() wiring needed here).
+    if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — boot-time session janitor uses the server's own provider
+      // `agentSessions.janitor.enabled: false` keeps the boot recovery and shutdown drain but schedules no tick.
+      SessionJanitor.Instance.StartWithSettings(configInfo.agentSessions.janitor, Metadata.Provider, resumeUser) // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
+        .catch(err => console.warn(`[SessionJanitor] Startup failed: ${err}`));
+      // The bridge engine's orphan reconcile likewise starts only now that this process holds its port, so it can't
+      // take the live bridges of another MJAPI still serving that port for its own orphans (#5310).
+      StartBridgeOrphanReconciliation(Metadata.Provider, resumeUser, configInfo.agentSessions.bridgeReconciler); // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
+    }
   }
 
   // Launch the durable task-graph dispatcher: claim Pending tasks, execute them with a fresh
@@ -1618,9 +1869,21 @@ const setupComplete$ = new ReplaySubject(1);
     // StartTaskGraphDispatcher); this gives the agent seam the same.
     SuppressTaskGraphSubmission('MJ_DISABLE_TASK_GRAPH_DISPATCHER=1 is set on this host');
     LogStatus('[TaskGraphDispatcher] Disabled by MJ_DISABLE_TASK_GRAPH_DISPATCHER=1 — this process will neither accept nor execute task graphs.');
-  } else if (resumeUser && taskGraphPool instanceof sql.ConnectionPool) {
+  } else if (runBackgroundWorkers && resumeUser && taskGraphPool instanceof sql.ConnectionPool) {
     StartTaskGraphDispatcher(taskGraphPool, resumeUser)
       .catch(err => console.warn(`[TaskGraphDispatcher] Startup failed: ${err}`));
+  }
+
+  // Start the durable work-queue host where enabled. It plans which subscriptions this instance runs,
+  // re-plans on a timer, and self-registers with ShutdownRegistry, so gracefulShutdown's awaited
+  // ShutdownAll() drains it (up to 2 × shutdownDrainMs) before the HTTP server closes.
+  // Not awaited: a slow engine load must not delay readiness, and a failure never stops the API.
+  const workQueueProvider = Metadata.Provider; // global-provider-ok: server startup — the work-queue host runs on the server's own provider
+  if (runBackgroundWorkers && configInfo.workQueue?.enabled && workQueueProvider instanceof DatabaseProviderBase) {
+    const workQueuePool = dataSources[0]?.dataSource;
+    const providerSource = new MJServerWorkQueueProviderSource(workQueuePool instanceof sql.ConnectionPool ? workQueuePool : null, workQueueProvider);
+    StartWorkQueueHost(configInfo.workQueue, workQueueProvider, providerSource)
+      .catch(error => console.error('❌ Failed to start the work queue host:', error));
   }
 
 
@@ -1779,9 +2042,18 @@ async function processRSUPendingWork(): Promise<void> {
   // Wait a moment for metadata to be fully loaded
   await new Promise(resolve => setTimeout(resolve, 3000));
 
+  // The RSU run these items belong to is still open: the pre-restart process was killed inside its
+  // own RestartMJAPI step, so it never wrote a terminal result. This session re-attaches to that run
+  // and reports the two steps that only ever happen here — CreateEntityMaps and StartSync — into the
+  // SAME event stream, so a client that has been tailing since before the restart keeps its cursor
+  // and finally learns whether the connector went live. Purely observational: every failure below is
+  // swallowed, and the work proceeds whether or not a run was found to report into.
+  const progressSession = new RSUPostRestartProgressSession();
+
   for (const pending of pendingItems) {
     const pendingWorkID = pending.ID;
     const item = pending.Work;
+    let progress: RSUPostRestartProgress | null = null;
     // Declared outside the try so the catch can narrow a retry to what is still outstanding: what
     // actually got mapped this attempt. Each retry is then strictly smaller, and one poison object
     // cannot keep re-running its healthy siblings.
@@ -1803,6 +2075,10 @@ async function processRSUPendingWork(): Promise<void> {
         continue;
       }
 
+      // Attached only for apply-objects work: promote-columns is a follow-up to a DIFFERENT run
+      // shape that has no CreateEntityMaps/StartSync steps to report.
+      progress = await progressSession.For(item.CompanyIntegrationID);
+
       // Resolve connector
       const rv = new RunView();
       const ciResult = await rv.RunView<MJCompanyIntegrationEntity>({
@@ -1812,8 +2088,10 @@ async function processRSUPendingWork(): Promise<void> {
       }, systemUser);
       const companyIntegration = ciResult.Results[0];
       if (!companyIntegration) {
-        await rsm.FailPendingWork(pendingWorkID, `CompanyIntegration ${item.CompanyIntegrationID} not found`, systemUser);
-        console.warn(`[RSU] CompanyIntegration ${item.CompanyIntegrationID} not found`);
+        const missingCI = `CompanyIntegration ${item.CompanyIntegrationID} not found`;
+        progress?.FailEntityMaps(missingCI, item.SourceObjectNames ?? []);
+        await rsm.FailPendingWork(pendingWorkID, missingCI, systemUser);
+        console.warn(`[RSU] ${missingCI}`);
         continue;
       }
 
@@ -1825,14 +2103,18 @@ async function processRSUPendingWork(): Promise<void> {
       }, systemUser);
       const integrationEntity = integrationResult.Results[0];
       if (!integrationEntity) {
-        await rsm.FailPendingWork(pendingWorkID, `Integration entity for ${integrationName} not found`, systemUser);
-        console.warn(`[RSU] Integration entity for ${integrationName} not found`);
+        const missingIntegration = `Integration entity for ${integrationName} not found`;
+        progress?.FailEntityMaps(missingIntegration, item.SourceObjectNames ?? []);
+        await rsm.FailPendingWork(pendingWorkID, missingIntegration, systemUser);
+        console.warn(`[RSU] ${missingIntegration}`);
         continue;
       }
       const connector = ConnectorFactory.Resolve(integrationEntity);
       if (!connector) {
-        await rsm.FailPendingWork(pendingWorkID, `Connector for ${integrationName} not found`, systemUser);
-        console.warn(`[RSU] Connector for ${integrationName} not found`);
+        const missingConnector = `Connector for ${integrationName} not found`;
+        progress?.FailEntityMaps(missingConnector, item.SourceObjectNames ?? []);
+        await rsm.FailPendingWork(pendingWorkID, missingConnector, systemUser);
+        console.warn(`[RSU] ${missingConnector}`);
         continue;
       }
 
@@ -1841,10 +2123,28 @@ async function processRSUPendingWork(): Promise<void> {
       const rvPending = new RunView();
       const sourceObjectFields: Record<string, string[] | null> = item.SourceObjectFields ?? {};
 
-      // Introspect schema ONCE for the entire connector, then reuse per object
+      // Introspect schema ONCE for the entire connector, then reuse per object.
+      //
+      // IN THE CONNECTION'S CATALOG SCOPE. This runs at process start, outside any request, so
+      // nothing upstream has entered a scope for it — and an unscoped catalog read falls back to
+      // the SHARED catalog by design. That would build these field maps from the connector's
+      // declared fields alone: every column this connection's own discovery sampled would get a
+      // table column from the RSU (built in scope, from the per-connection rows) but no field map,
+      // and its values would land in the overflow JSON instead of the column. Observed on the
+      // sandbox 2026-09-11: 487 declared fields, 556 per-connection — 69 columns that this read
+      // would have silently left unmapped. Entering the scope is not enough on a fresh process:
+      // IntrospectInCatalogScope loads the catalog and warms each object's fields first.
       const introspect = connector.IntrospectSchema.bind(connector) as
         (ci: unknown, u: unknown) => Promise<{ Objects: Array<{ ExternalName: string; Fields: Array<{ Name: string; IsPrimaryKey?: boolean; IsRequired?: boolean }> }> }>;
-      const schema = await introspect(companyIntegration, systemUser);
+      const schema = await IntrospectInCatalogScope(
+        item.CompanyIntegrationID,
+        item.SourceObjectNames,
+        () => introspect(companyIntegration, systemUser),
+        systemUser,
+      );
+
+      const objectsToMap = item.SourceObjectNames.length;
+      progress?.BeginEntityMaps(objectsToMap);
 
       for (const objName of item.SourceObjectNames) {
         const tableName = objName.replace(/[^A-Za-z0-9_]/g, '_').toLowerCase();
@@ -1950,7 +2250,14 @@ async function processRSUPendingWork(): Promise<void> {
         } catch (fieldErr) {
           console.warn(`[RSU] Field map creation failed for ${objName}: ${fieldErr}`);
         }
+
+        progress?.ObjectMapped(objName, mappedObjectNames.size, objectsToMap);
       }
+
+      // The applied rollup for this half of the run, in OBJECTS. `mappedObjectNames` is the same set
+      // the retry path narrows against, so what is reported succeeded here is exactly what a retry
+      // would NOT redo.
+      progress?.CompleteEntityMaps(objectsToMap, mappedObjectNames.size, objectsToMap - mappedObjectNames.size);
 
       // Remove-as-disable: entity maps whose object is NOT in this apply's selection
       // are disabled (data kept; re-selection re-enables). 'ignore' opts out for subset applies.
@@ -1967,8 +2274,11 @@ async function processRSUPendingWork(): Promise<void> {
         }
       }
 
-      // Start sync if requested
+      // Start sync if requested. This is the step the setup journey is actually waiting on — the
+      // connector is not live until it begins — so it is a stage of its own rather than a footnote
+      // on entity-map creation.
       if (item.StartSync !== false) {
+        progress?.BeginStartSync();
         try {
           await IntegrationEngine.Instance.Config(false, systemUser);
           const syncOptions: IntegrationSyncOptions = {};
@@ -1978,11 +2288,18 @@ async function processRSUPendingWork(): Promise<void> {
           const opts = Object.keys(syncOptions).length > 0 ? syncOptions : undefined;
           IntegrationEngine.Instance.RunSync(item.CompanyIntegrationID, systemUser, 'Manual', undefined, undefined, opts);
           console.log(`[RSU] Sync started for ${item.CompanyIntegrationID} (EntityMaps: ${createdEntityMapIDs.length}, FullSync: ${!!item.FullSync}, SyncDirection: ${item.SyncDirection ?? 'entity-map default'})`);
+          // Looked up rather than returned: RunSync resolves only when the whole sync finishes, and
+          // this stage closes when the sync STARTS. A null id closes the stage anyway — the sync did
+          // start; only the hand-off to its own stream is missing.
+          progress?.CompleteStartSync(await FindStartedSyncRunID(item.CompanyIntegrationID, systemUser));
         } catch (syncErr) {
           console.warn(`[RSU] Sync start failed: ${syncErr}`);
+          progress?.FailStartSync(`Sync start failed: ${syncErr instanceof Error ? syncErr.message : String(syncErr)}`);
         }
       } else {
         console.log(`[RSU] Sync skipped for ${item.CompanyIntegrationID} (StartSync=false)`);
+        progress?.BeginStartSync();
+        progress?.SkipStartSync('the caller asked for no initial sync (StartSync=false)');
       }
 
       // Create or update schedule if CronExpression provided
@@ -2021,6 +2338,7 @@ async function processRSUPendingWork(): Promise<void> {
               EntityName: 'MJ: Scheduled Job Types',
               ExtraFilter: `DriverClass='IntegrationSyncScheduledJobDriver'`,
               MaxRows: 1,
+              SkipTotalRowCount: true,
               ResultType: 'simple',
               Fields: ['ID']
             }, systemUser);
@@ -2069,6 +2387,16 @@ async function processRSUPendingWork(): Promise<void> {
       // Failing terminally on the first error means the objects this item would have mapped are
       // silently never mapped, and the only recovery is someone noticing and re-applying by hand.
       const remaining = (item.SourceObjectNames ?? []).filter(n => !mappedObjectNames.has(n));
+      // Same list the retry narrows to, reported into the run stream: when this half fails, those
+      // objects have tables and no way to sync into them, and this is the client's only signal.
+      //
+      // Reported under CreateEntityMaps because that is where the overwhelming majority of this
+      // block's work — and so its failures — lives. A throw from further down (schedule creation,
+      // say) lands here too, with an empty `remaining`; the stage attribution is then approximate
+      // but the message is the real error and the run is correctly marked failed, which is what the
+      // operator needs. The alternative — inventing a stage that is not in the pipeline's step list
+      // — would break the determinate stepper for the sake of a nicer label.
+      progress?.FailEntityMaps(message, remaining);
       const requeued = await rsm.RetryPendingWork(pendingWorkID, item, remaining, systemUser);
       if (!requeued) {
         // Budget spent, or nothing left to retry. This message is the operator's only signal, so
@@ -2079,7 +2407,40 @@ async function processRSUPendingWork(): Promise<void> {
     }
   }
 
+  // Terminates every RSU run this pass re-attached to. Until this lands, those runs have been
+  // flagged in-flight since before the restart — which is exactly the state this whole mechanism
+  // exists to end.
+  await progressSession.FinishAll();
+
   console.log(`[RSU] Pending work processing complete`);
+}
+
+/**
+ * The ID of the sync run a just-launched sync created, or null if it is not readable yet.
+ *
+ * `RunSync` resolves only when the entire sync FINISHES, so it cannot be awaited for this — the
+ * StartSync stage closes when the sync begins, not when it ends. The run row is written early in
+ * the sync's own startup, so a short settle plus a newest-first lookup finds it. Null is a normal
+ * outcome under load and is reported as such; it never fails anything.
+ */
+async function FindStartedSyncRunID(companyIntegrationID: string, systemUser: UserInfo): Promise<string | null> {
+  try {
+    await new Promise(resolve => setTimeout(resolve, 200));
+    const rv = new RunView();
+    const runResult = await rv.RunView<{ ID: string }>({
+      EntityName: 'MJ: Company Integration Runs',
+      ExtraFilter: `CompanyIntegrationID='${companyIntegrationID.replace(/'/g, "''")}' AND Status='In Progress'`,
+      OrderBy: '__mj_CreatedAt DESC',
+      MaxRows: 1,
+      SkipTotalRowCount: true,
+      ResultType: 'simple',
+      Fields: ['ID'],
+    }, systemUser);
+    return runResult.Success && runResult.Results.length > 0 ? runResult.Results[0].ID : null;
+  } catch (e) {
+    console.warn(`[RSU] Could not resolve the started sync run id for ${companyIntegrationID}: ${e}`);
+    return null;
+  }
 }
 
 /**
@@ -2106,11 +2467,51 @@ function createMSSQLCompatPool(pgPool: import('pg').Pool): sql.ConnectionPool {
   return wrapper as unknown as sql.ConnectionPool;
 }
 
+// Defined below serve() on purpose: serverExtensionReservedRoots.test.ts treats every app.use() that appears
+// textually before the unified auth middleware as a pre-auth mount, and these routes are mounted post-auth.
 /**
- * Translates SQL Server bracket-quoted identifiers to PostgreSQL double-quoted identifiers.
- * Converts [schema].[table] to "schema"."table" and handles common T-SQL patterns.
+ * Mounts the realtime recording shard/terminal routes (post-auth) and starts the assembly scheduler they
+ * hand work to. Skipped, with a warning, when the server's provider is not a SQL provider (the ledger calls
+ * stored procedures). Without a system user the routes still store shards, and the janitor assembles them.
+ * Returns whether the routes were mounted.
  */
-function translateBracketsToPG(sql: string): string {
-  // Replace [identifier] with "identifier"
-  return sql.replace(/\[([^\]]+)\]/g, '"$1"');
+function mountRealtimeRecordingRoutes(app: Application): boolean {
+  const provider = Metadata.Provider; // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet; the ledger's procs run as the server's SQL login either way
+  if (!(provider instanceof DatabaseProviderBase)) {
+    console.warn('[Realtime] Recording routes not mounted: the server provider is not a DatabaseProviderBase');
+    return false;
+  }
+  const graceMs = (): number => configInfo.realtime.recordingAssemblyGraceSeconds * 1000;
+  const systemUser = UserCache.Instance.GetSystemUser();
+  const runWorkers = ShouldRunBackgroundWorkers(ResolveServerRole(configInfo.serverRole ?? process.env.MJ_SERVER_ROLE));
+  if (systemUser && runWorkers) {
+    RecordingAssemblyScheduler.Instance.Start({ Provider: provider, SystemUser: systemUser, GraceMs: graceMs });
+  } else if (!systemUser) {
+    LogError('[Realtime] Recording assembly scheduler not started: no system user; the session janitor assembles recordings instead');
+  }
+  app.use(ApiRoute(REALTIME_RECORDING_MOUNT_PATH), cors<cors.CorsRequest>(), CreateRealtimeRecordingRouter({
+    ResolveCaller: req => {
+      const user: UserInfo | undefined = req.userPayload?.userRecord;
+      return user ? { ContextUser: user, Provider: provider } : null;
+    },
+    LoadOwnedSession: LoadOwnedRealtimeSession,
+    AuthorizeSession: AuthorizeLoadedSession,
+    CreateLedger: (ledgerProvider, contextUser) => new SqlRealtimeRecordingLedger(ledgerProvider, contextUser),
+    Scheduler: RecordingAssemblyScheduler.Instance,
+    GraceMs: graceMs,
+    SystemUser: () => UserCache.Instance.GetSystemUser() ?? null,
+  }));
+  return true;
 }
+
+// Public-edge building blocks for Open Apps that run their own pre-auth edge and mint
+// scope-limited guest sessions (e.g. a ballot edge: verify a credential, then mint a short-lived
+// session scoped to one resource). They are the same pieces WidgetSessionService uses; a generic
+// public-widget session mint remains the long-term replacement.
+export { BuildSessionClaims, MagicLinkKeyManager, MagicLinkService, HashToken, GenerateRawToken } from './auth/magicLink/index.js';
+export type { MagicLinkJWTClaims } from './auth/magicLink/index.js';
+export { VerifyHostAssertion } from './realtimeWidget/host-identity.js';
+export type { HostAssertedIdentity, HostAssertionResult } from './realtimeWidget/host-identity.js';
+export { IsScopeLimitedPrincipal } from './auth/scopeLimitedPrincipal.js';
+export const GetServerStartupSummary = () => StartupLogger.GetLastStartupSnapshot();
+export type { StartupSummarySnapshot } from './logging/StartupLogger.js';

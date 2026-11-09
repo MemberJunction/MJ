@@ -52,6 +52,26 @@ describe('FullTextSearchProvider', () => {
         FullTextSearchProvider.PerEntityFetchDepth = originalDepth;
     });
 
+    describe('scope entity lane list (empty means nothing, not everything)', () => {
+        it('a scoped search whose scope names no entity makes no FullTextSearch call', async () => {
+            const results = await provider.Search('budget', 10, undefined, contextUser, { Entities: [] });
+            expect(results).toEqual([]);
+            expect(mockFullTextSearch).not.toHaveBeenCalled();
+        });
+
+        it('a scoped search restricts the call to the lanes\' entities', async () => {
+            await provider.Search('budget', 10, undefined, contextUser, {
+                Entities: [{ EntityID: 'e-1', EntityName: 'MJ: AI Agents', ExtraFilter: "Status='Active'" }],
+            });
+            expect(mockFullTextSearch).toHaveBeenCalledWith(expect.objectContaining({ EntityNames: ['MJ: AI Agents'] }), contextUser);
+        });
+
+        it('an unscoped search (no Entities list) still searches every FTS entity', async () => {
+            await provider.Search('budget', 10, undefined, contextUser, {});
+            expect(mockFullTextSearch).toHaveBeenCalledWith(expect.objectContaining({ EntityNames: undefined }), contextUser);
+        });
+    });
+
     describe('MIN_TERM_LENGTH boundary (C3)', () => {
         it('rejects a 1-character query — no FullTextSearch call', async () => {
             const results = await provider.Search('U', 10, undefined, contextUser);

@@ -1,0 +1,86 @@
+:host {
+  display: block;
+  box-sizing: border-box;
+  height: 100%;
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+}
+
+.capture {
+  box-sizing: border-box;
+  height: 100%;
+}
+
+.capture--live {
+  display: flex;
+  flex-direction: column;
+}
+
+.capture__self {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.capture__bar {
+  display: flex;
+  justify-content: center;
+  padding: var(--mj-space-2, 8px);
+}
+
+.capture--card {
+  display: flex;
+  flex-direction: column;
+  padding: var(--mj-space-3, 12px);
+  text-align: center;
+  overflow-y: auto;
+}
+
+/* Auto margins centre the ask while it fits; unlike justify-content, they never push it past the top when it does not. */
+.capture__ask {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--mj-space-2, 8px);
+  margin: auto 0;
+}
+
+.capture__loading {
+  flex: 1 1 auto;
+}
+
+.capture__icon {
+  font-size: 1.5rem;
+  color: var(--mj-text-secondary);
+}
+
+.capture__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.capture__hint {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--mj-text-secondary);
+}
+
+.capture__reason {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--mj-text-primary);
+}
+
+.capture__problem {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--mj-status-error-text);
+}
+
+.capture__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--mj-space-2, 8px);
+}

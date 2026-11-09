@@ -1,8 +1,8 @@
 import { BaseEntity, EntitySaveOptions, LogError, LogStatus, RunView, SimpleEmbeddingResult, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { Float32VectorToBase64, RegisterClass } from '@memberjunction/global';
 import { MJTagEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
 import { TagEngine } from '@memberjunction/tag-engine';
-import { EmbedTextLocalHelper } from './util';
+import { EmbedTextLocalHelper, IsLocalEmbeddingStaleHelper } from './util';
 
 /**
  * Server-side Tag entity that:
@@ -28,6 +28,11 @@ export class MJTagEntityServer extends MJTagEntity {
 
     protected override async EmbedTextLocal(textToEmbed: string): Promise<SimpleEmbeddingResult> {
         return EmbedTextLocalHelper(this, textToEmbed);
+    }
+
+    /** A stored vector from a model other than the default local one is re-embedded on save. */
+    protected override async IsEmbeddingStale(embeddingModelID: string | null): Promise<boolean> {
+        return IsLocalEmbeddingStaleHelper(this, embeddingModelID);
     }
 
     public override SupportsEmbedTextLocal(): boolean {
@@ -75,7 +80,7 @@ export class MJTagEntityServer extends MJTagEntity {
         // Mirror to in-memory vector service. Reads the just-persisted vector
         // from this.EmbeddingVector — no recompute.
         try {
-            if (this.Status === 'Active' && this.EmbeddingVector) {
+            if (this.Status === 'Active' && (this.EmbeddingVectorBinary || this.EmbeddingVector)) {
                 TagEngine.Instance.AddOrUpdateSingleTagEmbeddingFromPersisted(this);
             } else {
                 TagEngine.Instance.RemoveTagFromVectorService(this.ID);
@@ -132,7 +137,7 @@ export class MJTagEntityServer extends MJTagEntity {
     }
 
     /**
-     * Refresh `EmbeddingVector` + `EmbeddingModelID` when the tag is new or its
+     * Refresh `EmbeddingVector` + `EmbeddingVectorBinary` + `EmbeddingModelID` when the tag is new or its
      * Name/Description has changed. Failures here log and clear the vector
      * fields rather than blocking the save — the tag is still functional, just
      * without semantic matching until the next successful refresh.
@@ -143,11 +148,14 @@ export class MJTagEntityServer extends MJTagEntity {
         const nameDirty = !this.IsSaved || (nameField?.Dirty ?? false);
         const descDirty = !this.IsSaved || (descField?.Dirty ?? false);
 
-        if (!nameDirty && !descDirty) return;
+        const textChanged = nameDirty || descDirty;
+        const stale = this.EmbeddingVector != null && await this.IsEmbeddingStale(this.EmbeddingModelID);
+        if (!textChanged && !stale) return;
 
         const trimmedName = this.Name?.trim();
         if (!trimmedName) {
             this.EmbeddingVector = null;
+            this.EmbeddingVectorBinary = null;
             this.EmbeddingModelID = null;
             return;
         }
@@ -159,14 +167,18 @@ export class MJTagEntityServer extends MJTagEntity {
             const result = await this.EmbedTextLocal(text);
             if (result?.vector && result.vector.length > 0) {
                 this.EmbeddingVector = JSON.stringify(result.vector);
+                this.EmbeddingVectorBinary = Float32VectorToBase64(result.vector);
                 if (result.modelID) this.EmbeddingModelID = result.modelID;
-            } else {
-                this.EmbeddingVector = null;
-                this.EmbeddingModelID = null;
+                return;
             }
         } catch (error) {
             LogError(`[MJTagEntityServer] Embedding refresh failed for tag "${this.Name}": ${error instanceof Error ? error.message : String(error)}`);
+        }
+        // A vector computed from old text must go; one that is only from an older model still matches
+        // the text, so keep it until a re-embed succeeds.
+        if (textChanged) {
             this.EmbeddingVector = null;
+            this.EmbeddingVectorBinary = null;
             this.EmbeddingModelID = null;
         }
     }

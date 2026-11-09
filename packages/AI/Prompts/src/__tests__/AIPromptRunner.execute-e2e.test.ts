@@ -7,7 +7,7 @@
  * execution → parse/validate → retry → result assembly → fire-and-forget persistence, plus
  * cancellation and the parallel-execution aggregation path.
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
 
 const h = vi.hoisted(() => {
   const norm = (s: unknown): string => (s == null ? '' : String(s).trim().toLowerCase());
@@ -77,16 +77,23 @@ vi.mock('@memberjunction/credentials', async (importOriginal) => {
     CredentialEngine: { Instance: { Config: vi.fn().mockResolvedValue(undefined), Credentials: [], getCredentialById: () => null, getCredential: vi.fn().mockResolvedValue({ values: {} }) } },
   };
 });
+// No mj.config is found, so a test that does not stub the server capture default gets 'None'.
+vi.mock('cosmiconfig', () => ({ cosmiconfigSync: () => ({ search: () => null }) }));
 
 import { AIPromptRunner } from '../AIPromptRunner';
+import { TEMPLATE_DATA_CAPTURE_FAILED_NOTE } from '../PromptRunDataCapture';
 import { GetToolCallingDecision, GetToolCallingMode } from '../nativeToolCallingGate';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJGlobal } from '@memberjunction/global';
-import { ChildPromptParam } from '@memberjunction/ai-core-plus';
+import { ChildPromptParam, type StoredPromptRunMessages } from '@memberjunction/ai-core-plus';
+import type { ReferencedVariablesResult } from '@memberjunction/templates';
 import { TestLLM, makeFailedChatResult, makeModelUsage, makeSuccessChatResult } from '@memberjunction/unit-testing';
 import { buildRealisticCatalog, DEFAULT_CONFIGURED_DRIVERS, MODEL_TYPE, type AICatalog } from './__fixtures__/ai-metadata.fixtures';
 
-/** Mock template engine: renders any template to `rendered:<id>` and exposes the requested templates. */
+/**
+ * Mock template engine: renders any template to `rendered:<id>` and exposes the requested templates.
+ * The child template (`text:tmpl-child`) reads `childKey`; any other template reads `parentKey`.
+ */
 function mockTemplateEngine(): unknown {
   const tmpl = (id: string) => ({ ID: id, Name: id, GetHighestPriorityContent: () => ({ ID: `${id}-c`, TemplateText: `text:${id}` }) });
   const calls: string[] = [];
@@ -95,6 +102,7 @@ function mockTemplateEngine(): unknown {
     Config: vi.fn().mockResolvedValue(undefined),
     Templates: [tmpl('tmpl-parent'), tmpl('tmpl-child')],
     RenderTemplate: vi.fn(async (template: { ID: string }) => { calls.push(template.ID); return { Success: true, Output: `rendered:${template.ID}` }; }),
+    GetReferencedVariables: vi.fn((text: string) => ({ Names: new Set(text === 'text:tmpl-child' ? ['childKey'] : ['parentKey']), Complete: true })),
   };
 }
 
@@ -263,30 +271,81 @@ describe('ExecutePrompt — hierarchical child-prompt composition', () => {
   });
 });
 
+describe('RenderChildPromptTemplates — public child render without execution', () => {
+  it('renders the children keyed by parent placeholder and makes no model call', async () => {
+    testLLM.Script({ kind: 'succeed', content: 'must not be called' });
+    const te = mockTemplateEngine();
+    (runner as unknown as { _templateEngine: unknown })._templateEngine = te;
+    const parent = makePrompt({ TemplateID: 'tmpl-parent', OutputType: 'string' });
+    const child = makePrompt({ ID: 'child-1', Name: 'Child', TemplateID: 'tmpl-child', OutputType: 'string' });
+    const childParams = { prompt: child, contextUser: { ID: 'u1' }, data: {} };
+    const params = makeParams(parent, { conversationMessages: undefined, templateMessageRole: 'system' });
+
+    const out = await runner.RenderChildPromptTemplates([new ChildPromptParam(childParams as never, 'agentSpecificPrompt')], params as never);
+
+    expect(out.renderedTemplates).toEqual({ agentSpecificPrompt: 'rendered:tmpl-child' });
+    const renderCalls = (te as { __renderCalls: string[] }).__renderCalls;
+    expect(renderCalls).toEqual(['tmpl-child']);          // only the child — the parent is untouched
+    expect(testLLM.CallCount).toBe(0);                     // nothing executed
+  });
+
+  it('returns an empty map for no children', async () => {
+    const params = makeParams(makePrompt(), {});
+    const out = await runner.RenderChildPromptTemplates([], params as never);
+    expect(out.renderedTemplates).toEqual({});
+  });
+
+  it('produces the same text the hierarchical execution path embeds', async () => {
+    testLLM.Script({ kind: 'succeed', content: 'composed answer' });
+    const te = mockTemplateEngine();
+    (runner as unknown as { _templateEngine: unknown })._templateEngine = te;
+    const parent = makePrompt({ TemplateID: 'tmpl-parent', OutputType: 'string' });
+    const child = makePrompt({ ID: 'child-1', Name: 'Child', TemplateID: 'tmpl-child', OutputType: 'string' });
+    const childParams = { prompt: child, contextUser: { ID: 'u1' }, data: {} };
+    const children = [new ChildPromptParam(childParams as never, 'agentSpecificPrompt')];
+    const params = makeParams(parent, { conversationMessages: undefined, templateMessageRole: 'system', childPrompts: children });
+
+    const pre = await runner.RenderChildPromptTemplates(children, params as never);
+    const result = await runner.ExecutePrompt(params as never);
+
+    expect(result.success).toBe(true);
+    // The execution path rendered the same child template (same ID) — pre-render and in-run agree.
+    const renderCalls = (te as { __renderCalls: string[] }).__renderCalls;
+    expect(renderCalls.filter(c => c === 'tmpl-child')).toHaveLength(2);
+    expect(pre.renderedTemplates.agentSpecificPrompt).toBe('rendered:tmpl-child');
+  });
+});
+
+/**
+ * Replaces the runner's planner and parallel coordinator with deterministic stand-ins. The coordinator
+ * returns two successful results (`t1` ranked first, `t2` second) in execution group 0.
+ */
+function useParallelStandIns(): void {
+  const model = h.state.models[0] as { ID: string; Name: string; Vendor?: string };
+  const taskResult = (taskId: string, content: string, ranking: number) => ({
+    success: true, rawResult: content, executionTimeMS: 10, ranking,
+    task: { taskId, model: { ID: model.ID, Name: model.Name, Vendor: 'Anthropic' } },
+    modelResult: makeSuccessChatResult(content, { usage: makeModelUsage({ promptTokens: 7, completionTokens: 3 }) }),
+  });
+
+  (runner as unknown as { _executionPlanner: { createExecutionPlan: () => unknown[] } })._executionPlanner = {
+    createExecutionPlan: () => [{ taskId: 't1' }, { taskId: 't2' }],
+  };
+  (runner as unknown as { _parallelCoordinator: { executeTasksInParallel: () => Promise<unknown> } })._parallelCoordinator = {
+    executeTasksInParallel: async () => ({
+      success: true,
+      taskResults: [taskResult('t1', 'first', 1), taskResult('t2', 'second', 2)],
+      errors: [], successCount: 2, failureCount: 0, totalExecutionTimeMS: 20, totalTokensUsed: 20,
+      groupResults: new Map([[0, {}]]),
+    }),
+  };
+}
+
 describe('ExecutePrompt — parallel execution aggregation', () => {
   it('aggregates tokens across tasks, selects a result, and surfaces additionalResults', async () => {
     testLLM.Script({ kind: 'succeed', content: 'unused' });
     const prompt = makePrompt({ OutputType: 'string', ParallelizationMode: 'ModelSpecific' });
-
-    const model = h.state.models[0] as { ID: string; Name: string; Vendor?: string };
-    const taskResult = (taskId: string, content: string, ranking: number) => ({
-      success: true, rawResult: content, executionTimeMS: 10, ranking,
-      task: { taskId, model: { ID: model.ID, Name: model.Name, Vendor: 'Anthropic' } },
-      modelResult: makeSuccessChatResult(content, { usage: makeModelUsage({ promptTokens: 7, completionTokens: 3 }) }),
-    });
-
-    // Replace the heavy collaborators with deterministic stand-ins.
-    (runner as unknown as { _executionPlanner: { createExecutionPlan: () => unknown[] } })._executionPlanner = {
-      createExecutionPlan: () => [{ taskId: 't1' }, { taskId: 't2' }],
-    };
-    (runner as unknown as { _parallelCoordinator: { executeTasksInParallel: () => Promise<unknown> } })._parallelCoordinator = {
-      executeTasksInParallel: async () => ({
-        success: true,
-        taskResults: [taskResult('t1', 'first', 1), taskResult('t2', 'second', 2)],
-        errors: [], successCount: 2, failureCount: 0, totalExecutionTimeMS: 20, totalTokensUsed: 20,
-        groupResults: new Map([[0, {}]]),
-      }),
-    };
+    useParallelStandIns();
 
     const result = await runner.ExecutePrompt(makeParams(prompt) as never);
     expect(result.success).toBe(true);
@@ -401,5 +460,238 @@ describe('ExecutePrompt — implicit control flow treats plain text as the termi
     const result = await runner.ExecutePrompt(makeParams(objectPrompt(), { tools: [tools[0]] }) as never);
     expect(GetToolCallingMode(result.chatResult)).toBe('Native');
     expect(result.validationResult?.Success).toBe(false);
+  });
+});
+
+describe('ExecutePrompt — template data capture', () => {
+  type ReferencedVariablesMock = Mock<(text: string) => ReferencedVariablesResult>;
+
+  // No catalog configuration: the native tool-calling gate stays closed without the harness's "could not resolve" warning.
+  const catalog = h.engine as unknown as { GetEffectiveModelConfiguration?: () => null };
+  beforeEach(() => { catalog.GetEffectiveModelConfiguration = () => null; });
+  afterEach(() => { delete catalog.GetEffectiveModelConfiguration; });
+
+  /** Fixes the server default capture mode (`aiPromptRuns.templateDataCapture`) for one test. */
+  const stubServerDefault = (mode: string): void => {
+    vi.spyOn(AIPromptRunner.prototype as unknown as { GetServerTemplateDataCaptureDefault(): string }, 'GetServerTemplateDataCaptureDefault').mockReturnValue(mode);
+  };
+
+  /** Puts the mock template engine on the runner and returns its variable-analysis mock. */
+  const useTemplateEngine = (): ReferencedVariablesMock => {
+    const te = mockTemplateEngine() as { GetReferencedVariables: ReferencedVariablesMock };
+    (runner as unknown as { _templateEngine: unknown })._templateEngine = te;
+    return te.GetReferencedVariables;
+  };
+
+  /** Runs the prompt with the harness params plus `overrides` and returns the object stored in `AIPromptRun.Messages`. */
+  const runAndReadStored = async (prompt: Record<string, unknown>, overrides: Record<string, unknown>): Promise<StoredPromptRunMessages> => {
+    const result = await runner.ExecutePrompt(makeParams(prompt, overrides) as never);
+    expect(result.success).toBe(true);
+    return JSON.parse(String(result.promptRun?.Messages)) as StoredPromptRunMessages;
+  };
+
+  it('stores only the shape by default (None), without _CURRENT_PAYLOAD, and the messages as before', async () => {
+    // No stub: the server default comes from mj.config, which the cosmiconfig mock reports as absent.
+    useTemplateEngine();
+    const stored = await runAndReadStored(makePrompt({ TemplateID: 'tmpl-parent' }), {
+      templateMessageRole: 'system',
+      data: { parentKey: 'p', _CURRENT_PAYLOAD: { x: 1 } },
+    });
+    expect(stored.dataCapture).toBe('None');
+    expect(stored.dataShape?.data?.keys).toEqual({ parentKey: 3 });
+    expect(stored).not.toHaveProperty('data');
+    expect(stored).not.toHaveProperty('templateData');
+    expect(stored.messages).toEqual([
+      { role: 'system', content: 'rendered:tmpl-parent' },
+      { role: 'user', content: 'Hello' },
+    ]);
+  });
+
+  it('uses the prompt setting before the server default', async () => {
+    stubServerDefault('None');
+    const stored = await runAndReadStored(makePrompt({ TemplateDataCapture: 'Full' }), { data: { parentKey: 'p' } });
+    expect(stored.dataCapture).toBe('Full');
+    expect(stored.data).toEqual({ parentKey: 'p' });
+    expect(stored).not.toHaveProperty('dataShape');
+  });
+
+  it('uses the call override before the prompt setting', async () => {
+    stubServerDefault('Full');
+    const stored = await runAndReadStored(makePrompt({ TemplateDataCapture: 'Full' }), { data: { parentKey: 'p' }, TemplateDataCapture: 'None' });
+    expect(stored.dataCapture).toBe('None');
+    expect(stored.dataShape?.data?.keys).toEqual({ parentKey: 3 });
+    expect(stored).not.toHaveProperty('data');
+  });
+
+  it('uses the server default when the prompt has no setting', async () => {
+    stubServerDefault('Full');
+    const stored = await runAndReadStored(makePrompt({ TemplateDataCapture: null }), { data: { parentKey: 'p' } });
+    expect(stored.dataCapture).toBe('Full');
+    expect(stored.data).toEqual({ parentKey: 'p' });
+  });
+
+  it('Referenced: keeps only the keys that the parent and child templates read', async () => {
+    stubServerDefault('Referenced');
+    useTemplateEngine();
+    const child = makePrompt({ ID: 'child-1', Name: 'Child', TemplateID: 'tmpl-child' });
+    const stored = await runAndReadStored(makePrompt({ TemplateID: 'tmpl-parent' }), {
+      conversationMessages: undefined,
+      templateMessageRole: 'system',
+      data: { parentKey: 'p', childKey: 'c', unusedKey: 'u' },
+      childPrompts: [new ChildPromptParam({ prompt: child, contextUser: { ID: 'u1' }, data: {} } as never, 'analysis')],
+    });
+    expect(stored.dataCapture).toBe('Referenced');
+    expect(stored.dataCaptureNote).toBeUndefined();
+    expect(stored.data).toEqual({ parentKey: 'p', childKey: 'c' });
+  });
+
+  it('Referenced: stores Full with a note when the template analysis is incomplete', async () => {
+    stubServerDefault('Referenced');
+    useTemplateEngine().mockReturnValue({ Names: new Set(['parentKey']), Complete: false, Reason: 'x' });
+    const stored = await runAndReadStored(makePrompt({ TemplateID: 'tmpl-parent' }), {
+      templateMessageRole: 'system',
+      data: { parentKey: 'p', otherKey: 'o', _CURRENT_PAYLOAD: { x: 1 } },
+    });
+    expect(stored.dataCapture).toBe('Full');
+    expect(stored.dataCaptureNote).toContain('prompt "E2E Prompt": x');
+    expect(stored.data).toEqual({ parentKey: 'p', otherKey: 'o' });
+  });
+
+  it('Referenced: stores Full with a note naming the prompt when its template is missing', async () => {
+    // The override skips rendering, so the run succeeds although the template does not exist.
+    stubServerDefault('Referenced');
+    useTemplateEngine();
+    const stored = await runAndReadStored(makePrompt({ TemplateID: 'tmpl-missing' }), {
+      templateMessageRole: 'system',
+      systemPromptOverride: 'override prompt',
+      data: { parentKey: 'p' },
+    });
+    expect(stored.dataCapture).toBe('Full');
+    expect(stored.dataCaptureNote).toContain('"E2E Prompt"');
+    expect(stored.data).toEqual({ parentKey: 'p' });
+    expect(stored.messages[0]).toEqual({ role: 'system', content: 'override prompt' });
+  });
+
+  it('parallel consolidated run: keeps the parallelExecution block and stores the shape (None)', async () => {
+    stubServerDefault('None');
+    useParallelStandIns();
+    const stored = await runAndReadStored(makePrompt({ ParallelizationMode: 'ModelSpecific' }), { data: { parentKey: 'p' } });
+    // The runner selects the model before the parallel step, so it plans one pre-selected task;
+    // the coordinator stand-in reports two successful results.
+    expect(stored.parallelExecution).toEqual({
+      parallelizationMode: 'ModelSpecific', totalTasks: 1, successfulTasks: 2, failedTasks: 0, selectedTaskId: 't1', executionGroups: [0],
+    });
+    expect(stored.dataCapture).toBe('None');
+    expect(stored.dataShape?.data?.keys).toEqual({ parentKey: 3 });
+    expect(stored).not.toHaveProperty('data');
+    expect(stored.messages).toEqual([{ role: 'user', content: 'Hello' }]);
+  });
+
+  it('None (default): data that is not an object does not fail the run', async () => {
+    const stored = await runAndReadStored(makePrompt(), { data: 'abc' });
+    expect(stored.dataCapture).toBe('None');
+    expect(stored.dataShape).toEqual({ data: { keyCount: 0, totalBytes: 5, keys: {}, keysElided: false } });
+    expect(stored).not.toHaveProperty('data');
+  });
+
+  it('a capture error does not fail the run: the run saves None with a fixed note and logs the error', async () => {
+    stubServerDefault('Referenced');
+    useTemplateEngine().mockImplementation(() => { throw new Error('analysis failed near IT-SECRET-VALUE'); });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const result = await runner.ExecutePrompt(makeParams(makePrompt({ TemplateID: 'tmpl-parent' }), {
+      templateMessageRole: 'system',
+      data: { parentKey: 'IT-SECRET-VALUE' },
+    }) as never);
+    await runner.WaitForPendingPromptRunSaves();
+
+    expect(result.success).toBe(true);
+    expect(lastPromptRun!.saveCount).toBeGreaterThanOrEqual(2);
+    const messagesJSON = String(result.promptRun?.Messages);
+    expect(JSON.parse(messagesJSON)).toEqual({
+      dataCapture: 'None',
+      dataCaptureNote: TEMPLATE_DATA_CAPTURE_FAILED_NOTE,
+      messages: [
+        { role: 'system', content: 'rendered:tmpl-parent' },
+        { role: 'user', content: 'Hello' },
+      ],
+    });
+    expect(messagesJSON).not.toContain('IT-SECRET-VALUE');
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.stringContaining('"E2E Prompt"'),
+      expect.objectContaining({ message: 'analysis failed near IT-SECRET-VALUE' }),
+    );
+  });
+
+  it('parallel consolidated run: a capture error keeps the parallelExecution block in the fallback', async () => {
+    // A BigInt value cannot be serialized, so the Full capture fails at both write sites
+    stubServerDefault('Full');
+    useParallelStandIns();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const stored = await runAndReadStored(makePrompt({ ParallelizationMode: 'ModelSpecific' }), { data: { big: 10n } });
+    expect(stored).toEqual({
+      dataCapture: 'None',
+      dataCaptureNote: TEMPLATE_DATA_CAPTURE_FAILED_NOTE,
+      parallelExecution: {
+        parallelizationMode: 'ModelSpecific', totalTasks: 1, successfulTasks: 2, failedTasks: 0, selectedTaskId: 't1', executionGroups: [0],
+      },
+      messages: [{ role: 'user', content: 'Hello' }],
+    });
+  });
+
+  describe('which prompt setting applies: the most specific prompt wins', () => {
+    /** A child prompt param for `prompt`, with optional child prompts of its own. */
+    const childPromptParam = (prompt: Record<string, unknown>, children: ChildPromptParam[] = []): ChildPromptParam =>
+      new ChildPromptParam({ prompt, contextUser: { ID: 'u1' }, data: {}, childPrompts: children } as never, 'analysis');
+    const childPrompt = (setting: string | null, id = 'child-1'): Record<string, unknown> =>
+      makePrompt({ ID: id, Name: `Child ${id}`, TemplateID: 'tmpl-child', TemplateDataCapture: setting });
+
+    /**
+     * Runs a hierarchical prompt whose main prompt has `mainSetting`, and returns the stored object.
+     * The hierarchical path adds the native tool-calling flags to `data`, so the tests match `parentKey` only.
+     */
+    const runHierarchical = (mainSetting: string | null, children: ChildPromptParam[], overrides: Record<string, unknown> = {}): Promise<StoredPromptRunMessages> => {
+      stubServerDefault('None');
+      useTemplateEngine();
+      return runAndReadStored(makePrompt({ TemplateID: 'tmpl-parent', TemplateDataCapture: mainSetting }), {
+        conversationMessages: undefined,
+        templateMessageRole: 'system',
+        data: { parentKey: 'p' },
+        childPrompts: children,
+        ...overrides,
+      });
+    };
+
+    it('a child prompt value beats the main prompt (main None, child Full)', async () => {
+      const stored = await runHierarchical('None', [childPromptParam(childPrompt('Full'))]);
+      expect(stored.dataCapture).toBe('Full');
+      expect(stored.data).toMatchObject({ parentKey: 'p' });
+    });
+
+    it('a child prompt value beats the main prompt (main Full, child None)', async () => {
+      const stored = await runHierarchical('Full', [childPromptParam(childPrompt('None'))]);
+      expect(stored.dataCapture).toBe('None');
+      expect(stored).not.toHaveProperty('data');
+      expect(stored.dataShape?.data?.keys).toMatchObject({ parentKey: 3 });
+    });
+
+    it('the main prompt value applies when the child prompt has none (main Full, child NULL)', async () => {
+      const stored = await runHierarchical('Full', [childPromptParam(childPrompt(null))]);
+      expect(stored.dataCapture).toBe('Full');
+      expect(stored.data).toMatchObject({ parentKey: 'p' });
+    });
+
+    it('the call override beats a child prompt value', async () => {
+      const stored = await runHierarchical('None', [childPromptParam(childPrompt('Full'))], { TemplateDataCapture: 'None' });
+      expect(stored.dataCapture).toBe('None');
+      expect(stored).not.toHaveProperty('data');
+    });
+
+    it('a nested child prompt (child of a child) value beats the main prompt', async () => {
+      const grandchild = childPromptParam(childPrompt('Full', 'grandchild-1'));
+      const stored = await runHierarchical('None', [childPromptParam(childPrompt(null), [grandchild])]);
+      expect(stored.dataCapture).toBe('Full');
+      expect(stored.data).toMatchObject({ parentKey: 'p' });
+    });
   });
 });

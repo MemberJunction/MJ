@@ -162,6 +162,15 @@ export class RealtimeSurfaceTabsModel {
   }
 
   /**
+   * The key of the channel whose tab is focused, or `null` when the focused tab is not a channel's (the Activity
+   * tab, or an empty strip). This is what tells the session which surface the user is looking at.
+   */
+  public get ActiveChannelKey(): string | null {
+    const tab = this.ActiveTab;
+    return tab.Kind === 'channel' ? tab.Key : null;
+  }
+
+  /**
    * Shows or hides the gated Activity tab. Turning it ON when an empty strip was implicitly
    * focusing Activity keeps focus on Activity; turning it OFF while it was focused falls
    * focus back to the first channel tab (if any). No-op (no emission) when unchanged.

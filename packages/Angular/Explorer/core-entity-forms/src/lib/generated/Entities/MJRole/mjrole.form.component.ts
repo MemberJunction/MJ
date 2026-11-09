@@ -34,7 +34,8 @@ export class MJRoleFormComponent extends BaseFormComponent {
             { sectionKey: 'mJMagicLinkInvites', sectionName: 'Magic Link Invites', isExpanded: false },
             { sectionKey: 'mJAISkillPermissions', sectionName: 'AI Skill Permissions', isExpanded: false },
             { sectionKey: 'mJConversationWidgetInstances', sectionName: 'Conversation Widget Instances', isExpanded: false },
-            { sectionKey: 'mJEntityFieldPermissions', sectionName: 'Entity Field Permissions', isExpanded: false }
+            { sectionKey: 'mJEntityFieldPermissions', sectionName: 'Entity Field Permissions', isExpanded: false },
+            { sectionKey: 'mJEntityFormContributions', sectionName: 'Entity Form Contributions', isExpanded: false }
         ]);
     }
 }

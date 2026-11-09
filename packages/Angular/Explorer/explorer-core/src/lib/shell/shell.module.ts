@@ -17,6 +17,9 @@ import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJDropdownComponent, MJClickableDirective, MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { SearchModule } from '@memberjunction/ng-search';
+import { MJDiagnosticsModule } from '@memberjunction/ng-diagnostics';
+// Marks the main content area as a panel a call can share on its own ("This panel").
+import { SharePanelDirective } from '@memberjunction/ng-realtime-media';
 
 @NgModule({
   declarations: [
@@ -38,9 +41,11 @@ import { SearchModule } from '@memberjunction/ng-search';
     ExplorerSettingsModule,
     SharedGenericModule,
     SearchModule,
+    MJDiagnosticsModule,
     RecordsHubPillComponent,
     RecordBarComponent,
-    RecordSwitcherSheetComponent
+    RecordSwitcherSheetComponent,
+    SharePanelDirective
   ],
   providers: [
     CommandPaletteService

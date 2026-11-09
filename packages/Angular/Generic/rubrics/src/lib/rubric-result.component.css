@@ -1,0 +1,29 @@
+.rubric-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-3, 0.75rem);
+  color: var(--mj-color-neutral-800);
+}
+
+.rubric-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-2, 0.5rem);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rubric-track {
+  display: block;
+  height: 0.5rem;
+  background: var(--mj-color-neutral-200);
+  border-radius: var(--mj-radius-full);
+  overflow: hidden;
+}
+
+.rubric-bar {
+  display: block;
+  height: 100%;
+  background: var(--mj-color-brand-500);
+}

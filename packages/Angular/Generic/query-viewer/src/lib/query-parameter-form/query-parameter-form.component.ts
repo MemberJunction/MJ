@@ -92,6 +92,13 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
     @Input() IsOpen: boolean = false;
 
     /**
+     * Parameters the host sets (for example a dashboard's mapped values): shown with their value,
+     * disabled, with a lock. A server-set parameter (`IsServerSet`) is always shown locked as "Set by
+     * server", has no value here, and is never submitted.
+     */
+    @Input() ReadOnlyParameters: string[] = [];
+
+    /**
      * Panel width in pixels
      */
     @Input() PanelWidth: number = 400;
@@ -249,6 +256,11 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
         const value = field.value;
         const param = field.info;
 
+        // The server sets it: nothing to fill or check here
+        if (param.IsServerSet) {
+            return;
+        }
+
         // Required check
         if (param.IsRequired) {
             if (value === null || value === undefined || value === '') {
@@ -287,7 +299,7 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
 
     private updateAllRequiredFilled(): void {
         this.AllRequiredFilled = this.Fields
-            .filter(f => f.info.IsRequired)
+            .filter(f => f.info.IsRequired && !f.info.IsServerSet)
             .every(f => {
                 const value = f.value;
                 if (value === null || value === undefined || value === '') return false;
@@ -325,6 +337,9 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
         // state from before the JSON-array fix is cleaned up on re-submit.
         const values: QueryParameterValues = {};
         for (const field of this.Fields) {
+            if (field.info.IsServerSet) {
+                continue; // only the server may set it; a value from here would be refused
+            }
             if (field.value !== null && field.value !== undefined) {
                 if (field.info.Type === 'array') {
                     const display = this.GetArrayDisplayValue(field.value);
@@ -368,6 +383,16 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
             return `e.g., ${param.SampleValue}`;
         }
         return param.Description || '';
+    }
+
+    /** True when the field is shown read-only: the host sets it, or the server does. */
+    public IsLocked(field: ParameterField): boolean {
+        return field.info.IsServerSet || this.ReadOnlyParameters.includes(field.info.Name);
+    }
+
+    /** The note a locked field shows. */
+    public LockLabel(field: ParameterField): string {
+        return field.info.IsServerSet ? 'Set by server' : 'Set for this view';
     }
 
     public TrackByField(index: number, field: ParameterField): string {

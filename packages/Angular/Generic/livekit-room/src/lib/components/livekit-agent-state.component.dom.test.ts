@@ -1,45 +1,22 @@
 import { describe, it, expect } from 'vitest';
 import { renderComponentFixture, query, text } from '@memberjunction/ng-test-utils';
-import { LiveKitAgentStateComponent, type LiveKitAgentVisualState } from './livekit-agent-state.component';
+import { LiveKitAgentStateComponent } from './livekit-agent-state.component';
 
 /**
- * DOM spec for <mj-livekit-agent-state> — a standalone, pure @Input leaf. Covers the
- * State → modifier-class mapping, the thinking spinner icon, the label text (driven by
- * the labelText getter) and the ShowLabel gate.
+ * DOM spec for the deprecated <mj-livekit-agent-state> wrapper: it renders `mj-agent-state` (whose own spec, in
+ * ng-realtime-media, covers the states and the label) and passes its inputs through.
  */
-describe('LiveKitAgentStateComponent (DOM)', () => {
+describe('LiveKitAgentStateComponent (DOM, deprecated wrapper)', () => {
   const render = (inputs: Record<string, unknown> = {}) => renderComponentFixture(LiveKitAgentStateComponent, { inputs });
 
-  it('renders the idle state by default', () => {
-    const f = render();
-    expect(query(f, '.lk-agent--idle')).not.toBeNull();
-    expect(text(f, '.lk-agent__label')).toContain('Agent · idle');
-  });
-
-  it('applies the state modifier class for each visual state', () => {
-    for (const state of ['listening', 'thinking', 'speaking'] as LiveKitAgentVisualState[]) {
-      const f = render({ State: state });
-      expect(query(f, `.lk-agent--${state}`)).not.toBeNull();
-    }
-  });
-
-  it('shows the spinning icon only while thinking', () => {
-    const thinking = render({ State: 'thinking' });
-    expect(query(thinking, '.lk-agent__orb .fa-spinner.fa-spin')).not.toBeNull();
-    expect(query(thinking, '.lk-agent__orb .fa-robot')).toBeNull();
-
-    const speaking = render({ State: 'speaking' });
-    expect(query(speaking, '.lk-agent__orb .fa-robot')).not.toBeNull();
-    expect(query(speaking, '.lk-agent__orb .fa-spinner')).toBeNull();
-  });
-
-  it('renders the agent name and human-readable state in the label', () => {
+  it('renders mj-agent-state with the state and the agent name', () => {
     const f = render({ State: 'thinking', AgentName: 'Sage' });
-    expect(text(f, '.lk-agent__label')).toContain('Sage · thinking…');
+    expect(query(f, 'mj-agent-state .agent--thinking')).not.toBeNull();
+    expect(text(f, '.agent__label')).toContain('Sage · thinking…');
+    expect(f.componentInstance.labelText).toBe('thinking…');
   });
 
-  it('hides the label when ShowLabel is false', () => {
-    const f = render({ ShowLabel: false });
-    expect(query(f, '.lk-agent__label')).toBeNull();
+  it('passes ShowLabel through', () => {
+    expect(query(render({ ShowLabel: false }), '.agent__label')).toBeNull();
   });
 });

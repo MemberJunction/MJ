@@ -40,6 +40,38 @@
             "checksum": "50960def3d0fccdb20afac3b9ec0c0a652790339ec5ef2e4f49b52f8fe9f3135"
           }
         }
+      ],
+      "MJ: Search Scope Permissions": [
+        {
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=UI",
+            "PermissionLevel": "Search"
+          },
+          "primaryKey": {
+            "ID": "592A281C-E031-444C-B6A5-F10B5F972843"
+          }
+        },
+        {
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Developer",
+            "PermissionLevel": "Search"
+          },
+          "primaryKey": {
+            "ID": "1C2F569A-4533-44C5-B9FA-2EAF3F9934C1"
+          }
+        },
+        {
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Integration",
+            "PermissionLevel": "Search"
+          },
+          "primaryKey": {
+            "ID": "5592D76F-F004-418B-9E39-355E1195E20E"
+          }
+        }
       ]
     },
     "primaryKey": {

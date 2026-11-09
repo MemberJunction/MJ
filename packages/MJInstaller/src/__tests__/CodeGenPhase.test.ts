@@ -187,6 +187,87 @@ describe('CodeGenPhase', () => {
       await expect(phase.Run(ctx)).rejects.toThrow(InstallerError);
     });
 
+    it('should accept mj_generatedentities linked under apps/MJAPI/node_modules (pnpm layout, #4599 / #4707)', async () => {
+      // pnpm links workspace packages into each dependent and never creates the root entry
+      mockFs.DirectoryExists.mockImplementation(async (p: string) => {
+        if (!p.includes('mj_generatedentities')) return true;
+        return p.split(/[\\/]/).includes('MJAPI');
+      });
+
+      const ctx = makeContext();
+      const result = await phase.Run(ctx);
+
+      expect(result.Success).toBe(true);
+      expect(result.ArtifactsVerified).toBe(true);
+    });
+
+    it('should accept mj_generatedentities linked under packages/MJAPI/node_modules (monorepo install under pnpm, #4562)', async () => {
+      const monorepoEntry = ['packages', 'MJAPI', 'node_modules', 'mj_generatedentities'].join('/');
+      mockFs.DirectoryExists.mockImplementation(async (p: string) => {
+        if (!p.includes('mj_generatedentities')) return true;
+        return p.split(/[\\/]/).join('/').endsWith(monorepoEntry);
+      });
+
+      const ctx = makeContext();
+      const result = await phase.Run(ctx);
+
+      expect(result.Success).toBe(true);
+      expect(result.ArtifactsVerified).toBe(true);
+    });
+
+    it('should name all three locations, the monorepo one as expected, when mj_generatedentities is missing (#4562)', async () => {
+      mockFs.DirectoryExists.mockImplementation(async (p: string) => !p.includes('mj_generatedentities'));
+
+      const ctx = makeContext();
+      const error = await phase.Run(ctx).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(InstallerError);
+      const text = (error as InstallerError).message;
+      expect(text).toContain('expected under packages/MJAPI/node_modules/ for this layout');
+      expect(text).toContain('also checked node_modules/ and apps/MJAPI/node_modules/');
+    });
+
+    it('should name apps/MJAPI as expected in a distribution layout (#4562)', async () => {
+      // No packages/MJCoreEntities → distribution layout
+      mockFs.DirectoryExists.mockImplementation(
+        async (p: string) => !p.includes('mj_generatedentities') && !p.includes('MJCoreEntities')
+      );
+
+      const ctx = makeContext();
+      const error = await phase.Run(ctx).catch((e: unknown) => e);
+
+      const text = (error as InstallerError).message;
+      expect(text).toContain('expected under apps/MJAPI/node_modules/ for this layout');
+      expect(text).toContain('also checked node_modules/ and packages/MJAPI/node_modules/');
+    });
+
+    it('should run the CLI linked under packages/MJAPI/node_modules in a monorepo install (#4562)', async () => {
+      const monorepoCli = ['packages', 'MJAPI', 'node_modules', '@memberjunction', 'cli', 'bin', 'run.js'].join('/');
+      mockFs.FileExists.mockImplementation(async (p: string) => {
+        if (!p.includes('run.js')) return true;
+        return p.split(/[\\/]/).join('/').endsWith(monorepoCli);
+      });
+
+      const ctx = makeContext();
+      await phase.Run(ctx);
+
+      const codegenCall = mockRunner.Run.mock.calls.find((c: [string, string[]]) => c[1]?.includes('codegen'));
+      expect(codegenCall?.[0]).toBe('node');
+      expect((codegenCall?.[1][0] ?? '').split(/[\\/]/).join('/')).toMatch(new RegExp(`${monorepoCli}$`));
+    });
+
+    it('should still accept mj_generatedentities at the repo-root node_modules (npm layout)', async () => {
+      mockFs.DirectoryExists.mockImplementation(async (p: string) => {
+        if (!p.includes('mj_generatedentities')) return true;
+        return !p.split(/[\\/]/).includes('MJAPI');
+      });
+
+      const ctx = makeContext();
+      const result = await phase.Run(ctx);
+
+      expect(result.ArtifactsVerified).toBe(true);
+    });
+
     it('should fail when codegen exits 0 but never wrote entity_subclasses.ts (#4477)', async () => {
       mockFs.FileExists.mockImplementation(async (p: string) => !p.includes('entity_subclasses.ts'));
 
