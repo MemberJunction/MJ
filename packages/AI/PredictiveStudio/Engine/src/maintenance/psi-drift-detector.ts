@@ -917,9 +917,9 @@ const PAIRING_RECORD_ID_CHUNK = 500;
 
 /**
  * The two bounded `MJ: Feature Values` reads behind one drift load of one record process (or model): the baseline
- * window, and everything computed since it ends (the evaluation window). Each is read newest-first and capped on its
- * own, so a capped load keeps the newest rows of BOTH windows; one row over the cap is fetched to tell a full window
- * from a truncated one.
+ * window, and everything computed since the evaluation window starts. Rows in a gap between the two windows are read by
+ * neither, so they never count toward a window's cap. Each is read newest-first and capped on its own, so a capped load
+ * keeps the newest rows of BOTH windows; one row over the cap is fetched to tell a full window from a truncated one.
  */
 function featureValueDriftViews(
   options: LoadDriftFromFeatureValuesOptions,
@@ -944,7 +944,7 @@ function featureValueDriftViews(
   });
   return [
     view(`ComputedAt >= '${at(windows.BaselineStartMs)}' AND ComputedAt < '${at(windows.BaselineEndMs)}'`),
-    view(`ComputedAt >= '${at(windows.BaselineEndMs)}'`),
+    view(`ComputedAt >= '${at(windows.EvaluationStartMs)}'`),
   ];
 }
 

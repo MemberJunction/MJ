@@ -779,6 +779,33 @@ describe('psi-drift-detector', () => {
         }
       });
 
+      it('reads the evaluation window from its own start, so rows in a gap after the baseline never count toward its cap', async () => {
+        const at = (daysAgo: number, i: number) => nowMs - daysAgo * 86_400_000 + i * 60_000;
+        const row = (id: string, value: number, computedAt: number) => ({
+          ID: id, RecordProcessID: 'rp-capped', RecordID: id, FeatureName: 'Score', Role: 'Champion' as const,
+          Source: 'Pipeline' as const, ValueNumeric: value, Confidence: 0.9, ComputedAt: new Date(computedAt),
+        });
+        // Baseline ends 10 days ago, evaluation starts 3 days ago: the 60 rows 5-6 days ago are in neither window.
+        const rows = [
+          ...Array.from({ length: 20 }, (_, i) => row(`b-${i}`, 0.1, at(15, i))),
+          ...Array.from({ length: 60 }, (_, i) => row(`gap-${i}`, 0.5, at(6, i))),
+          ...Array.from({ length: 20 }, (_, i) => row(`e-${i}`, 0.9, at(2, i))),
+        ];
+        const views: RunViewParams[] = [];
+        const input = await LoadFeatureAndPredictionDriftFromFeatureValues({
+          RecordProcessID: 'rp-capped',
+          BaselineWindowEnd: new Date(nowMs - 10 * 86_400_000).toISOString(),
+          EvaluationWindowStart: new Date(nowMs - 3 * 86_400_000).toISOString(),
+          Provider: featureValueProvider(rows, views),
+          ContextUser: { ID: 'user-1' } as UserInfo,
+          MaxRows: 50,
+        });
+
+        expect(input.Truncated).toBe(false);
+        expect(input.NumericFeatures?.['Score']?.Evaluation).toHaveLength(20);
+        expect(views[1].ExtraFilter).toContain(`ComputedAt >= '${new Date(nowMs - 3 * 86_400_000).toISOString()}'`);
+      });
+
       it('rejects a MaxRows that is not a positive whole number', async () => {
         for (const maxRows of [0, -5, 2.5]) {
           await expect(
