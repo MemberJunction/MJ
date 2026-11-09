@@ -12,7 +12,8 @@
  *   or cancel it, while an A2A task saves under the `A2A Task` type and reads back.
  * - TGS4: runs a small graph through the real dispatcher on the test DB, asserting that taint from an
  *   untrusted action propagates through a Decision step to gate a downstream action, failing the graph
- *   and triggering saga compensation of completed compensatable steps.
+ *   and triggering saga compensation of completed compensatable steps. The gate itself is the check's
+ *   stub action runner, not MJServer's `TaskGraphActionRunner` (see {@link checkDispatcherTaintGateAndCompensation}).
  *
  * Fixtures: one start-paused Human-only graph (so no dispatcher picks it up) and the rows the checks
  * create, all removed in teardown, rows that reference another first.
@@ -43,7 +44,7 @@ import {
 import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 // The store's own entry: the package root also starts the A2A server's config load on import.
 import { A2A_TASK_TYPE_NAME, DurableEntityA2ATaskStore, type Task } from '@memberjunction/a2aserver/task-store';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual, IntegrationCheckRegistry, SkipCheck, settle } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
 import { MUTATION_TIER_OFF_REASON, MutationTierOn } from './fixture-gates';
@@ -248,6 +249,51 @@ function providerFactory(ctx: IntegrationCheckContext): ProviderFactory {
     };
 }
 
+/**
+ * Deletes a submitted graph: its dependency rows, its children, then the workflow task. Returns what could
+ * not be deleted, so the check fails instead of leaking rows. A child that another child undoes
+ * (`CompensatesTaskID`) is deleted after the row undoing it — an escalation before its compensation, a
+ * compensation before its forward step — because the foreign key refuses the other order.
+ */
+export async function DeleteTaskGraph(provider: IMetadataProvider, user: UserInfo, parentID: string): Promise<string[]> {
+    const rv = RunView.FromMetadataProvider(provider);
+    const deleted = (row: { Delete(): Promise<boolean> }): Promise<boolean> => row.Delete().catch(() => false);
+    const children = await rv.RunView<MJTaskEntity>(
+        { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${parentID}'`, ResultType: 'entity_object', BypassCache: true },
+        user,
+    );
+    if (!children.Success) return [`could not list the workflow's tasks: ${children.ErrorMessage ?? ''}`];
+    const failures: string[] = [];
+    let remaining = children.Results ?? [];
+    if (remaining.length > 0) {
+        const deps = await rv.RunView<MJTaskDependencyEntity>(
+            { EntityName: 'MJ: Task Dependencies', ExtraFilter: `TaskID IN (${remaining.map((t) => `'${t.ID}'`).join(',')})`, ResultType: 'entity_object', BypassCache: true },
+            user,
+        );
+        if (!deps.Success) failures.push(`could not list the workflow's dependencies: ${deps.ErrorMessage ?? ''}`);
+        for (const dep of deps.Results ?? []) {
+            if (!(await deleted(dep))) failures.push(`dependency ${dep.ID}: ${dep.LatestResult?.CompleteMessage ?? 'not deleted'}`);
+        }
+    }
+    while (remaining.length > 0) {
+        const undone = new UUIDSet(remaining.map((t) => t.CompensatesTaskID));
+        const ready = remaining.filter((t) => !undone.Has(t.ID));
+        if (ready.length === 0) {
+            failures.push(`tasks that undo one another were left: ${remaining.map((t) => t.ID).join(', ')}`);
+            break;
+        }
+        for (const task of ready) {
+            if (!(await deleted(task))) failures.push(`task ${task.ID}: ${task.LatestResult?.CompleteMessage ?? 'not deleted'}`);
+        }
+        remaining = remaining.filter((t) => undone.Has(t.ID));
+    }
+    const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', user);
+    if ((await parent.Load(parentID).catch(() => false)) && !(await deleted(parent))) {
+        failures.push(`workflow ${parentID}: ${parent.LatestResult?.CompleteMessage ?? 'not deleted'}`);
+    }
+    return failures;
+}
+
 class NoopAgentRunner implements TaskAgentRunner {
     public readonly EnforcesSecurityEnvelope = true;
     public async RunAgentForTask(): Promise<TaskAgentRunResult> {
@@ -255,7 +301,19 @@ class NoopAgentRunner implements TaskAgentRunner {
     }
 }
 
-/** TGS4 — a tainted graph through the real dispatcher is gated on taint at a Decision-downstream action, failing the graph and triggering saga compensation. */
+/**
+ * TGS4 — a tainted graph through the real dispatcher is gated on taint at a Decision-downstream action, failing
+ * the graph and triggering saga compensation.
+ *
+ * The taint gate is this check's stub `TaskActionRunner`, which refuses the send step whenever its envelope is
+ * tainted. It is not MJServer's `TaskGraphActionRunner`: that class is not exported from `@memberjunction/server`
+ * (only `StartTaskGraphDispatcher` constructs it), this package does not depend on `@memberjunction/server`, and
+ * the real runner would execute whichever `MJ: Actions` rows the check picks. So TGS4 proves the dispatcher's
+ * half: the send step receives a tainted envelope through the Decision, a `TAINTED_EGRESS_BLOCKED` result is not
+ * retried and fails the graph, and the saga compensates the completed step. The real runner's own gate (refusing
+ * a `disallowWhenTainted` action under a tainted envelope) is covered by MJServer's
+ * `TaskGraphActionRunner.securityEnvelope.test.ts`.
+ */
 async function checkDispatcherTaintGateAndCompensation(ctx: IntegrationCheckContext): Promise<void> {
     if (!MutationTierOn(ctx)) {
         SkipCheck(MUTATION_TIER_OFF_REASON);
@@ -357,33 +415,6 @@ async function checkDispatcherTaintGateAndCompensation(ctx: IntegrationCheckCont
         fixture.ExtraTaskIDs.push(parentID);
     }
 
-    const cleanup = async () => {
-        try {
-            const childrenRes = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>(
-                { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${parentID}'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true },
-                ctx.User,
-            );
-            const childIDs = (childrenRes.Results ?? []).map((r) => r.ID);
-            if (childIDs.length > 0) {
-                const deps = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJTaskDependencyEntity>(
-                    { EntityName: 'MJ: Task Dependencies', ExtraFilter: `TaskID IN (${childIDs.map((id) => `'${id}'`).join(',')})`, ResultType: 'entity_object', BypassCache: true },
-                    ctx.User,
-                );
-                for (const dep of deps.Results ?? []) {
-                    await dep.Delete().catch(() => false);
-                }
-                for (const cid of childIDs) {
-                    const child = await ctx.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', ctx.User);
-                    if (await child.Load(cid).catch(() => false)) await child.Delete().catch(() => false);
-                }
-            }
-            const parent = await ctx.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', ctx.User);
-            if (await parent.Load(parentID).catch(() => false)) await parent.Delete().catch(() => false);
-        } catch {
-            // best-effort cleanup
-        }
-    };
-
     let sendSawTaintedEnvelope = false;
     let forwardRan = false;
     let fetchRan = false;
@@ -457,6 +488,7 @@ async function checkDispatcherTaintGateAndCompensation(ctx: IntegrationCheckCont
         decisionRunner,
     );
 
+    let cleanupFailures: string[] = [];
     try {
         await dispatcher.Start();
         const deadline = Date.now() + 30_000;
@@ -497,8 +529,9 @@ async function checkDispatcherTaintGateAndCompensation(ctx: IntegrationCheckCont
         AssertEqual(compTask!.Status, 'Complete', 'TGS4: compensation task status');
     } finally {
         await dispatcher.Stop();
-        await cleanup();
+        cleanupFailures = await DeleteTaskGraph(ctx.Provider, ctx.User, parentID).catch((e: unknown) => [String(e)]);
     }
+    Assert(cleanupFailures.length === 0, `TGS4: cleanup left rows behind: ${cleanupFailures.join('; ')}`);
 }
 
 export const TaskGraphSecurityChecks: NamedCheck[] = [
