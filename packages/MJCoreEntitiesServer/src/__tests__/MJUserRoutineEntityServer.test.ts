@@ -13,8 +13,8 @@
  * 'Bad/Zone' inputs fail) — real cron behavior is covered by the scheduling-engine package's
  * own UserRoutineProcessor tests.
  */
-import { describe, it, expect, vi } from 'vitest';
-import { ValidationResult } from '@memberjunction/global';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/global';
 
 // Neutralize the class-factory registration decorator; keep UUIDsEqual real.
 vi.mock('@memberjunction/global', async (importOriginal) => {
@@ -342,5 +342,37 @@ describe('MJUserRoutineEntityServer.Delete', () => {
         expect(ok).toBe(true);
         expect(e.SuperDeleteCalled).toBe(true);
         vi.restoreAllMocks();
+    });
+});
+
+/** Makes the generated base's Validate() return a warning, closed out with the old length-check idiom (Success false). */
+function baseReturnsWarning(serverClass: { prototype: object }): void {
+    const base = Object.getPrototypeOf(serverClass.prototype) as { Validate(): ValidationResult };
+    vi.spyOn(base, 'Validate').mockImplementation(() => {
+        const r = new ValidationResult();
+        r.Success = true;
+        r.Errors.push(new ValidationErrorInfo('Rank', 'Rank is unusually high', 900, ValidationErrorType.Warning));
+        r.Success = r.Success && r.Errors.length === 0;
+        return r;
+    });
+}
+
+describe('MJUserRoutineEntityServer.Validate — warnings from super.Validate() (#4241)', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('a warning from the base does not block an otherwise valid save', () => {
+        baseReturnsWarning(MJUserRoutineEntityServer);
+        const result = makeEntity().Validate();
+        expect(result.Success).toBe(true);
+        expect(result.Errors.some(e => e.Type === ValidationErrorType.Warning)).toBe(true);
+    });
+
+    it('a failure still blocks when the base also returned a warning', () => {
+        baseReturnsWarning(MJUserRoutineEntityServer);
+        const e = makeEntity();
+        e.CronExpression = 'BAD CRON';
+        expect(e.Validate().Success).toBe(false);
     });
 });

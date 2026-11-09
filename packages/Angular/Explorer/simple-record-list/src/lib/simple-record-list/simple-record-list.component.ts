@@ -262,7 +262,7 @@ export class SimpleRecordListComponent extends BaseAngularComponent implements O
     if (result === 'Yes') {
       if (!await this.DeleteRecordItem!.Delete()) {
         // show an error message
-        const errorMessage = this.DeleteRecordItem!.LatestResult.CompleteMessage;
+        const errorMessage = this.DeleteRecordItem!.LatestResult?.CompleteMessage ?? 'unknown error';
         MJNotificationService.Instance.CreateSimpleNotification('Error deleting record: ' + errorMessage, 'error', 3000);
       }
       else 

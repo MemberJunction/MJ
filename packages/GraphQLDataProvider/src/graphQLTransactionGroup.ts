@@ -18,8 +18,13 @@ export class GraphQLTransactionGroup extends TransactionGroupBase {
      *   fields (plus any companion payloads) cross the wire. On the server,
      *   `TransactionResolver.ExecuteTransactionGroup` loads the existing row via `InnerLoad(pkey)`
      *   before calling `entity.SetMany(itemValues, true)`, so untouched fields remain intact.
-     * - **Create / Delete / `ignoreDirtyState`**: Serializes the full loaded data object via
+     * - **Create (when `ignoreDirtyState` is not set)**: Sends primary keys, the fields the caller
+     *   set and required fields with no default (`GraphQLDataProvider.IsFieldSentOnCreate`, #5972).
+     *   The server builds the row with `GetEntityObject()`, which applies the metadata defaults to
+     *   everything left out.
+     * - **Delete / `ignoreDirtyState`**: Serializes the full loaded data object via
      *   `GetDataObjectJSON()`.
+     * - Companion payloads are added by `GetDataObjectJSON()` whatever fields are excluded.
      * - **Every operation**: leaves out the fields the current user may not read.
      */
     private async serializeTransactionItemEntity(pt: TransactionItem): Promise<string> {
@@ -27,8 +32,9 @@ export class GraphQLTransactionGroup extends TransactionGroupBase {
         try {
             const ignoreDirty = Boolean((pt.ExtraData as { ignoreDirtyState?: boolean } | undefined)?.ignoreDirtyState);
             const dirtyFiltered = pt.OperationType === 'Update' && !ignoreDirty;
+            const setFieldsFiltered = pt.OperationType === 'Create' && !ignoreDirty;
             const denied = this.deniedReadFieldNames(entity);
-            if (denied.size === 0 && !dirtyFiltered) {
+            if (denied.size === 0 && !dirtyFiltered && !setFieldsFiltered) {
                 // Nothing to leave out: serialize without walking (and so building) the field objects.
                 return await entity.GetDataObjectJSON();
             }
@@ -36,7 +42,8 @@ export class GraphQLTransactionGroup extends TransactionGroupBase {
             const excludeFields = fields
                 .filter(f => !f.IsPrimaryKey && (
                     denied.has(f.Name.trim().toLowerCase()) ||
-                    (dirtyFiltered && (f.ReadOnly || f.NotLoaded || !this._provider.IsFieldDirtyOnChain(entity, f)))
+                    (dirtyFiltered && (f.ReadOnly || f.NotLoaded || !this._provider.IsFieldDirtyOnChain(entity, f))) ||
+                    (setFieldsFiltered && (f.NotLoaded || !this._provider.IsFieldSentOnCreate(entity, f)))
                 ))
                 .map(f => f.Name);
             if (excludeFields.length === 0) {

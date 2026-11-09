@@ -1,4 +1,4 @@
-import { Base64DecodedByteLength, ClassFactory, ClassRegistration, DeserializeValidationErrors, Float32VectorToBase64, IsValidBase64, IsMemberOverridden, MJEventType, MJGlobal, NormalizeUUID, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, UserCacheKeySegment, WarningManager, ComputeContentHashAsync, EscapeSQLString } from '@memberjunction/global';
+import { AddValidationError, Base64DecodedByteLength, ClassFactory, ClassRegistration, DeserializeValidationErrors, Float32VectorToBase64, IsValidBase64, IsMemberOverridden, MJEventType, MJGlobal, NormalizeUUID, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, UserCacheKeySegment, WarningManager, ComputeContentHashAsync, EscapeSQLString } from '@memberjunction/global';
 import { GetDataHooks, PreDeleteHook, PreSaveHook } from './dataHooks';
 import { EntityLifecyclePolicyEngine } from './entityLifecyclePolicy';
 import { DocumentNumberingEngine } from './documentNumberingEngine';
@@ -1111,6 +1111,18 @@ export class BaseEntityEvent {
     ChangedFieldNames?: string[];
 }
 
+/** One field's value in a {@link ChainStateBeforeChildLoad} snapshot. */
+type ChainFieldValue = { name: string; value: unknown };
+
+/** One entity of an IS-A chain as it was before a child's row was loaded into the chain. */
+type ChainStateBeforeChildLoad = {
+    entity: BaseEntity;
+    /** Fields with unsaved edits. */
+    dirtyFields: ChainFieldValue[];
+    /** Clean fields that held loaded values. */
+    loadedFields: ChainFieldValue[];
+};
+
 /**
  * What came of loading the child that an entity's subtype rule named for a loaded record:
  * `'Linked'` (its row loaded and it is linked), `'NotFound'` (its load came back empty), or
@@ -1200,6 +1212,22 @@ type UnitOfWorkPart = {
     snapshots: RecordSnapshot[];
     deletedMark: number;
 };
+
+/**
+ * Result of {@link BaseEntity.ValidationReadOne}. `ok: false` means the read itself failed (connection,
+ * permission, bad filter), which is not the same as "no row": `ok: true, row: null` is the only
+ * answer that means the row does not exist.
+ */
+export type EntityValidationRead<R> = { ok: true; row: R | null } | { ok: false; error: string };
+
+/** Result of {@link BaseEntity.ValidationReadMany}. `ok: false` means the read failed. */
+export type EntityValidationReadList<R> = { ok: true; rows: R[] } | { ok: false; error: string };
+
+/** Result of {@link BaseEntity.ValidationCount}. `ok: false` means the count could not be read. */
+export type EntityValidationCount = { ok: true; count: number } | { ok: false; error: string };
+
+/** Default row cap for {@link BaseEntity.ValidationReadMany}. */
+export const VALIDATION_READ_MANY_DEFAULT_MAX_ROWS = 100;
 
 /**
  * Base class used for all entity objects. This class is abstract and is sub-classes for each particular entity using the CodeGen tool. This class provides the basic functionality for loading, saving, and validating entity objects.
@@ -1892,8 +1920,8 @@ export abstract class BaseEntity<T = unknown> {
 
         this._childEntity = childEntity;
 
-        // Capture any pending modifications on this entity or its ancestors before child InnerLoad
-        const dirtySnapshots = this.captureChainDirtyState();
+        // Capture this entity's chain before child InnerLoad: pending edits, and loaded values the child's row may not carry
+        const chainSnapshots = this.captureChainStateForChildLoad();
 
         // Load the child's record using our shared PK
         const loaded = await childEntity.InnerLoad(this.PrimaryKey);
@@ -1903,8 +1931,8 @@ export abstract class BaseEntity<T = unknown> {
             return false;
         }
 
-        // Re-apply any pending modifications so child hydration does not overwrite unsaved in-memory edits
-        this.restoreChainDirtyState(dirtySnapshots);
+        // Restore loaded values the child's row omitted and re-apply unsaved in-memory edits
+        this.restoreChainStateAfterChildLoad(chainSnapshots);
 
         // Recursively discover grandchildren (child may also be a parent type)
         // InitializeChildEntity is idempotent via _childEntityDiscoveryDone flag
@@ -2327,9 +2355,9 @@ export abstract class BaseEntity<T = unknown> {
             this.replaceChildParentChain(childEntity);
             this._childEntity = childEntity;
 
-            const dirtySnapshots = this.captureChainDirtyState();
+            const chainSnapshots = this.captureChainStateForChildLoad();
             await this.loadOrMirrorChildRow(childEntity);
-            this.restoreChainDirtyState(dirtySnapshots);
+            this.restoreChainStateAfterChildLoad(chainSnapshots);
 
             // Recursively discover grandchildren if the child is also a parent type
             if (childEntity.EntityInfo.IsParentType) {
@@ -2353,9 +2381,9 @@ export abstract class BaseEntity<T = unknown> {
             );
             this.replaceChildParentChain(childEntity);
 
-            const dirtySnapshots = this.captureChainDirtyState();
+            const chainSnapshots = this.captureChainStateForChildLoad();
             await this.loadOrMirrorChildRow(childEntity);
-            this.restoreChainDirtyState(dirtySnapshots);
+            this.restoreChainStateAfterChildLoad(chainSnapshots);
 
             if (childEntity.EntityInfo.IsParentType) {
                 await childEntity.EnsureISAChild();
@@ -2634,24 +2662,50 @@ export abstract class BaseEntity<T = unknown> {
         return value == null ? null : NormalizeUUID(String(value));
     }
 
-    private captureChainDirtyState(): Array<{ entity: BaseEntity; dirtyFields: Array<{ name: string; value: unknown }> }> {
-        const snapshots: Array<{ entity: BaseEntity; dirtyFields: Array<{ name: string; value: unknown }> }> = [];
+    /**
+     * Captures this entity's IS-A chain (this entity and its ancestors) before a child's row is
+     * loaded into it. Loading the child hydrates every ancestor from the child's view row, which
+     * resets fields the row does not carry; {@link restoreChainStateAfterChildLoad} puts back what
+     * that reset would lose.
+     */
+    private captureChainStateForChildLoad(): ChainStateBeforeChildLoad[] {
+        const snapshots: ChainStateBeforeChildLoad[] = [];
         let curr: BaseEntity | null = this;
         while (curr) {
-            const dirtyFields = curr.Fields.filter(f => f.Dirty).map(f => ({
-                name: f.Name,
-                value: f.Value,
-            }));
-            if (dirtyFields.length > 0) {
-                snapshots.push({ entity: curr, dirtyFields });
+            const dirtyFields: ChainFieldValue[] = [];
+            const loadedFields: ChainFieldValue[] = [];
+            for (const f of curr.Fields) {
+                if (f.Dirty) {
+                    dirtyFields.push({ name: f.Name, value: f.Value });
+                }
+                else if (!f.NotLoaded) {
+                    loadedFields.push({ name: f.Name, value: f.Value });
+                }
             }
+            snapshots.push({ entity: curr, dirtyFields, loadedFields });
             curr = curr._parentEntity;
         }
         return snapshots;
     }
 
-    private restoreChainDirtyState(snapshots: Array<{ entity: BaseEntity; dirtyFields: Array<{ name: string; value: unknown }> }>): void {
+    /**
+     * Restores what loading a child's row would otherwise lose on the chain captured by
+     * {@link captureChainStateForChildLoad}:
+     * - a loaded value the child's row omitted. A child's view joins its ancestors' base tables, so
+     *   it never carries an ancestor's view-only virtual fields (the joined display names); without
+     *   this they would read back null on any record that has a child (#4403). The value goes back
+     *   as loaded and clean, as the ancestor's own load set it.
+     * - a pending in-memory edit, re-applied so it stays dirty.
+     */
+    private restoreChainStateAfterChildLoad(snapshots: ChainStateBeforeChildLoad[]): void {
         for (const snap of snapshots) {
+            for (const lf of snap.loadedFields) {
+                const field = snap.entity.GetFieldByName(lf.name);
+                if (field?.NotLoaded) {
+                    field.ResetForInPlaceHydration();
+                    field.Value = lf.value;
+                }
+            }
             for (const df of snap.dirtyFields) {
                 snap.entity.Set(df.name, df.value);
             }
@@ -4150,9 +4204,10 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
-     * Returns the most recent result from the result history. If there are no results in the history, this method will return null.
+     * Returns the most recent result from the result history, or `null` when there is none yet
+     * (e.g. a record that was loaded but not saved or deleted).
      */
-    public get LatestResult(): BaseEntityResult {
+    public get LatestResult(): BaseEntityResult | null {
         if (this._resultHistory.length > 0)
             return this._resultHistory[this._resultHistory.length - 1];
         else
@@ -4319,6 +4374,25 @@ export abstract class BaseEntity<T = unknown> {
     private get companionsDirty(): boolean {
         if (!this.HasCompanions) return false;
         return this.Companions.some(c => c.Dirty);
+    }
+
+    /**
+     * Whether a one-node save must still go through the graph path (#5528).
+     *
+     * A companion can hold data without adding a record to the plan (inputs the server-side
+     * subclass reads in its own `Save()`). On a provider without entity transactions the plain
+     * save sends field values only, so that data would never reach the server; the graph
+     * operation carries it, and the server deserializes it before the root saves. A server
+     * provider holds the companions in process, so it does not need this. A record enrolled in a
+     * transaction group keeps its plain group save: the graph executes outside the group, which
+     * would break the group's atomicity.
+     */
+    private mustShipCompanionsAsGraph(): boolean {
+        return (
+            !this.TransactionGroup &&
+            this.ProviderToUse?.SupportsEntityTransactions !== true &&
+            this.companionsDirty
+        );
     }
 
     /**
@@ -5495,7 +5569,7 @@ export abstract class BaseEntity<T = unknown> {
         // and composites whose collections happen to be empty, behave exactly as they did before.
         if (this.HasCompanions) {
             const plan = this.BuildSavePlan(true, options);
-            if (plan.NodeCount > 1) {
+            if (plan.NodeCount > 1 || this.mustShipCompanionsAsGraph()) {
                 // A TransactionGroup defers this record's own write until Submit(), while a graph
                 // executes its child nodes immediately (or ships the whole graph to the server) —
                 // children would insert rows pointing at a parent whose write is still queued, and
@@ -8173,6 +8247,100 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * True when the record is new, or when any of the named fields is dirty. The guard a rule opens
+     * with so it runs only when its inputs changed. Unlike {@link Dirty}, an edit to an unrelated
+     * field does not re-run the rule. With no field names it falls back to {@link Dirty}.
+     *
+     * @param fieldNames - The fields the rule reads. Unknown names count as not dirty.
+     */
+    public IsNewOrDirty(...fieldNames: string[]): boolean {
+        if (!this.IsSaved) return true;
+        if (fieldNames.length === 0) return this.Dirty;
+        return fieldNames.some(name => this.GetFieldByName(name)?.Dirty === true);
+    }
+
+    /**
+     * Reads at most one row for a validation rule, using this record's provider and context user.
+     * A failed read returns `{ ok: false }` so the caller cannot mistake it for "no such row"; pair it
+     * with {@link MarkUnverified} to block the save instead of skipping the rule.
+     *
+     * @param entityName - Entity to read, e.g. `'MJ: Users'`.
+     * @param filter - `ExtraFilter` SQL. Escape any values interpolated into it.
+     * @param fields - Columns to return.
+     */
+    protected async ValidationReadOne<R>(entityName: string, filter: string, fields: string[]): Promise<EntityValidationRead<R>> {
+        const read = await this.runValidationView<R>({ EntityName: entityName, ExtraFilter: filter, Fields: fields, ResultType: 'simple', MaxRows: 1, SkipTotalRowCount: true });
+        if (read.ok === false) return { ok: false, error: read.error };
+        return { ok: true, row: read.results[0] ?? null };
+    }
+
+    /**
+     * Reads up to `maxRows` rows for a validation rule, for when the rule needs the rows themselves
+     * (for example to name the offending records in its message). Use {@link ValidationCount} when only
+     * the number matters. A failed read returns `{ ok: false }`.
+     *
+     * @param entityName - Entity to read.
+     * @param filter - `ExtraFilter` SQL. Escape any values interpolated into it.
+     * @param fields - Columns to return.
+     * @param maxRows - Row cap; defaults to {@link VALIDATION_READ_MANY_DEFAULT_MAX_ROWS}.
+     */
+    protected async ValidationReadMany<R>(entityName: string, filter: string, fields: string[], maxRows: number = VALIDATION_READ_MANY_DEFAULT_MAX_ROWS): Promise<EntityValidationReadList<R>> {
+        const read = await this.runValidationView<R>({ EntityName: entityName, ExtraFilter: filter, Fields: fields, ResultType: 'simple', MaxRows: maxRows, SkipTotalRowCount: true });
+        if (read.ok === false) return { ok: false, error: read.error };
+        return { ok: true, rows: read.results };
+    }
+
+    /**
+     * Counts matching rows for a validation rule without fetching them (`ResultType: 'count_only'`).
+     * A failed count returns `{ ok: false }`.
+     *
+     * @param entityName - Entity to count.
+     * @param filter - `ExtraFilter` SQL. Escape any values interpolated into it.
+     */
+    protected async ValidationCount(entityName: string, filter: string): Promise<EntityValidationCount> {
+        const read = await this.runValidationView<Record<string, never>>({ EntityName: entityName, ExtraFilter: filter, ResultType: 'count_only' });
+        if (read.ok === false) return { ok: false, error: read.error };
+        if (typeof read.totalRowCount !== 'number') {
+            return { ok: false, error: `count of ${entityName} returned no total` };
+        }
+        return { ok: true, count: read.totalRowCount };
+    }
+
+    /**
+     * Fails the save because a rule could not be evaluated (its read failed). Blocking a valid save is
+     * recoverable, since the user retries and sees why; writing an invalid row is not.
+     *
+     * @param result - The result being built.
+     * @param field - Field the rule guards; forms show the message on that control.
+     * @param what - What could not be checked, e.g. `'the unit's capacity'`.
+     */
+    protected MarkUnverified(result: ValidationResult, field: string, what: string): void {
+        AddValidationError(result, field, `Could not verify ${what}. The record was not saved; try again.`);
+    }
+
+    /**
+     * Shared RunView call for the validation read helpers: uses {@link RunViewProviderToUse} (not
+     * `ProviderToUse`, which is not a RunView provider) and the context user, and turns an
+     * unsuccessful result or a thrown error into `ok: false`.
+     */
+    private async runValidationView<R>(params: RunViewParams): Promise<{ ok: true; results: R[]; totalRowCount: number | undefined } | { ok: false; error: string }> {
+        try {
+            const rv = new RunView(this.RunViewProviderToUse);
+            const result = await rv.RunView<R>(params, this.ContextCurrentUser);
+            if (!result?.Success) {
+                const error = result?.ErrorMessage || 'unknown error';
+                LogError(`${this.EntityInfo?.Name ?? 'BaseEntity'} validation read of ${params.EntityName} failed (filter: ${params.ExtraFilter}): ${error}`);
+                return { ok: false, error };
+            }
+            return { ok: true, results: result.Results ?? [], totalRowCount: result.TotalRowCount };
+        } catch (e) {
+            const error = e instanceof Error ? e.message : String(e);
+            LogError(`${this.EntityInfo?.Name ?? 'BaseEntity'} validation read of ${params.EntityName} threw (filter: ${params.ExtraFilter}): ${error}`);
+            return { ok: false, error };
+        }
+    }
+
+    /**
      * This method deletes a record from the database. You must call Load() first in order to load the context of the record you are deleting.
      *
      * Debounces multiple calls so that if Delete() is called again while a delete is in progress,
@@ -9106,10 +9274,14 @@ export abstract class BaseEntity<T = unknown> {
 
     /**
      * Resolves the recursive foreign key field for this entity. If `parentFieldName` is provided,
-     * finds that specific field. Otherwise defaults to 'ParentID' if present, or the first
-     * self-referencing foreign key field found on the entity.
+     * finds that specific field. Otherwise uses the field marked `IsHierarchy`, then 'ParentID'
+     * if present, then the first self-referencing foreign key field found on the entity.
+     *
+     * @param requireHierarchyColumns When true, the 'ParentID' and first-recursive-FK fallbacks
+     * are accepted only if the entity also exposes `Root<Field>` and `<Field>Depth` — the columns
+     * `GetDescendants` / `GetAncestors` filter on. Without them the query cannot succeed.
      */
-    protected getRecursiveForeignKeyField(parentFieldName?: string): EntityFieldInfo | null {
+    protected getRecursiveForeignKeyField(parentFieldName?: string, requireHierarchyColumns = false): EntityFieldInfo | null {
         if (!this.EntityInfo) return null;
         if (this.PrimaryKeys.length !== 1) {
             LogError(`BaseEntity hierarchy methods: Entity '${this.EntityInfo.Name}' has ${this.PrimaryKeys.length} primary key fields. MemberJunction hierarchy traversal requires a single-column primary key.`);
@@ -9124,12 +9296,21 @@ export abstract class BaseEntity<T = unknown> {
         const explicitHierarchyField = fields.find(f => f.IsHierarchy && (UUIDsEqual(f.RelatedEntityID, this.EntityInfo?.ID) || f.RelatedEntity === this.EntityInfo?.Name));
         if (explicitHierarchyField) return explicitHierarchyField;
 
+        const isRecursive = (f: EntityFieldInfo): boolean => UUIDsEqual(f.RelatedEntityID, this.EntityInfo?.ID) || f.RelatedEntity === this.EntityInfo?.Name;
+        const isUsable = (f: EntityFieldInfo): boolean => !requireHierarchyColumns || this.hasHierarchyColumns(f.Name);
+
         // Check for 'ParentID' self-referencing foreign key next
-        const parentIdField = fields.find(f => f.Name.toLowerCase() === 'parentid' && (UUIDsEqual(f.RelatedEntityID, this.EntityInfo?.ID) || f.RelatedEntity === this.EntityInfo?.Name));
+        const parentIdField = fields.find(f => f.Name.toLowerCase() === 'parentid' && isRecursive(f) && isUsable(f));
         if (parentIdField) return parentIdField;
 
         // Fall back to first recursive foreign key field
-        return fields.find(f => f.RelatedEntityID && (UUIDsEqual(f.RelatedEntityID, this.EntityInfo?.ID) || f.RelatedEntity === this.EntityInfo?.Name)) ?? null;
+        return fields.find(f => f.RelatedEntityID && isRecursive(f) && isUsable(f)) ?? null;
+    }
+
+    /** True when the entity exposes the `Root<Field>` and `<Field>Depth` columns CodeGen adds for a hierarchy FK. */
+    private hasHierarchyColumns(fkFieldName: string): boolean {
+        const names = new Set((this.EntityInfo?.Fields ?? []).map(f => f.Name.toLowerCase()));
+        return names.has(`root${fkFieldName}`.toLowerCase()) && names.has(`${fkFieldName}depth`.toLowerCase());
     }
 
     /**
@@ -9140,9 +9321,9 @@ export abstract class BaseEntity<T = unknown> {
     public async GetDescendants<T extends BaseEntity = this>(options?: { parentFieldName?: string; maxDepth?: number } | number): Promise<T[]> {
         const maxDepth = typeof options === 'number' ? options : options?.maxDepth;
         const parentFieldName = typeof options === 'object' ? options?.parentFieldName : undefined;
-        const fkField = this.getRecursiveForeignKeyField(parentFieldName);
+        const fkField = this.getRecursiveForeignKeyField(parentFieldName, true);
         if (!fkField) {
-            LogError(`BaseEntity.GetDescendants(): No recursive foreign key field found on entity ${this.EntityInfo?.Name}`);
+            LogError(`BaseEntity.GetDescendants(): No recursive foreign key field with hierarchy columns (Root<Field>, <Field>Depth) found on entity ${this.EntityInfo?.Name}`);
             return [];
         }
         const pkName = this.FirstPrimaryKey.Name; // first-pk-ok: getRecursiveForeignKeyField already gates hierarchy traversal to single-column keys
@@ -9162,7 +9343,11 @@ export abstract class BaseEntity<T = unknown> {
             OrderBy: `${depthFieldName} ASC`,
         }, this._contextCurrentUser);
 
-        return result.Success ? (result.Results ?? []) : [];
+        if (!result.Success) {
+            LogError(`BaseEntity.GetDescendants(): query failed on entity ${this.EntityInfo.Name} (filter: ${filter}): ${result.ErrorMessage}`);
+            return [];
+        }
+        return result.Results ?? [];
     }
 
     /**
@@ -9171,9 +9356,9 @@ export abstract class BaseEntity<T = unknown> {
      * @returns Array of ancestor entity instances ordered from root down to parent.
      */
     public async GetAncestors<T extends BaseEntity = this>(parentFieldName?: string): Promise<T[]> {
-        const fkField = this.getRecursiveForeignKeyField(parentFieldName);
+        const fkField = this.getRecursiveForeignKeyField(parentFieldName, true);
         if (!fkField) {
-            LogError(`BaseEntity.GetAncestors(): No recursive foreign key field found on entity ${this.EntityInfo?.Name}`);
+            LogError(`BaseEntity.GetAncestors(): No recursive foreign key field with hierarchy columns (Root<Field>, <Field>Depth) found on entity ${this.EntityInfo?.Name}`);
             return [];
         }
         const pkName = this.FirstPrimaryKey.Name; // first-pk-ok: getRecursiveForeignKeyField already gates hierarchy traversal to single-column keys
@@ -9188,13 +9373,18 @@ export abstract class BaseEntity<T = unknown> {
 
         const rv = new RunView(this.RunViewProviderToUse);
         const idList = rawIds.map(id => `'${id}'`).join(',');
+        const filter = `${pkName} IN (${idList})`;
         const result = await rv.RunView<T>({
             EntityName: this.EntityInfo.Name,
-            ExtraFilter: `${pkName} IN (${idList})`,
+            ExtraFilter: filter,
             OrderBy: `${depthFieldName} ASC`,
         }, this._contextCurrentUser);
 
-        return result.Success ? (result.Results ?? []) : [];
+        if (!result.Success) {
+            LogError(`BaseEntity.GetAncestors(): query failed on entity ${this.EntityInfo.Name} (filter: ${filter}): ${result.ErrorMessage}`);
+            return [];
+        }
+        return result.Results ?? [];
     }
 
     /**
@@ -9218,7 +9408,11 @@ export abstract class BaseEntity<T = unknown> {
             ExtraFilter: `${fkField.Name} = '${currentId}'`,
         }, this._contextCurrentUser);
 
-        return result.Success ? (result.Results ?? []) : [];
+        if (!result.Success) {
+            LogError(`BaseEntity.GetChildren(): query failed on entity ${this.EntityInfo.Name} (filter: ${fkField.Name} = '${currentId}'): ${result.ErrorMessage}`);
+            return [];
+        }
+        return result.Results ?? [];
     }
 }
 

@@ -1,6 +1,6 @@
 import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, registerEnumType } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { AssertClientInputWritableForUser, CompositeKey, EntityInfo, IMetadataProvider, KeyValuePair, LogError, Metadata, RecordChangeMetadataSource, ServerOperationScopeManager, TransactionVariable, TransactionGroupBase, BaseEntity, UserInfo } from '@memberjunction/core';
+import { AssertClientInputWritableForUser, BaseEntityResult, CompositeKey, EntityInfo, IMetadataProvider, KeyValuePair, LogError, Metadata, RecordChangeMetadataSource, ServerOperationScopeManager, TransactionVariable, TransactionGroupBase, BaseEntity, UserInfo } from '@memberjunction/core';
 import { SafeJSONParse, ValuesEqual } from '@memberjunction/global';
 import { GetReadWriteProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -92,6 +92,21 @@ function describeRefusedItem(index: number, item: TransactionItemInputType, enti
     return `  [${index}] ${item.OperationType} '${item.EntityName}': ${reason || 'refused without a reported reason'}`;
 }
 
+/**
+ * Records that an `Update` or `Delete` item names a row that could not be loaded, on the entity's
+ * result history (so the reason reaches `ErrorMessages`) and as a refusal line for the server log.
+ * The wording matches the singular update path, which does not say whether the row is missing or
+ * hidden from this user, so record IDs cannot be probed through either path.
+ */
+function refuseMissingRecord(index: number, item: TransactionItemInputType, entity: BaseEntity): string {
+    const result = new BaseEntityResult();
+    result.Success = false;
+    result.Type = item.OperationType === TransactionOperationType.Delete ? 'delete' : 'update';
+    result.Message = 'Record not found or access denied';
+    entity.RegisterResultHistoryEntry(result);
+    return describeRefusedItem(index, item, entity);
+}
+
 export class TransactionResolver extends ResolverBase {
     /**
      * Maps a TransactionGroup item's operation type onto the SAME API-key scope path the singular
@@ -173,7 +188,13 @@ export class TransactionResolver extends ResolverBase {
                     case "Update":
                     case "Create":
                         if (item.OperationType === "Update") {
-                            await entity.InnerLoad(pkey);
+                            if (!await entity.InnerLoad(pkey)) {
+                                // #4446: without the row, Save() below would see a new record and INSERT it
+                                // while the caller asked for an update.
+                                refusals.push(refuseMissingRecord(index, item, entity));
+                                objectValues.push(itemValues);
+                                continue;
+                            }
                             if (typeof entity.GetDataObject === 'function') {
                                 // fls-guard: pre-update snapshot; projected before the delta is built
                                 preUpdateValues.set(index, await entity.GetDataObject());
@@ -190,7 +211,12 @@ export class TransactionResolver extends ResolverBase {
                         }
                         break;
                     case "Delete":
-                        await entity.InnerLoad(pkey);
+                        if (!await entity.InnerLoad(pkey)) {
+                            // #4446: there is no row to delete, so the group must not report that it deleted one.
+                            refusals.push(refuseMissingRecord(index, item, entity));
+                            objectValues.push(itemValues);
+                            continue;
+                        }
                         // AWAITED: GetDataObject() is async, and pushing the un-awaited Promise put
                         // one into `objectValues` — which is `any[]`, so neither tsc nor a
                         // floating-promise lint could see it. PrepareReturnValue's Delete branch

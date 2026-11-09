@@ -120,7 +120,7 @@ async function rubricRow(ctx: IntegrationCheckContext, entityName: string): Prom
     return created;
 }
 
-async function saveRow(record: { Save(): Promise<boolean>; LatestResult?: { Message?: string } }): Promise<void> {
+async function saveRow(record: { Save(): Promise<boolean>; LatestResult?: { Message?: string } | null }): Promise<void> {
     const ok = await record.Save();
     Assert(ok === true, record.LatestResult?.Message || 'Save returned false');
 }
@@ -407,7 +407,7 @@ async function ensureScoredEvaluation(ctx: IntegrationCheckContext, versionId: s
     await saveEntity(evaluation);
 }
 
-async function saveEntity(record: { Save(): Promise<boolean>; LatestResult?: { Message?: string } }): Promise<void> {
+async function saveEntity(record: { Save(): Promise<boolean>; LatestResult?: { Message?: string } | null }): Promise<void> {
     const ok = await record.Save();
     Assert(ok === true, record.LatestResult?.Message || 'Save returned false');
 }

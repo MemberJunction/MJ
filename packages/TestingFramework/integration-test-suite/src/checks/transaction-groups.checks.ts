@@ -34,8 +34,12 @@
  *                validation is symmetric, so a real client refuses the bad row locally and it
  *                never reaches the resolver. Before the fix, this returns Success:true with the
  *                survivor committed and the refusal silently dropped.
+ *   - TG7        **Missing-row pin (issue #4446)**: an `Update` whose key matches no row must be
+ *                refused, not turned into an INSERT. Sent as a RAW wire mutation, since a client
+ *                entity sends `Update` only for a record it believes is saved. Before the fix,
+ *                this returns Success:true and a new row exists.
  *
- * MUTATION TIER: TG2–TG6 write to the database (`RequiresMutation: true`). TG1 is read-only.
+ * MUTATION TIER: TG2–TG7 write to the database (`RequiresMutation: true`). TG1 is read-only.
  * TG5 additionally requires the CLIENT transport (a live MJAPI to attack over the wire) and
  * skips-as-pass loudly on the server transport, where no wire — and hence no API-key scope
  * ceiling — exists to exercise.
@@ -458,6 +462,43 @@ export const TransactionGroupsChecks: NamedCheck[] = [
             );
 
             console.log('      → refused row reported Success:false; survivor not committed; reason carried in ErrorMessages');
+        }
+    },
+    {
+        Id: 'transaction-groups.TG7',
+        Name: 'TG7: #4446 pin — an Update whose key matches no row is refused, not inserted',
+        // MUTATION-GATED because a regression INSERTS the row; teardown's prefix sweep removes it.
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const f = fx(ctx);
+            const wire = resolveWireProvider(ctx);
+            if (!wire) {
+                throw new Error('TG7: no GraphQLDataProvider resolvable in a client-transport run — the #4446 pin cannot execute (wiring regression)');
+            }
+            const before = await categoryRows(ctx, `ID='${MISSING_PARENT_ID}'`);
+            AssertEqual(before.length, 0, 'precondition: the missing-row key must match no Action Category');
+
+            const name = `${f.Prefix}-missing-update ${FIXTURE_TAG}`;
+            const results = await wire.ExecuteGQL(EXECUTE_TG_MUTATION, {
+                group: {
+                    Items: [{
+                        EntityName: CATEGORY_ENTITY,
+                        EntityObjectJSON: JSON.stringify({ ID: MISSING_PARENT_ID, Name: name, Status: 'Active' }),
+                        OperationType: 'Update'
+                    }],
+                    Variables: []
+                }
+            });
+
+            const tgResult = (results as WireGraphQLResponse['data'])?.ExecuteTransactionGroup;
+            Assert(tgResult != null, 'TG7: ExecuteTransactionGroup returned no payload');
+            Assert(tgResult!.Success === false,
+                'TG7 (#4446): an Update of a key that matches no row reported Success:true — the failed load was ignored and the Update became an INSERT');
+
+            const leaked = await categoryRows(ctx, `Name='${name.replace(/'/g, "''")}'`);
+            AssertEqual(leaked.length, 0, 'TG7 (#4446): the Update of a missing row INSERTED a new row');
+
+            console.log('      → Update of a missing key reported Success:false and wrote nothing');
         }
     }
 ];

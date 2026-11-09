@@ -109,10 +109,35 @@ export class FieldMappingEngine {
         record: ExternalRecord,
         fieldMap: ICompanyIntegrationFieldMap
     ): unknown {
-        const value: unknown = record.Fields[fieldMap.SourceFieldName];
         const pipeline = this.parseTransformPipeline(fieldMap.TransformPipeline);
+        // A source property the record does not carry is "not sent", not "empty". Running the
+        // pipeline on `undefined` turns it into null or '' (coerce, format, regex, substring) and
+        // the write then clears good MJ data (#6170). Skip the field instead; present-and-null
+        // still runs the pipeline.
+        if (!Object.hasOwn(record.Fields, fieldMap.SourceFieldName) && !this.appliesWhenSourceAbsent(record, pipeline)) {
+            return undefined;
+        }
+        const value: unknown = record.Fields[fieldMap.SourceFieldName];
         const result = this.transformEngine.ExecutePipeline(value, record.Fields, pipeline);
         return result.Skipped ? undefined : result.Value;
+    }
+
+    /**
+     * Pipelines that still apply when the mapped source property is absent:
+     * - a first `direct` step with a `DefaultValue`, the explicit "fallback when missing" case;
+     * - a first `combine` step, which reads its own `SourceFields`, when any of those is present.
+     */
+    private appliesWhenSourceAbsent(record: ExternalRecord, pipeline: TransformStep[]): boolean {
+        const first = pipeline[0];
+        if (!first) return false;
+        const config = first.Config;
+        if (first.Type === 'direct') {
+            return 'DefaultValue' in config && config.DefaultValue !== undefined;
+        }
+        if (first.Type === 'combine' && 'SourceFields' in config) {
+            return config.SourceFields.some((f) => Object.hasOwn(record.Fields, f));
+        }
+        return false;
     }
 
     /**

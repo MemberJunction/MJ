@@ -8,6 +8,7 @@ import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { Metadata } from "./metadata";
 import { CompositeKey, KeyValuePair } from "./compositeKey";
 import { BufferedEntityChange, EntityEventBatch, EntityEventBatchSet } from "./entityEventBatch";
+import { EntityWriteFence } from "./entityWriteFence";
 import type { EntityInfo } from "./entityInfo";
 
 /** Verbose-only status logging — hidden unless verbose logging is enabled */
@@ -345,6 +346,14 @@ export interface CacheWriteOptions {
      * `false` — caller-facing results are always frozen.
      */
     ProviderInternalScaffolding?: boolean;
+
+    /**
+     * The {@link LocalCacheManager.CaptureReadFence} value taken before the read that produced
+     * these rows was sent. When the entity was saved or deleted after that, the rows may predate
+     * the write, so they are not stored (and are removed again if the write lands while they are
+     * being stored). Omit for writes that do not come from a fresh read.
+     */
+    ReadFence?: number;
 }
 
 /**
@@ -639,6 +648,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     private _entityEventBatches = new EntityEventBatchSet();
     /** Save/delete events a batch took when they were raised. See {@link WasTakenByEntityEventBatch}. */
     private _eventsTakenByBatch = new WeakSet<BaseEntityEvent>();
+    /** Orders reads and fills against saves and deletes. See {@link CaptureReadFence}. */
+    private _writeFence = new EntityWriteFence();
 
     /**
      * Write holds on entities whose shared slots were found under a different schema, keyed by
@@ -1531,11 +1542,18 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             // Only react to completed save and delete events
             if (entityEvent.type !== 'save' && entityEvent.type !== 'delete') return;
 
+            // Stamped synchronously, before any cache work: a read that began before this point
+            // must not store its rows (#3059).
+            const entityName = entityEvent.baseEntity?.EntityInfo?.Name;
+            if (entityName) this._writeFence.RecordWrite(entityName);
+
             // Inside an open batch the change is recorded now and applied when the batch closes.
             if (this.bufferIfBatching(entityEvent)) return;
 
-            // Fire-and-forget to avoid blocking the save/delete operation
-            this.HandleBaseEntityEvent(entityEvent).catch((err) => {
+            // Fire-and-forget to avoid blocking the save/delete operation. Until it settles,
+            // reads of the entity's slots miss rather than serve a slot it has not reached yet.
+            const maintained = entityName ? [entityName] : [];
+            this._writeFence.Maintain(maintained, () => this.HandleBaseEntityEvent(entityEvent)).catch((err) => {
                 LogError(`LocalCacheManager.HandleBaseEntityEvent error: ${(err as Error).message}`);
             });
         });
@@ -1699,7 +1717,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
         LogWarning(`LocalCacheManager: an entity-event batch was abandoned with ${batch.Changes.length} buffered change(s) across ${batch.TouchedEntities.size} entit${batch.TouchedEntities.size === 1 ? 'y' : 'ies'} — invalidating them, because whether those rows reached the database is unknown`, 'Cache');
         try {
-            await this.invalidateBatchEntities(batch);
+            await this.maintainAfterBatch(batch, () => this.invalidateBatchEntities(batch));
         } catch (e) {
             LogError(`LocalCacheManager.AbandonEntityEventBatch failed: ${e instanceof Error ? e.message : String(e)}`);
         }
@@ -1720,7 +1738,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             return;
         }
         try {
-            await this.applyEntityEventBatch(batch);
+            await this.maintainAfterBatch(batch, () => this.applyEntityEventBatch(batch));
         } catch (e) {
             LogError(`LocalCacheManager: applying an entity-event batch failed: ${e instanceof Error ? e.message : String(e)}`);
         }
@@ -1857,6 +1875,51 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     private isPendingInBatch(fingerprint: string): boolean {
         const entityName = this.extractEntityFromFingerprint(fingerprint);
         return entityName !== null && this._entityEventBatches.HasPendingChanges(entityName);
+    }
+
+    /**
+     * True when `fingerprint`'s slot may be behind a write: its entity has changes in an open
+     * batch, or a save/delete of it is still being applied to the cache. Reads treat such a slot
+     * as a miss (#3059).
+     */
+    private isBehindWrites(fingerprint: string): boolean {
+        if (this.isPendingInBatch(fingerprint)) {
+            return true;
+        }
+        const entityName = this.extractEntityFromFingerprint(fingerprint);
+        return entityName !== null && this._writeFence.IsMaintaining(entityName);
+    }
+
+    /**
+     * Applies a closed batch's changes to the cache as a write to every entity it touched: fills
+     * from reads that began before now are refused, and reads of those entities miss until `work`
+     * settles. The batch released its pending hold on Close, so without this the window between
+     * Close and the rewrite would serve the old slots.
+     */
+    private maintainAfterBatch(batch: EntityEventBatch, work: () => Promise<void>): Promise<void> {
+        const entityNames = [...batch.TouchedEntities.keys()];
+        for (const name of entityNames) {
+            this._writeFence.RecordWrite(name);
+        }
+        return this._writeFence.Maintain(entityNames, work);
+    }
+
+    /**
+     * Value to capture before sending a read whose rows may be stored with
+     * {@link SetRunViewResult}; pass it back as {@link CacheWriteOptions.ReadFence}. A save or
+     * delete of the read's entity after the capture keeps the rows out of the cache (#3059).
+     */
+    public CaptureReadFence(): number {
+        return this._writeFence.Current;
+    }
+
+    /** True when the entity behind `fingerprint` was written after `readFence` was captured. */
+    private writtenSinceRead(fingerprint: string, readFence: number | undefined): boolean {
+        if (readFence === undefined) {
+            return false;
+        }
+        const entityName = this.extractEntityFromFingerprint(fingerprint);
+        return entityName !== null && this._writeFence.WrittenSince(entityName, readFence);
     }
 
     /**
@@ -3233,6 +3296,13 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             return;
         }
 
+        // Rows from a read that began before a save/delete of this entity may predate it, and
+        // the event maintenance for that write may already have run (#3059).
+        if (this.writtenSinceRead(fingerprint, options?.ReadFence)) {
+            LogStatusEx({ message: `[CACHE-WRITE-GATE] Skipping cache write for "${params.EntityName}" — it was written after the read began`, verboseOnly: true });
+            return;
+        }
+
         // Short-circuit: if the entity has AllowCaching = false, do not write to the cache.
         // The invalidation path (HandleBaseEntityEvent line 552) already short-circuits for
         // these entities, so any entry we write here would never be invalidated and would
@@ -3389,6 +3459,14 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
             // Maintain entity→fingerprint reverse index for universal cache invalidation
             this.addToEntityIndex(fingerprint);
+
+            // A write that arrived during the awaits above may have scanned the index before
+            // this slot was in it, so its maintenance never saw these rows. Take them back out.
+            if (this.writtenSinceRead(fingerprint, options?.ReadFence)) {
+                LogStatusEx({ message: `[CACHE-WRITE-GATE] Removing cache write for "${params.EntityName}" — it was written while the rows were being stored`, verboseOnly: true });
+                await this.InvalidateRunViewResult(fingerprint);
+                return;
+            }
             LogStatusVerbose(`LocalCacheManager.SetRunViewResult: Cached ${results.length} rows for "${fingerprint.substring(0, 60)}" (${sizeBytes} bytes)`);
         } catch (e) {
             LogError(`LocalCacheManager.SetRunViewResult failed: ${e}`);
@@ -3404,14 +3482,14 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @returns The cached results, maxUpdatedAt, rowCount (derived), and aggregateResults, or null if not found
      */
     public async GetRunViewResult(fingerprint: string): Promise<CachedRunViewResult | null> {
-        if (this.isPendingInBatch(fingerprint)) {
+        if (this.isBehindWrites(fingerprint)) {
             this._stats.misses++;
             return null;
         }
         return this.readRunViewSlot(fingerprint, 'serve');
     }
 
-    /** {@link GetRunViewResult} without the open-batch check; slot maintenance reads through this. */
+    /** {@link GetRunViewResult} without the open-batch and in-flight-write checks; slot maintenance reads through this. */
     private async readRunViewSlot(fingerprint: string, purpose: SlotReadPurpose): Promise<CachedRunViewResult | null> {
         if (!this._storageProvider || !this._config.enabled) return null;
 
@@ -3458,7 +3536,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         try {
             const raw = await this._storageProvider.GetItems<CachedRunViewData>(fingerprints, CacheCategory.RunViewCache);
             for (const [fp, parsed] of raw) {
-                out.set(fp, this.isPendingInBatch(fp) ? null : this.materializeCachedRunViewResult(fp, parsed, 'serve'));
+                out.set(fp, this.isBehindWrites(fp) ? null : this.materializeCachedRunViewResult(fp, parsed, 'serve'));
             }
             return out;
         } catch (e) {

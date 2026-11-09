@@ -29,6 +29,13 @@ export class AutotagPipelineResult {
 
 @Resolver()
 export class AutotagPipelineResolver extends ResolverBase {
+    /**
+     * Progress saves queued per process run. Each progress save runs after the previous one, and
+     * the completion save waits for the queue, so a late progress save cannot overwrite the final
+     * Status / EndTime (#4340).
+     */
+    private readonly progressSaveChains = new WeakMap<MJContentProcessRunEntity, Promise<void>>();
+
     @Mutation(() => AutotagPipelineResult)
     async RunAutotagPipeline(
         @Arg('contentSourceIDs', () => [String], { nullable: true }) contentSourceIDs: string[] | undefined,
@@ -256,7 +263,8 @@ export class AutotagPipelineResolver extends ResolverBase {
     }
 
     /**
-     * Update the process run record with current progress (fire-and-forget, non-blocking).
+     * Update the process run record with current progress. The save is queued behind the run's
+     * earlier progress saves and does not block the pipeline.
      */
     private updateProcessRunProgress(
         processRun: MJContentProcessRunEntity | null,
@@ -267,10 +275,16 @@ export class AutotagPipelineResolver extends ResolverBase {
         processRun.ProcessedItems = processedItems;
         processRun.TotalItemCount = totalItems;
         processRun.LastProcessedOffset = processedItems;
-        // Fire-and-forget save — don't await to avoid slowing down the pipeline
-        processRun.Save().catch(e => {
-            LogError(`RunAutotagPipeline: error updating process run progress: ${e instanceof Error ? e.message : String(e)}`);
+        // Not awaited, so the pipeline is not slowed down; chained so saves never overlap or reorder
+        const previous = this.progressSaveChains.get(processRun) ?? Promise.resolve();
+        const next = previous.then(async () => {
+            try {
+                await processRun.Save();
+            } catch (e) {
+                LogError(`RunAutotagPipeline: error updating process run progress: ${e instanceof Error ? e.message : String(e)}`);
+            }
         });
+        this.progressSaveChains.set(processRun, next);
     }
 
     /**
@@ -284,6 +298,9 @@ export class AutotagPipelineResolver extends ResolverBase {
     ): Promise<void> {
         if (!processRun) return;
         try {
+            // Let queued progress saves finish first, so none lands after the completion save
+            await this.progressSaveChains.get(processRun);
+            this.progressSaveChains.delete(processRun);
             processRun.Status = status;
             processRun.EndTime = new Date();
             if (errorMessage) {

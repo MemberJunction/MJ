@@ -105,12 +105,110 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
         it('sends only writable fields on create — primary key, read-only, and __mj_ fields are excluded', async () => {
             const entity = newCustomer();
             entity.Set('Name', 'Acme');
+            entity.Set('First Name', 'Ada');
+            entity.Set('Tier', 'Gold');
+            entity.Set('IsActive', false);
+            entity.Set('Age', 30);
+            entity.Set('SignedUpAt', new Date(SIGNED_UP_AT_MS));
             GraphQLWire.EnqueueResponse(saveResponse('CreateCRMCustomer', { ID: 'NEW-1', Name: 'Acme' }));
 
             await provider.Save(entity, user, new EntitySaveOptions());
 
             const input = lastInputRecord();
             expect(Object.keys(input).sort()).toEqual(['Age', 'First_Name', 'IsActive', 'Name', 'SignedUpAt', 'Tier']);
+        });
+
+        describe('sends only the fields the caller set (#5972)', () => {
+            it('omits untouched fields, defaulted or not, and leaves their values to the server', async () => {
+                const entity = newCustomer();
+                entity.Set('Name', 'Acme');
+                GraphQLWire.EnqueueResponse(saveResponse('CreateCRMCustomer', { ID: 'NEW-1', Name: 'Acme' }));
+
+                await provider.Save(entity, user, new EntitySaveOptions());
+
+                // Tier and IsActive hold their metadata defaults, the rest null: none was set.
+                expect(lastInputRecord()).toEqual({ Name: 'Acme' });
+            });
+
+            it('sends a field set to its default value, and one explicitly set to null', async () => {
+                const entity = newCustomer();
+                entity.Set('Name', 'Acme');
+                entity.Set('Tier', 'Standard');
+                entity.Set('First Name', null);
+                GraphQLWire.EnqueueResponse(saveResponse('CreateCRMCustomer', { ID: 'NEW-1' }));
+
+                await provider.Save(entity, user, new EntitySaveOptions());
+
+                expect(lastInputRecord()).toEqual({ Name: 'Acme', Tier: 'Standard', First_Name: null });
+            });
+
+            it('always sends a required field with no default, even untouched', async () => {
+                const entity = newCustomer();
+                entity.Set('Age', 5);
+                GraphQLWire.EnqueueResponse(saveResponse('CreateCRMCustomer', { ID: 'NEW-1' }));
+
+                await provider.Save(entity, user, new EntitySaveOptions());
+
+                expect(lastInputRecord()).toEqual({ Name: '', Age: 5 });
+            });
+
+            it('sends the defaults a subclass sets in NewRecord()', async () => {
+                class DefaultingCustomer extends TestCustomerEntity {
+                    public override NewRecord(): boolean {
+                        const ok = super.NewRecord();
+                        this.Set('Tier', 'Bronze');
+                        this.Set('IsActive', true); // equal to the metadata default, still the subclass's choice
+                        return ok;
+                    }
+                }
+                const entity = new DefaultingCustomer(BuildCustomerEntityInfo(), provider);
+                entity.NewRecord();
+                entity.Set('Name', 'Acme');
+                GraphQLWire.EnqueueResponse(saveResponse('CreateCRMCustomer', { ID: 'NEW-1' }));
+
+                await provider.Save(entity, user, new EntitySaveOptions());
+
+                expect(lastInputRecord()).toEqual({ Name: 'Acme', Tier: 'Bronze', IsActive: true });
+            });
+
+            it('sends every writable field when the caller passes IgnoreDirtyState', async () => {
+                const entity = newCustomer();
+                entity.Set('Name', 'Acme');
+                GraphQLWire.EnqueueResponse(saveResponse('CreateCRMCustomer', { ID: 'NEW-1' }));
+                const options = new EntitySaveOptions();
+                options.IgnoreDirtyState = true;
+
+                await provider.Save(entity, user, options);
+
+                expect(Object.keys(lastInputRecord()).sort()).toEqual(['Age', 'First_Name', 'IsActive', 'Name', 'SignedUpAt', 'Tier']);
+            });
+
+            it('still requests the whole row back, so the entity refreshes from the server defaults', async () => {
+                const entity = newCustomer();
+                entity.Set('Name', 'Acme');
+                GraphQLWire.EnqueueResponse(saveResponse('CreateCRMCustomer', { ID: 'NEW-1', Name: 'Acme', Tier: 'Standard' }));
+
+                await provider.Save(entity, user, new EntitySaveOptions());
+
+                const doc = GraphQLWire.LastRequest.document;
+                for (const expected of ['Tier', 'IsActive', 'Age', 'SignedUpAt', 'Photo', '_mj__CreatedAt']) {
+                    expect(doc).toContain(expected);
+                }
+            });
+
+            it('applies the same rule to a transaction-group create item, keeping the primary key', async () => {
+                const group = new GraphQLTransactionGroup(provider);
+                const entity = newCustomer();
+                entity.Set('Name', 'Queued Co');
+                entity.Set('Age', 7);
+                const item = new TransactionItem(entity, 'Create', '', { input: {} }, {}, () => {});
+                const serializer = group as unknown as { serializeTransactionItemEntity(pt: TransactionItem): Promise<string> };
+
+                const payload = JSON.parse(await serializer.serializeTransactionItemEntity(item)) as Record<string, unknown>;
+
+                expect(Object.keys(payload).sort()).toEqual(['Age', 'ID', 'Name']);
+                expect(payload['ID']).toBe(entity.Get('ID'));
+            });
         });
 
         it('converts values per field type: Date → epoch ms, numeric string → number, boolean-ish → boolean', async () => {
@@ -134,6 +232,7 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             // Name: NOT NULL, no default, never set   → '' fallback
             // Tier: NOT NULL, default 'Standard' — explicitly nulled → default restored
             entity.Set('Tier', null);
+            entity.Set('First Name', null);
             GraphQLWire.EnqueueResponse(saveResponse('CreateCRMCustomer', { ID: 'NEW-1' }));
 
             await provider.Save(entity, user, new EntitySaveOptions());
@@ -141,7 +240,7 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             const input = lastInputRecord();
             expect(input['Name']).toBe('');
             expect(input['Tier']).toBe('Standard');
-            // Nullable field left null passes through as null
+            // Nullable field set to null passes through as null
             expect(input['First_Name']).toBeNull();
         });
 

@@ -74,3 +74,22 @@ export function MissingParam(name: string): ActionResultSimple {
 export function missingParam(name: string): ActionResultSimple {
   return MissingParam(name);
 }
+
+/**
+ * Checks a caller-supplied record id before it is written as `ListDetail.RecordID`, which holds
+ * the compact `CompositeKey` segment: the raw value for a single-column key, `F1|v1||F2|v2` for a
+ * composite one (#4221). A bare value is kept for a single-column key; for a composite key a value
+ * with no `|` cannot name the record, so it is refused.
+ *
+ * @param primaryKeyCount - the number of primary key fields of the list's entity
+ * @returns an error message, or `null` when the id can be written as given
+ */
+export function ListRecordIDError(primaryKeyCount: number, recordId: string): string | null {
+  if (recordId.trim().length === 0) {
+    return 'Record ID is empty';
+  }
+  if (primaryKeyCount > 1 && !recordId.includes('|')) {
+    return `Record ID '${recordId}' is a single value, but the list's entity has a ${primaryKeyCount}-field primary key; pass the compact key segment (Field1|value1||Field2|value2)`;
+  }
+  return null;
+}

@@ -22,6 +22,8 @@ import { ValidationErrorInfo } from '@memberjunction/global';
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { BaseEntity } from '../generic/baseEntity';
+import { EntityCompanion } from '../generic/entityCompanion';
+import { TransactionGroupBase, TransactionResult } from '../generic/transactionGroup';
 import { EntityInfo } from '../generic/entityInfo';
 import { Metadata } from '../generic/metadata';
 import { ProviderBase } from '../generic/providerBase';
@@ -129,6 +131,39 @@ class ParentEntity extends BaseEntity {
         RelatedEntityJoinField: 'Name',
         OnRemove: 'delete',
     });
+    public override CheckPermissions(): boolean {
+        return true;
+    }
+}
+
+/**
+ * A data-only companion: it holds inputs the server-side subclass reads in its own `Save()`, and
+ * adds no record to the save plan (#5528).
+ */
+class InputsCompanion extends EntityCompanion<{ Code: string }> {
+    public readonly Name = 'Inputs';
+    public Code = '';
+
+    public override get Dirty(): boolean {
+        return this.Code.length > 0;
+    }
+
+    public override async Serialize(): Promise<{ Code: string } | null> {
+        return this.Code ? { Code: this.Code } : null;
+    }
+
+    public override async Deserialize(data: { Code: string }): Promise<void> {
+        this.Code = data?.Code ?? '';
+    }
+
+    public override AcceptChanges(): void {
+        this.Code = '';
+    }
+}
+
+/** A record whose only companion is {@link InputsCompanion}. */
+class InputsEntity extends BaseEntity {
+    public readonly Inputs = this.RegisterCompanion(new InputsCompanion(this));
     public override CheckPermissions(): boolean {
         return true;
     }
@@ -547,6 +582,78 @@ describe('tier routing', () => {
 
         expect(ok).toBe(true);
         expect(opLog).toEqual(['save:Parent', 'save:Child0']);
+    });
+});
+
+describe('data-only companions (#5528)', () => {
+    /** A saved record with a dirty data-only companion and one changed field. */
+    function makeInputsRecord(provider: ReturnType<typeof makeProvider>): InputsEntity {
+        const record = new InputsEntity(productEntityInfo, provider as unknown as IEntityDataProvider);
+        record.LoadFromData({ ID: '00000000-0000-4000-8000-000000000001', Name: 'Old', Price: 1 });
+        label(record, 'Record');
+        record.Set('Name', 'New');
+        record.Inputs.Code = 'PROMO10';
+        return record;
+    }
+
+    it('ships a one-node save with a dirty companion through the graph operation on a client provider', async () => {
+        supportsTransactions = false;
+        const provider = makeProvider();
+        const record = makeInputsRecord(provider);
+        routeOperationResult = {
+            Success: true,
+            ResultCode: 'SUCCESS',
+            Output: { Success: true, Fields: record.GetAll(), Companions: [] },
+        };
+
+        expect(await record.Save()).toBe(true);
+
+        // The plain path would have called provider.Save() and sent fields only.
+        expect(opLog).toEqual([]);
+        const sent = routedInput as { Companions: { Name: string; Data: { Code: string } }[]; IsExistingRecord: boolean };
+        expect(sent.IsExistingRecord).toBe(true);
+        expect(sent.Companions).toEqual([{ Name: 'Inputs', Data: { Code: 'PROMO10' } }]);
+    });
+
+    it('keeps the plain single-record save on a provider that can transact', async () => {
+        supportsTransactions = true;
+        const provider = makeProvider();
+        const record = makeInputsRecord(provider);
+
+        expect(await record.Save()).toBe(true);
+
+        expect(opLog).toEqual(['save:Record']);
+        expect(routedInput).toBeNull();
+        expect(txnLog).toEqual([]);
+    });
+
+    it('keeps the plain single-record save on a client provider when the companion is clean', async () => {
+        supportsTransactions = false;
+        const provider = makeProvider();
+        const record = makeInputsRecord(provider);
+        record.Inputs.Code = '';
+
+        expect(await record.Save()).toBe(true);
+
+        expect(opLog).toEqual(['save:Record']);
+        expect(routedInput).toBeNull();
+    });
+
+    it('leaves a record enrolled in a transaction group on the group save, not the graph', async () => {
+        supportsTransactions = false;
+        const provider = makeProvider();
+        const record = makeInputsRecord(provider);
+        class NoopGroup extends TransactionGroupBase {
+            protected async HandleSubmit(): Promise<TransactionResult[]> {
+                return [];
+            }
+        }
+        record.TransactionGroup = new NoopGroup();
+
+        // No refusal and no graph route: the save proceeds to the provider like any group member.
+        expect(await record.Save()).toBe(true);
+        expect(routedInput).toBeNull();
+        expect(opLog).toEqual(['save:Record']);
     });
 });
 

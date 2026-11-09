@@ -113,10 +113,10 @@ export class QueueManager extends BaseSingleton<QueueManager> implements IShutdo
         // STEP 3: Create a task in the database for this new task
         const md = new Metadata(); // global-provider-ok: process-wide queue singleton, no per-request provider context (QueueManager is process-scoped)
         const taskRecord = <MJQueueTaskEntity>await md.GetEntityObject('MJ: Queue Tasks', contextUser);
-        taskRecord.Set('QueueID', queue.QueueID);
-        taskRecord.Set('Status', 'Pending');
-        taskRecord.Set('Data', JSON.stringify(data));
-        taskRecord.Set('Options', JSON.stringify(options));
+        taskRecord.QueueID = queue.QueueID;
+        taskRecord.Status = 'Pending';
+        taskRecord.Data = JSON.stringify(data);
+        taskRecord.Options = JSON.stringify(options);
         if (await taskRecord.Save()) {
           // db save worked, now we can create a taskBase object
           const task = new TaskBase(taskRecord, data, options);

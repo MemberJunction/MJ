@@ -68,10 +68,10 @@ function resetSingleton(): void {
 }
 
 // Helper to create mock UserInfo objects
-function makeUser(id: string, name: string): UserInfo {
+function makeUser(id: string, name: string | null, isActive: boolean = true): UserInfo {
     return new (UserInfo as unknown as new (p: unknown, d: Record<string, unknown>) => UserInfo)(
         null,
-        { ID: id, Name: name }
+        { ID: id, Name: name, IsActive: isActive }
     );
 }
 
@@ -233,6 +233,14 @@ describe('UserCache', () => {
             expect(result).toBe(systemUser);
         });
 
+        it('should return undefined when the system user is inactive (#4234)', () => {
+            const instance = UserCache.Instance;
+            const systemUser = makeUser('ecafccec-6a37-ef11-86d4-000d3a4e707e', 'System', false);
+            (instance as unknown as Record<string, unknown>)._users = [systemUser];
+
+            expect(instance.GetSystemUser()).toBeUndefined();
+        });
+
         it('should return undefined when system user is not in the cache', () => {
             const instance = UserCache.Instance;
             const otherUser = makeUser('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', 'Other');
@@ -254,6 +262,17 @@ describe('UserCache', () => {
         it('should return undefined from GetSystemUser rather than throwing on a cold cache', () => {
             expect(() => UserCache.Instance.GetSystemUser()).not.toThrow();
             expect(UserCache.Instance.GetSystemUser()).toBeUndefined();
+        });
+
+        it('UserByName skips a row with no Name instead of throwing (#4234)', () => {
+            const instance = UserCache.Instance;
+            const nameless = makeUser('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', null);
+            const named = makeUser('bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee', 'Jane');
+            (instance as unknown as Record<string, unknown>)._users = [nameless, named];
+
+            expect(() => instance.UserByName('jane')).not.toThrow();
+            expect(instance.UserByName('jane')).toBe(named);
+            expect(instance.UserByName('nobody')).toBeUndefined();
         });
 
         it('should return undefined from UserByName rather than throwing on a cold cache', () => {

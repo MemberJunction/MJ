@@ -144,15 +144,12 @@ export class UserCache extends BaseSingleton<UserCache> {
     }
 
     /**
-     * Returns the system user, or `undefined` when the cache has not been refreshed or the row is
-     * absent — every caller already guards for that, and with `_users` defaulting to `[]` this can
-     * no longer throw. The declared return type stays `UserInfo` because widening it to
-     * `UserInfo | undefined` is a read-surface change, and Phase 1 of the provider refactor moves
-     * this class without touching its read surface. The new home compiles under `strict`, hence the
-     * explicit assertion where the old one silently inferred the same lie.
+     * Returns the system user, or `undefined` when the cache has not been refreshed, the row is
+     * absent, or the system user is deactivated (#4234). A deactivated system user is not one the
+     * server may act as, so callers get the same "no system user" answer as for a missing row.
      */
-    public GetSystemUser(): UserInfo {
-      return this.Users.find((u) => u.ID.toLowerCase() === UserCache.Instance.SYSTEM_USER_ID.toLowerCase()) as UserInfo;
+    public GetSystemUser(): UserInfo | undefined {
+      return this.Users.find((u) => UUIDsEqual(u.ID, UserCache.Instance.SYSTEM_USER_ID) && u.IsActive);
     }
 
     /**
@@ -298,6 +295,8 @@ export class UserCache extends BaseSingleton<UserCache> {
      */
     public UserByName(name: string, caseSensitive: boolean = false): UserInfo | undefined {
       return UserCache.Users.find(u => {
+        // A row with no Name cannot match; skip it rather than throw on `.trim()` (#4234).
+        if (u.Name == null) return false;
         const comparisonItem = u.Name.trim();
         const item = name.trim();
         return caseSensitive ? comparisonItem === item : comparisonItem.toLowerCase() === item.toLowerCase();

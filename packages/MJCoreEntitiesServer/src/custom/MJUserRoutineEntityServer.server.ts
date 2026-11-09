@@ -1,5 +1,5 @@
 import { BaseEntity, EntityDeleteOptions, EntitySaveOptions, RunView, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { FinalizeValidation, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJUserRoutineEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity } from '@memberjunction/core-entities';
 import { CronExpressionHelper, ComputeRoutineNextRunAt } from '@memberjunction/scheduling-engine';
 
@@ -41,8 +41,7 @@ export class MJUserRoutineEntityServer extends MJUserRoutineEntity {
         this.validateSchedule(result);
         this.validateTarget(result);
         this.validateOwnership(result);
-        result.Success = result.Success && result.Errors.length === 0;
-        return result;
+        return FinalizeValidation(result);
     }
 
     /**

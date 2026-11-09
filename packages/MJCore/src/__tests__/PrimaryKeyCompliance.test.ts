@@ -33,7 +33,10 @@
  *      - `CompositeKey.FromID(x)` is exempt when a `'MJ: …'` entity literal appears on the same line
  *        or within the FROM_ID_LITERAL_WINDOW lines above it (the `GetEntityObject('MJ: …')` /
  *        `OpenEntityRecord('MJ: …', …)` that names the core entity).
- *      - Anything else carries `// first-pk-ok: <reason>` on the same line. The reason is required.
+ *      - Anything else carries `// first-pk-ok: <reason>` on the same line. The reason is required,
+ *        and it states structure (why this key is one column), not encoding: a claim about what a
+ *        column holds ("stores one key value", "always a bare UUID") is not checked here and has
+ *        been wrong before (#4330). If the encoding matters, verify it or file the defect.
  *    Fix for the defect case: `CompositeKey.FromURLSegment(entityInfo, id)`,
  *    `CompositeKey.FromEntityRecord(entityInfo, row)`, `key.ToWhereClause()`, or iterate
  *    `entity.PrimaryKeys`; guard genuinely single-column code with `PrimaryKeys.length === 1`.

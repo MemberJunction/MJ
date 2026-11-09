@@ -42,7 +42,10 @@ export interface FieldSpec {
     Name: string;
     Type: string;
     IsPrimaryKey?: boolean;
-    /** A column the entity's view carries from another table, such as an IS-A parent's field mirrored on a child. */
+    /**
+     * A column in the entity's view but not its table: a view-only column such as a joined display
+     * name, or an IS-A parent's field mirrored on a child.
+     */
     IsVirtual?: boolean;
     Length?: number;
     /** Makes the field a foreign key to this entity's `ID`. */
@@ -66,7 +69,7 @@ function makeFields(entityID: string, entityName: string, specs: FieldSpec[]): R
         AutoIncrement: false,
         IsVirtual: spec.IsVirtual ?? false,
         IsNameField: spec.Name === 'Name',
-        AllowUpdateAPI: !spec.IsPrimaryKey,
+        AllowUpdateAPI: !spec.IsPrimaryKey && !spec.IsVirtual,
         ValueListType: 'None',
         Sequence: index + 1,
         Status: 'Active',
@@ -89,7 +92,7 @@ function makePermission(entityID: string, roleID: string): Record<string, unknow
     };
 }
 
-interface EntitySpec {
+export interface EntitySpec {
     ID: string;
     Name: string;
     BaseTable: string;
@@ -100,7 +103,7 @@ interface EntitySpec {
     Fields: FieldSpec[];
 }
 
-function makeEntity(spec: EntitySpec): Record<string, unknown> {
+export function MakeLoadHintEntity(spec: EntitySpec): Record<string, unknown> {
     const permissions = [makePermission(spec.ID, ADMIN_ROLE_ID)];
     if (spec.LimitedRoleCanRead !== false) {
         permissions.push(makePermission(spec.ID, LIMITED_ROLE_ID));
@@ -193,9 +196,9 @@ export function BuildLoadHintEntities(options?: { MirrorParentFields?: boolean; 
     const specs = ENTITY_SPECS.map(spec => ({ ...spec, Fields: [...spec.Fields, ...(options?.ExtraFields?.[spec.Name] ?? [])] }));
     return specs.map(spec => {
         if (!options?.MirrorParentFields || !spec.ParentID) {
-            return new EntityInfo(makeEntity(spec));
+            return new EntityInfo(MakeLoadHintEntity(spec));
         }
-        return new EntityInfo(makeEntity({ ...spec, Fields: [...spec.Fields, ...inheritedMirrorFields(spec, specs)] }));
+        return new EntityInfo(MakeLoadHintEntity({ ...spec, Fields: [...spec.Fields, ...inheritedMirrorFields(spec, specs)] }));
     });
 }
 
@@ -229,6 +232,7 @@ export class LoadHintTestEntity extends BaseEntity {
 export class InMemoryISAStore {
     private readonly tables = new Map<string, Map<string, Record<string, unknown>>>();
     private readonly hiddenFromLoads = new Set<string>();
+    private readonly viewOnlyColumns = new Map<string, Record<string, unknown>>();
 
     public Insert(entityName: string, row: Record<string, unknown>): void {
         const tableKey = entityName.toLowerCase();
@@ -240,6 +244,14 @@ export class InMemoryISAStore {
         table.set(String(row['ID']).toLowerCase(), row);
     }
 
+    /**
+     * Adds view-only columns (joined display names) to this entity's own view row. A child's view
+     * row does not carry them, as a generated child view joins its ancestors' base tables.
+     */
+    public InsertViewColumns(entityName: string, id: string, columns: Record<string, unknown>): void {
+        this.viewOnlyColumns.set(`${entityName.toLowerCase()}|${id.toLowerCase()}`, columns);
+    }
+
     /** Makes loads of this row come back empty, the way a row-level filter would, while probes still see it. */
     public HideFromLoads(entityName: string, id: string): void {
         this.hiddenFromLoads.add(`${entityName.toLowerCase()}|${id.toLowerCase()}`);
@@ -249,7 +261,7 @@ export class InMemoryISAStore {
         return this.tables.get(entityName.toLowerCase())?.has(id.toLowerCase()) ?? false;
     }
 
-    /** The entity's view row: its own row joined to every ancestor's, or null when its own row is missing or hidden. */
+    /** The entity's view row: its own row joined to every ancestor's, plus its own view-only columns, or null when its own row is missing or hidden. */
     public ViewRow(entityInfo: EntityInfo, id: string): Record<string, unknown> | null {
         if (this.hiddenFromLoads.has(`${entityInfo.Name.toLowerCase()}|${id.toLowerCase()}`)) {
             return null;
@@ -262,7 +274,7 @@ export class InMemoryISAStore {
         for (const ancestor of [...entityInfo.ParentChain].reverse()) {
             Object.assign(row, this.tables.get(ancestor.Name.toLowerCase())?.get(id.toLowerCase()) ?? {});
         }
-        return Object.assign(row, own);
+        return Object.assign(row, own, this.viewOnlyColumns.get(`${entityInfo.Name.toLowerCase()}|${id.toLowerCase()}`) ?? {});
     }
 }
 

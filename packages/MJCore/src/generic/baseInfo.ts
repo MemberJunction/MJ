@@ -174,10 +174,10 @@ export abstract class BaseInfo {
                 else {
                     const lowerUnderscoreKey = `_${key.charAt(0).toLowerCase()}${key.slice(1)}`;
                     const underscoreKey = `_${key}`;
-                    if (Object.prototype.hasOwnProperty.call(this, lowerUnderscoreKey)) {
+                    if (Object.prototype.hasOwnProperty.call(this, lowerUnderscoreKey) || hasMemoField(this, lowerUnderscoreKey)) {
                         self[lowerUnderscoreKey] = val;
                     }
-                    else if (Object.prototype.hasOwnProperty.call(this, underscoreKey)) {
+                    else if (Object.prototype.hasOwnProperty.call(this, underscoreKey) || hasMemoField(this, underscoreKey)) {
                         self[underscoreKey] = val;
                     }
                 }
@@ -219,6 +219,17 @@ export abstract class BaseInfo {
         const result: Record<string, unknown> = {};
         const self = this as unknown as Record<string, unknown>;
         const keys = Object.keys(this);
+        // Memo fields live behind prototype accessors, not as own fields; serialize the ones that are
+        // set exactly as the plain fields they replaced were serialized.
+        const memoNames = memoFieldsOf(this);
+        if (memoNames.length > 0) {
+            const memo = memoHolderOf(this);
+            for (const name of memoNames) {
+                if (name in memo) {
+                    keys.push(name);
+                }
+            }
+        }
 
         for (let i = 0; i < keys.length; i++) {
             const key = keys[i];
@@ -247,4 +258,148 @@ export abstract class BaseInfo {
 
         return result;
     }
+}
+
+/** A concrete or abstract Info class, for {@link RegisterInfoMemoFields}. */
+export type InfoClass = abstract new (...args: never[]) => BaseInfo;
+
+/** Key of each Info object's memo holder: a plain object that is never frozen. */
+const MEMO: unique symbol = Symbol('mj.info.memo');
+
+/** An Info object seen through its memo holder. */
+interface MemoHost {
+    readonly [MEMO]?: Record<string, unknown>;
+}
+
+/** Memo field names per Info class prototype, as registered with {@link RegisterInfoMemoFields}. */
+const memoFieldsByPrototype = new Map<object, readonly string[]>();
+
+/** Memo field names for an instance's whole prototype chain, per constructor. */
+const memoFieldsByConstructor = new WeakMap<Function, readonly string[]>();
+
+/** Objects already visited by {@link DeepFreezeInfoValue}, so a refresh only walks new objects. */
+const deepFrozen = new WeakSet<object>();
+
+/**
+ * Returns the Info object's memo holder, creating it on first use (also for objects built with
+ * `Object.create(prototype)`, which skip the constructor). Non-enumerable and symbol-keyed, so
+ * `Object.keys`, `toJSON()`, `copyInitData` and spreads never see or copy it.
+ */
+function memoHolderOf(info: BaseInfo): Record<string, unknown> {
+    const existing = (info as unknown as MemoHost)[MEMO];
+    if (existing) {
+        return existing;
+    }
+    const holder: Record<string, unknown> = {};
+    if (Object.isExtensible(info)) {
+        Object.defineProperty(info, MEMO, { value: holder, enumerable: false, writable: false, configurable: false });
+    }
+    // Frozen elsewhere without a holder: the value is computed but not cached.
+    return holder;
+}
+
+/**
+ * Registers the memo fields of an Info class (#3095).
+ *
+ * A memo field is a `_` field the class writes after construction to cache a derived value (a field
+ * map, the primary keys, parsed configuration, ...). Each one becomes an accessor on the class
+ * prototype that reads and writes a per-object holder instead of an own field. The holder is never
+ * frozen, so when a shared metadata graph is frozen in development ({@link DeepFreezeInfoValue}) the
+ * getters that fill these caches keep working. The class code is unchanged: `this._x` reads and
+ * assignments go through the accessor.
+ *
+ * A new lazily-cached `_` field must be added here, or its first write on a frozen object throws.
+ * Call it once per class, right after the class declaration.
+ * @param infoClass - the class declaring the fields
+ * @param names - the field names, `_` prefix included
+ */
+export function RegisterInfoMemoFields(infoClass: InfoClass, names: readonly string[]): void {
+    const proto = infoClass.prototype;
+    for (const name of names) {
+        Object.defineProperty(proto, name, {
+            configurable: true,
+            enumerable: false,
+            get(this: BaseInfo): unknown {
+                return memoHolderOf(this)[name];
+            },
+            set(this: BaseInfo, value: unknown) {
+                if (Object.isFrozen(this)) {
+                    // A value cached after the freeze is shared just like one cached before it.
+                    DeepFreezeInfoValue(value);
+                }
+                memoHolderOf(this)[name] = value;
+            }
+        });
+    }
+    memoFieldsByPrototype.set(proto, names);
+}
+
+/** The registered memo field names of an Info object's class and its base classes. */
+function memoFieldsOf(info: BaseInfo): readonly string[] {
+    const ctor = info.constructor;
+    let names = memoFieldsByConstructor.get(ctor);
+    if (!names) {
+        const collected: string[] = [];
+        let proto: object | null = Object.getPrototypeOf(info);
+        while (proto && proto !== Object.prototype) {
+            const own = memoFieldsByPrototype.get(proto);
+            if (own) {
+                collected.push(...own);
+            }
+            proto = Object.getPrototypeOf(proto);
+        }
+        names = collected;
+        memoFieldsByConstructor.set(ctor, names);
+    }
+    return names;
+}
+
+/** Whether `name` is a registered memo field of the Info object's class chain. */
+function hasMemoField(info: BaseInfo, name: string): boolean {
+    return memoFieldsOf(info).includes(name);
+}
+
+/**
+ * Deep-freezes a value of the metadata graph (#3095): arrays, Info objects and plain objects, and
+ * everything they hold. Other class instances (a provider, a user), `Map` and `Set` are left as is,
+ * and so is each Info object's memo holder, so memoizing getters keep working
+ * ({@link RegisterInfoMemoFields}). Idempotent: objects already frozen are not walked again.
+ * @param value - the value to freeze
+ */
+export function DeepFreezeInfoValue(value: unknown): void {
+    if (value === null || typeof value !== 'object' || deepFrozen.has(value)) {
+        return;
+    }
+    deepFrozen.add(value);
+    if (Array.isArray(value)) {
+        Object.freeze(value);
+        for (let i = 0; i < value.length; i++) {
+            DeepFreezeInfoValue(value[i]);
+        }
+        return;
+    }
+    const isInfo = value instanceof BaseInfo;
+    if (!isInfo && !isPlainObject(value)) {
+        return;
+    }
+    if (isInfo) {
+        memoHolderOf(value); // must exist before the object stops accepting new properties
+    }
+    Object.freeze(value);
+    const record = value as Record<string, unknown>;
+    for (const key of Object.keys(record)) {
+        DeepFreezeInfoValue(record[key]);
+    }
+    if (isInfo) {
+        // Values already cached are shared like the rest of the graph; the holder itself stays writable.
+        const memo = memoHolderOf(value);
+        for (const key of Object.keys(memo)) {
+            DeepFreezeInfoValue(memo[key]);
+        }
+    }
+}
+
+function isPlainObject(value: object): boolean {
+    const proto = Object.getPrototypeOf(value);
+    return proto === Object.prototype || proto === null;
 }

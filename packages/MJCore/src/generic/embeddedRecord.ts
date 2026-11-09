@@ -21,6 +21,7 @@ import { ValidationErrorInfo, ValidationErrorType, ValidationResult } from './en
 import type { EntitySaveOptions, IEntityDataProvider, IMetadataProvider } from './interfaces';
 import type { UserInfo } from './securityInfo';
 import { AssertClientInputWritableForUser, OmitFieldsUnreadableByActiveUser } from './entityValueFieldSecurity';
+import { LogWarning } from './logging';
 
 /** What clearing the relationship does to the embedded row. */
 export type EmbeddedRecordClearMode = 'delete' | 'orphan' | 'refuse';
@@ -78,6 +79,8 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
     private exposed = false;
     private cleared = false;
     private constructing = false;
+    /** True when the last `LoadEager` could not load the peer the owner's FK points at. */
+    private loadFailed = false;
 
     constructor(owner: BaseEntity, options: EmbeddedRecordOptions) {
         super(owner);
@@ -136,8 +139,17 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
         }
     }
 
+    /** True when the owner's FK is set but the last load could not hydrate that peer. */
+    public get LoadFailed(): boolean {
+        return this.loadFailed;
+    }
+
     /**
      * Sync provision. Idempotent. For a required FK this is a no-op after `NewRecord`.
+     *
+     * Throws when the owner's FK already points at a row that is not loaded (the peer failed
+     * to load, or the owner has not been loaded yet). Minting there would overwrite a live FK
+     * with the ID of a blank record. Clear the relationship first to replace the peer.
      */
     public Ensure(): T {
         if (!this.instance) {
@@ -149,6 +161,16 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
         }
         if (this.exposed) {
             return this.instance;
+        }
+        const fk = this.Owner.Get(this.ForeignKeyField);
+        // Clear() nulls the FK, so a set FK here always points at a row this owner still references.
+        if (!this.isEmptyKey(fk)) {
+            const reason = this.loadFailed ? 'could not be loaded' : 'is not loaded';
+            throw new Error(
+                `EmbeddedRecord '${this.Name}' on ${this.Owner.EntityInfo?.Name}: peer ` +
+                `${this.RelatedEntityName} '${String(fk)}' ${reason}; refusing to replace it. ` +
+                `Clear() the relationship first to provision a new peer.`,
+            );
         }
         // Always mint a new peer. After Clear()+Save() the leftover instance is
         // the orphaned row (still IsSaved). Restamping its PK would silently
@@ -172,6 +194,7 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
         }
         this.exposed = false;
         this.cleared = true;
+        this.loadFailed = false;
         this.Owner.Set(this.ForeignKeyField, null);
     }
 
@@ -191,6 +214,7 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
      */
     public OnOwnerNewRecord(): void {
         this.cleared = false;
+        this.loadFailed = false;
         if (!this.instance) {
             return;
         }
@@ -282,8 +306,9 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
         if (!this.instance) {
             return;
         }
+        this.loadFailed = false;
         const fk = this.Owner.Get(this.ForeignKeyField);
-        if (fk === null || fk === undefined || fk === '') {
+        if (this.isEmptyKey(fk)) {
             this.exposed = false;
             this.cleared = false;
             // A reused owner instance can still hold the previous record's
@@ -317,7 +342,15 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
                         `FK ${this.ForeignKeyField}='${fk}' does not resolve to a ${this.RelatedEntityName} row.`,
                     );
                 }
+                // A nullable peer that does not load (missing row, permission refusal, type
+                // mismatch) is reported, not dropped: the FK still points at it, and Ensure()
+                // must not mint over it.
                 this.exposed = false;
+                this.loadFailed = true;
+                LogWarning(
+                    `EmbeddedRecord '${this.Name}' on ${this.Owner.EntityInfo?.Name}: could not load ` +
+                    `${this.RelatedEntityName} '${String(fk)}' (FK ${this.ForeignKeyField}); the peer is not exposed.`,
+                );
                 return;
             }
             this.exposed = true;
@@ -371,6 +404,7 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
         if (data.Cleared) {
             this.exposed = false;
             this.cleared = true;
+            this.loadFailed = false;
             this.Owner.Set(this.ForeignKeyField, null);
             return;
         }
@@ -394,6 +428,7 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
         await this.applyWire(data, mode);
         this.exposed = true;
         this.cleared = false;
+        this.loadFailed = false;
     }
 
     private async applyWire(data: EmbeddedRecordWire, mode: EntityCompanionDeserializeMode): Promise<void> {
@@ -441,9 +476,13 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
         }
     }
 
+    private isEmptyKey(value: unknown): boolean {
+        return value === null || value === undefined || value === '';
+    }
+
     private stampOwnerKey(): void {
         const key = this.instance?.FirstPrimaryKey?.Value; // first-pk-ok: ForeignKeyField is one FK column, so it holds a single-column key by design
-        if (key === null || key === undefined || key === '') {
+        if (this.isEmptyKey(key)) {
             return;
         }
         this.Owner.Set(this.ForeignKeyField, key);

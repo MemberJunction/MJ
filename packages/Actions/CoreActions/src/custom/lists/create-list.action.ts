@@ -3,6 +3,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { DatabaseProviderBase, Metadata, RunView } from "@memberjunction/core";
 import { MJListEntity, MJListDetailEntity, MJEntityEntity } from "@memberjunction/core-entities";
+import { ListRecordIDError } from "./_action-helpers";
 
 /**
  * Action to create a new list and optionally add initial records.
@@ -84,6 +85,29 @@ export class CreateListAction extends BaseAction {
 
       if (categoryId) {
         list.CategoryID = categoryId;
+      }
+
+      // AddRecordIDs are written as ListDetail.RecordID, the compact key segment: the key value for
+      // a single-column primary key, Field1|value1||Field2|value2 for a composite one (#4221).
+      if (addRecordIds && addRecordIds.length > 0) {
+        const listEntity = md.EntityByID(resolvedEntityId!);
+        if (!listEntity) {
+          return {
+            Success: false,
+            ResultCode: 'ENTITY_NOT_FOUND',
+            Message: `Entity '${resolvedEntityId}' is not in metadata`
+          };
+        }
+        const invalidIds = addRecordIds
+          .map((id: string) => ListRecordIDError(listEntity.PrimaryKeys.length, String(id)))
+          .filter((e: string | null): e is string => e !== null);
+        if (invalidIds.length > 0) {
+          return {
+            Success: false,
+            ResultCode: 'INVALID_RECORD_ID',
+            Message: invalidIds.join('; ')
+          };
+        }
       }
 
       const provider = (params.Provider ?? Metadata.Provider) as DatabaseProviderBase;

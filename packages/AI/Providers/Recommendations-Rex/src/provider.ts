@@ -78,6 +78,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
                     VectorID: vectorID,
                     Options: options,
                     ErrorListID: request.ErrorListID,
+                    SourceEntityRecordID: recommendation.SourceEntityRecordID,
                     CurrentUser: request.CurrentUser
                 };
     
@@ -204,8 +205,14 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
                 const rasaError = ex.Data as RasaResponse | undefined;
                 LogError("Error getting Rex recommendation, rasaError:", undefined, rasaError);
                 if(params.ErrorListID){
+                    // The error list's RecordID is the source record's key, not the vector id (#4221).
                     const errorMessage: string = JSON.stringify(rasaError);
-                    await this.addRecordToErrorsList(params.ErrorListID, params.VectorID, errorMessage, params.CurrentUser);
+                    if(params.SourceEntityRecordID){
+                        await this.addRecordToErrorsList(params.ErrorListID, params.SourceEntityRecordID, errorMessage, params.CurrentUser);
+                    }
+                    else{
+                        LogError(`Rex recommendation failed for vector ${params.VectorID}, but no source record ID was given, so it is not added to error list ${params.ErrorListID}`);
+                    }
                 }
             }
             else{
