@@ -310,7 +310,7 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
           };
           return notif as T;
         },
-      } as Pick<IMetadataProvider, 'RunView' | 'RunViews' | 'GetEntityObject'> as IMetadataProvider;
+      } as unknown as IMetadataProvider;
 
       const action = new EvaluateFeatureAndPredictionDriftAction();
       const runParams = buildRunParams({});
@@ -361,7 +361,7 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
               ? { Success: false, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: 'timeout' }
               : { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' },
           ),
-      } as Pick<IMetadataProvider, 'RunView' | 'RunViews'> as IMetadataProvider;
+      } as unknown as IMetadataProvider;
 
       const action = new EvaluateFeatureAndPredictionDriftAction();
       const runParams = buildRunParams({ EmitAlertOnDrift: { value: false } });
