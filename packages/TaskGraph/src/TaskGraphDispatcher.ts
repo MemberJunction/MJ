@@ -576,7 +576,8 @@ export class TaskGraphDispatcher implements IShutdownable {
 
     /**
      * Graphs whose processing threw on this instance, and when it may try each again (S6). Reported
-     * once per failure streak, not once per poll; cleared the first time the graph processes cleanly.
+     * once per failure streak, not once per poll; cleared the first time the graph processes cleanly,
+     * or once the graph is no longer active (settled elsewhere).
      */
     private readonly failedGraphs = new UUIDMap<{ RetryAt: number }>();
 
@@ -1411,6 +1412,14 @@ export class TaskGraphDispatcher implements IShutdownable {
      */
     private async propagateAndRollup(provider: IMetadataProvider, graphIDs?: readonly string[]): Promise<GraphState[]> {
         const graphs = graphIDs ?? await this.findActiveGraphIDs(provider);
+        if (!graphIDs) {
+            // A set-aside graph that left the active set (another instance settled it) is never processed
+            // here again, so its back-off entry would never clear.
+            const active = new UUIDSet(graphs);
+            for (const id of [...this.failedGraphs.Keys()]) {
+                if (!active.Has(id)) this.failedGraphs.Delete(id);
+            }
+        }
         const survivingGraphs: GraphState[] = [];
         for (const parentID of graphs) {
             // ONE GRAPH'S FAILURE IS ITS OWN (S6). Anything this throws (an inactive submitter in the

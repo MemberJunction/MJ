@@ -615,6 +615,29 @@ describe('TaskGraphDispatcher saga coordinator', () => {
     });
 });
 
+describe('TaskGraphDispatcher back-off for graphs that threw (S6)', () => {
+    it('forgets a set-aside graph once it leaves the active set, as when another instance settled it', async () => {
+        const GONE = '00000000-0000-4000-8000-000000000300';
+        const provider = {} as IMetadataProvider;
+        const dispatcher = new TaskGraphDispatcher(
+            { CreateProvider: vi.fn().mockResolvedValue(provider) }, { RunAgentForTask: vi.fn() }, SYSTEM_USER, { InstanceID: 'inst-prune' },
+        );
+        const internals = dispatcher as unknown as {
+            failedGraphs: UUIDMap<{ RetryAt: number }>;
+            findActiveGraphIDs: ReturnType<typeof vi.fn>;
+            propagateAndRollup: (p: IMetadataProvider, ids?: string[]) => Promise<unknown>;
+        };
+        internals.failedGraphs.Set(GONE, { RetryAt: Date.now() + 60_000 });
+        internals.findActiveGraphIDs = vi.fn(async () => []);
+
+        await internals.propagateAndRollup(provider, [GONE]);
+        expect(internals.failedGraphs.Has(GONE)).toBe(true);
+
+        await internals.propagateAndRollup(provider);
+        expect(internals.failedGraphs.Has(GONE)).toBe(false);
+    });
+});
+
 describe('a graph rolling back does not settle under its saga (S7)', () => {
     let db: SagaDb;
     let previousCache: typeof globalRef.___SINGLETON__UserCache;
