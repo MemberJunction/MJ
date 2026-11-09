@@ -310,16 +310,9 @@ $$ LANGUAGE plpgsql;
       const param = rawParam.trim();
       if (!param) continue;
 
-      const m = param.match(
-        /@(\w+)\s+([\w(),\s]+?)(?:\s*=\s*(.+?))?(?:\s+OUTPUT|\s+OUT)?\s*$/i
-      );
-      if (m) {
-        parsedParams.push({
-          Name: m[1],
-          Type: m[2].trim(),
-          Default: m[3] ?? null,
-          IsOutput: isOutputParam(param),
-        });
+      const parsed = parseProcParam(param);
+      if (parsed) {
+        parsedParams.push({ ...parsed, IsOutput: isOutputParam(param) });
       }
     }
 
@@ -871,6 +864,26 @@ function convertQualifiedBooleanComparisons(sql: string, tableColumns: Map<strin
 /** True when any parameter in a T-SQL parameter list is declared OUTPUT. */
 function hasOutputParams(paramsBlock: string): boolean {
   return splitParams(paramsBlock).some(isOutputParam);
+}
+
+/**
+ * Splits one T-SQL parameter declaration (`@Name type [= default] [OUTPUT|OUT]`) into its name,
+ * type and default. Returns null when it is not one: no `@name`, a type with characters other than
+ * word characters, parentheses, commas and whitespace, or an `=` with nothing after it. Parsed by
+ * hand rather than with one regex, whose overlapping whitespace quantifiers backtrack polynomially.
+ */
+function parseProcParam(param: string): { Name: string; Type: string; Default: string | null } | null {
+  const head = /^@(\w+)\s/.exec(param);
+  if (!head) return null;
+  let rest = param.slice(head[0].length).trim();
+  const output = /\s(?:OUTPUT|OUT)$/i.exec(rest);
+  if (output) rest = rest.slice(0, output.index).trimEnd();
+
+  const eq = rest.indexOf('=');
+  const type = (eq === -1 ? rest : rest.slice(0, eq)).trim();
+  const defaultValue = eq === -1 ? null : rest.slice(eq + 1).trim();
+  if (!type || !/^[\w(),\s]+$/.test(type) || defaultValue === '') return null;
+  return { Name: head[1], Type: type, Default: defaultValue };
 }
 
 /** True when a T-SQL parameter declaration ends with the OUTPUT or OUT keyword. */
