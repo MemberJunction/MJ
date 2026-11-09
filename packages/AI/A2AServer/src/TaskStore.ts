@@ -134,14 +134,17 @@ export function MapMJTaskStatusToA2AStatus(status: MJTaskEntity['Status']): Task
  * shutdown.
  */
 export class TaskStore implements IA2ATaskStore {
-    protected readonly _tasks: Map<string, Task> = new Map();
-    protected readonly _listeners: Map<string, Set<(task: Task) => void>> = new Map();
-    protected readonly _abortControllers: Map<string, AbortController> = new Map();
+    // Keyed by task ID through UUIDMap: an ID read back from `MJ: Tasks` can differ in case from the
+    // lower-case one the server minted (SQL Server returns upper-case), and both must find the same task,
+    // owner, listeners and abort controller.
+    protected readonly _tasks = new UUIDMap<Task>();
+    protected readonly _listeners = new UUIDMap<Set<(task: Task) => void>>();
+    protected readonly _abortControllers = new UUIDMap<AbortController>();
     /**
      * The ID of the user each task was created for. Kept beside the task rather than on it,
      * because the task is the wire shape returned to clients.
      */
-    protected readonly _owners: Map<string, string> = new Map();
+    protected readonly _owners = new UUIDMap<string>();
     private readonly _sweepIntervalMs: number;
     private readonly _retentionMs: number;
     private _timer: ReturnType<typeof setInterval> | null = null;
@@ -175,15 +178,15 @@ export class TaskStore implements IA2ATaskStore {
             clearInterval(this._timer);
             this._timer = null;
         }
-        for (const controller of this._abortControllers.values()) {
+        for (const controller of this._abortControllers.Values()) {
             if (!controller.signal.aborted) {
                 controller.abort('A2AServer.TaskStore shutdown');
             }
         }
-        this._abortControllers.clear();
-        this._listeners.clear();
-        this._owners.clear();
-        this._tasks.clear();
+        this._abortControllers.Clear();
+        this._listeners.Clear();
+        this._owners.Clear();
+        this._tasks.Clear();
     }
 
     /**
@@ -202,10 +205,10 @@ export class TaskStore implements IA2ATaskStore {
         let evicted = 0;
         for (const [id, task] of this._tasks) {
             if (TERMINAL_STATUSES.has(task.status) && task.updated.getTime() <= cutoff) {
-                this._tasks.delete(id);
-                this._listeners.delete(id);
-                this._abortControllers.delete(id);
-                this._owners.delete(id);
+                this._tasks.Delete(id);
+                this._listeners.Delete(id);
+                this._abortControllers.Delete(id);
+                this._owners.Delete(id);
                 evicted++;
             }
         }
@@ -220,18 +223,18 @@ export class TaskStore implements IA2ATaskStore {
      * Returns an unsubscribe function.
      */
     public Subscribe(taskId: string, listener: (task: Task) => void): () => void {
-        let set = this._listeners.get(taskId);
+        let set = this._listeners.Get(taskId);
         if (!set) {
             set = new Set();
-            this._listeners.set(taskId, set);
+            this._listeners.Set(taskId, set);
         }
         set.add(listener);
         return () => {
-            const current = this._listeners.get(taskId);
+            const current = this._listeners.Get(taskId);
             if (current) {
                 current.delete(listener);
                 if (current.size === 0) {
-                    this._listeners.delete(taskId);
+                    this._listeners.Delete(taskId);
                 }
             }
         };
@@ -242,16 +245,16 @@ export class TaskStore implements IA2ATaskStore {
      * listeners and abort controllers once the task reaches a terminal state.
      */
     public Notify(task: Task): void {
-        this._tasks.set(task.id, task);
-        const set = this._listeners.get(task.id);
+        this._tasks.Set(task.id, task);
+        const set = this._listeners.Get(task.id);
         if (set) {
             for (const listener of Array.from(set)) {
                 listener(task);
             }
         }
         if (TERMINAL_STATUSES.has(task.status)) {
-            this._listeners.delete(task.id);
-            this._abortControllers.delete(task.id);
+            this._listeners.Delete(task.id);
+            this._abortControllers.Delete(task.id);
         }
     }
 
@@ -263,7 +266,7 @@ export class TaskStore implements IA2ATaskStore {
         taskId: string,
         controller: AbortController = new AbortController()
     ): AbortController {
-        this._abortControllers.set(taskId, controller);
+        this._abortControllers.Set(taskId, controller);
         return controller;
     }
 
@@ -272,13 +275,13 @@ export class TaskStore implements IA2ATaskStore {
      * notifying any active SSE subscribers immediately.
      */
     public CancelTask(taskId: string, reason: string = 'Task cancelled via A2A'): boolean {
-        const task = this._tasks.get(taskId);
+        const task = this._tasks.Get(taskId);
         if (!task) {
             return false;
         }
         task.status = 'cancelled';
         task.updated = new Date();
-        const controller = this._abortControllers.get(taskId);
+        const controller = this._abortControllers.Get(taskId);
         if (controller && !controller.signal.aborted) {
             controller.abort(reason);
         }
@@ -293,9 +296,9 @@ export class TaskStore implements IA2ATaskStore {
      *   Omit it when replacing a stored task, to keep its owner.
      */
     public Set(id: string, task: Task, ownerUserId?: string): this {
-        this._tasks.set(id, task);
+        this._tasks.Set(id, task);
         if (ownerUserId) {
-            this._owners.set(id, ownerUserId);
+            this._owners.Set(id, ownerUserId);
         }
         return this;
     }
@@ -306,8 +309,8 @@ export class TaskStore implements IA2ATaskStore {
      * another user's task IDs, nor read, continue or cancel their tasks.
      */
     public GetForUser(id: string, userId: string): Task | undefined {
-        const owner = this._owners.get(id);
-        return owner && UUIDsEqual(owner, userId) ? this._tasks.get(id) : undefined;
+        const owner = this._owners.Get(id);
+        return owner && UUIDsEqual(owner, userId) ? this._tasks.Get(id) : undefined;
     }
 
     /**
@@ -369,7 +372,7 @@ export class TaskStore implements IA2ATaskStore {
         return this.Set(id, task);
     }
     public Get(id: string): Task | undefined {
-        return this._tasks.get(id);
+        return this._tasks.Get(id);
     }
 
     /** @deprecated Use {@link Get}. */
@@ -377,7 +380,7 @@ export class TaskStore implements IA2ATaskStore {
         return this.Get(id);
     }
     public Has(id: string): boolean {
-        return this._tasks.has(id);
+        return this._tasks.Has(id);
     }
 
     /** @deprecated Use {@link Has}. */
@@ -385,10 +388,10 @@ export class TaskStore implements IA2ATaskStore {
         return this.Has(id);
     }
     public Delete(id: string): boolean {
-        this._listeners.delete(id);
-        this._abortControllers.delete(id);
-        this._owners.delete(id);
-        return this._tasks.delete(id);
+        this._listeners.Delete(id);
+        this._abortControllers.Delete(id);
+        this._owners.Delete(id);
+        return this._tasks.Delete(id);
     }
 
     /** @deprecated Use {@link Delete}. */
@@ -396,7 +399,7 @@ export class TaskStore implements IA2ATaskStore {
         return this.Delete(id);
     }
     public get Size(): number {
-        return this._tasks.size;
+        return this._tasks.Size;
     }
 
     /** @deprecated Use {@link Size}. */
@@ -404,7 +407,7 @@ export class TaskStore implements IA2ATaskStore {
         return this.Size;
     }
     public Values(): IterableIterator<Task> {
-        return this._tasks.values();
+        return this._tasks.Values();
     }
 
     /** @deprecated Use {@link Values}. */
@@ -565,7 +568,7 @@ export class DurableEntityA2ATaskStore extends TaskStore {
         if (!contextUser?.ID) {
             return false;
         }
-        const existingOwner = this._owners.get(task.id);
+        const existingOwner = this._owners.Get(task.id);
         if (existingOwner && !UUIDsEqual(existingOwner, contextUser.ID)) {
             LogError(`DurableEntityA2ATaskStore.SaveTask refused: task ${task.id} belongs to a different user`);
             return false;
@@ -822,7 +825,7 @@ export class DurableEntityA2ATaskStore extends TaskStore {
 
     /** Aborts this replica's in-flight work on a task another replica finished or cancelled. */
     private stopLocalWork(taskId: string): void {
-        const controller = this._abortControllers.get(taskId);
+        const controller = this._abortControllers.Get(taskId);
         if (controller && !controller.signal.aborted) {
             controller.abort('Task finished on another replica');
         }

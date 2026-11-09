@@ -191,6 +191,15 @@ describe('DurableEntityA2ATaskStore', () => {
         expect((await store.LoadTaskForUser(TASK_ID, USER_A, provider))?.status).toBe('pending');
     });
 
+    it("refuses another user's save under a case variant of the task's ID", async () => {
+        const provider = fakeProvider(db);
+        const store = new DurableEntityA2ATaskStore({ PersistenceEnabled: false });
+        const lower = 'abcdefab-2222-4333-8444-555555555555';
+        expect(await store.SaveTask({ ...task('pending'), id: lower }, USER_A, provider)).toBe(true);
+        expect(await store.SaveTask({ ...task('completed'), id: lower.toUpperCase() }, USER_B, provider)).toBe(false);
+        expect((await store.LoadTaskForUser(lower, USER_A, provider))?.status).toBe('pending');
+    });
+
     describe('only A2A rows (S5)', () => {
         function stageGraphStep(): StoredTaskRow {
             const row: StoredTaskRow = {
