@@ -483,7 +483,7 @@ docker exec claude-dev bash -lc 'cd /workspace/MJ && PG_CONTAINER=postgres-claud
 ```
 Behavioral create→update→delete per entity. Must be **0 failures**; 4 documented
 skips are expected (`p_data`/`p_entityname` custom proc shapes; `MJ: Entities` /
-`MJ: Entity Fields`). Full report: `/tmp/pg-crud-oracle-report.json`.
+`MJ: Entity Fields`). Full report: the `fullReport` path in the summary JSON.
 
 **Proceed to Phase 4 only when 3b gate passed and 3d–3g are green (modulo
 known-benign buckets).**

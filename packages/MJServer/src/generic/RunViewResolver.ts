@@ -236,6 +236,13 @@ export class RunViewByIDInput {
       'Optional map of named parameter values referenced as @paramName in ExtraFilter. Values may be string, number, boolean, Date, null, or a non-empty array of scalars for IN (@list).',
   })
   Parameters?: RunViewParameters;
+
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Optional JSON-encoded CompositeFilterDescriptor for structured, parameterized filtering. When combined with ExtraFilter, both are ANDed.',
+  })
+  Filter?: string;
 }
 
 @InputType()
@@ -392,6 +399,13 @@ export class RunViewByNameInput {
       'Optional map of named parameter values referenced as @paramName in ExtraFilter. Values may be string, number, boolean, Date, null, or a non-empty array of scalars for IN (@list).',
   })
   Parameters?: RunViewParameters;
+
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Optional JSON-encoded CompositeFilterDescriptor for structured, parameterized filtering. When combined with ExtraFilter, both are ANDed.',
+  })
+  Filter?: string;
 }
 
 @InputType()
@@ -527,6 +541,13 @@ export class RunDynamicViewInput {
       'Optional map of named parameter values referenced as @paramName in ExtraFilter. Values may be string, number, boolean, Date, null, or a non-empty array of scalars for IN (@list).',
   })
   Parameters?: RunViewParameters;
+
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Optional JSON-encoded CompositeFilterDescriptor for structured, parameterized filtering. When combined with ExtraFilter, both are ANDed.',
+  })
+  Filter?: string;
 }
 
 @InputType()
@@ -698,6 +719,13 @@ export class RunViewGenericInput {
       'Optional map of named parameter values referenced as @paramName in ExtraFilter. Values may be string, number, boolean, Date, null, or a non-empty array of scalars for IN (@list).',
   })
   Parameters?: RunViewParameters;
+
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Optional JSON-encoded CompositeFilterDescriptor for structured, parameterized filtering. When combined with ExtraFilter, both are ANDed.',
+  })
+  Filter?: string;
 }
 
 //****************************************************************************
@@ -1394,6 +1422,7 @@ export class RunViewResolver extends ResolverBase {
             ? CompositeKey.FromKeyValuePairs(item.params.AfterKey.KeyValuePairs)
             : undefined,
           Parameters: this.sanitizeRunViewParameters(item.params.Parameters),
+          Filter: this.parseStructuredRunViewFilter(item.params.Filter),
           TimeZone: userPayload?.TimeZone,
         },
         cacheStatus: item.cacheStatus ? {
