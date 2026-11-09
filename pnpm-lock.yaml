@@ -17036,6 +17036,12 @@ importers:
       '@memberjunction/graphql-dataprovider':
         specifier: 6.2.0
         version: link:../../GraphQLDataProvider
+      '@memberjunction/integration-engine':
+        specifier: 6.2.0
+        version: link:../../Integration/engine
+      '@memberjunction/integration-schema-builder':
+        specifier: 6.2.0
+        version: link:../../Integration/schema-builder
       '@memberjunction/livekit-room-server':
         specifier: 6.2.0
         version: link:../../LiveKitRoomServer
@@ -17084,12 +17090,18 @@ importers:
       '@memberjunction/scheduling-engine':
         specifier: 6.2.0
         version: link:../../Scheduling/engine
+      '@memberjunction/schema-engine':
+        specifier: 6.2.0
+        version: link:../../SchemaEngine
       '@memberjunction/search-engine':
         specifier: 6.2.0
         version: link:../../SearchEngine
       '@memberjunction/server-bootstrap-lite':
         specifier: 6.2.0
         version: link:../../ServerBootstrapLite
+      '@memberjunction/sql-dialect':
+        specifier: 6.2.0
+        version: link:../../SQLDialect
       '@memberjunction/sqlserver-dataprovider':
         specifier: 6.2.0
         version: link:../../SQLServerDataProvider
