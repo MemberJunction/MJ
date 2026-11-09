@@ -71,6 +71,8 @@ describe('Predictive Studio maintenance job and action metadata (D9, R2, R3, R5)
 
     const driftJob = jobs.find((j) => j.fields.Name === 'Predictive Studio Drift Evaluation');
     expect(driftJob).toBeDefined();
+    // Ships Disabled: an administrator opts in (and sets NotifyUserID) before it runs.
+    expect(driftJob?.fields.Status).toBe('Disabled');
     expect(driftJob?.fields.Description).toContain('NotifyUserID');
     expect(driftJob?.fields.Description).not.toContain('RetrainingPolicy.driftEnabled');
     expect(driftJob?.fields.Configuration).toEqual({
