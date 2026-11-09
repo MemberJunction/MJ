@@ -965,12 +965,17 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         };
     }
 
-    /** Starts a batch: drops the previous batch's per-record state ({@link PreviousFeatureValues}, {@link FeatureValueKeyOf}). */
+    /**
+     * Starts a batch: drops the previous batch's per-record state ({@link PreviousFeatureValues}, {@link FeatureValueKeyOf}),
+     * including champion inputs captured for a challenger but never used (a record that failed, was not sampled, or wrote nothing).
+     */
     protected ResetBatchState(): void {
         this.previousFeatureValues.clear();
         this.featureValuePreviews.clear();
         this.featureValueKeys.clear();
         this.pendingFeatureValues.clear();
+        this.championPromptDataByRecord.clear();
+        this.championUserMessageByRecord.clear();
     }
 
     /**
@@ -1493,19 +1498,25 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
     public ShouldSampleChallenger(
         config: MJRecordProcessEntity_IRecordProcessChallengerConfig | null | undefined = this.ChallengerConfig,
     ): boolean {
-        if (!config || config.Enabled !== true || config.WorkType !== 'Infer') {
-            return false;
-        }
-        if (typeof config.SampleRate !== 'number' || !Number.isFinite(config.SampleRate) || config.SampleRate <= 0) {
-            return false;
-        }
-        if (typeof config.ChallengerPromptID !== 'string' || config.ChallengerPromptID.trim().length === 0) {
+        if (!config || !InferProcessor.ChallengerCanSample(config)) {
             return false;
         }
         if (config.SampleRate >= 1) {
             return true;
         }
         return this.ChallengerRng() < config.SampleRate;
+    }
+
+    /** Whether a challenger configuration can sample at all: enabled, `'Infer'`, a positive SampleRate and a prompt. */
+    private static ChallengerCanSample(config: MJRecordProcessEntity_IRecordProcessChallengerConfig): boolean {
+        return config.Enabled === true && config.WorkType === 'Infer'
+            && typeof config.SampleRate === 'number' && Number.isFinite(config.SampleRate) && config.SampleRate > 0
+            && typeof config.ChallengerPromptID === 'string' && config.ChallengerPromptID.trim().length > 0;
+    }
+
+    /** Whether the compute hooks keep each record's champion prompt inputs: only while a challenger can sample them. */
+    private get capturesChampionInputs(): boolean {
+        return !!this.ChallengerConfig && InferProcessor.ChallengerCanSample(this.ChallengerConfig);
     }
 
     /**
@@ -2084,7 +2095,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         return {
             BuildPromptData: async (record, ctx) => {
                 const data = await this.buildPromptData(record, ctx);
-                if (record.RecordID) {
+                if (record.RecordID && this.capturesChampionInputs) {
                     this.championPromptDataByRecord.set(record.RecordID, data);
                 }
                 return data;
@@ -2094,7 +2105,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             AfterPromptExecute: (result, record, ctx) => this.afterPromptExecute(result, record, ctx),
             BuildUserMessage: async (record) => {
                 const msg = await this.BuildUserMessage(record);
-                if (record.RecordID) {
+                if (record.RecordID && this.capturesChampionInputs) {
                     this.championUserMessageByRecord.set(record.RecordID, msg);
                 }
                 return msg;

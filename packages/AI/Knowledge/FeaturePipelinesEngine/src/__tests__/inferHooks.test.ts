@@ -634,4 +634,52 @@ describe('InferProcessor Lifecycle Hooks (P1-6)', () => {
             FeatureValueCacheService.Instance.RecordFeatureValues = origRecordFeatureValues;
         }
     });
+    it('keeps champion prompt inputs only while a challenger can sample them, and drops unused ones when the next batch starts (P13)', async () => {
+        const processor = new ShadowTestableInferProcessor(
+            'prompt-champion-1',
+            undefined,
+            { Outputs: [{ Name: 'StandardTitle', Ref: '$.StandardTitle', Target: { Mode: 'none' } }] },
+            null,
+        );
+        // The capture maps and hooks are private; reached the way the M2 test reaches buildComputeHooks.
+        const internals = processor as unknown as {
+            buildComputeHooks: () => {
+                BuildPromptData: (record: RecordRef, ctx: RecordProcessorContext) => Promise<Record<string, unknown>>;
+                BuildUserMessage: (record: RecordRef, ctx: RecordProcessorContext) => Promise<string | null>;
+            };
+            championPromptDataByRecord: Map<string, unknown>;
+            championUserMessageByRecord: Map<string, unknown>;
+        };
+        const context: RecordProcessorContext = { ContextUser: { ID: 'user-1' } as UserInfo, RecordProcessID: 'rp-p13', EntityID: 'ent-contacts' };
+        const runChampionHooks = async (count: number, prefix: string) => {
+            const hooks = internals.buildComputeHooks();
+            for (let i = 0; i < count; i++) {
+                const record: RecordRef = { EntityID: 'ent-contacts', RecordID: `${prefix}-${i}`, Record: { title: `Title ${i}` } };
+                await hooks.BuildPromptData(record, context);
+                await hooks.BuildUserMessage(record, context);
+            }
+        };
+
+        // No challenger: nothing is kept, however many records run.
+        await runChampionHooks(50, 'plain');
+        expect(internals.championPromptDataByRecord.size).toBe(0);
+        expect(internals.championUserMessageByRecord.size).toBe(0);
+
+        // With a challenger, records that never reach a Feature Value write (failed, dry run) leave their inputs
+        // behind only until the next batch starts.
+        processor.ChallengerConfig = {
+            Enabled: true,
+            SampleRate: 0.5,
+            WorkType: 'Infer',
+            ChallengerPromptID: 'prompt-challenger-p13',
+            MaxLatencyMs: 5000,
+        };
+        await runChampionHooks(5, 'shadowed');
+        expect(internals.championPromptDataByRecord.size).toBe(5);
+        expect(internals.championUserMessageByRecord.size).toBe(5);
+
+        await processor.ProcessBatch([], context);
+        expect(internals.championPromptDataByRecord.size).toBe(0);
+        expect(internals.championUserMessageByRecord.size).toBe(0);
+    });
 });
