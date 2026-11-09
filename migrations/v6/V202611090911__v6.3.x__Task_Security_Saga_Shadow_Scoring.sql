@@ -8,7 +8,8 @@
 --    contract for every use of the action).
 -- 3. RecordProcess: ChallengerConfiguration (the shadow challenger mirrored on live traffic).
 -- 4. FeatureValue: Role (Champion rows are the production values; Challenger rows are shadow scores
---    that never reach a business record).
+--    that never reach a business record) and MLModelID (the ML Model that scored a value).
+-- 5. spDeleteEntityWithCoreDependencies: covers FeatureValue.MLModelID.
 -- =====================================================================================
 
 -- -------------------------------------------------------------------------------------
@@ -97,6 +98,419 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
 GO
 
 
+-- -------------------------------------------------------------------------------------
+-- FeatureValue.MLModelID and the delete policy
+-- -------------------------------------------------------------------------------------
+-- Feature Values scored by an ML Model record process (the champion's audit row and its shadow challenger's row)
+-- record which MJ: ML Models record produced them. AIModelID references MJ: AI Models (the LLM behind a prompt) and
+-- cannot hold an ML Model ID.
+
+ALTER TABLE [${flyway:defaultSchema}].[FeatureValue] ADD [MLModelID] UNIQUEIDENTIFIER NULL;
+GO
+
+ALTER TABLE [${flyway:defaultSchema}].[FeatureValue]
+    ADD CONSTRAINT [FK_FeatureValue_MLModel] FOREIGN KEY ([MLModelID])
+            REFERENCES [${flyway:defaultSchema}].[MLModel]([ID]);
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'The MJ: ML Models record that scored this value, for values written by an ML Model record process (the champion''s audit row or a shadow challenger''s row). NULL for values from AI prompts, which record their model in AIModelID.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeatureValue',
+    @level2type = N'COLUMN', @level2name = N'MLModelID';
+GO
+
+-- Update spDeleteEntityWithCoreDependencies to clear FeatureValue.MLModelID before deleting MLModel rows
+CREATE OR ALTER PROC [${flyway:defaultSchema}].[spDeleteEntityWithCoreDependencies]
+  @EntityID uniqueidentifier
+AS
+BEGIN
+SET NOCOUNT ON;
+SET XACT_ABORT ON;
+
+-- Own the transaction only when the caller has none (CodeGen calls in autocommit; a migration
+-- runner may already hold one, and its rollback then covers this proc too).
+DECLARE @OwnsTransaction bit = 0;
+IF @@TRANCOUNT = 0
+BEGIN
+    BEGIN TRANSACTION;
+    SET @OwnsTransaction = 1;
+END
+
+BEGIN TRY
+
+    -- ── Precondition: refuse to start if something not covered by the policy points at this entity ──
+    -- @Handled is the policy's delete and null references. A reference marked block
+    -- (Entity.ParentID), a core table added after this migration, or an FK from an app schema is
+    -- reported here, before anything is deleted.
+    DECLARE @blockers nvarchar(max) = N'', @probe nvarchar(max) = N'';
+
+    DECLARE @Handled TABLE (Pair nvarchar(400) PRIMARY KEY);
+    INSERT INTO @Handled (Pair) VALUES
+      (N'AccessControlRule.EntityID'), (N'ActionExecutionLog.TargetEntityID'),
+      (N'AIAgentExample.PrimaryScopeEntityID'), (N'AIAgentNote.PrimaryScopeEntityID'),
+      (N'AIAgentRun.PrimaryScopeEntityID'), (N'AIAgentSession.LinkedEntityID'),
+      (N'ApplicationEntity.EntityID'), (N'ArchiveConfigurationEntity.EntityID'),
+      (N'ArchiveRunDetail.EntityID'), (N'AuditLog.EntityID'), (N'CalendarEventLink.EntityID'),
+      (N'ClusterAnalysis.EntityID'), (N'CompanyIntegrationEntityMap.EntityID'),
+      (N'CompanyIntegrationRecordMap.EntityID'), (N'CompanyIntegrationRunDetail.EntityID'),
+      (N'ContentSource.EntityID'), (N'Conversation.LinkedEntityID'), (N'DataContextItem.EntityID'),
+      (N'DatasetItem.EntityID'), (N'DuplicateRun.EntityID'), (N'EntityAction.EntityID'),
+      (N'EntityAction.ScopeEntityID'), (N'EntityAIAction.EntityID'), (N'EntityAIAction.OutputEntityID'),
+      (N'EntityAlternateBaseView.EntityID'), (N'EntityCommunicationMessageType.EntityID'),
+      (N'EntityDocument.EntityID'), (N'EntityField.EntityID'), (N'EntityField.RelatedEntityID'),
+      (N'EntityFormContribution.EntityID'), (N'EntityFormContribution.RelatedEntityID'),
+      (N'EntityFormOverride.EntityID'), (N'EntityOrganicKey.EntityID'),
+      (N'EntityOrganicKeyRelatedEntity.RelatedEntityID'), (N'EntityPermission.EntityID'),
+      (N'EntityRecordDocument.EntityID'), (N'EntityRelationship.EntityID'),
+      (N'EntityRelationship.RelatedEntityID'), (N'EntitySetting.EntityID'), (N'FeatureValue.EntityID'),
+      (N'FileEntityRecordLink.EntityID'), (N'FormChromeRule.EntityID'),
+      (N'FormChromeRule.RelatedEntityID'), (N'GeneratedCode.LinkedEntityID'),
+      (N'GraphEdge.SourceEntityID'), (N'GraphEdge.TargetEntityID'), (N'GraphEdgeTypeEndpoint.EntityID'),
+      (N'IdentityClaim.EntityID'), (N'IntegrationURLFormat.EntityID'), (N'InteractionLink.EntityID'),
+      (N'List.EntityID'), (N'MaterializedResult.GeneratedEntityID'),
+      (N'MaterializedResult.SourceEntityID'), (N'MLModelScoringBinding.TargetEntityID'),
+      (N'MLTrainingPipeline.TargetEntityID'), (N'ProcessRunDetail.EntityID'), (N'ProcessRun.EntityID'),
+      (N'QueryEntity.EntityID'), (N'QueryField.SourceEntityID'),
+      (N'RecommendationItem.DestinationEntityID'), (N'Recommendation.SourceEntityID'),
+      (N'RecordChange.EntityID'), (N'RecordCloneLogItem.EntityID'), (N'RecordCloneLog.RootEntityID'),
+      (N'RecordGeoCode.EntityID'), (N'RecordLink.SourceEntityID'), (N'RecordLink.TargetEntityID'),
+      (N'RecordMergeLog.EntityID'), (N'RecordProcess.EntityID'), (N'RecordProcessWatermark.EntityID'),
+      (N'ResourceType.CategoryEntityID'), (N'ResourceType.EntityID'),
+      (N'RubricEvaluation.ContextEntityID'), (N'RubricEvaluation.SubjectEntityID'),
+      (N'ScopedNotificationConfig.PrimaryScopeEntityID'), (N'ScopedPromptConfig.PrimaryScopeEntityID'),
+      (N'ScopedPromptPart.PrimaryScopeEntityID'), (N'SearchScopeEntity.EntityID'),
+      (N'SignatureRequest.EntityID'), (N'SystemEvent.EntityID'), (N'TaggedItem.EntityID'),
+      (N'TagScope.ScopeEntityID'), (N'TemplateParam.EntityID'), (N'TestRun.TargetLogEntityID'),
+      (N'UserApplicationEntity.EntityID'), (N'UserFavorite.EntityID'), (N'User.LinkedEntityID'),
+      (N'UserRecordLog.EntityID'), (N'UserViewCategory.EntityID'), (N'UserView.EntityID'),
+      (N'VersionLabel.EntityID'), (N'VersionLabelItem.EntityID');
+
+    -- FOR XML PATH concatenation is deterministic (the += accumulator idiom is not). Only enabled
+    -- NO_ACTION FKs can block the final DELETE; CASCADE / SET NULL / SET DEFAULT and disabled FKs
+    -- are cleared or ignored by SQL Server itself.
+    SELECT @probe = (
+        SELECT DISTINCT
+             N' UNION ALL SELECT ''' + REPLACE(SCHEMA_NAME(pt.schema_id) + '.' + pt.name + '.' + pc.name, '''', '''''')
+           + N''' WHERE EXISTS (SELECT 1 FROM ' + QUOTENAME(SCHEMA_NAME(pt.schema_id)) + N'.' + QUOTENAME(pt.name)
+           + N' WHERE ' + QUOTENAME(pc.name) + N' = @EntityID)'
+        FROM sys.foreign_keys fk
+        JOIN sys.tables rt ON rt.object_id = fk.referenced_object_id
+             AND rt.name = 'Entity' AND SCHEMA_NAME(rt.schema_id) = '${flyway:defaultSchema}'
+        JOIN sys.tables pt ON pt.object_id = fk.parent_object_id
+        JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id
+        JOIN sys.columns pc ON pc.object_id = pt.object_id AND pc.column_id = fkc.parent_column_id
+        WHERE fk.delete_referential_action = 0
+          AND fk.is_disabled = 0
+          AND NOT (SCHEMA_NAME(pt.schema_id) = '${flyway:defaultSchema}'
+                   AND pt.name + '.' + pc.name IN (SELECT Pair FROM @Handled))
+        FOR XML PATH(''), TYPE
+    ).value('.', 'nvarchar(max)');
+
+    IF LEN(ISNULL(@probe, N'')) > 0
+    BEGIN
+        DECLARE @found TABLE (Ref nvarchar(400));
+        SET @probe = N'SELECT Ref FROM (SELECT CAST(NULL AS nvarchar(400)) Ref WHERE 1=0' + @probe + N') q;';
+        INSERT INTO @found (Ref) EXEC sp_executesql @probe, N'@EntityID uniqueidentifier', @EntityID = @EntityID;
+
+        SELECT @blockers = STUFF((SELECT N', ' + Ref FROM @found ORDER BY Ref FOR XML PATH(''), TYPE).value('.', 'nvarchar(max)'), 1, 2, N'');
+
+        IF @blockers IS NOT NULL AND @blockers <> N''
+        BEGIN
+            DECLARE @msg nvarchar(2048) = N'Cannot delete entity ' + CAST(@EntityID AS nvarchar(50))
+                + N': rows still reference it through foreign keys this procedure does not clear ('
+                + LEFT(@blockers, 1600) + N'). Clear them first. Nothing has been deleted.';
+            THROW 50000, @msg, 1;
+        END
+    END
+
+    -- ── Rows this proc deletes that other rows can reference: capture their IDs up front ──
+    -- (Taken before any delete, so every child statement below sees the full parent set.)
+    DECLARE @EntityFieldIDs TABLE (ID uniqueidentifier PRIMARY KEY);
+    INSERT INTO @EntityFieldIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = @EntityID;
+
+    DECLARE @UserViewIDs TABLE (ID uniqueidentifier PRIMARY KEY);
+    INSERT INTO @UserViewIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[UserView] WHERE [EntityID] = @EntityID;
+
+    DECLARE @UserViewCategoryIDs TABLE (ID uniqueidentifier PRIMARY KEY);
+    INSERT INTO @UserViewCategoryIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[UserViewCategory] WHERE [EntityID] = @EntityID;
+
+    DECLARE @UserViewRunIDs TABLE (ID uniqueidentifier PRIMARY KEY);
+    INSERT INTO @UserViewRunIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[UserViewRun] WHERE [UserViewID] IN (SELECT ID FROM @UserViewIDs);
+
+    DECLARE @ListIDs TABLE (ID uniqueidentifier PRIMARY KEY);
+    INSERT INTO @ListIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[List] WHERE [EntityID] = @EntityID;
+
+    DECLARE @EntityDocumentIDs TABLE (ID uniqueidentifier PRIMARY KEY);
+    INSERT INTO @EntityDocumentIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[EntityDocument] WHERE [EntityID] = @EntityID;
+
+    DECLARE @EntityRecordDocumentIDs TABLE (ID uniqueidentifier PRIMARY KEY);
+    INSERT INTO @EntityRecordDocumentIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[EntityRecordDocument]
+        WHERE [EntityID] = @EntityID OR [EntityDocumentID] IN (SELECT ID FROM @EntityDocumentIDs);
+
+    DECLARE @DuplicateRunIDs TABLE (ID uniqueidentifier PRIMARY KEY);
+    INSERT INTO @DuplicateRunIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[DuplicateRun]
+        WHERE [EntityID] = @EntityID OR [EntityDocumentID] IN (SELECT ID FROM @EntityDocumentIDs);
+
+    DECLARE @DuplicateRunDetailIDs TABLE (ID uniqueidentifier PRIMARY KEY);
+    INSERT INTO @DuplicateRunDetailIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[DuplicateRunDetail]
+        WHERE [DuplicateRunID] IN (SELECT ID FROM @DuplicateRunIDs);
+
+    DECLARE @EntityActionIDs TABLE (ID uniqueidentifier PRIMARY KEY);
+    INSERT INTO @EntityActionIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[EntityAction]
+        WHERE [EntityID] = @EntityID OR [ScopeEntityID] = @EntityID;
+
+    DECLARE @AlternateBaseViewIDs TABLE (ID uniqueidentifier PRIMARY KEY);
+    INSERT INTO @AlternateBaseViewIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[EntityAlternateBaseView] WHERE [EntityID] = @EntityID;
+
+    DECLARE @MessageTypeIDs TABLE (ID uniqueidentifier PRIMARY KEY);
+    INSERT INTO @MessageTypeIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[EntityCommunicationMessageType] WHERE [EntityID] = @EntityID;
+
+    DECLARE @OrganicKeyIDs TABLE (ID uniqueidentifier PRIMARY KEY);
+    INSERT INTO @OrganicKeyIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[EntityOrganicKey] WHERE [EntityID] = @EntityID;
+
+    DECLARE @IntegrationEntityMapIDs TABLE (ID uniqueidentifier PRIMARY KEY);
+    INSERT INTO @IntegrationEntityMapIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[CompanyIntegrationEntityMap] WHERE [EntityID] = @EntityID;
+
+    DECLARE @IntegrationRunDetailIDs TABLE (ID uniqueidentifier PRIMARY KEY);
+    INSERT INTO @IntegrationRunDetailIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[CompanyIntegrationRunDetail] WHERE [EntityID] = @EntityID;
+
+    DECLARE @PipelineIDs TABLE (ID uniqueidentifier PRIMARY KEY);
+    INSERT INTO @PipelineIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[MLTrainingPipeline] WHERE [TargetEntityID] = @EntityID;
+
+    DECLARE @MLModelIDs TABLE (ID uniqueidentifier PRIMARY KEY);
+    INSERT INTO @MLModelIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[MLModel] WHERE [PipelineID] IN (SELECT ID FROM @PipelineIDs);
+
+    DECLARE @ProcessRunDetailIDs TABLE (ID uniqueidentifier PRIMARY KEY);
+    INSERT INTO @ProcessRunDetailIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[ProcessRunDetail] WHERE [EntityID] = @EntityID;
+
+    DECLARE @RecommendationIDs TABLE (ID uniqueidentifier PRIMARY KEY);
+    INSERT INTO @RecommendationIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[Recommendation] WHERE [SourceEntityID] = @EntityID;
+
+    DECLARE @RecordCloneLogIDs TABLE (ID uniqueidentifier PRIMARY KEY);
+    INSERT INTO @RecordCloneLogIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[RecordCloneLog] WHERE [RootEntityID] = @EntityID;
+
+    DECLARE @RecordMergeLogIDs TABLE (ID uniqueidentifier PRIMARY KEY);
+    INSERT INTO @RecordMergeLogIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[RecordMergeLog] WHERE [EntityID] = @EntityID;
+
+    DECLARE @RecordProcessIDs TABLE (ID uniqueidentifier PRIMARY KEY);
+    INSERT INTO @RecordProcessIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[RecordProcess] WHERE [EntityID] = @EntityID;
+
+    DECLARE @RubricEvaluationIDs TABLE (ID uniqueidentifier PRIMARY KEY);
+    INSERT INTO @RubricEvaluationIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[RubricEvaluation] WHERE [SubjectEntityID] = @EntityID;
+
+    DECLARE @ResourceTypeIDs TABLE (ID uniqueidentifier PRIMARY KEY);
+    INSERT INTO @ResourceTypeIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[ResourceType] WHERE [EntityID] = @EntityID;
+
+    DECLARE @AgentNoteIDs TABLE (ID uniqueidentifier PRIMARY KEY);
+    INSERT INTO @AgentNoteIDs (ID) SELECT ID FROM [${flyway:defaultSchema}].[AIAgentNote] WHERE [PrimaryScopeEntityID] = @EntityID;
+
+    -- RecordChange can be large, so its doomed set stays a subquery instead of a table variable.
+
+    -- ── Nullable references to this entity: cleared, the rows survive ──
+    UPDATE [${flyway:defaultSchema}].[ActionExecutionLog] SET [TargetEntityID] = NULL WHERE [TargetEntityID] = @EntityID;
+    UPDATE [${flyway:defaultSchema}].[AIAgentRun] SET [PrimaryScopeEntityID] = NULL WHERE [PrimaryScopeEntityID] = @EntityID;
+    -- CK_AIAgentSession_LinkBinding / CK_Conversation_LinkBinding: both columns or neither
+    UPDATE [${flyway:defaultSchema}].[AIAgentSession] SET [LinkedEntityID] = NULL, [LinkedRecordID] = NULL WHERE [LinkedEntityID] = @EntityID;
+    UPDATE [${flyway:defaultSchema}].[AuditLog] SET [EntityID] = NULL WHERE [EntityID] = @EntityID;
+    UPDATE [${flyway:defaultSchema}].[ClusterAnalysis] SET [EntityID] = NULL WHERE [EntityID] = @EntityID;
+    UPDATE [${flyway:defaultSchema}].[ContentSource] SET [EntityID] = NULL WHERE [EntityID] = @EntityID;
+    -- CK_Conversation_LinkBinding / CK_Conversation_AnchorLinkBinding: clear LinkedRecordID and anchor columns with LinkedEntityID
+    UPDATE [${flyway:defaultSchema}].[Conversation] SET [LinkedEntityID] = NULL, [LinkedRecordID] = NULL, [AnchorType] = NULL, [AnchorKey] = NULL, [AnchorMetadata] = NULL WHERE [LinkedEntityID] = @EntityID;
+    UPDATE [${flyway:defaultSchema}].[DataContextItem] SET [EntityID] = NULL WHERE [EntityID] = @EntityID;
+    -- Other entities' fields that point AT this entity (#3561)
+    UPDATE [${flyway:defaultSchema}].[EntityField] SET [RelatedEntityID] = NULL WHERE [RelatedEntityID] = @EntityID;
+    UPDATE [${flyway:defaultSchema}].[GeneratedCode] SET [LinkedEntityID] = NULL WHERE [LinkedEntityID] = @EntityID;
+    UPDATE [${flyway:defaultSchema}].[IdentityClaim] SET [EntityID] = NULL WHERE [EntityID] = @EntityID;
+    UPDATE [${flyway:defaultSchema}].[MaterializedResult] SET [GeneratedEntityID] = NULL WHERE [GeneratedEntityID] = @EntityID;
+    UPDATE [${flyway:defaultSchema}].[MaterializedResult] SET [SourceEntityID] = NULL WHERE [SourceEntityID] = @EntityID;
+    UPDATE [${flyway:defaultSchema}].[MLModelScoringBinding] SET [TargetEntityID] = NULL WHERE [TargetEntityID] = @EntityID;
+    UPDATE [${flyway:defaultSchema}].[ProcessRun] SET [EntityID] = NULL WHERE [EntityID] = @EntityID;
+    UPDATE [${flyway:defaultSchema}].[QueryField] SET [SourceEntityID] = NULL WHERE [SourceEntityID] = @EntityID;
+    -- ResourceType references Entity twice; EntityID is a delete (below), CategoryEntityID is cleared (#4483)
+    UPDATE [${flyway:defaultSchema}].[ResourceType] SET [CategoryEntityID] = NULL WHERE [CategoryEntityID] = @EntityID;
+    -- CK_RubricEvaluation_ContextPair: both columns or neither
+    UPDATE [${flyway:defaultSchema}].[RubricEvaluation] SET [ContextEntityID] = NULL, [ContextRecordID] = NULL WHERE [ContextEntityID] = @EntityID;
+    UPDATE [${flyway:defaultSchema}].[SignatureRequest] SET [EntityID] = NULL WHERE [EntityID] = @EntityID;
+    -- SystemEvent has a physical FK but no entity, so generated metadata does not list it
+    UPDATE [${flyway:defaultSchema}].[SystemEvent] SET [EntityID] = NULL WHERE [EntityID] = @EntityID;
+    UPDATE [${flyway:defaultSchema}].[TemplateParam] SET [EntityID] = NULL WHERE [EntityID] = @EntityID;
+    UPDATE [${flyway:defaultSchema}].[TestRun] SET [TargetLogEntityID] = NULL WHERE [TargetLogEntityID] = @EntityID;
+    UPDATE [${flyway:defaultSchema}].[User] SET [LinkedEntityID] = NULL WHERE [LinkedEntityID] = @EntityID;
+    UPDATE [${flyway:defaultSchema}].[VersionLabel] SET [EntityID] = NULL WHERE [EntityID] = @EntityID;
+
+    -- ── Nullable references to rows deleted below: cleared first ──
+    UPDATE [${flyway:defaultSchema}].[AIAgentNote] SET [ConsolidatedIntoNoteID] = NULL WHERE [ConsolidatedIntoNoteID] IN (SELECT ID FROM @AgentNoteIDs);
+    UPDATE [${flyway:defaultSchema}].[ErrorLog] SET [CompanyIntegrationRunDetailID] = NULL WHERE [CompanyIntegrationRunDetailID] IN (SELECT ID FROM @IntegrationRunDetailIDs);
+    UPDATE [${flyway:defaultSchema}].[ActionExecutionLog] SET [EntityActionID] = NULL WHERE [EntityActionID] IN (SELECT ID FROM @EntityActionIDs);
+    UPDATE [${flyway:defaultSchema}].[EntityAlternateBaseView] SET [ParentID] = NULL WHERE [ParentID] IN (SELECT ID FROM @AlternateBaseViewIDs);
+    UPDATE [${flyway:defaultSchema}].[QueryEntity] SET [AlternateBaseViewID] = NULL WHERE [AlternateBaseViewID] IN (SELECT ID FROM @AlternateBaseViewIDs);
+    UPDATE [${flyway:defaultSchema}].[ContentSource] SET [EntityDocumentID] = NULL WHERE [EntityDocumentID] IN (SELECT ID FROM @EntityDocumentIDs);
+    UPDATE [${flyway:defaultSchema}].[ContentItem] SET [EntityRecordDocumentID] = NULL WHERE [EntityRecordDocumentID] IN (SELECT ID FROM @EntityRecordDocumentIDs);
+    UPDATE [${flyway:defaultSchema}].[DuplicateRun] SET [SourceListID] = NULL WHERE [SourceListID] IN (SELECT ID FROM @ListIDs);
+    UPDATE [${flyway:defaultSchema}].[RecordProcess] SET [ScopeListID] = NULL WHERE [ScopeListID] IN (SELECT ID FROM @ListIDs);
+    UPDATE [${flyway:defaultSchema}].[MLTrainingRun] SET [ResultingModelID] = NULL WHERE [ResultingModelID] IN (SELECT ID FROM @MLModelIDs);
+    UPDATE [${flyway:defaultSchema}].[FeatureValue] SET [MLModelID] = NULL WHERE [MLModelID] IN (SELECT ID FROM @MLModelIDs);
+    UPDATE [${flyway:defaultSchema}].[FeatureValue] SET [ProcessRunDetailID] = NULL WHERE [ProcessRunDetailID] IN (SELECT ID FROM @ProcessRunDetailIDs);
+    UPDATE [${flyway:defaultSchema}].[RecordChange] SET [RestoredFromID] = NULL
+        WHERE [RestoredFromID] IN (SELECT ID FROM [${flyway:defaultSchema}].[RecordChange] WHERE [EntityID] = @EntityID);
+    UPDATE [${flyway:defaultSchema}].[DuplicateRunDetailMatch] SET [RecordMergeLogID] = NULL WHERE [RecordMergeLogID] IN (SELECT ID FROM @RecordMergeLogIDs);
+    UPDATE [${flyway:defaultSchema}].[FeatureValueCache] SET [RecordProcessID] = NULL WHERE [RecordProcessID] IN (SELECT ID FROM @RecordProcessIDs);
+    UPDATE [${flyway:defaultSchema}].[MLModelScoringBinding] SET [RecordProcessID] = NULL WHERE [RecordProcessID] IN (SELECT ID FROM @RecordProcessIDs);
+    UPDATE [${flyway:defaultSchema}].[ProcessRun] SET [RecordProcessID] = NULL WHERE [RecordProcessID] IN (SELECT ID FROM @RecordProcessIDs);
+    UPDATE [${flyway:defaultSchema}].[MagicLinkInvite] SET [ResourceTypeID] = NULL WHERE [ResourceTypeID] IN (SELECT ID FROM @ResourceTypeIDs);
+    UPDATE [${flyway:defaultSchema}].[UserNotification] SET [ResourceTypeID] = NULL WHERE [ResourceTypeID] IN (SELECT ID FROM @ResourceTypeIDs);
+    UPDATE [${flyway:defaultSchema}].[RubricEvaluation] SET [SupersedesEvaluationID] = NULL WHERE [SupersedesEvaluationID] IN (SELECT ID FROM @RubricEvaluationIDs);
+    UPDATE [${flyway:defaultSchema}].[UserView] SET [CategoryID] = NULL WHERE [CategoryID] IN (SELECT ID FROM @UserViewCategoryIDs);
+    UPDATE [${flyway:defaultSchema}].[UserViewCategory] SET [ParentID] = NULL WHERE [ParentID] IN (SELECT ID FROM @UserViewCategoryIDs);
+    UPDATE [${flyway:defaultSchema}].[DataContextItem] SET [ViewID] = NULL WHERE [ViewID] IN (SELECT ID FROM @UserViewIDs);
+    UPDATE [${flyway:defaultSchema}].[EntityRelationship] SET [DisplayUserViewID] = NULL WHERE [DisplayUserViewID] IN (SELECT ID FROM @UserViewIDs);
+    UPDATE [${flyway:defaultSchema}].[List] SET [SourceViewID] = NULL WHERE [SourceViewID] IN (SELECT ID FROM @UserViewIDs);
+    UPDATE [${flyway:defaultSchema}].[RecordProcess] SET [ScopeViewID] = NULL WHERE [ScopeViewID] IN (SELECT ID FROM @UserViewIDs);
+
+    -- ── Deletes, children before parents ──
+
+    -- Entity fields: values and permissions first; the EntityField rows go last, just before Entity
+    DELETE FROM [${flyway:defaultSchema}].[EntityFieldValue] WHERE [EntityFieldID] IN (SELECT ID FROM @EntityFieldIDs);
+    DELETE FROM [${flyway:defaultSchema}].[EntityFieldPermission] WHERE [EntityFieldID] IN (SELECT ID FROM @EntityFieldIDs);
+    UPDATE [${flyway:defaultSchema}].[QueryField] SET [SourceEntityFieldID] = NULL WHERE [SourceEntityFieldID] IN (SELECT ID FROM @EntityFieldIDs);
+
+    -- Saved-view run history
+    DELETE FROM [${flyway:defaultSchema}].[UserViewRunDetail] WHERE [UserViewRunID] IN (SELECT ID FROM @UserViewRunIDs);
+    DELETE FROM [${flyway:defaultSchema}].[UserViewRun] WHERE [UserViewID] IN (SELECT ID FROM @UserViewIDs);
+
+    -- Lists
+    DELETE FROM [${flyway:defaultSchema}].[ListDetail] WHERE [ListID] IN (SELECT ID FROM @ListIDs);
+    DELETE FROM [${flyway:defaultSchema}].[ListInvitation] WHERE [ListID] IN (SELECT ID FROM @ListIDs);
+    DELETE FROM [${flyway:defaultSchema}].[ListShare] WHERE [ListID] IN (SELECT ID FROM @ListIDs);
+    DELETE FROM [${flyway:defaultSchema}].[List] WHERE [EntityID] = @EntityID;
+
+    -- Duplicate detection (a run is tied to the entity directly or through its entity document)
+    DELETE FROM [${flyway:defaultSchema}].[DuplicateRunDetailMatch] WHERE [DuplicateRunDetailID] IN (SELECT ID FROM @DuplicateRunDetailIDs);
+    DELETE FROM [${flyway:defaultSchema}].[DuplicateRunDetail] WHERE [DuplicateRunID] IN (SELECT ID FROM @DuplicateRunIDs);
+    DELETE FROM [${flyway:defaultSchema}].[DuplicateRun] WHERE [EntityID] = @EntityID OR [EntityDocumentID] IN (SELECT ID FROM @EntityDocumentIDs);
+
+    -- Entity documents
+    DELETE FROM [${flyway:defaultSchema}].[EntityDocumentRun] WHERE [EntityDocumentID] IN (SELECT ID FROM @EntityDocumentIDs);
+    DELETE FROM [${flyway:defaultSchema}].[EntityDocumentSetting] WHERE [EntityDocumentID] IN (SELECT ID FROM @EntityDocumentIDs);
+    DELETE FROM [${flyway:defaultSchema}].[EntityRecordDocument] WHERE [EntityID] = @EntityID OR [EntityDocumentID] IN (SELECT ID FROM @EntityDocumentIDs);
+    DELETE FROM [${flyway:defaultSchema}].[EntityDocument] WHERE [EntityID] = @EntityID;
+
+    -- Entity actions (on this entity, or scoped to one of its records)
+    DELETE FROM [${flyway:defaultSchema}].[EntityActionFilter] WHERE [EntityActionID] IN (SELECT ID FROM @EntityActionIDs);
+    DELETE FROM [${flyway:defaultSchema}].[EntityActionInvocation] WHERE [EntityActionID] IN (SELECT ID FROM @EntityActionIDs);
+    DELETE FROM [${flyway:defaultSchema}].[EntityActionParam] WHERE [EntityActionID] IN (SELECT ID FROM @EntityActionIDs);
+    DELETE FROM [${flyway:defaultSchema}].[EntityAction] WHERE [EntityID] = @EntityID OR [ScopeEntityID] = @EntityID;
+
+    -- Communication message types
+    DELETE FROM [${flyway:defaultSchema}].[EntityCommunicationField] WHERE [EntityCommunicationMessageTypeID] IN (SELECT ID FROM @MessageTypeIDs);
+    DELETE FROM [${flyway:defaultSchema}].[EntityCommunicationMessageType] WHERE [EntityID] = @EntityID;
+
+    -- Organic keys
+    DELETE FROM [${flyway:defaultSchema}].[EntityOrganicKeyRelatedEntity] WHERE [RelatedEntityID] = @EntityID OR [EntityOrganicKeyID] IN (SELECT ID FROM @OrganicKeyIDs);
+    DELETE FROM [${flyway:defaultSchema}].[EntityOrganicKey] WHERE [EntityID] = @EntityID;
+
+    -- Company integrations
+    DELETE FROM [${flyway:defaultSchema}].[CompanyIntegrationFieldMap] WHERE [EntityMapID] IN (SELECT ID FROM @IntegrationEntityMapIDs);
+    DELETE FROM [${flyway:defaultSchema}].[CompanyIntegrationSyncWatermark] WHERE [EntityMapID] IN (SELECT ID FROM @IntegrationEntityMapIDs);
+    DELETE FROM [${flyway:defaultSchema}].[CompanyIntegrationEntityMap] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[CompanyIntegrationRecordMap] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[CompanyIntegrationRunDetail] WHERE [EntityID] = @EntityID;
+
+    -- ML pipelines targeting this entity, their models, runs and scoring bindings
+    DELETE FROM [${flyway:defaultSchema}].[MLModelScoringBinding] WHERE [MLModelID] IN (SELECT ID FROM @MLModelIDs);
+    DELETE FROM [${flyway:defaultSchema}].[MLTrainingRun] WHERE [PipelineID] IN (SELECT ID FROM @PipelineIDs);
+    DELETE FROM [${flyway:defaultSchema}].[MLModel] WHERE [PipelineID] IN (SELECT ID FROM @PipelineIDs);
+    DELETE FROM [${flyway:defaultSchema}].[MLTrainingPipeline] WHERE [TargetEntityID] = @EntityID;
+
+    -- Record processes and feature values
+    DELETE FROM [${flyway:defaultSchema}].[FeatureValue] WHERE [EntityID] = @EntityID OR [RecordProcessID] IN (SELECT ID FROM @RecordProcessIDs);
+    DELETE FROM [${flyway:defaultSchema}].[FeaturePipelineVersion] WHERE [RecordProcessID] IN (SELECT ID FROM @RecordProcessIDs);
+    DELETE FROM [${flyway:defaultSchema}].[RecordProcessWatermark] WHERE [EntityID] = @EntityID OR [RecordProcessID] IN (SELECT ID FROM @RecordProcessIDs);
+    DELETE FROM [${flyway:defaultSchema}].[RecordProcess] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[ProcessRunDetail] WHERE [EntityID] = @EntityID;
+
+    -- Recommendations
+    DELETE FROM [${flyway:defaultSchema}].[RecommendationItem] WHERE [DestinationEntityID] = @EntityID OR [RecommendationID] IN (SELECT ID FROM @RecommendationIDs);
+    DELETE FROM [${flyway:defaultSchema}].[Recommendation] WHERE [SourceEntityID] = @EntityID;
+
+    -- Record history: version labels, changes, clone and merge logs
+    DELETE FROM [${flyway:defaultSchema}].[VersionLabelItem] WHERE [EntityID] = @EntityID
+        OR [RecordChangeID] IN (SELECT ID FROM [${flyway:defaultSchema}].[RecordChange] WHERE [EntityID] = @EntityID);
+    DELETE FROM [${flyway:defaultSchema}].[RecordChange] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[RecordCloneLogItem] WHERE [EntityID] = @EntityID OR [RecordCloneLogID] IN (SELECT ID FROM @RecordCloneLogIDs);
+    DELETE FROM [${flyway:defaultSchema}].[RecordCloneLog] WHERE [RootEntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[RecordMergeDeletionLog] WHERE [RecordMergeLogID] IN (SELECT ID FROM @RecordMergeLogIDs);
+    DELETE FROM [${flyway:defaultSchema}].[RecordMergeLog] WHERE [EntityID] = @EntityID;
+
+    -- Rubric evaluations of this entity's records
+    DELETE FROM [${flyway:defaultSchema}].[RubricEvaluationScore] WHERE [EvaluationID] IN (SELECT ID FROM @RubricEvaluationIDs);
+    DELETE FROM [${flyway:defaultSchema}].[RubricEvaluation] WHERE [SubjectEntityID] = @EntityID;
+
+    -- Resource types for this entity, with their links, permissions and workspace items
+    DELETE FROM [${flyway:defaultSchema}].[ResourceLink] WHERE [ResourceTypeID] IN (SELECT ID FROM @ResourceTypeIDs);
+    DELETE FROM [${flyway:defaultSchema}].[ResourcePermission] WHERE [ResourceTypeID] IN (SELECT ID FROM @ResourceTypeIDs);
+    DELETE FROM [${flyway:defaultSchema}].[WorkspaceItem] WHERE [ResourceTypeID] IN (SELECT ID FROM @ResourceTypeIDs);
+    DELETE FROM [${flyway:defaultSchema}].[ResourceType] WHERE [EntityID] = @EntityID;
+
+    -- Scope columns whose NULL means "global": delete rather than widen the scope
+    DELETE FROM [${flyway:defaultSchema}].[AIAgentNote] WHERE [PrimaryScopeEntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[AIAgentExample] WHERE [PrimaryScopeEntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[ScopedNotificationConfig] WHERE [PrimaryScopeEntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[ScopedPromptConfig] WHERE [PrimaryScopeEntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[ScopedPromptPart] WHERE [PrimaryScopeEntityID] = @EntityID;
+
+    -- Datasets: bump the parent so cached datasets refresh, then drop the item
+    UPDATE [${flyway:defaultSchema}].[Dataset] SET [__mj_UpdatedAt] = GETUTCDATE()
+        WHERE [ID] IN (SELECT [DatasetID] FROM [${flyway:defaultSchema}].[DatasetItem] WHERE [EntityID] = @EntityID);
+    DELETE FROM [${flyway:defaultSchema}].[DatasetItem] WHERE [EntityID] = @EntityID;
+
+    -- Saved views, then their categories (UserView.CategoryID was cleared above)
+    DELETE FROM [${flyway:defaultSchema}].[UserView] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[UserViewCategory] WHERE [EntityID] = @EntityID;
+
+    -- Rows with no dependents of their own
+    DELETE FROM [${flyway:defaultSchema}].[AccessControlRule] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[ArchiveConfigurationEntity] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[ArchiveRunDetail] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[CalendarEventLink] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[EntityAIAction] WHERE [EntityID] = @EntityID OR [OutputEntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[EntityAlternateBaseView] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[EntityFormContribution] WHERE [EntityID] = @EntityID OR [RelatedEntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[EntityFormOverride] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[EntityPermission] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [EntityID] = @EntityID OR [RelatedEntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[FileEntityRecordLink] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[FormChromeRule] WHERE [EntityID] = @EntityID OR [RelatedEntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[GraphEdge] WHERE [SourceEntityID] = @EntityID OR [TargetEntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[GraphEdgeTypeEndpoint] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[IntegrationURLFormat] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[InteractionLink] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[QueryEntity] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[RecordGeoCode] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[RecordLink] WHERE [SourceEntityID] = @EntityID OR [TargetEntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[SearchScopeEntity] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[TaggedItem] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[TagScope] WHERE [ScopeEntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[UserApplicationEntity] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[UserFavorite] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[UserRecordLog] WHERE [EntityID] = @EntityID;
+
+    -- The entity's own fields, then the entity
+    DELETE FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[Entity] WHERE [ID] = @EntityID;
+
+    IF @OwnsTransaction = 1 COMMIT TRANSACTION;
+END TRY
+BEGIN CATCH
+    IF @OwnsTransaction = 1 AND @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+    THROW;
+END CATCH
+END
+GO
+
+
 
 
 
@@ -155,17 +569,17 @@ GO
  *
  * It contains the EntityField metadata inserts for the new columns of MJ: Tasks, MJ: Actions,
  * MJ: Record Processes and MJ: Feature Values (with the Role value list and the new relationships);
- * the regenerated base views; the spCreate / spUpdate / spDelete procedures for those four entities
- * and the spDelete procedures of the entities whose cascades write MJ: Tasks rows; the hierarchy
+ * the regenerated base views; the spCreate / spUpdate / spDelete procedures for those entities and
+ * the spDelete procedures of the entities whose cascades write MJ: Tasks rows; the hierarchy
  * functions of MJ: Tasks and MJ: Actions; foreign-key indexes; permission grants and extended properties.
  *
  * Do NOT edit it by hand. If the hand-written DDL above changes, re-run CodeGen and replace this
  * entire generated section.
  * ===================================================================================== */
 
-/* SQL text to insert 7 new entity field(s) */
+/* SQL text to insert 8 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd969e264-6af2-4db1-a15f-4cf0a099911c' OR (EntityID = '38248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'CompensationActionID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5f489f47-2097-4ca2-8753-21c724bcc896' OR (EntityID = '38248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'CompensationActionID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -198,7 +612,7 @@ GO
          )
          VALUES
          (
-            'd969e264-6af2-4db1-a15f-4cf0a099911c',
+            '5f489f47-2097-4ca2-8753-21c724bcc896',
             '38248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Actions
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '38248F34-2837-EF11-86D4-6045BDEE16E6'),
             'CompensationActionID',
@@ -228,7 +642,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1f8bb3d9-956d-4ef2-8f5f-c9614aa2b72e' OR (EntityID = '38248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'CompensationInputMapping')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fd2b6457-58d5-42cc-9b21-a7f6051e4bec' OR (EntityID = '38248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'CompensationInputMapping')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -261,7 +675,7 @@ GO
          )
          VALUES
          (
-            '1f8bb3d9-956d-4ef2-8f5f-c9614aa2b72e',
+            'fd2b6457-58d5-42cc-9b21-a7f6051e4bec',
             '38248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Actions
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '38248F34-2837-EF11-86D4-6045BDEE16E6'),
             'CompensationInputMapping',
@@ -291,7 +705,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '06dfecee-2db3-40a7-9c87-c29abfe84422' OR (EntityID = '38248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'IsIdempotent')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7fa6cffb-763d-490c-ad8a-f658ffa19c99' OR (EntityID = '38248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'IsIdempotent')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -324,7 +738,7 @@ GO
          )
          VALUES
          (
-            '06dfecee-2db3-40a7-9c87-c29abfe84422',
+            '7fa6cffb-763d-490c-ad8a-f658ffa19c99',
             '38248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Actions
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '38248F34-2837-EF11-86D4-6045BDEE16E6'),
             'IsIdempotent',
@@ -354,7 +768,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fddc152f-1727-4a3b-84d6-e19e6a8d8a9e' OR (EntityID = '3BED585D-B150-4899-AB06-8A19624EA9BE' AND Name = 'Role')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '22993402-34a5-46d0-9b97-dc953a5ba501' OR (EntityID = '3BED585D-B150-4899-AB06-8A19624EA9BE' AND Name = 'Role')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -387,7 +801,7 @@ GO
          )
          VALUES
          (
-            'fddc152f-1727-4a3b-84d6-e19e6a8d8a9e',
+            '22993402-34a5-46d0-9b97-dc953a5ba501',
             '3BED585D-B150-4899-AB06-8A19624EA9BE', -- Entity: MJ: Feature Values
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '3BED585D-B150-4899-AB06-8A19624EA9BE'),
             'Role',
@@ -417,7 +831,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'bea88e59-f356-4e32-8708-c0a35cb6ae5b' OR (EntityID = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND Name = 'SecurityEnvelope')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '658a15c8-104a-4dc3-90ff-85ce8415327b' OR (EntityID = '3BED585D-B150-4899-AB06-8A19624EA9BE' AND Name = 'MLModelID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -450,7 +864,70 @@ GO
          )
          VALUES
          (
-            'bea88e59-f356-4e32-8708-c0a35cb6ae5b',
+            '658a15c8-104a-4dc3-90ff-85ce8415327b',
+            '3BED585D-B150-4899-AB06-8A19624EA9BE', -- Entity: MJ: Feature Values
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '3BED585D-B150-4899-AB06-8A19624EA9BE'),
+            'MLModelID',
+            'ML Model ID',
+            'The MJ: ML Models record that scored this value, for values written by an ML Model record process (the champion''s audit row or a shadow challenger''s row). NULL for values from AI prompts, which record their model in AIModelID.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            'A3997636-011D-46E0-BC01-8B1E61E1087B',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0e20eb27-b731-4cf2-8a38-2c844f422297' OR (EntityID = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND Name = 'SecurityEnvelope')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '0e20eb27-b731-4cf2-8a38-2c844f422297',
             '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1', -- Entity: MJ: Tasks
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1'),
             'SecurityEnvelope',
@@ -480,7 +957,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5c59e283-1557-4a20-8d64-f971a10a9f40' OR (EntityID = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND Name = 'CompensatesTaskID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a25b83b7-94b6-472e-9639-57a33abf7c98' OR (EntityID = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND Name = 'CompensatesTaskID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -513,7 +990,7 @@ GO
          )
          VALUES
          (
-            '5c59e283-1557-4a20-8d64-f971a10a9f40',
+            'a25b83b7-94b6-472e-9639-57a33abf7c98',
             '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1', -- Entity: MJ: Tasks
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1'),
             'CompensatesTaskID',
@@ -543,7 +1020,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5c8d70ce-a33c-46e5-bc40-f9730f7cdf01' OR (EntityID = 'BDE34DF9-7B59-4921-9B80-E94BC013A5BB' AND Name = 'ChallengerConfiguration')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'be6445d7-b89f-4539-827f-c5d95732a927' OR (EntityID = 'BDE34DF9-7B59-4921-9B80-E94BC013A5BB' AND Name = 'ChallengerConfiguration')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -576,7 +1053,7 @@ GO
          )
          VALUES
          (
-            '5c8d70ce-a33c-46e5-bc40-f9730f7cdf01',
+            'be6445d7-b89f-4539-827f-c5d95732a927',
             'BDE34DF9-7B59-4921-9B80-E94BC013A5BB', -- Entity: MJ: Record Processes
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'BDE34DF9-7B59-4921-9B80-E94BC013A5BB'),
             'ChallengerConfiguration',
@@ -606,39 +1083,49 @@ GO
          )
       END;
 
-/* SQL text to insert entity field value with ID 3c0bbf0d-abdb-441e-beaa-7a1eec317136 */
+/* SQL text to insert entity field value with ID 61a93819-fd17-4a34-a9c8-4d62cec1bd9c */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [Source], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('3c0bbf0d-abdb-441e-beaa-7a1eec317136', 'FDDC152F-1727-4A3B-84D6-E19E6A8D8A9E', 1, 'Challenger', 'Challenger', GETUTCDATE(), GETUTCDATE());
+                                       ('61a93819-fd17-4a34-a9c8-4d62cec1bd9c', '22993402-34A5-46D0-9B97-DC953A5BA501', 1, 'Challenger', 'Challenger', 'Check', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 6747261a-4bd9-411c-9d6f-d9055b01fa40 */
+/* SQL text to insert entity field value with ID 3cf20960-b165-4b66-8696-a7185487610f */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [Source], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('6747261a-4bd9-411c-9d6f-d9055b01fa40', 'FDDC152F-1727-4A3B-84D6-E19E6A8D8A9E', 2, 'Champion', 'Champion', GETUTCDATE(), GETUTCDATE());
+                                       ('3cf20960-b165-4b66-8696-a7185487610f', '22993402-34A5-46D0-9B97-DC953A5BA501', 2, 'Champion', 'Champion', 'Check', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID FDDC152F-1727-4A3B-84D6-E19E6A8D8A9E */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='FDDC152F-1727-4A3B-84D6-E19E6A8D8A9E';
+/* SQL text to update ValueListType for entity field ID 22993402-34A5-46D0-9B97-DC953A5BA501 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='22993402-34A5-46D0-9B97-DC953A5BA501';
 
 
 /* Create Entity Relationship: MJ: Actions -> MJ: Actions (One To Many via CompensationActionID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '8172a8be-cea9-4861-bfc6-1c48cd36a8f5' OR ([EntityID] = '38248F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = '38248F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityJoinField] = 'CompensationActionID')
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'e75beede-ff8f-452e-aa6b-cf4786aa33de' OR ([EntityID] = '38248F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = '38248F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityJoinField] = 'CompensationActionID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('8172a8be-cea9-4861-bfc6-1c48cd36a8f5', '38248F34-2837-EF11-86D4-6045BDEE16E6', '38248F34-2837-EF11-86D4-6045BDEE16E6', 'CompensationActionID', 'One To Many', 1, 1, 15, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('e75beede-ff8f-452e-aa6b-cf4786aa33de', '38248F34-2837-EF11-86D4-6045BDEE16E6', '38248F34-2837-EF11-86D4-6045BDEE16E6', 'CompensationActionID', 'One To Many', 1, 1, 15, GETUTCDATE(), GETUTCDATE())
+   END;
+
+
+/* Create Entity Relationship: MJ: ML Models -> MJ: Feature Values (One To Many via MLModelID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '89253b70-eb95-4215-a78c-22ac3a8fcb4e' OR ([EntityID] = 'A3997636-011D-46E0-BC01-8B1E61E1087B' AND [RelatedEntityID] = '3BED585D-B150-4899-AB06-8A19624EA9BE' AND [RelatedEntityJoinField] = 'MLModelID')
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('89253b70-eb95-4215-a78c-22ac3a8fcb4e', 'A3997636-011D-46E0-BC01-8B1E61E1087B', '3BED585D-B150-4899-AB06-8A19624EA9BE', 'MLModelID', 'One To Many', 1, 1, 3, GETUTCDATE(), GETUTCDATE())
    END;
 
 
 /* Create Entity Relationship: MJ: Tasks -> MJ: Tasks (One To Many via CompensatesTaskID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '52e7af41-f124-4155-b653-2c87f4cacd41' OR ([EntityID] = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND [RelatedEntityID] = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND [RelatedEntityJoinField] = 'CompensatesTaskID')
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '3b0d840c-363a-493b-94af-734f991f2b5a' OR ([EntityID] = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND [RelatedEntityID] = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND [RelatedEntityJoinField] = 'CompensatesTaskID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('52e7af41-f124-4155-b653-2c87f4cacd41', '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1', '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1', 'CompensatesTaskID', 'One To Many', 1, 1, 5, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('3b0d840c-363a-493b-94af-734f991f2b5a', '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1', '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1', 'CompensatesTaskID', 'One To Many', 1, 1, 5, GETUTCDATE(), GETUTCDATE())
    END;
 
 /* Index for Foreign Keys for FeatureValue */
@@ -713,6 +1200,15 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_FeatureValue_AIModelID ON [${flyway:defaultSchema}].[FeatureValue] ([AIModelID]);
 
+-- Index for foreign key MLModelID in table FeatureValue
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_FeatureValue_MLModelID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[FeatureValue]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_FeatureValue_MLModelID ON [${flyway:defaultSchema}].[FeatureValue] ([MLModelID]);
+
 /* Base View SQL for MJ: Feature Values */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -745,11 +1241,11 @@ SELECT
     MJAIModel_AIModelID.[Name] AS [AIModel]
 FROM
     [${flyway:defaultSchema}].[FeatureValue] AS f
-INNER JOIN
+LEFT OUTER JOIN
     [${flyway:defaultSchema}].[RecordProcess] AS MJRecordProcess_RecordProcessID
   ON
     [f].[RecordProcessID] = MJRecordProcess_RecordProcessID.[ID]
-INNER JOIN
+LEFT OUTER JOIN
     [${flyway:defaultSchema}].[Entity] AS MJEntity_EntityID
   ON
     [f].[EntityID] = MJEntity_EntityID.[ID]
@@ -853,7 +1349,9 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateFeatureValue]
     @ValueKeyHash_Clear bit = 0,
     @ValueKeyHash nvarchar(64) = NULL,
     @Source nvarchar(20) = NULL,
-    @Role nvarchar(20) = NULL
+    @Role nvarchar(20) = NULL,
+    @MLModelID_Clear bit = 0,
+    @MLModelID uniqueidentifier = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -890,7 +1388,8 @@ BEGIN
                 [InputHash],
                 [ValueKeyHash],
                 [Source],
-                [Role]
+                [Role],
+                [MLModelID]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
@@ -921,7 +1420,8 @@ BEGIN
                 CASE WHEN @InputHash_Clear = 1 THEN NULL ELSE ISNULL(@InputHash, NULL) END,
                 CASE WHEN @ValueKeyHash_Clear = 1 THEN NULL ELSE ISNULL(@ValueKeyHash, NULL) END,
                 ISNULL(@Source, 'Pipeline'),
-                ISNULL(@Role, 'Champion')
+                ISNULL(@Role, 'Champion'),
+                CASE WHEN @MLModelID_Clear = 1 THEN NULL ELSE ISNULL(@MLModelID, NULL) END
             )
     END
     ELSE
@@ -954,7 +1454,8 @@ BEGIN
                 [InputHash],
                 [ValueKeyHash],
                 [Source],
-                [Role]
+                [Role],
+                [MLModelID]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
@@ -984,7 +1485,8 @@ BEGIN
                 CASE WHEN @InputHash_Clear = 1 THEN NULL ELSE ISNULL(@InputHash, NULL) END,
                 CASE WHEN @ValueKeyHash_Clear = 1 THEN NULL ELSE ISNULL(@ValueKeyHash, NULL) END,
                 ISNULL(@Source, 'Pipeline'),
-                ISNULL(@Role, 'Champion')
+                ISNULL(@Role, 'Champion'),
+                CASE WHEN @MLModelID_Clear = 1 THEN NULL ELSE ISNULL(@MLModelID, NULL) END
             )
     END
     -- return the new record from the base view, which might have some calculated fields
@@ -1064,7 +1566,9 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateFeatureValue]
     @ValueKeyHash_Clear bit = 0,
     @ValueKeyHash nvarchar(64) = NULL,
     @Source nvarchar(20) = NULL,
-    @Role nvarchar(20) = NULL
+    @Role nvarchar(20) = NULL,
+    @MLModelID_Clear bit = 0,
+    @MLModelID uniqueidentifier = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -1096,7 +1600,8 @@ BEGIN
         [InputHash] = CASE WHEN @InputHash_Clear = 1 THEN NULL ELSE ISNULL(@InputHash, [InputHash]) END,
         [ValueKeyHash] = CASE WHEN @ValueKeyHash_Clear = 1 THEN NULL ELSE ISNULL(@ValueKeyHash, [ValueKeyHash]) END,
         [Source] = ISNULL(@Source, [Source]),
-        [Role] = ISNULL(@Role, [Role])
+        [Role] = ISNULL(@Role, [Role]),
+        [MLModelID] = CASE WHEN @MLModelID_Clear = 1 THEN NULL ELSE ISNULL(@MLModelID, [MLModelID]) END
     WHERE
         [ID] = @ID
 
@@ -1306,7 +1811,7 @@ LEFT OUTER JOIN
     [${flyway:defaultSchema}].[RecordProcessCategory] AS MJRecordProcessCategory_CategoryID
   ON
     [r].[CategoryID] = MJRecordProcessCategory_CategoryID.[ID]
-INNER JOIN
+LEFT OUTER JOIN
     [${flyway:defaultSchema}].[Entity] AS MJEntity_EntityID
   ON
     [r].[EntityID] = MJEntity_EntityID.[ID]
@@ -1880,8 +2385,8 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_Task_CompensatesTaskID ON [${flyway:defaultSchema}].[Task] ([CompensatesTaskID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 5C59E283-1557-4A20-8D64-F971A10A9F40 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='5C59E283-1557-4A20-8D64-F971A10A9F40', @RelatedEntityNameFieldMap='CompensatesTask';
+/* SQL text to update entity field related entity name field map for entity field ID A25B83B7-94B6-472E-9639-57A33ABF7C98 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='A25B83B7-94B6-472E-9639-57A33ABF7C98', @RelatedEntityNameFieldMap='CompensatesTask';
 
 /* Hierarchy Metadata Function SQL for MJ: Tasks.ParentID */
 -----------------------------------------------------------------
@@ -2175,11 +2680,11 @@ LEFT OUTER JOIN
     [${flyway:defaultSchema}].[Task] AS MJTask_ParentID
   ON
     [t].[ParentID] = MJTask_ParentID.[ID]
-INNER JOIN
+LEFT OUTER JOIN
     [${flyway:defaultSchema}].[TaskType] AS MJTaskType_TypeID
   ON
     [t].[TypeID] = MJTaskType_TypeID.[ID]
-INNER JOIN
+LEFT OUTER JOIN
     [${flyway:defaultSchema}].[Environment] AS MJEnvironment_EnvironmentID
   ON
     [t].[EnvironmentID] = MJEnvironment_EnvironmentID.[ID]
@@ -3443,8 +3948,8 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_Action_CompensationActionID ON [${flyway:defaultSchema}].[Action] ([CompensationActionID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID D969E264-6AF2-4DB1-A15F-4CF0A099911C */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='D969E264-6AF2-4DB1-A15F-4CF0A099911C', @RelatedEntityNameFieldMap='CompensationAction';
+/* SQL text to update entity field related entity name field map for entity field ID 5F489F47-2097-4CA2-8753-21C724BCC896 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='5F489F47-2097-4CA2-8753-21C724BCC896', @RelatedEntityNameFieldMap='CompensationAction';
 
 /* Hierarchy Metadata Function SQL for MJ: Actions.ParentID */
 -----------------------------------------------------------------
@@ -7675,13 +8180,14 @@ BEGIN
     DECLARE @MJFeatureValues_PromptID_ValueKeyHash nvarchar(64)
     DECLARE @MJFeatureValues_PromptID_Source nvarchar(20)
     DECLARE @MJFeatureValues_PromptID_Role nvarchar(20)
+    DECLARE @MJFeatureValues_PromptID_MLModelID uniqueidentifier
     DECLARE cascade_update_MJFeatureValues_PromptID_cursor CURSOR FOR
-        SELECT [ID], [RecordProcessID], [EntityID], [RecordID], [FeatureName], [ValueText], [ValueNumeric], [ValueDate], [ValueBoolean], [ValueJSON], [Reasoning], [Confidence], [PromptID], [PromptVersionHash], [ConstraintHash], [ProcessRunID], [ProcessRunDetailID], [AIPromptRunID], [FeatureValueCacheID], [ComputedAt], [PipelineVersion], [AIModelID], [ParametersHash], [InputHash], [ValueKeyHash], [Source], [Role]
+        SELECT [ID], [RecordProcessID], [EntityID], [RecordID], [FeatureName], [ValueText], [ValueNumeric], [ValueDate], [ValueBoolean], [ValueJSON], [Reasoning], [Confidence], [PromptID], [PromptVersionHash], [ConstraintHash], [ProcessRunID], [ProcessRunDetailID], [AIPromptRunID], [FeatureValueCacheID], [ComputedAt], [PipelineVersion], [AIModelID], [ParametersHash], [InputHash], [ValueKeyHash], [Source], [Role], [MLModelID]
         FROM [${flyway:defaultSchema}].[FeatureValue]
         WHERE [PromptID] = @ID
 
     OPEN cascade_update_MJFeatureValues_PromptID_cursor
-    FETCH NEXT FROM cascade_update_MJFeatureValues_PromptID_cursor INTO @MJFeatureValues_PromptIDID, @MJFeatureValues_PromptID_RecordProcessID, @MJFeatureValues_PromptID_EntityID, @MJFeatureValues_PromptID_RecordID, @MJFeatureValues_PromptID_FeatureName, @MJFeatureValues_PromptID_ValueText, @MJFeatureValues_PromptID_ValueNumeric, @MJFeatureValues_PromptID_ValueDate, @MJFeatureValues_PromptID_ValueBoolean, @MJFeatureValues_PromptID_ValueJSON, @MJFeatureValues_PromptID_Reasoning, @MJFeatureValues_PromptID_Confidence, @MJFeatureValues_PromptID_PromptID, @MJFeatureValues_PromptID_PromptVersionHash, @MJFeatureValues_PromptID_ConstraintHash, @MJFeatureValues_PromptID_ProcessRunID, @MJFeatureValues_PromptID_ProcessRunDetailID, @MJFeatureValues_PromptID_AIPromptRunID, @MJFeatureValues_PromptID_FeatureValueCacheID, @MJFeatureValues_PromptID_ComputedAt, @MJFeatureValues_PromptID_PipelineVersion, @MJFeatureValues_PromptID_AIModelID, @MJFeatureValues_PromptID_ParametersHash, @MJFeatureValues_PromptID_InputHash, @MJFeatureValues_PromptID_ValueKeyHash, @MJFeatureValues_PromptID_Source, @MJFeatureValues_PromptID_Role
+    FETCH NEXT FROM cascade_update_MJFeatureValues_PromptID_cursor INTO @MJFeatureValues_PromptIDID, @MJFeatureValues_PromptID_RecordProcessID, @MJFeatureValues_PromptID_EntityID, @MJFeatureValues_PromptID_RecordID, @MJFeatureValues_PromptID_FeatureName, @MJFeatureValues_PromptID_ValueText, @MJFeatureValues_PromptID_ValueNumeric, @MJFeatureValues_PromptID_ValueDate, @MJFeatureValues_PromptID_ValueBoolean, @MJFeatureValues_PromptID_ValueJSON, @MJFeatureValues_PromptID_Reasoning, @MJFeatureValues_PromptID_Confidence, @MJFeatureValues_PromptID_PromptID, @MJFeatureValues_PromptID_PromptVersionHash, @MJFeatureValues_PromptID_ConstraintHash, @MJFeatureValues_PromptID_ProcessRunID, @MJFeatureValues_PromptID_ProcessRunDetailID, @MJFeatureValues_PromptID_AIPromptRunID, @MJFeatureValues_PromptID_FeatureValueCacheID, @MJFeatureValues_PromptID_ComputedAt, @MJFeatureValues_PromptID_PipelineVersion, @MJFeatureValues_PromptID_AIModelID, @MJFeatureValues_PromptID_ParametersHash, @MJFeatureValues_PromptID_InputHash, @MJFeatureValues_PromptID_ValueKeyHash, @MJFeatureValues_PromptID_Source, @MJFeatureValues_PromptID_Role, @MJFeatureValues_PromptID_MLModelID
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
@@ -7689,9 +8195,9 @@ BEGIN
         SET @MJFeatureValues_PromptID_PromptID = NULL
 
         -- Call the update SP for the related entity
-        EXEC [${flyway:defaultSchema}].[spUpdateFeatureValue] @ID = @MJFeatureValues_PromptIDID, @RecordProcessID = @MJFeatureValues_PromptID_RecordProcessID, @EntityID = @MJFeatureValues_PromptID_EntityID, @RecordID = @MJFeatureValues_PromptID_RecordID, @FeatureName = @MJFeatureValues_PromptID_FeatureName, @ValueText = @MJFeatureValues_PromptID_ValueText, @ValueNumeric = @MJFeatureValues_PromptID_ValueNumeric, @ValueDate = @MJFeatureValues_PromptID_ValueDate, @ValueBoolean = @MJFeatureValues_PromptID_ValueBoolean, @ValueJSON = @MJFeatureValues_PromptID_ValueJSON, @Reasoning = @MJFeatureValues_PromptID_Reasoning, @Confidence = @MJFeatureValues_PromptID_Confidence, @PromptID_Clear = 1, @PromptID = @MJFeatureValues_PromptID_PromptID, @PromptVersionHash = @MJFeatureValues_PromptID_PromptVersionHash, @ConstraintHash = @MJFeatureValues_PromptID_ConstraintHash, @ProcessRunID = @MJFeatureValues_PromptID_ProcessRunID, @ProcessRunDetailID = @MJFeatureValues_PromptID_ProcessRunDetailID, @AIPromptRunID = @MJFeatureValues_PromptID_AIPromptRunID, @FeatureValueCacheID = @MJFeatureValues_PromptID_FeatureValueCacheID, @ComputedAt = @MJFeatureValues_PromptID_ComputedAt, @PipelineVersion = @MJFeatureValues_PromptID_PipelineVersion, @AIModelID = @MJFeatureValues_PromptID_AIModelID, @ParametersHash = @MJFeatureValues_PromptID_ParametersHash, @InputHash = @MJFeatureValues_PromptID_InputHash, @ValueKeyHash = @MJFeatureValues_PromptID_ValueKeyHash, @Source = @MJFeatureValues_PromptID_Source, @Role = @MJFeatureValues_PromptID_Role
+        EXEC [${flyway:defaultSchema}].[spUpdateFeatureValue] @ID = @MJFeatureValues_PromptIDID, @RecordProcessID = @MJFeatureValues_PromptID_RecordProcessID, @EntityID = @MJFeatureValues_PromptID_EntityID, @RecordID = @MJFeatureValues_PromptID_RecordID, @FeatureName = @MJFeatureValues_PromptID_FeatureName, @ValueText = @MJFeatureValues_PromptID_ValueText, @ValueNumeric = @MJFeatureValues_PromptID_ValueNumeric, @ValueDate = @MJFeatureValues_PromptID_ValueDate, @ValueBoolean = @MJFeatureValues_PromptID_ValueBoolean, @ValueJSON = @MJFeatureValues_PromptID_ValueJSON, @Reasoning = @MJFeatureValues_PromptID_Reasoning, @Confidence = @MJFeatureValues_PromptID_Confidence, @PromptID_Clear = 1, @PromptID = @MJFeatureValues_PromptID_PromptID, @PromptVersionHash = @MJFeatureValues_PromptID_PromptVersionHash, @ConstraintHash = @MJFeatureValues_PromptID_ConstraintHash, @ProcessRunID = @MJFeatureValues_PromptID_ProcessRunID, @ProcessRunDetailID = @MJFeatureValues_PromptID_ProcessRunDetailID, @AIPromptRunID = @MJFeatureValues_PromptID_AIPromptRunID, @FeatureValueCacheID = @MJFeatureValues_PromptID_FeatureValueCacheID, @ComputedAt = @MJFeatureValues_PromptID_ComputedAt, @PipelineVersion = @MJFeatureValues_PromptID_PipelineVersion, @AIModelID = @MJFeatureValues_PromptID_AIModelID, @ParametersHash = @MJFeatureValues_PromptID_ParametersHash, @InputHash = @MJFeatureValues_PromptID_InputHash, @ValueKeyHash = @MJFeatureValues_PromptID_ValueKeyHash, @Source = @MJFeatureValues_PromptID_Source, @Role = @MJFeatureValues_PromptID_Role, @MLModelID = @MJFeatureValues_PromptID_MLModelID
 
-        FETCH NEXT FROM cascade_update_MJFeatureValues_PromptID_cursor INTO @MJFeatureValues_PromptIDID, @MJFeatureValues_PromptID_RecordProcessID, @MJFeatureValues_PromptID_EntityID, @MJFeatureValues_PromptID_RecordID, @MJFeatureValues_PromptID_FeatureName, @MJFeatureValues_PromptID_ValueText, @MJFeatureValues_PromptID_ValueNumeric, @MJFeatureValues_PromptID_ValueDate, @MJFeatureValues_PromptID_ValueBoolean, @MJFeatureValues_PromptID_ValueJSON, @MJFeatureValues_PromptID_Reasoning, @MJFeatureValues_PromptID_Confidence, @MJFeatureValues_PromptID_PromptID, @MJFeatureValues_PromptID_PromptVersionHash, @MJFeatureValues_PromptID_ConstraintHash, @MJFeatureValues_PromptID_ProcessRunID, @MJFeatureValues_PromptID_ProcessRunDetailID, @MJFeatureValues_PromptID_AIPromptRunID, @MJFeatureValues_PromptID_FeatureValueCacheID, @MJFeatureValues_PromptID_ComputedAt, @MJFeatureValues_PromptID_PipelineVersion, @MJFeatureValues_PromptID_AIModelID, @MJFeatureValues_PromptID_ParametersHash, @MJFeatureValues_PromptID_InputHash, @MJFeatureValues_PromptID_ValueKeyHash, @MJFeatureValues_PromptID_Source, @MJFeatureValues_PromptID_Role
+        FETCH NEXT FROM cascade_update_MJFeatureValues_PromptID_cursor INTO @MJFeatureValues_PromptIDID, @MJFeatureValues_PromptID_RecordProcessID, @MJFeatureValues_PromptID_EntityID, @MJFeatureValues_PromptID_RecordID, @MJFeatureValues_PromptID_FeatureName, @MJFeatureValues_PromptID_ValueText, @MJFeatureValues_PromptID_ValueNumeric, @MJFeatureValues_PromptID_ValueDate, @MJFeatureValues_PromptID_ValueBoolean, @MJFeatureValues_PromptID_ValueJSON, @MJFeatureValues_PromptID_Reasoning, @MJFeatureValues_PromptID_Confidence, @MJFeatureValues_PromptID_PromptID, @MJFeatureValues_PromptID_PromptVersionHash, @MJFeatureValues_PromptID_ConstraintHash, @MJFeatureValues_PromptID_ProcessRunID, @MJFeatureValues_PromptID_ProcessRunDetailID, @MJFeatureValues_PromptID_AIPromptRunID, @MJFeatureValues_PromptID_FeatureValueCacheID, @MJFeatureValues_PromptID_ComputedAt, @MJFeatureValues_PromptID_PipelineVersion, @MJFeatureValues_PromptID_AIModelID, @MJFeatureValues_PromptID_ParametersHash, @MJFeatureValues_PromptID_InputHash, @MJFeatureValues_PromptID_ValueKeyHash, @MJFeatureValues_PromptID_Source, @MJFeatureValues_PromptID_Role, @MJFeatureValues_PromptID_MLModelID
     END
 
     CLOSE cascade_update_MJFeatureValues_PromptID_cursor
@@ -7860,132 +8366,3 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
 
 REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] FROM [cdp_Developer]
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer];
-
-/* SQL text to insert 2 new entity field(s) */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '615f281f-e373-4e51-bb29-800fa41e2dd8' OR (EntityID = '38248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'CompensationAction')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '615f281f-e373-4e51-bb29-800fa41e2dd8',
-            '38248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Actions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '38248F34-2837-EF11-86D4-6045BDEE16E6'),
-            'CompensationAction',
-            'Compensation Action',
-            NULL,
-            'nvarchar',
-            850,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2202e343-4c66-471d-9330-8e6bb198c779' OR (EntityID = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND Name = 'CompensatesTask')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '2202e343-4c66-471d-9330-8e6bb198c779',
-            '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1', -- Entity: MJ: Tasks
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1'),
-            'CompensatesTask',
-            'Compensates Task',
-            NULL,
-            'nvarchar',
-            510,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
