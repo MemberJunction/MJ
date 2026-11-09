@@ -144,6 +144,14 @@ stubs (`DatabaseProviderStub`, `EntitiesOnlyProvider`, `TestLLM`); `@vitest/cove
 | D39 | TP Prob model | `gpt-4.1-mini` (a setting) | Returns the 5 `top_logprobs` the judge asks for; `gpt-5.1-mini` does not exist and `gpt-5.4-nano` returns only 1 (spike §4) |
 | D40 | Test failure details | A small custom vitest reporter records `name`, `message`, `expected`, `actual`, `diff`, first stack frame and a timeout flag; `--reporter=json` is the fallback, with its limits stated (§7) | The JSON reporter gives only `error.stack`: no `expected`/`actual`/diff, and a timeout reads `Error: STACK_TRACE_ERROR` (spike §6) |
 | D41 | File-swap eligibility (narrows D9) | Only a PR whose changes are all under one package's `src/`, with no deletions or renames and no `package.json`, vitest, tsconfig, turbo or other outside change; otherwise the full head build | Spike §7 matched two worktrees only on that shape; a deleted or renamed file breaks the copy, and changes outside `src/` are never copied |
+| D42 | Token budget default (phase 2) | `TokensPerSession` defaults to 2,000,000; cache tokens still count (D37), so `UsdPerSession` (3 USD) is the cap that acts first on a normal session | Phase 1: 5 of 12 Opus sessions hit the 400K token budget at 28–40 turns, long before the dollar cap; a token cap that counts cache reads stops a session that is still cheap |
+| D43 | `PrivateAccess` and test subclasses (narrows §9.1) | A subclass the test declares may call a `protected` member of its base; a `protected` member reached by a cast, by index or on an instance of the base class still fires the rule | Phase 1 dropped valid tests that extended a class to reach a protected extension point, which is how the package's own tests do it |
+| D44 | Session records | `generation.json` keeps one `Session` per generator session (package, method, risk, end reason, turns, tokens, transcript, tests produced and failed) and every `TokenUsage` carries a `Role` (Generator, Analyzer, Judge) | Phase 1 could not say which sessions hit a budget or how much the analyzer cost when it shares the generator's model |
+| D45 | Base source snapshot | Before the base worktree is removed, `src/`, `tsconfig.json` and `package.json` of every tested package are copied to `<run>/base-src/`; `assess` reads them when the worktree is gone | The rule filter needs base's sources for the checker; without the snapshot a run cannot be re-assessed after `run` finished. Cross-package types are not in the snapshot, a known limit |
+| D46 | Store cleanup | A run removes its pnpm store and fetch folders when it ends; `jit-catch clean` removes work folders of finished runs | Phase 1 left ~4 GB per run in the per-run store |
+| D47 | Backtest ledger | `backtest` keeps one ledger per corpus slice, set and generator model under `.jit-catch/backtests/`; a stopped backtest resumes from the ledger; `--max-usd` stops it at a spend | Backtests run for hours and fail for infrastructure reasons; a resumable ledger means no PR is paid for twice |
+| D48 | Match check | A weak catch on a bug-set PR is re-run on the landing commit plus the fix PR's diff (`git apply --3way` on the host, in the run's head worktree); a test that passes there matched the fix | §14.1 defines a catch as one the fix PR makes pass; applying the fix's diff is the cheapest check that stays on the PR's own base |
+| D49 | Judge calibration before gate 1 | No judge or threshold changes before the tuning-slice report; the report gives each judge's agreement with the labels and TP Prob by label class, and §9.3 calibration decides | Phase 1 saw GPT-5.1 say High on 10 of 11 intended changes, but 11 catches are too few to act on |
 
 ---
 
@@ -456,7 +464,9 @@ is flagged as matching the risk. The rule filter boosts these (§9.1).
   from the SDK. One API message arrives as several SDK messages with the same `id`, so each `id` counts once; input is
   `input_tokens + cache_read_input_tokens + cache_creation_input_tokens`. Per-message output counts run far below the
   final figure, so exact totals come from the `result` message when there is one, and an aborted session's cost is
-  estimated from the host count. The SDK's `maxBudgetUsd` is a second cap (D37, spike §2).
+  estimated from the host count; the host keeps the largest output count each message reports, so the estimate runs
+  close to the final figure. The SDK's `maxBudgetUsd` is a second cap (D37, spike §2). The default token budget is
+  2,000,000 (D42), so the dollar cap acts first on a normal session.
 - **Model**: chosen in gate 1 (§13.2).
 
 **Prompt content that prevents false alarms:** the package's existing tests as style examples; the
@@ -484,7 +494,7 @@ continues with the list of boosts that fired. Dropped catches stay in the store 
 
 | Rule | Fires when |
 |---|---|
-| `PrivateAccess` | The test reads, writes or calls a member whose declaration in base is `private` or `protected` — by plain access, through a cast, or by index (`obj['_x']`). The TypeScript checker, run over the test and base's sources (job 3 checks out the base commit for this), resolves each member against the type of the expression *inside* the cast, not the cast's target: `(svc as unknown as { _cache: Map })._cache` and `(svc as any)._cache` are judged against `svc`'s declared type. A variable whose initializer is a cast is followed to that initializer, so the two-step form `const s = svc as unknown as {...}; s._cache` resolves the same way. A cast alone does not fire the rule: 42% of MJ test files use `as unknown as` to build stubs (`IMetadataProvider`, `UserInfo`), and generated tests copy that style; a stub's members have no base declaration, so they return nothing. |
+| `PrivateAccess` | The test reads, writes or calls a member whose declaration in base is `private` or `protected` — by plain access, through a cast, or by index (`obj['_x']`). The TypeScript checker, run over the test and base's sources (job 3 checks out the base commit for this), resolves each member against the type of the expression *inside* the cast, not the cast's target: `(svc as unknown as { _cache: Map })._cache` and `(svc as any)._cache` are judged against `svc`'s declared type. A variable whose initializer is a cast is followed to that initializer, so the two-step form `const s = svc as unknown as {...}; s._cache` resolves the same way. A cast alone does not fire the rule: 42% of MJ test files use `as unknown as` to build stubs (`IMetadataProvider`, `UserInfo`), and generated tests copy that style; a stub's members have no base declaration, so they return nothing. A subclass the test declares may call a `protected` member of its base (D43); the rule still fires for a `protected` member reached by a cast, by index or on an instance of the base class. |
 | `InternalCallCounting` | `toHaveBeenCalledTimes` / `toHaveBeenCalledWith` on a spy of a non-exported function |
 | `BrokenMock` | The failure starts inside a `vi.mock` factory or in setup (`beforeEach`), not in the code under test |
 | `OrderSensitive` | The assertion compares `JSON.stringify` output, `Object.keys` order, or a stringified object |
@@ -666,7 +676,7 @@ extend to nightly runs, which always use the workflow from `next`.
 |---|---|---|---|
 | `claude-opus-5-5` | $4.00 | $20.00 | $0.20 |
 | `claude-sonnet-5-5` | $2.00 | $10.00 | $0.20 |
-| `claude-haiku-5-5` | $0.10 | $0.50 | — (prompts ≤ 100K; $0.50 / $2.50 above) |
+| `claude-haiku-5-5` | $0.10 | $0.50 | $0.01 (prompts ≤ 100K; $0.50 / $2.50 above) |
 | `gemini-4-argon` (judge) | $2.00 → $4.00 on 2026-12-01 | $10.00 → $20.00 | $0.10 → $0.20 |
 
 Runner minutes are free: MJ is a public repo on standard `ubuntu-latest` runners. The real limits are tokens and the job
@@ -777,7 +787,7 @@ Passing gate 2 turns on nightly PR comments (at the nightly threshold) and start
 |---|---|---|
 | 0 Spike | Answers to the questions below; throwaway code | All answered; design adjusted if needed. Done 2026-11-06, except question 5 (open question Q2) |
 | 1 Core | Package, CLI, sandbox runner, redaction check, `VitestCatchTarget`, `AllRunsAgreeVerdict`, generator, analyzer, rules, judges, `FileCatchStore`; `jit-catch run --pr` works locally | Unit tests for every rule and verdict; end-to-end run on 3 real PRs |
-| 2 Gate 1 | Corpus files, `backtest` and `report` commands, three-model comparison | Gate 1 passes with the chosen model |
+| 2 Gate 1 | Corpus files, `corpus`, `backtest`, `label`, `report` and `clean` commands, the phase 1 fixes (D42–D46), three-model comparison; plan: [`catching-jittests-phase2.md`](catching-jittests-phase2.md) | Gate 1 passes with the chosen model |
 | 3 Gate 2 | Workflows (jobs 1–3, feedback, recheck), PR comment, promotion, data branch | Gate 2 passes |
 | 4 Nightly comments | Nightly reporting turned on | — |
 | 5 Track C | Own spec, then `IntegrationCatchTarget` | Own gates |
