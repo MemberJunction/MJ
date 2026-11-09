@@ -27838,7 +27838,7 @@ export const MJMLEvaluationProtocolSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    LineageRoot: z.string().describe(`
+    LineageRoot: z.string().nullable().describe(`
         * * Field Name: LineageRoot
         * * Display Name: Lineage Root
         * * SQL Data Type: nvarchar(255)`),
@@ -28162,7 +28162,7 @@ export const MJMLPredictionUnitSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    LineageRoot: z.string().describe(`
+    LineageRoot: z.string().nullable().describe(`
         * * Field Name: LineageRoot
         * * Display Name: Lineage Root
         * * SQL Data Type: nvarchar(255)`),
@@ -28641,11 +28641,11 @@ export const MJMLTrainingSnapshotSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Pipeline: z.string().describe(`
+    Pipeline: z.string().nullable().describe(`
         * * Field Name: Pipeline
         * * Display Name: Pipeline
         * * SQL Data Type: nvarchar(255)`),
-    PredictionUnit: z.string().describe(`
+    PredictionUnit: z.string().nullable().describe(`
         * * Field Name: PredictionUnit
         * * Display Name: Prediction Unit
         * * SQL Data Type: nvarchar(255)`),
@@ -28653,19 +28653,19 @@ export const MJMLTrainingSnapshotSchema = z.object({
         * * Field Name: EvaluationProtocol
         * * Display Name: Evaluation Protocol
         * * SQL Data Type: nvarchar(255)`),
-    StorageProvider: z.string().describe(`
+    StorageProvider: z.string().nullable().describe(`
         * * Field Name: StorageProvider
         * * Display Name: Storage Provider
         * * SQL Data Type: nvarchar(50)`),
-    MatrixFile: z.string().describe(`
+    MatrixFile: z.string().nullable().describe(`
         * * Field Name: MatrixFile
         * * Display Name: Matrix File
         * * SQL Data Type: nvarchar(500)`),
-    RowManifestFile: z.string().describe(`
+    RowManifestFile: z.string().nullable().describe(`
         * * Field Name: RowManifestFile
         * * Display Name: Row Manifest File
         * * SQL Data Type: nvarchar(500)`),
-    ProvenanceFile: z.string().describe(`
+    ProvenanceFile: z.string().nullable().describe(`
         * * Field Name: ProvenanceFile
         * * Display Name: Provenance File
         * * SQL Data Type: nvarchar(500)`),
