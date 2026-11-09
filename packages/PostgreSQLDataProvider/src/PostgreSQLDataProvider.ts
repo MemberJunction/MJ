@@ -20,6 +20,7 @@ import {
     RunQuerySQLFilterManager,
     RestoreContext,
     CloneContext,
+    SyncContext,
     RecordChangeSource,
     RecordChangePayload,
     EntityDeleteOptions,
@@ -93,13 +94,30 @@ export const POSTGRESQL_PROCEDURE_PARAM_LIMIT = 90;
  * - Identifier quoting uses "double quotes" instead of [brackets]
  */
 /**
- * The `ChangeContext` column and its `$n` placeholder for a Record Change insert, or nothing when
- * there is no context. Only clones set it, so every other tracked write keeps working on a database
- * whose RecordChange table doesn't have the column yet (the PostgreSQL migration ships at release).
+ * Optional `ChangeContext` and `IntegrationID` columns and their `$n` placeholders for a Record Change
+ * insert, or nothing when neither is set. Only clones and sync operations set them, so every other
+ * tracked write keeps working on a database whose RecordChange table doesn't have the columns yet.
  */
-function changeContextSQL(changeContext: string | null | undefined, placeholder: number): { column: string; value: string; parameters: string[] } {
-    if (!changeContext) return { column: '', value: '', parameters: [] };
-    return { column: ', "ChangeContext"', value: `, $${placeholder}::text`, parameters: [changeContext] };
+function changeContextSQL(
+    changeContext: string | null | undefined,
+    placeholder: number,
+    integrationID?: string | null,
+): { column: string; value: string; parameters: string[] } {
+    let column = '';
+    let value = '';
+    const parameters: string[] = [];
+    let nextPlaceholder = placeholder;
+    if (changeContext) {
+        column += ', "ChangeContext"';
+        value += `, $${nextPlaceholder++}::text`;
+        parameters.push(changeContext);
+    }
+    if (integrationID) {
+        column += ', "IntegrationID"';
+        value += `, $${nextPlaceholder++}::uuid`;
+        parameters.push(integrationID);
+    }
+    return { column, value, parameters };
 }
 
 export class PostgreSQLDataProvider extends GenericDatabaseProvider implements IColocatedVectorHost {
@@ -1218,7 +1236,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         const baseValues = saveSQL.parameters ?? [];
         const recordIDExpr = this.buildRecordIDFromCTE(entity.EntityInfo, 'save_result');
         const s = baseValues.length + 1;
-        const cc = changeContextSQL(payload.changeContext, s + 9);
+        const cc = changeContextSQL(payload.changeContext, s + 9, payload.integrationID);
         const fullSQL = `WITH save_result AS (
     ${saveSQL.sql}
 ),
@@ -1276,10 +1294,12 @@ SELECT ${resolvedReturn.finalSelectColumnsSQL} FROM save_result`;
                 user,
                 entity.RestoreContext,
                 "'",
+                entity.CloneContext,
+                entity.SyncContext,
             );
             if (payload) {
                 const s = paramValues.length + 1;
-                const cc = changeContextSQL(payload.changeContext, s + 7);
+                const cc = changeContextSQL(payload.changeContext, s + 7, payload.integrationID);
                 paramValues.push(
                     payload.entityID,
                     payload.recordID,
@@ -1621,6 +1641,7 @@ SELECT * FROM delete_result`;
         user: UserInfo,
         restoreContext?: RestoreContext | null,
         cloneContext?: CloneContext | null,
+        syncContext?: SyncContext | null,
     ): { sql: string; parameters?: unknown[] } | null {
         const payload = this.BuildRecordChangePayload(
             newData,
@@ -1632,10 +1653,11 @@ SELECT * FROM delete_result`;
             restoreContext,
             "'",
             cloneContext,
+            syncContext,
         );
         if (!payload) return null;
 
-        const cc = changeContextSQL(payload.changeContext, 11);
+        const cc = changeContextSQL(payload.changeContext, 11, payload.integrationID);
         const sql = `INSERT INTO ${this._schemaName}."RecordChange"
             ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason"${cc.column})
             VALUES ($1::uuid, $2::varchar, $3::uuid, $4::varchar, $5::varchar, $6::text, $7::text, $8::text, 'Complete', $9::uuid, $10::text${cc.value})

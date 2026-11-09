@@ -1,11 +1,12 @@
 # MJ Peer Sync — a first-class MJ ↔ MJ connector
 
 ## Status
-- **Status**: Draft — design spec, nothing built
+- **Status**: Implemented — Phase 0 prerequisites and Phase 1–4 `MemberJunctionConnector` pipeline built and unit-tested
 - **Created**: 2026-10-23
+- **Updated**: 2026-11-09
 - **Author**: Amith Nagarajan + Claude
 - **Branch**: `mj-peer-sync-spec`
-- **Grounded against**: MJ `next` at `f3b54c9c7` plus the BizApps sibling repos. Every `file:line` below is a pointer into that commit, from a code survey on 2026-10-22. Line numbers will drift.
+- **Grounded against**: MJ `next` (`origin/next`) plus the BizApps sibling repos. Every `file:line` below is a pointer into the codebase.
 
 ## Summary
 
@@ -787,3 +788,24 @@ Rough estimates for one experienced MJ engineer. Treat them as sizing, not commi
 | API keys | `packages/APIKeys/Engine/src/APIKeyEngine.ts:57-606`; `packages/MJServer/src/auth/APIKeyScopeAuth.ts:45-50` |
 | Server-to-server client precedent | `packages/GraphQLDataProvider/src/graphQLSystemUserClient.ts:23-128` |
 | Change-notification hint | `packages/MJServer/src/generic/CacheInvalidationResolver.ts:27-273` |
+
+---
+
+## Appendix B — Implementation Map
+
+| Component | Package / File | Description |
+|---|---|---|
+| `IRecordChangeSyncContext` | `metadata/entities/JSONType-interfaces/IRecordChangeContext.ts`, `packages/MJCoreEntities/src/generated/entities/__mj.ts` | Structured `Kind: 'Sync'` provenance JSON schema on `MJ: Record Changes.ChangeContext` |
+| `SyncContext` & `BaseEntity.SetSyncContext` | `packages/MJCore/src/generic/baseEntity.ts`, `packages/MJCore/src/generic/databaseProviderBase.ts` | Server-only provenance setter (`Source = 'Sync'`, `ChangeContext`, `IntegrationID`) stripped from client input via `ClientInputTransportKeys` |
+| Provider `Sync` SQL rendering | `packages/GenericDatabaseProvider`, `packages/SQLServerDataProvider`, `packages/PostgreSQLDataProvider` | Threads `entity.SyncContext` and `@IntegrationID` / `"IntegrationID"` through save and delete record-change logging |
+| Tarjan SCC & `PlanEntityDependencyOrder` | `packages/RecordGraph/src/sort.ts` | Strongly connected components (`FindStronglyConnectedComponents`), two-pass nullable FK cycle breaking, IS-A parent ordering, and self-referencing field detection |
+| Incremental Vectorization & Unsaved Dupe Lookup | `packages/AI/Vectors/Sync/src/models/entityVectorSync.ts`, `packages/AI/Vectors/Dupe/src/duplicateRecordDetector.ts` | `EntityVectorSyncer.VectorizeRecords` and `DuplicateRecordDetector.FindCandidatesForValues` |
+| `ThreeWayMerge` & `RunPipeline` seam | `packages/Integration/engine/src/ThreeWayMerge.ts`, `packages/Integration/engine/src/BaseIntegrationConnector.ts`, `packages/Integration/engine/src/IntegrationEngine.ts` | Shared field-level 3-way merge (`'source'` & `'destination'` key modes), Section 19 fixes 1–5, and `BaseIntegrationConnector.RunPipeline` |
+| `SchemaPlanner` & `ComputePairingID` | `packages/Integration/engine/src/peer-sync/SchemaPlanner.ts` | Deterministic SHA-256 schema fingerprinting, symmetric pairing ID, and `SchemaDriftPolicy` reconciliation |
+| `ChangeSetPlanner` | `packages/Integration/engine/src/peer-sync/ChangeSetPlanner.ts` | Composite `(ChangedAt, ID)` watermarks, `CoalesceRecordChanges` (`Create+Update`, `Create+Delete` elision, `Update+Update` earliest `AncestorData`), Tarjan SCC planner, and self-reference record ordering |
+| `PeerIdentityGate` | `packages/Integration/engine/src/peer-sync/IdentityGate.ts` | 5-step hybrid identity cascade (`RecordMap` $\rightarrow$ `PrimaryKey` $\rightarrow$ `KeyFields` $\rightarrow$ `DuplicateDetection` $\rightarrow$ `NewRecord`) |
+| `PeerSyncApplier` | `packages/Integration/engine/src/peer-sync/PeerSyncApplier.ts` | Inbound batch applier with FK translation, two-pass nullable FK deferral, 3-way merge, `SetSyncContext`, and post-batch vector indexing |
+| `PeerSyncEndpointService` & Transports | `packages/Integration/engine/src/peer-sync/PeerSyncEndpointService.ts` | Server-side handler for `GetManifest`, `GetSchemaFingerprint`, `PreviewSchemaPlan`, `FetchChangeBatch`, `ApplyChangeBatch`, and `NotifyChangeBatch` with `AllowedEntityNames` enforcement |
+| `PeerSyncDoorbell` | `packages/Integration/engine/src/peer-sync/PeerSyncDoorbell.ts` | `BaseSingleton` event listener over `MJGlobal` (`BaseEntityEvent`) with `SyncContext` loop suppression, debounce coalescing, and exponential backoff |
+| `MemberJunctionConnector` | `packages/Integration/engine/src/peer-sync/MemberJunctionConnector.ts` | `@RegisterClass(BaseIntegrationConnector, 'MemberJunctionConnector')` implementing `RunPipeline` |
+

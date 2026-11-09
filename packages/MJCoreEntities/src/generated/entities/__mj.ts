@@ -132141,13 +132141,28 @@ export interface MJRecordChangeEntity_IRecordChangeCloneContext {
     Reason?: string;
 }
 
+export interface MJRecordChangeEntity_IRecordChangeSyncContext {
+    /** `MJ_DEPLOYMENT_ID` of the origin deployment where the change originated. */
+    OriginDeploymentID: string;
+    /** Deterministic pairing ID between the local and peer deployments. */
+    PairingID: string;
+    /** `MJ: Company Integration Runs` ID that applied this sync change. */
+    RunID: string;
+    /** `MJ: Record Changes` IDs from the origin deployment that coalesced into this write. */
+    OriginChangeIDs: string[];
+    /** Email address of the user who authored the latest change on the origin deployment. */
+    OriginUserEmail: string;
+}
+
 export interface MJRecordChangeEntity_IRecordChangeContext {
     /** Shape version. */
     Version: 1;
     /** The process that produced the change. Restore keeps its dedicated columns; it is listed so future writers can carry both. */
-    Kind: 'Clone' | 'Merge' | 'Import' | 'Process' | 'Replay' | 'Other';
+    Kind: 'Clone' | 'Merge' | 'Import' | 'Process' | 'Replay' | 'Sync' | 'Other';
     /** Populated when Kind === 'Clone'. */
     Clone?: MJRecordChangeEntity_IRecordChangeCloneContext;
+    /** Populated when Kind === 'Sync'. */
+    Sync?: MJRecordChangeEntity_IRecordChangeSyncContext;
     /** Free-form tags for future kinds; never values. */
     Tags?: string[];
 }

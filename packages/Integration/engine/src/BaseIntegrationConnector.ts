@@ -1,5 +1,6 @@
 import type { UserInfo } from '@memberjunction/core';
-import type { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
+import type { MJCompanyIntegrationEntity, MJCompanyIntegrationRunEntity } from '@memberjunction/core-entities';
+import type { ICompanyIntegrationEntityMap, ICompanyIntegrationFieldMap } from './entity-types.js';
 import type {
     IntegrationObjectInfo,
     ActionGeneratorConfig,
@@ -20,6 +21,9 @@ import type {
     SearchResult,
     ListContext,
     ListResult,
+    SyncDirection,
+    SyncResult,
+    OnProgressCallback,
 } from './types.js';
 import { ClassifyError } from './types.js';
 import { ExtractRetryAfterFromError } from './RetryAfter.js';
@@ -1379,4 +1383,32 @@ export abstract class BaseIntegrationConnector {
         return result;
     }
 
+    /**
+     * Optional whole-run pipeline hook (spec §4.2 / §19.7).
+     *
+     * Most SaaS connectors operate entity-map-by-entity-map via `FetchChanges` / `CreateRecord` /
+     * `UpdateRecord` / `DeleteRecord`. Connectors that coordinate multi-entity graph ordering,
+     * schema evolution, and bidirectional change sets as a unified pipeline (such as
+     * `MemberJunctionConnector` for MJ Peer Sync) implement `RunPipeline` to execute the
+     * data plane while `IntegrationEngine` manages run records, lease heartbeats, cancellation,
+     * and telemetry.
+     */
+    public RunPipeline?(context: ConnectorPipelineContext): Promise<SyncResult>;
+
+}
+
+/**
+ * Context passed to {@link BaseIntegrationConnector.RunPipeline} when a connector
+ * overrides whole-run execution.
+ */
+export interface ConnectorPipelineContext {
+    CompanyIntegration: MJCompanyIntegrationEntity;
+    Run: MJCompanyIntegrationRunEntity;
+    EntityMaps: ICompanyIntegrationEntityMap[];
+    FieldMapsByEntityMapID: Map<string, ICompanyIntegrationFieldMap[]>;
+    SyncDirection?: SyncDirection;
+    FullSync: boolean;
+    ContextUser: UserInfo;
+    OnProgress?: OnProgressCallback;
+    AbortSignal?: AbortSignal;
 }

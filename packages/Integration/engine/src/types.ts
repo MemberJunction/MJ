@@ -194,6 +194,15 @@ export interface MappedRecord {
     /** ID of an existing MJ record if matched */
     MatchedMJRecordID?: string;
     /**
+     * True when key-field or duplicate-detection matching found multiple distinct candidate
+     * records in the destination entity (spec §11 / §19.5).
+     */
+    AmbiguousMatch?: boolean;
+    /**
+     * Candidate MJ record IDs when `AmbiguousMatch === true`.
+     */
+    AmbiguousCandidateIDs?: string[];
+    /**
      * Source keys the record returned that have NO active field map — the "extra" fields
      * the target table has no column for (yet). Computed at {@link MapSingleRecord} as
      * `keys(ExternalRecord.Fields) − active map SourceFieldNames`. Empty/undefined in the
