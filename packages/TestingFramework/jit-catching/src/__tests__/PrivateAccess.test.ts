@@ -3,7 +3,7 @@ import { PrivateAccess } from '../rules/drop/PrivateAccess';
 import { TestAst } from '../rules/TestAst';
 import type { CatchContext } from '../types';
 
-const lib = `export class Svc { private secret = 1; public Open() { return 3; } protected Hook(): number { return 1; } }`;
+const lib = `export class Svc { private secret = 1; public Open() { return 3; } protected Hook(): number { return 1; } } export class Mid extends Svc {} export class Holder { constructor(protected dep: number) {} }`;
 function ctx(source: string): CatchContext {
   const ast = TestAst.Load(source, '/repo', 'packages/X', 'packages/X/src/__tests__/jit/t.jit.test.ts', { '/repo/packages/X/src/svc.ts': lib });
   return { Run: {} as never, Analysis: {} as never, Test: { Source: source, Package: 'x', FilePath: 'packages/X/src/__tests__/jit/t.jit.test.ts' } as never, Base: [], Head: [], Verdict: { Label: 'WeakCatch', Timeout: false, Reason: '' }, BaseRootDir: '/repo', Boosts: [], Ast: ast } as CatchContext & { Ast: TestAst };
@@ -31,6 +31,14 @@ describe('PrivateAccess', () => {
   });
   it('does not fire when a subclass the test declares calls a protected extension point through super', () => {
     const src = `import { Svc } from '../../svc'; class Sub extends Svc { public Run(): number { return super.Hook(); } } expect(new Sub().Run()).toBe(1);`;
+    expect(rule.Evaluate(ctx(src)).Fired).toBe(false);
+  });
+  it('does not fire when a test subclass reads a protected constructor parameter property through this', () => {
+    const src = `import { Holder } from '../../svc'; class Sub extends Holder { public R(): number { return this.dep; } } expect(new Sub(1).R()).toBe(1);`;
+    expect(rule.Evaluate(ctx(src)).Fired).toBe(false);
+  });
+  it('does not fire when a test subclass of a base-package subclass calls a protected member of the base class', () => {
+    const src = `import { Mid } from '../../svc'; class Sub extends Mid { public Run(): number { return this.Hook(); } } expect(new Sub().Run()).toBe(1);`;
     expect(rule.Evaluate(ctx(src)).Fired).toBe(false);
   });
   it('fires on the two-step cast form and on a write to a private member', () => {

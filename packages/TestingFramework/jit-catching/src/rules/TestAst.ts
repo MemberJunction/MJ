@@ -114,19 +114,20 @@ export class TestAst {
 
     /**
      * True when `access` is `this.x` or `super.x` with no wrapper on the receiver, inside a class the test declares
-     * that extends, directly or through other test-declared classes, the class that declares `x`.
+     * whose `extends` chain (test-declared or base-package classes) reaches the class that declares `x`.
      */
     public ProtectedAccessFromTestSubclass(access: MemberAccess): boolean {
         const node = access.Node;
         if (!ts.isPropertyAccessExpression(node)) return false;
         const receiverKind = node.expression.kind;
         if (receiverKind !== ts.SyntaxKind.ThisKeyword && receiverKind !== ts.SyntaxKind.SuperKeyword) return false;
-        const owner = this.Checker.getSymbolAtLocation(node.name)?.declarations?.[0]?.parent;
-        if (!owner || !ts.isClassDeclaration(owner)) return false;
+        const declaration = this.Checker.getSymbolAtLocation(node.name)?.declarations?.[0];
+        const owner = declaration ? ts.findAncestor(declaration, ts.isClassDeclaration) : undefined;
+        if (!owner) return false;
         const enclosing = ts.findAncestor(node.parent, ts.isClassLike);
-        if (!enclosing || !ts.isClassDeclaration(enclosing)) return false;
+        if (!enclosing || !ts.isClassDeclaration(enclosing) || enclosing.getSourceFile() !== this.SourceFile) return false;
         let current: ts.ClassDeclaration = enclosing;
-        for (let hops = 0; hops < 16 && current.getSourceFile() === this.SourceFile; hops++) {
+        for (let hops = 0; hops < 16; hops++) {
             const base = this.baseClassOf(current);
             if (!base) return false;
             if (base === owner) return true;
