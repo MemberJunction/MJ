@@ -25432,6 +25432,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "StartedAt": "2026-09-02T00:00:00.000Z",
+            "EndedAt": "2027-01-01T00:00:00.000Z",
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
@@ -25439,7 +25440,7 @@
             "OutputPricePerUnit": 3.75,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 3.8 Flash INTRODUCTORY pricing on Google direct as of the September 2, 2026 GA launch: $0.75/1M input, $3.75/1M output, $0.075/1M cached input. INTRO WINDOW: through December 31, 2026. STANDARD PRICING FROM JANUARY 1, 2027: $1.50/1M input, $7.50/1M output, with cached input doubling to $0.15/1M. A reviewer should expire this row and add a standard-rate row before the intro window closes. Google does not charge for cache writes, so CacheWritePricePerUnit is null. Sources: https://ai.google.dev/gemini-api/docs/latest-model ; https://deepmind.google/models/model-cards/gemini-3-8-flash/",
+            "Comments": "Gemini 3.8 Flash INTRODUCTORY pricing on Google direct as of the September 2, 2026 GA launch: $0.75/1M input, $3.75/1M output, $0.075/1M cached input. INTRO WINDOW: through December 31, 2026. STANDARD PRICING FROM JANUARY 1, 2027: $1.50/1M input, $7.50/1M output, with cached input doubling to $0.15/1M. This row is window-closed at 2027-01-01 and the successor row at $1.50/$7.50 takes over automatically (GetModelCost selects on Status='Active' AND the StartedAt/EndedAt window), so the cutover needs no further edit. Window closed 2026-11-09. Google does not charge for cache writes, so CacheWritePricePerUnit is null. Intro-window end and the January 1, 2027 standard rates re-confirmed 2026-11-09; ai.google.dev was not directly reachable from the research environment, so the confirmation is a server-side read of the Gemini API pricing page rather than a direct fetch. Sources: https://ai.google.dev/gemini-api/docs/latest-model ; https://deepmind.google/models/model-cards/gemini-3-8-flash/",
             "CacheReadPricePerUnit": 0.075,
             "CacheWritePricePerUnit": null
           },
@@ -25456,6 +25457,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
             "StartedAt": "2026-09-02T00:00:00.000Z",
+            "EndedAt": "2027-01-01T00:00:00.000Z",
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
@@ -25463,7 +25465,7 @@
             "OutputPricePerUnit": 3.75,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 3.8 Flash INTRODUCTORY pricing on Vertex AI (Gemini Enterprise Agent Platform) as of September 2, 2026 GA. Matches Google direct: $0.75/$3.75 per 1M with $0.075/1M cache read and no cache-write charge. Intro window runs through 2026-12-31; standard $1.50/$7.50 applies from 2027-01-01. Cross-region inference may add a Vertex-side surcharge on top of these figures. Sources: https://cloud.google.com/vertex-ai/generative-ai/pricing ; https://ai.google.dev/gemini-api/docs/latest-model",
+            "Comments": "Gemini 3.8 Flash INTRODUCTORY pricing on Vertex AI (Gemini Enterprise Agent Platform) as of September 2, 2026 GA. Matches Google direct: $0.75/$3.75 per 1M with $0.075/1M cache read and no cache-write charge. Intro window runs through 2026-12-31; standard $1.50/$7.50 applies from 2027-01-01. Cross-region inference may add a Vertex-side surcharge on top of these figures. Intro-window end and the January 1, 2027 standard rates re-confirmed 2026-11-09; ai.google.dev was not directly reachable from the research environment, so the confirmation is a server-side read of the Gemini API pricing page rather than a direct fetch. Sources: https://cloud.google.com/vertex-ai/generative-ai/pricing ; https://ai.google.dev/gemini-api/docs/latest-model",
             "CacheReadPricePerUnit": 0.075,
             "CacheWritePricePerUnit": null
           },
@@ -25473,6 +25475,46 @@
           "sync": {
             "lastModified": "2026-09-10T17:40:34.449Z",
             "checksum": "c04c5558e327ecb53522adf5d3afabf805f83be22ed7bc23f672a89e20186ca6"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2027-01-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.5,
+            "OutputPricePerUnit": 7.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 3.8 Flash (gemini-3.8-flash) standard (post-introductory) pricing on Google direct, effective January 1, 2027: $1.50/1M input, $7.50/1M output, $0.15/1M cached input (output price includes thinking tokens). Exactly 2x the introductory $0.75/$3.75 rate that runs through December 31, 2026. Not selected by GetModelCost until StartedAt passes, so the cutover from the introductory row needs no further edit. Batch is half rate ($0.75/$3.75). Google does not charge for cache writes, so CacheWritePricePerUnit is null. Source: https://ai.google.dev/gemini-api/docs/pricing (read 2026-11-09 via server-side search; the host is not directly reachable from the research environment).",
+            "CacheReadPricePerUnit": 0.15,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "9DFB2970-EE65-4D59-B375-F376C9B1C802"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "StartedAt": "2027-01-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.5,
+            "OutputPricePerUnit": 7.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 3.8 Flash standard (post-introductory) pricing on Vertex AI, effective January 1, 2027: $1.50/1M input, $7.50/1M output, $0.15/1M cached input. Mirrored from the Gemini Developer API pricing page, matching the parity MJ has carried on this pair since the September 2, 2026 GA; the Vertex AI pricing page was not independently readable on 2026-11-09. Cross-region inference may add a Vertex-side surcharge on top of these figures. Sources: https://ai.google.dev/gemini-api/docs/pricing ; https://cloud.google.com/vertex-ai/generative-ai/pricing",
+            "CacheReadPricePerUnit": 0.15,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "75530021-C5C9-4DC7-BFC7-A1BC2F528024"
           }
         }
       ],
@@ -30842,6 +30884,386 @@
     },
     "primaryKey": {
       "ID": "7A77764D-453C-4630-B3AD-381048C4E1EC"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Claude Mythos 5",
+      "PowerRank": 26,
+      "Description": "Anthropic's Mythos-class Claude 5 flagship, released June 9, 2026 as the companion to Claude Fable 5. Same specifications and rate card as Fable 5 (1M-token context, 128K max output, $10/$50 per 1M tokens) but WITHOUT Fable's safety-classifier routing layer, and therefore limited-availability: access runs through Anthropic's trusted-access programs (Project Glasswing) rather than general API signup. Listed as Active on the Claude API with a tentative retirement not sooner than June 9, 2027. Modelled here per the routine's standing decision on limited-availability models: the Inference Provider route is seeded at Preview so model selection never routes to it automatically; a customer with access flips it to Active.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 10,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "8F5060E3-8E67-4843-AD54-E5AAF21E84B5"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Preview",
+            "DriverClass": "AnthropicLLM",
+            "APIName": "claude-mythos-5",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "79DC4AD7-BB38-4D3A-B482-383A793FD3A6"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "StartedAt": "2026-06-09T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 10,
+            "OutputPricePerUnit": 50,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Mythos 5 pricing on Anthropic direct, identical to Claude Fable 5: $10/$50 per 1M in/out, cache hits and refreshes $1/1M, 5-minute cache writes $12.50/1M, 1-hour cache writes $20/1M (the 1-hour rate is not representable in this schema). Batch API is half rate ($5/$25). Read from Anthropic's own rate card on 2026-11-09; the model is listed there alongside Fable 5 at the same figures, with a limited-availability note. Source: https://platform.claude.com/docs/en/about-claude/pricing",
+            "CacheReadPricePerUnit": 1,
+            "CacheWritePricePerUnit": 12.5
+          },
+          "primaryKey": {
+            "ID": "8AC3C19D-7187-49E0-A8B5-5DF813CEC300"
+          }
+        }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/gif,image/webp",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "FD4EC120-0D8F-46D1-9B43-1877D815838D"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=File",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "application/pdf",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "AAD7834B-DFC3-45FF-AB72-000619B93020"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "158189DA-1957-4AA5-B0ED-86B27BEFAFCE"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Claude Mythos 5.1",
+      "PowerRank": 27,
+      "Description": "Anthropic's Mythos-class Claude 5.1 flagship, released September 1, 2026 as the successor to Claude Mythos 5 and the companion to Claude Fable 5.1. Same specifications and rate card as Fable 5.1 (1M-token context, 128K max output, adaptive thinking with a five-level effort setting, $10/$50 per 1M tokens, cache hits and refreshes at $0.25/1M — 0.025x base input) but WITHOUT Fable's safety-classifier routing layer. Limited-availability: access runs through Anthropic's Cyber Verification and Life Sciences Verification programs (Project Glasswing). Uses the Claude 4.7-and-later tokenizer (~30% more tokens for the same text than Sonnet 4.6 and earlier). Listed as Active on the Claude API with a tentative retirement not sooner than September 1, 2027. Modelled here per the routine's standing decision on limited-availability models: the Inference Provider route is seeded at Preview so model selection never routes to it automatically; a customer with access flips it to Active.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 10,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Claude Mythos 5",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true,
+          "SupportsForcedToolChoice": false
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "481BA057-81EF-4A9B-AF23-A3568ECF95D1"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Preview",
+            "DriverClass": "AnthropicLLM",
+            "APIName": "claude-mythos-5-1",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "A8380285-E5D9-4336-922F-44CB6977C6AE"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "StartedAt": "2026-09-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 10,
+            "OutputPricePerUnit": 50,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Mythos 5.1 pricing on Anthropic direct, identical to Claude Fable 5.1: $10/$50 per 1M in/out, cache hits and refreshes $0.25/1M (0.025x base input), 5-minute cache writes $12.50/1M, 1-hour cache writes $20/1M (the 1-hour rate is not representable in this schema). Batch API is half rate ($5/$25). Read from Anthropic's own rate card on 2026-11-09, where the model is listed with a limited-availability note at the same figures as Fable 5.1. Source: https://platform.claude.com/docs/en/about-claude/pricing",
+            "CacheReadPricePerUnit": 0.25,
+            "CacheWritePricePerUnit": 12.5
+          },
+          "primaryKey": {
+            "ID": "E68A92DA-F23F-45F1-B0EA-FE4B48083A36"
+          }
+        }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/gif,image/webp",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "D936FF80-3B37-4976-BC9C-636B18BF2BAC"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=File",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "application/pdf",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "46091BE1-8995-48E3-A468-4C78F0111043"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "0D385017-0295-4BAD-97E5-CB0AF00092B8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GPT Image 2.6 Sunburst",
+      "PowerRank": 21,
+      "Description": "OpenAI's image generation and editing model, released November 4, 2026 as the engine behind ChatGPT Images 2.6. Sunburst is the higher-detail variant, targeted at detail and cross-generation consistency at medium/high quality; the Flare variant trades that for speed. New in 2.6 over 2.5: animated GIF output, SVG export, markup-guided edits, and a complexity parameter (defaults to high). Quality settings low/medium/high/xhigh/max. Token-billed at $5/1M text input, $8/1M image input ($2/1M cached) and $30/1M image output — unchanged from GPT Image 2.5. MJ never carried the 2.5 generation, so PriorVersionID points at GPT Image 2.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Image Generator",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 8,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT Image 2"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "86ACD7E8-66A2-4D84-81A0-F6A2E00AC966"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAIImageGenerator",
+            "APIName": "gpt-image-2.6-sunburst",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "E7F350B4-8060-47BD-AC08-148AD1D89AE0"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-11-04T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 5,
+            "OutputPricePerUnit": 30,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT Image 2.6 Sunburst (gpt-image-2.6-sunburst) pricing as of the November 4, 2026 launch, recorded in OpenAI's own billing unit (tokens) rather than a derived per-image figure. InputPricePerUnit is the TEXT input rate ($5/1M); OutputPricePerUnit is the IMAGE output rate ($30/1M). The other published rates: image input $8/1M, cached image input $2/1M (recorded in CacheReadPricePerUnit). Rates are unchanged from GPT Image 2.5, which MJ never carried. Batch API is half rate on every meter. Sunburst and Flare are priced identically; they differ in speed/detail trade-off, not rate. Source: https://developers.openai.com/api/docs/pricing (read 2026-11-09 via server-side search; developers.openai.com is not directly reachable from the research environment).",
+            "CacheReadPricePerUnit": 2,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "67BCC5BA-95CB-499A-8DF7-4CA847629DD6"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "D31A5072-FE62-4B8B-9AF0-C414156DC851"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GPT Image 2.6 Flare",
+      "PowerRank": 20,
+      "Description": "OpenAI's speed-optimised image generation and editing model, released November 4, 2026 alongside GPT Image 2.6 Sunburst as the engine behind ChatGPT Images 2.6. Flare generates roughly 50% faster than GPT Image 2.5 (third-party measurement via its OpenRouter listing, which also reports a 400K context); Sunburst is the higher-detail sibling. Shares 2.6's new capabilities: animated GIF output, SVG export, markup-guided edits, and a complexity parameter (defaults to high). Token-billed identically to Sunburst at $5/1M text input, $8/1M image input ($2/1M cached) and $30/1M image output. MJ never carried the 2.5 generation, so PriorVersionID points at GPT Image 2.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Image Generator",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 8,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT Image 2"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "7F5BBA51-848F-422C-976B-6DD130C27236"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAIImageGenerator",
+            "APIName": "gpt-image-2.6-flare",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "41AE6391-2F70-41E4-AACA-547B0CDB184F"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-11-04T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 5,
+            "OutputPricePerUnit": 30,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT Image 2.6 Flare (gpt-image-2.6-flare) pricing as of the November 4, 2026 launch, recorded in OpenAI's own billing unit (tokens) rather than a derived per-image figure. InputPricePerUnit is the TEXT input rate ($5/1M); OutputPricePerUnit is the IMAGE output rate ($30/1M). The other published rates: image input $8/1M, cached image input $2/1M (recorded in CacheReadPricePerUnit). Rates are unchanged from GPT Image 2.5, which MJ never carried. Batch API is half rate on every meter. Sunburst and Flare are priced identically; they differ in speed/detail trade-off, not rate. Source: https://developers.openai.com/api/docs/pricing (read 2026-11-09 via server-side search; developers.openai.com is not directly reachable from the research environment).",
+            "CacheReadPricePerUnit": 2,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "AB24D8DB-039C-414F-AD28-736D99548CA8"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "CA50D4B6-57E6-440E-8579-6DD5D85223F2"
     }
   }
 ]
