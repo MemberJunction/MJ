@@ -42,14 +42,14 @@ class Probe extends ResolverBase {
         entityObject: BaseEntity,
         input: { OldValues___?: Array<{ Key: string; Value: unknown }> } & Record<string, unknown>,
         contextUser: UserInfo
-    ): Promise<void> {
+    ): Promise<Record<string, unknown>> {
         const clientNewValues: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(input)) {
             if (k !== 'OldValues___') {
                 clientNewValues[k] = v;
             }
         }
-        await this.TestAndSetClientOldValuesToDBValues(input, clientNewValues, entityObject, contextUser);
+        return await this.TestAndSetClientOldValuesToDBValues(input, clientNewValues, entityObject, contextUser);
     }
 }
 const probe = new Probe();
@@ -592,5 +592,29 @@ describe('ResolverBase.TestAndSetClientOldValuesToDBValues — encrypted fields'
             error.mockRestore();
             log.mockRestore();
         }
+    });
+
+    it('returns only client-modified fields in the concurrencyBaseline map so untouched fields cannot trigger false conflicts', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedCredential(errorLogSaves);
+
+        const baseline = await probe.TestAndSet(
+            entity,
+            {
+                ID: credentialId,
+                Name: 'Updated Vendor Key',
+                Token: dbToken, // untouched by client (matches OldValues___)
+                OldValues___: [
+                    { Key: 'ID', Value: credentialId },
+                    { Key: 'Name', Value: 'Vendor key' },
+                    { Key: 'Token', Value: dbToken },
+                ],
+            },
+            user,
+        );
+
+        expect(baseline).toEqual({ Name: 'Vendor key' });
+        expect(baseline).not.toHaveProperty('Token');
+        expect(baseline).not.toHaveProperty('ID');
     });
 });

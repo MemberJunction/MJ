@@ -79651,6 +79651,9 @@ export class MJQueryField_ {
     @MaxLength(500)
     SourceObjectName?: string;
         
+    @Field(() => Boolean, {nullable: true, description: "True when this output field is returned by every branch variant of a templated query (or when the query does not use template branches). False when the field is only returned by a subset of conditional {% if %} branches, so generated TypeScript row interfaces mark the property optional."}) 
+    InAllBranchVariants?: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Query?: string;
@@ -79727,6 +79730,9 @@ export class CreateMJQueryFieldInput {
     @Field({ nullable: true })
     SourceObjectName: string | null;
 
+    @Field(() => Boolean, { nullable: true })
+    InAllBranchVariants?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -79790,6 +79796,9 @@ export class UpdateMJQueryFieldInput {
 
     @Field({ nullable: true })
     SourceObjectName?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    InAllBranchVariants?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
