@@ -50,6 +50,14 @@ describe('ClaudeAgentGenerator', () => {
     expect(r.Tests.find((t) => t.GenerationOutcome === 'Failed')?.FailureReason).toMatch(/never proved/);
     expect(r.Tokens).toMatchObject({ InputTokens: 100, OutputTokens: 50, Model: 'claude-haiku-5-5' });
   });
+  it('reports the end reason and turns of the result message and tags its tokens as generator usage', async () => {
+    const root = world();
+    const gen = new ClaudeAgentGenerator({ Sandbox: {} as never, ScratchRoot: root, Settings: DEFAULT_SETTINGS, PackageMap: { Get: () => ({ Name: '@memberjunction/core', Dir: 'packages/MJCore', HasVitest: true, HasTests: true }) } as never, TranscriptDir: root,
+      Runner: async function* () { yield { Type: 'result', Usage: { InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0 }, CostUSD: 0, Turns: 31, Subtype: 'error_max_turns' }; } });
+    const result = await gen.Generate(req(root));
+    expect(result.EndReason).toBe('error_max_turns'); expect(result.Turns).toBe(31);
+    expect(result.Tokens.Role).toBe('Generator');
+  });
   it('refuses a write outside the jit folder', async () => {
     const root = world(); let denied = '';
     const gen = new ClaudeAgentGenerator({ Sandbox: {} as never, ScratchRoot: root, Settings: DEFAULT_SETTINGS, PackageMap: { Get: () => ({ Name: '@memberjunction/core', Dir: 'packages/MJCore', HasVitest: true, HasTests: true }) } as never, TranscriptDir: root,
