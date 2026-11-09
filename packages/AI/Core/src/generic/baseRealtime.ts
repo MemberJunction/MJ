@@ -109,7 +109,10 @@ export function RealtimeDiagLog(message: string): void {
     if (v === 'true' || v === '1' || v === 'yes') {
         // Strip all control characters (C0/C1, incl. CR/LF/VT/FF/ESC/NEL) plus Unicode
         // line/paragraph separators, to prevent log injection (CWE-117).
-        const sanitized = message.replace(/[\r\n\p{Cc}\p{Zl}\p{Zp}]/gu, ' ');
+        // The trailing `.replace(/\n|\r/g, '')` is a runtime no-op (CR/LF are already gone); it is
+        // the exact form CodeQL's js/log-injection sanitizer model recognizes, which the
+        // replace-with-space above is not.
+        const sanitized = message.replace(/[\r\n\p{Cc}\p{Zl}\p{Zp}]/gu, ' ').replace(/\n|\r/g, '');
         // eslint-disable-next-line no-console
         console.log(sanitized);
     }
@@ -1269,8 +1272,16 @@ export interface RealtimeUsageModalityDetail {
      * a generated avatar's video). Part of the update's output total when the provider counts them there.
      */
     VideoTokens?: number;
-    /** Tokens served from the provider's prompt cache (billed at the cached rate). */
+    /**
+     * Tokens served from the provider's prompt cache (billed at the cached rate), of every modality. A subset of the
+     * update's input total, not added to it (OpenAI: `input_token_details.cached_tokens`).
+     */
     CachedTokens?: number;
+    /**
+     * The audio tokens served from the provider's prompt cache: a subset of both `AudioTokens` and `CachedTokens`
+     * (OpenAI: `input_token_details.cached_tokens_details.audio_tokens`). `AudioTokens` less this is the uncached audio.
+     */
+    CachedAudioTokens?: number;
     /**
      * Inbound only: the video frames sent so far on the session's video tracks (usage basis 'frames'),
      * a running total rather than an amount for this update. Client-side telemetry; comparing it

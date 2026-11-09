@@ -37,9 +37,8 @@
  * a real column when it needs a foreign key or becomes a first-class platform concept.
  */
 
-import { IsPlainObject } from '@memberjunction/global';
+import { IsPlainObject, SafeDeepMerge } from '@memberjunction/global';
 
-import { JSONObject, JSONValue } from './baseRealtime';
 import type { RealtimeTrackDescriptor } from './realtimeTracks';
 import type { EmbeddingInputType } from './embed.types';
 
@@ -179,10 +178,11 @@ export interface RealtimeUnitPrice {
 }
 
 /**
- * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
- * their own; the cost rows stay the authority for token prices. A price belongs to the host that
- * charges it, so set this on the model-vendor row: a price on the model or the model type would
- * reach every vendor that serves the model.
+ * Prices for realtime usage that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own: avatar video, and audio tokens, which providers bill at a different rate from the
+ * text tokens a cost row prices. The cost rows stay the authority for every other token price. A
+ * price belongs to the host that charges it, so set this on the model-vendor row: a price on the
+ * model or the model type would reach every vendor that serves the model.
  */
 export interface RealtimePricingSettings {
     /**
@@ -196,6 +196,22 @@ export interface RealtimePricingSettings {
      * per-minute price would also count the idle avatar between answers.
      */
     AvatarVideoOutput?: RealtimeUnitPrice | null;
+    /**
+     * The price of audio input tokens, charged on a line of its own instead of at the cost row's
+     * input rate. Realtime providers bill audio tokens at a different rate from text tokens (GPT
+     * Realtime: several times the text rate), and a cost row holds one input rate. `'Per 1M Tokens'`
+     * only; any other unit is not applied. Cached audio input tokens are priced at the cost row's cache-read rate, not here. Without this
+     * price, audio input tokens are priced at the cost row's input rate and the run's default cost
+     * line is marked as blended.
+     */
+    AudioInput?: RealtimeUnitPrice | null;
+    /**
+     * The price of audio output tokens, charged on a line of its own instead of at the cost row's
+     * output rate. `'Per 1M Tokens'` only; any other unit is not applied. Without this price, audio
+     * output tokens are priced at the cost row's output rate and the run's default cost line is
+     * marked as blended.
+     */
+    AudioOutput?: RealtimeUnitPrice | null;
 }
 
 /** The `Realtime` section — knobs the realtime drivers consume. */
@@ -543,14 +559,14 @@ function parseConfigurationBag<T>(json: string | null | undefined, caller: strin
 
 /**
  * Resolves the EFFECTIVE model configuration by deep-merging the catalog layers, base first —
- * type default < model < vendor default < model-vendor. Merge semantics are identical to the realtime config
- * cascade (`DeepMergeConfigs` in `@memberjunction/ai-agents` — duplicated here because package
- * layering runs the other way):
+ * type default < model < vendor default < model-vendor, via `SafeDeepMerge` in `@memberjunction/global`
+ * (the same merge the realtime config cascade, `DeepMergeConfigs` in `@memberjunction/ai-agents`, uses):
  *
  * - plain object vs plain object → recursive per-key merge (a vendor row overriding ONE
  *   `Realtime.TurnDetection` knob does not wipe the model's other sections);
  * - anything else (arrays, strings, numbers, booleans, `null`) → the later value REPLACES;
- * - `null`/`undefined` LAYERS are skipped entirely; inputs are never mutated.
+ * - `null`/`undefined` LAYERS are skipped entirely; inputs are never mutated;
+ * - `__proto__`, `constructor` and `prototype` keys are skipped at every depth.
  *
  * @param layers The catalog layers, base first (type, model, vendor).
  * @returns The merged configuration, or `null` when every layer is absent/empty.
@@ -558,36 +574,8 @@ function parseConfigurationBag<T>(json: string | null | undefined, caller: strin
 export function ResolveEffectiveModelConfiguration(
     ...layers: Array<AIModelConfiguration | null | undefined>
 ): AIModelConfiguration | null {
-    const result: JSONObject = {};
-    for (const layer of layers) {
-        if (!IsPlainObject(layer)) {
-            continue;
-        }
-        mergeInto(result, layer as unknown as JSONObject);
-    }
+    const result = SafeDeepMerge(...layers);
     return Object.keys(result).length > 0 ? (result as AIModelConfiguration) : null;
-}
-
-/** Recursive worker for {@link ResolveEffectiveModelConfiguration} — merges `source` into `target`. */
-function mergeInto(target: JSONObject, source: JSONObject): void {
-    for (const key of Object.keys(source)) {
-        const incoming = source[key];
-        if (incoming === undefined) {
-            continue;
-        }
-        const existing = target[key];
-        if (IsPlainObject(existing) && IsPlainObject(incoming)) {
-            mergeInto(existing, incoming);
-        } else if (IsPlainObject(incoming)) {
-            const copy: JSONObject = {};
-            mergeInto(copy, incoming);
-            target[key] = copy;
-        } else if (Array.isArray(incoming)) {
-            target[key] = incoming.slice() as JSONValue[];
-        } else {
-            target[key] = incoming;
-        }
-    }
 }
 
 /**

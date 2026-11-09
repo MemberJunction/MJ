@@ -405,6 +405,17 @@ describe('RecordTagsComponent — Related Records', () => {
             expect(cloudItems[1].Text).toBe('ML');
         });
 
+        it('should skip items whose Tag label is null (tag row missing)', () => {
+            const items = [
+                { Tag: 'AI', Weight: 0.9, ID: 'ti-1', TagID: 'tag-1' },
+                { Tag: null, Weight: 0.5, ID: 'ti-2', TagID: 'tag-missing-1' },
+                { Tag: null, Weight: 0.4, ID: 'ti-3', TagID: 'tag-missing-2' },
+            ] as unknown as import('@memberjunction/core-entities').MJTaggedItemEntity[];
+
+            const cloudItems = callPrivate(component, 'buildCloudItems', items) as Array<{ Text: string }>;
+            expect(cloudItems.map(i => i.Text)).toEqual(['AI']);
+        });
+
         it('should return empty array for no items', () => {
             const cloudItems = callPrivate(component, 'buildCloudItems', []) as unknown[];
             expect(cloudItems).toEqual([]);

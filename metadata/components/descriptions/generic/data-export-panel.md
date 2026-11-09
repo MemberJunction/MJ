@@ -1,6 +1,8 @@
+**Deprecated**: do not use DataExportPanel in new components. DataGrid, EntityDataGrid and SimpleChart export themselves (CSV, Excel, and PNG for charts); wrap any other data element in `ExportableData`. A whole component is exported as PDF from the artifact viewer. DataExportPanel stays available so existing components keep working.
+
 Multi-format export component supporting CSV, Excel (XLSX), and PDF with two modes: UI (dropdown button with format selection) or headless (programmatic export). Exports tabular data (array of objects + column definitions) OR HTML elements (charts, dashboards) to PDF via html2canvas. Column selection, preview, custom formatting (dates, numbers, currency). PDF features: orientation (portrait/landscape), page size (A4/letter), margins, multi-page support, data table inclusion, AI insights markdown rendering. Excel: auto-width columns, filters, custom sheet names. CSV: proper escaping, chunked processing for large datasets. Progress tracking and error callbacks.
 
-#### DataExportPanel - ONLY use when:
+#### DataExportPanel (existing components only) - used when:
 ✅ Need to export tabular data (array of records) to CSV/Excel/PDF
 ✅ Want to export visualizations (charts, dashboards) as PDF snapshots
 ✅ Need user-facing export UI with dropdown button

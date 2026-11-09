@@ -425,10 +425,12 @@ export class RecordTagsComponent extends BaseAngularComponent implements OnInit 
      * Converts TaggedItems to WordCloudItem format.
      */
     private buildCloudItems(items: MJTaggedItemEntity[]): WordCloudItem[] {
-        return items.map(item => ({
+        // A tagged item whose tag row is missing has a null Tag label; skip it so the
+        // word cloud gets no empty, duplicate-keyed entries.
+        return items.flatMap(item => item.Tag == null ? [] : [{
             Text: item.Tag,
             Weight: item.Weight,
             Metadata: { TaggedItemID: item.ID, TagID: item.TagID }
-        }));
+        }]);
     }
 }
