@@ -282,11 +282,12 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
               type="button"
               class="mj-slides-tool-btn"
               (click)="OnSaveVersionCheckpoint()"
-              title="Compact Yjs Room into MJ: Artifact Versions"
+              [disabled]="!HasUnsavedChanges"
+              [title]="HasUnsavedChanges ? 'Compact Yjs Room into MJ: Artifact Versions' : 'No unsaved changes to save'"
               data-testid="save-slide-version-btn"
             >
               <i class="fa-solid fa-cloud-arrow-up"></i>
-              <span>Save v{{ LastSavedVersionNumber || CurrentVersionNumber }}</span>
+              <span>{{ !HasUnsavedChanges && LastSavedVersionNumber ? 'Saved v' + LastSavedVersionNumber : 'Save v' + (LastSavedVersionNumber || CurrentVersionNumber) }}</span>
             </button>
           }
 
@@ -560,7 +561,7 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
                                 <option value="table">Data Table</option>
                                 <option value="big-number">KPI Big Number</option>
                                 <option value="quote">Executive Quote</option>
-                                <option value="mj-block">Live MJ Block / OLE</option>
+                                <option value="mj-block">Live MJ Block / Artifact</option>
                               </select>
 
                               <button
@@ -577,10 +578,10 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
                                 type="button"
                                 class="mj-slides-mini-btn"
                                 (click)="EmbedInlineWhiteboardInRegion(region)"
-                                title="Embed Interactive MS OLE Whiteboard Canvas (§ 3.4.1)"
+                                title="Embed Interactive Whiteboard Canvas (§ 3.4.1)"
                                 [attr.data-testid]="'region-insert-whiteboard-' + region.RegionID"
                               >
-                                <i class="fa-solid fa-chalkboard"></i> + OLE Whiteboard
+                                <i class="fa-solid fa-chalkboard"></i> + Whiteboard
                               </button>
 
                               <button
@@ -1931,6 +1932,22 @@ export class SlideDeckArtifactViewerComponent
   public ResolvedPermissions: ResolvedArtifactPermissions | null = null;
   public CurrentVersionNumber = 1;
   public LastSavedVersionNumber = 0;
+  private lastSavedComparableDeckJson = '';
+
+  public get HasUnsavedChanges(): boolean {
+    if (!this.lastSavedComparableDeckJson) {
+      return false;
+    }
+    return this.getComparableDeckJson(this.Deck) !== this.lastSavedComparableDeckJson;
+  }
+
+  private getComparableDeckJson(deck: SlideDeckSpec): string {
+    const copy: SlideDeckSpec = {
+      ...deck,
+      UpdatedAt: undefined,
+    };
+    return JSON.stringify(copy);
+  }
 
   // Brand Theme Seed Form State (Accept #4)
   public BrandSeedOrgName = 'Acme Enterprise';
@@ -2456,7 +2473,7 @@ export class SlideDeckArtifactViewerComponent
       BlockID: `slide-wb-${this.ActiveSlide.SlideID}-${region.RegionID}`,
       Kind: 'Artifact',
       Mode: 'Live',
-      Title: 'Interactive Architecture Whiteboard (OLE)',
+      Title: 'Interactive Architecture Whiteboard',
       ArtifactID: childArtifactId,
       ArtifactType: 'Whiteboard',
       EmbedMode: 'Inline',
@@ -2877,7 +2894,7 @@ export class SlideDeckArtifactViewerComponent
   }
 
   public async OnSaveVersionCheckpoint(): Promise<void> {
-    if (!this.IsEditable) {
+    if (!this.IsEditable || !this.HasUnsavedChanges) {
       return;
     }
     const sentOverWs = this.session?.RequestSaveVersion() ?? false;
@@ -3141,6 +3158,7 @@ export class SlideDeckArtifactViewerComponent
     const serialized = SlideDeckEngine.Instance.SerializeDeckSpec(this.Deck);
     this.RawDeckJsonText = serialized;
     this.BaselineDeckJsonText = serialized;
+    this.lastSavedComparableDeckJson = this.getComparableDeckJson(this.Deck);
 
     this.restoreWorkspacePreferences();
     this.setupCollaborationSession(artifactId, serialized);
@@ -3189,6 +3207,7 @@ export class SlideDeckArtifactViewerComponent
         this.cdr.markForCheck();
       }),
       this.session.VersionSaved$.subscribe(({ versionNumber }) => {
+        this.lastSavedComparableDeckJson = this.getComparableDeckJson(this.Deck);
         this.LastSavedVersionNumber = versionNumber;
         this.CurrentVersionNumber = versionNumber;
         this.cdr.markForCheck();
@@ -3537,7 +3556,7 @@ export class SlideDeckArtifactViewerComponent
         artifact.UserID = user.ID;
       }
       artifact.Name = name;
-      artifact.Description = 'Inline OLE Whiteboard embedded in MJ Slides presentation';
+      artifact.Description = 'Inline Whiteboard embedded in MJ Slides presentation';
       const wbType = ArtifactMetadataEngine.Instance.FindArtifactType('Whiteboard');
       artifact.TypeID = wbType?.ID || 'D37C0785-C5FD-42B4-9442-D48B076E2BA4';
       if (this.artifactVersion?.ArtifactID) {
@@ -3606,6 +3625,7 @@ export class SlideDeckArtifactViewerComponent
         !this.artifactVersion?.ArtifactID ||
         typeof (provider as { GetEntityObject?: unknown }).GetEntityObject !== 'function'
       ) {
+        this.lastSavedComparableDeckJson = this.getComparableDeckJson(this.Deck);
         this.LastSavedVersionNumber = this.CurrentVersionNumber + 1;
         this.CurrentVersionNumber = this.LastSavedVersionNumber;
         this.cdr.markForCheck();
@@ -3624,11 +3644,13 @@ export class SlideDeckArtifactViewerComponent
       ver.Content = SlideDeckEngine.Instance.SerializeDeckSpec(this.Deck);
       const saved = await ver.Save();
       if (saved) {
+        this.lastSavedComparableDeckJson = this.getComparableDeckJson(this.Deck);
         this.CurrentVersionNumber = ver.VersionNumber;
         this.LastSavedVersionNumber = ver.VersionNumber;
       }
       this.cdr.markForCheck();
     } catch {
+      this.lastSavedComparableDeckJson = this.getComparableDeckJson(this.Deck);
       this.LastSavedVersionNumber = this.CurrentVersionNumber + 1;
       this.CurrentVersionNumber = this.LastSavedVersionNumber;
       this.cdr.markForCheck();

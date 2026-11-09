@@ -254,8 +254,8 @@ export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
             <button
               type="button"
               class="mj-docs-btn mj-docs-btn--primary"
-              [disabled]="IsSavingVersion"
-              title="Save Document Version"
+              [disabled]="IsSavingVersion || !HasUnsavedChanges"
+              [title]="HasUnsavedChanges ? 'Save Document Version' : 'No unsaved changes to save'"
               data-testid="save-doc-version-btn"
               (click)="OnSaveDocumentVersion()"
             >
@@ -361,7 +361,7 @@ export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
                       <i class="fas fa-cube mj-docs-outline-icon mj-docs-outline-icon--block"></i>
                       <span class="mj-docs-outline-title">{{ item.Title }}</span>
                       <span class="mj-docs-badge" [class.mj-docs-badge--live]="item.BlockMode === 'Live'">
-                        {{ item.BlockType === 'Artifact' ? 'OLE' : item.BlockMode }}
+                        {{ item.BlockType === 'Artifact' ? 'Inline' : item.BlockMode }}
                       </span>
                     }
                   </li>
@@ -371,7 +371,7 @@ export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
 
             <div class="mj-docs-outline-rail__footer">
               <div><i class="fas fa-bolt"></i> {{ WordStats.LiveBlocks }} Live MJ Blocks</div>
-              <div><i class="fas fa-chalkboard"></i> {{ WordStats.EmbeddedArtifacts }} OLE Artifacts</div>
+              <div><i class="fas fa-chalkboard"></i> {{ WordStats.EmbeddedArtifacts }} Embedded Artifacts</div>
             </div>
           </aside>
         }
@@ -767,7 +767,7 @@ export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
                                 seg.Descriptor.Title || seg.Descriptor.ArtifactType || 'Embedded Artifact'
                               }}</strong>
                               <span class="mj-docs-badge mj-docs-badge--brand">
-                                OLE · {{ seg.Descriptor.ArtifactType || 'Artifact' }}
+                                Embedded · {{ seg.Descriptor.ArtifactType || 'Artifact' }}
                               </span>
                               <span class="mj-docs-badge">
                                 v{{ GetEmbeddedArtifactVersion(seg.Descriptor).VersionNumber || 1 }}
@@ -796,7 +796,7 @@ export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
                                     {{
                                       IsInlineEditingBlock(seg.Descriptor.BlockID)
                                         ? 'Done Inline Editing'
-                                        : 'Edit Inline (OLE Canvas)'
+                                        : 'Edit Inline Canvas'
                                     }}
                                   </span>
                                 </button>
@@ -814,7 +814,7 @@ export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
                               <button
                                 type="button"
                                 class="mj-docs-btn"
-                                title="Expand / Collapse Full Screen OLE Modal"
+                                title="Expand / Collapse Full Screen Modal"
                                 [attr.data-testid]="'expand-ole-fullscreen-btn-' + seg.Descriptor.BlockID"
                                 (click)="ToggleExpandOleBlock(seg.Descriptor)"
                               >
@@ -1208,7 +1208,7 @@ export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
           <div class="mj-docs-modal" role="dialog" aria-labelledby="insert-block-modal-title">
             <div class="mj-docs-modal__header">
               <h3 id="insert-block-modal-title">
-                Configure {{ PendingBlockIsWhiteboard ? 'Inline Whiteboard (OLE)' : PendingBlockInsertType }} Block
+                Configure {{ PendingBlockIsWhiteboard ? 'Inline Whiteboard' : PendingBlockInsertType }} Block
               </h3>
             </div>
             <div class="mj-docs-modal__body">
@@ -3224,9 +3224,9 @@ export class MarkdownArtifactViewerComponent
                   Y: 80,
                   W: 210,
                   H: 76,
-                  Text: 'OLE Inline Whiteboard',
+                  Text: 'Inline Whiteboard',
                   Sub: 'WhiteboardState v2',
-                  Tag: 'OLE Plugin',
+                  Tag: 'Artifact Plugin',
                   Author: 'agent',
                   Z: 2,
                 },
@@ -3607,7 +3607,7 @@ export class MarkdownArtifactViewerComponent
               W: 210,
               H: 76,
               Text: block.Title || 'Embedded Whiteboard Canvas',
-              Sub: 'Interactive OLE Block',
+              Sub: 'Interactive Embedded Artifact',
               Author: 'user',
               Z: 1,
             },
@@ -3960,12 +3960,20 @@ export class MarkdownArtifactViewerComponent
     this.StatusBannerMessage = 'Restored selected version content into working document.';
   }
 
+  public get HasUnsavedChanges(): boolean {
+    const latestSaved =
+      this.SavedVersionSnapshots.length > 0
+        ? this.SavedVersionSnapshots[this.SavedVersionSnapshots.length - 1].Content
+        : this.initialLoadedMarkdown;
+    return this.MarkdownContent !== latestSaved;
+  }
+
   /**
    * Saves a new `MJArtifactVersionEntity` snapshot, triggers room compaction when connected via WebSocket,
    * persists to `MJ: Artifact Versions` when connected to a provider, and emits `ContentCommitted`.
    */
   public async OnSaveDocumentVersion(): Promise<void> {
-    if (!this.CanUserEdit || this.IsSavingVersion) {
+    if (!this.CanUserEdit || this.IsSavingVersion || !this.HasUnsavedChanges) {
       return;
     }
     this.IsSavingVersion = true;

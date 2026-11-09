@@ -1174,7 +1174,7 @@ export class DocumentCollaborationService {
     },
     {
       Command: '/whiteboard',
-      Label: 'Inline Whiteboard (OLE Canvas)',
+      Label: 'Inline Whiteboard',
       Description: 'Embed an interactive Whiteboard canvas with inline editing & delegate permissions',
       Category: 'OLE Artifact',
       Icon: 'fa-chalkboard',
@@ -1182,7 +1182,7 @@ export class DocumentCollaborationService {
     },
     {
       Command: '/artifact',
-      Label: 'Embed Existing MJ Artifact (OLE)',
+      Label: 'Embed Existing MJ Artifact',
       Description: 'Embed any MJ Artifact by ID with version pinning and inline plugin rendering',
       Category: 'OLE Artifact',
       Icon: 'fa-cube',

@@ -267,10 +267,10 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
               type="button"
               class="mj-sheets-tool-btn"
               (click)="AddEmbeddedWhiteboardOnSheet()"
-              title="Embed Interactive OLE Whiteboard Canvas"
+              title="Embed Interactive Whiteboard Canvas"
               data-testid="sheet-add-whiteboard-btn"
             >
-              <i class="fa-solid fa-chalkboard"></i> + OLE Whiteboard
+              <i class="fa-solid fa-chalkboard"></i> + Whiteboard
             </button>
           </div>
         }
@@ -333,12 +333,12 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
               type="button"
               class="mj-sheets-tool-btn mj-sheets-save-btn"
               (click)="SaveNewArtifactVersion()"
-              [disabled]="IsSavingVersion"
-              title="Compact Yjs Working State into New MJ: Artifact Version"
+              [disabled]="IsSavingVersion || !HasUnsavedChanges"
+              [title]="HasUnsavedChanges ? 'Compact Yjs Working State into New MJ: Artifact Version' : 'No unsaved changes to save'"
               data-testid="sheet-save-version-btn"
             >
               <i class="fa-solid fa-floppy-disk"></i>
-              <span>{{ LastSavedVersionNumber ? 'Saved v' + LastSavedVersionNumber : 'Save Version' }}</span>
+              <span>{{ !HasUnsavedChanges && LastSavedVersionNumber ? 'Saved v' + LastSavedVersionNumber : 'Save Version' }}</span>
             </button>
           }
 
@@ -772,12 +772,12 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
                   </div>
                 }
 
-                <!-- Embedded OLE Artifacts / Whiteboards (§ 3.4.1) -->
+                <!-- Embedded Artifacts / Whiteboards (§ 3.4.1) -->
                 @if (ActiveSheet.EmbeddedArtifacts && ActiveSheet.EmbeddedArtifacts.length > 0) {
                   <div class="mj-sheets-objects-section" data-testid="sheets-embedded-artifacts-section">
                     <div class="mj-sheets-section-header">
                       <i class="fa-solid fa-chalkboard"></i>
-                      <span>Embedded OLE Artifacts ({{ ActiveSheet.EmbeddedArtifacts.length }})</span>
+                      <span>Embedded Artifacts ({{ ActiveSheet.EmbeddedArtifacts.length }})</span>
                     </div>
                     <div class="mj-sheets-cards-row">
                       @for (emb of ActiveSheet.EmbeddedArtifacts; track emb.EmbedID) {
@@ -795,7 +795,7 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
                               </span>
                             </div>
                             <span class="mj-sheets-mode-badge">
-                              <i class="fa-solid fa-pen-nib"></i> Inline OLE
+                              <i class="fa-solid fa-pen-nib"></i> Inline Canvas
                             </span>
                           </div>
                           <div class="mj-sheets-ole-host" [attr.data-testid]="'sheet-ole-host-' + emb.EmbedID">
@@ -2158,12 +2158,28 @@ export class SpreadsheetArtifactViewerComponent
   public IsSavingVersion = false;
   public LastSavedVersionNumber: number | null = null;
   public StatusBannerMessage = '';
+  private lastSavedComparableJson = '';
 
   public EmbeddedArtifactVersions: Record<string, MJArtifactVersionEntity> = {};
   private lastTableResults: Record<string, DocumentBlockExecutionResult> = {};
 
   private readonly subs: Subscription[] = [];
   private permissionsUnsubscribe: (() => void) | null = null;
+
+  public get HasUnsavedChanges(): boolean {
+    if (!this.lastSavedComparableJson) {
+      return false;
+    }
+    return this.getComparableWorkbookJson(this.Workbook) !== this.lastSavedComparableJson;
+  }
+
+  private getComparableWorkbookJson(wb: WorkbookSpec): string {
+    const normalized: WorkbookSpec = {
+      ...wb,
+      UpdatedAt: '',
+    };
+    return JSON.stringify(normalized);
+  }
 
   public get ActiveSheet(): WorksheetSpec {
     return (
@@ -2308,6 +2324,7 @@ export class SpreadsheetArtifactViewerComponent
     const serialized = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
     this.InitialSerializedWorkbook = serialized;
     this.SourceJsonText = serialized;
+    this.lastSavedComparableJson = this.getComparableWorkbookJson(this.Workbook);
     this.syncFormulaBarFromActiveCell();
 
     const artifactId = this.artifactVersion?.ArtifactID || this.Workbook.WorkbookID;
@@ -2373,6 +2390,7 @@ export class SpreadsheetArtifactViewerComponent
         this.cdr.markForCheck();
       }),
       session.VersionSaved$.subscribe((saved: { versionId: string; versionNumber: number }) => {
+        this.lastSavedComparableJson = this.getComparableWorkbookJson(this.Workbook);
         this.LastSavedVersionNumber = saved.versionNumber;
         this.IsSavingVersion = false;
         this.StatusBannerMessage = `Saved immutable Artifact Version v${saved.versionNumber}`;
@@ -2385,6 +2403,7 @@ export class SpreadsheetArtifactViewerComponent
     }
 
     await this.RefreshAllLiveData(false);
+    this.lastSavedComparableJson = this.getComparableWorkbookJson(this.Workbook);
     await this.hydrateEmbeddedArtifactVersions();
     await this.loadPersistedSheetRangeComments();
     this.cdr.markForCheck();
@@ -3000,7 +3019,7 @@ export class SpreadsheetArtifactViewerComponent
       if (wbType && artifactsEntityInfo) {
         const childArt = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', user);
         childArt.Name = wbTitle;
-        childArt.Description = `Inline OLE Whiteboard embedded in worksheet ${this.ActiveSheet.Name}`;
+        childArt.Description = `Inline Whiteboard embedded in worksheet ${this.ActiveSheet.Name}`;
         childArt.TypeID = wbType.ID;
         childArt.UserID = user?.ID || this.artifactVersion?.UserID || '';
         childArt.EnvironmentID = 'F51358F3-9447-4176-B313-BF8025FD8D09';
@@ -3494,7 +3513,7 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public async SaveNewArtifactVersion(): Promise<void> {
-    if (!this.CanEdit || this.IsSavingVersion) return;
+    if (!this.CanEdit || this.IsSavingVersion || !this.HasUnsavedChanges) return;
     this.IsSavingVersion = true;
     const serialized = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
     this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
@@ -3516,9 +3535,12 @@ export class SpreadsheetArtifactViewerComponent
           ver.UserID = md.CurrentUser?.ID || this.artifactVersion.UserID;
           ver.Content = serialized;
           if (await ver.Save()) {
+            this.lastSavedComparableJson = this.getComparableWorkbookJson(this.Workbook);
             this.LastSavedVersionNumber = nextVerNum;
             this.StatusBannerMessage = `Saved Artifact Version v${nextVerNum}`;
           }
+        } else {
+          this.lastSavedComparableJson = this.getComparableWorkbookJson(this.Workbook);
         }
       } catch {
         // Fallback when offline

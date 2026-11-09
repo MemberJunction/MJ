@@ -38,7 +38,7 @@ import {
         <div class="wb-toolbar-mode-badge">
           @if (!readonly) {
             <span class="wb-mode-pill wb-mode-pill--live">
-              <i class="fa-solid fa-pen-ruler" aria-hidden="true"></i> Interactive Canvas (OLE)
+              <i class="fa-solid fa-pen-ruler" aria-hidden="true"></i> Interactive Canvas
             </span>
           } @else {
             <span class="wb-mode-pill">
