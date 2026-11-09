@@ -4463,8 +4463,10 @@ export class AIPromptRunner extends BaseModelRunner {
       // Use raw result as fallback when parsed result is undefined, null, or empty string
       resultToSave = rawResult;
       
-      // Also set error message when we have to fall back to raw result
-      if (!promptRun.ErrorMessage) {
+      // Also set error message when we have to fall back to raw result. A turn that answered with tool calls has
+      // nothing else to parse: its empty text is the expected result, not a parse failure.
+      const answeredWithToolCalls = (modelResult.data?.choices?.[0]?.message?.toolCalls?.length ?? 0) > 0;
+      if (!promptRun.ErrorMessage && !answeredWithToolCalls) {
         const validationErrors = parsedResult.validationResult?.Errors;
         if (validationErrors && validationErrors.length > 0) {
           promptRun.ErrorMessage = `JSON parsing/validation failed: ${validationErrors.map(e => e.Message).join('; ')}`;
