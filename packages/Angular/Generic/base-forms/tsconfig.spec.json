@@ -70,7 +70,9 @@
     "src/lib/preview-popover/record-preview-popover.component.ts",
     "src/lib/field/form-field-live-merge.component.dom.test.ts",
     "src/lib/container/live-edit-mode-merge.component.dom.test.ts",
-    "src/lib/subtype-ui-driver/**/*.ts"
+    "src/lib/subtype-ui-driver/**/*.ts",
+    "src/lib/links/record-link.directive.ts",
+    "src/lib/comments/*.ts"
   ],
   "exclude": [
     "node_modules",

@@ -1,0 +1,234 @@
+/* ============================================================================
+   FIELD SUGGESTION CARD (EntitySubtypeUIDriverBase: FieldSuggestionCardComponent)
+   Uses global --mj-* design tokens exclusively.
+   ============================================================================ */
+
+.mj-field-suggestion-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--mj-radius-sm, 6px);
+  background: var(--mj-bg-surface-sunken);
+  border: 1px dashed color-mix(in srgb, var(--mj-brand-primary) 42%, var(--mj-border-default));
+}
+
+.mj-field-suggestion-card--accepted {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--mj-status-success) 45%, var(--mj-border-subtle));
+  background: color-mix(in srgb, var(--mj-status-success) 8%, var(--mj-bg-surface-sunken));
+}
+
+.mj-field-suggestion-card--rejected,
+.mj-field-suggestion-card--superseded {
+  border-style: solid;
+  border-color: var(--mj-border-subtle);
+  opacity: 0.85;
+}
+
+.mj-field-suggestion-card__meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.mj-field-suggestion-card__provenance {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.mj-field-suggestion-card__kind-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--mj-brand-primary);
+}
+
+.mj-field-suggestion-card__source-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: var(--mj-radius-full, 9999px);
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-subtle);
+  color: var(--mj-text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.mj-field-suggestion-card__confidence {
+  padding-left: 4px;
+  border-left: 1px solid var(--mj-border-subtle);
+  color: var(--mj-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.mj-field-suggestion-card__outcome-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: var(--mj-radius-full, 9999px);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.mj-field-suggestion-card__outcome-pill--pending {
+  background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+}
+
+.mj-field-suggestion-card__outcome-pill--accepted {
+  background: color-mix(in srgb, var(--mj-status-success) 16%, var(--mj-bg-surface));
+  color: var(--mj-status-success);
+}
+
+.mj-field-suggestion-card__outcome-pill--rejected {
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error);
+}
+
+.mj-field-suggestion-card__outcome-pill--superseded {
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-subtle);
+  color: var(--mj-text-muted);
+}
+
+.mj-field-suggestion-card__diff {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 8px;
+}
+
+.mj-field-suggestion-card__value-box {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 8px;
+  border-radius: var(--mj-radius-sm, 6px);
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-subtle);
+  min-width: 0;
+}
+
+.mj-field-suggestion-card__value-box--ghost {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 50%, var(--mj-border-default));
+  background: color-mix(in srgb, var(--mj-brand-primary) 7%, var(--mj-bg-surface-card));
+}
+
+.mj-field-suggestion-card--accepted .mj-field-suggestion-card__value-box--ghost {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--mj-status-success) 45%, var(--mj-border-subtle));
+  background: var(--mj-bg-surface-card);
+}
+
+.mj-field-suggestion-card--rejected .mj-field-suggestion-card__value-box--ghost .mj-field-suggestion-card__value-code--ghost,
+.mj-field-suggestion-card--superseded .mj-field-suggestion-card__value-box--ghost .mj-field-suggestion-card__value-code--ghost {
+  text-decoration: line-through;
+  color: var(--mj-text-muted);
+}
+
+.mj-field-suggestion-card__value-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--mj-text-muted);
+}
+
+.mj-field-suggestion-card__value-code {
+  font-family: var(--mj-font-mono, monospace);
+  font-size: 12px;
+  color: var(--mj-text-secondary);
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.mj-field-suggestion-card__value-code--ghost {
+  color: var(--mj-text-primary);
+  font-weight: 600;
+}
+
+.mj-field-suggestion-card__value-box--clearing .mj-field-suggestion-card__value-code--ghost {
+  font-style: italic;
+  color: var(--mj-text-secondary);
+}
+
+.mj-field-suggestion-card__arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mj-text-muted);
+  font-size: 11px;
+}
+
+.mj-field-suggestion-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.mj-field-suggestion-card__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: var(--mj-radius-sm, 6px);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+}
+
+.mj-field-suggestion-card__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mj-field-suggestion-card__btn--accept {
+  border: 1px solid var(--mj-brand-primary);
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
+}
+
+.mj-field-suggestion-card__btn--accept:hover:not(:disabled) {
+  background: var(--mj-brand-primary-hover);
+  border-color: var(--mj-brand-primary-hover);
+}
+
+.mj-field-suggestion-card__btn--reject {
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-secondary);
+}
+
+.mj-field-suggestion-card__btn--reject:hover:not(:disabled) {
+  border-color: var(--mj-status-error);
+  color: var(--mj-status-error);
+  background: var(--mj-status-error-bg);
+}
+
+.mj-field-suggestion-card__btn--discuss {
+  margin-left: auto;
+  border: 1px solid var(--mj-border-subtle);
+  background: transparent;
+  color: var(--mj-text-secondary);
+}
+
+.mj-field-suggestion-card__btn--discuss:hover:not(:disabled) {
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary);
+  background: var(--mj-bg-surface-hover);
+}

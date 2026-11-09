@@ -61,6 +61,8 @@ export * from './lib/toolbar/base-form-toolbar-action';
 export * from './lib/toolbar/actions/record-links-toolbar-action';
 export * from './lib/toolbar/actions/record-comments-toolbar-action';
 export * from './lib/comments/form-record-comments-coordinator.service';
+export * from './lib/comments/comment-card-driver-host.component';
+export * from './lib/comments/field-suggestion-card.component';
 export * from './lib/comments/record-comments.component';
 export * from './lib/field/form-field.component';
 export * from './lib/field/fk-search-utils';

@@ -921,6 +921,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.recordRefresh.SingleFieldRestoreRequested$.pipe(takeUntil(this.destroy$)).subscribe((req) => {
       void this.onSingleFieldRestoreRequested(req);
     });
+    this.CommentsCoordinator.BindRefreshCoordinator(this.recordRefresh);
     this.CommentsCoordinator.Changed$.pipe(takeUntil(this.destroy$)).subscribe(() => {
       this.ShowRecordComments = this.CommentsCoordinator.IsDrawerOpen;
       this.CommentCount = this.CommentsCoordinator.Rollup.TotalOpenCount;
@@ -2692,6 +2693,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    */
   private refreshAfterSave(): void {
     const record = this.EffectiveRecord;
+    if (record?.IsSaved && this.CommentsCoordinator.IsLoaded) {
+      void this.CommentsCoordinator.LoadForRecord(record, this.ProviderToUse, true);
+    }
     if (!record?.EntityInfo?.TrackRecordChanges) return;
 
     // Refresh version count badge

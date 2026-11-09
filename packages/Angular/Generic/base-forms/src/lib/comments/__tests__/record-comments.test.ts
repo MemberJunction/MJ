@@ -1,15 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BaseEntity, EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
+    COMMENT_TYPE_CODES,
     ConversationEngine,
+    MJCommentEntity,
     MJConversationDetailEntity,
     MJConversationEntity,
+    MJFieldSuggestionEntity,
     UserInfoEngine
 } from '@memberjunction/core-entities';
+import { NormalizeUUID } from '@memberjunction/global';
 import { FormRecordCommentsCoordinatorService } from '../form-record-comments-coordinator.service';
 import { MjRecordCommentsComponent } from '../record-comments.component';
 import { RecordCommentsToolbarAction } from '../../toolbar/actions/record-comments-toolbar-action';
 import { FormToolbarActionLifecycleContext } from '../../toolbar/base-form-toolbar-action';
+import { FormRecordRefreshCoordinator } from '../../form-record-refresh.coordinator';
 
 function makeEntityInfo(deniedFields: string[] = []): EntityInfo {
     const deniedSet = new Set(deniedFields.map((f) => f.toLowerCase()));
@@ -485,6 +490,179 @@ describe('MjRecordCommentsComponent', () => {
         } finally {
             setSettingSpy.mockRestore();
             getSettingSpy.mockRestore();
+        }
+    });
+
+    it('computes per-type field badge counts, filters threads by type, resolves FieldSuggestionCardComponent UIDriverClass, and expands Discuss composer on demand', async () => {
+        const entityInfo = makeEntityInfo();
+        const record = makeRecord(entityInfo, true);
+        const noteId = 'C0000000-0000-0000-0000-000000000010';
+        const suggId = 'C0000000-0000-0000-0000-000000000020';
+
+        const cNote = makeConv({
+            ID: noteId,
+            AnchorType: 'Field',
+            AnchorKey: 'Email',
+            AnchorMetadataObject: { fieldName: 'Email' }
+        });
+        const cSuggestion = makeConv({
+            ID: suggId,
+            AnchorType: 'Field',
+            AnchorKey: 'Email',
+            AnchorMetadataObject: { fieldName: 'Email' }
+        });
+
+        const suggestionEntity = {
+            ID: suggId,
+            AnchorKey: 'Email',
+            SuggestedValue: 'updated@example.com',
+            Confidence: 0.91,
+            Source: 'Agent',
+            Outcome: null
+        } as unknown as MJFieldSuggestionEntity;
+
+        const loadConvSpy = vi
+            .spyOn(ConversationEngine.Instance, 'LoadAnchoredConversations')
+            .mockResolvedValue([cNote, cSuggestion]);
+        const loadDetailsSpy = vi
+            .spyOn(ConversationEngine.Instance, 'LoadAnchoredConversationDetails')
+            .mockResolvedValue(new Map<string, MJConversationDetailEntity[]>());
+        const loadSubtypesSpy = vi
+            .spyOn(ConversationEngine.Instance, 'LoadAnchoredCommentsAndSuggestions')
+            .mockResolvedValue({
+                CommentsByConversationId: new Map<string, MJCommentEntity>(),
+                SuggestionsByConversationId: new Map<string, MJFieldSuggestionEntity>([
+                    [NormalizeUUID(suggId), suggestionEntity]
+                ]),
+                CommentTypeCodeByConversationId: new Map<string, string>([
+                    [NormalizeUUID(noteId), COMMENT_TYPE_CODES.COMMENT],
+                    [NormalizeUUID(suggId), COMMENT_TYPE_CODES.FIELD_SUGGESTION]
+                ])
+            });
+
+        try {
+            const coordinator = new FormRecordCommentsCoordinatorService();
+            await coordinator.LoadForRecord(record, { CurrentUser: { ID: 'u1' } } as unknown as IMetadataProvider);
+
+            // Per-type field badge counts
+            expect(coordinator.GetFieldOpenCommentCount('Email')).toBe(2);
+            expect(coordinator.GetFieldOpenNoteCount('Email')).toBe(1);
+            expect(coordinator.GetFieldOpenSuggestionCount('Email')).toBe(1);
+            expect(coordinator.GetFieldOpenCountByType('Email').get(COMMENT_TYPE_CODES.COMMENT)).toBe(1);
+            expect(coordinator.GetFieldOpenCountByType('Email').get(COMMENT_TYPE_CODES.FIELD_SUGGESTION)).toBe(1);
+
+            const comp = Object.assign(Object.create(MjRecordCommentsComponent.prototype), {
+                Coordinator: coordinator,
+                Record: record,
+                Mode: 'drawer' as const,
+                ReplyDraftByConversationId: new Map<string, string>(),
+                ExpandedDiscussionIds: new Set<string>(),
+                cdr: { markForCheck: vi.fn() }
+            }) as unknown as MjRecordCommentsComponent;
+
+            // AvailableTypeFilters shows All (2), Notes (1), Suggestions (1)
+            const filters = comp.AvailableTypeFilters;
+            expect(filters.find((f) => f.Code === 'all')?.Count).toBe(2);
+            expect(filters.find((f) => f.Code === COMMENT_TYPE_CODES.COMMENT)?.Count).toBe(1);
+            expect(filters.find((f) => f.Code === COMMENT_TYPE_CODES.FIELD_SUGGESTION)?.Count).toBe(1);
+
+            // Filter by FIELD_SUGGESTION
+            comp.OnTypeFilterChange(COMMENT_TYPE_CODES.FIELD_SUGGESTION);
+            const suggestionThreads = comp.VisibleThreads;
+            expect(suggestionThreads).toHaveLength(1);
+            expect(suggestionThreads[0].IsFieldSuggestion).toBe(true);
+            expect(suggestionThreads[0].UIDriverClass).toBe('FieldSuggestionCardComponent');
+            expect(suggestionThreads[0].FieldSuggestion?.SuggestedValue).toBe('updated@example.com');
+            // Reply composer stays tucked until Discuss is clicked on a message-less suggestion
+            expect(suggestionThreads[0].ShowReplyComposer).toBe(false);
+
+            comp.OnDiscussThread(suggId);
+            expect(comp.VisibleThreads[0].ShowReplyComposer).toBe(true);
+
+            // Filter by COMMENT
+            comp.OnTypeFilterChange(COMMENT_TYPE_CODES.COMMENT);
+            const noteThreads = comp.VisibleThreads;
+            expect(noteThreads).toHaveLength(1);
+            expect(noteThreads[0].IsFieldSuggestion).toBe(false);
+            expect(noteThreads[0].UIDriverClass).toBeNull();
+            expect(noteThreads[0].ShowReplyComposer).toBe(true);
+        } finally {
+            loadConvSpy.mockRestore();
+            loadDetailsSpy.mockRestore();
+            loadSubtypesSpy.mockRestore();
+        }
+    });
+
+    it('accepts and rejects field suggestions through Coordinator, reloading the open record and broadcasting FormRecordRefreshCoordinator updates', async () => {
+        const entityInfo = makeEntityInfo();
+        const innerLoadSpy = vi.fn().mockResolvedValue(true);
+        const record = Object.assign(makeRecord(entityInfo, true), {
+            Dirty: false,
+            InnerLoad: innerLoadSpy
+        }) as unknown as BaseEntity;
+
+        const suggId = 'C0000000-0000-0000-0000-000000000099';
+        const acceptedSuggestion = {
+            ID: suggId,
+            AnchorKey: 'Email',
+            SuggestedValue: 'accepted@example.com',
+            Outcome: 'Accepted'
+        } as unknown as MJFieldSuggestionEntity;
+        const rejectedSuggestion = {
+            ID: suggId,
+            AnchorKey: 'Email',
+            SuggestedValue: 'accepted@example.com',
+            Outcome: 'Rejected'
+        } as unknown as MJFieldSuggestionEntity;
+
+        const acceptSpy = vi
+            .spyOn(ConversationEngine.Instance, 'AcceptFieldSuggestion')
+            .mockResolvedValue(acceptedSuggestion);
+        const rejectSpy = vi
+            .spyOn(ConversationEngine.Instance, 'RejectFieldSuggestion')
+            .mockResolvedValue(rejectedSuggestion);
+        const loadConvSpy = vi
+            .spyOn(ConversationEngine.Instance, 'LoadAnchoredConversations')
+            .mockResolvedValue([]);
+        const loadDetailsSpy = vi
+            .spyOn(ConversationEngine.Instance, 'LoadAnchoredConversationDetails')
+            .mockResolvedValue(new Map());
+        const loadSubtypesSpy = vi
+            .spyOn(ConversationEngine.Instance, 'LoadAnchoredCommentsAndSuggestions')
+            .mockResolvedValue({
+                CommentsByConversationId: new Map(),
+                SuggestionsByConversationId: new Map(),
+                CommentTypeCodeByConversationId: new Map()
+            });
+
+        try {
+            const refreshCoordinator = new FormRecordRefreshCoordinator();
+            const remoteUpdates: string[][] = [];
+            refreshCoordinator.RemoteUpdated$.subscribe((evt) => {
+                remoteUpdates.push(Array.from(evt.changedFieldNames));
+            });
+
+            const coordinator = new FormRecordCommentsCoordinatorService();
+            coordinator.BindRefreshCoordinator(refreshCoordinator);
+            const provider = { CurrentUser: { ID: 'u1', Name: 'Alice' } } as unknown as IMetadataProvider;
+            coordinator.BindRecord(record, provider);
+
+            const accepted = await coordinator.AcceptFieldSuggestion(suggId);
+            expect(accepted?.Outcome).toBe('Accepted');
+            expect(acceptSpy).toHaveBeenCalledOnce();
+            expect(innerLoadSpy).toHaveBeenCalledOnce();
+            expect(remoteUpdates).toHaveLength(1);
+            expect(remoteUpdates[0]).toContain('Email');
+
+            const rejected = await coordinator.RejectFieldSuggestion(suggId);
+            expect(rejected?.Outcome).toBe('Rejected');
+            expect(rejectSpy).toHaveBeenCalledOnce();
+        } finally {
+            acceptSpy.mockRestore();
+            rejectSpy.mockRestore();
+            loadConvSpy.mockRestore();
+            loadDetailsSpy.mockRestore();
+            loadSubtypesSpy.mockRestore();
         }
     });
 });
