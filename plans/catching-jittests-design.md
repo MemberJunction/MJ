@@ -516,8 +516,9 @@ PR text and head's failure output are marked as untrusted data. Judges return st
 **Calls** go through MJ's AI provider classes (`@memberjunction/ai` with the OpenAI, Anthropic and Gemini providers),
 instantiated directly with keys and no database; spike §4 confirmed this for all three. A provider error comes either as
 a thrown error (`OpenAILLM`) or as a result with `success: false` (`AnthropicLLM`); the judges handle both the same way:
-TP Prob then gives a score of 0 with the error as its reason, and a bucket judge counts as Medium with the error as its
-reason.
+TP Prob then gives no score, and a bucket judge is recorded with no bucket and the error as its reason. The median is
+taken over the bucket judges that answered; when none did, the median is null and the catch is not reported (§9.3). An
+errored judge never moves a catch toward Medium.
 
 **No funnel, no Batch API.** About 14 PRs a day change TypeScript; at Meta's rates that is ~3 weak catches and ~12 judge
 calls a day. Every catch that survives the rules goes to every judge.
