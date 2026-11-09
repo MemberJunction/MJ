@@ -379,6 +379,25 @@ describe('TaskGraphDispatcher saga coordinator', () => {
         expect(envelope.RunScope.PrimaryScopeRecordID).toBe('org-A');
     });
 
+    it('taints the compensation of a forward step that recorded no taint when what fed it was tainted (T11)', async () => {
+        checkoutGraph(db);
+        // Invoice recorded nothing (written before steps recorded taint); Reserve, which fed it, read untrusted content.
+        db.Rows.get('T-B')!.Configuration = JSON.stringify({ runtime: { actionLogID: 'log-B' } });
+        db.Rows.get('T-A')!.Configuration = JSON.stringify({ runtime: { actionLogID: 'log-A', isOutputTainted: true } });
+        await coordinator(db).pass();
+        const envelope = compensationOf(db, 'T-B')!.SecurityEnvelope;
+        expect(envelope).not.toBeNull();
+        expect(JSON.parse(envelope!).IsRunTainted).toBe(true);
+    });
+
+    it('leaves that compensation clean when everything upstream of the step recorded clean output (T11)', async () => {
+        checkoutGraph(db);
+        db.Rows.get('T-B')!.Configuration = JSON.stringify({ runtime: { actionLogID: 'log-B' } });
+        await coordinator(db).pass();
+        const envelope = compensationOf(db, 'T-B')!.SecurityEnvelope;
+        expect(envelope == null || JSON.parse(envelope).IsRunTainted === false).toBe(true);
+    });
+
     it('escalates a failed compensation to a Human step for the submitter, then resumes when it completes (B23)', async () => {
         checkoutGraph(db);
         const c = coordinator(db);

@@ -126,7 +126,6 @@ import {
     CloneUserWithTenantContext,
     ComputeNodeInputTaint,
     EnvelopeConstrains,
-    RecordedOutputTaint,
     ResolveStoredNodeSecurity,
     UpstreamCarriesTaint,
     WithInputTaint,
@@ -4537,8 +4536,10 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
     /**
      * The envelope a compensation task is written with: the forward task's constraints, tainted when
-     * the forward task's output was. A compensation reads the forward run's input and output, so it
-     * runs under exactly what the forward task ran under, and never less tainted than what it reads.
+     * the forward task's output carries taint ({@link UpstreamCarriesTaint}, so a forward task that
+     * recorded none is read as tainted when the graph or anything upstream of it could be). A
+     * compensation reads the forward run's input and output, so it runs under exactly what the forward
+     * task ran under, and never less tainted than what it reads.
      */
     private compensationEnvelope(
         graph: GraphState,
@@ -4548,7 +4549,8 @@ export class TaskGraphDispatcher implements IShutdownable {
         if ('Refusal' in stored) {
             return stored;
         }
-        const forwardTainted = RecordedOutputTaint(forwardTask.Configuration) === true;
+        const graphTainted = stored.Envelope?.IsRunTainted === true;
+        const forwardTainted = UpstreamCarriesTaint(forwardTask, graphTainted, this.upstreamLookupInGraph(graph));
         return { Envelope: forwardTainted ? WithInputTaint(stored.Envelope, true) : stored.Envelope };
     }
 
