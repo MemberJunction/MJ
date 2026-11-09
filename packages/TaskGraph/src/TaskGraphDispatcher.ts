@@ -4532,6 +4532,10 @@ export class TaskGraphDispatcher implements IShutdownable {
      * that cannot be created after {@link SAGA_ROW_WRITE_ATTEMPTS} passes in a row is recorded as a failed
      * one ({@link retrySagaRowOrRecordFailed}), which stops it too.
      *
+     * The step carries the forward step's record changes, read as the user the graph's work runs as with
+     * the caller's tenant from the envelope. An envelope that cannot be read carries no tenant
+     * ({@link graphContext}), so that read would run untenanted: the step then gets no record changes.
+     *
      * @returns true when this call wrote a row
      */
     private async escalateCompensationFailure(
@@ -4540,13 +4544,14 @@ export class TaskGraphDispatcher implements IShutdownable {
         forwardTask: MJTaskEntity,
         failedCompensation: MJTaskEntity,
     ): Promise<boolean> {
-        const actingUser = await this.sagaActingUser(provider, graph, forwardTask);
+        const context = await this.graphContext(provider, forwardTask, { parentTask: graph.parent, parentMetadata: graph.parentMetadata });
+        const actingUser = context.ExecutionUser;
         const escalation = BuildCompensationEscalationSummary({
             WorkflowName: graph.parent?.Name ?? graph.parentTaskID,
             ForwardTask: forwardTask,
             CompensationTask: failedCompensation,
             ActionLogID: this.runtimeActionLogID(forwardTask),
-            RecordChanges: await this.loadCorrelatedRecordChanges(provider, forwardTask, actingUser),
+            RecordChanges: 'Refusal' in context.Security ? [] : await this.loadCorrelatedRecordChanges(provider, forwardTask, actingUser),
         });
         const human = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
         human.NewRecord();

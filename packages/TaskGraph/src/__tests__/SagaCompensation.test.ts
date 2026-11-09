@@ -500,6 +500,20 @@ describe('TaskGraphDispatcher saga coordinator', () => {
             expect(failed?.SecurityEnvelope).toBe('not an envelope');
         });
 
+        it('escalates a compensation refused for an unreadable envelope without reading record changes, which would run untenanted', async () => {
+            checkoutGraph(db);
+            db.Rows.get('T-B')!.SecurityEnvelope = 'not an envelope';
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const c = coordinator(db);
+            await c.pass();
+            await c.pass();
+
+            const human = [...db.Rows.values()].find((r) => r.StepType === 'Human');
+            expect(human?.CompensatesTaskID).toBe(compensationOf(db, 'T-B')!.ID);
+            expect(JSON.parse(human!.InputPayload!).recordChanges).toEqual([]);
+            expect(db.RunViewCalls.some((call) => call.Params.EntityName === 'MJ: Record Changes')).toBe(false);
+        });
+
         it('retries a compensation whose insert failed once (a deadlock, a timeout) and creates it on the next pass', async () => {
             checkoutGraph(db);
             vi.spyOn(console, 'error').mockImplementation(() => undefined);
