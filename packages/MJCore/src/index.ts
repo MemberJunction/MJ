@@ -86,6 +86,7 @@ export * from "./generic/data-table";
 export * from "./generic/data-snapshot";
 export * from "./generic/permissionInterfaces";
 export * from "./generic/entitySubtypeResolver";
+export * from "./generic/entitySubtypeDriver";
 export * from "./generic/contextTokens";
 export * from "./generic/queryTemplateContext";
 export * from "./generic/JSONType-interfaces/IFileStorageProviderConfiguration";
