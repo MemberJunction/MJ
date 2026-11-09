@@ -370,6 +370,7 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
       this.addOutputParam(params, 'DivergenceMetrics', report.DivergenceMetrics);
       this.addOutputParam(params, 'ShouldAlert', report.ShouldAlert);
       this.addOutputParam(params, 'InsufficientData', report.InsufficientData);
+      this.addOutputParam(params, 'Truncated', report.Truncated === true);
       this.addOutputParam(params, 'AlertEmitted', alertEmitted);
       if (alertId) {
         this.addOutputParam(params, 'AlertID', alertId);

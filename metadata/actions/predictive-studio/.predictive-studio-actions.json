@@ -1416,6 +1416,20 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "Truncated",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Whether a drift window held more than MaxRows Feature Value rows, so only its newest MaxRows were evaluated. Set when one Record Process or model is evaluated; a scheduled sweep reports it per process in ProcessResults."
+          },
+          "primaryKey": {
+            "ID": "C3B31AA9-9C8E-468B-8589-9049AD7C6CEE"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "AlertEmitted",
             "Type": "Output",
             "ValueType": "Scalar",

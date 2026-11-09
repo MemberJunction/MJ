@@ -469,6 +469,26 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
       }
     });
 
+    it('outputs Truncated when one record process is evaluated, true when a window exceeded MaxRows (P2)', async () => {
+      const nowMs = Date.now();
+      const rows = Array.from({ length: 31 }, (_, i) => ({
+        ID: `big-${i}`, RecordProcessID: 'rp-big', EntityID: 'ent-1', RecordID: `big-${i}`, FeatureName: 'Score', Role: 'Champion',
+        Source: 'Pipeline', ValueNumeric: 0.5, ValueText: null, Confidence: 0.9, Reasoning: null,
+        ComputedAt: new Date(nowMs - 2 * 86_400_000 + i * 60_000).toISOString(),
+      }));
+      const fakeProvider = {
+        RunViews: async (views: RunViewParams[]): Promise<RunViewResult[]> => views.map((v) => RunFeatureValueView(rows, v)),
+      } as Partial<IMetadataProvider> as IMetadataProvider;
+
+      for (const [maxRows, truncated] of [[30, true], [31, false]] as const) {
+        const runParams = buildRunParams({ RecordProcessID: { value: 'rp-big' }, MaxRows: { value: maxRows }, EmitAlertOnDrift: { value: false } });
+        runParams.Provider = fakeProvider;
+        const result = await new EvaluateFeatureAndPredictionDriftAction().Run(runParams);
+        expect(result.Success).toBe(true);
+        expect(getOutput(runParams, 'Truncated')).toBe(truncated);
+      }
+    });
+
     it('reports a process whose window exceeded MaxRows as Truncated on its process result (P2)', async () => {
       const nowMs = Date.now();
       const row = (rp: string, id: string, computedAt: number) => ({
