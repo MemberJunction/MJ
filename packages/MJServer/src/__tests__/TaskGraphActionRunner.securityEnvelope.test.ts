@@ -4,6 +4,9 @@
  * action, and an action whose output is untrusted reports its output tainted.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const { mockActions, runAction, cachedUsers } = vi.hoisted(() => ({
     mockActions: [] as Array<{ ID: string; Name: string; Config_Object: { disallowWhenTainted?: boolean; outputTrustLevel?: 'Trusted' | 'SemiTrusted' | 'Untrusted' } | null }>,
@@ -111,5 +114,69 @@ describe('TaskGraphActionRunner security envelope', () => {
         const copy = ToActionRunScope(scope);
         expect(copy).toEqual(scope);
         expect(copy.SearchScopeIDs).not.toBe(scope.SearchScopeIDs);
+    });
+});
+
+/**
+ * The gate is only as good as the metadata that turns it on: the actions MJ ships in `metadata/actions`
+ * that send data out or change data carry `Config.disallowWhenTainted`, so the runner refuses them on a
+ * tainted node, while read-only actions still run.
+ */
+describe('TaskGraphActionRunner taint gate on the shipped action metadata', () => {
+    const actionsDir = join(dirname(fileURLToPath(import.meta.url)), '../../../../metadata/actions');
+
+    type ShippedAction = { fields: { Name: string; Config?: Record<string, unknown> }; relatedEntities?: { 'MJ: Actions'?: ShippedAction[] } };
+    function shippedAction(file: string, name: string): ShippedAction['fields'] {
+        const all: ShippedAction[] = [];
+        const collect = (r: ShippedAction): void => { all.push(r); (r.relatedEntities?.['MJ: Actions'] ?? []).forEach(collect); };
+        (JSON.parse(readFileSync(join(actionsDir, file), 'utf8')) as ShippedAction[]).forEach(collect);
+        const found = all.filter((r) => r.fields.Name === name);
+        expect(found, `${file}: "${name}"`).toHaveLength(1);
+        return found[0].fields;
+    }
+    function load(file: string, name: string): string {
+        const fields = shippedAction(file, name);
+        const id = `f1000000-0000-4000-8000-${String(mockActions.length + 1).padStart(12, '0')}`;
+        mockActions.push({ ID: id, Name: name, Config_Object: (fields.Config ?? null) as (typeof mockActions)[number]['Config_Object'] });
+        return id;
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockActions.length = 0;
+        runAction.mockResolvedValue({ Success: true, Params: [], Message: 'ok', ResultCode: 'SUCCESS' });
+    });
+
+    it.each([
+        ['.actions.json', 'Send Single Message'],
+        ['.additional-core-actions.json', 'Slack Webhook'],
+        ['.additional-core-actions.json', 'Teams Webhook'],
+        ['.lists-actions.json', 'Send To Audience'],
+        ['.additional-core-actions.json', 'HTTP Request'],
+        ['.additional-core-actions.json', 'GraphQL Query'],
+        ['.mcp-actions.json', 'Execute MCP Tool'],
+        ['.actions.json', 'Create Record'],
+        ['.actions.json', 'Update Record'],
+        ['.actions.json', 'Delete Record'],
+        ['.write-entity-fields.json', 'Write Entity Field(s)'],
+        ['.execute-agent.json', 'Execute Agent'],
+        ['.file-storage-operations.json', 'File Storage: Delete Object'],
+        ['.biz-apps-social.json', 'Create Post (LinkedIn)'],
+    ])('refuses %s "%s" on a tainted node without running it', async (file, name) => {
+        const id = load(file, name);
+        const result = await new TaskGraphActionRunner().RunActionForTask(runParams(id, { Version: 1, IsRunTainted: true }));
+        expect(runAction).not.toHaveBeenCalled();
+        expect(result.ResultCode).toBe(TAINTED_EGRESS_BLOCKED);
+    });
+
+    it.each([
+        ['.actions.json', 'Get Record'],
+        ['.actions.json', 'Web Search'],
+        ['.scoped-search.json', 'Scoped Search'],
+    ])('still runs the read-only %s "%s" on a tainted node', async (file, name) => {
+        const id = load(file, name);
+        const result = await new TaskGraphActionRunner().RunActionForTask(runParams(id, { Version: 1, IsRunTainted: true }));
+        expect(runAction).toHaveBeenCalledTimes(1);
+        expect(result.Success).toBe(true);
     });
 });

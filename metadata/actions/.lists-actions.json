@@ -74,7 +74,10 @@
       "DriverClass": "Share List",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-share-nodes"
+      "IconClass": "fa-solid fa-share-nodes",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "primaryKey": {
       "ID": "F6B7278E-5602-4A3B-A2E3-A21895FE2644"
@@ -91,7 +94,10 @@
       "DriverClass": "Invite To List",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-envelope"
+      "IconClass": "fa-solid fa-envelope",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "primaryKey": {
       "ID": "7C7A4E3F-BC57-406C-876B-7067D9010312"
@@ -194,7 +200,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-paper-plane",
-      "CategoryID": "@lookup:MJ: Action Categories.Name=Communication"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Communication",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "primaryKey": {
       "ID": "F6D50EA9-5DC3-4585-89D7-2FB951732921"

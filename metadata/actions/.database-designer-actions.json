@@ -7,7 +7,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=Database Design?create&Description=Actions for creating and managing MemberJunction database entities",
       "Status": "Active",
-      "IconClass": "fa-solid fa-table-columns"
+      "IconClass": "fa-solid fa-table-columns",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -175,7 +178,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=Database Design?create&Description=Actions for creating and managing MemberJunction database entities",
       "Status": "Active",
-      "IconClass": "fa-solid fa-table-list"
+      "IconClass": "fa-solid fa-table-list",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [

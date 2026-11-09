@@ -280,7 +280,10 @@
       "Type": "Custom",
       "DriverClass": "PredictiveStudioScoreRecordSetAction",
       "Status": "Active",
-      "IconClass": "fa-solid fa-gauge-high"
+      "IconClass": "fa-solid fa-gauge-high",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -734,7 +737,10 @@
       "Type": "Custom",
       "DriverClass": "PredictiveStudioPromoteModelAction",
       "Status": "Active",
-      "IconClass": "fa-solid fa-circle-check"
+      "IconClass": "fa-solid fa-circle-check",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -960,7 +966,10 @@
       "Type": "Custom",
       "DriverClass": "PredictiveStudioScheduleModelScoringAction",
       "Status": "Active",
-      "IconClass": "fa-solid fa-calendar-check"
+      "IconClass": "fa-solid fa-calendar-check",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -1194,7 +1203,10 @@
       "Type": "Custom",
       "DriverClass": "PredictiveStudioMigratePipelinesAction",
       "Status": "Active",
-      "IconClass": "fa-solid fa-right-left"
+      "IconClass": "fa-solid fa-right-left",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
