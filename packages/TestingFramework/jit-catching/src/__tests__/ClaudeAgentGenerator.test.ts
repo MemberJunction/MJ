@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, symlinkSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ClaudeAgentGenerator, SdkRunner, type AgentMessage } from '../generator/ClaudeAgentGenerator';
+import { BuildSdkOptions, ClaudeAgentGenerator, SdkRunner, type AgentMessage } from '../generator/ClaudeAgentGenerator';
 import { DEFAULT_SETTINGS } from '../settings';
 import { SessionError } from '../generator/UsageCounter';
 import type { GenerationRequest } from '../types';
@@ -200,6 +200,13 @@ describe('SdkRunner', () => {
     expect(err).toBeInstanceOf(SessionError);
     expect((err as SessionError).Usage).toEqual({ Model: 'claude-haiku-5-5', InputTokens: 100, OutputTokens: 2, CacheReadTokens: 0, CostUSD: (100 * 1 + 2 * 5) / 1_000_000 });
     expect(err?.message).toMatch(/exited with code 1/);
+  });
+  it('forwards SDK stderr to the sink except the canUseTool shadow notice', () => {
+    const lines: string[] = [];
+    const o = BuildSdkOptions(runOptions(), { System: 's', McpServer: { type: 'sdk', name: 'jit' } as never, Abort: new AbortController(), CanUseTool: async () => ({ behavior: 'deny', message: 'no' }), Env: {}, Stderr: (s) => lines.push(s) });
+    o.stderr?.('ordinary line\n');
+    o.stderr?.('[warn] CLAUDE_SDK_CAN_USE_TOOL_SHADOWED: canUseTool is shadowed by allowedTools\n');
+    expect(lines).toEqual(['ordinary line\n']);
   });
   it('keeps the result message when the SDK throws after error_max_turns', async () => {
     env(); sdk.after = 'throw';
