@@ -33,7 +33,7 @@ const STAMP = new Date('2026-10-28T00:00:00Z');
 const FIELD = {
     ID: 'field-1', QueryID: 'query-1', Query: 'Q', Name: 'UserName', Description: 'The name.', Sequence: 1, SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)',
     SourceEntityID: 'entity-users', SourceEntity: 'MJ: Users', SourceFieldName: 'Name', SourceEntityFieldID: 'field-users-name', SourceEntityField: 'Name',
-    SourceObjectName: null, IsNullable: false, IsComputed: false, ComputationDescription: null, IsSummary: false, SummaryDescription: null,
+    SourceObjectName: null, InAllBranchVariants: true, IsNullable: false, IsComputed: false, ComputationDescription: null, IsSummary: false, SummaryDescription: null,
     DetectionMethod: 'Database', AutoDetectConfidenceScore: null, __mj_CreatedAt: STAMP, __mj_UpdatedAt: STAMP,
 };
 
@@ -60,7 +60,7 @@ async function mapped(): Promise<MappedRows> {
 describe('QuerySystemUserResolver: the saved query\'s child rows are returned with every column', () => {
     it('returns a field\'s nullability and its entity-field source', async () => {
         const { Fields } = await mapped();
-        expect(Fields[0]).toMatchObject({ IsNullable: false, SourceEntityFieldID: 'field-users-name', SourceEntityField: 'Name', SourceObjectName: null });
+        expect(Fields[0]).toMatchObject({ IsNullable: false, InAllBranchVariants: true, SourceEntityFieldID: 'field-users-name', SourceEntityField: 'Name', SourceObjectName: null });
     });
 
     it('returns the schema.object source of a field no entity backs', async () => {

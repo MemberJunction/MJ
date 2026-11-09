@@ -27,7 +27,11 @@ export type FilterOperator =
   | 'isnull'       // is null
   | 'isnotnull'    // is not null
   | 'isempty'      // is empty (alias for isnull)
-  | 'isnotempty';  // is not empty (alias for isnotnull)
+  | 'isnotempty'   // is not empty (alias for isnotnull)
+  // Set / range operations
+  | 'in'           // value in array
+  | 'notin'        // value not in array
+  | 'between';     // value between [min, max] inclusive
 
 /**
  * Logical operators for combining filters
