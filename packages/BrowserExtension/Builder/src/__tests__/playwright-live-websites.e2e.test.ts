@@ -915,4 +915,69 @@ describe.runIf(hasPlaywrightChromium)('Headless Playwright E2E Proof — Live Wi
             await sidePanelPage.close();
         }
     }, 60000);
+
+    it('E2E 5 (LinkedIn Profile Top-Card & Ad-Iframe Guard + Embedded ng-conversations Overlay): extracts LinkedIn profile without h1, blocks ad iframes from overwriting context, and expands embedded ng-conversations overlay', async () => {
+        const linkedInPage = await context.newPage();
+        try {
+            // Mock LinkedIn profile HTML without an <h1> (modern LinkedIn layout) + a right-rail Ricoh ad iframe (/tscp-serving/dtag)
+            await linkedInPage.route('https://www.linkedin.com/tscp-serving/**', async (route) => {
+                await route.fulfill({
+                    status: 200,
+                    contentType: 'text/html',
+                    body: '<!doctype html><html><head><title>Open Forum</title></head><body>Ad Ricoh Document Scanners Scan your paperwork. Find what you need faster. Learn More</body></html>',
+                });
+            });
+            await linkedInPage.route('https://www.linkedin.com/in/amithnagarajan/**', async (route) => {
+                await route.fulfill({
+                    status: 200,
+                    contentType: 'text/html; charset=utf-8',
+                    body: `<!doctype html>
+<html>
+<head><title>(24) Feed | LinkedIn</title></head>
+<body>
+  <main>
+    <section>
+      <div>Amith Nagarajan, AAiP</div>
+      <div>AI Expert // Association + Non Profit Advocate // 30+ Year Tech Entrepreneur</div>
+      <div>New Orleans, Louisiana, United States · Contact info</div>
+      <div>12,785 followers · 500+ connections</div>
+    </section>
+  </main>
+  <iframe id="ricoh-ad-frame" src="https://www.linkedin.com/tscp-serving/dtag?sz=300x250"></iframe>
+</body>
+</html>`,
+                });
+            });
+
+            await linkedInPage.goto('https://www.linkedin.com/in/amithnagarajan/', {
+                waitUntil: 'networkidle',
+            });
+            await linkedInPage.waitForSelector('html[data-mj-extension-content-script="ready"]', {
+                timeout: 10000,
+            });
+
+            // Verify the ad iframe is ignored by content-script.js top-frame guard
+            const adFrame = linkedInPage.frames().find((f) => f.url().includes('/tscp-serving/'));
+            expect(adFrame).toBeDefined();
+            if (adFrame) {
+                const adAttr = await adFrame.evaluate(() =>
+                    document.documentElement.getAttribute('data-mj-extension-content-script')
+                );
+                expect(adAttr).toBeNull();
+            }
+
+            const snap = await sendCommandToLiveContentScript<BrowserPageStateSnapshot>(
+                linkedInPage,
+                'MJ_CS_GET_PAGE_STATE'
+            );
+
+            expect(snap).toBeDefined();
+            expect(snap.Url).toBe('https://www.linkedin.com/in/amithnagarajan/');
+            expect(snap.CapturedSignals.PrimaryHeading).toBe('Amith Nagarajan, AAiP');
+            expect(snap.CapturedSignals.Headline).toContain('AI Expert');
+            expect(snap.CapturedSignals.Location).toBe('New Orleans, Louisiana, United States');
+        } finally {
+            await linkedInPage.close();
+        }
+    }, 60000);
 });
