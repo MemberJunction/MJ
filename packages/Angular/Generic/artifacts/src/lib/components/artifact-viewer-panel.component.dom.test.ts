@@ -7,6 +7,7 @@ import { ArtifactFileService } from '../services/artifact-file.service';
 import { ArtifactIconService } from '../services/artifact-icon.service';
 import { renderComponentFixture, query, queryAll, text, capture, StubEmptyStateComponent } from '@memberjunction/ng-test-utils';
 import { ArtifactViewerPanelComponent } from './artifact-viewer-panel.component';
+import { ArtifactVersionCompareComponent } from './version-diff/artifact-version-compare.component';
 
 /**
  * DOM coverage for <mj-artifact-viewer-panel> — the artifact viewer with header, version selector and
@@ -27,7 +28,7 @@ class CodeEditorStub { @Input() language = ''; @Input() lineWrapping = false; @I
 @Component({ standalone: true, selector: 'mj-markdown', template: '' })
 class MarkdownStub { @Input() data = ''; @Input() enableCollapsibleHeadings = false; @Input() enableHtml = false; @Input() enableLineNumbers = false; @Input() enableSmartypants = false; }
 
-const CHILDREN = [PluginViewerStub, CodeEditorStub, MarkdownStub, StubEmptyStateComponent];
+const CHILDREN = [PluginViewerStub, CodeEditorStub, MarkdownStub, StubEmptyStateComponent, ArtifactVersionCompareComponent];
 const ARTIFACT = { Name: 'Q3 Report', Description: 'Quarterly numbers' } as unknown as MJArtifactEntity;
 const VERSION = { ID: 'v1', VersionNumber: 2 } as unknown as MJArtifactVersionEntity;
 type OnInitProto = { ngOnInit: () => Promise<void> };
@@ -348,5 +349,38 @@ describe('ArtifactViewerPanelComponent (DOM) — PDF export menu', () => {
     await f.componentInstance.OnExportPDF('portrait');
     expect(notification.CreateSimpleNotification).toHaveBeenCalledWith(expect.stringContaining('Could not create the PDF'), 'error', 5000);
     expect(f.componentInstance.IsExportingPDF).toBe(false);
+  });
+});
+
+describe('ArtifactViewerPanelComponent (DOM) — Version Compare entry in version selector', () => {
+  it('surfaces "Compare Versions…" at the bottom of the version dropdown without cluttering tabs', async () => {
+    const { f } = await renderLoaded([1, 2, 3], { viewContext: 'conversation' });
+    // Tab strip stays clean (no permanent Compare tab)
+    expect(f.componentInstance.AllTabs).not.toContain('Compare');
+
+    // Open version selector dropdown
+    (query(f, '.version-selector') as HTMLElement).click();
+    f.detectChanges();
+
+    const compareTrigger = query(f, '[data-testid="open-version-compare-option"]') as HTMLButtonElement | null;
+    expect(compareTrigger).not.toBeNull();
+    expect(compareTrigger?.textContent?.trim()).toContain('Compare Versions…');
+
+    // Click Compare Versions -> defaults to immediate predecessor v2 -> v3
+    compareTrigger!.click();
+    await f.whenStable();
+    f.detectChanges();
+
+    expect(f.componentInstance.IsCompareMode).toBe(true);
+    expect(f.componentInstance.CompareBaseVersionNumber).toBe(2);
+    expect(f.componentInstance.CompareTargetVersionNumber).toBe(3);
+    expect(text(f, '.version-label')).toBe('v2 → v3');
+    expect(query(f, '[data-testid="artifact-version-compare-workspace"]')).not.toBeNull();
+
+    // Exit Compare returns immediately to normal Display mode
+    (query(f, '[data-testid="exit-compare-btn"]') as HTMLButtonElement).click();
+    f.detectChanges();
+    expect(f.componentInstance.IsCompareMode).toBe(false);
+    expect(text(f, '.version-label')).toBe('v3');
   });
 });

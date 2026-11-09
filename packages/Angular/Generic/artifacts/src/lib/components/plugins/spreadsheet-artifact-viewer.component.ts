@@ -3,6 +3,7 @@ import {
   OnInit,
   OnDestroy,
   ChangeDetectorRef,
+  Type,
   inject,
 } from '@angular/core';
 import { Subscription } from 'rxjs';
@@ -37,7 +38,8 @@ import {
   type ResolvedArtifactPermissions,
   type DocumentBlockExecutionResult,
 } from '@memberjunction/core-entities';
-import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
+import { BaseArtifactViewerPluginComponent, IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
+import { SpreadsheetVersionDiffComponent } from '../version-diff/spreadsheet-version-diff.component';
 import { ArtifactFileService } from '../../services/artifact-file.service';
 import { FetchArrayBuffer } from '../previews/office-preview.logic';
 import {
@@ -2262,6 +2264,14 @@ export class SpreadsheetArtifactViewerComponent
 
   public override get SupportsInlineEdit(): boolean {
     return true;
+  }
+
+  public override get SupportsVersionDiff(): boolean {
+    return true;
+  }
+
+  public override GetVersionDiffComponentType(): Type<IArtifactVersionDiffViewer> {
+    return SpreadsheetVersionDiffComponent;
   }
 
   public override GetCurrentStateSnapshot(): DataSnapshot | null {

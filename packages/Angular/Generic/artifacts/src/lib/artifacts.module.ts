@@ -65,6 +65,15 @@ import { ArtifactVersionHistoryComponent } from './components/artifact-version-h
 import { ArtifactViewerPanelComponent } from './components/artifact-viewer-panel.component';
 import { ArtifactMessageCardComponent } from './components/artifact-message-card.component';
 
+// Git-style Version History & Diff components (standalone)
+import { ArtifactVersionCompareComponent } from './components/version-diff/artifact-version-compare.component';
+import { GitDiffLinesViewComponent } from './components/version-diff/git-diff-lines-view.component';
+import { DocsVersionDiffComponent } from './components/version-diff/docs-version-diff.component';
+import { SlidesVersionDiffComponent } from './components/version-diff/slides-version-diff.component';
+import { SpreadsheetVersionDiffComponent } from './components/version-diff/spreadsheet-version-diff.component';
+import { ComponentVersionDiffComponent } from './components/version-diff/component-version-diff.component';
+import { QueryVersionDiffComponent } from './components/version-diff/query-version-diff.component';
+
 /**
  * Module for artifact viewer plugin system.
  * Provides components for viewing different types of artifacts (JSON, Code, Markdown, HTML, SVG, Components).
@@ -139,6 +148,13 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     MJVideoBadgeComponent,
     MJVideoFormatGlyphComponent,
     MJVideoBeatStripComponent,
+    ArtifactVersionCompareComponent,
+    GitDiffLinesViewComponent,
+    DocsVersionDiffComponent,
+    SlidesVersionDiffComponent,
+    SpreadsheetVersionDiffComponent,
+    ComponentVersionDiffComponent,
+    QueryVersionDiffComponent,
   ],
   exports: [
     // Export artifact type plugin viewer
@@ -148,6 +164,13 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     ArtifactViewerPanelComponent,
     ArtifactVersionHistoryComponent,
     ArtifactMessageCardComponent,
+    ArtifactVersionCompareComponent,
+    GitDiffLinesViewComponent,
+    DocsVersionDiffComponent,
+    SlidesVersionDiffComponent,
+    SpreadsheetVersionDiffComponent,
+    ComponentVersionDiffComponent,
+    QueryVersionDiffComponent,
 
     // Export plugin components
     JsonArtifactViewerComponent,

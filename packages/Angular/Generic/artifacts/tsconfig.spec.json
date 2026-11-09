@@ -31,7 +31,10 @@
     "src/lib/components/plugins/video-production/video-production-viewer.component.dom.test.ts",
     "src/lib/components/previews/video-production-artifact-preview.component.ts",
     "src/lib/components/previews/video-production-artifact-preview.component.dom.test.ts",
-    "src/__tests__/video-production-viewer.test.ts"
+    "src/__tests__/video-production-viewer.test.ts",
+    "src/lib/components/plugins/markdown-artifact-viewer.component.dom.test.ts",
+    "src/lib/services/artifact-version-diff.service.ts",
+    "src/lib/components/version-diff/*.ts"
   ],
   "exclude": [
     "node_modules",

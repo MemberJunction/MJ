@@ -14,6 +14,7 @@ export * from './lib/services/artifact-preview-resolver.service';
 export * from './lib/services/document-collaboration.service';
 export * from './lib/services/document-import-export.service';
 export * from './lib/services/slide-deck-export.service';
+export * from './lib/services/artifact-version-diff.service';
 
 // Interfaces
 export * from './lib/interfaces/artifact-viewer-plugin.interface';
@@ -37,6 +38,13 @@ export * from './lib/components/artifact-type-plugin-viewer.component';
 export * from './lib/components/artifact-viewer-panel.component';
 export * from './lib/components/artifact-version-history.component';
 export * from './lib/components/artifact-message-card.component';
+export * from './lib/components/version-diff/artifact-version-compare.component';
+export * from './lib/components/version-diff/git-diff-lines-view.component';
+export * from './lib/components/version-diff/docs-version-diff.component';
+export * from './lib/components/version-diff/slides-version-diff.component';
+export * from './lib/components/version-diff/spreadsheet-version-diff.component';
+export * from './lib/components/version-diff/component-version-diff.component';
+export * from './lib/components/version-diff/query-version-diff.component';
 
 // Plugin components
 export * from './lib/components/plugins/json-artifact-viewer.component';

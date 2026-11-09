@@ -71,6 +71,16 @@ export interface ArtifactViewerTab {
 }
 
 /**
+ * Strongly-typed contract implemented by per-artifact-type visual version diff viewer components.
+ * Mounted dynamically inside the Version Compare workspace when a plugin returns `true` from
+ * {@link BaseArtifactViewerPluginComponent.SupportsVersionDiff}.
+ */
+export interface IArtifactVersionDiffViewer {
+  BaseVersion: MJArtifactVersionEntity;
+  TargetVersion: MJArtifactVersionEntity;
+}
+
+/**
  * Abstract base component for all artifact viewer plugins.
  * Provides common functionality and enforces the contract.
  * Note: This is an abstract class and should not be declared in Angular module.
@@ -276,6 +286,25 @@ export abstract class BaseArtifactViewerPluginComponent extends BaseAngularCompo
    */
   public async ExportPDF(_orientation: PdfOrientation = 'portrait'): Promise<void> {
     // Subclasses override to export their content
+  }
+
+  /**
+   * Whether this plugin provides a domain-specific visual diff viewer for comparing two versions
+   * of the artifact inside the Git-style Version Compare workspace.
+   *
+   * When `false` (default), the workspace automatically falls back to the universal structural
+   * JSON diff (`DeepDiffer`) and unified/split line diff.
+   */
+  public get SupportsVersionDiff(): boolean {
+    return false;
+  }
+
+  /**
+   * Returns the Angular component type implementing {@link IArtifactVersionDiffViewer} when
+   * {@link SupportsVersionDiff} is `true`, or `null` to use the universal diff viewer.
+   */
+  public GetVersionDiffComponentType(): Type<IArtifactVersionDiffViewer> | null {
+    return null;
   }
 
   /**

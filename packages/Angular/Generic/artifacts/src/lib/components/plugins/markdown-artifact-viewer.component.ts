@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ChangeDetectorRef, ViewChild, ElementRef, inject } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ChangeDetectorRef, ViewChild, ElementRef, Type, inject } from '@angular/core';
 import { CompositeKey, DataSnapshot, Metadata, RunView, type EntityInfo, type QueryInfo } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
@@ -17,7 +17,8 @@ import {
 } from '@memberjunction/core-entities';
 import type { PdfOrientation } from '@memberjunction/ng-react';
 import { Subscription } from 'rxjs';
-import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
+import { BaseArtifactViewerPluginComponent, IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
+import { DocsVersionDiffComponent } from '../version-diff/docs-version-diff.component';
 import { CreateMarkdownSnapshot } from '../../snapshot-helpers';
 import {
   DocumentCollaborationService,
@@ -3965,6 +3966,14 @@ export class MarkdownArtifactViewerComponent
 
   public override get SupportsInlineEdit(): boolean {
     return true;
+  }
+
+  public override get SupportsVersionDiff(): boolean {
+    return true;
+  }
+
+  public override GetVersionDiffComponentType(): Type<IArtifactVersionDiffViewer> {
+    return DocsVersionDiffComponent;
   }
 
   public get CanUserEdit(): boolean {

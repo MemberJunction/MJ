@@ -4,6 +4,7 @@ import {
   OnDestroy,
   ChangeDetectorRef,
   HostListener,
+  Type,
   inject,
 } from '@angular/core';
 import { Subscription } from 'rxjs';
@@ -35,7 +36,8 @@ import {
   type DocumentBlockExecutionResult,
   type ResolvedArtifactPermissions,
 } from '@memberjunction/core-entities';
-import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
+import { BaseArtifactViewerPluginComponent, IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
+import { SlidesVersionDiffComponent } from '../version-diff/slides-version-diff.component';
 import {
   DocumentCollaborationService,
   DocumentCollaborationSession,
@@ -2024,6 +2026,14 @@ export class SlideDeckArtifactViewerComponent
 
   public override get SupportsInlineEdit(): boolean {
     return true;
+  }
+
+  public override get SupportsVersionDiff(): boolean {
+    return true;
+  }
+
+  public override GetVersionDiffComponentType(): Type<IArtifactVersionDiffViewer> {
+    return SlidesVersionDiffComponent;
   }
 
   public override GetCurrentStateSnapshot(): DataSnapshot | null {
