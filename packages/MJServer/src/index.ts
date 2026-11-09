@@ -615,7 +615,8 @@ const setupComplete$ = new ReplaySubject(1);
       cacheRefreshInterval / 1000, // convert ms to seconds
     );
     pgConfigData.LocalStorageProvider = sharedCache ?? undefined;
-    pgConfigData.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'log';
+    pgConfigData.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
+    pgConfigData.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
     const provider = new PostgreSQLDataProvider();
     await provider.Config(pgConfigData);
     SetProvider(provider);
@@ -829,7 +830,8 @@ const setupComplete$ = new ReplaySubject(1);
     // cacheRefreshInterval is configured in ms; checkRefreshIntervalSeconds declares seconds — see providerConfigUnits.ts
     const config = new SQLServerProviderConfigData(pool, mj_core_schema, MetadataCacheRefreshIntervalSeconds(cacheRefreshInterval));
     config.LocalStorageProvider = sharedCache ?? undefined;
-    config.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'log';
+    config.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
+    config.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
     // MJAPI is a long-running server, so entry-point default is 'full' engine pre-warm;
     // MJ_STARTUP_MODE / mj.config.cjs startup.mode can override per the shared precedence chain
     const startupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });

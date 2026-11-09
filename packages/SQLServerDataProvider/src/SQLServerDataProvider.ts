@@ -766,6 +766,7 @@ export class SQLServerDataProvider
       false,
     );
     cfg.ConcurrencyCheck = this.ConcurrencyCheck;
+    cfg.DeltaUpdates = this.DeltaUpdates;
     await child.Config(cfg, this);
     return child;
   }

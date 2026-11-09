@@ -18,8 +18,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.mock('mssql', async () => (await import('./helpers/mock-mssql')).createMockMssqlModule());
 
 import mssql from 'mssql';
-import type { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
-import { EntitySaveOptions, EntityDeleteOptions, Metadata } from '@memberjunction/core';
+import type { EntityInfo, UserInfo } from '@memberjunction/core';
+import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, Metadata } from '@memberjunction/core';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { EntityActionEngineServer } from '@memberjunction/actions';
@@ -1395,11 +1395,27 @@ describe('SQLServerDataProvider server-side concurrency check', () => {
     expect(mssqlState.EventKinds()).toEqual(['query']);
   });
 
-  it('defaults to ConcurrencyCheck === "log" on a fresh provider instance and honors per-save EntitySaveOptions.ConcurrencyCheck = "enforce"', async () => {
+  it('defaults to ConcurrencyCheck === "off" and DeltaUpdates === true on a fresh provider (zero extra round-trips on server saves) while honoring per-save EntitySaveOptions.ConcurrencyCheck = "enforce"', async () => {
     const freshProvider = new SaveDeleteTestProvider();
     freshProvider.AttachPool(new MockConnectionPool());
-    expect(freshProvider.ConcurrencyCheck).toBe('log');
+    expect(freshProvider.ConcurrencyCheck).toBe('off');
+    expect(freshProvider.DeltaUpdates).toBe(true);
 
+    // 1. Default server-side save: single SQL round-trip (no transaction, no UPDLOCK read), delta-only binding
+    const serverEntity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    serverEntity.Set('Name', 'Background Server Update');
+    const serverUpdatedRow = { ...savedWidgetRow(), Name: 'Background Server Update' };
+    mssqlState.QueueResult({ rows: [serverUpdatedRow] });
+    const serverSaved = await freshProvider.Save(serverEntity, TEST_USER, new EntitySaveOptions());
+    expect(serverSaved).toEqual(serverUpdatedRow);
+    expect(mssqlState.Queries).toHaveLength(1);
+    expect(mssqlState.EventKinds()).toEqual(['query']);
+    expect(mssqlState.Queries[0].sql).toContain('@Name=@Name');
+    expect(mssqlState.Queries[0].sql).not.toContain('@Description=');
+
+    // 2. Per-save override (`EntitySaveOptions.ConcurrencyCheck = 'enforce'`, as ResolverBase passes):
+    //    opens transaction and runs locked UPDLOCK read + conflict detection
+    mssqlState.Reset();
     const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
     entity.Set('Name', 'Client Rename');
 
@@ -1415,6 +1431,85 @@ describe('SQLServerDataProvider server-side concurrency check', () => {
     });
     expect(mssqlState.Queries).toHaveLength(1);
     expect(mssqlState.Queries[0].sql).toContain('SELECT [Name] FROM [dbo].[Widget] WITH (UPDLOCK, ROWLOCK)');
+  });
+
+  it('DeltaUpdates = false kill-switch restores legacy full-row spUpdate parameter binding', async () => {
+    const provider = makeProvider();
+    provider.DeltaUpdates = false;
+
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    entity.Set('Name', 'Only Name Dirty');
+
+    const saveSQL = await provider.SaveSQLForTest(entity, false, TEST_USER, new EntitySaveOptions());
+    // Both dirty Name AND untouched Description/Quantity are bound when DeltaUpdates === false
+    expect(saveSQL.fullSQL).toContain('@Name=@Name');
+    expect(saveSQL.fullSQL).toContain('@Description=@Description');
+    expect(saveSQL.fullSQL).toContain('@Quantity=@Quantity');
+  });
+
+  it('flushes @JSONType un-proxied object edits through subclass setters before delta-update binding', async () => {
+    interface WidgetPayload {
+      Version: number;
+      Tags: string[];
+    }
+    class JsonWidgetEntity extends BaseEntity {
+      public SetterCalls = 0;
+      public override CheckPermissions(): boolean {
+        return true;
+      }
+      public get Description(): string | null {
+        return this.Get('Description');
+      }
+      public set Description(value: string | null) {
+        this.SetterCalls++;
+        this.Set('Description', value);
+      }
+      public get DescriptionObject(): WidgetPayload | null {
+        return this.GetJSONFieldObject<WidgetPayload>('Description');
+      }
+      public set DescriptionObject(value: WidgetPayload | null) {
+        this.SetJSONFieldObject<WidgetPayload>('Description', value);
+      }
+    }
+
+    const provider = makeProvider();
+    const info = makeWidgetEntityInfo();
+    const entity = new JsonWidgetEntity(info, provider);
+    entity.ContextCurrentUser = TEST_USER;
+    await entity.LoadFromData(
+      {
+        ...savedWidgetRow(),
+        Description: JSON.stringify({ Version: 1, Tags: ['alpha'] }),
+      },
+      false,
+    );
+    entity.SetterCalls = 0;
+
+    // Adopt a plain object, reset counter, then mutate it in-place behind the proxy alongside a dirty scalar field
+    const adopted: WidgetPayload = { Version: 1, Tags: ['alpha'] };
+    entity.DescriptionObject = adopted;
+    entity.SetterCalls = 0;
+    adopted.Tags.push('beta');
+    expect(entity.SetterCalls).toBe(0); // un-proxied mutation is invisible until FlushJSONFieldObjects on Save()
+    entity.Set('Name', 'Renamed Alongside JSON');
+
+    const updatedRow = {
+      ...savedWidgetRow(),
+      Name: 'Renamed Alongside JSON',
+      Description: JSON.stringify({ Version: 1, Tags: ['alpha', 'beta'] }),
+    };
+    mssqlState.QueueResult({ rows: [updatedRow] });
+
+    expect(await entity.Save()).toBe(true);
+    expect(entity.SetterCalls).toBe(1);
+    expect(mssqlState.Queries).toHaveLength(1);
+    // Delta update includes BOTH @Name AND @Description (flushed via setter), while omitting untouched @Quantity!
+    expect(mssqlState.Queries[0].sql).toContain('@Name=@Name$');
+    expect(mssqlState.Queries[0].sql).toContain('@Description=@Description$');
+    expect(mssqlState.Queries[0].sql).not.toContain('@Quantity=');
+    expect(inputWithValue(mssqlState.Queries[0], JSON.stringify({ Version: 1, Tags: ['alpha', 'beta'] })).type).toEqual(
+      mssql.NVarChar(mssql.MAX),
+    );
   });
 
   it('ignores untouched fields in ConcurrencyBaseline so concurrent DB edits to untouched columns never trigger false conflicts', async () => {

@@ -1064,5 +1064,11 @@ describe('PostgreSQLDataProvider', () => {
                 `SELECT "Name" FROM "public"."Widget" WHERE "ID"='w-1' FOR UPDATE`,
             ]);
         });
+
+        it('defaults ConcurrencyCheck to "off" and DeltaUpdates to true on a fresh PostgreSQLDataProvider instance', () => {
+            const freshPg = new PostgreSQLDataProvider();
+            expect(freshPg.ConcurrencyCheck).toBe('off');
+            expect(freshPg.DeltaUpdates).toBe(true);
+        });
     });
 });

@@ -150,7 +150,9 @@ flowchart TD
   ConcurrencyConflict?: { ConflictingFields: string[] };
   ```
   The resolver maps this to the existing `CONCURRENT_MODIFICATION_CONFLICT` GraphQL error, so the client contract is unchanged.
-- **Rollout mode.** Server code has never had this check, and some of it may rely on overwriting (for example, high-frequency status rows). Add a config switch `concurrencyCheck: 'off' | 'log' | 'enforce'` (default `'log'` for one release, overridable per save via `EntitySaveOptions.ConcurrencyCheck`). In `'log'` mode, a would-be conflict emits a structured warning via `LogErrorEx` (`category: 'GenericDatabaseProvider.CheckUpdateConcurrency'`) and the save proceeds. On the GraphQL wire path (`ResolverBase.UpdateRecord`), saves that supply `OldValues___` always set `saveOptions.ConcurrencyCheck = 'enforce'`, persist a `SAVE_INCONSISTENCY` record to `MJ: Error Logs`, and reject conflicting saves with `CONCURRENT_MODIFICATION_CONFLICT` from day one.
+- **Rollout mode & kill-switch.** Server code has never had locked-row overlap checks, and enabling them unconditionally on every background save adds a transaction + locked read round-trip even when delta updates alone already protect disjoint columns. Add two config switches on `ProviderConfigDataBase` / `databaseSettings`:
+  - `deltaUpdates: boolean` (default `true`): operational kill-switch (`false` reverts to full-row `spUpdate*` / `fn_update*` parameter binding without redeploying code).
+  - `concurrencyCheck: 'off' | 'log' | 'enforce'` (default `'off'` server-wide so background saves remain single-round-trip, overridable per save via `EntitySaveOptions.ConcurrencyCheck` or provider-wide to `'log'` / `'enforce'`). In `'log'` mode, a would-be conflict emits a structured warning via `LogErrorEx` (`category: 'GenericDatabaseProvider.CheckUpdateConcurrency'`) and the save proceeds. On the GraphQL wire path (`ResolverBase.UpdateRecord`), saves that supply `OldValues___` always set `saveOptions.ConcurrencyCheck = 'enforce'`, persist a `SAVE_INCONSISTENCY` record to `MJ: Error Logs`, and reject conflicting saves with `CONCURRENT_MODIFICATION_CONFLICT` from day one.
 
 #### 1c. Optional row-version token (later, opt-in)
 Some entities want EF-style "any concurrent change to the row is a conflict" semantics (financial documents, approvals). That can be opted into per entity by also comparing `__mj_UpdatedAt` against the loaded value. No schema change is needed because tracked tables already have the column. This is out of scope for the first PR; record the open question.
@@ -266,7 +268,7 @@ New generator `packages/CodeGenLib/src/Misc/typed_query_codegen.ts`, called from
 |---|---|
 | `EntitySaveOptions` | `+ ConcurrencyBaseline?: Record<string, unknown>` |
 | `BaseEntityResult` | `+ ConcurrencyConflict?: { ConflictingFields: string[] }` |
-| MJAPI config | `+ concurrencyCheck: 'off' \| 'log' \| 'enforce'`, `+ typedQueryDrift: 'warn' \| 'throw'` |
+| MJAPI config | `+ deltaUpdates: boolean` (default `true`), `+ concurrencyCheck: 'off' \| 'log' \| 'enforce'` (default `'off'`), `+ typedQueryDrift: 'off' \| 'warn' \| 'throw'` |
 | `RunViewParams` | `+ Filter?: CompositeFilterDescriptor \| CompositeFilter` |
 | `BaseEnginePropertyConfig` | `+ Filter` structured form (existing string `Filter` stays) |
 | `FilterOperator` | `+ 'in' \| 'notin' \| 'between'` |
@@ -288,9 +290,9 @@ No GraphQL save-mutation change. `OldValues___` keeps its current shape and mean
 3. **Add `EntitySaveOptions.ConcurrencyBaseline`** and **`BaseEntityResult.ConcurrencyConflict`** in `packages/MJCore/src/generic/interfaces.ts` and `baseEntity.ts`. `BaseEntity._innerSave` passes options through unchanged (it already does).
 4. **Locked read plus check in the provider**: in the update path, open or join `BeginEntityTransaction`. Read the dirty columns with a locking read (new dialect hook `RenderLockedRowReadSQL(entityInfo, columns, pk)` with SQL Server and PG implementations), run the detector against `ConcurrencyBaseline ?? field.OldValue`, honor `SkipOldValuesCheck` and the `concurrencyCheck` mode, then execute the delta update.
 5. **Rewire the resolver**: `ResolverBase.UpdateRecord` passes the client old values as `ConcurrencyBaseline` and relies on the provider's decision. It keeps the `SAVE_INCONSISTENCY` error-log write and maps `LatestResult.ConcurrencyConflict` to `CONCURRENT_MODIFICATION_CONFLICT`. Remove the duplicate comparison once parity tests pass.
-6. **TransactionGroup path**: `SQLServerTransactionGroup` batches saves. Make sure each queued update gets the same locked read and check inside the group transaction, or document that groups opt out (open question). Graph saves (`saveEntityGraphOperation.ts`) go through `Save()` and inherit the check.
-7. **IS-A chains**: the check runs per level (each level's table holds its own columns). Verify that a conflict on a parent level rolls back the whole chain (the existing UnitOfWork snapshot logic should cover it) and add a test.
-8. **Config plus docs**: add `concurrencyCheck` to the MJAPI/MJServer config schema (`packages/MJServer/src/config.ts`), default `'log'`. Update `guides/TRANSACTIONS_AND_BATCHING_GUIDE.md` with a "Concurrency" section.
+6. **TransactionGroup path**: Queued `TransactionGroup` updates inherit delta-only `spUpdate*` / `fn_update*` bindings (`DeltaUpdates = true`). Locked-row `CheckUpdateConcurrency` inside `TransactionGroup.Submit()` and multi-process harness verification are tracked as a dedicated follow-up plan in [PR #6490](https://github.com/MemberJunction/MJ/pull/6490) (`plans/transaction-group-concurrency.md`). Graph saves (`saveEntityGraphOperation.ts`) go through `Save()` and inherit the check. Post-save SQL hydration of `RecordChange.FullRecordJSON` under concurrent delta updates is tracked in [PR #6489](https://github.com/MemberJunction/MJ/pull/6489) (`plans/record-changes-post-save-snapshot.md`).
+7. **IS-A chains**: the check runs per level (each level's table holds its own columns), propagating `ConcurrencyBaseline` across multi-level ancestors and rolling back both the physical DB transaction and `UnitOfWork` in-memory `Dirty` / `OldValue` state across the entire chain on conflict at any parent or child level.
+8. **Config plus docs**: add `deltaUpdates` (default `true`) and `concurrencyCheck` (default `'off'`) to `ProviderConfigDataBase` and the MJAPI/MJServer config schema (`packages/MJServer/src/config.ts`). Update `guides/TRANSACTIONS_AND_BATCHING_GUIDE.md` with a "Server-Side Concurrency & Delta-Only Updates" section.
 
 ### Phase 2: Structured filters (Workstream 2)
 1. Add `in`, `notin`, `between` to `FilterOperator` and `CompositeFilter.Evaluate()`. Align `isempty` / `isnotempty` semantics.
@@ -344,9 +346,11 @@ No GraphQL save-mutation change. `OldValues___` keeps its current shape and mean
 
 ## Risks & Open Questions
 
-- **Server code that relies on overwriting.** Mitigated by `'log'` mode first. Which entities show up in the logs decides the per-entity opt-outs before `'enforce'`.
+- **Server code overhead & overwrite expectations.** Mitigated by defaulting server-wide `concurrencyCheck` to `'off'` (zero extra round-trips on background saves while `deltaUpdates: true` eliminates disjoint-column lost updates) and offering `'log'` mode to audit overlapping writes before opting into `'enforce'`. GraphQL client mutations with `OldValues___` always run under `'enforce'`.
 - **Lock contention.** `UPDLOCK` is held from the read to the commit of the same save, a few milliseconds. Long transactions that do LLM work while holding the transaction would block other writers. Document "never await an LLM inside an entity transaction" (likely already a rule; verify).
-- **TransactionGroup semantics.** Deferred batches may need the locked read inside the generated batch SQL. Open: implement, or exclude groups for v1?
+- **Follow-up waves carved out of PR #6474:**
+  - `RecordChange.FullRecordJSON` post-save SQL hydration under concurrent delta updates: [PR #6489](https://github.com/MemberJunction/MJ/pull/6489) (`plans/record-changes-post-save-snapshot.md`).
+  - `TransactionGroup` locked-row concurrency checking & multi-process (2-MJAPI + Redis) verification: [PR #6490](https://github.com/MemberJunction/MJ/pull/6490) (`plans/transaction-group-concurrency.md`).
 - **Row-version opt-in (1c).** Is there demand for whole-row conflict semantics on specific entities?
 - **View filters.** Do we keep `WhereClause` as stored SQL (literal-safe compile) or compile `FilterState` at run time with parameters? Run time is cleaner and safer but changes how views are cached and screened.
 - **Related-entity fields in `Filter`.** v1 supports only the entity's base-view columns (which already include joined name fields). Multi-source `Source.Field` filters are for in-memory evaluation only, for now.

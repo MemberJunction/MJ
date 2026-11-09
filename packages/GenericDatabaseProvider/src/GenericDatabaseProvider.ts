@@ -546,9 +546,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
     /**
      * Server-side concurrency check mode for entity UPDATEs (`'off' | 'log' | 'enforce'`).
-     * Defaults to `'log'` so conflicts are detected under a row lock and logged while rolling out.
+     * Defaults to `'off'` so direct server-side background saves pay zero extra lock-read or
+     * transaction round-trips unless opted in via provider configuration or per-save
+     * `EntitySaveOptions.ConcurrencyCheck` (GraphQL mutations with `OldValues___` always pass `'enforce'`).
      */
-    public ConcurrencyCheck: ConcurrencyCheckMode = 'log';
+    public ConcurrencyCheck: ConcurrencyCheckMode = 'off';
+
+    /**
+     * Controls whether entity UPDATEs against CodeGen-generated routines (`spUpdateGenerated === true`)
+     * bind only dirty columns instead of every loaded column. Defaults to `true`. Set to `false`
+     * (or configure `databaseSettings.deltaUpdates: false`) as an operational kill-switch to restore
+     * legacy full-row parameter binding across all saves.
+     */
+    public DeltaUpdates: boolean = true;
 
     /**
      * Installs {@link ProviderConfigDataBase.LocalStorageProvider}, when the configuration carries
@@ -563,6 +573,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         }
         if (data?.ConcurrencyCheck) {
             this.ConcurrencyCheck = data.ConcurrencyCheck;
+        }
+        if (data?.DeltaUpdates !== undefined) {
+            this.DeltaUpdates = data.DeltaUpdates;
         }
         return super.Config(data, providerToUse);
     }
@@ -2237,13 +2250,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             }
         }
 
-        // 2. On normal UPDATEs where the entity's spUpdate is CodeGen-generated and at least one
-        //    field is dirty, pass ONLY the dirty fields (plus the PK appended by RenderSaveCallBinding)
-        //    to the stored procedure / function so untouched columns default to NULL and retain their
-        //    stored database values via ISNULL(@Param, [Col]) / COALESCE(p_param, "Col").
-        //    Forced saves (IgnoreDirtyState), ReplayOnly saves, and entities with custom spUpdate
-        //    implementations keep the full-row parameter map.
+        // 2. On normal UPDATEs where DeltaUpdates is enabled, the entity's spUpdate is CodeGen-generated,
+        //    and at least one field is dirty, pass ONLY the dirty fields (plus the PK appended by
+        //    RenderSaveCallBinding) to the stored procedure / function so untouched columns default to NULL
+        //    and retain their stored database values via ISNULL(@Param, [Col]) / COALESCE(p_param, "Col").
+        //    Provider-wide DeltaUpdates=false, forced saves (IgnoreDirtyState), ReplayOnly saves, and
+        //    entities with custom spUpdate implementations keep the full-row parameter map.
         const useDeltaUpdate =
+            this.DeltaUpdates &&
             isUpdate &&
             !options?.IgnoreDirtyState &&
             !options?.ReplayOnly &&

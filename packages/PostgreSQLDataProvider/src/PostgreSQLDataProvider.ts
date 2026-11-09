@@ -368,6 +368,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             false,
         );
         cfg.ConcurrencyCheck = this.ConcurrencyCheck;
+        cfg.DeltaUpdates = this.DeltaUpdates;
         await child.ConfigWithSharedPool(cfg, this.DatabaseConnection);
         return child;
     }

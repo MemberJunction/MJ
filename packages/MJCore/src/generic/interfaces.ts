@@ -17,8 +17,8 @@ export type { GetRecordDependenciesOptions } from "./databaseProviderBase";
 
 /**
  * Mode controlling how server-side database providers handle field-level concurrency checks on UPDATE:
- * - `'off'`: Skip server-side concurrency checking entirely.
- * - `'log'` (default): Detect field-level conflicts under a row lock and log a warning, then allow the save to proceed.
+ * - `'off'` (default): Skip server-side concurrency checking on direct server saves unless overridden per save (e.g. GraphQL mutations with `OldValues___` pass `'enforce'`).
+ * - `'log'`: Detect field-level conflicts under a row lock and log a warning, then allow the save to proceed.
  * - `'enforce'`: Detect field-level conflicts under a row lock and reject the save (`Save()` returns `false` and populates `LatestResult.ConcurrencyConflict`).
  */
 export type ConcurrencyCheckMode = 'off' | 'log' | 'enforce';
@@ -62,9 +62,18 @@ export class ProviderConfigDataBase<D = any> {
 
     /**
      * Server-side concurrency check mode for entity UPDATEs (`'off' | 'log' | 'enforce'`).
-     * Defaults to `'log'` on server-side database providers when omitted.
+     * Defaults to `'off'` on server-side database providers when omitted (GraphQL mutations with
+     * `OldValues___` still enforce concurrency per save via `EntitySaveOptions.ConcurrencyCheck`).
      */
     public ConcurrencyCheck?: ConcurrencyCheckMode;
+
+    /**
+     * Controls whether entity UPDATEs against CodeGen-generated routines (`spUpdateGenerated === true`)
+     * bind only dirty columns instead of every loaded column. Defaults to `true` on server-side
+     * database providers when omitted. Set to `false` as an operational escape hatch to restore
+     * legacy full-row parameter binding globally.
+     */
+    public DeltaUpdates?: boolean;
 
     /**
      * Constructor for ProviderConfigDataBase
@@ -419,7 +428,7 @@ export class EntitySaveOptions {
 
     /**
      * Optional per-save override for server-side field-level concurrency checking (`'off' | 'log' | 'enforce'`).
-     * When omitted, the database provider's configured `ConcurrencyCheck` mode (`'log'` by default) applies.
+     * When omitted, the database provider's configured `ConcurrencyCheck` mode (`'off'` by default) applies.
      */
     ConcurrencyCheck?: ConcurrencyCheckMode;
     
