@@ -256,6 +256,56 @@ export const TemplatesChecks: NamedCheck[] = [
                 `TP8: the failure names the subject-requires-HTML rule (got "${r.Message}")`);
         }
     },
+    {
+        Id: 'templates.TP9',
+        Name: 'TP9: deleting a template removes its params, including ones a content save derived, in the order a declarative delete uses',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const md = ctx.Provider;
+            const user = ctx.User;
+            const textTypeID = await resolveID('MJ: Template Content Types', "Name='Text'", user);
+
+            const tmpl = await md.GetEntityObject<MJTemplateEntity>('MJ: Templates', user);
+            tmpl.NewRecord();
+            tmpl.Name = `${PREFIX}-delete ${TAG}`;
+            tmpl.UserID = user.ID;
+            tmpl.IsActive = true;
+            Assert(await tmpl.Save(), `TP9: creating the template failed: ${tmpl.LatestResult?.CompleteMessage}`);
+
+            const content = await md.GetEntityObject<MJTemplateContentEntity>('MJ: Template Contents', user);
+            content.NewRecord();
+            content.TemplateID = tmpl.ID;
+            content.TypeID = textTypeID;
+            content.TemplateText = 'Hello {{ FirstName }}, your code is {{ Code }}.';
+            content.Priority = 1;
+            content.IsActive = true;
+            Assert(await content.Save(), `TP9: creating the content failed: ${content.LatestResult?.CompleteMessage}`);
+
+            const paramsOf = async (): Promise<MJTemplateParamEntity[]> => {
+                const r = await new RunView().RunView<MJTemplateParamEntity>(
+                    { EntityName: 'MJ: Template Params', ExtraFilter: `TemplateID='${tmpl.ID}'`, ResultType: 'entity_object', BypassCache: true }, user,
+                );
+                Assert(r.Success, `TP9: loading params failed: ${r.ErrorMessage}`);
+                return r.Results ?? [];
+            };
+
+            // A hand-written param as well, so the check holds even if extraction derived nothing.
+            const manual = await md.GetEntityObject<MJTemplateParamEntity>('MJ: Template Params', user);
+            manual.NewRecord();
+            manual.TemplateID = tmpl.ID;
+            manual.Name = 'HandWritten';
+            manual.Type = 'Scalar';
+            Assert(await manual.Save(), `TP9: creating the hand-written param failed: ${manual.LatestResult?.CompleteMessage}`);
+            const before = await paramsOf();
+            Assert(before.length >= 1, 'TP9: the template has params before the delete');
+
+            // Content first, then the template: the order a declarative delete (mj sync push) uses.
+            Assert(await content.Delete(), `TP9: deleting the content failed: ${content.LatestResult?.CompleteMessage}`);
+            Assert(await tmpl.Delete(), `TP9: deleting the template failed: ${tmpl.LatestResult?.CompleteMessage}`);
+
+            AssertEqual((await paramsOf()).length, 0, 'TP9: no params remain for the deleted template');
+            console.log(`      → template with ${before.length} param(s) deleted; params removed with it`);
+        }
+    },
 ];
 
 for (const check of TemplatesChecks) {

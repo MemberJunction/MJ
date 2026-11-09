@@ -8,6 +8,7 @@ export * from './custom/MJQueryEntityServer.server';
 export * from './custom/MJQuerySQLEntityServer.server';
 export * from './custom/query-refresh';
 export * from './custom/MJTemplateContentEntityServer.server';
+export * from './custom/MJTemplateEntityServer.server';
 export * from './custom/MJUserViewEntityServer.server';
 export * from './custom/MJListEntityServer.server';
 export * from './custom/MJListDetailEntityServer.server';
