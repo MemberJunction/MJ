@@ -136,7 +136,7 @@ describe('BacktestStep', () => {
     d.OrphanRunCost = vi.fn(async () => [{ RunID: 'orphan-1', CostUSD: 4 }]);
     const l = await backtest(options(root, corpus, d, { MaxUsd: 5 }));
     expect(d.OrphanRunCost).toHaveBeenCalledTimes(1);
-    expect(d.OrphanRunCost).toHaveBeenCalledWith(1, sha('a'), new Set(['run-3']), started);
+    expect(d.OrphanRunCost).toHaveBeenCalledWith(1, sha('a'), new Set(['run-3']), started, 'gen-model');
     expect(l.Entries[0]).toEqual(expect.objectContaining({ Status: 'Pending', CostUSD: 5 }));
     expect(d.calls).toEqual([]);
     expect(stderr.join('')).toMatch(/PR #1: recovered 4\.00 USD of run orphan-1/);
@@ -244,7 +244,7 @@ describe('BacktestStep', () => {
 });
 
 describe('DefaultOrphanRunCost', () => {
-  it('sums the generation costs of the Backtest runs of the PR and head that the ledger does not know and that started at or after the entry', async () => {
+  it('sums the generation costs of the Backtest runs of the PR, head and model that the ledger does not know and that started at or after the entry', async () => {
     const root = mkdtempSync(join(tmpdir(), 'jit-orphan-')); dirs.push(root);
     const write = (id: string, over: Partial<Run>) => {
       const dir = new RunDir(root, id, new RedactionCheck([]));
@@ -258,8 +258,9 @@ describe('DefaultOrphanRunCost', () => {
     write('other-head', { HeadSHA: sha('b') });
     write('local', { Trigger: 'Local' });
     write('older', { StartedAt: '2026-11-09T09:00:00.000Z' });
+    write('other-model', { GeneratorModel: 'other' });
     const orphans = DefaultOrphanRunCost(root, new RedactionCheck([]));
-    expect(await orphans(1, sha('a'), new Set(['known']), '2026-11-09T10:00:00.000Z')).toEqual([{ RunID: 'orphan', CostUSD: 1.5 }]);
+    expect(await orphans(1, sha('a'), new Set(['known']), '2026-11-09T10:00:00.000Z', 'm')).toEqual([{ RunID: 'orphan', CostUSD: 1.5 }]);
   });
 });
 

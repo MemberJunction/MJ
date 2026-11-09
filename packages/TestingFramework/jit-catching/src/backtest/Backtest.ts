@@ -22,8 +22,11 @@ export interface BacktestDeps {
     Repo: Pick<GitRepo, 'FirstParent' | 'Fetch'>;
     /** The USD cost recorded for a run; null when neither the store nor the run folder has the run. */
     CostOfRun: (runID: string) => Promise<number | null>;
-    /** The Backtest runs of `pr` on `headSHA` that started at or after `since` and whose IDs are not in `knownRunIDs`, with their recorded cost. */
-    OrphanRunCost: (pr: number, headSHA: string, knownRunIDs: Set<string>, since: string) => Promise<OrphanRun[]>;
+    /**
+     * The Backtest runs of `pr` on `headSHA` with generator `model` that started at or after `since` and whose IDs are not in `knownRunIDs`,
+     * with their recorded cost. Two ledgers with the same model and overlapping sets can still find each other's runs.
+     */
+    OrphanRunCost: (pr: number, headSHA: string, knownRunIDs: Set<string>, since: string, model: string) => Promise<OrphanRun[]>;
     Redaction: RedactionCheck;
 }
 
@@ -95,13 +98,13 @@ export function DefaultCostOfRun(store: Pick<BaseCatchStore, 'GetRun'>, repoRoot
 
 /** Finds orphan runs in the generation file of each folder under `<repo root>/.jit-catch/runs`; a folder without a readable generation file is skipped. */
 export function DefaultOrphanRunCost(repoRoot: string, redaction: RedactionCheck): BacktestDeps['OrphanRunCost'] {
-    return async (pr, headSHA, knownRunIDs, since) => {
+    return async (pr, headSHA, knownRunIDs, since, model) => {
         const runs = join(repoRoot, '.jit-catch', 'runs');
         if (!existsSync(runs)) return [];
         const out: OrphanRun[] = [];
         for (const id of readdirSync(runs).filter((n) => IsValidRunID(n) && !knownRunIDs.has(n)).sort()) {
             const run = readRun(new RunDir(repoRoot, id, redaction));
-            if (run && run.Trigger === 'Backtest' && run.PRNumber === pr && run.HeadSHA === headSHA && run.StartedAt >= since) out.push({ RunID: id, CostUSD: sumCost(run.TokensByModel) });
+            if (run && run.Trigger === 'Backtest' && run.PRNumber === pr && run.HeadSHA === headSHA && run.GeneratorModel === model && run.StartedAt >= since) out.push({ RunID: id, CostUSD: sumCost(run.TokensByModel) });
         }
         return out;
     };
@@ -177,7 +180,7 @@ async function recoverOrphans(ledger: BacktestLedger, deps: BacktestDeps): Promi
     const known = new Set(ledger.Entries.map((e) => e.RunID).filter((id): id is string => id !== null));
     for (const e of ledger.Entries) {
         if (e.Status !== 'Pending' || e.StartedAt === null) continue;
-        for (const orphan of await deps.OrphanRunCost(e.PR, e.HeadSHA, known, e.StartedAt)) {
+        for (const orphan of await deps.OrphanRunCost(e.PR, e.HeadSHA, known, e.StartedAt, ledger.Model)) {
             e.CostUSD += orphan.CostUSD;
             process.stderr.write(`backtest ${ledger.ID}: PR #${e.PR}: recovered ${orphan.CostUSD.toFixed(2)} USD of run ${orphan.RunID}, cut off before it was recorded\n`);
         }
