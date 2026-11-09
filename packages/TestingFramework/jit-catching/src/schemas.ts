@@ -4,7 +4,7 @@ const sha = z.string().regex(/^[0-9a-f]{7,40}$/);
 const iso = z.iso.datetime();
 export const TriggerSchema = z.enum(['Nightly', 'Label', 'Recheck', 'Backtest', 'Local']);
 export const BucketSchema = z.enum(['High', 'Medium', 'Low']);
-export const TokenUsageSchema = z.object({ Model: z.string(), InputTokens: z.number().int().nonnegative(), OutputTokens: z.number().int().nonnegative(), CacheReadTokens: z.number().int().nonnegative(), CostUSD: z.number().nonnegative() });
+export const TokenUsageSchema = z.object({ Model: z.string(), Role: z.enum(['Generator', 'Analyzer', 'Judge']).optional(), InputTokens: z.number().int().nonnegative(), OutputTokens: z.number().int().nonnegative(), CacheReadTokens: z.number().int().nonnegative(), CostUSD: z.number().nonnegative() });
 
 export const RunSchema = z.object({
     ID: z.string().min(1), Trigger: TriggerSchema, PRNumber: z.number().int().positive().nullable(), BaseSHA: sha, HeadSHA: sha,
@@ -50,7 +50,9 @@ export const CoverageResultSchema = z.object({ CandidateTestID: z.string(), Cove
 
 // ---- files passed between jobs (§5.4) ----
 /** `BaseRootDir` is the base worktree the generate step prepared and kept; execute and assess reuse it. */
-export const GenerationFileSchema = z.object({ Run: RunSchema, Analysis: ChangeAnalysisSchema, Tests: z.array(CandidateTestSchema), BaseRootDir: z.string().min(1) });
+export const SessionRecordSchema = z.object({ RunID: z.string(), Package: z.string(), Method: z.enum(['DodgyDiff', 'IntentAware']), RiskID: z.string().nullable(), EndReason: z.string(),
+    Turns: z.number().int().nonnegative(), Tokens: TokenUsageSchema, TranscriptURL: z.string().nullable(), Produced: z.number().int().nonnegative(), Failed: z.number().int().nonnegative() });
+export const GenerationFileSchema = z.object({ Run: RunSchema, Analysis: ChangeAnalysisSchema, Tests: z.array(CandidateTestSchema), BaseRootDir: z.string().min(1), Sessions: z.array(SessionRecordSchema).default([]) });
 /** `TypeErrors` maps each test ID to its type-check errors on base and head (null when it compiles). */
 export const ExecutionFileSchema = z.object({ RunID: z.string(), Tests: z.array(CandidateTestSchema), Results: z.array(ExecutionResultSchema), Coverage: z.array(CoverageResultSchema),
     TypeErrors: z.record(z.string(), z.object({ Base: z.string().nullable(), Head: z.string().nullable() })) })

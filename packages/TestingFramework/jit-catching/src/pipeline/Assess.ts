@@ -34,7 +34,7 @@ const MAX_PROMOTIONS = 3;
  * Job 3: checks the environment, reads `generation.json` and `execution.json`, gives every executed test a verdict, filters weak catches with
  * the rules (which read the base worktree) and judges the survivors, ranks and selects with the Label threshold,
  * offers up to three promotion candidates, saves everything to the store (the run with the judges' tokens added to
- * its tokens per model) and writes `assessment.json`. A catch's ID comes from its run and test, so running the step
+ * its tokens per role and model, and the generation sessions) and writes `assessment.json`. A catch's ID comes from its run and test, so running the step
  * again on the same run replaces the earlier catches in the store.
  */
 export async function AssessStep(o: AssessOptions): Promise<{ Catches: Catch[]; Promotions: PromotionCandidate[] }> {
@@ -70,7 +70,7 @@ async function assessTest(gen: GenerationFile, exec: ExecutionFile, t: Candidate
     ctx.Boosts = filter.Boosts;
     if (filter.DroppedBy !== null) return { ...c, DroppedByRule: filter.DroppedBy, Boosts: filter.Boosts };
     const panel: PanelResult = await d.JudgePanel.Judge(ctx);
-    judgeUsage.push(...panel.Usage);
+    judgeUsage.push(...panel.Usage.map((u) => ({ ...u, Role: 'Judge' as const })));
     return { ...c, Boosts: filter.Boosts, TPProb: panel.TPProb, JudgeBuckets: panel.Buckets, Median: panel.Median };
 }
 
@@ -84,6 +84,7 @@ function promotionsOf(gen: GenerationFile, exec: ExecutionFile, catches: Catch[]
 
 async function save(store: BaseCatchStore, gen: GenerationFile, exec: ExecutionFile, catches: Catch[], promotions: PromotionCandidate[], judgeUsage: TokenUsage[]): Promise<void> {
     await store.SaveRun({ ...gen.Run, Status: 'Assessed', EndedAt: new Date().toISOString(), TokensByModel: SumTokens([...gen.Run.TokensByModel, ...judgeUsage]) });
+    await store.SaveSessions(gen.Sessions);
     await store.SaveCandidateTests(gen.Tests);
     await store.SaveExecutionResults(exec.Results);
     await store.SaveCatches(catches);

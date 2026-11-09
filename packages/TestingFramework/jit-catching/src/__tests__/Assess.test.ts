@@ -46,7 +46,7 @@ describe('AssessStep', () => {
     expect(judge.mock.calls[0][0].Test.ID).toBe(ID_A);
     expect(out.Promotions).toEqual([{ CandidateTestID: ID_B, RunID: RUN_ID, NewlyCoveredLines: 4, State: 'Offered' }]);
     expect(await store.GetRun(RUN_ID)).toMatchObject({ Status: 'Assessed' });
-    expect((await store.GetRun(RUN_ID))?.TokensByModel).toContainEqual({ Model: 'judge-model', InputTokens: 11, OutputTokens: 2, CacheReadTokens: 0, CostUSD: 0.125 });
+    expect((await store.GetRun(RUN_ID))?.TokensByModel).toContainEqual({ Model: 'judge-model', Role: 'Judge', InputTokens: 11, OutputTokens: 2, CacheReadTokens: 0, CostUSD: 0.125 });
     expect((await store.ListCatches(RUN_ID)).map((x) => x.CandidateTestID).sort()).toEqual([ID_A, ID_B, ID_C].sort());
   });
 

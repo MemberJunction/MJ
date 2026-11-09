@@ -52,20 +52,20 @@ export class ClaudeAgentGenerator extends BaseTestGenerator {
         const factory = this.o.RunTestFactory ?? ((x: RunTestToolOptions) => new RunTestTool(x));
         const s: Session = { Request: r, PackageDir: pkg.Dir, JitDir: jitDir, IDs: ids, Files: new Map(), Transcript: [],
             Tool: factory({ Sandbox: this.o.Sandbox, BaseRootDir: r.BaseRootDir, PackageRelDir: pkg.Dir, PackageName: r.Package, ScratchRoot: this.o.ScratchRoot, Settings: this.o.Settings }) };
-        let usage: TokenUsage = { Model: r.Model, InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 }; let subtype = 'none';
+        let usage: TokenUsage = { Model: r.Model, InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 }; let subtype = 'none'; let turns = 0;
         const transcriptPath = this.transcriptPath(s);
         try {
             const ctx = buildContext(s);
             const options: AgentRunOptions = { Cwd: r.BaseRootDir, Model: r.Model, MaxTurns: r.Limits.TurnsPerSession, TokenBudget: r.Limits.TokensPerSession, BudgetUsd: r.Limits.UsdPerSession,
                 Price: this.o.Settings.Prices[r.Model] ?? null, Hooks: { WriteFile: (rel, source) => writeTest(s, rel, source), RunTest: (file, mutant) => runTest(s, file, mutant) } };
             for await (const m of this.runner(BuildTaskPrompt(r, ctx), BuildSystemPrompt(ctx), options)) {
-                if (m.Type === 'result') { usage = { Model: r.Model, ...m.Usage, CostUSD: m.CostUSD }; subtype = m.Subtype; }
+                if (m.Type === 'result') { usage = { Model: r.Model, ...m.Usage, CostUSD: m.CostUSD }; subtype = m.Subtype; turns = m.Turns; }
                 else if (m.Type === 'assistant') s.Transcript.push(`ASSISTANT ${m.Text.slice(0, 500)}`);
             }
         } finally {
             writeTranscript(this.o.TranscriptDir, transcriptPath, `${subtype}\n${s.Transcript.join('\n')}\n`);
         }
-        return { Tests: collectCandidates(s, usage, transcriptPath), Tokens: usage, TranscriptPath: transcriptPath };
+        return { Tests: collectCandidates(s, usage, transcriptPath), Tokens: { ...usage, Role: 'Generator' }, TranscriptPath: transcriptPath, EndReason: subtype, Turns: turns };
     }
 
     private transcriptPath(s: Session): string {
