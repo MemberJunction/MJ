@@ -15,8 +15,10 @@
  * per app, on the first injection of any shim.
  */
 
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
+import { JSONObject } from '@memberjunction/ai';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
+import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 import { ActiveTasksService } from './active-tasks.service';
@@ -66,7 +68,11 @@ const CHAT_TOKENS_STYLE_ID = 'mj-chat-tokens';
 
 @Injectable({ providedIn: 'root' })
 export class ConversationsRuntimeBootstrap {
-    constructor(activeTasks: ActiveTasksService, voice: RealtimeSessionService) {
+    constructor(
+        activeTasks: ActiveTasksService,
+        voice: RealtimeSessionService,
+        @Optional() agentClient?: AgentClientService
+    ) {
         const runtime = ConversationsRuntime.Instance;
 
         // INotificationAdapter — bridge to MJNotificationService.CreateSimpleNotification.
@@ -99,12 +105,13 @@ export class ConversationsRuntimeBootstrap {
 
         // Wire bidirectional session & conversation handoff with the MJ Browser Extension
         // content script via shared DOM attributes and CustomEvents on `document`.
-        this.wireBrowserExtensionBridge(runtime, voice);
+        this.wireBrowserExtensionBridge(runtime, voice, agentClient);
     }
 
     private wireBrowserExtensionBridge(
         runtime: ConversationsRuntime,
-        voice: RealtimeSessionService
+        voice: RealtimeSessionService,
+        agentClient?: AgentClientService
     ): void {
         if (typeof document === 'undefined') return;
 
@@ -143,19 +150,21 @@ export class ConversationsRuntimeBootstrap {
             }
         });
 
-        this.registerBrowserExtensionClientTools(runtime, voice);
+        this.registerBrowserExtensionClientTools(runtime, voice, agentClient);
     }
 
     /**
-     * Registers the 5 Browser Extension DOM & Coach-Mark client tools on both
-     * `ConversationsRuntime.Instance.Tools` (text agent runs) and
-     * `RealtimeSessionService.RegisterAppClientTools` (voice/realtime co-agent runs)
-     * so `<mj-chat-agents-overlay>` / `<mj-conversation-chat-area>` can inspect,
+     * Registers the 5 Browser Extension DOM & Coach-Mark client tools across all 3 execution paths:
+     * 1. `ConversationsRuntime.Instance.Tools` (Conversation Manager / Sage text runs)
+     * 2. `AgentClientService` (`@`-mentioned agents and Sage-delegated sub-agents)
+     * 3. `RealtimeSessionService.RegisterAppClientTools` (voice/realtime co-agent runs)
+     * so `<mj-chat-agents-overlay>` and `<mj-conversation-chat-area>` can inspect,
      * spotlight, click, and fill elements on the active browser tab.
      */
     private registerBrowserExtensionClientTools(
         runtime: ConversationsRuntime,
-        voice: RealtimeSessionService
+        voice: RealtimeSessionService,
+        agentClient?: AgentClientService
     ): void {
         const forwardToActiveTab = (
             commandType: string,
@@ -207,7 +216,7 @@ export class ConversationsRuntimeBootstrap {
         const toolSpecs: Array<{
             Name: string;
             Description: string;
-            ParameterSchema: Record<string, unknown>;
+            ParameterSchema: JSONObject;
             CommandType: string;
         }> = [
             {
@@ -304,21 +313,36 @@ export class ConversationsRuntimeBootstrap {
             },
         ];
 
+        const registeredSubAgentTools = new Set(
+            (agentClient?.GetRegisteredTools() ?? []).map((t) => t.Name)
+        );
+
         for (const spec of toolSpecs) {
+            const toolHandler = async (params: Record<string, unknown>) => {
+                const res = await forwardToActiveTab(spec.CommandType, params);
+                const ok = res['Success'] !== false;
+                return {
+                    Success: ok,
+                    Data: res,
+                    ErrorMessage: ok ? undefined : String(res['ErrorMessage'] ?? 'Browser tool failed'),
+                };
+            };
+
             if (!runtime.Tools.GetTool(spec.Name)) {
                 runtime.Tools.Register({
                     Name: spec.Name,
                     Description: spec.Description,
                     ParameterSchema: spec.ParameterSchema,
-                    Handler: async (params: Record<string, unknown>) => {
-                        const res = await forwardToActiveTab(spec.CommandType, params);
-                        const ok = res['Success'] !== false;
-                        return {
-                            Success: ok,
-                            Data: res,
-                            ErrorMessage: ok ? undefined : String(res['ErrorMessage'] ?? 'Browser tool failed'),
-                        };
-                    },
+                    Handler: toolHandler,
+                });
+            }
+
+            if (agentClient && !registeredSubAgentTools.has(spec.Name)) {
+                agentClient.RegisterTool({
+                    Name: spec.Name,
+                    Description: spec.Description,
+                    ParameterSchema: spec.ParameterSchema,
+                    Handler: toolHandler,
                 });
             }
         }

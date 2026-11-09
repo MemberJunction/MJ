@@ -110,6 +110,8 @@ export interface IAgentSettings {
         Version?: string | null;
         /** Assistant persona display name in the Side Panel and Coach-Mark badges (e.g. `'MJ Co-Pilot'`). */
         AssistantDisplayName?: string | null;
+        /** Custom label for the primary AI Agent tab in the Side Panel (defaults to `'Agent'`). */
+        AgentTabLabel?: string | null;
         /** Header title rendered in the Side Panel chrome (e.g. `'MemberJunction Co-Pilot'`). */
         SidePanelHeaderTitle?: string | null;
         /** Default MemberJunction GraphQL API URL pre-populated in onboarding. */
@@ -217,6 +219,46 @@ export interface IAgentSettings {
                 Kind: 'agent-prompt' | 'remote-operation' | 'open-in-explorer' | 'create-related-record';
                 Target: string;
                 ParamsTemplate?: Record<string, string>;
+            }>;
+        }> | null;
+        /** Optional custom system-prompt instructions injected into `AppContextSnapshot` for the Browser Extension AI Agent. */
+        AgentPromptInstructions?: string | null;
+        /** Guided cross-site playbooks contributed by this application (`MJExtensionPlaybookStepperComponent`). */
+        Playbooks?: Array<{
+            /** Unique playbook identifier (e.g. `'crm.hubspot-oauth-setup'`). */
+            Id: string;
+            /** Display name of the playbook. */
+            Name: string;
+            /** Short summary of what the playbook guides the user through. */
+            Description: string;
+            /** Optional starting URL for launching the playbook. */
+            StartUrl?: string;
+            /** Optional URL glob/substring patterns where this playbook is contextually prioritized. */
+            UrlPatterns?: string[];
+            /** Optional preferred browser control backend (`'content-script' | 'debugger-cdp' | 'auto'`). */
+            PreferredBackend?: 'content-script' | 'debugger-cdp' | 'auto';
+            /** Ordered steps in the guided playbook. */
+            Steps: Array<{
+                StepId: string;
+                Title: string;
+                Instruction: string;
+                Kind:
+                    | 'Navigate'
+                    | 'HighlightElement'
+                    | 'WaitForUserAction'
+                    | 'ClickElement'
+                    | 'FillInput'
+                    | 'CopySecretToMJVault';
+                NavigateUrl?: string;
+                TargetSelector?: string;
+                InputValue?: string;
+                CalloutPosition?: 'top' | 'bottom' | 'left' | 'right' | 'auto';
+                WaitForActionKind?: 'click' | 'input' | 'submit' | 'navigation';
+                ExpectedUrlPattern?: string;
+                RequireTrustedInput?: boolean;
+                RequiresConfirmationGate?: boolean;
+                VaultCredentialName?: string;
+                VaultTargetFieldName?: string;
             }>;
         }> | null;
     } | null;

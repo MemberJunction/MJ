@@ -226,3 +226,14 @@ export interface SyncedConversationMessage {
   Role: string;
   Message: string;
 }
+
+export type InteractiveElementRoleFilter = 'all' | 'button' | 'link' | 'input';
+
+export interface ContextualQuickActionItem {
+  Id: string;
+  Label: string;
+  IconClass: string;
+  Kind: 'agent-prompt' | 'open-in-explorer' | 'spotlight-page';
+  Prompt?: string;
+  Badge?: string;
+}

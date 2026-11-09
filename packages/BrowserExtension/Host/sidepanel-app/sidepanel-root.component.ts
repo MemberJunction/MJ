@@ -31,13 +31,23 @@ import {
 } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
+  BuildAppContextSnapshot,
+  ParseAgentSettings,
+  type AppContextSnapshot,
+  type ClientToolMetadata,
+  type RealtimeChannelExposure,
+} from '@memberjunction/ai-core-plus';
+import type { InteractiveElement } from '@memberjunction/computer-use/browser-probe';
+import {
   GraphQLDataProvider,
   GraphQLProviderConfigData,
   SetupGraphQLClient,
 } from '@memberjunction/graphql-dataprovider';
+import { AgentClientService } from '@memberjunction/ng-agent-client';
 import {
   ConversationChatAreaComponent,
   ConversationsModule,
+  RealtimeSessionService,
 } from '@memberjunction/ng-conversations';
 import {
   MJExtensionPlaybookStepperComponent,
@@ -48,14 +58,14 @@ import {
   BrowserPageStateSnapshot,
   BrowserPlaybookDefinition,
   ExtensionBrandProfile,
-  REFERENCE_BROWSER_PLAYBOOKS,
   RuntimeBrandKitHydrator,
 } from '@memberjunction/browser-extension-core';
-import type { RealtimeChannelExposure } from '@memberjunction/ai-core-plus';
 import type {
   ChromeExtensionNamespace,
   ChromeWindowCreateResult,
+  ContextualQuickActionItem,
   DiscoveredAuthProviderCatalogEntry,
+  InteractiveElementRoleFilter,
   LiveBraidedFacetGroup,
   LivePageContextDossier,
   MjHostSessionExtractResult,
@@ -107,7 +117,113 @@ interface DynamicEntityFacetEntry {
     OrderBy?: string;
     MaxRows?: number;
   };
+  QuickActions?: Array<{
+    Label?: string;
+    IconClass?: string;
+    Kind?: 'agent-prompt' | 'remote-operation' | 'open-in-explorer' | 'create-related-record';
+    Target?: string;
+  }>;
 }
+
+interface DynamicPlaybookEntry extends BrowserPlaybookDefinition {
+  UrlPatterns?: string[];
+  SourceApp?: string;
+}
+
+const BROWSER_EXTENSION_TOOL_MANIFEST: ClientToolMetadata[] = [
+  {
+    Name: 'GetActiveTabPageState',
+    Description:
+      'Reads the active browser tab URL, title, hostname, OpenGraph metadata, visible text excerpt, and grounded interactive elements.',
+    Category: 'Browser Extension',
+    InputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    Name: 'HighlightElementOnPage',
+    Description:
+      'Draws a non-intrusive Shadow-DOM Coach-Mark Spotlight ring and floating instruction callout around an element on the active browser tab.',
+    Category: 'Browser Extension',
+    InputSchema: {
+      type: 'object',
+      properties: {
+        Selector: {
+          type: 'string',
+          description: 'CSS selector or xpath=... expression of the element to highlight.',
+        },
+        Index: {
+          type: 'number',
+          description: 'Grounded interactive element index from GetActiveTabPageState or TopGroundedElements.',
+        },
+        Label: {
+          type: 'string',
+          description: 'Instruction text shown in the floating Coach-Mark callout.',
+        },
+        StepBadge: {
+          type: 'string',
+          description: 'Optional step badge pill text (e.g. "Step 1 of 3").',
+        },
+      },
+      required: ['Label'],
+    },
+  },
+  {
+    Name: 'ClearPageHighlights',
+    Description: 'Clears all Coach-Mark Spotlight rings and callouts on the active browser tab.',
+    Category: 'Browser Extension',
+    InputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    Name: 'ClickElementOnPage',
+    Description: 'Clicks a grounded interactive element on the active browser tab by Selector or Index.',
+    Category: 'Browser Extension',
+    InputSchema: {
+      type: 'object',
+      properties: {
+        Selector: {
+          type: 'string',
+          description: 'CSS selector or xpath=... expression of the element to click.',
+        },
+        Index: {
+          type: 'number',
+          description: 'Grounded interactive element index from GetActiveTabPageState or TopGroundedElements.',
+        },
+      },
+    },
+  },
+  {
+    Name: 'FillInputOnPage',
+    Description: 'Fills text into an input or textarea on the active browser tab by Selector or Index.',
+    Category: 'Browser Extension',
+    InputSchema: {
+      type: 'object',
+      properties: {
+        Selector: {
+          type: 'string',
+          description: 'CSS selector or xpath=... expression of the input element.',
+        },
+        Index: {
+          type: 'number',
+          description: 'Grounded interactive element index from GetActiveTabPageState or TopGroundedElements.',
+        },
+        Value: {
+          type: 'string',
+          description: 'Text value to enter into the input.',
+        },
+        PressEnter: {
+          type: 'boolean',
+          description: 'Whether to press Enter after filling the input.',
+        },
+      },
+      required: ['Value'],
+    },
+  },
+];
 
 interface GraphQLRunViewBatchItem {
   Success: boolean;
@@ -178,6 +294,10 @@ const DEFAULT_OAUTH_CONFIG = {
       [attr.data-default-backend]="BrandProfile.DefaultControlBackend"
       [attr.data-last-oauth-url]="LastOAuthUrl"
       [attr.data-last-oauth-provider]="LastOAuthProvider"
+      [attr.data-app-context-app]="AgentAppContext.App.Name"
+      [attr.data-app-context-resource-type]="AgentAppContext.ActiveNavItem?.ResourceType ?? null"
+      [attr.data-app-context-tools]="AgentAppContext.Capabilities?.Tools?.length ?? 0"
+      [attr.data-app-context-has-instructions]="AgentAppContext.AdditionalContext?.['SpecialAgentInstructions'] ? 'true' : 'false'"
     >
       <!-- Top Brand & Connection Header -->
       <header class="mj-sidepanel-header">
@@ -570,10 +690,21 @@ const DEFAULT_OAUTH_CONFIG = {
           <!-- Compact Page Context & Handoff Strip -->
           <div class="mj-agent-context-strip">
             <div class="mj-agent-context-meta">
-              <span class="mj-agent-context-dot" aria-hidden="true"></span>
+              <span
+                class="mj-agent-context-dot"
+                [class.paused]="ExposureMode === 'none'"
+                aria-hidden="true"
+              ></span>
               <span class="mj-agent-context-label" [title]="ActiveTabUrl">
-                <strong>{{ PageDossier?.DisplayName || ActiveHostLabel }}</strong>
-                <span class="mj-agent-tools-count"> · 5 Browser Tools</span>
+                @if (ExposureMode === 'none') {
+                  <strong>Context Paused</strong>
+                  <span class="mj-agent-tools-count"> · Perception Off</span>
+                } @else {
+                  <strong>{{ PageDossier?.DisplayName || ActiveHostLabel }}</strong>
+                  <span class="mj-agent-tools-count">
+                    · {{ GroundedElementCount }} els · 5 Tools@if (PageDossier?.MatchedInMJ) { · ✓ MJ Linked }
+                  </span>
+                }
               </span>
             </div>
             <div class="mj-agent-context-actions">
@@ -612,10 +743,13 @@ const DEFAULT_OAUTH_CONFIG = {
                 [pendingMessage]="PendingMessage"
                 [pendingAttachments]="PendingAttachments"
                 [pendingMessageConversationId]="PendingMessageConversationId"
+                [linkedEntityId]="MatchedEntityId"
+                [linkedRecordId]="PageDossier?.MatchedRecordID ?? null"
                 [overlayMode]="true"
                 [showExportButton]="false"
                 [showShareButton]="false"
                 [showArtifactIndicator]="true"
+                [assistantDisplayName]="BrandProfile.AssistantDisplayName"
                 [appContext]="AgentAppContext"
                 [emptyStateGreeting]="EmptyStateGreeting"
                 (conversationCreated)="OnConversationCreated($event)"
@@ -686,41 +820,192 @@ const DEFAULT_OAUTH_CONFIG = {
           }
         </div>
 
-        <!-- TAB 3: ACTIONS & GUIDED PLAYBOOKS -->
+        <!-- TAB 3: ACTIONS & GUIDED PLAYBOOKS (100% Live DOM + Metadata-Driven — Zero Hardcoded Playbooks) -->
         @if (ActiveTab === 'playbooks') {
           <div class="mj-tab-scroll">
-            <section class="mj-card">
-              <strong class="mj-card-kicker">Interactive Page Actions</strong>
-              <p class="mj-card-body-copy">
-                Highlight grounded elements on <strong>{{ ActiveHostLabel }}</strong> with non-intrusive Shadow-DOM Coach-Marks or step through cross-site OAuth &amp; setup playbooks.
-              </p>
+            <!-- 1. Contextual Agent & Record Quick Actions -->
+            <section id="mj-contextual-actions-card" class="mj-card">
+              <div class="mj-facet-header">
+                <div>
+                  <div class="mj-facet-app">Live Page &amp; MemberJunction</div>
+                  <h2 class="mj-facet-title">Contextual Actions</h2>
+                </div>
+                <span class="mj-badge mj-badge-info">{{ ActiveHostLabel }}</span>
+              </div>
               <div class="mj-toolbar-actions mj-top-gap">
-                <button type="button" class="mj-btn mj-btn-primary" (click)="OnSpotlightPrimaryElement()">
-                  <i class="fa-solid fa-bullseye" aria-hidden="true"></i>
-                  <span>Spotlight Primary Element</span>
+                @for (act of ContextualQuickActions; track act.Id) {
+                  <button
+                    type="button"
+                    class="mj-btn mj-btn-compact"
+                    [class.mj-btn-primary]="act.Id === 'summarize-page'"
+                    (click)="OnRunContextualQuickAction(act)"
+                  >
+                    <i [class]="act.IconClass" aria-hidden="true"></i>
+                    <span>{{ act.Label }}</span>
+                  </button>
+                }
+              </div>
+            </section>
+
+            <!-- 2. Live Grounded Interactive Elements on Active Browser Tab -->
+            <section id="mj-grounded-elements-card" class="mj-card">
+              <div class="mj-facet-header">
+                <div>
+                  <div class="mj-facet-app">DOM Perception · Coach-Marks</div>
+                  <h2 class="mj-facet-title">Grounded Elements on {{ ActiveHostLabel }}</h2>
+                </div>
+                <span class="mj-badge mj-badge-neutral">
+                  {{ FilteredInteractiveElements.length }} / {{ GroundedElementCount }}
+                </span>
+              </div>
+
+              <div class="mj-toolbar-actions">
+                <button type="button" class="mj-btn mj-btn-xs mj-btn-primary" (click)="ScanActiveTab()">
+                  <i class="fa-solid fa-rotate" aria-hidden="true"></i>
+                  <span>Rescan Tab</span>
                 </button>
-                <button type="button" class="mj-btn" (click)="OnClearSpotlights()">
+                <button type="button" class="mj-btn mj-btn-xs" (click)="OnSpotlightPrimaryElement()">
+                  <i class="fa-solid fa-bullseye" aria-hidden="true"></i>
+                  <span>Spotlight #0</span>
+                </button>
+                <button type="button" class="mj-btn mj-btn-xs" (click)="OnClearSpotlights()">
                   <i class="fa-solid fa-eraser" aria-hidden="true"></i>
                   <span>Clear Highlights</span>
                 </button>
               </div>
+
+              @if (ExposureMode === 'none') {
+                <p class="mj-card-body-copy mj-top-gap">
+                  Page perception is paused (<code>Exposure: None</code>). Re-enable DOM State in Settings to inspect or spotlight live elements.
+                </p>
+              } @else if (GroundedElementCount === 0) {
+                <p class="mj-card-body-copy mj-top-gap">
+                  No grounded interactive elements captured yet. Focus an <code>http://</code> or <code>https://</code> tab and click <strong>Rescan Tab</strong>.
+                </p>
+              } @else {
+                <search class="mj-elements-search mj-top-gap">
+                  <label class="mj-field-label" for="mj-filter-elements-input">
+                    Filter elements on {{ ActiveHostLabel }}
+                  </label>
+                  <input
+                    id="mj-filter-elements-input"
+                    name="elementFilter"
+                    type="search"
+                    class="mj-input"
+                    [value]="ElementSearchQuery"
+                    (input)="OnElementSearchInput($event)"
+                    placeholder="Search buttons, links, inputs..."
+                    autocorrect="off"
+                    autocapitalize="off"
+                    spellcheck="false"
+                  />
+                  <div class="mj-role-filter-row" role="group" aria-label="Filter by element role">
+                    <button
+                      type="button"
+                      class="mj-btn mj-btn-xs"
+                      [class.mj-btn-primary]="ElementRoleFilter === 'all'"
+                      (click)="SetElementRoleFilter('all')"
+                    >
+                      All ({{ GroundedElementCount }})
+                    </button>
+                    <button
+                      type="button"
+                      class="mj-btn mj-btn-xs"
+                      [class.mj-btn-primary]="ElementRoleFilter === 'button'"
+                      (click)="SetElementRoleFilter('button')"
+                    >
+                      Buttons
+                    </button>
+                    <button
+                      type="button"
+                      class="mj-btn mj-btn-xs"
+                      [class.mj-btn-primary]="ElementRoleFilter === 'link'"
+                      (click)="SetElementRoleFilter('link')"
+                    >
+                      Links
+                    </button>
+                    <button
+                      type="button"
+                      class="mj-btn mj-btn-xs"
+                      [class.mj-btn-primary]="ElementRoleFilter === 'input'"
+                      (click)="SetElementRoleFilter('input')"
+                    >
+                      Inputs
+                    </button>
+                  </div>
+                </search>
+
+                @if (FilteredInteractiveElements.length === 0) {
+                  <p class="mj-card-body-copy mj-top-gap">
+                    No elements match "{{ ElementSearchQuery }}" in filter <code>{{ ElementRoleFilter }}</code>.
+                  </p>
+                } @else {
+                  <ul class="mj-grounded-element-list">
+                    @for (el of FilteredInteractiveElements; track el.Index) {
+                      <li class="mj-grounded-element-item">
+                        <div class="mj-grounded-element-info">
+                          <div class="mj-grounded-element-header">
+                            <span class="mj-el-idx-pill">#{{ el.Index }}</span>
+                            <span class="mj-el-role-pill">{{ el.Role }}</span>
+                            @if (el.Scope) {
+                              <span class="mj-el-scope-text">{{ el.Scope }}</span>
+                            }
+                          </div>
+                          <div class="mj-grounded-element-name">{{ GetElementDisplayLabel(el) }}</div>
+                        </div>
+                        <div class="mj-grounded-element-actions">
+                          <button
+                            type="button"
+                            class="mj-btn mj-btn-xs"
+                            title="Draw Coach-Mark Spotlight on page"
+                            (click)="OnSpotlightElement(el)"
+                          >
+                            Spotlight
+                          </button>
+                          <button
+                            type="button"
+                            class="mj-btn mj-btn-xs"
+                            [disabled]="el.Disabled"
+                            title="Click element on active tab"
+                            (click)="OnClickGroundedElement(el)"
+                          >
+                            Click
+                          </button>
+                          <button
+                            type="button"
+                            class="mj-btn mj-btn-xs"
+                            title="Ask Agent about this element"
+                            (click)="OnAskAgentAboutElement(el)"
+                          >
+                            Ask
+                          </button>
+                        </div>
+                      </li>
+                    }
+                  </ul>
+                }
+              }
             </section>
 
-            <section class="mj-card mj-playbook-picker-card">
-              <div class="mj-playbook-tabs">
-                @for (pb of AvailablePlaybooks; track pb.Id) {
-                  <button
-                    type="button"
-                    class="mj-btn mj-btn-xs"
-                    [class.mj-btn-primary]="SelectedPlaybook.Id === pb.Id"
-                    (click)="SelectPlaybook(pb)"
-                  >
-                    {{ pb.Name }}
-                  </button>
-                }
-              </div>
+            <!-- 3. Metadata-Driven Guided Playbooks (from Application.AgentSettings.BrowserExtension.Playbooks) -->
+            <section id="mj-guided-playbooks-card" class="mj-card mj-playbook-picker-card">
+              @if (AvailablePlaybooks.length > 1) {
+                <div class="mj-playbook-tabs">
+                  @for (pb of AvailablePlaybooks; track pb.Id) {
+                    <button
+                      type="button"
+                      class="mj-btn mj-btn-xs"
+                      [class.mj-btn-primary]="SelectedPlaybook?.Id === pb.Id"
+                      (click)="SelectPlaybook(pb)"
+                    >
+                      {{ pb.Name }}
+                    </button>
+                  }
+                </div>
+              }
               <mj-extension-playbook-stepper
                 [Playbook]="SelectedPlaybook"
+                [HostLabel]="ActiveHostLabel"
                 [ActiveStepIndex]="ActivePlaybookStepIndex"
                 (ExecuteStep)="OnExecutePlaybookStep($event)"
               ></mj-extension-playbook-stepper>
@@ -1421,11 +1706,93 @@ const DEFAULT_OAUTH_CONFIG = {
       .mj-synced-text {
         white-space: pre-wrap;
       }
+      .mj-agent-context-dot.paused {
+        background: #94a3b8;
+      }
+      .mj-elements-search {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .mj-role-filter-row {
+        display: flex;
+        gap: 5px;
+        flex-wrap: wrap;
+      }
+      .mj-grounded-element-list {
+        list-style: none;
+        margin: 8px 0 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        max-height: 290px;
+        overflow-y: auto;
+      }
+      .mj-grounded-element-item {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 8px 9px;
+        border-radius: 7px;
+        border: 1px solid var(--mj-border-default, #e2e8f0);
+        background: var(--mj-bg-surface-sunken, #f8fafc);
+      }
+      .mj-grounded-element-info {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 0;
+      }
+      .mj-grounded-element-header {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        flex-wrap: wrap;
+      }
+      .mj-el-idx-pill {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 1px 5px;
+        border-radius: 4px;
+        background: var(--mj-brand-primary, #0076b6);
+        color: var(--mj-text-inverse, #ffffff);
+      }
+      .mj-el-role-pill {
+        font-size: 10px;
+        font-weight: 600;
+        padding: 1px 6px;
+        border-radius: 4px;
+        background: #e2e8f0;
+        color: #334155;
+      }
+      .mj-el-scope-text {
+        font-size: 10px;
+        color: var(--mj-text-secondary, #64748b);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 150px;
+      }
+      .mj-grounded-element-name {
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--mj-text-primary, #0f172a);
+        word-break: break-word;
+      }
+      .mj-grounded-element-actions {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        flex-wrap: wrap;
+      }
     `,
   ],
 })
 export class ExtensionSidePanelRootComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly realtimeSession = inject(RealtimeSessionService);
+  private readonly agentClient = inject(AgentClientService);
   private readonly brandHydrator = new RuntimeBrandKitHydrator();
 
   public BrandProfile: ExtensionBrandProfile = DEFAULT_BRAND_PROFILE;
@@ -1472,19 +1839,34 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
   public ExposureMode: RealtimeChannelExposure = 'state';
   public ControlBackendMode: BrowserControlBackendMode = 'content-script';
 
-  // Guided Playbooks state
-  public readonly AvailablePlaybooks: BrowserPlaybookDefinition[] = REFERENCE_BROWSER_PLAYBOOKS;
-  public SelectedPlaybook: BrowserPlaybookDefinition = REFERENCE_BROWSER_PLAYBOOKS[0];
+  // Actions Tab: Grounded Elements & Metadata-Driven Guided Playbooks (zero hardcoded playbooks)
+  public ElementSearchQuery = '';
+  public ElementRoleFilter: InteractiveElementRoleFilter = 'all';
+  public ContextualQuickActions: ContextualQuickActionItem[] = [];
+  public AvailablePlaybooks: BrowserPlaybookDefinition[] = [];
+  public SelectedPlaybook: BrowserPlaybookDefinition | null = null;
   public ActivePlaybookStepIndex = 0;
+
+  // Canonical AppContextSnapshot & Linked Entity Context for <mj-conversation-chat-area> + Realtime Voice
+  public MatchedEntityId: string | null = null;
+  public AgentAppContext: AppContextSnapshot = BuildAppContextSnapshot({
+    App: {
+      Name: DEFAULT_BRAND_PROFILE.BrandName,
+      Description: DEFAULT_BRAND_PROFILE.Description,
+    },
+    Capabilities: { Tools: BROWSER_EXTENSION_TOOL_MANIFEST },
+  });
 
   // Toast feedback
   public ToastMessage = '';
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // Dynamic Open App context rules & entity facets
+  // Dynamic Open App context rules, entity facets, prompt instructions & playbooks
   private installedAppNames: string[] = [];
   private dynamicContextRules: DynamicContextRuleEntry[] = [];
   private dynamicEntityFacets: DynamicEntityFacetEntry[] = [];
+  private dynamicAgentPromptInstructions: string[] = [];
+  private allConfiguredPlaybooks: DynamicPlaybookEntry[] = [];
   private pendingOAuthFlow: PendingOAuthPkceFlow | null = null;
   private boundForwardListener: ((ev: Event) => void) | null = null;
 
@@ -1500,6 +1882,33 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
     return this.PageSnapshot?.InteractiveElements?.length ?? 0;
   }
 
+  public get FilteredInteractiveElements(): InteractiveElement[] {
+    const all = this.PageSnapshot?.InteractiveElements ?? [];
+    const q = this.ElementSearchQuery.trim().toLowerCase();
+    return all
+      .filter((el) => {
+        const role = (el.Role || '').toLowerCase();
+        if (this.ElementRoleFilter === 'button' && !role.includes('button') && role !== 'tab' && role !== 'menuitem') {
+          return false;
+        }
+        if (this.ElementRoleFilter === 'link' && !role.includes('link')) {
+          return false;
+        }
+        if (
+          this.ElementRoleFilter === 'input' &&
+          !['textbox', 'searchbox', 'combobox', 'checkbox', 'radio', 'spinbutton', 'slider'].includes(role)
+        ) {
+          return false;
+        }
+        if (!q) {
+          return true;
+        }
+        const hay = `${el.Name || ''} ${el.Role || ''} ${el.Scope || ''} ${el.Value || ''} #${el.Index}`.toLowerCase();
+        return hay.includes(q);
+      })
+      .slice(0, 40);
+  }
+
   public get EmptyStateGreeting(): string {
     const target = this.PageDossier?.DisplayName;
     return target
@@ -1507,31 +1916,9 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
       : `How can ${this.BrandProfile.AssistantDisplayName} help with this page?`;
   }
 
-  public get AgentAppContext(): Record<string, string | number | boolean | object | null> {
-    return {
-      AppName: this.BrandProfile.BrandName,
-      Surface: 'BrowserExtensionSidePanel',
-      ActiveTabUrl: this.PageSnapshot?.Url ?? this.ActiveTabUrl,
-      ActiveTabTitle: this.PageSnapshot?.Title ?? '',
-      ActiveTabHostname: this.PageSnapshot?.Hostname ?? '',
-      GroundedInteractiveElementCount: this.GroundedElementCount,
-      VisibleTextExcerpt: (this.PageSnapshot?.VisibleTextExcerpt ?? '').slice(0, 2500),
-      BraidedContext: this.PageDossier
-        ? {
-            DisplayName: this.PageDossier.DisplayName,
-            EntityType: this.PageDossier.EntityType,
-            MatchedInMJ: this.PageDossier.MatchedInMJ,
-            MatchedEntityName: this.PageDossier.MatchedEntityName,
-            MatchedRecordID: this.PageDossier.MatchedRecordID,
-            Fields: this.PageDossier.Fields,
-            Facets: this.PageDossier.Facets,
-          }
-        : null,
-    };
-  }
-
   public ngOnInit(): void {
     this.hydrateBrandProfile();
+    this.rebuildAgentAppContext();
     this.wireInProcessBrowserToolBridge();
     this.wireChromeExtensionListeners();
     void this.initializeSessionAndScan();
@@ -1588,6 +1975,13 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
     const val = select?.value;
     if (val === 'state' || val === 'pixels' || val === 'none') {
       this.ExposureMode = val;
+      if (val === 'none') {
+        this.PageSnapshot = null;
+        this.PageDossier = null;
+        this.rebuildAgentAppContext();
+      } else {
+        void this.ScanActiveTab();
+      }
       this.showToast(`Perception exposure set to "${val}".`);
     }
   }
@@ -1597,6 +1991,7 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
     const val = select?.value;
     if (val === 'content-script' || val === 'auto' || val === 'debugger-cdp') {
       this.ControlBackendMode = val;
+      this.rebuildAgentAppContext();
       this.showToast(`Browser control mode set to "${val}".`);
     }
   }
@@ -1637,6 +2032,7 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
   }
 
   public OnSignOut(): void {
+    this.agentClient.StopSession();
     this.IsSignedIn = false;
     this.IsProviderReady = false;
     this.GraphQLProvider = null;
@@ -1649,9 +2045,17 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
     this.ActiveConversation = null;
     this.IsNewConversation = true;
     this.SyncedLightweightMessages = [];
+    this.installedAppNames = [];
+    this.dynamicContextRules = [];
+    this.dynamicEntityFacets = [];
+    this.dynamicAgentPromptInstructions = [];
+    this.allConfiguredPlaybooks = [];
+    this.AvailablePlaybooks = [];
+    this.SelectedPlaybook = null;
     this.AuthDrawerOpen = true;
     const chromeApi = this.getChromeApi();
     chromeApi?.storage?.local?.remove('mj_ext_auth_session');
+    this.rebuildAgentAppContext();
     void this.ScanActiveTab();
     this.showToast('Signed out of MemberJunction.');
     this.cdr.markForCheck();
@@ -1831,12 +2235,14 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
     if (this.ExposureMode === 'none') {
       this.PageSnapshot = null;
       this.PageDossier = null;
+      this.rebuildAgentAppContext();
       this.cdr.markForCheck();
       return;
     }
 
     const snap = await this.sendToActiveTab<BrowserPageStateSnapshot>('MJ_CS_GET_PAGE_STATE', {});
     if (!snap || !snap.Url) {
+      this.rebuildAgentAppContext();
       this.cdr.markForCheck();
       return;
     }
@@ -1847,7 +2253,79 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
 
     const baseDossier = this.extractLivePageSignals(snap);
     this.PageDossier = await this.resolveLiveMjBraiding(baseDossier);
+    this.rebuildAgentAppContext();
     this.cdr.markForCheck();
+  }
+
+  public OnElementSearchInput(event: Event): void {
+    const input = event.target as HTMLInputElement | null;
+    this.ElementSearchQuery = input?.value ?? '';
+    this.cdr.markForCheck();
+  }
+
+  public SetElementRoleFilter(filter: InteractiveElementRoleFilter): void {
+    this.ElementRoleFilter = filter;
+    this.cdr.markForCheck();
+  }
+
+  public GetElementDisplayLabel(el: InteractiveElement): string {
+    const label = (el.Name || el.Value || '').trim();
+    if (label) {
+      return label.length > 90 ? `${label.slice(0, 87)}...` : label;
+    }
+    return el.Selector || `Element #${el.Index}`;
+  }
+
+  public async OnSpotlightElement(el: InteractiveElement): Promise<void> {
+    const labelText = this.GetElementDisplayLabel(el);
+    const res = await this.sendToActiveTab<{ Success?: boolean }>('MJ_CS_HIGHLIGHT_ELEMENT', {
+      Index: el.Index,
+      Selector: el.Selector,
+      StepBadge: `#${el.Index} · ${el.Role}`,
+      Label: labelText,
+    });
+    if (res?.Success) {
+      this.showToast(`Spotlighted #${el.Index} (${labelText}) on ${this.ActiveHostLabel}.`);
+    } else {
+      this.showToast(`Could not locate element #${el.Index} on active tab.`);
+    }
+  }
+
+  public async OnClickGroundedElement(el: InteractiveElement): Promise<void> {
+    const labelText = this.GetElementDisplayLabel(el);
+    const res = await this.sendToActiveTab<{ Success?: boolean; ErrorMessage?: string }>('MJ_CS_CLICK_ELEMENT', {
+      Index: el.Index,
+      Selector: el.Selector,
+    });
+    if (res?.Success) {
+      this.showToast(`Clicked #${el.Index} (${labelText}).`);
+      setTimeout(() => {
+        void this.ScanActiveTab();
+      }, 350);
+    } else {
+      this.showToast(res?.ErrorMessage || `Could not click element #${el.Index}.`);
+    }
+  }
+
+  public OnAskAgentAboutElement(el: InteractiveElement): void {
+    const labelText = this.GetElementDisplayLabel(el);
+    this.sendPromptToAgent(
+      `Inspect interactive element #${el.Index} (${el.Role}: "${labelText}") on ${this.ActiveTabUrl || this.ActiveHostLabel}, highlight it on the page if helpful, and explain what it does or how to proceed.`
+    );
+  }
+
+  public OnRunContextualQuickAction(action: ContextualQuickActionItem): void {
+    if (action.Kind === 'open-in-explorer' && this.PageDossier) {
+      this.OnOpenMatchedRecordInExplorer(this.PageDossier);
+      return;
+    }
+    if (action.Kind === 'spotlight-page') {
+      void this.OnSpotlightPrimaryElement();
+      return;
+    }
+    if (action.Prompt) {
+      this.sendPromptToAgent(action.Prompt);
+    }
   }
 
   public async OnSpotlightPrimaryElement(): Promise<void> {
@@ -1875,11 +2353,19 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
   }
 
   public async OnExecutePlaybookStep(event: PlaybookStepExecuteEvent): Promise<void> {
+    if (!this.SelectedPlaybook) {
+      return;
+    }
     const step = this.SelectedPlaybook.Steps[event.StepIndex];
     if (!step) {
       return;
     }
-    if (step.Kind === 'HighlightElement') {
+    if (step.Kind === 'Navigate' && step.NavigateUrl) {
+      const chromeApi = this.getChromeApi();
+      if (chromeApi?.tabs && this.ActiveTabId) {
+        await chromeApi.tabs.update(this.ActiveTabId, { url: step.NavigateUrl });
+      }
+    } else if (step.Kind === 'HighlightElement') {
       await this.sendToActiveTab('MJ_CS_HIGHLIGHT_ELEMENT', {
         Selector: step.TargetSelector,
         Label: step.Instruction,
@@ -1917,25 +2403,27 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
   }
 
   public OnCaptureCandidateToMj(dossier: LivePageContextDossier): void {
-    this.ActiveTab = 'chat';
-    if (this.IsProviderReady) {
-      const summary = dossier.FieldEntries.map((e) => `${e.Key}: ${e.Value}`).join(', ');
-      this.IsNewConversation = !this.ActiveConversationId;
-      this.PendingMessageConversationId = this.ActiveConversationId;
-      this.PendingMessage = `Create or enrich a ${dossier.TargetEntityName} record in MemberJunction for "${dossier.DisplayName}" using these live page details: ${summary}`;
-    } else {
-      this.AuthDrawerOpen = true;
-      this.showToast('Sign in to MemberJunction first to create records.');
-    }
-    this.cdr.markForCheck();
+    const summary = dossier.FieldEntries.map((e) => `${e.Key}: ${e.Value}`).join(', ');
+    this.sendPromptToAgent(
+      `Create or enrich a ${dossier.TargetEntityName} record in MemberJunction for "${dossier.DisplayName}" using these live page details: ${summary}`
+    );
   }
 
   public OnAskAgentAboutPage(dossier: LivePageContextDossier): void {
+    this.sendPromptToAgent(
+      `Summarize this page (${dossier.DisplayName} — ${this.ActiveTabUrl}) and check any related MemberJunction records.`
+    );
+  }
+
+  private sendPromptToAgent(prompt: string): void {
     this.ActiveTab = 'chat';
     if (this.IsProviderReady) {
       this.IsNewConversation = !this.ActiveConversationId;
       this.PendingMessageConversationId = this.ActiveConversationId;
-      this.PendingMessage = `Summarize this page (${dossier.DisplayName} — ${this.ActiveTabUrl}) and check any related MemberJunction records.`;
+      this.PendingMessage = prompt;
+    } else {
+      this.AuthDrawerOpen = true;
+      this.showToast(`Sign in to MemberJunction first to run ${this.BrandProfile.AssistantDisplayName}.`);
     }
     this.cdr.markForCheck();
   }
@@ -2012,6 +2500,252 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
   }
 
   /**
+   * Assembles the canonical `AppContextSnapshot` (via `BuildAppContextSnapshot` from `@memberjunction/ai-core-plus`)
+   * consumed by `BaseAgent.buildAppContextSection` + `BaseAgent.resolveClientToolsForRun` on text runs
+   * AND streamed live to `RealtimeSessionService` (`ClientContextChannel` + `ContextTool`) on voice runs.
+   * Also refreshes contextual quick actions and metadata-configured playbooks for the active tab.
+   */
+  private rebuildAgentAppContext(): void {
+    this.refreshContextualQuickActionsAndPlaybooks();
+
+    let resolvedEntityId: string | null = null;
+    if (this.IsProviderReady && this.PageDossier?.MatchedInMJ && this.PageDossier.MatchedEntityName) {
+      try {
+        const md = new Metadata();
+        const foundEntity = md.Entities.find(
+          (e) => e.Name.toLowerCase() === this.PageDossier!.MatchedEntityName!.toLowerCase()
+        );
+        resolvedEntityId = foundEntity?.ID ?? null;
+      } catch {
+        resolvedEntityId = null;
+      }
+    }
+    this.MatchedEntityId = resolvedEntityId;
+
+    const snap = this.ExposureMode === 'none' ? null : this.PageSnapshot;
+    const dossier = this.ExposureMode === 'none' ? null : this.PageDossier;
+
+    const basePromptInstructions = [
+      `You are ${this.BrandProfile.AssistantDisplayName}, operating inside the MemberJunction Browser Extension Side Panel alongside the user's active web browser tab.`,
+      'Use ActiveBrowserTab, ExtractedPageSignals, TopGroundedElements, and MatchedMemberJunctionRecord below directly without asking the user what URL or page they are looking at.',
+      'Use Browser Extension client tools (GetActiveTabPageState, HighlightElementOnPage, ClearPageHighlights, ClickElementOnPage, FillInputOnPage) to inspect fresh DOM state, spotlight elements with Shadow-DOM Coach-Marks, click elements, or fill inputs; confirm with the user before destructive clicks or form submissions.',
+      ...this.dynamicAgentPromptInstructions,
+    ].join(' ');
+
+    const additionalContext: Record<string, unknown> = {
+      Surface: 'BrowserExtensionSidePanel',
+      ExposureMode: this.ExposureMode,
+      BrowserControlMode: this.ControlBackendMode,
+      SpecialAgentInstructions: basePromptInstructions,
+    };
+
+    if (snap) {
+      additionalContext['ActiveBrowserTab'] = {
+        Url: snap.Url,
+        Title: snap.Title,
+        Hostname: snap.Hostname,
+        IsAuthOrMfaScreen: snap.IsAuthOrMfaScreen,
+        GroundedElementCount: snap.InteractiveElements?.length ?? 0,
+        MetaDescription: snap.OpenGraph?.['description'] || snap.MetaTags?.['description'] || null,
+      };
+      additionalContext['VisiblePageExcerpt'] = snap.IsAuthOrMfaScreen
+        ? '[Redacted on sensitive login/MFA screen]'
+        : (snap.VisibleTextExcerpt || '').slice(0, 2500);
+      additionalContext['TopGroundedElements'] = (snap.InteractiveElements ?? []).slice(0, 20).map((el) => ({
+        Index: el.Index,
+        Role: el.Role,
+        Name: (el.Name || el.Value || '').slice(0, 80),
+        Selector: el.Selector,
+        Disabled: Boolean(el.Disabled),
+      }));
+    }
+
+    if (dossier) {
+      additionalContext['ExtractedPageSignals'] = dossier.Fields;
+      additionalContext['MatchedMemberJunctionRecord'] = dossier.MatchedInMJ
+        ? {
+            MatchedInMJ: true,
+            EntityName: dossier.MatchedEntityName,
+            RecordID: dossier.MatchedRecordID,
+            DisplayName: dossier.DisplayName,
+            RelatedFacets: dossier.Facets.map((f) => ({
+              App: f.App,
+              Header: f.Header,
+              Badge: f.Badge,
+              Items: f.Items.slice(0, 5).map((item) => ({
+                RecordID: item.RecordID,
+                Title: item.Title,
+                Subtitle: item.Subtitle,
+              })),
+            })),
+          }
+        : {
+            MatchedInMJ: false,
+            CandidateTargetEntity: dossier.TargetEntityName,
+            DisplayName: dossier.DisplayName,
+            ProposedFields: dossier.Fields,
+          };
+    }
+
+    const visibleEntities: string[] = [];
+    if (dossier?.MatchedEntityName) {
+      visibleEntities.push(dossier.MatchedEntityName);
+    } else if (dossier?.TargetEntityName) {
+      visibleEntities.push(dossier.TargetEntityName);
+    }
+
+    this.AgentAppContext = BuildAppContextSnapshot({
+      App: {
+        Name: this.BrandProfile.BrandName,
+        Description:
+          "MemberJunction Browser Extension Side Panel running alongside the user's live web browser tab with grounded DOM perception, Coach-Mark Spotlights, and multi-app MemberJunction context braiding.",
+      },
+      ActiveNavItem: {
+        Name:
+          this.ExposureMode === 'none'
+            ? 'Page Context Paused'
+            : dossier
+              ? `${dossier.DisplayName} (${this.ActiveHostLabel})`
+              : this.ActiveHostLabel,
+        Description:
+          this.ExposureMode === 'none'
+            ? 'User paused browser tab perception (Exposure: none).'
+            : snap?.Title
+              ? `${snap.Title} — ${snap.Url}`
+              : this.ActiveTabUrl || 'Browser Extension Side Panel',
+        ResourceType: 'Active Browser Tab',
+      },
+      OtherNavItems: [
+        { Name: 'Context', Description: '360° MemberJunction entity resolution and Open App facets for active tab' },
+        { Name: this.AgentTabLabel, Description: 'AI Agent chat, artifacts, and realtime voice' },
+        { Name: 'Actions', Description: 'Live grounded DOM elements and metadata-driven playbooks' },
+      ],
+      NavigableApps: this.installedAppNames.map((Name) => ({ Name })),
+      User: {
+        Name: this.CurrentUser?.Name || this.SignedInUserDisplay || '',
+        Roles: this.CurrentUser?.UserRoles?.map((r) => r.Role) ?? [],
+      },
+      View: {
+        VisibleEntities: visibleEntities,
+        Selection:
+          dossier?.MatchedInMJ && dossier.MatchedRecordID && dossier.MatchedEntityName
+            ? { EntityName: dossier.MatchedEntityName, RecordIDs: [dossier.MatchedRecordID] }
+            : null,
+        FreeText:
+          this.ExposureMode === 'none'
+            ? 'Browser tab perception is paused by the user.'
+            : snap?.Url
+              ? `Active browser tab: "${snap.Title || this.ActiveHostLabel}" (${snap.Url}) with ${this.GroundedElementCount} grounded interactive elements.`
+              : 'No http/https browser tab currently focused.',
+      },
+      AdditionalContext: additionalContext,
+      Capabilities: {
+        Tools: this.ExposureMode === 'none' ? [] : BROWSER_EXTENSION_TOOL_MANIFEST,
+      },
+    });
+
+    this.realtimeSession.UpdateAppContext(this.AgentAppContext);
+  }
+
+  private refreshContextualQuickActionsAndPlaybooks(): void {
+    const actions: ContextualQuickActionItem[] = [];
+    const pageLabel = this.PageDossier?.DisplayName || this.ActiveHostLabel;
+    const urlContext = this.ActiveTabUrl ? ` (${this.ActiveTabUrl})` : '';
+
+    actions.push({
+      Id: 'summarize-page',
+      Label: 'Summarize This Page',
+      IconClass: 'fa-solid fa-wand-magic-sparkles',
+      Kind: 'agent-prompt',
+      Prompt: `Summarize the active page "${pageLabel}"${urlContext}, highlighting the key facts and any relevant MemberJunction context.`,
+    });
+
+    actions.push({
+      Id: 'extract-action-items',
+      Label: 'Extract Key Signals & Next Steps',
+      IconClass: 'fa-solid fa-list-check',
+      Kind: 'agent-prompt',
+      Prompt: `Extract the structured facts, key entities, and recommended action items from "${pageLabel}"${urlContext}.`,
+    });
+
+    if (this.PageDossier?.MatchedInMJ && this.PageDossier.MatchedRecordID) {
+      actions.push({
+        Id: 'mj-360-briefing',
+        Label: `360° Briefing: ${this.PageDossier.DisplayName}`,
+        IconClass: 'fa-solid fa-layer-group',
+        Kind: 'agent-prompt',
+        Prompt: `Prepare a 360° MemberJunction briefing for "${this.PageDossier.DisplayName}" (${this.PageDossier.MatchedEntityName} ID: ${this.PageDossier.MatchedRecordID}), combining live page signals with MemberJunction records.`,
+      });
+      actions.push({
+        Id: 'open-matched-in-explorer',
+        Label: 'Open Record in Explorer',
+        IconClass: 'fa-solid fa-arrow-up-right-from-square',
+        Kind: 'open-in-explorer',
+      });
+    } else if (this.PageDossier) {
+      const summary = this.PageDossier.FieldEntries.map((e) => `${e.Key}: ${e.Value}`).join(', ');
+      actions.push({
+        Id: 'capture-candidate-to-mj',
+        Label: `Create ${this.PageDossier.TargetEntityName} in MJ`,
+        IconClass: 'fa-solid fa-plus',
+        Kind: 'agent-prompt',
+        Prompt: `Create or enrich a ${this.PageDossier.TargetEntityName} record in MemberJunction for "${this.PageDossier.DisplayName}" using these live page details: ${summary}`,
+      });
+    }
+
+    // Append any metadata-configured QuickActions from matching Open App EntityFacets
+    if (this.PageDossier) {
+      const anchor = this.PageDossier.MatchedEntityName || this.PageDossier.TargetEntityName;
+      for (const facet of this.dynamicEntityFacets) {
+        const parent = facet.AnchorEntityName || facet.ParentEntityName || '';
+        if ((parent === anchor || parent === this.PageDossier.TargetEntityName) && Array.isArray(facet.QuickActions)) {
+          facet.QuickActions.forEach((qa, qaIdx) => {
+            if (!qa.Label || !qa.Target) {
+              return;
+            }
+            const interpolated = qa.Target.replace(
+              /\{\{?AnchorRecordID\}?\}/g,
+              this.PageDossier?.MatchedRecordID || ''
+            )
+              .replace(/\{\{?DisplayName\}?\}/g, this.PageDossier?.DisplayName || '')
+              .replace(/\{\{?Url\}?\}/g, this.ActiveTabUrl || '');
+            actions.push({
+              Id: `facet-qa-${facet.Title || 'app'}-${qaIdx}`,
+              Label: qa.Label,
+              IconClass: qa.IconClass || 'fa-solid fa-bolt',
+              Kind: qa.Kind === 'open-in-explorer' ? 'open-in-explorer' : 'agent-prompt',
+              Prompt: interpolated,
+            });
+          });
+        }
+      }
+    }
+
+    this.ContextualQuickActions = actions;
+
+    // Filter / prioritize metadata-configured playbooks for the active URL (ZERO hardcoded playbooks!)
+    const activeUrlLower = (this.ActiveTabUrl || '').toLowerCase();
+    const matchingPlaybooks = this.allConfiguredPlaybooks.filter((pb) => {
+      if (Array.isArray(pb.UrlPatterns) && pb.UrlPatterns.length > 0) {
+        return pb.UrlPatterns.some((pat) => {
+          const clean = pat.replace(/\*/g, '').trim().toLowerCase();
+          return !clean || activeUrlLower.includes(clean);
+        });
+      }
+      return true;
+    });
+
+    this.AvailablePlaybooks = matchingPlaybooks;
+    if (matchingPlaybooks.length === 0) {
+      this.SelectedPlaybook = null;
+      this.ActivePlaybookStepIndex = 0;
+    } else if (!this.SelectedPlaybook || !matchingPlaybooks.some((p) => p.Id === this.SelectedPlaybook?.Id)) {
+      this.SelectedPlaybook = matchingPlaybooks[0];
+      this.ActivePlaybookStepIndex = 0;
+    }
+  }
+
+  /**
    * Routes `MJ_EXT_FORWARD_TO_ACTIVE_TAB` CustomEvents emitted by
    * `ConversationsRuntimeBootstrap` (`GetActiveTabPageState`, `HighlightElementOnPage`,
    * `ClearPageHighlights`, `ClickElementOnPage`, `FillInputOnPage`) directly to the
@@ -2035,6 +2769,20 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
         return;
       }
       const reqId = detail.RequestId;
+      if (this.ExposureMode === 'none') {
+        document.dispatchEvent(
+          new CustomEvent('mj-ext-response', {
+            detail: {
+              RequestId: reqId,
+              Result: {
+                Success: false,
+                ErrorMessage: 'Browser tab perception is paused by the user (Exposure: none).',
+              },
+            },
+          })
+        );
+        return;
+      }
       const commandType = detail.Payload?.CommandType || 'MJ_CS_GET_PAGE_STATE';
       const commandPayload = detail.Payload?.CommandPayload ?? {};
       void (async () => {
@@ -2472,6 +3220,9 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
       const provider = await SetupGraphQLClient(config);
       this.GraphQLProvider = provider;
       this.Provider = provider;
+      if (provider.sessionId) {
+        this.agentClient.StartSession(provider.sessionId);
+      }
 
       const md = new Metadata();
       this.CurrentUser = md.CurrentUser;
@@ -2668,6 +3419,8 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
 
     const rules: DynamicContextRuleEntry[] = [];
     const facets: DynamicEntityFacetEntry[] = [];
+    const promptInstructions: string[] = [];
+    const playbooks: DynamicPlaybookEntry[] = [];
     const names: string[] = [];
 
     for (const app of res[0].Results) {
@@ -2679,30 +3432,58 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
       if (!rawSettings) {
         continue;
       }
-      try {
-        const parsed = (typeof rawSettings === 'string' ? JSON.parse(rawSettings) : rawSettings) as {
-          BrowserExtension?: {
-            ContextRules?: DynamicContextRuleEntry[];
-            EntityFacets?: DynamicEntityFacetEntry[];
-          };
-        };
-        const ext = parsed?.BrowserExtension;
-        if (Array.isArray(ext?.ContextRules)) {
-          rules.push(...ext.ContextRules);
+      const serialized = typeof rawSettings === 'string' ? rawSettings : JSON.stringify(rawSettings);
+      const parsed = ParseAgentSettings(serialized);
+      const ext = parsed?.BrowserExtension;
+      if (!ext) {
+        continue;
+      }
+      if (typeof ext.AgentPromptInstructions === 'string' && ext.AgentPromptInstructions.trim().length > 0) {
+        promptInstructions.push(`[${appName || 'MJ App'}]: ${ext.AgentPromptInstructions.trim()}`);
+      }
+      const rawRules = ext.ContextRules as Array<DynamicContextRuleEntry & { Key?: string; Name?: string }> | null | undefined;
+      if (Array.isArray(rawRules)) {
+        for (const r of rawRules) {
+          rules.push({
+            ...r,
+            RuleName: r.RuleName || r.Key || r.Name,
+            EntityName: r.EntityName || r.EntityResolution?.EntityName,
+          });
         }
-        if (Array.isArray(ext?.EntityFacets)) {
-          for (const f of ext.EntityFacets) {
-            facets.push({ ...f, SourceApp: appName || 'MJ Open App' });
+      }
+      const rawFacets = ext.EntityFacets as DynamicEntityFacetEntry[] | null | undefined;
+      if (Array.isArray(rawFacets)) {
+        for (const f of rawFacets) {
+          facets.push({
+            ...f,
+            SourceApp: appName || 'MJ Open App',
+          });
+        }
+      }
+      if (Array.isArray(ext.Playbooks)) {
+        for (const pb of ext.Playbooks) {
+          if (pb && pb.Id && pb.Name && Array.isArray(pb.Steps) && pb.Steps.length > 0) {
+            playbooks.push({
+              Id: pb.Id,
+              Name: pb.Name,
+              Description: pb.Description || '',
+              StartUrl: pb.StartUrl,
+              UrlPatterns: pb.UrlPatterns,
+              PreferredBackend: pb.PreferredBackend,
+              Steps: pb.Steps,
+              SourceApp: appName || 'MJ Open App',
+            });
           }
         }
-      } catch {
-        // Ignore malformed JSON on unrelated apps
       }
     }
 
     this.installedAppNames = names;
     this.dynamicContextRules = rules;
     this.dynamicEntityFacets = facets;
+    this.dynamicAgentPromptInstructions = promptInstructions;
+    this.allConfiguredPlaybooks = playbooks;
+    this.rebuildAgentAppContext();
   }
 
   private async loadLightweightConversationMessages(conversationId: string): Promise<void> {

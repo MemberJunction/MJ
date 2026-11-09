@@ -779,6 +779,8 @@ describe.runIf(hasPlaywrightChromium)('Headless Playwright E2E Proof — Live Wi
                                     Name: 'Common Business Apps',
                                     AgentSettings: JSON.stringify({
                                         BrowserExtension: {
+                                            AgentPromptInstructions:
+                                                'Prioritize executive sponsor outreach and Wikimedia renewal milestones.',
                                             ContextRules: [
                                                 {
                                                     RuleID: 'bizapps-org-domain',
@@ -799,6 +801,32 @@ describe.runIf(hasPlaywrightChromium)('Headless Playwright E2E Proof — Live Wi
                                                     RelatedEntityName: 'People',
                                                     ForeignKeyField: 'OrganizationID',
                                                     MaxRecords: 5,
+                                                    QuickActions: [
+                                                        {
+                                                            Label: 'Draft Renewal Brief',
+                                                            IconClass: 'fa-solid fa-wand-magic-sparkles',
+                                                            Kind: 'agent-prompt',
+                                                            Target: 'Draft an executive renewal brief for {{DisplayName}} on {{Url}}.',
+                                                        },
+                                                    ],
+                                                },
+                                            ],
+                                            Playbooks: [
+                                                {
+                                                    Id: 'wikimedia-exec-outreach',
+                                                    Name: 'Executive Renewal Verification',
+                                                    Description: 'Verify Wikimedia domain signals and executive contacts.',
+                                                    UrlPatterns: ['wikipedia.org'],
+                                                    Steps: [
+                                                        {
+                                                            StepId: 'step-verify-heading',
+                                                            Title: 'Verify Primary Portal Heading',
+                                                            Instruction:
+                                                                'Confirm the active Wikipedia portal heading on the live tab.',
+                                                            Kind: 'HighlightElement',
+                                                            TargetSelector: '#mp-welcome, h1',
+                                                        },
+                                                    ],
                                                 },
                                             ],
                                         },
@@ -921,6 +949,30 @@ describe.runIf(hasPlaywrightChromium)('Headless Playwright E2E Proof — Live Wi
             const chatText = await sidePanelPage.innerText('#mj-sidepanel-context-view');
             expect(chatText).toContain('Q4 Executive Pipeline & Renewal Strategy');
             expect(chatText).toContain('Wikimedia Foundation is an Active Enterprise Member');
+
+            // Verify canonical AppContextSnapshot wiring (App.Name, Active Browser Tab, 5 client tools, and SpecialAgentInstructions)
+            expect(
+                await sidePanelPage.getAttribute('#mj-extension-sidepanel-root', 'data-app-context-app')
+            ).toBeTruthy();
+            expect(
+                await sidePanelPage.getAttribute('#mj-extension-sidepanel-root', 'data-app-context-resource-type')
+            ).toBe('Active Browser Tab');
+            expect(
+                await sidePanelPage.getAttribute('#mj-extension-sidepanel-root', 'data-app-context-tools')
+            ).toBe('5');
+            expect(
+                await sidePanelPage.getAttribute('#mj-extension-sidepanel-root', 'data-app-context-has-instructions')
+            ).toBe('true');
+
+            // Switch to Actions tab and verify Open App QuickActions + metadata-driven Playbooks (zero hardcoded playbooks)
+            await sidePanelPage.click('[data-tab="playbooks"]');
+            await sidePanelPage.waitForSelector('#mj-contextual-actions-card', { timeout: 10000 });
+            const actionsTabText = await sidePanelPage.innerText('#mj-sidepanel-context-view');
+            expect(actionsTabText).toContain('Draft Renewal Brief');
+            expect(actionsTabText).toContain('Executive Renewal Verification');
+            expect(actionsTabText).toContain('Verify Primary Portal Heading');
+            expect(actionsTabText).not.toContain('HubSpot');
+            expect(actionsTabText).not.toContain('Microsoft Entra ID');
 
             // Clean up persisted auth session so subsequent tests start cleanly
             await sidePanelPage.click('#mj-btn-toggle-auth');
@@ -1076,10 +1128,16 @@ describe.runIf(hasPlaywrightChromium)('Headless Playwright E2E Proof — Live Wi
             });
             expect(workletCheck.ok).toBe(true);
 
-            // 5. Switch to Actions tab — real @memberjunction/ng-browser-extension <mj-extension-playbook-stepper> mounted
+            // 5. Switch to Actions tab — live Contextual Actions + Grounded Elements + honest empty state (zero hardcoded playbooks)
             await sidePanelPage.click('[data-tab="playbooks"]');
             await sidePanelPage.waitForSelector('mj-extension-playbook-stepper', { timeout: 10000 });
+            expect(await sidePanelPage.locator('#mj-contextual-actions-card').count()).toBe(1);
+            expect(await sidePanelPage.locator('#mj-grounded-elements-card').count()).toBe(1);
             expect(await sidePanelPage.locator('mj-extension-playbook-stepper').count()).toBe(1);
+            expect(await sidePanelPage.locator('mj-extension-playbook-stepper .mj-playbook-empty').count()).toBe(1);
+            const actionsDefaultText = await sidePanelPage.innerText('#mj-sidepanel-context-view');
+            expect(actionsDefaultText).not.toContain('HubSpot');
+            expect(actionsDefaultText).not.toContain('Microsoft Entra ID');
             expect(await sidePanelPage.locator('iframe').count()).toBe(0);
 
             // 6. Zero Manifest V3 CSP errors and zero uncaught page errors

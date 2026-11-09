@@ -134,6 +134,21 @@ export interface PlaybookStepExecuteEvent {
                     }
                 </ol>
             </section>
+        } @else {
+            <section
+                class="mj-playbook-stepper mj-playbook-empty"
+                role="region"
+                aria-label="Guided Playbooks"
+            >
+                <span class="mj-playbook-badge">Guided Playbooks</span>
+                <h3 class="mj-playbook-title">
+                    No guided playbooks configured for {{ HostLabel || 'this page' }}
+                </h3>
+                <p class="mj-playbook-summary">
+                    Installed MemberJunction Open Apps can publish cross-site setup &amp; workflow playbooks via
+                    <code>Application.AgentSettings.BrowserExtension.Playbooks</code>.
+                </p>
+            </section>
         }
     `,
     styles: [
@@ -291,14 +306,27 @@ export interface PlaybookStepExecuteEvent {
                 padding: 6px 12px;
                 cursor: pointer;
             }
+            .mj-playbook-empty {
+                border-bottom: none;
+                gap: 4px;
+            }
+            .mj-playbook-empty code {
+                font-size: 11px;
+                padding: 1px 4px;
+                border-radius: 4px;
+                background: var(--mj-bg-surface-sunken, var(--mj-bg-surface));
+            }
         `,
     ],
 })
 export class MJExtensionPlaybookStepperComponent extends BaseAngularComponent {
     private readonly cdr = inject(ChangeDetectorRef);
 
-    /** Active guided playbook specification (`null` when no playbook is running). */
+    /** Active guided playbook specification (`null` when no playbook is configured for the active tab). */
     @Input() public Playbook: BrowserPlaybookDefinition | null = null;
+
+    /** Optional display label for the active host/domain used in the empty state. */
+    @Input() public HostLabel = '';
 
     /** Zero-based index of the currently active step. */
     @Input() public ActiveStepIndex = 0;

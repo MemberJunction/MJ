@@ -67,4 +67,18 @@ describe('MJExtensionPlaybookStepperComponent (DOM TestBed)', () => {
         expect(events[0].ConfirmedByUser).toBe(true);
         expect(events[0].StepID).toBe('hubspot-step-6-vault-client-secret');
     });
+
+    it('renders honest empty state when Playbook is null (zero hardcoded playbooks)', () => {
+        const fixture = TestBed.createComponent(MJExtensionPlaybookStepperComponent);
+        const comp = fixture.componentInstance;
+        comp.Playbook = null;
+        comp.HostLabel = 'wsj.com';
+        fixture.detectChanges();
+
+        const host = fixture.nativeElement as HTMLElement;
+        const emptyRegion = host.querySelector('.mj-playbook-empty');
+        expect(emptyRegion).not.toBeNull();
+        expect(emptyRegion?.textContent).toContain('No guided playbooks configured for wsj.com');
+        expect(host.querySelectorAll('.mj-step-item').length).toBe(0);
+    });
 });
