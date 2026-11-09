@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { ComputeTypedQuerySignature } from '@memberjunction/core';
 import {
     FilterEligibleTypedQueries,
     GenerateTypedQueriesFileContent,
@@ -273,14 +274,20 @@ describe('typed_query_codegen', () => {
         expect(code).toContain('ReportsQuery: Reports,');
     });
 
-    it('includes template-extracted parameters in Signature even when query.Parameters only lists a subset', () => {
-        const baseQuery: TypedQueryCodeGenQuery = {
+    it('matches runtime ComputeTypedQuerySignature(liveQuery) when query.Parameters is populated and falls back to template parameters when empty', () => {
+        const persistedQuery: TypedQueryCodeGenQuery = {
             ID: 'cccccccc-0000-0000-0000-000000000001',
             Name: 'Partial Metadata Query',
             Status: 'Approved',
             Reusable: true,
             CategoryPath: '/Sales/',
-            SQL: 'SELECT Total FROM Orders WHERE Region = {{ region | sqlString }} AND Total >= {{ minTotal | sqlNumber }}',
+            SQL: `
+                {# @param {string} mysteryParam Overridden via doc comment #}
+                SELECT Total FROM Orders
+                WHERE Region = {{ region | sqlString }}
+                  AND Mystery = {{ mysteryParam }}
+                  AND Extra = {{ templateOnlyParam | sqlNumber }}
+            `,
             Parameters: [
                 {
                     Name: 'region',
@@ -289,26 +296,46 @@ describe('typed_query_codegen', () => {
                     DefaultValue: null,
                     DetectionMethod: 'Manual',
                 },
+                {
+                    Name: 'mysteryParam',
+                    Type: 'unknown',
+                    IsRequired: true,
+                    DefaultValue: null,
+                    DetectionMethod: 'Auto',
+                },
             ],
             Fields: [{ Name: 'Total', SQLBaseType: 'decimal', InAllBranchVariants: true }],
         };
 
-        const singleParamQuery: TypedQueryCodeGenQuery = {
-            ...baseQuery,
+        const codePersisted = GenerateTypedQueriesFileContent([persistedQuery], sampleEntities, {
+            platform: 'sqlserver',
+        });
+        const emittedSig = /Signature:\s*"([^"]+)"/.exec(codePersisted)?.[1];
+        const runtimeSig = ComputeTypedQuerySignature({
+            Parameters: persistedQuery.Parameters,
+            Fields: persistedQuery.Fields,
+        });
+        expect(emittedSig).toBe(runtimeSig);
+
+        // Fallback when query.Parameters is empty: hashes template-extracted parameters
+        const templateOnly1: TypedQueryCodeGenQuery = {
+            ...persistedQuery,
+            Parameters: [],
+            SQL: 'SELECT Total FROM Orders WHERE Region = {{ region | sqlString }} AND Total >= {{ minTotal | sqlNumber }}',
+        };
+        const templateOnly2: TypedQueryCodeGenQuery = {
+            ...persistedQuery,
+            Parameters: [],
             SQL: 'SELECT Total FROM Orders WHERE Region = {{ region | sqlString }}',
         };
-
-        const codeWithTemplateParam = GenerateTypedQueriesFileContent([baseQuery], sampleEntities, {
-            platform: 'sqlserver',
-        });
-        const codeSingleParam = GenerateTypedQueriesFileContent([singleParamQuery], sampleEntities, {
-            platform: 'sqlserver',
-        });
-
-        const sigWithTemplate = /Signature:\s*"([^"]+)"/.exec(codeWithTemplateParam)?.[1];
-        const sigSingle = /Signature:\s*"([^"]+)"/.exec(codeSingleParam)?.[1];
-        expect(sigWithTemplate).toBeDefined();
-        expect(sigSingle).toBeDefined();
-        expect(sigWithTemplate).not.toBe(sigSingle);
+        const sig1 = /Signature:\s*"([^"]+)"/.exec(
+            GenerateTypedQueriesFileContent([templateOnly1], sampleEntities, { platform: 'sqlserver' }),
+        )?.[1];
+        const sig2 = /Signature:\s*"([^"]+)"/.exec(
+            GenerateTypedQueriesFileContent([templateOnly2], sampleEntities, { platform: 'sqlserver' }),
+        )?.[1];
+        expect(sig1).toBeDefined();
+        expect(sig2).toBeDefined();
+        expect(sig1).not.toBe(sig2);
     });
 });

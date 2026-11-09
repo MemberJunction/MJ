@@ -22,6 +22,7 @@ import type { QueryInfo } from '../generic/queryInfo';
 import { UserInfo } from '../generic/securityInfo';
 import { BaseEngine, BaseEnginePropertyConfig } from '../generic/baseEngine';
 import { BaseEntity } from '../generic/baseEntity';
+import { CompositeKey } from '../generic/compositeKey';
 import { BaseEntityEvent } from '../generic/interfaces';
 import { LocalCacheManager } from '../generic/localCacheManager';
 import * as loggingModule from '../generic/logging';
@@ -633,6 +634,127 @@ describe('BaseEngine structured Filter & Where()', () => {
 
         expect(removeSpy).not.toHaveBeenCalled();
         removeSpy.mockRestore();
+    });
+
+    it('maintains structured cf: slots in place in LocalCacheManager on entity save events without invalidating', async () => {
+        const entityInfo = makeOrderEntity();
+        const f = FilterOf<OrderFixtureRow>();
+        const filter = f.And(f.Eq('Status', 'Active'), f.Gte('Total', 100));
+        const cfSegment = `cf:${CanonicalCompositeFilterKey(filter).replace(/\|/g, '\\u007c')}`;
+        const fingerprint = `Orders|_|_|_|_|_|_|${cfSegment}`;
+        const nowISO = '2026-11-08T00:00:00.000Z';
+
+        const matchingRow: Record<string, unknown> = {
+            ID: '10',
+            Status: 'Active',
+            Total: 250,
+            Region: 'NA',
+            IsPriority: true,
+            OrderedAt: null,
+            Notes: null,
+            InternalCost: 50,
+        };
+        const nonMatchingRow: Record<string, unknown> = {
+            ...matchingRow,
+            Status: 'Cancelled',
+        };
+        const key10 = new CompositeKey([{ FieldName: 'ID', Value: '10' }]);
+
+        const applyRowChangesSpy = vi
+            .spyOn(LocalCacheManager.Instance, 'ApplyRowChanges')
+            .mockResolvedValue(true);
+        const upsertSpy = vi
+            .spyOn(LocalCacheManager.Instance, 'UpsertSingleEntity')
+            .mockResolvedValue(true);
+        const removeSpy = vi
+            .spyOn(LocalCacheManager.Instance, 'RemoveSingleEntity')
+            .mockResolvedValue(true);
+        const invalidateSpy = vi
+            .spyOn(LocalCacheManager.Instance, 'InvalidateRunViewResult')
+            .mockResolvedValue(undefined);
+
+        type InternalCacheHooks = {
+            applyEntityChangesToSlot(
+                fp: string,
+                changes: Array<{
+                    Type: 'save' | 'delete';
+                    Key: CompositeKey;
+                    Record: Record<string, unknown> | null;
+                    EntityInfo: EntityInfo;
+                }>,
+                iso: string,
+            ): Promise<void>;
+            processEntityEventForFingerprint(
+                evtType: 'save' | 'delete',
+                fp: string,
+                be: BaseEntity,
+                k: CompositeKey,
+                iso: string,
+            ): Promise<void>;
+        };
+        const hooks = LocalCacheManager.Instance as unknown as InternalCacheHooks;
+
+        // 1. Batched save of a matching record -> ApplyRowChanges with Row: matchingRow (no invalidation)
+        await hooks.applyEntityChangesToSlot(
+            fingerprint,
+            [{ Type: 'save', Key: key10, Record: matchingRow, EntityInfo: entityInfo }],
+            nowISO,
+        );
+        expect(applyRowChangesSpy).toHaveBeenCalledWith(
+            fingerprint,
+            [{ Key: key10, Row: matchingRow }],
+            nowISO,
+        );
+        expect(invalidateSpy).not.toHaveBeenCalled();
+
+        // 2. Batched save of a non-matching record -> ApplyRowChanges with Row: null to remove in place
+        applyRowChangesSpy.mockClear();
+        await hooks.applyEntityChangesToSlot(
+            fingerprint,
+            [{ Type: 'save', Key: key10, Record: nonMatchingRow, EntityInfo: entityInfo }],
+            nowISO,
+        );
+        expect(applyRowChangesSpy).toHaveBeenCalledWith(
+            fingerprint,
+            [{ Key: key10, Row: null }],
+            nowISO,
+        );
+        expect(invalidateSpy).not.toHaveBeenCalled();
+
+        // 3. Single-event save of matching & non-matching records -> UpsertSingleEntity / RemoveSingleEntity
+        const matchingEntity = {
+            EntityInfo: entityInfo,
+            GetAll: () => matchingRow,
+        } as unknown as BaseEntity;
+        const nonMatchingEntity = {
+            EntityInfo: entityInfo,
+            GetAll: () => nonMatchingRow,
+        } as unknown as BaseEntity;
+
+        await hooks.processEntityEventForFingerprint(
+            'save',
+            fingerprint,
+            matchingEntity,
+            key10,
+            nowISO,
+        );
+        expect(upsertSpy).toHaveBeenCalledWith(fingerprint, matchingRow, key10, nowISO);
+        expect(invalidateSpy).not.toHaveBeenCalled();
+
+        await hooks.processEntityEventForFingerprint(
+            'save',
+            fingerprint,
+            nonMatchingEntity,
+            key10,
+            nowISO,
+        );
+        expect(removeSpy).toHaveBeenCalledWith(fingerprint, key10, nowISO);
+        expect(invalidateSpy).not.toHaveBeenCalled();
+
+        applyRowChangesSpy.mockRestore();
+        upsertSpy.mockRestore();
+        removeSpy.mockRestore();
+        invalidateSpy.mockRestore();
     });
 });
 

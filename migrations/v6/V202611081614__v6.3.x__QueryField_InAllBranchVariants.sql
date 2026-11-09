@@ -218,7 +218,7 @@ SELECT
     MJEntityField_SourceEntityFieldID.[Name] AS [SourceEntityField]
 FROM
     [${flyway:defaultSchema}].[QueryField] AS q
-INNER JOIN
+LEFT OUTER JOIN
     [${flyway:defaultSchema}].[Query] AS MJQuery_QueryID
   ON
     [q].[QueryID] = MJQuery_QueryID.[ID]
@@ -231,6 +231,9 @@ LEFT OUTER JOIN
   ON
     [q].[SourceEntityFieldID] = MJEntityField_SourceEntityFieldID.[ID]
 GO
+REVOKE SELECT ON [${flyway:defaultSchema}].[vwQueryFields] FROM [cdp_Developer]
+REVOKE SELECT ON [${flyway:defaultSchema}].[vwQueryFields] FROM [cdp_Integration]
+REVOKE SELECT ON [${flyway:defaultSchema}].[vwQueryFields] FROM [cdp_UI]
 GRANT SELECT ON [${flyway:defaultSchema}].[vwQueryFields] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
 
 /* Base View Permissions SQL for MJ: Query Fields */
@@ -243,6 +246,9 @@ GRANT SELECT ON [${flyway:defaultSchema}].[vwQueryFields] TO [cdp_UI], [cdp_Deve
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
 
+REVOKE SELECT ON [${flyway:defaultSchema}].[vwQueryFields] FROM [cdp_Developer]
+REVOKE SELECT ON [${flyway:defaultSchema}].[vwQueryFields] FROM [cdp_Integration]
+REVOKE SELECT ON [${flyway:defaultSchema}].[vwQueryFields] FROM [cdp_UI]
 GRANT SELECT ON [${flyway:defaultSchema}].[vwQueryFields] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
 
 /* spCreate SQL for MJ: Query Fields */
@@ -396,11 +402,15 @@ BEGIN
     SELECT * FROM [${flyway:defaultSchema}].[vwQueryFields] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spCreateQueryField] FROM [cdp_Developer]
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spCreateQueryField] FROM [cdp_Integration]
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateQueryField] TO [cdp_Developer], [cdp_Integration];
     
 
 /* spCreate Permissions for MJ: Query Fields */
 
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spCreateQueryField] FROM [cdp_Developer]
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spCreateQueryField] FROM [cdp_Integration]
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateQueryField] TO [cdp_Developer], [cdp_Integration];
 
 
@@ -493,6 +503,8 @@ BEGIN
 END
 GO
 
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spUpdateQueryField] FROM [cdp_Developer]
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spUpdateQueryField] FROM [cdp_Integration]
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateQueryField] TO [cdp_Developer], [cdp_Integration]
 GO
 
@@ -523,6 +535,8 @@ GO
 
 /* spUpdate Permissions for MJ: Query Fields */
 
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spUpdateQueryField] FROM [cdp_Developer]
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spUpdateQueryField] FROM [cdp_Integration]
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateQueryField] TO [cdp_Developer], [cdp_Integration];
 
 
@@ -562,9 +576,16 @@ BEGIN
         SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
 END
 GO
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteQueryField] FROM [cdp_Developer]
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteQueryField] FROM [cdp_Integration]
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteQueryField] TO [cdp_Developer], [cdp_Integration];
     
 
 /* spDelete Permissions for MJ: Query Fields */
 
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteQueryField] FROM [cdp_Developer]
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteQueryField] FROM [cdp_Integration]
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteQueryField] TO [cdp_Developer], [cdp_Integration];
+
+/* SQL text to update existing entity fields from schema (1 scoped entities) */
+EXEC [${flyway:defaultSchema}].[spUpdateExistingEntityFieldsFromSchema] @ExcludedSchemaNames='sys,staging', @EntityIDs='19248F34-2837-EF11-86D4-6045BDEE16E6', @IncludedSchemaNames='${flyway:defaultSchema}';

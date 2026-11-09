@@ -421,18 +421,34 @@ function resolveQuerySpecs(
             const parameters = resolveParametersForQuery(query, fullPath, templateParams, docs?.Parameters ?? [], warn);
             const fields = resolveFieldsForQuery(query, entities, docs?.Fields ?? []);
 
-            const sigParams: TypedQuerySignatureParamInput[] = parameters.map((p) => ({
-                Name: p.Name,
-                Type: p.SignatureType,
-                IsRequired: p.SignatureIsRequired,
-                DefaultValue: p.DefaultValue,
-                IsServerSet: false,
-            }));
-            const sigFields: TypedQuerySignatureFieldInput[] = fields.map((f) => ({
-                Name: f.Name,
-                SQLBaseType: f.SQLBaseType,
-                InAllBranchVariants: !f.IsOptional,
-            }));
+            const sigParams: TypedQuerySignatureParamInput[] =
+                query.Parameters && query.Parameters.length > 0
+                    ? query.Parameters.map((p) => ({
+                          Name: p.Name,
+                          Type: p.Type,
+                          IsRequired: p.IsRequired,
+                          DefaultValue: p.DefaultValue,
+                          IsServerSet: p.IsServerSet,
+                      }))
+                    : parameters.map((p) => ({
+                          Name: p.Name,
+                          Type: p.SignatureType,
+                          IsRequired: p.SignatureIsRequired,
+                          DefaultValue: p.DefaultValue,
+                          IsServerSet: false,
+                      }));
+            const sigFields: TypedQuerySignatureFieldInput[] =
+                query.Fields && query.Fields.length > 0
+                    ? query.Fields.map((f) => ({
+                          Name: f.Name,
+                          SQLBaseType: f.SQLBaseType,
+                          InAllBranchVariants: f.InAllBranchVariants,
+                      }))
+                    : fields.map((f) => ({
+                          Name: f.Name,
+                          SQLBaseType: f.SQLBaseType,
+                          InAllBranchVariants: !f.IsOptional,
+                      }));
             const signature = ComputeTypedQuerySignature({
                 Parameters: sigParams,
                 Fields: sigFields,
