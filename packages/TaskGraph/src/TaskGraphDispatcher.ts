@@ -2115,16 +2115,6 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
-     * The ID of the user a graph's work runs as, without resolving it: the submitter {@link graphContext}
-     * reads, or this dispatcher's own user when none is recorded ({@link resolveGraphExecutionUser}).
-     * A Human step completed as this user clears no taint (`HumanReviewClearsTaint`).
-     */
-    private graphRunUserID(graph: GraphState, task?: MJTaskEntity): string {
-        const submittedByUserID = graph.parentMetadata?.submittedByUserID ?? graph.parent?.UserID ?? task?.UserID;
-        return submittedByUserID?.trim() || this.contextUser.ID;
-    }
-
-    /**
      * Resolves the submitting user's `UserInfo` for a task graph so durable node executions
      * (Agent, Action, Prompt, Decision) run under the submitting user's security context
      * rather than the background server daemon's `this.contextUser`.
@@ -2374,8 +2364,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         }
         const graphTainted = stored.Envelope?.IsRunTainted === true;
         const lookup = this.upstreamLookupInGraph(graph);
-        const runUserID = this.graphRunUserID(graph);
-        const outputsTainted = [...graph.entityById.values()].some((task) => UpstreamCarriesTaint(task, graphTainted, runUserID, lookup));
+        const outputsTainted = [...graph.entityById.values()].some((task) => UpstreamCarriesTaint(task, graphTainted, lookup));
         return { Envelope: WithInputTaint(stored.Envelope, graphTainted || outputsTainted) };
     }
 
@@ -3934,7 +3923,6 @@ export class TaskGraphDispatcher implements IShutdownable {
             EnvelopeTainted: stored?.IsRunTainted === true,
             IsCompensation: IsCompensationTask(task),
             Upstream: prehydrated?.upstreamTasks ?? [],
-            RunUserID: context.ExecutionUser.ID,
             UpstreamOf: prehydrated?.upstreamOf,
         });
         return { Envelope: WithInputTaint(stored, inputTainted) };
@@ -4677,7 +4665,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             return stored;
         }
         const graphTainted = stored.Envelope?.IsRunTainted === true;
-        const forwardTainted = UpstreamCarriesTaint(forwardTask, graphTainted, this.graphRunUserID(graph, forwardTask), this.upstreamLookupInGraph(graph));
+        const forwardTainted = UpstreamCarriesTaint(forwardTask, graphTainted, this.upstreamLookupInGraph(graph));
         return { Envelope: forwardTainted ? WithInputTaint(stored.Envelope, true) : stored.Envelope };
     }
 

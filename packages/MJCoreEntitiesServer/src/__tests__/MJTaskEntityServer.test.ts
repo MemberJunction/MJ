@@ -172,15 +172,28 @@ describe('MJTaskEntityServer: who completed a Human step, and the dispatcher sco
         expect(JSON.parse(t.Configuration!).human).toEqual({ instructions: 'x' });
     });
 
-    it('records the user who saved, never the completer a client or server caller wrote in', async () => {
+    it('records the client who saved, never the completer a caller wrote in', async () => {
         const forged = { human: { instructions: 'x' }, runtime: { completedByUserID: REVIEWER.ID } };
         const byClient = human(OTHER, { next: forged });
         expect(await asClient(() => byClient.Save())).toBe(true);
         expect(completedBy(byClient)).toBe(OTHER.ID);
+    });
 
-        const byServerCode = human(OTHER, { next: forged });
+    it('records nobody when server code completes the step, even as the assignee, so it clears no taint', async () => {
+        // An agent or action run saves as the graph's submitter, who is the step's assignee.
+        const byServerCode = human(REVIEWER);
         expect(await byServerCode.Save()).toBe(true);
-        expect(completedBy(byServerCode)).toBe(OTHER.ID);
+        expect(completedBy(byServerCode)).toBeUndefined();
+
+        const forged = human(REVIEWER, { next: { human: { instructions: 'x' }, runtime: { completedByUserID: REVIEWER.ID } } });
+        expect(await forged.Save()).toBe(true);
+        expect(completedBy(forged)).toBeUndefined();
+
+        // Server authority entered inside a client request is server code too.
+        const insideAuthority = human(REVIEWER);
+        const otherOperation = { operationKey: 'some-server-operation', source: 'ServerEngine' as const, allowedEntities: ['MJ: Tasks'] };
+        expect(await asClient(() => ServerOperationScopeManager.Instance.RunWithAuthority(otherOperation, () => insideAuthority.Save()))).toBe(true);
+        expect(completedBy(insideAuthority)).toBeUndefined();
     });
 
     it('refuses editing the recorded completer of a step already complete, by a client or by server code', async () => {

@@ -302,11 +302,12 @@ describe('TaskGraphDispatcher security envelope (WS-4.1)', () => {
             expect(h.actionCalls[0].SecurityEnvelope?.IsRunTainted).toBe(true);
         });
 
-        it("keeps taint behind a Human step completed as the graph's own run user, its assignee", async () => {
+        it("clears taint behind a Human step its assignee, the graph's submitter, completed in person", async () => {
+            // Every real graph assigns its Human steps to the submitter, who is also the user its work runs as.
             const h = harness({ parent: makeParent(tainted) });
-            const selfApproved = reviewedBy(TEST_USER.ID, TEST_USER.ID);
-            await h.run(makeTask({ ID: 'after-review', SecurityEnvelope: SerializeTaskSecurityEnvelope(tainted) }), { upstreamTasks: [selfApproved] });
-            expect(h.actionCalls[0].SecurityEnvelope?.IsRunTainted).toBe(true);
+            const submitterApproved = reviewedBy(TEST_USER.ID, TEST_USER.ID);
+            await h.run(makeTask({ ID: 'after-review', SecurityEnvelope: SerializeTaskSecurityEnvelope(tainted) }), { upstreamTasks: [submitterApproved] });
+            expect(h.actionCalls[0].SecurityEnvelope?.IsRunTainted).toBe(false);
         });
 
         it('keeps taint behind a Human step edited to Complete with no recorded completer', async () => {

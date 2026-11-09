@@ -1,5 +1,6 @@
 import {
     BaseEntity,
+    CLIENT_DIRECT_CRUD_BOUNDARY_KEY,
     EntitySaveOptions,
     ServerOperationScopeManager,
     ValidationErrorInfo,
@@ -106,6 +107,19 @@ export function WithCompletedByUserID(configuration: string | null, userID: stri
 }
 
 /**
+ * Whether the save running now arrived as a direct client CRUD request: inside a client CRUD boundary
+ * (`ResolverBase`, `TransactionGroupResolver`, `EntityCRUDHandler`, a client-dispatched remote operation)
+ * with no server authority entered since. Server code (an agent or action run, an engine, the
+ * dispatcher) runs outside one, so its saves never count as a person's.
+ */
+export function IsDirectClientCrudSave(): boolean {
+    const scopes = ServerOperationScopeManager.Instance;
+    const inBoundary = scopes.GetTracker().GetActiveFrames()
+        .some((frame) => frame.source === 'ClientCrudBoundary' || frame.operationKey === CLIENT_DIRECT_CRUD_BOUNDARY_KEY);
+    return inBoundary && scopes.GetEffectiveAuthorityFrames().length === 0;
+}
+
+/**
  * Server-side `MJ: Tasks` entity: keeps a task's security envelope immutable after insert
  * ({@link SecurityEnvelopeChangeRefusal}) and its runtime security fields dispatcher-owned
  * ({@link RuntimeSecurityChangeRefusal}), and records who completes a Human step.
@@ -114,15 +128,18 @@ export function WithCompletedByUserID(configuration: string | null, userID: stri
 export class MJTaskEntityServer extends MJTaskEntity {
     /**
      * Records who completed a Human step (`runtime.completedByUserID`) when this save moves one to
-     * `Complete`: the user the save runs as, whatever the caller put there. A completed Human step clears
-     * taint only when its assignee completed it, and not as the graph's own run user
-     * (`UpstreamCarriesTaint` in `@memberjunction/task-graph`), so the record must be the server's.
-     * The dispatcher, settling a step from the answered request, records the request's responder
-     * itself, inside {@link TASK_GRAPH_RUNTIME_SECURITY_OPERATION}.
+     * `Complete`, whatever the caller put there: the user the save runs as when it arrived as a direct
+     * client CRUD request ({@link IsDirectClientCrudSave}), and nobody otherwise. A completed Human step
+     * clears taint only when the record names its assignee (`HumanReviewClearsTaint` in
+     * `@memberjunction/task-graph`). The assignee is the graph's submitter, and the graph's agents and
+     * actions run as that same user, so the user alone cannot tell a person's review from server code
+     * completing the step; where the save came from can. The dispatcher, settling a step from the
+     * answered request, records the request's responder itself, inside {@link TASK_GRAPH_RUNTIME_SECURITY_OPERATION}.
      */
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         if (this.completesHumanStep() && !this.inDispatcherScope()) {
-            this.Configuration = WithCompletedByUserID(this.Configuration, this.ContextCurrentUser?.ID ?? null);
+            const completer = IsDirectClientCrudSave() ? (this.ContextCurrentUser?.ID ?? null) : null;
+            this.Configuration = WithCompletedByUserID(this.Configuration, completer);
         }
         return super.Save(options);
     }
