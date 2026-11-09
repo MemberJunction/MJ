@@ -55,7 +55,7 @@ function copyExtendsChain(baseRoot: string, configRel: string, dest: string, see
     seen.add(configRel);
     let count = 0;
     for (const ext of extendsOf(join(baseRoot, configRel))) {
-        if (!ext.startsWith('.') && !ext.startsWith('/')) continue;
+        if (!ext.startsWith('.')) { warn(`skipped ${JSON.stringify(ext)} extended by ${configRel}: only relative paths are followed`); continue; }
         const rel = parentConfigRel(baseRoot, configRel, ext);
         if (rel === null) { warn(`skipped ${JSON.stringify(ext)} extended by ${configRel}: not a regular file inside the base worktree`); continue; }
         if (!seen.has(rel)) count += copyIfRegular(join(baseRoot, rel), join(dest, rel));
