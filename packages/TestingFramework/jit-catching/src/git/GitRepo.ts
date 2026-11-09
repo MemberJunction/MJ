@@ -24,7 +24,11 @@ export class GitRepo {
     /** The subject line of commit `sha`, trimmed. */
     public async Subject(sha: string): Promise<string> { return (await this.git(['log', '-1', '--format=%s', sha])).trim(); }
     public async Fetch(ref: string): Promise<void> { await this.git(['fetch', '--no-tags', 'origin', ref]); }
-    public async Diff(base: string, head: string, paths: string[] = []): Promise<string> { return this.git(['diff', '--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/', `${base}..${head}`, '--', ...paths]); }
+    /** Unified diff of base..head. `NoRenames` shows a renamed file as a delete of the old path plus an add of the new one. */
+    public async Diff(base: string, head: string, paths: string[] = [], o: { NoRenames?: boolean } = {}): Promise<string> {
+        const renames = o.NoRenames ? ['--no-renames'] : [];
+        return this.git(['diff', '--no-color', '--no-ext-diff', ...renames, '--src-prefix=a/', '--dst-prefix=b/', `${base}..${head}`, '--', ...paths]);
+    }
     /** SHAs of commits after `sha` on origin/next that touch any of `paths`. */
     public async LaterCommitsTouching(sha: string, paths: string[]): Promise<string[]> {
         return (await this.git(['log', '--format=%H', `${sha}..origin/next`, '--', ...paths])).split('\n').filter(Boolean);

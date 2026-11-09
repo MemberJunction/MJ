@@ -54,6 +54,12 @@ describe('GitRepo', () => {
     expect(await fake.Subject('abc1234')).toBe('fix(core): keep the cache per user');
     expect(calls).toEqual([{ args: ['-c', 'core.quotePath=false', 'log', '-1', '--format=%s', 'abc1234'], cwd: '/repo' }]);
   });
+  it('Diff with NoRenames passes --no-renames so a renamed file diffs as a delete and an add', async () => {
+    const calls: string[][] = [];
+    const fake = new GitRepo('/repo', async (args) => { calls.push(args); return ''; });
+    await fake.Diff('aaa1111', 'bbb2222', [], { NoRenames: true });
+    expect(calls[0]).toContain('--no-renames');
+  });
   it('LaterCommitsTouching lists the SHAs after a commit on origin/next that touch the paths', async () => {
     const calls: string[][] = [];
     const fake = new GitRepo('/repo', async (args) => { calls.push(args); return 'a'.repeat(40) + '\n' + 'b'.repeat(40) + '\n'; });

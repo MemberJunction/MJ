@@ -19,10 +19,12 @@ const MAX_FILES = 100;
 const FIX_TITLE_RE = /^fix[(:!]/i;
 const MERGE_SUBJECT_RE = /^Merge pull request #(\d+) from /;
 const SQUASH_SUBJECT_RE = /\(#(\d+)\)\s*$/;
+/** GitHub errors that mean the number is not a merged pull request: not merged yet, or an issue number. */
+const NOT_A_MERGED_PR_RE = /is not merged|Could not resolve to a PullRequest/;
 
 /** True for packages/<X>/src/**.ts that is not a test file and whose package has vitest. */
 export function IsEligibleSource(path: string, map: Pick<PackageMap, 'PackageForPath'>): boolean {
-    if (!/^packages\/.+\/src\/.+\.ts$/.test(path) || /\.test\.ts$/.test(path) || /\.d\.ts$/.test(path)) return false;
+    if (!/^packages\/.+\/src\/.+\.ts$/.test(path) || /\.(test|spec|d)\.ts$/.test(path) || path.includes('/__tests__/')) return false;
     const pkg = map.PackageForPath(path);
     return pkg !== null && pkg.HasVitest && path.startsWith(`${pkg.Dir}/src/`);
 }
@@ -105,16 +107,22 @@ async function bugFor(d: MinerDeps, fix: MergedPullRequest): Promise<BugCandidat
     counts.delete(fix.Number);
     const top = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0];
     if (!top) return null;
-    const bug = await d.GitHub.GetMergedPullRequest(top[0]);
-    const files = eligibleFiles(bug, d.PackageMap);
-    if (!files) return null;
+    const bug = await mergedPullRequestOrNull(d, top[0]);
+    const files = bug && eligibleFiles(bug, d.PackageMap);
+    if (!bug || !files) return null;
     return { FixPR: fix.Number, FixMergeSHA: fix.MergeSHA, FixTitle: fix.Title, BugPR: bug.Number, BugMergeSHA: bug.MergeSHA, BugTitle: bug.Title, BlamedLines: top[1], Files: files };
+}
+
+/** The merged PR `n`, or null when GitHub says it is not merged or not a pull request; other errors propagate. */
+async function mergedPullRequestOrNull(d: MinerDeps, n: number): Promise<MergedPullRequestDetail | null> {
+    try { return await d.GitHub.GetMergedPullRequest(n); }
+    catch (e) { if (e instanceof Error && NOT_A_MERGED_PR_RE.test(e.message)) return null; throw e; }
 }
 
 /** Blamed-line counts per PR for the eligible source lines the fix removed, blamed at the fix's first parent. */
 async function blamedLinesByPR(d: MinerDeps, fixMergeSHA: string): Promise<Map<number, number>> {
     const parent = await d.Repo.FirstParent(fixMergeSHA);
-    const ranges = RemovedRangesByFile(ParseUnifiedDiff(await d.Repo.Diff(parent, fixMergeSHA)));
+    const ranges = RemovedRangesByFile(ParseUnifiedDiff(await d.Repo.Diff(parent, fixMergeSHA, [], { NoRenames: true })));
     const shaCounts = new Map<string, number>();
     for (const [path, r] of Object.entries(ranges)) {
         if (!IsEligibleSource(path, d.PackageMap)) continue;

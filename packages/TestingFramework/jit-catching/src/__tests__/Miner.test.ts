@@ -14,19 +14,20 @@ const packageMap = {
     : null,
 };
 
-interface Fakes { windows: Record<string, MergedPullRequest[]>; details: MergedPullRequestDetail[]; later?: Record<string, string[]>; diffs?: Record<string, string>; blames?: Record<string, string[]>; subjects?: Record<string, string>; }
+interface Fakes { windows: Record<string, MergedPullRequest[]>; details: MergedPullRequestDetail[]; later?: Record<string, string[]>; diffs?: Record<string, string>; renameDiffs?: Record<string, string>; blames?: Record<string, string[]>; subjects?: Record<string, string>; failures?: Record<number, string>; }
 function fakeDeps(f: Fakes): MinerDeps {
   return {
     GitHub: {
       ListMergedPullRequests: vi.fn(async (o: { Since: string; Until: string }) => f.windows[`${o.Since}..${o.Until}`] ?? []),
       GetMergedPullRequest: vi.fn(async (n: number) => {
+        if (f.failures?.[n]) throw new Error(f.failures[n]);
         const d = f.details.find((x) => x.Number === n); if (!d) throw new Error(`PR #${n} is not merged`); return d;
       }),
     },
     Repo: {
       LaterCommitsTouching: vi.fn(async (s: string) => f.later?.[s] ?? []),
       BlameFirstParent: vi.fn(async (s: string, path: string) => f.blames?.[`${s}:${path}`] ?? []),
-      Diff: vi.fn(async (_base: string, head: string) => f.diffs?.[head] ?? ''),
+      Diff: vi.fn(async (_base: string, head: string, _paths?: string[], o?: { NoRenames?: boolean }) => (!o?.NoRenames && f.renameDiffs?.[head]) || (f.diffs?.[head] ?? '')),
       FirstParent: vi.fn(async (s: string) => `${s}^1`),
       Subject: vi.fn(async (s: string) => f.subjects?.[s] ?? 'direct push'),
     },
@@ -48,6 +49,10 @@ describe('IsEligibleSource', () => {
     expect(IsEligibleSource('packages/X/src/__tests__/a.test.ts', packageMap)).toBe(false);
     expect(IsEligibleSource('packages/X/README.md', packageMap)).toBe(false);
     expect(IsEligibleSource('packages/NoVitest/src/a.ts', packageMap)).toBe(false);
+  });
+  it('rejects spec files and helpers under __tests__', () => {
+    expect(IsEligibleSource('packages/X/src/a.spec.ts', packageMap)).toBe(false);
+    expect(IsEligibleSource('packages/X/src/__tests__/helpers/fakes.ts', packageMap)).toBe(false);
   });
 });
 
@@ -115,5 +120,34 @@ describe('MineBugs', () => {
     expect(d.Repo.BlameFirstParent).toHaveBeenCalledWith(`${sha('f')}^1`, 'packages/X/src/a.ts', [{ Start: 3, End: 4 }, { Start: 10, End: 10 }]);
     expect(d.Repo.BlameFirstParent).toHaveBeenCalledTimes(3);
     expect(d.Repo.Diff).not.toHaveBeenCalledWith(expect.anything(), sha('9'));
+  });
+
+  it('blames the old path when the fix renames and edits a file', async () => {
+    const fix = pr(600, 'fix: rename and edit', 'c'); const bug = pr(124, 'feat: old file', '5');
+    const renameDiff = ['diff --git a/packages/X/src/old.ts b/packages/X/src/new.ts', 'similarity index 90%', 'rename from packages/X/src/old.ts', 'rename to packages/X/src/new.ts',
+      '--- a/packages/X/src/old.ts', '+++ b/packages/X/src/new.ts', '@@ -3 +3 @@', '-bad', '+good', ''].join('\n');
+    const splitDiff = ['diff --git a/packages/X/src/new.ts b/packages/X/src/new.ts', 'new file mode 100644', '--- /dev/null', '+++ b/packages/X/src/new.ts', '@@ -0,0 +1,2 @@', '+a', '+good',
+      'diff --git a/packages/X/src/old.ts b/packages/X/src/old.ts', 'deleted file mode 100644', '--- a/packages/X/src/old.ts', '+++ /dev/null', '@@ -1,2 +0,0 @@', '-a', '-bad', ''].join('\n');
+    const d = fakeDeps({
+      windows: { '2026-03-01..2026-03-31': [fix] }, details: [detail(bug, ['packages/X/src/old.ts'])],
+      renameDiffs: { [sha('c')]: renameDiff }, diffs: { [sha('c')]: splitDiff },
+      blames: { [`${sha('c')}^1:packages/X/src/old.ts`]: [sha('5'), sha('5')] }, subjects: { [sha('5')]: 'feat: old file (#124)' },
+    });
+    const bugs = await MineBugs(d, { Since: '2026-03-01', Until: '2026-03-31' });
+    expect(d.Repo.BlameFirstParent).toHaveBeenCalledWith(`${sha('c')}^1`, 'packages/X/src/old.ts', [{ Start: 1, End: 2 }]);
+    expect(d.Repo.BlameFirstParent).not.toHaveBeenCalledWith(expect.anything(), 'packages/X/src/new.ts', expect.anything());
+    expect(bugs.map((b) => b.BugPR)).toEqual([124]);
+  });
+
+  it('skips a fix whose top blamed number is not a merged PR or not a PR, and still mines the others', async () => {
+    const fixA = pr(700, 'fix: a', 'a'); const fixB = pr(701, 'fix: b', 'b'); const fixC = pr(702, 'fix: c', 'e'); const bug = pr(123, 'feat(core): add cache', '1');
+    const d = fakeDeps({
+      windows: { '2026-04-01..2026-04-30': [fixA, fixB, fixC] }, details: [detail(bug, ['packages/X/src/a.ts'])],
+      diffs: { [sha('a')]: fixDiff, [sha('b')]: fixDiff, [sha('e')]: fixDiff },
+      blames: { [`${sha('a')}^1:packages/X/src/a.ts`]: [sha('2')], [`${sha('b')}^1:packages/X/src/a.ts`]: [sha('3')], [`${sha('e')}^1:packages/X/src/a.ts`]: [sha('1')] },
+      subjects: { [sha('1')]: 'feat(core): add cache (#123)', [sha('2')]: 'wip (#900)', [sha('3')]: 'see issue (#901)' },
+      failures: { 900: 'PR #900 is not merged', 901: 'Command failed: gh pr view 901\nGraphQL: Could not resolve to a PullRequest with the number of 901. (repository.pullRequest)' },
+    });
+    expect((await MineBugs(d, { Since: '2026-04-01', Until: '2026-04-30' })).map((b) => [b.FixPR, b.BugPR])).toEqual([[702, 123]]);
   });
 });
