@@ -103,10 +103,16 @@ services:
       TEST_UID: "${TEST_UID}"
       TEST_PWD: "${TEST_PWD}"
     ports:
-      - "${MJAPI_HOST_PORT:-4000}:4000"       # MJAPI  (default 4000; set MJAPI_HOST_PORT=4100 to avoid conflicts)
-      - "${EXPLORER_HOST_PORT:-4200}:4200"     # Explorer (default 4200; set EXPLORER_HOST_PORT=4300 to avoid conflicts)
-      - "4002:4002"                              # MJAPI instance B (for Redis cache invalidation testing)
-      - "4202:4202"                              # Explorer instance B (for Redis cache invalidation testing)
+      # Loopback only, like the databases above. MJAPI and Explorer here are dev servers
+      # running with test credentials inside a sandbox where Claude runs with
+      # --dangerously-skip-permissions; they are not something to publish on every
+      # interface of the host. To reach them from another machine, use an SSH tunnel
+      # (ssh -L 4200:localhost:4200 -L 4000:localhost:4000 <host>) or set
+      # WORKBENCH_BIND_ADDR=0.0.0.0 in .env deliberately.
+      - "${WORKBENCH_BIND_ADDR:-127.0.0.1}:${MJAPI_HOST_PORT:-4000}:4000"       # MJAPI  (default 4000; set MJAPI_HOST_PORT=4100 to avoid conflicts)
+      - "${WORKBENCH_BIND_ADDR:-127.0.0.1}:${EXPLORER_HOST_PORT:-4200}:4200"     # Explorer (default 4200; set EXPLORER_HOST_PORT=4300 to avoid conflicts)
+      - "${WORKBENCH_BIND_ADDR:-127.0.0.1}:4002:4002"                            # MJAPI instance B (for Redis cache invalidation testing)
+      - "${WORKBENCH_BIND_ADDR:-127.0.0.1}:4202:4202"                            # Explorer instance B (for Redis cache invalidation testing)
     # depends_on:
     #   sql-claude:
     #     condition: service_healthy

@@ -70,7 +70,7 @@ jobs:
       # it tests the SAME pair of values a rewired publish.yml would use.
       - name: Mint an installation token
         id: token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
         with:
           app-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}

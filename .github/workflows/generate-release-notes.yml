@@ -43,19 +43,26 @@ jobs:
       || ((github.head_ref == 'next' || startsWith(github.head_ref, 'release/'))
           && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
+    # READ-ONLY, deliberately (security audit, MJ#6240 item 7). The agent in this job has a
+    # shell and reads contributor-influenced text — commit messages, the diff, .changeset/
+    # bodies — so a prompt injection there must not be able to reach a write-capable token.
+    # This job therefore holds no write permission, keeps no token on disk
+    # (persist-credentials: false) and puts none in the agent's environment. Its only
+    # product is the notes file, uploaded as an artifact; `apply-release-notes` below is the
+    # deterministic job that holds `pull-requests: write` and applies it.
     permissions:
       contents: read
-      pull-requests: write
-      issues: read
+    outputs:
+      generated: ${{ steps.stage.outputs.generated }}
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
-
-      - name: Fetch all tags
-        run: git fetch --tags
+          # Tags come with fetch-depth: 0. Nothing after this step talks to the remote, so
+          # the token is not left in .git/config for the agent's shell to read.
+          persist-credentials: false
 
       # Cheap pre-flight: if there is nothing to release (no pending changesets),
       # skip the paid agent step entirely instead of letting it discover that
@@ -69,9 +76,9 @@ jobs:
       # The changeset gate applies only to the automated PR path. A manual
       # workflow_dispatch is an explicit human ask — honor it even at 0 pending
       # changesets (e.g. right after a release, when `changeset version` has
-      # consumed the .md files). Note the dispatch path has a pre-existing
-      # caveat regardless of this gate: the prompt calls get_pull_request with
-      # no PR context, so dispatch runs are only useful alongside an open PR.
+      # consumed the .md files). A dispatch carries no PR context: the apply job
+      # looks the release PR up by head branch, and when there is none the notes
+      # are left in the `release-notes` artifact.
       - name: Generate Release Notes with Gemini
         id: gemini-release-notes
         if: github.event_name == 'workflow_dispatch' || steps.cs.outputs.count != '0'
@@ -83,12 +90,8 @@ jobs:
           # on run 31453795512, where its absence killed the sibling gemini-command
           # workflow before a single tool call. The action does not set it itself.
           GEMINI_CLI_TRUST_WORKSPACE: 'true'
-          # Consumed by the github MCP server declared in `settings` below, via the
-          # ${GITHUB_TOKEN} expansion in its `env` block. Settings values expand $VAR
-          # from the process environment — but an UNSET variable is left as the
-          # literal string "${GITHUB_TOKEN}" rather than erroring, so if the MCP
-          # server starts unauthenticated, suspect this line first.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # NO GITHUB_TOKEN here, on purpose — see the job's `permissions` comment. Do not
+          # add one back to "fix" something: the PR is edited by `apply-release-notes`.
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
 
@@ -105,45 +108,24 @@ jobs:
           # Pinned so the tool-name strings below stay true; `latest` moves.
           gemini_cli_version: '0.54.4'
 
-          # TOOL SURFACE. Unlike gemini-command.yml this agent is deliberately
-          # powerful — it shells out to git and npx, writes a notes file, and edits
-          # the PR through MCP. That matches what the claude-code-action version was
-          # granted (Bash,Read,Write,Glob,Grep + two GitHub MCP tools).
+          # TOOL SURFACE. Unlike gemini-command.yml this agent has a shell — it runs git
+          # and npx and writes a notes file. It has NO GitHub tools and no MCP server: it
+          # used to edit the PR itself through the GitHub MCP server with a write token
+          # in its environment, which is what the audit flagged. The PR edit is now the
+          # `apply-release-notes` job's.
           #
           # `core` is an allowlist and is used in preference to `exclude` because
           # settings tool names are never validated: a typo in `exclude` silently
           # leaves a tool enabled, a typo here silently leaves it disabled.
-          #
-          # WHY `allowed` ALSO LISTS THE MCP TOOLS: setting `tools.core` at all emits
-          # a blanket `{toolName: "*", decision: DENY}` policy rule at priority 4.24,
-          # which outranks both MCP grant priorities (trusted 4.2 / allowed 4.1) and
-          # would otherwise swallow the GitHub tools. `tools.allowed` sits at 4.3 and
-          # re-permits them above that deny. `allowed` is an auto-approve list, NOT a
-          # restriction — the actual narrowing is `includeTools` on the server, which
-          # filters at discovery so the model never sees anything else.
-          #
-          # MCP tools are addressed by their fully-qualified `mcp_<server>_<tool>`
-          # name in `allowed`, but by their BARE name in `includeTools` — the include
-          # filter runs before the name is qualified. Both spellings below are load
-          # bearing and are not interchangeable.
           settings: |
             {
               "tools": {
-                "core": ["run_shell_command", "read_file", "read_many_files", "list_directory", "glob", "grep_search", "write_file"],
-                "allowed": ["mcp_github_pull_request_read", "mcp_github_update_pull_request"]
-              },
-              "mcpServers": {
-                "github": {
-                  "command": "docker",
-                  "args": ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server:v0.27.0"],
-                  "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}" },
-                  "includeTools": ["pull_request_read", "update_pull_request"]
-                }
+                "core": ["run_shell_command", "read_file", "read_many_files", "list_directory", "glob", "grep_search", "write_file"]
               }
             }
 
           prompt: |
-            You are a technical analyst working as a release coordinator for MemberJunction. Your task is to create release notes in markdown and update the PR description.
+            You are a technical analyst working as a release coordinator for MemberJunction. Your task is to create release notes in markdown. A later, separate CI job publishes the file you write as the PR title and description — you do not touch GitHub yourself.
 
             ## Format
 
@@ -154,7 +136,7 @@ jobs:
             used since v5.51.1. Follow that file — not your memory of what a release note looks
             like, and not the opening structure of an older file in `releases/`.
 
-            The PR description you produce is pasted into Teams verbatim by the build engineer,
+            The notes you produce become the PR description, which is pasted into Teams verbatim by the build engineer,
             and most readers there stop after the TL;DR. It is the release announcement, not
             just a PR body.
 
@@ -165,44 +147,166 @@ jobs:
             3. Use both the diff contents and git commit messages to build up the context.
             - The .changeset/ dir also has more focused human-entered notes you can use.
             4. Write the release notes to tmp/release-<version>.md following the format in `releases/README.md`.
+            - `<version>` is the bare version number with no leading `v` (e.g. tmp/release-2.73.0.md). A later CI job reads the version from this filename and sets the PR title to `v<version>`.
+            - Write exactly ONE such file. The whole file becomes the PR description, replacing what is there, so it must contain the release notes and nothing else.
             - You can add/remove bullets as needed and omit sections if there are no bullets.
-            - `## TL;DR` is the one section that is never omitted. A later CI step reads the
-              published PR body back and fails the run if it has no TL;DR.
-            5. Use the GitHub MCP server to update the PR description with the release notes.
+            - `## TL;DR` is the one section that is never omitted. A later CI step checks the
+              file and fails the run if it has no TL;DR.
+            5. Stop. Do not commit, push, or try to edit the pull request.
 
-            ## Steps to complete:
-            1. **Get current PR details**: Use `mcp_github_pull_request_read` with method `get` to get the current PR description
-            2. **Generate release notes**: Follow the process above to create release notes
-            3. **Update PR title and description**: Use `mcp_github_update_pull_request` to:
-               - Set the PR title to the version number (e.g., "v2.73.0")
-               - Set the PR description to the generated release notes (replace entire description)
-
-            The generated release notes should become the entire PR description, not appended to existing content.
-
-      # The agent's own report is not evidence — the sibling job below says exactly that and
-      # then checks its artifact. This job never did, which was survivable while the PR body
-      # was read only by release reviewers. It stopped being survivable when the body became
-      # the release announcement: the build engineer pastes it into Teams verbatim, so a run
-      # that quietly drops the TL;DR ships an announcement missing the part most readers stop
-      # at, and nobody finds out until it is in the channel.
-      #
-      # Check the body that actually shipped, NOT tmp/release-<version>.md. The agent writes
-      # the file and updates the PR in two separate steps; only one of them is the artifact.
-      #
-      # PR path only: a workflow_dispatch carries no PR context at all (see the changeset-gate
-      # note above), so there is no published body to read back.
-      - name: Verify the PR body carries a TL;DR
-        if: github.event_name == 'pull_request' && steps.gemini-release-notes.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR: ${{ github.event.pull_request.number }}
+      # The hand-off. Everything the write-capable job will ever see of this job is this one
+      # file. Staged out of the workspace so the upload cannot pick up anything else the
+      # agent left in tmp/.
+      - name: Stage the notes file for the apply job
+        id: stage
+        if: steps.gemini-release-notes.outcome == 'success'
         run: |
           set -euo pipefail
-          gh pr view "$PR" --json body --jq '.body' > "$RUNNER_TEMP/pr-body.md"
+          mapfile -t FILES < <(find tmp -maxdepth 1 -type f -name 'release-*.md' 2>/dev/null | sort)
+          if [ "${#FILES[@]}" -ne 1 ]; then
+            echo "::error::expected the agent to write exactly one tmp/release-<version>.md, found ${#FILES[@]}: ${FILES[*]:-<none>}"
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/release-notes"
+          cp -- "${FILES[0]}" "$RUNNER_TEMP/release-notes/"
+          echo "generated=true" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the notes file
+        if: steps.stage.outputs.generated == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release-notes
+          path: ${{ runner.temp }}/release-notes/
+          if-no-files-found: error
+          retention-days: 14
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # The write half of the Edge path. Deterministic: no agent, no repo code other than
+  # the shape checker, and the only thing it does with its token is set one PR's title
+  # and body. It treats the artifact as UNTRUSTED input — the agent that produced it
+  # read contributor-influenced text — and validates it before anything is applied.
+  #
+  # Nothing from the artifact is ever written into the repository, so it cannot change
+  # a workflow file (or any file); the validation below is about the PR title/body.
+  # ─────────────────────────────────────────────────────────────────────────────
+  apply-release-notes:
+    name: Apply generated notes to the release PR
+    needs: generate-release-notes
+    if: needs.generate-release-notes.outputs.generated == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      # Only the shape checker is needed, and it is read from this checkout — never
+      # from the artifact.
+      - name: Checkout the shape checker
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+          sparse-checkout-cone-mode: false
+
+      - name: Download the notes file
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: release-notes
+          path: ${{ runner.temp }}/release-notes
+
+      - name: Validate the notes file
+        id: notes
+        run: |
+          set -euo pipefail
+          DIR="$RUNNER_TEMP/release-notes"
+          # Exactly one entry, a regular file, with the one name the agent was told to use.
+          mapfile -t ENTRIES < <(find "$DIR" -mindepth 1 | sort)
+          if [ "${#ENTRIES[@]}" -ne 1 ] || [ ! -f "${ENTRIES[0]}" ] || [ -L "${ENTRIES[0]}" ]; then
+            echo "::error::the release-notes artifact must contain exactly one regular file; it contains ${#ENTRIES[@]} entr(y/ies)."
+            exit 1
+          fi
+          F="${ENTRIES[0]}"
+          NAME=$(basename -- "$F")
+          # The version becomes the PR title, so it is matched in full, not searched for.
+          if [[ ! "$NAME" =~ ^release-v?([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?)\.md$ ]]; then
+            echo "::error::artifact file name is not release-<semver>.md — refusing to derive a PR title from it."
+            exit 1
+          fi
+          VERSION="${BASH_REMATCH[1]}"
+          # GitHub caps a PR body at 65,536 characters; stay under it in bytes. A file this
+          # large is not release notes anyway.
+          SIZE=$(wc -c < "$F" | tr -d ' ')
+          if [ "$SIZE" -lt 1 ] || [ "$SIZE" -gt 60000 ]; then
+            echo "::error::notes file is $SIZE bytes; expected 1..60000."
+            exit 1
+          fi
+          # Text only: valid UTF-8, no NUL or other control bytes besides tab/newline/CR.
+          iconv -f UTF-8 -t UTF-8 "$F" > /dev/null || { echo "::error::notes file is not valid UTF-8."; exit 1; }
+          if LC_ALL=C grep -qP '[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]' "$F"; then
+            echo "::error::notes file contains control characters."
+            exit 1
+          fi
           # The same shape check the line job runs, so the two generators cannot drift into
           # producing differently-shaped notes. Unit tested — including the case a naive
           # "is there a TL;DR heading" grep silently passes:
           # .github/scripts/__tests__/check-release-notes-shape.test.mjs
+          node .github/scripts/check-release-notes-shape.mjs "$F"
+          echo "file=$F" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      # Which PR. On the pull_request path it is the PR that triggered the run. A bare
+      # workflow_dispatch has no PR context, so it is looked up: the one open PR into `main`
+      # from the dispatched branch, and only from a branch the trigger gate above would have
+      # accepted. Anything else leaves the artifact as the run's output and edits nothing.
+      - name: Resolve the release PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_PR: ${{ github.event.pull_request.number }}
+          HEAD: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ -n "$EVENT_PR" ]; then
+            echo "number=$EVENT_PR" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$HEAD" != "next" ] && [[ "$HEAD" != release/* ]]; then
+            echo "::notice::dispatched from '$HEAD', which is not a release branch — the notes are in the 'release-notes' artifact and no PR was edited."
+            exit 0
+          fi
+          NUMS=$(gh pr list --repo "$GITHUB_REPOSITORY" --base main --head "$HEAD" --state open --json number --jq '.[].number')
+          COUNT=$(printf '%s' "$NUMS" | grep -c . || true)
+          if [ "$COUNT" -ne 1 ]; then
+            echo "::notice::found $COUNT open PR(s) from '$HEAD' into main — the notes are in the 'release-notes' artifact and no PR was edited."
+            exit 0
+          fi
+          echo "number=$NUMS" >> "$GITHUB_OUTPUT"
+
+      # Title is `v<version>` from the validated file name; body is the validated file,
+      # byte for byte, so the shape check above is a check of what ships.
+      - name: Set the PR title and description
+        if: steps.pr.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ steps.pr.outputs.number }}
+          NOTES_FILE: ${{ steps.notes.outputs.file }}
+          VERSION: ${{ steps.notes.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --title "v$VERSION" --body-file "$NOTES_FILE"
+
+      # The agent's own report is not evidence — the sibling job below says exactly that and
+      # then checks its artifact. This step does the same for the body that actually shipped,
+      # NOT just the file: the body is the release announcement (the build engineer pastes it
+      # into Teams verbatim), so a TL;DR that did not survive publication must fail the run.
+      - name: Verify the PR body carries a TL;DR
+        if: steps.pr.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' > "$RUNNER_TEMP/pr-body.md"
           node .github/scripts/check-release-notes-shape.mjs "$RUNNER_TEMP/pr-body.md"
 
 
@@ -227,9 +331,15 @@ jobs:
     name: Write canonical notes for a line release
     if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version != '' }}
     runs-on: ubuntu-latest
+    # READ-ONLY, for the same reason as the Edge job (security audit, MJ#6240 item 7): the
+    # agent below has a shell and reads commit subjects and changeset bodies. It used to run
+    # in a job holding `contents: write` with the checkout's token persisted in .git/config,
+    # one `git push` away from the repository. This job now writes nothing but an artifact;
+    # `line-release-notes-apply` below commits it and opens the PR.
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
+    outputs:
+      generated: ${{ steps.done.outputs.generated }}
 
     env:
       VERSION: ${{ github.event.inputs.version }}
@@ -238,10 +348,13 @@ jobs:
     steps:
       # `next` is the base: notes land there and reach the line by backport label.
       - name: Checkout next
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: next
           fetch-depth: 0
+          # The repository is public, so the fetch below needs no token — and the agent's
+          # shell must not find one in .git/config.
+          persist-credentials: false
 
       - name: Fetch tags and the line branch
         run: |
@@ -428,6 +541,86 @@ jobs:
           # told to write exactly one file.
           git diff --name-only --exit-code -- . ":(exclude)$F" || {
             echo "::error::the agent modified files other than $F (listed above)."; exit 1; }
+          # The hand-off: this one file is all the write-capable job receives.
+          mkdir -p "$RUNNER_TEMP/line-release-notes"
+          cp -- "$F" "$RUNNER_TEMP/line-release-notes/v$VERSION.md"
+
+      - name: Upload the notes file
+        if: steps.pre.outputs.skip == 'false'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: line-release-notes
+          path: ${{ runner.temp }}/line-release-notes/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Mark the notes as generated
+        id: done
+        if: steps.pre.outputs.skip == 'false'
+        run: echo "generated=true" >> "$GITHUB_OUTPUT"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # The write half of the line path. Deterministic — no agent runs here. It takes
+  # exactly one file from the artifact, validates it as untrusted input, places it at
+  # the one path it is allowed to occupy, and opens the PR.
+  # ─────────────────────────────────────────────────────────────────────────────
+  line-release-notes-apply:
+    name: Open the notes PR for a line release
+    needs: line-release-notes
+    if: needs.line-release-notes.outputs.generated == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    env:
+      VERSION: ${{ github.event.inputs.version }}
+      LINE: ${{ github.event.inputs.line_branch }}
+
+    steps:
+      - name: Checkout next
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: next
+
+      - name: Download the notes file
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: line-release-notes
+          path: ${{ runner.temp }}/line-release-notes
+
+      # The artifact is untrusted. Only its bytes are used, and only at a path this job
+      # computes from the (already validated) VERSION input — never a path the artifact
+      # names — so it cannot land on a workflow file or anywhere outside releases/.
+      - name: Validate and place the notes file
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::version '$VERSION' must be plain X.Y.Z."; exit 1; }
+          [[ "$LINE" =~ ^lts/[0-9]+(\.[0-9]+)?$ ]] || { echo "::error::line_branch '$LINE' must look like lts/5 or lts/6.1."; exit 1; }
+          DIR="$RUNNER_TEMP/line-release-notes"
+          SRC="$DIR/v$VERSION.md"
+          mapfile -t ENTRIES < <(find "$DIR" -mindepth 1 | sort)
+          if [ "${#ENTRIES[@]}" -ne 1 ] || [ "${ENTRIES[0]}" != "$SRC" ] || [ ! -f "$SRC" ] || [ -L "$SRC" ]; then
+            echo "::error::the line-release-notes artifact must contain exactly one regular file, v$VERSION.md."
+            exit 1
+          fi
+          SIZE=$(wc -c < "$SRC" | tr -d ' ')
+          if [ "$SIZE" -lt 1 ] || [ "$SIZE" -gt 200000 ]; then
+            echo "::error::notes file is $SIZE bytes; expected 1..200000."
+            exit 1
+          fi
+          iconv -f UTF-8 -t UTF-8 "$SRC" > /dev/null || { echo "::error::notes file is not valid UTF-8."; exit 1; }
+          if LC_ALL=C grep -qP '[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]' "$SRC"; then
+            echo "::error::notes file contains control characters."
+            exit 1
+          fi
+          F="releases/v$VERSION.md"
+          [ ! -e "$F" ] || { echo "::error::$F appeared on next since the notes were generated — nothing to do; re-dispatch if that is wrong."; exit 1; }
+          cp -- "$SRC" "$F"
+          node .github/scripts/check-release-notes-shape.mjs "$F"
+          # Exactly one change in the tree, and it is the notes file.
+          CHANGED=$(git status --porcelain --untracked-files=all)
+          [ "$CHANGED" = "?? $F" ] || { echo "::error::expected the working tree to differ from next by $F only; got:"; echo "$CHANGED"; exit 1; }
 
       # The label is the entire point: the docs site builds the line branch, so notes that
       # stop at `next` are published nowhere. It used to be passed to `gh pr create`, which
@@ -447,7 +640,6 @@ jobs:
       # still fails the RUN, naming the exact remedy, so a green check never means "shipped"
       # when the notes would publish nowhere.
       - name: Open the notes PR against next
-        if: steps.pre.outputs.skip == 'false'
         env:
           GH_TOKEN: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
         run: |
@@ -467,7 +659,7 @@ jobs:
           # to recover, and a plain push cannot — the agent is non-deterministic, so the new
           # commit differs from the abandoned one and the push is rejected as non-fast-forward.
           #
-          # Safe here and nowhere else: the "Skip if the notes already exist" step above has
+          # Safe here and nowhere else: the "Skip if the notes already exist" step in the generating job has
           # already established that NO PR is open for this branch, so anything sitting on it is
           # debris from a run that died before opening one. The lease still refuses to overwrite
           # anything that arrived after this job's checkout.
