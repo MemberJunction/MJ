@@ -454,8 +454,8 @@ export class GoogleDriveFileStorage extends FileStorageBase {
       const part = pathParts[i];
       const isLastPart = i === pathParts.length - 1;
 
-      // Escape single quotes in the part name for Google Drive query syntax
-      const escapedPart = part.replace(/'/g, "\\'");
+      // Escape the part name for Google Drive query syntax
+      const escapedPart = this._escapeQuery(part);
 
       // Query for the item
       const query = isLastPart
@@ -517,7 +517,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
     // Navigate through path parts, creating folders as needed
     for (const part of pathParts) {
       // Check if folder exists
-      const query = `name = '${part}' and '${currentParentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+      const query = `name = '${this._escapeQuery(part)}' and '${currentParentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
 
       const response = await this._drive.files.list({
         q: query,
@@ -1572,7 +1572,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
         // Convert extensions to MIME types if needed
         return ft.includes('/') ? ft : mime.lookup(ft) || ft;
       });
-      const mimeQuery = mimeTypes.map((mt) => `mimeType='${mt}'`).join(' or ');
+      const mimeQuery = mimeTypes.map((mt) => `mimeType='${this._escapeQuery(mt)}'`).join(' or ');
       queryParts.push(`(${mimeQuery})`);
     }
 
@@ -1608,7 +1608,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
         if (typeof value === 'boolean') {
           queryParts.push(`${key}=${value}`);
         } else if (typeof value === 'string') {
-          queryParts.push(`${key}='${value}'`);
+          queryParts.push(`${key}='${this._escapeQuery(value)}'`);
         }
       }
     }
@@ -1675,7 +1675,8 @@ export class GoogleDriveFileStorage extends FileStorageBase {
    * @private
    */
   private _escapeQuery(query: string): string {
-    return query.replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+    // Backslashes first, so the backslash added before each quote is not escaped again
+    return query.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   }
 
   /**
