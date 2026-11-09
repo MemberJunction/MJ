@@ -125,13 +125,13 @@ describe('Main', () => {
 
   it('backtest calls BacktestStep with the corpus, slice, set, model, the default --max-usd 50 and --only', async () => {
     const d = deps();
-    expect(await Main(['backtest', '--corpus', 'c.json', '--slice', 'HeldOut', '--set', 'Both', '--model', 'gen-model', '--only', '3,5'], d)).toBe(0);
-    expect(d.BacktestStep).toHaveBeenCalledWith(expect.objectContaining({ CorpusPath: resolve('c.json'), Slice: 'HeldOut', Set: 'Both', Model: 'gen-model', MaxUsd: 50, Only: [3, 5], RepoRoot: '/repo', StoreDir: join('/repo', '.jit-catch', 'store') }));
+    expect(await Main(['backtest', '--corpus', 'c.json', '--slice', 'HeldOut', '--set', 'Both', '--model', 'claude-haiku-5-5', '--only', '3,5'], d)).toBe(0);
+    expect(d.BacktestStep).toHaveBeenCalledWith(expect.objectContaining({ CorpusPath: resolve('c.json'), Slice: 'HeldOut', Set: 'Both', Model: 'claude-haiku-5-5', MaxUsd: 50, Only: [3, 5], RepoRoot: '/repo', StoreDir: join('/repo', '.jit-catch', 'store') }));
   });
 
   it('backtest --retry-failed sets RetryFailed', async () => {
     const d = deps();
-    expect(await Main(['backtest', '--corpus', 'c.json', '--slice', 'Tuning', '--set', 'Bug', '--model', 'm', '--retry-failed'], d)).toBe(0);
+    expect(await Main(['backtest', '--corpus', 'c.json', '--slice', 'Tuning', '--set', 'Bug', '--model', 'claude-haiku-5-5', '--retry-failed'], d)).toBe(0);
     expect(d.BacktestStep).toHaveBeenCalledWith(expect.objectContaining({ RetryFailed: true }));
   });
 
@@ -164,6 +164,18 @@ describe('Main', () => {
       expect(stderr.join('')).toMatch(message);
     }
     expect(d.BacktestStep).not.toHaveBeenCalled();
+  });
+});
+
+describe('Main backtest model', () => {
+  it('returns 2 and names the priced models when --model has no price in the settings', async () => {
+    const stderr: string[] = [];
+    vi.spyOn(process.stderr, 'write').mockImplementation((s: string | Uint8Array) => { stderr.push(String(s)); return true; });
+    const d = deps();
+    expect(await Main(['backtest', '--corpus', 'c.json', '--slice', 'Tuning', '--set', 'Bug', '--model', 'unpriced-model', '--max-usd', '10'], d)).toBe(2);
+    expect(stderr.join('')).toMatch(/--model unpriced-model has no price.*claude-haiku-5-5/);
+    expect(d.BacktestStep).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
   });
 });
 

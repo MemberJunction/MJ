@@ -42,7 +42,7 @@ export interface OrphanRun { RunID: string; CostUSD: number; }
 interface SelectedPR { PR: number; Set: 'Bug' | 'Clean'; MergeSHA: string; }
 
 /**
- * Creates or resumes the ledger; runs each Pending entry serially with Settings.GeneratorModel = Model and Trigger 'Backtest';
+ * Refuses a model without a price in the settings. Creates or resumes the ledger; runs each Pending entry serially with Settings.GeneratorModel = Model and Trigger 'Backtest';
  * records each run's cost from the injected cost lookup; stops with a message when the ledger's cost reaches MaxUsd. Returns the ledger.
  *
  * Resume: refuses a ledger made for another corpus path, model, slice or set. Appends a Pending entry for each corpus PR of the
@@ -53,6 +53,8 @@ interface SelectedPR { PR: number; Set: 'Bug' | 'Clean'; MergeSHA: string; }
  * The run stops after 3 Failed entries in a row and leaves the rest Pending.
  */
 export async function BacktestStep(o: BacktestOptions): Promise<BacktestLedger> {
+    const unpriced = UnpricedModel(o.Settings.Prices, o.Model);
+    if (unpriced) throw new Error(unpriced);
     const deps = o.Deps ?? defaultDeps(o);
     await deps.Repo.Fetch('next');
     const file = new LedgerFile(o.RepoRoot, LedgerID(o.CorpusPath, o.Slice, o.Set, o.Model), deps.Redaction);
@@ -64,6 +66,12 @@ export async function BacktestStep(o: BacktestOptions): Promise<BacktestLedger> 
     file.Write(ledger);
     await runPending(ledger, file, o, deps);
     return ledger;
+}
+
+/** A message naming the priced models when `model` has no price in `prices`; null when it has one. */
+export function UnpricedModel(prices: Settings['Prices'], model: string): string | null {
+    if (Object.hasOwn(prices, model)) return null;
+    return `--model ${model} has no price in the settings; priced models: ${Object.keys(prices).join(', ')}`;
 }
 
 /** The cost of a run from the store, else from the run folder's generation file, else null. */

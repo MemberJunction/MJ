@@ -21,7 +21,7 @@ import { GitHub } from './git/GitHub';
 import { GitRepo } from './git/GitRepo';
 import { PackageMap } from './analyzer/PackageMap';
 import { SliceSchema, type Slice } from './corpus/Corpus';
-import { BacktestStep } from './backtest/Backtest';
+import { BacktestStep, UnpricedModel } from './backtest/Backtest';
 import { MatchStep } from './backtest/Match';
 import { LedgerFile } from './backtest/Ledger';
 import { LoadCorpus } from './corpus/Corpus';
@@ -89,7 +89,7 @@ interface Parsed {
 interface BacktestArgs { CorpusPath: string; Slice: Slice; Set: 'Bug' | 'Clean' | 'Both'; Model: string; MaxUsd: number; Only?: number[]; RetryFailed: boolean; }
 const BACKTEST_SETS = ['Bug', 'Clean', 'Both'] as const;
 
-/** Parses argv and dispatches one command. Returns the process exit code: 0 done, 1 failed, 2 usage error. */
+/** Parses argv and dispatches one command. Returns the process exit code: 0 done, 1 failed, 2 usage error (also a `--model` the settings do not price). */
 export async function Main(argv: string[], deps: CliDeps = DEFAULT_DEPS): Promise<number> {
     FilterProcessWarnings(['CLAUDE_SDK_CAN_USE_TOOL_SHADOWED']);
     let p: Parsed;
@@ -101,6 +101,7 @@ export async function Main(argv: string[], deps: CliDeps = DEFAULT_DEPS): Promis
     }
     try { return await dispatch(p, deps); }
     catch (e) {
+        if (e instanceof UsageError) { process.stderr.write(`${USAGE}\n${e.message}\n`); return 2; }
         process.stderr.write(`jit-catch ${p.Command}: ${OneLine(e)}\n`);
         return 1;
     }
@@ -200,6 +201,14 @@ function backtestArgs(p: Parsed): BacktestArgs {
     return p.Backtest;
 }
 
+/** The parsed `backtest` options, after checking that the settings price `--model`; a usage error otherwise. */
+function pricedBacktestArgs(p: Parsed, settings: Settings): BacktestArgs {
+    const args = backtestArgs(p);
+    const unpriced = UnpricedModel(settings.Prices, args.Model);
+    if (unpriced) throw new UsageError(unpriced);
+    return args;
+}
+
 async function dispatch(p: Parsed, deps: CliDeps): Promise<number> {
     if (p.Command === 'corpus') return corpusMine(p, deps);
     if (p.Command === 'clean') return clean(p, deps);
@@ -220,7 +229,7 @@ async function dispatch(p: Parsed, deps: CliDeps): Promise<number> {
         case 'run': await deps.RunAll({ PR: p.PR, BaseSHA: p.Base, HeadSHA: p.Head, Trigger: p.Trigger, RepoRoot: repoRoot, Settings: settings, StoreDir: storeDir }); break;
         case 'backtest':
             if (p.Match) await deps.MatchStep({ ...p.Match, RepoRoot: repoRoot, Settings: settings, StoreDir: storeDir });
-            else await deps.BacktestStep({ ...backtestArgs(p), RepoRoot: repoRoot, Settings: settings, StoreDir: storeDir });
+            else await deps.BacktestStep({ ...pricedBacktestArgs(p, settings), RepoRoot: repoRoot, Settings: settings, StoreDir: storeDir });
             break;
     }
     return 0;

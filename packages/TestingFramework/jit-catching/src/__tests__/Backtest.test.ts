@@ -58,8 +58,11 @@ function fakes(runAll?: (o: RunAllOptions) => Promise<{ RunID: string; Reported:
 }
 const failing = (prs: number[]) => fakes(async (o) => { if (o.PR !== null && prs.includes(o.PR)) throw new Error('boom'); return { RunID: `run-${o.PR}`, Reported: [] }; });
 
+const PRICE = { Input: 1, Output: 1, CachedInput: 1 };
+/** The default settings with prices for the test generator models. */
+const SETTINGS = { ...DEFAULT_SETTINGS, Prices: { ...DEFAULT_SETTINGS.Prices, 'gen-model': PRICE, 'gen.model': PRICE, 'gen_model': PRICE } };
 function options(root: string, corpus: string, deps: BacktestDeps, over: Partial<BacktestOptions> = {}): BacktestOptions {
-  return { CorpusPath: corpus, Slice: 'Tuning', Set: 'Bug', Model: 'gen-model', MaxUsd: 50, RepoRoot: root, Settings: DEFAULT_SETTINGS, StoreDir: join(root, 'store'), Deps: deps, ...over };
+  return { CorpusPath: corpus, Slice: 'Tuning', Set: 'Bug', Model: 'gen-model', MaxUsd: 50, RepoRoot: root, Settings: SETTINGS, StoreDir: join(root, 'store'), Deps: deps, ...over };
 }
 
 describe('BacktestStep', () => {
@@ -211,6 +214,13 @@ describe('BacktestStep', () => {
     const l = await BacktestStep(options(root, corpus, d, { Set: 'Clean', MaxUsd: 1.5 }));
     expect(l.Entries.map((e) => [e.PR, e.Status, e.RunID])).toEqual([[5, 'Assessed', 'run-5'], [6, 'Pending', null]]);
     expect(l.Entries[1]).toEqual(expect.objectContaining({ BaseSHA: parentOf(sha('0')), HeadSHA: sha('0') }));
+  });
+
+  it('refuses a generator model the settings have no price for, before any run', async () => {
+    const { root, corpus } = setup();
+    const d = fakes();
+    await expect(BacktestStep(options(root, corpus, d, { Model: 'unpriced-model' }))).rejects.toThrow(/unpriced-model has no price.*claude-haiku-5-5/);
+    expect(d.calls).toEqual([]);
   });
 
   it('names the PR when the first parent of its landing commit cannot be found', async () => {
