@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import type { MJFeatureValueEntity, MJMLModelEntity } from '@memberjunction/core-entities';
+import type {
+  MJFeatureValueEntity,
+  MJMLModelEntity,
+  MJRecordProcessEntity_IRecordProcessChallengerConfig,
+} from '@memberjunction/core-entities';
 import type { PredictRequest, PredictResponse } from '@memberjunction/predictive-studio-core';
 import { InMemoryArtifactLoader } from '../artifact-loader';
 import {
@@ -9,7 +13,6 @@ import {
   ShadowScoringCoordinator,
   type ChallengerScoreOutput,
   type IChallengerScoreRunner,
-  type IRecordProcessChallengerConfig,
   type IShadowScoreAuditSink,
   type IShadowWorkQueuePublisher,
   type ShadowFeatureValueAuditRecord,
@@ -70,7 +73,7 @@ class SavedFeatureValueDouble {
 }
 
 describe('ShadowScoringCoordinator', () => {
-  const baseConfig: IRecordProcessChallengerConfig = {
+  const baseConfig: MJRecordProcessEntity_IRecordProcessChallengerConfig = {
     Enabled: true,
     SampleRate: 1.0,
     WorkType: 'ML Model',
@@ -94,7 +97,7 @@ describe('ShadowScoringCoordinator', () => {
       // D12: non-number SampleRate (e.g. string '0.5' from unvalidated JSON) must be rejected
       const invalidSampleRateConfig = JSON.parse(
         JSON.stringify({ ...baseConfig, SampleRate: '0.5' }),
-      ) as IRecordProcessChallengerConfig;
+      ) as MJRecordProcessEntity_IRecordProcessChallengerConfig;
       expect(coordinator.ShouldSample(invalidSampleRateConfig)).toBe(false);
       // Missing both ChallengerModelID and ChallengerPromptID must not sample
       expect(
@@ -647,6 +650,7 @@ describe('ShadowScoringCoordinator', () => {
           SampleRate: 1.0,
           WorkType: 'ML Model',
           ChallengerModelID: 'Model-Schema-Strict',
+          MaxLatencyMs: 5000,
         },
         FrozenFeatures: { income: 50000 }, // credit_score missing
         DispatchedAt: '2026-11-02T12:00:00.000Z',

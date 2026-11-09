@@ -21,9 +21,9 @@ import {
 } from '../ml-model-inference-processor';
 import { ModelNotScorableError, ModelNeedsTrainingError } from '../model-readiness';
 import { InMemoryArtifactLoader } from '../artifact-loader';
+import type { MJRecordProcessEntity_IRecordProcessChallengerConfig } from '@memberjunction/core-entities';
 import {
   ShadowScoringCoordinator,
-  type IRecordProcessChallengerConfig,
   type ShadowFeatureValueAuditRecord,
   type ShadowScoreEnvelope,
 } from '../shadow-scoring';
@@ -336,7 +336,7 @@ describe('MLModelInferenceProcessor — lifecycle status gate (W1 → S7.3, F-SC
 });
 
 describe('MLModelInferenceProcessor — shadow scoring integration (D3, D10, D13)', () => {
-  const challengerConfig: IRecordProcessChallengerConfig = {
+  const challengerConfig: MJRecordProcessEntity_IRecordProcessChallengerConfig = {
     Enabled: true,
     SampleRate: 1.0,
     WorkType: 'ML Model',
@@ -599,6 +599,7 @@ describe('MLModelInferenceProcessor — shadow scoring integration (D3, D10, D13
             WorkType: 'Infer',
             ChallengerPromptID: 'prompt-challenger-1',
             ChallengerModelID: 'model-challenger-ignored',
+            MaxLatencyMs: 50,
           },
           shadowCoordinator,
         },
