@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { Main, type CliDeps } from '../cli';
 import { InfrastructureError } from '../target/VitestCatchTarget';
+import { RunAllError } from '../pipeline/Run';
+import { z } from 'zod';
 
 function deps(over: Partial<CliDeps> = {}): CliDeps {
   return {
@@ -40,6 +42,13 @@ describe('Main', () => {
     const d = deps({ ExecuteStep: vi.fn(async () => { throw new InfrastructureError('install failed on Head: offline\n  at stack line'); }) });
     expect(await Main(['execute', '--run', 'r1'], d)).toBe(1);
     expect(stderr.join('')).toBe('jit-catch execute: install failed on Head: offline\n');
+  });
+
+  it('prints the path: message pairs of a ZodError wrapped in a RunAllError', async () => {
+    const zodError = z.object({ Status: z.string() }).safeParse({ Status: 1 }).error;
+    const d = deps({ RunAll: vi.fn(async () => { throw new RunAllError('r1', 'Assess', zodError); }) });
+    expect(await Main(['run', '--pr', '12'], d)).toBe(1);
+    expect(stderr.join('')).toMatch(/^jit-catch run: Status: /);
   });
 
   it('redacts token-shaped text in the one-line error', async () => {

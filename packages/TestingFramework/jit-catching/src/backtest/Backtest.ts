@@ -38,7 +38,7 @@ interface SelectedPR { PR: number; Set: 'Bug' | 'Clean'; MergeSHA: string; }
 
 /**
  * Creates or resumes the ledger; runs each Pending entry serially with Settings.GeneratorModel = Model and Trigger 'Backtest';
- * records cost from the stored run; stops with a message when the ledger's cost reaches MaxUsd. Returns the ledger.
+ * records each run's cost from the injected cost lookup; stops with a message when the ledger's cost reaches MaxUsd. Returns the ledger.
  *
  * Resume: refuses a ledger made for another corpus path, model, slice or set. Appends a Pending entry for each corpus PR of the
  * slice and set that the ledger lacks; entries whose PR left the slice stay as recorded and are named on stderr.

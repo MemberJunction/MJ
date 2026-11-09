@@ -11,7 +11,7 @@ import type { Trigger } from './types';
 import { GenerateStep } from './pipeline/Generate';
 import { ExecuteStep } from './pipeline/Execute';
 import { AssessStep } from './pipeline/Assess';
-import { RunAll } from './pipeline/Run';
+import { RunAll, RunAllError } from './pipeline/Run';
 import { IsValidRunID } from './pipeline/RunDir';
 import { MineClean, MineBugs, type CleanCandidate, type BugCandidate } from './corpus/Miner';
 import { GitHub } from './git/GitHub';
@@ -160,8 +160,9 @@ async function dispatch(p: Parsed, deps: CliDeps): Promise<number> {
     return 0;
 }
 
-/** One redacted line for stderr: a zod error as `path: message` pairs, anything else as the first line of its message. */
+/** One redacted line for stderr: a `RunAllError` as its cause, a zod error as `path: message` pairs, anything else as the first line of its message. */
 export function OneLine(e: unknown): string {
+    if (e instanceof RunAllError) return OneLine(e.cause);
     if (e instanceof ZodError) return RedactTail(e.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; '));
     const message = e instanceof Error ? e.message : String(e);
     return RedactTail(message.split('\n').map((l) => l.trim()).find((l) => l.length > 0) ?? 'failed');
