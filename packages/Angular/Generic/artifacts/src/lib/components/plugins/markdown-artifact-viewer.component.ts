@@ -3837,7 +3837,17 @@ export class MarkdownArtifactViewerComponent
    * Optional WebSocket URL (or base URL) for `/collaboration/yjs` real-time Yjs room sync (§ 3.2).
    * When omitted, falls back to `globalThis.__MJ_COLLAB_WS_URL__` if configured.
    */
-  @Input() public collaborationWsUrl: string | null = null;
+  @Input() public CollaborationWsUrl: string | null = null;
+
+  /** @deprecated Use {@link CollaborationWsUrl}. */
+  @Input()
+  public get collaborationWsUrl(): string | null {
+    return this.CollaborationWsUrl;
+  }
+  /** @deprecated Use {@link CollaborationWsUrl}. */
+  public set collaborationWsUrl(value: string | null) {
+    this.CollaborationWsUrl = value;
+  }
 
   private readonly collabService = inject(DocumentCollaborationService);
   private readonly importExportService = inject(DocumentImportExportService);
@@ -4017,7 +4027,8 @@ export class MarkdownArtifactViewerComponent
     if (changes['artifactVersion'] && !changes['artifactVersion'].firstChange) {
       this.initializeDocument();
     }
-    if (changes['collaborationWsUrl'] && !changes['collaborationWsUrl'].firstChange) {
+    const wsChange = changes['CollaborationWsUrl'] ?? changes['collaborationWsUrl'];
+    if (wsChange && !wsChange.firstChange) {
       this.setupCollaborationSession();
     }
     if (changes['readonly']) {
@@ -5022,7 +5033,7 @@ export class MarkdownArtifactViewerComponent
 
   private resolveEntityPickerOptions(): DocsEntityPickerOption[] {
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const entities: EntityInfo[] = md.Entities ?? [];
       if (entities.length > 0) {
         return [...entities]
@@ -5077,7 +5088,7 @@ export class MarkdownArtifactViewerComponent
 
   private resolveQueryPickerOptions(): DocsQueryPickerOption[] {
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const queries: QueryInfo[] = md.Queries ?? [];
       if (queries.length > 0) {
         return [...queries]
@@ -5101,7 +5112,7 @@ export class MarkdownArtifactViewerComponent
     this.cdr.markForCheck();
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const filter = entityId
         ? `EntityID='${this.escapeSql(entityId)}'`
         : `Entity='${this.escapeSql(entityName)}'`;
@@ -5130,7 +5141,7 @@ export class MarkdownArtifactViewerComponent
 
   private async loadAvailableArtifactsForPicker(): Promise<void> {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const res = await rv.RunView<{ ID: string; Name: string; Type: string }>({
         EntityName: 'MJ: Artifacts',
         ExtraFilter: `Visibility='Always'`,
@@ -6765,7 +6776,7 @@ export class MarkdownArtifactViewerComponent
 
   private resolveConfiguredWsUrl(artifactId: string): string {
     const globalWsUrl = (globalThis as { __MJ_COLLAB_WS_URL__?: string }).__MJ_COLLAB_WS_URL__;
-    const candidate = this.collaborationWsUrl || globalWsUrl;
+    const candidate = this.CollaborationWsUrl || globalWsUrl;
     if (!candidate) {
       return '';
     }

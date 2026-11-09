@@ -1381,6 +1381,22 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     artifactId?: string;
     versionNumber?: number;
   }): void {
+    if (event.type === 'collection' && this.resolveAppId('Library')) {
+      const queryParams: Record<string, string> = { collectionId: event.id };
+      if (event.artifactId) {
+        queryParams['artifactId'] = event.artifactId;
+        if (event.versionNumber) {
+          queryParams['version'] = String(event.versionNumber);
+        }
+      }
+      void this.OnNavigationRequest({
+        appName: 'Library',
+        navItemName: 'Library',
+        queryParams,
+      });
+      return;
+    }
+
     // Map the link type to the nav item name
     const navItemName = event.type === 'conversation' ? 'Conversations' : 'Collections';
 
@@ -1470,7 +1486,15 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
         this.navigationService.OpenArtifact(route.ArtifactId, route.Title);
         break;
       case 'nav-item':
-        void this.navigationService.OpenNavItemByName(route.NavItemName, route.Configuration);
+        if (route.NavItemName === 'Collections' && this.resolveAppId('Library')) {
+          void this.OnNavigationRequest({
+            appName: 'Library',
+            navItemName: 'Library',
+            queryParams: route.Configuration,
+          });
+        } else {
+          void this.navigationService.OpenNavItemByName(route.NavItemName, route.Configuration);
+        }
         break;
     }
   }

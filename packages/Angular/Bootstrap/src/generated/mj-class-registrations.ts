@@ -875,13 +875,16 @@ import {
     WorkflowsResourceComponent,
 } from '@memberjunction/ng-dashboards';
 
-// @memberjunction/ng-explorer-core (14 classes)
+// @memberjunction/ng-explorer-core (17 classes)
 import {
     ArtifactResource,
+    ChatCollectionsResource,
     ChatConversationsResource,
     ConversationFeedbackResource,
     DashboardResource,
     EntityRecordResource,
+    LibraryDriveResource,
+    LibraryResource,
     ListDetailResource,
     MeetingsResource,
     OmnibarAgentProvider,
@@ -1687,10 +1690,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     WorkflowsDashboardComponent,
     WorkflowsResourceComponent,
     ArtifactResource,
+    ChatCollectionsResource,
     ChatConversationsResource,
     ConversationFeedbackResource,
     DashboardResource,
     EntityRecordResource,
+    LibraryDriveResource,
+    LibraryResource,
     ListDetailResource,
     MeetingsResource,
     OmnibarAgentProvider,
@@ -1714,7 +1720,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 786;
+export const CLASS_REGISTRATIONS_COUNT = 789;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

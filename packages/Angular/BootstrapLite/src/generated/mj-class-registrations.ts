@@ -652,13 +652,16 @@ import {
     FileBrowserResource,
 } from '@memberjunction/ng-file-storage';
 
-// @memberjunction/ng-explorer-core (14 classes)
+// @memberjunction/ng-explorer-core (17 classes)
 import {
     ArtifactResource,
+    ChatCollectionsResource,
     ChatConversationsResource,
     ConversationFeedbackResource,
     DashboardResource,
     EntityRecordResource,
+    LibraryDriveResource,
+    LibraryResource,
     ListDetailResource,
     MeetingsResource,
     OmnibarAgentProvider,
@@ -1344,10 +1347,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     WebURLPartComponent,
     FileBrowserResource,
     ArtifactResource,
+    ChatCollectionsResource,
     ChatConversationsResource,
     ConversationFeedbackResource,
     DashboardResource,
     EntityRecordResource,
+    LibraryDriveResource,
+    LibraryResource,
     ListDetailResource,
     MeetingsResource,
     OmnibarAgentProvider,
@@ -1367,13 +1373,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     BrandKitGenerationPolicyPanelComponent,
     CompanyHeaderPanel,
     CompanyOverviewPanel,
-    ContentItemHierarchyPanel,
-    ConversationHeaderPanel,
-    ConversationOverviewPanel,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    ContentItemHierarchyPanel,
+    ConversationHeaderPanel,
+    ConversationOverviewPanel,
     DashboardCategoryHierarchyPanel,
     EmployeeHeaderPanel,
     EmployeeOverviewPanel,
@@ -1450,7 +1456,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 662;
+export const CLASS_REGISTRATIONS_COUNT = 665;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

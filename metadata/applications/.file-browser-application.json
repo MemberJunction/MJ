@@ -1,17 +1,21 @@
 {
   "fields": {
-    "Name": "File Browser",
-    "Description": "Browse and manage files across multiple storage providers",
-    "Icon": "fa-solid fa-folder-tree",
-    "DefaultForNewUser": false,
-    "Color": "#4caf50",
-    "DefaultSequence": 1010,
+    "Name": "Library",
+    "Description": "Create, organize, and collaborate on documents, spreadsheets, presentations, collections, and connected cloud drives",
+    "Icon": "fa-solid fa-book-open",
+    "DefaultForNewUser": true,
+    "Color": "#0284c7",
+    "DefaultSequence": 2,
+    "Status": "Active",
+    "NavigationStyle": "Both",
+    "HideNavBarIconWhenActive": true,
+    "TopNavLocation": "Left of User Menu",
     "DefaultNavItems": [
       {
-        "Label": "Browse Files",
-        "Icon": "fa-solid fa-folder-open",
+        "Label": "Library",
+        "Icon": "fa-solid fa-book-open",
         "ResourceType": "Custom",
-        "DriverClass": "FileBrowserResource",
+        "DriverClass": "LibraryResource",
         "isDefault": true
       }
     ]
@@ -21,9 +25,5 @@
   },
   "primaryKey": {
     "ID": "EB07016C-AE35-4EF9-804B-91563529A08A"
-  },
-  "sync": {
-    "lastModified": "2026-01-25T19:02:13.780Z",
-    "checksum": "96ad58ba782b02716fbac7d0fa7b10a25485cd5398617aade55d05191958e995"
   }
 }

@@ -2445,12 +2445,7 @@ export class SpreadsheetArtifactViewerComponent
 
   private resolveCurrentUser(): UserInfo | undefined {
     try {
-      const providerUser = (this.ProviderToUse as unknown as { CurrentUser?: UserInfo })?.CurrentUser;
-      if (providerUser) {
-        return providerUser;
-      }
-      const md = new Metadata();
-      return md.CurrentUser;
+      return this.ProviderToUse?.CurrentUser ?? undefined;
     } catch {
       return undefined;
     }
@@ -3021,7 +3016,7 @@ export class SpreadsheetArtifactViewerComponent
     });
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const user = md.CurrentUser;
       const wbType = ArtifactMetadataEngine.Instance.FindArtifactType('Whiteboard');
       const artifactsEntityInfo = md.Entities.find((e) => e.Name === 'MJ: Artifacts');
@@ -3095,7 +3090,7 @@ export class SpreadsheetArtifactViewerComponent
     if (ids.size === 0) return;
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       for (const artId of ids) {
         const safeId = artId.replace(/'/g, () => "''");
         const res = await rv.RunView<MJArtifactVersionEntity>({
@@ -3122,7 +3117,7 @@ export class SpreadsheetArtifactViewerComponent
     const existingVer = this.EmbeddedArtifactVersions[embed.ArtifactID];
     if (!existingVer) return;
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const nextVer = await md.GetEntityObject<MJArtifactVersionEntity>(
         'MJ: Artifact Versions',
         md.CurrentUser,
@@ -3154,11 +3149,11 @@ export class SpreadsheetArtifactViewerComponent
     if (!this.artifactVersion?.ArtifactID) return;
     const user = this.resolveCurrentUser();
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const artifactsEntity = md.Entities.find((e) => e.Name === 'MJ: Artifacts');
       if (!artifactsEntity) return;
 
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(md);
       const safeArtId = this.artifactVersion.ArtifactID.replace(/'/g, () => "''");
       const convResult = await rv.RunView<MJConversationEntity>({
         EntityName: 'MJ: Conversations',
@@ -3233,7 +3228,7 @@ export class SpreadsheetArtifactViewerComponent
     let persistedConv: MJConversationEntity | null = null;
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const artifactsEntity = md.Entities.find((e) => e.Name === 'MJ: Artifacts');
       if (artifactsEntity && this.artifactVersion?.ArtifactID && user) {
         const conv = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', user);
@@ -3304,7 +3299,7 @@ export class SpreadsheetArtifactViewerComponent
 
       if (persistedConv && user) {
         try {
-          const md = new Metadata();
+          const md = this.ProviderToUse;
           const agentDetail = await md.GetEntityObject<MJConversationDetailEntity>(
             'MJ: Conversation Details',
             user,
@@ -3532,7 +3527,7 @@ export class SpreadsheetArtifactViewerComponent
     if (!sentViaWs) {
       try {
         if (this.artifactVersion?.ArtifactID) {
-          const md = new Metadata();
+          const md = this.ProviderToUse;
           const nextVerNum =
             (this.LastSavedVersionNumber ?? this.artifactVersion.VersionNumber ?? 1) + 1;
           const ver = await md.GetEntityObject<MJArtifactVersionEntity>(

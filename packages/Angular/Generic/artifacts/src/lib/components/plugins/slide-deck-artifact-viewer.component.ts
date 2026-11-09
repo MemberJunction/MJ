@@ -3305,12 +3305,7 @@ export class SlideDeckArtifactViewerComponent
 
   private getSafeCurrentUser(): UserInfo | null {
     try {
-      const providerUser = (this.ProviderToUse as unknown as { CurrentUser?: UserInfo })?.CurrentUser;
-      if (providerUser) {
-        return providerUser;
-      }
-      const md = new Metadata();
-      return md.CurrentUser ?? null;
+      return this.ProviderToUse?.CurrentUser ?? null;
     } catch {
       return null;
     }

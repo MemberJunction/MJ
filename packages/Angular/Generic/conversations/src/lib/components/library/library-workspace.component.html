@@ -1,0 +1,1283 @@
+<!-- ========================================================================= -->
+<!-- 1. FULL-CANVAS STUDIO MODE (100% Viewport Focus from Hub or Maximize)     -->
+<!-- ========================================================================= -->
+@if (IsFullCanvasOpen && ActiveArtifactId) {
+  <div class="library-full-canvas" data-testid="library-full-canvas">
+    <header class="full-canvas-topbar">
+      <div class="full-canvas-left">
+        <button
+          type="button"
+          mjButton
+          variant="secondary"
+          size="sm"
+          (click)="ExitFullCanvasToOrigin()"
+          data-testid="full-canvas-back-btn"
+        >
+          <i class="fa-solid fa-arrow-left"></i>
+          {{ FullCanvasOriginMode === 'hub' ? 'Back to Hub' : 'Back to Navigator' }}
+        </button>
+
+        @if (ActiveItem; as current) {
+          <div class="full-canvas-identity">
+            <i [class]="current.Icon" class="full-canvas-icon"></i>
+            <span class="full-canvas-title">{{ current.Name }}</span>
+            <span class="category-pill" [attr.data-cat]="current.Category">
+              {{ current.CategoryBadge }}
+            </span>
+            @for (colName of current.CollectionNames.slice(0, 2); track colName) {
+              <span class="collection-tag">
+                <i class="fa-solid fa-folder"></i>
+                {{ colName }}
+              </span>
+            }
+          </div>
+        }
+      </div>
+
+      <div class="full-canvas-actions">
+        <button
+          type="button"
+          mjButton
+          variant="secondary"
+          size="sm"
+          (click)="SwitchFullCanvasToSplitNavigator()"
+          title="Dock alongside the Power Navigator tree and item list"
+          data-testid="full-canvas-split-btn"
+        >
+          <i class="fa-solid fa-table-columns"></i>
+          Split Navigator
+        </button>
+        @if (ConnectedDrives.length > 0 && ActiveItem) {
+          <button
+            type="button"
+            mjButton
+            variant="secondary"
+            size="sm"
+            (click)="OpenExportToDriveModal(ActiveItem)"
+            data-testid="full-canvas-export-drive-btn"
+          >
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+            Export to Drive…
+          </button>
+        }
+      </div>
+    </header>
+
+    <div class="full-canvas-stage">
+      <mj-artifact-viewer-panel
+        [artifactId]="ActiveArtifactId"
+        [VersionNumber]="ActiveVersionNumber"
+        [CurrentUser]="EffectiveUser"
+        [EnvironmentId]="EffectiveEnvironmentId"
+        [ViewContext]="SelectedCollectionId ? 'collection' : null"
+        [ContextCollectionId]="SelectedCollectionId || undefined"
+        [canEdit]="ActiveItem?.CanEdit"
+        [canShare]="ActiveItem?.CanShare"
+        [IsMaximized]="true"
+        [ShowMaximizeButton]="true"
+        [ShowCloseButton]="false"
+        [RefreshTrigger]="RefreshViewerSubject"
+        (MaximizeToggled)="SwitchFullCanvasToSplitNavigator()"
+        (ShareRequested)="OpenShareArtifactModal($event)"
+        (SaveToCollectionRequested)="OpenSaveToCollectionModal($event)"
+        (OpenEntityRecord)="OnViewerOpenEntityRecord($event)"
+        (NavigateToLink)="OnViewerNavigateToLink($event)"
+      ></mj-artifact-viewer-panel>
+    </div>
+  </div>
+} @else if (SurfaceMode === 'hub') {
+  <!-- ======================================================================= -->
+  <!-- 2. HUB MODE (Default Spacious Zero-Sidebar Landing — Option B Style)    -->
+  <!-- ======================================================================= -->
+  <mj-page-layout data-testid="library-hub-surface">
+    <mj-page-header
+      Title="Library"
+      Icon="fa-solid fa-book-open"
+      Subtitle="Documents, spreadsheets, presentations, collections, and connected drives"
+    >
+      <ng-container meta>
+        <mj-stat-badge [Count]="AllItems.length" Label="items"></mj-stat-badge>
+        <mj-stat-badge [Count]="FlatCollections.length" Label="collections"></mj-stat-badge>
+        @if (ConnectedDrives.length > 0) {
+          <mj-stat-badge [Count]="ConnectedDrives.length" Label="connected drives" Variant="info"></mj-stat-badge>
+        }
+      </ng-container>
+
+      <div actions>
+        <mj-view-toggle
+          [Options]="SurfaceToggleOptions"
+          [ActiveKey]="SurfaceMode"
+          (KeyChange)="SwitchSurfaceMode($event === 'navigator' ? 'navigator' : 'hub')"
+          data-testid="library-surface-toggle"
+        ></mj-view-toggle>
+        <button
+          type="button"
+          mjButton
+          variant="secondary"
+          size="sm"
+          (click)="OpenUploadConvertDialog()"
+          data-testid="library-hub-upload-btn"
+        >
+          <i class="fa-solid fa-cloud-arrow-up"></i>
+          Upload
+        </button>
+        <button
+          type="button"
+          mjButton
+          variant="primary"
+          size="sm"
+          (click)="OpenCreateBlankDialog('document')"
+          data-testid="library-hub-create-btn"
+        >
+          <i class="fa-solid fa-plus"></i>
+          Create New
+        </button>
+      </div>
+
+      <div toolbar>
+        <mj-tab-nav
+          [Tabs]="HubTabs"
+          [ActiveKey]="HubTab"
+          (TabChange)="SwitchHubTab($event)"
+          data-testid="library-hub-tabs"
+        ></mj-tab-nav>
+        <div class="toolbar-spacer"></div>
+        <mj-page-search
+          AriaLabel="Search Library"
+          Placeholder="Search docs, sheets, slides, collections..."
+          [Value]="SearchQuery"
+          (ValueChange)="SetSearchQuery($event)"
+        ></mj-page-search>
+        <mj-filter-popover
+          Label="Filters"
+          [ActiveCount]="ActiveFilterCount"
+          (Cleared)="ResetFilters()"
+        >
+          <mj-filter-panel
+            [Fields]="FilterFields"
+            [Values]="FilterPanelValues"
+            (ValuesChange)="OnFilterValuesChange($event)"
+            (Reset)="ResetFilters()"
+          ></mj-filter-panel>
+        </mj-filter-popover>
+        @if (HubTab === 'all' || HubTab === 'shared') {
+          <mj-view-toggle
+            [Options]="ListStyleOptions"
+            [ActiveKey]="ListStyle"
+            (KeyChange)="SetListStyle($event)"
+          ></mj-view-toggle>
+        }
+        <mj-refresh-button [Loading]="IsLoading" (Clicked)="ReloadWorkspaceData()"></mj-refresh-button>
+      </div>
+    </mj-page-header>
+
+    <mj-page-body>
+      @if (IsLoading && AllItems.length === 0) {
+        <div class="library-loading-box">
+          <mj-loading text="Loading your Library..." size="large"></mj-loading>
+        </div>
+      } @else if (LoadError) {
+        <mj-empty-state
+          Variant="error"
+          Title="Could not load Library"
+          [Message]="LoadError"
+          ActionText="Try Again"
+          ActionIcon="fa-solid fa-rotate-right"
+          (Action)="ReloadWorkspaceData()"
+        ></mj-empty-state>
+      } @else {
+        @switch (HubTab) {
+          @case ('overview') {
+            <div class="hub-overview-stack" data-testid="library-hub-overview">
+              <!-- Start Creating Strip -->
+              <section class="hub-section" aria-labelledby="hub-start-creating">
+                <div class="section-heading-row">
+                  <h2 id="hub-start-creating" class="section-title">Start Creating</h2>
+                  <span class="section-hint">Collaborative native editors with live MJ data blocks</span>
+                </div>
+                <div class="starter-strip">
+                  <button
+                    type="button"
+                    class="starter-card"
+                    (click)="OpenCreateBlankDialog('document')"
+                    data-testid="hub-starter-document"
+                  >
+                    <div class="starter-glyph tone-doc">
+                      <i class="fa-solid fa-file-lines"></i>
+                    </div>
+                    <div class="starter-meta">
+                      <div class="starter-name">Blank Document</div>
+                      <div class="starter-desc">Rich Markdown, Suggesting & live views</div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    class="starter-card"
+                    (click)="OpenCreateBlankDialog('spreadsheet')"
+                    data-testid="hub-starter-spreadsheet"
+                  >
+                    <div class="starter-glyph tone-sheet">
+                      <i class="fa-solid fa-table-cells"></i>
+                    </div>
+                    <div class="starter-meta">
+                      <div class="starter-name">Spreadsheet</div>
+                      <div class="starter-desc">Formulas, =MJ.QUERY() & range charts</div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    class="starter-card"
+                    (click)="OpenCreateBlankDialog('presentation')"
+                    data-testid="hub-starter-presentation"
+                  >
+                    <div class="starter-glyph tone-slide">
+                      <i class="fa-solid fa-person-chalkboard"></i>
+                    </div>
+                    <div class="starter-meta">
+                      <div class="starter-name">Presentation</div>
+                      <div class="starter-desc">16:9 structured slides & live KPIs</div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    class="starter-card"
+                    (click)="OpenCreateBlankDialog('query')"
+                    data-testid="hub-starter-query"
+                  >
+                    <div class="starter-glyph tone-query">
+                      <i class="fa-solid fa-database"></i>
+                    </div>
+                    <div class="starter-meta">
+                      <div class="starter-name">Data Query</div>
+                      <div class="starter-desc">Versioned SQL with visual Git diff</div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    class="starter-card starter-card-dashed"
+                    (click)="OpenUploadConvertDialog()"
+                    data-testid="hub-starter-upload"
+                  >
+                    <div class="starter-glyph tone-upload">
+                      <i class="fa-solid fa-cloud-arrow-up"></i>
+                    </div>
+                    <div class="starter-meta">
+                      <div class="starter-name">Upload / Convert</div>
+                      <div class="starter-desc">Import .docx, .xlsx, .csv, .pdf, media</div>
+                    </div>
+                  </button>
+                </div>
+              </section>
+
+              <!-- Continue Working Section -->
+              <section class="hub-section" aria-labelledby="hub-continue-working">
+                <div class="section-heading-row">
+                  <h2 id="hub-continue-working" class="section-title">Continue Working</h2>
+                  @if (AllItems.length > 8) {
+                    <button
+                      type="button"
+                      class="section-link-btn"
+                      (click)="SwitchHubTab('all')"
+                    >
+                      View all {{ AllItems.length }} items
+                      <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                  }
+                </div>
+                @if (ContinueWorkingItems.length === 0) {
+                  <mj-empty-state
+                    Size="compact"
+                    Icon="fa-solid fa-book-open"
+                    Title="Your Library is ready"
+                    Message="Create a blank document, spreadsheet, or presentation above, or upload an existing file."
+                  ></mj-empty-state>
+                } @else {
+                  <ng-container
+                    *ngTemplateOutlet="itemCardsTemplate; context: { $implicit: ContinueWorkingItems }"
+                  ></ng-container>
+                }
+              </section>
+
+              <!-- Collections Section -->
+              <section class="hub-section" aria-labelledby="hub-collections">
+                <div class="section-heading-row">
+                  <h2 id="hub-collections" class="section-title">Collections</h2>
+                  <div class="section-heading-actions">
+                    <button
+                      type="button"
+                      mjButton
+                      variant="flat"
+                      size="sm"
+                      (click)="OpenNewCollectionModal()"
+                    >
+                      <i class="fa-solid fa-folder-plus"></i>
+                      New Collection
+                    </button>
+                    @if (FlatCollections.length > 6) {
+                      <button
+                        type="button"
+                        class="section-link-btn"
+                        (click)="SwitchHubTab('collections')"
+                      >
+                        View all
+                        <i class="fa-solid fa-arrow-right"></i>
+                      </button>
+                    }
+                  </div>
+                </div>
+                @if (HighlightCollections.length === 0) {
+                  <mj-empty-state
+                    Size="compact"
+                    Icon="fa-solid fa-folder-open"
+                    Title="No collections yet"
+                    Message="Group related documents, sheets, slides, and interactive components into shared team collections."
+                    ActionText="Create Collection"
+                    ActionIcon="fa-solid fa-folder-plus"
+                    (Action)="OpenNewCollectionModal()"
+                  ></mj-empty-state>
+                } @else {
+                  <ng-container
+                    *ngTemplateOutlet="collectionsGridTemplate; context: { $implicit: HighlightCollections }"
+                  ></ng-container>
+                }
+              </section>
+
+              <!-- Connected Drives Section -->
+              <section class="hub-section" aria-labelledby="hub-drives">
+                <div class="section-heading-row">
+                  <div>
+                    <h2 id="hub-drives" class="section-title">Connected Drives</h2>
+                  </div>
+                  <span class="section-hint">
+                    Dynamic cloud storage · Browsed live without creating MJ: Files records
+                  </span>
+                </div>
+                @if (ConnectedDrives.length === 0) {
+                  <mj-empty-state
+                    Size="compact"
+                    Icon="fa-solid fa-cloud"
+                    Title="No connected storage accounts"
+                    Message="Configure SharePoint, Google Drive, Box, Dropbox, Azure Blob, or S3 accounts in File Storage settings to browse them live here."
+                  ></mj-empty-state>
+                } @else {
+                  <ng-container
+                    *ngTemplateOutlet="drivesGridTemplate; context: { $implicit: ConnectedDrives }"
+                  ></ng-container>
+                }
+              </section>
+            </div>
+          }
+
+          @case ('collections') {
+            <div class="hub-tab-panel">
+              <div class="section-heading-row">
+                <h2 class="section-title">All Collections</h2>
+                <button
+                  type="button"
+                  mjButton
+                  variant="primary"
+                  size="sm"
+                  (click)="OpenNewCollectionModal()"
+                >
+                  <i class="fa-solid fa-folder-plus"></i>
+                  New Collection
+                </button>
+              </div>
+              @if (FilteredCollections.length === 0) {
+                <mj-empty-state
+                  [Variant]="SearchQuery ? 'no-results' : 'empty'"
+                  Icon="fa-solid fa-folder-open"
+                  [Title]="SearchQuery ? 'No matching collections' : 'No collections yet'"
+                  Message="Create a collection to organize and share Library items."
+                  ActionText="New Collection"
+                  ActionIcon="fa-solid fa-folder-plus"
+                  (Action)="OpenNewCollectionModal()"
+                ></mj-empty-state>
+              } @else {
+                <ng-container
+                  *ngTemplateOutlet="collectionsGridTemplate; context: { $implicit: FilteredCollections }"
+                ></ng-container>
+              }
+            </div>
+          }
+
+          @case ('all') {
+            <ng-container
+              *ngTemplateOutlet="itemsBrowserBodyTemplate; context: { $implicit: FilteredItems, emptyTitle: 'No items match your filters' }"
+            ></ng-container>
+          }
+
+          @case ('shared') {
+            <ng-container
+              *ngTemplateOutlet="itemsBrowserBodyTemplate; context: { $implicit: FilteredItems, emptyTitle: 'Nothing shared with you yet' }"
+            ></ng-container>
+          }
+
+          @case ('drives') {
+            @if (SelectedDrive) {
+              <mj-library-remote-drive-pane
+                [Account]="SelectedDrive.AccountWithProvider"
+                [CurrentPrefix]="DriveFolderPrefix"
+                [CurrentUser]="EffectiveUser"
+                [EnvironmentId]="EffectiveEnvironmentId"
+                [Collections]="CollectionTree"
+                [ShowBackButton]="true"
+                [StorageClientOverride]="StorageClientOverride"
+                (PrefixChange)="DriveFolderPrefix = $event"
+                (BackRequested)="SelectedDriveId = null; DriveFolderPrefix = ''"
+                (ArtifactConverted)="OnRemoteDriveArtifactConverted($event)"
+              ></mj-library-remote-drive-pane>
+            } @else if (ConnectedDrives.length === 0) {
+              <mj-empty-state
+                Icon="fa-solid fa-cloud"
+                Title="No connected drives configured"
+                Message="Connect SharePoint, Google Drive, Box, Dropbox, S3, or Azure storage accounts to browse external files dynamically."
+              ></mj-empty-state>
+            } @else {
+              <ng-container
+                *ngTemplateOutlet="drivesGridTemplate; context: { $implicit: ConnectedDrives }"
+              ></ng-container>
+            }
+          }
+        }
+      }
+    </mj-page-body>
+  </mj-page-layout>
+} @else {
+  <!-- ======================================================================= -->
+  <!-- 3. NAVIGATOR MODE (Power-User Tree + List + Split Studio — Option A)    -->
+  <!-- ======================================================================= -->
+  <mj-page-layout data-testid="library-navigator-surface">
+    <mj-page-header
+      Title="Library"
+      Icon="fa-solid fa-book-open"
+      Subtitle="Power Navigator · Collections, items, and split studio"
+    >
+      <div actions>
+        <mj-view-toggle
+          [Options]="SurfaceToggleOptions"
+          [ActiveKey]="SurfaceMode"
+          (KeyChange)="SwitchSurfaceMode($event === 'navigator' ? 'navigator' : 'hub')"
+        ></mj-view-toggle>
+        <button
+          type="button"
+          mjButton
+          variant="secondary"
+          size="sm"
+          (click)="OpenNewCollectionModal(SelectedCollectionNode || undefined)"
+        >
+          <i class="fa-solid fa-folder-plus"></i>
+          New Collection
+        </button>
+        <button
+          type="button"
+          mjButton
+          variant="secondary"
+          size="sm"
+          (click)="OpenUploadConvertDialog()"
+        >
+          <i class="fa-solid fa-cloud-arrow-up"></i>
+          Upload
+        </button>
+        <button
+          type="button"
+          mjButton
+          variant="primary"
+          size="sm"
+          (click)="OpenCreateBlankDialog('document')"
+        >
+          <i class="fa-solid fa-plus"></i>
+          Create New
+        </button>
+      </div>
+    </mj-page-header>
+
+    <mj-page-body [Padding]="false" [Flex]="true" Direction="row">
+      <!-- Left Collapsible Navigator Tree -->
+      <aside
+        class="library-nav-rail"
+        [class.collapsed]="LeftRailCollapsed"
+        aria-label="Library navigation tree"
+        data-testid="library-navigator-rail"
+      >
+        <div class="rail-top-bar">
+          @if (!LeftRailCollapsed) {
+            <button
+              type="button"
+              class="rail-hub-return"
+              (click)="SwitchSurfaceMode('hub')"
+              title="Return to spacious Hub landing"
+            >
+              <i class="fa-solid fa-compass"></i>
+              <span>Hub Overview</span>
+            </button>
+          }
+          <button
+            type="button"
+            class="rail-collapse-btn"
+            (click)="LeftRailCollapsed = !LeftRailCollapsed"
+            [title]="LeftRailCollapsed ? 'Expand navigation tree' : 'Collapse navigation tree'"
+            aria-label="Toggle navigation tree"
+          >
+            <i
+              class="fa-solid"
+              [class.fa-angles-left]="!LeftRailCollapsed"
+              [class.fa-angles-right]="LeftRailCollapsed"
+            ></i>
+          </button>
+        </div>
+
+        @if (!LeftRailCollapsed) {
+          <div class="rail-scroll">
+            <!-- Library Views -->
+            <div class="rail-group">
+              <div class="rail-group-header">Library Views</div>
+              <button
+                type="button"
+                class="rail-item"
+                [class.active]="NavigatorSection === 'all'"
+                (click)="SelectNavigatorView('all')"
+              >
+                <i class="fa-solid fa-layer-group rail-item-icon"></i>
+                <span class="rail-item-label">All Items</span>
+                <span class="rail-badge">{{ AllItems.length }}</span>
+              </button>
+              <button
+                type="button"
+                class="rail-item"
+                [class.active]="NavigatorSection === 'shared'"
+                (click)="SelectNavigatorView('shared')"
+              >
+                <i class="fa-solid fa-user-group rail-item-icon"></i>
+                <span class="rail-item-label">Shared with Me</span>
+                @if (SharedWithMeCount > 0) {
+                  <span class="rail-badge">{{ SharedWithMeCount }}</span>
+                }
+              </button>
+              <button
+                type="button"
+                class="rail-item"
+                [class.active]="NavigatorSection === 'starred'"
+                (click)="SelectNavigatorView('starred')"
+              >
+                <i class="fa-solid fa-star rail-item-icon"></i>
+                <span class="rail-item-label">Starred</span>
+                @if (StarredCount > 0) {
+                  <span class="rail-badge">{{ StarredCount }}</span>
+                }
+              </button>
+            </div>
+
+            <!-- Collections Tree -->
+            <div class="rail-group">
+              <div class="rail-group-header-row">
+                <span class="rail-group-header">Collections</span>
+                <button
+                  type="button"
+                  class="rail-mini-btn"
+                  (click)="OpenNewCollectionModal()"
+                  title="New root collection"
+                >
+                  <i class="fa-solid fa-plus"></i>
+                </button>
+              </div>
+              @if (CollectionTree.length === 0) {
+                <div class="rail-empty-note">No collections yet</div>
+              } @else {
+                @for (rootCol of CollectionTree; track rootCol.Id) {
+                  <ng-container
+                    *ngTemplateOutlet="collectionTreeItemTemplate; context: { $implicit: rootCol, depth: 0 }"
+                  ></ng-container>
+                }
+              }
+            </div>
+
+            <!-- Connected Drives -->
+            <div class="rail-group">
+              <div class="rail-group-header">Connected Drives</div>
+              @if (ConnectedDrives.length === 0) {
+                <div class="rail-empty-note">No connected drives</div>
+              } @else {
+                @for (drive of ConnectedDrives; track drive.AccountId) {
+                  <button
+                    type="button"
+                    class="rail-item"
+                    [class.active]="NavigatorSection === 'drive' && SelectedDrive?.AccountId === drive.AccountId"
+                    (click)="OpenConnectedDrive(drive.AccountId)"
+                  >
+                    <i [class]="drive.Icon + ' rail-item-icon'"></i>
+                    <span class="rail-item-label">{{ drive.AccountName }}</span>
+                    <span class="rail-live-dot" title="Dynamic remote stream"></span>
+                  </button>
+                }
+              }
+            </div>
+          </div>
+        }
+      </aside>
+
+      <!-- Center + Right Split Content Region -->
+      <div class="navigator-main-pane">
+        @if (NavigatorSection === 'drive' && SelectedDrive) {
+          <div class="navigator-drive-host">
+            <mj-library-remote-drive-pane
+              [Account]="SelectedDrive.AccountWithProvider"
+              [CurrentPrefix]="DriveFolderPrefix"
+              [CurrentUser]="EffectiveUser"
+              [EnvironmentId]="EffectiveEnvironmentId"
+              [Collections]="CollectionTree"
+              [ShowBackButton]="false"
+              [StorageClientOverride]="StorageClientOverride"
+              (PrefixChange)="DriveFolderPrefix = $event"
+              (ArtifactConverted)="OnRemoteDriveArtifactConverted($event)"
+            ></mj-library-remote-drive-pane>
+          </div>
+        } @else if (ActiveArtifactId) {
+          <!-- Split Studio Active -->
+          <as-split direction="horizontal" unit="percent" class="library-split-container">
+            <as-split-area [size]="42" [minSize]="26">
+              <div class="navigator-browser-column">
+                <ng-container *ngTemplateOutlet="navigatorInteriorChromeTemplate"></ng-container>
+                <div class="navigator-browser-scroll">
+                  <ng-container
+                    *ngTemplateOutlet="navigatorSubfoldersAndItemsTemplate"
+                  ></ng-container>
+                </div>
+              </div>
+            </as-split-area>
+
+            <as-split-area [size]="58" [minSize]="34">
+              <div class="split-studio-pane" data-testid="library-split-studio">
+                @if (ConnectedDrives.length > 0 && ActiveItem) {
+                  <div class="split-studio-utility-bar">
+                    <span class="split-studio-badge">
+                      <i [class]="ActiveItem.Icon"></i>
+                      {{ ActiveItem.CategoryBadge }}
+                    </span>
+                    <button
+                      type="button"
+                      mjButton
+                      variant="flat"
+                      size="sm"
+                      (click)="OpenExportToDriveModal(ActiveItem)"
+                    >
+                      <i class="fa-solid fa-cloud-arrow-up"></i>
+                      Export to Drive…
+                    </button>
+                  </div>
+                }
+                <div class="split-studio-viewer-host">
+                  <mj-artifact-viewer-panel
+                    [artifactId]="ActiveArtifactId"
+                    [VersionNumber]="ActiveVersionNumber"
+                    [CurrentUser]="EffectiveUser"
+                    [EnvironmentId]="EffectiveEnvironmentId"
+                    [ViewContext]="SelectedCollectionId ? 'collection' : null"
+                    [ContextCollectionId]="SelectedCollectionId || undefined"
+                    [canEdit]="ActiveItem?.CanEdit"
+                    [canShare]="ActiveItem?.CanShare"
+                    [IsMaximized]="false"
+                    [ShowMaximizeButton]="true"
+                    [ShowCloseButton]="true"
+                    [RefreshTrigger]="RefreshViewerSubject"
+                    (Closed)="CloseSplitStudio()"
+                    (MaximizeToggled)="ToggleStudioMaximize()"
+                    (ShareRequested)="OpenShareArtifactModal($event)"
+                    (SaveToCollectionRequested)="OpenSaveToCollectionModal($event)"
+                    (OpenEntityRecord)="OnViewerOpenEntityRecord($event)"
+                    (NavigateToLink)="OnViewerNavigateToLink($event)"
+                  ></mj-artifact-viewer-panel>
+                </div>
+              </div>
+            </as-split-area>
+          </as-split>
+        } @else {
+          <!-- Full-Width Navigator Browser (No Studio Open Yet) -->
+          <div class="navigator-browser-column">
+            <ng-container *ngTemplateOutlet="navigatorInteriorChromeTemplate"></ng-container>
+            <div class="navigator-browser-scroll">
+              <ng-container *ngTemplateOutlet="navigatorSubfoldersAndItemsTemplate"></ng-container>
+            </div>
+          </div>
+        }
+      </div>
+    </mj-page-body>
+  </mj-page-layout>
+}
+
+<!-- ========================================================================= -->
+<!-- SHARED TEMPLATES                                                          -->
+<!-- ========================================================================= -->
+
+<!-- Navigator Interior Header Card -->
+<ng-template #navigatorInteriorChromeTemplate>
+  <mj-page-header-interior
+    [Title]="NavigatorHeaderTitle"
+    [Subtitle]="NavigatorHeaderSubtitle"
+  >
+    <ng-container meta>
+      @if (NavigatorSection === 'collection' && SelectedCollectionAncestors.length > 1) {
+        <div class="interior-breadcrumbs">
+          @for (anc of SelectedCollectionAncestors; track anc.Id; let isLast = $last) {
+            <button
+              type="button"
+              class="interior-crumb"
+              [class.current]="isLast"
+              (click)="OpenCollectionById(anc.Id)"
+            >
+              {{ anc.Name }}
+            </button>
+            @if (!isLast) {
+              <i class="fa-solid fa-chevron-right interior-crumb-sep"></i>
+            }
+          }
+        </div>
+      }
+      <mj-stat-badge [Count]="FilteredItems.length" Label="items"></mj-stat-badge>
+    </ng-container>
+
+    <div actions>
+      @if (NavigatorSection === 'collection' && SelectedCollectionNode; as colNode) {
+        @if (colNode.CanShare) {
+          <button
+            type="button"
+            mjButton
+            variant="secondary"
+            size="sm"
+            (click)="OpenShareCollectionModal(colNode)"
+          >
+            <i class="fa-solid fa-share-nodes"></i>
+            Share
+          </button>
+        }
+        @if (colNode.CanEdit) {
+          <button
+            type="button"
+            mjButton
+            variant="secondary"
+            size="sm"
+            (click)="OpenNewCollectionModal(colNode)"
+          >
+            <i class="fa-solid fa-folder-plus"></i>
+            Subfolder
+          </button>
+        }
+      }
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="ReloadWorkspaceData()"></mj-refresh-button>
+    </div>
+
+    <div toolbar>
+      <mj-page-search
+        AriaLabel="Filter items"
+        Placeholder="Filter items..."
+        [Value]="SearchQuery"
+        (ValueChange)="SetSearchQuery($event)"
+      ></mj-page-search>
+      <mj-filter-popover
+        Label="Filters"
+        [ActiveCount]="ActiveFilterCount"
+        (Cleared)="ResetFilters()"
+      >
+        <mj-filter-panel
+          [Fields]="FilterFields"
+          [Values]="FilterPanelValues"
+          (ValuesChange)="OnFilterValuesChange($event)"
+          (Reset)="ResetFilters()"
+        ></mj-filter-panel>
+      </mj-filter-popover>
+      <div class="toolbar-spacer"></div>
+      <mj-view-toggle
+        [Options]="ListStyleOptions"
+        [ActiveKey]="ListStyle"
+        (KeyChange)="SetListStyle($event)"
+      ></mj-view-toggle>
+    </div>
+  </mj-page-header-interior>
+</ng-template>
+
+<!-- Navigator Subfolders + Items -->
+<ng-template #navigatorSubfoldersAndItemsTemplate>
+  @if (NavigatorSection === 'collection' && SelectedCollectionNode && SelectedCollectionNode.Children.length > 0) {
+    <div class="subfolders-strip">
+      @for (sub of SelectedCollectionNode.Children; track sub.Id) {
+        <button
+          type="button"
+          class="subfolder-pill"
+          (click)="OpenCollectionById(sub.Id)"
+          (dragover)="OnCollectionDragOver(sub, $event)"
+          (dragleave)="DragOverCollectionId = null"
+          (drop)="OnCollectionDrop(sub, $event)"
+          [class.drag-over]="DragOverCollectionId === sub.Id"
+        >
+          <i [class]="sub.Icon" [style.color]="sub.Color"></i>
+          <span class="subfolder-name">{{ sub.Name }}</span>
+          <span class="subfolder-count">{{ sub.TotalItemCount }}</span>
+        </button>
+      }
+    </div>
+  }
+  <ng-container
+    *ngTemplateOutlet="itemsBrowserBodyTemplate; context: { $implicit: FilteredItems, emptyTitle: 'No items in this view' }"
+  ></ng-container>
+</ng-template>
+
+<!-- Recursive Collection Tree Node -->
+<ng-template #collectionTreeItemTemplate let-node let-depth="depth">
+  <div
+    class="rail-tree-row"
+    [style.paddingLeft.px]="10 + depth * 14"
+    [class.active]="NavigatorSection === 'collection' && SelectedCollectionNode?.Id === node.Id"
+    [class.drag-over]="DragOverCollectionId === node.Id"
+    (click)="OpenCollectionById(node.Id)"
+    (dragover)="OnCollectionDragOver(node, $event)"
+    (dragleave)="DragOverCollectionId = null"
+    (drop)="OnCollectionDrop(node, $event)"
+  >
+    @if (node.Children.length > 0) {
+      <button
+        type="button"
+        class="tree-chevron"
+        (click)="ToggleCollectionExpand(node, $event)"
+        aria-label="Toggle subcollections"
+      >
+        <i
+          class="fa-solid"
+          [class.fa-chevron-down]="IsCollectionExpanded(node.Id)"
+          [class.fa-chevron-right]="!IsCollectionExpanded(node.Id)"
+        ></i>
+      </button>
+    } @else {
+      <span class="tree-chevron-spacer"></span>
+    }
+
+    <i [class]="node.Icon + ' rail-folder-icon'" [style.color]="node.Color"></i>
+    <span class="rail-item-label" [title]="node.Name">{{ node.Name }}</span>
+
+    <div class="rail-row-hover-actions">
+      @if (node.CanEdit) {
+        <button
+          type="button"
+          class="rail-inline-action"
+          title="New subcollection"
+          (click)="OpenNewCollectionModal(node, $event)"
+        >
+          <i class="fa-solid fa-plus"></i>
+        </button>
+        <button
+          type="button"
+          class="rail-inline-action"
+          title="Rename / edit collection"
+          (click)="OpenEditCollectionModal(node, $event)"
+        >
+          <i class="fa-solid fa-pen"></i>
+        </button>
+      }
+      @if (node.CanShare) {
+        <button
+          type="button"
+          class="rail-inline-action"
+          title="Share collection"
+          (click)="OpenShareCollectionModal(node, $event)"
+        >
+          <i class="fa-solid fa-share-nodes"></i>
+        </button>
+      }
+      @if (node.CanDelete) {
+        <button
+          type="button"
+          class="rail-inline-action danger"
+          title="Delete collection"
+          (click)="DeleteCollection(node, $event)"
+        >
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      }
+    </div>
+    <span class="rail-badge">{{ node.TotalItemCount }}</span>
+  </div>
+
+  @if (node.Children.length > 0 && IsCollectionExpanded(node.Id)) {
+    @for (child of node.Children; track child.Id) {
+      <ng-container
+        *ngTemplateOutlet="collectionTreeItemTemplate; context: { $implicit: child, depth: depth + 1 }"
+      ></ng-container>
+    }
+  }
+</ng-template>
+
+<!-- Items Browser Body (Cards or List) -->
+<ng-template #itemsBrowserBodyTemplate let-items let-emptyTitle="emptyTitle">
+  @if (items.length === 0) {
+    <mj-empty-state
+      [Variant]="SearchQuery || ActiveFilterCount > 0 ? 'no-results' : 'empty'"
+      Icon="fa-solid fa-layer-group"
+      [Title]="emptyTitle"
+      [Message]="SearchQuery || ActiveFilterCount > 0 ? 'Try adjusting your search or clearing active filters.' : 'Create a new document, spreadsheet, presentation, or upload a file to get started.'"
+      ActionText="Create New"
+      ActionIcon="fa-solid fa-plus"
+      (Action)="OpenCreateBlankDialog('document')"
+    ></mj-empty-state>
+  } @else if (ListStyle === 'cards') {
+    <ng-container *ngTemplateOutlet="itemCardsTemplate; context: { $implicit: items }"></ng-container>
+  } @else {
+    <ng-container *ngTemplateOutlet="itemTableTemplate; context: { $implicit: items }"></ng-container>
+  }
+</ng-template>
+
+<!-- Rich Miniature Preview Item Cards Grid -->
+<ng-template #itemCardsTemplate let-items>
+  <div class="library-cards-grid">
+    @for (item of items; track item.Id) {
+      <article
+        class="library-item-card"
+        [class.selected]="ActiveItem?.Id === item.Id"
+        draggable="true"
+        (dragstart)="OnItemDragStart(item, $event)"
+        (dragend)="OnItemDragEnd()"
+        (click)="OpenArtifactStudio(item.Id)"
+        [attr.data-testid]="'library-item-card-' + item.Id"
+      >
+        <!-- Visual Miniature Preview Header -->
+        <div class="card-mini-preview" [attr.data-cat]="item.Category">
+          @switch (item.Category) {
+            @case ('documents') {
+              <div class="mini-doc-sheet" aria-hidden="true">
+                <div class="mini-doc-h1"></div>
+                <div class="mini-doc-line w-90"></div>
+                <div class="mini-doc-line w-75"></div>
+                <div class="mini-doc-live-pill"></div>
+              </div>
+            }
+            @case ('spreadsheets') {
+              <div class="mini-sheet-grid" aria-hidden="true">
+                <div class="mini-sheet-head"></div>
+                <div class="mini-sheet-cells">
+                  <span></span><span></span><span></span>
+                  <span></span><span></span><span></span>
+                </div>
+              </div>
+            }
+            @case ('presentations') {
+              <div class="mini-slide-stage" aria-hidden="true">
+                <div class="mini-slide-bar"></div>
+                <div class="mini-slide-cols">
+                  <div class="mini-slide-col"></div>
+                  <div class="mini-slide-col accent"></div>
+                </div>
+              </div>
+            }
+            @default {
+              <div class="mini-generic-glyph" aria-hidden="true">
+                <i [class]="item.Icon"></i>
+              </div>
+            }
+          }
+
+          <span class="preview-badge" [attr.data-cat]="item.Category">
+            {{ item.CategoryBadge }}
+          </span>
+
+          <button
+            type="button"
+            class="card-star-btn"
+            [class.starred]="item.IsStarred"
+            (click)="ToggleStar(item, $event)"
+            [title]="item.IsStarred ? 'Remove from Starred' : 'Add to Starred'"
+            aria-label="Toggle star"
+          >
+            <i class="fa-star" [class.fa-solid]="item.IsStarred" [class.fa-regular]="!item.IsStarred"></i>
+          </button>
+        </div>
+
+        <!-- Card Body -->
+        <div class="card-body">
+          <div class="card-title-row">
+            <h3 class="card-title" [title]="item.Name">{{ item.Name }}</h3>
+            <span class="version-chip">v{{ item.LatestVersionNumber }}</span>
+          </div>
+          @if (item.Description) {
+            <p class="card-desc">{{ item.Description }}</p>
+          } @else {
+            <p class="card-desc muted">{{ item.TypeName }}</p>
+          }
+        </div>
+
+        <!-- Card Footer -->
+        <div class="card-footer">
+          <span class="card-timestamp">
+            {{ FormatRelativeTime(item.UpdatedAt) }}
+            @if (item.IsSharedWithMe) {
+              · Shared
+            }
+          </span>
+          <div class="card-footer-actions">
+            @if (SurfaceMode === 'hub') {
+              <button
+                type="button"
+                class="card-mini-btn"
+                title="Open in Power Navigator Split View"
+                (click)="$event.stopPropagation(); OpenArtifactStudio(item.Id, { forceNavigatorSplit: true })"
+              >
+                <i class="fa-solid fa-table-columns"></i>
+                <span>Split</span>
+              </button>
+            }
+            @if (item.CanShare) {
+              <button
+                type="button"
+                class="card-mini-btn"
+                title="Share"
+                (click)="OpenShareArtifactModal(item, $event)"
+              >
+                <i class="fa-solid fa-share-nodes"></i>
+              </button>
+            }
+            @if (NavigatorSection === 'collection' && SelectedCollectionNode?.CanEdit) {
+              <button
+                type="button"
+                class="card-mini-btn"
+                title="Remove from this collection"
+                (click)="RemoveItemFromCurrentCollection(item, $event)"
+              >
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            }
+          </div>
+        </div>
+      </article>
+    }
+  </div>
+</ng-template>
+
+<!-- Compact Table View -->
+<ng-template #itemTableTemplate let-items>
+  <div class="library-table-wrap">
+    <table class="library-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Collections</th>
+          <th>Version</th>
+          <th>Updated</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (item of items; track item.Id) {
+          <tr
+            class="library-table-row"
+            [class.selected]="ActiveItem?.Id === item.Id"
+            draggable="true"
+            (dragstart)="OnItemDragStart(item, $event)"
+            (dragend)="OnItemDragEnd()"
+            (click)="OpenArtifactStudio(item.Id)"
+          >
+            <td>
+              <div class="row-name-cell">
+                <button
+                  type="button"
+                  class="row-star-btn"
+                  [class.starred]="item.IsStarred"
+                  (click)="ToggleStar(item, $event)"
+                  aria-label="Toggle star"
+                >
+                  <i class="fa-star" [class.fa-solid]="item.IsStarred" [class.fa-regular]="!item.IsStarred"></i>
+                </button>
+                <i [class]="item.Icon + ' row-type-icon'"></i>
+                <div class="row-title-stack">
+                  <span class="row-title">{{ item.Name }}</span>
+                  @if (item.Description) {
+                    <span class="row-sub">{{ item.Description }}</span>
+                  }
+                </div>
+              </div>
+            </td>
+            <td>
+              <span class="category-pill" [attr.data-cat]="item.Category">
+                {{ item.CategoryBadge }}
+              </span>
+            </td>
+            <td>
+              <div class="row-collections">
+                @for (cn of item.CollectionNames.slice(0, 2); track cn) {
+                  <span class="collection-tag">{{ cn }}</span>
+                }
+                @if (item.CollectionNames.length > 2) {
+                  <span class="collection-tag">+{{ item.CollectionNames.length - 2 }}</span>
+                }
+              </div>
+            </td>
+            <td><span class="version-chip">v{{ item.LatestVersionNumber }}</span></td>
+            <td class="row-muted">{{ FormatRelativeTime(item.UpdatedAt) }}</td>
+            <td class="row-actions">
+              <button
+                type="button"
+                class="card-mini-btn"
+                title="Open in Split View"
+                (click)="$event.stopPropagation(); OpenArtifactStudio(item.Id, { forceNavigatorSplit: true })"
+              >
+                <i class="fa-solid fa-table-columns"></i>
+              </button>
+              @if (item.CanShare) {
+                <button
+                  type="button"
+                  class="card-mini-btn"
+                  title="Share"
+                  (click)="OpenShareArtifactModal(item, $event)"
+                >
+                  <i class="fa-solid fa-share-nodes"></i>
+                </button>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</ng-template>
+
+<!-- Collections Grid -->
+<ng-template #collectionsGridTemplate let-collections>
+  <div class="collections-grid">
+    @for (col of collections; track col.Id) {
+      <div
+        class="collection-card"
+        (click)="OpenCollectionById(col.Id)"
+        [attr.data-testid]="'library-collection-card-' + col.Id"
+      >
+        <div class="collection-card-icon" [style.color]="col.Color">
+          <i [class]="col.Icon"></i>
+        </div>
+        <div class="collection-card-body">
+          <div class="collection-card-title">{{ col.Name }}</div>
+          <div class="collection-card-desc">
+            {{ col.Description || 'Shared workspace collection' }}
+          </div>
+          <div class="collection-card-meta">
+            <span>{{ col.TotalItemCount }} {{ col.TotalItemCount === 1 ? 'item' : 'items' }}</span>
+            @if (col.Children.length > 0) {
+              <span>· {{ col.Children.length }} subfolders</span>
+            }
+          </div>
+        </div>
+        <div class="collection-card-actions">
+          @if (col.CanShare) {
+            <button
+              type="button"
+              class="card-mini-btn"
+              title="Share collection"
+              (click)="OpenShareCollectionModal(col, $event)"
+            >
+              <i class="fa-solid fa-share-nodes"></i>
+            </button>
+          }
+          @if (col.CanEdit) {
+            <button
+              type="button"
+              class="card-mini-btn"
+              title="Edit collection"
+              (click)="OpenEditCollectionModal(col, $event)"
+            >
+              <i class="fa-solid fa-pen"></i>
+            </button>
+          }
+        </div>
+      </div>
+    }
+  </div>
+</ng-template>
+
+<!-- Connected Drives Grid -->
+<ng-template #drivesGridTemplate let-drives>
+  <div class="drives-grid">
+    @for (drive of drives; track drive.AccountId) {
+      <button
+        type="button"
+        class="drive-card"
+        (click)="OpenConnectedDrive(drive.AccountId)"
+        [attr.data-testid]="'library-drive-card-' + drive.AccountId"
+      >
+        <div class="drive-card-icon">
+          <i [class]="drive.Icon"></i>
+        </div>
+        <div class="drive-card-body">
+          <div class="drive-card-top">
+            <span class="drive-card-name">{{ drive.AccountName }}</span>
+            <span class="drive-live-badge">Live Remote</span>
+          </div>
+          <div class="drive-card-provider">{{ drive.ProviderName }}</div>
+          <div class="drive-card-desc">{{ drive.Description }}</div>
+        </div>
+        <i class="fa-solid fa-arrow-right drive-card-arrow" aria-hidden="true"></i>
+      </button>
+    }
+  </div>
+</ng-template>
+
+<!-- ========================================================================= -->
+<!-- MODALS                                                                    -->
+<!-- ========================================================================= -->
+<mj-library-create-dialog
+  [IsOpen]="IsCreateDialogOpen"
+  [InitialTab]="CreateDialogTab"
+  [InitialStarterKind]="CreateDialogStarter"
+  [DefaultCollectionId]="SelectedCollectionId"
+  [Collections]="CollectionTree"
+  [EnvironmentId]="EffectiveEnvironmentId"
+  [CurrentUser]="EffectiveUser"
+  (Created)="OnArtifactCreated($event)"
+  (Cancelled)="IsCreateDialogOpen = false"
+></mj-library-create-dialog>
+
+<mj-library-export-drive-dialog
+  [IsOpen]="IsExportDriveDialogOpen"
+  [Item]="ExportingItem"
+  [Drives]="ConnectedDrives"
+  [CurrentUser]="EffectiveUser"
+  (Published)="IsExportDriveDialogOpen = false"
+  (Cancelled)="IsExportDriveDialogOpen = false"
+></mj-library-export-drive-dialog>
+
+<mj-collection-form-modal
+  [isOpen]="IsCollectionFormOpen"
+  [collection]="EditingCollectionEntity"
+  [parentCollection]="ParentCollectionForNew"
+  [environmentId]="EffectiveEnvironmentId"
+  [currentUser]="EffectiveUser"
+  (saved)="OnCollectionSaved($event)"
+  (cancelled)="IsCollectionFormOpen = false"
+></mj-collection-form-modal>
+
+<mj-collection-share-modal
+  [isOpen]="IsCollectionShareOpen"
+  [collection]="SharingCollectionEntity"
+  [currentUser]="EffectiveUser"
+  [currentUserPermissions]="SharingCollectionPerm"
+  (saved)="IsCollectionShareOpen = false; ReloadWorkspaceData()"
+  (cancelled)="IsCollectionShareOpen = false"
+></mj-collection-share-modal>
+
+<mj-artifact-share-modal
+  [isOpen]="IsArtifactShareOpen"
+  [artifact]="SharingArtifactEntity"
+  [currentUser]="EffectiveUser"
+  (saved)="IsArtifactShareOpen = false; ReloadWorkspaceData()"
+  (cancelled)="IsArtifactShareOpen = false"
+></mj-artifact-share-modal>
+
+<mj-artifact-collection-picker-modal
+  [isOpen]="IsSaveToCollectionOpen"
+  [artifactVersionId]="SaveToCollectionArtifact?.LatestVersionId ?? null"
+  [artifactName]="SaveToCollectionArtifact?.Name ?? ''"
+  [artifactVersionNumber]="SaveToCollectionArtifact?.LatestVersionNumber ?? null"
+  [excludeCollectionIds]="SaveToCollectionExcludedIds"
+  [environmentId]="EffectiveEnvironmentId"
+  [currentUser]="EffectiveUser"
+  (completed)="IsSaveToCollectionOpen = false; ReloadWorkspaceData()"
+  (cancelled)="IsSaveToCollectionOpen = false"
+></mj-artifact-collection-picker-modal>
