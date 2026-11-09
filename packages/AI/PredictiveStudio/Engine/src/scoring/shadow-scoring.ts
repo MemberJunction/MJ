@@ -580,7 +580,7 @@ export class MLModelChallengerScoreRunner implements IChallengerScoreRunner {
     const loaded = await this.loadChallengerModel(challengerModelId, contextUser, activeProvider);
     this.throwIfAborted(signal);
 
-    const featureRow = this.projectFrozenRow(envelope.FrozenFeatures, loaded.featureSchema);
+    const featureRow = this.projectFrozenRow(envelope.FrozenFeatures, loaded.featureSchema, challengerModelId);
     const req: PredictRequest = {
       artifact_b64: loaded.artifactB64,
       fitted_preprocessing: loaded.fittedPreprocessing,
@@ -689,6 +689,7 @@ export class MLModelChallengerScoreRunner implements IChallengerScoreRunner {
   private projectFrozenRow(
     frozenFeatures: Readonly<Record<string, unknown>>,
     featureSchema: FeatureSchemaEntry[],
+    challengerModelId: string,
   ): Record<string, string | number | boolean | null> {
     const row: Record<string, string | number | boolean | null> = {};
     if (featureSchema.length > 0) {
@@ -701,8 +702,10 @@ export class MLModelChallengerScoreRunner implements IChallengerScoreRunner {
         }
       }
       if (missing.length > 0) {
+        // The challenger was trained on columns the champion's model does not compute, so it cannot be scored on
+        // the champion's row. The audit sink records this as the challenger's SHADOW_ERROR.
         throw new Error(
-          `SHADOW_ERROR: Frozen feature row lacks features required by challenger schema: ${missing.join(', ')}`,
+          `Challenger model '${challengerModelId}' schema has feature column(s) not in the champion's frozen feature row: ${missing.join(', ')}`,
         );
       }
       return row;
@@ -764,9 +767,7 @@ export class FeatureValueShadowAuditSink implements IShadowScoreAuditSink {
     fv.ValueText = record.TextValue ?? null;
     fv.Confidence = record.Confidence ?? null;
     fv.Reasoning = record.ErrorMessage
-      ? record.TimedOut
-        ? `SHADOW_TIMEOUT: ${record.ErrorMessage}`
-        : `SHADOW_ERROR: ${record.ErrorMessage}`
+      ? shadowFailureReason(record.ErrorMessage, record.TimedOut === true)
       : (record.Reasoning ?? null);
     fv.ComputedAt = record.RecordedAt ? new Date(record.RecordedAt) : new Date();
 
@@ -777,6 +778,15 @@ export class FeatureValueShadowAuditSink implements IShadowScoreAuditSink {
       );
     }
   }
+}
+
+/**
+ * The stored reason for a failed challenger: its message under exactly one `SHADOW_TIMEOUT:` / `SHADOW_ERROR:`
+ * prefix (timeout messages already carry theirs).
+ */
+function shadowFailureReason(message: string, timedOut: boolean): string {
+  const prefix = timedOut ? 'SHADOW_TIMEOUT:' : 'SHADOW_ERROR:';
+  return message.startsWith(prefix) ? message : `${prefix} ${message}`;
 }
 
 function parseJsonOrDefault<T>(raw: string | null | undefined, fallback: T): T {

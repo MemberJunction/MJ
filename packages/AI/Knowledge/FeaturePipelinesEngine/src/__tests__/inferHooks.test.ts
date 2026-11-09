@@ -392,7 +392,8 @@ describe('InferProcessor Lifecycle Hooks (P1-6)', () => {
             expect(observedParams?.cancellationToken?.aborted).toBe(true);
             expect(observedAbortOnToken).toBe(true);
             expect(createdChallengerRows).toHaveLength(1);
-            expect(createdChallengerRows[0].Reasoning).toContain('SHADOW_TIMEOUT');
+            // One prefix, not 'SHADOW_TIMEOUT: SHADOW_TIMEOUT: …' (M4)
+            expect(createdChallengerRows[0].Reasoning).toBe('SHADOW_TIMEOUT: Challenger prompt exceeded MaxLatencyMs (25ms)');
         } finally {
             AIEngine.Instance.Config = origConfig;
             if (origPromptsDescriptor) {

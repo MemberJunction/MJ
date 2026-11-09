@@ -668,7 +668,7 @@ describe('ShadowScoringCoordinator', () => {
       expect(capturedPredictArtifacts[2]).toBe(Buffer.from('bytes-v2').toString('base64'));
     });
 
-    it('throws SHADOW_ERROR with missing feature names when challenger schema features are missing from frozen row (M4)', async () => {
+    it('names the challenger schema columns the champion row lacks, and records the challenger as errored with one SHADOW_ERROR prefix (M4)', async () => {
       const artifacts = new InMemoryArtifactLoader();
       artifacts.set('file-1', new TextEncoder().encode('artifact-data'));
 
@@ -705,8 +705,54 @@ describe('ShadowScoringCoordinator', () => {
       };
 
       await expect(runner.RunChallenger(envelope)).rejects.toThrow(
-        /SHADOW_ERROR: Frozen feature row lacks features required by challenger schema: credit_score/,
+        "Challenger model 'Model-Schema-Strict' schema has feature column(s) not in the champion's frozen feature row: credit_score",
       );
+
+      // Recorded as an errored challenger row whose reason carries one SHADOW_ERROR prefix and the column names.
+      const createdEntities: SavedFeatureValueDouble[] = [];
+      const fakeProvider = {
+        GetEntityObject: async <T>(): Promise<T> => {
+          const entity = new SavedFeatureValueDouble();
+          createdEntities.push(entity);
+          return entity as T;
+        },
+      } as unknown as IMetadataProvider;
+      await new ShadowScoringCoordinator({ ChallengerRunner: runner, AuditSink: new FeatureValueShadowAuditSink() }).ExecuteChallengerEnvelope(
+        { ...envelope, EntityID: 'Ent-Members' },
+        { ID: 'user-1' } as UserInfo,
+        fakeProvider,
+      );
+      expect(createdEntities.map((e) => e.Reasoning)).toEqual([
+        "SHADOW_ERROR: Challenger model 'Model-Schema-Strict' schema has feature column(s) not in the champion's frozen feature row: credit_score",
+      ]);
+      expect(createdEntities[0].ValueNumeric).toBeNull();
+    });
+
+    it('stores a timed-out challenger reason with one SHADOW_TIMEOUT prefix (M4)', async () => {
+      const createdEntities: SavedFeatureValueDouble[] = [];
+      const fakeProvider = {
+        GetEntityObject: async <T>(): Promise<T> => {
+          const entity = new SavedFeatureValueDouble();
+          createdEntities.push(entity);
+          return entity as T;
+        },
+      } as unknown as IMetadataProvider;
+      const coordinator = new ShadowScoringCoordinator({
+        ChallengerRunner: { RunChallenger: async () => new Promise<ChallengerScoreOutput>((resolve) => setTimeout(() => resolve({ Score: 1 }), 60)) },
+        AuditSink: new FeatureValueShadowAuditSink(),
+      });
+      await coordinator.ExecuteChallengerEnvelope(
+        {
+          EntityID: 'Ent-Members',
+          RecordID: 'rec-slow',
+          ChallengerConfig: { ...baseConfig, MaxLatencyMs: 10 },
+          FrozenFeatures: {},
+          DispatchedAt: '2026-11-02T12:00:00.000Z',
+        },
+        { ID: 'user-1' } as UserInfo,
+        fakeProvider,
+      );
+      expect(createdEntities.map((e) => e.Reasoning)).toEqual(['SHADOW_TIMEOUT: Challenger exceeded MaxLatencyMs (10ms)']);
     });
   });
 });

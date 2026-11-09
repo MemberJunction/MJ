@@ -1723,7 +1723,9 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
                     fv.ValueDate = null;
                     fv.ValueJSON = null;
                     fv.Confidence = null;
-                    fv.Reasoning = timedOut ? `SHADOW_TIMEOUT: ${errorMessage}` : `SHADOW_ERROR: ${errorMessage}`;
+                    // One prefix: a timeout's message already starts with SHADOW_TIMEOUT:
+                    const prefix = timedOut ? 'SHADOW_TIMEOUT:' : 'SHADOW_ERROR:';
+                    fv.Reasoning = errorMessage.startsWith(prefix) ? errorMessage : `${prefix} ${errorMessage}`;
                 } else {
                     const resolved = ResolveMappingRef(output.Ref, { $: rawAnswer });
                     const constraintType = OutputTargets.HasWriteTarget(output) ? undefined : output.Constraint?.Type;
