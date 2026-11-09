@@ -189,18 +189,24 @@ let warningFilter: ((w: Error & { code?: string }) => void) | null = null;
 
 /**
  * Replaces the default process `warning` listeners with one that drops warnings whose `code` is in `codes` and writes
- * every other warning as one line in Node's format; it writes nothing when Node runs with `--no-warnings` or `NODE_NO_WARNINGS=1`.
+ * every other warning as one line in Node's format; it writes nothing when Node runs with `--no-warnings` (also in `NODE_OPTIONS`) or `NODE_NO_WARNINGS=1`.
  * Installs once; later calls do nothing while the listener is attached.
  */
 export function FilterProcessWarnings(codes: readonly string[], sink: (line: string) => void = (s) => { process.stderr.write(s); }): void {
     if (warningFilter && process.listeners('warning').includes(warningFilter)) return;
     process.removeAllListeners('warning');
     warningFilter = (w) => {
-        if (process.execArgv.includes('--no-warnings') || process.env.NODE_NO_WARNINGS === '1') return;
+        if (warningsSilenced()) return;
         if (w.code && codes.includes(w.code)) return;
         sink(`(node:${process.pid}) ${w.code ? `[${w.code}] ` : ''}${w.name}: ${w.message}\n`);
     };
     process.on('warning', warningFilter);
+}
+
+/** True when Node runs with `--no-warnings` (on the command line or in `NODE_OPTIONS`) or with `NODE_NO_WARNINGS=1`. */
+function warningsSilenced(): boolean {
+    const options = process.env.NODE_OPTIONS?.split(/\s+/) ?? [];
+    return process.execArgv.includes('--no-warnings') || options.includes('--no-warnings') || process.env.NODE_NO_WARNINGS === '1';
 }
 
 /** SDK options for one session. `tools` restricts the built-ins; only run_test skips `canUseTool` (spike §2, D36). */
