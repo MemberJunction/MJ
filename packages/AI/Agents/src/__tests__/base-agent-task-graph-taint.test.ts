@@ -68,7 +68,7 @@ vi.mock('../AgentRunner', () => ({
     },
 }));
 
-import { BaseAgent } from '../base-agent';
+import { BaseAgent, CircuitBreakerActionResult, type ActionResultSummary } from '../base-agent';
 
 const CALLER = new UserInfo(undefined, { ID: 'aaaaaaaa-0000-4000-8000-0000000000c7', Name: 'Caller', Email: 'caller@test.mj', UserRoles: [] });
 const SEND_EMAIL = { ID: 'aaaaaaaa-0000-4000-8000-0000000000e1', Name: 'Send Email', Params: { Items: [] }, Config_Object: { disallowWhenTainted: true } } as unknown as MJActionEntityExtended;
@@ -90,6 +90,10 @@ function paramsWith(extra: Partial<ExecuteAgentParams> = {}): ExecuteAgentParams
 class TaintableAgent extends BaseAgent {
     public ReadUntrusted(): void {
         this.recordTaintedSource(1, 'Web Page Fetch', 'Untrusted');
+    }
+
+    public FailureDirective(summary: ActionResultSummary): string {
+        return this.formatActionFailureDirective(summary);
     }
 
     public async CallSubAgent(params: ExecuteAgentParams): Promise<void> {
@@ -165,6 +169,21 @@ describe('BaseAgent egress gate on taint gained mid-run (M1)', () => {
         agent.ReadUntrusted();
         expect((await send(agent, paramsWith({ SecurityEnvelope: CLEAN_NODE }), SEARCH)).Success).toBe(true);
         expect(h.dispatched).toHaveLength(1);
+    });
+
+    it('locks a refused action out for the run, so the model is told to stop rather than retry (T9)', async () => {
+        const agent = new TaintableAgent();
+        agent.ReadUntrusted();
+        const params = paramsWith({ SecurityEnvelope: CLEAN_NODE });
+        const first = await agent.ExecuteSingleAction(params, EMAIL, SEND_EMAIL, CALLER);
+        expect(first.ResultCode).toBe(TAINTED_EGRESS_BLOCKED);
+        expect(agent.FailureDirective({ actionName: EMAIL.name, success: false, params: [], resultCode: first.ResultCode, message: first.Message }))
+            .toContain('DO NOT call');
+
+        const retry = await agent.ExecuteSingleAction(params, { ...EMAIL, params: { To: 'someone-else@example.com' } }, SEND_EMAIL, CALLER);
+        expect(retry).toBeInstanceOf(CircuitBreakerActionResult);
+        expect((retry as CircuitBreakerActionResult).Reason).toBe('fatal');
+        expect(h.dispatched).toHaveLength(0);
     });
 
     it('leaves a run outside any task graph to its own policies', async () => {

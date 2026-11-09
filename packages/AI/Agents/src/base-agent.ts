@@ -13700,9 +13700,14 @@ The context is now within limits. Please retry your request with the recovered c
             return policyBlocked;
         }
 
-        // A run under a task-graph envelope refuses egress once tainted, whenever the taint arrived.
+        // A run under a task-graph envelope refuses egress once tainted, whenever the taint arrived. The run
+        // stays tainted and no argument changes the refusal, so the action is locked out for the run, as a
+        // refused binding is: the model is told to stop calling it, not to adjust its arguments and retry.
         const taintBlocked = this.checkTaintedEgress(params, action, actionEntity, contextUser ?? params.contextUser);
         if (taintBlocked) {
+            if (!skipBreaker) {
+                this.lockOutAction(action, actionEntity);
+            }
             return taintBlocked;
         }
 
