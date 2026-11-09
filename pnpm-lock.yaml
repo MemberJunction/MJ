@@ -13471,6 +13471,9 @@ importers:
       diff:
         specifier: 8.0.3
         version: 8.0.3
+      docx:
+        specifier: ^9.5.1
+        version: 9.6.1
       dompurify:
         specifier: ^3.3.0
         version: 3.3.1
@@ -13507,6 +13510,9 @@ importers:
       leaflet:
         specifier: ^1.9.4
         version: 1.9.4
+      lib0:
+        specifier: ^0.2.99
+        version: 0.2.119
       livekit-client:
         specifier: ^2.7.4
         version: 2.19.2(@types/dom-mediacapture-record@1.0.22)
@@ -13573,6 +13579,9 @@ importers:
       tslib:
         specifier: ^2.8.1
         version: 2.8.1
+      turndown:
+        specifier: ^7.2.2
+        version: 7.2.2
       umap-js:
         specifier: ^1.4.0
         version: 1.4.0
@@ -13582,6 +13591,15 @@ importers:
       validator:
         specifier: ^13.15.26
         version: 13.15.26
+      xlsx:
+        specifier: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
+        version: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
+      y-protocols:
+        specifier: ^1.0.6
+        version: 1.0.7(yjs@13.6.33)
+      yjs:
+        specifier: ^13.6.24
+        version: 13.6.33
       zod:
         specifier: ^3.25.0
         version: 3.25.76
@@ -27875,6 +27893,7 @@ packages:
   image-size@0.5.5:
     resolution: {integrity: sha512-6TDAlDPZxUFCv+fuOkIoXT/V/f3Qbq8e37p+YOiYrUv3v9cc3/6x78VdfPgFVaB9dZYeLUfKgHRebpkm/oP2VQ==}
     engines: {node: '>=0.10.0'}
+    deprecated: Please migrate to image-size@2.x
     hasBin: true
 
   image-size@1.2.1:
