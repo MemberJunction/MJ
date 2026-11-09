@@ -21,7 +21,8 @@ import {
   inject,
 } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { CompositeKey, Metadata, UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
+import { CompositeKey, UserInfo } from '@memberjunction/core';
 import {
   ArtifactMetadataEngine,
   ConversationEngine,
@@ -63,6 +64,9 @@ import {
 import type {
   ChromeExtensionNamespace,
   ChromeWindowCreateResult,
+  SidePanelWindowGlobals,
+} from './chrome-extension-ambient';
+import type {
   ContextualQuickActionItem,
   DiscoveredAuthProviderCatalogEntry,
   InteractiveElementRoleFilter,
@@ -70,7 +74,6 @@ import type {
   LivePageContextDossier,
   MjHostSessionExtractResult,
   PersistedAuthSession,
-  SidePanelWindowGlobals,
   SyncedConversationMessage,
 } from './chrome-extension-types';
 
@@ -295,7 +298,7 @@ const DEFAULT_OAUTH_CONFIG = {
       [attr.data-last-oauth-url]="LastOAuthUrl"
       [attr.data-last-oauth-provider]="LastOAuthProvider"
       [attr.data-app-context-app]="AgentAppContext.App.Name"
-      [attr.data-app-context-resource-type]="AgentAppContext.ActiveNavItem?.ResourceType ?? null"
+      [attr.data-app-context-resource-type]="AgentAppContext.ActiveNavItem ? AgentAppContext.ActiveNavItem.ResourceType : null"
       [attr.data-app-context-tools]="AgentAppContext.Capabilities?.Tools?.length ?? 0"
       [attr.data-app-context-has-instructions]="AgentAppContext.AdditionalContext?.['SpecialAgentInstructions'] ? 'true' : 'false'"
     >
@@ -408,13 +411,13 @@ const DEFAULT_OAUTH_CONFIG = {
 
         @if (DiscoveredProviders.length > 0) {
           <div id="mj-provider-catalog-list" class="mj-catalog-list">
-            @for (prov of DiscoveredProviders; track prov.name) {
+            @for (prov of DiscoveredProviders; track prov.Name) {
               <button
                 type="button"
                 class="mj-btn mj-btn-primary"
                 (click)="OnLaunchCatalogProvider(prov)"
               >
-                🔐 Sign In with {{ prov.name }} ({{ prov.type }})
+                🔐 Sign In with {{ prov.Name }} ({{ prov.Type }})
               </button>
             }
           </div>
@@ -2021,13 +2024,13 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
     }
     const claims = this.decodeJwtClaims(token);
     await this.applyAuthenticatedSession({
-      provider: 'Bearer Token',
-      idToken: token,
-      userName: claims.name || claims.preferred_username || 'Authenticated User',
-      email: claims.email || '',
-      graphQLUrl: url,
-      explorerOrigin: this.ExplorerOrigin,
-      activeConversationId: this.ActiveConversationId ?? undefined,
+      Provider: 'Bearer Token',
+      IdToken: token,
+      UserName: claims.name || claims.preferred_username || 'Authenticated User',
+      Email: claims.email || '',
+      GraphQLUrl: url,
+      ExplorerOrigin: this.ExplorerOrigin,
+      ActiveConversationId: this.ActiveConversationId ?? undefined,
     });
   }
 
@@ -2113,8 +2116,30 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
       try {
         const resp = await fetch(`${base}/auth/providers`);
         if (resp.ok) {
-          const body = (await resp.json()) as { providers?: DiscoveredAuthProviderCatalogEntry[] };
-          const list = Array.isArray(body.providers) ? body.providers : [];
+          interface RawAuthCatalogItem {
+            name?: string;
+            type?: string;
+            clientId?: string;
+            domain?: string;
+            issuer?: string;
+            scopes?: string[];
+            clientConfiguration?: { authority?: string };
+          }
+          const body = (await resp.json()) as { providers?: RawAuthCatalogItem[] };
+          const rawList = Array.isArray(body.providers) ? body.providers : [];
+          const list: DiscoveredAuthProviderCatalogEntry[] = rawList
+            .filter((item): item is RawAuthCatalogItem & { name: string; type: string } =>
+              Boolean(item?.name && item?.type)
+            )
+            .map((item) => ({
+              Name: item.name,
+              Type: item.type,
+              ClientId: item.clientId,
+              Domain: item.domain,
+              Issuer: item.issuer,
+              Scopes: item.scopes,
+              Authority: item.clientConfiguration?.authority,
+            }));
           if (list.length > 0) {
             this.DiscoveredProviders = list;
             this.showToast(`Discovered ${list.length} auth provider(s) from ${base}/auth/providers.`);
@@ -2130,7 +2155,7 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
   }
 
   public OnLaunchCatalogProvider(entry: DiscoveredAuthProviderCatalogEntry): void {
-    const kind: 'msal' | 'auth0' = entry.type === 'auth0' ? 'auth0' : 'msal';
+    const kind: 'msal' | 'auth0' = entry.Type === 'auth0' ? 'auth0' : 'msal';
     void this.OnLaunchOAuthPopup(kind, entry);
   }
 
@@ -2148,12 +2173,12 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
     let clientId = '';
 
     if (providerType === 'auth0') {
-      clientId = catalogEntry?.clientId || DEFAULT_OAUTH_CONFIG.auth0.clientId;
-      const rawDomain = catalogEntry?.domain || catalogEntry?.issuer || DEFAULT_OAUTH_CONFIG.auth0.domain;
+      clientId = catalogEntry?.ClientId || DEFAULT_OAUTH_CONFIG.auth0.clientId;
+      const rawDomain = catalogEntry?.Domain || catalogEntry?.Issuer || DEFAULT_OAUTH_CONFIG.auth0.domain;
       const cleanDomain = rawDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
       const scopes =
-        catalogEntry?.scopes && catalogEntry.scopes.length > 0
-          ? catalogEntry.scopes.join(' ')
+        catalogEntry?.Scopes && catalogEntry.Scopes.length > 0
+          ? catalogEntry.Scopes.join(' ')
           : DEFAULT_OAUTH_CONFIG.auth0.scopes.join(' ');
       tokenEndpoint = `https://${cleanDomain}/oauth/token`;
       const params = new URLSearchParams({
@@ -2168,15 +2193,15 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
       });
       authorizeUrl = `https://${cleanDomain}/authorize?${params.toString()}`;
     } else {
-      clientId = catalogEntry?.clientId || DEFAULT_OAUTH_CONFIG.msal.clientId;
+      clientId = catalogEntry?.ClientId || DEFAULT_OAUTH_CONFIG.msal.clientId;
       let authority =
-        catalogEntry?.clientConfiguration?.authority ||
-        (catalogEntry?.issuer ? catalogEntry.issuer.replace(/\/v2\.0\/?$/, '') : '') ||
+        catalogEntry?.Authority ||
+        (catalogEntry?.Issuer ? catalogEntry.Issuer.replace(/\/v2\.0\/?$/, '') : '') ||
         DEFAULT_OAUTH_CONFIG.msal.authority;
       authority = authority.replace(/\/+$/, '');
       const scopes =
-        catalogEntry?.scopes && catalogEntry.scopes.length > 0
-          ? catalogEntry.scopes.join(' ')
+        catalogEntry?.Scopes && catalogEntry.Scopes.length > 0
+          ? catalogEntry.Scopes.join(' ')
           : DEFAULT_OAUTH_CONFIG.msal.scopes.join(' ');
       tokenEndpoint = `${authority}/oauth2/v2.0/token`;
       const params = new URLSearchParams({
@@ -2458,7 +2483,7 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
   }
 
   public OnConversationRenamed(event: { conversationId: string; name: string; description: string }): void {
-    if (this.ActiveConversation && this.ActiveConversation.ID === event.conversationId) {
+    if (this.ActiveConversation && UUIDsEqual(this.ActiveConversation.ID, event.conversationId)) {
       this.ActiveConversationName = event.name;
       this.cdr.markForCheck();
     }
@@ -2511,7 +2536,7 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
     let resolvedEntityId: string | null = null;
     if (this.IsProviderReady && this.PageDossier?.MatchedInMJ && this.PageDossier.MatchedEntityName) {
       try {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const foundEntity = md.Entities.find(
           (e) => e.Name.toLowerCase() === this.PageDossier!.MatchedEntityName!.toLowerCase()
         );
@@ -2705,10 +2730,10 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
             }
             const interpolated = qa.Target.replace(
               /\{\{?AnchorRecordID\}?\}/g,
-              this.PageDossier?.MatchedRecordID || ''
+              () => this.PageDossier?.MatchedRecordID || ''
             )
-              .replace(/\{\{?DisplayName\}?\}/g, this.PageDossier?.DisplayName || '')
-              .replace(/\{\{?Url\}?\}/g, this.ActiveTabUrl || '');
+              .replace(/\{\{?DisplayName\}?\}/g, () => this.PageDossier?.DisplayName || '')
+              .replace(/\{\{?Url\}?\}/g, () => this.ActiveTabUrl || '');
             actions.push({
               Id: `facet-qa-${facet.Title || 'app'}-${qaIdx}`,
               Label: qa.Label,
@@ -2840,24 +2865,24 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
         if (shouldAcceptToken && p.IdToken) {
           const claims = this.decodeJwtClaims(p.IdToken);
           void this.applyAuthenticatedSession({
-            provider: 'MJ Explorer',
-            idToken: p.IdToken,
-            userName: claims.name || claims.preferred_username || claims.nickname || 'MJ User',
-            email: claims.email || claims.preferred_username || '',
-            graphQLUrl: p.GraphQLUrl || this.ConnectedServerUrl,
-            explorerOrigin: this.ExplorerOrigin,
-            activeConversationId: p.ConversationID,
+            Provider: 'MJ Explorer',
+            IdToken: p.IdToken,
+            UserName: claims.name || claims.preferred_username || claims.nickname || 'MJ User',
+            Email: claims.email || claims.preferred_username || '',
+            GraphQLUrl: p.GraphQLUrl || this.ConnectedServerUrl,
+            ExplorerOrigin: this.ExplorerOrigin,
+            ActiveConversationId: p.ConversationID,
           });
           sendResponse({ Received: true });
           return;
         }
-        if (p.ConversationID && p.ConversationID !== this.ActiveConversationId) {
+        if (p.ConversationID && !UUIDsEqual(p.ConversationID, this.ActiveConversationId)) {
           this.ActiveConversationId = p.ConversationID;
           this.IsNewConversation = false;
           if (this.IsProviderReady) {
             void ConversationEngine.Instance.Config(true).then(() => {
-              const found = ConversationEngine.Instance.Conversations.find(
-                (c) => c.ID.toLowerCase() === p.ConversationID!.toLowerCase()
+              const found = ConversationEngine.Instance.Conversations.find((c) =>
+                UUIDsEqual(c.ID, p.ConversationID)
               );
               if (found) {
                 this.ActiveConversation = found;
@@ -2894,8 +2919,8 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
               resolve(items?.mj_ext_auth_session);
             });
           });
-          if (stored?.idToken) {
-            if (!this.isJwtExpired(stored.idToken)) {
+          if (stored?.IdToken) {
+            if (!this.isJwtExpired(stored.IdToken)) {
               await this.applyAuthenticatedSession(stored);
             } else {
               chromeApi.storage.local.remove('mj_ext_auth_session');
@@ -3092,18 +3117,18 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
             if (hostSession.IdToken && !this.isJwtExpired(hostSession.IdToken)) {
               const claims = this.decodeJwtClaims(hostSession.IdToken);
               await this.applyAuthenticatedSession({
-                provider: 'MJ Explorer',
-                idToken: hostSession.IdToken,
-                userName:
+                Provider: 'MJ Explorer',
+                IdToken: hostSession.IdToken,
+                UserName:
                   hostSession.UserName ||
                   claims.name ||
                   claims.preferred_username ||
                   claims.nickname ||
                   'MJ User',
-                email: hostSession.UserEmail || claims.email || claims.preferred_username || '',
-                graphQLUrl: hostSession.GraphQLUrl || this.ConnectedServerUrl,
-                explorerOrigin: hostSession.Origin || this.ExplorerOrigin,
-                activeConversationId: hostSession.ConversationID ?? undefined,
+                Email: hostSession.UserEmail || claims.email || claims.preferred_username || '',
+                GraphQLUrl: hostSession.GraphQLUrl || this.ConnectedServerUrl,
+                ExplorerOrigin: hostSession.Origin || this.ExplorerOrigin,
+                ActiveConversationId: hostSession.ConversationID ?? undefined,
               });
               if (!silent) {
                 this.showToast(`Connected via MemberJunction Explorer (${this.ExplorerOrigin})!`);
@@ -3160,18 +3185,18 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
   private async applyAuthenticatedSession(session: PersistedAuthSession): Promise<void> {
     this.IsSignedIn = true;
     this.ProviderConnectionError = null;
-    this.ApiTokenInput = session.idToken;
-    this.AuthProviderLabel = session.provider || 'MJ Explorer';
-    this.SignedInUserDisplay = session.userName || session.email || 'Authenticated User';
-    this.SignedInUserEmail = session.email || '';
-    if (session.graphQLUrl) {
-      this.ConnectedServerUrl = session.graphQLUrl;
+    this.ApiTokenInput = session.IdToken;
+    this.AuthProviderLabel = session.Provider || 'MJ Explorer';
+    this.SignedInUserDisplay = session.UserName || session.Email || 'Authenticated User';
+    this.SignedInUserEmail = session.Email || '';
+    if (session.GraphQLUrl) {
+      this.ConnectedServerUrl = session.GraphQLUrl;
     }
-    if (session.explorerOrigin) {
-      this.ExplorerOrigin = session.explorerOrigin;
+    if (session.ExplorerOrigin) {
+      this.ExplorerOrigin = session.ExplorerOrigin;
     }
-    if (session.activeConversationId) {
-      this.ActiveConversationId = session.activeConversationId;
+    if (session.ActiveConversationId) {
+      this.ActiveConversationId = session.ActiveConversationId;
       this.IsNewConversation = false;
     }
     this.AuthDrawerOpen = false;
@@ -3183,7 +3208,7 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
     this.IsConnectingProvider = true;
     this.cdr.markForCheck();
 
-    await this.connectMjGraphQLProvider(session.idToken, this.ConnectedServerUrl);
+    await this.connectMjGraphQLProvider(session.IdToken, this.ConnectedServerUrl);
 
     if (this.CurrentUser) {
       this.SignedInUserDisplay = this.CurrentUser.Name || this.SignedInUserDisplay;
@@ -3224,7 +3249,7 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
         this.agentClient.StartSession(provider.sessionId);
       }
 
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       this.CurrentUser = md.CurrentUser;
       this.EnvironmentId = MJEnvironmentEntityExtended.DefaultEnvironmentID;
 
@@ -3236,8 +3261,8 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
       ]);
 
       if (this.ActiveConversationId) {
-        const existing = ConversationEngine.Instance.Conversations.find(
-          (c) => c.ID.toLowerCase() === this.ActiveConversationId!.toLowerCase()
+        const existing = ConversationEngine.Instance.Conversations.find((c) =>
+          UUIDsEqual(c.ID, this.ActiveConversationId)
         );
         if (existing) {
           this.ActiveConversation = existing;
@@ -3688,7 +3713,7 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
         const stage2Inputs = matchingFacets.map((f) => {
           const rawTemplate = f.Query?.FilterTemplate || f.ForeignKeyFilterTemplate || '';
           const filter = rawTemplate
-            ? rawTemplate.replace(/\{\{?AnchorRecordID\}?\}/g, safeId)
+            ? rawTemplate.replace(/\{\{?AnchorRecordID\}?\}/g, () => safeId)
             : f.ForeignKeyField
               ? `${f.ForeignKeyField} = '${safeId}'`
               : '';
@@ -3778,10 +3803,10 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
     if (directIdToken) {
       const claims = this.decodeJwtClaims(directIdToken);
       await this.applyAuthenticatedSession({
-        provider: flow.provider,
-        idToken: directIdToken,
-        userName: claims.name || claims.preferred_username || 'MJ User',
-        email: claims.email || '',
+        Provider: flow.provider,
+        IdToken: directIdToken,
+        UserName: claims.name || claims.preferred_username || 'MJ User',
+        Email: claims.email || '',
       });
       return;
     }
@@ -3810,11 +3835,11 @@ export class ExtensionSidePanelRootComponent extends BaseAngularComponent implem
         if (jwt) {
           const claims = this.decodeJwtClaims(jwt);
           await this.applyAuthenticatedSession({
-            provider: flow.provider,
-            idToken: jwt,
-            accessToken: tokenData.access_token,
-            userName: claims.name || claims.preferred_username || 'MJ User',
-            email: claims.email || '',
+            Provider: flow.provider,
+            IdToken: jwt,
+            AccessToken: tokenData.access_token,
+            UserName: claims.name || claims.preferred_username || 'MJ User',
+            Email: claims.email || '',
           });
           this.showToast(`Signed in via ${flow.provider.toUpperCase()}!`);
         } else {

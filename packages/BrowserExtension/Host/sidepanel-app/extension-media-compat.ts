@@ -20,7 +20,7 @@ import type {
   ChromeExtensionNamespace,
   ChromeRuntimeMessageListener,
   SidePanelWindowGlobals,
-} from './chrome-extension-types';
+} from './chrome-extension-ambient';
 
 let installed = false;
 let pendingMicPopupPromise: Promise<boolean> | null = null;

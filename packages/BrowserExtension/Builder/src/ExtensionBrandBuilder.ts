@@ -1993,19 +1993,24 @@ try {
             let rawLength: number;
 
             if (posixName.startsWith('sidepanel-app/')) {
-                const stat = fs.statSync(fullPath);
-                const cacheKey = `${posixName}:${stat.size}`;
-                const cached = sidePanelZipDeflateCache.get(cacheKey);
-                if (cached) {
-                    compressed = cached.compressed;
-                    crc = cached.crc;
-                    rawLength = cached.rawLength;
-                } else {
-                    const rawData = fs.readFileSync(fullPath);
-                    compressed = zlib.deflateRawSync(rawData);
-                    crc = this.computeCrc32(rawData);
-                    rawLength = rawData.length;
-                    sidePanelZipDeflateCache.set(cacheKey, { compressed, crc, rawLength });
+                const fd = fs.openSync(fullPath, 'r');
+                try {
+                    const stat = fs.fstatSync(fd);
+                    const cacheKey = `${posixName}:${stat.size}`;
+                    const cached = sidePanelZipDeflateCache.get(cacheKey);
+                    if (cached) {
+                        compressed = cached.compressed;
+                        crc = cached.crc;
+                        rawLength = cached.rawLength;
+                    } else {
+                        const rawData = fs.readFileSync(fd);
+                        compressed = zlib.deflateRawSync(rawData);
+                        crc = this.computeCrc32(rawData);
+                        rawLength = rawData.length;
+                        sidePanelZipDeflateCache.set(cacheKey, { compressed, crc, rawLength });
+                    }
+                } finally {
+                    fs.closeSync(fd);
                 }
             } else {
                 const rawData = fs.readFileSync(fullPath);
