@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { GenerateStep, type GenerateTools } from '../pipeline/Generate';
+import { GenerateError, GenerateStep, type GenerateTools } from '../pipeline/Generate';
 import { RunDir } from '../pipeline/RunDir';
 import { RedactionCheck } from '../sandbox/Redaction';
 import { DEFAULT_SETTINGS } from '../settings';
@@ -108,8 +108,33 @@ describe('GenerateStep', () => {
       Deps: { GitHub: { GetPullRequest: vi.fn() }, Repo: { Fetch: async () => undefined, MergeBase: vi.fn(), Subject: async () => 's' }, Redaction: redaction, ForRun: () => tools } });
     const g = new RunDir(root, RunID, redaction).ReadGeneration();
     expect(g.Tests).toHaveLength(1);
-    expect(g.Tests[0]).toMatchObject({ GenerationOutcome: 'Failed', Tokens: spent });
+    expect(g.Tests[0]).toMatchObject({ GenerationOutcome: 'Failed' });
+    expect(g.Tests[0].Tokens).toEqual({ ...spent, Role: 'Generator' });
     expect(g.Run.TokensByModel).toContainEqual({ ...spent, Role: 'Generator' });
+  });
+
+  it('throws a GenerateError with the run ID, the analyzer and finished session usage and the cause when it fails after the analyzer ran', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'jit-gen-')); const redaction = new RedactionCheck(['super-secret-value-123']);
+    const info = { Name: PKG, Dir: PKG_DIR, HasVitest: true, HasTests: true };
+    const tools: GenerateTools = {
+      EnsureImage: async () => undefined,
+      Target: { Prepare: async (r: RevisionRef): Promise<PreparedRevision> => ({ Ref: r, RootDir: '/work/base' }), BuildPackages: async () => undefined },
+      Analyzer: { Analyze: async () => ({ ...analysis(), Summary: 'leaks super-secret-value-123' }), Usage: { Model: 'claude-sonnet-5-5', InputTokens: 7, OutputTokens: 3, CacheReadTokens: 1, CostUSD: 0.25 } },
+      Generator: { Generate: async (): Promise<GenerationResult> => ({ Tests: [candidate(ID_A)], Tokens: { Model: 'm', InputTokens: 2, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 0.5 }, TranscriptPath: null, EndReason: 'success', Turns: 1 }) },
+      PackageMap: { Get: () => info, PackageForPath: () => info },
+    };
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const e = await GenerateStep({ PR: null, BaseSHA: BASE_SHA, HeadSHA: HEAD_SHA, Trigger: 'Local', RepoRoot: root, Settings: DEFAULT_SETTINGS, Env: FULL_ENV,
+      Deps: { GitHub: { GetPullRequest: vi.fn() }, Repo: { Fetch: async () => undefined, MergeBase: vi.fn(), Subject: async () => 's' }, Redaction: redaction, ForRun: () => tools } }).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(GenerateError);
+    const ge = e as GenerateError;
+    expect(ge.RunID).toMatch(/^\d{8}-\d{6}-/);
+    expect(ge.Usage).toEqual([
+      { Model: 'claude-sonnet-5-5', Role: 'Analyzer', InputTokens: 7, OutputTokens: 3, CacheReadTokens: 1, CostUSD: 0.25 },
+      { Model: 'm', Role: 'Generator', InputTokens: 2, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 0.5 },
+    ]);
+    expect(ge.cause).toBeInstanceOf(Error);
+    expect(ge.message).toMatch(/generation\.json/);
   });
 
   it('with a PR and an explicit head uses the given base and head, fetches next, and takes the text from the PR', async () => {

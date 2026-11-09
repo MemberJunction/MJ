@@ -9,7 +9,7 @@ import type { PackageMap } from '../analyzer/PackageMap';
 import type { BaseTestGenerator } from '../contracts/BaseTestGenerator';
 import type { RedactionCheck } from '../sandbox/Redaction';
 import type { Settings } from '../settings';
-import type { ChangeAnalysis, GenerationRequest, GenerationResult, Run, SessionRecord, TokenUsage, Trigger } from '../types';
+import type { ChangeAnalysis, GenerationRequest, GenerationResult, PreparedRevision, Run, SessionRecord, TokenUsage, Trigger } from '../types';
 import { NewID, NewRunID } from '../ids';
 import { RedactTail } from '../sandbox/Redaction';
 import { RunDir } from './RunDir';
@@ -39,9 +39,18 @@ export interface GenerateDeps {
  */
 export interface GenerateOptions { PR: number | null; BaseSHA?: string; HeadSHA?: string; Trigger: Trigger; RepoRoot: string; Settings: Settings; Deps?: GenerateDeps; Env?: NodeJS.ProcessEnv; }
 
+/** Generate failed after the analyzer ran. `Usage` holds the analyzer's usage and every finished session's, with `Role`; the original error is `cause`. */
+export class GenerateError extends Error {
+    constructor(public readonly RunID: string, public readonly Usage: TokenUsage[], cause: unknown) {
+        super(cause instanceof Error ? cause.message : String(cause), { cause });
+        this.name = 'GenerateError';
+    }
+}
+
 /**
  * Job 1: checks the environment, resolves the revisions, prepares and builds base, analyses the change, runs one generation session per
  * (package, method[, risk]) and writes `generation.json` with one record per session and the analyzer's and the sessions' tokens per role and model. The base worktree stays for the execute and assess jobs.
+ * A failure from the analyzer on is thrown as a `GenerateError`; an earlier failure is thrown as it is.
  */
 export async function GenerateStep(o: GenerateOptions): Promise<{ RunID: string }> {
     PreflightEnv(o.Settings, o.Env ?? process.env, 'Generate');
@@ -55,10 +64,23 @@ export async function GenerateStep(o: GenerateOptions): Promise<{ RunID: string 
     const t = d.ForRun(dir);
     await t.EnsureImage();
     const base = await t.Target.Prepare({ Kind: 'Base', SHA: BaseSHA });
-    const analysis = await t.Analyzer.Analyze(run, await pullRequestText(d, pr, HeadSHA));
+    const text = await pullRequestText(d, pr, HeadSHA);
+    const finished: TokenUsage[] = [];
+    try { await analyzeAndGenerate(run, dir, t, base, text, o.Settings, finished); }
+    catch (e) { throw new GenerateError(run.ID, SumTokens([{ ...t.Analyzer.Usage, Role: 'Analyzer' }, ...finished]), e); }
+    return { RunID: run.ID };
+}
+
+/** Analyses the change, builds base, runs the sessions (adding each finished session's usage to `finished`) and writes `generation.json`. */
+async function analyzeAndGenerate(run: Run, dir: RunDir, t: GenerateTools, base: PreparedRevision, text: PullRequestText, settings: Settings, finished: TokenUsage[]): Promise<void> {
+    const analysis = await t.Analyzer.Analyze(run, text);
     await t.Target.BuildPackages(base, analysis.PackagesToTest);
-    const requests = buildRequests(run, analysis, base.RootDir, o.Settings, t.PackageMap);
-    const results = await RunWithConcurrency(requests, o.Settings.Limits.ParallelSessions, (r) => generateOrFail(t, r));
+    const requests = buildRequests(run, analysis, base.RootDir, settings, t.PackageMap);
+    const results = await RunWithConcurrency(requests, settings.Limits.ParallelSessions, async (r) => {
+        const result = await generateOrFail(t, r);
+        finished.push({ ...result.Tokens, Role: 'Generator' });
+        return result;
+    });
     const tests = results.flatMap((r) => r.Tests);
     const sessions: SessionRecord[] = requests.map((r, i) => ({ RunID: run.ID, Package: r.Package, Method: r.Method, RiskID: r.Risk?.ID ?? null, EndReason: results[i].EndReason,
         Turns: results[i].Turns, Tokens: results[i].Tokens, TranscriptURL: results[i].TranscriptPath,
@@ -67,7 +89,6 @@ export async function GenerateStep(o: GenerateOptions): Promise<{ RunID: string 
     dir.WriteGeneration({ Run: run, Analysis: analysis, Tests: tests, BaseRootDir: base.RootDir, Sessions: sessions, BaseSourceDir: null });
     const produced = tests.filter((x) => x.GenerationOutcome === 'Produced').length;
     process.stdout.write(`run ${run.ID}: ${produced} produced, ${tests.length - produced} failed, ${requests.length} sessions\n`);
-    return { RunID: run.ID };
 }
 
 /**
@@ -106,7 +127,7 @@ function buildRequests(run: Run, analysis: ChangeAnalysis, baseRoot: string, set
 
 /**
  * Runs one generation session. A session that throws becomes one failed test for its request, with the redacted
- * first line of the error as reason, the tokens a `SessionError` carries (zero otherwise) and end reason `error`, so the other sessions still finish.
+ * first line of the error as reason, the tokens a `SessionError` carries (zero otherwise) with role `Generator` and end reason `error`, so the other sessions still finish.
  */
 async function generateOrFail(t: GenerateTools, r: GenerationRequest): Promise<GenerationResult> {
     try { return await t.Generator.Generate(r); }
@@ -114,7 +135,7 @@ async function generateOrFail(t: GenerateTools, r: GenerationRequest): Promise<G
         const message = (e instanceof Error ? e.message : String(e)).split('\n')[0].trim();
         const dir = t.PackageMap.Get(r.Package)?.Dir; const id = NewID();
         if (!dir) throw e;
-        const tokens: TokenUsage = e instanceof SessionError ? e.Usage : NoUsage(r.Model);
+        const tokens: TokenUsage = { ...(e instanceof SessionError ? e.Usage : NoUsage(r.Model)), Role: 'Generator' };
         return { Tokens: tokens, TranscriptPath: null, EndReason: 'error', Turns: 0, Tests: [{ ID: id, RunID: r.Run.ID, Package: r.Package, Method: r.Method, RiskID: r.Risk?.ID ?? null,
             RiskText: r.Risk ? `${r.Risk.WhatCouldBreak} (${r.Risk.Symbol})` : null, Mutant: null, MutantFailure: null, FilePath: `${dir}/src/__tests__/jit/${id}.jit.test.ts`,
             Source: '', GenerationOutcome: 'Failed', FailureReason: `generation session failed: ${RedactTail(message)}`, Tokens: tokens, TranscriptURL: null }] };

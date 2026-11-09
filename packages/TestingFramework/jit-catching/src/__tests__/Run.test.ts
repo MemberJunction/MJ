@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CleanupBase, FinishRun, RunAll, RunAllError } from '../pipeline/Run';
 import { ExecuteStep } from '../pipeline/Execute';
+import { GenerateError, GenerateStep } from '../pipeline/Generate';
 import { DEFAULT_SETTINGS } from '../settings';
 import { RunDir } from '../pipeline/RunDir';
 import { RedactionCheck } from '../sandbox/Redaction';
@@ -11,7 +12,7 @@ import type { PreparedRevision } from '../types';
 import { candidate, generation, ID_A, PKG_DIR, RUN_ID } from './helpers/pipelineFixtures';
 
 vi.mock('../pipeline/Preflight', () => ({ PreflightEnv: vi.fn() }));
-vi.mock('../pipeline/Generate', () => ({ GenerateStep: vi.fn(async () => ({ RunID: 'r-7' })) }));
+vi.mock('../pipeline/Generate', async (importOriginal) => ({ ...(await importOriginal<typeof import('../pipeline/Generate')>()), GenerateStep: vi.fn(async () => ({ RunID: 'r-7' })) }));
 vi.mock('../pipeline/Execute', () => ({ ExecuteStep: vi.fn(async () => undefined) }));
 
 describe('RunAll', () => {
@@ -22,6 +23,14 @@ describe('RunAll', () => {
     const e = await RunAll(o).catch((x: unknown) => x);
     expect(e).toBeInstanceOf(RunAllError);
     expect(e).toMatchObject({ RunID: 'r-7', Step: 'Execute', cause, message: 'install failed' });
+  });
+  it('turns a GenerateError into a RunAllError of step Generate that carries the run ID, the usage and the cause', async () => {
+    const cause = new Error('refusing to write generation.json');
+    const usage = [{ Model: 'm', Role: 'Analyzer' as const, InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 0.25 }];
+    vi.mocked(GenerateStep).mockRejectedValueOnce(new GenerateError('r-8', usage, cause));
+    const e = await RunAll(o).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(RunAllError);
+    expect(e).toMatchObject({ RunID: 'r-8', Step: 'Generate', Usage: usage, cause });
   });
 });
 

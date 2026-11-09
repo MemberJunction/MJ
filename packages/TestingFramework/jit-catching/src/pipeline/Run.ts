@@ -1,8 +1,8 @@
 import { join } from 'node:path';
 import type { Settings } from '../settings';
 import type { GenerationFile } from '../schemas';
-import type { Catch, PreparedRevision, Trigger } from '../types';
-import { GenerateStep } from './Generate';
+import type { Catch, PreparedRevision, TokenUsage, Trigger } from '../types';
+import { GenerateError, GenerateStep } from './Generate';
 import { ExecuteStep } from './Execute';
 import { AssessStep } from './Assess';
 import { CheckedBaseRootDir, RunDir } from './RunDir';
@@ -14,9 +14,12 @@ import { PreflightEnv } from './Preflight';
 /** `PR` null runs on `BaseSHA`/`HeadSHA` instead. `Trigger` defaults to `Local`. */
 export interface RunAllOptions { PR: number | null; BaseSHA?: string; HeadSHA?: string; Trigger?: Trigger; RepoRoot: string; Settings: Settings; StoreDir: string; }
 
-/** A step after Generate failed. Carries the run ID, so the run's recorded spend can still be read, and the original error as `cause`. */
+/**
+ * A step failed after the run had an ID. Carries the run ID, so the run's recorded spend can still be read, and the original error as `cause`.
+ * `Usage` holds the spend of a Generate failure that wrote no `generation.json`.
+ */
 export class RunAllError extends Error {
-    constructor(public readonly RunID: string, public readonly Step: 'Execute' | 'Assess' | 'Cleanup', cause: unknown) {
+    constructor(public readonly RunID: string, public readonly Step: 'Generate' | 'Execute' | 'Assess' | 'Cleanup', cause: unknown, public readonly Usage?: TokenUsage[]) {
         super(cause instanceof Error ? cause.message : String(cause), { cause });
         this.name = 'RunAllError';
     }
@@ -25,11 +28,11 @@ export class RunAllError extends Error {
 /**
  * Checks the keys of every step first, then generates, executes and assesses on this machine with the real dependencies, and finishes the run with `FinishRun`.
  * When a step fails, the run folder and the base worktree stay so the failed step can be run again on its own.
- * A Generate failure is thrown as it is; a later failure is thrown as a `RunAllError`.
+ * A Generate failure after the analyzer ran is thrown as a `RunAllError` with its usage; an earlier Generate failure is thrown as it is; a later failure is thrown as a `RunAllError`.
  */
 export async function RunAll(o: RunAllOptions): Promise<{ RunID: string; Reported: Catch[] }> {
     PreflightEnv(o.Settings, process.env, 'Assess');
-    const { RunID } = await GenerateStep({ PR: o.PR, BaseSHA: o.BaseSHA, HeadSHA: o.HeadSHA, Trigger: o.Trigger ?? 'Local', RepoRoot: o.RepoRoot, Settings: o.Settings });
+    const { RunID } = await generate(o);
     let step: RunAllError['Step'] = 'Execute';
     try {
         await ExecuteStep({ RunID, RepoRoot: o.RepoRoot, Settings: o.Settings });
@@ -42,6 +45,14 @@ export async function RunAll(o: RunAllOptions): Promise<{ RunID: string; Reporte
         return { RunID, Reported: Catches.filter((c) => c.Reported) };
     } catch (e) {
         throw new RunAllError(RunID, step, e);
+    }
+}
+
+async function generate(o: RunAllOptions): Promise<{ RunID: string }> {
+    try { return await GenerateStep({ PR: o.PR, BaseSHA: o.BaseSHA, HeadSHA: o.HeadSHA, Trigger: o.Trigger ?? 'Local', RepoRoot: o.RepoRoot, Settings: o.Settings }); }
+    catch (e) {
+        if (e instanceof GenerateError) throw new RunAllError(e.RunID, 'Generate', e.cause, e.Usage);
+        throw e;
     }
 }
 

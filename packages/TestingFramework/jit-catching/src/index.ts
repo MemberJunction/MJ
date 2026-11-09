@@ -29,7 +29,7 @@ export { AllRunsAgreeVerdict } from './verdict/AllRunsAgreeVerdict';
 export { RunDir } from './pipeline/RunDir';
 export { RunWithConcurrency } from './pipeline/concurrency';
 export { type PipelineTarget } from './pipeline/Deps';
-export { GenerateStep, DefaultGenerateDeps, SumTokens, type GenerateDeps, type GenerateTools, type GenerateOptions } from './pipeline/Generate';
+export { GenerateStep, GenerateError, DefaultGenerateDeps, SumTokens, type GenerateDeps, type GenerateTools, type GenerateOptions } from './pipeline/Generate';
 export { ExecuteStep, type ExecuteDeps, type ExecuteOptions } from './pipeline/Execute';
 export { AssessStep, type AssessDeps, type AssessOptions } from './pipeline/Assess';
 export { RunAll, RunAllError, FinishRun, type RunAllOptions } from './pipeline/Run';
@@ -39,6 +39,6 @@ export { LabelCatch, LabelPacket, IsLabelAnswer, LABEL_ANSWERS, type LabelAnswer
 export { SliceSchema, BugPairSchema, CleanEntrySchema, CorpusSchema, LoadCorpus, AssignSlices, RevisionsOf, type Corpus, type Slice } from './corpus/Corpus';
 export { MineClean, MineBugs, IsEligibleSource, PullRequestNumberOf, RemovedRangesByFile, MonthWindows, type CleanCandidate, type BugCandidate, type MinerDeps, type LineRange } from './corpus/Miner';
 export { LedgerFile, LedgerID, MatchRecordSchema, LedgerEntrySchema, BacktestLedgerSchema, type MatchRecord, type LedgerEntry, type BacktestLedger } from './backtest/Ledger';
-export { BacktestStep, DefaultCostOfRun, type BacktestOptions, type BacktestDeps } from './backtest/Backtest';
+export { BacktestStep, DefaultCostOfRun, DefaultOrphanRunCost, type BacktestOptions, type BacktestDeps, type OrphanRun } from './backtest/Backtest';
 export { WilsonInterval, RateOf, type RateWithInterval } from './report/Stats';
 export { BuildGateReport, RenderMarkdown, LatestLabel, TableCostOf, MarkdownText, type GateReport, type GateReportOptions, type ModelReport, type HumanLabel, type AgreementResult } from './report/Report';

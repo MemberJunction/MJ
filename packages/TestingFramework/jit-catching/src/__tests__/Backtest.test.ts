@@ -2,8 +2,8 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { BacktestStep, DefaultCostOfRun, type BacktestDeps, type BacktestOptions } from '../backtest/Backtest';
-import { LedgerFile, LedgerID } from '../backtest/Ledger';
+import { BacktestStep, DefaultCostOfRun, DefaultOrphanRunCost, type BacktestDeps, type BacktestOptions } from '../backtest/Backtest';
+import { LedgerFile, LedgerID, type BacktestLedger } from '../backtest/Ledger';
 import { RedactionCheck } from '../sandbox/Redaction';
 import { DEFAULT_SETTINGS } from '../settings';
 import { RunAllError, type RunAllOptions } from '../pipeline/Run';
@@ -51,7 +51,8 @@ function fakes(runAll?: (o: RunAllOptions) => Promise<{ RunID: string; Reported:
     calls,
     RunAll: vi.fn(async (o: RunAllOptions) => { calls.push(o); return runAll ? runAll(o) : { RunID: `run-${o.PR}`, Reported: [] }; }),
     Repo: { FirstParent: vi.fn(async (s: string) => parentOf(s)), Fetch: vi.fn(async () => undefined) },
-    CostOfRun: vi.fn(async () => 1.5),
+    CostOfRun: vi.fn(async (): Promise<number | null> => 1.5),
+    OrphanRunCost: vi.fn(async (): Promise<{ RunID: string; CostUSD: number }[]> => []),
     Redaction: new RedactionCheck(['super-secret-value-123']),
   };
 }
@@ -88,11 +89,51 @@ describe('BacktestStep', () => {
   it('records the run ID and the recovered cost of a run that failed after Generate, and counts it toward MaxUsd', async () => {
     const { root, corpus } = setup();
     const d = fakes(async (o) => { throw new RunAllError(`run-${o.PR}`, 'Execute', new Error('install failed\n  at stack')); });
-    d.CostOfRun = vi.fn(async () => 2);
+    d.CostOfRun = vi.fn(async (): Promise<number | null> => 2);
     const l = await BacktestStep(options(root, corpus, d, { MaxUsd: 1.5 }));
     expect(d.CostOfRun).toHaveBeenCalledWith('run-1');
     expect(l.Entries[0]).toEqual(expect.objectContaining({ Status: 'Failed', RunID: 'run-1', CostUSD: 2, Error: 'install failed' }));
     expect(l.Entries[1].Status).toBe('Pending');
+  });
+
+  it('records the usage cost of a Generate failure that left no stored run and no generation file', async () => {
+    const { root, corpus } = setup();
+    const usage = [{ Model: 'm', Role: 'Analyzer' as const, InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 0.25 }, { Model: 'g', Role: 'Generator' as const, InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 0.5 }];
+    const d = fakes(async (o) => { throw new RunAllError(`run-${o.PR}`, 'Generate', new Error('refusing to write generation.json'), usage); });
+    d.CostOfRun = DefaultCostOfRun({ GetRun: async () => null }, root, new RedactionCheck([]));
+    const l = await BacktestStep(options(root, corpus, d, { Only: [1] }));
+    expect(l.Entries[0]).toEqual(expect.objectContaining({ Status: 'Failed', RunID: 'run-1', CostUSD: 0.75 }));
+  });
+
+  it('writes the entry with its StartedAt to the ledger file before the run starts', async () => {
+    const { root, corpus } = setup();
+    let onDisk: { Status: string; StartedAt: string | null } | null = null;
+    const d = fakes(async (o) => {
+      const e = new LedgerFile(root, LedgerID(corpus, 'Tuning', 'Bug', 'gen-model'), new RedactionCheck([])).Read().Entries[0];
+      onDisk = { Status: e.Status, StartedAt: e.StartedAt };
+      return { RunID: `run-${o.PR}`, Reported: [] };
+    });
+    await BacktestStep(options(root, corpus, d, { Only: [1] }));
+    expect(onDisk).toEqual({ Status: 'Pending', StartedAt: expect.any(String) });
+  });
+
+  it('on resume adds the cost of an orphan run to a started Pending entry, names it on stderr and keeps the entry Pending', async () => {
+    const { root, corpus } = setup();
+    const file = new LedgerFile(root, LedgerID(corpus, 'Tuning', 'Bug', 'gen-model'), new RedactionCheck([]));
+    const started = '2026-11-09T10:00:00.000Z';
+    const ledger: BacktestLedger = { ID: LedgerID(corpus, 'Tuning', 'Bug', 'gen-model'), CorpusPath: corpus, Slice: 'Tuning', Set: 'Bug', Model: 'gen-model', CreatedAt: started, Entries: [
+      { PR: 1, Set: 'Bug', BaseSHA: parentOf(sha('a')), HeadSHA: sha('a'), RunID: null, Status: 'Pending', Error: null, CostUSD: 1, StartedAt: started, EndedAt: null, Match: null },
+      { PR: 3, Set: 'Bug', BaseSHA: parentOf(sha('c')), HeadSHA: sha('c'), RunID: 'run-3', Status: 'Assessed', Error: null, CostUSD: 1, StartedAt: started, EndedAt: started, Match: null },
+    ] };
+    file.Write(ledger);
+    const d = fakes();
+    d.OrphanRunCost = vi.fn(async () => [{ RunID: 'orphan-1', CostUSD: 4 }]);
+    const l = await BacktestStep(options(root, corpus, d, { MaxUsd: 5 }));
+    expect(d.OrphanRunCost).toHaveBeenCalledTimes(1);
+    expect(d.OrphanRunCost).toHaveBeenCalledWith(1, sha('a'), new Set(['run-3']), started);
+    expect(l.Entries[0]).toEqual(expect.objectContaining({ Status: 'Pending', CostUSD: 5 }));
+    expect(d.calls).toEqual([]);
+    expect(stderr.join('')).toMatch(/PR #1: recovered 4\.00 USD of run orphan-1/);
   });
 
   it('runs only the Pending entries of an existing ledger', async () => {
@@ -142,7 +183,7 @@ describe('BacktestStep', () => {
   it('runs a Failed entry again with RetryFailed and adds the new cost to the recorded one', async () => {
     const { root, corpus } = setup();
     const first = fakes(async () => { throw new RunAllError('run-old', 'Execute', new Error('install failed')); });
-    first.CostOfRun = vi.fn(async () => 2);
+    first.CostOfRun = vi.fn(async (): Promise<number | null> => 2);
     const failed = await BacktestStep(options(root, corpus, first, { Only: [1] }));
     expect(failed.Entries[0]).toEqual(expect.objectContaining({ Status: 'Failed', CostUSD: 2 }));
     const d = fakes();
@@ -180,6 +221,26 @@ describe('BacktestStep', () => {
   });
 });
 
+describe('DefaultOrphanRunCost', () => {
+  it('sums the generation costs of the Backtest runs of the PR and head that the ledger does not know and that started at or after the entry', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'jit-orphan-')); dirs.push(root);
+    const write = (id: string, over: Partial<Run>) => {
+      const dir = new RunDir(root, id, new RedactionCheck([]));
+      const gen = generation(join(dir.Path, 'work', 'base'), [candidate(ID_A)]);
+      gen.Run = { ...storedRun(id, [1, 0.5]), PRNumber: 1, HeadSHA: sha('a'), StartedAt: '2026-11-09T10:00:01.000Z', ...over };
+      dir.WriteGeneration(gen);
+    };
+    write('orphan', {});
+    write('known', {});
+    write('other-pr', { PRNumber: 2 });
+    write('other-head', { HeadSHA: sha('b') });
+    write('local', { Trigger: 'Local' });
+    write('older', { StartedAt: '2026-11-09T09:00:00.000Z' });
+    const orphans = DefaultOrphanRunCost(root, new RedactionCheck([]));
+    expect(await orphans(1, sha('a'), new Set(['known']), '2026-11-09T10:00:00.000Z')).toEqual([{ RunID: 'orphan', CostUSD: 1.5 }]);
+  });
+});
+
 describe('DefaultCostOfRun', () => {
   it('sums the stored run costs, or the generation file costs when the store has no run', async () => {
     const root = mkdtempSync(join(tmpdir(), 'jit-cost-')); dirs.push(root);
@@ -191,6 +252,6 @@ describe('DefaultCostOfRun', () => {
     const cost = DefaultCostOfRun(store, root, new RedactionCheck([]));
     expect(await cost('stored')).toBe(1.25);
     expect(await cost(RUN_ID)).toBe(1.25);
-    expect(await cost('missing')).toBe(0);
+    expect(await cost('missing')).toBeNull();
   });
 });
