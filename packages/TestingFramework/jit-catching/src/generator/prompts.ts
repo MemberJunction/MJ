@@ -28,6 +28,7 @@ Never (these produce false alarms and the pipeline drops them):
   - mock the function under test, or put the failing logic inside vi.mock factories or beforeEach
   - leave Date, Math.random or time zone unpinned (use vi.useFakeTimers / vi.setSystemTime; TZ is UTC)
   - use any, as any, it.skip, it.todo, expect(true).toBe(true)
+  - construct an abstract class (BaseEntity, BaseEngine, ...) or call a constructor with missing arguments: the pipeline type-checks every file with tsc and a type error makes the test Invalid, even when run_test passes; extend the class in the test or use the stubs
 
 A good test: calls public API with a concrete input, asserts a concrete output or a thrown error, and reads as a specification: it('canRead returns false for a user without the role').`;
 }
