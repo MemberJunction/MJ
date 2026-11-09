@@ -11,6 +11,9 @@ import { BuildIndexHints, FormatIndexHint, IsUniquelyIndexed } from "../utils/in
 import { SeedContextExcerpt } from "../utils/seed-context.js";
 import { TableNode, BackpropagationTrigger, TableAnalysisContext, TableGroundTruthContext, EnumCandidateContext } from '../types/analysis.js';
 import { EnumCandidateGate } from '../discovery/EnumCandidateGate.js';
+import type { DataQualityRunner } from '../quality/DataQualityRunner.js';
+import { ResolveDataQualityConfig } from '../quality/DataQualityConfig.js';
+import { ColumnQualityLines, OrphanEvidence, TableQualityLines } from '../quality/PromptFacts.js';
 import { KeyVerifier, StampFor, JoinProbeResult } from '../discovery/JoinProbe.js';
 import {
   TableAnalysisPromptResult,
@@ -57,6 +60,17 @@ export class AnalysisEngine {
     this.keyVerifier = verifier;
   }
 
+  /**
+   * Data quality findings shown to the model while it describes tables and prunes keys. Optional:
+   * without it the prompts carry no data quality facts.
+   */
+  private dataQuality: DataQualityRunner | null = null;
+
+  /** Supply the data quality runner whose findings the description and pruning prompts show. */
+  public SetDataQuality(runner: DataQualityRunner | null): void {
+    this.dataQuality = runner;
+  }
+
   constructor(
     private config: DBAutoDocConfig,
     private promptEngine: PromptEngine,
@@ -82,7 +96,10 @@ export class AnalysisEngine {
     );
 
     this.guardrailsManager = new GuardrailsManager(config.analysis.guardrails);
-    this.enumCandidateGate = new EnumCandidateGate();
+    // Value lists fold spellings that differ only by case or whitespace when the data quality
+    // check for them is on: 'Active', 'ACTIVE' and 'Active ' are one value written three ways.
+    const quality = ResolveDataQualityConfig(config.analysis.dataQuality);
+    this.enumCandidateGate = new EnumCandidateGate({ FoldSpellingVariants: quality.Enabled && quality.Checks.CaseWhitespaceVariants });
 
     // Set up guardrail checking in PromptEngine
     this.promptEngine.setGuardrailCheck(() => {
@@ -353,15 +370,20 @@ export class AnalysisEngine {
       const [schemaName, tableName] = tableKey.split('.');
       const table = this.stateManager.findTable(state, schemaName, tableName);
 
-      const candidates = tableFKs.map(fk => ({
-        sourceColumn: fk.sourceColumn,
-        targetSchema: fk.targetSchema,
-        targetTable: fk.targetTable,
-        targetColumn: fk.targetColumn,
-        confidence: fk.confidence,
-        locked: fk.status === 'confirmed',
-        targetUniquelyIndexed: IsUniquelyIndexed(this.stateManager.findTable(state, fk.targetSchema, fk.targetTable), fk.targetColumn)
-      }));
+      const qualityFindings = table && this.dataQuality ? this.dataQuality.TableFindings(state, schemaName, table) : [];
+      const candidates = tableFKs.map(fk => {
+        const orphans = OrphanEvidence(qualityFindings, fk.sourceColumn, fk.targetSchema, fk.targetTable);
+        return {
+          sourceColumn: fk.sourceColumn,
+          targetSchema: fk.targetSchema,
+          targetTable: fk.targetTable,
+          targetColumn: fk.targetColumn,
+          confidence: fk.confidence,
+          locked: fk.status === 'confirmed',
+          targetUniquelyIndexed: IsUniquelyIndexed(this.stateManager.findTable(state, fk.targetSchema, fk.targetTable), fk.targetColumn),
+          ...(orphans ? { orphanRate: orphans.OrphanRate, checkedRows: orphans.CheckedRows } : {})
+        };
+      });
 
       const context = {
         sourceSchema: schemaName,
@@ -765,10 +787,17 @@ export class AnalysisEngine {
     const enumCandidates = this.enumCandidateGate.evaluateTable(table.columns, table.rowCount);
     const enumCandidateMap = new Map(enumCandidates.map(c => [c.columnName, c]));
 
+    // Data quality facts, derived from the current state so keys added or removed since the
+    // measurement pass are reflected.
+    const qualityFindings = this.dataQuality ? this.dataQuality.TableFindings(state, tableNode.schema, table) : [];
+    const columnQuality = ColumnQualityLines(qualityFindings, this.dataQuality?.Config.PromptMaxFindingsPerColumn ?? 0);
+    const tableQuality = TableQualityLines(qualityFindings);
+
     return {
       schema: tableNode.schema,
       table: tableNode.table,
       rowCount: table.rowCount,
+      dependencyLevel: tableNode.level,
       columns: table.columns.map(col => ({
         name: col.name,
         dataType: col.dataType,
@@ -780,7 +809,8 @@ export class AnalysisEngine {
         defaultValue: col.defaultValue,
         possibleValues: col.possibleValues,
         statistics: col.statistics,
-        enumCandidate: enumCandidateMap.get(col.name) ?? undefined
+        enumCandidate: enumCandidateMap.get(col.name) ?? undefined,
+        quality: columnQuality.get(col.name)
       })),
       dependsOn: table.dependsOn,
       dependents: table.dependents,
@@ -792,7 +822,8 @@ export class AnalysisEngine {
       groundTruth: groundTruthContext,
       fkCandidateStats,
       enumCandidates: enumCandidates.length > 0 ? enumCandidates : undefined,
-      existingIndexes: this.indexHintLines(table)
+      existingIndexes: this.indexHintLines(table),
+      dataQuality: tableQuality.length > 0 ? tableQuality : undefined
     };
   }
 

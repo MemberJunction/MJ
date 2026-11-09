@@ -30,3 +30,6 @@ export * from './utils/index.js';
 
 // Plugin system
 export * from './plugins/index.js';
+
+// Data quality phase
+export * from './quality/index.js';

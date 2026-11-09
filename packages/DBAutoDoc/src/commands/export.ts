@@ -19,6 +19,7 @@ import { ErdClusterer, ErdClusterPlan } from '../generators/ErdClusterer.js';
 import { ErdClusterGenerator } from '../generators/ErdClusterGenerator.js';
 import { ERD_DEFAULTS, ErdColumnMode, ErdConfig, ErdMode } from '../types/config.js';
 import { AdditionalSchemaInfoGenerator } from '../generators/AdditionalSchemaInfoGenerator.js';
+import { DataQualityReportGenerator } from '../generators/DataQualityReportGenerator.js';
 import { PluginManager } from '../plugins/PluginManager.js';
 import type { AutoDocExporter, AutoDocExporterOptions, AutoDocPluginConfigEntry } from '../plugins/types.js';
 import type { DatabaseDocumentation } from '../types/state.js';
@@ -42,6 +43,7 @@ export default class Export extends Command {
     '$ db-auto-doc export --html',
     '$ db-auto-doc export --csv',
     '$ db-auto-doc export --mermaid',
+    '$ db-auto-doc export --data-quality',
     '$ db-auto-doc export --sql --markdown --html --csv --mermaid --apply',
     '$ db-auto-doc export --mermaid --erd-mode clusters',
     '$ db-auto-doc export --html --mermaid --erd-mode clusters --erd-hub-min-inbound 12 --erd-page-size 40'
@@ -57,6 +59,7 @@ export default class Export extends Command {
     mermaid: Flags.boolean({ description: 'Generate Mermaid ERD diagram files' }),
     report: Flags.boolean({ description: 'Generate analysis report' }),
     'schema-info': Flags.boolean({ description: 'Generate additionalSchemaInfo.json for CodeGen soft FK/PK support' }),
+    'data-quality': Flags.boolean({ description: 'Generate data-quality.md and data-quality.json from the findings in the state file' }),
     'schema-info-discovered-only': Flags.boolean({ description: 'Only include AI-discovered keys in schema info (exclude hard DB constraints)', default: false }),
     'schema-info-confirmed-only': Flags.boolean({ description: 'Only include confirmed candidates in schema info', default: false }),
     apply: Flags.boolean({ description: 'Apply SQL to database', default: false }),
@@ -147,7 +150,7 @@ export default class Export extends Command {
       }
 
       // Default to SQL + Markdown if no specific format flags provided
-      const anyFormatSpecified = flags.sql || flags.markdown || flags.html || flags.csv || flags.mermaid || flags.report || flags['schema-info'] || !!flags.format?.length;
+      const anyFormatSpecified = flags.sql || flags.markdown || flags.html || flags.csv || flags.mermaid || flags.report || flags['schema-info'] || flags['data-quality'] || !!flags.format?.length;
       const generateSQL = flags.sql || !anyFormatSpecified;
       const generateMarkdown = flags.markdown || !anyFormatSpecified;
       const generateHTML = flags.html;
@@ -320,6 +323,20 @@ export default class Export extends Command {
         const schemaInfoPath = path.join(outputDir, 'additionalSchemaInfo.json');
         await fs.writeFile(schemaInfoPath, schemaInfo, 'utf-8');
         spinner.succeed(`Additional schema info saved to ${schemaInfoPath}`);
+      }
+
+      // Data quality report
+      if (flags['data-quality']) {
+        const qualityGen = new DataQualityReportGenerator();
+        if (!qualityGen.HasReport(state)) {
+          throw new Error('The state file has no data quality findings. Run "db-auto-doc analyze" with analysis.dataQuality enabled (the default).');
+        }
+        spinner.start('Generating data quality report');
+        const mdPath = path.join(outputDir, 'data-quality.md');
+        const jsonPath = path.join(outputDir, 'data-quality.json');
+        await fs.writeFile(mdPath, qualityGen.GenerateMarkdown(state), 'utf-8');
+        await fs.writeFile(jsonPath, qualityGen.GenerateJson(state), 'utf-8');
+        spinner.succeed(`Data quality report saved to ${mdPath} and ${jsonPath}`);
       }
 
       this.log(chalk.green('\n✓ Export complete!'));

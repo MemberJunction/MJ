@@ -8,6 +8,7 @@ import { SampleQuery, SampleQueryGenerationSummary } from './sample-queries.js';
 import { OrganicKeyCluster, OrganicKeyDetectionPhase } from './organic-keys.js';
 import type { AutoDocPluginStateSection } from '../plugins/types.js';
 import type { AutoDocIndex } from './driver.js';
+import type { DataQualityFinding, DataQualityPhase } from './data-quality.js';
 
 export interface DatabaseDocumentation {
   version: string;
@@ -22,6 +23,11 @@ export interface DatabaseDocumentation {
    * detection phase. Empty/absent when that phase didn't run.
    */
   organicKeyClusters?: OrganicKeyCluster[];
+  /**
+   * Deliverable: data quality findings, derived from statistics, the catalog and the probe
+   * measurements in `phases.dataQuality`. Absent when the phase did not run.
+   */
+  dataQuality?: DataQualityFinding[]; // case-violation-ok-legacy-back-compat: added to a camelCase interface; its siblings and the state/config/prompt keys are camelCase
   resumedFromFile?: string; // Path to the state file this analysis resumed from
   /**
    * Per-plugin sections, keyed by plugin registration name. Each holds the plugin's hook-run
@@ -82,6 +88,8 @@ export interface AnalysisPhases {
   descriptionGeneration: AnalysisRun[]; // Table and column description analysis
   queryGeneration?: QueryGenerationPhase; // Metadata about query generation process
   organicKeyDetection?: OrganicKeyDetectionPhase; // Optional organic-key cluster detection (runs after description + PK/FK)
+  // Data quality measurements and phase status (findings are in `dataQuality` at the root)
+  dataQuality?: DataQualityPhase; // case-violation-ok-legacy-back-compat: added to a camelCase interface; its siblings and the state/config/prompt keys are camelCase
 }
 
 /**
@@ -136,7 +144,10 @@ export interface SchemaDefinition {
 
 export interface TableDefinition {
   name: string;
+  /** Row count. Read from catalog estimates at introspection; the data quality phase replaces it with the exact count. */
   rowCount: number;
+  /** The catalog's estimate, kept when the data quality phase replaced `rowCount` with an exact count that differed. */
+  rowCountEstimate?: number; // case-violation-ok-legacy-back-compat: added to a camelCase interface; its siblings and the state/config/prompt keys are camelCase
   dependencyLevel?: number;
   dependsOn: ForeignKeyReference[];
   dependents: ForeignKeyReference[];
@@ -210,6 +221,14 @@ export interface ForeignKeyReference {
   referencedColumn: string;
   /** The constraint this column pair belongs to, when introspected. Groups the columns of a composite key. */
   constraintName?: string;
+  /**
+   * Declared constraints only: false when the database does not guarantee existing rows satisfy
+   * the constraint (SQL Server WITH NOCHECK, PostgreSQL NOT VALID, MySQL engines that do not
+   * enforce foreign keys). Undefined when unknown (older state files, discovered keys).
+   */
+  isTrusted?: boolean; // case-violation-ok-legacy-back-compat: added to a camelCase interface; its siblings and the state/config/prompt keys are camelCase
+  /** Declared constraints only: true when the constraint is disabled and checks nothing. */
+  isDisabled?: boolean; // case-violation-ok-legacy-back-compat: added to a camelCase interface; its siblings and the state/config/prompt keys are camelCase
 }
 
 /**

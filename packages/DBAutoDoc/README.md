@@ -64,6 +64,7 @@ graph TD
 - **Granular Guardrails** -- Multi-level resource controls (run, phase, iteration limits)
 - **Resume Capability** -- Pause and resume analysis from checkpoint state files
 - **Index Advisor** -- Built-in plugin that reads existing indexes, proposes missing ones (uncovered foreign keys, discovered primary keys) with an optional LLM review, flags redundant indexes, and exports the proposals as a SQL migration. See [Index Advisor](#index-advisor-built-in-plugin)
+- **Data Quality** -- Findings such as orphaned foreign keys, always-NULL columns, placeholder dates, blank strings and case variants, from the statistics a run already collects plus one consolidated probe per table. Every check can be switched off. See [Data Quality](#data-quality)
 - **Programmatic API** -- Use as a library in your own applications
 - **Extensible** -- Custom database drivers, plus a [plugin system](#plugins) for adding steps before, during and after a run and new export formats
 
@@ -76,6 +77,7 @@ graph TD
 - **Analysis Reports** -- Detailed metrics and quality assessments
 - **Additional Schema Info** -- CodeGen-compatible JSON for soft FK/PK metadata
 - **Index Migration** -- Flyway-style SQL migration creating the Index Advisor's proposed indexes (`export --format index-migration`)
+- **Data Quality Report** -- `data-quality.md` and `data-quality.json`, written with every analysis (`export --data-quality` regenerates them)
 
 ## Installation
 
@@ -335,7 +337,7 @@ Generate SQL
 ### 4. Export
 
 ```bash
-db-auto-doc export --sql --markdown --html --csv --mermaid --schema-info
+db-auto-doc export --sql --markdown --html --csv --mermaid --schema-info --data-quality
 ```
 
 This generates:
@@ -532,6 +534,57 @@ Unique indexes also feed deterministic PK detection (`relationshipDiscovery.inde
 - a unique index on NOT NULL columns becomes a candidate even when the statistics can't show uniqueness (an empty table, for example), scored with an index boost, so naming, type, the name blacklist and column position still decide between several unique columns;
 - a unique index on a nullable column only boosts a column that already passes the statistical checks;
 - multi-column unique indexes are considered as composite keys when no single column qualifies (junction tables, for example); next to a qualifying single-column key they are alternate keys and are not added.
+
+### Data Quality
+
+Every analysis also reports on the data itself. Most checks read the statistics the sampling pass already collected, so they cost nothing. The rest come from **one consolidated probe statement per table**: a single `SELECT` of aggregates (columns are split into batches of 40 only for very wide tables), plus one anti-join per relationship that the database does not already guarantee. A trusted declared foreign key cannot have orphans, so it is never probed.
+
+Findings land in `state.json` (`dataQuality`, with the measurements in `phases.dataQuality`), in `data-quality.md` / `data-quality.json` beside `summary.md`, and as a "Data Quality" list per table in `summary.md`. They also feed the rest of the run:
+
+- the table-analysis prompt shows each column's facts ("Every one of 12,480 rows is NULL", "3 values differ only by letter case"), so the model describes what the data holds instead of inventing a purpose;
+- FK pruning sees the measured orphan rate of each candidate key;
+- value lists fold spellings that differ only by case or surrounding spaces into the most frequent one;
+- `rowCount` becomes the exact count (the catalog estimate is kept in `rowCountEstimate`).
+
+Findings are derived again after the description loop and after pruning, so none describes a key that was later removed.
+
+| Check | What it reports | Source | Default |
+|---|---|---|---|
+| `EmptyTable`, `StaleRowCountEstimate` | No rows; catalog estimate off by 10% or more | statistics | on |
+| `NoPrimaryKey`, `IsolatedTable` | No key declared or discovered; no relationship at all | catalog | on |
+| `AlwaysNull`, `ConstantValue`, `HighNullRate`, `NullableNeverNull` | Unused columns, one value everywhere, 90%+ NULL, nullable but never NULL | statistics | on |
+| `NearUnique`, `UndeclaredUnique` | 99%+ unique with a few repeats; unique with no key or unique index | statistics | on |
+| `ForeignKeyMostlyNull`, `OneToOne` | Optional-in-practice relationships; one-to-one extensions | statistics | on |
+| `SentinelDate`, `FutureDate` | Placeholder dates (1900-01-01, 9999-12-31, ...); dates after today | statistics + probe | on |
+| `LengthAtCapacity`, `NegativeValue` | Values that fill the declared length; negative quantities | statistics + probe | on |
+| `BlankString`, `UntrimmedString`, `CaseWhitespaceVariants` | Empty strings instead of NULL; padding; `Active` / `ACTIVE` / `Active ` | probe | on |
+| `NumericStoredAsText`, `DateStoredAsText` | Numbers or dates kept in text columns | probe | on |
+| `UntrustedForeignKey`, `ForeignKeyTypeMismatch` | Constraints created WITH NOCHECK / NOT VALID or disabled; discovered keys whose two sides differ in type | catalog | on |
+| `OrphanedForeignKey` | Rows whose key has no parent row (error on a declared key) | probe | on |
+| `ExactDuplicateRows` | Exact copies in tables with no key | probe (extra scan) | **off** |
+| `UnreferencedParentRows` | Parent rows nothing references | probe (extra scan) | **off** |
+
+```jsonc
+"analysis": {
+  "dataQuality": {
+    "enabled": true,              // false skips the phase
+    "probes": true,               // false = statistics and catalog checks only, zero extra SQL
+    "probeTimeoutMs": 60000,      // per statement; a timed-out table is reported as not probed, never as clean
+    "maxRowsForProbe": 20000000,  // larger tables are not probed (0 = no cap)
+    "maxPhaseDurationMs": 0,      // wall-clock cap on all probes (0 = none)
+    "columnBatchSize": 40,
+    "relationshipBatchSize": 8,
+    "includeSampleValues": 5,     // example values on a finding (0 = none)
+    "promptMaxFindingsPerColumn": 3,
+    "checks": { "ExactDuplicateRows": true, "HighNullRate": false },
+    "thresholds": { "highNullRatePercent": 90, "nearUniqueRatio": 0.99, "orphanWarningPercent": 5 }
+  }
+}
+```
+
+`db-auto-doc analyze --skip-data-quality` skips the phase for one run. An unknown check name in the config is an error, so a typo cannot silently leave a check on. Probe failures never stop the run: a failed column or table is listed under "Not probed" in the report with a reason that never quotes data values, and the phase is marked `partial`. A resumed run re-probes only tables that failed, were skipped, or need a measure a newly enabled check requires.
+
+On SQL Server the probes run with `SET LOCK_TIMEOUT` and `OPTION (MAXDOP 1)`; on PostgreSQL with `statement_timeout`; on MySQL with `max_execution_time`.
 
 ### Organic Key Detection (Optional)
 

@@ -22,6 +22,8 @@ import { SQLGenerator } from '../generators/SQLGenerator.js';
 import { MarkdownGenerator } from '../generators/MarkdownGenerator.js';
 import { AdditionalSchemaInfoGenerator } from '../generators/AdditionalSchemaInfoGenerator.js';
 import { SampleQueryGenerator } from '../generators/SampleQueryGenerator.js';
+import { DataQualityReportGenerator } from '../generators/DataQualityReportGenerator.js';
+import { DataQualityRunner } from '../quality/DataQualityRunner.js';
 import { DBAutoDocConfig } from '../types/config.js';
 import { DatabaseDocumentation, AnalysisRun, DataSamplingPhase, TableDefinition } from '../types/state.js';
 import { DiscoveryTriggerAnalyzer } from '../discovery/DiscoveryTriggerAnalyzer.js';
@@ -45,6 +47,8 @@ export interface AnalysisOptions {
   maxIterations?: number;
   /** Skip table data sampling pass */
   skipSampling?: boolean;
+  /** Skip the data quality phase for this run (no new probes, no findings) */
+  skipDataQuality?: boolean; // case-violation-ok-legacy-back-compat: added to a camelCase interface; its siblings and the state/config/prompt keys are camelCase
 }
 
 export interface OrchestratorResult {
@@ -62,6 +66,7 @@ export class AnalysisOrchestrator {
   private reanalyzeBelowConfidence?: number;
   private maxIterationsOverride?: number;
   private skipSampling?: boolean;
+  private skipDataQuality?: boolean;
 
   constructor(options: AnalysisOptions) {
     this.config = options.config;
@@ -70,6 +75,7 @@ export class AnalysisOrchestrator {
     this.reanalyzeBelowConfidence = options.reanalyzeBelowConfidence;
     this.maxIterationsOverride = options.maxIterations;
     this.skipSampling = options.skipSampling;
+    this.skipDataQuality = options.skipDataQuality;
   }
 
   /**
@@ -265,6 +271,25 @@ export class AnalysisOrchestrator {
       } else if (discoveryComplete) {
         this.onProgress('Relationship discovery: using completed results from prior run');
       }
+      // Data quality, pass 1: exact row counts, one probe per table, orphan probes for the
+      // relationships known so far. Before the AfterDiscovery hook so plugins see the measurements.
+      const dataQuality = new DataQualityRunner(this.config.analysis.dataQuality, {
+        Driver: db.getDriver(),
+        OnProgress: (message, data) => this.onProgress(message, data),
+        SkipRequested: this.skipDataQuality === true,
+        Save: async () => {
+          stateManager.updateSummary(state);
+          await stateManager.save(state);
+        }
+      });
+      try {
+        await dataQuality.RunMeasurementPass(state);
+      } catch (err) {
+        // Non-fatal, like organic-key detection: the documentation does not depend on it.
+        this.onProgress(`Data quality measurement failed (continuing): ${(err as Error).message}`);
+      }
+      stateManager.updateSummary(state);
+      await stateManager.save(state);
       await runHook('AfterDiscovery');
 
       // Topological sort
@@ -291,6 +316,7 @@ export class AnalysisOrchestrator {
         this.config.analysis.keyVerification ?? {}
       );
       analysisEngine.SetKeyVerifier(keyVerifier);
+      analysisEngine.SetDataQuality(dataQuality);
 
       // Create analysis run
       const run = stateManager.createAnalysisRun(
@@ -357,6 +383,14 @@ export class AnalysisOrchestrator {
       }
       await runHook('AfterDescriptions');
 
+      // Data quality, pass 2: orphan probes for relationships the model proposed during the
+      // description loop, so pruning sees their orphan rates.
+      try {
+        await dataQuality.RunRelationshipPass(state);
+      } catch (err) {
+        this.onProgress(`Data quality relationship probes failed (continuing): ${(err as Error).message}`);
+      }
+
       // Sanity checks
       // FUTURE FEATURE: Schema/cross-schema sanity checks disabled.
       // Pending LLM 10M+ token context support.
@@ -393,6 +427,14 @@ export class AnalysisOrchestrator {
         stateManager.updateSummary(state);
         await stateManager.save(state);
       }
+      // Final data quality findings: derived after pruning, so no finding describes a removed key.
+      try {
+        dataQuality.DeriveAndStore(state);
+      } catch (err) {
+        this.onProgress(`Data quality findings failed (continuing): ${(err as Error).message}`);
+      }
+      stateManager.updateSummary(state);
+      await stateManager.save(state);
       await runHook('AfterPruning');
 
       // Complete run
@@ -482,6 +524,12 @@ export class AnalysisOrchestrator {
       const schemaInfo = schemaInfoGen.generate(state, { OrganicKeys: organicKeyOutput });
       const schemaInfoPath = path.join(runFolder, 'additionalSchemaInfo.json');
       await fs.writeFile(schemaInfoPath, schemaInfo, 'utf-8');
+
+      const qualityGen = new DataQualityReportGenerator();
+      if (qualityGen.HasReport(state)) {
+        await fs.writeFile(path.join(runFolder, 'data-quality.md'), qualityGen.GenerateMarkdown(state), 'utf-8');
+        await fs.writeFile(path.join(runFolder, 'data-quality.json'), qualityGen.GenerateJson(state), 'utf-8');
+      }
 
       // Close database
       await db.close();

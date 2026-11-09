@@ -10,3 +10,4 @@ export { CSVGenerator, CSVGeneratorOptions, CSVExport } from './CSVGenerator.js'
 export { MermaidGenerator, MermaidGeneratorOptions } from './MermaidGenerator.js';
 export { ErdClusterer, ErdClustererOptions, ErdClustererSettings, ErdClusterPlan, ErdCluster, ErdClusterPage, ErdEdge } from './ErdClusterer.js';
 export { ErdClusterGenerator, ErdClusterGeneratorOptions, ErdClusterOutput, ErdClusterFile } from './ErdClusterGenerator.js';
+export { DataQualityReportGenerator, DataQualityReport, FormatFindingLine } from './DataQualityReportGenerator.js';

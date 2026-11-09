@@ -3,6 +3,10 @@
  */
 
 import { DatabaseDocumentation } from '../types/state.js';
+import { FormatFindingLine } from './DataQualityReportGenerator.js';
+
+/** Data quality lines shown per table in summary.md; the rest are in data-quality.md. */
+const MAX_QUALITY_LINES_PER_TABLE = 10;
 
 export class MarkdownGenerator {
   /**
@@ -156,6 +160,21 @@ export class MarkdownGenerator {
             seenRefs.add(refKey);
             const link = `[${dep.schema}.${depTable}](#${this.toAnchor(depTable)})`;
             lines.push(`- ${link}`);
+          }
+          lines.push('');
+        }
+
+        // Data quality: warnings and errors only; the full list is in data-quality.md
+        const quality = (state.dataQuality ?? []).filter(
+          f => f.SchemaName === schema.name && f.TableName === table.name && f.Severity !== 'info'
+        );
+        if (quality.length > 0) {
+          lines.push('**Data Quality**:');
+          for (const finding of quality.slice(0, MAX_QUALITY_LINES_PER_TABLE)) {
+            lines.push(`- ${FormatFindingLine(finding)}`);
+          }
+          if (quality.length > MAX_QUALITY_LINES_PER_TABLE) {
+            lines.push(`- ...and ${quality.length - MAX_QUALITY_LINES_PER_TABLE} more in data-quality.md`);
           }
           lines.push('');
         }

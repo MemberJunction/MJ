@@ -50,6 +50,8 @@ export interface TableAnalysisContext {
   schema: string;
   table: string;
   rowCount: number;
+  /** The table's level in the dependency graph (0 = depends on nothing). */
+  dependencyLevel?: number; // case-violation-ok-legacy-back-compat: added to a camelCase interface; its siblings and the state/config/prompt keys are camelCase
   columns: any[];
   dependsOn: any[];
   dependents: any[];
@@ -66,6 +68,8 @@ export interface TableAnalysisContext {
   enumCandidates?: EnumCandidateContext[];
   /** Existing indexes on the table, one formatted line each (see FormatIndexHint) — evidence for keys */
   existingIndexes?: string[];
+  /** Data quality facts about the table and its relationships, one sentence each. */
+  dataQuality?: string[]; // case-violation-ok-legacy-back-compat: added to a camelCase interface; its siblings and the state/config/prompt keys are camelCase
 }
 
 /**
@@ -80,6 +84,8 @@ export interface EnumCandidateContext {
   cardinalityRatio: number;
   dataType: string;
   maxLength?: number;
+  /** Spellings that differed only by case or surrounding whitespace and were folded into one value. */
+  variantsFolded?: number; // case-violation-ok-legacy-back-compat: added to a camelCase interface; its siblings and the state/config/prompt keys are camelCase
 }
 
 export interface TableGroundTruthContext {

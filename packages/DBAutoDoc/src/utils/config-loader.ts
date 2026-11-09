@@ -5,6 +5,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { DBAutoDocConfig } from '../types/config.js';
+import { ValidateDataQualityConfig } from '../quality/DataQualityConfig.js';
 
 export class ConfigLoader {
   /**
@@ -189,6 +190,11 @@ export class ConfigLoader {
 
     if (!config.ai.apiKey) {
       throw new Error('Missing ai.apiKey');
+    }
+
+    const qualityErrors = ValidateDataQualityConfig(config.analysis?.dataQuality);
+    if (qualityErrors.length > 0) {
+      throw new Error(qualityErrors.join('\n'));
     }
   }
 

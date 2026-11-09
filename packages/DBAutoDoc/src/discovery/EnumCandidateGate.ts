@@ -25,6 +25,12 @@ export interface EnumGateConfig {
   MaxCardinalityRatio: number;
   /** Regex patterns for column names to always exclude */
   ExcludeColumnNamePatterns: RegExp[];
+  /**
+   * Treat spellings that differ only by letter case or surrounding whitespace ('Active',
+   * 'ACTIVE', 'Active ') as one value, kept in its most frequent spelling (default false).
+   * Turned on by the data quality phase's CaseWhitespaceVariants check.
+   */
+  FoldSpellingVariants: boolean;
 }
 
 /** Result returned when a column passes the gate */
@@ -53,6 +59,7 @@ const DEFAULT_CONFIG: EnumGateConfig = {
     // Audit columns naming who wrote the row (e.g. CreatedBy, cst_add_user): a list of users, not a closed set.
     /(^|_)(add|change|changed|create|created|modify|modified|update|updated|delete|deleted|insert|inserted)_?(user|usr|by|login)$/i,
   ],
+  FoldSpellingVariants: false,
 };
 
 /** Value shapes that make a column a poor closed list even when its cardinality is low. */
@@ -123,7 +130,7 @@ export class EnumCandidateGate {
     if (!this.passesDistinctCountGate(stats.distinctCount)) return null;
     if (!this.passesCardinalityGate(stats, tableRowCount)) return null;
 
-    const values = this.extractValues(stats);
+    const { Values: values, Folded: folded } = this.extractValues(stats);
     if (values.length < 2) return null;
     if (!this.passesValueShapeGate(values)) return null;
 
@@ -135,6 +142,7 @@ export class EnumCandidateGate {
       cardinalityRatio: tableRowCount > 0 ? stats.distinctCount / tableRowCount : 1,
       dataType: column.dataType,
       maxLength: this.declaredLength(column) ?? undefined,
+      ...(folded > 0 ? { variantsFolded: folded } : {}),
     };
   }
 
@@ -151,8 +159,18 @@ export class EnumCandidateGate {
   ): string[] | null {
     const candidate = this.EvaluateColumn(column, tableRowCount);
     if (!candidate) return null;
-    const observed = new Set(candidate.values);
-    const kept = verdictValues.filter(v => observed.has(v));
+    if (!this.config.FoldSpellingVariants) {
+      const observed = new Set(candidate.values);
+      const kept = verdictValues.filter(v => observed.has(v));
+      return kept.length >= 2 ? kept : null;
+    }
+    // Match on the folded spelling and return the observed (canonical) one, once.
+    const canonical = new Map(candidate.values.map(v => [foldSpelling(v), v]));
+    const kept: string[] = [];
+    for (const v of verdictValues) {
+      const match = canonical.get(foldSpelling(v));
+      if (match !== undefined && !kept.includes(match)) kept.push(match);
+    }
     return kept.length >= 2 ? kept : null;
   }
 
@@ -284,7 +302,7 @@ export class EnumCandidateGate {
    * Extract distinct string values from column statistics.
    * Trims whitespace, drops empty strings and null-like sentinels.
    */
-  private extractValues(stats: ColumnStatistics): string[] {
+  private extractValues(stats: ColumnStatistics): { Values: string[]; Folded: number } {
     const rawValues = this.collectRawValues(stats);
     return this.normalizeValues(rawValues);
   }
@@ -309,22 +327,42 @@ export class EnumCandidateGate {
   }
 
   /**
-   * Trim whitespace, drop empty strings and null-like sentinels.
-   * Does NOT case-normalize — case differences may be meaningful.
+   * Trim whitespace, drop empty strings and null-like sentinels. Case is kept as written unless
+   * `FoldSpellingVariants` is on; then spellings that differ only by case collapse into the first
+   * one seen, which is the most frequent because values arrive in frequency order.
    */
-  private normalizeValues(values: string[]): string[] {
+  private normalizeValues(values: string[]): { Values: string[]; Folded: number } {
     const NULL_SENTINELS = new Set(['', 'NULL', 'null', 'N/A', 'n/a', '-', '--']);
     const seen = new Set<string>();
+    const seenFolded = new Set<string>();
     const result: string[] = [];
+    let folded = 0;
 
     for (const raw of values) {
       const trimmed = raw.trim();
       if (NULL_SENTINELS.has(trimmed)) continue;
-      if (seen.has(trimmed)) continue;
+      if (seen.has(trimmed)) {
+        // Differs from an earlier value only by surrounding whitespace.
+        if (this.config.FoldSpellingVariants && raw !== trimmed) folded++;
+        continue;
+      }
       seen.add(trimmed);
+      if (this.config.FoldSpellingVariants) {
+        const key = foldSpelling(trimmed);
+        if (seenFolded.has(key)) {
+          folded++;
+          continue;
+        }
+        seenFolded.add(key);
+      }
       result.push(trimmed);
     }
 
-    return result;
+    return { Values: result, Folded: folded };
   }
+}
+
+/** The key two spellings share when they differ only by letter case or surrounding whitespace. */
+function foldSpelling(value: string): string {
+  return value.trim().toLowerCase();
 }

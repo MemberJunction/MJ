@@ -16,6 +16,8 @@ import {
   AutoDocExistingDescription,
   AutoDocIndex
 } from '../types/driver.js';
+import type { BoundedQueryOutcome } from '../types/data-quality.js';
+import { DescribeProbeFailure } from './probeErrors.js';
 
 /**
  * Outcome of a join-containment probe.
@@ -282,6 +284,27 @@ export abstract class BaseAutoDocDriver {
   // ============================================================================
   // QUERY EXECUTION
   // ============================================================================
+
+  /**
+   * Run one read-only statement under a time bound and never throw.
+   *
+   * The data quality probes use this. Each built-in driver bounds the statement with its engine's
+   * own mechanism (PostgreSQL `statement_timeout`, MySQL `max_execution_time`, SQL Server
+   * `LOCK_TIMEOUT` plus a client-side deadline). This default, for drivers that do not override it,
+   * has no bound beyond the connection's own timeout. Failures come back as a value-free reason.
+   */
+  public async ExecuteBounded<T extends Record<string, unknown>>(sql: string, timeoutMs: number): Promise<BoundedQueryOutcome<T>> {
+    void timeoutMs;
+    try {
+      const result = await this.executeQuery<T>(sql, 1);
+      if (!result.success) {
+        return { Ok: false, Reason: DescribeProbeFailure(result.errorMessage ?? '') };
+      }
+      return { Ok: true, Rows: result.data ?? [] };
+    } catch (error) {
+      return { Ok: false, Reason: DescribeProbeFailure(error) };
+    }
+  }
 
   /**
    * Execute a raw SQL query

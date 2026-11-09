@@ -47,6 +47,10 @@ export default class Analyze extends Command {
     'skip-sampling': Flags.boolean({
       description: 'Skip table data sampling pass (useful for large databases or when schema/dictionary is already provided)',
       default: false
+    }),
+    'skip-data-quality': Flags.boolean({
+      description: 'Skip the data quality phase for this run: no probes and no data-quality report. Set analysis.dataQuality in the config to turn single checks off instead.',
+      default: false
     })
   };
 
@@ -85,6 +89,8 @@ export default class Analyze extends Command {
         maxIterations,
         // --pruning-only runs the FK pruning pass alone; sampling would be new work it never asked for
         skipSampling: flags['skip-sampling'] || flags['pruning-only'],
+        // Likewise for the data quality probes
+        skipDataQuality: flags['skip-data-quality'] || flags['pruning-only'],
         onProgress: (message, data) => {
           if (data) {
             spinner.succeed(`${message}: ${JSON.stringify(data)}`);
@@ -109,6 +115,11 @@ export default class Analyze extends Command {
         this.log(`    - state.json`);
         this.log(`    - extended-props.sql`);
         this.log(`    - summary.md`);
+        this.log(`    - additionalSchemaInfo.json`);
+        if (result.state.dataQuality) {
+          const counts = result.state.phases.dataQuality?.FindingCounts;
+          this.log(`    - data-quality.md, data-quality.json${counts ? ` (${counts.error} errors, ${counts.warning} warnings, ${counts.info} info)` : ''}`);
+        }
 
         if (flags.resume) {
           this.log(chalk.blue(`\n  Resumed from: ${flags.resume}`));
