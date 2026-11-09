@@ -296,6 +296,24 @@ describe('FeatureValueCacheService', () => {
             expect(saved).toHaveLength(0);
         });
 
+        it('leaves an unchanged ML classification row (score plus its label in ValueText) untouched (P7)', async () => {
+            const save = vi.fn();
+            const keyHash = await FeatureValueKey.ComputeHash(keyInput);
+            MockRunView.mockResults = [{
+                FeatureName: 'SeniorityLevel', ValueKeyHash: keyHash, ValueText: 'renew', ValueNumeric: 0.65, ValueBoolean: null, ValueDate: null, ValueJSON: null,
+                Reasoning: null, Confidence: 0.65, Save: save,
+            }];
+            const saved: Array<Record<string, unknown>> = [];
+            const outcome = await FeatureValueCacheService.Instance.RecordFeatureValues({
+                ...params(providerWith(saved)),
+                outputs: [{ featureName: 'SeniorityLevel', value: 0.65, valueText: 'renew', confidence: 0.65 }],
+            });
+            expect(outcome.Upserted).toBe(0);
+            expect(outcome.Unchanged).toBe(1);
+            expect(save).not.toHaveBeenCalled();
+            expect(saved).toHaveLength(0);
+        });
+
         it('makes an unchanged keyed row the latest again when another key holds the latest value', async () => {
             const keyHash = await FeatureValueKey.ComputeHash(keyInput);
             // a newer version wrote Manager last; this version's row still holds Director, which the run computes again
@@ -431,6 +449,19 @@ describe('FeatureValueCacheService', () => {
                 const reread = MockRunView.calls[2];
                 expect(reread.ExtraFilter).toBe(`RecordProcessID = 'rp-1' AND ValueKeyHash IN ('${keyHash}') AND Role = 'Champion'`);
                 expect(reread.BypassCache).toBe(true);
+            });
+
+            it('counts it Unchanged when the row another run stored holds the same labelled score (P7)', async () => {
+                const keyHash = await FeatureValueKey.ComputeHash(keyInput);
+                MockRunView.queue = [[], [], [{ FeatureName: 'SeniorityLevel', ValueText: 'renew', ValueNumeric: 0.65, ValueBoolean: null,
+                    ValueDate: null, ValueJSON: null, Reasoning: null, Confidence: 0.65, ValueKeyHash: keyHash }]];
+                const provider = stubProvider(vi.fn().mockResolvedValue({ NewRecord: vi.fn(), Save: vi.fn().mockResolvedValue(false),
+                    LatestResult: { CompleteMessage: duplicate } }));
+                const outcome = await FeatureValueCacheService.Instance.RecordFeatureValues({
+                    ...params(provider),
+                    outputs: [{ featureName: 'SeniorityLevel', value: 0.65, valueText: 'renew', confidence: 0.65 }],
+                });
+                expect(outcome).toEqual({ Upserted: 0, Unchanged: 1, Previous: { SeniorityLevel: null } });
             });
 
             it('throws the save error when the row another run stored holds a different value', async () => {

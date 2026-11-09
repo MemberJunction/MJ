@@ -408,7 +408,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         row: MJFeatureValueEntity | undefined,
         supersededByAnotherKey: boolean
     ): Promise<FeatureValueWriteResult> {
-        const typed = FeatureValueCacheService.ToTypedValue(out.value, out.constraintType);
+        const typed = FeatureValueCacheService.StoredValueOf(out);
         const unchanged = !!row && this.IsUnchanged(row, typed, out);
         if (unchanged && !supersededByAnotherKey) {
             return 'Unchanged';
@@ -479,7 +479,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
 
     /** Sets a row's value, reasoning, confidence, run links and ComputedAt. */
     protected AssignValueColumns(fv: MJFeatureValueEntity, params: RecordFeatureValuesParams, out: FeatureValueOutputItem, typed: TypedFeatureValue): void {
-        fv.ValueText = out.valueText !== undefined ? out.valueText : typed.ValueText;
+        fv.ValueText = typed.ValueText;
         fv.ValueNumeric = typed.ValueNumeric;
         fv.ValueBoolean = typed.ValueBoolean;
         fv.ValueDate = typed.ValueDate;
@@ -724,6 +724,16 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             return { ...empty, ValueDate: new Date(text) };
         }
         return undefined;
+    }
+
+    /**
+     * The typed value columns an output is stored with: its typed value, with an explicit `valueText` (an ML label
+     * stored beside its score) in `ValueText`. Unchanged and concurrent-insert checks compare against this, so an
+     * unchanged labelled score is Unchanged rather than rewritten.
+     */
+    protected static StoredValueOf(out: FeatureValueOutputItem): TypedFeatureValue {
+        const typed = FeatureValueCacheService.ToTypedValue(out.value, out.constraintType);
+        return out.valueText !== undefined ? { ...typed, ValueText: out.valueText } : typed;
     }
 
     /** A copy of a row's typed value columns. */
