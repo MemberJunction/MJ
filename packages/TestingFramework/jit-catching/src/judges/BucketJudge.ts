@@ -10,6 +10,8 @@ import { AddUsage, NoUsage, UsageFromChat, type Price } from '../generator/Usage
 
 const BUCKETS: readonly Bucket[] = ['High', 'Medium', 'Low'];
 const REASON_MAX = 400;
+/** Output budget per call. Thinking models (Opus 5.5, Gemini 4) spend output tokens on reasoning before the JSON reply. */
+const MAX_OUTPUT_TOKENS = 4096;
 const BUCKET_WORD_RE = /\b(high|medium|low)\b/gi;
 
 /** Bucket word in any case → the `Bucket` spelling; other values pass through to fail the enum. */
@@ -72,7 +74,7 @@ export class BucketJudge extends BaseCatchJudge {
         const input = BuildJudgeInput(c);
         let usage: TokenUsage | null = null;
         for (let attempt = 0; attempt < 2; attempt++) {
-            const r = await SafeChat(this.llm, { model: this.model, messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: input }], temperature: 0, maxOutputTokens: 300 });
+            const r = await SafeChat(this.llm, { model: this.model, messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: input }], temperature: 0, maxOutputTokens: MAX_OUTPUT_TOKENS });
             if (!r.Ok) return this.score('Medium', `${JUDGE_ERROR_PREFIX}provider error: ${r.Error.slice(0, 300)}`, usage);
             usage = AddUsage(usage ?? NoUsage(this.model), UsageFromChat(this.model, r.Result.data.usage, this.price));
             const answer = parseAnswer(GetTextFromContent(r.Result.data.choices[0]?.message.content ?? ''));

@@ -8,7 +8,7 @@ import { BucketJudge } from '../judges/BucketJudge';
 import { CreateLLM } from '../judges/ProviderFactory';
 import { FileCatchStore } from '../store/FileCatchStore';
 import { RankCatches, SelectReported } from '../ranking/Ranker';
-import { NewID } from '../ids';
+import { StableID } from '../ids';
 import type { BaseCatchStore } from '../contracts/BaseCatchStore';
 import type { RedactionCheck } from '../sandbox/Redaction';
 import type { Settings } from '../settings';
@@ -34,7 +34,8 @@ const MAX_PROMOTIONS = 3;
  * Job 3: checks the environment, reads `generation.json` and `execution.json`, gives every executed test a verdict, filters weak catches with
  * the rules (which read the base worktree) and judges the survivors, ranks and selects with the Label threshold,
  * offers up to three promotion candidates, saves everything to the store (the run with the judges' tokens added to
- * its tokens per model) and writes `assessment.json`.
+ * its tokens per model) and writes `assessment.json`. A catch's ID comes from its run and test, so running the step
+ * again on the same run replaces the earlier catches in the store.
  */
 export async function AssessStep(o: AssessOptions): Promise<{ Catches: Catch[]; Promotions: PromotionCandidate[] }> {
     PreflightEnv(o.Settings, o.Env ?? process.env, 'Assess');
@@ -62,7 +63,7 @@ async function assessTest(gen: GenerationFile, exec: ExecutionFile, t: Candidate
     const mine = exec.Results.filter((r) => UUIDsEqual(r.CandidateTestID, t.ID)).sort((a, b) => a.RunIndex - b.RunIndex);
     const baseRuns = mine.filter((r) => r.Revision === 'Base'); const headRuns = mine.filter((r) => r.Revision === 'Head');
     const verdict = new AllRunsAgreeVerdict(exec.TypeErrors[t.ID] ?? { Base: null, Head: null }).Classify(baseRuns, headRuns);
-    const c: Catch = { ID: NewID(), RunID: gen.Run.ID, CandidateTestID: t.ID, Verdict: verdict, DroppedByRule: null, Boosts: [], TPProb: null, JudgeBuckets: [], Median: null, Rank: null, Reported: false, CommentID: null };
+    const c: Catch = { ID: StableID('catch', gen.Run.ID, t.ID), RunID: gen.Run.ID, CandidateTestID: t.ID, Verdict: verdict, DroppedByRule: null, Boosts: [], TPProb: null, JudgeBuckets: [], Median: null, Rank: null, Reported: false, CommentID: null };
     if (verdict.Label !== 'WeakCatch') return c;
     const ctx: CatchContext = { Run: gen.Run, Analysis: gen.Analysis, Test: t, Base: baseRuns, Head: headRuns, Verdict: verdict, BaseRootDir: gen.BaseRootDir, Boosts: [] };
     const filter = d.Rules.Apply(ctx);

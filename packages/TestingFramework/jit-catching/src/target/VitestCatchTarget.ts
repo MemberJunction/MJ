@@ -193,7 +193,10 @@ export class VitestCatchTarget extends BaseCatchTarget {
         return this.inSandbox(revision, 'ro', ['sh', '-c', cmd], timeoutMs, { TZ: 'UTC' }, ViteTmpfs(g.Dir), [g.Dir]);
     }
 
-    /** Per test: how many changed lines its run executed, from a v8 coverage report written inside the container. */
+    /**
+     * Per test: how many changed lines its run executed, from a v8 coverage report written inside the container.
+     * A test whose run wrote no readable report is left out, with one line on stderr.
+     */
     public async Coverage(revision: PreparedRevision, tests: CandidateTest[], changed: ChangedLines): Promise<CoverageResult[]> {
         const out: CoverageResult[] = [];
         for (const g of this.groups(tests)) {
@@ -201,7 +204,9 @@ export class VitestCatchTarget extends BaseCatchTarget {
                 const report = `/tmp/cov-${t.ID}`;
                 const cmd = `cd ${sq(`${CONTAINER_ROOT}/${g.Dir}`)} && npx vitest run ${sq(g.Files[i])} --coverage.enabled --coverage.provider=v8 --coverage.reporter=json --coverage.reportsDirectory=${report} >/dev/null 2>&1; cat ${report}/coverage-final.json`;
                 const r = await this.inSandbox(revision, 'ro', ['sh', '-c', cmd], 10 * 60_000, { TZ: 'UTC' }, ViteTmpfs(g.Dir), [g.Dir]);
-                out.push({ CandidateTestID: t.ID, CoveredChangedLines: CountCoveredChangedLines(r.Stdout, changed, CONTAINER_ROOT) });
+                const covered = CountCoveredChangedLines(r.Stdout, changed, CONTAINER_ROOT);
+                if (covered === null) { process.stderr.write(`coverage not measured for test ${t.ID} in ${g.Dir}: ${SandboxEvidence(r)}\n`); continue; }
+                out.push({ CandidateTestID: t.ID, CoveredChangedLines: covered });
             }
         }
         return out;
@@ -336,9 +341,9 @@ function safeJson<T>(text: string): T | null { try { return JSON.parse(text) as 
 
 interface V8Coverage { statementMap: Record<string, { start: { line: number }; end: { line: number } }>; s: Record<string, number>; }
 
-/** Counts changed lines (new side) that the v8 coverage report marks as executed at least once. */
-export function CountCoveredChangedLines(coverageJson: string, changed: ChangedLines, containerRoot: string): number {
-    const data = safeJson<Record<string, V8Coverage>>(coverageJson.trim()); if (!data) return 0;
+/** Counts changed lines (new side) that the v8 coverage report marks as executed at least once; null when the report is not a JSON object. */
+export function CountCoveredChangedLines(coverageJson: string, changed: ChangedLines, containerRoot: string): number | null {
+    const data = safeJson<Record<string, V8Coverage>>(coverageJson.trim()); if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
     let covered = 0;
     for (const [file, lines] of Object.entries(changed)) {
         const entry = data[`${containerRoot}/${file}`]; if (!entry) continue;
