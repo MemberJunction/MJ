@@ -112,11 +112,36 @@ export class TestAst {
         return 'public';
     }
 
-    /** True when the innermost receiver's type is declared only in the test file (a class the test declares). */
-    public ReceiverDeclaredInTest(receiver: ts.Expression): boolean {
-        const type = this.Checker.getTypeAtLocation(this.InnermostExpression(receiver));
-        const declarations = type.getSymbol()?.declarations ?? [];
-        return declarations.length > 0 && declarations.every((d) => d.getSourceFile() === this.SourceFile);
+    /**
+     * True when `access` is `this.x` or `super.x` with no wrapper on the receiver, inside a class the test declares
+     * that extends, directly or through other test-declared classes, the class that declares `x`.
+     */
+    public ProtectedAccessFromTestSubclass(access: MemberAccess): boolean {
+        const node = access.Node;
+        if (!ts.isPropertyAccessExpression(node)) return false;
+        const receiverKind = node.expression.kind;
+        if (receiverKind !== ts.SyntaxKind.ThisKeyword && receiverKind !== ts.SyntaxKind.SuperKeyword) return false;
+        const owner = this.Checker.getSymbolAtLocation(node.name)?.declarations?.[0]?.parent;
+        if (!owner || !ts.isClassDeclaration(owner)) return false;
+        const enclosing = ts.findAncestor(node.parent, ts.isClassLike);
+        if (!enclosing || !ts.isClassDeclaration(enclosing)) return false;
+        let current: ts.ClassDeclaration = enclosing;
+        for (let hops = 0; hops < 16 && current.getSourceFile() === this.SourceFile; hops++) {
+            const base = this.baseClassOf(current);
+            if (!base) return false;
+            if (base === owner) return true;
+            current = base;
+        }
+        return false;
+    }
+
+    /** The class declaration named in `cls`'s `extends` clause, following import aliases; undefined when there is none. */
+    private baseClassOf(cls: ts.ClassDeclaration): ts.ClassDeclaration | undefined {
+        const extendsClause = cls.heritageClauses?.find((h) => h.token === ts.SyntaxKind.ExtendsKeyword);
+        const expression = extendsClause?.types[0]?.expression; if (!expression) return undefined;
+        let symbol = this.Checker.getSymbolAtLocation(expression);
+        if (symbol && symbol.flags & ts.SymbolFlags.Alias) symbol = this.Checker.getAliasedSymbol(symbol);
+        return symbol?.declarations?.find(ts.isClassDeclaration);
     }
 
     /** Calls whose callee text matches one of `names` exactly (e.g. `expect`, `vi.mock`). */

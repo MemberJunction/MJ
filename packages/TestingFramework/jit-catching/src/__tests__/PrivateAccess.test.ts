@@ -21,6 +21,18 @@ describe('PrivateAccess', () => {
     const src = `import { Svc } from '../../svc'; class Sub extends Svc { public Run(): number { return this.Hook(); } } expect(new Sub().Run()).toBe(1);`;
     expect(rule.Evaluate(ctx(src)).Fired).toBe(false);
   });
+  it('fires on a protected member reached by a cast on a test-subclass instance', () => {
+    const src = `import { Svc } from '../../svc'; class Sub extends Svc {} expect((new Sub() as unknown as { Hook(): number }).Hook()).toBe(1);`;
+    expect(rule.Evaluate(ctx(src))).toMatchObject({ Fired: true, Reason: expect.stringMatching(/protected member Hook/) });
+  });
+  it('fires on a protected member called on a test-subclass instance from outside the subclass', () => {
+    const src = `import { Svc } from '../../svc'; class Sub extends Svc {} expect(new Sub().Hook()).toBe(1);`;
+    expect(rule.Evaluate(ctx(src))).toMatchObject({ Fired: true, Reason: expect.stringMatching(/protected member Hook/) });
+  });
+  it('does not fire when a subclass the test declares calls a protected extension point through super', () => {
+    const src = `import { Svc } from '../../svc'; class Sub extends Svc { public Run(): number { return super.Hook(); } } expect(new Sub().Run()).toBe(1);`;
+    expect(rule.Evaluate(ctx(src)).Fired).toBe(false);
+  });
   it('fires on the two-step cast form and on a write to a private member', () => {
     expect(rule.Evaluate(ctx(`import { Svc } from '../../svc'; const svc = new Svc(); const s = svc as unknown as { secret: number }; expect(s.secret).toBe(1);`)).Fired).toBe(true);
     expect(rule.Evaluate(ctx(`import { Svc } from '../../svc'; const svc = new Svc(); (svc as any).secret = 5; expect(svc.Open()).toBe(3);`)).Fired).toBe(true);
