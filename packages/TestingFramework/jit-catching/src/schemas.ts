@@ -52,7 +52,9 @@ export const CoverageResultSchema = z.object({ CandidateTestID: z.string(), Cove
 /** `BaseRootDir` is the base worktree the generate step prepared and kept; execute and assess reuse it. */
 export const SessionRecordSchema = z.object({ RunID: z.string(), Package: z.string(), Method: z.enum(['DodgyDiff', 'IntentAware']), RiskID: z.string().nullable(), EndReason: z.string(),
     Turns: z.number().int().nonnegative(), Tokens: TokenUsageSchema, TranscriptURL: z.string().nullable(), Produced: z.number().int().nonnegative(), Failed: z.number().int().nonnegative() });
-export const GenerationFileSchema = z.object({ Run: RunSchema, Analysis: ChangeAnalysisSchema, Tests: z.array(CandidateTestSchema), BaseRootDir: z.string().min(1), Sessions: z.array(SessionRecordSchema).default([]) });
+/** `BaseSourceDir` is the run's `base-src` copy of the tested packages' sources; null until the run finishes. */
+export const GenerationFileSchema = z.object({ Run: RunSchema, Analysis: ChangeAnalysisSchema, Tests: z.array(CandidateTestSchema), BaseRootDir: z.string().min(1), Sessions: z.array(SessionRecordSchema).default([]),
+    BaseSourceDir: z.string().nullable().default(null) });
 /** `TypeErrors` maps each test ID to its type-check errors on base and head (null when it compiles). */
 export const ExecutionFileSchema = z.object({ RunID: z.string(), Tests: z.array(CandidateTestSchema), Results: z.array(ExecutionResultSchema), Coverage: z.array(CoverageResultSchema),
     TypeErrors: z.record(z.string(), z.object({ Base: z.string().nullable(), Head: z.string().nullable() })) })

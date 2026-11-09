@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AssessStep } from '../pipeline/Assess';
@@ -58,6 +58,17 @@ describe('AssessStep', () => {
     const first = await AssessStep(opts); const second = await AssessStep(opts);
     expect(second.Catches.map((c) => c.ID).sort()).toEqual(first.Catches.map((c) => c.ID).sort());
     expect((await store.ListCatches(RUN_ID)).map((x) => x.CandidateTestID).sort()).toEqual([ID_A, ID_B, ID_C].sort());
+  });
+
+  it('assesses from the base source snapshot when the base worktree is gone', async () => {
+    const dir = new RunDir(root, RUN_ID, redaction); const baseSrc = join(dir.Path, 'base-src');
+    mkdirSync(join(baseSrc, PKG_DIR, 'src'), { recursive: true }); writeFileSync(join(baseSrc, PKG_DIR, 'src/svc.ts'), SVC);
+    rmSync(join(dir.Path, 'work'), { recursive: true, force: true });
+    dir.WriteGeneration({ ...generation(join(root, 'gone'), [candidate(ID_A, SOURCE_A), candidate(ID_B), candidate(ID_C, SOURCE_C)]), BaseSourceDir: baseSrc });
+    const judge = vi.fn(async (_c: CatchContext): Promise<PanelResult> => ({ TPProb: 0.8, Buckets: [{ Model: 'm', Bucket: 'High', Reason: 'r' }], Median: 'High', Usage: [] }));
+    const out = await AssessStep({ RunID: RUN_ID, RepoRoot: root, Settings: DEFAULT_SETTINGS, StoreDir: storeDir, Env: FULL_ENV,
+      Deps: { JudgePanel: { Judge: judge }, Rules: new RuleFilter(AllRules()), Store: new FileCatchStore(storeDir, redaction), Redaction: redaction } });
+    expect(out.Catches.find((x) => x.CandidateTestID === ID_C)).toMatchObject({ DroppedByRule: 'PrivateAccess' });
   });
 
   it('refuses a BaseRootDir outside the run folder before judging or saving', async () => {

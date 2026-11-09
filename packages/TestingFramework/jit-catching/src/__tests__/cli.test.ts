@@ -12,6 +12,7 @@ function deps(over: Partial<CliDeps> = {}): CliDeps {
     ExecuteStep: vi.fn(async () => undefined),
     AssessStep: vi.fn(async () => ({ Catches: [], Promotions: [] })),
     RunAll: vi.fn(async () => ({ RunID: 'r1', Reported: [] })),
+    CleanRun: vi.fn(async () => undefined),
     ...over,
   };
 }
@@ -53,5 +54,18 @@ describe('Main', () => {
     expect(await Main(['execute', '--run', '../../x'], d)).toBe(2);
     expect(stderr.join('')).toMatch(/usage/);
     expect(d.ExecuteStep).not.toHaveBeenCalled();
+  });
+
+  it('clean --run <id> calls CleanRun with the repository root and the run ID', async () => {
+    const d = deps();
+    expect(await Main(['clean', '--run', 'r1'], d)).toBe(0);
+    expect(d.CleanRun).toHaveBeenCalledWith('/repo', 'r1', expect.anything());
+  });
+
+  it('returns 2 with a usage error for clean without --run or --all-finished', async () => {
+    const d = deps();
+    expect(await Main(['clean'], d)).toBe(2);
+    expect(stderr.join('')).toMatch(/clean needs --run or --all-finished/);
+    expect(d.CleanRun).not.toHaveBeenCalled();
   });
 });

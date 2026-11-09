@@ -12,8 +12,10 @@ import { ExecuteStep } from './pipeline/Execute';
 import { AssessStep } from './pipeline/Assess';
 import { RunAll } from './pipeline/Run';
 import { IsValidRunID } from './pipeline/RunDir';
+import { CleanRun, FinishedRunIDs } from './pipeline/Clean';
+import { GitRepo } from './git/GitRepo';
 
-export const COMMANDS = ['generate', 'execute', 'assess', 'run', 'recheck', 'feedback', 'backtest', 'label', 'report'] as const;
+export const COMMANDS = ['generate', 'execute', 'assess', 'run', 'recheck', 'feedback', 'backtest', 'label', 'report', 'clean'] as const;
 export type CommandName = (typeof COMMANDS)[number];
 
 /** The steps and the repository root lookup, injected so tests never run git, a container or a provider. */
@@ -23,24 +25,26 @@ export interface CliDeps {
     ExecuteStep: typeof ExecuteStep;
     AssessStep: typeof AssessStep;
     RunAll: typeof RunAll;
+    CleanRun: typeof CleanRun;
 }
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_DEPS: CliDeps = {
     RepoRoot: async () => (await execFileAsync('git', ['rev-parse', '--show-toplevel'], { cwd: process.cwd() })).stdout.trim(),
-    GenerateStep, ExecuteStep, AssessStep, RunAll,
+    GenerateStep, ExecuteStep, AssessStep, RunAll, CleanRun,
 };
 
 const USAGE = `usage: jit-catch <${COMMANDS.join('|')}> [options]
   generate|run  --pr <n> | --head <sha> [--base <sha>]  [--trigger ${TriggerSchema.options.join('|')}] [--settings <file>] [--store <dir>]
   execute       --run <run ID> [--settings <file>]
-  assess        --run <run ID> [--settings <file>] [--store <dir>]`;
+  assess        --run <run ID> [--settings <file>] [--store <dir>]
+  clean         --run <run ID> | --all-finished`;
 const SHA_RE = /^[0-9a-f]{7,40}$/;
 
 /** A command-line mistake; `Main` prints the usage and returns 2. */
 class UsageError extends Error {}
 
-interface Parsed { Command: CommandName; PR: number | null; RunID: string | null; Base?: string; Head?: string; Trigger: Trigger; SettingsPath?: string; Store?: string; }
+interface Parsed { Command: CommandName; PR: number | null; RunID: string | null; Base?: string; Head?: string; Trigger: Trigger; SettingsPath?: string; Store?: string; AllFinished: boolean; }
 
 /** Parses argv and dispatches one command. Returns the process exit code: 0 done, 1 failed, 2 usage error. */
 export async function Main(argv: string[], deps: CliDeps = DEFAULT_DEPS): Promise<number> {
@@ -66,7 +70,7 @@ function isParseArgsError(e: unknown): e is Error {
 function parse(argv: string[]): Parsed {
     const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, strict: true, options: {
         pr: { type: 'string' }, run: { type: 'string' }, base: { type: 'string' }, head: { type: 'string' },
-        settings: { type: 'string' }, store: { type: 'string' }, trigger: { type: 'string' },
+        settings: { type: 'string' }, store: { type: 'string' }, trigger: { type: 'string' }, 'all-finished': { type: 'boolean' },
     } });
     const command = COMMANDS.find((c) => c === positionals[0]);
     if (!command || positionals.length !== 1) throw new UsageError(positionals[0] ? `unknown command ${positionals[0]}` : 'no command');
@@ -74,14 +78,16 @@ function parse(argv: string[]): Parsed {
     for (const k of ['base', 'head'] as const) if (values[k] !== undefined && !SHA_RE.test(values[k])) throw new UsageError(`--${k} must be a lower-case commit SHA`);
     const trigger = TriggerSchema.safeParse(values.trigger ?? 'Local');
     if (!trigger.success) throw new UsageError(`--trigger must be one of ${TriggerSchema.options.join(', ')}`);
-    const p: Parsed = { Command: command, PR: values.pr !== undefined ? Number(values.pr) : null, RunID: values.run ?? null, Base: values.base, Head: values.head, Trigger: trigger.data, SettingsPath: values.settings, Store: values.store };
+    const p: Parsed = { Command: command, PR: values.pr !== undefined ? Number(values.pr) : null, RunID: values.run ?? null, Base: values.base, Head: values.head, Trigger: trigger.data, SettingsPath: values.settings, Store: values.store, AllFinished: values['all-finished'] ?? false };
     if ((command === 'generate' || command === 'run') && p.PR === null && !p.Head) throw new UsageError(`${command} needs --pr or --head`);
     if ((command === 'execute' || command === 'assess') && !p.RunID) throw new UsageError(`${command} needs --run`);
+    if (command === 'clean' && (p.RunID === null) === !p.AllFinished) throw new UsageError('clean needs --run or --all-finished, not both');
     if (p.RunID !== null && !IsValidRunID(p.RunID)) throw new UsageError(`--run must be a run ID (letters, digits, '-' and '_'), not ${JSON.stringify(p.RunID)}`);
     return p;
 }
 
 async function dispatch(p: Parsed, deps: CliDeps): Promise<number> {
+    if (p.Command === 'clean') return clean(p, deps);
     if (p.Command !== 'generate' && p.Command !== 'execute' && p.Command !== 'assess' && p.Command !== 'run') {
         process.stderr.write(`${p.Command}: not implemented (phase 2/3)\n`);
         return 1;
@@ -96,6 +102,14 @@ async function dispatch(p: Parsed, deps: CliDeps): Promise<number> {
         case 'assess': await deps.AssessStep({ RunID: runID, RepoRoot: repoRoot, Settings: settings, StoreDir: storeDir }); break;
         case 'run': await deps.RunAll({ PR: p.PR, BaseSHA: p.Base, HeadSHA: p.Head, Trigger: p.Trigger, RepoRoot: repoRoot, Settings: settings, StoreDir: storeDir }); break;
     }
+    return 0;
+}
+
+/** Cleans the run named by `--run`, or every finished run with `--all-finished`. */
+async function clean(p: Parsed, deps: CliDeps): Promise<number> {
+    const repoRoot = await deps.RepoRoot();
+    const repo = new GitRepo(repoRoot);
+    for (const id of p.RunID !== null ? [p.RunID] : FinishedRunIDs(repoRoot)) await deps.CleanRun(repoRoot, id, repo);
     return 0;
 }
 
