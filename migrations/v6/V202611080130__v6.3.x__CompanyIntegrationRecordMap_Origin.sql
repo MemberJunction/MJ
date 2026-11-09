@@ -5,7 +5,7 @@
 -- Existing rows default to 'Created', which keeps their behaviour exactly as before this column existed.
 
 ALTER TABLE ${flyway:defaultSchema}.CompanyIntegrationRecordMap
-    ADD Origin NVARCHAR(20) NOT NULL
+    ADD Origin NVARCHAR(20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL
         CONSTRAINT DF_CompanyIntegrationRecordMap_Origin DEFAULT 'Created'
         CONSTRAINT CK_CompanyIntegrationRecordMap_Origin CHECK (Origin IN ('Created', 'Adopted'));
 GO
