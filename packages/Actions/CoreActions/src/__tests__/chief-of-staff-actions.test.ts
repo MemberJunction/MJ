@@ -179,6 +179,7 @@ describe('Chief of Staff Actions Suite', () => {
             expect(routineStub.UserID).toBe('user-abc');
             expect(routineStub.RoutineType).toBe('AgentWake');
             expect(routineStub.ScheduleMode).toBe('Adaptive');
+            expect(routineStub.CronExpression).toBe('*/30 * * * *');
             expect(routineStub.WakeConfigurationObject?.workstreamKey).toBe('q4-okr-rollup');
             expect(routineStub.WakeConfigurationObject?.watchedEntities?.[0].entityName).toBe(
                 'MJ: AI Agent Requests'

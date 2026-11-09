@@ -1472,6 +1472,16 @@ export abstract class BaseEntity<T = unknown> {
     private _skipSubtypeLoadHint: boolean = false;
 
     /**
+     * Set while an already-loaded parent links and loads an IS-A child downward
+     * ({@link linkAndLoadChildEntity}, {@link loadChildRowQuietly}). Child views join the parent's
+     * physical base table rather than the parent's view, so they omit the parent's virtual joined
+     * columns (e.g. `Conversation.Type`, `Comment.CommentType`). Skipping `this._parentEntity.Hydrate`
+     * during downward child hydration preserves the parent's authoritative virtual columns while
+     * `SetMany` still synchronizes shared physical columns.
+     */
+    private _skipParentChainHydration: boolean = false;
+
+    /**
      * For **overlapping** subtype parents (AllowMultipleSubtypes = true), stores
      * the list of child entity type names that have records for this PK.
      * Populated during InitializeChildEntity() via discoverOverlappingChildren().
@@ -1914,8 +1924,15 @@ export abstract class BaseEntity<T = unknown> {
         // Capture any pending modifications on this entity or its ancestors before child InnerLoad
         const dirtySnapshots = this.captureChainDirtyState();
 
-        // Load the child's record using our shared PK
-        const loaded = await childEntity.InnerLoad(this.PrimaryKey);
+        // Load the child's record using our shared PK without wiping virtual columns on the
+        // already-loaded parent chain (child views join parent base tables, not parent views).
+        childEntity._skipParentChainHydration = true;
+        let loaded: boolean;
+        try {
+            loaded = await childEntity.InnerLoad(this.PrimaryKey);
+        } finally {
+            childEntity._skipParentChainHydration = false;
+        }
         if (!loaded) {
             // Load failed — clean up the link
             this._childEntity = null;
@@ -2418,10 +2435,12 @@ export abstract class BaseEntity<T = unknown> {
     private async loadChildRowQuietly(childEntity: BaseEntity): Promise<boolean> {
         const probe: SubtypeHintProbe = { RowReadFailed: false };
         childEntity._subtypeHintProbe = probe;
+        childEntity._skipParentChainHydration = true;
         try {
             return await childEntity.InnerLoad(this.PrimaryKey);
         } finally {
             childEntity._subtypeHintProbe = null;
+            childEntity._skipParentChainHydration = false;
         }
     }
 
@@ -7308,11 +7327,10 @@ export abstract class BaseEntity<T = unknown> {
             // did not narrow its SELECT (see narrowHydrationSource).
             data = this.narrowHydrationSource(data);
 
-            // IS-A: hydrate parent chain from loaded data before populating self.
-            // Hydrate resets each parent via init() (giving fresh _NeverSet=true on PK fields)
-            // then populates from data. This must happen before self's SetMany so parents
-            // are in clean state when they receive routed field values.
-            if (this._parentEntity) {
+            // IS-A: hydrate parent chain from loaded data before populating self when loading
+            // upward from a child/leaf instance. Skipped when an already-loaded parent links a
+            // child downward so the parent's virtual view columns are not cleared.
+            if (this._parentEntity && !this._skipParentChainHydration) {
                 this._parentEntity.Hydrate(data);
             }
 

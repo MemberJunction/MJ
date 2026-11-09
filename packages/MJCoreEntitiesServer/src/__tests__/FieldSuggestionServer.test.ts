@@ -459,5 +459,40 @@ describe('FieldSuggestionCommentDriver, Server Subclasses & Security Hooks', () 
             expect(BUILT_IN_CONVERSATION_TYPE_IDS.COMMENT).toBe('17E6A105-AE51-43A2-9D56-290BC8D1D6BB');
             expect(BUILT_IN_COMMENT_TYPE_IDS.FIELD_SUGGESTION).toBe('8918DBA5-EDDD-4AF4-A518-FEB387ED02F9');
         });
+
+        it('MJCommentEntityServer.Save initializes ValidationResult.Success = true and delegates to super.Save when valid', async () => {
+            const targetEntityInfo = makeTargetEntityInfo({ allowFieldSuggestions: true });
+            const fakeProvider = {
+                Entities: [targetEntityInfo],
+                EntityByID: (id: string) => (id === TARGET_ENTITY_ID ? targetEntityInfo : undefined),
+            } as unknown as IMetadataProvider;
+
+            const superSaveSpy = vi
+                .spyOn(Object.getPrototypeOf(MJCommentEntityServer.prototype) as BaseEntity, 'Save')
+                .mockResolvedValue(true);
+
+            try {
+                const fakeComment = Object.create(MJCommentEntityServer.prototype) as MJCommentEntityServer;
+                let typeId: string | null = null;
+                let commentTypeId: string | null = null;
+                Object.defineProperties(fakeComment, {
+                    TypeID: { get: () => typeId, set: (v: string | null) => { typeId = v; } },
+                    CommentTypeID: { get: () => commentTypeId, set: (v: string | null) => { commentTypeId = v; } },
+                    AnchorType: { get: () => 'Record' },
+                    LinkedEntityID: { get: () => TARGET_ENTITY_ID },
+                    IsSaved: { get: () => false },
+                    ProviderToUse: { get: () => fakeProvider },
+                    RegisterResultHistoryEntry: { value: vi.fn() },
+                });
+
+                const ok = await fakeComment.Save();
+                expect(ok).toBe(true);
+                expect(typeId).toBe(BUILT_IN_CONVERSATION_TYPE_IDS.COMMENT);
+                expect(commentTypeId).toBe(BUILT_IN_COMMENT_TYPE_IDS.COMMENT);
+                expect(superSaveSpy).toHaveBeenCalledTimes(1);
+            } finally {
+                superSaveSpy.mockRestore();
+            }
+        });
     });
 });

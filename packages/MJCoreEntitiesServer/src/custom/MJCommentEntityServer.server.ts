@@ -35,7 +35,7 @@ export class MJCommentEntityServer extends MJCommentEntity {
     }
 
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
-        if (!this.TypeID) {
+        if (!this.TypeID || (!this.IsSaved && UUIDsEqual(this.TypeID, BUILT_IN_CONVERSATION_TYPE_IDS.CHAT))) {
             this.TypeID =
                 ConversationEngine.Instance.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.COMMENT) ??
                 BUILT_IN_CONVERSATION_TYPE_IDS.COMMENT;
@@ -47,6 +47,7 @@ export class MJCommentEntityServer extends MJCommentEntity {
         }
 
         const validation = new ValidationResult();
+        validation.Success = true;
         this.validateCommentTypeConstraints(validation);
         if (!validation.Success) {
             const message = validation.Errors.map((e) => e.Message).join('; ');

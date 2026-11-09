@@ -61,7 +61,13 @@ export class MJConversationEntityServer extends MJConversationEntity {
     }
 
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
-        if (!this.TypeID) {
+        const typeIdField = typeof this.GetFieldByName === 'function' ? this.GetFieldByName('TypeID') : undefined;
+        const shouldDefaultAnchoredToComment =
+            !this.IsSaved &&
+            Boolean(this.AnchorType) &&
+            !typeIdField?.Dirty &&
+            Boolean(this.TypeID && UUIDsEqual(this.TypeID, BUILT_IN_CONVERSATION_TYPE_IDS.CHAT));
+        if (!this.TypeID || shouldDefaultAnchoredToComment) {
             const defaultCode = this.AnchorType
                 ? CONVERSATION_TYPE_CODES.COMMENT
                 : CONVERSATION_TYPE_CODES.CHAT;

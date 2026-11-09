@@ -53,7 +53,7 @@ export class MJFieldSuggestionEntityServer extends MJFieldSuggestionEntity {
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         const wasNew = !this.IsSaved;
 
-        if (!this.TypeID) {
+        if (!this.TypeID || (!wasNew ? false : UUIDsEqual(this.TypeID, BUILT_IN_CONVERSATION_TYPE_IDS.CHAT))) {
             this.TypeID =
                 ConversationEngine.Instance.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.COMMENT) ??
                 BUILT_IN_CONVERSATION_TYPE_IDS.COMMENT;

@@ -1078,5 +1078,60 @@ describe('Generic Type Extensions via SubtypeSelector (AutoEnsureOnSave, OnSubty
             expect(await comment.ISAParent!.ResolveSubtypeDriver()).toBeNull();
             expect(await comment.Save()).toBe(true);
         });
+
+        it('preserves virtual view columns on root and branch entities when loading downward across a 3-level IS-A chain', async () => {
+            // Add virtual joined view fields (like Conversation.Type and Comment.CommentType) to the metadata
+            const convEntity = provider.EntityByName('TestConversations')!;
+            const commentEntity = provider.EntityByName('TestComments')!;
+            convEntity.Fields.push(
+                new (convEntity.Fields[0].constructor as new (data: Record<string, unknown>) => typeof convEntity.Fields[0])({
+                    ...makeField('ent-convs', 'TestConversations', 'Type', 99),
+                    IsVirtual: true,
+                    AllowUpdateAPI: false,
+                })
+            );
+            commentEntity.Fields.push(
+                new (commentEntity.Fields[0].constructor as new (data: Record<string, unknown>) => typeof commentEntity.Fields[0])({
+                    ...makeField('ent-comments', 'TestComments', 'CommentType', 99),
+                    IsVirtual: true,
+                    AllowUpdateAPI: false,
+                })
+            );
+
+            // Save a 3-level record (Conversation -> Comment -> FieldSuggestion)
+            const suggestion = await provider.GetEntityObject('TestFieldSuggestions');
+            suggestion.Set('Name', '3-level virtual column check');
+            suggestion.Set('TypeID', CONV_TYPE_COMMENT_ID);
+            suggestion.Set('CommentTypeID', COMMENT_TYPE_SUGGESTION_ID);
+            suggestion.Set('Source', 'LLM');
+            suggestion.Set('SuggestedValue', 'Proposed');
+            expect(await suggestion.Save()).toBe(true);
+            const id = String(suggestion.Get('ID'));
+
+            // Simulate real SQL views: each view only exposes its OWN virtual FK-joined columns,
+            // while child views join ancestor physical base tables (omitting ancestor virtual columns).
+            const originalLoad = provider.Load.bind(provider);
+            vi.spyOn(provider, 'Load').mockImplementation(async (entity, ck, rels, u) => {
+                const row = await originalLoad(entity, ck, rels, u);
+                if (!row) return null;
+                if (entity.EntityInfo.Name === 'TestConversations') {
+                    return { ...row, Type: 'Comment' };
+                }
+                if (entity.EntityInfo.Name === 'TestComments') {
+                    return { ...row, CommentType: 'Field Suggestion' };
+                }
+                // TestFieldSuggestions joins base tables Conversation + Comment (no virtual Type or CommentType)
+                return row;
+            });
+
+            const loadedConv = await provider.GetEntityObject('TestConversations');
+            expect(await loadedConv.InnerLoad(CompositeKey.FromID(id))).toBe(true);
+
+            // Downward child discovery must attach both Comment and FieldSuggestion WITHOUT wiping virtual columns
+            expect(loadedConv.ISAChild?.EntityInfo.Name).toBe('TestComments');
+            expect(loadedConv.ISAChild?.ISAChild?.EntityInfo.Name).toBe('TestFieldSuggestions');
+            expect(loadedConv.Get('Type')).toBe('Comment');
+            expect(loadedConv.ISAChild?.Get('CommentType')).toBe('Field Suggestion');
+        });
     });
 });

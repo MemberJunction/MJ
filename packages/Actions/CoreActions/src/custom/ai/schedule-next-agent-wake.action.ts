@@ -107,6 +107,12 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
                 existingRoutine ??
                 (await md.GetEntityObject<MJUserRoutineEntity>('MJ: User Routines', contextUser));
 
+            const effectiveCronExpression = this.resolveEffectiveCronExpression(
+                params,
+                scheduleMode,
+                cronExpression
+            );
+
             routine.UserID = contextUser.ID;
             routine.Name = `${ agentName } — Wake (${ workstreamKey })`;
             routine.Description = wakeReason;
@@ -116,7 +122,7 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
             routine.TargetType = 'Agent';
             routine.TargetID = agentId;
             routine.Timezone = timezone;
-            routine.CronExpression = cronExpression && cronExpression.trim().length > 0 ? cronExpression.trim() : null;
+            routine.CronExpression = effectiveCronExpression;
             routine.InitialMessage = initialMessage;
             routine.StartingPayload = JSON.stringify({
                 workstreamKey,
@@ -324,6 +330,34 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
             return raw;
         }
         return 'Active';
+    }
+
+    /**
+     * Ensures `Adaptive` routines always carry a non-null `CronExpression` so the periodic
+     * adaptive check-in loop has a valid cadence AND satisfies `CK_UserRoutine_CronOrOneShot`
+     * (`[ScheduleMode] = 'OneShot' OR [CronExpression] IS NOT NULL`).
+     */
+    private resolveEffectiveCronExpression(
+        params: RunActionParams,
+        scheduleMode: MJUserRoutineEntity['ScheduleMode'],
+        cronExpression: string | null
+    ): string | null {
+        if (cronExpression && cronExpression.trim().length > 0) {
+            return cronExpression.trim();
+        }
+        if (scheduleMode !== 'Adaptive') {
+            return null;
+        }
+        const wakeInMinutes =
+            this.getNumericParam(params, 'WakeInMinutes') ?? this.getNumericParam(params, 'DelayMinutes');
+        if (wakeInMinutes != null && wakeInMinutes >= 1 && wakeInMinutes <= 59) {
+            return `*/${ Math.max(1, Math.round(wakeInMinutes)) } * * * *`;
+        }
+        if (wakeInMinutes != null && wakeInMinutes >= 60 && wakeInMinutes < 1440) {
+            const hours = Math.min(23, Math.max(1, Math.round(wakeInMinutes / 60)));
+            return hours === 1 ? '0 * * * *' : `0 */${ hours } * * *`;
+        }
+        return '0 * * * *';
     }
 
     private resolveNextRunAt(
