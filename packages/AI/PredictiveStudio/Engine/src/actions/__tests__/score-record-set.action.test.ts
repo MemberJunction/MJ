@@ -14,7 +14,8 @@ import type {
 import type { JsonObject } from '../base-predictive-studio.action';
 import type { RecordRef, RecordResult } from '@memberjunction/record-set-processor-base';
 import type { MLInferenceResultPayload } from '../../scoring/ml-model-inference-processor';
-import { LocalArtifactLoader } from '../../scoring/artifact-loader';
+import { StorageProviderArtifactLoader } from '../../scoring/storage-provider-artifact-loader';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /**
  * Unit tests for the Score Record Set action. NO live DB, NO live sidecar — the
@@ -185,7 +186,7 @@ describe('PredictiveStudioScoreRecordSetAction — default runner', () => {
       throw new Error('expected the action to build a ProductionScoreRecordSetRunner');
     }
     const deps = runner['resolveDeps']();
-    expect(deps.artifactLoader).toBeInstanceOf(LocalArtifactLoader);
+    expect(deps.artifactLoader).toBeInstanceOf(StorageProviderArtifactLoader);
   });
 });
 
@@ -323,7 +324,7 @@ describe('ProductionScoreRecordSetRunner.summarize — counts + RecordID correla
     return { EntityID: 'e1', RecordID: id };
   }
   function payload(score: number, klass?: string): MLInferenceResultPayload {
-    return { modelId: 'm1', target: 'Churned', problemType: 'classification', score, class: klass, scoredAt: '2026-10-23T00:00:00.000Z' };
+    return { modelId: 'm1', target: 'Churned', problemType: 'classification', score, class: klass, scoredAt: '2026-10-23T00:00:00.000Z', inTraining: false };
   }
   function baseRequest(): ScoreRecordSetRequest {
     return { modelId: 'm1', scope: { records: [] }, provider: SUMMARY_PROVIDER };
@@ -388,6 +389,7 @@ describe('ProductionScoreRecordSetRunner.summarize — counts + RecordID correla
 
 describe('PredictiveStudioScoreRecordSetAction — refusal codes', () => {
   it('keeps a refusal\'s typed code instead of SCORING_FAILED', async () => {
+    const errors = ConsoleCapture.Errors();
     class RefusingRunner implements IScoreRecordSetRunner {
       public async run(): Promise<ScoreRecordSetResult> {
         throw new ModelNotScorableError('model-7', 'Archived');
@@ -401,5 +403,6 @@ describe('PredictiveStudioScoreRecordSetAction — refusal codes', () => {
     );
     expect(result.Success).toBe(false);
     expect(result.ResultCode).toBe('MODEL_NOT_SCORABLE');
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("ML Model 'model-7' is Archived and cannot score records")]);
   });
 });

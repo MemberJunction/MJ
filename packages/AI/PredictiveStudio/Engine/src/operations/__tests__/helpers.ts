@@ -12,10 +12,10 @@ import type { RemoteOpServerContext } from '@memberjunction/core';
 import type { RemoteOpProgress } from '@memberjunction/core';
 
 /**
- * A minimal stub provider. The engine seams are mocked, but the training
- * delegation now resolves the active File Storage Provider via `RunView` before
- * delegating — so the stub answers that ONE read with an empty result (→ no active
- * provider → the local-disk artifact fallback), keeping the train-op unit tests DB-free.
+ * A minimal stub provider. The engine seams are mocked; building the training deps
+ * reads nothing (the `PS_STORAGE_PROVIDER` storage is resolved lazily, when a run
+ * stores a file), so the stub answers any `RunView` with an empty result, keeping
+ * the train-op unit tests DB-free.
  */
 export function stubProvider(): IMetadataProvider {
   return {

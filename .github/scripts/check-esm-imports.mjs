@@ -155,11 +155,14 @@ export async function checkPackage(pkgDir, pkgJson = null, { timeoutMs = IMPORT_
 
     // A gating break in ANY entry gates the package; otherwise the first entry's status
     // stands (a side-effecting subpath's non-gating error doesn't muddy a clean root).
-    const results = [];
-    for (const p of entries) {
+    // Entries import in parallel: a package whose `exports` star expands to hundreds of files
+    // (integration-test-suite's ./checks/*, ~4 s per fresh process) otherwise runs them one by
+    // one and alone outlasts the job's time cap. The child-process limiter below bounds how many
+    // run at once across the whole sweep, and results keep entry order.
+    const results = await Promise.all(entries.map(async (p) => {
         const failure = await importInFreshProcess(p, timeoutMs);
-        results.push(failure ? classifyFailure(failure, pkgDir) : { status: 'OK', detail: '' });
-    }
+        return failure ? classifyFailure(failure, pkgDir) : { status: 'OK', detail: '' };
+    }));
     const gating = results.find((r) => r.status === 'OWN_DIST_MISSING_EXT');
     return { name, pkgDir, ...(gating ?? results[0]) };
 }
@@ -248,7 +251,35 @@ function walkFiles(dir, out = []) {
  * timeout and hang CI to the job cap. SIGKILL is uncatchable, so the timeout can
  * always reclaim the child.
  */
+/** At most CHILD_LIMIT import children run at once, across every package in a sweep. */
+const CHILD_LIMIT = 8;
+let runningChildren = 0;
+const waitingChildren = [];
+
+/**
+ * Run `start` once a child slot is free. A finishing child hands its slot straight to the
+ * oldest waiter (the count does not drop), so a newcomer can never take it in between.
+ */
+async function withChildSlot(start) {
+    if (runningChildren < CHILD_LIMIT) {
+        runningChildren++;
+    } else {
+        await new Promise((takeSlot) => waitingChildren.push(takeSlot));
+    }
+    try {
+        return await start();
+    } finally {
+        const next = waitingChildren.shift();
+        if (next) next();
+        else runningChildren--;
+    }
+}
+
 function importInFreshProcess(entryPath, timeoutMs = IMPORT_TIMEOUT_MS) {
+    return withChildSlot(() => importInChild(entryPath, timeoutMs));
+}
+
+function importInChild(entryPath, timeoutMs) {
     const url = pathToFileURL(entryPath).href;
     return new Promise((resolveResult) => {
         execFile(

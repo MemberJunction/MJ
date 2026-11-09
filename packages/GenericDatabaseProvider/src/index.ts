@@ -58,3 +58,18 @@ export { TypedQueryParameter, IsTypedQueryParameterList, TypedBindValue, NamedQu
 export type { TypedQueryParameterValue } from './typedQueryParameter.js';
 export { StatementMemo } from './statementMemo.js';
 export { FindProjectionStars } from './fieldSecurity/projectionStars.js';
+export {
+    AreEntityFieldValuesDifferent,
+    ClientOldValueToFieldValue,
+    DatesEqualAtColumnResolution,
+    DetectFieldConcurrencyConflicts,
+    FindEntityFieldByCodeNameOrName,
+    IsFieldOpaqueToClient,
+    JsonStringsEquivalent,
+    RedactEncryptedConflictValues,
+    WithoutEchoedOpaqueValues,
+} from './concurrency/fieldConflictDetector.js';
+export type {
+    ConflictDiagnosticEntry,
+    FieldConcurrencyCheckResult,
+} from './concurrency/fieldConflictDetector.js';
