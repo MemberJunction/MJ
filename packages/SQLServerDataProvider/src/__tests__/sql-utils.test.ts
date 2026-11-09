@@ -94,24 +94,9 @@ vi.mock('@memberjunction/global', () => {
   };
 });
 
-// Mock nunjucks — keep a lightweight render implementation
-// Note: Code imports as `import nunjucks from 'nunjucks'` (default import)
-// so we must wrap in a default object
-vi.mock('nunjucks', () => ({
-  default: {
-    Environment: class Environment {
-      constructor() {}
-      addFilter() {}
-      renderString(template: string, context: Record<string, unknown>) {
-        // Very naive Nunjucks substitute: replace {{ key }} with context[key]
-        return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_match, key) => {
-          const val = context[key];
-          return val !== undefined ? String(val) : '';
-        });
-      }
-    }
-  }
-}));
+// nunjucks is NOT mocked: QueryParameterProcessor parses each template to find values written
+// without a SQL filter, and builds its environment through @memberjunction/nunjucks-sandbox,
+// both of which need the real library.
 
 // ---------------------------------------------------------------------------
 // Import the classes under test AFTER mocks are set up
@@ -366,16 +351,29 @@ describe('QueryParameterProcessor.processQueryTemplate', () => {
   });
 
   it('should process a simple template query', () => {
+    // A number, because the mocked core registers no sql* filters and a string value written
+    // without one is refused by design.
     const query = {
       ID: 'q2',
-      SQL: "SELECT * FROM Users WHERE Status = '{{ status }}'",
+      SQL: 'SELECT * FROM Users WHERE LoginCount > {{ minLogins }}',
+      UsesTemplate: true,
+      Parameters: [makeParamDef({ Name: 'minLogins', Type: 'number', IsRequired: true })],
+    };
+    const result = QueryParameterProcessor.processQueryTemplate(query as never, { minLogins: 5 });
+    expect(result.success).toBe(true);
+    expect(result.processedSQL).toBe('SELECT * FROM Users WHERE LoginCount > 5');
+    expect(result.appliedParameters.minLogins).toBe(5);
+  });
+
+  it('should refuse a string value written into a template without a SQL filter', () => {
+    const query = {
+      ID: 'q2b',
+      SQL: 'SELECT * FROM Users WHERE Status = {{ status }}',
       UsesTemplate: true,
       Parameters: [makeParamDef({ Name: 'status', Type: 'string', IsRequired: true })],
     };
-    const result = QueryParameterProcessor.processQueryTemplate(query as never, { status: 'Active' });
-    expect(result.success).toBe(true);
-    expect(result.processedSQL).toContain('Active');
-    expect(result.appliedParameters.status).toBe('Active');
+    const result = QueryParameterProcessor.processQueryTemplate(query as never, { status: '1 UNION SELECT Email FROM Users' });
+    expect(result.success).toBe(false);
   });
 
   it('should fail when required parameters are missing for template query', () => {

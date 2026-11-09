@@ -14,14 +14,22 @@
  *    - `X-Forwarded-For` (if present) contains only loopback addresses.
  *    - `Host` header is `localhost`, `127.0.0.1`, or `::1`.
  *    - `Origin` / `Referer` headers (if present) resolve to `localhost`, `127.0.0.1`, or `::1`.
- *    - Socket remote address is loopback (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`) or local
- *      Docker bridge/host-gateway when no external `X-Forwarded-For` is present.
+ *    - Socket remote address is loopback (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`).
  *    Any request failing these checks is denied with `403 Forbidden` and logged.
+ * 3. The Docker bridge / host-gateway allowance is never implicit. Under Docker NAT with a
+ *    published port, EVERY remote client's connection appears to come from the bridge gateway,
+ *    so a bridge source address proves nothing about where the request originated. A bridge
+ *    address is therefore accepted only when BOTH hold:
+ *    - `MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE=true` is set explicitly (running inside a container is
+ *      NOT auto-detected), and
+ *    - `MJ_DEV_AUTH_BRIDGE_SECRET` (at least {@link MIN_BRIDGE_SECRET_LENGTH} characters) is set
+ *      and the request presents the same value in the `X-MJ-Dev-Auth-Secret` header.
+ *    Opt-in without a usable secret fails closed.
  *
  * @module @memberjunction/server/auth/localDevAuth
  */
 
-import * as fs from 'node:fs';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { Router, json, type Request, type Response } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import {
@@ -66,6 +74,119 @@ export interface LocalhostGuardResult {
 
 const LOCALHOST_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 
+/** Request header carrying the shared secret required for the Docker bridge allowance. */
+export const DEV_AUTH_BRIDGE_SECRET_HEADER = 'x-mj-dev-auth-secret';
+
+/** Minimum accepted length of `MJ_DEV_AUTH_BRIDGE_SECRET`. */
+export const MIN_BRIDGE_SECRET_LENGTH = 16;
+
+/** Resolved state of the opt-in Docker bridge allowance. */
+export interface DockerBridgeAllowance {
+  /** True when `MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE` is explicitly `true`/`1`. */
+  OptedIn: boolean;
+  /** The configured shared secret, present only when opted in and the secret is usable. */
+  Secret?: string;
+  /** Why the allowance is unusable even though it was opted into. */
+  MisconfigurationReason?: string;
+}
+
+/**
+ * Per-process random key for comparing bridge secrets. Both sides are HMAC'd with it so the
+ * comparison is fixed-length and constant-time without hashing the secret with a bare digest.
+ */
+const bridgeSecretCompareKey = randomBytes(32);
+let bridgeMisconfigurationLogged = false;
+
+const BRIDGE_SETUP_HELP =
+  `To allow /auth/dev-login from the Docker bridge / host gateway, set ` +
+  `MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE=true AND MJ_DEV_AUTH_BRIDGE_SECRET to a random value of at least ` +
+  `${MIN_BRIDGE_SECRET_LENGTH} characters (e.g. \`openssl rand -hex 32\`), and have the client send it in the ` +
+  `'X-MJ-Dev-Auth-Secret' request header. Publish the port on 127.0.0.1 only (e.g. "127.0.0.1:4000:4000").`;
+
+/**
+ * Resolves the Docker bridge allowance from the environment. The allowance is never implicit:
+ * it requires an explicit opt-in and a shared secret of sufficient length.
+ */
+export function ResolveDockerBridgeAllowance(env: NodeJS.ProcessEnv = process.env): DockerBridgeAllowance {
+  const rawOptIn = env.MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE?.trim().toLowerCase();
+  if (rawOptIn !== 'true' && rawOptIn !== '1') {
+    return { OptedIn: false };
+  }
+  const secret = env.MJ_DEV_AUTH_BRIDGE_SECRET?.trim() ?? '';
+  if (secret.length === 0) {
+    return { OptedIn: true, MisconfigurationReason: 'MJ_DEV_AUTH_BRIDGE_SECRET is not set' };
+  }
+  if (secret.length < MIN_BRIDGE_SECRET_LENGTH) {
+    return {
+      OptedIn: true,
+      MisconfigurationReason: `MJ_DEV_AUTH_BRIDGE_SECRET is shorter than ${MIN_BRIDGE_SECRET_LENGTH} characters`,
+    };
+  }
+  return { OptedIn: true, Secret: secret };
+}
+
+/**
+ * Logs (once per process) when the bridge allowance was opted into without a usable secret.
+ * Called at route attachment (startup) and again lazily on the first affected request.
+ */
+export function ReportDockerBridgeMisconfiguration(env: NodeJS.ProcessEnv = process.env): void {
+  const allowance = ResolveDockerBridgeAllowance(env);
+  if (!allowance.MisconfigurationReason || bridgeMisconfigurationLogged) {
+    return;
+  }
+  bridgeMisconfigurationLogged = true;
+  LogError(
+    `[SECURITY] MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE=true is set but ${allowance.MisconfigurationReason}; ` +
+      `the Docker bridge allowance is DISABLED (failing closed). ${BRIDGE_SETUP_HELP}`
+  );
+}
+
+/** Constant-time comparison of a presented bridge secret against the configured one. */
+function bridgeSecretMatches(presented: string | undefined, expected: string): boolean {
+  if (!presented) {
+    return false;
+  }
+  const presentedMac = createHmac('sha256', bridgeSecretCompareKey).update(presented).digest();
+  const expectedMac = createHmac('sha256', bridgeSecretCompareKey).update(expected).digest();
+  return timingSafeEqual(presentedMac, expectedMac);
+}
+
+/**
+ * Decides whether a non-loopback socket address may be treated as local because it is a Docker
+ * bridge / host-gateway address AND the caller proved knowledge of the shared secret.
+ */
+function verifyDockerBridgeRequest(
+  req: Request,
+  remoteAddress: string | undefined,
+  hasProxyHeader: boolean,
+  env: NodeJS.ProcessEnv
+): LocalhostGuardResult {
+  const rejected = `Non-loopback socket remote address '${remoteAddress ?? 'unknown'}' rejected`;
+  if (hasProxyHeader || !IsLoopbackAddress(remoteAddress, true)) {
+    return { Allowed: false, Reason: `${rejected}.` };
+  }
+  const allowance = ResolveDockerBridgeAllowance(env);
+  if (!allowance.OptedIn) {
+    return {
+      Allowed: false,
+      Reason: `${rejected}: the Docker bridge allowance is off (MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE is not 'true').`,
+    };
+  }
+  if (!allowance.Secret) {
+    ReportDockerBridgeMisconfiguration(env);
+    return { Allowed: false, Reason: `${rejected}: ${allowance.MisconfigurationReason}.` };
+  }
+  const rawHeader = req.headers[DEV_AUTH_BRIDGE_SECRET_HEADER];
+  const presented = Array.isArray(rawHeader) ? rawHeader[0] : rawHeader;
+  if (!bridgeSecretMatches(presented?.trim(), allowance.Secret)) {
+    return {
+      Allowed: false,
+      Reason: `${rejected}: missing or incorrect '${DEV_AUTH_BRIDGE_SECRET_HEADER}' header.`,
+    };
+  }
+  return { Allowed: true };
+}
+
 function TrimTrailingSlashes(value: string): string {
   let end = value.length;
   while (end > 0 && value.charCodeAt(end - 1) === 47) {
@@ -77,6 +198,10 @@ function TrimTrailingSlashes(value: string): string {
 /**
  * Checks whether an IP address is a loopback address, or (when `allowDockerBridge` is true)
  * a local Docker bridge / Docker Desktop host-gateway address.
+ *
+ * This is address classification only. A bridge address is NOT evidence of a local caller
+ * (under Docker NAT every remote client appears as the bridge gateway), so
+ * {@link VerifyLocalhostRequest} additionally requires an explicit opt-in and a shared secret.
  */
 export function IsLoopbackAddress(rawIp: string | undefined, allowDockerBridge: boolean): boolean {
   if (!rawIp) {
@@ -104,16 +229,6 @@ export function IsLoopbackAddress(rawIp: string | undefined, allowDockerBridge: 
     }
   }
   return false;
-}
-
-function isRunningInsideContainer(env: NodeJS.ProcessEnv): boolean {
-  if (env.MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE === 'true') {
-    return true;
-  }
-  if (env.MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE === 'false') {
-    return false;
-  }
-  return fs.existsSync('/.dockerenv') || fs.existsSync('/run/.containerenv');
 }
 
 /** Extracts the hostname (without port) from a raw HTTP `Host` header value. */
@@ -239,23 +354,20 @@ export function VerifyLocalhostRequest(
     }
   }
 
-  // 5. Inspect socket remote address (allow Docker local bridge ONLY when running in a container and no proxy header is present)
+  // 5. Inspect socket remote address. Pure loopback needs nothing further. A Docker bridge /
+  //    host-gateway address is accepted only with the explicit opt-in AND the shared secret,
+  //    and never when a proxy header is present.
   const hasProxyHeader = Boolean(
     (xffValue && xffValue.trim().length > 0) ||
     (forwardedVal && forwardedVal.trim().length > 0) ||
     req.headers['x-real-ip'] ||
     req.headers['cf-connecting-ip']
   );
-  const allowDockerBridge = !hasProxyHeader && isRunningInsideContainer(env);
   const remoteAddress = req.socket?.remoteAddress || req.ip;
-  if (!IsLoopbackAddress(remoteAddress, allowDockerBridge)) {
-    return {
-      Allowed: false,
-      Reason: `Non-loopback socket remote address '${remoteAddress ?? 'unknown'}' rejected.`,
-    };
+  if (IsLoopbackAddress(remoteAddress, false)) {
+    return { Allowed: true };
   }
-
-  return { Allowed: true };
+  return verifyDockerBridgeRequest(req, remoteAddress, hasProxyHeader, env);
 }
 
 /**
@@ -419,6 +531,10 @@ export function MintLocalDevJwt(
  * When enabled, every request is gated by {@link VerifyLocalhostRequest}.
  */
 export function AttachLocalDevAuthRoutes(router: Router): void {
+  if (IsLocalDevAuthEnabled()) {
+    ReportDockerBridgeMisconfiguration();
+  }
+
   const devAuthLimiter = rateLimit({
     windowMs: 60_000,
     limit: 60,
@@ -440,7 +556,9 @@ export function AttachLocalDevAuthRoutes(router: Router): void {
       LogError(`[SECURITY] Blocked /auth/dev-login request: ${guard.Reason}`);
       res.status(403).json({
         success: false,
-        error: 'Forbidden: /auth/dev-login is restricted to localhost only.',
+        error:
+          'Forbidden: /auth/dev-login is restricted to localhost only. Docker bridge access requires ' +
+          'MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE=true plus MJ_DEV_AUTH_BRIDGE_SECRET and the X-MJ-Dev-Auth-Secret header.',
       });
       return;
     }

@@ -4,6 +4,14 @@ import jwt from 'jsonwebtoken';
 import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import { UserInfo } from '@memberjunction/core';
 
+// Simulate running inside a container: the guard must NOT treat that as an opt-in.
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  const existsSync = (path: Parameters<typeof actual.existsSync>[0]): boolean =>
+    path === '/.dockerenv' || path === '/run/.containerenv' ? true : actual.existsSync(path);
+  return { ...actual, existsSync, default: { ...actual, existsSync } };
+});
+
 vi.mock('../config.js', () => ({
   configInfo: {
     devAuth: { enabled: false },
@@ -16,6 +24,8 @@ import {
   AssertLocalDevAuthAllowed,
   IsLocalDevAuthEnabled,
   IsLoopbackAddress,
+  DEV_AUTH_BRIDGE_SECRET_HEADER,
+  ResolveDockerBridgeAllowance,
   MintLocalDevJwt,
   RegisterLocalDevAuthProvider,
   VerifyLocalhostRequest,
@@ -28,12 +38,14 @@ function createMockRequest(overrides: {
   origin?: string;
   referer?: string;
   xff?: string;
+  bridgeSecret?: string;
 }): Request {
   const headers: Record<string, string | undefined> = {
     host: overrides.host ?? 'localhost:4000',
     origin: overrides.origin,
     referer: overrides.referer,
     'x-forwarded-for': overrides.xff,
+    'x-mj-dev-auth-secret': overrides.bridgeSecret,
   };
   return {
     headers,
@@ -100,15 +112,7 @@ describe('localDevAuth security invariants', () => {
       ).Allowed
     ).toBe(true);
 
-    // 2. Docker Desktop host-gateway when Host is localhost, inside container, and no XFF is present
-    expect(
-      VerifyLocalhostRequest(
-        createMockRequest({ remoteAddress: '::ffff:192.168.65.1', host: 'localhost:4000' }),
-        { NODE_ENV: 'development', MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE: 'true' }
-      ).Allowed
-    ).toBe(true);
-
-    // 2b. Rejects Docker bridge IPs when NOT running inside a container
+    // 2b. Rejects Docker bridge IPs when the allowance is explicitly off
     expect(
       VerifyLocalhostRequest(
         createMockRequest({ remoteAddress: '172.18.0.1', host: 'localhost:4000' }),
@@ -192,5 +196,115 @@ describe('localDevAuth security invariants', () => {
     expect(userInfo.email).toBe('admin@memberjunction.org');
     expect(userInfo.firstName).toBe('Admin');
     expect(userInfo.lastName).toBe('User');
+  });
+});
+
+describe('localDevAuth Docker bridge allowance (explicit opt-in + shared secret)', () => {
+  const SECRET = 'correct-horse-battery-staple-0001';
+  const BRIDGE_ADDRESSES = ['172.18.0.1', '::ffff:192.168.65.1', '10.0.2.2'];
+  const bridgeEnv = (extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv => ({
+    NODE_ENV: 'development',
+    MJ_DEV_AUTH_ENABLED: 'true',
+    ...extra,
+  });
+
+  it('uses the documented header name', () => {
+    expect(DEV_AUTH_BRIDGE_SECRET_HEADER).toBe('x-mj-dev-auth-secret');
+  });
+
+  it('allows pure loopback socket addresses with no secret, regardless of bridge settings', () => {
+    for (const remoteAddress of ['127.0.0.1', '::1', '::ffff:127.0.0.1']) {
+      expect(VerifyLocalhostRequest(createMockRequest({ remoteAddress }), bridgeEnv()).Allowed).toBe(true);
+      expect(
+        VerifyLocalhostRequest(
+          createMockRequest({ remoteAddress }),
+          bridgeEnv({ MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE: 'true' })
+        ).Allowed
+      ).toBe(true);
+    }
+  });
+
+  it('rejects bridge addresses by default even inside a container (no auto-detection)', () => {
+    for (const remoteAddress of BRIDGE_ADDRESSES) {
+      const result = VerifyLocalhostRequest(createMockRequest({ remoteAddress }), bridgeEnv());
+      expect(result.Allowed).toBe(false);
+      expect(result.Reason).toMatch(/Docker bridge allowance is off/);
+    }
+  });
+
+  it('rejects a Host: localhost spoof from a bridge address without the secret', () => {
+    // Attacker on the LAN reaching a published port: socket peer is the bridge gateway.
+    const spoof = createMockRequest({
+      remoteAddress: '172.18.0.1',
+      host: 'localhost:4000',
+      origin: 'http://localhost:4200',
+    });
+    expect(VerifyLocalhostRequest(spoof, bridgeEnv()).Allowed).toBe(false);
+    expect(VerifyLocalhostRequest(spoof, bridgeEnv({ MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE: 'true' })).Allowed).toBe(false);
+    expect(
+      VerifyLocalhostRequest(
+        spoof,
+        bridgeEnv({ MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE: 'true', MJ_DEV_AUTH_BRIDGE_SECRET: SECRET })
+      ).Allowed
+    ).toBe(false);
+  });
+
+  it('fails closed when opted in with a missing or short secret, even if the client sends one', () => {
+    for (const configured of [undefined, '', '   ', 'short-secret']) {
+      const env = bridgeEnv({ MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE: 'true', MJ_DEV_AUTH_BRIDGE_SECRET: configured });
+      expect(ResolveDockerBridgeAllowance(env).Secret).toBeUndefined();
+      expect(ResolveDockerBridgeAllowance(env).MisconfigurationReason).toBeTruthy();
+      for (const bridgeSecret of [undefined, configured, SECRET]) {
+        expect(
+          VerifyLocalhostRequest(createMockRequest({ remoteAddress: '172.18.0.1', bridgeSecret }), env).Allowed
+        ).toBe(false);
+      }
+    }
+  });
+
+  it('rejects a wrong secret when opted in', () => {
+    const env = bridgeEnv({ MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE: 'true', MJ_DEV_AUTH_BRIDGE_SECRET: SECRET });
+    for (const bridgeSecret of ['wrong-secret-wrong-secret-0001', SECRET + 'x', SECRET.slice(0, -1), '']) {
+      const result = VerifyLocalhostRequest(createMockRequest({ remoteAddress: '172.18.0.1', bridgeSecret }), env);
+      expect(result.Allowed).toBe(false);
+      expect(result.Reason).toMatch(/missing or incorrect/);
+    }
+  });
+
+  it('allows a bridge address when opted in and the correct secret is presented', () => {
+    const env = bridgeEnv({ MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE: 'true', MJ_DEV_AUTH_BRIDGE_SECRET: SECRET });
+    for (const remoteAddress of BRIDGE_ADDRESSES) {
+      expect(
+        VerifyLocalhostRequest(createMockRequest({ remoteAddress, bridgeSecret: SECRET }), env).Allowed
+      ).toBe(true);
+    }
+  });
+
+  it('requires the opt-in: a configured and presented secret alone is not enough', () => {
+    for (const optIn of [undefined, 'false', 'yes']) {
+      const env = bridgeEnv({ MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE: optIn, MJ_DEV_AUTH_BRIDGE_SECRET: SECRET });
+      expect(
+        VerifyLocalhostRequest(createMockRequest({ remoteAddress: '172.18.0.1', bridgeSecret: SECRET }), env).Allowed
+      ).toBe(false);
+    }
+  });
+
+  it('never extends the secret to non-bridge addresses, proxied requests, non-localhost Hosts or production', () => {
+    const env = bridgeEnv({ MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE: 'true', MJ_DEV_AUTH_BRIDGE_SECRET: SECRET });
+    const denied = [
+      createMockRequest({ remoteAddress: '192.168.1.50', bridgeSecret: SECRET }),
+      createMockRequest({ remoteAddress: '172.20.10.5', bridgeSecret: SECRET }),
+      createMockRequest({ remoteAddress: '172.18.0.1', bridgeSecret: SECRET, xff: '127.0.0.1' }),
+      createMockRequest({ remoteAddress: '172.18.0.1', bridgeSecret: SECRET, host: '192.168.1.50:4000' }),
+    ];
+    for (const req of denied) {
+      expect(VerifyLocalhostRequest(req, env).Allowed).toBe(false);
+    }
+    expect(
+      VerifyLocalhostRequest(createMockRequest({ remoteAddress: '172.18.0.1', bridgeSecret: SECRET }), {
+        ...env,
+        NODE_ENV: 'production',
+      }).Allowed
+    ).toBe(false);
   });
 });
