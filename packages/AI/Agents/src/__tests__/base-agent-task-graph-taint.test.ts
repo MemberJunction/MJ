@@ -117,7 +117,7 @@ describe('BaseAgent sub-agents and taint (S2)', () => {
         parent.ReadUntrusted();
         await parent.CallSubAgent(paramsWith());
         expect(childEnvelope()).toBeUndefined();
-        expect(h.childRuns[0].parentRunTainted).toBe(true);
+        expect(h.childRuns[0].ParentRunTainted).toBe(true);
     });
 
     it("keeps the parent's node envelope for the sub-agent, tainted once the parent became tainted", async () => {
@@ -134,7 +134,7 @@ describe('BaseAgent sub-agents and taint (S2)', () => {
     it('gives a clean parent with no envelope a sub-agent with none, and no taint', async () => {
         await new TaintableAgent().CallSubAgent(paramsWith());
         expect(childEnvelope()).toBeUndefined();
-        expect(h.childRuns[0].parentRunTainted).toBeUndefined();
+        expect(h.childRuns[0].ParentRunTainted).toBeUndefined();
     });
 
     it("absorbs the sub-agent's taint back into the parent", async () => {

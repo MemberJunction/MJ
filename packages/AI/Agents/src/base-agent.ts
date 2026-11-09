@@ -1518,12 +1518,12 @@ export class BaseAgent {
 
     /**
      * Starts a sub-agent run tainted when its parent, running outside any task graph, was tainted
-     * (`ExecuteAgentParams.parentRunTainted`): it works from the parent's context. A sub-agent of a graph
+     * (`ExecuteAgentParams.ParentRunTainted`): it works from the parent's context. A sub-agent of a graph
      * node is seeded through its envelope instead ({@link seedTaintFromSecurityEnvelope}). Private for
      * the same reason.
      */
     private seedTaintFromParentRun(params: ExecuteAgentParams): void {
-        if (params.parentRunTainted === true) {
+        if (params.ParentRunTainted === true) {
             this.recordTaintedSource(0, 'parent-run', 'Untrusted');
         }
     }
@@ -19988,15 +19988,15 @@ The context is now within limits. Please retry your request with the recovered c
      * starts tainted when this run is tainted now, and carries the taint into its memory writes and any graph
      * it submits. When this run executes under a task-graph envelope (`params.SecurityEnvelope`), the
      * sub-agent gets that envelope with `IsRunTainted` set, and so refuses `disallowWhenTainted` actions as
-     * an agent node does. A run outside any graph hands down only the taint (`parentRunTainted`): its
+     * an agent node does. A run outside any graph hands down only the taint (`ParentRunTainted`): its
      * sub-agent is held to what the run itself is, not to a gate the run is not under.
      */
-    private subAgentTaint(params: ExecuteAgentParams): Pick<ExecuteAgentParams, 'SecurityEnvelope' | 'parentRunTainted'> {
+    private subAgentTaint(params: ExecuteAgentParams): Pick<ExecuteAgentParams, 'SecurityEnvelope' | 'ParentRunTainted'> {
         const tainted = this.IsRunTainted || params.SecurityEnvelope?.IsRunTainted === true;
         if (params.SecurityEnvelope) {
             return { SecurityEnvelope: { ...params.SecurityEnvelope, IsRunTainted: tainted } };
         }
-        return tainted ? { parentRunTainted: true } : {};
+        return tainted ? { ParentRunTainted: true } : {};
     }
 
     /**

@@ -1404,7 +1404,7 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * the `disallowWhenTainted` egress gate: a sub-agent of a run outside a graph is held to what its parent
      * is. Set by `ExecuteSubAgent`; hosts need not. It only ever adds a constraint.
      */
-    parentRunTainted?: boolean;
+    ParentRunTainted?: boolean;
     /**
      * Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents.
      *
