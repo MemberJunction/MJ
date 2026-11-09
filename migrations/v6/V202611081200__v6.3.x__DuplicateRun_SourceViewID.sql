@@ -663,11 +663,11 @@ SELECT
     MJUserView_SourceViewID.[Name] AS [SourceView]
 FROM
     [${flyway:defaultSchema}].[DuplicateRun] AS d
-INNER JOIN
+LEFT OUTER JOIN
     [${flyway:defaultSchema}].[Entity] AS MJEntity_EntityID
   ON
     [d].[EntityID] = MJEntity_EntityID.[ID]
-INNER JOIN
+LEFT OUTER JOIN
     [${flyway:defaultSchema}].[User] AS MJUser_StartedByUserID
   ON
     [d].[StartedByUserID] = MJUser_StartedByUserID.[ID]
@@ -679,7 +679,7 @@ LEFT OUTER JOIN
     [${flyway:defaultSchema}].[User] AS MJUser_ApprovedByUserID
   ON
     [d].[ApprovedByUserID] = MJUser_ApprovedByUserID.[ID]
-INNER JOIN
+LEFT OUTER JOIN
     [${flyway:defaultSchema}].[EntityDocument] AS MJEntityDocument_EntityDocumentID
   ON
     [d].[EntityDocumentID] = MJEntityDocument_EntityDocumentID.[ID]

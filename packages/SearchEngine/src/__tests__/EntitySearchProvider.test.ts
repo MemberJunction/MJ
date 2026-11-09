@@ -947,6 +947,47 @@ describe('EntitySearchProvider', () => {
             expect(results[0].Score).toBe(0.65);
             expect(results[0].MatchedFields).toEqual(['FirstName', 'LastName']);
         });
+
+        it('keeps a record a quoted one-word query matches (agents quote their searches)', async () => {
+            mockEntities.push({
+                Name: 'Tasks',
+                AllowUserSearchAPI: true,
+                Fields: [{ Name: 'Name', IncludeInUserSearchAPI: true, IsNameField: true, Sequence: 1 }],
+                NameField: { Name: 'Name' },
+            });
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [{ ID: 't-1', Name: 'SOW 2026 Extension' }] });
+
+            const results = await provider.Search('"SOW"', 10, undefined, contextUser);
+
+            expect(results).toHaveLength(1);
+            expect(results[0].RecordID).toBe('t-1');
+        });
+
+        it('keeps a record whose text holds a quote the query also holds (only a wrapping pair is dropped)', async () => {
+            mockEntities.push({
+                Name: 'Parts',
+                AllowUserSearchAPI: true,
+                Fields: [{ Name: 'Name', IncludeInUserSearchAPI: true, IsNameField: true, Sequence: 1 }],
+                NameField: { Name: 'Name' },
+            });
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [{ ID: 'p-1', Name: '6" pipe fitting' }] });
+
+            const results = await provider.Search('6" pipe', 10, undefined, contextUser);
+
+            expect(results.map(r => r.RecordID)).toEqual(['p-1']);
+        });
+
+        it('measures the minimum term length without the quotes: `"a"` is one character', async () => {
+            mockEntities.push({
+                Name: 'Tasks',
+                AllowUserSearchAPI: true,
+                Fields: [{ Name: 'Name', IncludeInUserSearchAPI: true, IsNameField: true, Sequence: 1 }],
+                NameField: { Name: 'Name' },
+            });
+
+            expect(await provider.Search('"a"', 10, undefined, contextUser)).toEqual([]);
+            expect(mockRunViewFn).not.toHaveBeenCalled();
+        });
     });
 });
 

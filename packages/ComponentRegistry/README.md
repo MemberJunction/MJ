@@ -465,6 +465,8 @@ By default, the server runs without authentication. For production use:
 
 ### CORS
 
+The default `['*']` is intended for a public, read-only registry (`requireAuth: false`): any site may read published components. When you set `requireAuth: true`, also set `corsOrigins` to the origins that should call the registry, so browsers on other sites cannot make authenticated cross-origin calls to it.
+
 Configure CORS origins appropriately for your environment:
 
 ```javascript

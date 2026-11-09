@@ -690,7 +690,7 @@ export class RealtimeSessionRunner {
             return undefined;
         }
         const sum: RealtimeUsageModalityDetail = {};
-        for (const key of ['TextTokens', 'AudioTokens', 'ImageTokens', 'VideoTokens', 'VideoSeconds', 'CachedTokens'] as const) {
+        for (const key of ['TextTokens', 'AudioTokens', 'ImageTokens', 'VideoTokens', 'VideoSeconds', 'CachedTokens', 'CachedAudioTokens'] as const) {
             const av = a?.[key];
             const bv = b?.[key];
             if (typeof av === 'number' || typeof bv === 'number') {

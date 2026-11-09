@@ -37,6 +37,12 @@ export interface JudgeCriterion {
     Weight: number;
 }
 
+/**
+ * A criterion as a test writes it in `judgeValidationCriteria` or an oracle's `criteria`: a string, or
+ * an object with the criterion's text and an optional weight. Read it with {@link ReadJudgeCriteriaList}.
+ */
+export type JudgeCriterionInput = string | { criterion: string; weight?: number };
+
 /** A value read from the test or the oracle config, or the reason it cannot be used. */
 export type JudgeReadResult<T> =
     | { Success: true; Value: T }
@@ -78,7 +84,23 @@ export function BuildJudgeTrace(input: OracleInput): JudgeTrace {
  */
 export function ReadJudgeCriteria(input: OracleInput, config: OracleConfig): JudgeReadResult<JudgeCriterion[]> {
     const raw = readExpectedCriteria(input.expectedOutput) || config.criteria;
-    if (!raw || (Array.isArray(raw) && raw.length === 0)) {
+    if (!raw) {
+        return { Success: false, ErrorMessage: 'No validation criteria provided' };
+    }
+    return ReadJudgeCriteriaList(raw);
+}
+
+/**
+ * Reads a list of criteria as a test writes them ({@link JudgeCriterionInput}), with the same rules
+ * and error messages as {@link ReadJudgeCriteria}. For a caller that holds the list itself rather than
+ * an oracle input, such as a driver that hands the criteria to its own in-run judge.
+ *
+ * @param raw - The criteria list
+ * @returns The criteria, in order, or the reason they cannot be read: there are none, the value is
+ *   not an array, an entry is malformed, or every weight is 0
+ */
+export function ReadJudgeCriteriaList(raw: unknown): JudgeReadResult<JudgeCriterion[]> {
+    if (raw == null || (Array.isArray(raw) && raw.length === 0)) {
         return { Success: false, ErrorMessage: 'No validation criteria provided' };
     }
     if (!Array.isArray(raw)) {

@@ -53193,6 +53193,10 @@ export class MJEntityFieldValue_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: "Where this value came from. Check = parsed from the column's CHECK constraint by CodeGen. Config = declared in the additionalSchemaInfo file and written by CodeGen. Manual = entered by a person or by any other process. CodeGen removes Config rows the file no longer declares (when retractRemovedSoftKeys is on) and never removes Manual rows."}) 
+    @MaxLength(20)
+    Source?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     EntityField?: string;
@@ -53233,6 +53237,9 @@ export class CreateMJEntityFieldValueInput {
     @Field({ nullable: true })
     Description: string | null;
 
+    @Field({ nullable: true })
+    Source?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -53260,6 +53267,9 @@ export class UpdateMJEntityFieldValueInput {
 
     @Field({ nullable: true })
     Description?: string | null;
+
+    @Field({ nullable: true })
+    Source?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -55058,6 +55068,10 @@ export class MJEntityOrganicKey_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: "Where this organic key came from. Config = declared in the additionalSchemaInfo file and written by CodeGen. Manual = created by a person or by any other process. CodeGen removes Config keys the file no longer declares, with their related entities and unused bridge views (when retractRemovedSoftKeys is on), and never removes Manual keys."}) 
+    @MaxLength(20)
+    Source?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Entity?: string;
@@ -55102,6 +55116,9 @@ export class CreateMJEntityOrganicKeyInput {
     @Field({ nullable: true })
     Status?: string;
 
+    @Field({ nullable: true })
+    Source?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -55141,6 +55158,9 @@ export class UpdateMJEntityOrganicKeyInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    Source?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
