@@ -23,6 +23,11 @@ import { PackageMap } from './analyzer/PackageMap';
 import { SliceSchema, type Slice } from './corpus/Corpus';
 import { BacktestStep } from './backtest/Backtest';
 import { MatchStep } from './backtest/Match';
+import { LedgerFile } from './backtest/Ledger';
+import { LoadCorpus } from './corpus/Corpus';
+import { FileCatchStore } from './store/FileCatchStore';
+import { RunDir } from './pipeline/RunDir';
+import { BuildGateReport, RenderMarkdown } from './report/Report';
 
 export const COMMANDS = ['generate', 'execute', 'assess', 'run', 'recheck', 'feedback', 'backtest', 'label', 'report', 'corpus', 'clean'] as const;
 export type CommandName = (typeof COMMANDS)[number];
@@ -40,6 +45,7 @@ export interface CliDeps {
     LabelPacket: typeof LabelPacket;
     BacktestStep: typeof BacktestStep;
     MatchStep: typeof MatchStep;
+    BuildGateReport: typeof BuildGateReport;
 }
 
 const execFileAsync = promisify(execFile);
@@ -50,7 +56,7 @@ const DEFAULT_DEPS: CliDeps = {
         const d = { GitHub: new GitHub(), Repo: new GitRepo(o.RepoRoot), PackageMap: PackageMap.Load(o.RepoRoot) };
         return { Clean: await MineClean(d, o), Bug: await MineBugs(d, o) };
     },
-    BacktestStep, MatchStep,
+    BacktestStep, MatchStep, BuildGateReport,
 };
 
 const USAGE = `usage: jit-catch <${COMMANDS.join('|')}> [options]
@@ -63,7 +69,8 @@ const USAGE = `usage: jit-catch <${COMMANDS.join('|')}> [options]
   clean         --run <run ID> | --all-finished
   backtest      --corpus <file> --slice ${SliceSchema.options.join('|')} --set Bug|Clean|Both --model <generator> [--max-usd <n, default 50>] [--only <n,n>] [--retry-failed] [--settings <file>] [--store <dir>]
                 --max-usd counts the cost of the whole ledger, every attempt of a --retry-failed entry included, and is checked before each run, so the last run can take the total above it.
-  backtest match --ledger <ledger ID> --corpus <file> [--settings <file>] [--store <dir>]`;
+  backtest match --ledger <ledger ID> --corpus <file> [--settings <file>] [--store <dir>]
+  report        --ledger <ledger ID>[,<ledger ID>…] --corpus <file> [--out <file.md>] [--settings <file>] [--store <dir>]`;
 const SHA_RE = /^[0-9a-f]{7,40}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -76,6 +83,7 @@ interface Parsed {
     Label?: { CatchID: string; Answer: LabelAnswer; User: string };
     Backtest?: BacktestArgs;
     Match?: { LedgerID: string; CorpusPath: string };
+    Report?: { LedgerIDs: string[]; CorpusPath: string };
 }
 interface BacktestArgs { CorpusPath: string; Slice: Slice; Set: 'Bug' | 'Clean' | 'Both'; Model: string; MaxUsd: number; Only?: number[]; RetryFailed: boolean; }
 const BACKTEST_SETS = ['Bug', 'Clean', 'Both'] as const;
@@ -118,6 +126,7 @@ function parse(argv: string[]): Parsed {
     const p: Parsed = { Command: command, PR: values.pr !== undefined ? Number(values.pr) : null, RunID: values.run ?? null, Base: values.base, Head: values.head, Trigger: trigger.data, SettingsPath: values.settings, Store: values.store, Since: values.since, Until: values.until, Out: values.out, AllFinished: values['all-finished'] ?? false };
     if (command === 'corpus') checkCorpusMine(positionals[1], p);
     if (command === 'backtest') parseBacktestForm(positionals[1], values, p);
+    if (command === 'report') p.Report = parseReport(values.ledger, values.corpus);
     if ((command === 'generate' || command === 'run') && p.PR === null && !p.Head) throw new UsageError(`${command} needs --pr or --head`);
     if ((command === 'execute' || command === 'assess') && !p.RunID) throw new UsageError(`${command} needs --run`);
     if (command === 'clean' && (p.RunID === null) === !p.AllFinished) throw new UsageError('clean needs --run or --all-finished, not both');
@@ -140,6 +149,14 @@ function parseBacktestForm(sub: string | undefined, v: Parameters<typeof parseBa
     if (!v.ledger || !/^[A-Za-z0-9_-]+$/.test(v.ledger)) throw new UsageError('backtest match needs --ledger as a ledger ID (letters, digits, \'-\' and \'_\')');
     if (!v.corpus) throw new UsageError('backtest match needs --corpus');
     p.Match = { LedgerID: v.ledger, CorpusPath: resolve(v.corpus) };
+}
+
+/** `report` needs --ledger as ledger IDs separated by commas, and --corpus. */
+function parseReport(ledger: string | undefined, corpus: string | undefined): Parsed['Report'] {
+    const ids = ledger?.split(',') ?? [];
+    if (ids.length === 0 || !ids.every((id) => /^[A-Za-z0-9_-]+$/.test(id))) throw new UsageError('report needs --ledger as ledger IDs (letters, digits, \'-\' and \'_\') separated by commas');
+    if (!corpus) throw new UsageError('report needs --corpus');
+    return { LedgerIDs: ids, CorpusPath: resolve(corpus) };
 }
 
 /** Checks and converts the `backtest` options; --max-usd defaults to 50. */
@@ -184,6 +201,7 @@ function backtestArgs(p: Parsed): BacktestArgs {
 async function dispatch(p: Parsed, deps: CliDeps): Promise<number> {
     if (p.Command === 'corpus') return corpusMine(p, deps);
     if (p.Command === 'clean') return clean(p, deps);
+    if (p.Command === 'report') return report(p, deps);
     if (p.Command !== 'generate' && p.Command !== 'execute' && p.Command !== 'assess' && p.Command !== 'run' && p.Command !== 'label' && p.Command !== 'backtest') {
         process.stderr.write(`${p.Command}: not implemented (phase 2/3)\n`);
         return 1;
@@ -203,6 +221,24 @@ async function dispatch(p: Parsed, deps: CliDeps): Promise<number> {
             else await deps.BacktestStep({ ...backtestArgs(p), RepoRoot: repoRoot, Settings: settings, StoreDir: storeDir });
             break;
     }
+    return 0;
+}
+
+/** Builds the gate-1 report from the ledgers, the corpus and the store, and writes it to --out or stdout. */
+async function report(p: Parsed, deps: CliDeps): Promise<number> {
+    const repoRoot = await deps.RepoRoot();
+    if (!p.Report) throw new Error('report options were not parsed');
+    const o = p.Report;
+    const redaction = DefaultRedaction();
+    const ledgers = o.LedgerIDs.map((id) => {
+        const file = new LedgerFile(repoRoot, id, redaction);
+        if (!file.Exists()) throw new Error(`no backtest ledger ${id} at ${file.Path}`);
+        return file.Read();
+    });
+    const store = new FileCatchStore(p.Store ? resolve(p.Store) : join(repoRoot, '.jit-catch', 'store'), redaction);
+    const r = await deps.BuildGateReport({ Ledgers: ledgers, Corpus: LoadCorpus(o.CorpusPath), Store: store, RunDirOf: (id) => new RunDir(repoRoot, id, redaction), Prices: LoadSettings(p.SettingsPath).Prices });
+    if (p.Out) writeFileSync(resolve(p.Out), RenderMarkdown(r));
+    else process.stdout.write(RenderMarkdown(r));
     return 0;
 }
 
