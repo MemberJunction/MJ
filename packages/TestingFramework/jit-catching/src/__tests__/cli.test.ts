@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { Main, type CliDeps } from '../cli';
 import { InfrastructureError } from '../target/VitestCatchTarget';
 
@@ -13,6 +13,7 @@ function deps(over: Partial<CliDeps> = {}): CliDeps {
     AssessStep: vi.fn(async () => ({ Catches: [], Promotions: [] })),
     RunAll: vi.fn(async () => ({ RunID: 'r1', Reported: [] })),
     MineCorpus: vi.fn(async () => ({ Clean: [], Bug: [] })),
+    BacktestStep: vi.fn(async () => ({ ID: 'l', CorpusPath: '/c.json', Slice: 'Tuning' as const, Set: 'Bug' as const, Model: 'm', CreatedAt: '2026-11-09T10:00:00.000Z', Entries: [] })),
     ...over,
   };
 }
@@ -65,5 +66,28 @@ describe('Main', () => {
     expect(d.MineCorpus).toHaveBeenCalledWith({ RepoRoot: '/repo', Since: '2026-01-01', Until: '2026-03-31' });
     expect(JSON.parse(readFileSync(out, 'utf8'))).toEqual({ Clean: clean, Bug: [] });
     expect(stdout.join('')).toMatch(/1 clean.*0 bug/);
+  });
+
+  it('backtest calls BacktestStep with the corpus, slice, set, model, the default --max-usd 50 and --only', async () => {
+    const d = deps();
+    expect(await Main(['backtest', '--corpus', 'c.json', '--slice', 'HeldOut', '--set', 'Both', '--model', 'gen-model', '--only', '3,5'], d)).toBe(0);
+    expect(d.BacktestStep).toHaveBeenCalledWith(expect.objectContaining({ CorpusPath: resolve('c.json'), Slice: 'HeldOut', Set: 'Both', Model: 'gen-model', MaxUsd: 50, Only: [3, 5], RepoRoot: '/repo', StoreDir: join('/repo', '.jit-catch', 'store') }));
+  });
+
+  it('backtest returns 2 and names the option for a bad --slice, --set, --max-usd or --only, or a missing --corpus or --model', async () => {
+    const d = deps();
+    const base = { '--corpus': 'c.json', '--slice': 'Tuning', '--set': 'Bug', '--model': 'm' };
+    const cases: [Record<string, string | null>, RegExp][] = [
+      [{ '--slice': 'All' }, /--slice must be Tuning or HeldOut/], [{ '--set': 'Some' }, /--set must be Bug, Clean or Both/],
+      [{ '--model': null }, /backtest needs --model/], [{ '--corpus': null }, /backtest needs --corpus/],
+      [{ '--max-usd': '0' }, /--max-usd must be a positive number/], [{ '--only': '3,x' }, /--only must be PR numbers separated by commas/],
+    ];
+    for (const [over, message] of cases) {
+      stderr.length = 0;
+      const args = Object.entries({ ...base, ...over }).flatMap(([k, v]) => (v === null ? [] : [k, v]));
+      expect(await Main(['backtest', ...args], d)).toBe(2);
+      expect(stderr.join('')).toMatch(message);
+    }
+    expect(d.BacktestStep).not.toHaveBeenCalled();
   });
 });
