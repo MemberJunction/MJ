@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W1 -> S6.3",
+    "Description": "Gate G2.39 (phase 2, dataset W1, criterion S6.3): on W1-signal s42-s44 each of logistic regression, random forest, XGBoost, LightGBM and MLP is reported with log loss, Brier and a calibration slope; a family whose slope lies in 0.8-1.2 is offered and one outside is hidden by the hide rule, matching the gate's declared hidden cells (LightGBM s43, random forest s42, MLP s42), 15 of 15 cells. A sidecar-level measurement: the hide rule over the trainer's reported slopes; the UI path that hides a family arrives in a later milestone. It fails when the hide rule never hides a family (a family with a slope outside 0.8-1.2 is offered).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.39\",\"owner:PR3\",\"phase:2\",\"dataset:W1\",\"criterion:S6.3\"]",
+    "MaxExecutionTimeMS": 1200000,
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Every W1 family is calibrated (slope 0.8-1.2) or hidden by the hide rule, 15 of 15 family x seed cells (15 of 15 pytest cases pass)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w1-s6-3"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "3370FD64-0BA4-42A2-8EE6-A5530EB0C553"
+  }
+}

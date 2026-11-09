@@ -1,6 +1,6 @@
 import { ChangeDetectorRef, Directive, inject } from '@angular/core';
-import { LogError } from '@memberjunction/core';
-import { ResourceData } from '@memberjunction/core-entities';
+import { LogError, type UserInfo } from '@memberjunction/core';
+import { MJEnvironmentEntityExtended, ResourceData } from '@memberjunction/core-entities';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 
@@ -53,6 +53,21 @@ export abstract class PSResourceBase extends BaseResourceComponent {
    * a failed load is honest rather than indistinguishable from a genuinely-empty studio.
    */
   public loadError: string | null = null;
+
+  /** The signed-in user, for the docked chat. */
+  public get CurrentUser(): UserInfo | null { return this.ProviderToUse.CurrentUser || null; }
+
+  /** The chat environment the resource's configuration names, or the default environment. */
+  public get ChatEnvironmentId(): string {
+    const id = this.Data?.Configuration?.['environmentId'];
+    return typeof id === 'string' && id ? id : MJEnvironmentEntityExtended.DefaultEnvironmentID;
+  }
+
+  /** The application the resource's configuration scopes the docked chat to; null when it names none. */
+  public get ApplicationID(): string | null {
+    const id = this.Data?.Configuration?.['applicationId'];
+    return typeof id === 'string' && id ? id : null;
+  }
 
   /** Public door label for templates (the error banner title). Mirrors the protected {@link SectionLabel}. */
   public get sectionTitle(): string {
