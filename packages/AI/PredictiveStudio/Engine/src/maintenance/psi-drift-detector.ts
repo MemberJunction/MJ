@@ -18,7 +18,7 @@
 
 import { LogError, RunView, type IMetadataProvider, type RunViewParams, type UserInfo } from '@memberjunction/core';
 import type { MJFeatureValueEntity, MJMLModelEntity } from '@memberjunction/core-entities';
-import { EscapeSQLString } from '@memberjunction/global';
+import { EscapeSQLString, UUIDMap, UUIDSet } from '@memberjunction/global';
 import type { DriftContext, DriftResult, IDriftDetector } from './types';
 
 /** Default Laplace smoothing constant for zero-count bins. */
@@ -977,15 +977,15 @@ function championMLModelID(rows: readonly FeatureValueDriftRow[]): string | unde
 }
 
 /**
- * Each named ML model's `ProblemType`, by lower-cased ID, from one `MJ: ML Models` read as the caller. A failed read
- * is logged and yields no entries, so divergence falls back to its score-range heuristic rather than failing the load.
+ * Each named ML model's `ProblemType`, by ID, from one `MJ: ML Models` read as the caller. A failed read is logged and
+ * yields no entries, so divergence falls back to its score-range heuristic rather than failing the load.
  */
 async function loadModelProblemTypes(
   modelIDs: ReadonlyArray<string | undefined>,
   options: Pick<LoadDriftFromFeatureValuesOptions, 'Provider' | 'ContextUser'>,
-): Promise<Map<string, MJMLModelEntity['ProblemType']>> {
-  const ids = [...new Set(modelIDs.filter((id): id is string => !!id).map((id) => id.toLowerCase()))];
-  const problemTypes = new Map<string, MJMLModelEntity['ProblemType']>();
+): Promise<UUIDMap<MJMLModelEntity['ProblemType']>> {
+  const ids = [...new UUIDSet(modelIDs.filter((id): id is string => !!id))];
+  const problemTypes = new UUIDMap<MJMLModelEntity['ProblemType']>();
   if (ids.length === 0) {
     return problemTypes;
   }
@@ -1003,7 +1003,7 @@ async function loadModelProblemTypes(
     return problemTypes;
   }
   for (const model of res.Results ?? []) {
-    problemTypes.set(model.ID.toLowerCase(), model.ProblemType);
+    problemTypes.Set(model.ID, model.ProblemType);
   }
   return problemTypes;
 }
@@ -1012,10 +1012,9 @@ async function loadModelProblemTypes(
 function withChampionProblemType(
   options: LoadDriftFromFeatureValuesOptions,
   rows: readonly FeatureValueDriftRow[],
-  problemTypes: ReadonlyMap<string, MJMLModelEntity['ProblemType']>,
+  problemTypes: UUIDMap<MJMLModelEntity['ProblemType']>,
 ): LoadDriftFromFeatureValuesOptions {
-  const modelID = championMLModelID(rows);
-  return { ...options, ProblemType: options.ProblemType ?? (modelID ? problemTypes.get(modelID.toLowerCase()) : undefined) };
+  return { ...options, ProblemType: options.ProblemType ?? problemTypes.Get(championMLModelID(rows)) };
 }
 
 /**
@@ -1054,7 +1053,7 @@ export async function LoadFeatureAndPredictionDriftFromFeatureValues(
     options.RecordProcessID ?? options.ModelID ?? '',
   );
   const problemTypes = options.ProblemType
-    ? new Map<string, MJMLModelEntity['ProblemType']>()
+    ? new UUIDMap<MJMLModelEntity['ProblemType']>()
     : await loadModelProblemTypes([championMLModelID(capped.Rows)], options);
   return {
     ...buildDriftInputFromRows(capped.Rows, windows, withChampionProblemType(options, capped.Rows, problemTypes)),
@@ -1115,7 +1114,7 @@ export async function LoadFeatureAndPredictionDriftForRecordProcesses(
 
     // One ML Models read for the chunk: each ML process's ProblemType comes from its champion's model.
     const problemTypes = options.ProblemType
-      ? new Map<string, MJMLModelEntity['ProblemType']>()
+      ? new UUIDMap<MJMLModelEntity['ProblemType']>()
       : await loadModelProblemTypes(
           chunkLoads.map((l) => ('Capped' in l && l.Capped ? championMLModelID(l.Capped.Rows) : undefined)),
           options,
