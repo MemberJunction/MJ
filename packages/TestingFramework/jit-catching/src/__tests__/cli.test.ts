@@ -141,6 +141,13 @@ describe('Main', () => {
     expect(d.BacktestStep).not.toHaveBeenCalled();
   });
 
+  it('backtest match returns 2 for a ledger ID that is not a file name', async () => {
+    const d = deps();
+    expect(await Main(['backtest', 'match', '--ledger', '../x', '--corpus', 'c.json'], d)).toBe(2);
+    expect(stderr.join('')).toMatch(/backtest match needs --ledger as a ledger ID/);
+    expect(d.MatchStep).not.toHaveBeenCalled();
+  });
+
   it('backtest returns 2 and names the option for a bad --slice, --set, --max-usd or --only, or a missing --corpus or --model', async () => {
     const d = deps();
     const base = { '--corpus': 'c.json', '--slice': 'Tuning', '--set': 'Bug', '--model': 'm' };

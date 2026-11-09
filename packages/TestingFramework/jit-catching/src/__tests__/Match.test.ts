@@ -150,4 +150,14 @@ describe('MatchStep', () => {
     expect(d.Target.Cleanup).toHaveBeenCalledTimes(2);
     expect(file.Read().Entries.map((e) => e.Match?.Status ?? null)).toEqual(['Matched', null]);
   });
+
+  it('removes the pnpm store when preparing head throws', async () => {
+    const { root, corpus } = setup([entry(1)]);
+    const d = fakes();
+    d.Target.Prepare.mockRejectedValueOnce(new Error('install failed'));
+    const removeStore = vi.fn(async () => undefined);
+    await expect(match(root, corpus, { ...d, RemoveStore: removeStore })).rejects.toThrow('install failed');
+    expect(removeStore).toHaveBeenCalledTimes(1);
+    expect(d.Target.Cleanup).not.toHaveBeenCalled();
+  });
 });

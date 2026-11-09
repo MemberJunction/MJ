@@ -34,7 +34,7 @@ export interface MatchOptions { LedgerID: string; CorpusPath: string; RepoRoot: 
  * For every Bug entry that is Assessed and has no Match: the weak, non-dropped catches of its run; none → NoCatch.
  * Else prepares head, applies the fix PR's diff (ApplyFailed when it does not apply), builds the tested packages,
  * writes and runs those tests Settings.Repeats times; a test that passes every time matches. ReportedMatched is true
- * when a Reported catch matched. The ledger is written after every entry; an error from the target cleans head up and ends the step.
+ * when a Reported catch matched. The ledger is written after every entry; an error from the target cleans head up (when prepared), removes the store and ends the step.
  */
 export async function MatchStep(o: MatchOptions): Promise<BacktestLedger> {
     const redaction = o.Deps?.Redaction ?? DefaultRedaction();
@@ -79,19 +79,26 @@ async function matchOne(entry: LedgerEntry, fixSHA: string, o: MatchOptions, dep
     if (tests.length === 0) return record('NoCatch');
     const patch = await deps.Repo.Diff(await deps.Repo.FirstParent(fixSHA), fixSHA);
     await deps.EnsureImage?.();
-    const head = await deps.Target.Prepare({ Kind: 'Head', SHA: entry.HeadSHA });
+    let head: PreparedRevision | null = null;
     try {
+        head = await deps.Target.Prepare({ Kind: 'Head', SHA: entry.HeadSHA });
         return await runOnFixedHead(deps.Target, head, patch, tests, catches, o.Settings.Repeats);
     } finally {
-        await deps.Target.Cleanup(head);
+        if (head) await deps.Target.Cleanup(head);
         await deps.RemoveStore?.();
     }
 }
 
-/** The candidate tests of the catches, from the run's `execution.json`, in catch order. */
+/** The candidate tests of the catches, from the run's `execution.json`, in catch order; a test missing there is named on stderr and left out. */
 function testsOf(catches: Catch[], dir: RunDir): CandidateTest[] {
     const byID = IndexByUUID(dir.ReadExecution().Tests);
-    return catches.map((c) => byID.Get(c.CandidateTestID)).filter((t): t is CandidateTest => t !== undefined);
+    const tests: CandidateTest[] = [];
+    for (const c of catches) {
+        const t = byID.Get(c.CandidateTestID);
+        if (t) tests.push(t);
+        else process.stderr.write(`match: run ${dir.RunID}: test ${c.CandidateTestID} of catch ${c.ID} is not in execution.json; left out\n`);
+    }
+    return tests;
 }
 
 /** Applies the fix on head; when it applies, builds, writes and runs the tests and records which passed every repeat. */
