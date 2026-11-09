@@ -361,13 +361,31 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
     const groupLegend = (el: Control): string =>
       clean(el.closest('fieldset')?.querySelector('legend')?.textContent);
 
-    const findAll = (targetRaw: string, desired: string | boolean): Array<{ control: Control; matchedByOption: boolean }> => {
+    const names = (c: Control) =>
+      [c.id, c.getAttribute('name') ?? '', fieldLabel(c), inspectedLabel(c), c.getAttribute('placeholder') ?? ''].map((s) => s.toLowerCase());
+    const explicitCheckboxValue = (cb: Control): string => {
+      const raw = (cb.getAttribute('value') ?? '').trim().toLowerCase();
+      return raw === 'on' ? '' : raw;
+    };
+    const exactCheckboxOptionMatch = (cb: Control, tok: string): boolean => {
+      const val = explicitCheckboxValue(cb);
+      return (val !== '' && val === tok) || fieldLabel(cb).toLowerCase() === tok || inspectedLabel(cb).toLowerCase() === tok;
+    };
+    const substringCheckboxOptionMatch = (cb: Control, tok: string): boolean => {
+      const val = explicitCheckboxValue(cb);
+      return fieldLabel(cb).toLowerCase().includes(tok) || inspectedLabel(cb).toLowerCase().includes(tok) || (val !== '' && val.includes(tok));
+    };
+
+    const findAll = (
+      targetRaw: string,
+      desired: string | boolean,
+    ): { matches: Array<{ control: Control; matchedByOption: boolean }>; missingOptions: string[] } => {
       const target = targetRaw.trim().toLowerCase();
       if (/^f\d+$/.test(target)) {
         // A ref only ever names the field the latest inspect stamped, and only while it is visible.
         const ref = byRef(target);
         const match = controls.find((c) => c === ref);
-        return match ? [{ control: match, matchedByOption: false }] : [];
+        return { matches: match ? [{ control: match, matchedByOption: false }] : [], missingOptions: [] };
       }
       if (typeof desired === 'string') {
         const want = desired.trim().toLowerCase();
@@ -395,52 +413,81 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
                 r.value.toLowerCase().includes(want),
             );
           if (radio) {
-            return [{ control: radio, matchedByOption: true }];
+            return { matches: [{ control: radio, matchedByOption: true }], missingOptions: [] };
           }
           if (!isBooleanKeyword && radios.some((r) => (r.getAttribute('name') ?? '').toLowerCase() === target)) {
-            return [];
+            return { matches: [], missingOptions: [] };
           }
         }
         // A checkbox group named by its shared name or fieldset legend, with the value naming one or more options.
-        const checkboxes = controls.filter(
+        // Substring legend matching applies only when no control on the page has an exact id/name/label match.
+        const hasExactControlMatch = controls.some((c) => names(c).includes(target));
+        const exactGroupCheckboxes = controls.filter(
           (c) =>
             typeOf(c) === 'checkbox' &&
-            ((c.getAttribute('name') ?? '').toLowerCase() === target ||
-              groupLegend(c).toLowerCase() === target ||
-              (groupLegend(c) && groupLegend(c).toLowerCase().includes(target))),
+            ((c.getAttribute('name') ?? '').toLowerCase() === target || groupLegend(c).toLowerCase() === target),
         );
-        if (checkboxes.length > 1 && !isBooleanKeyword) {
-          const tokens = want.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
-          const candidates = tokens.length > 1 ? [want, ...tokens] : [want];
-          const matched = checkboxes.filter((cb) => {
-            const val = cb.value.toLowerCase();
-            const lbl = fieldLabel(cb).toLowerCase();
-            const insp = inspectedLabel(cb).toLowerCase();
-            return candidates.some(
-              (tok) =>
-                val === tok ||
-                lbl === tok ||
-                insp === tok ||
-                lbl.includes(tok) ||
-                insp.includes(tok) ||
-                (val !== 'on' && val.includes(tok)),
-            );
-          });
-          if (matched.length > 0) {
-            return matched.map((control) => ({ control, matchedByOption: true }));
+        const checkboxes =
+          exactGroupCheckboxes.length > 1
+            ? exactGroupCheckboxes
+            : !hasExactControlMatch
+              ? controls.filter(
+                  (c) =>
+                    typeOf(c) === 'checkbox' &&
+                    Boolean(groupLegend(c)) &&
+                    groupLegend(c).toLowerCase().includes(target),
+                )
+              : [];
+        if (checkboxes.length > 1) {
+          const wholeExact = checkboxes.filter((cb) => exactCheckboxOptionMatch(cb, want));
+          if (wholeExact.length > 0) {
+            return {
+              matches: wholeExact.map((control) => ({ control, matchedByOption: true })),
+              missingOptions: [],
+            };
           }
-          if (checkboxes.some((cb) => (cb.getAttribute('name') ?? '').toLowerCase() === target)) {
-            return [];
+          if (!isBooleanKeyword) {
+            const rawTokens = desired
+              .trim()
+              .split(/[,;]/)
+              .map((s) => s.trim())
+              .filter(Boolean);
+            const matched: Control[] = [];
+            const missingOptions: string[] = [];
+            for (const rawTok of rawTokens) {
+              const tok = rawTok.toLowerCase();
+              const exactForTok = checkboxes.filter((cb) => exactCheckboxOptionMatch(cb, tok));
+              const picked =
+                exactForTok.length > 0
+                  ? exactForTok
+                  : checkboxes.filter((cb) => substringCheckboxOptionMatch(cb, tok));
+              if (picked.length === 0) {
+                missingOptions.push(rawTok);
+              } else {
+                for (const cb of picked) {
+                  if (!matched.includes(cb)) {
+                    matched.push(cb);
+                  }
+                }
+              }
+            }
+            if (matched.length > 0) {
+              return {
+                matches: matched.map((control) => ({ control, matchedByOption: true })),
+                missingOptions,
+              };
+            }
+            if (exactGroupCheckboxes.length > 1) {
+              return { matches: [], missingOptions: [] };
+            }
           }
         }
       }
-      const names = (c: Control) =>
-        [c.id, c.getAttribute('name') ?? '', fieldLabel(c), inspectedLabel(c), c.getAttribute('placeholder') ?? ''].map((s) => s.toLowerCase());
       const single =
         controls.find((c) => names(c).includes(target)) ??
         controls.find((c) => names(c).slice(1).some((n) => n && n.includes(target))) ??
         null;
-      return single ? [{ control: single, matchedByOption: false }] : [];
+      return { matches: single ? [{ control: single, matchedByOption: false }] : [], missingOptions: [] };
     };
 
     const fire = (el: Element, ...types: string[]) => types.forEach((t) => el.dispatchEvent(new Event(t, { bubbles: true })));
@@ -448,10 +495,13 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
     const errors: string[] = [];
 
     for (const item of req.Values) {
-      const targets = findAll(item.Target, item.Value);
+      const { matches: targets, missingOptions } = findAll(item.Target, item.Value);
       if (targets.length === 0) {
         errors.push(`Field "${item.Target}" was not found on the current page; inspect again for fresh refs.`);
         continue;
+      }
+      for (const missingOption of missingOptions) {
+        errors.push(`Checkbox group "${item.Target}" has no option matching "${missingOption}".`);
       }
       for (const { control, matchedByOption } of targets) {
         const ref = control.getAttribute(REF_ATTR) || item.Target;

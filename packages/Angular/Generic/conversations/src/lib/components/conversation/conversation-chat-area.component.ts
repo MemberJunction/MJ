@@ -436,7 +436,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (!value) {
       this.standbyPreparedConversationId = null;
       this.CloseRemoteBrowserPanel();
-      void this.remoteBrowser?.Close?.();
+      void this.remoteBrowser?.Close();
     }
   }
   get AllowRemoteBrowser(): boolean {
@@ -3798,6 +3798,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const browserConversation = this.remoteBrowser?.ConversationId;
     if (!browserConversation || !UUIDsEqual(browserConversation, this._conversationId)) {
       this.ShowRemoteBrowserPanel = false;
+      this.standbyPreparedConversationId = null;
       void this.remoteBrowser?.Close();
     }
     this.SelectedArtifactId = null;
@@ -8092,7 +8093,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       !UUIDsEqual(this.standbyPreparedConversationId, this.ConversationId)
     ) {
       this.standbyPreparedConversationId = this.ConversationId;
-      this.ensureRemoteBrowser().SetConversation?.(this.ConversationId);
+      this.ensureRemoteBrowser().SetConversation(this.ConversationId);
     }
     const controller = this.remoteBrowser;
     if (!controller) {

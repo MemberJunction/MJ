@@ -139,6 +139,101 @@ describe('fill', () => {
         expect(inputs.map((i) => i.checked)).toEqual([false, true, true]);
         expect((document.querySelector<HTMLInputElement>('input[name="newsletter"]')!).checked).toBe(true);
     });
+
+    it('prefers exact checkbox option matches before substring or boolean-keyword fallbacks', async () => {
+        // 1. Member vs Non-Member: "Member" ticks only Member.
+        render(`
+          <fieldset>
+            <legend>Tier</legend>
+            <label><input type="checkbox" name="tier" data-visible> Member</label>
+            <label><input type="checkbox" name="tier" data-visible> Non-Member</label>
+          </fieldset>`);
+        let res = await session.ExecuteAction({ Kind: 'fill', Values: [{ Target: 'tier', Value: 'Member' }] });
+        expect(res.Success).toBe(true);
+        expect(Array.from(document.querySelectorAll<HTMLInputElement>('input[name="tier"]')).map((i) => i.checked)).toEqual([true, false]);
+
+        // 2. AI vs Email Marketing vs Retail: "AI" ticks only AI (not emAIl or retAIl).
+        render(`
+          <fieldset>
+            <legend>Sectors</legend>
+            <label><input type="checkbox" name="sectors" data-visible> AI</label>
+            <label><input type="checkbox" name="sectors" data-visible> Email Marketing</label>
+            <label><input type="checkbox" name="sectors" data-visible> Retail</label>
+          </fieldset>`);
+        res = await session.ExecuteAction({ Kind: 'fill', Values: [{ Target: 'sectors', Value: 'AI' }] });
+        expect(res.Success).toBe(true);
+        expect(Array.from(document.querySelectorAll<HTMLInputElement>('input[name="sectors"]')).map((i) => i.checked)).toEqual([true, false, false]);
+
+        // 3. "Yes, please" vs "Yes" vs "Other": "Yes, please" ticks only "Yes, please" (whole-value exact before comma split).
+        render(`
+          <fieldset>
+            <legend>Opt in</legend>
+            <label><input type="checkbox" name="opt" data-visible> Yes, please</label>
+            <label><input type="checkbox" name="opt" data-visible> Yes</label>
+            <label><input type="checkbox" name="opt" data-visible> Other</label>
+          </fieldset>`);
+        res = await session.ExecuteAction({ Kind: 'fill', Values: [{ Target: 'opt', Value: 'Yes, please' }] });
+        expect(res.Success).toBe(true);
+        expect(Array.from(document.querySelectorAll<HTMLInputElement>('input[name="opt"]')).map((i) => i.checked)).toEqual([true, false, false]);
+
+        // 4. Yes, No with "No" -> ticks No.
+        render(`
+          <fieldset>
+            <legend>Attend</legend>
+            <label><input type="checkbox" name="attend" data-visible> Yes</label>
+            <label><input type="checkbox" name="attend" data-visible> No</label>
+          </fieldset>`);
+        res = await session.ExecuteAction({ Kind: 'fill', Values: [{ Target: 'attend', Value: 'No' }] });
+        expect(res.Success).toBe(true);
+        expect(Array.from(document.querySelectorAll<HTMLInputElement>('input[name="attend"]')).map((i) => i.checked)).toEqual([false, true]);
+
+        // 5. No, Yes with "Yes" -> ticks Yes (not No).
+        render(`
+          <fieldset>
+            <legend>Attend</legend>
+            <label><input type="checkbox" name="attend" data-visible> No</label>
+            <label><input type="checkbox" name="attend" data-visible> Yes</label>
+          </fieldset>`);
+        res = await session.ExecuteAction({ Kind: 'fill', Values: [{ Target: 'attend', Value: 'Yes' }] });
+        expect(res.Success).toBe(true);
+        expect(Array.from(document.querySelectorAll<HTMLInputElement>('input[name="attend"]')).map((i) => i.checked)).toEqual([false, true]);
+    });
+
+    it('reports an error when a comma-separated checkbox group value includes an unknown option, and does not let a fieldset legend substring shadow an exact field match', async () => {
+        render(`
+          <form>
+            <label for="company">Company</label><input id="company" data-visible>
+            <fieldset>
+              <legend>Company details</legend>
+              <label><input type="checkbox" name="greek" data-visible> Alpha</label>
+              <label><input type="checkbox" name="greek" data-visible> Beta</label>
+              <label><input type="checkbox" name="greek" data-visible> Gamma</label>
+            </fieldset>
+          </form>`);
+        // "Company" fills the Company text box instead of matching the "Company details" legend.
+        const companyRes = await session.ExecuteAction({ Kind: 'fill', Values: [{ Target: 'Company', Value: 'AI' }] });
+        expect(companyRes.Success).toBe(true);
+        expect((document.getElementById('company') as HTMLInputElement).value).toBe('AI');
+        expect(Array.from(document.querySelectorAll<HTMLInputElement>('input[name="greek"]')).map((i) => i.checked)).toEqual([false, false, false]);
+
+        // "Alpha, Gamma" ticks both and succeeds.
+        const validMulti = await session.ExecuteAction({ Kind: 'fill', Values: [{ Target: 'greek', Value: 'Alpha, Gamma' }] });
+        expect(validMulti.Success).toBe(true);
+        expect(Array.from(document.querySelectorAll<HTMLInputElement>('input[name="greek"]')).map((i) => i.checked)).toEqual([true, false, true]);
+
+        // "Alpha, Zeta" ticks Alpha and reports Zeta as an unmatched option error.
+        render(`
+          <fieldset>
+            <legend>Greek</legend>
+            <label><input type="checkbox" name="greek" data-visible> Alpha</label>
+            <label><input type="checkbox" name="greek" data-visible> Beta</label>
+            <label><input type="checkbox" name="greek" data-visible> Gamma</label>
+          </fieldset>`);
+        const partialMulti = await session.ExecuteAction({ Kind: 'fill', Values: [{ Target: 'greek', Value: 'Alpha, Zeta' }] });
+        expect(partialMulti.Success).toBe(false);
+        expect(partialMulti.Detail).toContain('no option matching "Zeta"');
+        expect(Array.from(document.querySelectorAll<HTMLInputElement>('input[name="greek"]')).map((i) => i.checked)).toEqual([true, false, false]);
+    });
 });
 
 describe('click guard', () => {
