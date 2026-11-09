@@ -10,6 +10,7 @@ import { SnapshotBaseSources } from './BaseSnapshot';
 import type { VitestCatchTarget } from '../target/VitestCatchTarget';
 import { DefaultRedaction, DefaultRunTarget } from './Deps';
 import { PreflightEnv } from './Preflight';
+import { RedactTail } from '../sandbox/Redaction';
 
 /** `PR` null runs on `BaseSHA`/`HeadSHA` instead. `Trigger` defaults to `Local`. */
 export interface RunAllOptions { PR: number | null; BaseSHA?: string; HeadSHA?: string; Trigger?: Trigger; RepoRoot: string; Settings: Settings; StoreDir: string; }
@@ -19,7 +20,7 @@ export interface RunAllOptions { PR: number | null; BaseSHA?: string; HeadSHA?: 
  * `Usage` holds the spend of a Generate failure that wrote no `generation.json`.
  */
 export class RunAllError extends Error {
-    constructor(public readonly RunID: string, public readonly Step: 'Generate' | 'Execute' | 'Assess' | 'Cleanup', cause: unknown, public readonly Usage?: TokenUsage[]) {
+    constructor(public readonly RunID: string, public readonly Step: 'Generate' | 'Execute' | 'Assess', cause: unknown, public readonly Usage?: TokenUsage[]) {
         super(cause instanceof Error ? cause.message : String(cause), { cause });
         this.name = 'RunAllError';
     }
@@ -28,23 +29,34 @@ export class RunAllError extends Error {
 /**
  * Checks the keys of every step first, then generates, executes and assesses on this machine with the real dependencies, and finishes the run with `FinishRun`.
  * When a step fails, the run folder and the base worktree stay so the failed step can be run again on its own.
+ * A `FinishRun` failure after Assess is written as one stderr line and the run still succeeds.
  * A Generate failure after the analyzer ran is thrown as a `RunAllError` with its usage; an earlier Generate failure is thrown as it is; a later failure is thrown as a `RunAllError`.
  */
 export async function RunAll(o: RunAllOptions): Promise<{ RunID: string; Reported: Catch[] }> {
     PreflightEnv(o.Settings, process.env, 'Assess');
     const { RunID } = await generate(o);
     let step: RunAllError['Step'] = 'Execute';
+    let catches: Catch[];
     try {
         await ExecuteStep({ RunID, RepoRoot: o.RepoRoot, Settings: o.Settings });
         step = 'Assess';
-        const { Catches } = await AssessStep({ RunID, RepoRoot: o.RepoRoot, Settings: o.Settings, StoreDir: o.StoreDir });
-        step = 'Cleanup';
-        const dir = new RunDir(o.RepoRoot, RunID, DefaultRedaction());
-        const { Target, PackageMap } = DefaultRunTarget(o.RepoRoot, dir.Path, o.Settings);
-        await FinishRun(dir, Target, PackageDirs(dir.ReadGeneration().Analysis.PackagesToTest, (n) => PackageMap.Get(n)?.Dir ?? null));
-        return { RunID, Reported: Catches.filter((c) => c.Reported) };
+        catches = (await AssessStep({ RunID, RepoRoot: o.RepoRoot, Settings: o.Settings, StoreDir: o.StoreDir })).Catches;
     } catch (e) {
         throw new RunAllError(RunID, step, e);
+    }
+    await finishOrReport(o, RunID);
+    return { RunID, Reported: catches.filter((c) => c.Reported) };
+}
+
+/** Finishes the run with `FinishRun`; a failure is written as one redacted stderr line and does not fail the run. */
+async function finishOrReport(o: RunAllOptions, runID: string): Promise<void> {
+    try {
+        const dir = new RunDir(o.RepoRoot, runID, DefaultRedaction());
+        const { Target, PackageMap } = DefaultRunTarget(o.RepoRoot, dir.Path, o.Settings);
+        await FinishRun(dir, Target, PackageDirs(dir.ReadGeneration().Analysis.PackagesToTest, (n) => PackageMap.Get(n)?.Dir ?? null));
+    } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        process.stderr.write(`finish run ${runID}: ${RedactTail(message.split('\n')[0].trim())}\n`);
     }
 }
 
