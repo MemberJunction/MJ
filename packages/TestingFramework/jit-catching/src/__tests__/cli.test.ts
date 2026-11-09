@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Main, type CliDeps } from '../cli';
@@ -12,6 +12,7 @@ function deps(over: Partial<CliDeps> = {}): CliDeps {
     ExecuteStep: vi.fn(async () => undefined),
     AssessStep: vi.fn(async () => ({ Catches: [], Promotions: [] })),
     RunAll: vi.fn(async () => ({ RunID: 'r1', Reported: [] })),
+    MineCorpus: vi.fn(async () => ({ Clean: [], Bug: [] })),
     ...over,
   };
 }
@@ -53,5 +54,16 @@ describe('Main', () => {
     expect(await Main(['execute', '--run', '../../x'], d)).toBe(2);
     expect(stderr.join('')).toMatch(/usage/);
     expect(d.ExecuteStep).not.toHaveBeenCalled();
+  });
+  it('corpus mine writes the mined Clean and Bug lists to --out and prints the counts', async () => {
+    const out = join(mkdtempSync(join(tmpdir(), 'jit-cli-')), 'mined.json');
+    const clean = [{ PR: 10, MergeSHA: 'a'.repeat(40), MergedAt: '2026-01-20T10:00:00Z', Title: 'feat: x', Files: ['packages/X/src/a.ts'] }];
+    const d = deps({ MineCorpus: vi.fn(async () => ({ Clean: clean, Bug: [] })) });
+    const stdout: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((s: string | Uint8Array) => { stdout.push(String(s)); return true; });
+    expect(await Main(['corpus', 'mine', '--since', '2026-01-01', '--until', '2026-03-31', '--out', out], d)).toBe(0);
+    expect(d.MineCorpus).toHaveBeenCalledWith({ RepoRoot: '/repo', Since: '2026-01-01', Until: '2026-03-31' });
+    expect(JSON.parse(readFileSync(out, 'utf8'))).toEqual({ Clean: clean, Bug: [] });
+    expect(stdout.join('')).toMatch(/1 clean.*0 bug/);
   });
 });

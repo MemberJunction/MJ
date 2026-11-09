@@ -34,3 +34,4 @@ export { ExecuteStep, type ExecuteDeps, type ExecuteOptions } from './pipeline/E
 export { AssessStep, type AssessDeps, type AssessOptions } from './pipeline/Assess';
 export { RunAll, type RunAllOptions } from './pipeline/Run';
 export { SliceSchema, BugPairSchema, CleanEntrySchema, CorpusSchema, LoadCorpus, AssignSlices, RevisionsOf, type Corpus, type Slice } from './corpus/Corpus';
+export { MineClean, MineBugs, IsEligibleSource, PullRequestNumberOf, RemovedRangesByFile, MonthWindows, type CleanCandidate, type BugCandidate, type MinerDeps, type LineRange } from './corpus/Miner';

@@ -54,4 +54,27 @@ describe('GitRepo', () => {
     expect(await fake.Subject('abc1234')).toBe('fix(core): keep the cache per user');
     expect(calls).toEqual([{ args: ['-c', 'core.quotePath=false', 'log', '-1', '--format=%s', 'abc1234'], cwd: '/repo' }]);
   });
+  it('Diff with NoRenames passes --no-renames so a renamed file diffs as a delete and an add', async () => {
+    const calls: string[][] = [];
+    const fake = new GitRepo('/repo', async (args) => { calls.push(args); return ''; });
+    await fake.Diff('aaa1111', 'bbb2222', [], { NoRenames: true });
+    expect(calls[0]).toContain('--no-renames');
+  });
+  it('LaterCommitsTouching lists the SHAs after a commit on origin/next that touch the paths', async () => {
+    const calls: string[][] = [];
+    const fake = new GitRepo('/repo', async (args) => { calls.push(args); return 'a'.repeat(40) + '\n' + 'b'.repeat(40) + '\n'; });
+    expect(await fake.LaterCommitsTouching('abc1234', ['packages/X/src/a.ts', 'packages/X/src/b.ts'])).toEqual(['a'.repeat(40), 'b'.repeat(40)]);
+    expect(calls).toEqual([['-c', 'core.quotePath=false', 'log', '--format=%H', 'abc1234..origin/next', '--', 'packages/X/src/a.ts', 'packages/X/src/b.ts']]);
+  });
+  it('BlameFirstParent returns one 40-hex SHA per blamed line', async () => {
+    const calls: string[][] = [];
+    const out = [
+      `${'1'.repeat(40)} (t 2026-01-01 10:00:00 +0000 3) const a = 1;`,
+      `^${'2'.repeat(40)} (t 2026-01-01 10:00:00 +0000 4) const b = 2;`,
+      `${'3'.repeat(40)} (t 2026-01-01 10:00:00 +0000 9) const c = 3;`,
+    ].join('\n') + '\n';
+    const fake = new GitRepo('/repo', async (args) => { calls.push(args); return out; });
+    expect(await fake.BlameFirstParent('abc1234', 'packages/X/src/a.ts', [{ Start: 3, End: 4 }, { Start: 9, End: 9 }])).toEqual(['1'.repeat(40), '2'.repeat(40), '3'.repeat(40)]);
+    expect(calls[0]).toEqual(expect.arrayContaining(['blame', '-l', '--first-parent', '-L', '3,4', '-L', '9,9', 'abc1234', '--', 'packages/X/src/a.ts']));
+  });
 });
