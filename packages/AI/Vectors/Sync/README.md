@@ -295,6 +295,8 @@ A full run (no `listID`, no `StartingOffset`, paging reached the last page) ends
 { "pipeline": { "pruneOrphans": false } }
 ```
 
+The prune runs only for a user who can delete `MJ: Entity Record Documents` with no row filter on those deletes, and whose reads of the source entity are not row-filtered (role row-level security or an API-key row filter); a filtered user's run pages only part of the entity, so every record outside the filter would look orphaned. It also needs every page to have been read as the run's user. Otherwise the run removes nothing and the response's `pruneSkippedReason` says why. Every removal of Entity Record Documents (the prune, the duplicate cleanup and the delete listener) goes through the same delete check, before any vector is deleted.
+
 The run's response carries `prunedRecords`. Vectors are deleted by their stored `VectorID` with the index's `ProviderConfig`; a read-only driver (`SimpleVectorServiceProvider`) only loses the rows, which is where it reads vectors from.
 
 Two runs of the same entity document in one process run one after the other, so they cannot both create a record's Entity Record Document. Runs on different servers are not serialized; the duplicate cleanup on the next run removes what they leave.

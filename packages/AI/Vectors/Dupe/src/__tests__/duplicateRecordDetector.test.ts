@@ -1543,4 +1543,12 @@ describe('stored vectors in batch runs', () => {
         await d.Vectors(records, await d.Load(records, DOC));
         expect(mockRunEmbeddingFn).toHaveBeenCalledTimes(1);
     });
+
+    it('refuses a batch when the embedding call returns fewer vectors than records it was sent', async () => {
+        mockRunViewFn.mockResolvedValueOnce({ Success: true, Results: [] });
+        mockRunEmbeddingFn.mockResolvedValueOnce({ Success: true, Vectors: [[0.1, 0.2]] });
+        const d = detectorWithWidth(2);
+        const records = [record('a'), record('b')];
+        await expect(d.Vectors(records, await d.Load(records, DOC))).rejects.toThrow(/Embedding failed/);
+    });
 });

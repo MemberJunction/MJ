@@ -1,5 +1,5 @@
 import type { VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
-import { EntityInfo, EntityPermissionType, IMetadataProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
+import { EntityInfo, EntityPermissionType, IMetadataProvider, LogError, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
 import type { MJEntityRecordDocumentEntity } from '@memberjunction/core-entities';
 
 /** The `MJ: Entity Record Documents` columns the pruner reads. */
@@ -44,7 +44,9 @@ const ENTITY_RECORD_DOCUMENTS = 'MJ: Entity Record Documents';
 /**
  * Why the user may not remove Entity Record Documents (and their vectors), or null when they may.
  * Vectors are deleted before their rows, so the row-level Delete permission check in BaseEntity
- * comes too late to protect them; this check runs first.
+ * comes too late to protect them; this check runs first. A user whose deletes of Entity Record
+ * Documents are row-filtered is refused as well: BaseEntity would refuse some of the row deletes
+ * only after their vectors were gone.
  */
 export function RecordDocumentDeleteDenial(user: UserInfo, provider?: IMetadataProvider): string | null {
   const md: IMetadataProvider = provider ?? Metadata.Provider;
@@ -54,6 +56,9 @@ export function RecordDocumentDeleteDenial(user: UserInfo, provider?: IMetadataP
   }
   if (!erdEntity.GetUserPermisions(user).CanDelete) {
     return `user ${user.Email ?? user.ID} cannot delete ${ENTITY_RECORD_DOCUMENTS}`;
+  }
+  if (erdEntity.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Delete, '').length > 0) {
+    return `deletes of ${ENTITY_RECORD_DOCUMENTS} are row-filtered for user ${user.Email ?? user.ID}`;
   }
   return null;
 }
@@ -74,6 +79,7 @@ export function OrphanPruneDenial(sourceEntity: EntityInfo, user: UserInfo, prov
   }
   return null;
 }
+
 const DELETE_CONCURRENCY = 10;
 
 function updatedTime(row: PrunableRecordDocument): number {
@@ -135,6 +141,9 @@ export function PlanRecordDocumentPrune(stored: ReadonlyArray<PrunableRecordDocu
  * (`SimpleVectorServiceProvider`) holds no vectors of its own — it reads these rows — so only the
  * rows are deleted; its index cache drops them on the delete event.
  *
+ * Every caller goes through {@link RecordDocumentDeleteDenial} here: a user it refuses removes
+ * nothing, and every row counts as failed.
+ *
  * Failures are logged and counted, never thrown: callers run this as cleanup after the work that
  * matters has finished.
  */
@@ -147,6 +156,15 @@ export async function RemoveRecordDocuments(
 ): Promise<RemoveRecordDocumentsResult> {
   const result: RemoveRecordDocumentsResult = { RemovedRows: 0, RemovedVectors: 0, Failed: 0 };
   const md: IMetadataProvider = provider ?? Metadata.Provider;
+  if (rows.length === 0) {
+    return result;
+  }
+  const denial = RecordDocumentDeleteDenial(contextUser, md);
+  if (denial) {
+    LogStatus(`RemoveRecordDocuments: removed nothing: ${denial}`);
+    result.Failed = rows.length;
+    return result;
+  }
   const deleteVectors = target.VectorDB != null && !target.VectorDB.IsReadOnly;
 
   for (let i = 0; i < rows.length; i += REMOVE_BATCH_SIZE) {

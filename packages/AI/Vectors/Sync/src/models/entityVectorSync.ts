@@ -36,6 +36,12 @@ type PagingState = {
   SeenRecordIDs: Set<string>;
   /** True only when paging ended because the last page was short; false after an error or a halted cursor. */
   Completed: boolean;
+  /**
+   * Every user a page was read as. Pages are read as the syncer's `CurrentUser`, which another run on
+   * the same syncer can replace mid-run; the prune trusts the seen set only when every page was read
+   * as the run's own user.
+   */
+  PagedAs: Set<UserInfo>;
 };
 
 /**
@@ -210,7 +216,10 @@ export class EntityVectorSyncer extends VectorBase {
     );
     // Where this run's vectors live: duplicate Entity Record Documents found while upserting, and
     // orphans found at the end, are removed together with their vectors.
-    this._vectorTarget = { VectorDB: obj.vectorDB, IndexName: providerIndexName, ProviderConfig: vectorIndexProviderConfig };
+    // Kept per run, not read back from the syncer: runs of other documents on the same syncer replace
+    // `_vectorTarget` while this one is still upserting.
+    const vectorTarget: RecordDocumentVectorTarget = { VectorDB: obj.vectorDB, IndexName: providerIndexName, ProviderConfig: vectorIndexProviderConfig };
+    this._vectorTarget = vectorTarget;
 
     const erdUpserter = new AsyncBatchTransform<EmbeddingData, undefined, EmbeddingData>({
       BatchSize: 10,
@@ -220,7 +229,7 @@ export class EntityVectorSyncer extends VectorBase {
         // record (the previous Promise.all(map(...)) issued an N+1 read storm —
         // ~1 RunView per source record — which tripped the sequential/duplicate
         // RunView telemetry). Saves remain per-record (BaseEntity contract).
-        await this.UpsertEntityRecordDocumentBatch(batch, super.CurrentUser);
+        await this.UpsertEntityRecordDocumentBatch(batch, contextUser, vectorTarget);
         return batch;
       },
     });
@@ -289,7 +298,7 @@ export class EntityVectorSyncer extends VectorBase {
       originalEndStream();
     };
 
-    const pagingState: PagingState = { SeenRecordIDs: new Set<string>(), Completed: false };
+    const pagingState: PagingState = { SeenRecordIDs: new Set<string>(), Completed: false, PagedAs: new Set<UserInfo>() };
     this.startDataPaging(dataStream, params, md, entity, template, vectorIndexEntity, entityDocument, pageSize, pagingState);
 
     this.vlog(entityDocument.Name, 'pipeline started');
@@ -315,12 +324,14 @@ export class EntityVectorSyncer extends VectorBase {
     // Orphan prune (#5201): only after a full, completed pass over the document's records, so the
     // seen set is the complete list of records the document still covers.
     let prunedRecords = 0;
+    let pruneSkippedReason: string | undefined;
     if (ShouldPruneAfterRun(params, pagingState, pipelineConfig?.pruneOrphans)) {
-      const denial = OrphanPruneDenial(entity, contextUser, md);
+      const denial = PagingUserDenial(pagingState, contextUser) ?? OrphanPruneDenial(entity, contextUser, md);
       if (denial) {
+        pruneSkippedReason = denial;
         LogStatus(`[${entityDocument.Name}] orphan prune skipped: ${denial}`);
       } else {
-        prunedRecords = await this.PruneOrphanedRecordDocuments(entityDocument, pagingState.SeenRecordIDs, this._vectorTarget, contextUser);
+        prunedRecords = await this.PruneOrphanedRecordDocuments(entityDocument, pagingState.SeenRecordIDs, vectorTarget, contextUser);
         if (prunedRecords > 0) {
           LogStatus(`[${entityDocument.Name}] removed ${prunedRecords} orphaned or duplicate Entity Record Document(s) and their vectors`);
         }
@@ -359,6 +370,7 @@ export class EntityVectorSyncer extends VectorBase {
       errorCount: allErrors.length,
       elapsedMs,
       prunedRecords,
+      pruneSkippedReason,
     };
   }
 
@@ -1189,6 +1201,7 @@ export class EntityVectorSyncer extends VectorBase {
 
       let hasMore = true;
       while (hasMore) {
+        pagingState?.PagedAs.add(this.CurrentUser);
         const pageRecordRequest: PageRecordsParams = {
           EntityID: params.entityID,
           PageNumber: useKeysetForThisRun ? 0 : pageNumber,
@@ -1726,7 +1739,7 @@ export class EntityVectorSyncer extends VectorBase {
    * per-record `Save()` is inherent to the BaseEntity contract). Grouping is usually a single read
    * within one entity's pipeline; a mixed batch produces several views, now executed together.
    */
-  protected async UpsertEntityRecordDocumentBatch(batch: EmbeddingData[], contextUser: UserInfo): Promise<void> {
+  protected async UpsertEntityRecordDocumentBatch(batch: EmbeddingData[], contextUser: UserInfo, vectorTarget?: RecordDocumentVectorTarget): Promise<void> {
     if (batch.length === 0) {
       return;
     }
@@ -1788,7 +1801,7 @@ export class EntityVectorSyncer extends VectorBase {
             LogStatus(`Duplicate Entity Record Documents kept: ${denial}`);
           } else {
             const keepVectorIDs = new Set([...Keep.values()].map(k => k.VectorID).filter((v): v is string => !!v));
-            await RemoveRecordDocuments(Duplicates, this._vectorTarget, contextUser, md, keepVectorIDs);
+            await RemoveRecordDocuments(Duplicates, vectorTarget ?? this._vectorTarget, contextUser, md, keepVectorIDs);
           }
         }
       } else {
@@ -1925,6 +1938,20 @@ export class EntityVectorSyncer extends VectorBase {
  * not one that started at an offset, not one whose paging stopped early, and not when the document
  * opts out with `Configuration.pipeline.pruneOrphans: false`.
  */
+/**
+ * Why the seen set cannot be trusted for the prune, or null when it can: some page was read as a
+ * user other than the run's own (another run on the same syncer replaced `CurrentUser`), so the
+ * permission checks for the run's user say nothing about what those pages left out.
+ */
+export function PagingUserDenial(pagingState: Pick<PagingState, 'PagedAs'>, contextUser: UserInfo): string | null {
+  for (const user of pagingState.PagedAs) {
+    if (user !== contextUser) {
+      return `some pages were read as user ${user?.Email ?? user?.ID ?? 'unknown'}, not the run's user ${contextUser.Email ?? contextUser.ID}`;
+    }
+  }
+  return null;
+}
+
 export function ShouldPruneAfterRun(
   params: Pick<VectorizeEntityParams, 'listID' | 'StartingOffset'>,
   pagingState: Pick<PagingState, 'Completed'>,

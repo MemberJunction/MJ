@@ -4,6 +4,7 @@ import type { VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 
 vi.mock('@memberjunction/core', () => ({
   LogError: vi.fn(),
+  LogStatus: vi.fn(),
   Metadata: { Provider: null },
   EntityPermissionType: { Read: 'Read', Create: 'Create', Update: 'Update', Delete: 'Delete' },
 }));
@@ -24,11 +25,24 @@ function row(ID: string, RecordID: string, VectorID: string | null, updated = '2
   return { ID, RecordID, VectorID, __mj_UpdatedAt: new Date(updated) };
 }
 
-/** A metadata provider whose Entity Record Documents load and delete from an in-memory set. */
-function fakeProvider(existing: string[], failDelete: string[] = []): { md: IMetadataProvider; deleted: string[] } {
+/** The `MJ: Entity Record Documents` entity as the permission check reads it. */
+function erdEntity(canDelete: boolean, deleteRowFilter = ''): unknown {
+  return {
+    Name: 'MJ: Entity Record Documents',
+    GetUserPermisions: () => ({ CanDelete: canDelete }),
+    GetEffectiveRowFilterWhereClause: vi.fn(() => deleteRowFilter),
+  };
+}
+
+/**
+ * A metadata provider whose Entity Record Documents load and delete from an in-memory set. The
+ * user may delete them unless `canDelete` is false or `deleteRowFilter` is set.
+ */
+function fakeProvider(existing: string[], failDelete: string[] = [], canDelete = true, deleteRowFilter = ''): { md: IMetadataProvider; deleted: string[] } {
   const rows = new Set(existing);
   const deleted: string[] = [];
   const md = {
+    Entities: [erdEntity(canDelete, deleteRowFilter)],
     GetEntityObject: async () => {
       let id = '';
       return {
@@ -157,11 +171,8 @@ describe('RemoveRecordDocuments', () => {
 });
 
 describe('prune permission checks', () => {
-  function providerWith(canDelete: boolean | null): IMetadataProvider {
-    const entities = canDelete == null ? [] : [{
-      Name: 'MJ: Entity Record Documents',
-      GetUserPermisions: () => ({ CanDelete: canDelete }),
-    }];
+  function providerWith(canDelete: boolean | null, deleteRowFilter = ''): IMetadataProvider {
+    const entities = canDelete == null ? [] : [erdEntity(canDelete, deleteRowFilter)];
     return { Entities: entities } as unknown as IMetadataProvider;
   }
   function sourceEntity(rowFilter: string): EntityInfo {
@@ -175,6 +186,24 @@ describe('prune permission checks', () => {
   it('refuses removal when the user cannot delete Entity Record Documents, or the entity is missing', () => {
     expect(RecordDocumentDeleteDenial(USER, providerWith(false))).toMatch(/cannot delete/);
     expect(RecordDocumentDeleteDenial(USER, providerWith(null))).toMatch(/not found/);
+  });
+
+  it('refuses removal when deletes of Entity Record Documents are row-filtered for the user', () => {
+    const md = providerWith(true, "(CreatedByUserID='u1')");
+    expect(RecordDocumentDeleteDenial(USER, md)).toMatch(/row-filtered/);
+    const erd = (md.Entities as unknown as Array<{ GetEffectiveRowFilterWhereClause: ReturnType<typeof vi.fn> }>)[0];
+    expect(erd.GetEffectiveRowFilterWhereClause).toHaveBeenCalledWith(USER, 'Delete', '');
+  });
+
+  it('RemoveRecordDocuments removes no row and no vector for a user the check refuses', async () => {
+    for (const [canDelete, filter] of [[false, ''], [true, "(CreatedByUserID='u1')"]] as const) {
+      const { md, deleted } = fakeProvider(['a', 'b'], [], canDelete, filter);
+      const { db, calls } = fakeVectorDB();
+      const result = await RemoveRecordDocuments([row('a', 'r1', 'v1'), row('b', 'r2', 'v2')], { VectorDB: db }, USER, md);
+      expect(result).toEqual({ RemovedRows: 0, RemovedVectors: 0, Failed: 2 });
+      expect(deleted).toEqual([]);
+      expect(calls).toEqual([]);
+    }
   });
 
   it('allows the orphan prune only when reads of the source entity are unfiltered', () => {

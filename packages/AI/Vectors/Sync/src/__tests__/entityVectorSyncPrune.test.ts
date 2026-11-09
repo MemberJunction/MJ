@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { Transform } from 'node:stream';
 import type { EntityInfo, IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
 import type { PageRecordsParams } from '@memberjunction/ai-vectors';
 
@@ -79,15 +80,17 @@ vi.mock('@memberjunction/ai-vectors', () => ({
   },
 }));
 vi.mock('@memberjunction/aiengine', () => ({
-  AIEngine: { Instance: { Config: vi.fn() } },
+  AIEngine: { Instance: { Config: vi.fn(), GetProviderIndexName: () => 'members-index' } },
 }));
 vi.mock('@memberjunction/templates', () => ({
-  TemplateEngineServer: { Instance: { Config: vi.fn(), Templates: [], SetupNunjucks: vi.fn() } },
+  TemplateEngineServer: {
+    Instance: { Config: vi.fn(), Templates: [{ ID: 'T1', Content: [{ TemplateText: '{{ Name }}' }] }], SetupNunjucks: vi.fn() },
+  },
 }));
 vi.mock('@memberjunction/templates-base-types', () => ({}));
 
 import type { MJEntityDocumentEntity, MJTemplateEntityExtended, MJVectorIndexEntity } from '@memberjunction/core-entities';
-import { EntityVectorSyncer, ShouldPruneAfterRun } from '../models/entityVectorSync';
+import { EntityVectorSyncer, PagingUserDenial, ShouldPruneAfterRun } from '../models/entityVectorSync';
 import { PagedRecords } from '../models/PagedRecords';
 import type { EmbeddingData, TemplateParamData, VectorizeEntityParams, VectorizeEntityResponse } from '../generic/vectorSync.types';
 import type { RecordDocumentVectorTarget } from '../models/entityRecordDocumentPruner';
@@ -101,7 +104,7 @@ const ENTITY = {
 const MD = { ConfigData: { MJCoreSchemaName: '__mj' } } as unknown as IMetadataProvider;
 const DOC = { ID: 'D1', EntityID: 'E1', Name: 'Members search', Configuration: null } as unknown as MJEntityDocumentEntity;
 
-type PagingState = { SeenRecordIDs: Set<string>; Completed: boolean };
+type PagingState = { SeenRecordIDs: Set<string>; Completed: boolean; PagedAs: Set<UserInfo> };
 
 interface DataPagingSeam {
   startDataPaging(
@@ -112,8 +115,13 @@ interface DataPagingSeam {
 }
 
 class TestableSyncer extends EntityVectorSyncer {
+  /** Keyset paging for the cursor-halt tests; offset paging otherwise. */
+  public Keyset = false;
+  protected override CanUseKeysetPagination(): boolean {
+    return this.Keyset;
+  }
   public async page(pageSize: number): Promise<PagingState> {
-    const state: PagingState = { SeenRecordIDs: new Set(), Completed: false };
+    const state: PagingState = { SeenRecordIDs: new Set(), Completed: false, PagedAs: new Set() };
     const stream = new PagedRecords();
     const ended = new Promise<void>((resolve) => stream.on('end', () => resolve()));
     stream.resume();
@@ -163,6 +171,32 @@ describe('the paging loop records what a run saw', () => {
     expect(state.Completed).toBe(true);
   });
 
+  it('leaves a run whose keyset cursor met a null key incomplete', async () => {
+    pages.push([{ ID: 'r1' }, { ID: null }], [{ ID: 'r3' }]);
+    const syncer = new TestableSyncer();
+    syncer.Keyset = true;
+    const state = await syncer.page(2);
+    expect(state.Completed).toBe(false);
+    expect(state.SeenRecordIDs.has('r3')).toBe(false);
+  });
+
+  it('leaves a run whose keyset cursor did not advance incomplete', async () => {
+    pages.push([{ ID: 'r1' }, { ID: 'r2' }], [{ ID: 'r1' }, { ID: 'r2' }], [{ ID: 'r3' }]);
+    const syncer = new TestableSyncer();
+    syncer.Keyset = true;
+    const state = await syncer.page(2);
+    expect(state.Completed).toBe(false);
+    expect(state.SeenRecordIDs.has('r3')).toBe(false);
+  });
+
+  it('records the user each page was read as', async () => {
+    pages.push([{ ID: 'r1' }, { ID: 'r2' }], [{ ID: 'r3' }]);
+    const syncer = new TestableSyncer();
+    syncer.CurrentUser = USER;
+    const state = await syncer.page(2);
+    expect([...state.PagedAs]).toEqual([USER]);
+  });
+
   it('leaves a run whose paging failed incomplete, so it does not prune', async () => {
     pages.push([{ ID: 'r1' }, { ID: 'r2' }], new Error('database went away'));
     const state = await new TestableSyncer().page(2);
@@ -185,6 +219,7 @@ describe('PruneOrphanedRecordDocuments', () => {
     const deleted: string[] = [];
     const syncer = new TestableSyncer();
     syncer.Provider = {
+      Entities: [{ Name: 'MJ: Entity Record Documents', GetUserPermisions: () => ({ CanDelete: true }), GetEffectiveRowFilterWhereClause: () => '' }],
       GetEntityObject: async () => {
         let id = '';
         return { Load: async (k: string) => { id = k; return true; }, Delete: async () => { deleted.push(id); return true; } };
@@ -217,7 +252,7 @@ describe('UpsertEntityRecordDocumentBatch with duplicate rows for one record', (
     const deleted: string[] = [];
     const syncer = new TestableSyncer();
     const md = {
-      Entities: [{ Name: 'MJ: Entity Record Documents', GetUserPermisions: () => ({ CanDelete: true }) }],
+      Entities: [{ Name: 'MJ: Entity Record Documents', GetUserPermisions: () => ({ CanDelete: true }), GetEffectiveRowFilterWhereClause: () => '' }],
       GetEntityObject: async () => {
         let id = '';
         return { Load: async (k: string) => { id = k; return true; }, Delete: async () => { deleted.push(id); return true; } };
@@ -240,7 +275,7 @@ describe('UpsertEntityRecordDocumentBatch with duplicate rows for one record', (
     const deleted: string[] = [];
     const syncer = new TestableSyncer();
     const md = {
-      Entities: [{ Name: 'MJ: Entity Record Documents', GetUserPermisions: () => ({ CanDelete: false }) }],
+      Entities: [{ Name: 'MJ: Entity Record Documents', GetUserPermisions: () => ({ CanDelete: false }), GetEffectiveRowFilterWhereClause: () => '' }],
       GetEntityObject: async () => ({ Load: async () => true, Delete: async () => { deleted.push('x'); return true; } }),
     };
     (syncer as unknown as { TestMetadata: unknown }).TestMetadata = md;
@@ -293,5 +328,149 @@ describe('one run per entity document per process', () => {
       syncer.VectorizeEntity({ entityID: 'E1', entityDocumentID: 'B' }, USER),
     ]);
     expect(maxRunning).toBe(2);
+  });
+});
+
+describe('PagingUserDenial', () => {
+  it('trusts a seen set read entirely as the run user', () => {
+    expect(PagingUserDenial({ PagedAs: new Set([USER]) }, USER)).toBeNull();
+  });
+  it('refuses a seen set with a page read as another user', () => {
+    const other = { ID: 'u2' } as UserInfo;
+    expect(PagingUserDenial({ PagedAs: new Set([USER, other]) }, USER)).toMatch(/u2/);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  The orphan prune through VectorizeEntity                           */
+/* ------------------------------------------------------------------ */
+
+type Permissions = { canDelete: boolean; sourceReadFilter?: string; erdDeleteFilter?: string };
+
+/** A pass-through stage standing in for render/embed and the vector upsert. */
+function passThrough(): Transform {
+  return new Transform({ objectMode: true, transform(chunk, _e, cb) { cb(null, chunk); } });
+}
+
+/**
+ * A syncer whose run pages `r1` and `r2`, with stored Entity Record Documents for `r1` and the
+ * orphan `gone`. Everything outside the paging loop, the permission checks and the prune is stubbed.
+ */
+function runFixture(perms: Permissions, onPage?: (syncer: EntityVectorSyncer, pageIndex: number) => void) {
+  pages.length = 0;
+  pages.push([{ ID: 'r1' }, { ID: 'r2' }], []);
+  runView.mockReset();
+  runView.mockResolvedValue({
+    Success: true,
+    Results: [
+      { ID: 'erd-r1', RecordID: 'r1', VectorID: 'v-r1', __mj_UpdatedAt: new Date() },
+      { ID: 'erd-gone', RecordID: 'gone', VectorID: 'v-gone', __mj_UpdatedAt: new Date() },
+    ],
+  });
+
+  const source = {
+    ID: 'E1', Name: 'Members', FirstPrimaryKey: { Name: 'ID' }, PrimaryKeys: [{ Name: 'ID' }],
+    GetEffectiveRowFilterWhereClause: vi.fn(() => perms.sourceReadFilter ?? ''),
+  };
+  const erd = {
+    Name: 'MJ: Entity Record Documents',
+    GetUserPermisions: () => ({ CanDelete: perms.canDelete }),
+    GetEffectiveRowFilterWhereClause: vi.fn(() => perms.erdDeleteFilter ?? ''),
+  };
+  const deleted: string[] = [];
+  const provider = {
+    Entities: [source, erd],
+    ConfigData: { MJCoreSchemaName: '__mj' },
+    GetEntityObject: async () => {
+      let id = '';
+      return { Load: async (k: string) => { id = k; return true; }, Delete: async () => { deleted.push(id); return true; } };
+    },
+  };
+  const vectorDB = { IsReadOnly: false, DeleteRecords: vi.fn(async () => ({ success: true, message: '', data: null })) };
+  const upsertTargets: unknown[] = [];
+
+  class RunSyncer extends TestableSyncer {
+    private pageIndex = 0;
+    protected override async GetRelatedTemplateDataForBatch(): Promise<TemplateParamData[]> {
+      onPage?.(this, this.pageIndex++);
+      return [];
+    }
+    protected override async UpsertEntityRecordDocumentBatch(_b: EmbeddingData[], _u: UserInfo, target?: RecordDocumentVectorTarget): Promise<void> {
+      upsertTargets.push(target);
+    }
+  }
+  const syncer = new RunSyncer();
+  syncer.Provider = provider as unknown as IMetadataProvider;
+  Object.assign(syncer as unknown as Record<string, unknown>, {
+    GetEntityDocument: async () => ({ ID: 'D1', Name: 'Members search', EntityID: 'E1', TemplateID: 'T1', Configuration: null }),
+    getVectorIndexForEntityDocument: () => ({ ID: 'VI1', Name: 'Members', ProviderConfig: null }),
+    GetVectorDatabaseAndEmbeddingClassByEntityDocumentID: async () => ({ vectorDB, embeddingRunner: {}, aiModelID: 'm1', embeddingModelAPIName: 'embed' }),
+    ResolveIndexDimensions: async () => null,
+    ValidateTemplateContextParamAlignment: () => true,
+    createVectorCreator: passThrough,
+    createVectorUpserter: passThrough,
+  });
+  const run = (): Promise<VectorizeEntityResponse> => syncer.VectorizeEntity({ entityID: 'E1', entityDocumentID: 'D1', listBatchCount: 2 }, USER);
+  return { syncer, run, deleted, vectorDB, upsertTargets, source, erd };
+}
+
+describe('VectorizeEntity runs the prune permission check', () => {
+  it('a user who may delete and reads the whole entity prunes the orphan and its vector', async () => {
+    const { run, deleted, vectorDB } = runFixture({ canDelete: true });
+    const response = await run();
+    expect(response.prunedRecords).toBe(1);
+    expect(response.pruneSkippedReason).toBeUndefined();
+    expect(deleted).toEqual(['erd-gone']);
+    expect(vectorDB.DeleteRecords).toHaveBeenCalledWith([{ id: 'v-gone', values: [] }], 'members-index', undefined);
+  });
+
+  it('a user without Delete on Entity Record Documents removes nothing and the response says why', async () => {
+    const { run, deleted, vectorDB } = runFixture({ canDelete: false });
+    const response = await run();
+    expect(response.prunedRecords).toBe(0);
+    expect(response.pruneSkippedReason).toMatch(/cannot delete/);
+    expect(deleted).toEqual([]);
+    expect(vectorDB.DeleteRecords).not.toHaveBeenCalled();
+    expect(runView).not.toHaveBeenCalled();
+  });
+
+  it('a user whose reads of the source entity are row-filtered removes nothing', async () => {
+    const { run, deleted, vectorDB, source } = runFixture({ canDelete: true, sourceReadFilter: "(OwnerID='u1')" });
+    const response = await run();
+    expect(source.GetEffectiveRowFilterWhereClause).toHaveBeenCalledWith(USER, 'Read', '');
+    expect(response.pruneSkippedReason).toMatch(/row-filtered/);
+    expect(deleted).toEqual([]);
+    expect(vectorDB.DeleteRecords).not.toHaveBeenCalled();
+  });
+
+  it('a user whose deletes of Entity Record Documents are row-filtered removes nothing', async () => {
+    const { run, deleted, vectorDB } = runFixture({ canDelete: true, erdDeleteFilter: "(CreatedByUserID='u1')" });
+    const response = await run();
+    expect(response.pruneSkippedReason).toMatch(/row-filtered/);
+    expect(deleted).toEqual([]);
+    expect(vectorDB.DeleteRecords).not.toHaveBeenCalled();
+  });
+
+  it('a run with a page read as another user removes nothing', async () => {
+    const other = { ID: 'u2' } as UserInfo;
+    const { run, deleted, vectorDB } = runFixture({ canDelete: true }, (syncer, pageIndex) => {
+      // Another run on the same syncer replaces CurrentUser after the first page.
+      if (pageIndex === 0) syncer.CurrentUser = other;
+    });
+    const response = await run();
+    expect(response.pruneSkippedReason).toMatch(/u2/);
+    expect(deleted).toEqual([]);
+    expect(vectorDB.DeleteRecords).not.toHaveBeenCalled();
+  });
+
+  it('removes through the run\'s own vector target even when another run replaces the syncer\'s', async () => {
+    const otherDB = { IsReadOnly: false, DeleteRecords: vi.fn(async () => ({ success: true, message: '', data: null })) };
+    const { run, vectorDB, upsertTargets } = runFixture({ canDelete: true }, (syncer) => {
+      (syncer as unknown as { _vectorTarget: RecordDocumentVectorTarget })._vectorTarget = { VectorDB: otherDB as unknown as RecordDocumentVectorTarget['VectorDB'] };
+    });
+    await run();
+    expect(vectorDB.DeleteRecords).toHaveBeenCalledTimes(1);
+    expect(otherDB.DeleteRecords).not.toHaveBeenCalled();
+    expect((upsertTargets[0] as RecordDocumentVectorTarget).VectorDB).toBe(vectorDB);
   });
 });
