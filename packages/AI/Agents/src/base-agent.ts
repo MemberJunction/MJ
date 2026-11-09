@@ -539,12 +539,15 @@ export interface ExecuteSingleActionOptions {
  * - `'audience'` — the action engine refused the action for the run's audience (`AUDIENCE_UNSUPPORTED`): it cannot
  *   limit what it returns to what everyone in a shared conversation may see, so it is locked out for the run. Not a
  *   configuration or credential error, and the model is told so.
+ * - `'tainted'` — the run read untrusted content under a task-graph envelope and the action is `disallowWhenTainted`
+ *   (`TAINTED_EGRESS_BLOCKED`), so it is locked out until a person reviews that content. Not a configuration or
+ *   credential error either, and the model is told so.
  * - `'identical-arguments'` — the action already failed {@link IDENTICAL_FAILURE_THRESHOLD} times
  *   with these exact arguments.
  * - `'attempts-exhausted'` — the action has failed {@link ACTION_FAILURE_BUDGET} consecutive times
  *   across any arguments.
  */
-export type ActionCircuitBreakerReason = 'fatal' | 'audience' | 'identical-arguments' | 'attempts-exhausted';
+export type ActionCircuitBreakerReason = 'fatal' | 'audience' | 'tainted' | 'identical-arguments' | 'attempts-exhausted';
 
 /**
  * What {@link BaseAgent.classifyActionFailure} names for a failed action: the breaker rule that fired, a refusal by
@@ -842,6 +845,14 @@ export class BaseAgent {
     private _audienceLockedActions: Set<string> = new Set();
 
     /**
+     * Actions refused because the run read untrusted content under a task-graph envelope (`TAINTED_EGRESS_BLOCKED`) —
+     * locked out like {@link _fatalActionFailures}, under their own breaker reason (`'tainted'`) so the model is told
+     * a person must review that content first rather than that the action is misconfigured.
+     * @private
+     */
+    private _taintLockedActions: Set<string> = new Set();
+
+    /**
      * The run's audience readers beyond the caller (`ExecuteAgentParams.Audience`), hydrated from the user cache:
      * `[]` when the audience adds nobody, `undefined` until hydrated for this run. Set after the permission check
      * in {@link Execute}; {@link ExecuteSingleAction}, which is also called directly, hydrates it lazily.
@@ -1049,11 +1060,18 @@ export class BaseAgent {
     }
 
     /**
-     * Locks an action out for the rest of the run: later calls short-circuit on the breaker's `'fatal'` rule, or on
-     * its `'audience'` rule for an action the engine refused for the run's audience.
+     * Locks an action out for the rest of the run: later calls short-circuit on the breaker's `'fatal'` rule, on
+     * its `'audience'` rule for an action the engine refused for the run's audience, or on its `'tainted'` rule for
+     * an action refused because the run read untrusted content.
      */
-    private lockOutAction(action: AgentAction, actionEntity: MJActionEntityExtended | undefined, reason: 'fatal' | 'audience' = 'fatal'): void {
-        const lockouts = reason === 'audience' ? this._audienceLockedActions : this._fatalActionFailures;
+    private lockOutAction(
+        action: AgentAction,
+        actionEntity: MJActionEntityExtended | undefined,
+        reason: 'fatal' | 'audience' | 'tainted' = 'fatal'
+    ): void {
+        const lockouts = reason === 'audience' ? this._audienceLockedActions
+            : reason === 'tainted' ? this._taintLockedActions
+            : this._fatalActionFailures;
         lockouts.add(action.name);
         if (actionEntity?.Name) {
             lockouts.add(actionEntity.Name);
@@ -1064,12 +1082,14 @@ export class BaseAgent {
     private resetActionCircuitBreaker(): void {
         this._fatalActionFailures.clear();
         this._audienceLockedActions.clear();
+        this._taintLockedActions.clear();
         this._actionFailureHistory.clear();
     }
 
     /**
-     * The blocked result for an action locked out for the run — refused for the audience (`'audience'`), or failed
-     * with an unrecoverable configuration or credential error (`'fatal'`) — or null when it is not locked out.
+     * The blocked result for an action locked out for the run — refused for the audience (`'audience'`), refused
+     * because the run read untrusted content (`'tainted'`), or failed with an unrecoverable configuration or
+     * credential error (`'fatal'`) — or null when it is not locked out.
      */
     private lockedOutActionResult(params: ExecuteAgentParams, action: AgentAction, actionEntity: MJActionEntityExtended): CircuitBreakerActionResult | null {
         const isLocked = (lockouts: Set<string>): boolean =>
@@ -1080,6 +1100,10 @@ export class BaseAgent {
                 `Action '${action.name}' is not available in this shared conversation: what it returns could not be limited to what ` +
                 'everyone here may see. Do not call it again in this run; use another tool or answer from what you have.');
         }
+        if (isLocked(this._taintLockedActions)) {
+            this.logStatus(`   ⚡ Circuit breaker: Action '${action.name}' short-circuited (0ms): this run read untrusted content`, false, params);
+            return this.buildBlockedActionResult(actionEntity, 'tainted', this.taintLockoutText(action.name));
+        }
         if (isLocked(this._fatalActionFailures)) {
             this.logStatus(
                 `   ⚡ Circuit breaker: Action '${action.name}' short-circuited (0ms): fatal configuration or credential error earlier in this run`,
@@ -1089,6 +1113,14 @@ export class BaseAgent {
                 'credential error. You must select an alternative action.');
         }
         return null;
+    }
+
+    /** What the model is told about an action locked out because the run read untrusted content (`'tainted'`). */
+    private taintLockoutText(name: string): string {
+        return `Action '${name}' is not allowed in this run: the run has read untrusted content, and this action sends data ` +
+            'out or cannot be undone, so it cannot run until a person reviews that content. It is not broken or misconfigured, ' +
+            `and no change to its arguments will help. DO NOT call '${name}' again during this run; use another tool, or tell ` +
+            'the user it needs a person to review the content first.';
     }
 
     /**
@@ -1311,6 +1343,9 @@ export class BaseAgent {
         if (this._audienceLockedActions.has(summary.actionName)) {
             return 'audience';
         }
+        if (this._taintLockedActions.has(summary.actionName)) {
+            return 'tainted';
+        }
         if (this._fatalActionFailures.has(summary.actionName)) {
             return 'fatal';
         }
@@ -1376,6 +1411,8 @@ export class BaseAgent {
                 return `[CRITICAL/NOT_AVAILABLE_IN_SHARED_CONVERSATION] Action '${name}' is not available in this shared conversation: what it ` +
                     `returns could not be limited to what everyone in it may see ("${summary.message}"). It is not broken or misconfigured. ` +
                     `DO NOT call '${name}' again during this run. Use another tool, or answer from what you already have.`;
+            case 'tainted':
+                return `[CRITICAL/NOT_ALLOWED_AFTER_UNTRUSTED_CONTENT] ${this.taintLockoutText(name)}`;
             case 'fatal':
                 return `[CRITICAL/ACTION_UNAVAILABLE] Action '${name}' failed with an unrecoverable configuration or credential error: "${summary.message}". This action cannot execute in this environment. DO NOT call '${name}' again during this run. You MUST select an alternative tool or proceed with available data.`;
             case 'attempts-exhausted':
@@ -13706,7 +13743,7 @@ The context is now within limits. Please retry your request with the recovered c
         const taintBlocked = this.checkTaintedEgress(params, action, actionEntity, contextUser ?? params.contextUser);
         if (taintBlocked) {
             if (!skipBreaker) {
-                this.lockOutAction(action, actionEntity);
+                this.lockOutAction(action, actionEntity, 'tainted');
             }
             return taintBlocked;
         }

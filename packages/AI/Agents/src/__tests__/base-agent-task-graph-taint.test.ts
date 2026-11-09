@@ -177,13 +177,20 @@ describe('BaseAgent egress gate on taint gained mid-run (M1)', () => {
         const params = paramsWith({ SecurityEnvelope: CLEAN_NODE });
         const first = await agent.ExecuteSingleAction(params, EMAIL, SEND_EMAIL, CALLER);
         expect(first.ResultCode).toBe(TAINTED_EGRESS_BLOCKED);
-        expect(agent.FailureDirective({ actionName: EMAIL.name, success: false, params: [], resultCode: first.ResultCode, message: first.Message }))
-            .toContain('DO NOT call');
+        const directive = agent.FailureDirective({ actionName: EMAIL.name, success: false, params: [], resultCode: first.ResultCode, message: first.Message });
+        expect(directive).toContain('DO NOT call');
 
         const retry = await agent.ExecuteSingleAction(params, { ...EMAIL, params: { To: 'someone-else@example.com' } }, SEND_EMAIL, CALLER);
         expect(retry).toBeInstanceOf(CircuitBreakerActionResult);
-        expect((retry as CircuitBreakerActionResult).Reason).toBe('fatal');
+        expect((retry as CircuitBreakerActionResult).Reason).toBe('tainted');
         expect(h.dispatched).toHaveLength(0);
+
+        // The model is told why: untrusted content needing a person's review, not a broken configuration.
+        for (const told of [directive, retry.Message ?? '']) {
+            expect(told).toContain('read untrusted content');
+            expect(told).toContain('a person reviews');
+            expect(told).not.toContain('configuration or credential');
+        }
     });
 
     it('leaves a run outside any task graph to its own policies', async () => {
