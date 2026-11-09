@@ -61,6 +61,12 @@ export type TaskStepConfiguration = MJTaskEntity_ITaskStepConfiguration & {
      */
     runtime?: NonNullable<MJTaskEntity_ITaskStepConfiguration['runtime']> & {
         isOutputTainted?: boolean;
+        /**
+         * The parameters an Action step's action was actually given: its input mapping resolved over
+         * the upstream outputs, with the envelope's bound parameters restored. `InputPayload` holds only
+         * the authored input, so this is what a compensation's `input.*` mapping reads.
+         */
+        actionInput?: Record<string, unknown>;
     };
 };
 

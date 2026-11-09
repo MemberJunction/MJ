@@ -262,6 +262,13 @@ describe('saga-compensation rules', () => {
         })).toEqual({ ReservationID: 'R-1', Why: 'r' });
     });
 
+    it('leaves out a parameter whose unprefixed path resolves to nothing, rather than passing the path text as its value', () => {
+        expect(BuildCompensationInputPayload({
+            ForwardInput: { OrderID: 'ORD-42' }, ForwardOutput: { chargeId: 'CH-7' },
+            InputMapping: { ChargeID: 'output.chargeId', OrderID: 'ordrId' },
+        })).toEqual({ ChargeID: 'CH-7' });
+    });
+
     it('backs off exponentially, capped', () => {
         expect([1, 2, 3, 10].map((a) => RetryBackoffMs(a, 100))).toEqual([100, 200, 400, 3000]);
     });
@@ -358,6 +365,49 @@ describe('TaskGraphDispatcher saga coordinator', () => {
         release!.Status = 'Complete';
         await c.pass();
         expect(c.sagaStates.at(-1)).toBe('Compensated');
+    });
+
+    it("gives a compensation the parameters the forward step's action ran with, mapped from an upstream output, not its authored InputPayload", async () => {
+        db.Add({ ID: 'T-ORDER', Name: 'Order', Status: 'Complete', ActionID: RESERVE, OutputPayload: JSON.stringify({ orderId: 'ORD-42' }),
+            Configuration: JSON.stringify({ runtime: { isOutputTainted: false } }) });
+        const chargeConfig = BuildStepConfiguration({
+            tempId: 'charge', name: 'Charge', kind: 'Action',
+            configuration: {
+                actionName: 'Charge',
+                inputMapping: JSON.stringify({ OrderID: 'payload.orderId', Amount: 'static:10' }),
+                compensation: { compensationActionId: RELEASE, inputMapping: { OrderID: 'input.OrderID', ChargeID: 'output.chargeId' } },
+            },
+        });
+        const charge = db.Add({ ID: 'T-CHARGE', Name: 'Charge', ActionID: CHARGE, InputPayload: null, Configuration: JSON.stringify(chargeConfig) });
+        db.Add({ ID: 'T-SHIP', Name: 'Ship', Status: 'Failed', ActionID: INVOICE, ErrorMessage: 'out of stock' });
+        db.Deps.push({ TaskID: 'T-CHARGE', DependsOnTaskID: 'T-ORDER' }, { TaskID: 'T-SHIP', DependsOnTaskID: 'T-CHARGE' });
+
+        // The forward step runs through the real dispatcher path: input mapping over the upstream output.
+        const actionRunner: TaskActionRunner = {
+            EnforcesSecurityEnvelope: true,
+            RunActionForTask: vi.fn(async () => ({ Success: true, Output: { chargeId: 'CH-7' } })),
+        };
+        const parent = parentRow();
+        const forwardDispatcher = new TaskGraphDispatcher(
+            { CreateProvider: vi.fn().mockResolvedValue({} as IMetadataProvider) }, { RunAgentForTask: vi.fn() }, SYSTEM_USER,
+            { InstanceID: 'inst-forward' }, undefined, undefined, actionRunner,
+        );
+        const completeClaimed = vi.fn().mockResolvedValue(true);
+        (forwardDispatcher as unknown as { claims: { CompleteClaimed: typeof completeClaimed } }).claims.CompleteClaimed = completeClaimed;
+        const chargeEntity = { ...charge, get ConfigurationObject() { return JSON.parse(charge.Configuration!); } } as unknown as MJTaskEntity;
+        await (forwardDispatcher as unknown as { executeClaimed: (c: ClaimedTaskCandidate) => Promise<void> }).executeClaimed({
+            ID: charge.ID, ParentID: PARENT_ID, taskEntity: chargeEntity, parentTask: parent,
+            parentMetadata: ParseTaskGraphParentMetadata(parent.InputPayload),
+            dependencyOutputs: new Map([['T-ORDER', { orderId: 'ORD-42' }]]),
+            upstreamTasks: [db.Rows.get('T-ORDER') as unknown as MJTaskEntity],
+        });
+        expect(vi.mocked(actionRunner.RunActionForTask).mock.calls[0][0].InputPayload).toEqual({ OrderID: 'ORD-42', Amount: '10' });
+        const recorded = completeClaimed.mock.calls[0][2] as { Status: MJTaskEntity['Status']; OutputPayload: string; Configuration: string };
+        Object.assign(charge, { Status: recorded.Status, OutputPayload: recorded.OutputPayload, Configuration: recorded.Configuration, CompletedAt: new Date() });
+        expect(charge.InputPayload).toBeNull();
+
+        await coordinator(db, parent).pass();
+        expect(JSON.parse(compensationOf(db, 'T-CHARGE')!.InputPayload!)).toEqual({ OrderID: 'ORD-42', ChargeID: 'CH-7' });
     });
 
     it('reads the forward step\'s record changes as the acting user, bounded to its action log window (S10)', async () => {

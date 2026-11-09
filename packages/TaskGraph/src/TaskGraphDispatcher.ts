@@ -322,6 +322,8 @@ type TaskBodyOutcome = {
      * Set for every step that ran (`false` included) and recorded as `runtime.isOutputTainted`.
      */
     IsOutputTainted?: boolean;
+    /** The parameters an Action step's action was given, recorded as `runtime.actionInput` for its compensation. */
+    ActionInput?: Record<string, unknown>;
 };
 
 interface GlobalUserCacheLookup {
@@ -1374,6 +1376,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     AgentRunID: result.AgentRunID ?? null,
                     Configuration: this.configurationWithRuntime(
                         task, result.PromptRunID, result.ActionLogID, result.Iterations, result.PayloadAtStart, result.IsOutputTainted,
+                        result.ActionInput,
                     ),
                 },
                 this.contextUser,
@@ -4161,6 +4164,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             ...raw,
             Output: this.applyStepOutputMapping(task, payload, raw.Output, config?.outputMapping),
             PayloadAtStart: payload,
+            ...(task.ActionID ? { ActionInput: effectiveInput } : {}),
             // Monotonic: tainted input taints the output, and so does an action or agent that read
             // untrusted content (the runner reports that from the action's trust level or the run's
             // tainted sources).
@@ -4549,6 +4553,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         const escalation = BuildCompensationEscalationSummary({
             WorkflowName: graph.parent?.Name ?? graph.parentTaskID,
             ForwardTask: forwardTask,
+            ForwardInput: this.runtimeActionInput(forwardTask),
             CompensationTask: failedCompensation,
             ActionLogID: this.runtimeActionLogID(forwardTask),
             RecordChanges: 'Refusal' in context.Security ? [] : await this.loadCorrelatedRecordChanges(provider, forwardTask, actingUser),
@@ -4605,6 +4610,15 @@ export class TaskGraphDispatcher implements IShutdownable {
     /** The `MJ: Action Execution Logs` row a completed action step recorded (`runtime.actionLogID`). */
     private runtimeActionLogID(task: MJTaskEntity): string | null {
         return (this.parseConfiguration(task) as TaskStepConfiguration | undefined)?.runtime?.actionLogID ?? null;
+    }
+
+    /**
+     * The parameters a completed action step's action was given (`runtime.actionInput`), which the
+     * dispatcher records when the step runs. Not `InputPayload`: that is only the authored input, and
+     * the action's real parameters come from its input mapping over upstream outputs and the envelope.
+     */
+    private runtimeActionInput(task: MJTaskEntity): Record<string, unknown> {
+        return (this.parseConfiguration(task) as TaskStepConfiguration | undefined)?.runtime?.actionInput ?? {};
     }
     /**
      * The envelope a compensation task is written with: the forward task's constraints, tainted when
@@ -4706,20 +4720,16 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
-     * Builds the compensation input payload from a completed forward task's input, output, runtime log ID,
-     * and correlated `MJ: Record Changes` rows.
+     * Builds the compensation input payload from a completed forward task's input (the parameters its
+     * action was given, {@link runtimeActionInput}), output, runtime log ID, and correlated
+     * `MJ: Record Changes` rows.
      */
     private buildForwardTaskCompensationInput(
         forwardTask: MJTaskEntity,
         compMeta: TaskCompensationStepMetadata,
         recordChanges?: ReadonlyArray<Record<string, unknown>>,
     ): Record<string, unknown> {
-        const parsedInput = ParseTaskInputPayload(forwardTask.ID, forwardTask.InputPayload);
-        const rawInput = 'Payload' in parsedInput ? parsedInput.Payload : null;
-        const forwardInput: Record<string, unknown> =
-            rawInput && typeof rawInput === 'object' && !Array.isArray(rawInput)
-                ? (rawInput as Record<string, unknown>)
-                : {};
+        const forwardInput = this.runtimeActionInput(forwardTask);
         let forwardOutput: Record<string, unknown> = {};
         if (forwardTask.OutputPayload) {
             try {
@@ -6085,8 +6095,9 @@ export class TaskGraphDispatcher implements IShutdownable {
         iterations?: MJTaskEntity_ITaskLoopIteration[],
         payloadAtStart?: Record<string, unknown>,
         isOutputTainted?: boolean,
+        actionInput?: Record<string, unknown>,
     ): string | undefined {
-        if (!promptRunID && !actionLogID && !iterations?.length && !payloadAtStart && isOutputTainted === undefined) return undefined;
+        if (!promptRunID && !actionLogID && !iterations?.length && !payloadAtStart && isOutputTainted === undefined && !actionInput) return undefined;
 
         const existing = this.parseConfiguration(task);
         const merged: TaskStepConfiguration = {
@@ -6105,6 +6116,8 @@ export class TaskGraphDispatcher implements IShutdownable {
                 ...(payloadAtStart ? { payloadAtStart } : {}),
                 // Written true OR false: "ran clean" must be told apart from "never ran" (UpstreamCarriesTaint).
                 ...(isOutputTainted !== undefined ? { isOutputTainted } : {}),
+                // What the action was actually given, which its compensation's `input.*` reads.
+                ...(actionInput ? { actionInput } : {}),
             },
         };
         return JSON.stringify(merged);

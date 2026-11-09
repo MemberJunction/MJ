@@ -8,7 +8,7 @@
  * it undoes through `CompensatesTaskID`, whose unique index is what makes materializing it a claim:
  * two dispatchers can both decide to compensate a step, and only one insert succeeds.
  *
- * Everything here is pure; the dispatcher reads the rows, asks {@link NextSagaStep} what to do, and
+ * Everything here is pure (one log line aside); the dispatcher reads the rows, asks {@link NextSagaStep} what to do, and
  * does it. Because the answer is computed from durable rows on every pass, any dispatcher can pick a
  * saga up where another left it.
  *
@@ -19,6 +19,7 @@ import {
     type ActionCompensationFailurePolicy,
     type ActionCompensationSpec,
 } from '@memberjunction/ai-core-plus';
+import { LogError } from '@memberjunction/core';
 import type { MJActionEntity, MJTaskEntity } from '@memberjunction/core-entities';
 import { UUIDMap, UUIDSet } from '@memberjunction/global';
 import { IsHumanTask } from './task-predicates';
@@ -305,8 +306,17 @@ export function BuildCompensationInputPayload(args: {
     }
 
     const mapped: Record<string, unknown> = {};
+    const unresolved: string[] = [];
     for (const [paramName, rawSource] of Object.entries(mappingDict)) {
-        mapped[paramName] = resolveCompensationMappingExpression(rawSource, envelope);
+        const value = resolveCompensationMappingExpression(rawSource, envelope);
+        if (value === undefined) {
+            unresolved.push(`${paramName} ← ${rawSource}`);
+        } else {
+            mapped[paramName] = value;
+        }
+    }
+    if (unresolved.length > 0) {
+        LogError(`[TaskGraph] Compensation input mapping left out parameters whose path resolved to nothing: ${unresolved.join(', ')}.`);
     }
     return mapped;
 }
@@ -317,7 +327,9 @@ export function BuildCompensationInputPayload(args: {
  */
 export function BuildCompensationEscalationSummary(args: {
     WorkflowName: string;
-    ForwardTask: Pick<MJTaskEntity, 'ID' | 'Name' | 'InputPayload' | 'OutputPayload'>;
+    ForwardTask: Pick<MJTaskEntity, 'ID' | 'Name' | 'OutputPayload'>;
+    /** The parameters the forward step's action was given (`runtime.actionInput`). */
+    ForwardInput: Record<string, unknown>;
     CompensationTask: Pick<MJTaskEntity, 'ID' | 'Name' | 'InputPayload' | 'ErrorMessage'>;
     ActionLogID?: string | null;
     RecordChanges?: readonly Record<string, unknown>[];
@@ -327,7 +339,7 @@ export function BuildCompensationEscalationSummary(args: {
         workflowName: args.WorkflowName,
         forwardTaskID: args.ForwardTask.ID,
         forwardTaskName: args.ForwardTask.Name,
-        forwardInput: safeParseJsonObject(args.ForwardTask.InputPayload),
+        forwardInput: args.ForwardInput,
         forwardOutput: safeParseJsonObject(args.ForwardTask.OutputPayload),
         actionLogID: args.ActionLogID ?? null,
         recordChanges: args.RecordChanges ?? [],
@@ -364,8 +376,9 @@ function resolveCompensationMappingExpression(rawExpression: string, envelope: R
             return GetValueFromPath(envelope[prefix], unwrapped.slice(dotIndex + 1));
         }
     }
-    const fromEnvelope = GetValueFromPath(envelope, unwrapped);
-    return fromEnvelope !== undefined ? fromEnvelope : rawExpression;
+    // A path that names nothing is left out, never passed on as its own text: a typo must not become a
+    // literal parameter value of a refund or cancel.
+    return GetValueFromPath(envelope, unwrapped);
 }
 
 function parseMappingDictionary(mapping: Readonly<Record<string, string>> | string | null | undefined): Record<string, string> | null {
