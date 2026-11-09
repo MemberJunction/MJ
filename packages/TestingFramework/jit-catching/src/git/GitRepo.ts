@@ -54,4 +54,17 @@ export class GitRepo {
     }
     public async AddWorktree(dir: string, sha: string): Promise<void> { await this.git(['worktree', 'add', '--detach', dir, sha]); }
     public async RemoveWorktree(dir: string): Promise<void> { await this.git(['worktree', 'remove', '--force', dir]); }
+    /** `git -C <dir> apply --3way --whitespace=nowarn <patchFile>`; false when git exits non-zero (the patch does not apply). */
+    public async ApplyPatch(dir: string, patchFile: string): Promise<boolean> {
+        try { await this.runner([...BASE_ARGS, '-C', dir, 'apply', '--3way', '--whitespace=nowarn', patchFile], this.Root); return true; }
+        catch (e) {
+            if (isExitError(e)) return false;
+            throw new Error(`git apply ${patchFile} failed: ${(e as Error).message}`);
+        }
+    }
+}
+
+/** True when the error is a process that ran and exited non-zero (a numeric exit `code`), not one that failed to start. */
+function isExitError(e: unknown): boolean {
+    return e instanceof Error && 'code' in e && typeof e.code === 'number' && e.code !== 0;
 }

@@ -19,6 +19,7 @@ function deps(over: Partial<CliDeps> = {}): CliDeps {
     LabelCatch: vi.fn(async () => undefined),
     LabelPacket: vi.fn(async () => '# packet\n'),
     BacktestStep: vi.fn(async () => ({ ID: 'l', CorpusPath: '/c.json', Slice: 'Tuning' as const, Set: 'Bug' as const, Model: 'm', CreatedAt: '2026-11-09T10:00:00.000Z', Entries: [] })),
+    MatchStep: vi.fn(async () => ({ ID: 'l', CorpusPath: '/c.json', Slice: 'Tuning' as const, Set: 'Bug' as const, Model: 'm', CreatedAt: '2026-11-09T10:00:00.000Z', Entries: [] })),
     ...over,
   };
 }
@@ -131,6 +132,20 @@ describe('Main', () => {
     const d = deps();
     expect(await Main(['backtest', '--corpus', 'c.json', '--slice', 'Tuning', '--set', 'Bug', '--model', 'm', '--retry-failed'], d)).toBe(0);
     expect(d.BacktestStep).toHaveBeenCalledWith(expect.objectContaining({ RetryFailed: true }));
+  });
+
+  it('backtest match calls MatchStep with the ledger ID and corpus', async () => {
+    const d = deps();
+    expect(await Main(['backtest', 'match', '--ledger', 'corpus-Tuning-Bug-m', '--corpus', 'c.json'], d)).toBe(0);
+    expect(d.MatchStep).toHaveBeenCalledWith(expect.objectContaining({ LedgerID: 'corpus-Tuning-Bug-m', CorpusPath: resolve('c.json'), RepoRoot: '/repo', StoreDir: join('/repo', '.jit-catch', 'store') }));
+    expect(d.BacktestStep).not.toHaveBeenCalled();
+  });
+
+  it('backtest match returns 2 for a ledger ID that is not a file name', async () => {
+    const d = deps();
+    expect(await Main(['backtest', 'match', '--ledger', '../x', '--corpus', 'c.json'], d)).toBe(2);
+    expect(stderr.join('')).toMatch(/backtest match needs --ledger as a ledger ID/);
+    expect(d.MatchStep).not.toHaveBeenCalled();
   });
 
   it('backtest returns 2 and names the option for a bad --slice, --set, --max-usd or --only, or a missing --corpus or --model', async () => {

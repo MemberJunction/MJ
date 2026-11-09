@@ -22,6 +22,7 @@ import { GitRepo } from './git/GitRepo';
 import { PackageMap } from './analyzer/PackageMap';
 import { SliceSchema, type Slice } from './corpus/Corpus';
 import { BacktestStep } from './backtest/Backtest';
+import { MatchStep } from './backtest/Match';
 
 export const COMMANDS = ['generate', 'execute', 'assess', 'run', 'recheck', 'feedback', 'backtest', 'label', 'report', 'corpus', 'clean'] as const;
 export type CommandName = (typeof COMMANDS)[number];
@@ -38,6 +39,7 @@ export interface CliDeps {
     LabelCatch: typeof LabelCatch;
     LabelPacket: typeof LabelPacket;
     BacktestStep: typeof BacktestStep;
+    MatchStep: typeof MatchStep;
 }
 
 const execFileAsync = promisify(execFile);
@@ -48,7 +50,7 @@ const DEFAULT_DEPS: CliDeps = {
         const d = { GitHub: new GitHub(), Repo: new GitRepo(o.RepoRoot), PackageMap: PackageMap.Load(o.RepoRoot) };
         return { Clean: await MineClean(d, o), Bug: await MineBugs(d, o) };
     },
-    BacktestStep,
+    BacktestStep, MatchStep,
 };
 
 const USAGE = `usage: jit-catch <${COMMANDS.join('|')}> [options]
@@ -60,7 +62,8 @@ const USAGE = `usage: jit-catch <${COMMANDS.join('|')}> [options]
   corpus mine   --since <YYYY-MM-DD> --until <YYYY-MM-DD> --out <file>
   clean         --run <run ID> | --all-finished
   backtest      --corpus <file> --slice ${SliceSchema.options.join('|')} --set Bug|Clean|Both --model <generator> [--max-usd <n, default 50>] [--only <n,n>] [--retry-failed] [--settings <file>] [--store <dir>]
-                --max-usd counts the cost of the whole ledger, every attempt of a --retry-failed entry included, and is checked before each run, so the last run can take the total above it.`;
+                --max-usd counts the cost of the whole ledger, every attempt of a --retry-failed entry included, and is checked before each run, so the last run can take the total above it.
+  backtest match --ledger <ledger ID> --corpus <file> [--settings <file>] [--store <dir>]`;
 const SHA_RE = /^[0-9a-f]{7,40}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -72,6 +75,7 @@ interface Parsed {
     Since?: string; Until?: string; Out?: string; AllFinished: boolean;
     Label?: { CatchID: string; Answer: LabelAnswer; User: string };
     Backtest?: BacktestArgs;
+    Match?: { LedgerID: string; CorpusPath: string };
 }
 interface BacktestArgs { CorpusPath: string; Slice: Slice; Set: 'Bug' | 'Clean' | 'Both'; Model: string; MaxUsd: number; Only?: number[]; RetryFailed: boolean; }
 const BACKTEST_SETS = ['Bug', 'Clean', 'Both'] as const;
@@ -103,17 +107,17 @@ function parse(argv: string[]): Parsed {
         settings: { type: 'string' }, store: { type: 'string' }, trigger: { type: 'string' }, 'all-finished': { type: 'boolean' },
         since: { type: 'string' }, until: { type: 'string' }, out: { type: 'string' },
         catch: { type: 'string' }, answer: { type: 'string' }, user: { type: 'string' },
-        corpus: { type: 'string' }, slice: { type: 'string' }, set: { type: 'string' }, model: { type: 'string' }, 'max-usd': { type: 'string' }, only: { type: 'string' }, 'retry-failed': { type: 'boolean' },
+        corpus: { type: 'string' }, slice: { type: 'string' }, set: { type: 'string' }, model: { type: 'string' }, 'max-usd': { type: 'string' }, only: { type: 'string' }, 'retry-failed': { type: 'boolean' }, ledger: { type: 'string' },
     } });
     const command = COMMANDS.find((c) => c === positionals[0]);
-    if (!command || positionals.length > (command === 'corpus' ? 2 : 1)) throw new UsageError(positionals[0] ? `unknown command ${positionals[0]}` : 'no command');
+    if (!command || positionals.length > (command === 'corpus' || command === 'backtest' ? 2 : 1)) throw new UsageError(positionals[0] ? `unknown command ${positionals[0]}` : 'no command');
     if (values.pr !== undefined && !/^[1-9]\d*$/.test(values.pr)) throw new UsageError(`--pr must be a positive whole number, not ${values.pr}`);
     for (const k of ['base', 'head'] as const) if (values[k] !== undefined && !SHA_RE.test(values[k])) throw new UsageError(`--${k} must be a lower-case commit SHA`);
     const trigger = TriggerSchema.safeParse(values.trigger ?? 'Local');
     if (!trigger.success) throw new UsageError(`--trigger must be one of ${TriggerSchema.options.join(', ')}`);
     const p: Parsed = { Command: command, PR: values.pr !== undefined ? Number(values.pr) : null, RunID: values.run ?? null, Base: values.base, Head: values.head, Trigger: trigger.data, SettingsPath: values.settings, Store: values.store, Since: values.since, Until: values.until, Out: values.out, AllFinished: values['all-finished'] ?? false };
     if (command === 'corpus') checkCorpusMine(positionals[1], p);
-    if (command === 'backtest') p.Backtest = parseBacktest(values);
+    if (command === 'backtest') parseBacktestForm(positionals[1], values, p);
     if ((command === 'generate' || command === 'run') && p.PR === null && !p.Head) throw new UsageError(`${command} needs --pr or --head`);
     if ((command === 'execute' || command === 'assess') && !p.RunID) throw new UsageError(`${command} needs --run`);
     if (command === 'clean' && (p.RunID === null) === !p.AllFinished) throw new UsageError('clean needs --run or --all-finished, not both');
@@ -127,6 +131,15 @@ function checkCorpusMine(sub: string | undefined, p: Parsed): void {
     if (sub !== 'mine') throw new UsageError(sub ? `unknown corpus subcommand ${sub}` : 'corpus needs the subcommand mine');
     for (const k of ['Since', 'Until'] as const) if (!p[k] || !DATE_RE.test(p[k])) throw new UsageError(`corpus mine needs --${k.toLowerCase()} as YYYY-MM-DD`);
     if (!p.Out) throw new UsageError('corpus mine needs --out');
+}
+
+/** `backtest` runs the backtest; `backtest match` needs only --ledger, a ledger file name, and --corpus. */
+function parseBacktestForm(sub: string | undefined, v: Parameters<typeof parseBacktest>[0] & { ledger?: string }, p: Parsed): void {
+    if (sub === undefined) { p.Backtest = parseBacktest(v); return; }
+    if (sub !== 'match') throw new UsageError(`unknown backtest subcommand ${sub}`);
+    if (!v.ledger || !/^[A-Za-z0-9_-]+$/.test(v.ledger)) throw new UsageError('backtest match needs --ledger as a ledger ID (letters, digits, \'-\' and \'_\')');
+    if (!v.corpus) throw new UsageError('backtest match needs --corpus');
+    p.Match = { LedgerID: v.ledger, CorpusPath: resolve(v.corpus) };
 }
 
 /** Checks and converts the `backtest` options; --max-usd defaults to 50. */
@@ -162,7 +175,7 @@ function parseLabel(catchID: string | undefined, answer: string | undefined, use
     return { CatchID: catchID, Answer: answer, User: user };
 }
 
-/** The parsed `backtest` options; `parse` sets them for every backtest command. */
+/** The parsed `backtest` options; `parse` sets them for every backtest command but `backtest match`. */
 function backtestArgs(p: Parsed): BacktestArgs {
     if (!p.Backtest) throw new Error('backtest options were not parsed');
     return p.Backtest;
@@ -185,7 +198,10 @@ async function dispatch(p: Parsed, deps: CliDeps): Promise<number> {
         case 'execute': await deps.ExecuteStep({ RunID: runID, RepoRoot: repoRoot, Settings: settings }); break;
         case 'assess': await deps.AssessStep({ RunID: runID, RepoRoot: repoRoot, Settings: settings, StoreDir: storeDir }); break;
         case 'run': await deps.RunAll({ PR: p.PR, BaseSHA: p.Base, HeadSHA: p.Head, Trigger: p.Trigger, RepoRoot: repoRoot, Settings: settings, StoreDir: storeDir }); break;
-        case 'backtest': await deps.BacktestStep({ ...backtestArgs(p), RepoRoot: repoRoot, Settings: settings, StoreDir: storeDir }); break;
+        case 'backtest':
+            if (p.Match) await deps.MatchStep({ ...p.Match, RepoRoot: repoRoot, Settings: settings, StoreDir: storeDir });
+            else await deps.BacktestStep({ ...backtestArgs(p), RepoRoot: repoRoot, Settings: settings, StoreDir: storeDir });
+            break;
     }
     return 0;
 }

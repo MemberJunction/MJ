@@ -48,6 +48,12 @@ describe('GitRepo', () => {
     expect(await repo.ChangedPaths(second, third)).toEqual(['packages/X/src/café.ts', 'packages/X/src/sp ace.ts']);
     expect(AddedLinesByFile(ParseUnifiedDiff(await repo.Diff(second, third)))).toEqual({ 'packages/X/src/café.ts': [1], 'packages/X/src/sp ace.ts': [1] });
   });
+  it('ApplyPatch runs git apply --3way in the folder and returns false when git exits 1', async () => {
+    const calls: { args: string[]; cwd: string }[] = [];
+    const fake = new GitRepo('/repo', async (args, cwd) => { calls.push({ args, cwd }); throw Object.assign(new Error('patch does not apply'), { code: 1 }); });
+    expect(await fake.ApplyPatch('/work/head', '/work/fix.patch')).toBe(false);
+    expect(calls).toEqual([{ args: ['-c', 'core.quotePath=false', '-C', '/work/head', 'apply', '--3way', '--whitespace=nowarn', '/work/fix.patch'], cwd: '/repo' }]);
+  });
   it('Subject returns the trimmed subject line of a commit through the runner', async () => {
     const calls: { args: string[]; cwd: string }[] = [];
     const fake = new GitRepo('/repo', async (args, cwd) => { calls.push({ args, cwd }); return '  fix(core): keep the cache per user  \n'; });
