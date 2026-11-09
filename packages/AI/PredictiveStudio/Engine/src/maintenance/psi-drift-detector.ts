@@ -18,7 +18,7 @@
 
 import { LogError, RunView, type IMetadataProvider, type RunViewParams, type UserInfo } from '@memberjunction/core';
 import type { MJFeatureValueEntity, MJMLModelEntity } from '@memberjunction/core-entities';
-import { EscapeSQLString, UUIDMap, UUIDSet } from '@memberjunction/global';
+import { EscapeSQLString, NormalizeUUID, UUIDMap, UUIDSet } from '@memberjunction/global';
 import type { DriftContext, DriftResult, IDriftDetector } from './types';
 
 /** Default Laplace smoothing constant for zero-count bins. */
@@ -888,6 +888,28 @@ function resolveDriftWindows(options: Pick<LoadDriftFromFeatureValuesOptions, 'E
   return { BaselineStartMs: baselineEndMs - 28 * DAY_MS, BaselineEndMs: baselineEndMs, EvaluationStartMs: evaluationStartMs };
 }
 
+/** The `MJ: Feature Values` columns every drift read selects. */
+const DRIFT_ROW_FIELDS: readonly (keyof FeatureValueDriftRow)[] = [
+  'ID',
+  'RecordProcessID',
+  'ProcessRunID',
+  'EntityID',
+  'RecordID',
+  'FeatureName',
+  'Role',
+  'AIModelID',
+  'MLModelID',
+  'Source',
+  'ValueNumeric',
+  'ValueText',
+  'Confidence',
+  'Reasoning',
+  'ComputedAt',
+];
+
+/** RecordIDs per pairing read, so a long list becomes several `IN (…)` views in the same batch. */
+const PAIRING_RECORD_ID_CHUNK = 500;
+
 /**
  * The two bounded `MJ: Feature Values` reads behind one drift load of one record process (or model): the baseline
  * window, and everything computed since it ends (the evaluation window). Each is read newest-first and capped on its
@@ -910,23 +932,7 @@ function featureValueDriftViews(
     EntityName: 'MJ: Feature Values',
     ExtraFilter: `${target}${window} AND Source = 'Pipeline'`,
     OrderBy: 'ComputedAt DESC',
-    Fields: [
-      'ID',
-      'RecordProcessID',
-      'ProcessRunID',
-      'EntityID',
-      'RecordID',
-      'FeatureName',
-      'Role',
-      'AIModelID',
-      'MLModelID',
-      'Source',
-      'ValueNumeric',
-      'ValueText',
-      'Confidence',
-      'Reasoning',
-      'ComputedAt',
-    ],
+    Fields: [...DRIFT_ROW_FIELDS],
     ResultType: 'simple',
     MaxRows: maxRows + 1,
     SkipTotalRowCount: true,
@@ -964,6 +970,91 @@ function capDriftWindows(
   const rows = windowRows.flatMap((w) => w.slice(0, maxRows));
   rows.sort((a, b) => new Date(a.ComputedAt).getTime() - new Date(b.ComputedAt).getTime());
   return { Rows: rows, Truncated: truncated };
+}
+
+/** The key a challenger is paired on: its record and feature. */
+function pairingKey(row: Pick<FeatureValueDriftRow, 'RecordID' | 'FeatureName'>): string {
+  return `${row.RecordID}::${row.FeatureName || 'Prediction'}`;
+}
+
+/**
+ * Reads of the current champion rows for the evaluation-window challengers that have no champion in the loaded
+ * windows. A champion whose value has not changed is never rewritten, so its `ComputedAt` can predate both windows;
+ * without these rows a stable model's challengers would go unpaired. One view per record process, feature and chunk
+ * of {@link PAIRING_RECORD_ID_CHUNK} RecordIDs, newest first. Bounded by the RecordID list, so `IgnoreMaxRows`.
+ */
+function pairingChampionViews(rows: readonly FeatureValueDriftRow[], windows: DriftWindows): RunViewParams[] {
+  const championKeys = new Set(rows.filter((r) => r.Role !== 'Challenger').map(pairingKey));
+  const unpaired = new Map<string, { RecordProcessID: string; FeatureName: string; RecordIDs: Set<string> }>();
+  for (const r of rows) {
+    if (
+      r.Role !== 'Challenger' ||
+      (r.Source && r.Source !== 'Pipeline') ||
+      !r.RecordProcessID ||
+      !r.FeatureName ||
+      new Date(r.ComputedAt).getTime() < windows.EvaluationStartMs ||
+      championKeys.has(pairingKey(r))
+    ) {
+      continue;
+    }
+    const groupKey = `${NormalizeUUID(r.RecordProcessID)}::${r.FeatureName}`;
+    const group = unpaired.get(groupKey) ?? { RecordProcessID: r.RecordProcessID, FeatureName: r.FeatureName, RecordIDs: new Set<string>() };
+    group.RecordIDs.add(r.RecordID);
+    unpaired.set(groupKey, group);
+  }
+
+  const views: RunViewParams[] = [];
+  for (const group of unpaired.values()) {
+    const ids = [...group.RecordIDs];
+    for (let i = 0; i < ids.length; i += PAIRING_RECORD_ID_CHUNK) {
+      const idList = ids.slice(i, i + PAIRING_RECORD_ID_CHUNK).map((id) => `'${EscapeSQLString(id)}'`).join(', ');
+      views.push({
+        EntityName: 'MJ: Feature Values',
+        ExtraFilter:
+          `RecordProcessID = '${EscapeSQLString(group.RecordProcessID)}' AND Role = 'Champion' AND Source = 'Pipeline'` +
+          ` AND FeatureName = '${EscapeSQLString(group.FeatureName)}' AND RecordID IN (${idList})`,
+        OrderBy: 'ComputedAt DESC',
+        Fields: [...DRIFT_ROW_FIELDS],
+        ResultType: 'simple',
+        IgnoreMaxRows: true,
+      });
+    }
+  }
+  return views;
+}
+
+/**
+ * Each row set's out-of-window champion rows for pairing ({@link pairingChampionViews}), from one batched `RunViews`
+ * as the caller across every set. A failed view is logged and leaves its challengers unpaired (InsufficientData, never
+ * a false alarm).
+ */
+async function loadPairingChampions(
+  rowSets: ReadonlyArray<readonly FeatureValueDriftRow[]>,
+  windows: DriftWindows,
+  options: Pick<LoadDriftFromFeatureValuesOptions, 'Provider' | 'ContextUser'>,
+): Promise<FeatureValueDriftRow[][]> {
+  const views: RunViewParams[] = [];
+  const owners: number[] = [];
+  rowSets.forEach((rows, i) => {
+    for (const view of pairingChampionViews(rows, windows)) {
+      views.push(view);
+      owners.push(i);
+    }
+  });
+  const champions: FeatureValueDriftRow[][] = rowSets.map(() => []);
+  if (views.length === 0) {
+    return champions;
+  }
+  const results = await RunView.FromMetadataProvider(options.Provider).RunViews<FeatureValueDriftRow>(views, options.ContextUser);
+  views.forEach((_view, k) => {
+    const res = results[k];
+    if (!res?.Success) {
+      LogError(`Drift evaluation could not read the champion rows to pair challengers with: ${res?.ErrorMessage ?? 'unknown error'}`);
+      return;
+    }
+    champions[owners[k]].push(...(res.Results ?? []));
+  });
+  return champions;
 }
 
 /** The ML model of a process's newest champion row; `rows` are oldest first. Undefined for non-ML processes. */
@@ -1008,13 +1099,24 @@ async function loadModelProblemTypes(
   return problemTypes;
 }
 
+/**
+ * The ML model behind a process's newest champion: from the windows, else (a stable model whose champions are all
+ * older) from the pairing champions, which are newest first.
+ */
+function processChampionMLModelID(
+  rows: readonly FeatureValueDriftRow[],
+  pairingChampions: readonly FeatureValueDriftRow[],
+): string | undefined {
+  return championMLModelID(rows) ?? pairingChampions.find((r) => r.MLModelID)?.MLModelID ?? undefined;
+}
+
 /** A caller-supplied ProblemType, else the one of the ML model behind the process's newest champion row. */
 function withChampionProblemType(
   options: LoadDriftFromFeatureValuesOptions,
-  rows: readonly FeatureValueDriftRow[],
+  modelID: string | undefined,
   problemTypes: UUIDMap<MJMLModelEntity['ProblemType']>,
 ): LoadDriftFromFeatureValuesOptions {
-  return { ...options, ProblemType: options.ProblemType ?? problemTypes.Get(championMLModelID(rows)) };
+  return { ...options, ProblemType: options.ProblemType ?? problemTypes.Get(modelID) };
 }
 
 /**
@@ -1027,7 +1129,8 @@ function withChampionProblemType(
  *   window holds values *computed* (i.e. changed) in that window rather than a full historical population
  *   snapshot.
  * - Each challenger row computed in the evaluation window is paired with the latest champion row for the
- *   same record and feature (the latest champion value is all that exists).
+ *   same record and feature (the latest champion value is all that exists). A champion that has not changed keeps
+ *   its old `ComputedAt`, so champions older than the windows are read for pairing only (one batched read).
  * - An ML Model Record Process with no challenger configured writes no Feature Values, so it has no drift
  *   population and the sweep reports `InsufficientData: true` for it.
  * - `MJ: Feature Values` rows carry no latency metrics, so the scheduled sweep reports no P95 latency
@@ -1052,11 +1155,13 @@ export async function LoadFeatureAndPredictionDriftFromFeatureValues(
     maxRows,
     options.RecordProcessID ?? options.ModelID ?? '',
   );
+  const [pairingChampions] = await loadPairingChampions([capped.Rows], windows, options);
+  const modelID = processChampionMLModelID(capped.Rows, pairingChampions);
   const problemTypes = options.ProblemType
     ? new UUIDMap<MJMLModelEntity['ProblemType']>()
-    : await loadModelProblemTypes([championMLModelID(capped.Rows)], options);
+    : await loadModelProblemTypes([modelID], options);
   return {
-    ...buildDriftInputFromRows(capped.Rows, windows, withChampionProblemType(options, capped.Rows, problemTypes)),
+    ...buildDriftInputFromRows(capped.Rows, windows, withChampionProblemType(options, modelID, problemTypes), pairingChampions),
     Truncated: capped.Truncated,
   };
 }
@@ -1112,36 +1217,47 @@ export async function LoadFeatureAndPredictionDriftForRecordProcesses(
       };
     });
 
-    // One ML Models read for the chunk: each ML process's ProblemType comes from its champion's model.
+    // One pairing read for the chunk (champions older than the windows), then one ML Models read: each ML process's
+    // ProblemType comes from its champion's model.
+    const loadedRows = chunkLoads.map((l) => ('Capped' in l && l.Capped ? l.Capped.Rows : []));
+    const pairingChampions = await loadPairingChampions(loadedRows, windows, options);
+    const modelIDs = loadedRows.map((rows, i) => processChampionMLModelID(rows, pairingChampions[i]));
     const problemTypes = options.ProblemType
       ? new UUIDMap<MJMLModelEntity['ProblemType']>()
-      : await loadModelProblemTypes(
-          chunkLoads.map((l) => ('Capped' in l && l.Capped ? championMLModelID(l.Capped.Rows) : undefined)),
-          options,
-        );
-    for (const load of chunkLoads) {
+      : await loadModelProblemTypes(modelIDs, options);
+    chunkLoads.forEach((load, i) => {
       if (!('Capped' in load) || !load.Capped) {
         allLoads.push(load);
-        continue;
+        return;
       }
       allLoads.push({
         RecordProcessID: load.RecordProcessID,
         Input: {
-          ...buildDriftInputFromRows(load.Capped.Rows, windows, withChampionProblemType(load.Options, load.Capped.Rows, problemTypes)),
+          ...buildDriftInputFromRows(
+            load.Capped.Rows,
+            windows,
+            withChampionProblemType(load.Options, modelIDs[i], problemTypes),
+            pairingChampions[i],
+          ),
           Truncated: load.Capped.Truncated,
         },
       });
-    }
+    });
   }
 
   return allLoads;
 }
 
-/** Splits loaded Feature Value rows into the two windows' feature distributions and champion/challenger pairs. */
+/**
+ * Splits loaded Feature Value rows into the two windows' feature distributions and champion/challenger pairs.
+ * `pairingChampions` (champion rows older than the windows, newest first) only pair challengers that have no champion
+ * in `rows`; they never enter a window.
+ */
 function buildDriftInputFromRows(
   rows: FeatureValueDriftRow[],
   windows: DriftWindows,
   options: LoadDriftFromFeatureValuesOptions,
+  pairingChampions: readonly FeatureValueDriftRow[] = [],
 ): FeatureAndPredictionDriftInput {
   const championByFeature = new Map<string, FeatureValueDriftRow[]>();
   const latestChampionByRecordFeature = new Map<string, FeatureValueDriftRow>();
@@ -1162,6 +1278,12 @@ function buildDriftInputFromRows(
       list.push(row);
       championByFeature.set(featureName, list);
       latestChampionByRecordFeature.set(`${row.RecordID}::${featureName}`, row);
+    }
+  }
+  for (const row of pairingChampions) {
+    const key = pairingKey(row);
+    if (!latestChampionByRecordFeature.has(key)) {
+      latestChampionByRecordFeature.set(key, row);
     }
   }
 
@@ -1216,8 +1338,7 @@ function buildDriftInputFromRows(
 
   const pairs: ChampionChallengerPair[] = [];
   for (const chall of challengerRows) {
-    const featureName = chall.FeatureName || 'Prediction';
-    const champ = latestChampionByRecordFeature.get(`${chall.RecordID}::${featureName}`);
+    const champ = latestChampionByRecordFeature.get(pairingKey(chall));
     const reasoning = chall.Reasoning ?? '';
     const isTimeout = reasoning.includes('SHADOW_TIMEOUT');
     const isError = reasoning.includes('SHADOW_ERROR');

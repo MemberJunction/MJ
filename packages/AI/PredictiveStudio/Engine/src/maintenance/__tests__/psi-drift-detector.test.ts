@@ -627,6 +627,89 @@ describe('psi-drift-detector', () => {
       });
     });
 
+    describe('Pairing challengers with champions older than the windows (stable champions)', () => {
+      const nowMs = Date.now();
+      /**
+       * `count` records of one process whose champion was last changed 60 days ago (before both windows; an unchanged
+       * champion is not rewritten) and was shadowed by a challenger 2 days ago.
+       */
+      function stableRows(recordProcessID: string, count: number): FeatureValueDoubleRow[] {
+        return Array.from({ length: count }, (_, i) => [
+          {
+            ID: `${recordProcessID}-champ-${i}`, RecordProcessID: recordProcessID, RecordID: `${recordProcessID}-rec-${i}`,
+            FeatureName: 'Score', Role: 'Champion', Source: 'Pipeline', MLModelID: 'model-stable', ValueNumeric: 0.45,
+            Confidence: 0.9, ComputedAt: new Date(nowMs - 60 * 86_400_000 + i * 1000),
+          },
+          {
+            ID: `${recordProcessID}-chall-${i}`, RecordProcessID: recordProcessID, RecordID: `${recordProcessID}-rec-${i}`,
+            FeatureName: 'Score', Role: 'Challenger', Source: 'Pipeline', MLModelID: 'model-challenger', ValueNumeric: 0.47,
+            ComputedAt: new Date(nowMs - 2 * 86_400_000 + i * 1000),
+          },
+        ]).flat();
+      }
+      /** Feature Value reads from `rows`, ML Models reads from one regression model; records each batch's views. */
+      function provider(rows: FeatureValueDoubleRow[], batches: RunViewParams[][]): IMetadataProvider {
+        const one = (v: RunViewParams): RunViewResult => {
+          if (v.EntityName === 'MJ: ML Models') {
+            const results = String(v.ExtraFilter).includes("'model-stable'") ? [{ ID: 'model-stable', ProblemType: 'regression' }] : [];
+            return { Success: true, Results: results, RowCount: results.length, TotalRowCount: results.length, ExecutionTime: 1, ErrorMessage: '' };
+          }
+          return RunFeatureValueView(rows, v);
+        };
+        return {
+          RunView: async (v: RunViewParams) => one(v),
+          RunViews: async (views: RunViewParams[]) => {
+            batches.push(views);
+            return views.map(one);
+          },
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+      }
+
+      it('pairs every recent challenger with its 60-day-old champion, leaving the PSI windows unchanged', async () => {
+        const batches: RunViewParams[][] = [];
+        const input = await LoadFeatureAndPredictionDriftFromFeatureValues({
+          RecordProcessID: 'rp-stable',
+          Provider: provider(stableRows('rp-stable', 120), batches),
+          ContextUser: { ID: 'user-1' } as UserInfo,
+        });
+
+        // Every challenger is paired, so divergence has its sample.
+        const report = EvaluateFeatureAndPredictionDrift(input);
+        expect(report.DivergenceMetrics.DivergenceInsufficientData).toBe(false);
+        expect(report.InsufficientData).toBe(false);
+        expect(report.DivergenceMetrics.PairCount).toBe(120);
+        expect(report.DivergenceMetrics.AgreementRate).toBe(1);
+
+        // The old champions pair challengers only: no window holds them.
+        expect(input.NumericFeatures).toBeUndefined();
+        expect(input.ConfidenceAndDivergence?.BaselineConfidences).toEqual([]);
+        const pairs = input.ConfidenceAndDivergence?.Pairs ?? [];
+        expect(pairs).toHaveLength(120);
+        expect(pairs.every((p) => p.ChampionScore === 0.45 && p.ChallengerScore === 0.47)).toBe(true);
+        // Their model gives the ProblemType too.
+        expect(input.ConfidenceAndDivergence?.ProblemType).toBe('regression');
+
+        // Windows in one batch, then one batched pairing read as the caller, never a read per record.
+        expect(batches.map((b) => b.length)).toEqual([2, 1]);
+        expect(batches[1][0].ExtraFilter).toMatch(
+          /^RecordProcessID = 'rp-stable' AND Role = 'Champion' AND Source = 'Pipeline' AND FeatureName = 'Score' AND RecordID IN \('rp-stable-rec-0', /,
+        );
+      });
+
+      it('reads the pairing champions of a whole sweep chunk in one batch, splitting a long RecordID list', async () => {
+        const batches: RunViewParams[][] = [];
+        const loads = await LoadFeatureAndPredictionDriftForRecordProcesses(['rp-big', 'rp-small'], {
+          Provider: provider([...stableRows('rp-big', 1200), ...stableRows('rp-small', 10)], batches),
+          ContextUser: { ID: 'user-1' } as UserInfo,
+        });
+
+        // Four window views, then one pairing batch: rp-big's 1200 RecordIDs as 500 + 500 + 200, rp-small's 10.
+        expect(batches.map((b) => b.length)).toEqual([4, 4]);
+        expect(batches[1].map((v) => (String(v.ExtraFilter).match(/'rp-(?:big|small)-rec-\d+'/g) ?? []).length)).toEqual([500, 500, 200, 10]);
+        expect(loads.map((l) => l.Input?.ConfidenceAndDivergence?.Pairs?.filter((p) => p.ChampionScore === 0.45).length)).toEqual([1200, 10]);
+      });
+    });
+
     describe('MaxRows caps each window separately (P2)', () => {
       const nowMs = Date.now();
       /** `baseline` rows 14-20 days ago at 0.1 and `evaluation` rows in the last 3 days at 0.9, one minute apart. */
