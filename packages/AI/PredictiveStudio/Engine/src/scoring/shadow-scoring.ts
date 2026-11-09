@@ -628,7 +628,7 @@ export class MLModelChallengerScoreRunner implements IChallengerScoreRunner {
       throw new ModelNeedsTrainingError(`MLModelChallengerScoreRunner: ML Model '${modelId}' not found`);
     }
     this.assertStatusCanScore(modelId, model);
-    const artifactB64 = await this.ensureArtifactB64(modelId, model.ArtifactFileID, contextUser);
+    const artifactB64 = await this.ensureArtifactB64(modelId, model.ArtifactFileID, contextUser, provider);
     return {
       modelId: model.ID,
       artifactB64,
@@ -643,13 +643,14 @@ export class MLModelChallengerScoreRunner implements IChallengerScoreRunner {
     modelId: string,
     artifactFileId: string,
     contextUser: UserInfo | undefined,
+    provider: IMetadataProvider,
   ): Promise<string> {
     const cached = this.artifactCache.get(modelId);
     if (cached && cached.artifactFileId === artifactFileId) {
       return cached.artifactB64Promise;
     }
     const artifactB64Promise = (async () => {
-      const bytes = await this.deps.artifactLoader.load(artifactFileId, contextUser);
+      const bytes = await this.deps.artifactLoader.load(artifactFileId, contextUser, provider);
       if (!bytes) {
         throw new ModelNeedsTrainingError(
           `MLModelChallengerScoreRunner: ${ModelArtifactMissingMessage(modelId, artifactFileId)}`,
