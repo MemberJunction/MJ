@@ -19,12 +19,24 @@ const MergedViewSchema = z.object({
 });
 export interface MergedPullRequest { Number: number; Title: string; MergedAt: string; MergeSHA: string; Author: string; HeadRef: string; }
 export interface MergedPullRequestDetail extends MergedPullRequest { Body: string; Files: string[]; }
+/** Wait and warning hooks for `gh` retries. */
+export interface GitHubRetryOptions { Sleep?: (ms: number) => Promise<void>; Warn?: (line: string) => void; }
+
+/** Waits before each retry of a failed `gh` command; the attempt count is one more than its length. */
+const RETRY_WAITS_MS = [2000, 8000];
+/** `gh` failures that are a definitive answer (not merged, not a PR, auth or missing resource), so a retry cannot help. */
+const DEFINITIVE_FAILURE_RE = /is not merged|Could not resolve to a PullRequest|gh auth login|HTTP 40[134]/;
 
 /** Reads pull requests through the `gh` CLI, which is logged in locally and preinstalled on runners. */
 export class GitHub {
-    constructor(private readonly runner: (args: string[]) => Promise<string> = defaultRunner) {}
+    private readonly sleep: (ms: number) => Promise<void>;
+    private readonly warn: (line: string) => void;
+    constructor(private readonly runner: (args: string[]) => Promise<string> = defaultRunner, o: GitHubRetryOptions = {}) {
+        this.sleep = o.Sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+        this.warn = o.Warn ?? ((line) => { process.stderr.write(`${line}\n`); });
+    }
     public async GetPullRequest(n: number): Promise<PullRequestInfo> {
-        const raw = await this.runner(['pr', 'view', String(n), '--repo', REPO, '--json', 'number,title,body,headRefOid,baseRefName,headRepository,headRepositoryOwner,author']);
+        const raw = await this.exec(['pr', 'view', String(n), '--repo', REPO, '--json', 'number,title,body,headRefOid,baseRefName,headRepository,headRepositoryOwner,author']);
         const v = ViewSchema.parse(JSON.parse(raw));
         const headRepo = `${v.headRepositoryOwner.login}/${v.headRepository.name}`;
         if (headRepo !== REPO) throw new Error(`PR #${n} comes from a fork (${headRepo}); only same-repo PRs are supported`);
@@ -32,7 +44,7 @@ export class GitHub {
     }
     /** Lists PRs merged into `next` between Since and Until (YYYY-MM-DD); throws when the window holds 1000 or more. */
     public async ListMergedPullRequests(o: { Since: string; Until: string }): Promise<MergedPullRequest[]> {
-        const raw = await this.runner(['pr', 'list', '--repo', REPO, '--state', 'merged', '--base', 'next', '--search', `merged:${o.Since}..${o.Until}`,
+        const raw = await this.exec(['pr', 'list', '--repo', REPO, '--state', 'merged', '--base', 'next', '--search', `merged:${o.Since}..${o.Until}`,
             '--limit', String(MERGED_LIST_LIMIT), '--json', 'number,title,mergedAt,mergeCommit,author,headRefName']);
         const list = MergedListSchema.parse(JSON.parse(raw));
         if (list.length >= MERGED_LIST_LIMIT) throw new Error(`${list.length} merged PRs between ${o.Since} and ${o.Until} hit the ${MERGED_LIST_LIMIT} limit; use a narrower window`);
@@ -40,7 +52,7 @@ export class GitHub {
     }
     /** Reads a merged PR with its body and changed file paths; throws when the PR is not merged. */
     public async GetMergedPullRequest(n: number): Promise<MergedPullRequestDetail> {
-        const raw = await this.runner(['pr', 'view', String(n), '--repo', REPO, '--json', 'number,title,body,mergedAt,mergeCommit,author,files,headRefName']);
+        const raw = await this.exec(['pr', 'view', String(n), '--repo', REPO, '--json', 'number,title,body,mergedAt,mergeCommit,author,files,headRefName']);
         const v = MergedViewSchema.parse(JSON.parse(raw));
         if (v.mergeCommit === null || v.mergedAt === null) throw new Error(`PR #${n} is not merged`);
         return {
@@ -48,5 +60,24 @@ export class GitHub {
             Body: v.body ?? '', Files: v.files.map((f) => f.path),
         };
     }
+    /** Runs one `gh` command, retrying a transient failure up to 3 attempts in total; a definitive failure throws at once. */
+    private async exec(args: string[]): Promise<string> {
+        for (let attempt = 1; ; attempt++) {
+            try { return await this.runner(args); }
+            catch (e) {
+                const reason = failureText(e);
+                const wait = RETRY_WAITS_MS[attempt - 1];
+                if (wait === undefined || DEFINITIVE_FAILURE_RE.test(reason)) throw e;
+                this.warn(`gh retry ${attempt}/${RETRY_WAITS_MS.length + 1} after ${firstLine(reason)}`);
+                await this.sleep(wait);
+            }
+        }
+    }
 }
+/** The stderr of a failed command when present, else the error message. */
+function failureText(e: unknown): string {
+    if (e instanceof Error && 'stderr' in e && typeof e.stderr === 'string' && e.stderr.trim()) return e.stderr;
+    return e instanceof Error ? e.message : String(e);
+}
+function firstLine(text: string): string { return text.trim().split('\n')[0]; }
 async function defaultRunner(args: string[]): Promise<string> { return (await run('gh', args, { maxBuffer: 16 * 1024 * 1024 })).stdout; }

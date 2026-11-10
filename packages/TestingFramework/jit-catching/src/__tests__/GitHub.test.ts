@@ -51,3 +51,35 @@ describe('GitHub.GetMergedPullRequest', () => {
     await expect(gh.GetMergedPullRequest(9)).rejects.toThrow(/not merged/);
   });
 });
+
+describe('GitHub retries', () => {
+  const ghError = (stderr: string): Error => Object.assign(new Error(`Command failed: gh pr view 9\n${stderr}`), { stderr });
+  const make = (results: (string | Error)[]) => {
+    const calls: string[][] = []; const waits: number[] = []; const lines: string[] = [];
+    const gh = new GitHub(async (args) => { calls.push(args); const r = results.shift(); if (r instanceof Error || r === undefined) throw r ?? new Error('no result'); return r; },
+      { Sleep: async (ms) => { waits.push(ms); }, Warn: (line) => { lines.push(line); } });
+    return { gh, calls, waits, lines };
+  };
+
+  it('retries a transient gh failure and returns the later success', async () => {
+    const f = make([ghError('error connecting to api.github.com\ncheck your internet connection'), JSON.stringify(detail)]);
+    expect((await f.gh.GetMergedPullRequest(9)).Number).toBe(9);
+    expect(f.calls).toHaveLength(2);
+    expect(f.waits).toEqual([2000]);
+    expect(f.lines).toEqual(['gh retry 1/3 after error connecting to api.github.com']);
+  });
+
+  it('does not retry when GitHub says the number is not a pull request', async () => {
+    const f = make([ghError('GraphQL: Could not resolve to a PullRequest with the number of 9. (repository.pullRequest)')]);
+    await expect(f.gh.GetMergedPullRequest(9)).rejects.toThrow(/Could not resolve to a PullRequest/);
+    expect(f.calls).toHaveLength(1);
+  });
+
+  it('throws the last error after three transient failures', async () => {
+    const f = make([ghError('timeout 1'), ghError('timeout 2'), ghError('timeout 3'), JSON.stringify(detail)]);
+    await expect(f.gh.GetMergedPullRequest(9)).rejects.toThrow(/timeout 3/);
+    expect(f.calls).toHaveLength(3);
+    expect(f.waits).toEqual([2000, 8000]);
+    expect(f.lines).toEqual(['gh retry 1/3 after timeout 1', 'gh retry 2/3 after timeout 2']);
+  });
+});
