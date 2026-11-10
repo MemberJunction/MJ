@@ -73118,14 +73118,17 @@ export class MJActionResultCodeEntity extends BaseEntity<MJActionResultCodeEntit
  * need neither a foreign key nor an index, so they live in one evolvable JSON bag instead of a
  * column each. New optional keys can be added without a schema migration.
  *
- * Two kinds of setting share it today:
+ * Three kinds of setting share it today:
  *
  *  - Integration routing, written by IntegrationActionGenerator for actions with
  *    DriverClass='IntegrationActionExecutor' and read by that executor to dispatch the call.
  *  - Output trust, read by the agent runtime (BaseAgent.resolveActionTrustLevel) to decide
  *    how far to trust what the action returns.
+ *  - Agent result lifecycle and execution-limit defaults, read by BaseAgent across both
+ *    directly-attached (`AIAgentAction`) and skill-provided (`AISkillAction`) invocations so
+ *    that skills act purely as a bundling mechanism over a single action invocation pathway.
  *
- * NULL for actions that need neither.
+ * NULL for actions that need none of these.
  */
 export interface MJActionEntity_IActionConfiguration {
     /** Integration routing: the MJ: Integrations record the generated action calls. */

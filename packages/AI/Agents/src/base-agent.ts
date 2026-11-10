@@ -885,6 +885,14 @@ export class BaseAgent {
     protected _taintedSources: AgentTaintedSource[] = [];
 
     /**
+     * Highest-severity taint observed during the most recent {@link executePipelineAsStep} invocation,
+     * consumed by {@link injectPipelineResultMessage} so pipeline outputs derived from `'Untrusted'` or
+     * `'SemiTrusted'` actions/artifacts are wrapped in `<untrusted_external_data>` delimiters.
+     * @private
+     */
+    private _lastPipelineTaint: { trustLevel: AgentTaintedSource['trustLevel']; sourceName: string } | null = null;
+
+    /**
      * True when the current agent run has ingested at least one `'Untrusted'` or `'SemiTrusted'`
      * action or client-tool result.
      */
@@ -1614,16 +1622,27 @@ export class BaseAgent {
         outputParams: ActionParam[],
         message: string | undefined,
         stepNumber: number,
-        expirationConfig?: ResolvedActionExpirationConfig
+        expirationConfig?: ResolvedActionExpirationConfig,
+        trustLevel: ActionOutputTrustLevel = 'Trusted'
     ): string[] {
         const registeredIds: string[] = [];
+        const sourceName = `action:${actionName}`;
+        const trustMetadata = trustLevel !== 'Trusted' ? { trustLevel, sourceName } : {};
         const willExpire = expirationConfig != null && expirationConfig.expirationMode !== 'None';
-        const charThreshold = willExpire
-            ? (expirationConfig.expirationMode === 'Compact'
-                ? Math.min(expirationConfig.compactLength ?? 2000, 1000)
-                : 500)
-            : 4000;
-        const rowThreshold = willExpire ? 2 : 20;
+        const isCompact = willExpire && expirationConfig.expirationMode === 'Compact';
+        // For Compact mode, only spill over into ArtifactToolManager when the output is large enough
+        // that compaction (`compactLength`) would truncate the inline message — avoiding mid-run
+        // `_ARTIFACT_MANIFEST` mutations (and system-prompt KV cache invalidation) on tiny lookup results.
+        const charThreshold = isCompact
+            ? Math.max(Math.floor((expirationConfig.compactLength ?? 500) * 0.75), 200)
+            : willExpire
+                ? 500
+                : 4000;
+        const rowThreshold = isCompact
+            ? Number.MAX_SAFE_INTEGER
+            : willExpire
+                ? 5
+                : 25;
 
         // Extract optional Columns metadata parameter if the action returned one (e.g., Run Ad-hoc Query)
         const columnsParam = outputParams.find(p => p.Name?.trim().toLowerCase() === 'columns' && Array.isArray(p.Value));
@@ -1645,6 +1664,7 @@ export class BaseAgent {
                 val.every(r => r !== null && typeof r === 'object' && !Array.isArray(r))
             ) {
                 const rows = val as Array<Record<string, unknown>>;
+                // fls-guard: action output params already scoped to the run's contextUser and audience in ExecuteSingleAction
                 const serializedRows = JSON.stringify(rows);
                 if (rows.length >= rowThreshold || serializedRows.length >= charThreshold) {
                     const firstRow = rows[0];
@@ -1682,6 +1702,7 @@ export class BaseAgent {
                         description: `${rows.length} row(s) returned by action "${actionName}" (${tableName}). Queryable via get_tables, get_schema, get_rows, search_rows, filter, aggregate, group_aggregate, compute, or get_full.`,
                         deliveryMode: 'ToolsOnly',
                         forceToolsOnly: true,
+                        ...trustMetadata,
                     });
                     registeredIds.push(alphaId);
                     registeredTabularRows = true;
@@ -1721,6 +1742,7 @@ export class BaseAgent {
                         description: `Structured JSON output from action "${actionName}" (${param.Name}). Queryable via json_path, json_keys, json_search, json_iterate, or get_full.`,
                         deliveryMode: 'ToolsOnly',
                         forceToolsOnly: true,
+                        ...trustMetadata,
                     });
                     registeredIds.push(alphaId);
                 }
@@ -1749,6 +1771,7 @@ export class BaseAgent {
                     description: `Output from action "${actionName}" (${param.Name}, ${val.length} chars).`,
                     deliveryMode: 'ToolsOnly',
                     forceToolsOnly: true,
+                    ...trustMetadata,
                 });
                 registeredIds.push(alphaId);
             }
@@ -1769,6 +1792,7 @@ export class BaseAgent {
                 description: `Full message output from action "${actionName}" (${message.length} chars). Queryable via grep, get_lines, or get_full.`,
                 deliveryMode: 'ToolsOnly',
                 forceToolsOnly: true,
+                ...trustMetadata,
             });
             registeredIds.push(alphaId);
         }
@@ -1783,6 +1807,16 @@ export class BaseAgent {
     protected recordTaintedSource(stepNumber: number, sourceName: string, trustLevel: AgentTaintedSource['trustLevel']): void {
         if (!this._taintedSources.some(s => s.stepNumber === stepNumber && s.sourceName === sourceName && s.trustLevel === trustLevel)) {
             this._taintedSources.push({ stepNumber, sourceName, trustLevel });
+        }
+    }
+
+    /**
+     * Records taint for the currently executing pipeline stage; `'Untrusted'` takes precedence over `'SemiTrusted'`.
+     * @protected
+     */
+    protected recordPipelineTaint(sourceName: string, trustLevel: AgentTaintedSource['trustLevel']): void {
+        if (!this._lastPipelineTaint || (this._lastPipelineTaint.trustLevel === 'SemiTrusted' && trustLevel === 'Untrusted')) {
+            this._lastPipelineTaint = { trustLevel, sourceName };
         }
     }
 
@@ -3239,6 +3273,7 @@ export class BaseAgent {
             this._resolvedHandoffTarget = null;
             this._lastSubAgentArtifactDirective = undefined;
             this._taintedSources = [];
+            this._lastPipelineTaint = null;
             this._messageLifecycleCallback = params.onMessageLifecycle;
             this._catalogNarrowing = undefined;
             this._openingRequest = OpeningRequestText(params.conversationMessages);
@@ -6461,9 +6496,17 @@ export class BaseAgent {
 
     private async runArtifactToolFromTool(call: ArtifactToolCall): Promise<AgentToolResult> {
         const stored = await this._artifactToolManager.ExecuteSingleToolCall(call);
-        return stored.result.success
-            ? { Content: this.capStandaloneToolResultText(RenderToolResultData(stored.result.data)), IsError: false }
-            : { Content: stored.result.errorMessage ?? `Artifact tool '${call.tool}' failed.`, IsError: true };
+        if (stored.trustLevel === 'Untrusted' || stored.trustLevel === 'SemiTrusted') {
+            this.recordTaintedSource(this._promptTurnCount, stored.sourceName ?? `artifact:${stored.artifactId}`, stored.trustLevel);
+        }
+        if (!stored.result.success) {
+            return { Content: stored.result.errorMessage ?? `Artifact tool '${call.tool}' failed.`, IsError: true };
+        }
+        const rendered = this.capStandaloneToolResultText(RenderToolResultData(stored.result.data));
+        const content = (stored.trustLevel === 'Untrusted' || stored.trustLevel === 'SemiTrusted')
+            ? WrapUntrustedExternalData(rendered, stored.sourceName ?? `artifact:${stored.artifactId}`, stored.trustLevel)
+            : rendered;
+        return { Content: content, IsError: false };
     }
 
     private async runConversationToolFromTool(tool: string, input: Record<string, unknown>): Promise<AgentToolResult> {
@@ -10646,6 +10689,13 @@ The context is now within limits. Please retry your request with the recovered c
                 });
 
                 const stored = await this._artifactToolManager.ExecuteSingleToolCall(call);
+                if (stored.trustLevel === 'Untrusted' || stored.trustLevel === 'SemiTrusted') {
+                    this.recordTaintedSource(
+                        toolStep?.StepNumber ?? this._promptTurnCount,
+                        stored.sourceName ?? `artifact:${stored.artifactId}`,
+                        stored.trustLevel,
+                    );
+                }
 
                 // Typed cross-turn contract — see CarryForwardToolStepOutput (read back by
                 // BuildPriorTurnToolResultsMessage on the next run; StepName is display-only).
@@ -10656,6 +10706,8 @@ The context is now within limits. Please retry your request with the recovered c
                     input: stored.input,
                     result: stored.result,
                     durationMs: stored.durationMs,
+                    ...(stored.trustLevel ? { trustLevel: stored.trustLevel } : {}),
+                    ...(stored.sourceName ? { sourceName: stored.sourceName } : {}),
                 };
                 await this.finalizeStepEntity(
                     toolStep,
@@ -11610,6 +11662,8 @@ The context is now within limits. Please retry your request with the recovered c
             if (!parsed.toolFamily || !BaseAgent.CarryForwardToolFamilies.includes(parsed.toolFamily)) continue;
             if (typeof parsed.tool !== 'string' || parsed.tool.length === 0) continue;
             if (parsed.result?.success !== true) continue;
+            // Never carry untrusted or semi-trusted artifact reads across into a new run without taint tracking.
+            if (parsed.trustLevel === 'Untrusted' || parsed.trustLevel === 'SemiTrusted') continue;
 
             const section = FormatToolResultSection(
                 { tool: parsed.tool, input: parsed.input },
@@ -11809,8 +11863,11 @@ The context is now within limits. Please retry your request with the recovered c
         const body = toolResults.map((r, i) => {
             const parts: ToolResultSectionParts = { tool: r.tool, input: r.input, ordinal: i + 1, signaturePrefix: r.artifactId };
             if (r.result.success) {
-                const data = this.capStandaloneToolResultText(RenderToolResultData(r.result.data));
-                return FormatToolResultSection(parts, data);
+                const rawData = this.capStandaloneToolResultText(RenderToolResultData(r.result.data));
+                const section = FormatToolResultSection(parts, rawData);
+                return (r.trustLevel === 'Untrusted' || r.trustLevel === 'SemiTrusted')
+                    ? WrapUntrustedExternalData(section, r.sourceName ?? `artifact:${r.artifactId}`, r.trustLevel)
+                    : section;
             }
             return FormatToolErrorSection(parts, r.result.errorMessage);
         }).join('\n\n');
@@ -12103,9 +12160,22 @@ The context is now within limits. Please retry your request with the recovered c
         // there is no model in that loop to act on the breaker's guidance.
         this.getEffectiveActionsForValidation(params.agent.ID).forEach((actionEntity) =>
             register(
-                new ActionInvocable(actionEntity.Name, (p) =>
-                    this.ExecuteSingleAction(params, { name: actionEntity.Name, params: p }, actionEntity, params.contextUser, { skipCircuitBreaker: true }),
-                ),
+                new ActionInvocable(actionEntity.Name, async (p) => {
+                    const actionResult = await this.ExecuteSingleAction(
+                        params,
+                        { name: actionEntity.Name, params: p },
+                        actionEntity,
+                        params.contextUser,
+                        { skipCircuitBreaker: true },
+                    );
+                    const trustLevel = this.resolveActionTrustLevel(actionEntity.Name, actionEntity, params);
+                    if (trustLevel === 'Untrusted' || trustLevel === 'SemiTrusted') {
+                        const sourceName = `action:${actionEntity.Name}`;
+                        this.recordTaintedSource(this._promptTurnCount, sourceName, trustLevel);
+                        this.recordPipelineTaint(sourceName, trustLevel);
+                    }
+                    return actionResult;
+                }),
             ),
         );
 
@@ -12119,6 +12189,11 @@ The context is now within limits. Please retry your request with the recovered c
                         tool,
                         input: p,
                     });
+                    if (stored.trustLevel === 'Untrusted' || stored.trustLevel === 'SemiTrusted') {
+                        const sourceName = stored.sourceName ?? `artifact:${stored.artifactId}`;
+                        this.recordTaintedSource(this._promptTurnCount, sourceName, stored.trustLevel);
+                        this.recordPipelineTaint(sourceName, stored.trustLevel);
+                    }
                     return stored.result;
                 }),
             ),
@@ -12140,6 +12215,7 @@ The context is now within limits. Please retry your request with the recovered c
         pipeline: AgentPipelineRequest,
         params: ExecuteAgentParams,
     ): Promise<PipelineExecutionResult> {
+        this._lastPipelineTaint = null;
         const stepEntity = await this.createStepEntity({
             stepType: 'Tool',
             stepName: `Pipeline: ${pipeline.steps.length} step(s)`,
@@ -12190,6 +12266,8 @@ The context is now within limits. Please retry your request with the recovered c
      * @protected
      */
     protected injectPipelineResultMessage(params: ExecuteAgentParams, result: PipelineExecutionResult): void {
+        const pipelineTaint = this._lastPipelineTaint;
+        this._lastPipelineTaint = null;
         const diagnostic = result.success && result.diagnostic
             ? `\n⚠ Empty result — ${result.diagnostic}`
             : '';
@@ -12197,8 +12275,12 @@ The context is now within limits. Please retry your request with the recovered c
         // select`). Without it, multiple pipeline results across turns are indistinguishable once
         // compacted — mirrors how artifact-tool results name their tool/artifact.
         const label = summarizePipelineStages(result.steps);
+        const renderedFinalOutput = result.success ? formatFinalOutput(result.finalOutput) : '';
+        const formattedFinalOutput = result.success && pipelineTaint
+            ? WrapUntrustedExternalData(renderedFinalOutput, pipelineTaint.sourceName, pipelineTaint.trustLevel)
+            : `\`\`\`\n${renderedFinalOutput}\n\`\`\``;
         const content = result.success
-            ? `Pipeline result [${label}] (final stage value — intermediate stages stayed out of context, ~${result.contextBytesSaved} bytes saved):\n\`\`\`\n${formatFinalOutput(result.finalOutput)}\n\`\`\`${diagnostic}`
+            ? `Pipeline result [${label}] (final stage value — intermediate stages stayed out of context, ~${result.contextBytesSaved} bytes saved):\n${formattedFinalOutput}${diagnostic}`
             : `Pipeline failed [${label}].\n${result.error}`;
 
         const message: AgentChatMessage = {
@@ -15808,6 +15890,7 @@ The context is now within limits. Please retry your request with the recovered c
         this._heldDecisions = undefined;
         this._awaitingWorkflowTaskID = null;
         this._taintedSources = [];
+        this._lastPipelineTaint = null;
 
         // Resolve action-result compression config for this run (default on; opt out via
         // crushActionResults: false in the agent-type prompt params).
@@ -20058,7 +20141,8 @@ The context is now within limits. Please retry your request with the recovered c
                         sanitizedParams,
                         actionResult?.Message,
                         stepNum,
-                        expirationConfig
+                        expirationConfig,
+                        trustLevel
                     )
                     : [];
 

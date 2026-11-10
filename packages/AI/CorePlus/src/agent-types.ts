@@ -1175,6 +1175,10 @@ export interface InputArtifact {
     deliveryMode?: 'Inline' | 'ToolsOnly';
     /** Per-instance override that forces ToolsOnly regardless of type default. */
     forceToolsOnly?: boolean;
+    /** Optional output trust classification when the artifact originated from an action or external source. */
+    trustLevel?: ActionOutputTrustLevel;
+    /** Provenance identifier (e.g. `'action:Web Search'`) used when wrapping untrusted tool reads. */
+    sourceName?: string;
 }
 
 /**

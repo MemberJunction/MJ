@@ -18,6 +18,8 @@
  * @module @memberjunction/ai-agents
  */
 
+import type { ActionOutputTrustLevel } from '@memberjunction/actions-base';
+
 /**
  * The tool families whose step results are eligible for prior-turn carry-forward —
  * single source of the family values. Stamp sites and the eligibility check both
@@ -50,6 +52,10 @@ export interface CarryForwardToolStepOutput {
     durationMs?: number;
     /** Artifact-family only: the artifact the tool ran against */
     artifactId?: string;
+    /** Artifact-family only: output trust classification of the underlying artifact */
+    trustLevel?: ActionOutputTrustLevel;
+    /** Artifact-family only: provenance label of the underlying artifact (e.g. `'action:Web Search'`) */
+    sourceName?: string;
     /** summarizeRange only: the recursive sub-call's AIPromptRun ID */
     promptRunId?: string;
 }
