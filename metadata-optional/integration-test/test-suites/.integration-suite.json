@@ -1568,6 +1568,17 @@
           "primaryKey": {
             "ID": "61D60AC5-0A31-4257-945E-4901AFB5E8D3"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT165 - Integration and Runtime Schema Typing and Auto-Indexing Pipeline",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6C49D2E1-8B37-4A52-9E14-7F08A3C5D9B2"
+          }
         }
       ]
     },
