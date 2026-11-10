@@ -1730,6 +1730,21 @@
   },
   {
     "fields": {
+      "Name": "ExportableData",
+      "Namespace": "Generic/UI/Export",
+      "Title": "Exportable Data",
+      "Type": "Widget",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/generic/exportable-data.spec.json"
+    },
+    "primaryKey": {
+      "ID": "565F40FE-0B97-4BA2-9C8B-5D8A7E59EF3D"
+    }
+  },
+  {
+    "fields": {
       "Name": "DataGrid",
       "Namespace": "Generic/UI/Table",
       "Title": "Data Grid",

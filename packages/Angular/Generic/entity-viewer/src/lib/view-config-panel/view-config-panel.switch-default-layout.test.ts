@@ -1,8 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { SimpleChange, type ChangeDetectorRef } from '@angular/core';
-import type { EntityFieldInfo, EntityInfo, IMetadataProvider, UserInfo, UserViewProperty } from '@memberjunction/core';
+import type { CompositeFilterDescriptor, EntityFieldInfo, EntityInfo, IMetadataProvider, UserInfo, UserViewProperty } from '@memberjunction/core';
 import type { MJUserViewEntityExtended } from '@memberjunction/core-entities';
-import { CompositeFilterDescriptor } from '@memberjunction/ng-filter-builder';
 import { ViewConfigPanelComponent, type ViewSaveEvent } from './view-config-panel.component';
 
 /**

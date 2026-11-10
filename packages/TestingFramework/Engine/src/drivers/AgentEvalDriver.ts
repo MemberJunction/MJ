@@ -10,6 +10,7 @@ import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessage } from '@memberjunction/ai';
 import { BaseTestDriver } from './BaseTestDriver';
 import { BuildJudgeOutputEvidence, JudgeOutputEvidence } from '../utils/judge-evidence';
+import type { JudgeCriterionInput } from '../oracles/judge-trace';
 import { ComponentRegistryFetcher, LoadJudgeArtifacts } from './agent-run-evidence';
 import { EnsureImplicitRubricOracle, PublishedVersionPin, ResolveRubric, WeightsForImplicitRubric, type RubricSuiteRow } from '../oracles/rubric-resolution';
 import {
@@ -211,9 +212,11 @@ export interface AgentEvalExpectedOutcomes {
     }>;
 
     /**
-     * Custom validation criteria for LLM judge
+     * Validation criteria for the judge oracles (`LLMJudgeOracle` and `DecisionJudgeOracle`), each a
+     * string or `{ criterion, weight }`. Both judges read the list with `ReadJudgeCriteria`, so they
+     * accept and reject the same entries; the weights apply to the weighted score.
      */
-    judgeValidationCriteria?: string[];
+    judgeValidationCriteria?: JudgeCriterionInput[];
 }
 
 /**
