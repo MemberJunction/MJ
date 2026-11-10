@@ -323,9 +323,10 @@ export class SchemaEvolution {
     private sqlTypeFamily(sqlType: string): string {
         const base = (sqlType ?? '')
             .toLowerCase()
-            .replace(/\(.*\)/, '')
-            .replace(/\s+/g, ' ')
-            .trim();
+            .split('(')[0]
+            .trim()
+            .split(/\s+/)
+            .join(' ');
         if (base === 'nvarchar' || base === 'varchar' || base === 'nchar' || base === 'char' || base === 'ntext' || base === 'text' || base === 'string') {
             return 'string';
         }
