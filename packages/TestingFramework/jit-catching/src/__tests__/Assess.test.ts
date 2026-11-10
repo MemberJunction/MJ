@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AssessStep } from '../pipeline/Assess';
 import { RunDir } from '../pipeline/RunDir';
+import { SnapshotBaseSources } from '../pipeline/BaseSnapshot';
 import { RuleFilter } from '../rules/RuleFilter';
 import { AllRules } from '../rules/index';
 import { FileCatchStore } from '../store/FileCatchStore';
@@ -15,6 +16,9 @@ import { candidate, FULL_ENV, generation, ID_A, ID_B, ID_C, PKG_DIR, results, RU
 
 const SVC = 'export class Svc { private secret = 1; public Open(): number { return 4; } }\n';
 const SOURCE_A = `import { it, expect } from 'vitest';\nimport { Svc } from '../../svc';\nit('opens', () => { expect(new Svc().Open()).toBe(3); });\n`;
+const SOURCE_AWAIT = `import { it, expect } from 'vitest';\nimport { Svc } from '../../svc';\nit('reads', async () => { const s = await Promise.resolve(new Svc()); expect(s['secret']).toBe(2); });\n`;
+const SERVER_TSCONFIG = JSON.stringify({ compilerOptions: { target: 'ES2022', lib: ['ES2022'], module: 'ES2022', moduleResolution: 'bundler', strict: true, skipLibCheck: true } });
+const PACKAGE_TSCONFIG = JSON.stringify({ extends: '../../tsconfig.server.json', compilerOptions: { outDir: 'dist', rootDir: 'src' } });
 const SOURCE_C = `import { it, expect } from 'vitest';\nimport { Svc } from '../../svc';\nit('reads', () => { expect((new Svc() as unknown as { secret: number }).secret).toBe(2); });\n`;
 
 describe('AssessStep', () => {
@@ -46,7 +50,7 @@ describe('AssessStep', () => {
     expect(judge.mock.calls[0][0].Test.ID).toBe(ID_A);
     expect(out.Promotions).toEqual([{ CandidateTestID: ID_B, RunID: RUN_ID, NewlyCoveredLines: 4, State: 'Offered' }]);
     expect(await store.GetRun(RUN_ID)).toMatchObject({ Status: 'Assessed' });
-    expect((await store.GetRun(RUN_ID))?.TokensByModel).toContainEqual({ Model: 'judge-model', InputTokens: 11, OutputTokens: 2, CacheReadTokens: 0, CostUSD: 0.125 });
+    expect((await store.GetRun(RUN_ID))?.TokensByModel).toContainEqual({ Model: 'judge-model', Role: 'Judge', InputTokens: 11, OutputTokens: 2, CacheReadTokens: 0, CostUSD: 0.125 });
     expect((await store.ListCatches(RUN_ID)).map((x) => x.CandidateTestID).sort()).toEqual([ID_A, ID_B, ID_C].sort());
   });
 
@@ -58,6 +62,31 @@ describe('AssessStep', () => {
     const first = await AssessStep(opts); const second = await AssessStep(opts);
     expect(second.Catches.map((c) => c.ID).sort()).toEqual(first.Catches.map((c) => c.ID).sort());
     expect((await store.ListCatches(RUN_ID)).map((x) => x.CandidateTestID).sort()).toEqual([ID_A, ID_B, ID_C].sort());
+  });
+
+  it('assesses from the base source snapshot when the base worktree is gone', async () => {
+    const dir = new RunDir(root, RUN_ID, redaction); const baseSrc = join(dir.Path, 'base-src');
+    mkdirSync(join(baseSrc, PKG_DIR, 'src'), { recursive: true }); writeFileSync(join(baseSrc, PKG_DIR, 'src/svc.ts'), SVC);
+    rmSync(join(dir.Path, 'work'), { recursive: true, force: true });
+    dir.WriteGeneration({ ...generation(join(root, 'gone'), [candidate(ID_A, SOURCE_A), candidate(ID_B), candidate(ID_C, SOURCE_C)]), BaseSourceDir: baseSrc });
+    const judge = vi.fn(async (_c: CatchContext): Promise<PanelResult> => ({ TPProb: 0.8, Buckets: [{ Model: 'm', Bucket: 'High', Reason: 'r' }], Median: 'High', Usage: [] }));
+    const out = await AssessStep({ RunID: RUN_ID, RepoRoot: root, Settings: DEFAULT_SETTINGS, StoreDir: storeDir, Env: FULL_ENV,
+      Deps: { JudgePanel: { Judge: judge }, Rules: new RuleFilter(AllRules()), Store: new FileCatchStore(storeDir, redaction), Redaction: redaction } });
+    expect(out.Catches.find((x) => x.CandidateTestID === ID_C)).toMatchObject({ DroppedByRule: 'PrivateAccess' });
+  });
+
+  it('drops a private access through an awaited receiver from a snapshot whose tsconfig extends a parent', async () => {
+    const dir = new RunDir(root, RUN_ID, redaction); const baseSrc = join(dir.Path, 'base-src');
+    writeFileSync(join(base, 'tsconfig.server.json'), SERVER_TSCONFIG); writeFileSync(join(base, PKG_DIR, 'tsconfig.json'), PACKAGE_TSCONFIG);
+    SnapshotBaseSources(base, [PKG_DIR], baseSrc);
+    rmSync(join(dir.Path, 'work'), { recursive: true, force: true });
+    const tests = [candidate(ID_C, SOURCE_AWAIT)];
+    dir.WriteGeneration({ ...generation(join(root, 'gone'), tests), BaseSourceDir: baseSrc });
+    dir.WriteExecution({ RunID: RUN_ID, Tests: tests, Coverage: [], Results: [...results(ID_C, 'Base', true), ...results(ID_C, 'Head', false)], TypeErrors: { [ID_C]: { Base: null, Head: null } } });
+    const judge = vi.fn(async (_c: CatchContext): Promise<PanelResult> => ({ TPProb: 0.8, Buckets: [{ Model: 'm', Bucket: 'High', Reason: 'r' }], Median: 'High', Usage: [] }));
+    const out = await AssessStep({ RunID: RUN_ID, RepoRoot: root, Settings: DEFAULT_SETTINGS, StoreDir: storeDir, Env: FULL_ENV,
+      Deps: { JudgePanel: { Judge: judge }, Rules: new RuleFilter(AllRules()), Store: new FileCatchStore(storeDir, redaction), Redaction: redaction } });
+    expect(out.Catches.find((x) => x.CandidateTestID === ID_C)).toMatchObject({ DroppedByRule: 'PrivateAccess' });
   });
 
   it('refuses a BaseRootDir outside the run folder before judging or saving', async () => {

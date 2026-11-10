@@ -9,6 +9,7 @@ export const SettingsSchema = z.object({
         TpProbModel: z.string(),
         BucketModels: z.array(z.object({ Vendor: z.enum(['Anthropic', 'OpenAI', 'Gemini']), Model: z.string() })).min(1),
     }),
+    /** TokensPerSession counts input, cache reads and output (D37); UsdPerSession is the cap that acts first on a normal session (D42). */
     Limits: z.object({
         TestsPerPackage: z.number().int().positive(), RisksPerPackage: z.number().int().positive(), TestsPerRisk: z.number().int().positive(),
         PackagesPerPR: z.number().int().positive(), ParallelSessions: z.number().int().positive(), TurnsPerSession: z.number().int().positive(), TokensPerSession: z.number().int().positive(),
@@ -33,14 +34,14 @@ export const DEFAULT_SETTINGS: Settings = {
     GeneratorModel: 'claude-opus-5-5',
     AnalyzerModel: 'claude-sonnet-5-5',
     Judges: { TpProbModel: 'gpt-4.1-mini', BucketModels: [{ Vendor: 'Anthropic', Model: 'claude-opus-5-5' }, { Vendor: 'Gemini', Model: 'gemini-4-argon' }, { Vendor: 'OpenAI', Model: 'gpt-5.1' }] },
-    Limits: { TestsPerPackage: 5, RisksPerPackage: 3, TestsPerRisk: 2, PackagesPerPR: 3, ParallelSessions: 4, TurnsPerSession: 30, TokensPerSession: 400_000, UsdPerSession: 3 },
+    Limits: { TestsPerPackage: 5, RisksPerPackage: 3, TestsPerRisk: 2, PackagesPerPR: 3, ParallelSessions: 4, TurnsPerSession: 30, TokensPerSession: 2_000_000, UsdPerSession: 3 },
     Repeats: 3,
     TestTimeoutMs: 30_000,
     SequenceSeed: 1,
     Thresholds: { Label: { MinMedian: 'Medium', MaxReported: 3 }, Nightly: { MinMedian: 'High', MediumWithBoosts: ['AccessChange', 'MatchesRisk'] } },
     Prices: {
         'claude-opus-5-5': { Input: 4, Output: 20, CachedInput: 0.2 }, 'claude-sonnet-5-5': { Input: 2, Output: 10, CachedInput: 0.2 },
-        'claude-haiku-5-5': { Input: 0.1, Output: 0.5, CachedInput: 0.1 }, 'gemini-4-argon': { Input: 2, Output: 10, CachedInput: 0.1 },
+        'claude-haiku-5-5': { Input: 0.1, Output: 0.5, CachedInput: 0.01 }, 'gemini-4-argon': { Input: 2, Output: 10, CachedInput: 0.1 },
         'gpt-4.1-mini': { Input: 0.4, Output: 1.6, CachedInput: 0.1 }, 'gpt-5.1': { Input: 1.25, Output: 10, CachedInput: 0.125 },
     },
     Sandbox: { Image: 'jit-sandbox:local', MemoryGB: 6, Cpus: 3, PidsLimit: 1024, PnpmVersion: '10.33.0' },

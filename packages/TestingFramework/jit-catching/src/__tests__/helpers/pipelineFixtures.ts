@@ -27,7 +27,7 @@ export function candidate(id: string, source = `it('t', () => {});`, outcome: Ca
 }
 
 export function generation(baseRootDir: string, tests: CandidateTest[]): GenerationFile {
-  return { Run: run(), Analysis: analysis(), Tests: tests, BaseRootDir: baseRootDir };
+  return { Run: run(), Analysis: analysis(), Tests: tests, BaseRootDir: baseRootDir, Sessions: [], BaseSourceDir: null };
 }
 
 const FAILURE: FailureDetail = { Assertion: 'expected 4 to be 3', Expected: '3', Actual: '4', Message: 'AssertionError: expected 4 to be 3', StackExcerpt: null, ErrorName: 'AssertionError' };

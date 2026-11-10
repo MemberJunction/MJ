@@ -40,6 +40,18 @@ describe('TestAst.DeclarationVisibility', () => {
   });
 });
 
+describe('TestAst.ProtectedAccessFromTestSubclass', () => {
+  it('does not take a member declared in a class expression for a member of the class around that expression', () => {
+    const ast = load(`class Outer { static Make() { return class { protected Secret(): number { return 1; } }; } }
+const Made = Outer.Make();
+interface Outer extends InstanceType<typeof Made> {}
+class Sub extends Outer { public Run(): number { return this.Secret(); } }`);
+    const secret = ast.MemberAccesses().find((m) => m.Name === 'Secret');
+    expect(secret).toBeDefined();
+    expect(ast.ProtectedAccessFromTestSubclass(secret!)).toBe(false);
+  });
+});
+
 describe('TestAst helpers', () => {
   it('finds expect() arguments and hook ranges', () => {
     const ast = load(`import { describe, it, expect, beforeEach, vi } from 'vitest'; vi.mock('x', () => ({ a: 1 })); beforeEach(() => { const y = 1; }); it('t', () => { expect(JSON.stringify({a:1})).toBe('x'); });`);

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { analysis } from './helpers/pipelineFixtures';
-import { RunSchema, ChangeAnalysisSchema, CandidateTestSchema, ExecutionResultSchema, CatchSchema, ExecutionFileSchema, JitTestPath, MutantEditSchema } from '../schemas';
+import { RunSchema, ChangeAnalysisSchema, CandidateTestSchema, ExecutionResultSchema, CatchSchema, ExecutionFileSchema, GenerationFileSchema, JitTestPath, MutantEditSchema } from '../schemas';
 
 describe('record schemas', () => {
   it('accepts a complete Run and rejects a bad Trigger', () => {
@@ -31,6 +31,11 @@ describe('record schemas', () => {
   it('Catch keeps Median null until judged', () => {
     const c = { ID: 'c1', RunID: 'r1', CandidateTestID: 't1', Verdict: { Label: 'WeakCatch', Timeout: false, Reason: '' }, DroppedByRule: null, Boosts: [], TPProb: null, JudgeBuckets: [], Median: null, Rank: null, Reported: false, CommentID: null };
     expect(CatchSchema.parse(c).Median).toBeNull();
+  });
+  it('reads a generation file without Sessions as an empty list', () => {
+    const run = { ID: 'r1', Trigger: 'Local', PRNumber: null, BaseSHA: 'a'.repeat(40), HeadSHA: 'b'.repeat(40), Status: 'Generated',
+      GeneratorModel: 'claude-haiku-5-5', TokensByModel: [], RunnerMinutes: 0, StartedAt: '2026-11-05T00:00:00.000Z', EndedAt: null };
+    expect(GenerationFileSchema.parse({ Run: run, Analysis: analysis(), Tests: [], BaseRootDir: '/work/base' }).Sessions).toEqual([]);
   });
 });
 

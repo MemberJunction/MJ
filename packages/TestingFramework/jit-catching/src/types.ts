@@ -14,8 +14,13 @@ export type FeedbackAnswer = 'Bug' | 'Intended' | 'TestFault' | 'AuthorChangedPR
 export type RuleKind = 'Drop' | 'Boost';
 export type Vendor = 'Anthropic' | 'OpenAI' | 'Gemini';
 
-/** InputTokens = uncached input + cache-creation tokens; CacheReadTokens = cache reads (priced as cached input). */
-export interface TokenUsage { Model: string; InputTokens: number; OutputTokens: number; CacheReadTokens: number; CostUSD: number; }
+/** The pipeline part that spent tokens. */
+export type TokenRole = 'Generator' | 'Analyzer' | 'Judge';
+/**
+ * InputTokens = uncached input + cache-creation tokens; CacheReadTokens = cache reads (priced as cached input).
+ * `Role` keeps usage of parts that share a model apart in run totals.
+ */
+export interface TokenUsage { Model: string; Role?: TokenRole; InputTokens: number; OutputTokens: number; CacheReadTokens: number; CostUSD: number; }
 
 export interface Run {
     ID: string; Trigger: Trigger; PRNumber: number | null; BaseSHA: string; HeadSHA: string; Status: RunStatus;
@@ -86,4 +91,10 @@ export interface GenerationRequest {
     Run: Run; Analysis: ChangeAnalysis; Package: string; PackageDir: string; BaseRootDir: string; Method: GenerationMethod;
     Risk: Risk | null; Model: string; Limits: GenerationLimits;
 }
-export interface GenerationResult { Tests: CandidateTest[]; Tokens: TokenUsage; TranscriptPath: string | null; }
+/** `EndReason` is how the session ended (the SDK result subtype, `aborted_token_budget`, or `error` when it threw); `Turns` is its turn count. */
+export interface GenerationResult { Tests: CandidateTest[]; Tokens: TokenUsage; TranscriptPath: string | null; EndReason: string; Turns: number; }
+/** One generation session of a run: how it ended, what it cost and how many tests it produced and failed. */
+export interface SessionRecord {
+    RunID: string; Package: string; Method: GenerationMethod; RiskID: string | null; EndReason: string; Turns: number; Tokens: TokenUsage;
+    TranscriptURL: string | null; Produced: number; Failed: number;
+}

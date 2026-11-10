@@ -216,6 +216,15 @@ export class VitestCatchTarget extends BaseCatchTarget {
         await this.o.Repo.RemoveWorktree(revision.RootDir).catch(() => rmSync(revision.RootDir, { recursive: true, force: true }));
     }
 
+    /** Removes the run's pnpm store and the `*-fetch` and `*-pnpm-version` folders under the work root. */
+    public async RemoveStore(): Promise<void> {
+        rmSync(this.o.StoreDir, { recursive: true, force: true });
+        if (!existsSync(this.o.WorkRoot)) return;
+        for (const e of readdirSync(this.o.WorkRoot, { withFileTypes: true })) {
+            if (e.name.endsWith('-fetch') || e.name.endsWith('-pnpm-version')) rmSync(join(this.o.WorkRoot, e.name), { recursive: true, force: true });
+        }
+    }
+
     /** Tests grouped by package, with each test file relative to its package folder. Every FilePath is checked first. */
     private groups(tests: CandidateTest[]): PackageGroup[] {
         const byDir = new Map<string, PackageGroup>();

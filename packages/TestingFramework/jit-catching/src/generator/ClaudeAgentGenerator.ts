@@ -52,20 +52,20 @@ export class ClaudeAgentGenerator extends BaseTestGenerator {
         const factory = this.o.RunTestFactory ?? ((x: RunTestToolOptions) => new RunTestTool(x));
         const s: Session = { Request: r, PackageDir: pkg.Dir, JitDir: jitDir, IDs: ids, Files: new Map(), Transcript: [],
             Tool: factory({ Sandbox: this.o.Sandbox, BaseRootDir: r.BaseRootDir, PackageRelDir: pkg.Dir, PackageName: r.Package, ScratchRoot: this.o.ScratchRoot, Settings: this.o.Settings }) };
-        let usage: TokenUsage = { Model: r.Model, InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 }; let subtype = 'none';
+        let usage: TokenUsage = { Model: r.Model, InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 }; let subtype = 'none'; let turns = 0;
         const transcriptPath = this.transcriptPath(s);
         try {
             const ctx = buildContext(s);
             const options: AgentRunOptions = { Cwd: r.BaseRootDir, Model: r.Model, MaxTurns: r.Limits.TurnsPerSession, TokenBudget: r.Limits.TokensPerSession, BudgetUsd: r.Limits.UsdPerSession,
                 Price: this.o.Settings.Prices[r.Model] ?? null, Hooks: { WriteFile: (rel, source) => writeTest(s, rel, source), RunTest: (file, mutant) => runTest(s, file, mutant) } };
             for await (const m of this.runner(BuildTaskPrompt(r, ctx), BuildSystemPrompt(ctx), options)) {
-                if (m.Type === 'result') { usage = { Model: r.Model, ...m.Usage, CostUSD: m.CostUSD }; subtype = m.Subtype; }
+                if (m.Type === 'result') { usage = { Model: r.Model, ...m.Usage, CostUSD: m.CostUSD }; subtype = m.Subtype; turns = m.Turns; }
                 else if (m.Type === 'assistant') s.Transcript.push(`ASSISTANT ${m.Text.slice(0, 500)}`);
             }
         } finally {
             writeTranscript(this.o.TranscriptDir, transcriptPath, `${subtype}\n${s.Transcript.join('\n')}\n`);
         }
-        return { Tests: collectCandidates(s, usage, transcriptPath), Tokens: usage, TranscriptPath: transcriptPath };
+        return { Tests: collectCandidates(s, usage, transcriptPath), Tokens: { ...usage, Role: 'Generator' }, TranscriptPath: transcriptPath, EndReason: subtype, Turns: turns };
     }
 
     private transcriptPath(s: Session): string {
@@ -183,6 +183,31 @@ function safeName(text: string): string { return text.replace(/[^A-Za-z0-9._-]/g
 const MutantSchema = z.object({ Edits: z.array(z.object({ File: z.string(), Find: z.string(), Replace: z.string() })).min(1) });
 const RunTestShape = { File: z.string(), Mutant: MutantSchema.optional() };
 const WriteTestShape = { File: z.string(), Source: z.string() };
+
+/** The listener `FilterProcessWarnings` installed, while it is attached. */
+let warningFilter: ((w: Error & { code?: string }) => void) | null = null;
+
+/**
+ * Replaces the default process `warning` listeners with one that drops warnings whose `code` is in `codes` and writes
+ * every other warning as one line in Node's format; it writes nothing when Node runs with `--no-warnings` (also in `NODE_OPTIONS`) or `NODE_NO_WARNINGS=1`.
+ * Installs once; later calls do nothing while the listener is attached.
+ */
+export function FilterProcessWarnings(codes: readonly string[], sink: (line: string) => void = (s) => { process.stderr.write(s); }): void {
+    if (warningFilter && process.listeners('warning').includes(warningFilter)) return;
+    process.removeAllListeners('warning');
+    warningFilter = (w) => {
+        if (warningsSilenced()) return;
+        if (w.code && codes.includes(w.code)) return;
+        sink(`(node:${process.pid}) ${w.code ? `[${w.code}] ` : ''}${w.name}: ${w.message}\n`);
+    };
+    process.on('warning', warningFilter);
+}
+
+/** True when Node runs with `--no-warnings` (on the command line or in `NODE_OPTIONS`) or with `NODE_NO_WARNINGS=1`. */
+function warningsSilenced(): boolean {
+    const options = process.env.NODE_OPTIONS?.split(/\s+/) ?? [];
+    return process.execArgv.includes('--no-warnings') || options.includes('--no-warnings') || process.env.NODE_NO_WARNINGS === '1';
+}
 
 /** SDK options for one session. `tools` restricts the built-ins; only run_test skips `canUseTool` (spike §2, D36). */
 export function BuildSdkOptions(o: AgentRunOptions, x: { System: string; McpServer: McpSdkServerConfigWithInstance; Abort: AbortController; CanUseTool: CanUseTool; Env: Record<string, string> }): Options {

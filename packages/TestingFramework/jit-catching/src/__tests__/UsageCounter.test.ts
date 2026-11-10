@@ -15,4 +15,11 @@ describe('UsageCounter', () => {
     expect(counter().EstimateCostUSD({ Input: 4, Output: 20, CachedInput: 0.2 })).toBeCloseTo(0.0196738, 7);
     expect(counter().EstimateCostUSD(null)).toBe(0);
   });
+  it('keeps the largest output count a message id reports, and still counts the id once', () => {
+    const c = new UsageCounter();
+    c.Add('m1', { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 100 });
+    c.Add('m1', { input_tokens: 10, output_tokens: 420, cache_read_input_tokens: 100 });
+    c.Add('m1', { input_tokens: 10, output_tokens: 400, cache_read_input_tokens: 100 });
+    expect(c.OutputTokens).toBe(420); expect(c.InputTokens).toBe(10); expect(c.CacheReadTokens).toBe(100); expect(c.Turns).toBe(1);
+  });
 });

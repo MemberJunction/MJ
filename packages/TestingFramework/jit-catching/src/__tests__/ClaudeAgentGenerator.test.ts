@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, symlinkSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ClaudeAgentGenerator, SdkRunner, type AgentMessage } from '../generator/ClaudeAgentGenerator';
+import { ClaudeAgentGenerator, FilterProcessWarnings, SdkRunner, type AgentMessage } from '../generator/ClaudeAgentGenerator';
 import { DEFAULT_SETTINGS } from '../settings';
 import { SessionError } from '../generator/UsageCounter';
 import type { GenerationRequest } from '../types';
@@ -49,6 +49,14 @@ describe('ClaudeAgentGenerator', () => {
     expect(r.Tests.filter((t) => t.GenerationOutcome === 'Produced').map((t) => t.Source)).toEqual(['proved']);
     expect(r.Tests.find((t) => t.GenerationOutcome === 'Failed')?.FailureReason).toMatch(/never proved/);
     expect(r.Tokens).toMatchObject({ InputTokens: 100, OutputTokens: 50, Model: 'claude-haiku-5-5' });
+  });
+  it('reports the end reason and turns of the result message and tags its tokens as generator usage', async () => {
+    const root = world();
+    const gen = new ClaudeAgentGenerator({ Sandbox: {} as never, ScratchRoot: root, Settings: DEFAULT_SETTINGS, PackageMap: { Get: () => ({ Name: '@memberjunction/core', Dir: 'packages/MJCore', HasVitest: true, HasTests: true }) } as never, TranscriptDir: root,
+      Runner: async function* () { yield { Type: 'result', Usage: { InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0 }, CostUSD: 0, Turns: 31, Subtype: 'error_max_turns' }; } });
+    const result = await gen.Generate(req(root));
+    expect(result.EndReason).toBe('error_max_turns'); expect(result.Turns).toBe(31);
+    expect(result.Tokens.Role).toBe('Generator');
   });
   it('refuses a write outside the jit folder', async () => {
     const root = world(); let denied = '';
@@ -198,5 +206,41 @@ describe('SdkRunner', () => {
     sdk.messages = [init('ANTHROPIC_API_KEY'), assistant('m1', 5), { type: 'result', subtype: 'error_max_turns', total_cost_usd: 0.5, num_turns: 4, usage: { input_tokens: 5, output_tokens: 7, cache_read_input_tokens: 3, cache_creation_input_tokens: 2 }, modelUsage: {} }];
     const out = await collect(SdkRunner('p', 's', runOptions()));
     expect(out.filter((m) => m.Type === 'result')).toEqual([{ Type: 'result', Subtype: 'error_max_turns', CostUSD: 0.5, Turns: 1, Usage: { InputTokens: 7, OutputTokens: 7, CacheReadTokens: 3 } }]);
+  });
+});
+
+describe('FilterProcessWarnings', () => {
+  const original = process.listeners('warning');
+  afterEach(() => {
+    process.removeAllListeners('warning');
+    for (const l of original) process.on('warning', l);
+    vi.unstubAllEnvs();
+  });
+  it('drops warnings with a filtered code and writes the others in Node format', async () => {
+    vi.stubEnv('NODE_NO_WARNINGS', '0');
+    vi.stubEnv('NODE_OPTIONS', '');
+    const lines: string[] = [];
+    FilterProcessWarnings(['CLAUDE_SDK_CAN_USE_TOOL_SHADOWED'], (s) => lines.push(s));
+    process.emitWarning('x', { code: 'CLAUDE_SDK_CAN_USE_TOOL_SHADOWED' });
+    process.emitWarning('y', { code: 'OTHER' });
+    await new Promise((r) => setImmediate(r));
+    expect(lines).toEqual([`(node:${process.pid}) [OTHER] Warning: y\n`]);
+  });
+  it('writes nothing when NODE_OPTIONS holds --no-warnings', async () => {
+    vi.stubEnv('NODE_NO_WARNINGS', '0');
+    vi.stubEnv('NODE_OPTIONS', '--max-old-space-size=4096  --no-warnings');
+    const lines: string[] = [];
+    FilterProcessWarnings(['CLAUDE_SDK_CAN_USE_TOOL_SHADOWED'], (s) => lines.push(s));
+    process.emitWarning('y', { code: 'OTHER' });
+    await new Promise((r) => setImmediate(r));
+    expect(lines).toEqual([]);
+  });
+  it('writes nothing when NODE_NO_WARNINGS is 1', async () => {
+    vi.stubEnv('NODE_NO_WARNINGS', '1');
+    const lines: string[] = [];
+    FilterProcessWarnings(['CLAUDE_SDK_CAN_USE_TOOL_SHADOWED'], (s) => lines.push(s));
+    process.emitWarning('y', { code: 'OTHER' });
+    await new Promise((r) => setImmediate(r));
+    expect(lines).toEqual([]);
   });
 });
