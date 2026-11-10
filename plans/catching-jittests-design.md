@@ -720,8 +720,11 @@ method: for each fix PR, `git blame` the lines the fix changed (at the fix's par
 introduced them. Keep pairs where the introducing PR changed TypeScript source in packages with vitest tests; confirm by
 hand that the bug is observable at unit level. Record bug PR, fix PR and a one-line description.
 
-**Clean set (~45 PRs).** PRs merged at least 6 months before the backtest, that changed TypeScript source in packages with
-vitest tests, and whose changed lines no later fix commit touched.
+**Clean set (~45 PRs).** PRs merged at least 8 weeks before the backtest and after the repository switched to pnpm
+(PR #3500, 2026-08-05; an older base has no `pnpm-lock.yaml`, so the sandbox cannot install it), that changed TypeScript
+source in packages with vitest tests, and whose changed lines no later fix commit touched. The 6-month seasoning the
+design first asked for has no runnable PR; the shorter window leaves more undiscovered bugs among "clean" PRs, which the
+author labels (D26) sort out.
 
 **Tuning and held-out slices (D33).** Two thirds of each set (about 30 + 30) serve the three-model comparison and all
 tuning. One third (about 15 + 15) is held out and run once, with the chosen model and final settings, to decide the gate.

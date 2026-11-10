@@ -2,7 +2,9 @@
 
 Mined from merged PRs of `MemberJunction/MJ`. Bug set: 169 fix→bug pairs over 133 bug PRs, merged 2025-05-01..2026-11-01, reduced to one pair per bug PR (133 pairs) and ranked. Clean set: 734 clean PRs merged 2025-05-01..2026-05-01, 70 sampled (seed 1, 49 packages). Bug-set rule (SZZ): a later fix PR removed lines that `git blame` puts on the bug PR's landing commit, in TypeScript source under `packages/<X>/src/` of a package that has vitest. Clean-set rule: a PR merged at least 6 months before the backtest that changed the same kind of source, and whose changed lines no later fix commit touched. Each bug row was judged from the fix diff restricted to the bug PR's eligible files. `Unit-testable?` asks whether a vitest unit test, with no database, browser or live service, can reach the buggy logic and show the fix. `Costly` marks a bug PR with more than 25 eligible files.
 
-Bug rows: 70 (Yes 19, Likely 38, Unlikely 13, No 0). Clean rows: 70.
+Bug rows: 70 (Yes 19, Likely 38, Unlikely 13, No 0), plus the addendum below. Clean rows: 45.
+
+**Runnable base.** The smoke run (task 2.16) showed that a PR merged before the repository switched to pnpm (PR #3500, 2026-08-05) has no `pnpm-lock.yaml` at its base, so the sandbox cannot install it. Every clean PR of the first window (2025-05-01..2026-05-01) and 31 of the 70 bug rows are therefore unrunnable. The clean set was re-mined over 2026-08-05..2026-09-15 (after the switch, at least 8 weeks before the backtest): 341 clean candidates; pool of 234 after dropping docs/chore/ci/build titles, PRs with more than 8 eligible files, PRs whose only eligible files are generated class-registration manifests, and every PR that is a bug PR of a mined pair; 45 sampled (seed 1, stratified over 41 packages). A bug row with a pre-pnpm base is marked in the `Runnable` list after the bug table.
 
 ## Bug candidates
 
@@ -79,87 +81,106 @@ Bug rows: 70 (Yes 19, Likely 38, Unlikely 13, No 0). Clean rows: 70.
 | 69 | #3913 fix(agent-manager): hybrid agent search so new agents are f… | #2715 feat(search): standardize entity semantic search on Provide… | 18 | 13: `AI/Engine/…/AIEngine.ts`, `AI/Engine/…/index.ts` | Unlikely | New agents not found by semantic-only search; fix switches to hybrid mode, needs the search provider |
 | 70 | #5845 fix: address #5729 review findings (stale action indexes, d… | #5729 perf: core data access, template, action, and AI agent runt… | 50 | 31: `AI/Agents/…/PayloadChangeAnalyzer.ts`, `AI/Agents/…/PayloadManager.ts` | Unlikely | Costly. Prompt steps recorded a wrong message delta when the stack was not append-only; deep inside BaseAgent |
 
+**Runnable.** 39 of the 70 rows have a pnpm-era base. Rows with a pre-pnpm base, unrunnable: 10 (#1893), 11 (#1287), 12 (#1143), 13 (#1213), 15 (#1062), 17 (#1232), 18 (#1129), 20 (#1281), 25 (#2330), 26 (#3279), 28 (#2426), 30 (#743), 33 (#3184), 40 (#1331), 42 (#2519), 45 (#804), 46 (#3339), 49 (#1888), 50 (#2101), 51 (#2683), 52 (#1162), 54 (#1188), 56 (#1718), 57 (#2709), 58 (#2058), 59 (#2854), 62 (#2065), 65 (#1996), 67 (#1136), 68 (#2539), 69 (#2715).
+
+## Bug candidates (addendum)
+
+The 34 ranked pairs with a pnpm-era base that the first pass did not judge, judged the same way. Two were skipped as feature changes (#5306 → #4847 adds a `judgeEvidence` input absent at the bug base; #5820 → #5527 is Login Studio preview scaling with only a comment outside Angular).
+
+| # | Fix PR | Bug PR | Blamed | Files | Unit-testable? | Note |
+|---|---|---|---|---|---|---|
+| 1 | #3808 fix(materialization): close the fail-open gates in the ship… | #3735 Rework: Query & Entity Materialization (join-table redesign) | 79 | 38: `Angular/Explorer/core-entity-forms/…/mjentity.form.component.ts`, `Angular/Explorer/core-entity-forms/…/mjmaterializedresult.form.component.ts` | Yes | Costly. Analyzer read only the first UNION branch; assert detectAggregationKeyColumns on a grouped UNION returns null |
+| 2 | #4543 fix(realtime): confirm whiteboard edits only on tool succes… | #4512 feat(ai): Gemini 3.8 Live + Extended Thinking on a real med… | 16 | 31: `AI/Agents/…/realtime-client-session-service.ts`, `AI/Agents/…/realtime-coagent-config.ts` | Likely | Costly. Whiteboard channel confirmed a failed agent tool; apply a bad tool call, assert no confirmation frame is pushed |
+| 3 | #4880 fix(ai-prompts): a decision answered by LLM Decision carrie… | #4814 feat(ai): MJ agents can call Jev: typed decisions end to end | 27 | 19: `AI/Agents/…/AgentDecisionService.ts`, `AI/Agents/…/loop-agent-prompt-params.ts` | Likely | LLMDecision took cost only from promptResult.cost; mock a saved prompt run with Cost set, assert the decision usage carries it |
+| 4 | #3523 fix(agent-harness): real response contract, honest accounti… | #3412 [6.0] External agent harnesses as MJ agents — turn protocol… | 25 | 33: `AI/AgentHarness/…/HarnessAgentBase.ts`, `AI/AgentHarness/…/HarnessAgentType.ts` | Likely | Costly. Harness turn: no response contract, wrong model, false StructuredOutput; assert adapter capabilities and turn input |
+| 5 | #5793 fix(conversations): show the composer status line for any r… | #5047 feat(ai-agents, ng-conversations, server): Stop actually st… | 7 | 15: `AI/Agents/…/AgentRunner.ts`, `AI/Agents/…/agent-run-watchdog.ts` | Likely | StatusText returned null when AllowStopRun was off though a reply was in flight; set in-flight state, assert the status line shows |
+| 6 | #4258 fix: close six recurring undrained-fetch-body leaks + bound… | #3915 fix(remote-browser): name a browser within an agent session… | 6 | 2: `AI/RemoteBrowser/Server/…/remote-browser-engine.ts`, `MJServer/…/RemoteBrowserActionResolver.ts` | Unlikely | Screencast/audio idempotency sets never shed entries for sessions that skip Stop; a test needs heavy resolver mocks and a fake clock |
+| 7 | #3774 fix(integration): stop introspecting the source inside Comp… | #3354 fix(integration): record-map write amplification, paginatio… | 61 | 5: `Integration/engine/…/IntegrationConnectorCreationPipeline.ts`, `Integration/engine/…/IntegrationEngine.ts` | Unlikely | Save() ran the schema-refresh pipeline on IsActive false to true; needs entity Save and pipeline mocks, and the fix is a redesign |
+| 8 | #5888 fix(conversations,server,form-builder): skipped step UX, co… | #5878 feat(ai-agents,conversations,server): real-time task graph … | 31 | 23: `AI/Agents/…/AgentRunner.ts`, `AI/Agents/…/loop-agent-type.ts` | Unlikely | Skipped task-graph steps counted as incomplete and task prompt lacked name/description; logic sits in Angular and RunView code |
+| 9 | #4021 fix(core-entities): scope Identity Claim reads, thread prov… | #4012 feat(claims): identity claims infrastructure, atomic CAS en… | 206 | 17: `Angular/Bootstrap/…/mj-class-registrations.ts`, `Angular/BootstrapLite/…/mj-class-registrations.ts` | Unlikely | Identity claim engine used the global provider and the caller as read user; reaching it needs entity and provider mocks |
+| 10 | #4735 fix(server): DeleteOptionsInput.SkipRecordChanges is option… | #4091 feat: sync-scoped suppression of per-write side effects (au… | 2 | 12: `GenericDatabaseProvider/…/GenericDatabaseProvider.ts`, `GraphQLDataProvider/…/graphQLDataProvider.ts` | Unlikely | DeleteOptionsInput.SkipRecordChanges was a required GraphQL field; only schema metadata shows it, so a unit test adds little |
+| 11 | #4356 fix(server): fail a transaction group whose rows are refuse… | #4305 fix(security): close the #4282 role-elevation path on MJ: R… | 7 | 9: `Angular/Explorer/explorer-settings/…/user-dialog.component.ts`, `Angular/Explorer/explorer-settings/…/user-management.component.ts` | Unlikely | Server-side transaction-group refusal reasons were not shown in the user dialogs; Angular components with entity mocks |
+| 12 | #3945 fix(ng-hierarchy-tree): unbreak CI — regenerate the lockfil… | #3927 feat(angular): hierarchy tree + 15 core panels; fix IS-A pa… | 8 | 11: `Angular/Explorer/core-entity-forms/…/hierarchy-form-panels.ts`, `Angular/Explorer/core-entity-forms/…/custom-forms.module.ts` | Unlikely | Hierarchy tree read metadata from the global provider and used a literal accent color; Angular component with d3 |
+| 13 | #6005 fix(explorer): restore the standard-form open (#4766) and c… | #5999 feat(forms,record-changes,grid,conversations): pluggable to… | 32 | 28: `Angular/Explorer/explorer-core/…/record-resource.component.ts`, `Angular/Explorer/explorer-core/…/record-origin-crumb.component.ts` | Unlikely | Costly. Standard-form open lost form mode and record-tab matching; Angular navigation service and shell wiring |
+| 14 | #6020 fix(ai-agent-sessions): make the recording ledger's columns… | #5536 feat(realtime): deliver client-direct recordings as Opus sh… | 91 | 46: `AI/Agents/…/index.ts`, `AI/Agents/…/realtime-recording-ledger.ts` | Unlikely | Costly. Recording ledger columns were entity-updatable; fix moves the stamp to a stored procedure, so the behavior needs a database |
+| 15 | #3576 fix(task-graphs): convert the control plane to Remote Opera… | #3574 feat(task-graphs)!: Phase 2 — move execution server-side an… | 115 | 16: `Angular/Generic/conversations/…/message-input.component.ts`, `MJServer/…/index.ts` | Unlikely | Task-graph control plane moved to Remote Operations and dispatcher start wired at server boot; server wiring, not unit logic |
+| 16 | #5603 fix(ai-engine-base): index the category walk, restore the n… | #5585 fix: agents pick the newest storage account instead of fail… | 4 | 6: `AI/Agents/…/base-agent.ts`, `AI/BaseAIEngine/…/BaseAIEngine.ts` | No | Category walk switched to an indexed lookup; same result, perf and lint only |
+| 17 | #5914 fix: restore Source guards on next (provider in Save as Wor… | #5912 fix(ai): support multiple starting steps in workflow compil… | 4 | 2: `AI/Agents/…/flow-agent-type.ts`, `AI/CorePlus/…/flow-graph-compiler.ts` | No | Completed-step check switched to UUIDSet; same result, lint compliance only |
+| 18 | #6017 fix(base-forms): use the ?? provider fallback the multi-pro… | #6008 feat(base-forms,record-changes): declarative [mjRecordLink]… | 4 | 18: `Angular/Explorer/core-entity-forms/…/entity-link-pill.component.ts`, `Angular/Explorer/explorer-app/…/explorer-app.component.ts` | No | Provider fallback rewritten as a ?? chain; same result, lint compliance only |
+| 19 | #6136 fix(testing): stop lowering QueryEngine's settle window for… | #6105 perf(core-entities): make QueryEngine's result-deletion set… | 42 | 2: `MJCoreEntities/…/QueryEngine.ts`, `TestingFramework/integration-test-suite/…/runquery-cache.checks.ts` | No | Integration-suite bundle stopped lowering the QueryEngine settle window; test harness timing against a live DB |
+| 20 | #4052 fix(pg): make spRebindLayeredOuterView actually run, and st… | #4048 fix(migrate): heal Open App metadata after migrate/install | 7 | 11: `CodeGenLib/…/codeGenDatabaseProvider.ts`, `CodeGenLib/…/manage-metadata.ts` | No | Integration check for spRebindLayeredOuterView skipped silently; needs a live database |
+| 21 | #3584 fix: resolve multi-provider + UUID compliance violations (h… | #3562 feat(task-graphs): Phase 1 — make the task engine tell the … | 5 | 11: `AI/CorePlus/…/index.ts`, `AI/CorePlus/…/graph-algorithms.ts` | No | Integration checks used new Metadata() instead of ctx.Provider; multi-provider lint in live-DB checks |
+| 22 | #6237 fix(ci): stop saving stale DB snapshots, flush mj test suit… | #6159 test(integration): skips are visible and fail the run | 2 | 71: `TestingFramework/CLI/…/suite-skip-gate.ts`, `TestingFramework/CLI/…/suite.ts` | No | Costly. CLI exit before piped stdout flushed; process-exit wiring |
+| 23 | #4689 fix: unbreak next — stale lockfile, and the TS2305 it was m… | #4678 feat(record-processes): add unified overview tab, option A … | 2 | 2: `Angular/Explorer/core-entity-forms/…/record-process-form.component.ts`, `Angular/Generic/base-forms/…/resolve-form-chrome.ts` | No | LogError imported from the wrong package (TS2305); build break only |
+| 24 | #3954 fix(core): unbreak next — accept a parsed Configuration on … | #3811 feat(forms): form contributions + left-nav chrome (More, in… | 1 | 38: `Angular/Explorer/core-entity-forms/…/entity-form.component.ts`, `Angular/Explorer/core-entity-forms/…/custom-forms.module.ts` | No | Costly. Type-only widening of RelatedFormRoleCandidate.Configuration; compile error only |
+| 25 | #5989 fix(base-forms): annotate FK FirstPrimaryKey fallbacks for … | #5953 feat(ui,forms,entity-viewer,core): polymorphic FK smart lin… | 2 | 28: `AI/AgentsClient/…/AgentClientSession.ts`, `Angular/Explorer/core-entity-forms/…/ai-agent-session-form.component.ts` | No | Costly. Comment annotations for the FirstPrimaryKey gate; no logic change |
+| 26 | #5927 fix(ai-prompts): restore the multi-provider compliance scan… | #5915 perf(core,ai,task-graph,ng): Phase 2 fresh efficiency & qua… | 1 | 34: `AI/AgentManager/core/…/agent-spec-sync.ts`, `AI/Agents/…/PayloadManager.ts` | No | Costly. Comment annotation for the multi-provider scan; no logic change |
+| 27 | #5909 fix(conversations): rename openConversationArtifactForComma… | #5896 fix(task-graph,server,agents): multi-prereq conditional gat… | 6 | 20: `AI/CorePlus/…/ui-commands.ts`, `Actions/CoreActions/…/create-document.action.ts` | No | Method renamed to PascalCase; naming lint only |
+| 28 | #4651 fix(migrations): ship the NativeToolCallCount validator as … | #4604 feat(query): add Query.Configuration JSONType and Predictiv… | 9 | 17: `AI/PredictiveStudio/Engine/…/pipeline-builder-agent.ts`, `AI/PredictiveStudio/Engine/…/pipeline-builder.ts` | No | Indentation of a generated validator; codegen output |
+| 29 | #5857 fix: repair next after #5842 — fresh-install migration, Cod… | #5842 feat(ai-agents): Chief of Staff Agent, AIAgentUserPolicy go… | 42 | 36: `AI/Agents/…/base-agent.ts`, `AI/CorePlus/…/AgentUserPolicyEngine.ts` | No | Costly. Generated entity and GraphQL schema drift; codegen output |
+| 30 | #4204 fix(build): regenerate class-registration manifests for Aut… | #4105 fix(build): regenerate every class-registration manifest on… | 6 | 7: `AI/A2AServer/…/class-registrations-manifest.ts`, `AI/MCPServer/…/class-registrations-manifest.ts` | No | Class-registration manifests regenerated; codegen output |
+| 31 | #4105 fix(build): regenerate every class-registration manifest on… | #3704 feat(ai): price models billed by duration or by image, not … | 22 | 19: `AI/BaseAIEngine/…/BaseAIEngine.ts`, `AI/BaseAIEngine/…/PriceUnitTypes.ts` | No | Class-registration manifests regenerated on the chunked format; codegen output |
+| 32 | #4671 fix(manifests): regenerate class registrations for the Reco… | #4635 feat(predictive-studio-explorer): friendly navigation title… | 2 | 41: `AI/PredictiveStudio/Core/…/index.ts`, `AI/PredictiveStudio/Core/…/outcome-config.ts` | No | Costly. Class-registration manifests regenerated for the Record Processes form; codegen output |
+
+### Skipped
+
+- #5306 → #4847: feature change: the fix adds a new judgeEvidence input to BuildJudgeTrace, which does not exist at the bug base
+- #5820 → #5527: feature change: Login Studio desktop preview scaling and a button import; the ThemeEngine hunk is a comment only
+
 ## Clean candidates
+
+Merged 2026-08-05..2026-09-15, after the pnpm switch. `fix-PR` marks a title that starts with `fix`; a fix PR may be clean (it is the head of its own change), but a bug PR of any pair is excluded.
 
 | # | PR | Merged | Files | Flag |
 |---|---|---|---|---|
-| 1 | #918 Update AzureFileStorage for Clock Skew and Type Safety | 2025-05-06 | 1: `MJStorage/…/AzureFileStorage.ts` |  |
-| 2 | #922 Issue #916:  Update fails for numeric with decimals | 2025-05-07 | 1: `MJServer/…/ResolverBase.ts` |  |
-| 3 | #934 AI Agent A2A Protocol Implementation | 2025-05-13 | 4: `AI/A2AServer/…/EntityOperations.ts`, `AI/A2AServer/…/Server.ts` |  |
-| 4 | #944 Several Skip Updates | 2025-05-14 | 2: `AI/Engine/…/AIEngine.ts`, `MJServer/…/AskSkipResolver.ts` |  |
-| 5 | #947 Skip bug fixes | 2025-05-14 | 2: `AI/Core/…/baseLLM.ts`, `AI/Providers/Anthropic/…/anthropic.ts` |  |
-| 6 | #969 Stored Procs with suffix | 2025-05-21 | 2: `MJCore/…/entityInfo.ts`, `SQLServerDataProvider/…/SQLServerDataProvider.ts` |  |
-| 7 | #973 Replace Box SDK with direct REST API calls | 2025-05-22 | 1: `MJStorage/…/BoxFileStorage.ts` |  |
-| 8 | #1004 Mj ai agentic architecture improvements | 2025-06-04 | 3: `AI/BaseAIEngine/…/BaseAIEngine.ts`, `Angular/Generic/data-context/…/module.ts` |  |
-| 9 | #1033 Use BaseEntity class from MJ Core instead of typeorm | 2025-06-12 | 2: `MJCoreEntities/…/AIAgentExtended.ts`, `MJCoreEntities/…/AIPromptCategoryExtended.ts` |  |
-| 10 | #1037 Jf dev | 2025-06-12 | 2: `MetadataSync/…/index.ts`, `MetadataSync/…/config.ts` |  |
-| 11 | #1072 feat: Add DatabaseProviderBase and fix SQL Server transaction handlin… | 2025-06-20 | 5: `Actions/Engine/…/ActionEntity.server.ts`, `MJCore/…/databaseProviderBase.ts` |  |
-| 12 | #1071 Fix implement immediate rollback in SQLServerTransactionGroup | 2025-06-20 | 1: `SQLServerDataProvider/…/SQLServerTransactionGroup.ts` | fix-PR |
-| 13 | #1074 feat: Add {@include} file inclusion support to MetadataSync and Loop… | 2025-06-20 | 3: `AI/Agents/…/loop-agent-type.ts`, `MetadataSync/…/sync-engine.ts` |  |
-| 14 | #1122 EntityField Dirty and Set updates to improve Boolean/Number compariso… | 2025-06-29 | 1: `MJCore/…/baseEntity.ts` |  |
-| 15 | #1155 Agent Improvements | 2025-07-08 | 3: `AI/Prompts/…/AIPromptRunner.ts`, `Angular/Explorer/core-entity-forms/…/ai-agent-run-timeline.component.ts` |  |
-| 16 | #1177 Fix React Runtime Package | 2025-07-17 | 1: `React/runtime/…/runtime-utilities.ts` | fix-PR |
-| 17 | #1180 Fix context length exceeded errors and entity save inconsistencies | 2025-07-19 | 6: `AI/Core/…/errorAnalyzer.ts`, `AI/Core/…/errorTypes.ts` | fix-PR |
-| 18 | #1226 slight tweak to CleanJSON | 2025-07-29 | 1: `MJGlobal/…/util.ts` |  |
-| 19 | #1228 2.78 - Cascade Deletes for Queries, etc | 2025-07-30 | 4: `InteractiveComponents/…/data-requirements.ts`, `MJCoreEntities/…/entity_subclasses.ts` |  |
-| 20 | #1238 Performance Improvements in React Runtime | 2025-08-01 | 6: `Angular/Generic/react/…/mj-react-component.component.ts`, `React/runtime/…/component-compiler.ts` |  |
-| 21 | #1216 Implement Apollo Enrichment Actions | 2025-08-04 | 4: `Actions/ApolloEnrichment/…/accounts.ts`, `Actions/ApolloEnrichment/…/contacts.ts` |  |
-| 22 | #1250 Remove Apollo actions loading from MJAPI and add to MJServer. | 2025-08-04 | 2: `MJAPI/…/index.ts`, `MJServer/…/index.ts` |  |
-| 23 | #1283 feat(MetadataSync): improve dependency ordering and logging for push… | 2025-08-12 | 3: `MetadataSync/…/record-dependency-analyzer.ts`, `MetadataSync/…/sync-engine.ts` |  |
-| 24 | #1304 Fix: Add missing StartRow parameter to GraphQL RunView methods | 2025-08-14 | 4: `GraphQLDataProvider/…/graphQLDataProvider.ts`, `MJServer/…/ResolverBase.ts` | fix-PR |
-| 25 | #1307 fix: GraphQL resolver and linter improvements | 2025-08-15 | 3: `GraphQLDataProvider/…/graphQLSystemUserClient.ts`, `MJServer/…/CreateQueryResolver.ts` | fix-PR |
-| 26 | #1310 Fix build error in test-harness.ts | 2025-08-15 | 1: `React/test-harness/…/test-harness.ts` | fix-PR |
-| 27 | #1335 feat(SimpleVectorService): Add distance metrics, clustering algorithm… | 2025-08-23 | 2: `AI/Vectors/Memory/…/index.ts`, `AI/Vectors/Memory/…/SimpleVectorService.ts` |  |
-| 28 | #1358 feat: Component linter improvements, query validation, and metadata u… | 2025-08-31 | 3: `Angular/Explorer/core-entity-forms/…/ai-agent-form.component.ts`, `MJServer/…/CreateQueryResolver.ts` |  |
-| 29 | #1361 Jf skip | 2025-09-01 | 4: `MJCLI/…/push.ts`, `MetadataSync/…/json-write-helper.ts` |  |
-| 30 | #1366 Issue 1365: Add Message Headers | 2025-09-03 | 3: `Communication/base-types/…/BaseProvider.ts`, `Communication/providers/MSGraph/…/MSGraphProvider.ts` |  |
-| 31 | #1388 Update ComponentRegistryResolver.ts to Add .js Extensions to Match Ot… | 2025-09-11 | 1: `MJServer/…/ComponentRegistryResolver.ts` |  |
-| 32 | #1399 feat: Add router mode support to ComponentRegistryAPIServer | 2025-09-16 | 2: `ComponentRegistry/…/Server.ts`, `ComponentRegistry/…/types.ts` |  |
-| 33 | #1401 feat: Improve React component system for Skip's component generation | 2025-09-18 | 2: `React/runtime/…/component-manager.ts`, `React/runtime/…/library-loader.ts` |  |
-| 34 | #1432 Fix providers anthropic and OpenAI | 2025-10-07 | 3: `AI/Prompts/…/AIPromptRunner.ts`, `AI/Providers/Anthropic/…/anthropic.ts` | fix-PR |
-| 35 | #1442 Add user email tracking to Component Registry | 2025-10-07 | 3: `ComponentRegistryClientSDK/…/ComponentRegistryClient.ts`, `ComponentRegistryClientSDK/…/types.ts` |  |
-| 36 | #1455 Add graphql support for datetime2 and smalldatetime data types. | 2025-10-13 | 1: `CodeGenLib/…/graphql_server_codegen.ts` |  |
-| 37 | #1493 Updated `AgentSpec` and created agent-manager-design doc with Ethan s… | 2025-10-21 | 1: `AI/CorePlus/…/agent-spec.ts` |  |
-| 38 | #1517 Agent Manager Enhancement | 2025-10-26 | 7: `AI/AgentManager/core/…/agent-spec-sync.ts`, `AI/AgentManager/core/…/architect-agent.ts` |  |
-| 39 | #1575 fix(actions): Load all Action Params by ignoring UserViewMaxRows limit | 2025-11-07 | 1: `Actions/Base/…/ActionEngine-Base.ts` | fix-PR |
-| 40 | #1573 Ms datestamps | 2025-11-07 | 2: `Communication/base-types/…/BaseProvider.ts`, `Communication/providers/MSGraph/…/MSGraphProvider.ts` |  |
-| 41 | #1593 Agent Conversation UI Improvement | 2025-11-14 | 8: `AI/AICLI/…/AgentService.ts`, `AI/Agents/…/base-agent.ts` |  |
-| 42 | #1706 Jf dev | 2025-12-17 | 1: `QueryGen/…/index.ts` |  |
-| 43 | #1798 feat(migrations): Optimize v3 baseline migration (Eliminate 52.7% GO… | 2026-01-18 | 1: `MJCLI/…/index.ts` | bug-PR |
-| 44 | #1809 Documentation and dependency improvements for v3 | 2026-01-21 | 1: `AI/Providers/ElevenLabs/…/index.ts` |  |
-| 45 | #1828 Dbauto related | 2026-01-22 | 4: `DBAutoDoc/…/init.ts`, `DBAutoDoc/…/config.ts` |  |
-| 46 | #1851 Fixed issue with Autotagger after package upgrade. | 2026-01-26 | 1: `ContentAutotagging/…/AutotagBaseEngine.ts` | fix-PR |
-| 47 | #1863 feat(MCP): Auto-generate Actions from MCP Server Tools | 2026-01-28 | 4: `AI/MCPClient/…/MCPClientManager.ts`, `AI/MCPClient/…/types.ts` |  |
-| 48 | #1889 fix(testing): Fix multi-turn Agent Eval tests to reuse same conversat… | 2026-02-04 | 1: `TestingFramework/Engine/…/AgentEvalDriver.ts` | fix-PR |
-| 49 | #1957 Fix ESM directory import crash on Node 19+ | 2026-02-12 | 2: `Communication/providers/MSGraph/…/MSGraphProvider.ts`, `Communication/providers/MSGraph/…/auth.ts` | fix-PR |
-| 50 | #1982 Remove large-string splitting from SqlLogger for Skyway | 2026-02-17 | 1: `SQLServerDataProvider/…/SqlLogger.ts` |  |
-| 51 | #1998 fix(mcp-server): Improve duplicate tool dedup and remove memory leak | 2026-02-20 | 1: `AI/MCPServer/…/Server.ts` | fix-PR |
-| 52 | #2003 Fix: Use PascalCase properties in hasSoftPrimaryKeyInConfig() | 2026-02-22 | 1: `CodeGenLib/…/manage-metadata.ts` | fix-PR |
-| 53 | #2009 Fix Caeleb MJ Entity Issues (partially) | 2026-02-23 | 6: `AI/MJComputerUse/…/MJComputerUseEngine.ts`, `AI/MJComputerUse/…/MJLLMJudge.ts` | fix-PR |
-| 54 | #2040 Fix multi-audience support for same-issuer auth providers | 2026-03-02 | 4: `AI/MCPServer/…/TokenValidator.ts`, `MJServer/…/AuthProviderFactory.ts` | fix-PR |
-| 55 | #2149 fix: resolve ExternalChangeDetection transaction race condition (#214… | 2026-03-16 | 1: `ExternalChangeDetection/…/ChangeDetector.ts` | fix-PR |
-| 56 | #2162 Replace QueryEmbeddingService with QueryEngineServer (BaseSingleton c… | 2026-03-18 | 6: `AI/Engine/…/index.ts`, `AI/Engine/…/QueryEmbeddingService.ts` |  |
-| 57 | #2165 refactor: Convert QueryCacheManager to BaseSingleton | 2026-03-18 | 2: `GenericDatabaseProvider/…/GenericDatabaseProvider.ts`, `MJCore/…/QueryCacheManager.ts` |  |
-| 58 | #2171 refactor(MJCore): use SQLDialect for identifier quoting in QueryCompo… | 2026-03-19 | 8: `Actions/CoreActions/…/run-adhoc-query.action.ts`, `GenericDatabaseProvider/…/GenericDatabaseProvider.ts` |  |
-| 59 | #2177 feat: HubSpot association v4 fetch, empty-string datetime fix, OpenAI… | 2026-03-19 | 3: `AI/Providers/OpenAI/…/openAI.ts`, `Integration/connectors/…/HubSpotConnector.ts` |  |
-| 60 | #2188 fix: Hoist inner CTEs and disable ECD job to prevent OOM crashes | 2026-03-20 | 3: `GenericDatabaseProvider/…/queryCompositionEngine.ts`, `SQLParser/…/index.ts` | fix-PR |
-| 61 | #2192 feat: Add Sage Intacct and QuickBooks Online integration connectors w… | 2026-03-22 | 4: `Integration/connectors/…/QuickBooksConnector.ts`, `Integration/connectors/…/SageIntacctConnector.ts` |  |
-| 62 | #2244 fix(SQLParser): extract condition-only parameters and remove hardcode… | 2026-03-26 | 2: `MJCoreEntitiesServer/…/MJQueryEntityServer.server.ts`, `SQLParser/…/sql-parser.ts` | fix-PR |
-| 63 | #2255 fix(ai-agents): Handle 'Retry' nextStep type for message expansion | 2026-03-27 | 2: `AI/Agents/…/loop-agent-response-type.ts`, `AI/Agents/…/loop-agent-type.ts` | fix-PR |
-| 64 | #2233 fix: default messaging extensions to Enabled: false | 2026-03-28 | 1: `MessagingAdapters/…/BaseMessagingAdapter.ts` | fix-PR |
-| 65 | #2303 feat: Add @memberjunction/ng-kanban and @memberjunction/ng-gantt pack… | 2026-04-03 | 8: `Angular/Generic/gantt/…/gantt-chart.component.ts`, `Angular/Generic/gantt/…/gantt.module.ts` |  |
-| 66 | #2315 feat(auth): add AWS Cognito client-side auth provider | 2026-04-06 | 4: `Angular/Bootstrap/…/bootstrap.types.ts`, `Angular/Explorer/auth-services/…/mjexplorer-cognito-provider.service.ts` |  |
-| 67 | #2370 fix: Repair knip dependency checking and add missing deps across 17 p… | 2026-04-13 | 2: `ServerBootstrap/…/mj-class-registrations.ts`, `ServerBootstrapLite/…/mj-class-registrations.ts` | fix-PR |
-| 68 | #2415 fix: silence /healthcheck 401 spam, switch to socket-primary heartbeat | 2026-04-19 | 5: `Angular/Explorer/explorer-app/…/explorer-app.component.ts`, `Angular/Explorer/explorer-core/…/server-connectivity.service.ts` | fix-PR |
-| 69 | #2439 feat(test-harness): add onPageReady callback and fullPage screenshot… | 2026-04-20 | 1: `React/test-harness/…/component-runner.ts` |  |
-| 70 | #2475 fix(mjcore): gate SetRunViewResult on AllowCaching to prevent stale e… | 2026-04-29 | 8: `Actions/CoreActions/…/scheduled-geocoding.action.ts`, `GenericDatabaseProvider/…/GenericDatabaseProvider.ts` | fix-PR |
+| 1 | #3484 perf(ci): persist turbo's cache and stop the build from rewriting its  | 2026-08-05 | 8: `AI/…/class-registrations-manifest.ts`, `AI/…/class-registrations-manifest.ts` |  |
+| 2 | #3378 feat(search-engine): make the SearchScope permission resolver replacea | 2026-08-05 | 6: `Actions/…/scoped-search.action.ts`, `MJServer/…/SearchKnowledgeResolver.ts` |  |
+| 3 | #3525 fix(actions): implement Action Filter evaluation — RunSingleFilter was | 2026-08-06 | 1: `Actions/…/ActionEngine.ts` | fix-PR |
+| 4 | #3584 fix: resolve multi-provider + UUID compliance violations (harness & ta | 2026-08-07 | 2: `AI/…/HarnessAgentBase.ts`, `TestingFramework/…/task-graph-orchestration.checks.ts` | fix-PR |
+| 5 | #3601 Feat/generic field-path resolution for vector provider directives + Pi | 2026-08-07 | 6: `AI/…/VectorDBBase.ts`, `AI/…/PineconeDatabase.ts` |  |
+| 6 | #3624 IT74 — execute task graphs for real, and fix the three bugs it found | 2026-08-08 | 4: `TaskGraph/…/TaskGraphDispatcher.ts`, `TaskGraph/…/types.ts` |  |
+| 7 | #3662 fix(realtime): capture xAI Grok Voice token usage — the payload is top | 2026-08-08 | 4: `AI/…/realtimeUsage.ts`, `AI/…/index.ts` | fix-PR |
+| 8 | #3725 fix(realtime): map Gemini's neutral voice key to speechConfig | 2026-08-11 | 1: `AI/…/geminiRealtime.ts` | fix-PR |
+| 9 | #3529 feat(search-engine): configurable per-entity search timeout + fetch de | 2026-08-11 | 3: `SearchEngine/…/EntitySearchProvider.ts`, `SearchEngine/…/FullTextSearchProvider.ts` |  |
+| 10 | #3779 Generated remote-operation clients for the eight workflow debug verbs | 2026-08-13 | 1: `MJCoreEntities/…/remote_operations.ts` |  |
+| 11 | #3783 Fix dispatched-workflow submission crash and its misreported status | 2026-08-13 | 6: `AI/…/agent-run-tree-loader.ts`, `AI/…/agent-run-tree.ts` |  |
+| 12 | #3776 fix(storage): log named fields from Box and Dropbox SDK errors, not th | 2026-08-13 | 2: `MJStorage/…/BoxFileStorage.ts`, `MJStorage/…/DropboxFileStorage.ts` | fix-PR |
+| 13 | #3801 feat(cli): mj dev workspace — member-derived globs, dependency pins, a | 2026-08-14 | 8: `MJCLI/…/index.ts`, `MJCLI/…/build.ts` |  |
+| 14 | #3633 security: harden SQL-filter validator, OAuth handler, API-key lookup,  | 2026-08-14 | 7: `APIKeys/…/APIKeyEngine.ts`, `MJCore/…/databaseProviderBase.ts` |  |
+| 15 | #3823 feat(gantt,kanban): double-click to open a record | 2026-08-15 | 2: `Angular/…/gantt-chart.component.ts`, `Angular/…/kanban-board.component.ts` |  |
+| 16 | #3774 fix(integration): stop introspecting the source inside CompanyIntegrat | 2026-08-15 | 2: `MJCoreEntitiesServer/…/MJCompanyIntegrationEntityServer.server.ts`, `MJServer/…/IntegrationDiscoveryResolver.ts` | fix-PR |
+| 17 | #3941 fix(sqlserver-dataprovider): keep the UserCache export alive for publi | 2026-08-24 | 1: `SQLServerDataProvider/…/index.ts` | fix-PR |
+| 18 | #3907 fix(geo): stop re-asking an address that has already been settled | 2026-08-24 | 3: `Actions/…/scheduled-geocoding.action.ts`, `geo/…/GeoCodeSyncService.ts` | fix-PR |
+| 19 | #3892 perf(global): build the ClassFactory resolution diagnostic only when i | 2026-08-24 | 2: `MJGlobal/…/ClassFactory.ts`, `MJGlobal/…/util.ts` |  |
+| 20 | #4037 security: refuse ad-hoc SQL for scope-limited sessions, escape Resolve | 2026-08-24 | 4: `MJServer/…/index.ts`, `MJServer/…/scopeLimitedPrincipal.ts` |  |
+| 21 | #3872 DownloadMigrations: recurse like the scanner does, and fail on an empt | 2026-08-25 | 1: `OpenApp/…/github-client.ts` |  |
+| 22 | #3895 perf(integration): index integration-object fields and memoise the per | 2026-08-25 | 3: `Integration/…/IntegrationEngineBase.ts`, `Integration/…/BaseRESTIntegrationConnector.ts` |  |
+| 23 | #4005 fix(codegen): teach the class-registration manifest scanner to see @Re | 2026-08-25 | 4: `Angular/…/mj-class-registrations.ts`, `Angular/…/mj-class-registrations.ts` | fix-PR |
+| 24 | #4052 fix(pg): make spRebindLayeredOuterView actually run, and stop IT69 ski | 2026-08-25 | 1: `TestingFramework/…/layered-base-views.checks.ts` | fix-PR |
+| 25 | #3968 fix(integration): enforce within-batch ExternalID identity before mapp | 2026-08-26 | 3: `Integration/…/BatchIdentity.ts`, `Integration/…/IntegrationEngine.ts` | fix-PR |
+| 26 | #3864 fix(sql-converter): resolve ${mjSchema}, not just ${flyway:defaultSche | 2026-08-30 | 4: `MJCLI/…/convert.ts`, `MJCLI/…/rebake.ts` | fix-PR |
+| 27 | #3883 fix(storage): a failed upload reports the driver's real cause, not "St | 2026-08-30 | 4: `AI/…/base-agent.ts`, `AI/…/realtime-recording-store.ts` | fix-PR |
+| 28 | #4087 feat(providers): opt-in batched transaction-group submit — one round t | 2026-08-30 | 6: `MJCore/…/transactionGroup.ts`, `PostgreSQLDataProvider/…/PostgreSQLTransactionGroup.ts` |  |
+| 29 | #3861 fix(sql-converter): never write a hollow .pg.sql when every statement  | 2026-08-31 | 1: `SQLConverter/…/MigrationConverter.ts` | fix-PR |
+| 30 | #4092 fix(realtime): a streamed utterance's corrections are actually persist | 2026-08-31 | 1: `MJServer/…/RealtimeClientSessionResolver.ts` | fix-PR |
+| 31 | #3916 fix(remote-browser): recover a dead browser handle instead of poisonin | 2026-08-31 | 4: `AI/…/dead-handle.ts`, `AI/…/index.ts` | fix-PR |
+| 32 | #3926 fix(ai): ExecuteSimplePrompt model selection — four stacked defects (# | 2026-08-31 | 2: `AI/…/apiKeyDictionary.ts`, `MJServer/…/RunAIPromptResolver.ts` | fix-PR |
+| 33 | #4157 fix(markdown-core): keep HTML blocks intact across blank lines so SVG  | 2026-09-01 | 1: `MarkdownCore/…/markdown-engine.ts` | fix-PR |
+| 34 | #4123 feat(communication): first-class date bounds on GetMessages, and stop  | 2026-09-04 | 5: `Communication/…/BaseProvider.ts`, `Communication/…/FilterUtils.ts` |  |
+| 35 | #4100 security: harden CORS default, OAuth error open redirect, and consent  | 2026-09-06 | 2: `AI/…/OAuthProxyRouter.ts`, `MJServer/…/index.ts` |  |
+| 36 | #4264 fix(installer): refuse archive entries that resolve outside the extrac | 2026-09-06 | 3: `MJInstaller/…/FileSystemAdapter.ts`, `MJInstaller/…/ArchiveEntryRefusedError.ts` | fix-PR |
+| 37 | #4254 fix(ci): gate metadata-only PRs and surface sync validation detail in  | 2026-09-07 | 2: `MetadataSync/…/index.ts`, `MetadataSync/…/FormattingService.ts` | fix-PR |
+| 38 | #4291 fix(codegen): separate default-constraint drop blocks in the SQL log s | 2026-09-08 | 2: `CodeGenLib/…/manage-metadata.ts`, `CodeGenLib/…/sql_logging.ts` | fix-PR |
+| 39 | #4276 fix(communication-ms-graph): a stored Azure Service Principal credenti | 2026-09-09 | 1: `Communication/…/MSGraphProvider.ts` | fix-PR |
+| 40 | #4251 fix(credentials): serialize per-credential writes so background timest | 2026-09-09 | 1: `Credentials/…/CredentialEngine.ts` | fix-PR |
+| 41 | #4394 fix(testing): stop the rig harness forwarding two symbols its package  | 2026-09-11 | 1: `TestingFramework/…/index.ts` | fix-PR |
+| 42 | #4411 fix(storage,content-autotagging,search-engine): Dropbox refresh-token/ | 2026-09-13 | 5: `ContentAutotagging/…/AutotagCloudStorage.ts`, `ContentAutotagging/…/AutotagBaseEngine.ts` | fix-PR |
+| 43 | #4470 fix(core): rebuild engine derived state after a cross-server cache pay | 2026-09-14 | 2: `AI/…/BaseAIEngine.ts`, `MJCore/…/baseEngine.ts` | fix-PR |
+| 44 | #4408 The login screen becomes a composable Explorer surface: tokens, layout | 2026-09-15 | 6: `Angular/…/login-picker.component.ts`, `Angular/…/explorer-app.component.ts` |  |
+| 45 | #4517 fix(sqlserver-dataprovider): route commit and rollback through the SQL | 2026-09-15 | 5: `GenericDatabaseProvider/…/GenericDatabaseProvider.ts`, `MJCore/…/databaseProviderBase.ts` | fix-PR |
 
-## For the curator
+## Selection (corpus/gate1.json)
 
-Pick about 45 bug rows and about 45 clean rows. Prefer `Yes` and `Likely` bug rows, and avoid `Costly` rows unless they are clearly good. For each chosen bug pair, write a one-line `Description` of the bug: what input now gives what wrong output (for example, "a MaxRows:1 RunView reports TotalRowCount 1 instead of the view's total"). Put the chosen pairs, with their `Description`, and the chosen clean PRs into `corpus/gate1.json`.
+The user chose the top of the list. Bug set: every runnable judged row and addendum pair, best grade first (document order within a grade), cut at 45: Yes 13, Likely 25, Unlikely 7; 9 Costly. Rows 60 (#4448) and 63 (#3674) stay out because their bug PR is the fix PR of a chosen pair (one landing commit per role). Clean set: the 45 sampled post-switch PRs. Slices: `AssignSlices(…, Seed: 1)` on each set in this order, 30 Tuning and 15 HeldOut each.
 
-Before you pick:
-
-- Clean PR #1798 (Flag `bug-PR`) is also the bug PR of a ranked pair (not listed above). The corpus rule forbids a bug PR in the clean set; if you pick it as clean, do not pick its pair, and the reverse.
-- Two PRs are the fix of one listed pair and the bug of another: #4448 (fix in the #4225 pair, bug in the #4517 pair) and #3674 (fix in the #3602 pair, bug in the #3678 pair). Pick at most one pair from each, so that one landing commit is not used both as a head and as a base.
-- Rows marked `Unlikely` are listed only to show the next-best options; replace them first when you trim.
+Chosen bug PRs: #4253 (row 1, Yes), #5897 (row 2, Yes), #5481 (row 3, Yes), #3831 (row 4, Yes), #5906 (row 5, Yes), #4245 (row 6, Yes), #4126 (row 7, Yes), #4418 (row 8, Yes), #3748 (row 9, Yes), #6069 (row 14, Yes), #5040 (row 16, Yes), #5063 (row 19, Yes), #3735 (addendum 1, Yes), #4782 (row 21, Likely), #4065 (row 22, Likely), #6227 (row 23, Likely), #4450 (row 24, Likely), #5854 (row 27, Likely), #5703 (row 29, Likely), #4828 (row 31, Likely), #3381 (row 32, Likely), #4225 (row 34, Likely), #4572 (row 35, Likely), #4290 (row 36, Likely), #4120 (row 37, Likely), #5267 (row 38, Likely), #3824 (row 39, Likely), #3602 (row 41, Likely), #5052 (row 43, Likely), #4317 (row 44, Likely), #4451 (row 47, Likely), #3585 (row 48, Likely), #3644 (row 53, Likely), #4874 (row 55, Likely), #4512 (addendum 2, Likely), #4814 (addendum 3, Likely), #3412 (addendum 4, Likely), #5047 (addendum 5, Likely), #5514 (row 61, Unlikely), #6027 (row 64, Unlikely), #5513 (row 66, Unlikely), #5729 (row 70, Unlikely), #3915 (addendum 6, Unlikely), #3354 (addendum 7, Unlikely), #5878 (addendum 8, Unlikely).

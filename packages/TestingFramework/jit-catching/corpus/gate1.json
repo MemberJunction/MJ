@@ -75,51 +75,11 @@
       "Slice": "Tuning"
     },
     {
-      "BugPR": 1893,
-      "FixPR": 4334,
-      "BugMergeSHA": "a593553dfe3f4a5e3ead3f83166553d3fc7f0ee9",
-      "FixMergeSHA": "ee85060f248670367f7644f5c6e3e878a85c6a6b",
-      "Description": "MSGraph ReplyToMessage ignores ContextData.Email, so the reply is sent from the wrong mailbox.",
-      "Slice": "Tuning"
-    },
-    {
-      "BugPR": 1287,
-      "FixPR": 1290,
-      "BugMergeSHA": "be2c5056b4f96071c87dbd2da0b9482716a51aca",
-      "FixMergeSHA": "bfe2d1e1cc137dea061b8379559ed5dd49ba9944",
-      "Description": "RecordDependencyAnalyzer resolves only @parent:ID lookups, so a @parent:<other field> or nested-parent reference is not matched.",
-      "Slice": "Tuning"
-    },
-    {
-      "BugPR": 1143,
-      "FixPR": 1671,
-      "BugMergeSHA": "c7050481a1cb7f9861458b625cd2f2cdb6378b55",
-      "FixMergeSHA": "6bc677fcd96948ebbbd1aecb61071781ae2c09d6",
-      "Description": "PayloadManager merges newElements into existing array items and drops extra updateElements instead of appending them.",
-      "Slice": "Tuning"
-    },
-    {
-      "BugPR": 1213,
-      "FixPR": 1214,
-      "BugMergeSHA": "0b0d4ed79edee34ed11ed24e08c7309bfd00a564",
-      "FixMergeSHA": "200a7e69ef3c8d60efbe94dd44d6b63f84963323",
-      "Description": "The component linter reports a violation for the valid savedUserSettings override pattern.",
-      "Slice": "Tuning"
-    },
-    {
       "BugPR": 6069,
       "FixPR": 6076,
       "BugMergeSHA": "d44011c97c7d66ec8a583204eb01dae48ec00d01",
       "FixMergeSHA": "61b24684dbde0567ac37e6838f57d4a4878360a8",
       "Description": "The lookup subquery compares string criteria case-sensitively and leaves [bracket] identifiers, so a differently cased value is not found.",
-      "Slice": "HeldOut"
-    },
-    {
-      "BugPR": 1062,
-      "FixPR": 6046,
-      "BugMergeSHA": "1fc2d2999fc6bfa68d2b92010934b12fd88e6704",
-      "FixMergeSHA": "ec3a94ca6c32aa6ac1533f3d46ca005ed3ed4993",
-      "Description": "The Anthropic provider sends assistant prefill and temperature when extended thinking is on, which the API rejects.",
       "Slice": "Tuning"
     },
     {
@@ -131,35 +91,19 @@
       "Slice": "Tuning"
     },
     {
-      "BugPR": 1232,
-      "FixPR": 2018,
-      "BugMergeSHA": "e4904b98cd62575388409baa0baeb4e71d4c1326",
-      "FixMergeSHA": "72ff33bee4225a8fa2188fbf9cb135f8419075e1",
-      "Description": "Value-list entries are sorted by Sequence alone, so ties flip-flop between CodeGen runs instead of ordering deterministically.",
-      "Slice": "Tuning"
-    },
-    {
-      "BugPR": 1129,
-      "FixPR": 5489,
-      "BugMergeSHA": "7636e6d2e97825ef84a3af28c49bcb19fdff77ae",
-      "FixMergeSHA": "589e39fe0291b75f1464c72f6196419c35d3194a",
-      "Description": "ErrorAnalyzer reads code ECONNRESET as a status and classifies a dropped provider connection as Unknown instead of NetworkError.",
-      "Slice": "HeldOut"
-    },
-    {
       "BugPR": 5063,
       "FixPR": 5140,
       "BugMergeSHA": "bea23861c3bbc396fee46b3c6c28a8a6f337ec58",
       "FixMergeSHA": "fd2b95a241ddf462c1e6891c4d5a11ba379d8bec",
       "Description": "A wrapped stream error loses its errorMessage, so an \"Invalid API key\" error is not classified as Authentication.",
-      "Slice": "HeldOut"
+      "Slice": "Tuning"
     },
     {
-      "BugPR": 1281,
-      "FixPR": 1307,
-      "BugMergeSHA": "c37df344a0df9ebd7c6e7c03df977379b099eeb8",
-      "FixMergeSHA": "19ffa4b64abb457a74414688609e180c9e1fb1ee",
-      "Description": "The full-state-ownership linter rule reports a violation for a valid controlled component.",
+      "BugPR": 3735,
+      "FixPR": 3808,
+      "BugMergeSHA": "73009530d32516a6ca102bf86dfe1eca3c961548",
+      "FixMergeSHA": "be0bdb2c7091a54683270a8cd19ba0523d205bca",
+      "Description": "detectAggregationKeyColumns on a UNION of two grouped SELECTs returns a key from the first branch only instead of refusing with null.",
       "Slice": "Tuning"
     },
     {
@@ -176,7 +120,7 @@
       "BugMergeSHA": "d78d2cd392197d33db1ca38469f7c52d33e5b40a",
       "FixMergeSHA": "d2b788e62334a7e913773e3d889cdf8eb84d17ec",
       "Description": "Discovery sampling stops when DiscoverObjects fails and ignores the scoped object list, so declared objects are not sampled.",
-      "Slice": "HeldOut"
+      "Slice": "Tuning"
     },
     {
       "BugPR": 6227,
@@ -195,22 +139,6 @@
       "Slice": "Tuning"
     },
     {
-      "BugPR": 2330,
-      "FixPR": 2491,
-      "BugMergeSHA": "f065f5fe00c4591511f218322128bd1309534c53",
-      "FixMergeSHA": "65583ac0e6eef86564305a7bfce1d3d873e6d443",
-      "Description": "AIEngine keeps a rejected embeddings promise forever, so after one failed load every later call fails instead of retrying.",
-      "Slice": "HeldOut"
-    },
-    {
-      "BugPR": 3279,
-      "FixPR": 3350,
-      "BugMergeSHA": "f1bcddb0df246ce7c78e0af2863b10032b17b224",
-      "FixMergeSHA": "ae5e8e9ea080f56c09cc86460558cd62fdda1bba",
-      "Description": "GraphQL codegen emits reverse-relationship members for entity types that are not in the generated file.",
-      "Slice": "HeldOut"
-    },
-    {
       "BugPR": 5854,
       "FixPR": 6229,
       "BugMergeSHA": "8bac3ac96d6fbbd2589ce965294181342053aeda",
@@ -219,28 +147,12 @@
       "Slice": "HeldOut"
     },
     {
-      "BugPR": 2426,
-      "FixPR": 4540,
-      "BugMergeSHA": "142d9795465fa0f46ab1d9a1c3f19101cc87fc34",
-      "FixMergeSHA": "2fad528f0a8595ebfafd19855a4054d63c46d5d2",
-      "Description": "The connectivity service treats a transient \"unknown\" state or a 200 healthcheck as recovery while the socket is still degraded.",
-      "Slice": "Tuning"
-    },
-    {
       "BugPR": 5703,
       "FixPR": 5719,
       "BugMergeSHA": "c49b1800b9f16e87cbc071f15d85677404880114",
       "FixMergeSHA": "c8f1c92898cd8e839707f1c38df53187dc6776c7",
       "Description": "Any error whose text names definitionHash triggers the old-server fallback, even when the error is unrelated to a schema rejection.",
-      "Slice": "Tuning"
-    },
-    {
-      "BugPR": 743,
-      "FixPR": 4291,
-      "BugMergeSHA": "3b45d791a869e790a1d0caf349955488a0efb885",
-      "FixMergeSHA": "319a7edc11daf883bcef0810cd0d2656c9147023",
-      "Description": "The CodeGen SQL log puts a DECLARE-bearing default-constraint drop block in the same batch as the next block instead of after a GO.",
-      "Slice": "Tuning"
+      "Slice": "HeldOut"
     },
     {
       "BugPR": 4828,
@@ -256,15 +168,7 @@
       "BugMergeSHA": "a56fab980d77b137bf74f52ead367b9b9d82347c",
       "FixMergeSHA": "7ad25c275ca1770efc5b628b3ca52442b2966fdc",
       "Description": "A WithTimeout expiry of the engine's own FetchChanges call is classified as a retryable NETWORK_TIMEOUT and retried.",
-      "Slice": "Tuning"
-    },
-    {
-      "BugPR": 3184,
-      "FixPR": 3218,
-      "BugMergeSHA": "c585583a89586035ae2f8a25390538f43d4b835d",
-      "FixMergeSHA": "186941164c26dc0399b43ddfe3bdb3365fda82e3",
-      "Description": "The OpenAI realtime client splits one paused utterance into several turns instead of replacing the turn with its continuation.",
-      "Slice": "Tuning"
+      "Slice": "HeldOut"
     },
     {
       "BugPR": 4225,
@@ -296,7 +200,7 @@
       "BugMergeSHA": "03f3f8290f159a3264cabcb679c7016b8433154a",
       "FixMergeSHA": "4303a79060f139f096ce9ea9d18cea347c3bd7f7",
       "Description": "An object the account cannot serve still gets a watermark write and orphan checks instead of being skipped.",
-      "Slice": "Tuning"
+      "Slice": "HeldOut"
     },
     {
       "BugPR": 5267,
@@ -315,14 +219,6 @@
       "Slice": "HeldOut"
     },
     {
-      "BugPR": 1331,
-      "FixPR": 1607,
-      "BugMergeSHA": "7adf1f5bead7d609df8d664212939b656b198ea0",
-      "FixMergeSHA": "27e1603b9c0215dee8c547cbe0798feb078fad10",
-      "Description": "The linter misses an invalid .records read on a RunQuery or RunView result in some code shapes.",
-      "Slice": "Tuning"
-    },
-    {
       "BugPR": 3602,
       "FixPR": 3674,
       "BugMergeSHA": "857d4dad9c754b246d4471de4dacb25f47046f74",
@@ -331,20 +227,12 @@
       "Slice": "Tuning"
     },
     {
-      "BugPR": 2519,
-      "FixPR": 2758,
-      "BugMergeSHA": "c3cc83164269cc12adf913c40edc4a809ce69ae7",
-      "FixMergeSHA": "270560d51add76c513c80929e88d031ee90a7cfd",
-      "Description": "The baseline emitter puts a cross-database syslogins lookup in plain SQL, which Azure rejects at parse time instead of wrapping it in sp_executesql.",
-      "Slice": "Tuning"
-    },
-    {
       "BugPR": 5052,
       "FixPR": 5769,
       "BugMergeSHA": "1cc56a661f590f89d65d4bdabf78214d9f15f7f0",
       "FixMergeSHA": "bb532a42dcdad7609cda502e9df6cf6d8ea1987e",
       "Description": "complete_task rejects a payloadChangeRequest string that contains layout escapes instead of decoding the escaped JSON.",
-      "Slice": "HeldOut"
+      "Slice": "Tuning"
     },
     {
       "BugPR": 4317,
@@ -355,238 +243,350 @@
       "Slice": "Tuning"
     },
     {
-      "BugPR": 804,
-      "FixPR": 1304,
-      "BugMergeSHA": "f3dcd51df44ce87c02c84a5588710dc3512abe3b",
-      "FixMergeSHA": "2fb5ec60d97784d842061ddcfa24841fc065f5b9",
-      "Description": "A RunView with StartRow 0 and MaxRows uses TOP and runs no total-count query instead of OFFSET/FETCH plus a count.",
+      "BugPR": 4451,
+      "FixPR": 6125,
+      "BugMergeSHA": "272678589e503bf5d06ee731e4cef05813e7bc70",
+      "FixMergeSHA": "73982311d246a5f97962c57ff10d5afef88a44f3",
+      "Description": "CodeGen emits a foreign-key auto-index on a MAX-typed column that SQL Server cannot index, instead of skipping it with a note.",
+      "Slice": "Tuning"
+    },
+    {
+      "BugPR": 3585,
+      "FixPR": 3902,
+      "BugMergeSHA": "eb457cd04a002824854f1483210e9c9bf6a6442f",
+      "FixMergeSHA": "e05012a40fd41c4aeda4550011deccbbcc409d93",
+      "Description": "Entity-subclass codegen imports core related entities from the wrong package and uses raw field names instead of the generated property names.",
+      "Slice": "Tuning"
+    },
+    {
+      "BugPR": 3644,
+      "FixPR": 3696,
+      "BugMergeSHA": "80a0919bd87ad1566c554a937430f970c384d7e8",
+      "FixMergeSHA": "ac91e5a5959a612c087185477a4ed4eb1060c3db",
+      "Description": "TaskGraphActionRunner matches actions with === on IDs, so an action whose UUID differs only in case is not found.",
+      "Slice": "Tuning"
+    },
+    {
+      "BugPR": 4874,
+      "FixPR": 5910,
+      "BugMergeSHA": "ba9b53f8cea77859a88e8230f3779fb1347b819a",
+      "FixMergeSHA": "bf37c322ae84f6de727bf4c159e2c6c156a1a244",
+      "Description": "Save as Workflow keeps synthetic step IDs in the path Origin and Destination instead of mapping them to the persisted step UUIDs.",
+      "Slice": "HeldOut"
+    },
+    {
+      "BugPR": 4512,
+      "FixPR": 4543,
+      "BugMergeSHA": "47f4e7431c796a46c9cbf44b5cf4de363425a8fc",
+      "FixMergeSHA": "a333a3a56cda6edad3724e5ba142f938a80ed8c5",
+      "Description": "A whiteboard agent tool call that returns success:false still pushes a confirmation frame and tells the model its edit landed.",
+      "Slice": "Tuning"
+    },
+    {
+      "BugPR": 4814,
+      "FixPR": 4880,
+      "BugMergeSHA": "793ec7607acf712d18e08df02b45d64d9930755b",
+      "FixMergeSHA": "965b9ada7082bd7831494fb2fc191d9d1b73584c",
+      "Description": "An LLM Decision whose prompt result has no cost but whose saved prompt run has one reports no cost instead of the run cost.",
+      "Slice": "Tuning"
+    },
+    {
+      "BugPR": 3412,
+      "FixPR": 3523,
+      "BugMergeSHA": "dac7eb0bb58093ba881cc2cc86dcbe7baf915408",
+      "FixMergeSHA": "bfef4a34d3758157a8be54caa25c825b65c685e7",
+      "Description": "The Claude Code harness adapter reports StructuredOutput support and builds turn input without the response contract the agent type requires.",
+      "Slice": "Tuning"
+    },
+    {
+      "BugPR": 5047,
+      "FixPR": 5793,
+      "BugMergeSHA": "05328873deefb2c8d090a99f6d1d5d967d672ae1",
+      "FixMergeSHA": "c8c6f81566b2d5a9e9ee3611641b28805278891f",
+      "Description": "With AllowStopRun false and one reply in flight, the composer status line is null instead of \"<agent> is working\".",
+      "Slice": "HeldOut"
+    },
+    {
+      "BugPR": 5514,
+      "FixPR": 5558,
+      "BugMergeSHA": "8adc195c3ec746b062b8ee9ce237b53651276d8d",
+      "FixMergeSHA": "f75b7b4a486ad4b83cd74a17a7c740509353eda1",
+      "Description": "Clustering reads records and their vectors in separate queries instead of one local vector read.",
+      "Slice": "HeldOut"
+    },
+    {
+      "BugPR": 6027,
+      "FixPR": 6057,
+      "BugMergeSHA": "531e3b24b0784c932a4267055a59a3a684ceb3b5",
+      "FixMergeSHA": "21bd820e4981c663f92cbb92c80893abb3a59a88",
+      "Description": "The record-set processor loops on the Action log row before the detail row is ready instead of waiting on a ready signal.",
+      "Slice": "Tuning"
+    },
+    {
+      "BugPR": 5513,
+      "FixPR": 5601,
+      "BugMergeSHA": "534251fd19c8f023b413af3741c38044642a7e33",
+      "FixMergeSHA": "3d83ec7bb296eb7083ba581f0b07fa212c19745e",
+      "Description": "A click on a whiteboard resize handle with no pointer movement commits a size change.",
+      "Slice": "Tuning"
+    },
+    {
+      "BugPR": 5729,
+      "FixPR": 5845,
+      "BugMergeSHA": "4f2d100fbfe2b4692cd4377ab4b4acece1e6ff0f",
+      "FixMergeSHA": "0ab85d7d247d7cf1f3c5635788b6ea12f410a471",
+      "Description": "Prompt steps record a wrong message delta when the message stack is not append-only.",
+      "Slice": "Tuning"
+    },
+    {
+      "BugPR": 3915,
+      "FixPR": 4258,
+      "BugMergeSHA": "8089a7e1be2efd126b16ef5f22e7fbb34b7f9c35",
+      "FixMergeSHA": "36c2bad9f9cd6e7714a054cc0b62e947716fb847",
+      "Description": "A screencast start whose session never called Stop leaves its key forever, so a later start for that key is a silent no-op.",
+      "Slice": "HeldOut"
+    },
+    {
+      "BugPR": 3354,
+      "FixPR": 3774,
+      "BugMergeSHA": "8903fdf936242aedcb07eaf0fc140db43704b2f7",
+      "FixMergeSHA": "669ef4b32a63e43a0adb98cf93e70ac51e1e1a43",
+      "Description": "Saving a Company Integration with IsActive going from false to true runs the full schema-refresh pipeline inside Save().",
+      "Slice": "Tuning"
+    },
+    {
+      "BugPR": 5878,
+      "FixPR": 5888,
+      "BugMergeSHA": "5b5aa28be060909dad9232c6de93f7631dd18199",
+      "FixMergeSHA": "3aeb8ebc3bcf900e678c195d66a81be6a8b63570",
+      "Description": "A task graph whose remaining steps are Skipped never reaches 100 percent complete and the step agent prompt omits the task name.",
       "Slice": "HeldOut"
     }
   ],
   "Clean": [
     {
-      "PR": 918,
-      "MergeSHA": "f406dac48f213fbeb65d5a60607fc65773cbab45",
+      "PR": 3484,
+      "MergeSHA": "38414642ab950b5c0484d1c642d109c57566da4d",
       "Slice": "Tuning"
     },
     {
-      "PR": 922,
-      "MergeSHA": "93b358b654a3c7cc53758c39025588d8897dd2d8",
+      "PR": 3378,
+      "MergeSHA": "aaf20a2980a0fb531ea3484943d0d746f3c474d0",
       "Slice": "Tuning"
     },
     {
-      "PR": 934,
-      "MergeSHA": "73083bde4aa2232f314aca5c6360069eedf9e53f",
+      "PR": 3525,
+      "MergeSHA": "7f18ea99286181f3675e233a299ad9a0d6a831da",
       "Slice": "HeldOut"
     },
     {
-      "PR": 944,
-      "MergeSHA": "1b88f5dc7d94565d53128d8d3a69f784dca5823f",
+      "PR": 3584,
+      "MergeSHA": "5cdea96522311afe18691f2b234e54b0f7e58ac3",
       "Slice": "Tuning"
     },
     {
-      "PR": 947,
-      "MergeSHA": "73d0bd71e9c8b60ca2ff1d36aaa9f299cf0bfa5e",
+      "PR": 3601,
+      "MergeSHA": "17aeee027474ce5aa9f2a4e73a9a623f501319f4",
       "Slice": "Tuning"
     },
     {
-      "PR": 969,
-      "MergeSHA": "0e5c298593f5ede110f5f283374d023420543fc8",
+      "PR": 3624,
+      "MergeSHA": "bec46ecae5f57a72b7f5a7b5b56ecffd61dca363",
       "Slice": "Tuning"
     },
     {
-      "PR": 973,
-      "MergeSHA": "8efc301bb51314c687dca051c21b5bd227faca10",
+      "PR": 3662,
+      "MergeSHA": "29e999ad353003a37e22e8a3e60cf1f130d9a5c9",
       "Slice": "HeldOut"
     },
     {
-      "PR": 1004,
-      "MergeSHA": "01fcd515e8c39b9ecf29028769650ab003e20e9f",
+      "PR": 3725,
+      "MergeSHA": "13873677f7bdb78434f1ebd8f52c882e58417184",
       "Slice": "Tuning"
     },
     {
-      "PR": 1033,
-      "MergeSHA": "016d8cefc90d0ec45ca7bb35bec22576e7b7cae4",
+      "PR": 3529,
+      "MergeSHA": "71817dbb9953a6e11708c37dab39d32ba5e56f1d",
       "Slice": "Tuning"
     },
     {
-      "PR": 1037,
-      "MergeSHA": "9d47f6dbb743b53dcaeab3527574c9136f870e08",
+      "PR": 3779,
+      "MergeSHA": "3bd3e5ccf77ddbcd363ff848bce8d6f45f1c2b67",
       "Slice": "Tuning"
     },
     {
-      "PR": 1072,
-      "MergeSHA": "e5d4df9868adcdb0d40bdd75975e610fa05d0a85",
+      "PR": 3783,
+      "MergeSHA": "a95205ae38c07f73d1e7723bccbd12eaeced9833",
       "Slice": "Tuning"
     },
     {
-      "PR": 1071,
-      "MergeSHA": "74eaa040cc85d639fd16afdfe41cb33146ba3a2a",
+      "PR": 3776,
+      "MergeSHA": "10435a272477eaa3288c81cad128db94ff3e3e83",
       "Slice": "Tuning"
     },
     {
-      "PR": 1074,
-      "MergeSHA": "e80b66327088ec20aeebaea10a30f204f02bb54f",
+      "PR": 3801,
+      "MergeSHA": "42e075b186dabc71800e59d30e15348c9bb39aa8",
       "Slice": "Tuning"
     },
     {
-      "PR": 1122,
-      "MergeSHA": "48bcf614cf947a6510f29707127d9163b635905e",
+      "PR": 3633,
+      "MergeSHA": "cefc302d9be36d8b2c6cd372b2ea0fe686aceb3a",
       "Slice": "HeldOut"
     },
     {
-      "PR": 1155,
-      "MergeSHA": "1d6ab1e0bf5f2a16cb565a13b8ee7576bf3e21aa",
+      "PR": 3823,
+      "MergeSHA": "a5f8e303b47c2f9f59f68fb440eabca4e8f86f6f",
       "Slice": "Tuning"
     },
     {
-      "PR": 1177,
-      "MergeSHA": "3cd4497a6015c7265929ef18b153ef6cc55a78ac",
+      "PR": 3774,
+      "MergeSHA": "669ef4b32a63e43a0adb98cf93e70ac51e1e1a43",
       "Slice": "Tuning"
     },
     {
-      "PR": 1180,
-      "MergeSHA": "a00f8a35a117c358bc08c99681b26e1954105e96",
+      "PR": 3941,
+      "MergeSHA": "cdfc63177c5b9dafc7a1d7884ad63186f9f848f8",
       "Slice": "Tuning"
     },
     {
-      "PR": 1226,
-      "MergeSHA": "56ecef33ec1a9edc2b820a83005a8cb8b501991a",
+      "PR": 3907,
+      "MergeSHA": "871796ae0ddd906b9b836d7319d75ecc66a52ec7",
       "Slice": "HeldOut"
     },
     {
-      "PR": 1228,
-      "MergeSHA": "1b0db7bc442e55deeadd1f67f36695a8260a6002",
+      "PR": 3892,
+      "MergeSHA": "fba57a9262681459b9943874d31c42b633a2990d",
       "Slice": "HeldOut"
     },
     {
-      "PR": 1238,
-      "MergeSHA": "bec393e0517a8137b674573db31391cbc1f25788",
+      "PR": 4037,
+      "MergeSHA": "647df38d1aefb33456fd50724d2d26aaf986bc1e",
       "Slice": "Tuning"
     },
     {
-      "PR": 1216,
-      "MergeSHA": "4e69ea64b9c64c25b5fca94e6f79f8fdc3978af8",
+      "PR": 3872,
+      "MergeSHA": "ae4a504be3b43128c98590a1f7d8883001db864f",
       "Slice": "HeldOut"
     },
     {
-      "PR": 1250,
-      "MergeSHA": "725e20914d1fec5d13a7ef10c8273afede67b3e6",
+      "PR": 3895,
+      "MergeSHA": "e7bba3ee13c75272104c06bdaca25410e5540b4a",
       "Slice": "HeldOut"
     },
     {
-      "PR": 1283,
-      "MergeSHA": "1aadbdfdbed98d6170c930ec85b0f9d355ba10c9",
+      "PR": 4005,
+      "MergeSHA": "b0bc9e7dbb4d2b707c5569283bcd369877e12bd5",
       "Slice": "Tuning"
     },
     {
-      "PR": 1304,
-      "MergeSHA": "2fb5ec60d97784d842061ddcfa24841fc065f5b9",
+      "PR": 4052,
+      "MergeSHA": "a24ef7da929ea96f9689a21597d42870fb435daa",
       "Slice": "Tuning"
     },
     {
-      "PR": 1307,
-      "MergeSHA": "19ffa4b64abb457a74414688609e180c9e1fb1ee",
+      "PR": 3968,
+      "MergeSHA": "7d78dd9bc7695e5b2f2e588c39f91eb0bc190616",
       "Slice": "HeldOut"
     },
     {
-      "PR": 1310,
-      "MergeSHA": "4c46d9d722899d20d6c2123a5a0b7f5707465d84",
+      "PR": 3864,
+      "MergeSHA": "399edce2c44fbb469ca2c01c9cb4a5e54e494f10",
       "Slice": "HeldOut"
     },
     {
-      "PR": 1335,
-      "MergeSHA": "f6e6de3751b2fdbbee1c5f33b071b16a028f6454",
+      "PR": 3883,
+      "MergeSHA": "52eea6890291a876a1d8cc878e566f4b3836e6b0",
       "Slice": "HeldOut"
     },
     {
-      "PR": 1358,
-      "MergeSHA": "4655152251e589831cff5ba54c3af947c1f25821",
+      "PR": 4087,
+      "MergeSHA": "c42c0e8973e1244ce42da908e5e78fc7349c4e22",
       "Slice": "Tuning"
     },
     {
-      "PR": 1361,
-      "MergeSHA": "54b46628103bd9dd197301cf6c1a4113abf80439",
+      "PR": 3861,
+      "MergeSHA": "31de41c3fefa50372d7267b0f632a65bc44df9b8",
       "Slice": "Tuning"
     },
     {
-      "PR": 1366,
-      "MergeSHA": "ff63478561408451981a047a2eacb8125d9d35b4",
+      "PR": 4092,
+      "MergeSHA": "e4250321bde2b58c769a5d8b794c09dae9a02c64",
       "Slice": "Tuning"
     },
     {
-      "PR": 1388,
-      "MergeSHA": "28a90ffb5857d46e63212659984a14e829b442c8",
+      "PR": 3916,
+      "MergeSHA": "e99b874bd3c51b869e52efd76f69b77f3d74cb54",
       "Slice": "Tuning"
     },
     {
-      "PR": 1399,
-      "MergeSHA": "4e71a448a800ac48e1464a4f4382c35f2aec19a0",
+      "PR": 3926,
+      "MergeSHA": "c81a87512bb5b817e011a9e91dd707408ff37c09",
       "Slice": "Tuning"
     },
     {
-      "PR": 1401,
-      "MergeSHA": "6266519912f76048e13787c5726cd9a55b00422d",
+      "PR": 4157,
+      "MergeSHA": "8c4407f6c1a16e872544958c1a4d8357dd2befbe",
       "Slice": "Tuning"
     },
     {
-      "PR": 1432,
-      "MergeSHA": "41ab2adf74644dd16c4af6ef813f72923540f71f",
+      "PR": 4123,
+      "MergeSHA": "d38845a20aab9adcd4957c8b4036eec3ceac3a7b",
       "Slice": "HeldOut"
     },
     {
-      "PR": 1442,
-      "MergeSHA": "36bf0d4fb996f9d6a780b322508edc961cc76c43",
+      "PR": 4100,
+      "MergeSHA": "1e2eb97d39ce52f2863dcfd05a3eb136d3faf20d",
       "Slice": "Tuning"
     },
     {
-      "PR": 1455,
-      "MergeSHA": "d4dfb42b1d3a1502e11415d645beb6305849ea72",
+      "PR": 4264,
+      "MergeSHA": "956f0e0f1a9b65da4ec05e14bd96fff4df341983",
       "Slice": "Tuning"
     },
     {
-      "PR": 1493,
-      "MergeSHA": "2cc82a2d4531632391b7f7080ec49f30f3321c25",
+      "PR": 4254,
+      "MergeSHA": "f2ec156daf31670b42d7704e994686b09daf14df",
       "Slice": "Tuning"
     },
     {
-      "PR": 1517,
-      "MergeSHA": "546566f3de91f12f2001256d1f75bfabd9496b6f",
+      "PR": 4291,
+      "MergeSHA": "319a7edc11daf883bcef0810cd0d2656c9147023",
       "Slice": "HeldOut"
     },
     {
-      "PR": 1575,
-      "MergeSHA": "8158272a1ac34b167d4fafa08b709aa7802d016e",
+      "PR": 4276,
+      "MergeSHA": "770cfcab34565fbc7a41b9057c68d953e4f20c8b",
       "Slice": "HeldOut"
     },
     {
-      "PR": 1573,
-      "MergeSHA": "25a6bde4c0d37fa3c7af8a02c1df46dbe7ab27f0",
+      "PR": 4251,
+      "MergeSHA": "a77afac9e3f823fa901735d921b1b20ed9db5cd4",
       "Slice": "Tuning"
     },
     {
-      "PR": 1593,
-      "MergeSHA": "e6adfcf081d5c5f79bfea6dad23e2060f1ccf165",
+      "PR": 4394,
+      "MergeSHA": "8f63b57dbec7d92b4558268bce2422665f8b2a57",
       "Slice": "Tuning"
     },
     {
-      "PR": 1706,
-      "MergeSHA": "48e82426d23c5cb9a4dc12d2902ecbd19eeb8319",
+      "PR": 4411,
+      "MergeSHA": "5e987a7741911aece94d135706ebf08ef364801c",
       "Slice": "Tuning"
     },
     {
-      "PR": 1798,
-      "MergeSHA": "a9cf95b88080638e11cb5ea42dcf0c359d5364b8",
+      "PR": 4470,
+      "MergeSHA": "33a16b0fcf25195da5a00f85d6a416fef5b1386d",
       "Slice": "HeldOut"
     },
     {
-      "PR": 1809,
-      "MergeSHA": "2030147b2f294a4e14cd33b969b4301d8c53cf9f",
+      "PR": 4408,
+      "MergeSHA": "e225ece6382ca0c5ade034b9b332ec6d606fce55",
       "Slice": "Tuning"
     },
     {
-      "PR": 1828,
-      "MergeSHA": "31de1cb01d481d74967847ba4b8ccd3a29fb5949",
+      "PR": 4517,
+      "MergeSHA": "7be1684928d1a54f3a562c8aa74c2a1cca9d1e1f",
       "Slice": "HeldOut"
     }
   ]

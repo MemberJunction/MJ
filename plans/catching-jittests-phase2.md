@@ -414,7 +414,7 @@ it('system prompt tells the agent that files are type-checked and abstract class
 **Files:**
 - Create: `corpus/gate1.candidates.md`, `corpus/gate1.json`
 
-- [ ] **Step 1:** In a checkout with `gh` logged in, run `jit-catch corpus mine --since 2025-05-01 --until 2026-05-01 --out /tmp/clean.json` (clean window: landed at least 6 months before the backtest) and `jit-catch corpus mine --since 2025-11-01 --until 2026-11-01 --out /tmp/bugs.json` (bug window). Both read only; no model calls, no Docker.
+- [ ] **Step 1:** In a checkout with `gh` logged in, run `jit-catch corpus mine --since 2025-05-01 --until 2026-05-01 --out /tmp/clean.json` (clean window as first planned; the smoke run in 2.16 showed that no PR merged before the pnpm switch, PR #3500 on 2026-08-05, can run, so the clean window became `--since 2026-08-05 --until 2026-09-15`: after the switch and at least 8 weeks before the backtest) and `jit-catch corpus mine --since 2025-11-01 --until 2026-11-01 --out /tmp/bugs.json` (bug window). Both read only; no model calls, no Docker.
 - [ ] **Step 2:** Write `corpus/gate1.candidates.md`: a table of up to 70 bug candidates (fix PR and title, bug PR and title, blamed lines, files, a one-line note on whether a unit test could show the bug) and up to 70 clean candidates (PR, title, merged date, files), ordered by blamed lines and by date. Report `DONE_WITH_CONCERNS` listing the pairs the implementer could not judge.
 - [ ] **Step 3 (controller + user):** the user picks ~45 of each (or accepts the implementer's ranking), writes the one-line `Description` for each bug pair, and the controller writes `corpus/gate1.json` with `AssignSlices(…, Seed: 1)` applied to each set. Commit: `docs(jit-catching): gate-1 corpus`.
 

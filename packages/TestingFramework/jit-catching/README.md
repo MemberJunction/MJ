@@ -26,7 +26,7 @@ Options in brackets are optional; the usage text in `src/cli.ts` shows which com
 
 Design: §14.1 of the design document. The pass values apply to the held-out slice.
 
-1. Run `corpus mine` over the window, then curate the corpus file by hand: confirm each bug pair and put every PR in the `Tuning` or `HeldOut` slice.
+1. Run `corpus mine` over the window, then curate the corpus file by hand: confirm each bug pair and put every PR in the `Tuning` or `HeldOut` slice. Every base must be a pnpm-era commit (after PR #3500, 2026-08-05); an older base has no `pnpm-lock.yaml` and the run fails before any spend.
 2. Run `backtest --slice Tuning --set Both` cheapest model first, always with `--max-usd`: Haiku on the full slice; Sonnet unless Haiku passes; then Opus on a sample of 15 PRs (`--only`) if Sonnet passes, or on the full slice if it fails.
 3. Run `backtest match` on each ledger.
 4. Send each clean-set PR author the catches for their PRs (`label --run` prints the packet) and record each answer with `label --catch <catch ID> --answer Bug|Intended|TestFault --user <login>`.
