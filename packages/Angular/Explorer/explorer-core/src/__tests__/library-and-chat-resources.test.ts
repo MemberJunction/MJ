@@ -298,7 +298,8 @@ describe('ArtifactResource — viewer-scoped permission resolution', () => {
       CanEdit: false,
       CanDelete: false,
       CanShare: true,
-      Source: 'direct',
+      Source: 'ArtifactPermission',
+      Reason: 'Granted via direct artifact permission',
     });
 
     const resource = new ArtifactResource();

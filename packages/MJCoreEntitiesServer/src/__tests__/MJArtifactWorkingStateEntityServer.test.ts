@@ -64,12 +64,13 @@ describe('MJArtifactWorkingStateEntityServer & ArtifactWorkingStatePostRunViewHo
 
         vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockImplementation(
             async (_p, artifactId) => ({
+                ArtifactID: artifactId,
                 CanRead: artifactId === allowedArtifactId,
                 CanEdit: false,
                 CanDelete: false,
                 CanShare: false,
-                IsOwner: false,
-                Source: artifactId === allowedArtifactId ? 'DirectPermission' : 'Denied'
+                Source: artifactId === allowedArtifactId ? 'ArtifactPermission' : 'Denied',
+                Reason: artifactId === allowedArtifactId ? 'Allowed' : 'Denied'
             })
         );
 

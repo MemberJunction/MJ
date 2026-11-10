@@ -14,7 +14,11 @@ import {
   WorkbookSpec,
 } from '@memberjunction/core-entities';
 import { LibraryCreationService, RemoteDriveFileExistsError } from '../lib/services/library-creation.service';
-import { GraphQLAttachmentBlobStore, UploadBlobInput, UploadBlobResult } from '../lib/services/graphql-attachment-blob-store';
+import type {
+  AttachmentBlobUploadInput as UploadBlobInput,
+  AttachmentBlobUploadResult as UploadBlobResult,
+} from '@memberjunction/ai-core-plus';
+import { GraphQLAttachmentBlobStore } from '../lib/services/graphql-attachment-blob-store';
 import { LibraryWorkspaceComponent } from '../lib/components/library/library-workspace.component';
 import { LibraryRemoteDrivePaneComponent } from '../lib/components/library/library-remote-drive-pane.component';
 import { LibraryExportDriveDialogComponent } from '../lib/components/library/library-create-dialog.component';

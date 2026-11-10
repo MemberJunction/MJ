@@ -43,7 +43,7 @@ describe('SlidesVersionDiffComponent DOM', () => {
       SlideDeckEngine.Instance.SerializeDeckSpec(baseDeck),
       'Deck v2',
     );
-    const { Deck: targetDeck } = SlideDeckEngine.Instance.AddSlide(cloned, 'BigNumber', undefined, 'Added KPI Slide');
+    const { Deck: targetDeck } = SlideDeckEngine.Instance.AddSlide(cloned, { Layout: 'BigNumber', Title: 'Added KPI Slide' });
     const f = renderComponentFixture(SlidesVersionDiffComponent, {
       imports: [SlidesVersionDiffComponent],
       inputs: {

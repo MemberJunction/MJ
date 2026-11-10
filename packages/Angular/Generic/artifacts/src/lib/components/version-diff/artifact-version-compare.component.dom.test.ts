@@ -131,7 +131,7 @@ describe('ArtifactVersionDiffService — Universal & 5 Artifact-Specific Diff En
     targetDeck.Slides[0].SpeakerNotes = 'Highlight Q4 record enterprise expansion and net retention.';
     // Remove slide 2 and add a brand new slide via SlideDeckEngine
     targetDeck = SlideDeckEngine.Instance.DeleteSlide(targetDeck, targetDeck.Slides[1].SlideID).Deck;
-    targetDeck = SlideDeckEngine.Instance.AddSlide(targetDeck, { Layout: 'two-column', Title: '2027 Strategic Roadmap' }).Deck;
+    targetDeck = SlideDeckEngine.Instance.AddSlide(targetDeck, { Layout: 'TwoColumn', Title: '2027 Strategic Roadmap' }).Deck;
 
     const slideDiff = svc.ComputeSlidesVisualDiff(
       SlideDeckEngine.Instance.SerializeDeckSpec(baseDeck),
