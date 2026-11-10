@@ -6,7 +6,8 @@
 import type { ColumnDefinition, DatabaseDocumentation, TableDefinition } from '../types/state.js';
 import type { ColumnMeasure, RelationshipProbeOrigin, RelationshipProbeSpec, TableQualityProbeColumn, TableQualityProbeSpec } from '../types/data-quality.js';
 import type { ResolvedDataQualityConfig } from './DataQualityConfig.js';
-import { BaseTypeName, IsFutureLookingName, IsQuantityName, TypeMismatch, type RuleContext } from './DataQualityRules.js';
+import { IsFutureLookingName, IsQuantityName, TypeMismatch, type RuleContext } from './DataQualityRules.js';
+import { BaseTypeName } from './QualityProbeSQL.js';
 import type { QualityDialect } from './QualityProbeSQL.js';
 import { FindTable, OrphanProbeOrigin, RelationshipKey, TableRelationships, type Relationship } from './Relationships.js';
 

@@ -21,7 +21,7 @@ import type {
 } from '../types/data-quality.js';
 import { IsUniquelyIndexed } from '../utils/index-hints.js';
 import type { ResolvedDataQualityConfig } from './DataQualityConfig.js';
-import { QualityDialectFor, SqlServerSentinelDates, type QualityDialect, type QualityTypeFamily } from './QualityProbeSQL.js';
+import { BaseTypeName, QualityDialectFor, SqlServerSentinelDates, type QualityDialect, type QualityTypeFamily } from './QualityProbeSQL.js';
 import { FindTable, RelationshipKey, TableRelationships, type Relationship } from './Relationships.js';
 
 /** Everything a rule may read. */
@@ -771,15 +771,6 @@ export function ToISODate(value: unknown): string | undefined {
   if (iso) return iso[1];
   const parsed = Date.parse(text);
   return Number.isNaN(parsed) ? undefined : new Date(parsed).toISOString().slice(0, 10);
-}
-
-/** Lower-cased type name without length, precision or `unsigned`. */
-export function BaseTypeName(dataType: string): string {
-  return dataType
-    .toLowerCase()
-    .replace(/\(.*$/, '')
-    .replace(/\s+unsigned$/, '')
-    .trim();
 }
 
 function sentinelDates(dialect: QualityDialect, dataType: string): Set<string> {

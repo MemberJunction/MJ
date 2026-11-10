@@ -82,7 +82,7 @@ const NUMERIC_TYPES = new Set([
  * type can hold: the type's own minimum and maximum, and 1900-01-01 (the value of a zero datetime).
  */
 export function SqlServerSentinelDates(dataType: string): string[] {
-  switch (baseType(dataType)) {
+  switch (BaseTypeName(dataType)) {
     case 'smalldatetime':
       return ['1900-01-01', '2079-06-06'];
     case 'datetime':
@@ -92,12 +92,17 @@ export function SqlServerSentinelDates(dataType: string): string[] {
   }
 }
 
-function baseType(dataType: string): string {
-  return dataType
-    .toLowerCase()
-    .replace(/\(.*$/, '')
-    .replace(/\s+unsigned$/, '')
-    .trim();
+/**
+ * Lower-cased type name without length, precision or `unsigned`.
+ * Index-based so a hostile type string cannot make it backtrack.
+ */
+export function BaseTypeName(dataType: string): string {
+  const lower = dataType.toLowerCase();
+  const paren = lower.indexOf('(');
+  const withoutLength = (paren >= 0 ? lower.slice(0, paren) : lower).trim();
+  const unsigned = ' unsigned';
+  const endsUnsigned = withoutLength.endsWith('unsigned') && /\s/.test(withoutLength.charAt(withoutLength.length - unsigned.length));
+  return endsUnsigned ? withoutLength.slice(0, -'unsigned'.length).trim() : withoutLength;
 }
 
 /** Family shared by every engine; each dialect overrides the engine-specific cases first. */
@@ -140,7 +145,7 @@ export const SQL_SERVER_QUALITY_DIALECT: QualityDialect = {
   AsText: (e) => `CAST(${e} AS NVARCHAR(4000))`,
   Suffix: () => 'OPTION (MAXDOP 1)',
   TypeFamily: (dataType) => {
-    const t = baseType(dataType);
+    const t = BaseTypeName(dataType);
     if (t === 'text' || t === 'ntext') return 'largeText';
     // `timestamp` on SQL Server is rowversion, not a date.
     if (t === 'timestamp' || t === 'rowversion') return 'other';
@@ -170,7 +175,7 @@ export const POSTGRESQL_QUALITY_DIALECT: QualityDialect = {
   AsText: (e) => `${e}::text`,
   Suffix: () => '',
   TypeFamily: (dataType) => {
-    const t = baseType(dataType);
+    const t = BaseTypeName(dataType);
     if (t === 'text') return 'text';
     if (t === 'timestamp' || t === 'timestamp without time zone' || t === 'timestamp with time zone') return 'date';
     return commonTypeFamily(t);
@@ -196,7 +201,7 @@ export const MYSQL_QUALITY_DIALECT: QualityDialect = {
   AsText: (e) => `CAST(${e} AS CHAR)`,
   Suffix: () => '',
   TypeFamily: (dataType) => {
-    const t = baseType(dataType);
+    const t = BaseTypeName(dataType);
     if (t === 'tinytext' || t === 'text') return 'text';
     if (t === 'mediumtext' || t === 'longtext') return 'largeText';
     if (t === 'timestamp') return 'date';
