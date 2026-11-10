@@ -354,7 +354,7 @@ Configuration is **layered**: provider-type defaults (non-secret) → per-accoun
 
 ## Inbound webhooks
 
-Signing vendors push status changes to MemberJunction at `POST /esignature/webhook/:driverKey`. The endpoint (in MJ Server) is intentionally **unauthenticated by MJ** — trust comes from the provider's own signature, verified over the raw request bytes. The policy is **verify-if-configured**: a configured-but-invalid signature is logged and *not* applied; a missing secret is accepted with a warning.
+Signing vendors push status changes to MemberJunction at `POST /esignature/webhook/:driverKey`. The endpoint (in MJ Server) is intentionally **unauthenticated by MJ** — trust comes from the provider's own signature, verified over the raw request bytes. The policy is **default-strict**: only an event whose signature *verifies* changes a request's status. An invalid signature, or an account with no webhook secret configured, is logged and *not* applied.
 
 ```mermaid
 flowchart TD
@@ -364,16 +364,17 @@ flowchart TD
     Find -->|yes| Verify{"HMAC over raw bytes"}
     Verify -->|secret set & mismatch| Mismatch["202 — verification failed<br/>logged, status NOT applied"]
     Verify -->|verified| Apply["200 — update status + log"]
-    Verify -->|no secret configured| ApplyWarn["200 — apply + warn"]
+    Verify -->|no secret configured| Reject["503 — rejected<br/>logged, status NOT applied"]
 
     style Mismatch fill:#8a2d2d,stroke:#5c1a1a,color:#fff
+    style Reject fill:#8a2d2d,stroke:#5c1a1a,color:#fff
     style Apply fill:#2d8659,stroke:#1a5c3a,color:#fff
-    style ApplyWarn fill:#8a5a2d,stroke:#5c3a1a,color:#fff
     style Accept202 fill:#8a5a2d,stroke:#5c3a1a,color:#fff
 ```
 
 - **Invalid signature** (a secret is configured but the HMAC doesn't match): the failure is logged, the envelope status is **left unchanged**, and the endpoint returns **202** — accepted-but-not-actioned, so the provider doesn't hammer the endpoint with retries of a payload MJ will never trust.
-- **No secret configured**: the event is applied with a warning logged — convenient for development, with a nudge to configure a secret for production.
+- **No secret configured**: the event is **rejected**. The envelope status is left unchanged, an error naming the driver and account is logged, a `Success = false` row is written to `MJ: Signature Request Logs`, and the endpoint returns **503** so the provider retries and the event lands once the secret is in place. Fix it by storing the provider's webhook HMAC secret as `connectHmacKey` in the signature account's credential (see each driver's README).
+  - **Local-development opt-out**: set `ESIGNATURE_ALLOW_UNVERIFIED_WEBHOOKS=true` (or `eSignature: { allowUnverifiedWebhooks: true }` in `mj.config.cjs`) to apply such events without verification. It is **ignored when `NODE_ENV=production`**, and never applies to an invalid signature. Code calling the engine directly passes `{ AllowUnverified: true }` as the last argument of `SignatureEngine.RecordWebhookEvent`.
 - **Verified** event: status applied and logged, **200**.
 - **Unknown envelope**: **202** — accepted (so the provider stops retrying) but not actioned.
 - Malformed requests fail fast: missing driver key → **400**; no system user → **503**; unexpected error → **500**.

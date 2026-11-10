@@ -522,7 +522,7 @@ describe('QueryParameterProcessor.processQueryTemplate', () => {
 
   it('should process template with valid parameters', () => {
     const query = {
-      SQL: "SELECT * FROM Users WHERE Status = '{{ status }}'",
+      SQL: "SELECT * FROM Users WHERE Status = {{ status | sqlString }}",
       UsesTemplate: true,
       Parameters: [makeParamDef({ Name: 'status', Type: 'string', IsRequired: true })],
     };
@@ -533,7 +533,7 @@ describe('QueryParameterProcessor.processQueryTemplate', () => {
 
   it('should fail when required parameter is missing', () => {
     const query = {
-      SQL: "SELECT * FROM Users WHERE ID = '{{ id }}'",
+      SQL: "SELECT * FROM Users WHERE ID = {{ id | sqlString }}",
       UsesTemplate: true,
       Parameters: [makeParamDef({ Name: 'id', Type: 'string', IsRequired: true })],
     };
@@ -609,7 +609,7 @@ describe('QueryParameterProcessor.processQueryTemplate forceTemplateProcessing',
 
   it('should skip templates when UsesTemplate=false and forceTemplateProcessing=false', () => {
     const query = {
-      SQL: "SELECT * FROM T {% if x %}WHERE x = '{{ x }}'{% endif %}",
+      SQL: "SELECT * FROM T {% if x %}WHERE x = {{ x | sqlString }}{% endif %}",
       UsesTemplate: false,
       Parameters: [],
     };
@@ -626,7 +626,7 @@ describe('QueryParameterProcessor.processQueryTemplate forceTemplateProcessing',
 
   it('should process templates when forceTemplateProcessing=true even with UsesTemplate=false', () => {
     const query = {
-      SQL: "SELECT * FROM T {% if x %}WHERE x = '{{ x }}'{% endif %}",
+      SQL: "SELECT * FROM T {% if x %}WHERE x = {{ x | sqlString }}{% endif %}",
       UsesTemplate: false,
       Parameters: [],
     };
@@ -643,7 +643,7 @@ describe('QueryParameterProcessor.processQueryTemplate forceTemplateProcessing',
 
   it('should remove falsy Nunjucks blocks when forceTemplateProcessing=true and no params', () => {
     const query = {
-      SQL: "SELECT * FROM T {% if Region %}WHERE Region = '{{ Region }}'{% endif %}",
+      SQL: "SELECT * FROM T {% if Region %}WHERE Region = {{ Region | sqlString }}{% endif %}",
       UsesTemplate: false,
       Parameters: [],
     };
@@ -676,7 +676,7 @@ describe('QueryParameterProcessor.processQueryTemplate forceTemplateProcessing',
     // The query defines no parameters, but the caller provides one that
     // exists as a Nunjucks token from a dependency
     const query = {
-      SQL: "SELECT * FROM T {% if Region %}WHERE Region = '{{ Region }}'{% endif %}",
+      SQL: "SELECT * FROM T {% if Region %}WHERE Region = {{ Region | sqlString }}{% endif %}",
       UsesTemplate: false,
       Parameters: [],
     };

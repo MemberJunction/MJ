@@ -208,7 +208,9 @@ describe('TestQuerySQLResolver.AuthorizeRenderedTestSQL', () => {
         );
         expect(safeRefusal).toBeNull();
 
-        // Template expansion that introduces a base table reference is refused
+        // Template expansion that introduces a base table reference is refused. The query
+        // processor now refuses it first: a caller string written without a SQL filter may not
+        // carry SQL tokens, so the value never reaches the rendered-SQL screen.
         const injectedTableRefusal = resolver.AuthorizeRenderedTestSQL(
             {
                 SQL: 'SELECT * FROM {{ targetTable }}',
@@ -218,7 +220,8 @@ describe('TestQuerySQLResolver.AuthorizeRenderedTestSQL', () => {
             provider,
             user,
         );
-        expect(injectedTableRefusal).toMatch(/entity base view/);
+        expect(injectedTableRefusal).not.toBeNull();
+        expect(injectedTableRefusal).toMatch(/targetTable/);
     });
 
     it('screens the rendered SQL after inline Dependencies ({{query:"..."}}) composition', () => {

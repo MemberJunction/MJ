@@ -272,6 +272,7 @@
     "@memberjunction/ng-word-cloud": 2.5,
     "@memberjunction/ng-workspace-initializer": 1.4,
     "@memberjunction/notifications": 0.9,
+    "@memberjunction/nunjucks-sandbox": 2.0,
     "@memberjunction/open-app-engine": 22.1,
     "@memberjunction/postgresql-dataprovider": 80.5,
     "@memberjunction/predictive-studio": 165.2,

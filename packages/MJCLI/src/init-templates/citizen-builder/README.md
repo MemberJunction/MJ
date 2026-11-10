@@ -73,7 +73,7 @@ The **Citizen Agent Builder** provides an isolated, local MemberJunction environ
 * **`sqlserver` (Port 1433)**: Microsoft SQL Server 2022.
 * **`mj` (Ports 4000 & 4202)**: A Node 24 container that executes `mj install` on first boot, provisions the database schema, installs business context (More Cheese default, or enterprise apps like Blue Cypress), and serves:
   * **MJAPI** at `http://localhost:4000` (GraphQL API and agent execution engine).
-  * **MJExplorer** at `http://localhost:4202` (Web UI for testing agents and viewing records; zero-config Local Dev Auth is enabled by default on localhost, and port 4202 is also an authorized redirect URI for Auth0/MSAL).
+  * **MJExplorer** at `http://localhost:4202` (Web UI for testing agents and viewing records; zero-config Local Dev Auth is enabled by default on localhost — the container generates a per-start shared secret (`MJ_DEV_AUTH_BRIDGE_SECRET`) that the bundled Explorer sends to MJAPI, so keep the published ports bound to `127.0.0.1` — and port 4202 is also an authorized redirect URI for Auth0/MSAL).
 * **Metadata Directory (`./metadata`)**: Local JSON and Markdown files mapped into the container. Pushing metadata to the database is done with a single command (`./scripts/sync-metadata.sh`, which runs `mj sync push --dir /work/metadata`).
 
 ### Available Agent Tools & CLI Commands

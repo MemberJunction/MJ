@@ -661,6 +661,13 @@ are authoring rules that a query saved before the language existed may rely on, 
 the run, so a construct outside the language (an unsupported tag, a function call, attribute access other than
 `.length`, a subscript, an unknown filter, a malformed tag) never reaches Nunjucks.
 
+A query with an unfiltered hole (`MJQ_UNFILTERED_VALUE`, `MJQ_UNFILTERED_UNTYPED`) still runs, but the **value** is
+checked on every run: for a hole that no SQL filter formats, a caller's value is refused unless it is a number, a
+boolean, or text that is a plain decimal number or `ASC`/`DESC`. `TOP {{ n }}` with `n` declared `string` renders for
+`25` and refuses `1 UNION SELECT …`; `Status = {{ status }}` refuses `Active` (as bare SQL it is a column name), and
+the fix is `{{ status | sqlString }}`. Parameters declared `number`, `boolean` or `date` are converted to that type
+first, and server-set parameters are not checked (`QueryParameterProcessor`, `@memberjunction/query-processor`).
+
 A `{{ }}` value tag inside a SQL string literal (`MJQ_TAG_IN_STRING_LITERAL`, such as `WHERE Region = '{{ Region }}'`)
 also refuses the run, however old the query. The value is pasted between the quotes without escaping, so a value
 that contains a quote can change the statement. The refusal names the query (or, for a composed query, its full

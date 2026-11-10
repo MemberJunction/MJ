@@ -16,11 +16,12 @@
  * The parser, the code generator, the runtime module and the `Environment` prototype are shared by every
  * nunjucks environment in the process, so the guard covers all of them, including templates loaded
  * through `include` and `import`.
- * @module @memberjunction/templates
+ * @module @memberjunction/nunjucks-sandbox
  */
 import nunjucks from 'nunjucks';
 import { IsInheritedMemberName } from './InheritedMemberNames';
 import { AssertTemplateTreeIsSafe } from './NunjucksCompileGuard';
+import { AssertNunjucksSandboxIsEffective } from './NunjucksSandboxCanary';
 import { TemplateSandboxError } from './TemplateSandboxError';
 
 /** The parts of a nunjucks render context the guard reads. */
@@ -150,33 +151,49 @@ const installedGuards = new WeakSet<GuardableHook>();
  *   `Object`, `Reflect`, `globalThis` or `process` throws a {@link TemplateSandboxError}
  *
  * Safe to call any number of times: a hook that already carries the guard is left as it is.
+ *
+ * Whenever a call installs a guard (the first call, and any call after something replaced a guarded hook),
+ * it then checks the result with `AssertNunjucksSandboxIsEffective` and throws a {@link TemplateSandboxError}
+ * if a template can still run JavaScript. A call that finds every guard in place does no rendering.
+ *
+ * The guard covers the nunjucks module this package loads. Build environments with
+ * `CreateSandboxedEnvironment`, which uses that module, instead of `new nunjucks.Environment(...)`.
  */
 export function HardenNunjucksRuntime(): void {
     const { parser, compiler, runtime, Environment } = NUNJUCKS;
-    installGuard(parser, 'parse', guardParse);
-    installGuard(compiler.Compiler.prototype, 'compilePair', guardCompilePair);
-    installGuard(runtime, 'memberLookup', guardMemberLookup);
-    installGuard(runtime, 'contextOrFrameLookup', guardContextOrFrameLookup);
-    installGuard(runtime, 'callWrap', guardCallWrap);
-    installGuard(runtime, 'makeMacro', guardMakeMacro);
-    installGuard(runtime, 'makeKeywordArgs', guardMakeKeywordArgs);
-    installGuard(Environment.prototype, 'getFilter', guardRegistryLookup('filters'));
-    installGuard(Environment.prototype, 'getTest', guardRegistryLookup('tests'));
-    installGuard(Environment.prototype, 'getGlobal', guardRegistryLookup('globals'));
+    const installed = [
+        installGuard(parser, 'parse', guardParse),
+        installGuard(compiler.Compiler.prototype, 'compilePair', guardCompilePair),
+        installGuard(runtime, 'memberLookup', guardMemberLookup),
+        installGuard(runtime, 'contextOrFrameLookup', guardContextOrFrameLookup),
+        installGuard(runtime, 'callWrap', guardCallWrap),
+        installGuard(runtime, 'makeMacro', guardMakeMacro),
+        installGuard(runtime, 'makeKeywordArgs', guardMakeKeywordArgs),
+        installGuard(Environment.prototype, 'getFilter', guardRegistryLookup('filters')),
+        installGuard(Environment.prototype, 'getTest', guardRegistryLookup('tests')),
+        installGuard(Environment.prototype, 'getGlobal', guardRegistryLookup('globals')),
+    ];
+    if (installed.includes(true)) {
+        AssertNunjucksSandboxIsEffective();
+    }
 }
 
-/** Replaces one hook with its guarded version, unless the hook is already a guard. */
+/**
+ * Replaces one hook with its guarded version, unless the hook is already a guard.
+ * @returns true when this call installed the guard
+ */
 function installGuard<K extends PropertyKey, T extends Record<K, GuardableHook>>(
     target: T,
     hook: K,
     guard: (original: T[K]) => T[K],
-): void {
+): boolean {
     if (installedGuards.has(target[hook])) {
-        return;
+        return false;
     }
     const guarded = guard(target[hook]);
     installedGuards.add(guarded);
     target[hook] = guarded;
+    return true;
 }
 
 /** Parsing for the compiler: the tree is checked before nunjucks compiles it. */

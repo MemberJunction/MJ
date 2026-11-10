@@ -90,4 +90,42 @@ describe('MJLocalDevProvider', () => {
     expect(userInfo?.email).toBe('admin@memberjunction.org');
     expect(userInfo?.name).toBe('Admin User');
   });
+
+  describe('Docker bridge shared secret', () => {
+    function stubLoginFetch() {
+      const mockToken = buildMockJwt({ sub: 'local-dev|u-1', email: 'a@b.org', exp: Math.floor(Date.now() / 1000) + 3600 });
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true, token: mockToken }) });
+      vi.stubGlobal('fetch', fetchMock);
+      return fetchMock;
+    }
+    const sentHeaders = (fetchMock: ReturnType<typeof vi.fn>): Record<string, string> =>
+      (fetchMock.mock.calls[0][1] as { headers: Record<string, string> }).headers;
+
+    it('does not send X-MJ-Dev-Auth-Secret when no bridge secret is configured', async () => {
+      const fetchMock = stubLoginFetch();
+      const { MJLocalDevProvider } = await import('../providers/mjexplorer-local-dev-provider.service');
+      for (const bridgeSecret of [undefined, '', '   ']) {
+        fetchMock.mockClear();
+        storageMap.clear();
+        await new MJLocalDevProvider({ graphqlUri: 'http://localhost:4000/', bridgeSecret }).initialize();
+        expect(Object.keys(sentHeaders(fetchMock))).toEqual(['Content-Type']);
+      }
+    });
+
+    it('sends X-MJ-Dev-Auth-Secret when a bridge secret is configured', async () => {
+      const fetchMock = stubLoginFetch();
+      const { MJLocalDevProvider } = await import('../providers/mjexplorer-local-dev-provider.service');
+      await new MJLocalDevProvider({ graphqlUri: 'http://localhost:4000/', bridgeSecret: 'a-secret-of-16-chars-plus' }).initialize();
+      expect(sentHeaders(fetchMock)['X-MJ-Dev-Auth-Secret']).toBe('a-secret-of-16-chars-plus');
+    });
+
+    it('AngularProviderFactory reads LOCAL_DEV_BRIDGE_SECRET from the environment', async () => {
+      const { MJLocalDevProvider } = await import('../providers/mjexplorer-local-dev-provider.service');
+      const read = (env: Record<string, unknown>) =>
+        (MJLocalDevProvider.AngularProviderFactory(env)[0] as { useValue: { bridgeSecret?: string } }).useValue.bridgeSecret;
+      expect(read({})).toBeUndefined();
+      expect(read({ LOCAL_DEV_BRIDGE_SECRET: '' })).toBeUndefined();
+      expect(read({ LOCAL_DEV_BRIDGE_SECRET: ' s3cret-s3cret-s3cret ' })).toBe('s3cret-s3cret-s3cret');
+    });
+  });
 });

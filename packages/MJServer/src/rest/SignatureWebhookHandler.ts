@@ -2,8 +2,14 @@
  * @fileoverview Inbound eSignature webhook handler (DocuSign Connect, Adobe events, …).
  *
  * Unauthenticated by design — external signature providers call this endpoint without an MJ bearer
- * token. Payload authenticity is verified by the provider DRIVER's `ParseWebhookEvent` (HMAC /
+ * token. Payload authenticity is verified by the provider DRIVER's `VerifyWebhookSignature` (HMAC /
  * signature), not by MJ auth. Must be registered BEFORE the unified auth middleware.
+ *
+ * Default-strict: an event that is not verified never changes a signature request's status. An
+ * event for an account with NO webhook secret configured is rejected with 503 (so the provider
+ * retries once the secret is set) unless `eSignature.allowUnverifiedWebhooks`
+ * (`ESIGNATURE_ALLOW_UNVERIFIED_WEBHOOKS=true`) is set for local development; the engine ignores
+ * that opt-out when NODE_ENV=production.
  *
  * Endpoint:
  *   - POST /esignature/webhook/:driverKey
@@ -16,6 +22,7 @@ import BodyParser from 'body-parser';
 import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { SignatureEngine } from '@memberjunction/esignature/server';
+import { configInfo } from '../config.js';
 
 /**
  * Build an Express router exposing the eSignature webhook. Mount it unauthenticated:
@@ -65,7 +72,17 @@ async function handleWebhook(req: express.Request, res: express.Response): Promi
         await SignatureEngine.Instance.Config(false, contextUser);
         const headers = normalizeHeaders(req.headers);
         const rawBody = (req as RawBodyRequest).rawBody;
-        const result = await SignatureEngine.Instance.RecordWebhookEvent(driverKey, req.body, headers, contextUser, rawBody);
+        const result = await SignatureEngine.Instance.RecordWebhookEvent(driverKey, req.body, headers, contextUser, rawBody, undefined, {
+            AllowUnverified: configInfo?.eSignature?.allowUnverifiedWebhooks === true,
+        });
+
+        if (result.Rejection === 'VerificationNotConfigured') {
+            // A server-side configuration gap, not a bad payload: answer non-2xx so the provider
+            // retries and the event is applied once the account's webhook secret is configured.
+            // (The engine has already logged how to fix it and written the audit row.)
+            res.status(503).json({ received: true, actioned: false, message: result.ErrorMessage });
+            return;
+        }
 
         if (!result.Success) {
             // 202: we received it but couldn't act (e.g. unrecognized payload / no matching envelope).

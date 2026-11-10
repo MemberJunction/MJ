@@ -183,7 +183,7 @@ describe('DocuSignSignatureProvider', () => {
             expect(provider.VerifyWebhookSignature(RAW, headers)).toBe('Failed');
         });
 
-        it('reports NotConfigured when no HMAC key is set (verify-if-configured policy)', async () => {
+        it('reports NotConfigured when no HMAC key is set (the engine then rejects the event)', async () => {
             await provider.initialize(VALID_CONFIG); // no connectHmacKey
             const headers = { 'x-docusign-signature-1': signatureFor(RAW, HMAC_KEY) };
             expect(provider.VerifyWebhookSignature(RAW, headers)).toBe('NotConfigured');

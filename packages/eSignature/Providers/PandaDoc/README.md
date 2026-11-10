@@ -61,7 +61,7 @@ These values live in the account's **Credential** (encrypted via the [Credential
 |---|:---:|---|---|
 | `apiKey` | ✅ | — | PandaDoc API key, sent as `Authorization: API-Key <key>`. |
 | `restBase` | — | `https://api.pandadoc.com/public/v1` | REST API base. |
-| `connectHmacKey` | — | — | HMAC secret for verifying inbound webhooks. **Set this in production.** |
+| `connectHmacKey` | — | — | HMAC secret for verifying inbound webhooks. **Required to receive webhooks** — without it inbound events are rejected (503) and never change status. |
 | `readinessIntervalMs` | — | `1500` | Poll interval (ms) while waiting for an uploaded document to reach `draft`. |
 
 ### One-time setup
@@ -71,7 +71,7 @@ These values live in the account's **Credential** (encrypted via the [Credential
    - The **PandaDoc** Signature Provider row is already seeded.
    - Create a **Credential** holding `apiKey`.
    - Create a **Signature Account** pointing at that credential.
-3. (Production) Configure a PandaDoc webhook pointing at `POST {your-server}/esignature/webhook/PandaDoc`, and store its HMAC secret as `connectHmacKey`.
+3. (To receive status webhooks) Configure a PandaDoc webhook pointing at `POST {your-server}/esignature/webhook/PandaDoc`, and store its HMAC secret as `connectHmacKey`.
 
 ---
 

@@ -12,7 +12,20 @@ import {
 export interface LocalDevAuthConfig {
   graphqlUri?: string;
   email?: string;
+  /**
+   * Shared secret for MJAPI's opt-in Docker bridge allowance (`MJ_DEV_AUTH_BRIDGE_SECRET`),
+   * sent as the `X-MJ-Dev-Auth-Secret` header. Only needed when MJAPI runs in a container
+   * and the browser reaches it through a published port; leave unset for plain localhost.
+   *
+   * This value ships in the browser bundle, so it is not confidential from anyone who can
+   * load this Explorer build. It only proves the request came through this build, which is
+   * acceptable for a dev container whose ports are published on 127.0.0.1 only.
+   */
+  bridgeSecret?: string;
 }
+
+/** Header MJAPI reads the Docker bridge shared secret from. */
+const DEV_AUTH_BRIDGE_SECRET_HEADER = 'X-MJ-Dev-Auth-Secret';
 
 interface DevLoginResponse {
   success: boolean;
@@ -192,10 +205,13 @@ export class MJLocalDevProvider extends MJAuthBase {
   static AngularProviderFactory = (environment: Record<string, unknown>): Provider[] => {
     const graphqlUri = (environment['GRAPHQL_URI'] as string | undefined) || 'http://localhost:4000/';
     const email = environment['LOCAL_DEV_EMAIL'] as string | undefined;
+    const rawBridgeSecret = environment['LOCAL_DEV_BRIDGE_SECRET'];
+    const bridgeSecret =
+      typeof rawBridgeSecret === 'string' && rawBridgeSecret.trim().length > 0 ? rawBridgeSecret.trim() : undefined;
     return [
       {
         provide: 'localDevAuthConfig',
-        useValue: { graphqlUri, email } satisfies LocalDevAuthConfig,
+        useValue: { graphqlUri, email, bridgeSecret } satisfies LocalDevAuthConfig,
       },
     ];
   };
@@ -233,11 +249,14 @@ export class MJLocalDevProvider extends MJAuthBase {
     try {
       const url = this.resolveDevLoginUrl();
       const bodyPayload = this.localConfig.email ? { email: this.localConfig.email } : {};
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const bridgeSecret = this.localConfig.bridgeSecret?.trim();
+      if (bridgeSecret) {
+        headers[DEV_AUTH_BRIDGE_SECRET_HEADER] = bridgeSecret;
+      }
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(bodyPayload),
       });
 

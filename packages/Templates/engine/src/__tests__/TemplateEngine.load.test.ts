@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import nunjucks from 'nunjucks';
 import '../TemplateEngine';
-import { TemplateSandboxError } from '../TemplateSandboxError';
+import { TemplateSandboxError } from '@memberjunction/nunjucks-sandbox';
 
 /** A nunjucks parse-tree node class: the position, then the node's fields in order. */
 type NodeClass = new (lineno: number, colno: number, ...fields: unknown[]) => object;

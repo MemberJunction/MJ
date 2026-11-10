@@ -4247,6 +4247,9 @@ importers:
       '@memberjunction/network-utils':
         specifier: 6.2.0
         version: link:../../NetworkUtils
+      '@memberjunction/nunjucks-sandbox':
+        specifier: 6.2.0
+        version: link:../../Templates/nunjucks-sandbox
       '@memberjunction/react-linter':
         specifier: 6.2.0
         version: link:../../React/linter
@@ -4368,7 +4371,7 @@ importers:
         specifier: ^11.12.2
         version: 11.12.2
       nunjucks:
-        specifier: ^3.2.4
+        specifier: 3.2.4
         version: 3.2.4(chokidar@3.6.0)
       nwsapi:
         specifier: ^2.2.23
@@ -11524,6 +11527,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0
         version: link:../MJGlobal
+      '@memberjunction/nunjucks-sandbox':
+        specifier: 6.2.0
+        version: link:../Templates/nunjucks-sandbox
       '@memberjunction/server-bootstrap-lite':
         specifier: 6.2.0
         version: link:../ServerBootstrapLite
@@ -11552,7 +11558,7 @@ importers:
         specifier: ^3.16.3
         version: 3.16.3
       nunjucks:
-        specifier: ^3.2.4
+        specifier: 3.2.4
         version: 3.2.4(chokidar@3.6.0)
       ora:
         specifier: ^9.3.0
@@ -14890,6 +14896,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0
         version: link:../MJGlobal
+      '@memberjunction/nunjucks-sandbox':
+        specifier: 6.2.0
+        version: link:../Templates/nunjucks-sandbox
       '@memberjunction/sqlserver-dataprovider':
         specifier: 6.2.0
         version: link:../SQLServerDataProvider
@@ -14900,7 +14909,7 @@ importers:
         specifier: ^14.0.3
         version: 14.0.3
       nunjucks:
-        specifier: ^3.2.4
+        specifier: 3.2.4
         version: 3.2.4(chokidar@3.6.0)
       ora:
         specifier: ^9.3.0
@@ -14933,8 +14942,11 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0
         version: link:../MJGlobal
+      '@memberjunction/nunjucks-sandbox':
+        specifier: 6.2.0
+        version: link:../Templates/nunjucks-sandbox
       nunjucks:
-        specifier: ^3.2.4
+        specifier: 3.2.4
         version: 3.2.4(chokidar@3.6.0)
     devDependencies:
       '@types/nunjucks':
@@ -15772,22 +15784,19 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0
         version: link:../MJGlobal
+      '@memberjunction/nunjucks-sandbox':
+        specifier: 6.2.0
+        version: link:../Templates/nunjucks-sandbox
       '@memberjunction/storage':
         specifier: 6.2.0
         version: link:../MJStorage
       '@memberjunction/tag-engine-base':
         specifier: 6.2.0
         version: link:../AI/Knowledge/TagEngineBase
-      nunjucks:
-        specifier: ^3.2.4
-        version: 3.2.4(chokidar@3.6.0)
     devDependencies:
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
-      '@types/nunjucks':
-        specifier: ^3.2.6
-        version: 3.2.6
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -16719,6 +16728,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0
         version: link:../../MJGlobal
+      '@memberjunction/nunjucks-sandbox':
+        specifier: 6.2.0
+        version: link:../nunjucks-sandbox
       '@memberjunction/templates-base-types':
         specifier: 6.2.0
         version: link:../base-types
@@ -16729,6 +16741,22 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  packages/Templates/nunjucks-sandbox:
+    dependencies:
+      '@types/nunjucks':
+        specifier: ^3.2.6
+        version: 3.2.6
+      nunjucks:
+        specifier: 3.2.4
+        version: 3.2.4(chokidar@3.6.0)
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.1.1
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/TestingFramework/CLI:
     dependencies:

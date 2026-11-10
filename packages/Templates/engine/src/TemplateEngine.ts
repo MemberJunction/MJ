@@ -3,13 +3,14 @@ import { MJTemplateCategoryEntity, MJTemplateContentEntity, MJTemplateContentTyp
 import nunjucks from 'nunjucks';
 import { BaseSingleton, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { TemplateExtensionBase } from "./extensions/TemplateExtensionBase";
-import { HardenNunjucksRuntime } from "./NunjucksSandbox";
+import { CreateSandboxedEnvironment, HardenNunjucksRuntime } from "@memberjunction/nunjucks-sandbox";
 import { CollectReferencedVariables, ReferencedVariablesResult } from "./TemplateVariableAnalysis";
 import { CurrentTemplateRenderUser, RunAsTemplateRenderUser } from "./TemplateRenderUser";
 import { TemplateRenderOptions, TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templates-base-types'
 
 // Stored templates are user-editable, so nunjucks is guarded as soon as the engine loads. The guard
-// is process-wide: it also covers nunjucks environments that other packages create.
+// lives in @memberjunction/nunjucks-sandbox, which every package that builds a nunjucks environment
+// calls itself, so no other package relies on this one having been loaded.
 HardenNunjucksRuntime();
 
 /**
@@ -191,7 +192,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
     private createConfiguredNunjucksEnv(autoescape: boolean): nunjucks.Environment {
         // SECURITY: dev must stay false — nunjucks dev mode includes full stack traces in
         // rendering errors, which can leak server internals to whoever sees template output.
-        const env = new nunjucks.Environment(this._templateLoader as unknown as nunjucks.ILoader, { autoescape, dev: false });
+        const env = CreateSandboxedEnvironment(this._templateLoader as unknown as nunjucks.ILoader, { autoescape, dev: false });
         this.addCustomFilters(env);
         return env;
     }

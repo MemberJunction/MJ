@@ -13,6 +13,7 @@ import {
     OperationResult,
     SignatureDocumentInput,
     SignatureRecipientInput,
+    WebhookVerificationResult,
 } from '../types';
 import { SignatureAccountWithProvider, SignatureEngineBase } from '../SignatureEngineBase';
 import { InitializeDriverWithAccountCredentials } from './util';
@@ -69,6 +70,29 @@ export interface RefreshStatusResult {
     Success: boolean;
     status?: EnvelopeStatus;
     ErrorMessage?: string;
+}
+
+/** Options for {@link SignatureEngine.RecordWebhookEvent}. */
+export interface RecordWebhookEventOptions {
+    /**
+     * LOCAL DEVELOPMENT ONLY. When true, a webhook for an account that has no webhook secret
+     * configured (`VerifyWebhookSignature` → `'NotConfigured'`) is applied without verification.
+     * Defaults to false (reject). Ignored when `NODE_ENV=production`. A configured-but-invalid
+     * signature is always rejected regardless of this flag.
+     */
+    AllowUnverified?: boolean;
+}
+
+/** Why {@link SignatureEngine.RecordWebhookEvent} refused an event on authenticity grounds. */
+export type WebhookRejection = 'VerificationFailed' | 'VerificationNotConfigured';
+
+/** Result of {@link SignatureEngine.RecordWebhookEvent}. */
+export interface RecordWebhookEventResult {
+    Success: boolean;
+    event?: NormalizedSignatureEvent;
+    ErrorMessage?: string;
+    /** Set when the event was parsed and matched but refused because it could not be authenticated. */
+    Rejection?: WebhookRejection;
 }
 
 /** Result of {@link SignatureEngine.DownloadSigned}. */
@@ -340,14 +364,23 @@ export class SignatureEngine extends BaseSingleton<SignatureEngine> {
     // ---- Webhook ----------------------------------------------------------------------------------
 
     /**
-     * Normalize an inbound provider webhook and apply the status — fail-closed on authenticity.
+     * Normalize an inbound provider webhook and apply the status — **fail-closed on authenticity**.
      *
-     * Flow (no env vars; HMAC secret lives in the account credential):
+     * Flow (the HMAC secret lives in the account credential, never an env var):
      *  1. Parse the payload on a bare driver (parsing needs no secret) to discover the envelope.
      *  2. Find the owning MJ: Signature Request, hence its account.
      *  3. Resolve the account's *credential-initialized* driver and require
-     *     {@link BaseSignatureProvider.VerifyWebhookSignature} to pass over the raw bytes.
+     *     {@link BaseSignatureProvider.VerifyWebhookSignature} to return `'Verified'` over the raw bytes.
      *  4. Only then apply the status.
+     *
+     * The webhook endpoint is pre-auth, so an event that is not `'Verified'` never changes a
+     * request's status:
+     *  - `'Failed'` → rejected (`Rejection: 'VerificationFailed'`).
+     *  - `'NotConfigured'` (no webhook secret on the account) → rejected
+     *    (`Rejection: 'VerificationNotConfigured'`) unless the caller passes
+     *    {@link RecordWebhookEventOptions.AllowUnverified}, a local-development escape hatch that is
+     *    ignored when `NODE_ENV=production`.
+     * Every rejection is written to `MJ: Signature Request Logs` (`Success = false`) for audit.
      *
      * @param rawBody The exact request bytes, required for byte-accurate HMAC verification.
      */
@@ -358,7 +391,8 @@ export class SignatureEngine extends BaseSingleton<SignatureEngine> {
         contextUser: UserInfo,
         rawBody?: Buffer,
         provider?: IMetadataProvider,
-    ): Promise<{ Success: boolean; event?: NormalizedSignatureEvent; ErrorMessage?: string }> {
+        options?: RecordWebhookEventOptions,
+    ): Promise<RecordWebhookEventResult> {
         const parser = this.resolveDriverByKey(driverKey, contextUser);
         if (!parser) {
             return { Success: false, ErrorMessage: `No signature provider registered for driver key '${driverKey}'.` };
@@ -374,26 +408,63 @@ export class SignatureEngine extends BaseSingleton<SignatureEngine> {
             return { Success: false, event, ErrorMessage: 'No matching signature request for the webhook envelope.' };
         }
 
-        // Authenticity: verify on the credential-initialized driver for the owning account, under a
-        // verify-if-configured policy. A configured-but-invalid signature is rejected; an account
-        // with no HMAC secret configured is accepted (logged) so the endpoint works pre-setup.
+        // Authenticity: verify on the credential-initialized driver for the owning account.
+        const before = request.Status as EnvelopeStatus;
         const verifier = await this.GetDriver(request.SignatureAccountID, contextUser);
         const verification = verifier.VerifyWebhookSignature(rawBody, headers, payload);
-        if (verification === 'Failed') {
-            await this.logOperation(request.ID, 'Webhook', false, request.Status as EnvelopeStatus, event.status, 'Webhook signature verification failed.', contextUser, provider);
-            return { Success: false, event, ErrorMessage: 'Webhook signature verification failed.' };
-        }
-        if (verification === 'NotConfigured') {
-            LogStatus(
-                `[eSignature] Webhook for envelope '${event.externalEnvelopeId}' accepted WITHOUT signature verification ` +
-                    `(no HMAC key configured on account '${request.SignatureAccountID}'). Configure a webhook secret to enforce authenticity.`,
-            );
+        const rejection = this.evaluateWebhookVerification(verification, driverKey, request, event, options);
+        if (rejection) {
+            await this.logOperation(request.ID, 'Webhook', false, before, event.status, rejection.ErrorMessage, contextUser, provider);
+            return { Success: false, event, ...rejection };
         }
 
-        const before = request.Status as EnvelopeStatus;
         await this.applyStatus(request, event.status, contextUser);
         await this.logOperation(request.ID, 'Webhook', true, before, event.status, JSON.stringify(event), contextUser, provider);
         return { Success: true, event };
+    }
+
+    /**
+     * Decide whether a webhook may be applied given its verification outcome. Returns `null` to
+     * accept, or the rejection to report. Written as an allow-list: only `'Verified'` (or
+     * `'NotConfigured'` under the non-production opt-out) is accepted, so any other value a driver
+     * returns is rejected.
+     */
+    private evaluateWebhookVerification(
+        verification: WebhookVerificationResult,
+        driverKey: string,
+        request: MJSignatureRequestEntity,
+        event: NormalizedSignatureEvent,
+        options?: RecordWebhookEventOptions,
+    ): { Rejection: WebhookRejection; ErrorMessage: string } | null {
+        if (verification === 'Verified') {
+            return null;
+        }
+        if (verification !== 'NotConfigured') {
+            return { Rejection: 'VerificationFailed', ErrorMessage: 'Webhook signature verification failed.' };
+        }
+
+        const where = `driver '${driverKey}', signature account '${request.SignatureAccountID}', envelope '${event.externalEnvelopeId}'`;
+        const isProduction = process.env.NODE_ENV === 'production';
+        if (options?.AllowUnverified === true && !isProduction) {
+            LogStatus(
+                `[eSignature] Webhook accepted WITHOUT signature verification (${where}) because unverified webhooks are ` +
+                    `explicitly allowed for local development. Never enable this on a reachable deployment.`,
+            );
+            return null;
+        }
+
+        const ignoredOptOut = options?.AllowUnverified === true && isProduction
+            ? ' The allow-unverified-webhooks opt-out is set but is ignored because NODE_ENV=production.'
+            : '';
+        LogError(
+            `[eSignature] Webhook REJECTED (${where}): no webhook secret is configured, so the payload cannot be authenticated ` +
+                `and the request status was not changed. Set the provider's webhook HMAC secret as 'connectHmacKey' in the ` +
+                `signature account's credential, and configure the same secret on the provider's webhook.${ignoredOptOut}`,
+        );
+        return {
+            Rejection: 'VerificationNotConfigured',
+            ErrorMessage: 'Webhook rejected: no webhook secret is configured for the signature account, so the payload cannot be verified.',
+        };
     }
 
     // ─────────────────────────────────────────────────────────────────────────

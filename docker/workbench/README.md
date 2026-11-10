@@ -68,6 +68,7 @@ Open `.env` in a text editor and configure:
 | `SA_PASSWORD` | SQL Server admin password. Fine to leave as-is for local dev. | `Claude2Sql99` |
 | `MJAPI_HOST_PORT` | Host port mapped to MJAPI (container :4000). Override if you already run a local MJAPI. | `4000` |
 | `EXPLORER_HOST_PORT` | Host port mapped to MJExplorer (container :4200). Override if you already run a local Explorer. | `4200` |
+| `WORKBENCH_BIND_ADDR` | Host interface the MJAPI/Explorer ports (4000, 4200, 4002, 4202) are published on. Loopback by default, so the dev servers are reachable only from the host itself; use an SSH tunnel for remote access, or set `0.0.0.0` deliberately to publish on every interface. | `127.0.0.1` |
 | `TEST_AUTH0_DOMAIN` | Auth0 tenant domain. Pre-fill to skip interactive `auth-setup` on first boot. | _(empty)_ |
 | `TEST_AUTH0_CLIENT_ID` | Auth0 SPA application client ID. | _(empty)_ |
 | `TEST_AUTH0_CLIENT_SECRET` | Auth0 application secret. | _(empty)_ |

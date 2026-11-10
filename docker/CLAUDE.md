@@ -10,7 +10,7 @@ This directory contains Docker configurations for MemberJunction. When working w
 - Runs Flyway migrations, CodeGen, then starts MJAPI via PM2
 - Build from repo root: `docker build -f docker/MJAPI/Dockerfile -t memberjunction/api .`
 - Configured via environment variables (see `docker.config.cjs`)
-- SSH debugging on port 2222 (password: `Docker!`)
+- SSH debugging on port 2222 (password: `Docker!`) — the Azure App Service convention, an accepted risk. `entrypoint.sh` starts sshd only on App Service (`WEBSITE_INSTANCE_ID` set) or when `ENABLE_SSH=true`; never set that where port 2222 is reachable
 
 ### docker/regression/
 **Purpose**: Full-stack regression test environment that exercises MJ Explorer end-to-end via LLM-driven browser automation (Computer Use engine + headless Chromium).
@@ -59,6 +59,7 @@ mj test regression remote --target=<name-or-path>     # Run against a remote URL
 - SQL Server accessible from host at `localhost:1444`
 - Host ports are configurable: `MJAPI_HOST_PORT` (default 4000), `EXPLORER_HOST_PORT` (default 4200)
 - To avoid conflicts with local dev servers, set `MJAPI_HOST_PORT=4100` and `EXPLORER_HOST_PORT=4300` in `.env`
+- Every published port (SQL, Postgres, Redis, MJAPI 4000/4002, Explorer 4200/4202) binds to `127.0.0.1` only. The app ports follow `WORKBENCH_BIND_ADDR` (default `127.0.0.1`); set it to `0.0.0.0` only when the workbench must be reachable from another machine, and prefer an SSH tunnel
 - Claude Code, MJ CLI, and Playwright CLI auto-update on every container start via `entrypoint.sh`
 - MJ repo is auto-cloned to `/workspace/MJ` on first start (from `next` branch)
 - Pre-configured permissions in `claude-settings.json` allow npm, git, sqlcmd, mj, playwright-cli, and other common commands

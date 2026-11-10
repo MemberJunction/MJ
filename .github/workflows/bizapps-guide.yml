@@ -45,14 +45,14 @@ jobs:
       BRANCH: chore/bizapps-guide-refresh
     steps:
       - name: Checkout next
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: next
           fetch-depth: 1
           persist-credentials: false
 
       - name: Set up node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
 
@@ -83,7 +83,7 @@ jobs:
       - name: Mint the App token
         if: steps.diff.outputs.changed == 'true'
         id: token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
         with:
           app-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}

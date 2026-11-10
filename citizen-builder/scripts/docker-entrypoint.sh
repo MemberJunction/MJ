@@ -185,6 +185,25 @@ fi
 
 # Sync container environment variables (API keys, encryption key, DB_USER, local dev auth) into workspace .env files
 export MJ_DEV_AUTH_ENABLED="${MJ_DEV_AUTH_ENABLED:-true}"
+
+# Local dev auth through Docker's published port: MJAPI sees the host browser as the Docker
+# bridge gateway, which it only accepts with an explicit opt-in AND a shared secret (every
+# remote client would look the same under Docker NAT). Generate a fresh secret per container
+# start unless one is supplied, and hand the same value to MJAPI and to the Explorer build.
+# Trade-off: the secret ships in the Explorer browser bundle, so it only proves a request came
+# through this Explorer build. That is acceptable because docker-compose.yml publishes the
+# ports on 127.0.0.1 only; do not widen that binding while local dev auth is enabled.
+if [ "$MJ_DEV_AUTH_ENABLED" = "true" ]; then
+  export MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE="true"
+  MJ_DEV_AUTH_BRIDGE_SECRET="${MJ_DEV_AUTH_BRIDGE_SECRET:-}"
+  if [ "${#MJ_DEV_AUTH_BRIDGE_SECRET}" -lt 16 ]; then
+    if [ -n "$MJ_DEV_AUTH_BRIDGE_SECRET" ]; then
+      echo "Notice: MJ_DEV_AUTH_BRIDGE_SECRET is shorter than 16 characters; generating a random one instead."
+    fi
+    MJ_DEV_AUTH_BRIDGE_SECRET="$(node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))")"
+  fi
+  export MJ_DEV_AUTH_BRIDGE_SECRET
+fi
 node -e "
   const fs = require('fs');
   const upsertVar = (content, key, val) => {
@@ -196,6 +215,7 @@ node -e "
   const keysToSync = [
     'DB_HOST', 'DB_PORT', 'DB_DATABASE', 'DB_USERNAME', 'DB_PASSWORD',
     'MJ_BASE_ENCRYPTION_KEY', 'MJ_DEV_AUTH_ENABLED',
+    'MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE', 'MJ_DEV_AUTH_BRIDGE_SECRET',
     'AI_VENDOR_API_KEY__OpenAILLM', 'AI_VENDOR_API_KEY__AnthropicLLM',
     'AI_VENDOR_API_KEY__GeminiLLM', 'AI_VENDOR_API_KEY__GroqLLM', 'AI_VENDOR_API_KEY__MistralLLM'
   ];
@@ -227,6 +247,18 @@ node -e "
         .replace(/GRAPHQL_WS_URI:\s*['\"][^'\"]*['\"]/g, \"GRAPHQL_WS_URI: 'ws://localhost:\" + apiPort + \"/'\");
       if (process.env.MJ_DEV_AUTH_ENABLED === 'true') {
         next = next.replace(/AUTH_TYPE:\s*['\"][^'\"]*['\"]/g, \"AUTH_TYPE: 'local'\");
+        // Bridge secret is hex or operator-supplied; only write values that are safe inside a TS string literal
+        const bridgeSecret = String(process.env.MJ_DEV_AUTH_BRIDGE_SECRET || '');
+        if (/^[A-Za-z0-9._~+\/=-]{16,}$/.test(bridgeSecret)) {
+          const secretLine = \"LOCAL_DEV_BRIDGE_SECRET: '\" + bridgeSecret + \"'\";
+          if (/LOCAL_DEV_BRIDGE_SECRET:\s*['\"][^'\"]*['\"]/.test(next)) {
+            next = next.replace(/LOCAL_DEV_BRIDGE_SECRET:\s*['\"][^'\"]*['\"]/g, () => secretLine);
+          } else {
+            next = next.replace(/AUTH_TYPE:\s*'local'/, () => \"AUTH_TYPE: 'local',\\n  \" + secretLine);
+          }
+        } else {
+          console.warn('Notice: MJ_DEV_AUTH_BRIDGE_SECRET contains characters that cannot be written to the Explorer environment; browser login through the Docker bridge will be refused.');
+        }
       }
       if (next !== src) {
         fs.writeFileSync(ngEnv, next);

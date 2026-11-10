@@ -70,7 +70,7 @@ These values live in the account's **Credential** (encrypted via the [Credential
 | `privateKey` | ✅ | — | RSA private key (PEM) used to sign the JWT. |
 | `oauthBase` | — | `account-d.docusign.com` | OAuth host. Use `account.docusign.com` for production. |
 | `restBase` | — | `https://demo.docusign.net/restapi` | REST API base. Use your production base for live envelopes. |
-| `connectHmacKey` | — | — | HMAC secret for verifying DocuSign Connect webhooks. **Set this in production.** |
+| `connectHmacKey` | — | — | HMAC secret for verifying DocuSign Connect webhooks. **Required to receive webhooks** — without it inbound events are rejected (503) and never change status. |
 
 > The defaults point at the **DocuSign demo** environment, so you can test immediately. Override `oauthBase` and `restBase` for production.
 
@@ -82,7 +82,7 @@ These values live in the account's **Credential** (encrypted via the [Credential
    - The **DocuSign** Signature Provider row is already seeded.
    - Create a **Credential** holding `integrationKey`, `userId`, `accountId`, and `privateKey`.
    - Create a **Signature Account** pointing at that credential.
-4. (Production) Configure a **Connect** webhook in DocuSign pointing at `POST {your-server}/esignature/webhook/DocuSign`, and store its HMAC secret as `connectHmacKey`.
+4. (To receive status webhooks) Configure a **Connect** webhook in DocuSign pointing at `POST {your-server}/esignature/webhook/DocuSign`, and store its HMAC secret as `connectHmacKey`.
 
 ---
 
@@ -104,7 +104,7 @@ DocuSign's native envelope statuses map onto MemberJunction's [normalized lifecy
 
 ## Webhooks (DocuSign Connect)
 
-DocuSign Connect pushes envelope events to `POST /esignature/webhook/DocuSign`. The driver verifies the `x-docusign-signature-1` header as an HMAC over the **raw request body** using your `connectHmacKey`. If the key is configured and the signature doesn't match, the event is logged and the envelope status is left unchanged — see the [webhook flow](../../Base/README.md#inbound-webhooks).
+DocuSign Connect pushes envelope events to `POST /esignature/webhook/DocuSign`. The driver verifies the `x-docusign-signature-1` header as an HMAC over the **raw request body** using your `connectHmacKey`. If the signature doesn't match, or no key is configured, the event is logged and the envelope status is left unchanged — see the [webhook flow](../../Base/README.md#inbound-webhooks).
 
 ---
 

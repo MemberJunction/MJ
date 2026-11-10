@@ -148,9 +148,12 @@ The engine provides built-in filters for JSON operations:
 ### Template Sandbox
 
 Users can edit stored templates, so the engine guards nunjucks when this package loads
-(`HardenNunjucksRuntime()`). The guard is process-wide: it also covers nunjucks environments that
-other packages create, and templates loaded through `include` and `import`. It checks templates at
-two points.
+(`HardenNunjucksRuntime()`) and builds its environments with `CreateSandboxedEnvironment()`. Both come
+from [`@memberjunction/nunjucks-sandbox`](../nunjucks-sandbox/README.md), which also exports
+`TemplateSandboxError` and `AssertTemplateTreeIsSafe`; import them from there, not from this package.
+Every other MemberJunction package that builds a nunjucks environment calls that package itself, so
+none of them relies on this engine having been loaded. The guard also covers templates loaded through
+`include` and `import`. It checks templates at two points.
 
 **Before a template compiles.** The nunjucks compiler copies names from the template into the code it
 generates, so `AssertTemplateTreeIsSafe()` checks every parsed template first:

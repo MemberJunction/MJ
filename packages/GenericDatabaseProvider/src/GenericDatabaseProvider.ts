@@ -3157,7 +3157,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * Default: returns null (no view run logging).
      */
     protected async executeSQLForUserViewRunLogging(
-        _viewId: number,
+        _viewId: string,
         _entityInfo: EntityInfo,
         _effectiveBaseView: string,
         _whereSQL: string,
@@ -3720,7 +3720,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // (reads the snapshot). effectiveBaseView === entityInfo.BaseView on the default live path,
                 // so non-materialized reads are unchanged.
                 const logResult = await this.executeSQLForUserViewRunLogging(
-                    Number(viewEntity.ID), entityInfo, effectiveBaseView, whereSQL, orderBy, user, effectiveSchemaName, queryParameters,
+                    String(viewEntity.ID), entityInfo, effectiveBaseView, whereSQL, orderBy, user, effectiveSchemaName, queryParameters,
                 );
                 if (logResult) {
                     viewSQL = logResult.executeViewSQL;

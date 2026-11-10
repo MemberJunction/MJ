@@ -8,7 +8,7 @@
  * reads and writes template names as keys of plain objects, so a name that every object inherits is
  * refused as a key, an argument or a binding. Bare names and member reads are left to the runtime guard.
  * {@link AssertTemplateTreeIsSafe} checks a parsed template before it compiles.
- * @module @memberjunction/templates
+ * @module @memberjunction/nunjucks-sandbox
  */
 import nunjucks from 'nunjucks';
 import { IsInheritedMemberName } from './InheritedMemberNames';

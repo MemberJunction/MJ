@@ -12,6 +12,7 @@ import { ChatMessage } from '@memberjunction/ai';
 import { Subject, Subscription } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ParseJSONRecursive, ParseJSONOptions, UUIDsEqual, EscapeHTML } from '@memberjunction/global';
+import { RenderSafeMarkdownLink } from './markdown-link-safety';
 import {
     ParentTaskIDFromStepOutput,
     ReadPaneSizePair,
@@ -3629,8 +3630,10 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         // Italic
         html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
         
-        // Links
-        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="markdown-link">$1</a>');
+        // Links — this HTML is marked trusted below, so Angular will NOT strip dangerous hrefs.
+        // RenderSafeMarkdownLink only emits an anchor for http(s)/mailto or scheme-less targets.
+        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match: string, text: string, url: string) =>
+            RenderSafeMarkdownLink(text, url));
         
         // Unordered lists
         html = html.replace(/^[*-+] (.+)$/gm, '<li>$1</li>');

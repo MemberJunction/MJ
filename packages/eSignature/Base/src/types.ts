@@ -250,12 +250,11 @@ export interface TemplateEnvelopeRequest {
 /**
  * Outcome of {@link BaseSignatureProvider.VerifyWebhookSignature}. Three-state so the engine can
  * distinguish "no secret configured" (verification not possible) from "configured but the signature
- * didn't match" — enabling a verify-if-configured policy:
+ * didn't match". The engine is **default-strict** — only `Verified` changes a request's status:
  *   - `Verified`      — a secret is configured and the signature matched. Accept.
  *   - `Failed`        — a secret is configured but the signature was missing/invalid. **Reject.**
- *   - `NotConfigured` — no secret is configured, so authenticity can't be checked. Accept with a
- *                       logged warning (the endpoint still functions during setup; tightens to
- *                       strict automatically once a key is set).
+ *   - `NotConfigured` — no secret is configured, so authenticity can't be checked. **Reject**, unless
+ *                       the caller explicitly opts out for local development (never in production).
  */
 export type WebhookVerificationResult = 'Verified' | 'Failed' | 'NotConfigured';
 

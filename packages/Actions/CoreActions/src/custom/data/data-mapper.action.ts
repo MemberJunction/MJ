@@ -1,7 +1,8 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import nunjucks from "nunjucks";
+import type nunjucks from "nunjucks";
+import { CreateSandboxedEnvironment } from "@memberjunction/nunjucks-sandbox";
 import { JSONParamHelper } from "../utilities/json-param-helper";
 
 /**
@@ -67,7 +68,8 @@ export class DataMapperAction extends BaseAction {
     constructor() {
         super();
         // Initialize Nunjucks with custom filters
-        this.nunjucksEnv = new nunjucks.Environment();
+        // Mapping templates come from the action's caller, so the environment is always built sandboxed.
+        this.nunjucksEnv = CreateSandboxedEnvironment();
         this.setupCustomFilters();
     }
 
@@ -131,7 +133,7 @@ export class DataMapperAction extends BaseAction {
             let activeEnv = this.nunjucksEnv;
             if (strictVariables) {
                 // Create a new environment with strict settings
-                activeEnv = new nunjucks.Environment(undefined, { throwOnUndefined: true });
+                activeEnv = CreateSandboxedEnvironment(undefined, { throwOnUndefined: true });
                 // Copy filters from the main environment
                 this.copyFiltersToEnvironment(activeEnv);
             }

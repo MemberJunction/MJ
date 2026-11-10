@@ -22,6 +22,12 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { randomUUID } from 'crypto';
 import { Readable } from 'stream';
+import {
+    DescribeSystemApiKeyRejection,
+    GetSystemApiKeyRejection,
+    IsSystemApiKeyMatch,
+    MIN_SYSTEM_API_KEY_LENGTH,
+} from './systemKeyAuth.js';
 import express, { Request, Response, NextFunction } from 'express';
 import sql from "mssql";
 import { z } from "zod";
@@ -222,7 +228,6 @@ function buildPoolConfig(): sql.config {
  * 1. x-api-key header
  * 2. x-mj-api-key header
  * 3. Authorization: Bearer <token> header
- * 4. URL query parameter (apiKey or api_key)
  *
  * @param request - The incoming HTTP request
  * @returns The extracted API key string, or null if not found
@@ -240,16 +245,34 @@ function extractAPIKeyFromRequest(request: Request | http.IncomingMessage): stri
         }
     }
 
-    // Check URL query parameters as fallback
-    if (!apiKey && request.url) {
-        const url = new URL(request.url, `http://${request.headers.host}`);
-        const queryKey = url.searchParams.get('apiKey') || url.searchParams.get('api_key');
-        if (queryKey) {
-            apiKey = queryKey;
-        }
-    }
+    // NOTE: API keys are deliberately NOT accepted via URL query parameters — long-lived
+    // credentials in a query string land in access logs, proxies and browser history.
+    // Send the key in the x-mj-api-key (or Authorization) header instead.
 
     return apiKey || null;
+}
+
+let warnedAboutUnusableSystemApiKey = false;
+
+/**
+ * Logs, once per process, that a system key is configured but will not be honored. Without this
+ * an operator whose key is a placeholder or too short only sees "invalid API key" and has no way
+ * to tell the key was refused on purpose. The key itself is never logged.
+ */
+function warnOnceIfSystemApiKeyUnusable(configuredKey: string | null | undefined): void {
+    if (warnedAboutUnusableSystemApiKey) {
+        return;
+    }
+    const rejection = GetSystemApiKeyRejection(configuredKey);
+    if (rejection === null || rejection === 'missing') {
+        return;
+    }
+    warnedAboutUnusableSystemApiKey = true;
+    console.warn(
+        `[Auth] System API key authentication is DISABLED: ${DescribeSystemApiKeyRejection(rejection)}. ` +
+        `Set MCP_SYSTEM_API_KEY (or MJ_API_KEY) to a random value of at least ${MIN_SYSTEM_API_KEY_LENGTH} characters. ` +
+        `API Key Engine keys and OAuth are unaffected.`
+    );
 }
 
 /**
@@ -324,8 +347,9 @@ async function validateApiKey(
         const mcpSystemKey = _config.mcpServerSettings?.systemApiKey;
         const sharedApiKey = _config.apiKey;
         const configuredSystemApiKey = mcpSystemKey || sharedApiKey;
+        warnOnceIfSystemApiKeyUnusable(configuredSystemApiKey);
 
-        if (configuredSystemApiKey && apiKey === configuredSystemApiKey) {
+        if (IsSystemApiKeyMatch(apiKey, configuredSystemApiKey)) {
             return {
                 valid: true,
                 user: systemUser,
