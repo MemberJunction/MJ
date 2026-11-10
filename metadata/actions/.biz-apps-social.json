@@ -7,7 +7,10 @@
       "DriverClass": "BufferCreatePostAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-plus-circle"
+      "IconClass": "fa-solid fa-plus-circle",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -320,7 +323,10 @@
       "DriverClass": "BufferDeletePostAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-trash"
+      "IconClass": "fa-solid fa-trash",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -1269,7 +1275,10 @@
       "DriverClass": "BufferReorderQueueAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-sort"
+      "IconClass": "fa-solid fa-sort",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -1723,7 +1732,10 @@
       "DriverClass": "HootsuiteCreatePostAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-plus-circle"
+      "IconClass": "fa-solid fa-plus-circle",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -2014,7 +2026,10 @@
       "DriverClass": "HootsuiteDeletePostAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-trash"
+      "IconClass": "fa-solid fa-trash",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -3032,7 +3047,10 @@
       "DriverClass": "HootsuiteUpdatePostAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-edit"
+      "IconClass": "fa-solid fa-edit",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -3554,7 +3572,10 @@
       "DriverClass": "FacebookCreatePostAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-brands fa-facebook"
+      "IconClass": "fa-brands fa-facebook",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -3882,7 +3903,10 @@
       "DriverClass": "FacebookDeletePostAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-trash"
+      "IconClass": "fa-solid fa-trash",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -5298,7 +5322,10 @@
       "DriverClass": "FacebookUpdatePostAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-edit"
+      "IconClass": "fa-solid fa-edit",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -5521,7 +5548,10 @@
       "DriverClass": "FacebookUploadMediaAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-upload"
+      "IconClass": "fa-solid fa-upload",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -5781,7 +5811,10 @@
       "DriverClass": "YouTubeUploadVideoAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-brands fa-youtube"
+      "IconClass": "fa-brands fa-youtube",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -6129,7 +6162,10 @@
       "DriverClass": "YouTubeDeleteVideoAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-trash"
+      "IconClass": "fa-solid fa-trash",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -7867,7 +7903,10 @@
       "DriverClass": "YouTubeUpdateVideoAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-edit"
+      "IconClass": "fa-solid fa-edit",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -8144,7 +8183,10 @@
       "DriverClass": "InstagramCreatePostAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-brands fa-instagram"
+      "IconClass": "fa-brands fa-instagram",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -8438,7 +8480,10 @@
       "DriverClass": "InstagramDeletePostAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-trash"
+      "IconClass": "fa-solid fa-trash",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -9442,7 +9487,10 @@
       "DriverClass": "InstagramReplyToCommentAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-reply"
+      "IconClass": "fa-solid fa-reply",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -9783,7 +9831,10 @@
       "DriverClass": "LinkedInCreatePostAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-brands fa-linkedin"
+      "IconClass": "fa-brands fa-linkedin",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -10061,7 +10112,10 @@
       "DriverClass": "LinkedInDeletePostAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-trash"
+      "IconClass": "fa-solid fa-trash",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -11518,7 +11572,10 @@
       "DriverClass": "TikTokUploadVideoAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-brands fa-tiktok"
+      "IconClass": "fa-brands fa-tiktok",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -11831,7 +11888,10 @@
       "DriverClass": "TikTokDeleteVideoAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-trash"
+      "IconClass": "fa-solid fa-trash",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -12858,7 +12918,10 @@
       "DriverClass": "TikTokReplyToCommentAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-reply"
+      "IconClass": "fa-solid fa-reply",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -13078,7 +13141,10 @@
       "DriverClass": "TwitterCreateTweetAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-brands fa-x-twitter"
+      "IconClass": "fa-brands fa-x-twitter",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -13388,7 +13454,10 @@
       "DriverClass": "TwitterDeleteTweetAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-trash"
+      "IconClass": "fa-solid fa-trash",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -14819,7 +14888,10 @@
       "DriverClass": "TwitterUploadMediaAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-upload"
+      "IconClass": "fa-solid fa-upload",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [

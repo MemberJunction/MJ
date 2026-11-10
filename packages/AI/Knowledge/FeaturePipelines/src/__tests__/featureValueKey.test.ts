@@ -142,4 +142,13 @@ describe('the pipeline pin', () => {
         expect(await FeatureValueKey.ComputeHash(composite))
             .not.toBe(await FeatureValueKey.ComputeHash({ ...composite, RecordID: 'orderid|abc-1' }));
     });
+    it('normalises MLModelID case-insensitively when present in key, and produces a different hash than when null/omitted', async () => {
+        const k = { EntityID: 'aaaa-1', RecordID: 'r1', FeatureName: 'SeniorityLevel', PipelineVersion: null,
+            PromptVersionHash: null, AIModelID: null, ParametersHash: null, InputHash: null, Source: 'Pipeline' as const };
+        const kWithML = { ...k, MLModelID: 'b1b2c3d4-e5f6-7890-abcd-ef1234567890' };
+        expect(await FeatureValueKey.ComputeHash(kWithML))
+            .toBe(await FeatureValueKey.ComputeHash({ ...k, MLModelID: 'B1B2C3D4-E5F6-7890-ABCD-EF1234567890' }));
+        expect(await FeatureValueKey.ComputeHash(kWithML))
+            .not.toBe(await FeatureValueKey.ComputeHash(k));
+    });
 });
