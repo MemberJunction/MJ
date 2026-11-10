@@ -17,6 +17,7 @@ import { GoogleAuth, type GoogleAuthOptions } from 'google-auth-library';
 import {
     BaseRealtimeModel,
     BuildRealtimeRelayUrl,
+    ResolveRealtimeTiming,
     RealtimeProxyRegistry,
     ResolveRealtimeProxyBaseWsUrl,
     type ClientRealtimeSessionConfig,
@@ -216,6 +217,13 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
     public override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
         const credentials = this.requireCredentials();
         const location = GeminiEnterpriseRealtime.sessionLocation(credentials);
+        const resolvedTiming = ResolveRealtimeTiming({
+            Config: params.Config,
+            DriverDefaultConnectionSeconds: this.DefaultCallDurationSeconds,
+            DriverDefaultBufferSeconds: this.ReconnectBufferSeconds,
+            DefaultTrustNativeResumption: this.ClientSessionTrustsNativeResumption('relay'),
+            ZeroDataRetention: params.ZeroDataRetention,
+        });
         const config = this.BuildConnectConfig(params);
         const upstreamUrl = this.LiveUrl(credentials, location);
         const policy = new GeminiLiveRelayPolicy({
@@ -243,6 +251,9 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
             SessionConfig: this.SessionPactFor(params.Model, config, GeminiEnterpriseRealtime.browserConnectConfig(config)),
             ...(avatarStatus ? { AvatarStatus: avatarStatus } : {}),
             MaxSessionSeconds: maxSessionSeconds,
+            ConnectionMaxSeconds: resolvedTiming.ConnectionMaxSeconds,
+            ReconnectBufferSeconds: resolvedTiming.ReconnectBufferSeconds,
+            TrustNativeResumption: resolvedTiming.TrustNativeResumption,
         };
     }
 

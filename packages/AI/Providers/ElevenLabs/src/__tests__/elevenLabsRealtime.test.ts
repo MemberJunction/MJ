@@ -1615,3 +1615,113 @@ describe('SanitizeToolParametersForElevenLabs — leaf descriptions', () => {
         expect(props['b']['description']).toBeUndefined();
     });
 });
+
+describe('ElevenLabsRealtimeSession — long-call duration reconnect and history seeding', () => {
+    it('reconnects before ConnectionDurationSeconds expires and seeds prior turns via contextual_update', async () => {
+        vi.useFakeTimers();
+        try {
+            class MultiSocketElevenLabsRealtime extends TestElevenLabsRealtime {
+                public Sockets: FakeSocket[] = [];
+                protected override async connectConversation(args: ElevenLabsConnectArgs): Promise<ElevenLabsRealtimeSocket> {
+                    this.LastConnectArgs = args;
+                    const s = new FakeSocket();
+                    this.Socket = s;
+                    this.Sockets.push(s);
+                    queueMicrotask(() => {
+                        args.OnMessage({
+                            type: 'conversation_initiation_metadata',
+                            conversation_initiation_metadata_event: {
+                                conversation_id: `conv_${this.Sockets.length}`,
+                                agent_output_audio_format: 'pcm_16000',
+                                user_input_audio_format: 'pcm_16000',
+                            },
+                        });
+                    });
+                    return s;
+                }
+            }
+
+            const driver = new MultiSocketElevenLabsRealtime('fake-api-key');
+            const session = await driver.StartSession(
+                makeParams({
+                    Config: {
+                        connectionMaxSeconds: 120,
+                        reconnectBufferSeconds: 10,
+                    },
+                })
+            );
+            expect(driver.Sockets).toHaveLength(1);
+
+            // Emit user and agent transcripts on the first socket
+            driver.Emit({
+                type: 'user_transcript',
+                user_transcription_event: { user_transcript: 'Please remember ticket 9988.' },
+            });
+            driver.Emit({
+                type: 'agent_response',
+                agent_response_event: { agent_response: 'I have noted ticket 9988.' },
+            });
+            driver.Emit({
+                type: 'agent_response_complete',
+            });
+
+            // Advance into the soft reconnect window
+            await vi.advanceTimersByTimeAsync(95_000);
+
+            expect(driver.Sockets).toHaveLength(2);
+            expect(driver.Sockets[0].Closed).toBe(true);
+
+            const secondFrames = driver.Sockets[1].SentFrames();
+            expect(secondFrames[0]?.type).toBe('conversation_initiation_client_data');
+            const contextualUpdates = secondFrames.filter((f) => f.type === 'contextual_update');
+            expect(contextualUpdates.length).toBeGreaterThanOrEqual(1);
+            expect(contextualUpdates[0]?.text).toContain('Please remember ticket 9988.');
+            expect(contextualUpdates[0]?.text).toContain('I have noted ticket 9988.');
+
+            await session.Close();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+});
+
+describe('ElevenLabsRealtimeSession — tool result during a reconnect', () => {
+    /** The first socket answers its initiation at once; the second only when the test sends its metadata. */
+    class ManualSecondSocketElevenLabsRealtime extends TestElevenLabsRealtime {
+        public readonly Sockets: FakeSocket[] = [];
+        public SecondArgs: ElevenLabsConnectArgs | null = null;
+        protected override async connectConversation(args: ElevenLabsConnectArgs): Promise<ElevenLabsRealtimeSocket> {
+            const socket = new FakeSocket();
+            this.Sockets.push(socket);
+            if (this.Sockets.length === 1) {
+                this.LastConnectArgs = args;
+                queueMicrotask(() => args.OnMessage(metadataEvent()));
+            } else {
+                this.SecondArgs = args;
+            }
+            return socket;
+        }
+    }
+
+    it('sends a result that arrives while the new socket opens to that socket, once, as a late-result note', async () => {
+        const driver = new ManualSecondSocketElevenLabsRealtime('fake-api-key');
+        const session = await driver.StartSession(makeParams());
+        driver.Emit({
+            type: 'client_tool_call',
+            client_tool_call: { tool_name: 'get_weather', tool_call_id: 'call-1', parameters: { city: 'NYC' } },
+        });
+
+        const reconnect = session.TriggerReconnect('duration-expiry');
+        await flushAsync();
+        expect(driver.Sockets).toHaveLength(2);
+        await session.SendToolResult('call-1', '{"status":"shipped"}');
+        driver.SecondArgs?.OnMessage(metadataEvent());
+        expect(await reconnect).toBe(true);
+
+        const carrying = (socket: FakeSocket) => socket.SentFrames().filter((f) => JSON.stringify(f).includes('shipped'));
+        expect(carrying(driver.Sockets[0])).toEqual([]);
+        expect(carrying(driver.Sockets[1])).toHaveLength(1);
+        expect(carrying(driver.Sockets[1])[0].type).toBe('contextual_update');
+        await session.Close();
+    });
+});

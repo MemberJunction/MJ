@@ -550,7 +550,12 @@ describe('GeminiEnterpriseRealtime', () => {
 
         it('carries the model\'s facts in the pact, as the Gemini pact does', async () => {
             const { Minted } = await mint();
-            expect(Minted.SessionConfig).toMatchObject({ model: 'gemini-3.8-live', idleSignal: 'turnComplete', supportsInboundVideo: true });
+            expect(Minted.SessionConfig).toMatchObject({
+                model: 'gemini-3.8-live',
+                idleSignal: 'turnComplete',
+                supportsInboundVideo: true,
+                contextWindowCompression: true,
+            });
             expect(Minted.SessionConfig['avatar']).toBeUndefined();
         });
 
