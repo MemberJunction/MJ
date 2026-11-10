@@ -1374,6 +1374,9 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             return;
         }
         active.SeenVideoSources.delete(source.SourceID);
+        if (active.SeenVideoSources.size === 0) {
+            active.RealtimeSession.ClearVideoLimit?.();
+        }
         active.RealtimeSession.SendContextNote?.(VideoSourceEndedNote(seenLabel));
     }
 

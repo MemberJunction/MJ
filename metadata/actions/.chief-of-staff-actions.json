@@ -19,7 +19,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Optional UUID of the AI Agent — leave blank when scheduling Chief of Staff (defaults automatically to 'Chief of Staff')",
+            "Description": "Optional UUID of the AI Agent — leave blank to default automatically to the calling agent (or 'Chief of Staff' outside an agent run)",
             "IsRequired": false
           },
           "primaryKey": {
@@ -37,9 +37,8 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Name of the AI Agent to wake (defaults to 'Chief of Staff' if omitted)",
-            "IsRequired": false,
-            "DefaultValue": "Chief of Staff"
+            "Description": "Optional name of the AI Agent to wake — omit to default automatically to the calling agent",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "B1F29E01-4C11-4E8A-9B01-1A2B3C4D5E02"
@@ -310,7 +309,7 @@
             "Type": "Input",
             "ValueType": "Simple Object",
             "IsArray": false,
-            "Description": "JSON array of entities the wake gate watches for changes, for example [{ \"entityName\": \"MJ: AI Agent Requests\", \"filter\": \"Status = 'Requested'\", \"trackChangesOnly\": true }].",
+            "Description": "JSON array of entities the wake gate watches for changes, for example [{ \"entityName\": \"MJ: AI Agent Requests\", \"extraFilter\": \"Status = 'Requested'\", \"includeRecordChanges\": true }].",
             "IsRequired": false
           },
           "primaryKey": {
@@ -328,7 +327,7 @@
             "Type": "Input",
             "ValueType": "Simple Object",
             "IsArray": false,
-            "Description": "JSON object with the wake gate: tier1Expression (a deterministic expression), tier2DecisionQuestion (a yes/no question for the decision model) and skipIfUnchanged.",
+            "Description": "JSON object with the wake gate: skipIfUnchanged, tier1Expression (e.g. \"totalChangedCount > 0\"), and tier2Decision ({ \"question\": \"...\" }).",
             "IsRequired": false
           },
           "primaryKey": {
@@ -401,7 +400,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Optional UUID of the AI Agent — leave blank when configuring Chief of Staff (defaults automatically to 'Chief of Staff')",
+            "Description": "Optional UUID of the AI Agent — leave blank to default automatically to the calling agent (or 'Chief of Staff' outside an agent run)",
             "IsRequired": false
           },
           "primaryKey": {
@@ -419,9 +418,8 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Name of the AI Agent (defaults to 'Chief of Staff')",
-            "IsRequired": false,
-            "DefaultValue": "Chief of Staff"
+            "Description": "Optional name of the AI Agent — omit to default automatically to the calling agent",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "B2F29E01-4C11-4E8A-9B01-1A2B3C4D5E02"
@@ -748,7 +746,7 @@
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "ID of the recipient's Chief of Staff conversation",
+            "Description": "ID of the recipient's target agent conversation",
             "IsRequired": false
           },
           "primaryKey": {
@@ -757,6 +755,34 @@
           "sync": {
             "lastModified": "2026-10-20T23:18:47.322Z",
             "checksum": "8fccf24dbbf8d6cf0d9447a195f55075df05d5d655e70d2a03628d9ad905def2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetAgentID",
+            "Type": "Both",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional UUID of the recipient's target AI Agent (defaults to 'Chief of Staff' if omitted); also returned on output.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "44E530A0-210F-4E43-882B-C001DD6A26C9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetAgentName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional name of the recipient's target AI Agent (e.g., 'Software Factory' or 'Chief of Staff').",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6DB1357C-7BE7-4FBD-A5BA-35692225BC4C"
           }
         }
       ],
@@ -1794,6 +1820,172 @@
     "sync": {
       "lastModified": "2026-11-03T23:46:07.467Z",
       "checksum": "f39897be6eb24aae14e71d17b55a778f2a2fc94d6aaebb1d0fbe4c105d94d0a5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Trigger Agent Wake",
+      "Description": "Triggers an immediate event-driven AgentWake routine in MJ: User Routines for a specific target user, agent, and workstream. Designed for declarative lifecycle hooks (e.g., TaskType.OnCreateActionID / OnStatusChangeActionID) and webhook handlers.",
+      "DriverClass": "Trigger Agent Wake",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-bolt"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetUserID",
+            "Type": "Both",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the MJ User whose agent should wake (defaults to ContextUser.ID when omitted).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BC699947-200D-4723-A739-761E445AD164"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetAgentID",
+            "Type": "Both",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional UUID of the target AI Agent to wake.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3FF6EDAA-AA26-4AC8-9B74-6107B909719B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetAgentName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional name of the target AI Agent to wake (e.g., 'Software Factory' or 'Chief of Staff').",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1C939F18-2DEB-4073-9442-A11565E535D8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WorkstreamKey",
+            "Type": "Both",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Stable workstream key used to coalesce queued events onto a single wake routine (e.g., 'task:<TaskID>').",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "61867ED8-A260-4285-B717-FF6F3860A5A6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WakeReason",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Human-readable reason explaining why the agent is being woken.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "F667C406-0226-4E26-A244-D1857577C6F4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResumeState",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Optional JSON object delivered to the agent in resumeState (and appended to resumeState.pendingEvents while unclaimed).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4C66626C-F8D0-4C2C-8F73-38C6772AEAAB"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RoutineID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the created or updated MJ: User Routines row.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B8698F97-686B-49FD-B461-F3A96364A692"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NextRunAt",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ISO-8601 timestamp when the wake routine will run.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6DB73C27-9DA4-454E-85AC-A8FD4231BE7A"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Immediate agent wake routine scheduled"
+          },
+          "primaryKey": {
+            "ID": "89207A9E-A2D8-4F1E-A1B3-192FF4A633F6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "POLICY_DENIED",
+            "IsSuccess": false,
+            "Description": "Target user policy is Paused or Disabled; wake suppressed"
+          },
+          "primaryKey": {
+            "ID": "50D7D373-98E8-417D-A9A2-DF33D1BCDA3F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "AGENT_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Target AI Agent could not be found"
+          },
+          "primaryKey": {
+            "ID": "CAEFEE5F-EBD1-4D21-B868-963B41B70523"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F410C27B-66C8-49B0-9A45-AC51F8A5CD2F"
     }
   }
 ]

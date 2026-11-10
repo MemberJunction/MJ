@@ -192,6 +192,10 @@ export class WidgetController {
     this.config = initialConfig;
     this.now = deps.now ?? (() => Date.now());
     this.perception = new PerceptionBridge(deps.runtime, (event) => this.emit(event));
+    // The widget closes the session on pagehide itself (deps.pageClose, which also records the 'page-close'
+    // end reason and covers an SPA removal); a second, concurrent close from the runtime would make the
+    // server run its close work twice.
+    deps.runtime.ClosesSessionOnPageHide = false;
     this.applyPageSettings();
     this.wireRuntimeStreams();
   }

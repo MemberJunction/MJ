@@ -196,10 +196,7 @@ Dialog wrapper around the preview component.
 - `@angular/core` ^21.x
 - `@angular/forms` ^21.x
 - `@angular/router` ^21.x
-- `@progress/kendo-angular-buttons` ^22.x
-- `@progress/kendo-angular-dialog` ^22.x
-- `@progress/kendo-angular-listbox` ^22.x
-- `@progress/kendo-angular-indicators` ^22.x
+- `@memberjunction/ng-ui-components`
 
 ## Build
 

@@ -190,10 +190,14 @@ import {
     CatalogNarrowingNote,
     CatalogNarrowingOutcome,
     CATALOG_NARROWING_FIND_ACTIONS,
+    CATALOG_NARROWING_FIND_SKILLS,
+    DEFAULT_MAX_SKILL_DECISION_CANDIDATES,
     IsAlwaysShownAction,
     IsCatalogListNarrowed,
     NoCatalogNarrowing,
     OpeningRequestText,
+    PreFilterSkillCandidatesForDecision,
+    RankSkillsByHybridRelevance,
     ReachableCatalogNarrowingLimits,
     ResolveCatalogNarrowingLimits,
     SelectCatalogNarrowing,
@@ -13093,10 +13097,37 @@ The context is now within limits. Please retry your request with the recovered c
             return;
         }
         try {
-            const candidates = this.catalogNarrowingCandidates(agent, actions, subAgents, skills);
+            const rawCandidates = this.catalogNarrowingCandidates(agent, actions, subAgents, skills);
+            const maxSkillDecisionCandidates =
+                typeof promptParams.maxSkillDecisionCandidates === 'number' && promptParams.maxSkillDecisionCandidates >= 1
+                    ? Math.floor(promptParams.maxSkillDecisionCandidates)
+                    : DEFAULT_MAX_SKILL_DECISION_CANDIDATES;
+            const { FilteredCandidates: candidates, PreHiddenSkillIDs: preHiddenSkillIDs } =
+                PreFilterSkillCandidatesForDecision(
+                    rawCandidates,
+                    this._openingRequest ?? '',
+                    maxSkillDecisionCandidates
+                );
             const asked = CatalogNarrowingCandidatesToAsk(candidates, limits);
             if (asked.length > 0) {
-                this._catalogNarrowing = await this.narrowCatalog(agent, contextUser, promptParams, candidates, asked, limits);
+                const outcome = await this.narrowCatalog(agent, contextUser, promptParams, candidates, asked, limits);
+                if (preHiddenSkillIDs.size > 0) {
+                    const mergedSkillHidden = new Set<string>(outcome.Hidden.skill);
+                    for (const id of preHiddenSkillIDs) {
+                        mergedSkillHidden.add(id);
+                    }
+                    outcome.Hidden.skill = mergedSkillHidden;
+                }
+                this._catalogNarrowing = outcome;
+            } else if (preHiddenSkillIDs.size > 0) {
+                this._catalogNarrowing = {
+                    Hidden: {
+                        action: new Set<string>(),
+                        agent: new Set<string>(),
+                        skill: preHiddenSkillIDs,
+                    },
+                    Lists: {},
+                };
             }
         } catch (error) {
             this.warnCatalogNarrowing(agent, error instanceof Error ? error.message : String(error));
@@ -13127,7 +13158,8 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Every item of the three lists as a narrowing candidate. An action or sub-agent with
-     * `MinExecutionsPerRun` set, and the Find Candidate tools, are pinned: always shown.
+     * `MinExecutionsPerRun` set, explicitly assigned `MJ: AI Agent Skills` (when the agent also has
+     * unpinned auto-activatable skills), and the Find Candidate tools, are pinned: always shown.
      */
     private catalogNarrowingCandidates(
         agent: MJAIAgentEntityExtended,
@@ -13138,12 +13170,18 @@ The context is now within limits. Please retry your request with the recovered c
         const requiredActionIDs = AIEngine.Instance.AgentActions
             .filter(aa => UUIDsEqual(aa.AgentID, agent.ID) && aa.Status === 'Active' && (aa.MinExecutionsPerRun ?? 0) > 0)
             .map(aa => aa.ActionID);
+        const assignedSkillIDs = new UUIDSet(
+            (AIEngine.Instance.AgentSkills ?? [])
+                .filter(as => UUIDsEqual(as.AgentID, agent.ID) && as.Status === 'Active')
+                .map(as => as.SkillID)
+        );
+        const hasUnpinnedSkills = skills.some(s => !assignedSkillIDs.Has(s.ID));
         const candidate = (kind: CatalogNarrowingKind, item: { ID: string; Name: string; Description: string | null }, pinned: boolean): CatalogNarrowingCandidate =>
             ({ Kind: kind, ID: item.ID, Name: item.Name, Description: item.Description ?? '', Pinned: pinned });
         return [
             ...actions.map(a => candidate('action', a, IsAlwaysShownAction(a.Name) || requiredActionIDs.some(id => UUIDsEqual(id, a.ID)))),
             ...subAgents.filter(s => !!s).map(s => candidate('agent', s, (s.MinExecutionsPerRun ?? 0) > 0)),
-            ...skills.map(s => candidate('skill', s, false)),
+            ...skills.map(s => candidate('skill', s, hasUnpinnedSkills && assignedSkillIDs.Has(s.ID))),
         ];
     }
 
@@ -13328,7 +13366,17 @@ The context is now within limits. Please retry your request with the recovered c
             }
             const shownSet = new Set(shown);
             const hiddenNames = items.filter(item => !shownSet.has(item)).map(item => item.Name);
-            return `${CatalogNarrowingNote(kind, hiddenNames)}\n\n${format(shown)}`;
+            const hasFindCandidateSkills =
+                kind === 'skill' &&
+                this._effectiveActions.some(
+                    a => (a.Name ?? '').trim().toLowerCase() === CATALOG_NARROWING_FIND_SKILLS.toLowerCase()
+                );
+            const note = CatalogNarrowingNote(
+                kind,
+                hiddenNames,
+                hasFindCandidateSkills ? { hasFindCandidateSkills: true } : undefined
+            );
+            return `${note}\n\n${format(shown)}`;
         } catch (error) {
             LogErrorEx({
                 message: `Catalog narrowing could not narrow the ${kind} list, so all of it is shown: ${error instanceof Error ? error.message : String(error)}`,
@@ -14294,7 +14342,7 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         // Enforce per-(Agent, User) action policy narrowing rules when a user policy is active
-        const policyBlocked = this.checkUserActionPolicy(params, action, actionEntity, contextUser ?? params.contextUser);
+        const policyBlocked = await this.checkUserActionPolicy(params, action, actionEntity, contextUser ?? params.contextUser);
         if (policyBlocked) {
             return policyBlocked;
         }
@@ -14308,15 +14356,19 @@ The context is now within limits. Please retry your request with the recovered c
 
         try {
             // Execute the action and return the full ActionResult
-            const result = await ActionEngineServer.Instance.RunAction({
-                Action: actionEntity,
-                Params: this.toActionParams(binding, actionEntity),
-                ContextUser: contextUser,
-                Filters: [],
-                SkipActionLog: false,
-                Context: this.stampActionContext(params),
-                ...this.runBoundDispatchParams(params, actionEntity, audience.Readers, contextUser),
-            });
+            const result = await AgentUserPolicyEngine.Instance.RunWithExecutingAgentContext(
+                params.agent?.ID ?? '',
+                () =>
+                    ActionEngineServer.Instance.RunAction({
+                        Action: actionEntity,
+                        Params: this.toActionParams(binding, actionEntity),
+                        ContextUser: contextUser,
+                        Filters: [],
+                        SkipActionLog: false,
+                        Context: this.stampActionContext(params),
+                        ...this.runBoundDispatchParams(params, actionEntity, audience.Readers, contextUser),
+                    })
+            );
             this.recordDispatchOutcome(params, action, actionEntity, result, normalizedParams, skipBreaker);
             return result;
 
@@ -14338,19 +14390,47 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Checks per-(Agent, User) action policy narrowing rules (`MJ: AI Agent User Policies`)
-     * before dispatching an action. Returns a synthetic ActionResult when the action is denied,
-     * deferred outside a configured time window, or requires explicit user approval.
+     * before dispatching an action. Loads the user's policy on cold cache (failing closed on
+     * lookup error) and returns a synthetic ActionResult when the action is denied, deferred
+     * outside a configured time window, or requires explicit user approval.
      */
-    protected checkUserActionPolicy(
+    protected async checkUserActionPolicy(
         params: ExecuteAgentParams,
         action: AgentAction,
         actionEntity: MJActionEntityExtended,
         contextUser?: UserInfo
-    ): ActionResult | null {
+    ): Promise<ActionResult | null> {
         if (!contextUser?.ID || !params?.agent?.ID) {
             return null;
         }
-        const policy = AgentUserPolicyEngine.Instance.GetCachedPolicy(params.agent.ID, contextUser.ID);
+        let policy = AgentUserPolicyEngine.Instance.GetCachedPolicy(
+            params.agent.ID,
+            contextUser.ID,
+            params.provider
+        );
+        if (!policy) {
+            const lookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
+                params.agent.ID,
+                contextUser.ID,
+                contextUser,
+                { provider: params.provider }
+            );
+            if (lookup.status === 'error') {
+                return {
+                    Success: false,
+                    ResultCode: POLICY_DENIED_RESULT_CODE,
+                    Message: `Action "${actionEntity.Name || action.name}" blocked (fail-closed): user policy lookup failed (${lookup.errorMessage}).`,
+                    Params: [],
+                    RunParams: {
+                        Action: actionEntity,
+                        Params: this.toActionParams({ Params: action.params ?? {}, Bound: [] }, actionEntity),
+                        ContextUser: contextUser,
+                        Filters: [],
+                    },
+                };
+            }
+            policy = lookup.policy;
+        }
         if (!policy) {
             return null;
         }
