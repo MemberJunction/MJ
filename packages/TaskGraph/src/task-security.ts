@@ -60,12 +60,14 @@ export function ResolveStoredNodeSecurity(
  *
  * A `Human` step that its assignee completed in person never does: a person reviewed what flowed
  * through it, which is the only thing that clears taint inside a graph ({@link HumanReviewClearsTaint}).
- * Any other node, a Human step completed by anyone else or by server code included, carries what it recorded when it ran
- * (`Configuration.runtime.isOutputTainted`, which every node the dispatcher runs writes as its input
- * taint OR its own). A node that recorded nothing — skipped, failed before recording, or written by
- * older code — is never read as clean: it is tainted when the graph is, or when anything it depends
- * on could be (followed through `upstreamOf`, transitively), and tainted outright when what it depends
- * on is not known. So a Decision, a skipped branch or a failed step between an untrusted fetch and an
+ * Any other node carries what it recorded when it ran (`Configuration.runtime.isOutputTainted`, which
+ * every node the dispatcher runs writes as its input taint OR its own). A node `Complete` with nothing
+ * recorded is tainted: it was completed outside the dispatcher (forced, or saved by code) or is a Human
+ * step no assignee reviewed in person, so its output is nobody's vouched-for result, and what ran
+ * before it may not have run yet. Any other node that recorded nothing (skipped, failed before
+ * recording) is never read as clean: it is tainted when the graph is, or when anything it depends on
+ * could be (followed through `upstreamOf`, transitively), and tainted outright when what it depends on
+ * is not known. So a Decision, a skipped branch or a failed step between an untrusted fetch and an
  * egress action cannot launder the fetch's taint.
  */
 export function UpstreamCarriesTaint(
@@ -115,6 +117,13 @@ function carriesTaint(node: UpstreamTaskTaintFields, walk: TaintWalk): boolean {
     const recorded = RecordedOutputTaint(node.Configuration);
     if (recorded !== undefined) {
         return recorded;
+    }
+    if (node.Status === 'Complete') {
+        // Complete with nothing recorded: it did not finish through the dispatcher, which records every
+        // run's taint, and is not a Human step its assignee reviewed. Its output (forced from the debugger,
+        // saved by code, or an answer nobody vouched for) is untrusted whatever ran before it, which may not
+        // have run yet.
+        return true;
     }
     if (walk.GraphTainted) {
         return true;

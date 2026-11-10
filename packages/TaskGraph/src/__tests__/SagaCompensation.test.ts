@@ -440,12 +440,22 @@ describe('TaskGraphDispatcher saga coordinator', () => {
         expect(JSON.parse(envelope!).IsRunTainted).toBe(true);
     });
 
-    it('leaves that compensation clean when everything upstream of the step recorded clean output (T11)', async () => {
+    it('leaves the compensation of a step that recorded clean output clean when everything upstream did too (T11)', async () => {
+        checkoutGraph(db);
+        db.Rows.get('T-B')!.Configuration = JSON.stringify({ runtime: { actionLogID: 'log-B', isOutputTainted: false } });
+        await coordinator(db).pass();
+        const envelope = compensationOf(db, 'T-B')!.SecurityEnvelope;
+        expect(envelope == null || JSON.parse(envelope).IsRunTainted === false).toBe(true);
+    });
+
+    it('taints the compensation of a step Complete with nothing recorded, even when everything upstream recorded clean (T11)', async () => {
+        // Written before steps recorded taint, or completed by code outside the dispatcher: the two cannot be told apart.
         checkoutGraph(db);
         db.Rows.get('T-B')!.Configuration = JSON.stringify({ runtime: { actionLogID: 'log-B' } });
         await coordinator(db).pass();
         const envelope = compensationOf(db, 'T-B')!.SecurityEnvelope;
-        expect(envelope == null || JSON.parse(envelope).IsRunTainted === false).toBe(true);
+        expect(envelope).not.toBeNull();
+        expect(JSON.parse(envelope!).IsRunTainted).toBe(true);
     });
 
     it('escalates a failed compensation to a Human step for the submitter, then resumes when it completes (B23)', async () => {

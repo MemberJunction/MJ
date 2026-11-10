@@ -99,24 +99,38 @@ describe('UpstreamCarriesTaint', () => {
         expect(UpstreamCarriesTaint(upstream({ Status: 'Skipped' }), false)).toBe(true);
     });
 
-    it('follows a step that recorded nothing back to what it depends on, transitively', () => {
+    it('follows a step that ended without recording back to what it depends on, transitively', () => {
         const fetch = upstream({ ID: 'fetch', Configuration: ranTainted });
         const clean = upstream({ ID: 'clean', Configuration: ranClean });
-        const decision = upstream({ ID: 'decision', StepType: 'Decision' });
+        // A Decision that failed before recording; a Decision that ran records like any step.
+        const decision = upstream({ ID: 'decision', StepType: 'Decision', Status: 'Failed' });
         const skipped = upstream({ ID: 'skipped', Status: 'Skipped' });
         const prereqs = lookup({ decision: [fetch], skipped: [decision], 'clean-decision': [clean], root: [] });
 
         expect(UpstreamCarriesTaint(decision, false, prereqs)).toBe(true);
         expect(UpstreamCarriesTaint(skipped, false, prereqs)).toBe(true);
-        expect(UpstreamCarriesTaint(upstream({ ID: 'clean-decision', StepType: 'Decision' }), false, prereqs)).toBe(false);
+        expect(UpstreamCarriesTaint(upstream({ ID: 'clean-decision', StepType: 'Decision', Status: 'Failed' }), false, prereqs)).toBe(false);
         expect(UpstreamCarriesTaint(upstream({ ID: 'root', Status: 'Skipped' }), false, prereqs)).toBe(false);
         // A dependency the lookup does not know reads as tainted.
-        expect(UpstreamCarriesTaint(upstream({ ID: 'orphan', StepType: 'Decision' }), false, prereqs)).toBe(true);
+        expect(UpstreamCarriesTaint(upstream({ ID: 'orphan', StepType: 'Decision', Status: 'Failed' }), false, prereqs)).toBe(true);
+    });
+
+    it('treats a step Complete with nothing recorded as tainted, whatever ran before it', () => {
+        // Completed outside the dispatcher (forced, or saved by code): nobody vouches for its output.
+        expect(UpstreamCarriesTaint(upstream({ ID: 'forced' }), false, lookup({ forced: [] }))).toBe(true);
+        // A Human step completed by server code before the fetch feeding it ran: the fetch, still Pending and
+        // recording nothing, would otherwise read as clean, and so would the answer the step was given.
+        const fetchNotRunYet = upstream({ ID: 'fetch', Status: 'Pending' });
+        const settledEarly = upstream({ ID: 'approve', StepType: 'Human', UserID: RUN_USER });
+        expect(UpstreamCarriesTaint(settledEarly, false, lookup({ approve: [fetchNotRunYet], fetch: [] }))).toBe(true);
+        // Its assignee's own review still clears it.
+        const reviewedEarly = upstream({ ID: 'approve', StepType: 'Human', UserID: RUN_USER, Configuration: completedBy(RUN_USER) });
+        expect(UpstreamCarriesTaint(reviewedEarly, false, lookup({ approve: [fetchNotRunYet], fetch: [] }))).toBe(false);
     });
 
     it("stops at an assignee's review on the way back, not at anyone else's, and fails closed on a cycle", () => {
         const fetch = upstream({ ID: 'fetch', Configuration: ranTainted });
-        const decision = upstream({ ID: 'decision', StepType: 'Decision' });
+        const decision = upstream({ ID: 'decision', StepType: 'Decision', Status: 'Skipped' });
         expect(UpstreamCarriesTaint(decision, false, lookup({ decision: [reviewed({ ID: 'review' })], review: [fetch] }))).toBe(false);
         const othersReview = reviewed({ ID: 'review', Configuration: completedBy(RUN_USER) });
         expect(UpstreamCarriesTaint(decision, false, lookup({ decision: [othersReview], review: [fetch] }))).toBe(true);
