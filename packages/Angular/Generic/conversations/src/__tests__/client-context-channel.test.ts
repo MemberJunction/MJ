@@ -142,8 +142,8 @@ describe('ClientContextChannel — context streaming', () => {
       User: { Name: 'Soham', Roles: ['Admin'] },
       View: { VisibleEntities: ['MJ: AI Prompt Runs'], FreeText: 'KPI cards loaded' },
       Capabilities: {
-        Tools: [{ Name: 'FilterDateRange', Description: 'Filter by date', Category: 'view' }],
-        Agents: [{ Name: 'Sage', Description: 'Primary assistant' }],
+        Tools: [{ Name: 'FilterDateRange', Description: 'Filter by date', Category: 'view', InputSchema: {} }],
+        Agents: [{ AgentID: 'agent-sage', Name: 'Sage', Description: 'Primary assistant' }],
       },
     };
     const appContext$ = new BehaviorSubject<AppContextSnapshot | null>(initialSnapshot);
@@ -290,8 +290,9 @@ describe('ClientContextChannel — context streaming', () => {
           Name: `SurfaceTool_${i + 1}`,
           Description: 'Executes a rich interactive filter or drilldown action on the active surface',
           Category: 'view',
+          InputSchema: {},
         })),
-        Agents: [{ Name: 'Sage', Description: 'Ambient co-agent and workspace orchestrator' }],
+        Agents: [{ AgentID: 'agent-sage', Name: 'Sage', Description: 'Ambient co-agent and workspace orchestrator' }],
       },
     });
 
