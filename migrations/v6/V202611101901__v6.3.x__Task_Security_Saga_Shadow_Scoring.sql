@@ -586,7 +586,7 @@ GO
 
 /* SQL text to insert 8 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '81095783-8e4b-4ceb-aba8-0ea36cb7088d' OR (EntityID = '38248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'CompensationActionID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'da54779d-cceb-4fdf-895c-9bc56171622d' OR (EntityID = '38248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'CompensationActionID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -619,7 +619,7 @@ GO
          )
          VALUES
          (
-            '81095783-8e4b-4ceb-aba8-0ea36cb7088d',
+            'da54779d-cceb-4fdf-895c-9bc56171622d',
             '38248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Actions
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '38248F34-2837-EF11-86D4-6045BDEE16E6'),
             'CompensationActionID',
@@ -649,7 +649,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c52936af-a395-42ac-b0b7-8fc13fbe9a26' OR (EntityID = '38248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'CompensationInputMapping')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5b83682c-a785-4b34-a36d-76629847e618' OR (EntityID = '38248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'CompensationInputMapping')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -682,7 +682,7 @@ GO
          )
          VALUES
          (
-            'c52936af-a395-42ac-b0b7-8fc13fbe9a26',
+            '5b83682c-a785-4b34-a36d-76629847e618',
             '38248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Actions
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '38248F34-2837-EF11-86D4-6045BDEE16E6'),
             'CompensationInputMapping',
@@ -712,7 +712,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2df90609-abe1-4bd9-8206-5aec06114ad4' OR (EntityID = '38248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'IsIdempotent')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '924a0da8-eae9-4c9a-aac3-cccf4bb8e6d9' OR (EntityID = '38248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'IsIdempotent')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -745,7 +745,7 @@ GO
          )
          VALUES
          (
-            '2df90609-abe1-4bd9-8206-5aec06114ad4',
+            '924a0da8-eae9-4c9a-aac3-cccf4bb8e6d9',
             '38248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Actions
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '38248F34-2837-EF11-86D4-6045BDEE16E6'),
             'IsIdempotent',
@@ -775,7 +775,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '234fb2ce-776d-4d36-b356-0fe1348132b4' OR (EntityID = '3BED585D-B150-4899-AB06-8A19624EA9BE' AND Name = 'Role')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'bab2f6f6-56d7-4372-9f00-505790d71886' OR (EntityID = '3BED585D-B150-4899-AB06-8A19624EA9BE' AND Name = 'Role')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -808,7 +808,7 @@ GO
          )
          VALUES
          (
-            '234fb2ce-776d-4d36-b356-0fe1348132b4',
+            'bab2f6f6-56d7-4372-9f00-505790d71886',
             '3BED585D-B150-4899-AB06-8A19624EA9BE', -- Entity: MJ: Feature Values
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '3BED585D-B150-4899-AB06-8A19624EA9BE'),
             'Role',
@@ -838,7 +838,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '728338f3-7230-42c1-9ad1-6956afec40b7' OR (EntityID = '3BED585D-B150-4899-AB06-8A19624EA9BE' AND Name = 'MLModelID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '24ace2b5-b5e9-4048-80ed-7d55cbcd2846' OR (EntityID = '3BED585D-B150-4899-AB06-8A19624EA9BE' AND Name = 'MLModelID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -871,7 +871,7 @@ GO
          )
          VALUES
          (
-            '728338f3-7230-42c1-9ad1-6956afec40b7',
+            '24ace2b5-b5e9-4048-80ed-7d55cbcd2846',
             '3BED585D-B150-4899-AB06-8A19624EA9BE', -- Entity: MJ: Feature Values
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '3BED585D-B150-4899-AB06-8A19624EA9BE'),
             'MLModelID',
@@ -901,7 +901,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'de7a4543-3adc-44e2-bb36-445baf0f80b6' OR (EntityID = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND Name = 'SecurityEnvelope')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '37840d7f-035c-4607-83e7-232c7a324097' OR (EntityID = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND Name = 'SecurityEnvelope')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -934,7 +934,7 @@ GO
          )
          VALUES
          (
-            'de7a4543-3adc-44e2-bb36-445baf0f80b6',
+            '37840d7f-035c-4607-83e7-232c7a324097',
             '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1', -- Entity: MJ: Tasks
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1'),
             'SecurityEnvelope',
@@ -964,7 +964,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '39d94800-530b-46f5-beb4-95e33cdb1833' OR (EntityID = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND Name = 'CompensatesTaskID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd06ae20f-5407-4491-83c5-7fb97d6daf4f' OR (EntityID = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND Name = 'CompensatesTaskID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -997,7 +997,7 @@ GO
          )
          VALUES
          (
-            '39d94800-530b-46f5-beb4-95e33cdb1833',
+            'd06ae20f-5407-4491-83c5-7fb97d6daf4f',
             '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1', -- Entity: MJ: Tasks
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1'),
             'CompensatesTaskID',
@@ -1020,14 +1020,14 @@ GO
             1,
             0,
             0,
-            1,
+            0,
             'Search',
             GETUTCDATE(),
             GETUTCDATE()
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '37a2ef5e-60bd-4308-82b6-e81c37e288fe' OR (EntityID = 'BDE34DF9-7B59-4921-9B80-E94BC013A5BB' AND Name = 'ChallengerConfiguration')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e025fd0c-92d5-41c6-95a0-b076f95a5c8e' OR (EntityID = 'BDE34DF9-7B59-4921-9B80-E94BC013A5BB' AND Name = 'ChallengerConfiguration')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1060,7 +1060,7 @@ GO
          )
          VALUES
          (
-            '37a2ef5e-60bd-4308-82b6-e81c37e288fe',
+            'e025fd0c-92d5-41c6-95a0-b076f95a5c8e',
             'BDE34DF9-7B59-4921-9B80-E94BC013A5BB', -- Entity: MJ: Record Processes
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'BDE34DF9-7B59-4921-9B80-E94BC013A5BB'),
             'ChallengerConfiguration',
@@ -1090,49 +1090,50 @@ GO
          )
       END;
 
-/* SQL text to insert entity field value with ID 77b68e90-506f-4019-b6a3-914699c91335 */
+/* SQL text to sync entity unique keys (1 added, 0 updated, 0 removed) */
+INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('33e120ae-b469-4490-8178-b40e7ee3c064', '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1', 'UQ_Task_CompensatesTaskID', 'CompensatesTaskID', '([CompensatesTaskID] IS NOT NULL)');
+
+/* SQL text to sync 2 entity field value row(s) for entity field ID BAB2F6F6-56D7-4372-9F00-505790D71886 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [Source], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('77b68e90-506f-4019-b6a3-914699c91335', '234FB2CE-776D-4D36-B356-0FE1348132B4', 1, 'Challenger', 'Challenger', 'Check', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID 13832682-906a-4d0f-a819-ce365aa93d97 */
+                                       ('0f42095a-2938-4b51-814b-fce520307b18', 'BAB2F6F6-56D7-4372-9F00-505790D71886', 1, 'Challenger', 'Challenger', 'Check', GETUTCDATE(), GETUTCDATE());
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [Source], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('13832682-906a-4d0f-a819-ce365aa93d97', '234FB2CE-776D-4D36-B356-0FE1348132B4', 2, 'Champion', 'Champion', 'Check', GETUTCDATE(), GETUTCDATE());
+                                       ('dff637a2-5ef8-4da9-bdd2-c4a15f81a75b', 'BAB2F6F6-56D7-4372-9F00-505790D71886', 2, 'Champion', 'Champion', 'Check', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 234FB2CE-776D-4D36-B356-0FE1348132B4 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='234FB2CE-776D-4D36-B356-0FE1348132B4';
+/* SQL text to update ValueListType for entity field ID BAB2F6F6-56D7-4372-9F00-505790D71886 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='BAB2F6F6-56D7-4372-9F00-505790D71886';
 
 
 /* Create Entity Relationship: MJ: Actions -> MJ: Actions (One To Many via CompensationActionID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'ad025870-b3bc-4e0f-965f-33e6228e1dc4' OR ([EntityID] = '38248F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = '38248F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityJoinField] = 'CompensationActionID')
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'dac637ef-6f70-4e62-b4e3-8374076fe810' OR ([EntityID] = '38248F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = '38248F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityJoinField] = 'CompensationActionID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('ad025870-b3bc-4e0f-965f-33e6228e1dc4', '38248F34-2837-EF11-86D4-6045BDEE16E6', '38248F34-2837-EF11-86D4-6045BDEE16E6', 'CompensationActionID', 'One To Many', 1, 1, 15, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('dac637ef-6f70-4e62-b4e3-8374076fe810', '38248F34-2837-EF11-86D4-6045BDEE16E6', '38248F34-2837-EF11-86D4-6045BDEE16E6', 'CompensationActionID', 'One To Many', 1, 1, 15, GETUTCDATE(), GETUTCDATE())
    END;
 
 
 /* Create Entity Relationship: MJ: ML Models -> MJ: Feature Values (One To Many via MLModelID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '502b4788-9425-4cbf-8fbe-a5e8b0599f9c' OR ([EntityID] = 'A3997636-011D-46E0-BC01-8B1E61E1087B' AND [RelatedEntityID] = '3BED585D-B150-4899-AB06-8A19624EA9BE' AND [RelatedEntityJoinField] = 'MLModelID')
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'eb42f51a-4e80-4378-9892-95815fcfb08b' OR ([EntityID] = 'A3997636-011D-46E0-BC01-8B1E61E1087B' AND [RelatedEntityID] = '3BED585D-B150-4899-AB06-8A19624EA9BE' AND [RelatedEntityJoinField] = 'MLModelID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('502b4788-9425-4cbf-8fbe-a5e8b0599f9c', 'A3997636-011D-46E0-BC01-8B1E61E1087B', '3BED585D-B150-4899-AB06-8A19624EA9BE', 'MLModelID', 'One To Many', 1, 1, 3, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('eb42f51a-4e80-4378-9892-95815fcfb08b', 'A3997636-011D-46E0-BC01-8B1E61E1087B', '3BED585D-B150-4899-AB06-8A19624EA9BE', 'MLModelID', 'One To Many', 1, 1, 3, GETUTCDATE(), GETUTCDATE())
    END;
 
 
 /* Create Entity Relationship: MJ: Tasks -> MJ: Tasks (One To Many via CompensatesTaskID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '3ac9eb5a-4ed7-4a07-a75e-14515a1a8c9f' OR ([EntityID] = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND [RelatedEntityID] = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND [RelatedEntityJoinField] = 'CompensatesTaskID')
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '6051c6c5-d7d9-4b04-bb27-2ae6fff2f386' OR ([EntityID] = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND [RelatedEntityID] = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND [RelatedEntityJoinField] = 'CompensatesTaskID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('3ac9eb5a-4ed7-4a07-a75e-14515a1a8c9f', '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1', '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1', 'CompensatesTaskID', 'One To Many', 1, 1, 5, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('6051c6c5-d7d9-4b04-bb27-2ae6fff2f386', '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1', '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1', 'CompensatesTaskID', 'One To Many', 1, 1, 5, GETUTCDATE(), GETUTCDATE())
    END;
 
 /* Index for Foreign Keys for FeatureValue */
@@ -2410,8 +2411,8 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_Task_CompensatesTaskID ON [${flyway:defaultSchema}].[Task] ([CompensatesTaskID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 39D94800-530B-46F5-BEB4-95E33CDB1833 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='39D94800-530B-46F5-BEB4-95E33CDB1833', @RelatedEntityNameFieldMap='CompensatesTask';
+/* SQL text to update entity field related entity name field map for entity field ID D06AE20F-5407-4491-83C5-7FB97D6DAF4F */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='D06AE20F-5407-4491-83C5-7FB97D6DAF4F', @RelatedEntityNameFieldMap='CompensatesTask';
 
 /* Hierarchy Metadata Function SQL for MJ: Tasks.ParentID */
 -----------------------------------------------------------------
@@ -3973,8 +3974,8 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_Action_CompensationActionID ON [${flyway:defaultSchema}].[Action] ([CompensationActionID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 81095783-8E4B-4CEB-ABA8-0EA36CB7088D */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='81095783-8E4B-4CEB-ABA8-0EA36CB7088D', @RelatedEntityNameFieldMap='CompensationAction';
+/* SQL text to update entity field related entity name field map for entity field ID DA54779D-CCEB-4FDF-895C-9BC56171622D */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='DA54779D-CCEB-4FDF-895C-9BC56171622D', @RelatedEntityNameFieldMap='CompensationAction';
 
 /* Hierarchy Metadata Function SQL for MJ: Actions.ParentID */
 -----------------------------------------------------------------
@@ -6775,7 +6776,6 @@ BEGIN
     DECLARE @MJConversations_DefaultAgentID_ExternalID nvarchar(500)
     DECLARE @MJConversations_DefaultAgentID_Name nvarchar(255)
     DECLARE @MJConversations_DefaultAgentID_Description nvarchar(MAX)
-    DECLARE @MJConversations_DefaultAgentID_Type nvarchar(50)
     DECLARE @MJConversations_DefaultAgentID_IsArchived bit
     DECLARE @MJConversations_DefaultAgentID_LinkedEntityID uniqueidentifier
     DECLARE @MJConversations_DefaultAgentID_LinkedRecordID nvarchar(500)
@@ -6799,13 +6799,14 @@ BEGIN
     DECLARE @MJConversations_DefaultAgentID_IsResolved bit
     DECLARE @MJConversations_DefaultAgentID_ResolvedByUserID uniqueidentifier
     DECLARE @MJConversations_DefaultAgentID_ResolvedAt datetimeoffset
+    DECLARE @MJConversations_DefaultAgentID_TypeID uniqueidentifier
     DECLARE cascade_update_MJConversations_DefaultAgentID_cursor CURSOR FOR
-        SELECT [ID], [UserID], [ExternalID], [Name], [Description], [Type], [IsArchived], [LinkedEntityID], [LinkedRecordID], [DataContextID], [Status], [EnvironmentID], [ProjectID], [IsPinned], [TestRunID], [ApplicationScope], [ApplicationID], [DefaultAgentID], [AdditionalData], [RecordingFileID], [EgressID], [VisitorKey], [LastConversationID], [AnchorType], [AnchorKey], [AnchorMetadata], [IsResolved], [ResolvedByUserID], [ResolvedAt]
+        SELECT [ID], [UserID], [ExternalID], [Name], [Description], [IsArchived], [LinkedEntityID], [LinkedRecordID], [DataContextID], [Status], [EnvironmentID], [ProjectID], [IsPinned], [TestRunID], [ApplicationScope], [ApplicationID], [DefaultAgentID], [AdditionalData], [RecordingFileID], [EgressID], [VisitorKey], [LastConversationID], [AnchorType], [AnchorKey], [AnchorMetadata], [IsResolved], [ResolvedByUserID], [ResolvedAt], [TypeID]
         FROM [${flyway:defaultSchema}].[Conversation]
         WHERE [DefaultAgentID] = @ID
 
     OPEN cascade_update_MJConversations_DefaultAgentID_cursor
-    FETCH NEXT FROM cascade_update_MJConversations_DefaultAgentID_cursor INTO @MJConversations_DefaultAgentIDID, @MJConversations_DefaultAgentID_UserID, @MJConversations_DefaultAgentID_ExternalID, @MJConversations_DefaultAgentID_Name, @MJConversations_DefaultAgentID_Description, @MJConversations_DefaultAgentID_Type, @MJConversations_DefaultAgentID_IsArchived, @MJConversations_DefaultAgentID_LinkedEntityID, @MJConversations_DefaultAgentID_LinkedRecordID, @MJConversations_DefaultAgentID_DataContextID, @MJConversations_DefaultAgentID_Status, @MJConversations_DefaultAgentID_EnvironmentID, @MJConversations_DefaultAgentID_ProjectID, @MJConversations_DefaultAgentID_IsPinned, @MJConversations_DefaultAgentID_TestRunID, @MJConversations_DefaultAgentID_ApplicationScope, @MJConversations_DefaultAgentID_ApplicationID, @MJConversations_DefaultAgentID_DefaultAgentID, @MJConversations_DefaultAgentID_AdditionalData, @MJConversations_DefaultAgentID_RecordingFileID, @MJConversations_DefaultAgentID_EgressID, @MJConversations_DefaultAgentID_VisitorKey, @MJConversations_DefaultAgentID_LastConversationID, @MJConversations_DefaultAgentID_AnchorType, @MJConversations_DefaultAgentID_AnchorKey, @MJConversations_DefaultAgentID_AnchorMetadata, @MJConversations_DefaultAgentID_IsResolved, @MJConversations_DefaultAgentID_ResolvedByUserID, @MJConversations_DefaultAgentID_ResolvedAt
+    FETCH NEXT FROM cascade_update_MJConversations_DefaultAgentID_cursor INTO @MJConversations_DefaultAgentIDID, @MJConversations_DefaultAgentID_UserID, @MJConversations_DefaultAgentID_ExternalID, @MJConversations_DefaultAgentID_Name, @MJConversations_DefaultAgentID_Description, @MJConversations_DefaultAgentID_IsArchived, @MJConversations_DefaultAgentID_LinkedEntityID, @MJConversations_DefaultAgentID_LinkedRecordID, @MJConversations_DefaultAgentID_DataContextID, @MJConversations_DefaultAgentID_Status, @MJConversations_DefaultAgentID_EnvironmentID, @MJConversations_DefaultAgentID_ProjectID, @MJConversations_DefaultAgentID_IsPinned, @MJConversations_DefaultAgentID_TestRunID, @MJConversations_DefaultAgentID_ApplicationScope, @MJConversations_DefaultAgentID_ApplicationID, @MJConversations_DefaultAgentID_DefaultAgentID, @MJConversations_DefaultAgentID_AdditionalData, @MJConversations_DefaultAgentID_RecordingFileID, @MJConversations_DefaultAgentID_EgressID, @MJConversations_DefaultAgentID_VisitorKey, @MJConversations_DefaultAgentID_LastConversationID, @MJConversations_DefaultAgentID_AnchorType, @MJConversations_DefaultAgentID_AnchorKey, @MJConversations_DefaultAgentID_AnchorMetadata, @MJConversations_DefaultAgentID_IsResolved, @MJConversations_DefaultAgentID_ResolvedByUserID, @MJConversations_DefaultAgentID_ResolvedAt, @MJConversations_DefaultAgentID_TypeID
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
@@ -6813,9 +6814,9 @@ BEGIN
         SET @MJConversations_DefaultAgentID_DefaultAgentID = NULL
 
         -- Call the update SP for the related entity
-        EXEC [${flyway:defaultSchema}].[spUpdateConversation] @ID = @MJConversations_DefaultAgentIDID, @UserID = @MJConversations_DefaultAgentID_UserID, @ExternalID = @MJConversations_DefaultAgentID_ExternalID, @Name = @MJConversations_DefaultAgentID_Name, @Description = @MJConversations_DefaultAgentID_Description, @Type = @MJConversations_DefaultAgentID_Type, @IsArchived = @MJConversations_DefaultAgentID_IsArchived, @LinkedEntityID = @MJConversations_DefaultAgentID_LinkedEntityID, @LinkedRecordID = @MJConversations_DefaultAgentID_LinkedRecordID, @DataContextID = @MJConversations_DefaultAgentID_DataContextID, @Status = @MJConversations_DefaultAgentID_Status, @EnvironmentID = @MJConversations_DefaultAgentID_EnvironmentID, @ProjectID = @MJConversations_DefaultAgentID_ProjectID, @IsPinned = @MJConversations_DefaultAgentID_IsPinned, @TestRunID = @MJConversations_DefaultAgentID_TestRunID, @ApplicationScope = @MJConversations_DefaultAgentID_ApplicationScope, @ApplicationID = @MJConversations_DefaultAgentID_ApplicationID, @DefaultAgentID_Clear = 1, @DefaultAgentID = @MJConversations_DefaultAgentID_DefaultAgentID, @AdditionalData = @MJConversations_DefaultAgentID_AdditionalData, @RecordingFileID = @MJConversations_DefaultAgentID_RecordingFileID, @EgressID = @MJConversations_DefaultAgentID_EgressID, @VisitorKey = @MJConversations_DefaultAgentID_VisitorKey, @LastConversationID = @MJConversations_DefaultAgentID_LastConversationID, @AnchorType = @MJConversations_DefaultAgentID_AnchorType, @AnchorKey = @MJConversations_DefaultAgentID_AnchorKey, @AnchorMetadata = @MJConversations_DefaultAgentID_AnchorMetadata, @IsResolved = @MJConversations_DefaultAgentID_IsResolved, @ResolvedByUserID = @MJConversations_DefaultAgentID_ResolvedByUserID, @ResolvedAt = @MJConversations_DefaultAgentID_ResolvedAt
+        EXEC [${flyway:defaultSchema}].[spUpdateConversation] @ID = @MJConversations_DefaultAgentIDID, @UserID = @MJConversations_DefaultAgentID_UserID, @ExternalID = @MJConversations_DefaultAgentID_ExternalID, @Name = @MJConversations_DefaultAgentID_Name, @Description = @MJConversations_DefaultAgentID_Description, @IsArchived = @MJConversations_DefaultAgentID_IsArchived, @LinkedEntityID = @MJConversations_DefaultAgentID_LinkedEntityID, @LinkedRecordID = @MJConversations_DefaultAgentID_LinkedRecordID, @DataContextID = @MJConversations_DefaultAgentID_DataContextID, @Status = @MJConversations_DefaultAgentID_Status, @EnvironmentID = @MJConversations_DefaultAgentID_EnvironmentID, @ProjectID = @MJConversations_DefaultAgentID_ProjectID, @IsPinned = @MJConversations_DefaultAgentID_IsPinned, @TestRunID = @MJConversations_DefaultAgentID_TestRunID, @ApplicationScope = @MJConversations_DefaultAgentID_ApplicationScope, @ApplicationID = @MJConversations_DefaultAgentID_ApplicationID, @DefaultAgentID_Clear = 1, @DefaultAgentID = @MJConversations_DefaultAgentID_DefaultAgentID, @AdditionalData = @MJConversations_DefaultAgentID_AdditionalData, @RecordingFileID = @MJConversations_DefaultAgentID_RecordingFileID, @EgressID = @MJConversations_DefaultAgentID_EgressID, @VisitorKey = @MJConversations_DefaultAgentID_VisitorKey, @LastConversationID = @MJConversations_DefaultAgentID_LastConversationID, @AnchorType = @MJConversations_DefaultAgentID_AnchorType, @AnchorKey = @MJConversations_DefaultAgentID_AnchorKey, @AnchorMetadata = @MJConversations_DefaultAgentID_AnchorMetadata, @IsResolved = @MJConversations_DefaultAgentID_IsResolved, @ResolvedByUserID = @MJConversations_DefaultAgentID_ResolvedByUserID, @ResolvedAt = @MJConversations_DefaultAgentID_ResolvedAt, @TypeID = @MJConversations_DefaultAgentID_TypeID
 
-        FETCH NEXT FROM cascade_update_MJConversations_DefaultAgentID_cursor INTO @MJConversations_DefaultAgentIDID, @MJConversations_DefaultAgentID_UserID, @MJConversations_DefaultAgentID_ExternalID, @MJConversations_DefaultAgentID_Name, @MJConversations_DefaultAgentID_Description, @MJConversations_DefaultAgentID_Type, @MJConversations_DefaultAgentID_IsArchived, @MJConversations_DefaultAgentID_LinkedEntityID, @MJConversations_DefaultAgentID_LinkedRecordID, @MJConversations_DefaultAgentID_DataContextID, @MJConversations_DefaultAgentID_Status, @MJConversations_DefaultAgentID_EnvironmentID, @MJConversations_DefaultAgentID_ProjectID, @MJConversations_DefaultAgentID_IsPinned, @MJConversations_DefaultAgentID_TestRunID, @MJConversations_DefaultAgentID_ApplicationScope, @MJConversations_DefaultAgentID_ApplicationID, @MJConversations_DefaultAgentID_DefaultAgentID, @MJConversations_DefaultAgentID_AdditionalData, @MJConversations_DefaultAgentID_RecordingFileID, @MJConversations_DefaultAgentID_EgressID, @MJConversations_DefaultAgentID_VisitorKey, @MJConversations_DefaultAgentID_LastConversationID, @MJConversations_DefaultAgentID_AnchorType, @MJConversations_DefaultAgentID_AnchorKey, @MJConversations_DefaultAgentID_AnchorMetadata, @MJConversations_DefaultAgentID_IsResolved, @MJConversations_DefaultAgentID_ResolvedByUserID, @MJConversations_DefaultAgentID_ResolvedAt
+        FETCH NEXT FROM cascade_update_MJConversations_DefaultAgentID_cursor INTO @MJConversations_DefaultAgentIDID, @MJConversations_DefaultAgentID_UserID, @MJConversations_DefaultAgentID_ExternalID, @MJConversations_DefaultAgentID_Name, @MJConversations_DefaultAgentID_Description, @MJConversations_DefaultAgentID_IsArchived, @MJConversations_DefaultAgentID_LinkedEntityID, @MJConversations_DefaultAgentID_LinkedRecordID, @MJConversations_DefaultAgentID_DataContextID, @MJConversations_DefaultAgentID_Status, @MJConversations_DefaultAgentID_EnvironmentID, @MJConversations_DefaultAgentID_ProjectID, @MJConversations_DefaultAgentID_IsPinned, @MJConversations_DefaultAgentID_TestRunID, @MJConversations_DefaultAgentID_ApplicationScope, @MJConversations_DefaultAgentID_ApplicationID, @MJConversations_DefaultAgentID_DefaultAgentID, @MJConversations_DefaultAgentID_AdditionalData, @MJConversations_DefaultAgentID_RecordingFileID, @MJConversations_DefaultAgentID_EgressID, @MJConversations_DefaultAgentID_VisitorKey, @MJConversations_DefaultAgentID_LastConversationID, @MJConversations_DefaultAgentID_AnchorType, @MJConversations_DefaultAgentID_AnchorKey, @MJConversations_DefaultAgentID_AnchorMetadata, @MJConversations_DefaultAgentID_IsResolved, @MJConversations_DefaultAgentID_ResolvedByUserID, @MJConversations_DefaultAgentID_ResolvedAt, @MJConversations_DefaultAgentID_TypeID
     END
 
     CLOSE cascade_update_MJConversations_DefaultAgentID_cursor
@@ -8396,7 +8397,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
 
 /* SQL text to insert 2 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'bc8b311c-aad6-4db2-a36b-520d0fb91627' OR (EntityID = '38248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'CompensationAction')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '823f5157-e05d-44b2-877b-e1e5a76d79cf' OR (EntityID = '38248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'CompensationAction')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -8429,7 +8430,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
          VALUES
          (
-            'bc8b311c-aad6-4db2-a36b-520d0fb91627',
+            '823f5157-e05d-44b2-877b-e1e5a76d79cf',
             '38248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Actions
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '38248F34-2837-EF11-86D4-6045BDEE16E6'),
             'CompensationAction',
@@ -8459,7 +8460,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c8b16731-23c6-44c1-aa38-3be5c0ed25a9' OR (EntityID = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND Name = 'CompensatesTask')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '48974b67-3539-41ce-a2fa-a8dcb20018bc' OR (EntityID = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND Name = 'CompensatesTask')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -8492,7 +8493,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
          VALUES
          (
-            'c8b16731-23c6-44c1-aa38-3be5c0ed25a9',
+            '48974b67-3539-41ce-a2fa-a8dcb20018bc',
             '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1', -- Entity: MJ: Tasks
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1'),
             'CompensatesTask',
@@ -8521,3 +8522,4 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
             GETUTCDATE()
          )
       END;
+
