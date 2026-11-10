@@ -2,6 +2,12 @@
   {
     "fields": {
       "Name": "Run Stored Query",
+      "Config": {
+        "resultExpirationMode": "Compact",
+        "resultExpirationTurns": 1,
+        "compactMode": "First N Chars",
+        "compactLength": 2000
+      },
       "Description": "Executes a stored query by ID or name, with optional parameters. Uses the full query pipeline including composition resolution, Nunjucks templating, caching, and audit logging. Preferred over ad-hoc SQL when a matching stored query exists.",
       "DriverClass": "Run Stored Query",
       "Type": "Custom",

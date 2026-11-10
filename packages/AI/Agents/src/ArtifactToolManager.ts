@@ -1,9 +1,11 @@
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { ArtifactMetadataEngine } from '@memberjunction/core-entities';
+import type { ActionOutputTrustLevel } from '@memberjunction/actions-base';
 import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult, NativeFileInput, InputArtifact } from '@memberjunction/ai-core-plus';
 import { DataSnapshotToolLibrary } from './artifact-tools/DataSnapshotToolLibrary';
 import { JSONToolLibrary } from './artifact-tools/JSONToolLibrary';
 import { TextToolLibrary } from './artifact-tools/TextToolLibrary';
+import { CSVToolLibrary } from './artifact-tools/CSVToolLibrary';
 
 // Re-export so existing consumers that import { InputArtifact } from
 // './ArtifactToolManager' continue to compile. The canonical declaration
@@ -36,6 +38,8 @@ interface ArtifactEntry {
   annotation?: string;
   deliveryMode?: 'Inline' | 'ToolsOnly';
   forceToolsOnly?: boolean;
+  trustLevel?: ActionOutputTrustLevel;
+  sourceName?: string;
 }
 
 /**
@@ -106,6 +110,10 @@ export interface StoredToolResult {
   timestamp: Date;
   /** How long the invocation took, in milliseconds */
   durationMs: number;
+  /** Output trust classification inherited from the underlying artifact, when set */
+  trustLevel?: ActionOutputTrustLevel;
+  /** Provenance label inherited from the underlying artifact (e.g. `'action:Web Search'`) */
+  sourceName?: string;
 }
 
 export interface ArtifactToolSnapshot {
@@ -149,6 +157,8 @@ export class ArtifactToolManager {
         annotation: artifact.annotation,
         deliveryMode: artifact.deliveryMode,
         forceToolsOnly: artifact.forceToolsOnly,
+        trustLevel: artifact.trustLevel,
+        sourceName: artifact.sourceName,
       });
     }
   }
@@ -167,6 +177,11 @@ export class ArtifactToolManager {
       mimeType: artifact.mimeType,
       content: artifact.content,
       library: this.resolveLibrary(artifact.typeName, artifact.toolLibraryClass),
+      annotation: artifact.annotation,
+      deliveryMode: artifact.deliveryMode,
+      forceToolsOnly: artifact.forceToolsOnly,
+      trustLevel: artifact.trustLevel,
+      sourceName: artifact.sourceName,
     });
     return alphaId;
   }
@@ -594,6 +609,8 @@ export class ArtifactToolManager {
       result,
       timestamp: new Date(),
       durationMs: Date.now() - startedAt,
+      ...(entry.trustLevel ? { trustLevel: entry.trustLevel } : {}),
+      ...(entry.sourceName ? { sourceName: entry.sourceName } : {}),
     };
     this.toolResults.push(stored);
     return stored;
@@ -758,6 +775,9 @@ export class ArtifactToolManager {
     }
     if (lower.includes('json')) {
       return new JSONToolLibrary();
+    }
+    if (lower.includes('csv')) {
+      return new CSVToolLibrary();
     }
     // File-based types: try ClassFactory for dynamically registered libraries
     // (PDFToolLibrary, ExcelToolLibrary, DocxToolLibrary are registered by CoreActions)
