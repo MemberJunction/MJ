@@ -21,6 +21,7 @@ import {
 } from '@memberjunction/markdown-core';
 import { Colors, Radius, Spacing, Type } from '@/theme/tokens';
 import { HighlightCode } from './highlight';
+import { DecodeEntities } from './decode-entities';
 
 /**
  * Native markdown renderer.
@@ -99,7 +100,7 @@ function renderBlock(token: Token, key: string): React.ReactNode {
             const t = token as Tokens.Text;
             return (
                 <Text key={key} style={styles.paragraph}>
-                    {t.tokens ? renderInline(t.tokens, key) : decodeEntities(t.text)}
+                    {t.tokens ? renderInline(t.tokens, key) : DecodeEntities(t.text)}
                 </Text>
             );
         }
@@ -146,7 +147,7 @@ function renderBlock(token: Token, key: string): React.ReactNode {
             // text if present, otherwise skip.
             const g = token as Tokens.Generic;
             return typeof g.text === 'string'
-                ? <Text key={key} style={styles.paragraph}>{decodeEntities(g.text)}</Text>
+                ? <Text key={key} style={styles.paragraph}>{DecodeEntities(g.text)}</Text>
                 : null;
         }
     }
@@ -165,7 +166,7 @@ function renderInline(tokens: Token[] | undefined, keyPrefix: string): React.Rea
                 const t = token as Tokens.Text;
                 return t.tokens
                     ? <Text key={key}>{renderInline(t.tokens, key)}</Text>
-                    : decodeEntities(t.text);
+                    : DecodeEntities(t.text);
             }
             case 'strong':
                 return <Text key={key} style={styles.bold}>{renderInline((token as Tokens.Strong).tokens, key)}</Text>;
@@ -174,7 +175,7 @@ function renderInline(tokens: Token[] | undefined, keyPrefix: string): React.Rea
             case 'del':
                 return <Text key={key} style={styles.del}>{renderInline((token as Tokens.Del).tokens, key)}</Text>;
             case 'codespan':
-                return <Text key={key} style={styles.codespan}>{decodeEntities((token as Tokens.Codespan).text)}</Text>;
+                return <Text key={key} style={styles.codespan}>{DecodeEntities((token as Tokens.Codespan).text)}</Text>;
             case 'math':
             case 'mathml':
                 return <Text key={key} style={styles.codespan}>{(token as Tokens.Generic as MathToken | MathMLToken).text}</Text>;
@@ -196,7 +197,7 @@ function renderInline(tokens: Token[] | undefined, keyPrefix: string): React.Rea
                 return (token as Tokens.Escape).text;
             default: {
                 const g = token as Tokens.Generic;
-                return typeof g.text === 'string' ? decodeEntities(g.text) : null;
+                return typeof g.text === 'string' ? DecodeEntities(g.text) : null;
             }
         }
     });
@@ -301,17 +302,6 @@ function openUrl(href: string | null | undefined): void {
     Linking.openURL(href).catch(() => {
         // Ignore failures (e.g. unsupported scheme) — nothing else to do.
     });
-}
-
-/** Decode the handful of HTML entities marked may emit in token text. */
-function decodeEntities(text: string): string {
-    return text
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&#x27;/g, "'");
 }
 
 function headingSize(depth: number) {
