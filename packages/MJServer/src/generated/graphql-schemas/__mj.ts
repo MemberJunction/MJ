@@ -49770,7 +49770,7 @@ export class MJEntity_ {
     @Field({nullable: true, description: "Schema-based programmatic class name used for TypeScript entity classes, Zod schemas, and Angular form components. Computed as GetProgrammaticName(GetClassNameSchemaPrefix(SchemaName) + BaseTable + NameSuffix). The prefix is derived from SchemaName (guaranteed unique by SQL Server), not from EntityNamePrefix. For the core __mj schema, the prefix is \"MJ\"; for all other schemas it is the alphanumeric-sanitized schema name. This prevents cross-schema collisions and aligns with GraphQL type naming in getGraphQLTypeNameBase()."}) 
     ClassName?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: "Programmatic name of the base table plus NameSuffix, without a schema prefix: GetProgrammaticName(BaseTable + NameSuffix). Used to name generated procedures and triggers. Maintained by trigger; read-only."}) 
     BaseTableCodeName?: string;
         
     @Field({nullable: true}) 
@@ -53603,7 +53603,7 @@ export class MJEntityField_ {
     @MaxLength(500)
     RelatedEntityOrderBy?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: "Programmatic name of the field: GetProgrammaticName of the Name with spaces removed. Maintained by trigger; read-only."}) 
     FieldCodeName?: string;
         
     @Field({nullable: true}) 
