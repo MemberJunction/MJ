@@ -672,6 +672,8 @@ describe('TaskGraphService.Submit & persistComputedLayout parallelization (Item 
                 edges: Array<{ taskId: string; dependsOnTaskId: string; dependencyType: 'FinishToStart' }>;
             }): Promise<void>;
         };
+        // Its saves run in the dispatcher's scope, bound to its user.
+        (dispatcher as unknown as { contextUser: UserInfo }).contextUser = TEST_USER;
 
         await dispatcher.persistComputedLayout({
             entityById: new Map<string, MJTaskEntity>([

@@ -6090,9 +6090,11 @@ export class TaskGraphDispatcher implements IShutdownable {
                 tasksToSave.push(task);
             }
 
+            // In the dispatcher's scope: these in-memory rows can carry a status a guarded skip already wrote, and a
+            // workflow step's status is the dispatcher's (`MJTaskEntityServer`).
             await Promise.all(
                 tasksToSave.map(async (task) => {
-                    if (!(await task.Save())) {
+                    if (!(await this.saveWithRuntimeAuthority(task))) {
                         LogError(`[TaskGraphDispatcher] Could not save computed layout for ${task.ID}: ${task.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                     }
                 }),
