@@ -455,7 +455,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             const cachePopulated = Array.isArray(userCache.Users) && userCache.Users.length > 0;
             if (!cachePopulated) {
                 throw new RoutineOwnerResolutionError(
-                    `Routine "${routine.Name}" owner (${ownerUserId}) not found in unpopulated UserCache — refusing to execute.`,
+                    `Routine "${routine.Name}" owner (${ownerUserId}) not found in UserCache — refusing to execute.`,
                     'transient'
                 );
             }
