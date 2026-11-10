@@ -14,6 +14,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@memberjunction/a2aserver": "6.2.0",
     "@memberjunction/actions": "6.2.0",
     "@memberjunction/actions-base": "6.2.0",
     "@memberjunction/ai": "6.2.0",
@@ -64,6 +65,8 @@
     "@memberjunction/generic-database-provider": "6.2.0",
     "@memberjunction/global": "6.2.0",
     "@memberjunction/graphql-dataprovider": "6.2.0",
+    "@memberjunction/integration-engine": "6.2.0",
+    "@memberjunction/integration-schema-builder": "6.2.0",
     "@memberjunction/livekit-room-server": "6.2.0",
     "@memberjunction/metadata-sync": "6.2.0",
     "@memberjunction/notifications": "6.2.0",
@@ -77,8 +80,11 @@
     "@memberjunction/record-set-processor-base": "6.2.0",
     "@memberjunction/redis-provider": "6.2.0",
     "@memberjunction/scheduling-engine": "6.2.0",
+    "@memberjunction/schema-engine": "6.2.0",
     "@memberjunction/search-engine": "6.2.0",
+    "@memberjunction/server": "6.2.0",
     "@memberjunction/server-bootstrap-lite": "6.2.0",
+    "@memberjunction/sql-dialect": "6.2.0",
     "@memberjunction/sqlserver-dataprovider": "6.2.0",
     "@memberjunction/storage": "6.2.0",
     "@memberjunction/task-graph": "6.2.0",

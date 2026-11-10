@@ -205,5 +205,24 @@
       "lastModified": "2026-09-21T02:45:24.803Z",
       "checksum": "1edb8b29696daf3e163b1ee2073b35403d530b7ad9c0810ba0d3180d71af8e66"
     }
+  },
+  {
+    "fields": {
+      "Name": "Semantic Graph",
+      "Description": "Structural lane over the active semantic graphs (MJ: Graphs). Matches the query to canon concepts by name and synonym and to entities named in the query, expands their bounded neighborhood through GraphEngine (stored edges plus each graph's edge providers), and ranks the reached nodes by hop-attenuated reciprocal rank. Every node is checked as the caller and every audience reader at the hop it is reached. A no-op when no graph is active.",
+      "DriverClass": "GraphSearchProvider",
+      "Status": "Active",
+      "Priority": 4,
+      "SupportsPreview": false,
+      "MaxResultsOverride": null,
+      "ProviderConfig": null,
+      "CredentialID": null,
+      "DisplayName": "Semantic Graph",
+      "Icon": "fa-solid fa-diagram-project",
+      "Comments": "Built-in provider. Available when the server registers the graph expansion service at startup (MJAPI does). Defaults: MaxDepth 2, MaxNodes 25, MinWeight 0.25; override with ProviderConfig { graphNames, maxDepth, maxNodes, minWeight, edgeTypeFilter }."
+    },
+    "primaryKey": {
+      "ID": "2B328989-9845-4DB4-96B3-E914E6154C46"
+    }
   }
 ]

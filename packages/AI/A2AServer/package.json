@@ -5,6 +5,17 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./task-store": {
+      "types": "./dist/TaskStore.d.ts",
+      "default": "./dist/TaskStore.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist/**/*"
   ],

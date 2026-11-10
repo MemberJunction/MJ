@@ -205,7 +205,10 @@
       "Type": "Custom",
       "CodeApprovalStatus": "Approved",
       "Status": "Active",
-      "IconClass": "fa-solid fa-calendar-plus"
+      "IconClass": "fa-solid fa-calendar-plus",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -439,7 +442,10 @@
       "Type": "Custom",
       "CodeApprovalStatus": "Approved",
       "Status": "Active",
-      "IconClass": "fa-solid fa-calendar-edit"
+      "IconClass": "fa-solid fa-calendar-edit",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -683,7 +689,10 @@
       "Type": "Custom",
       "CodeApprovalStatus": "Approved",
       "Status": "Active",
-      "IconClass": "fa-solid fa-calendar-times"
+      "IconClass": "fa-solid fa-calendar-times",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -801,7 +810,10 @@
       "Type": "Custom",
       "CodeApprovalStatus": "Approved",
       "Status": "Active",
-      "IconClass": "fa-solid fa-play-circle"
+      "IconClass": "fa-solid fa-play-circle",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [

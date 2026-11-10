@@ -124,5 +124,22 @@
       "lastModified": "2026-08-05T18:34:40.059Z",
       "checksum": "6e12c399b0ff5f26e65bd773d7b5d014c3fc0ede85a34e906d4dea90650316c4"
     }
+  },
+  {
+    "fields": {
+      "Name": "AI Skills Search",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Skills",
+      "TypeID": "@lookup:MJ: Entity Document Types.Name=Search",
+      "Status": "Active",
+      "VectorDatabaseID": "@lookup:MJ: Vector Databases.Name=Simple Vector Service Provider",
+      "VectorIndexID": "@lookup:MJ: Vector Indexes.Name=Default - SVS + gte-small (Local)",
+      "AIModelID": "@lookup:MJ: AI Models.Name=gte-small (Local)",
+      "TemplateText": "@file:templates/mj-ai-skills-search.njk",
+      "PotentialMatchThreshold": 0.7,
+      "AbsoluteMatchThreshold": 0.95
+    },
+    "primaryKey": {
+      "ID": "9E3C2F18-6A7B-4D19-B2A5-7F8E4C01D2E9"
+    }
   }
 ]
