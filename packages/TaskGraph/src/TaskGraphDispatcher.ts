@@ -969,7 +969,8 @@ export class TaskGraphDispatcher implements IShutdownable {
         // against a host that believed the dispatcher had stopped.
         this.activePasses++;
         try {
-            await this.sweepUnsettledGraphs(UNSETTLED_STARTUP_WINDOW_HOURS);
+            // Server work, like every pass: see `pollOnce`.
+            await ServerOperationScopeManager.Instance.RunAsServerWork(() => this.sweepUnsettledGraphs(UNSETTLED_STARTUP_WINDOW_HOURS));
         } finally {
             this.activePasses--;
         }
@@ -3041,7 +3042,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 request.ExpiresAt = new Date(Date.now() + expiresInHours * 60 * 60 * 1000);
             }
 
-            if (await request.Save()) {
+            if (await this.saveWithRuntimeAuthority(request, 'MJ: AI Agent Requests')) {
                 // INSERT-THEN-RESELECT (R3-5). The check above is read-then-write in a system whose
                 // every other cross-instance write is a CAS, and there is no unique index behind it —
                 // so two overlapping instances both read "none open", both insert, and both ping the
@@ -3307,19 +3308,20 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
-     * Saves a task inside {@link TASK_GRAPH_RUNTIME_SECURITY_OPERATION}, bound to this dispatcher's user:
-     * the one scope in which `MJTaskEntityServer` accepts a write of a task's runtime security fields.
-     * Only the save runs inside it.
+     * Saves a row inside {@link TASK_GRAPH_RUNTIME_SECURITY_OPERATION}, bound to this dispatcher's user and to
+     * the row's entity: the one scope in which `MJTaskEntityServer` accepts a write of a task's runtime
+     * security fields, and `MJAIAgentRequestEntityServer` accepts a new request for a workflow step. Only
+     * the save runs inside it.
      */
-    private saveWithRuntimeAuthority(task: MJTaskEntity): Promise<boolean> {
+    private saveWithRuntimeAuthority(row: { Save(): Promise<boolean> }, entityName: 'MJ: Tasks' | 'MJ: AI Agent Requests' = 'MJ: Tasks'): Promise<boolean> {
         return ServerOperationScopeManager.Instance.RunWithAuthority(
             {
                 operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION,
                 source: 'ServerEngine',
-                allowedEntities: ['MJ: Tasks'],
+                allowedEntities: [entityName],
                 userId: this.contextUser.ID,
             },
-            () => task.Save(),
+            () => row.Save(),
         );
     }
 

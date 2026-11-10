@@ -26,18 +26,29 @@
  * as when the save is that user's own client request (`ServerOperationScopeManager.IsInDirectClientCrud`),
  * and to nobody when server code answers, such as an agent run calling Create Record or Update Record
  * as that user. No other save may change it.
+ *
+ * Workflow requests: a request naming a task-graph step (`OriginatingTaskID`) is how a person releases
+ * that step, and the dispatcher settles the step from it. So only the dispatcher raises one (inside its
+ * runtime-security scope), no request's `OriginatingTaskID` ever changes, a workflow request's question
+ * (`Request`, `ResponseSchema`) is the dispatcher's, and its answer cannot change once given. Server
+ * code acting as the step's assignee could otherwise point an answer the person gave elsewhere at the
+ * step, pre-create the request the dispatcher then adopts, or rewrite the question the person answers.
  */
 
 import { BaseEntity, EntitySaveOptions, LogError, LogStatus, Metadata, IMetadataProvider, ServerOperationScopeManager, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentRequestEntity, MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
-import { AgentResponseForm, ConversationUtility, MJAIAgentEntityExtended, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
+import { AgentResponseForm, ConversationUtility, MJAIAgentEntityExtended, ExecuteAgentParams, TASK_GRAPH_RUNTIME_SECURITY_OPERATION } from '@memberjunction/ai-core-plus';
 import { ChatMessage } from '@memberjunction/ai';
 import { AgentRunner } from './AgentRunner';
 import { AgentWakeTriggerService } from './AgentWakeTriggerService';
 
 /** Statuses that indicate a human has responded */
 const RESPONDED_STATUSES = ['Approved', 'Rejected', 'Responded'];
+/** A workflow request's question: written by the task-graph dispatcher that raises it, and by nothing else. */
+const WORKFLOW_QUESTION_FIELDS = ['Request', 'ResponseSchema'];
+/** A request's answer: fixed for a workflow request once it is given. */
+const ANSWER_FIELDS = ['Status', 'Response', 'ResponseData'];
 
 @RegisterClass(BaseEntity, 'MJ: AI Agent Requests')
 export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
@@ -45,6 +56,7 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
         const result = super.Validate();
         this.validateOwnership(result);
         this.validateResponderUnchanged(result);
+        this.validateWorkflowRequest(result);
         result.Success = result.Success && result.Errors.length === 0;
         return result;
     }
@@ -70,6 +82,48 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
                 ValidationErrorType.Failure
             ));
         }
+    }
+
+    /**
+     * The workflow-request rules (see the file header): `OriginatingTaskID` never changes; outside the
+     * dispatcher's scope, a workflow request cannot be created, its question cannot change, and once
+     * answered its answer cannot change.
+     */
+    private validateWorkflowRequest(result: ValidationResult): void {
+        const refuse = (field: string, message: string): void => {
+            result.Errors.push(new ValidationErrorInfo(field, message, this.GetFieldByName(field)?.Value, ValidationErrorType.Failure));
+        };
+        if (this.IsSaved && this.GetFieldByName('OriginatingTaskID')?.Dirty) {
+            refuse('OriginatingTaskID', 'OriginatingTaskID cannot change after a request is created: a workflow step settles from the requests that name it.');
+            return;
+        }
+        if (this.OriginatingTaskID == null || this.inDispatcherScope()) {
+            return;
+        }
+        if (!this.IsSaved) {
+            refuse('OriginatingTaskID', 'Only the task-graph dispatcher raises a request for a workflow step.');
+            return;
+        }
+        for (const field of WORKFLOW_QUESTION_FIELDS) {
+            if (this.GetFieldByName(field)?.Dirty) {
+                refuse(field, `${field} of a workflow step's request is the dispatcher's question and cannot be changed.`);
+            }
+        }
+        const storedStatus = this.GetFieldByName('Status')?.OldValue as string | null | undefined;
+        if (storedStatus && RESPONDED_STATUSES.includes(storedStatus)) {
+            for (const field of ANSWER_FIELDS) {
+                if (this.GetFieldByName(field)?.Dirty) {
+                    refuse(field, `A workflow step's request cannot change ${field} once it has been answered.`);
+                }
+            }
+        }
+    }
+
+    /** Whether this save runs inside the task-graph dispatcher's runtime-security scope, bound to its user. */
+    private inDispatcherScope(): boolean {
+        return ServerOperationScopeManager.Instance.IsOperationActive(
+            [TASK_GRAPH_RUNTIME_SECURITY_OPERATION], 'MJ: AI Agent Requests', this.ContextCurrentUser ?? undefined,
+        );
     }
 
     /**

@@ -18,7 +18,7 @@
  *
  * @module @memberjunction/integration-test-suite
  */
-import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { RunView, ServerOperationScopeManager, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import {
     MJTaskEntity,
     MJTaskTypeEntity,
@@ -49,6 +49,7 @@ import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunct
 import {
     GetTaskGraphSubmitter,
     SuppressTaskGraphSubmission,
+    TASK_GRAPH_RUNTIME_SECURITY_OPERATION,
     TaskGraphSubmissionSuppressedBecause,
 } from '@memberjunction/ai-core-plus';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -1664,7 +1665,13 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
                 duplicate.Status = 'Requested';
                 duplicate.RequestedAt = new Date();
                 duplicate.Request = 'a second ask for the same step';
-                Assert(await duplicate.Save(), 'could not stage the duplicate request');
+                // Saved as the losing dispatcher instance saves its own: only the dispatcher raises a request
+                // for a workflow step (`MJAIAgentRequestEntityServer`), inside its runtime-security scope.
+                const staged = await ServerOperationScopeManager.Instance.RunWithAuthority(
+                    { operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION, source: 'ServerEngine', allowedEntities: ['MJ: AI Agent Requests'], userId: ctx.User.ID },
+                    () => duplicate.Save(),
+                );
+                Assert(staged, `could not stage the duplicate request: ${duplicate.LatestResult?.CompleteMessage ?? ''}`);
                 AssertEqual(await openRequestCount(ctx, task.ID), 2, 'the fixture did not stage a duplicate');
 
                 await waitFor(() => openRequestCount(ctx, task.ID), n => n === 1,
