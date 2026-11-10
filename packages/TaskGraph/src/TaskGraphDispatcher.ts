@@ -1090,7 +1090,8 @@ export class TaskGraphDispatcher implements IShutdownable {
     public async Reconcile(): Promise<void> {
         this.activePasses++;
         try {
-            await this.reconcileOnce();
+            // Server work, like every pass: see `pollOnce`.
+            await ServerOperationScopeManager.Instance.RunAsServerWork(() => this.reconcileOnce());
         } finally {
             this.activePasses--;
         }
@@ -1167,8 +1168,17 @@ export class TaskGraphDispatcher implements IShutdownable {
      *
      * Overlap-guarded — a pass that runs long simply skips the next tick rather than stacking, which
      * would otherwise let a slow database multiply in-flight work past the cap.
+     *
+     * Always server work (`ServerOperationScopeManager.RunAsServerWork`). {@link Kick} runs a pass in its
+     * caller's async scope, and a caller inside a client's own CRUD request (a graph submitted from one)
+     * would otherwise hand that request's boundary to every node the pass runs, so a node's save of a
+     * Human step or an agent request would read as that person's own act.
      */
-    private async pollOnce(): Promise<void> {
+    private pollOnce(): Promise<void> {
+        return ServerOperationScopeManager.Instance.RunAsServerWork(() => this.runPass());
+    }
+
+    private async runPass(): Promise<void> {
         if (!this.running || this.polling) return;
 
         this.polling = true;
