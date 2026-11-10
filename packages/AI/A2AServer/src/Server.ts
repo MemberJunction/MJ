@@ -4,6 +4,7 @@ import { DiscoverMJConfig, LoadDynamicPackages } from "@memberjunction/dynamic-p
 import { UserCache } from "@memberjunction/generic-database-provider";
 import { GetAPIKeyEngine } from "@memberjunction/api-keys";
 import express, { Request, Response, NextFunction } from 'express';
+import { randomUUID } from 'node:crypto';
 import sql from 'mssql';
 import { z } from "zod";
 import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate, a2aServerSettings } from './config.js';
@@ -920,7 +921,7 @@ async function processTask(task: Task, authenticatedUser?: UserInfo, authContext
     }
 }
 
-// Utility function to generate a random ID
+// Utility function to generate a random ID (cryptographically strong — Math.random() is guessable)
 function generateId() {
-    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    return randomUUID();
 }

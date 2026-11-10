@@ -58,9 +58,9 @@ RUN locale-gen "en_US.UTF-8" \
   && rm -f /etc/apt/sources.list.d/msprod.list \
   && rm -rf /var/lib/apt/lists/*
 
-# Set up SSH configuration
-RUN mkdir /var/run/sshd \
-  && echo "root:Docker!" | chpasswd
+# Set up SSH configuration. The root password Azure App Service's SSH requires is NOT
+# baked into the image — entrypoint.sh sets it only when it actually starts sshd.
+RUN mkdir /var/run/sshd
 
 COPY docker/MJAPI/sshd_config /etc/ssh/
 EXPOSE 2222
