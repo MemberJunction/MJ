@@ -68,7 +68,13 @@ vi.mock('../AgentRunner', () => ({
     },
 }));
 
+import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { BaseAgent, CircuitBreakerActionResult, type ActionResultSummary } from '../base-agent';
+
+// Every action dispatch resolves the agent/user policy first; no policy here, so the gate under test decides.
+beforeEach(() => {
+    vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockResolvedValue({ status: 'none', policy: null });
+});
 
 const CALLER = new UserInfo(undefined, { ID: 'aaaaaaaa-0000-4000-8000-0000000000c7', Name: 'Caller', Email: 'caller@test.mj', UserRoles: [] });
 const SEND_EMAIL = { ID: 'aaaaaaaa-0000-4000-8000-0000000000e1', Name: 'Send Email', Params: { Items: [] }, Config_Object: { disallowWhenTainted: true } } as unknown as MJActionEntityExtended;
