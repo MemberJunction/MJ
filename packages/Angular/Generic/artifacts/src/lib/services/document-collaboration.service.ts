@@ -32,6 +32,45 @@ import {
 export type { SequenceDiffOp } from '../utils/line-diff';
 export type ArtifactEffectivePermissions = ResolvedArtifactPermissions;
 
+/**
+ * Extended artifact permission verification result distinguishing explicit server denial
+ * (`AccessRevoked === true`) from transient network/GraphQL verification errors
+ * (`PermissionVerifyError === true`, which still fails closed as read-only while offering Retry).
+ */
+export interface VerifiedArtifactPermissions extends ResolvedArtifactPermissions {
+  AccessRevoked?: boolean;
+  PermissionVerifyError?: boolean;
+}
+
+const ANCHORED_COMMENT_MENTION_SOURCE = '(?:^|[\\s([{"\'])@([A-Za-z][A-Za-z0-9_-]*)';
+
+/**
+ * Extracts unique `@handle` mentions from comment text while strictly ignoring email addresses
+ * (such as `alice@example.com` or `foo.bar@baz.co`) by requiring `@` to appear at start-of-string
+ * or immediately after whitespace or opening punctuation (`[\s([{"']`).
+ */
+export function ExtractAnchoredCommentMentions(text: string): string[] {
+  if (!text) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const handles: string[] = [];
+  const matcher = new RegExp(ANCHORED_COMMENT_MENTION_SOURCE, 'g');
+  for (const match of text.matchAll(matcher)) {
+    const handle = match[1];
+    if (handle && !seen.has(handle)) {
+      seen.add(handle);
+      handles.push(handle);
+    }
+  }
+  return handles;
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  const normalized = (hostname || '').trim().toLowerCase().replace(/^\[|\]$/g, '');
+  return normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '::1';
+}
+
 const MSG_SYNC = 0;
 const MSG_AWARENESS = 1;
 const MSG_CONTROL = 2;
@@ -211,6 +250,7 @@ export interface ResolvedCollaborationEndpoint {
   WsUrl: string;
   CanEdit?: boolean;
   HasBackend?: boolean;
+  LiveSyncUnavailable?: boolean;
 }
 
 function isGraphQLCollaborationProvider(
@@ -834,6 +874,13 @@ export class DocumentCollaborationSession {
           this.canEdit = false;
         }
         if (resolved.Mode === 'local' || !resolved.WsUrl) {
+          if (resolved.LiveSyncUnavailable === true) {
+            this.liveSyncUnavailable = true;
+            this.canEdit = false;
+            this.clearReconnectTimer();
+            this.setStatus('readonly');
+            return;
+          }
           if (resolved.HasBackend === false && this.transport === 'local-only') {
             this.ensureLocalSeedIfUnseeded();
           }
@@ -1800,7 +1847,8 @@ export class DocumentCollaborationSession {
   providedIn: 'root',
 })
 export class DocumentCollaborationService {
-  private readonly verifiedFrozenHashes = new Map<string, boolean>();
+  private readonly frozenSnapshotVerificationCache = new Map<string, boolean>();
+  private readonly inFlightFrozenVerifications = new Map<string, Promise<boolean>>();
   private readonly slashCommands: ReadonlyArray<DocumentSlashCommand> = [
     {
       Command: '/heading-1',
@@ -1989,25 +2037,29 @@ export class DocumentCollaborationService {
           return {
             Mode: 'local',
             WsUrl: '',
-            CanEdit: typeof ticketData.CanEdit === 'boolean' ? ticketData.CanEdit : undefined,
+            CanEdit: false,
             HasBackend: true,
+            LiveSyncUnavailable: true,
           };
         }
-        const rawTicketWs =
-          ticketData.wsUrl ?? ticketData.WsUrl ?? ticketData.WsPath ?? '/collaboration/yjs';
+        const explicitTicketWsUrl = (ticketData.wsUrl ?? ticketData.WsUrl ?? '').trim();
+        const fallbackTicketWsPath = (ticketData.WsPath ?? '/collaboration/yjs').trim() || '/collaboration/yjs';
+        const rawTicketWs = explicitTicketWsUrl || fallbackTicketWsPath;
         const wsUrl = this.ResolveCollaborationWebSocketUrl(
           artifactId,
           trimmedOverride || null,
           ticketData.Ticket,
           rawTicketWs,
           providerOverride,
+          fallbackTicketWsPath,
         );
         if (!wsUrl) {
           return {
             Mode: 'local',
             WsUrl: '',
-            CanEdit: typeof ticketData.CanEdit === 'boolean' ? ticketData.CanEdit : undefined,
+            CanEdit: false,
             HasBackend: true,
+            LiveSyncUnavailable: true,
           };
         }
         return {
@@ -2040,11 +2092,11 @@ export class DocumentCollaborationService {
 
   /**
    * Resolves the WebSocket URL for `/collaboration/yjs`:
-   * 1. If `wsPath` (`ticketPayload.wsUrl` or `WsPath`) is an absolute `ws://` / `wss://` / `http://` / `https://` URL,
-   *    uses that URL directly and appends `artifactId` + `ticket` query parameters.
-   * 2. Otherwise derives from the configured GraphQL endpoint URL (e.g. `https://example.com/api-prefix/graphql`),
-   *    stripping only the trailing `/graphql` segment so any reverse-proxy prefix (`/api-prefix`) is preserved
-   *    before appending `/collaboration/yjs` (`Blocker 1`).
+   * 1. If `wsPath` (`ticketPayload.wsUrl` / `WsUrl`) is a real configured public URL (or matches local dev
+   *    when `window.location.hostname` is also loopback), uses that URL directly and appends `artifactId` + `ticket`.
+   * 2. Whenever `ticket.WsUrl` is empty/undefined OR points to `localhost`/`127.0.0.1` while `window.location.hostname`
+   *    is NOT `localhost`/`127.0.0.1`, derives the WebSocket URL from the active GraphQL endpoint URL
+   *    (`GraphQLDataProvider` config URL -> `http(s)` replaced with `ws(s)` + reverse-proxy prefix + collaboration WS path).
    */
   public ResolveCollaborationWebSocketUrl(
     artifactId: string,
@@ -2052,11 +2104,16 @@ export class DocumentCollaborationService {
     ticket?: string | null,
     wsPath?: string | null,
     providerOverride?: IMetadataProvider | null,
+    fallbackWsSubPath?: string | null,
   ): string {
     const fallbackRelativeBase =
       typeof window !== 'undefined' && window.location?.origin
         ? window.location.origin
         : 'http://localhost';
+    const browserHostname =
+      typeof window !== 'undefined' && window.location?.hostname
+        ? window.location.hostname.trim()
+        : '';
 
     const trimmedOverride = baseUrlOverride?.trim() || '';
     if (trimmedOverride && trimmedOverride.includes('?') && !ticket) {
@@ -2076,18 +2133,26 @@ export class DocumentCollaborationService {
       }
     }
 
-    const rawPathOrUrl = wsPath && wsPath.trim() ? wsPath.trim() : '';
+    let rawPathOrUrl = wsPath && wsPath.trim() ? wsPath.trim() : '';
     if (/^(wss?|https?):\/\//i.test(rawPathOrUrl)) {
       try {
         const parsedWs = new URL(rawPathOrUrl);
-        parsedWs.protocol = parsedWs.protocol.replace(/^http/i, 'ws');
-        if (!parsedWs.searchParams.has('artifactId')) {
-          parsedWs.searchParams.set('artifactId', artifactId);
+        const isLoopbackTicketOnRemoteOrigin =
+          isLoopbackHostname(parsedWs.hostname) &&
+          browserHostname.length > 0 &&
+          !isLoopbackHostname(browserHostname);
+        if (!isLoopbackTicketOnRemoteOrigin) {
+          parsedWs.protocol = parsedWs.protocol.replace(/^http/i, 'ws');
+          if (!parsedWs.searchParams.has('artifactId')) {
+            parsedWs.searchParams.set('artifactId', artifactId);
+          }
+          if (ticket && !parsedWs.searchParams.has('ticket')) {
+            parsedWs.searchParams.set('ticket', ticket);
+          }
+          return parsedWs.toString();
         }
-        if (ticket && !parsedWs.searchParams.has('ticket')) {
-          parsedWs.searchParams.set('ticket', ticket);
-        }
-        return parsedWs.toString();
+        // Ignore loopback ticket.WsUrl on remote browser origins; preserve path and derive from GraphQL URL below
+        rawPathOrUrl = (fallbackWsSubPath && fallbackWsSubPath.trim()) || parsedWs.pathname || '/collaboration/yjs';
       } catch (err) {
         LogError(err);
         return '';
@@ -2104,6 +2169,9 @@ export class DocumentCollaborationService {
           provider.ConfigData.WSURL ||
           '';
       }
+    }
+    if (!endpointUrl && browserHostname.length > 0 && !isLoopbackHostname(browserHostname)) {
+      endpointUrl = fallbackRelativeBase;
     }
 
     if (!endpointUrl) {
@@ -2140,11 +2208,15 @@ export class DocumentCollaborationService {
    * on the server via `ResolveArtifactPermissions` so server-registered delegates (such as
    * `bizapps-collaboration` space items) are evaluated on the server, falling back to
    * `ArtifactPermissionEngine.Instance.ResolvePermissions` when no GraphQL endpoint is available in tests.
+   *
+   * Distinguishes an explicit server denial (`AccessRevoked: true`, `PermissionVerifyError: false`)
+   * from a transient GraphQL/network error (`PermissionVerifyError: true`, `AccessRevoked: false`)
+   * while maintaining fail-closed read-only safety in both cases.
    */
   public async ResolvePermissionsFromServer(
     artifactId: string,
     providerOverride?: IMetadataProvider | null,
-  ): Promise<ResolvedArtifactPermissions | null> {
+  ): Promise<VerifiedArtifactPermissions | null> {
     if (!artifactId || !artifactId.trim()) {
       return null;
     }
@@ -2161,6 +2233,7 @@ export class DocumentCollaborationService {
         const serverPerms =
           gqlRes?.ResolveArtifactPermissions ?? gqlRes?.ResolveArtifactUserPermissions;
         if (serverPerms && typeof serverPerms === 'object') {
+          const canRead = Boolean(serverPerms.CanRead);
           const rawSource = serverPerms.Source;
           const validSource: ResolvedArtifactPermissions['Source'] =
             rawSource === 'Owner' ||
@@ -2169,23 +2242,25 @@ export class DocumentCollaborationService {
             rawSource === 'CollectionPermission' ||
             rawSource === 'Denied'
               ? rawSource
-              : serverPerms.CanRead
+              : canRead
                 ? 'Delegate'
                 : 'Denied';
           return {
             ArtifactID: serverPerms.ArtifactID || artifactId,
-            CanRead: Boolean(serverPerms.CanRead),
+            CanRead: canRead,
             CanEdit: Boolean(serverPerms.CanEdit),
             CanDelete: Boolean(serverPerms.CanDelete),
             CanShare: Boolean(serverPerms.CanShare),
             Source: validSource,
             Reason: serverPerms.Reason || '',
+            AccessRevoked: !canRead,
+            PermissionVerifyError: false,
           };
         }
       } catch (err) {
         LogError(err);
       }
-      // Fail closed when a GraphQL collaboration provider is configured and permission verification fails
+      // Fail closed when a GraphQL collaboration provider is configured and permission verification fails transiently
       return {
         ArtifactID: artifactId,
         CanRead: false,
@@ -2194,6 +2269,8 @@ export class DocumentCollaborationService {
         CanShare: false,
         Source: 'Denied',
         Reason: 'Failed to verify artifact permissions on server.',
+        AccessRevoked: false,
+        PermissionVerifyError: true,
       };
     }
 
@@ -2202,15 +2279,37 @@ export class DocumentCollaborationService {
       return null;
     }
     try {
-      return await ArtifactPermissionEngine.Instance.ResolvePermissions(
+      const localPerms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
         provider,
         artifactId,
         currentUser,
       );
+      return {
+        ...localPerms,
+        AccessRevoked: !localPerms.CanRead,
+        PermissionVerifyError: false,
+      };
     } catch (err) {
       LogError(err);
       return null;
     }
+  }
+
+  /**
+   * Alias for {@link FreezeLiveBlockOnServer} used by Document, Slide Deck, and Spreadsheet viewers.
+   */
+  public async FreezeLiveBlock(
+    spec: DocumentBlockSpec,
+    acknowledgeSecurityWarning: boolean,
+    hostArtifactId?: string | null,
+    providerOverride?: IMetadataProvider | null,
+  ): Promise<{ Success: boolean; UpdatedSpec?: DocumentBlockSpec; ErrorMessage?: string }> {
+    return this.FreezeLiveBlockOnServer(
+      spec,
+      acknowledgeSecurityWarning,
+      hostArtifactId,
+      providerOverride,
+    );
   }
 
   /**
@@ -2288,19 +2387,36 @@ export class DocumentCollaborationService {
     }
   }
 
-  private computeFrozenVerificationCacheKey(block: DocumentBlockSpec): string {
+  private computeFrozenVerificationCacheKey(
+    block: DocumentBlockSpec & { SourceType?: string; SourceID?: string },
+  ): string {
     const snap = block.FrozenSnapshot;
     if (!snap) {
       return '';
     }
+    const resolvedSourceType = block.SourceType ?? block.Kind ?? '';
+    const resolvedSourceId =
+      block.SourceID ??
+      block.ViewID ??
+      block.QueryID ??
+      block.ArtifactID ??
+      block.DashboardID ??
+      block.ComponentID ??
+      block.EntityName ??
+      block.QueryName ??
+      '';
     return JSON.stringify({
       BlockID: block.BlockID,
+      SourceType: resolvedSourceType,
+      SourceID: resolvedSourceId,
       FrozenAt: snap.FrozenAt,
       FrozenByUserID: snap.FrozenByUserID,
       FrozenByUserName: snap.FrozenByUserName,
       Columns: snap.Columns,
       Rows: snap.Rows,
       TotalRowCount: snap.TotalRowCount,
+      ArtifactContentSnapshot: snap.ArtifactContentSnapshot ?? '',
+      ArtifactTypeSnapshot: snap.ArtifactTypeSnapshot ?? '',
       SecurityWarningAcknowledged: snap.SecurityWarningAcknowledged,
       SnapshotContentHash: snap.SnapshotContentHash ?? '',
     });
@@ -2309,7 +2425,7 @@ export class DocumentCollaborationService {
   private recordFrozenSnapshotVerification(block: DocumentBlockSpec, verified: boolean): void {
     const key = this.computeFrozenVerificationCacheKey(block);
     if (key) {
-      this.verifiedFrozenHashes.set(key, verified);
+      this.frozenSnapshotVerificationCache.set(key, verified);
     }
   }
 
@@ -2349,12 +2465,13 @@ export class DocumentCollaborationService {
       return false;
     }
     const key = this.computeFrozenVerificationCacheKey(block);
-    return key ? this.verifiedFrozenHashes.get(key) === true : false;
+    return key ? this.frozenSnapshotVerificationCache.get(key) === true : false;
   }
 
   /**
-   * Verifies a frozen snapshot strictly on the server via `VerifyFrozenBlockSnapshot` and caches
-   * the boolean result for synchronous template rendering via {@link IsFrozenSnapshotVerified}.
+   * Verifies a frozen snapshot strictly on the server via `VerifyFrozenBlockSnapshot`, returning
+   * cached verification results immediately and deduplicating concurrent in-flight GraphQL requests
+   * for the same `cacheKey` so rapid editor re-parses emit zero redundant network calls (`E3`).
    */
   public async VerifyFrozenSnapshotOnServer(
     block: DocumentBlockSpec,
@@ -2372,22 +2489,46 @@ export class DocumentCollaborationService {
       this.recordFrozenSnapshotVerification(block, false);
       return false;
     }
+    const cacheKey = this.computeFrozenVerificationCacheKey(block);
+    if (cacheKey) {
+      const cached = this.frozenSnapshotVerificationCache.get(cacheKey);
+      if (cached !== undefined) {
+        return cached;
+      }
+      const inFlight = this.inFlightFrozenVerifications.get(cacheKey);
+      if (inFlight) {
+        return inFlight;
+      }
+    }
+
     const provider = resolveDefaultMetadataProvider(providerOverride);
     if (isGraphQLCollaborationProvider(provider)) {
-      try {
-        const gqlRes = await provider.ExecuteGQL(VERIFY_FROZEN_BLOCK_SNAPSHOT_QUERY, {
-          specJson: JSON.stringify(block),
-        });
-        const verifyPayload = gqlRes?.VerifyFrozenBlockSnapshot;
-        if (verifyPayload && typeof verifyPayload.SnapshotVerified === 'boolean') {
-          this.recordFrozenSnapshotVerification(block, verifyPayload.SnapshotVerified);
-          return verifyPayload.SnapshotVerified;
+      const runVerification = async (): Promise<boolean> => {
+        try {
+          const gqlRes = await provider.ExecuteGQL(VERIFY_FROZEN_BLOCK_SNAPSHOT_QUERY, {
+            specJson: JSON.stringify(block),
+          });
+          const verifyPayload = gqlRes?.VerifyFrozenBlockSnapshot;
+          if (verifyPayload && typeof verifyPayload.SnapshotVerified === 'boolean') {
+            this.recordFrozenSnapshotVerification(block, verifyPayload.SnapshotVerified);
+            return verifyPayload.SnapshotVerified;
+          }
+        } catch (err) {
+          LogError(err);
+        } finally {
+          if (cacheKey) {
+            this.inFlightFrozenVerifications.delete(cacheKey);
+          }
         }
-      } catch (err) {
-        LogError(err);
+        this.recordFrozenSnapshotVerification(block, false);
+        return false;
+      };
+
+      const promise = runVerification();
+      if (cacheKey) {
+        this.inFlightFrozenVerifications.set(cacheKey, promise);
       }
-      this.recordFrozenSnapshotVerification(block, false);
-      return false;
+      return promise;
     }
     return this.IsFrozenSnapshotVerified(block);
   }
@@ -2501,6 +2642,40 @@ export class DocumentCollaborationService {
           err instanceof Error ? err.message : 'Failed to execute anchored comment agent mention.',
       };
     }
+  }
+
+  /**
+   * Alias for {@link ExecuteAnchoredCommentAgentMention} exposing `ReplyMessage` alongside `ReplyBody`.
+   */
+  public async DispatchAnchoredCommentAgentMention(
+    artifactId: string,
+    agentHandle: string,
+    agentMode: 'comment' | 'suggest' | 'edit',
+    commentBody: string,
+    anchorQuote?: string,
+    providerOverride?: IMetadataProvider | null,
+  ): Promise<{
+    HandledByServer: boolean;
+    Success: boolean;
+    ReplyBody?: string;
+    ReplyMessage?: string;
+    UpdatedContent?: string;
+    VersionID?: string;
+    VersionNumber?: number;
+    ErrorMessage?: string;
+  }> {
+    const res = await this.ExecuteAnchoredCommentAgentMention(
+      artifactId,
+      agentHandle,
+      agentMode,
+      commentBody,
+      anchorQuote,
+      providerOverride,
+    );
+    return {
+      ...res,
+      ReplyMessage: res.ReplyBody,
+    };
   }
 
   /**

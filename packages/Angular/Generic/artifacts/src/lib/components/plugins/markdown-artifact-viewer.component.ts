@@ -27,6 +27,7 @@ import { CreateMarkdownSnapshot } from '../../snapshot-helpers';
 import {
   DocumentCollaborationService,
   DocumentCollaborationSession,
+  ExtractAnchoredCommentMentions,
   type CollaborationConnectionStatus,
   type CollaboratorPresence,
   type DocumentAnchoredThread,
@@ -429,6 +430,40 @@ export interface DocsPermissionEntry {
               </button>
             }
           </div>
+        </div>
+      }
+
+      <!-- Collaboration & Permission Status Banners (E1 & Low Retry State) -->
+      @if (LiveSyncUnavailable) {
+        <div
+          class="mj-docs-status-banner mj-docs-status-banner--readonly"
+          role="status"
+          data-testid="docs-live-sync-unavailable-banner"
+        >
+          <span>
+            <i class="fas fa-plug-circle-xmark"></i>
+            Live collaborative sync is unavailable on this server — viewing in read-only mode.
+          </span>
+        </div>
+      }
+      @if (PermissionVerifyError) {
+        <div
+          class="mj-docs-status-banner mj-docs-status-banner--warning"
+          role="alert"
+          data-testid="docs-permission-verify-error-banner"
+        >
+          <span>
+            <i class="fas fa-triangle-exclamation"></i>
+            Couldn't verify permissions — Retry
+          </span>
+          <button
+            type="button"
+            class="mj-docs-btn"
+            data-testid="docs-permission-retry-btn"
+            (click)="RetryVerifyPermissions()"
+          >
+            Retry
+          </button>
         </div>
       }
 
@@ -2365,6 +2400,17 @@ export interface DocsPermissionEntry {
         color: var(--mj-text-primary);
       }
 
+      .mj-docs-status-banner--readonly {
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-text-secondary);
+      }
+
+      .mj-docs-status-banner--warning {
+        background: var(--mj-status-warning-bg);
+        color: var(--mj-status-warning-text);
+        border-bottom-color: var(--mj-status-warning-border);
+      }
+
       .mj-docs-body {
         flex: 1;
         min-height: 0;
@@ -4005,6 +4051,8 @@ export class MarkdownArtifactViewerComponent
   private entitySearchFilteringActive = false;
 
   // Suggestions & Anchored Comments
+  public AccessRevoked = false;
+  public PermissionVerifyError = false;
   public Suggestions: DocumentSuggestionItem[] = [];
   public AnchoredThreads: DocumentAnchoredThread[] = [];
   public CommentFilter: 'all' | 'open' | 'resolved' = 'all';
@@ -6689,15 +6737,23 @@ export class MarkdownArtifactViewerComponent
     const mode = thread.AgentMode ?? this.NewCommentAgentMode;
     const nowIso = new Date().toISOString();
     const normalizedAuthor = agentHandle.startsWith('@') ? agentHandle : `@${agentHandle}`;
+    const trimmedReply = (response.replyMessage ?? '').trim();
+    const trimmedProposed = (response.proposedMarkdown ?? '').trim();
     const targetSeg =
       this.DocumentSegments.find((s) => s.SegmentID === thread.AnchorKey) ?? this.DocumentSegments[0];
 
-    if (mode === 'comment' || !response.proposedMarkdown) {
+    if (!trimmedReply && !trimmedProposed) {
+      this.StatusBannerMessage = `${normalizedAuthor} did not return a reply.`;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    if (mode === 'comment' || !trimmedProposed) {
       thread.Messages.push({
         DetailID: `msg-${Date.now()}-agent`,
         UserName: normalizedAuthor,
         Role: 'Agent',
-        Message: response.replyMessage,
+        Message: trimmedReply,
         CreatedAt: nowIso,
         Mentions: [],
       });
@@ -6708,18 +6764,20 @@ export class MarkdownArtifactViewerComponent
 
     if (mode === 'edit' && this.CanUserEdit && targetSeg) {
       if (response.appliedOnServer) {
-        this.OnMarkdownChanged(response.proposedMarkdown, true);
+        this.OnMarkdownChanged(response.proposedMarkdown!, true);
       } else {
-        this.ReplaceSegmentMarkdown(targetSeg, response.proposedMarkdown);
+        this.ReplaceSegmentMarkdown(targetSeg, response.proposedMarkdown!);
       }
-      thread.Messages.push({
-        DetailID: `msg-${Date.now()}-agent`,
-        UserName: normalizedAuthor,
-        Role: 'Agent',
-        Message: response.replyMessage || `Applied direct edit to ${thread.AnchorLabel}.`,
-        CreatedAt: nowIso,
-        Mentions: [],
-      });
+      if (trimmedReply) {
+        thread.Messages.push({
+          DetailID: `msg-${Date.now()}-agent`,
+          UserName: normalizedAuthor,
+          Role: 'Agent',
+          Message: trimmedReply,
+          CreatedAt: nowIso,
+          Mentions: [],
+        });
+      }
       this.StatusBannerMessage = `${normalizedAuthor} applied direct edit to ${thread.AnchorLabel}.`;
       this.cdr.markForCheck();
       return;
@@ -6729,27 +6787,34 @@ export class MarkdownArtifactViewerComponent
       this.CreateSuggestion(
         targetSeg.SegmentID,
         targetSeg.RawMarkdown,
-        response.proposedMarkdown,
-        response.rationale || response.replyMessage || `Suggestion from ${normalizedAuthor}`,
+        response.proposedMarkdown!,
+        response.rationale || trimmedReply || `Suggestion from ${normalizedAuthor}`,
         normalizedAuthor,
       );
     }
-    thread.Messages.push({
-      DetailID: `msg-${Date.now()}-agent`,
-      UserName: normalizedAuthor,
-      Role: 'Agent',
-      Message: response.replyMessage || `Proposed tracked suggestion for ${thread.AnchorLabel}.`,
-      CreatedAt: nowIso,
-      Mentions: [],
-    });
+    if (trimmedReply) {
+      thread.Messages.push({
+        DetailID: `msg-${Date.now()}-agent`,
+        UserName: normalizedAuthor,
+        Role: 'Agent',
+        Message: trimmedReply,
+        CreatedAt: nowIso,
+        Mentions: [],
+      });
+    }
     this.StatusBannerMessage = `${normalizedAuthor} proposed a tracked suggestion.`;
     this.cdr.markForCheck();
   }
 
   /**
    * Selects a block to anchor a new `DocBlock` comment thread in the right-margin drawer.
+   * Only populates `SelectedAnchorQuote` when the user actually selected a text quote
+   * (never slices `RawMarkdown.slice(0, 120)` as a fake quote).
    */
-  public OpenAnchorCommentForSegment(seg: DocumentRenderSegment): void {
+  public OpenAnchorCommentForSegment(
+    seg: DocumentRenderSegment,
+    explicitSelectedQuote?: string,
+  ): void {
     this.SelectedAnchorKey = seg.SegmentID;
     this.SelectedAnchorLabel =
       seg.HeadingText ??
@@ -6757,7 +6822,18 @@ export class MarkdownArtifactViewerComponent
       seg.Descriptor?.EntityName ??
       seg.Descriptor?.ArtifactType ??
       seg.SegmentID;
-    this.SelectedAnchorQuote = seg.RawMarkdown.slice(0, 120);
+    const rawSelection =
+      explicitSelectedQuote !== undefined
+        ? explicitSelectedQuote.trim()
+        : typeof window !== 'undefined' && typeof window.getSelection === 'function'
+          ? (window.getSelection()?.toString() ?? '').trim()
+          : '';
+    this.SelectedAnchorQuote =
+      rawSelection && seg.RawMarkdown.includes(rawSelection)
+        ? rawSelection
+        : rawSelection
+          ? rawSelection.slice(0, 240)
+          : '';
     this.ShowCommentsDrawer = true;
     if (this.session) {
       this.session.SetActiveBlock(seg.SegmentID);
@@ -6776,13 +6852,14 @@ export class MarkdownArtifactViewerComponent
     }
 
     const user = this.getSafeCurrentUser();
-    const mentions = Array.from(message.matchAll(/@([A-Za-z0-9_-]+)/g)).map((m) => m[1]);
+    const mentions = ExtractAnchoredCommentMentions(message);
+    const selectedQuote = this.SelectedAnchorQuote.trim();
     const nowIso = new Date().toISOString();
     const newThread: DocumentAnchoredThread = {
       ConversationID: `conv-${Date.now()}`,
       AnchorKey: this.SelectedAnchorKey,
       AnchorLabel: this.SelectedAnchorLabel,
-      QuotedText: this.SelectedAnchorQuote,
+      QuotedText: selectedQuote,
       Status: 'Open',
       AgentMode: this.NewCommentAgentMode,
       CreatedAt: nowIso,
@@ -6808,36 +6885,63 @@ export class MarkdownArtifactViewerComponent
 
     this.AnchoredThreads = [newThread, ...this.AnchoredThreads];
     this.NewCommentText = '';
+    this.SelectedAnchorQuote = '';
     this.StatusBannerMessage = 'Posted anchored comment.';
     this.cdr.markForCheck();
 
     if (artifactId && mentions.length > 0) {
       const provider = this.getSafeProvider();
       const firstHandle = mentions[0];
-      const serverMention = await this.collabService.ExecuteAnchoredCommentAgentMention(
+      const serverMention = await this.collabService.DispatchAnchoredCommentAgentMention(
         artifactId,
         firstHandle,
         newThread.AgentMode,
         message,
-        newThread.QuotedText,
+        selectedQuote || undefined,
         provider,
       );
       if (this.isComponentDestroyed) {
         return;
       }
-      if (serverMention.HandledByServer) {
-        if (!serverMention.Success) {
-          this.notifyError(
-            serverMention.ErrorMessage || `Failed to run @${firstHandle} in ${newThread.AgentMode} mode.`,
-          );
-          return;
-        }
-        this.DispatchAgentCommentMention(newThread, firstHandle, {
-          replyMessage: serverMention.ReplyBody || `Processed @${firstHandle}.`,
-          proposedMarkdown: serverMention.UpdatedContent,
-          appliedOnServer: newThread.AgentMode === 'edit' && Boolean(serverMention.UpdatedContent),
-        });
+      const replyMessage = (serverMention.ReplyMessage ?? serverMention.ReplyBody ?? '').trim();
+      const updatedContent =
+        serverMention.Success &&
+        typeof serverMention.UpdatedContent === 'string' &&
+        serverMention.UpdatedContent.trim().length > 0
+          ? serverMention.UpdatedContent
+          : undefined;
+      if (!serverMention.Success || (!replyMessage && !updatedContent)) {
+        const errStatus =
+          serverMention.ErrorMessage ||
+          (!serverMention.HandledByServer
+            ? `Cannot dispatch @${firstHandle}: live server agent runtime is unavailable.`
+            : !serverMention.Success
+              ? `Failed to run @${firstHandle} in ${newThread.AgentMode} mode.`
+              : `@${firstHandle} did not return a reply.`);
+        this.notifyError(errStatus);
+        this.StatusBannerMessage = errStatus;
+        this.cdr.markForCheck();
+        return;
       }
+      // In 'edit' mode, NEVER mutate document markdown locally unless UpdatedContent was returned with Success === true from server
+      if (newThread.AgentMode === 'edit' && !updatedContent) {
+        newThread.Messages.push({
+          DetailID: `msg-${Date.now()}-agent`,
+          UserName: `@${firstHandle}`,
+          Role: 'Agent',
+          Message: replyMessage,
+          CreatedAt: new Date().toISOString(),
+          Mentions: [],
+        });
+        this.StatusBannerMessage = `@${firstHandle} replied in comment thread.`;
+        this.cdr.markForCheck();
+        return;
+      }
+      this.DispatchAgentCommentMention(newThread, firstHandle, {
+        replyMessage,
+        proposedMarkdown: updatedContent,
+        appliedOnServer: newThread.AgentMode === 'edit' && Boolean(updatedContent),
+      });
     }
   }
 
@@ -7367,6 +7471,10 @@ export class MarkdownArtifactViewerComponent
     }
   }
 
+  public RetryVerifyPermissions(): void {
+    void this.evaluatePermissionsAndLoadThreads(this.sessionInitGeneration);
+  }
+
   private async evaluatePermissionsAndLoadThreads(gen = this.sessionInitGeneration): Promise<void> {
     const artifactId = this.artifactVersion?.ArtifactID;
     if (!artifactId) {
@@ -7392,6 +7500,8 @@ export class MarkdownArtifactViewerComponent
         return;
       }
       if (!perms) {
+        this.AccessRevoked = false;
+        this.PermissionVerifyError = false;
         this.HasEditPermission = false;
         this.CanUserShareArtifact = false;
         this.CurrentUserEffectiveRoleLabel = 'Viewer';
@@ -7399,6 +7509,21 @@ export class MarkdownArtifactViewerComponent
         this.cdr.markForCheck();
         return;
       }
+      if (perms.PermissionVerifyError) {
+        this.AccessRevoked = false;
+        this.PermissionVerifyError = true;
+        this.HasEditPermission = false;
+        this.CanUserShareArtifact = false;
+        this.CurrentUserEffectiveRoleLabel = 'Viewer';
+        this.CollaborationStatus = 'readonly';
+        if (this.ViewMode === 'edit' || this.ViewMode === 'suggest') {
+          this.ViewMode = 'preview';
+        }
+        this.session?.SetCanEdit(false);
+        this.cdr.markForCheck();
+        return;
+      }
+      this.PermissionVerifyError = false;
       this.HasEditPermission = perms.CanEdit;
       this.CanUserShareArtifact = perms.CanShare;
       this.CurrentUserEffectiveRoleLabel = perms.CanShare
@@ -7409,10 +7534,12 @@ export class MarkdownArtifactViewerComponent
             ? 'Viewer'
             : 'No Access';
       if (!perms.CanRead) {
+        this.AccessRevoked = true;
         this.CollaborationStatus = 'revoked';
         this.ViewMode = 'preview';
         this.session?.SetCanEdit(false);
       } else {
+        this.AccessRevoked = false;
         this.session?.SetCanEdit(this.hasPermissionToEdit);
         if (!perms.CanEdit && (this.ViewMode === 'edit' || this.ViewMode === 'suggest')) {
           this.ViewMode = 'preview';
@@ -7424,9 +7551,12 @@ export class MarkdownArtifactViewerComponent
       if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
         return;
       }
+      this.AccessRevoked = false;
+      this.PermissionVerifyError = true;
       this.HasEditPermission = false;
       this.CanUserShareArtifact = false;
       this.CurrentUserEffectiveRoleLabel = 'Viewer';
+      this.CollaborationStatus = 'readonly';
       this.session?.SetCanEdit(false);
       if (this.ViewMode === 'edit' || this.ViewMode === 'suggest') {
         this.ViewMode = 'preview';
@@ -7447,12 +7577,26 @@ export class MarkdownArtifactViewerComponent
       if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
         return;
       }
-      if (evt.ArtifactID === artifactId && user) {
+      if (UUIDsEqual(evt.ArtifactID, artifactId) && user) {
         try {
           const updated = await this.collabService.ResolvePermissionsFromServer(artifactId, provider);
           if (this.isComponentDestroyed || gen !== this.sessionInitGeneration || !updated) {
             return;
           }
+          if (updated.PermissionVerifyError) {
+            this.AccessRevoked = false;
+            this.PermissionVerifyError = true;
+            this.HasEditPermission = false;
+            this.CanUserShareArtifact = false;
+            this.CollaborationStatus = 'readonly';
+            if (this.ViewMode === 'edit' || this.ViewMode === 'suggest') {
+              this.ViewMode = 'preview';
+            }
+            this.session?.SetCanEdit(false);
+            this.cdr.markForCheck();
+            return;
+          }
+          this.PermissionVerifyError = false;
           this.HasEditPermission = updated.CanEdit;
           this.CanUserShareArtifact = updated.CanShare;
           this.CurrentUserEffectiveRoleLabel = updated.CanShare
@@ -7463,10 +7607,12 @@ export class MarkdownArtifactViewerComponent
                 ? 'Viewer'
                 : 'No Access';
           if (!updated.CanRead) {
+            this.AccessRevoked = true;
             this.CollaborationStatus = 'revoked';
             this.ViewMode = 'preview';
             this.session?.SetCanEdit(false);
           } else {
+            this.AccessRevoked = false;
             this.session?.SetCanEdit(this.hasPermissionToEdit);
             if (!updated.CanEdit) {
               this.CollaborationStatus = 'readonly';
@@ -7591,7 +7737,7 @@ export class MarkdownArtifactViewerComponent
           Role: (d.Role === 'AI' ? 'Agent' : 'User') as 'User' | 'Agent',
           Message: d.Message,
           CreatedAt: d.__mj_CreatedAt ?? new Date().toISOString(),
-          Mentions: Array.from((d.Message ?? '').matchAll(/@([A-Za-z0-9_-]+)/g)).map((m) => m[1]),
+          Mentions: ExtractAnchoredCommentMentions(d.Message ?? ''),
         }));
 
         return {

@@ -1,4 +1,4 @@
-import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, Metadata, RunView, UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import { BaseSingleton, EscapeSQLString, MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 
 /**
@@ -683,6 +683,13 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
         user: UserInfo
     ): Promise<CollectionPermissionRowProjection[]> {
         try {
+            // On Database providers, run the version/collection membership lookup as the system user
+            // so `ArtifactVersionPostRunViewHook` does not recurse back into `ResolvePermissions`
+            // while resolving collection-shared grants for `user` (`B3`).
+            const queryActor =
+                provider.ProviderType === 'Database'
+                    ? ((await WellKnownUserSource.Instance.GetSystemUser(provider)) ?? user)
+                    : user;
             const rv = RunView.FromMetadataProvider(provider);
             const safeArtifactId = EscapeSQLString(artifactId);
             const safeUserId = EscapeSQLString(user.ID);
@@ -695,7 +702,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                     SkipTotalRowCount: true,
                     ResultType: 'simple'
                 },
-                user
+                queryActor
             );
             const versionIds = Array.from(
                 new Set((versionsResult.Success ? versionsResult.Results ?? [] : []).map((v) => v.ID).filter(Boolean))
@@ -713,7 +720,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                     SkipTotalRowCount: true,
                     ResultType: 'simple'
                 },
-                user
+                queryActor
             );
             const collectionIds = Array.from(
                 new Set((colResult.Success ? colResult.Results ?? [] : []).map((r) => r.CollectionID).filter(Boolean))
@@ -731,7 +738,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                     SkipTotalRowCount: true,
                     ResultType: 'simple'
                 },
-                user
+                queryActor
             );
             return permResult.Success ? permResult.Results ?? [] : [];
         } catch {

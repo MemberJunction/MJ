@@ -1,14 +1,54 @@
 import { RunView, type EntityInfo, type IMetadataProvider, type RunViewParams, type UserInfo } from '@memberjunction/core';
-import { EscapeSQLString, IndexByUUID } from '@memberjunction/global';
+import { EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
 import { UserHoldsAuthorization } from './user-authorization';
 
 /**
- * Optional MJ Authorization name granting non-owner / non-administrator roles access to the
- * "All Users" scope toggle in Agent Activity.
+ * Seeded MJ Authorization name granting non-owner roles access to the
+ * "All Users" UX scope toggle in Agent Activity.
  */
 export const AGENT_ACTIVITY_VIEW_ALL_USERS_AUTHORIZATION = 'Agent Activity: View All Users';
 
-const ALL_USERS_AUTHORIZED_ROLE_NAMES = new Set(['administrator', 'system administrator']);
+/** Short TTL (30 seconds) for cached `{ conversationIds, detailIds }` per user in Agent Activity polling. */
+export const AGENT_ACTIVITY_SCOPE_CACHE_TTL_MS = 30_000;
+
+interface AgentActivityScopeIds {
+  conversationIds: string[];
+  detailIds: string[];
+}
+
+interface CachedAgentActivityScope extends AgentActivityScopeIds {
+  expiresAt: number;
+  globalEpoch: number;
+  userEpoch: number;
+}
+
+interface InFlightAgentActivityScope {
+  token: object;
+  promise: Promise<AgentActivityScopeIds | null>;
+  globalEpoch: number;
+  userEpoch: number;
+}
+
+let globalScopeCacheEpoch = 0;
+const userScopeCacheEpochs = new Map<string, number>();
+const scopeCacheByProvider = new WeakMap<IMetadataProvider, Map<string, CachedAgentActivityScope>>();
+const inFlightScopeByProvider = new WeakMap<IMetadataProvider, Map<string, InFlightAgentActivityScope>>();
+
+/**
+ * Invalidates cached `{ conversationIds, detailIds }` scope entries used by
+ * {@link BuildConversationTasksFilter} and {@link BuildAgentActivityTasksFilter}.
+ *
+ * Pass `userId` to invalidate a single user's cached scope, or omit `userId` to clear all users.
+ */
+export function InvalidateAgentActivityScopeCache(userId?: string): void {
+  if (userId && userId.trim().length > 0) {
+    const normId = NormalizeUUID(userId);
+    userScopeCacheEpochs.set(normId, (userScopeCacheEpochs.get(normId) ?? 0) + 1);
+    return;
+  }
+  globalScopeCacheEpoch += 1;
+  userScopeCacheEpochs.clear();
+}
 
 /** The ExtraFilter for the top-level tasks a user owns. */
 export function OwnTasksFilter(user: UserInfo): string {
@@ -17,9 +57,11 @@ export function OwnTasksFilter(user: UserInfo): string {
 
 /**
  * Returns `true` only when `user` is authorized to switch Agent Activity from personal/conversation
- * scope to the organization-wide "All Users" scope (`User.Type === 'Owner'`, `Administrator` /
- * `System Administrator` role, or the explicit `Agent Activity: View All Users` authorization).
- * Standard `UI`, `Developer`, and `Integration` roles default strictly to their own workflows.
+ * scope to the organization-wide "All Users" scope (`User.Type === 'Owner'` or the seeded
+ * `Agent Activity: View All Users` authorization via `AuthorizationEngine`).
+ *
+ * Note: `MJ: Tasks` has no server-side RLS filter in a default install, so this check gates the
+ * Agent Activity UX scope control rather than enforcing database-level row security.
  */
 export function CanUserViewAllAgentTasks(
   user: UserInfo | null | undefined,
@@ -31,25 +73,7 @@ export function CanUserViewAllAgentTasks(
   if ((user.Type ?? '').trim().toLowerCase() === 'owner') {
     return true;
   }
-  if (UserHoldsAuthorization(user, AGENT_ACTIVITY_VIEW_ALL_USERS_AUTHORIZATION, provider ?? undefined)) {
-    return true;
-  }
-  const providerRoles = provider?.Roles ?? [];
-  const rolesById = providerRoles.length > 0 ? IndexByUUID(providerRoles) : null;
-  for (const userRole of user.UserRoles ?? []) {
-    const directName = (userRole.Role ?? '').trim().toLowerCase();
-    if (ALL_USERS_AUTHORIZED_ROLE_NAMES.has(directName)) {
-      return true;
-    }
-    if (userRole.RoleID && rolesById) {
-      const matched = rolesById.Get(userRole.RoleID);
-      const resolvedName = (matched?.Name ?? '').trim().toLowerCase();
-      if (ALL_USERS_AUTHORIZED_ROLE_NAMES.has(resolvedName)) {
-        return true;
-      }
-    }
-  }
-  return false;
+  return UserHoldsAuthorization(user, AGENT_ACTIVITY_VIEW_ALL_USERS_AUTHORIZATION, provider ?? undefined);
 }
 
 function buildAgentBackedClause(provider?: IMetadataProvider | null): string {
@@ -96,17 +120,21 @@ export function BuildAgentBackedTaskExtraFilter(
  * conversations the user owns or wrote) with the agent-backed task predicate.
  *
  * When `options?.includeAllUsers` is `true` and {@link CanUserViewAllAgentTasks} is satisfied,
- * returns the organization-wide agent-backed task filter.
+ * returns the organization-wide agent-backed task filter. Note that `MJ: Tasks` has no server RLS
+ * filter by default, so this toggle is a UX scope control gated by `Agent Activity: View All Users`
+ * (or `User.Type === 'Owner'`).
  */
 export async function BuildAgentActivityTasksFilter(
   provider: IMetadataProvider,
   user: UserInfo,
-  options?: { includeAllUsers?: boolean },
+  options?: { includeAllUsers?: boolean; bypassCache?: boolean },
 ): Promise<string> {
   if (options?.includeAllUsers && CanUserViewAllAgentTasks(user, provider)) {
     return BuildAgentBackedTaskExtraFilter(provider, user, { includeAllUsers: true });
   }
-  const conversationScopedFilter = await BuildConversationTasksFilter(provider, user);
+  const conversationScopedFilter = await BuildConversationTasksFilter(provider, user, {
+    useCache: options?.bypassCache !== true,
+  });
   const agentClause = buildAgentBackedClause(provider);
   return `(${conversationScopedFilter}) AND ${agentClause}`;
 }
@@ -119,32 +147,122 @@ export async function BuildAgentActivityTasksFilter(
  * The conversation and message IDs are read with their own RunView, so the row-level security on
  * those entities applies. A subquery over their views would skip it, and the server refuses one
  * for a user whose read of them is row-filtered. When a read fails, the result is the user's own
- * tasks.
+ * tasks. When `options?.useCache` is `true` (used by {@link BuildAgentActivityTasksFilter}),
+ * resolved `{ conversationIds, detailIds }` are cached per user with a 30-second TTL and
+ * concurrent in-flight deduplication so 4-second polling and `TaskGraphEvents$` bursts do not
+ * repeatedly query `MJ: Conversations` and `MJ: Conversation Details` with `IgnoreMaxRows: true`.
  */
-export async function BuildConversationTasksFilter(provider: IMetadataProvider, user: UserInfo): Promise<string> {
+export async function BuildConversationTasksFilter(
+  provider: IMetadataProvider,
+  user: UserInfo,
+  options?: { useCache?: boolean },
+): Promise<string> {
   const ownTasks = OwnTasksFilter(user);
   const tasks = provider.EntityByName('MJ: Tasks');
   if (!tasks) {
     return ownTasks;
   }
-  const rv = RunView.FromMetadataProvider(provider);
-  const conversationIds = await readIds(rv, user, {
-    EntityName: 'MJ: Conversations',
-    ExtraFilter: `UserID = '${EscapeSQLString(user.ID)}'`,
-    Fields: ['ID'],
-  });
-  if (conversationIds == null) {
+  const scope = await resolveUserActivityScope(provider, user, tasks, Boolean(options?.useCache));
+  if (scope == null || scope.detailIds.length === 0) {
     return ownTasks;
   }
-  const messageIds = await readIds(rv, user, {
-    EntityName: 'MJ: Conversation Details',
-    ExtraFilter: taskMessagesFilter(user, conversationIds, tasks),
-    Fields: ['ID'],
-  });
-  if (messageIds == null || messageIds.length === 0) {
-    return ownTasks;
+  return `ParentID IS NULL AND (UserID = '${EscapeSQLString(user.ID)}' OR ConversationDetailID IN (${sqlInList(scope.detailIds)}))`;
+}
+
+async function resolveUserActivityScope(
+  provider: IMetadataProvider,
+  user: UserInfo,
+  tasks: EntityInfo,
+  useCache: boolean,
+): Promise<AgentActivityScopeIds | null> {
+  const userKey = NormalizeUUID(user.ID);
+  const currentGlobalEpoch = globalScopeCacheEpoch;
+  const currentUserEpoch = userScopeCacheEpochs.get(userKey) ?? 0;
+  const now = Date.now();
+
+  let providerCache = scopeCacheByProvider.get(provider);
+  if (!providerCache) {
+    providerCache = new Map<string, CachedAgentActivityScope>();
+    scopeCacheByProvider.set(provider, providerCache);
   }
-  return `ParentID IS NULL AND (UserID = '${EscapeSQLString(user.ID)}' OR ConversationDetailID IN (${sqlInList(messageIds)}))`;
+
+  if (useCache) {
+    const cached = providerCache.get(userKey);
+    if (
+      cached &&
+      cached.globalEpoch === currentGlobalEpoch &&
+      cached.userEpoch === currentUserEpoch &&
+      now < cached.expiresAt
+    ) {
+      return { conversationIds: cached.conversationIds, detailIds: cached.detailIds };
+    }
+  }
+
+  let providerInFlight = inFlightScopeByProvider.get(provider);
+  if (!providerInFlight) {
+    providerInFlight = new Map<string, InFlightAgentActivityScope>();
+    inFlightScopeByProvider.set(provider, providerInFlight);
+  }
+
+  if (useCache) {
+    const existingInFlight = providerInFlight.get(userKey);
+    if (
+      existingInFlight &&
+      existingInFlight.globalEpoch === currentGlobalEpoch &&
+      existingInFlight.userEpoch === currentUserEpoch
+    ) {
+      return existingInFlight.promise;
+    }
+  }
+
+  const inFlightToken = {};
+  const runFetch = async (): Promise<AgentActivityScopeIds | null> => {
+    try {
+      const rv = RunView.FromMetadataProvider(provider);
+      const conversationIds = await readIds(rv, user, {
+        EntityName: 'MJ: Conversations',
+        ExtraFilter: `UserID = '${EscapeSQLString(user.ID)}'`,
+        Fields: ['ID'],
+      });
+      if (conversationIds == null) {
+        return null;
+      }
+      const detailIds = await readIds(rv, user, {
+        EntityName: 'MJ: Conversation Details',
+        ExtraFilter: taskMessagesFilter(user, conversationIds, tasks),
+        Fields: ['ID'],
+      });
+      if (detailIds == null) {
+        return null;
+      }
+      const latestUserEpoch = userScopeCacheEpochs.get(userKey) ?? 0;
+      if (globalScopeCacheEpoch === currentGlobalEpoch && latestUserEpoch === currentUserEpoch) {
+        providerCache.set(userKey, {
+          conversationIds,
+          detailIds,
+          expiresAt: Date.now() + AGENT_ACTIVITY_SCOPE_CACHE_TTL_MS,
+          globalEpoch: currentGlobalEpoch,
+          userEpoch: currentUserEpoch,
+        });
+      }
+      return { conversationIds, detailIds };
+    } finally {
+      const activeEntry = providerInFlight.get(userKey);
+      if (activeEntry?.token === inFlightToken) {
+        providerInFlight.delete(userKey);
+      }
+    }
+  };
+
+  const fetchPromise = runFetch();
+  providerInFlight.set(userKey, {
+    token: inFlightToken,
+    promise: fetchPromise,
+    globalEpoch: currentGlobalEpoch,
+    userEpoch: currentUserEpoch,
+  });
+
+  return fetchPromise;
 }
 
 /**

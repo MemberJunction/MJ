@@ -1,10 +1,11 @@
-import safeRegexCheck from 'safe-regex';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
 import {
     FormatCellAddress,
+    IsSafeUserRegex,
     ParseCellAddress,
     ParseRangeAddress,
+    SafeRegexTest,
     SpreadsheetCalculatedColumnSpec,
     SpreadsheetCellFormatType,
     SpreadsheetCellSpec,
@@ -1018,7 +1019,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                 }
                 regex = null;
             }
-            if (regex && !this.isSafeSearchRegex(query)) {
+            if (regex && !IsSafeUserRegex(query)) {
                 return this.errorResult('Unsafe or overly complex regular expression rejected');
             }
         }
@@ -1051,7 +1052,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                 if (val === null || val === undefined || val === '') continue;
                 const text = cell.DisplayValue || String(val);
                 const matched = regex
-                    ? (regex.test(text) || regex.test(String(val)))
+                    ? (SafeRegexTest(regex, text) || SafeRegexTest(regex, String(val)))
                     : (text.toLowerCase().includes(literalNeedle) || String(val).toLowerCase().includes(literalNeedle));
                 if (matched) {
                     matches.push({
@@ -1064,50 +1065,6 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         }
 
         return this.successResult({ matches });
-    }
-
-    private isSafeSearchRegex(pattern: string): boolean {
-        if (!pattern || pattern.length > 256 || !safeRegexCheck(pattern) || /\\[1-9]/.test(pattern)) {
-            return false;
-        }
-        const groupStack: Array<{ hasAlternation: boolean }> = [];
-        let inCharClass = false;
-        for (let i = 0; i < pattern.length; i++) {
-            const ch = pattern[i];
-            if (ch === '\\') {
-                i++;
-                continue;
-            }
-            if (inCharClass) {
-                if (ch === ']') inCharClass = false;
-                continue;
-            }
-            if (ch === '[') {
-                inCharClass = true;
-                continue;
-            }
-            if (ch === '(') {
-                groupStack.push({ hasAlternation: false });
-                continue;
-            }
-            if (ch === '|' && groupStack.length > 0) {
-                groupStack[groupStack.length - 1].hasAlternation = true;
-                continue;
-            }
-            if (ch === ')' && groupStack.length > 0) {
-                const closed = groupStack.pop()!;
-                let nextIdx = i + 1;
-                while (nextIdx < pattern.length && /\s/.test(pattern[nextIdx])) nextIdx++;
-                const nextCh = pattern[nextIdx];
-                if (closed.hasAlternation && (nextCh === '*' || nextCh === '+' || nextCh === '{')) {
-                    return false;
-                }
-                if (closed.hasAlternation && groupStack.length > 0) {
-                    groupStack[groupStack.length - 1].hasAlternation = true;
-                }
-            }
-        }
-        return true;
     }
 
     private handleAggregateColumn(

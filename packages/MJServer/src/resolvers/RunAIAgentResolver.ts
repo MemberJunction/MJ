@@ -1,7 +1,7 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID, Int } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { MJConversationDetailEntity, MJConversationDetailEntityExtended, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine, ConversationEngine } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationDetailEntityExtended, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine, ArtifactPermissionEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { RouteArtifact } from './artifact-routing.js';
 import { AgentRunner, ArtifactToolManager, CanAgentOwnSubAgentConsults, LoadOpenSubAgentConsults, HostAllowedAgentIDs } from '@memberjunction/ai-agents';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData, ContinuationAnnouncementText } from '@memberjunction/ai-core-plus';
@@ -1903,7 +1903,7 @@ export class RunAIAgentResolver extends ResolverBase {
      * Batch load input artifact versions for conversation details.
      * Returns a map of ConversationDetailID -> ArtifactVersion[]
      */
-    private async loadInputArtifactsBatch(
+    protected async loadInputArtifactsBatch(
         conversationDetailIds: string[],
         contextUser: UserInfo,
         provider: IMetadataProvider
@@ -1935,15 +1935,38 @@ export class RunAIAgentResolver extends ResolverBase {
 
         if (!versionsResult.Success || !versionsResult.Results) return map;
 
-        // Build a lookup of version ID -> version entity
+        // Enforce artifact read ACL via ArtifactPermissionEngine so conversation context loading never bypasses permissions (D3)
+        const canReadByArtifactId = new Map<string, boolean>();
+        for (const v of versionsResult.Results) {
+            const artId = (v.ArtifactID ?? '').trim();
+            if (!artId) {
+                continue;
+            }
+            const lowerArtId = artId.toLowerCase();
+            if (!canReadByArtifactId.has(lowerArtId)) {
+                const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+                    provider,
+                    artId,
+                    contextUser
+                );
+                canReadByArtifactId.set(lowerArtId, perms.CanRead === true);
+            }
+        }
+
+        // Build a lookup of version ID -> readable version entity (keyed lowercase for case-insensitive UUID matching)
         const versionMap = new Map<string, MJArtifactVersionEntity>();
         for (const v of versionsResult.Results) {
-            versionMap.set(v.ID, v);
+            const lowerArtId = (v.ArtifactID ?? '').trim().toLowerCase();
+            if (lowerArtId && canReadByArtifactId.get(lowerArtId) === true) {
+                versionMap.set(v.ID.toLowerCase(), v);
+            }
         }
 
         // Group by conversation detail ID
         for (const link of linksResult.Results) {
-            const version = versionMap.get(link.ArtifactVersionID);
+            const version = link.ArtifactVersionID
+                ? versionMap.get(link.ArtifactVersionID.toLowerCase())
+                : undefined;
             if (version) {
                 const existing = map.get(link.ConversationDetailID) || [];
                 existing.push(version);

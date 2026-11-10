@@ -193,12 +193,15 @@ node -e "
     if (re.test(content)) return content.replace(re, () => line);
     return content + (content.endsWith('\n') ? '' : '\n') + line + '\n';
   };
+  const crypto = require('crypto');
   const keysToSync = [
     'DB_HOST', 'DB_PORT', 'DB_DATABASE', 'DB_USERNAME', 'DB_PASSWORD',
-    'MJ_BASE_ENCRYPTION_KEY', 'MJ_DEV_AUTH_ENABLED',
+    'MJ_BASE_ENCRYPTION_KEY', 'MJ_ARTIFACT_COLLAB_HMAC_SECRET', 'MJ_FROZEN_BLOCK_HMAC_SECRET', 'MJ_DEV_AUTH_ENABLED',
     'AI_VENDOR_API_KEY__OpenAILLM', 'AI_VENDOR_API_KEY__AnthropicLLM',
     'AI_VENDOR_API_KEY__GeminiLLM', 'AI_VENDOR_API_KEY__GroqLLM', 'AI_VENDOR_API_KEY__MistralLLM'
   ];
+  const generatedCollabSecret = crypto.randomBytes(32).toString('hex');
+  const generatedFrozenSecret = crypto.randomBytes(32).toString('hex');
   for (const envFile of ['.env', 'apps/MJAPI/.env', 'packages/MJAPI/.env']) {
     if (fs.existsSync(envFile)) {
       let content = fs.readFileSync(envFile, 'utf8');
@@ -207,6 +210,12 @@ node -e "
         if (v !== undefined && v !== '') {
           content = upsertVar(content, k, v);
         }
+      }
+      if (!/^MJ_ARTIFACT_COLLAB_HMAC_SECRET=.+/m.test(content)) {
+        content = upsertVar(content, 'MJ_ARTIFACT_COLLAB_HMAC_SECRET', generatedCollabSecret);
+      }
+      if (!/^MJ_FROZEN_BLOCK_HMAC_SECRET=.+/m.test(content)) {
+        content = upsertVar(content, 'MJ_FROZEN_BLOCK_HMAC_SECRET', generatedFrozenSecret);
       }
       content = upsertVar(content, 'DB_USER', process.env.DB_USERNAME || 'sa');
       fs.writeFileSync(envFile, content);

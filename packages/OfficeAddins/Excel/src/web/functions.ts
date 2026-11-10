@@ -11,6 +11,7 @@ import {
     ExcelAddinEvaluateCustomFunctionOutput,
     ExcelCancelableInvocation,
     ExcelCustomFunctionCoordinator,
+    ValidateExcelViewFilter,
 } from '../custom-functions';
 import {
     HydrateConnectionsFromOfficeStorage,
@@ -31,10 +32,32 @@ interface OfficeCustomFunctionsApi {
     associate(id: string, callback: (...args: readonly unknown[]) => Promise<ExcelCellValue[][]>): void;
 }
 
+/** Resolved viewer-scoped connection context memoized across custom function cell evaluations. */
+export interface ResolvedCustomFunctionContext {
+    ScopeKey: string;
+    Connection: StoredConnection;
+}
+
+const BLOCKED_SQL_METADATA_IDENTIFIER_RE =
+    /\b(?:SYSTEM_USER|CURRENT_USER|SESSION_USER|USER_NAME|SUSER_NAME|SUSER_SNAME|ORIGINAL_LOGIN|DB_NAME|HOST_NAME|APP_NAME|SCHEMA_NAME|OBJECT_NAME|OBJECT_DEFINITION|HAS_PERMS_BY_NAME)\b/i;
+
+const BLOCKED_SQL_GLOBAL_VARIABLE_RE = /@@[A-Za-z_][A-Za-z0-9_]*/i;
+
 let cachedAddinUrlPromise: Promise<string> | null = null;
+let cachedContextPromise: Promise<ResolvedCustomFunctionContext> | null = null;
 let sharedCoordinator: ExcelCustomFunctionCoordinator<StoredConnection> | null = null;
 let functionsAssociated = false;
 let connectionListenerRegistered = false;
+
+function ensureConnectionListenerRegistered(): void {
+    if (!connectionListenerRegistered) {
+        OnConnectionChanged(() => {
+            InvalidateCustomFunctionContext();
+            sharedCoordinator?.ClearCache();
+        });
+        connectionListenerRegistered = true;
+    }
+}
 
 function fingerprintToken(token: string): string {
     let h1 = 0x811c9dc5;
@@ -90,35 +113,91 @@ export function BuildConnectionScopeKey(conn: StoredConnection): string {
     return `${conn.AddinUrl}::${conn.UserEmail || conn.UserName || 'user'}::${fingerprintToken(conn.APIKey)}`;
 }
 
-/** Clears the shared custom function result cache (called automatically on sign-in, account switch, or sign-out). */
+/**
+ * Invalidates the memoized custom-function connection context so the next cell evaluation
+ * re-reads the active server URL and connection (invoked automatically on `OnConnectionChanged`).
+ */
+export function InvalidateCustomFunctionContext(): void {
+    cachedContextPromise = null;
+    cachedAddinUrlPromise = null;
+}
+
+/**
+ * Resolves and memoizes the active `{ ScopeKey, Connection }` context until invalidated
+ * by {@link InvalidateCustomFunctionContext} or an {@link OnConnectionChanged} event.
+ * Rejections are cleared immediately so subsequent cells retry cleanly after sign-in.
+ */
+export function ResolveCustomFunctionContext(): Promise<ResolvedCustomFunctionContext> {
+    ensureConnectionListenerRegistered();
+    if (!cachedContextPromise) {
+        cachedContextPromise = (async (): Promise<ResolvedCustomFunctionContext> => {
+            const conn = await ResolveActiveCustomFunctionConnection();
+            return {
+                ScopeKey: BuildConnectionScopeKey(conn),
+                Connection: conn,
+            };
+        })().catch((err: Error) => {
+            cachedContextPromise = null;
+            throw err;
+        });
+    }
+    return cachedContextPromise;
+}
+
+/**
+ * Validates an `=MJ.VIEW` filter expression, blocking SQL Server system/metadata functions
+ * (`SYSTEM_USER`, `CURRENT_USER`, `SESSION_USER`, `USER_NAME`, `SUSER_NAME`, `SUSER_SNAME`,
+ * `ORIGINAL_LOGIN`, `DB_NAME`, `HOST_NAME`, `APP_NAME`, `SCHEMA_NAME`, `OBJECT_NAME`,
+ * `OBJECT_DEFINITION`, `HAS_PERMS_BY_NAME`) and `@@` global variables (`@@VERSION`,
+ * `@@SERVERNAME`, `@@SERVICENAME`, `@@SPID`, `@@LANGUAGE`) outside single-quoted string literals
+ * so they cannot be used as boolean oracles. Throws a `#VALUE!` error when rejected.
+ */
+export function ValidateExtraFilter(rawFilter: string | undefined): string | undefined {
+    const trimmed = (rawFilter ?? '').trim();
+    if (!trimmed) {
+        return undefined;
+    }
+    const strippedEscapedQuotes = trimmed.replace(/''/g, () => '');
+    const singleQuoteCount = strippedEscapedQuotes.match(/'/g)?.length ?? 0;
+    if (singleQuoteCount % 2 !== 0) {
+        throw new Error('#VALUE! Unterminated string literal in =MJ.VIEW filter.');
+    }
+
+    // Mask ONLY single-quoted string literals so unquoted or double-quoted SQL metadata tokens are caught
+    const outsideSingleQuotes = trimmed.replace(/'(?:''|[^'])*'/g, () => '__MJ_SQ_LIT__');
+    if (
+        BLOCKED_SQL_GLOBAL_VARIABLE_RE.test(outsideSingleQuotes) ||
+        BLOCKED_SQL_METADATA_IDENTIFIER_RE.test(outsideSingleQuotes)
+    ) {
+        throw new Error('#VALUE! Unsafe SQL Server metadata function or variable refused in =MJ.VIEW.');
+    }
+
+    return ValidateExcelViewFilter(trimmed);
+}
+
+/** Clears the shared custom function result cache and memoized connection context (called automatically on sign-in, account switch, or sign-out). */
 export function ClearCustomFunctionCache(): void {
+    InvalidateCustomFunctionContext();
     sharedCoordinator?.ClearCache();
 }
 
 export function GetOrCreateCustomFunctionCoordinator(): ExcelCustomFunctionCoordinator<StoredConnection> {
-    if (!connectionListenerRegistered) {
-        OnConnectionChanged(() => {
-            ClearCustomFunctionCache();
-        });
-        connectionListenerRegistered = true;
-    }
+    ensureConnectionListenerRegistered();
     if (!sharedCoordinator) {
         sharedCoordinator = new ExcelCustomFunctionCoordinator<StoredConnection>(
             async (
                 input: ExcelAddinEvaluateCustomFunctionInput,
                 options?: { signal?: AbortSignal; connection?: StoredConnection },
             ): Promise<ExcelAddinEvaluateCustomFunctionOutput> => {
-                const conn = options?.connection ?? (await ResolveActiveCustomFunctionConnection());
-                return EvaluateCustomFunctionOnServer(conn, input, options);
+                const validatedInput =
+                    input.Kind === 'View'
+                        ? { ...input, Filter: ValidateExtraFilter(input.Filter) }
+                        : input;
+                const conn = options?.connection ?? (await ResolveCustomFunctionContext()).Connection;
+                return EvaluateCustomFunctionOnServer(conn, validatedInput, options);
             },
             {
-                ResolveContext: async () => {
-                    const conn = await ResolveActiveCustomFunctionConnection();
-                    return {
-                        ScopeKey: BuildConnectionScopeKey(conn),
-                        Connection: conn,
-                    };
-                },
+                ResolveContext: () => ResolveCustomFunctionContext(),
             },
         );
     }
@@ -144,28 +223,38 @@ export function RegisterMjExcelCustomFunctions(customFunctionsOverride?: OfficeC
     );
     cf.associate(
         'VIEW',
-        (
+        async (
             entityNameOrId: unknown,
             viewNameOrId?: unknown,
             filter?: unknown,
             includeHeaders?: unknown,
             invocation?: unknown,
-        ) =>
-            coordinator.EvaluateView(
+        ) => {
+            let safeFilterArg: string | boolean | ExcelCancelableInvocation | undefined;
+            if (typeof filter === 'boolean') {
+                safeFilterArg = filter;
+            } else if (typeof filter === 'string') {
+                try {
+                    safeFilterArg = ValidateExtraFilter(filter);
+                } catch (err) {
+                    const msg = err instanceof Error ? err.message : '#VALUE!';
+                    return [[msg.startsWith('#VALUE!') ? msg.slice(0, 80) : `#VALUE! ${msg}`.slice(0, 80)]];
+                }
+            } else if (filter !== undefined && filter !== null) {
+                safeFilterArg = filter as ExcelCancelableInvocation;
+            }
+            return coordinator.EvaluateView(
                 String(entityNameOrId ?? ''),
                 viewNameOrId !== undefined && viewNameOrId !== null
                     ? (viewNameOrId as string | ExcelCancelableInvocation)
                     : undefined,
-                typeof filter === 'boolean'
-                    ? filter
-                    : filter !== undefined && filter !== null
-                      ? (filter as string | ExcelCancelableInvocation)
-                      : undefined,
+                safeFilterArg,
                 typeof includeHeaders === 'boolean'
                     ? includeHeaders
                     : (includeHeaders as ExcelCancelableInvocation | undefined),
                 invocation as ExcelCancelableInvocation | undefined,
-            ),
+            );
+        },
     );
     if (!customFunctionsOverride) {
         functionsAssociated = true;

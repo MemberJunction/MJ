@@ -142,7 +142,8 @@ BEGIN TRY
       (N'EntityFormOverride.EntityID'), (N'EntityOrganicKey.EntityID'),
       (N'EntityOrganicKeyRelatedEntity.RelatedEntityID'), (N'EntityPermission.EntityID'),
       (N'EntityRecordDocument.EntityID'), (N'EntityRelationship.EntityID'),
-      (N'EntityRelationship.RelatedEntityID'), (N'EntitySetting.EntityID'), (N'FeatureValue.EntityID'),
+      (N'EntityRelationship.RelatedEntityID'), (N'EntitySetting.EntityID'),
+      (N'EntityUniqueKey.EntityID'), (N'FeatureValue.EntityID'),
       (N'FileEntityRecordLink.EntityID'), (N'FormChromeRule.EntityID'),
       (N'FormChromeRule.RelatedEntityID'), (N'GeneratedCode.LinkedEntityID'),
       (N'GraphEdge.SourceEntityID'), (N'GraphEdge.TargetEntityID'), (N'GraphEdgeTypeEndpoint.EntityID'),
@@ -464,6 +465,7 @@ BEGIN TRY
     DELETE FROM [${flyway:defaultSchema}].[EntityPermission] WHERE [EntityID] = @EntityID;
     DELETE FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [EntityID] = @EntityID OR [RelatedEntityID] = @EntityID;
     DELETE FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[EntityUniqueKey] WHERE [EntityID] = @EntityID;
     DELETE FROM [${flyway:defaultSchema}].[FileEntityRecordLink] WHERE [EntityID] = @EntityID;
     DELETE FROM [${flyway:defaultSchema}].[FormChromeRule] WHERE [EntityID] = @EntityID OR [RelatedEntityID] = @EntityID;
     DELETE FROM [${flyway:defaultSchema}].[GraphEdge] WHERE [SourceEntityID] = @EntityID OR [TargetEntityID] = @EntityID;
@@ -604,9 +606,9 @@ GO
          , 0
          , 0
          , 0
-         , 1
-         , 1
-         , 1
+         , 0
+         , 0
+         , 0
          , 1000
          , GETUTCDATE()
          , GETUTCDATE()
@@ -1582,12 +1584,14 @@ BEGIN
         SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
 END
 GO
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteArtifact] FROM [cdp_Developer]
 REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteArtifact] FROM [cdp_Integration]
 REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteArtifact] FROM [cdp_UI]
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteArtifact] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
 
 /* spDelete Permissions for MJ: Artifacts */
 
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteArtifact] FROM [cdp_Developer]
 REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteArtifact] FROM [cdp_Integration]
 REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteArtifact] FROM [cdp_UI]
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteArtifact] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
@@ -1655,10 +1659,6 @@ BEGIN
         _organicTable.[ID] = I.[ID];
 END;
 GO
-
-/* spDelete Permissions for MJ: Artifact Working States */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteArtifactWorkingState] TO [cdp_Developer], [cdp_Integration];
 
 /* SQL text to insert 3 new entity field(s) */
 
@@ -1850,6 +1850,12 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteArtifactWorkingState] TO [cd
             GETUTCDATE()
          )
       END;
+
+/* SQL text to sync entity unique keys (1 added, 0 updated, 0 removed) */
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityUniqueKey] WHERE [EntityID] = '0BA6990D-DC4F-408E-A748-8F64B3039533' AND [Name] = 'UQ_ArtifactWorkingState_ArtifactID')
+BEGIN
+   INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('f4b7e21a-89d4-4c61-b802-71c89d5e3a10', '0BA6990D-DC4F-408E-A748-8F64B3039533', 'UQ_ArtifactWorkingState_ArtifactID', 'ArtifactID', NULL);
+END;
 
 /* Set field properties for entity */
 

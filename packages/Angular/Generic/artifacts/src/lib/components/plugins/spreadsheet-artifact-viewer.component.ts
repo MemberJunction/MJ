@@ -39,7 +39,7 @@ import {
   type SpreadsheetChartType,
   type SpreadsheetChartDataset,
   type SpreadsheetEmbeddedArtifactSpec,
-  type ResolvedArtifactPermissions,
+  type DocumentBlockSpec,
   type DocumentBlockExecutionResult,
 } from '@memberjunction/core-entities';
 import { BaseArtifactViewerPluginComponent, IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
@@ -49,10 +49,12 @@ import { FetchArrayBuffer } from '../previews/office-preview.logic';
 import {
   DocumentCollaborationService,
   DocumentCollaborationSession,
+  ExtractAnchoredCommentMentions,
   type CollaboratorPresence,
   type CollaborationConnectionStatus,
   type DocumentAnchoredThread,
   type DocumentDiffResult,
+  type VerifiedArtifactPermissions,
 } from '../../services/document-collaboration.service';
 
 /**
@@ -398,6 +400,36 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
         </div>
       </div>
 
+      @if (LiveSyncUnavailable) {
+        <div
+          class="mj-sheets-status-banner mj-sheets-status-banner--readonly"
+          role="status"
+          data-testid="sheets-live-sync-unavailable-banner"
+        >
+          <i class="fa-solid fa-plug-circle-xmark"></i>
+          <span>Live collaborative sync is unavailable on this server — viewing in read-only mode.</span>
+        </div>
+      }
+
+      @if (PermissionVerifyError) {
+        <div
+          class="mj-sheets-status-banner mj-sheets-status-banner--warning"
+          role="alert"
+          data-testid="sheets-permission-verify-error-banner"
+        >
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <span>Couldn't verify permissions — Retry</span>
+          <button
+            type="button"
+            class="mj-sheets-tool-btn mj-sheets-banner-retry"
+            data-testid="sheets-permission-retry-btn"
+            (click)="RetryVerifyPermissions()"
+          >
+            Retry
+          </button>
+        </div>
+      }
+
       @if (StatusBannerMessage) {
         <div class="mj-sheets-status-banner" data-testid="sheets-status-banner">
           <i class="fa-solid fa-circle-info"></i>
@@ -628,6 +660,35 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
                                 </span>
                               }
                             </div>
+                          }
+
+                          @if (table.Mode === 'Frozen' && table.FrozenSnapshot) {
+                            @if (IsLiveTableSnapshotVerified(table)) {
+                              <div
+                                class="mj-sheets-table-provenance"
+                                [attr.data-testid]="'sheet-frozen-provenance-' + table.TableID"
+                              >
+                                <i class="fa-solid fa-shield-halved"></i>
+                                <span>
+                                  Frozen snapshot captured at {{ table.FrozenSnapshot.FrozenAt }}
+                                  @if (table.FrozenSnapshot.FrozenByUserName || table.FrozenSnapshot.FrozenByUserID) {
+                                    by
+                                    <strong>{{
+                                      table.FrozenSnapshot.FrozenByUserName || table.FrozenSnapshot.FrozenByUserID
+                                    }}</strong>
+                                  }
+                                </span>
+                              </div>
+                            } @else {
+                              <div
+                                class="mj-sheets-table-error"
+                                data-testid="unverified-snapshot-banner"
+                                [attr.data-table-id]="table.TableID"
+                              >
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                                <span>Unverified Snapshot — signature missing or invalid</span>
+                              </div>
+                            }
                           }
 
                           @if (table.AccessDenied || table.LastError) {
@@ -1347,6 +1408,21 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
         border-bottom: 1px solid var(--mj-border-default);
       }
 
+      .mj-sheets-status-banner--readonly {
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-text-secondary);
+      }
+
+      .mj-sheets-status-banner--warning {
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-status-warning);
+        border-bottom-color: var(--mj-status-warning);
+      }
+
+      .mj-sheets-banner-retry {
+        margin-left: auto;
+      }
+
       .mj-sheets-banner-close {
         margin-left: auto;
         border: none;
@@ -1722,6 +1798,17 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
         background: var(--mj-bg-surface-sunken);
         color: var(--mj-text-secondary);
         border: 1px solid var(--mj-border-subtle);
+      }
+
+      .mj-sheets-table-provenance {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 8px;
+        border-radius: 6px;
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-status-success);
+        font-size: 11px;
       }
 
       .mj-sheets-table-error {
@@ -2155,7 +2242,9 @@ export class SpreadsheetArtifactViewerComponent
   public CollaborationSession: DocumentCollaborationSession | null = null;
   public ConnectionStatus: CollaborationConnectionStatus = 'local';
   public Collaborators: CollaboratorPresence[] = [];
-  public Permissions: ResolvedArtifactPermissions | null = null;
+  public Permissions: VerifiedArtifactPermissions | null = null;
+  public AccessRevoked = false;
+  public PermissionVerifyError = false;
 
   public ShowCommentsDrawer = false;
   public NewCommentText = '';
@@ -2384,6 +2473,8 @@ export class SpreadsheetArtifactViewerComponent
     this.teardownSession();
     this.FallbackXlsxBytes = null;
     this.Permissions = null;
+    this.AccessRevoked = false;
+    this.PermissionVerifyError = false;
     this.ConnectionStatus = 'local';
     this.AnchoredThreads = [];
     this.EmbeddedArtifactVersions = {};
@@ -2453,10 +2544,25 @@ export class SpreadsheetArtifactViewerComponent
           if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
             return;
           }
-          if (!this.Permissions || !this.Permissions.CanRead) {
+          if (!this.Permissions) {
+            this.AccessRevoked = false;
+            this.PermissionVerifyError = false;
+            this.ConnectionStatus = 'readonly';
+          } else if (this.Permissions.PermissionVerifyError) {
+            this.AccessRevoked = false;
+            this.PermissionVerifyError = true;
+            this.ConnectionStatus = 'readonly';
+          } else if (!this.Permissions.CanRead) {
+            this.PermissionVerifyError = false;
+            this.AccessRevoked = true;
             this.ConnectionStatus = 'revoked';
           } else if (!this.Permissions.CanEdit) {
+            this.PermissionVerifyError = false;
+            this.AccessRevoked = false;
             this.ConnectionStatus = 'readonly';
+          } else {
+            this.PermissionVerifyError = false;
+            this.AccessRevoked = false;
           }
         } catch (err) {
           if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
@@ -2464,6 +2570,8 @@ export class SpreadsheetArtifactViewerComponent
           }
           LogError(err);
           this.Permissions = null;
+          this.AccessRevoked = false;
+          this.PermissionVerifyError = true;
           this.ConnectionStatus = 'readonly';
         }
 
@@ -2519,6 +2627,7 @@ export class SpreadsheetArtifactViewerComponent
         SpreadsheetEngine.Instance.EvaluateWorkbook(this.Workbook);
         this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
         this.syncFormulaBarFromActiveCell();
+        this.verifyFrozenLiveTablesOnServer(this.Workbook);
         if (this.workbookHasLiveDataOrMjFunctions(this.Workbook)) {
           void this.RefreshAllLiveData(false);
         }
@@ -2548,6 +2657,7 @@ export class SpreadsheetArtifactViewerComponent
       void session.Connect(this.CollaborationWsUrl, provider);
     }
 
+    this.verifyFrozenLiveTablesOnServer(this.Workbook);
     await this.RefreshAllLiveData(false);
     if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
       return;
@@ -2586,6 +2696,10 @@ export class SpreadsheetArtifactViewerComponent
     }
   }
 
+  public RetryVerifyPermissions(): void {
+    void this.refreshPermissionsAndAnchoredThreads(this.sessionInitGeneration);
+  }
+
   private async refreshPermissionsAndAnchoredThreads(gen = this.sessionInitGeneration): Promise<void> {
     const provider = this.getSafeProvider();
     const user = this.resolveCurrentUser();
@@ -2598,13 +2712,32 @@ export class SpreadsheetArtifactViewerComponent
       if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
         return;
       }
-      if (!this.Permissions || !this.Permissions.CanRead) {
+      if (!this.Permissions) {
+        this.AccessRevoked = false;
+        this.PermissionVerifyError = false;
+        this.ConnectionStatus = 'readonly';
+        this.CollaborationSession?.SetCanEdit(false);
+      } else if (this.Permissions.PermissionVerifyError) {
+        this.AccessRevoked = false;
+        this.PermissionVerifyError = true;
+        this.ConnectionStatus = 'readonly';
+        this.CollaborationSession?.SetCanEdit(false);
+      } else if (!this.Permissions.CanRead) {
+        this.PermissionVerifyError = false;
+        this.AccessRevoked = true;
         this.ConnectionStatus = 'revoked';
         this.CollaborationSession?.SetCanEdit(false);
       } else if (!this.Permissions.CanEdit) {
+        this.PermissionVerifyError = false;
+        this.AccessRevoked = false;
         this.ConnectionStatus = 'readonly';
         this.CollaborationSession?.SetCanEdit(false);
       } else {
+        this.PermissionVerifyError = false;
+        this.AccessRevoked = false;
+        if (this.ConnectionStatus === 'readonly' || this.ConnectionStatus === 'revoked') {
+          this.ConnectionStatus = this.CollaborationSession ? this.CollaborationSession.Status : 'local';
+        }
         this.CollaborationSession?.SetCanEdit(this.hasPermissionToEdit);
       }
       await this.loadPersistedSheetRangeComments();
@@ -2614,6 +2747,11 @@ export class SpreadsheetArtifactViewerComponent
       this.cdr.markForCheck();
     } catch (err) {
       LogError(err);
+      this.AccessRevoked = false;
+      this.PermissionVerifyError = true;
+      this.ConnectionStatus = 'readonly';
+      this.CollaborationSession?.SetCanEdit(false);
+      this.cdr.markForCheck();
     }
   }
 
@@ -2997,6 +3135,56 @@ export class SpreadsheetArtifactViewerComponent
     this.cdr.markForCheck();
   }
 
+  private liveTableToBlockSpec(
+    table: SpreadsheetLiveTableSpec,
+    modeOverride?: 'Live' | 'Frozen',
+  ): DocumentBlockSpec {
+    return {
+      BlockID: table.TableID,
+      Kind: table.SourceType,
+      Title: table.Title,
+      DisplayMode: 'table',
+      Mode: modeOverride ?? table.Mode,
+      EntityName: table.EntityName,
+      ViewID: table.ViewID,
+      ViewName: table.ViewName,
+      ExtraFilter: table.ExtraFilter,
+      Fields: table.Fields,
+      QueryID: table.QueryID,
+      QueryName: table.QueryName,
+      Parameters: table.QueryParameters,
+      MaxRows: table.MaxRows,
+      FrozenSnapshot: modeOverride === 'Live' ? undefined : table.FrozenSnapshot,
+    };
+  }
+
+  public IsLiveTableSnapshotVerified(table: SpreadsheetLiveTableSpec | null | undefined): boolean {
+    if (!table) {
+      return false;
+    }
+    return this.collaborationService.IsFrozenSnapshotVerified(
+      this.liveTableToBlockSpec(table),
+      this.lastTableResults[table.TableID],
+    );
+  }
+
+  private verifyFrozenLiveTablesOnServer(workbook: WorkbookSpec): void {
+    const provider = this.getSafeProvider();
+    for (const sheet of workbook.Worksheets ?? []) {
+      for (const table of sheet.LiveTables ?? []) {
+        if (table.Mode === 'Frozen' && table.FrozenSnapshot) {
+          void this.collaborationService
+            .VerifyFrozenSnapshotOnServer(this.liveTableToBlockSpec(table), provider)
+            .then(() => {
+              if (!this.isComponentDestroyed) {
+                this.cdr.markForCheck();
+              }
+            });
+        }
+      }
+    }
+  }
+
   public PromptFreezeLiveTable(table: SpreadsheetLiveTableSpec): void {
     this.PendingFreezeTable = table;
     this.FreezeConfirmedChecked = false;
@@ -3013,43 +3201,67 @@ export class SpreadsheetArtifactViewerComponent
     if (!this.PendingFreezeTable || !this.FreezeConfirmedChecked) return;
     const user = this.resolveCurrentUser();
     if (!user) return;
+    const provider = this.getSafeProvider();
+    if (!provider) {
+      this.notifyError('Cannot freeze live table: metadata provider unavailable.');
+      return;
+    }
 
     const target = this.PendingFreezeTable;
     this.PendingFreezeTable = null;
     this.FreezeConfirmedChecked = false;
 
-    let execResult = this.lastTableResults[target.TableID];
-    if (!execResult) {
-      const refreshed = await SpreadsheetEngine.Instance.RefreshLiveTables(
-        this.Workbook,
-        user,
-        this.ProviderToUse,
-        { TableID: target.TableID },
+    try {
+      const liveBlockSpec = this.liveTableToBlockSpec(target, 'Live');
+      const res = await this.collaborationService.FreezeLiveBlock(
+        liveBlockSpec,
+        true,
+        this.artifactVersion?.ArtifactID,
+        provider,
       );
-      execResult = refreshed[target.TableID] ?? {
+      if (this.isComponentDestroyed) {
+        return;
+      }
+      if (!res.Success || !res.UpdatedSpec?.FrozenSnapshot) {
+        this.notifyError(res.ErrorMessage || 'Failed to freeze live table on server.');
+        return;
+      }
+
+      const signedSnapshot = res.UpdatedSpec.FrozenSnapshot;
+      const execResult: DocumentBlockExecutionResult = {
         BlockID: target.TableID,
         Kind: target.SourceType,
-        Mode: 'Live',
+        Mode: 'Frozen',
         Success: true,
-        Columns: [],
-        Rows: [],
-        TotalRowCount: target.LastRowCount ?? 0,
-        ExecutedAt: new Date().toISOString(),
+        Columns: signedSnapshot.Columns,
+        Rows: signedSnapshot.Rows,
+        TotalRowCount: signedSnapshot.TotalRowCount,
+        FrozenMetadata: {
+          FrozenAt: signedSnapshot.FrozenAt,
+          FrozenByUserID: signedSnapshot.FrozenByUserID,
+          FrozenByUserName: signedSnapshot.FrozenByUserName,
+          SnapshotVerified: true,
+        },
       };
-    }
 
-    SpreadsheetEngine.Instance.FreezeLiveTable(
-      this.Workbook,
-      this.ActiveSheet.SheetID,
-      target.TableID,
-      execResult,
-      user,
-      true,
-    );
-    this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
-    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
-    this.StatusBannerMessage = `Froze snapshot of "${target.Title}" under current viewer permissions.`;
-    this.cdr.markForCheck();
+      SpreadsheetEngine.Instance.FreezeLiveTable(
+        this.Workbook,
+        this.ActiveSheet.SheetID,
+        target.TableID,
+        execResult,
+        user,
+        true,
+        signedSnapshot,
+      );
+      this.lastTableResults[target.TableID] = execResult;
+      this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
+      this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+      this.StatusBannerMessage = `Froze snapshot of "${target.Title}" under current viewer permissions.`;
+      this.cdr.markForCheck();
+    } catch (err) {
+      LogError(err);
+      this.notifyError(err instanceof Error ? err.message : 'Failed to freeze live table on server.');
+    }
   }
 
   public async UnfreezeLiveTable(table: SpreadsheetLiveTableSpec): Promise<void> {
@@ -3447,7 +3659,7 @@ export class SpreadsheetArtifactViewerComponent
           Role: (d.Role === 'AI' ? 'Agent' : 'User') as 'User' | 'Agent',
           Message: d.Message,
           CreatedAt: new Date().toISOString(),
-          Mentions: Array.from((d.Message ?? '').matchAll(/@([A-Za-z0-9_-]+)/g)).map((m) => m[1]),
+          Mentions: ExtractAnchoredCommentMentions(d.Message ?? ''),
         }));
 
         threads.push({
@@ -3476,7 +3688,7 @@ export class SpreadsheetArtifactViewerComponent
     const anchorKey = `${this.ActiveSheet.SheetID}:${this.SelectedRange}`;
     const anchorLabel = `${this.ActiveSheet.Name}!${this.SelectedRange}`;
     const user = this.resolveCurrentUser();
-    const mentions = Array.from(body.matchAll(/@([A-Za-z0-9_-]+)/g)).map((m) => m[1]);
+    const mentions = ExtractAnchoredCommentMentions(body);
 
     let convId = `sheet-conv-${Date.now()}`;
     let detailId = `msg-${Date.now()}`;

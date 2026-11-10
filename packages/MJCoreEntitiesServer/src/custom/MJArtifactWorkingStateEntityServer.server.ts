@@ -10,6 +10,7 @@ import {
     IMetadataProvider,
     Metadata,
     PostRunViewHook,
+    PreRunViewHook,
     RegisterDataHook,
     DatabaseProviderBase,
     RunViewParams,
@@ -23,7 +24,14 @@ import {
     type MJUserViewEntity
 } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import {
+    BytesToBase64,
+    IsByteArray,
+    NormalizeUUID,
+    RegisterClass,
+    UUIDsEqual
+} from '@memberjunction/global';
+import { randomUUID } from 'crypto';
 
 function isServerSystemUser(user: UserInfo | undefined | null): boolean {
     if (!user) {
@@ -73,12 +81,53 @@ function readWorkingStateArtifactId(row: unknown): string | null {
     return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate.trim() : null;
 }
 
+const SYNTHETIC_WORKING_STATE_ARTIFACT_ID_PARAMS = new WeakSet<object>();
+
+function stripSyntheticWorkingStateArtifactId(row: unknown): unknown {
+    if (!row || typeof row !== 'object' || row instanceof BaseEntity) {
+        return row;
+    }
+    if (!Object.prototype.hasOwnProperty.call(row, 'ArtifactID')) {
+        return row;
+    }
+    const copy = { ...(row as Record<string, unknown>) };
+    delete copy['ArtifactID'];
+    return copy;
+}
+
+export const ArtifactWorkingStatePreRunViewHook: PreRunViewHook = (
+    params: RunViewParams,
+    contextUser: UserInfo | undefined
+): RunViewParams => {
+    if (
+        !params ||
+        resolveTargetEntityName(params) !== 'MJ: Artifact Working States' ||
+        isServerSystemUser(contextUser) ||
+        !contextUser
+    ) {
+        return params;
+    }
+    if (
+        Array.isArray(params.Fields) &&
+        params.Fields.length > 0 &&
+        !params.Fields.some((f) => typeof f === 'string' && f.trim().toLowerCase() === 'artifactid')
+    ) {
+        const augmented: RunViewParams = {
+            ...params,
+            Fields: [...params.Fields, 'ArtifactID']
+        };
+        SYNTHETIC_WORKING_STATE_ARTIFACT_ID_PARAMS.add(augmented);
+        return augmented;
+    }
+    return params;
+};
+
 /**
  * Server-side `PostRunView` data hook enforcing `ArtifactPermissionEngine` read authorization
  * on `MJ: Artifact Working States` (`B1`).
  *
- * `MJ: Artifact Working States` has `IncludeInAPI = 0` (`AllowCreateAPI = 0`, `AllowUpdateAPI = 0`,
- * `AllowDeleteAPI = 0`) and is not exposed on the GraphQL schema. This hook adds defense-in-depth
+ * `MJ: Artifact Working States` has `AllowAllRowsAPI = 0`, `AllowCreateAPI = 0`, `AllowUpdateAPI = 0`,
+ * `AllowDeleteAPI = 0` and zero CRUD resolvers on the GraphQL schema. This hook adds defense-in-depth
  * for in-process callers so no non-system `RunView` can return `YjsState` rows for artifacts the
  * caller is not authorized to read via `ArtifactPermissionEngine`.
  */
@@ -90,6 +139,8 @@ export const ArtifactWorkingStatePostRunViewHook: PostRunViewHook = async (
     if (!results?.Success || resolveTargetEntityName(params) !== 'MJ: Artifact Working States') {
         return results;
     }
+
+    const shouldStripSyntheticArtifactId = SYNTHETIC_WORKING_STATE_ARTIFACT_ID_PARAMS.has(params);
 
     if (isServerSystemUser(contextUser)) {
         return results;
@@ -106,6 +157,12 @@ export const ArtifactWorkingStatePostRunViewHook: PostRunViewHook = async (
 
     const provider = resolveProviderForUser(contextUser);
     if (!provider || provider.ProviderType !== 'Database') {
+        if (shouldStripSyntheticArtifactId && Array.isArray(results.Results)) {
+            return {
+                ...results,
+                Results: results.Results.map(stripSyntheticWorkingStateArtifactId)
+            };
+        }
         return results;
     }
 
@@ -140,11 +197,13 @@ export const ArtifactWorkingStatePostRunViewHook: PostRunViewHook = async (
             readAllowedByArtifact.set(normId, allowed);
         }
         if (allowed) {
-            keptRows.push(row);
+            keptRows.push(
+                shouldStripSyntheticArtifactId ? stripSyntheticWorkingStateArtifactId(row) : row
+            );
         }
     }
 
-    if (keptRows.length === results.Results.length) {
+    if (keptRows.length === results.Results.length && !shouldStripSyntheticArtifactId) {
         return results;
     }
 
@@ -158,12 +217,16 @@ export const ArtifactWorkingStatePostRunViewHook: PostRunViewHook = async (
 };
 
 /**
- * Ensures {@link ArtifactWorkingStatePostRunViewHook} is registered once in the global `PostRunView`
- * data hooks store.
+ * Ensures {@link ArtifactWorkingStatePreRunViewHook} and {@link ArtifactWorkingStatePostRunViewHook}
+ * are registered once in the global data hooks store.
  */
 export function EnsureArtifactWorkingStateReadHookRegistered(): void {
-    const existing = GetDataHooks<PostRunViewHook>('PostRunView');
-    if (!existing.includes(ArtifactWorkingStatePostRunViewHook)) {
+    const existingPre = GetDataHooks<PreRunViewHook>('PreRunView');
+    if (!existingPre.includes(ArtifactWorkingStatePreRunViewHook)) {
+        RegisterDataHook('PreRunView', ArtifactWorkingStatePreRunViewHook);
+    }
+    const existingPost = GetDataHooks<PostRunViewHook>('PostRunView');
+    if (!existingPost.includes(ArtifactWorkingStatePostRunViewHook)) {
         RegisterDataHook('PostRunView', ArtifactWorkingStatePostRunViewHook);
     }
 }
@@ -269,37 +332,123 @@ export class MJArtifactWorkingStateEntityServer extends MJArtifactWorkingStateEn
         res.Type = this.IsSaved ? 'update' : 'create';
         res.StartedAt = new Date();
         try {
+            if (!this.ArtifactID || this.ArtifactID.trim().length === 0) {
+                throw new Error('ArtifactID is required to save MJ: Artifact Working States.');
+            }
             const schema = dbProvider.ConfigData.MJCoreSchemaName || '__mj';
             const table = dbProvider.QuoteSchemaAndView(schema, 'ArtifactWorkingState');
             const view = dbProvider.QuoteSchemaAndView(schema, 'vwArtifactWorkingStates');
-            const p0 = dbProvider.BuildParameterPlaceholder(0);
-            const p1 = dbProvider.BuildParameterPlaceholder(1);
-            const p2 = dbProvider.BuildParameterPlaceholder(2);
+            const colId = dbProvider.QuoteIdentifier('ID');
+            const colArtifactId = dbProvider.QuoteIdentifier('ArtifactID');
+            const colYjsState = dbProvider.QuoteIdentifier('YjsState');
+            const colLastModUserId = dbProvider.QuoteIdentifier('LastModifiedByUserID');
+            const colUpdatedAt = dbProvider.QuoteIdentifier('__mj_UpdatedAt');
+
             const yjsBytes = this.YjsState ? Buffer.from(this.YjsState, 'base64') : null;
-            const lastModUserId = this.LastModifiedByUserID || null;
-            const sql = `
-                DECLARE @Upserted TABLE ([ID] UNIQUEIDENTIFIER);
-                MERGE ${table} AS target
-                USING (SELECT CAST(${p0} AS UNIQUEIDENTIFIER) AS [ArtifactID]) AS source
-                ON target.[ArtifactID] = source.[ArtifactID]
-                WHEN MATCHED THEN
-                    UPDATE SET
-                        [YjsState] = CAST(${p1} AS VARBINARY(MAX)),
-                        [LastModifiedByUserID] = CAST(${p2} AS UNIQUEIDENTIFIER)
-                WHEN NOT MATCHED THEN
-                    INSERT ([ArtifactID], [YjsState], [LastModifiedByUserID])
-                    VALUES (CAST(${p0} AS UNIQUEIDENTIFIER), CAST(${p1} AS VARBINARY(MAX)), CAST(${p2} AS UNIQUEIDENTIFIER))
-                OUTPUT INSERTED.[ID] INTO @Upserted;
-                SELECT * FROM ${view} WHERE [ID] = (SELECT TOP 1 [ID] FROM @Upserted);
-            `;
+            const lastModUserId =
+                this.LastModifiedByUserID && this.LastModifiedByUserID.trim().length > 0
+                    ? this.LastModifiedByUserID
+                    : null;
+
+            const probeSql = `SELECT ${colId} FROM ${table} WHERE ${colArtifactId} = ${dbProvider.BuildParameterPlaceholder(0)}`;
+            const existingRows = await dbProvider.ExecuteSQL<Record<string, unknown>>(
+                probeSql,
+                [this.ArtifactID],
+                { isMutation: false },
+                actor
+            );
+
+            const executeUpdate = async (): Promise<void> => {
+                const updateParams: unknown[] = [];
+                const setClauses: string[] = [];
+
+                if (yjsBytes !== null) {
+                    setClauses.push(
+                        `${colYjsState} = ${dbProvider.BuildParameterPlaceholder(updateParams.length)}`
+                    );
+                    updateParams.push(yjsBytes);
+                } else {
+                    setClauses.push(`${colYjsState} = NULL`);
+                }
+
+                if (lastModUserId !== null) {
+                    setClauses.push(
+                        `${colLastModUserId} = ${dbProvider.BuildParameterPlaceholder(updateParams.length)}`
+                    );
+                    updateParams.push(lastModUserId);
+                } else {
+                    setClauses.push(`${colLastModUserId} = NULL`);
+                }
+
+                setClauses.push(
+                    `${colUpdatedAt} = ${dbProvider.BuildParameterPlaceholder(updateParams.length)}`
+                );
+                updateParams.push(new Date());
+
+                const wherePlaceholder = dbProvider.BuildParameterPlaceholder(updateParams.length);
+                updateParams.push(this.ArtifactID);
+
+                const updateSql = `UPDATE ${table} SET ${setClauses.join(', ')} WHERE ${colArtifactId} = ${wherePlaceholder}`;
+                await dbProvider.ExecuteSQL(updateSql, updateParams, { isMutation: true }, actor);
+            };
+
+            if (existingRows && existingRows.length > 0) {
+                await executeUpdate();
+            } else {
+                const recordId =
+                    this.ID && this.ID.trim().length > 0 ? this.ID : randomUUID();
+                const insertParams: unknown[] = [recordId, this.ArtifactID];
+                const valExprs: string[] = [
+                    dbProvider.BuildParameterPlaceholder(0),
+                    dbProvider.BuildParameterPlaceholder(1)
+                ];
+
+                if (yjsBytes !== null) {
+                    valExprs.push(dbProvider.BuildParameterPlaceholder(insertParams.length));
+                    insertParams.push(yjsBytes);
+                } else {
+                    valExprs.push('NULL');
+                }
+
+                if (lastModUserId !== null) {
+                    valExprs.push(dbProvider.BuildParameterPlaceholder(insertParams.length));
+                    insertParams.push(lastModUserId);
+                } else {
+                    valExprs.push('NULL');
+                }
+
+                const insertSql = `INSERT INTO ${table} (${colId}, ${colArtifactId}, ${colYjsState}, ${colLastModUserId}) VALUES (${valExprs.join(', ')})`;
+                try {
+                    await dbProvider.ExecuteSQL(
+                        insertSql,
+                        insertParams,
+                        { isMutation: true },
+                        actor
+                    );
+                } catch (insertErr) {
+                    const msg =
+                        insertErr instanceof Error ? insertErr.message : String(insertErr);
+                    if (/unique|duplicate|2627|2601|23505|UQ_ArtifactWorkingState_ArtifactID/i.test(msg)) {
+                        await executeUpdate();
+                    } else {
+                        throw insertErr;
+                    }
+                }
+            }
+
+            const selectSql = `SELECT * FROM ${view} WHERE ${colArtifactId} = ${dbProvider.BuildParameterPlaceholder(0)}`;
             const rows = await dbProvider.ExecuteSQL<Record<string, unknown>>(
-                sql,
-                [this.ArtifactID, yjsBytes, lastModUserId],
-                undefined,
+                selectSql,
+                [this.ArtifactID],
+                { isMutation: false },
                 actor
             );
             if (rows && rows.length > 0) {
-                await this.LoadFromData(rows[0]);
+                const normalizedRow: Record<string, unknown> = {};
+                for (const [key, value] of Object.entries(rows[0])) {
+                    normalizedRow[key] = IsByteArray(value) ? BytesToBase64(value) : value;
+                }
+                await this.LoadFromData(normalizedRow);
             }
             res.Success = true;
             res.EndedAt = new Date();
@@ -324,10 +473,29 @@ export class MJArtifactWorkingStateEntityServer extends MJArtifactWorkingStateEn
         try {
             const schema = dbProvider.ConfigData.MJCoreSchemaName || '__mj';
             const table = dbProvider.QuoteSchemaAndView(schema, 'ArtifactWorkingState');
-            const p0 = dbProvider.BuildParameterPlaceholder(0);
-            const p1 = dbProvider.BuildParameterPlaceholder(1);
-            const sql = `DELETE FROM ${table} WHERE [ID] = CAST(${p0} AS UNIQUEIDENTIFIER) OR [ArtifactID] = CAST(${p1} AS UNIQUEIDENTIFIER);`;
-            await dbProvider.ExecuteSQL(sql, [this.ID || null, this.ArtifactID || null], undefined, actor);
+            const colId = dbProvider.QuoteIdentifier('ID');
+            const colArtifactId = dbProvider.QuoteIdentifier('ArtifactID');
+            const predicates: string[] = [];
+            const params: unknown[] = [];
+
+            if (this.ID && this.ID.trim().length > 0) {
+                predicates.push(
+                    `${colId} = ${dbProvider.BuildParameterPlaceholder(params.length)}`
+                );
+                params.push(this.ID);
+            }
+            if (this.ArtifactID && this.ArtifactID.trim().length > 0) {
+                predicates.push(
+                    `${colArtifactId} = ${dbProvider.BuildParameterPlaceholder(params.length)}`
+                );
+                params.push(this.ArtifactID);
+            }
+            if (predicates.length === 0) {
+                throw new Error('ID or ArtifactID is required to delete MJ: Artifact Working States.');
+            }
+
+            const sql = `DELETE FROM ${table} WHERE ${predicates.join(' OR ')}`;
+            await dbProvider.ExecuteSQL(sql, params, { isMutation: true }, actor);
             this.NewRecord();
             res.Success = true;
             res.EndedAt = new Date();

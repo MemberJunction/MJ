@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { EscapeSQLString, GetGlobalObjectStore, MJEventType, MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, GetGlobalObjectStore, IsValidUUID, MJEventType, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
 import {
   ArtifactMetadataEngine,
@@ -1123,8 +1123,77 @@ export class ArtifactToolManager {
   }
 
   /**
+   * Downloads binary content for a file-backed artifact version (`FileID`) from `FileStorageEngine`
+   * using the same `MJ: Files` -> `ResolveFileObject` -> `Driver.GetObject` pipeline as `AgentRunner.DownloadArtifactFileContent`.
+   */
+  private async downloadArtifactFileContent(fileId: string): Promise<Buffer | null> {
+    if (!this.contextUser || !this.provider) {
+      return null;
+    }
+    const trimmedFileId = (fileId ?? '').trim();
+    if (!IsValidUUID(trimmedFileId)) {
+      LogError(`ArtifactToolManager: refusing to read artifact file content — '${fileId}' is not a valid UUID`);
+      return null;
+    }
+    try {
+      await FileStorageEngine.Instance.Config(false, this.contextUser, this.provider);
+      const rv = RunView.FromMetadataProvider(this.provider);
+      const fileResult = await rv.RunView<{
+        ID: string;
+        Name: string;
+        ContentType: string;
+        ProviderID: string;
+        ProviderKey: string;
+      }>(
+        {
+          EntityName: 'MJ: Files',
+          ExtraFilter: `ID = '${EscapeSQLString(trimmedFileId)}'`,
+          Fields: ['ID', 'Name', 'ContentType', 'ProviderID', 'ProviderKey'],
+          ResultType: 'simple',
+        },
+        this.contextUser,
+      );
+      if (!fileResult.Success || !fileResult.Results?.length) {
+        LogError(`ArtifactToolManager: file not found in MJ: Files for FileID '${trimmedFileId}'`);
+        return null;
+      }
+      const resolved = await FileStorageEngine.Instance.ResolveFileObject(
+        fileResult.Results[0],
+        this.contextUser,
+        'Read',
+        this.provider,
+      );
+      if (!resolved) {
+        LogError(
+          `ArtifactToolManager: no FileStorageAccount resolved for ProviderID '${fileResult.Results[0].ProviderID}'`,
+        );
+        return null;
+      }
+      const rawContent: Buffer | Uint8Array | string = await resolved.Driver.GetObject({ fullPath: resolved.ObjectKey });
+      if (Buffer.isBuffer(rawContent)) {
+        return rawContent;
+      }
+      if (rawContent instanceof Uint8Array) {
+        return Buffer.from(rawContent);
+      }
+      if (typeof rawContent === 'string') {
+        return Buffer.from(rawContent);
+      }
+      return null;
+    } catch (err) {
+      LogError(
+        `ArtifactToolManager: failed to download file content for FileID '${trimmedFileId}': ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return null;
+    }
+  }
+
+  /**
    * Reloads the latest persisted `MJ: Artifact Versions` record from the database into the in-memory
-   * session entry so an agent run can recover after a concurrent modification conflict (`Round 3 Item 9`).
+   * session entry so an agent run can recover after a concurrent modification conflict (`Round 3 Item 9`, `E9`).
+   * Re-downloads `FileID` binary bytes when set and fails closed without advancing baseline version numbers on error.
    */
   private async reloadArtifactFromDatabase(entry: ArtifactEntry): Promise<ArtifactToolResult> {
     if (!entry.artifactId || !this.contextUser || !this.provider) {
@@ -1144,12 +1213,13 @@ export class ArtifactToolManager {
         Configuration?: string | null;
         ContentMode?: 'File' | 'Text' | null;
         FileID?: string | null;
+        MimeType?: string | null;
       }>(
         {
           EntityName: 'MJ: Artifact Versions',
           ExtraFilter: `ArtifactID='${EscapeSQLString(entry.artifactId)}'`,
           OrderBy: 'VersionNumber DESC',
-          Fields: ['ID', 'VersionNumber', 'Name', 'Content', 'Configuration', 'ContentMode', 'FileID'],
+          Fields: ['ID', 'VersionNumber', 'Name', 'Content', 'Configuration', 'ContentMode', 'FileID', 'MimeType'],
           MaxRows: 1,
           SkipTotalRowCount: true,
           ResultType: 'simple',
@@ -1164,22 +1234,98 @@ export class ArtifactToolManager {
         };
       }
       const latest = latestRes.Results[0];
+      const latestFileId = (latest.FileID ?? '').trim();
+
+      let nextEntryContent: string | Buffer;
+      let nextOriginalXlsxBytes: Uint8Array | undefined;
+
+      if (latestFileId) {
+        const downloadedBytes = await this.downloadArtifactFileContent(latestFileId);
+        if (!downloadedBytes || downloadedBytes.byteLength === 0) {
+          return {
+            success: false,
+            data: null,
+            errorMessage: `Failed to download file content for FileID '${latestFileId}' while reloading artifact '${entry.artifactId}'.`,
+          };
+        }
+
+        const isZipArchive =
+          downloadedBytes.length > 4 && downloadedBytes[0] === 0x50 && downloadedBytes[1] === 0x4b;
+        const effectiveMime = (latest.MimeType ?? entry.mimeType ?? '').toLowerCase();
+        const libClassName = entry.library.constructor.name;
+        const isBinaryLibrary =
+          libClassName === 'DocxToolLibrary' ||
+          libClassName === 'PDFToolLibrary' ||
+          libClassName === 'ExcelToolLibrary' ||
+          libClassName === 'GenericBinaryToolLibrary';
+
+        if (libClassName === 'SpreadsheetToolLibrary' && isZipArchive) {
+          nextOriginalXlsxBytes = new Uint8Array(downloadedBytes);
+          const importedWorkbook = SpreadsheetEngine.Instance.ImportFromXlsxBytes(
+            nextOriginalXlsxBytes,
+            latest.Configuration ?? undefined,
+          );
+          SpreadsheetEngine.Instance.EvaluateWorkbook(importedWorkbook);
+          nextEntryContent = SpreadsheetEngine.Instance.SerializeWorkbook(importedWorkbook);
+        } else if (isBinaryLibrary || Buffer.isBuffer(entry.content)) {
+          if (isZipArchive && effectiveMime === XLSX_MIME_TYPE) {
+            nextOriginalXlsxBytes = new Uint8Array(downloadedBytes);
+          }
+          nextEntryContent = downloadedBytes;
+        } else {
+          if (isZipArchive && effectiveMime === XLSX_MIME_TYPE) {
+            nextOriginalXlsxBytes = new Uint8Array(downloadedBytes);
+            const importedWorkbook = SpreadsheetEngine.Instance.ImportFromXlsxBytes(
+              nextOriginalXlsxBytes,
+              latest.Configuration ?? undefined,
+            );
+            SpreadsheetEngine.Instance.EvaluateWorkbook(importedWorkbook);
+            nextEntryContent = SpreadsheetEngine.Instance.SerializeWorkbook(importedWorkbook);
+          } else {
+            nextEntryContent = downloadedBytes.toString('utf-8');
+          }
+        }
+      } else {
+        if (latest.ContentMode === 'File') {
+          return {
+            success: false,
+            data: null,
+            errorMessage: `Latest version v${latest.VersionNumber} of artifact '${entry.artifactId}' has ContentMode='File' without a FileID.`,
+          };
+        }
+        const textCandidate = latest.Content ?? latest.Configuration;
+        if (typeof textCandidate !== 'string') {
+          return {
+            success: false,
+            data: null,
+            errorMessage: `Latest version v${latest.VersionNumber} of artifact '${entry.artifactId}' has no loadable content.`,
+          };
+        }
+        nextEntryContent = textCandidate;
+        nextOriginalXlsxBytes = undefined;
+      }
+
+      // Commit reloaded state only after storage download & parsing succeeded
       entry.versionId = latest.ID;
       entry.versionNumber = latest.VersionNumber;
       entry.baseVersionNumber = latest.VersionNumber;
       entry.currentVersionNumber = latest.VersionNumber;
       entry.agentRunVersionId = undefined;
       entry.agentRunVersionEntity = undefined;
+      if (latest.Name) {
+        entry.name = latest.Name;
+      }
+      if (latest.MimeType) {
+        entry.mimeType = latest.MimeType;
+      }
       if (latest.ContentMode === 'File' || latest.ContentMode === 'Text') {
         entry.contentMode = latest.ContentMode;
+      } else if (latestFileId) {
+        entry.contentMode = 'File';
       }
-      const nextContent =
-        latest.ContentMode === 'File'
-          ? (latest.Configuration ?? latest.Content)
-          : (latest.Content ?? latest.Configuration);
-      if (typeof nextContent === 'string') {
-        entry.content = nextContent;
-      }
+      entry.originalXlsxBytes = nextOriginalXlsxBytes;
+      entry.content = nextEntryContent;
+
       return {
         success: true,
         data: {

@@ -4,14 +4,24 @@ import { EntityFieldInfo, EntityFieldTSType, EntityInfo, IMetadataProvider, User
 import {
     ColumnIndexToLetter,
     ColumnLetterToIndex,
+    CompileSafeUserRegex,
+    DocumentFrozenSnapshot,
     FormatCellAddress,
+    IsSafeUserRegex,
     ParseCellAddress,
     ParseRangeAddress,
+    SafeRegexTest,
     SpreadsheetEngine,
+    SpreadsheetLiveTableSpec,
     XlsxOpenXmlAdapter
 } from '../custom/SpreadsheetEngine';
 import { SlideDeckEngine } from '../custom/SlideDeckEngine';
-import { DocumentLiveBlockEngine } from '../custom/DocumentLiveBlockEngine';
+import {
+    ComputeFrozenSnapshotHash,
+    DocumentBlockExecutionResult,
+    DocumentLiveBlockEngine,
+    ValidateFrozenBlockSnapshot
+} from '../custom/DocumentLiveBlockEngine';
 
 function createMockUser(id: string, name: string, canRead = true): UserInfo {
     return {
@@ -1004,5 +1014,331 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         expect(engine.EvaluateFormulaExpression(liveWb, lws.SheetID, '=IFERROR(B2, 0)')).toBe('#MJ_ACCESS_DENIED!');
         expect(engine.EvaluateFormulaExpression(liveWb, lws.SheetID, '=COUNT(B2)')).toBe('#MJ_ACCESS_DENIED!');
         expect(engine.EvaluateFormulaExpression(liveWb, lws.SheetID, '=COUNTA(B2)')).toBe('#MJ_ACCESS_DENIED!');
+    });
+
+    it('C2: FreezeLiveTable preserves Live mode if HMAC secret is absent and accepts preSignedSnapshot from browser callers', () => {
+        const wb = engine.CreateEmptyWorkbook('Freeze C2', ['Data'], 15, 6);
+        const ws = wb.Worksheets[0];
+        const table: SpreadsheetLiveTableSpec = {
+            TableID: 'tbl-deals-c2',
+            Title: 'Deals',
+            SourceType: 'EntityView',
+            EntityName: 'Deals',
+            AnchorCell: 'A1',
+            IncludeHeaders: true,
+            Mode: 'Live'
+        };
+        ws.LiveTables.push(table);
+
+        const execResult: DocumentBlockExecutionResult = {
+            BlockID: table.TableID,
+            Kind: 'EntityView',
+            Mode: 'Live',
+            Success: true,
+            Columns: [
+                { Name: 'Deal', DisplayName: 'Deal', Type: 'string' },
+                { Name: 'Amount', DisplayName: 'Amount', Type: 'number' }
+            ],
+            Rows: [
+                { Deal: 'Acme Renewal', Amount: 12500 },
+                { Deal: 'Globex Expansion', Amount: 27500 }
+            ],
+            TotalRowCount: 2
+        };
+
+        // Pre-compute a server-signed snapshot while secret is available
+        const serverSignedHash = ComputeFrozenSnapshotHash({
+            FrozenAt: '2026-11-10T20:00:00.000Z',
+            FrozenByUserID: 'user-1',
+            FrozenByUserName: 'Alice',
+            Columns: execResult.Columns,
+            Rows: execResult.Rows,
+            TotalRowCount: 2,
+            SecurityWarningAcknowledged: true
+        });
+        const preSigned: DocumentFrozenSnapshot = {
+            FrozenAt: '2026-11-10T20:00:00.000Z',
+            FrozenByUserID: 'user-1',
+            FrozenByUserName: 'Alice',
+            Columns: execResult.Columns,
+            Rows: execResult.Rows,
+            TotalRowCount: 2,
+            SecurityWarningAcknowledged: true,
+            SnapshotContentHash: serverSignedHash
+        };
+
+        // Simulate browser runtime with NO MJ_FROZEN_BLOCK_HMAC_SECRET
+        const prevHmacEnv = process.env.MJ_FROZEN_BLOCK_HMAC_SECRET;
+        const prevSnapEnv = process.env.MJ_FROZEN_SNAPSHOT_SECRET;
+        delete process.env.MJ_FROZEN_BLOCK_HMAC_SECRET;
+        delete process.env.MJ_FROZEN_SNAPSHOT_SECRET;
+        DocumentLiveBlockEngine.Instance.SetSigningSecret('');
+        try {
+            expect(() =>
+                engine.FreezeLiveTable(wb, ws.SheetID, table.TableID, execResult, { ID: 'user-1', Name: 'Alice' }, true)
+            ).toThrow(/MJ_FROZEN_BLOCK_HMAC_SECRET/);
+
+            // Crucial C2 invariant: table.Mode MUST remain 'Live' and FrozenSnapshot untouched when hash signing fails!
+            expect(table.Mode).toBe('Live');
+            expect(table.FrozenSnapshot ?? null).toBeNull();
+
+            // Passing preSignedSnapshot succeeds in the browser without local HMAC secret!
+            const frozen = engine.FreezeLiveTable(
+                wb,
+                ws.SheetID,
+                table.TableID,
+                execResult,
+                { ID: 'user-1', Name: 'Alice' },
+                true,
+                preSigned
+            );
+            expect(frozen.Mode).toBe('Frozen');
+            expect(frozen.FrozenSnapshot?.SnapshotContentHash).toBe(serverSignedHash);
+            expect(ws.Cells['A2']?.RawValue).toBe('Acme Renewal');
+            expect(ws.Cells['B3']?.RawValue).toBe(27500);
+        } finally {
+            if (prevHmacEnv !== undefined) process.env.MJ_FROZEN_BLOCK_HMAC_SECRET = prevHmacEnv;
+            if (prevSnapEnv !== undefined) process.env.MJ_FROZEN_SNAPSHOT_SECRET = prevSnapEnv;
+            DocumentLiveBlockEngine.Instance.SetSigningSecret('test-frozen-block-hmac-secret-at-least-32-bytes!!');
+        }
+
+        // Verify the stored pre-signed snapshot validates cleanly on the server
+        expect(ValidateFrozenBlockSnapshot(table.FrozenSnapshot!).Valid).toBe(true);
+    });
+
+    it('D1: 15-significant-digit IEEE-754 float normalization fixes decimal identities, criteria/lookups, and step functions without losing 15-digit precision', () => {
+        const wb = engine.CreateEmptyWorkbook('Float D1', ['Math'], 20, 10);
+        const s = wb.Worksheets[0];
+
+        // Core Excel decimal identities
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=FLOOR(0.3, 0.1)')).toBe(0.3);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=CEILING(0.1*3, 0.1)')).toBe(0.3);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=MOD(0.3, 0.1)')).toBe(0);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=MROUND(0.1+0.2, 0.1)')).toBe(0.3);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=TRUNC(0.1+0.2, 1)')).toBe(0.3);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=ROUNDUP(0.1*3, 1)')).toBe(0.3);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=ROUNDDOWN(0.1+0.2, 1)')).toBe(0.3);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=INT((0.1+0.2)*10)')).toBe(3);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=ROUND(1.005, 2)')).toBe(1.01);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=0.1+0.2=0.3')).toBe(true);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=0.1+0.2<>0.3')).toBe(false);
+
+        // Criteria & lookup functions on a cell holding =0.1+0.2
+        engine.SetCell(wb, s.SheetID, 'A1', { Formula: '=0.1+0.2' }, false);
+        engine.SetCell(wb, s.SheetID, 'A2', { Value: 0.4 }, false);
+        engine.SetCell(wb, s.SheetID, 'B1', { Value: 100 }, false);
+        engine.SetCell(wb, s.SheetID, 'B2', { Value: 200 }, false);
+        engine.SetCell(wb, s.SheetID, 'C1', { Formula: '=0.1+0.2' }, false);
+        engine.SetCell(wb, s.SheetID, 'D1', { Value: 0.4 }, false);
+        engine.SetCell(wb, s.SheetID, 'C2', { Value: 'Found03' }, false);
+        engine.SetCell(wb, s.SheetID, 'D2', { Value: 'Found04' }, true);
+
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIF(A1:A2, 0.3)')).toBe(1);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIF(A1:A2, "=0.3")')).toBe(1);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(A1:A2, 0.3, B1:B2, 100)')).toBe(1);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIF(A1:A2, 0.3, B1:B2)')).toBe(100);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(B1:B2, A1:A2, 0.3)')).toBe(100);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=AVERAGEIF(A1:A2, 0.3, B1:B2)')).toBe(100);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=AVERAGEIFS(B1:B2, A1:A2, 0.3)')).toBe(100);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=MATCH(0.3, A1:A2, 0)')).toBe(1);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=XMATCH(0.3, A1:A2, 0)')).toBe(1);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=VLOOKUP(0.3, A1:B2, 2, FALSE)')).toBe(100);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=HLOOKUP(0.3, C1:D2, 2, FALSE)')).toBe('Found03');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=XLOOKUP(0.3, A1:A2, B1:B2, "Miss")')).toBe(100);
+
+        // Preserve full 15-significant-digit distinction: 100000000000001 != 1E14 and difference === 1
+        engine.SetCell(wb, s.SheetID, 'F1', { Value: 100000000000001 }, false);
+        engine.SetCell(wb, s.SheetID, 'F2', { Value: 1e14 }, true);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=F1=F2')).toBe(false);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=F1-F2')).toBe(1);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=MOD(F1, F2)')).toBe(1);
+    });
+
+    it('D2 & E7: PatchXlsxBytes preserves shared formulas & array metadata on precedent edits, expands orphaned followers on master edits, and prefixes _xlfn. future functions', () => {
+        // Seed a realistic .xlsx archive containing both a shared formula (H2:H5, si="0") and a dynamic-array formula (A1, cm="1", _xlfn.SEQUENCE)
+        const baseWb = engine.CreateEmptyWorkbook('SharedAndArray', ['Sheet1'], 10, 10);
+        const initialBytes = engine.ExportToXlsxBytes(baseWb, false);
+
+        // Inject shared-formula master + followers and dynamic-array master into xl/worksheets/sheet1.xml via Patch/zip rebuild
+        const decoder = new TextDecoder();
+        const encoder = new TextEncoder();
+        const entries = engine.ExtractZipArchive(initialBytes);
+
+        const customSheet1Xml = [
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+            '<dimension ref="A1:H5"/>',
+            '<sheetData>',
+            '<row r="1"><c r="A1" cm="1" t="n"><f t="array" ref="A1:A3">_xlfn.SEQUENCE(B1)</f><v>1</v></c><c r="B1" t="n"><v>3</v></c></row>',
+            '<row r="2"><c r="G2" t="n"><v>10</v></c><c r="H2" s="1" t="n"><f t="shared" ref="H2:H5" si="0">G2*2</f><v>20</v></c></row>',
+            '<row r="3"><c r="G3" t="n"><v>20</v></c><c r="H3" s="1" t="n"><f t="shared" si="0"/><v>40</v></c></row>',
+            '<row r="4"><c r="G4" t="n"><v>30</v></c><c r="H4" s="1" t="n"><f t="shared" si="0"/><v>60</v></c></row>',
+            '<row r="5"><c r="G5" t="n"><v>40</v></c><c r="H5" s="1" t="n"><f t="shared" si="0"/><v>80</v></c></row>',
+            '</sheetData>',
+            '</worksheet>'
+        ].join('');
+        entries.set('xl/worksheets/sheet1.xml', encoder.encode(customSheet1Xml));
+        const seededXlsx = engine.BuildZipArchive(
+            Array.from(entries.entries()).map(([Name, Data]) => ({ Name, Data }))
+        );
+
+        // Case A: Edit precedent G2 (10 -> 100) and B1 (3 -> 4) WITHOUT editing H2's or A1's formula
+        const importedA = engine.ImportFromXlsxBytes(seededXlsx);
+        expect(importedA.Worksheets[0].Cells['A1']?.Formula).toBe('=SEQUENCE(B1)');
+        engine.SetCell(importedA, 'Sheet1', 'G2', { Value: 100 }, true);
+        engine.SetCell(importedA, 'Sheet1', 'B1', { Value: 4 }, true);
+        expect(importedA.Worksheets[0].Cells['H2']?.ComputedValue).toBe(200);
+
+        const patchedBytesA = engine.PatchXlsxBytes(seededXlsx, importedA);
+        const patchedEntriesA = engine.ExtractZipArchive(patchedBytesA);
+        const xmlA = decoder.decode(patchedEntriesA.get('xl/worksheets/sheet1.xml')!);
+
+        // Master <f t="shared" ref="H2:H5" si="0">G2*2</f> and followers MUST be preserved verbatim, with <v>200</v> updated!
+        expect(xmlA).toContain('<f t="shared" ref="H2:H5" si="0">G2*2</f><v>200</v>');
+        expect(xmlA).toContain('<f t="shared" si="0"/><v>40</v>');
+        // Array metadata cm="1", t="array" ref="A1:A3", and _xlfn.SEQUENCE(B1) preserved!
+        expect(xmlA).toContain('cm="1"');
+        expect(xmlA).toContain('<f t="array" ref="A1:A3">_xlfn.SEQUENCE(B1)</f>');
+
+        // Case B: Explicitly overwrite shared master H2 with a literal (999) AND edit A1 to a new dynamic-array formula + add XLOOKUP in C2
+        const importedB = engine.ImportFromXlsxBytes(seededXlsx);
+        engine.SetCell(importedB, 'Sheet1', 'H2', { Value: 999 }, true);
+        engine.SetCell(importedB, 'Sheet1', 'A1', { Formula: '=SEQUENCE(5, 1, 10)' }, true);
+        engine.SetCell(importedB, 'Sheet1', 'C2', { Formula: '=XLOOKUP(20, G2:G5, H2:H5)' }, true);
+
+        const patchedBytesB = engine.PatchXlsxBytes(seededXlsx, importedB);
+        const patchedEntriesB = engine.ExtractZipArchive(patchedBytesB);
+        const xmlB = decoder.decode(patchedEntriesB.get('xl/worksheets/sheet1.xml')!);
+
+        // Zero orphaned shared-formula tags may remain for si="0", and H3:H5 must have explicit translated formulas!
+        expect(xmlB).not.toContain('t="shared"');
+        expect(xmlB).toContain('<f>G3*2</f><v>40</v>');
+        expect(xmlB).toContain('<f>G4*2</f><v>60</v>');
+        expect(xmlB).toContain('<f>G5*2</f><v>80</v>');
+        // Newly edited future functions get _xlfn. prefix in both PatchXlsxBytes and ExportToXlsxBytes, and A1 keeps cm="1" + t="array"!
+        expect(xmlB).toContain('cm="1"');
+        expect(xmlB).toContain('<f t="array" ref="A1:A3">_xlfn.SEQUENCE(5, 1, 10)</f><v>10</v>');
+        expect(xmlB).toContain('<f>_xlfn.XLOOKUP(20, G2:G5, H2:H5)</f><v>40</v>');
+
+        const freshExportBytes = engine.ExportToXlsxBytes(importedB, false);
+        const freshEntries = engine.ExtractZipArchive(freshExportBytes);
+        const freshXml = decoder.decode(freshEntries.get('xl/worksheets/sheet1.xml')!);
+        expect(freshXml).toContain('<f>_xlfn.XLOOKUP(20, G2:G5, H2:H5)</f>');
+    });
+
+    it('E6 & RenameWorksheet: supports whole-column/whole-row stable refs across rename & insert/delete, recalculates beyond row 25, rejects duplicate/empty names, and quotes boolean/R1C1 sheet names', () => {
+        const wb = engine.CreateEmptyWorkbook('WholeRefs', ['Summary', 'Two'], 25, 12);
+        engine.SetCell(wb, 'Two', 'A2', { Value: 10 }, false);
+        engine.SetCell(wb, 'Two', 'A10', { Value: 25 }, false);
+        engine.SetCell(wb, 'Two', 'C3', { Value: 7 }, false);
+        engine.SetCell(wb, 'Summary', 'B1', { Formula: '=SUM(Two!A:A)' }, false);
+        engine.SetCell(wb, 'Summary', 'B2', { Formula: '=SUM(Two!3:3)' }, true);
+
+        expect(wb.Worksheets[0].Cells['B1']?.ComputedValue).toBe(35);
+        expect(wb.Worksheets[0].Cells['B2']?.ComputedValue).toBe(7);
+
+        // RenameWorksheet validation: reject empty and duplicate / case-colliding names
+        expect(engine.RenameWorksheet(wb, 'Two', '   ')).toBe(false);
+        expect(engine.RenameWorksheet(wb, 'Two', 'summary')).toBe(false);
+
+        // Rename Two -> Renamed updates whole-column and whole-row cross-sheet refs without #REF!
+        expect(engine.RenameWorksheet(wb, 'Two', 'Renamed')).toBe(true);
+        expect(wb.Worksheets[0].Cells['B1']?.Formula).toBe('=SUM(Renamed!A:A)');
+        expect(wb.Worksheets[0].Cells['B2']?.Formula).toBe('=SUM(Renamed!3:3)');
+        expect(wb.Worksheets[0].Cells['B1']?.ComputedValue).toBe(35);
+
+        // Insert column at A on Renamed shifts A:A -> B:B; insert row at 1 shifts 3:3 -> 4:4
+        engine.InsertColumns(wb, 'Renamed', 1, 1);
+        expect(wb.Worksheets[0].Cells['B1']?.Formula).toBe('=SUM(Renamed!B:B)');
+        expect(wb.Worksheets[0].Cells['B1']?.ComputedValue).toBe(35);
+
+        engine.InsertRows(wb, 'Renamed', 1, 1);
+        expect(wb.Worksheets[0].Cells['B2']?.Formula).toBe('=SUM(Renamed!4:4)');
+        expect(wb.Worksheets[0].Cells['B2']?.ComputedValue).toBe(7);
+
+        // Whole-column =SUM(A:A) on Summary invalidates/recalculates when cells beyond row 25 (A50, A200) are edited!
+        engine.SetCell(wb, 'Summary', 'D1', { Formula: '=SUM(A:A)' }, true);
+        expect(wb.Worksheets[0].Cells['D1']?.ComputedValue).toBe(0);
+        engine.SetCell(wb, 'Summary', 'A50', { Value: 120 }, true);
+        expect(wb.Worksheets[0].Cells['D1']?.ComputedValue).toBe(120);
+        engine.SetCell(wb, 'Summary', 'A200', { Value: 80 }, true);
+        expect(wb.Worksheets[0].Cells['D1']?.ComputedValue).toBe(200);
+
+        // Sheet quoting for boolean literals (TRUE / FALSE) and R1C1-style tokens (R1C1)
+        expect(engine.RenameWorksheet(wb, 'Renamed', 'TRUE')).toBe(true);
+        expect(wb.Worksheets[0].Cells['B1']?.Formula).toBe("=SUM('TRUE'!B:B)");
+        expect(wb.Worksheets[0].Cells['B1']?.ComputedValue).toBe(35);
+
+        expect(engine.RenameWorksheet(wb, 'TRUE', 'R1C1')).toBe(true);
+        expect(wb.Worksheets[0].Cells['B1']?.Formula).toBe("=SUM('R1C1'!B:B)");
+        expect(wb.Worksheets[0].Cells['B1']?.ComputedValue).toBe(35);
+    });
+
+    it('E8: IsSafeUserRegex rejects polynomial and exponential backtracking patterns and SafeRegexTest finishes in < 20ms on 5,000-char adversarial input', () => {
+        expect(IsSafeUserRegex('\\d+\\d+\\d+$')).toBe(false);
+        expect(IsSafeUserRegex('\\d+\\s*\\d+$')).toBe(false);
+        expect(IsSafeUserRegex('\\w+.*\\w+$')).toBe(false);
+        expect(IsSafeUserRegex('(a+)+$')).toBe(false);
+        expect(IsSafeUserRegex('(a|a)*$')).toBe(false);
+        expect(IsSafeUserRegex('(a+)\\1$')).toBe(false);
+        expect(IsSafeUserRegex('(a|aa)'.repeat(12) + '$')).toBe(false);
+
+        // Benign anchored & delimited patterns remain allowed
+        expect(IsSafeUserRegex('^\\d+-\\d+-\\d+$')).toBe(true);
+        expect(IsSafeUserRegex('^\\d+(\\.\\d+)?$')).toBe(true);
+        expect(IsSafeUserRegex('foo.*bar')).toBe(true);
+        expect(IsSafeUserRegex('^[^/]+/[^/]+$')).toBe(true);
+
+        const adversarial = '1'.repeat(5000) + 'a';
+        const startMs = performance.now();
+        expect(CompileSafeUserRegex('\\d+\\d+\\d+$')).toBeNull();
+        const safeCompiled = CompileSafeUserRegex('^\\d+(\\.\\d+)?$');
+        expect(safeCompiled).not.toBeNull();
+        expect(SafeRegexTest(safeCompiled!, adversarial)).toBe(false);
+        const elapsedMs = performance.now() - startMs;
+        expect(elapsedMs).toBeLessThan(20);
+
+        // Linear two-pointer Excel wildcard matching finishes in < 20ms on multi-star adversarial text
+        const wcWb = engine.CreateEmptyWorkbook('Wildcard ReDoS', ['Data'], 5, 3);
+        const wcWs = wcWb.Worksheets[0];
+        engine.SetCell(wcWb, wcWs.SheetID, 'A1', { Value: '1'.repeat(5000) + 'b' }, false);
+        engine.SetCell(wcWb, wcWs.SheetID, 'B1', { Value: 'Found' }, true);
+        const wcStartMs = performance.now();
+        expect(engine.EvaluateFormulaExpression(wcWb, wcWs.SheetID, '=VLOOKUP("*1*1*1*1*a", A1:B1, 2, FALSE)')).toBe('#N/A');
+        expect(performance.now() - wcStartMs).toBeLessThan(20);
+    });
+
+    it('Low: deterministic non-wall-clock SerializeWorkbook and ParseWorkbook sparse 1,000-row structural fidelity', () => {
+        const wb = engine.CreateEmptyWorkbook('Sparse 1000', ['Ledger'], 1000, 12);
+        const ws = wb.Worksheets[0];
+        engine.SetCell(wb, ws.SheetID, 'A1', { Value: 'Account', Style: { Bold: true } }, false);
+        engine.SetCell(wb, ws.SheetID, 'B1', { Value: 'Amount', Style: { Bold: true } }, false);
+        const populatedRows = [2, 150, 400, 750, 999];
+        for (let i = 0; i < populatedRows.length; i++) {
+            const r = populatedRows[i];
+            engine.SetCell(wb, ws.SheetID, `A${r}`, { Value: `Acct-${r}` }, false);
+            engine.SetCell(wb, ws.SheetID, `B${r}`, { Value: (i + 1) * 100, Style: { FormatType: 'currency' } }, false);
+        }
+        engine.SetCell(wb, ws.SheetID, 'A1000', { Value: 'Total', Style: { Bold: true } }, false);
+        engine.SetCell(wb, ws.SheetID, 'B1000', { Formula: '=SUM(B2:B999)', Style: { FormatType: 'currency', Bold: true } }, true);
+        wb.NamedRanges.push({ Name: 'LedgerTotal', SheetID: ws.SheetID, Range: 'B1000' });
+
+        // Deterministic sparse cell map invariant: 14 populated cells, NOT 1000 * 12 = 12,000 dense cells
+        expect(Object.keys(ws.Cells)).toHaveLength(14);
+        const revBefore = engine.ComputeRevisionHash(wb);
+
+        const json = engine.SerializeWorkbook(wb);
+        const parsed = engine.ParseWorkbook(json);
+        const parsedWs = parsed.Worksheets[0];
+
+        expect(parsedWs.Rows).toHaveLength(1000);
+        expect(parsedWs.Columns).toHaveLength(12);
+        expect(Object.keys(parsedWs.Cells)).toHaveLength(14);
+        expect(parsedWs.Cells['B1000']?.Formula).toBe('=SUM(B2:B999)');
+        expect(parsedWs.Cells['B1000']?.FormulaStable).toBe(ws.Cells['B1000']?.FormulaStable);
+        expect(parsedWs.Cells['B1000']?.ComputedValue).toBe(1500);
+        expect(parsedWs.Cells['B1000']?.Style?.FormatType).toBe('currency');
+        expect(parsed.NamedRanges).toEqual([{ Name: 'LedgerTotal', SheetID: ws.SheetID, Range: 'B1000' }]);
+        expect(engine.ComputeRevisionHash(parsed)).toBe(revBefore);
     });
 });

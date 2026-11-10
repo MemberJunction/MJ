@@ -1,7 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import * as Y from 'yjs';
 import type { IMetadataProvider } from '@memberjunction/core';
-import { DocumentCollaborationService } from './document-collaboration.service';
+import {
+  DocumentCollaborationService,
+  ExtractAnchoredCommentMentions,
+} from './document-collaboration.service';
 
 describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3, Blocker 7)', () => {
   const service = new DocumentCollaborationService();
@@ -224,5 +227,184 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
         },
       }),
     ).toBe(false);
+  });
+
+  function mockGqlProvider(shape: {
+    ConfigData?: { URL?: string };
+    ExecuteGQL: (query: string, variables?: Record<string, unknown>) => Promise<Record<string, unknown>>;
+  }): IMetadataProvider {
+    const base = Object.create(null) as IMetadataProvider;
+    return Object.assign(base, shape);
+  }
+
+  it('C1: ExtractAnchoredCommentMentions ignores email addresses while matching real @handles', () => {
+    const sample =
+      'Email alice@example.com or foo.bar@baz.co for sign-off; ask @DocsAgent (@Reviewer, "@Analyst") to check.';
+    expect(ExtractAnchoredCommentMentions(sample)).toEqual(['DocsAgent', 'Reviewer', 'Analyst']);
+    expect(ExtractAnchoredCommentMentions('Contact support+urgent@company.org.')).toEqual([]);
+    expect(ExtractAnchoredCommentMentions('@LeadAgent please summarize')).toEqual(['LeadAgent']);
+  });
+
+  it('Low Permission Retry State: distinguishes AccessRevoked on explicit server CanRead=false from PermissionVerifyError on transient throw', async () => {
+    const explicitRevokeProvider = mockGqlProvider({
+      ExecuteGQL: async () => ({
+        ResolveArtifactPermissions: {
+          ArtifactID: 'art-revoked-1',
+          CanRead: false,
+          CanEdit: false,
+          CanDelete: false,
+          CanShare: false,
+          Source: 'Denied',
+          Reason: 'Share revoked by owner',
+        },
+      }),
+    });
+
+    const revoked = await service.ResolvePermissionsFromServer('art-revoked-1', explicitRevokeProvider);
+    expect(revoked?.CanRead).toBe(false);
+    expect(revoked?.AccessRevoked).toBe(true);
+    expect(revoked?.PermissionVerifyError).toBe(false);
+
+    const transientErrorProvider = mockGqlProvider({
+      ExecuteGQL: async () => {
+        throw new Error('503 Service Temporarily Unavailable');
+      },
+    });
+
+    const transientErr = await service.ResolvePermissionsFromServer('art-revoked-1', transientErrorProvider);
+    expect(transientErr?.CanRead).toBe(false);
+    expect(transientErr?.CanEdit).toBe(false);
+    expect(transientErr?.AccessRevoked).toBe(false);
+    expect(transientErr?.PermissionVerifyError).toBe(true);
+  });
+
+  it('E2: derives WebSocket URL from GraphQL URL when ticket.WsUrl is missing or loopback on a remote browser origin', async () => {
+    const prevWindow = (globalThis as { window?: Window }).window;
+    try {
+      Object.defineProperty(globalThis, 'window', {
+        configurable: true,
+        writable: true,
+        value: {
+          location: {
+            origin: 'https://workspace.acme.io',
+            hostname: 'workspace.acme.io',
+          },
+        },
+      });
+
+      const loopbackTicketProvider = mockGqlProvider({
+        ConfigData: {
+          URL: 'https://api.acme.io/mj/graphql',
+        },
+        ExecuteGQL: async () => ({
+          MintArtifactCollaborationTicket: {
+            Success: true,
+            Ticket: 'tkt_remote_1',
+            WsUrl: 'ws://localhost:4000/collaboration/yjs',
+            WsPath: '/collaboration/yjs',
+            CanRead: true,
+            CanEdit: true,
+          },
+        }),
+      });
+
+      const remoteResolved = await service.ResolveCollaborationEndpoint(
+        'art-remote-1',
+        null,
+        loopbackTicketProvider,
+      );
+      expect(remoteResolved.Mode).toBe('connect');
+      expect(remoteResolved.WsUrl).toBe(
+        'wss://api.acme.io/mj/collaboration/yjs?artifactId=art-remote-1&ticket=tkt_remote_1',
+      );
+
+      // On local dev (window.location.hostname === 'localhost'), localhost ticket.WsUrl is still honored
+      Object.defineProperty(globalThis, 'window', {
+        configurable: true,
+        writable: true,
+        value: {
+          location: {
+            origin: 'http://localhost:4200',
+            hostname: 'localhost',
+          },
+        },
+      });
+
+      const localResolved = await service.ResolveCollaborationEndpoint(
+        'art-local-1',
+        null,
+        loopbackTicketProvider,
+      );
+      expect(localResolved.Mode).toBe('connect');
+      expect(localResolved.WsUrl).toBe(
+        'ws://localhost:4000/collaboration/yjs?artifactId=art-local-1&ticket=tkt_remote_1',
+      );
+    } finally {
+      Object.defineProperty(globalThis, 'window', {
+        configurable: true,
+        writable: true,
+        value: prevWindow,
+      });
+    }
+  });
+
+  it('E3: VerifyFrozenSnapshotOnServer caches results, deduplicates 10 concurrent calls into 1 ExecuteGQL, and busts cache on ArtifactContentSnapshot change', async () => {
+    const isolatedService = new DocumentCollaborationService();
+    const executeSpy = vi.fn(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+      return {
+        VerifyFrozenBlockSnapshot: {
+          Valid: true,
+          SnapshotVerified: true,
+        },
+      };
+    });
+    const gqlProvider = mockGqlProvider({
+      ExecuteGQL: executeSpy,
+    });
+
+    const frozenArtifactBlock = {
+      BlockID: 'blk-ole-frozen-1',
+      Kind: 'Artifact' as const,
+      ArtifactID: 'wb-1',
+      Mode: 'Frozen' as const,
+      FrozenSnapshot: {
+        FrozenAt: '2026-11-10T12:00:00.000Z',
+        FrozenByUserID: 'u-1',
+        FrozenByUserName: 'Alice',
+        Columns: [],
+        Rows: [],
+        TotalRowCount: 0,
+        ArtifactContentSnapshot: '{"pages":[{"id":"p1","items":[]}]}',
+        SecurityWarningAcknowledged: true,
+        SnapshotContentHash:
+          'hmac-sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
+      },
+    };
+
+    // 5 concurrent + 5 sequential calls on the exact same frozen block -> ExecuteGQL invoked ONCE
+    const concurrentResults = await Promise.all(
+      Array.from({ length: 5 }, () =>
+        isolatedService.VerifyFrozenSnapshotOnServer(frozenArtifactBlock, gqlProvider),
+      ),
+    );
+    expect(concurrentResults).toEqual([true, true, true, true, true]);
+    for (let i = 0; i < 5; i++) {
+      const seqRes = await isolatedService.VerifyFrozenSnapshotOnServer(frozenArtifactBlock, gqlProvider);
+      expect(seqRes).toBe(true);
+    }
+    expect(executeSpy).toHaveBeenCalledTimes(1);
+
+    // Changing ArtifactContentSnapshot busts the verification cache key -> invokes ExecuteGQL a second time
+    const modifiedArtifactSnapshotBlock = {
+      ...frozenArtifactBlock,
+      FrozenSnapshot: {
+        ...frozenArtifactBlock.FrozenSnapshot,
+        ArtifactContentSnapshot: '{"pages":[{"id":"p1","items":[{"id":"tampered"}]}]}',
+      },
+    };
+    expect(isolatedService.IsFrozenSnapshotVerified(modifiedArtifactSnapshotBlock)).toBe(false);
+    await isolatedService.VerifyFrozenSnapshotOnServer(modifiedArtifactSnapshotBlock, gqlProvider);
+    expect(executeSpy).toHaveBeenCalledTimes(2);
   });
 });

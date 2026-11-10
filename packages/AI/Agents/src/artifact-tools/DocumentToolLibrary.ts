@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from 'node:crypto';
-import safeRegexCheck from 'safe-regex';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
 import {
@@ -7,69 +6,10 @@ import {
     DocumentBlockKind,
     DocumentBlockMode,
     DocumentBlockSpec,
-    DocumentLiveBlockEngine
+    DocumentLiveBlockEngine,
+    IsSafeUserRegex,
+    SafeRegexTest
 } from '@memberjunction/core-entities';
-
-/**
- * Validates that a user/agent-supplied regular expression is safe against both star-height
- * ReDoS (`safe-regex`) and exponential alternation/backreference patterns (e.g. `(a|a)*$`)
- * that bypass star-height checks (`Round 3 Item 19`).
- */
-function isSafeUserRegex(pattern: string): boolean {
-    if (!pattern || pattern.length > 256) {
-        return false;
-    }
-    if (!safeRegexCheck(pattern)) {
-        return false;
-    }
-    // Reject backreferences (\1..\9) which can exhibit super-linear backtracking
-    if (/\\[1-9]/.test(pattern)) {
-        return false;
-    }
-    // Reject any parenthesized group containing alternation ('|') when followed by a quantifier (*, +, {)
-    const groupStack: Array<{ hasAlternation: boolean }> = [];
-    let inCharClass = false;
-    for (let i = 0; i < pattern.length; i++) {
-        const ch = pattern[i];
-        if (ch === '\\') {
-            i++;
-            continue;
-        }
-        if (inCharClass) {
-            if (ch === ']') {
-                inCharClass = false;
-            }
-            continue;
-        }
-        if (ch === '[') {
-            inCharClass = true;
-            continue;
-        }
-        if (ch === '(') {
-            groupStack.push({ hasAlternation: false });
-            continue;
-        }
-        if (ch === '|' && groupStack.length > 0) {
-            groupStack[groupStack.length - 1].hasAlternation = true;
-            continue;
-        }
-        if (ch === ')' && groupStack.length > 0) {
-            const closed = groupStack.pop()!;
-            let nextIdx = i + 1;
-            while (nextIdx < pattern.length && /\s/.test(pattern[nextIdx])) {
-                nextIdx++;
-            }
-            const nextCh = pattern[nextIdx];
-            if (closed.hasAlternation && (nextCh === '*' || nextCh === '+' || nextCh === '{')) {
-                return false;
-            }
-            if (closed.hasAlternation && groupStack.length > 0) {
-                groupStack[groupStack.length - 1].hasAlternation = true;
-            }
-        }
-    }
-    return true;
-}
 
 /**
  * Logical block parsed from a Markdown Document.
@@ -748,14 +688,15 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         }
 
         if (compiledRegex) {
-            if (!isSafeUserRegex(query)) {
+            if (!IsSafeUserRegex(query)) {
                 return {
                     success: false,
                     data: null,
                     errorMessage: 'Unsafe or overly complex regular expression rejected'
                 };
             }
-            const matches = blocks.filter((b) => compiledRegex!.test(b.rawMarkdown));
+            const activeRegex = compiledRegex;
+            const matches = blocks.filter((b) => SafeRegexTest(activeRegex, b.rawMarkdown));
             return {
                 success: true,
                 data: {
@@ -831,7 +772,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             return { success: true, data: matches };
         }
 
-        if (!isSafeUserRegex(patternStr)) {
+        if (!IsSafeUserRegex(patternStr)) {
             return {
                 success: false,
                 data: null,
@@ -841,7 +782,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
 
         const matches: Array<{ lineNumber: number; text: string }> = [];
         for (let i = 0; i < lines.length; i++) {
-            if (regex.test(lines[i])) {
+            if (SafeRegexTest(regex, lines[i])) {
                 matches.push({ lineNumber: i, text: lines[i] });
             }
         }

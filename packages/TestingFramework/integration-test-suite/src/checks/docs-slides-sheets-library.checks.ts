@@ -1,5 +1,6 @@
 /**
- * @fileoverview Integration check bundle `'docs-slides-sheets-library'` (IT164) — verifies the
+ * @fileoverview Integration check bundle `'docs-slides-sheets-library'` (IT166) and client companion
+ * `'docs-slides-sheets-library-client'` (IT167) — verifies the
  * collaborative MJ Docs, Slides, Sheets, Yjs Working States, Delegated OLE Permissions, and
  * Library / Chat application substrate against the live database and metadata provider.
  *
@@ -547,7 +548,7 @@ async function checkDsl3LiveWorkingStateAndDelegatedPerms(ctx: IntegrationCheckC
         const verErrorMsg = unauthorizedVer.LatestResult?.CompleteMessage ?? '';
         Assert(!unauthorizedVerSaved, 'Restricted user without CanEdit must be refused Save() on MJ: Artifact Versions');
         Assert(
-            verErrorMsg.includes('does not have Edit permission on artifact'),
+            verErrorMsg.includes('does not hold Edit permission on artifact'),
             `MJArtifactVersionEntityServer must refuse Save() with artifact ACL message, not FK error (got: ${verErrorMsg})`,
         );
 
@@ -606,20 +607,22 @@ async function checkDsl3LiveWorkingStateAndDelegatedPerms(ctx: IntegrationCheckC
         AssertEqual(cascadedPeerPerms.CanEdit, false, 'Parent Read-only share must keep CanEdit=false on child OLE artifact');
         AssertEqual(cascadedPeerPerms.Source, 'Delegate', 'Cascaded child permission Source must be Delegate');
     } finally {
-        if (sharedPerm?.IsSaved) {
-            await sharedPerm.Delete();
-        }
-        if (childWhiteboard?.IsSaved) {
-            await childWhiteboard.Delete();
-        }
-        if (workingState?.IsSaved) {
-            await workingState.Delete();
-        }
-        if (parentVer?.IsSaved) {
-            await parentVer.Delete();
-        }
-        if (parentDoc?.IsSaved) {
-            await parentDoc.Delete();
+        const teardownTargets: Array<{ label: string; entity: { IsSaved: boolean; Delete(): Promise<boolean>; LatestResult?: { CompleteMessage?: string } | null } | null }> = [
+            { label: 'sharedPerm', entity: sharedPerm },
+            { label: 'childWhiteboard', entity: childWhiteboard },
+            { label: 'workingState', entity: workingState },
+            { label: 'parentVer', entity: parentVer },
+            { label: 'parentDoc', entity: parentDoc },
+        ];
+        for (const { label, entity } of teardownTargets) {
+            if (entity?.IsSaved) {
+                const deleted = await entity.Delete();
+                if (!deleted) {
+                    console.warn(
+                        `[IT166 DSL3 teardown] Delete() returned false for ${label}: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                    );
+                }
+            }
         }
     }
 }
@@ -1046,7 +1049,7 @@ for (const c of DocsSlidesSheetsLibraryChecks) {
     IntegrationCheckRegistry.Instance.Register(c);
 }
 
-// ─── IT165: Client-transport wire checks (DSLC1–DSLC4) ───────────────────────
+// ─── IT167: Client-transport wire checks (DSLC1–DSLC4) ───────────────────────
 
 const CLIENT_BUNDLE = 'docs-slides-sheets-library-client';
 const GRANTEE_EMAIL = 'it-artifact-viewer@integration.test';
@@ -1138,7 +1141,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(CLIENT_BUNDLE, {
                 ctx,
                 dslClientFixture,
                 granteeId,
-                'IT165 DSL client grantee (mj-integration-test)',
+                'IT167 DSL client grantee (mj-integration-test)',
             );
             const builtProvider = await BuildUserKeyProviderWithRetry(rawKey);
             dslClientFixture.GranteeProvider = builtProvider as GraphQLDataProvider;
@@ -1161,7 +1164,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(CLIENT_BUNDLE, {
             // 1. Shared Read-Only artifact + version 1
             const parentDoc = await ownerProvider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', ctx.User);
             parentDoc.NewRecord();
-            parentDoc.Name = `__IT165_SharedDoc_${suffix} (mj-integration-test — safe to delete)`;
+            parentDoc.Name = `__IT167_SharedDoc_${suffix} (mj-integration-test — safe to delete)`;
             parentDoc.TypeID = docTypeId;
             parentDoc.UserID = ctx.User.ID;
             parentDoc.Visibility = 'Always';
@@ -1170,7 +1173,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(CLIENT_BUNDLE, {
             }
             dslClientFixture.ParentDocID = parentDoc.ID;
 
-            const initialContent = `# IT165 Shared Strategy Document ${suffix}\n\nOwner baseline content.`;
+            const initialContent = `# IT167 Shared Strategy Document ${suffix}\n\nOwner baseline content.`;
             const parentVer = await ownerProvider.GetEntityObject<MJArtifactVersionEntity>(
                 'MJ: Artifact Versions',
                 ctx.User,
@@ -1208,7 +1211,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(CLIENT_BUNDLE, {
             // 2. Private unshared artifact + version 1
             const privateDoc = await ownerProvider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', ctx.User);
             privateDoc.NewRecord();
-            privateDoc.Name = `__IT165_PrivateDoc_${suffix} (mj-integration-test — safe to delete)`;
+            privateDoc.Name = `__IT167_PrivateDoc_${suffix} (mj-integration-test — safe to delete)`;
             privateDoc.TypeID = docTypeId;
             privateDoc.UserID = ctx.User.ID;
             privateDoc.Visibility = 'Always';
@@ -1227,7 +1230,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(CLIENT_BUNDLE, {
             privateVer.Name = privateDoc.Name;
             privateVer.UserID = ctx.User.ID;
             privateVer.ContentMode = 'Text';
-            privateVer.Content = `# IT165 Private Document ${suffix}\n\nConfidential owner content.`;
+            privateVer.Content = `# IT167 Private Document ${suffix}\n\nConfidential owner content.`;
             if (!(await privateVer.Save())) {
                 throw new Error(`Failed to create privateVer: ${privateVer.LatestResult?.CompleteMessage ?? ''}`);
             }
@@ -1371,7 +1374,7 @@ async function checkDslc2RestrictedUserVersionSaveRefusedOverApi(ctx: Integratio
         },
     );
     Assert(
-        createErr.includes('does not have Edit permission on artifact'),
+        createErr.includes('does not hold Edit permission on artifact'),
         `Read-only grantee CreateMJArtifactVersion over GraphQL must be refused by MJArtifactVersionEntityServer artifact ACL check (got: ${createErr || 'no error'})`,
     );
 
@@ -1394,7 +1397,7 @@ async function checkDslc2RestrictedUserVersionSaveRefusedOverApi(ctx: Integratio
         },
     );
     Assert(
-        updateErr.includes('does not have Edit permission on artifact'),
+        updateErr.includes('does not hold Edit permission on artifact'),
         `Read-only grantee UpdateMJArtifactVersion over GraphQL must be refused by MJArtifactVersionEntityServer artifact ACL check (got: ${updateErr || 'no error'})`,
     );
 

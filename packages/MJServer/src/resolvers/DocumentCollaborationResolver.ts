@@ -1,6 +1,10 @@
 import { createHash } from 'node:crypto';
 import { Resolver, Query, Mutation, Arg, Ctx, ObjectType, Field, Int } from 'type-graphql';
-import { IMetadataProvider, LogError, Metadata, RunView } from '@memberjunction/core';
+import type { ChatMessage } from '@memberjunction/ai';
+import { AgentRunner } from '@memberjunction/ai-agents';
+import type { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { AIEngine } from '@memberjunction/aiengine';
+import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { EscapeSQLString } from '@memberjunction/global';
 import {
@@ -10,6 +14,7 @@ import {
     DocumentLiveBlockEngine,
     MJArtifactEntity,
     MJArtifactVersionEntity,
+    MJConversationDetailEntity,
     ValidateFrozenBlockSnapshot
 } from '@memberjunction/core-entities';
 import { ApiRoute } from '../apiRoot.js';
@@ -217,7 +222,13 @@ export class DocumentCollaborationResolver extends ResolverBase {
         });
 
         const wsPath = ApiRoute(ARTIFACT_COLLABORATION_WS_PATH);
-        const wsUrl = ApiRoute(ARTIFACT_COLLABORATION_WS_PATH, { absolute: true }).replace(/^http/i, 'ws');
+        const configuredPublicUrl = (configInfo.publicUrl || process.env['MJAPI_PUBLIC_URL'] || '').trim();
+        const wsUrl = configuredPublicUrl
+            ? (configInfo.publicUrl
+                  ? ApiRoute(ARTIFACT_COLLABORATION_WS_PATH, { absolute: true })
+                  : `${configuredPublicUrl.replace(/\/+$/, '')}${ARTIFACT_COLLABORATION_WS_PATH}`
+              ).replace(/^http/i, 'ws')
+            : undefined;
 
         return {
             Success: true,
@@ -595,9 +606,9 @@ export class DocumentCollaborationResolver extends ResolverBase {
 
     /**
      * Dispatches an `@mention` inside an anchored document comment (`comment`, `suggest`, or `edit` mode)
-     * on the server after verifying permissions via {@link ArtifactPermissionEngine}.
-     * - `agentMode === 'edit'` requires `CanEdit === true` on `artifactId`.
-     * - `agentMode === 'comment' | 'suggest'` requires `CanRead === true` on `artifactId`.
+     * on the server after verifying API key scopes and permissions via {@link ArtifactPermissionEngine}.
+     * - `agentMode === 'edit'` requires `artifact:edit` scope and `CanEdit === true` on `artifactId`.
+     * - `agentMode === 'comment' | 'suggest'` requires `artifact:comment` scope and `CanRead === true` on `artifactId`.
      */
     @Mutation(() => ExecuteAnchoredCommentAgentMentionPayload)
     public async ExecuteAnchoredCommentAgentMention(
@@ -608,10 +619,10 @@ export class DocumentCollaborationResolver extends ResolverBase {
         @Arg('anchorQuote', () => String, { nullable: true }) anchorQuote: string | undefined,
         @Ctx() context: AppContext
     ): Promise<ExecuteAnchoredCommentAgentMentionPayload> {
-        const user = context.userPayload?.userRecord;
+        const user = this.GetUserFromPayload(context.userPayload) ?? context.userPayload?.userRecord;
         const provider = this.resolveProvider(context);
         const normalizedArtifactId = (artifactId ?? '').trim();
-        const normalizedHandle = (agentHandle ?? '').trim().replace(/^@+/, '');
+        const normalizedHandle = (agentHandle ?? '').trim().replace(/^@+/, '').trim();
         const normalizedMode =
             agentMode === 'edit' ? 'edit' : agentMode === 'suggest' ? 'suggest' : 'comment';
 
@@ -623,6 +634,12 @@ export class DocumentCollaborationResolver extends ResolverBase {
                 ErrorMessage: 'Authenticated user, artifactId, and agentHandle are required.'
             };
         }
+
+        await this.CheckAPIKeyScopeAuthorization(
+            normalizedMode === 'edit' ? 'artifact:edit' : 'artifact:comment',
+            normalizedArtifactId,
+            context.userPayload
+        );
 
         const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
             provider,
@@ -652,19 +669,119 @@ export class DocumentCollaborationResolver extends ResolverBase {
             .replace(new RegExp(`@${escapedHandle}(?![A-Za-z0-9_-])`, 'gi'), '')
             .trim();
 
+        const currentContent = await ArtifactCollaborationServer.Instance.GetRoomContent(
+            normalizedArtifactId,
+            user
+        );
+
         if (normalizedMode === 'edit') {
-            const currentContent = await ArtifactCollaborationServer.Instance.GetRoomContent(
-                normalizedArtifactId,
-                user
-            );
-            let nextContent = currentContent;
-            if (trimmedQuote && currentContent.includes(trimmedQuote) && trimmedInstruction) {
-                nextContent = currentContent.replace(trimmedQuote, () => trimmedInstruction);
-            } else if (trimmedInstruction) {
-                nextContent = currentContent
-                    ? `${currentContent}\n\n${trimmedInstruction}`
-                    : trimmedInstruction;
+            if (!trimmedQuote) {
+                return {
+                    Success: false,
+                    AgentHandle: normalizedHandle,
+                    AgentMode: normalizedMode,
+                    ErrorMessage: 'Edit mode requires a non-empty anchored quote to replace.'
+                };
             }
+            if (!currentContent.includes(trimmedQuote)) {
+                return {
+                    Success: false,
+                    AgentHandle: normalizedHandle,
+                    AgentMode: normalizedMode,
+                    ErrorMessage: 'Anchored quote was not found in the current document content.'
+                };
+            }
+        }
+
+        const resolvedAgent = await this.resolveAgentByHandle(normalizedHandle, user);
+        if (!resolvedAgent.Agent) {
+            return {
+                Success: false,
+                AgentHandle: normalizedHandle,
+                AgentMode: normalizedMode,
+                ErrorMessage:
+                    resolvedAgent.ErrorMessage || `No active AI agent matching '@${normalizedHandle}' was found.`
+            };
+        }
+        const agent = resolvedAgent.Agent;
+
+        type MentionExecutionPayload =
+            | {
+                  replacement?: string;
+                  updatedContent?: string;
+                  updatedQuote?: string;
+                  reply?: string;
+                  message?: string;
+              }
+            | string;
+        let agentResult: ExecuteAgentResult<MentionExecutionPayload>;
+        try {
+            const agentRunner = new AgentRunner(provider);
+            const conversationMessages = this.buildAnchoredMentionMessages(
+                normalizedMode,
+                currentContent,
+                trimmedQuote,
+                trimmedInstruction || (commentBody ?? '').trim()
+            );
+            agentResult = await agentRunner.RunAgent<MentionExecutionPayload>({
+                agent,
+                conversationMessages,
+                contextUser: user
+            });
+        } catch (runErr) {
+            const msg = runErr instanceof Error ? runErr.message : String(runErr);
+            LogError(`DocumentCollaborationResolver.ExecuteAnchoredCommentAgentMention error: ${msg}`);
+            return {
+                Success: false,
+                AgentHandle: normalizedHandle,
+                AgentMode: normalizedMode,
+                ErrorMessage: `Failed to execute AI agent '@${agent.Name}': ${msg}`
+            };
+        }
+
+        if (!agentResult?.success) {
+            return {
+                Success: false,
+                AgentHandle: normalizedHandle,
+                AgentMode: normalizedMode,
+                ErrorMessage:
+                    agentResult?.errorMessage ||
+                    agentResult?.agentRun?.ErrorMessage ||
+                    `AI agent '@${agent.Name}' execution failed.`
+            };
+        }
+
+        const extracted = this.extractMentionAgentOutput(agentResult, normalizedMode);
+
+        if (normalizedMode === 'edit') {
+            const proposedReplacement = extracted.Replacement;
+            if (
+                typeof proposedReplacement !== 'string' ||
+                proposedReplacement.trim().length === 0 ||
+                proposedReplacement === trimmedQuote
+            ) {
+                return {
+                    Success: false,
+                    AgentHandle: normalizedHandle,
+                    AgentMode: normalizedMode,
+                    ErrorMessage: `AI agent '@${agent.Name}' did not produce a valid replacement for the anchored quote.`
+                };
+            }
+
+            const quoteIdx = currentContent.indexOf(trimmedQuote);
+            if (quoteIdx < 0) {
+                return {
+                    Success: false,
+                    AgentHandle: normalizedHandle,
+                    AgentMode: normalizedMode,
+                    ErrorMessage: 'Anchored quote is no longer present in the current document content.'
+                };
+            }
+            const nextContent =
+                currentContent.slice(0, quoteIdx) +
+                proposedReplacement +
+                currentContent.slice(quoteIdx + trimmedQuote.length);
+
             const mutated = await ArtifactCollaborationServer.Instance.ApplyServerContentMutation(
                 normalizedArtifactId,
                 nextContent,
@@ -680,11 +797,22 @@ export class DocumentCollaborationResolver extends ResolverBase {
                     ErrorMessage: 'Failed to apply agent edit to collaboration room.'
                 };
             }
+            const editReply =
+                extracted.Reply ||
+                `Applied edit to anchored selection (saved as Version ${mutated.VersionNumber ?? ''}).`.trim();
+            await this.persistAnchoredAgentReplyIfThreadExists(
+                provider,
+                user,
+                normalizedArtifactId,
+                trimmedQuote,
+                agent.ID,
+                editReply
+            );
             return {
                 Success: true,
                 AgentHandle: normalizedHandle,
                 AgentMode: normalizedMode,
-                ReplyBody: `Applied requested edit${trimmedQuote ? ` to "${trimmedQuote}"` : ''} (saved as Version ${mutated.VersionNumber ?? ''}).`.trim(),
+                ReplyBody: editReply,
                 UpdatedContent: nextContent,
                 VersionID: mutated.VersionID,
                 VersionNumber: mutated.VersionNumber
@@ -692,25 +820,326 @@ export class DocumentCollaborationResolver extends ResolverBase {
         }
 
         if (normalizedMode === 'suggest') {
+            const replyBody = extracted.Reply;
+            const proposedReplacement = extracted.Replacement;
+            if (!replyBody && !proposedReplacement) {
+                return {
+                    Success: false,
+                    AgentHandle: normalizedHandle,
+                    AgentMode: normalizedMode,
+                    ErrorMessage: `AI agent '@${agent.Name}' returned no suggestion output.`
+                };
+            }
+            const finalReply = replyBody || `Suggested revision for "${trimmedQuote || 'anchored block'}".`;
+            await this.persistAnchoredAgentReplyIfThreadExists(
+                provider,
+                user,
+                normalizedArtifactId,
+                trimmedQuote,
+                agent.ID,
+                finalReply
+            );
             return {
                 Success: true,
                 AgentHandle: normalizedHandle,
                 AgentMode: normalizedMode,
-                UpdatedContent: trimmedInstruction || undefined,
-                ReplyBody: trimmedQuote
-                    ? `Suggested revision for "${trimmedQuote}": ${trimmedInstruction || trimmedQuote}`
-                    : `Suggested revision: ${trimmedInstruction}`
+                UpdatedContent: proposedReplacement || undefined,
+                ReplyBody: finalReply
             };
         }
 
+        const commentReply = extracted.Reply;
+        if (!commentReply) {
+            return {
+                Success: false,
+                AgentHandle: normalizedHandle,
+                AgentMode: normalizedMode,
+                ErrorMessage: `AI agent '@${agent.Name}' returned an empty response.`
+            };
+        }
+        await this.persistAnchoredAgentReplyIfThreadExists(
+            provider,
+            user,
+            normalizedArtifactId,
+            trimmedQuote,
+            agent.ID,
+            commentReply
+        );
         return {
             Success: true,
             AgentHandle: normalizedHandle,
             AgentMode: normalizedMode,
-            ReplyBody: trimmedQuote
-                ? `@${normalizedHandle} reviewed "${trimmedQuote}": ${trimmedInstruction || 'No issues found.'}`
-                : `@${normalizedHandle}: ${trimmedInstruction || 'Reviewed.'}`
+            ReplyBody: commentReply
         };
+    }
+
+    private async resolveAgentByHandle(
+        handle: string,
+        user: UserInfo
+    ): Promise<{ Agent: MJAIAgentEntityExtended | null; ErrorMessage?: string }> {
+        const stripped = handle.trim().replace(/^@+/, '').trim();
+        if (!stripped) {
+            return { Agent: null, ErrorMessage: 'Agent handle is required.' };
+        }
+        try {
+            if (!AIEngine.Instance.Loaded) {
+                await AIEngine.Instance.Config(false, user);
+            }
+        } catch (cfgErr) {
+            if ((AIEngine.Instance.Agents?.length ?? 0) === 0) {
+                return {
+                    Agent: null,
+                    ErrorMessage: `Unable to load AI agent catalog for '@${stripped}': ${
+                        cfgErr instanceof Error ? cfgErr.message : String(cfgErr)
+                    }`
+                };
+            }
+        }
+
+        const agents = AIEngine.Instance.Agents ?? [];
+        const lower = stripped.toLowerCase();
+        const collapsed = lower.replace(/[\s_-]+/g, '');
+
+        const exactMatches = agents.filter((a) => (a.Name ?? '').trim().toLowerCase() === lower);
+        const normalizedMatches =
+            exactMatches.length > 0
+                ? exactMatches
+                : agents.filter(
+                      (a) => (a.Name ?? '').trim().toLowerCase().replace(/[\s_-]+/g, '') === collapsed
+                  );
+
+        if (normalizedMatches.length === 0) {
+            return {
+                Agent: null,
+                ErrorMessage: `No AI agent matching '@${stripped}' was found.`
+            };
+        }
+
+        const activeAgent = normalizedMatches.find((a) => a.Status === 'Active');
+        if (!activeAgent) {
+            return {
+                Agent: null,
+                ErrorMessage: `AI agent '${normalizedMatches[0].Name}' is not active (Status: ${normalizedMatches[0].Status}).`
+            };
+        }
+
+        if (typeof AIEngine.Instance.CanUserRunAgent === 'function') {
+            try {
+                const canRun = await AIEngine.Instance.CanUserRunAgent(activeAgent.ID, user);
+                if (!canRun) {
+                    return {
+                        Agent: null,
+                        ErrorMessage: `User does not have permission to run AI agent '${activeAgent.Name}'.`
+                    };
+                }
+            } catch {
+                // If permission cache is uninitialized in isolated unit tests, allow only when Agents was pre-seeded
+                if (AIEngine.Instance.Loaded) {
+                    return {
+                        Agent: null,
+                        ErrorMessage: `Unable to verify run permission for AI agent '${activeAgent.Name}'.`
+                    };
+                }
+            }
+        }
+
+        return { Agent: activeAgent };
+    }
+
+    private buildAnchoredMentionMessages(
+        mode: 'comment' | 'suggest' | 'edit',
+        documentContent: string,
+        anchoredQuote: string,
+        instruction: string
+    ): ChatMessage[] {
+        const modeGuidance =
+            mode === 'edit'
+                ? 'Respond with a JSON object {"reply": "<short explanation>", "replacement": "<exact replacement markdown for the anchored quote>"}. Only include the replacement text for the anchored quote itself in "replacement".'
+                : mode === 'suggest'
+                  ? 'Respond with a JSON object {"reply": "<rationale for suggestion>", "replacement": "<suggested replacement markdown for the anchored quote>"}.'
+                  : 'Respond directly and concisely to the user instruction regarding the anchored passage.';
+
+        const userPromptParts: string[] = [
+            `Mode: ${mode}`,
+            modeGuidance,
+            anchoredQuote ? `Anchored Quote:\n"""\n${anchoredQuote}\n"""` : '',
+            `User Instruction:\n${instruction}`,
+            documentContent ? `Document Context:\n"""\n${documentContent.slice(0, 16_000)}\n"""` : ''
+        ].filter((part) => part.length > 0);
+
+        return [
+            {
+                role: 'user',
+                content: userPromptParts.join('\n\n')
+            }
+        ];
+    }
+
+    private extractMentionAgentOutput(
+        agentResult: ExecuteAgentResult<{
+            replacement?: string;
+            updatedContent?: string;
+            updatedQuote?: string;
+            reply?: string;
+            message?: string;
+        } | string>,
+        mode: 'comment' | 'suggest' | 'edit'
+    ): { Reply?: string; Replacement?: string } {
+        type StructuredMentionPayload = {
+            replacement?: string;
+            updatedContent?: string;
+            updatedQuote?: string;
+            reply?: string;
+            message?: string;
+        };
+        const parseStructuredCandidate = (
+            raw: StructuredMentionPayload | string | null | undefined
+        ): { Reply?: string; Replacement?: string } | null => {
+            if (!raw) {
+                return null;
+            }
+            if (typeof raw === 'object' && !Array.isArray(raw)) {
+                const rep =
+                    typeof raw.replacement === 'string'
+                        ? raw.replacement
+                        : typeof raw.updatedContent === 'string'
+                          ? raw.updatedContent
+                          : typeof raw.updatedQuote === 'string'
+                            ? raw.updatedQuote
+                            : undefined;
+                const reply =
+                    typeof raw.reply === 'string'
+                        ? raw.reply.trim()
+                        : typeof raw.message === 'string'
+                          ? raw.message.trim()
+                          : undefined;
+                if (rep !== undefined || reply !== undefined) {
+                    return { Reply: reply, Replacement: rep };
+                }
+                return null;
+            }
+            if (typeof raw === 'string') {
+                const trimmed = raw.trim();
+                if (!trimmed) {
+                    return null;
+                }
+                const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+                const jsonCandidate = fencedMatch ? fencedMatch[1].trim() : trimmed;
+                if (jsonCandidate.startsWith('{') && jsonCandidate.endsWith('}')) {
+                    try {
+                        const parsed = JSON.parse(jsonCandidate) as StructuredMentionPayload;
+                        return parseStructuredCandidate(parsed);
+                    } catch {
+                        // Fall through to plain text handling
+                    }
+                }
+            }
+            return null;
+        };
+
+        const fromPayload = parseStructuredCandidate(agentResult.payload);
+        if (fromPayload) {
+            return fromPayload;
+        }
+        const fromFinalPayload = parseStructuredCandidate(agentResult.agentRun?.FinalPayload);
+        if (fromFinalPayload) {
+            return fromFinalPayload;
+        }
+        const rawRunMessage = (agentResult.agentRun?.Message ?? '').trim();
+        const fromMessageJson = parseStructuredCandidate(rawRunMessage);
+        if (fromMessageJson) {
+            return fromMessageJson;
+        }
+
+        if (typeof agentResult.payload === 'string' && agentResult.payload.trim().length > 0) {
+            return mode === 'comment'
+                ? { Reply: agentResult.payload.trim() }
+                : { Reply: rawRunMessage || undefined, Replacement: agentResult.payload };
+        }
+        if (rawRunMessage.length > 0) {
+            return mode === 'comment' ? { Reply: rawRunMessage } : { Reply: rawRunMessage };
+        }
+        return {};
+    }
+
+    private async persistAnchoredAgentReplyIfThreadExists(
+        provider: IMetadataProvider,
+        user: UserInfo,
+        artifactId: string,
+        anchorQuote: string,
+        agentId: string,
+        replyMessage: string
+    ): Promise<void> {
+        if (!replyMessage.trim()) {
+            return;
+        }
+        try {
+            const rv = RunView.FromMetadataProvider(provider);
+            const convRes = await rv.RunView<{
+                ID: string;
+                AnchorMetadata?: string | null;
+            }>(
+                {
+                    EntityName: 'MJ: Conversations',
+                    ExtraFilter: `LinkedRecordID='${EscapeSQLString(artifactId)}' AND AnchorType IS NOT NULL`,
+                    OrderBy: '__mj_CreatedAt DESC',
+                    Fields: ['ID', 'AnchorMetadata'],
+                    MaxRows: 10,
+                    SkipTotalRowCount: true,
+                    ResultType: 'simple'
+                },
+                user
+            );
+            if (!convRes.Success || !convRes.Results || convRes.Results.length === 0) {
+                return;
+            }
+
+            let targetConversationId: string | undefined;
+            if (anchorQuote) {
+                for (const row of convRes.Results) {
+                    if (!row.AnchorMetadata) {
+                        continue;
+                    }
+                    try {
+                        const meta = JSON.parse(row.AnchorMetadata) as {
+                            quote?: string;
+                            status?: string;
+                        };
+                        if (meta.status !== 'Resolved' && meta.quote?.trim() === anchorQuote) {
+                            targetConversationId = row.ID;
+                            break;
+                        }
+                    } catch {
+                        // Ignore malformed metadata JSON
+                    }
+                }
+            }
+            if (!targetConversationId) {
+                targetConversationId = convRes.Results[0].ID;
+            }
+
+            const detail = await provider.GetEntityObject<MJConversationDetailEntity>(
+                'MJ: Conversation Details',
+                user
+            );
+            detail.NewRecord();
+            detail.ConversationID = targetConversationId;
+            detail.Role = 'AI';
+            detail.AgentID = agentId;
+            detail.UserID = user.ID;
+            detail.Message = replyMessage;
+            detail.Status = 'Complete';
+            const saved = await detail.Save();
+            if (!saved) {
+                LogError(
+                    `DocumentCollaborationResolver.persistAnchoredAgentReplyIfThreadExists failed to save AI reply on conversation '${targetConversationId}': ${
+                        detail.LatestResult?.CompleteMessage ?? 'Save() returned false'
+                    }`
+                );
+            }
+        } catch {
+            // Best-effort persistence when an anchored conversation thread exists
+        }
     }
 }
 

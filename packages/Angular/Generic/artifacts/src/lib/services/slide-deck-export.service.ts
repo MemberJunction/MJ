@@ -225,9 +225,9 @@ export class SlideDeckExportService {
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: ${EscapeHtml(theme.BodyFont || 'Inter, system-ui, sans-serif')};
-      background: ${EscapeHtml(theme.BackgroundColor)};
-      color: ${EscapeHtml(theme.TextColor)};
+      font-family: ${this.sanitizeStyleDeclarationValue(theme.BodyFont || 'Inter, system-ui, sans-serif')};
+      background: ${this.sanitizeStyleDeclarationValue(theme.BackgroundColor)};
+      color: ${this.sanitizeStyleDeclarationValue(theme.TextColor)};
     }
     .print-slide-page {
       page-break-after: always;
@@ -242,27 +242,27 @@ export class SlideDeckExportService {
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      border: 2px solid ${EscapeHtml(theme.PrimaryColor)};
+      border: 2px solid ${this.sanitizeStyleDeclarationValue(theme.PrimaryColor)};
       border-radius: 12px;
       padding: 28px 36px;
-      background: ${EscapeHtml(theme.BackgroundColor)};
+      background: ${this.sanitizeStyleDeclarationValue(theme.BackgroundColor)};
     }
     .print-slide-master-header, .print-slide-master-footer {
       display: flex;
       justify-content: space-between;
       font-size: 12px;
-      color: ${EscapeHtml(theme.MutedTextColor)};
+      color: ${this.sanitizeStyleDeclarationValue(theme.MutedTextColor)};
     }
     .print-slide-heading h1 {
       margin: 12px 0 4px;
       font-size: 32px;
-      color: ${EscapeHtml(theme.PrimaryColor)};
-      font-family: ${EscapeHtml(theme.HeadingFont || 'Inter, system-ui, sans-serif')};
+      color: ${this.sanitizeStyleDeclarationValue(theme.PrimaryColor)};
+      font-family: ${this.sanitizeStyleDeclarationValue(theme.HeadingFont || 'Inter, system-ui, sans-serif')};
     }
     .print-slide-subtitle {
       margin: 0 0 16px;
       font-size: 18px;
-      color: ${EscapeHtml(theme.MutedTextColor)};
+      color: ${this.sanitizeStyleDeclarationValue(theme.MutedTextColor)};
     }
     .print-slide-regions {
       flex: 1;
@@ -272,14 +272,14 @@ export class SlideDeckExportService {
       align-items: start;
     }
     .print-region-card {
-      background: ${EscapeHtml(theme.SurfaceColor)};
+      background: ${this.sanitizeStyleDeclarationValue(theme.SurfaceColor)};
       border-radius: 8px;
       padding: 16px;
     }
     .print-big-number {
       font-size: 54px;
       font-weight: 800;
-      color: ${EscapeHtml(theme.AccentColor)};
+      color: ${this.sanitizeStyleDeclarationValue(theme.AccentColor)};
     }
     table {
       width: 100%;
@@ -288,7 +288,7 @@ export class SlideDeckExportService {
       font-size: 13px;
     }
     th, td {
-      border: 1px solid ${EscapeHtml(theme.MutedTextColor)};
+      border: 1px solid ${this.sanitizeStyleDeclarationValue(theme.MutedTextColor)};
       padding: 6px 10px;
       text-align: left;
     }
@@ -296,8 +296,8 @@ export class SlideDeckExportService {
       margin-top: 12px;
       padding: 10px 14px;
       font-size: 13px;
-      background: ${EscapeHtml(theme.SurfaceColor)};
-      border-left: 4px solid ${EscapeHtml(theme.AccentColor)};
+      background: ${this.sanitizeStyleDeclarationValue(theme.SurfaceColor)};
+      border-left: 4px solid ${this.sanitizeStyleDeclarationValue(theme.AccentColor)};
     }
   </style>
 </head>
@@ -305,6 +305,15 @@ export class SlideDeckExportService {
 ${slideSections.join('\n')}
 </body>
 </html>`;
+  }
+
+  /**
+   * Keeps valid single/double quotes for CSS font-family declarations intact inside `<style>`
+   * (where HTML entities like `&#39;` are not decoded) while guaranteeing `<`, `>`, and `</style`
+   * can never appear.
+   */
+  private sanitizeStyleDeclarationValue(value: string): string {
+    return (value || '').replace(/<\/style/gi, '').replace(/[<>]/g, '');
   }
 
   /**

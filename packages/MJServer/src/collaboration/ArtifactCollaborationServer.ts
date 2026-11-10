@@ -171,6 +171,10 @@ export interface CollaborationRoom {
     BaseVersionNumber: number;
     /** Serialized content of the latest `MJ: Artifact Versions` row reconciled into this room. */
     BaseVersionText: string;
+    /** Baseline content most recently 3-way merged into this room via `reconcileOutOfBandVersionIntoRoom`. */
+    LastReconciledBaselineText?: string | null;
+    /** Server-memory-only pre-out-of-band Yjs snapshot for reconnect deduplication (never stored inside `Doc.getMap('meta')`). */
+    PreOutOfBandDocState?: Uint8Array | null;
     /** Monotonic lineage token updated whenever an out-of-band version or reset mutates the room. */
     RoomEpoch: string;
     /** Serialized per-room flush promise queue so concurrent `FlushWorkingState` calls never interleave. */
@@ -314,6 +318,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     private _heartbeatIntervalMs: number = DEFAULT_COLLABORATION_HEARTBEAT_MS;
     private _shutdownRegistered = false;
     private _shuttingDown = false;
+    private _startupSecretsChecked = false;
 
     protected constructor() {
         super();
@@ -328,10 +333,57 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
     /**
      * Supplies the active MJServer `DataSourceInfo[]` pool list so HTTP-header WebSocket upgrades
-     * resolve `getUserPayload` against real database pools.
+     * resolve `getUserPayload` against real database pools, and performs one-time startup validation
+     * of required >= 32-byte HMAC secrets (`E1`).
      */
     public SetDataSources(dataSources: DataSourceInfo[]): void {
         this._dataSources = dataSources ?? [];
+        if (!this._startupSecretsChecked) {
+            this._startupSecretsChecked = true;
+            this.CheckStartupSecrets();
+        }
+    }
+
+    /**
+     * Checks `MJ_ARTIFACT_COLLAB_HMAC_SECRET` and `MJ_FROZEN_BLOCK_HMAC_SECRET` at server startup (`E1`).
+     * Emits clear startup warnings when either secret is unset or shorter than 32 UTF-8 bytes so operators
+     * immediately see why live collaborative editing or frozen-snapshot signing is disabled.
+     */
+    public CheckStartupSecrets(): {
+        CollabSecretConfigured: boolean;
+        FrozenBlockSecretConfigured: boolean;
+        Warnings: string[];
+    } {
+        const warnings: string[] = [];
+        const collabSecret = this.getTicketHmacSecret();
+        const collabSecretConfigured = collabSecret !== null;
+        if (!collabSecretConfigured) {
+            const msg =
+                '[ArtifactCollaborationServer] Startup warning: MJ_ARTIFACT_COLLAB_HMAC_SECRET is unset or shorter than 32 UTF-8 bytes; live collaborative editing is disabled until a >= 32-byte secret is configured.';
+            warnings.push(msg);
+            LogStatus(msg);
+            console.warn(msg);
+        }
+
+        const frozenCandidate = (
+            process.env['MJ_FROZEN_BLOCK_HMAC_SECRET'] ??
+            process.env['MJ_FROZEN_SNAPSHOT_SECRET'] ??
+            ''
+        ).trim();
+        const frozenBlockSecretConfigured = Buffer.byteLength(frozenCandidate, 'utf8') >= 32;
+        if (!frozenBlockSecretConfigured) {
+            const msg =
+                '[ArtifactCollaborationServer] Startup warning: MJ_FROZEN_BLOCK_HMAC_SECRET is unset or shorter than 32 UTF-8 bytes; frozen-snapshot signing is disabled until a >= 32-byte secret is configured.';
+            warnings.push(msg);
+            LogStatus(msg);
+            console.warn(msg);
+        }
+
+        return {
+            CollabSecretConfigured: collabSecretConfigured,
+            FrozenBlockSecretConfigured: frozenBlockSecretConfigured,
+            Warnings: warnings
+        };
     }
 
     /**
@@ -1147,12 +1199,18 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
         const yText = room.Doc.getText('content');
         const existing = this.extractRoomSerializedContent(room.Doc);
-        if (existing !== newContent) {
-            const preMutationStateB64 = BytesToBase64(Y.encodeStateAsUpdate(room.Doc));
+        const alreadyReconciledFromSameBaseline =
+            !saveVersion &&
+            typeof previousContent === 'string' &&
+            previousContent !== newContent &&
+            room.BaseVersionText === newContent &&
+            room.LastReconciledBaselineText === previousContent;
+
+        if (existing !== newContent && !alreadyReconciledFromSameBaseline) {
+            room.PreOutOfBandDocState = Y.encodeStateAsUpdate(room.Doc);
             const nextEpoch = `epoch-${Date.now()}-${randomBytes(4).toString('hex')}`;
             room.RoomEpoch = nextEpoch;
             room.Doc.transact(() => {
-                room.Doc.getMap('meta').set('preOutOfBandStateB64', preMutationStateB64);
                 room.Doc.getMap('meta').set('roomEpoch', nextEpoch);
                 this.applyMinimalTextDiff(yText, yText.toString(), newContent, previousContent);
                 this.syncSlideDeckStructuresIfPresent(room.Doc, newContent, {
@@ -1347,7 +1405,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     !this._inFlightCompactionVersionIds.has(payload.VersionID)
                 ) {
                     const room = this._rooms.get(payload.ArtifactID.trim().toLowerCase());
-                    if (room && room.BaseVersionID !== payload.VersionID) {
+                    if (room && !UUIDsEqual(room.BaseVersionID, payload.VersionID)) {
                         this.reconcileOutOfBandVersionIntoRoom(room, {
                             ID: payload.VersionID,
                             VersionNumber: payload.VersionNumber,
@@ -1367,6 +1425,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             VersionNumber: number;
             Content?: string | null;
             Configuration?: string | null;
+        },
+        options?: {
+            previousContent?: string;
         }
     ): void {
         if (UUIDsEqual(room.BaseVersionID, version.ID)) {
@@ -1374,16 +1435,22 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         }
         const targetText = version.Content || version.Configuration || '';
         const yText = room.Doc.getText('content');
-        const currentSerialized = this.extractRoomSerializedContent(room.Doc);
-        const baselineText = room.BaseVersionText;
-        const preMutationStateB64 = BytesToBase64(Y.encodeStateAsUpdate(room.Doc));
+        const liveText = this.extractRoomSerializedContent(room.Doc);
+        const baselineText = options?.previousContent ?? room.BaseVersionText;
         const nextEpoch = `epoch-${version.ID}-${version.VersionNumber}`;
         room.RoomEpoch = nextEpoch;
 
-        room.Doc.transact(() => {
-            room.Doc.getMap('meta').set('preOutOfBandStateB64', preMutationStateB64);
-            room.Doc.getMap('meta').set('roomEpoch', nextEpoch);
-            if (targetText && currentSerialized !== targetText) {
+        if (liveText === targetText) {
+            room.Doc.transact(() => {
+                room.Doc.getMap('meta').set('roomEpoch', nextEpoch);
+                room.Doc.getMap('meta').set('versionNumber', version.VersionNumber);
+                room.Doc.getMap('meta').set('versionId', version.ID);
+            }, 'server-oob-version');
+            room.DirtyVersion = false;
+        } else if (liveText === baselineText) {
+            room.PreOutOfBandDocState = Y.encodeStateAsUpdate(room.Doc);
+            room.Doc.transact(() => {
+                room.Doc.getMap('meta').set('roomEpoch', nextEpoch);
                 this.applyMinimalTextDiff(yText, yText.toString(), targetText);
                 this.syncSlideDeckStructuresIfPresent(room.Doc, targetText);
                 this.syncSpreadsheetStructuresIfPresent(
@@ -1391,12 +1458,51 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     version.Content ?? '',
                     version.Configuration ?? null
                 );
-            }
+                room.Doc.getMap('meta').set('versionNumber', version.VersionNumber);
+                room.Doc.getMap('meta').set('versionId', version.ID);
+            }, 'server-oob-version');
             room.DirtyVersion = false;
-            room.Doc.getMap('meta').set('versionNumber', version.VersionNumber);
-            room.Doc.getMap('meta').set('versionId', version.ID);
-        }, 'server-oob-version');
+        } else if (baselineText !== targetText) {
+            room.PreOutOfBandDocState = Y.encodeStateAsUpdate(room.Doc);
+            room.Doc.transact(() => {
+                room.Doc.getMap('meta').set('roomEpoch', nextEpoch);
+                this.applyMinimalTextDiff(yText, yText.toString(), targetText, baselineText);
+                this.syncSlideDeckStructuresIfPresent(room.Doc, targetText, {
+                    preserveConcurrentAdditions: true,
+                    baselineContent: baselineText
+                });
+                this.syncSpreadsheetStructuresIfPresent(
+                    room.Doc,
+                    version.Content ?? '',
+                    version.Configuration ?? null,
+                    {
+                        preserveConcurrentAdditions: true,
+                        baselineContent: baselineText
+                    }
+                );
+                if (
+                    room.Doc.getMap('slidesById').size > 0 ||
+                    room.Doc.getMap('worksheetsById').size > 0
+                ) {
+                    const mergedSerialized = this.extractRoomSerializedContent(room.Doc);
+                    this.applyMinimalTextDiff(yText, yText.toString(), mergedSerialized);
+                }
+                room.Doc.getMap('meta').set('versionNumber', version.VersionNumber);
+                room.Doc.getMap('meta').set('versionId', version.ID);
+            }, 'server-oob-version');
+            const mergedText = this.extractRoomSerializedContent(room.Doc);
+            room.DirtyVersion = mergedText !== targetText;
+        } else {
+            // liveText !== baselineText && baselineText === targetText: preserve live edits untouched
+            room.Doc.transact(() => {
+                room.Doc.getMap('meta').set('roomEpoch', nextEpoch);
+                room.Doc.getMap('meta').set('versionNumber', version.VersionNumber);
+                room.Doc.getMap('meta').set('versionId', version.ID);
+            }, 'server-oob-version');
+            room.DirtyVersion = true;
+        }
 
+        room.LastReconciledBaselineText = baselineText;
         room.BaseVersionID = version.ID;
         room.BaseVersionNumber = version.VersionNumber;
         room.BaseVersionText = targetText;
@@ -1448,8 +1554,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             ) {
                 this.reconcileOutOfBandVersionIntoRoom(room, latest);
             }
-        } catch {
-            // Ignore transient lookup error during read
+        } catch (err) {
+            LogError(
+                `ArtifactCollaborationServer.checkAndReconcileLatestDatabaseVersion failed for '${room.ArtifactID}': ${
+                    err instanceof Error ? err.message : String(err)
+                }`
+            );
         }
     }
 
@@ -1951,6 +2061,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             const versionRow = versionRes.Results?.[0] as VersionRowProjection | undefined;
 
             let appliedWorkingState = false;
+            let sanitizedLegacyMeta = false;
             if (workingRow?.YjsState) {
                 const stateBytes = DecodeWorkingStateBytes(workingRow.YjsState);
                 if (stateBytes.byteLength > 0) {
@@ -1958,6 +2069,13 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     // are preserved across room disposals and client reconnections (`Blocker 1` & `Blocker 2`).
                     Y.applyUpdate(room.Doc, stateBytes, 'hydrate');
                     appliedWorkingState = true;
+                    // Strip any legacy nested `preOutOfBandStateB64` stored in `Y.Map('meta')` so bloated rows shrink (`B2`).
+                    if (room.Doc.getMap('meta').has('preOutOfBandStateB64')) {
+                        room.Doc.transact(() => {
+                            room.Doc.getMap('meta').delete('preOutOfBandStateB64');
+                        }, 'hydrate');
+                        sanitizedLegacyMeta = true;
+                    }
                 }
             }
 
@@ -1986,7 +2104,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
             const yText = room.Doc.getText('content');
             const versionTargetText = versionRow?.Content || versionRow?.Configuration || '';
-            let seededOrUpdatedWorkingState = false;
+            let seededOrUpdatedWorkingState = sanitizedLegacyMeta;
 
             if (!appliedWorkingState && yText.length === 0 && versionTargetText) {
                 // Seed inside a deterministic-clientID Y.Doc derived from versionRow.ID (or room.ArtifactID)
@@ -2016,11 +2134,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 seededOrUpdatedWorkingState = true;
             } else if (appliedWorkingState && versionNewerThanWorkingState && versionRow) {
                 const currentSerialized = this.extractRoomSerializedContent(room.Doc);
-                const preOutOfBandStateB64 = BytesToBase64(Y.encodeStateAsUpdate(room.Doc));
+                room.PreOutOfBandDocState = Y.encodeStateAsUpdate(room.Doc);
                 const nextEpoch = `epoch-${versionRow.ID}-${versionRow.VersionNumber}`;
                 room.RoomEpoch = nextEpoch;
                 room.Doc.transact(() => {
-                    room.Doc.getMap('meta').set('preOutOfBandStateB64', preOutOfBandStateB64);
                     room.Doc.getMap('meta').set('roomEpoch', nextEpoch);
                     if (versionTargetText && currentSerialized !== versionTargetText) {
                         this.applyMinimalTextDiff(yText, yText.toString(), versionTargetText);
@@ -2158,15 +2275,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         }
         conn.InitialSyncDedupeChecked = true;
 
-        const preStateB64 = room.Doc.getMap('meta').get('preOutOfBandStateB64') as string | undefined;
-        if (!preStateB64) {
+        const preBytes = room.PreOutOfBandDocState;
+        if (!preBytes || preBytes.byteLength === 0) {
             return false;
         }
         try {
-            const preBytes = Base64ToBytes(preStateB64);
-            if (preBytes.byteLength === 0) {
-                return false;
-            }
             const preDoc = new Y.Doc();
             Y.applyUpdate(preDoc, preBytes);
             const preText = preDoc.getText('content').toString();
@@ -2485,7 +2598,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             await this.ReevaluateRoomPermissions(room.ArtifactID, msg.TargetUserID, false);
         } else if (msg.MessageType === 'version-saved' && typeof msg.VersionNumber === 'number') {
             const queryActor = room.LastModifiedByUser ?? UserCache.Instance.GetSystemUser();
-            if (msg.VersionID && msg.VersionID !== room.BaseVersionID && queryActor) {
+            if (msg.VersionID && !UUIDsEqual(msg.VersionID, room.BaseVersionID) && queryActor) {
                 await this.checkAndReconcileLatestDatabaseVersion(room, queryActor);
             } else {
                 room.DirtyVersion = false;
@@ -2599,6 +2712,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     }
 
     private teardownRoomResources(room: CollaborationRoom): void {
+        room.PreOutOfBandDocState = null;
         if (room.IdleDisposeTimer) {
             clearTimeout(room.IdleDisposeTimer);
             room.IdleDisposeTimer = null;
@@ -2703,7 +2817,6 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
         if (
             typeof baselineText === 'string' &&
-            baselineText.length > 0 &&
             baselineText !== currentText &&
             baselineText !== targetText
         ) {
@@ -2777,6 +2890,30 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                             deleteCount: 0,
                             insertText: agentNewSlice
                         });
+                        continue;
+                    }
+                    if (aHunk.oldStart === 0 && aHunk.oldEnd === baseLines.length && baseLines.length > 1) {
+                        const humanModifiedOldLines = humanHunks.reduce(
+                            (sum, h) => sum + (h.oldEnd - h.oldStart),
+                            0
+                        );
+                        if (humanModifiedOldLines < baseLines.length) {
+                            // Whole-document out-of-band replacement where baseline shares zero lines with target:
+                            // apply the restored/replaced document while preserving all concurrent live human hunks.
+                            const preservedHumanText = humanHunks
+                                .map((h) => liveLines.slice(h.newStart, h.newEnd).join(''))
+                                .filter((s) => s.length > 0)
+                                .join('');
+                            const sep =
+                                agentNewSlice.length > 0 &&
+                                !agentNewSlice.endsWith('\n') &&
+                                preservedHumanText.length > 0
+                                    ? '\n'
+                                    : '';
+                            const mergedFullDoc = `${agentNewSlice}${sep}${preservedHumanText}`;
+                            splices.push(this.refineCharSplice(0, currentText, mergedFullDoc));
+                            continue;
+                        }
                     }
                     // For overlapping replacements on the same baseline line(s), preserve the human's
                     // concurrent edit on that hunk while still applying all non-overlapping agent hunks.

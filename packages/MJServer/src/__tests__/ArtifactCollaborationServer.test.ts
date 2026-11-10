@@ -8,13 +8,21 @@ import * as awarenessProtocol from 'y-protocols/awareness';
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
+import { AgentRunner } from '@memberjunction/ai-agents';
+import {
+    MJAIAgentEntityExtended,
+    MJAIAgentRunEntityExtended
+} from '@memberjunction/ai-core-plus';
+import { AIEngine } from '@memberjunction/aiengine';
 import { IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { BytesToBase64 } from '@memberjunction/global';
+import { Base64ToBytes, BytesToBase64, MJEventType, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import {
     ArtifactMetadataEngine,
     ArtifactPermissionEngine,
     DocumentLiveBlockEngine,
+    MJArtifactVersionEntity,
+    MJConversationDetailArtifactEntity,
     SpreadsheetEngine,
     type SpreadsheetCellSpec,
     type WorkbookSpec,
@@ -71,6 +79,7 @@ vi.mock('type-graphql', () => {
 
 import {
     ARTIFACT_COLLABORATION_WS_PATH,
+    ARTIFACT_VERSION_SAVED_EVENT_CODE,
     ArtifactCollaborationServer,
     CollaborationControlFrame,
     CollaborationPermissionStatusFrame,
@@ -87,6 +96,7 @@ import {
     YjsRelayMessage
 } from '../collaboration/YjsRoomRelay.js';
 import { DocumentCollaborationResolver } from '../resolvers/DocumentCollaborationResolver.js';
+import { RunAIAgentResolver } from '../resolvers/RunAIAgentResolver.js';
 import { getUserPayload } from '../context.js';
 import type { AppContext, DataSourceInfo } from '../types.js';
 
@@ -2041,45 +2051,707 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
     it('ExecuteAnchoredCommentAgentMention enforces CanEdit for edit mode and succeeds for editors (Item 20)', async () => {
         const resolver = new DocumentCollaborationResolver();
         const mockProvider = createMockProvider();
+        const fakeSkipAgent: Partial<MJAIAgentEntityExtended> = {
+            ID: 'aaaaaaaa-1111-4222-8333-444444444444',
+            Name: 'Skip',
+            Status: 'Active'
+        };
+        const fakeRun: Partial<MJAIAgentRunEntityExtended> = {
+            ID: 'bbbbbbbb-1111-4222-8333-444444444444',
+            AgentID: fakeSkipAgent.ID
+        };
+        const loadedSpy = vi.spyOn(AIEngine.Instance, 'Loaded', 'get').mockReturnValue(true);
+        const agentsSpy = vi
+            .spyOn(AIEngine.Instance, 'Agents', 'get')
+            .mockReturnValue([fakeSkipAgent as MJAIAgentEntityExtended]);
+        const canRunSpy = vi.spyOn(AIEngine.Instance, 'CanUserRunAgent').mockReturnValue(true);
+        const runAgentSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockResolvedValue({
+            success: true,
+            payload: {
+                reply: 'Applied requested paragraph edit.',
+                replacement: 'Replaced paragraph via anchored comment.'
+            },
+            agentRun: fakeRun as MJAIAgentRunEntityExtended
+        });
+
+        try {
+            const editorCtx: AppContext = {
+                dataSource: {} as AppContext['dataSource'],
+                dataSources: [],
+                providers: [{ provider: mockProvider, type: 'Read-Write' }],
+                userPayload: {
+                    userRecord: editorUser,
+                    email: editorUser.Email,
+                    sessionId: 'sess-mention-editor'
+                }
+            };
+            const viewerCtx: AppContext = {
+                ...editorCtx,
+                userPayload: {
+                    userRecord: viewerUser,
+                    email: viewerUser.Email,
+                    sessionId: 'sess-mention-viewer'
+                }
+            };
+
+            const deniedEdit = await resolver.ExecuteAnchoredCommentAgentMention(
+                artifactId,
+                'Skip',
+                'edit',
+                '@Skip replace Baseline paragraph.',
+                'Baseline paragraph.',
+                viewerCtx
+            );
+            expect(deniedEdit.Success).toBe(false);
+            expect(deniedEdit.ErrorMessage).toContain('CanEdit');
+
+            const allowedEdit = await resolver.ExecuteAnchoredCommentAgentMention(
+                artifactId,
+                'Skip',
+                'edit',
+                '@Skip Replaced paragraph via anchored comment.',
+                'Baseline paragraph.',
+                editorCtx
+            );
+            expect(allowedEdit.Success).toBe(true);
+            expect(allowedEdit.UpdatedContent).toContain('Replaced paragraph via anchored comment.');
+        } finally {
+            runAgentSpy.mockRestore();
+            canRunSpy.mockRestore();
+            agentsSpy.mockRestore();
+            loadedSpy.mockRestore();
+        }
+    });
+
+    it('B1: reconcileOutOfBandVersionIntoRoom performs a true 3-way merge across single-node MJ_ARTIFACT_VERSION_SAVED and multi-node version-saved relays while logging DB lookup errors', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+        const baseDoc = [
+            '# Product Roadmap',
+            '',
+            '## Summary',
+            'Baseline summary line.',
+            '',
+            '## Milestones',
+            'Baseline milestone Q1.',
+            '',
+            '## Risks',
+            'Baseline risk item.'
+        ].join('\n');
+        versions[0].Content = baseDoc;
+
+        const client = await connectYjsClient(editorUser.ID);
+        await client.waitForText('Baseline milestone Q1.');
+
+        // 1. Human types live edits into ## Summary before any version checkpoint happens
+        client.doc.transact(() => {
+            const yText = client.doc.getText('content');
+            const idx = yText.toString().indexOf('Baseline summary line.');
+            yText.delete(idx, 'Baseline summary line.'.length);
+            yText.insert(idx, 'Human live summary typed in editor.');
+        }, 'human-live');
+
+        await vi.waitFor(async () => {
+            expect(await server.GetRoomContent(artifactId, editorUser)).toContain(
+                'Human live summary typed in editor.'
+            );
+        });
+
+        // Simulate ArtifactToolManager saving v2 (built from baseDoc, editing ## Milestones) -> fires MJ_ARTIFACT_VERSION_SAVED synchronously BEFORE LiveContentMutation
+        const agentV2Text = [
+            '# Product Roadmap',
+            '',
+            '## Summary',
+            'Baseline summary line.',
+            '',
+            '## Milestones',
+            'Agent updated milestone Q1 + Q2.',
+            '',
+            '## Risks',
+            'Baseline risk item.'
+        ].join('\n');
+        versions.push({
+            ID: 'ver-agent-b1-2',
+            ArtifactID: artifactId,
+            VersionNumber: 2,
+            Content: agentV2Text,
+            ContentHash: 'agent-b1-hash-2',
+            UserID: editorUser.ID,
+            __mj_CreatedAt: new Date().toISOString(),
+            __mj_UpdatedAt: new Date().toISOString()
+        });
+        MJGlobal.Instance.RaiseEvent({
+            component: null,
+            event: MJEventType.ComponentEvent,
+            eventCode: ARTIFACT_VERSION_SAVED_EVENT_CODE,
+            args: {
+                ArtifactID: artifactId,
+                VersionID: 'ver-agent-b1-2',
+                VersionNumber: 2,
+                Content: agentV2Text,
+                UserID: editorUser.ID
+            }
+        });
+        // Followed immediately by LiveContentMutation with previousContent = baseDoc
+        await server.ApplyServerContentMutation(artifactId, agentV2Text, editorUser, false, baseDoc);
+
+        const afterSingleNodeMerge = await server.GetRoomContent(artifactId, editorUser);
+        expect(afterSingleNodeMerge).toBe(
+            [
+                '# Product Roadmap',
+                '',
+                '## Summary',
+                'Human live summary typed in editor.',
+                '',
+                '## Milestones',
+                'Agent updated milestone Q1 + Q2.',
+                '',
+                '## Risks',
+                'Baseline risk item.'
+            ].join('\n')
+        );
+        const activeRoom = await server.GetOrCreateRoom(artifactId, editorUser);
+        expect(activeRoom?.DirtyVersion).toBe(true);
+        client.ws.close();
+
+        // 2. Multi-node relay: Node B holds uncompacted human edits in ## Risks while Node A saves v3 and broadcasts 'version-saved'
+        class MultiNodePeerB extends ArtifactCollaborationServer {
+            public constructor() {
+                super();
+            }
+        }
+        const bus = new InMemoryYjsRelayBus();
+        const relayA = new InMemoryYjsRoomRelay(bus, 'b1-node-a');
+        const relayB = new InMemoryYjsRoomRelay(bus, 'b1-node-b');
+        const peerB = new MultiNodePeerB();
+        peerB.SetRoomRelay(relayB);
+        peerB.SetMetadataProviderOverride(createMockProvider());
+
+        try {
+            const roomOnB = await peerB.GetOrCreateRoom(artifactId, secondEditorUser);
+            expect(roomOnB).not.toBeNull();
+            // Human on Node B modifies ## Summary
+            roomOnB!.Doc.transact(() => {
+                const yText = roomOnB!.Doc.getText('content');
+                const idx = yText.toString().indexOf('Baseline summary line.');
+                yText.delete(idx, 'Baseline summary line.'.length);
+                yText.insert(idx, 'Node B concurrent human keystrokes.');
+            }, 'node-b-human');
+
+            // Node A saves v3 updating ## Risks (starting from v2) and broadcasts 'version-saved'
+            const nodeAV3Text = [
+                '# Product Roadmap',
+                '',
+                '## Summary',
+                'Baseline summary line.',
+                '',
+                '## Milestones',
+                'Agent updated milestone Q1 + Q2.',
+                '',
+                '## Risks',
+                'Node A compacted risk mitigation plan.'
+            ].join('\n');
+            versions.push({
+                ID: 'ver-node-a-3',
+                ArtifactID: artifactId,
+                VersionNumber: 3,
+                Content: nodeAV3Text,
+                ContentHash: 'node-a-hash-3',
+                UserID: editorUser.ID,
+                __mj_CreatedAt: new Date().toISOString(),
+                __mj_UpdatedAt: new Date().toISOString()
+            });
+
+            await relayA.PublishToRoom({
+                ArtifactID: artifactId,
+                MessageType: 'version-saved',
+                PayloadBase64: '',
+                VersionID: 'ver-node-a-3',
+                VersionNumber: 3
+            });
+
+            await vi.waitFor(async () => {
+                const mergedOnB = await peerB.GetRoomContent(artifactId, secondEditorUser);
+                expect(mergedOnB).toContain('Node B concurrent human keystrokes.');
+                expect(mergedOnB).toContain('Node A compacted risk mitigation plan.');
+            });
+
+            // 3. Verify checkAndReconcileLatestDatabaseVersion logs errors instead of swallowing silently when DB lookup throws
+            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const throwingProvider: Partial<IMetadataProvider> = {
+                RunView: (async () => {
+                    throw new Error('Simulated DB version lookup failure');
+                }) as IMetadataProvider['RunView']
+            };
+            peerB.SetMetadataProviderOverride(throwingProvider as IMetadataProvider);
+
+            await relayA.PublishToRoom({
+                ArtifactID: artifactId,
+                MessageType: 'version-saved',
+                PayloadBase64: '',
+                VersionID: 'ver-node-a-4',
+                VersionNumber: 4
+            });
+
+            await vi.waitFor(() => {
+                expect(errorSpy).toHaveBeenCalledWith(
+                    expect.stringContaining('checkAndReconcileLatestDatabaseVersion failed')
+                );
+            });
+            errorSpy.mockRestore();
+        } finally {
+            await relayA.Shutdown();
+            await peerB.Shutdown();
+        }
+    });
+
+    it('B2: keeps Y.Doc update byteLength < 10_000 across 20 consecutive mutations on a 2 KB doc and strips legacy preOutOfBandStateB64', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+
+        // Build a > 2 KB realistic Markdown document
+        const paragraphs: string[] = ['# Enterprise Architecture Specification'];
+        for (let i = 1; i <= 24; i++) {
+            paragraphs.push(
+                `## Section ${i}\nOperational requirement ${i}: deterministic collaborative synchronization across browser clients and background AI workers.`
+            );
+        }
+        const initial2KbDoc = paragraphs.join('\n\n');
+        expect(Buffer.byteLength(initial2KbDoc, 'utf8')).toBeGreaterThanOrEqual(2048);
+        versions[0].Content = initial2KbDoc;
+
+        // Seed a legacy working state containing a bloated `meta.preOutOfBandStateB64` entry
+        const legacyDoc = new Y.Doc();
+        legacyDoc.getText('content').insert(0, initial2KbDoc);
+        legacyDoc.getMap('meta').set('preOutOfBandStateB64', 'LEGACY_EMBEDDED_STATE_'.repeat(300));
+        workingStates.set(artifactId, {
+            ID: 'ws-legacy-bloat',
+            ArtifactID: artifactId,
+            YjsState: BytesToBase64(Y.encodeStateAsUpdate(legacyDoc)),
+            LastModifiedByUserID: editorUser.ID,
+            __mj_UpdatedAt: new Date(Date.now() + 1000).toISOString()
+        });
+        legacyDoc.destroy();
+
+        const room = await server.GetOrCreateRoom(artifactId, editorUser);
+        expect(room).not.toBeNull();
+        // Legacy preOutOfBandStateB64 must be stripped on room hydration
+        expect(room!.Doc.getMap('meta').has('preOutOfBandStateB64')).toBe(false);
+
+        // Execute 20 consecutive server mutations + out-of-band reconciliations on the >= 2 KB document
+        let currentDoc = initial2KbDoc;
+        for (let step = 1; step <= 20; step++) {
+            const prevDoc = currentDoc;
+            currentDoc = currentDoc.replace(
+                `Operational requirement ${step}:`,
+                `Operational requirement ${step} [rev-${step}]:`
+            );
+            const verNum = step + 1;
+            const verId = `ver-b2-step-${verNum}`;
+            versions.push({
+                ID: verId,
+                ArtifactID: artifactId,
+                VersionNumber: verNum,
+                Content: currentDoc,
+                ContentHash: `hash-b2-${verNum}`,
+                UserID: editorUser.ID,
+                __mj_CreatedAt: new Date().toISOString(),
+                __mj_UpdatedAt: new Date().toISOString()
+            });
+
+            if (step % 2 === 0) {
+                MJGlobal.Instance.RaiseEvent({
+                    component: null,
+                    event: MJEventType.ComponentEvent,
+                    eventCode: ARTIFACT_VERSION_SAVED_EVENT_CODE,
+                    args: {
+                        ArtifactID: artifactId,
+                        VersionID: verId,
+                        VersionNumber: verNum,
+                        Content: currentDoc,
+                        UserID: editorUser.ID
+                    }
+                });
+            } else {
+                const res = await server.ApplyServerContentMutation(
+                    artifactId,
+                    currentDoc,
+                    editorUser,
+                    false,
+                    prevDoc
+                );
+                expect(res.Success).toBe(true);
+            }
+        }
+
+        const encodedBytes = Y.encodeStateAsUpdate(room!.Doc);
+        expect(encodedBytes.byteLength).toBeLessThan(10_000);
+        expect(room!.Doc.getMap('meta').has('preOutOfBandStateB64')).toBe(false);
+        expect(room!.PreOutOfBandDocState).toBeInstanceOf(Uint8Array);
+
+        await server.FlushWorkingState(artifactId, editorUser);
+        const persistedWs = workingStates.get(artifactId);
+        expect(persistedWs).toBeDefined();
+        const verifyPersistedDoc = new Y.Doc();
+        Y.applyUpdate(verifyPersistedDoc, Base64ToBytes(persistedWs!.YjsState));
+        expect(verifyPersistedDoc.getMap('meta').has('preOutOfBandStateB64')).toBe(false);
+        verifyPersistedDoc.destroy();
+    });
+
+    it('C1: ExecuteAnchoredCommentAgentMention enforces API key scopes, resolves agents by normalized handle, posts Role=AI ConversationDetail replies, and never echoes prompts or overwrites content on missing/failed agents', async () => {
+        const resolver = new DocumentCollaborationResolver();
+        const savedReplies: Array<{
+            ConversationID: string;
+            Message: string;
+            Role: string;
+            AgentID: string | null;
+            ParentID: string | null;
+            Status: string;
+        }> = [];
+
+        const baseProvider = createMockProvider();
+        const c1Provider: Partial<IMetadataProvider> = {
+            ...baseProvider,
+            RunView: (async (params: RunViewParams, user?: UserInfo) => {
+                if (params.EntityName === 'MJ: Conversations') {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: 'dddddddd-2222-4333-8444-555555555555',
+                                AnchorMetadata: JSON.stringify({
+                                    quote: 'Baseline paragraph.',
+                                    status: 'Open'
+                                })
+                            }
+                        ],
+                        TotalRowCount: 1
+                    };
+                }
+                return await baseProvider.RunView(params, user);
+            }) as IMetadataProvider['RunView'],
+            GetEntityObject: (async (entityName: string, user?: UserInfo) => {
+                if (entityName === 'MJ: Conversation Details') {
+                    const draft = {
+                        ID: 'eeeeeeee-2222-4333-8444-555555555555',
+                        ConversationID: '',
+                        UserID: '',
+                        Role: '',
+                        AgentID: null as string | null,
+                        ParentID: null as string | null,
+                        Message: '',
+                        Status: '',
+                        NewRecord() {
+                            return undefined;
+                        },
+                        async Save() {
+                            savedReplies.push({
+                                ConversationID: this.ConversationID,
+                                Message: this.Message,
+                                Role: this.Role,
+                                AgentID: this.AgentID,
+                                ParentID: this.ParentID,
+                                Status: this.Status
+                            });
+                            return true;
+                        }
+                    };
+                    return draft;
+                }
+                return await baseProvider.GetEntityObject(entityName, user);
+            }) as IMetadataProvider['GetEntityObject']
+        };
+
         const editorCtx: AppContext = {
             dataSource: {} as AppContext['dataSource'],
             dataSources: [],
-            providers: [{ provider: mockProvider, type: 'Read-Write' }],
+            providers: [{ provider: c1Provider as IMetadataProvider, type: 'Read-Write' }],
             userPayload: {
                 userRecord: editorUser,
                 email: editorUser.Email,
-                sessionId: 'sess-mention-editor'
-            }
-        };
-        const viewerCtx: AppContext = {
-            ...editorCtx,
-            userPayload: {
-                userRecord: viewerUser,
-                email: viewerUser.Email,
-                sessionId: 'sess-mention-viewer'
+                sessionId: 'sess-c1'
             }
         };
 
-        const deniedEdit = await resolver.ExecuteAnchoredCommentAgentMention(
-            artifactId,
-            'Skip',
-            'edit',
-            '@Skip replace Baseline paragraph.',
-            'Baseline paragraph.',
-            viewerCtx
-        );
-        expect(deniedEdit.Success).toBe(false);
-        expect(deniedEdit.ErrorMessage).toContain('CanEdit');
+        const activeAgent: Partial<MJAIAgentEntityExtended> = {
+            ID: '12121212-3434-4567-8989-abababababab',
+            Name: 'Research Analyst',
+            Status: 'Active'
+        };
+        const fakeRun: Partial<MJAIAgentRunEntityExtended> = {
+            ID: '34343434-5656-4789-8989-cdcdcdcdcdcd',
+            AgentID: activeAgent.ID
+        };
 
-        const allowedEdit = await resolver.ExecuteAnchoredCommentAgentMention(
-            artifactId,
-            'Skip',
-            'edit',
-            '@Skip Replaced paragraph via anchored comment.',
-            'Baseline paragraph.',
-            editorCtx
+        const loadedSpy = vi.spyOn(AIEngine.Instance, 'Loaded', 'get').mockReturnValue(true);
+        const agentsSpy = vi
+            .spyOn(AIEngine.Instance, 'Agents', 'get')
+            .mockReturnValue([activeAgent as MJAIAgentEntityExtended]);
+        const canRunSpy = vi.spyOn(AIEngine.Instance, 'CanUserRunAgent').mockReturnValue(true);
+
+        try {
+            // 1. API key scope enforcement: 'artifact:comment' key may comment, but 'edit' mode requires 'artifact:edit'
+            const sysUser = createTestUser('sys-c1-1', 'System', 'sys-c1@example.com');
+            const sysSpy = vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(sysUser);
+            const apiKeyEngine = GetAPIKeyEngine();
+            const authorizeSpy = vi.spyOn(apiKeyEngine, 'Authorize').mockImplementation(
+                async (_hash: string, _app: string, scopePath: string) => ({
+                    Allowed: scopePath === 'artifact:comment',
+                    Reason: scopePath === 'artifact:comment' ? 'Allowed comment' : 'Denied edit',
+                    MatchedRule: null,
+                    EvaluatedRules: []
+                })
+            );
+            const scopedCtx: AppContext = {
+                ...editorCtx,
+                userPayload: {
+                    ...editorCtx.userPayload,
+                    apiKeyId: 'key-c1',
+                    apiKeyHash: 'hash-comment-only'
+                }
+            };
+
+            try {
+                await expect(
+                    resolver.ExecuteAnchoredCommentAgentMention(
+                        artifactId,
+                        'Research Analyst',
+                        'edit',
+                        '@research-analyst rewrite this',
+                        'Baseline paragraph.',
+                        scopedCtx
+                    )
+                ).rejects.toThrow(/Access denied/i);
+            } finally {
+                authorizeSpy.mockRestore();
+                sysSpy.mockRestore();
+            }
+
+            // 2. Unknown agent handle returns { Success: false } and NEVER echoes prompt or mutates document content
+            const unknownRes = await resolver.ExecuteAnchoredCommentAgentMention(
+                artifactId,
+                '@NoSuchAgent',
+                'edit',
+                '@NoSuchAgent DESTRUCTIVE PROMPT INSTRUCTION',
+                'Baseline paragraph.',
+                editorCtx
+            );
+            expect(unknownRes.Success).toBe(false);
+            expect(unknownRes.ErrorMessage).toContain("No AI agent matching '@NoSuchAgent' was found.");
+            expect(unknownRes.ReplyBody).toBeUndefined();
+            expect(await ArtifactCollaborationServer.Instance.GetRoomContent(artifactId, editorUser)).toBe(
+                '# Initial Strategy Document\n\nBaseline paragraph.'
+            );
+
+            // 3. Matching agent via normalized hyphenated handle in 'comment' mode executes AgentRunner and posts Role='AI' reply
+            const runCommentSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockResolvedValueOnce({
+                success: true,
+                payload: { reply: 'Q4 ARR figures match the audited ledger.' },
+                agentRun: fakeRun as MJAIAgentRunEntityExtended
+            });
+            const commentRes = await resolver.ExecuteAnchoredCommentAgentMention(
+                artifactId,
+                '@research-analyst',
+                'comment',
+                '@research-analyst verify baseline paragraph',
+                'Baseline paragraph.',
+                editorCtx
+            );
+            expect(commentRes.Success).toBe(true);
+            expect(commentRes.ReplyBody).toBe('Q4 ARR figures match the audited ledger.');
+            expect(savedReplies).toHaveLength(1);
+            expect(savedReplies[0]).toMatchObject({
+                ConversationID: 'dddddddd-2222-4333-8444-555555555555',
+                Role: 'AI',
+                AgentID: activeAgent.ID,
+                Message: 'Q4 ARR figures match the audited ledger.',
+                Status: 'Complete'
+            });
+            runCommentSpy.mockRestore();
+
+            // 4. Edit mode when agent returns no replacement fails closed without overwriting RawMarkdown with prompt text
+            const runNoReplaceSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockResolvedValueOnce({
+                success: true,
+                payload: { reply: 'I cannot rewrite this without Q4 targets.' },
+                agentRun: fakeRun as MJAIAgentRunEntityExtended
+            });
+            const noReplaceEdit = await resolver.ExecuteAnchoredCommentAgentMention(
+                artifactId,
+                'Research Analyst',
+                'edit',
+                '@Research Analyst replace with raw instruction text',
+                'Baseline paragraph.',
+                editorCtx
+            );
+            expect(noReplaceEdit.Success).toBe(false);
+            expect(noReplaceEdit.ErrorMessage).toContain('did not produce a valid replacement');
+            expect(await ArtifactCollaborationServer.Instance.GetRoomContent(artifactId, editorUser)).toBe(
+                '# Initial Strategy Document\n\nBaseline paragraph.'
+            );
+            runNoReplaceSpy.mockRestore();
+        } finally {
+            canRunSpy.mockRestore();
+            agentsSpy.mockRestore();
+            loadedSpy.mockRestore();
+        }
+    });
+
+    it('D3: RunAIAgentResolver.loadInputArtifactsBatch filters conversation input artifact versions through ArtifactPermissionEngine CanRead ACL', async () => {
+        class TestableRunAIAgentResolver extends RunAIAgentResolver {
+            public async LoadBatchForTest(
+                detailIds: string[],
+                user: UserInfo,
+                provider: IMetadataProvider
+            ): Promise<Map<string, MJArtifactVersionEntity[]>> {
+                return this.loadInputArtifactsBatch(detailIds, user, provider);
+            }
+        }
+
+        const allowedArtId = 'a1111111-2222-4333-8444-555555555555';
+        const deniedArtId = 'd9999999-2222-4333-8444-555555555555';
+        const detailId = 'cd111111-2222-4333-8444-555555555555';
+
+        resolvePermissionsSpy.mockImplementation(async (_provider, artId) => {
+            const readable = UUIDsEqual(artId, allowedArtId);
+            return {
+                ArtifactID: artId ?? '',
+                CanRead: readable,
+                CanEdit: false,
+                CanDelete: false,
+                CanShare: false,
+                Source: readable ? 'ArtifactPermission' : 'Denied',
+                Reason: readable ? 'Shared with user' : 'No read grant'
+            };
+        });
+
+        const links: Partial<MJConversationDetailArtifactEntity>[] = [
+            {
+                ID: 'link-1',
+                ConversationDetailID: detailId,
+                ArtifactVersionID: 'ver-allowed-1',
+                Direction: 'Input'
+            },
+            {
+                ID: 'link-2',
+                ConversationDetailID: detailId,
+                ArtifactVersionID: 'ver-denied-1',
+                Direction: 'Input'
+            }
+        ];
+        const loadedVersions: Partial<MJArtifactVersionEntity>[] = [
+            {
+                ID: 'ver-allowed-1',
+                ArtifactID: allowedArtId,
+                VersionNumber: 1,
+                Name: 'Readable Doc.md'
+            },
+            {
+                ID: 'ver-denied-1',
+                ArtifactID: deniedArtId,
+                VersionNumber: 1,
+                Name: 'Private Owner Doc.md'
+            }
+        ];
+
+        const aclProvider: Partial<IMetadataProvider> = {
+            RunView: (async (params: RunViewParams) => {
+                if (params.EntityName === 'MJ: Conversation Detail Artifacts') {
+                    return {
+                        Success: true,
+                        Results: links as MJConversationDetailArtifactEntity[],
+                        TotalRowCount: links.length
+                    };
+                }
+                if (params.EntityName === 'MJ: Artifact Versions') {
+                    return {
+                        Success: true,
+                        Results: loadedVersions as MJArtifactVersionEntity[],
+                        TotalRowCount: loadedVersions.length
+                    };
+                }
+                return { Success: true, Results: [], TotalRowCount: 0 };
+            }) as IMetadataProvider['RunView']
+        };
+
+        const resolver = new TestableRunAIAgentResolver();
+        const byDetail = await resolver.LoadBatchForTest(
+            [detailId],
+            viewerUser,
+            aclProvider as IMetadataProvider
         );
-        expect(allowedEdit.Success).toBe(true);
-        expect(allowedEdit.UpdatedContent).toContain('Replaced paragraph via anchored comment.');
+
+        const versionsForTurn = byDetail.get(detailId) ?? [];
+        expect(versionsForTurn).toHaveLength(1);
+        expect(versionsForTurn[0].ID).toBe('ver-allowed-1');
+    });
+
+    it('E1 & E2: CheckStartupSecrets warns when HMAC secrets are missing/<32 bytes, and MintArtifactCollaborationTicket omits WsUrl unless MJAPI_PUBLIC_URL is set', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+        const prevCollabEnv = process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET;
+        const prevTicketEnv = process.env.MJ_COLLABORATION_TICKET_SECRET;
+        const prevFrozenEnv = process.env.MJ_FROZEN_BLOCK_HMAC_SECRET;
+        const prevPublicUrl = process.env.MJAPI_PUBLIC_URL;
+
+        try {
+            // E1: Missing / short secrets produce explicit startup warnings
+            server.SetTicketHmacSecret(null);
+            delete process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET;
+            delete process.env.MJ_COLLABORATION_TICKET_SECRET;
+            process.env.MJ_FROZEN_BLOCK_HMAC_SECRET = 'short-secret';
+
+            const missingStatus = server.CheckStartupSecrets();
+            expect(missingStatus.CollabSecretConfigured).toBe(false);
+            expect(missingStatus.FrozenBlockSecretConfigured).toBe(false);
+            expect(missingStatus.Warnings).toHaveLength(2);
+            expect(warnSpy).toHaveBeenCalledTimes(2);
+
+            // Configure >= 32-byte secrets -> zero warnings
+            warnSpy.mockClear();
+            server.SetTicketHmacSecret('test-collab-ticket-hmac-secret-at-least-32-bytes!!');
+            process.env.MJ_FROZEN_BLOCK_HMAC_SECRET = 'test-frozen-block-hmac-secret-at-least-32-bytes!!';
+            const validStatus = server.CheckStartupSecrets();
+            expect(validStatus.CollabSecretConfigured).toBe(true);
+            expect(validStatus.FrozenBlockSecretConfigured).toBe(true);
+            expect(validStatus.Warnings).toHaveLength(0);
+            expect(warnSpy).not.toHaveBeenCalled();
+
+            // E2: Without MJAPI_PUBLIC_URL, WsUrl is undefined (never ws://localhost:4000/...) while WsPath is returned
+            delete process.env.MJAPI_PUBLIC_URL;
+            const resolver = new DocumentCollaborationResolver();
+            const editorCtx: AppContext = {
+                dataSource: {} as AppContext['dataSource'],
+                dataSources: [],
+                providers: [{ provider: createMockProvider(), type: 'Read-Write' }],
+                userPayload: {
+                    userRecord: editorUser,
+                    email: editorUser.Email,
+                    sessionId: 'sess-e2'
+                }
+            };
+
+            const relativeMinted = await resolver.MintArtifactCollaborationTicket(artifactId, editorCtx);
+            expect(relativeMinted.Success).toBe(true);
+            expect(relativeMinted.WsPath).toBe(ARTIFACT_COLLABORATION_WS_PATH);
+            expect(relativeMinted.WsUrl).toBeUndefined();
+
+            // With MJAPI_PUBLIC_URL configured, WsUrl is returned as an absolute wss:// URL
+            process.env.MJAPI_PUBLIC_URL = 'https://api.staging.memberjunction.org';
+            const publicMinted = await resolver.MintArtifactCollaborationTicket(artifactId, editorCtx);
+            expect(publicMinted.Success).toBe(true);
+            expect(publicMinted.WsPath).toBe(ARTIFACT_COLLABORATION_WS_PATH);
+            expect(publicMinted.WsUrl).toBe(
+                `wss://api.staging.memberjunction.org${ARTIFACT_COLLABORATION_WS_PATH}`
+            );
+        } finally {
+            warnSpy.mockRestore();
+            if (prevCollabEnv === undefined) delete process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET;
+            else process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET = prevCollabEnv;
+            if (prevTicketEnv === undefined) delete process.env.MJ_COLLABORATION_TICKET_SECRET;
+            else process.env.MJ_COLLABORATION_TICKET_SECRET = prevTicketEnv;
+            if (prevFrozenEnv === undefined) delete process.env.MJ_FROZEN_BLOCK_HMAC_SECRET;
+            else process.env.MJ_FROZEN_BLOCK_HMAC_SECRET = prevFrozenEnv;
+            if (prevPublicUrl === undefined) delete process.env.MJAPI_PUBLIC_URL;
+            else process.env.MJAPI_PUBLIC_URL = prevPublicUrl;
+        }
     });
 });

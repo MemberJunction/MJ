@@ -10,6 +10,7 @@ import {
     LogError,
     Metadata,
     PostRunViewHook,
+    PreRunViewHook,
     RegisterDataHook,
     RunView,
     RunViewParams,
@@ -27,7 +28,14 @@ import {
     type MJUserViewEntity
 } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { MJEventType, MJGlobal, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import {
+    EscapeSQLString,
+    MJEventType,
+    MJGlobal,
+    NormalizeUUID,
+    RegisterClass,
+    UUIDsEqual
+} from '@memberjunction/global';
 import { createHash } from 'crypto';
 
 export const ARTIFACT_VERSION_SAVED_EVENT_CODE = 'MJ_ARTIFACT_VERSION_SAVED';
@@ -97,6 +105,140 @@ function readVersionArtifactId(row: unknown): string | null {
     return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate.trim() : null;
 }
 
+function readVersionRowId(row: unknown): string | null {
+    if (!row || typeof row !== 'object') {
+        return null;
+    }
+    if (row instanceof MJArtifactVersionEntity) {
+        return row.ID || null;
+    }
+    const candidate = (row as Record<string, unknown>)['ID'];
+    return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate.trim() : null;
+}
+
+const INTERNAL_VERSION_SECURITY_QUERY_PARAMS = new WeakSet<object>();
+const SYNTHETIC_ARTIFACT_ID_PARAMS = new WeakSet<object>();
+const IN_FLIGHT_VERSION_PERMISSION_KEYS = new Set<string>();
+
+const SINGLE_ARTIFACT_EQ_FILTER_RE =
+    /^\s*\[?ArtifactID\]?\s*=\s*N?'([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})'\s*$/i;
+
+function extractSingleArtifactIdFromFilter(extraFilter: RunViewParams['ExtraFilter']): string | null {
+    const raw =
+        typeof extraFilter === 'string'
+            ? extraFilter
+            : extraFilter && typeof extraFilter === 'object'
+              ? extraFilter.default
+              : null;
+    if (typeof raw !== 'string') {
+        return null;
+    }
+    const match = SINGLE_ARTIFACT_EQ_FILTER_RE.exec(raw);
+    return match ? match[1] : null;
+}
+
+function hasFieldIgnoreCase(fields: readonly string[], targetField: string): boolean {
+    const lower = targetField.toLowerCase();
+    return fields.some((f) => typeof f === 'string' && f.trim().toLowerCase() === lower);
+}
+
+async function fetchVersionArtifactIdsByIds(
+    provider: IMetadataProvider,
+    contextUser: UserInfo,
+    versionIds: readonly string[]
+): Promise<Map<string, string>> {
+    const map = new Map<string, string>();
+    const uniqueEscaped = Array.from(
+        new Set(
+            versionIds
+                .map((id) => id.trim())
+                .filter((id) => id.length > 0)
+                .map((id) => `'${EscapeSQLString(id)}'`)
+        )
+    );
+    if (uniqueEscaped.length === 0) {
+        return map;
+    }
+    try {
+        const systemUser =
+            (await WellKnownUserSource.Instance.GetSystemUser(provider)) ?? contextUser;
+        const rv = RunView.FromMetadataProvider(provider);
+        const lookupParams: RunViewParams = {
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ID IN (${uniqueEscaped.join(',')})`,
+            Fields: ['ID', 'ArtifactID'],
+            MaxRows: uniqueEscaped.length,
+            SkipTotalRowCount: true,
+            ResultType: 'simple'
+        };
+        INTERNAL_VERSION_SECURITY_QUERY_PARAMS.add(lookupParams);
+        const res = await rv.RunView<{ ID?: string; ArtifactID?: string }>(
+            lookupParams,
+            systemUser
+        );
+        if (res?.Success && Array.isArray(res.Results)) {
+            for (const item of res.Results) {
+                if (item.ID && item.ArtifactID) {
+                    map.set(NormalizeUUID(item.ID), item.ArtifactID);
+                }
+            }
+        }
+    } catch (error) {
+        LogError(
+            `ArtifactVersionPostRunViewHook failed hydrating ArtifactID for narrow Fields projection: ${
+                error instanceof Error ? error.message : String(error)
+            }`
+        );
+    }
+    return map;
+}
+
+function stripSyntheticArtifactId(row: unknown): unknown {
+    if (!row || typeof row !== 'object' || row instanceof BaseEntity) {
+        return row;
+    }
+    if (!Object.prototype.hasOwnProperty.call(row, 'ArtifactID')) {
+        return row;
+    }
+    const copy = { ...(row as Record<string, unknown>) };
+    delete copy['ArtifactID'];
+    return copy;
+}
+
+/**
+ * Server-side `PreRunView` data hook ensuring `ArtifactID` is included prior to column projection
+ * when a non-system caller queries `MJ: Artifact Versions` with a narrow `Fields` list (`B3`).
+ * Any synthetically added `ArtifactID` is stripped in {@link ArtifactVersionPostRunViewHook}
+ * before returning to the caller so the caller's projected shape is preserved.
+ */
+export const ArtifactVersionPreRunViewHook: PreRunViewHook = (
+    params: RunViewParams,
+    contextUser: UserInfo | undefined
+): RunViewParams => {
+    if (
+        !params ||
+        INTERNAL_VERSION_SECURITY_QUERY_PARAMS.has(params) ||
+        resolveTargetEntityName(params) !== 'MJ: Artifact Versions' ||
+        isServerSystemUser(contextUser) ||
+        !contextUser
+    ) {
+        return params;
+    }
+    if (
+        Array.isArray(params.Fields) &&
+        params.Fields.length > 0 &&
+        !hasFieldIgnoreCase(params.Fields, 'ArtifactID')
+    ) {
+        const augmented: RunViewParams = {
+            ...params,
+            Fields: [...params.Fields, 'ArtifactID']
+        };
+        SYNTHETIC_ARTIFACT_ID_PARAMS.add(augmented);
+        return augmented;
+    }
+    return params;
+};
+
 /**
  * Server-side `PostRunView` data hook enforcing `ArtifactPermissionEngine` `CanRead`
  * authorization on `MJ: Artifact Versions` across `RunView` and `RunMJArtifactVersionDynamicView`.
@@ -106,9 +248,15 @@ export const ArtifactVersionPostRunViewHook: PostRunViewHook = async (
     results: RunViewResult,
     contextUser: UserInfo | undefined
 ): Promise<RunViewResult> => {
-    if (!results?.Success || resolveTargetEntityName(params) !== 'MJ: Artifact Versions') {
+    if (
+        !results?.Success ||
+        INTERNAL_VERSION_SECURITY_QUERY_PARAMS.has(params) ||
+        resolveTargetEntityName(params) !== 'MJ: Artifact Versions'
+    ) {
         return results;
     }
+
+    const shouldStripSyntheticArtifactId = SYNTHETIC_ARTIFACT_ID_PARAMS.has(params);
 
     if (isServerSystemUser(contextUser)) {
         return results;
@@ -125,6 +273,12 @@ export const ArtifactVersionPostRunViewHook: PostRunViewHook = async (
 
     const provider = resolveMetadataProvider(undefined, contextUser);
     if (!provider || provider.ProviderType !== 'Database') {
+        if (shouldStripSyntheticArtifactId && Array.isArray(results.Results)) {
+            return {
+                ...results,
+                Results: results.Results.map(stripSyntheticArtifactId)
+            };
+        }
         return results;
     }
 
@@ -132,31 +286,72 @@ export const ArtifactVersionPostRunViewHook: PostRunViewHook = async (
         return results;
     }
 
+    const filterArtifactId = extractSingleArtifactIdFromFilter(params.ExtraFilter);
+
+    // If any rows lack `ArtifactID` (e.g. direct hook call or narrow projection without PreRunView)
+    // and `ExtraFilter` is not a single-artifact equality predicate, hydrate `ArtifactID` by `ID`.
+    const missingIds: string[] = [];
+    if (!filterArtifactId) {
+        for (const row of results.Results) {
+            if (!readVersionArtifactId(row)) {
+                const versionId = readVersionRowId(row);
+                if (versionId) {
+                    missingIds.push(versionId);
+                }
+            }
+        }
+    }
+    const hydratedArtifactIds =
+        missingIds.length > 0
+            ? await fetchVersionArtifactIdsByIds(provider, contextUser, missingIds)
+            : null;
+
     const readAllowedByArtifact = new Map<string, boolean>();
     const keptRows: unknown[] = [];
 
     for (const row of results.Results) {
-        const artifactId = readVersionArtifactId(row);
+        let artifactId = readVersionArtifactId(row) ?? filterArtifactId;
+        if (!artifactId && hydratedArtifactIds) {
+            const versionId = readVersionRowId(row);
+            if (versionId) {
+                artifactId = hydratedArtifactIds.get(NormalizeUUID(versionId)) ?? null;
+            }
+        }
         if (!artifactId) {
+            // Unclassifiable projection (no ArtifactID, no single-artifact filter, and no resolvable ID):
+            // keep rather than silently emptying narrow read projections (`B3`).
+            keptRows.push(shouldStripSyntheticArtifactId ? stripSyntheticArtifactId(row) : row);
             continue;
         }
         const normId = NormalizeUUID(artifactId);
         let allowed = readAllowedByArtifact.get(normId);
         if (allowed === undefined) {
-            const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
-                provider,
-                artifactId,
-                contextUser
-            );
-            allowed = perms.CanRead;
-            readAllowedByArtifact.set(normId, allowed);
+            const reentrancyKey = `${NormalizeUUID(contextUser.ID)}:${normId}`;
+            if (IN_FLIGHT_VERSION_PERMISSION_KEYS.has(reentrancyKey)) {
+                // Re-entrant lookup while `ResolvePermissions` is already evaluating this `(user, artifact)`:
+                // allow the internal membership probe without infinite recursion (`B3`).
+                allowed = true;
+            } else {
+                IN_FLIGHT_VERSION_PERMISSION_KEYS.add(reentrancyKey);
+                try {
+                    const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+                        provider,
+                        artifactId,
+                        contextUser
+                    );
+                    allowed = perms.CanRead;
+                } finally {
+                    IN_FLIGHT_VERSION_PERMISSION_KEYS.delete(reentrancyKey);
+                }
+                readAllowedByArtifact.set(normId, allowed);
+            }
         }
         if (allowed) {
-            keptRows.push(row);
+            keptRows.push(shouldStripSyntheticArtifactId ? stripSyntheticArtifactId(row) : row);
         }
     }
 
-    if (keptRows.length === results.Results.length) {
+    if (keptRows.length === results.Results.length && !shouldStripSyntheticArtifactId) {
         return results;
     }
 
@@ -170,8 +365,12 @@ export const ArtifactVersionPostRunViewHook: PostRunViewHook = async (
 };
 
 export function EnsureArtifactVersionReadHookRegistered(): void {
-    const existing = GetDataHooks<PostRunViewHook>('PostRunView');
-    if (!existing.includes(ArtifactVersionPostRunViewHook)) {
+    const existingPre = GetDataHooks<PreRunViewHook>('PreRunView');
+    if (!existingPre.includes(ArtifactVersionPreRunViewHook)) {
+        RegisterDataHook('PreRunView', ArtifactVersionPreRunViewHook);
+    }
+    const existingPost = GetDataHooks<PostRunViewHook>('PostRunView');
+    if (!existingPost.includes(ArtifactVersionPostRunViewHook)) {
         RegisterDataHook('PostRunView', ArtifactVersionPostRunViewHook);
     }
 }

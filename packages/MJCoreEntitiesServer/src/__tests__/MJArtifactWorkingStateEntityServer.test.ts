@@ -1,5 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { BaseEntity, IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
+import {
+    BaseEntity,
+    DatabaseProviderBase,
+    ExecuteSQLOptions,
+    IMetadataProvider,
+    ProviderConfigDataBase,
+    RunViewParams,
+    RunViewResult,
+    UserInfo
+} from '@memberjunction/core';
 import { ArtifactPermissionEngine } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import {
@@ -118,5 +127,185 @@ describe('MJArtifactWorkingStateEntityServer & ArtifactWorkingStatePostRunViewHo
         const filteredVersions = await ArtifactVersionPostRunViewHook(versionParams, versionResults, devUser);
         expect(filteredVersions.Results).toHaveLength(1);
         expect((filteredVersions.Results[0] as { ArtifactID: string }).ArtifactID).toBe(allowedArtifactId);
+    });
+
+    it('persists and deletes MJ: Artifact Working States with dialect-neutral SQL across PostgreSQL ($1 / "col") and SQL Server (@p0 / [col]) (D4)', async () => {
+        interface RecordedSqlCall {
+            sql: string;
+            params: unknown[] | undefined;
+            options: ExecuteSQLOptions | undefined;
+        }
+
+        class MockDialectDbProvider extends DatabaseProviderBase {
+            public readonly calls: RecordedSqlCall[] = [];
+            private readonly _dialect: 'pg' | 'mssql';
+            private readonly _handler: (sql: string, params?: unknown[]) => Record<string, unknown>[];
+
+            public constructor(
+                dialect: 'pg' | 'mssql',
+                handler: (sql: string, params?: unknown[]) => Record<string, unknown>[]
+            ) {
+                super();
+                this._dialect = dialect;
+                this._handler = handler;
+            }
+
+            public override get ConfigData(): ProviderConfigDataBase {
+                return { MJCoreSchemaName: '__mj' } as ProviderConfigDataBase;
+            }
+
+            public override QuoteIdentifier(name: string): string {
+                return this._dialect === 'pg' ? `"${name}"` : `[${name}]`;
+            }
+
+            public override QuoteSchemaAndView(schemaName: string, objectName: string): string {
+                return `${this.QuoteIdentifier(schemaName)}.${this.QuoteIdentifier(objectName)}`;
+            }
+
+            public override BuildParameterPlaceholder(index: number): string {
+                return this._dialect === 'pg' ? `$${index + 1}` : `@p${index}`;
+            }
+
+            protected override get UUIDFunctionPattern(): RegExp {
+                return /^gen_random_uuid\(\)$/i;
+            }
+
+            protected override get DBDefaultFunctionPattern(): RegExp {
+                return /^now\(\)$/i;
+            }
+
+            public override async BeginTransaction(): Promise<void> {}
+            public override async CommitTransaction(): Promise<void> {}
+            public override async RollbackTransaction(): Promise<void> {}
+
+            public override async ExecuteSQL<T>(
+                sql: string,
+                params?: unknown[],
+                options?: ExecuteSQLOptions
+            ): Promise<Array<T>> {
+                this.calls.push({ sql, params, options });
+                return this._handler(sql, params) as unknown as Array<T>;
+            }
+        }
+
+        // 1. PostgreSQL dialect: insert -> update (with NULL fields) -> unique-race fallback -> delete
+        let pgRowExists = false;
+        let throwUniqueOnce = false;
+        const pgProvider = new MockDialectDbProvider('pg', (sql) => {
+            if (sql.startsWith('SELECT "ID"')) {
+                return pgRowExists ? [{ ID: 'ws-pg-1' }] : [];
+            }
+            if (sql.startsWith('INSERT INTO')) {
+                if (throwUniqueOnce) {
+                    throwUniqueOnce = false;
+                    throw new Error('duplicate key value violates unique constraint "UQ_ArtifactWorkingState_ArtifactID" (23505)');
+                }
+                pgRowExists = true;
+                return [];
+            }
+            if (sql.startsWith('UPDATE')) {
+                return [];
+            }
+            if (sql.startsWith('SELECT * FROM')) {
+                return [
+                    {
+                        ID: 'ws-pg-1',
+                        ArtifactID: allowedArtifactId,
+                        YjsState: Buffer.from([1, 2, 3, 4]),
+                        LastModifiedByUserID: devUser.ID
+                    }
+                ];
+            }
+            return [];
+        });
+
+        let loadedRowData: Record<string, unknown> | null = null;
+        const makeWorkingStateEntity = (provider: DatabaseProviderBase): MJArtifactWorkingStateEntityServer => {
+            const entity = Object.create(
+                MJArtifactWorkingStateEntityServer.prototype
+            ) as MJArtifactWorkingStateEntityServer;
+            Object.defineProperty(entity, 'ResultHistory', { value: [], writable: true });
+            Object.defineProperty(entity, 'IsSaved', { value: false, writable: true });
+            Object.defineProperty(entity, 'ID', { value: '', writable: true });
+            Object.defineProperty(entity, 'ArtifactID', { value: allowedArtifactId, writable: true });
+            Object.defineProperty(entity, 'YjsState', {
+                value: Buffer.from([1, 2, 3, 4]).toString('base64'),
+                writable: true
+            });
+            Object.defineProperty(entity, 'LastModifiedByUserID', {
+                value: devUser.ID,
+                writable: true
+            });
+            Object.defineProperty(entity, 'ContextCurrentUser', { value: systemUser, writable: true });
+            Object.defineProperty(entity, 'ProviderToUse', { value: provider, configurable: true });
+            Object.defineProperty(entity, 'LoadFromData', {
+                value: vi.fn(async (data: Record<string, unknown>) => {
+                    loadedRowData = data;
+                    Object.defineProperty(entity, 'ID', { value: String(data['ID'] ?? ''), writable: true });
+                    Object.defineProperty(entity, 'IsSaved', { value: true, writable: true });
+                    return true;
+                }),
+                configurable: true
+            });
+            Object.defineProperty(entity, 'NewRecord', {
+                value: vi.fn(() => {
+                    Object.defineProperty(entity, 'IsSaved', { value: false, writable: true });
+                    return true;
+                }),
+                configurable: true
+            });
+            return entity;
+        };
+
+        const pgEntity = makeWorkingStateEntity(pgProvider);
+        expect(await pgEntity.Save()).toBe(true);
+        expect(pgProvider.calls.every((c) => !/MERGE|DECLARE|UNIQUEIDENTIFIER|\[/i.test(c.sql))).toBe(true);
+        expect(pgProvider.calls[1]?.sql).toBe(
+            'INSERT INTO "__mj"."ArtifactWorkingState" ("ID", "ArtifactID", "YjsState", "LastModifiedByUserID") VALUES ($1, $2, $3, $4)'
+        );
+        expect(Buffer.isBuffer(pgProvider.calls[1]?.params?.[2])).toBe(true);
+        // Driver-returned BYTEA Buffer must be normalized to base64 before LoadFromData
+        expect(loadedRowData?.['YjsState']).toBe(Buffer.from([1, 2, 3, 4]).toString('base64'));
+
+        // Update path with NULL YjsState & NULL LastModifiedByUserID emits SQL literal NULL (no untyped null param)
+        pgEntity.YjsState = null;
+        pgEntity.LastModifiedByUserID = null;
+        expect(await pgEntity.Save()).toBe(true);
+        const updateCall = pgProvider.calls.find((c) => c.sql.startsWith('UPDATE'));
+        expect(updateCall?.sql).toBe(
+            'UPDATE "__mj"."ArtifactWorkingState" SET "YjsState" = NULL, "LastModifiedByUserID" = NULL, "__mj_UpdatedAt" = $1 WHERE "ArtifactID" = $2'
+        );
+
+        // Concurrent unique-constraint collision falls back cleanly to UPDATE
+        pgRowExists = false;
+        throwUniqueOnce = true;
+        pgProvider.calls.length = 0;
+        const racingEntity = makeWorkingStateEntity(pgProvider);
+        expect(await racingEntity.Save()).toBe(true);
+        expect(pgProvider.calls.some((c) => c.sql.startsWith('INSERT INTO'))).toBe(true);
+        expect(pgProvider.calls.some((c) => c.sql.startsWith('UPDATE'))).toBe(true);
+
+        // Delete path on PostgreSQL
+        pgProvider.calls.length = 0;
+        expect(await pgEntity.Delete()).toBe(true);
+        expect(pgProvider.calls[0]?.sql).toBe(
+            'DELETE FROM "__mj"."ArtifactWorkingState" WHERE "ID" = $1 OR "ArtifactID" = $2'
+        );
+
+        // 2. SQL Server dialect: verifies @p0 / [__mj].[ArtifactWorkingState]
+        const mssqlProvider = new MockDialectDbProvider('mssql', (sql) => {
+            if (sql.startsWith('SELECT [ID]')) {
+                return [];
+            }
+            if (sql.startsWith('SELECT * FROM')) {
+                return [{ ID: 'ws-ms-1', ArtifactID: allowedArtifactId, YjsState: 'AQIDBA==' }];
+            }
+            return [];
+        });
+        const mssqlEntity = makeWorkingStateEntity(mssqlProvider);
+        expect(await mssqlEntity.Save()).toBe(true);
+        expect(mssqlProvider.calls[1]?.sql).toBe(
+            'INSERT INTO [__mj].[ArtifactWorkingState] ([ID], [ArtifactID], [YjsState], [LastModifiedByUserID]) VALUES (@p0, @p1, @p2, @p3)'
+        );
     });
 });

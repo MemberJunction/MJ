@@ -2385,6 +2385,9 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
   private allHierarchyTasks: MJTaskEntity[] = [];
   private streamSubscription: Subscription | null = null;
   private livePollTimer: ReturnType<typeof setInterval> | null = null;
+  private isLoadingTasks = false;
+  private pendingReload = false;
+  private isDestroyed = false;
 
   ngOnInit(): void {
     this.LoadTasks();
@@ -2411,6 +2414,8 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
   }
 
   ngOnDestroy(): void {
+    this.isDestroyed = true;
+    this.pendingReload = false;
     if (this.streamSubscription) {
       this.streamSubscription.unsubscribe();
       this.streamSubscription = null;
@@ -2464,6 +2469,11 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
   }
 
   public async LoadTasks(): Promise<void> {
+    if (this.isLoadingTasks) {
+      this.pendingReload = true;
+      return;
+    }
+    this.isLoadingTasks = true;
     this.isLoading = true;
     this.LoadError = null;
 
@@ -2513,9 +2523,14 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
       console.error('Failed to load tasks:', error);
       this.LoadError = error instanceof Error ? error.message : 'Failed to load AI agent workflows.';
     } finally {
+      this.isLoadingTasks = false;
       this.isLoading = false;
       this.updateLivePollingState();
       this.cdr?.markForCheck();
+      if (this.pendingReload && !this.isDestroyed) {
+        this.pendingReload = false;
+        void this.LoadTasks();
+      }
     }
   }
 

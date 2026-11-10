@@ -1,12 +1,25 @@
+import '@angular/compiler';
 import { describe, expect, it, vi } from 'vitest';
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
 import * as syncProtocol from 'y-protocols/sync';
 import * as Y from 'yjs';
-import type { IMetadataProvider } from '@memberjunction/core';
-import { SpreadsheetEngine } from '@memberjunction/core-entities';
+import { ChangeDetectorRef, Injector, runInInjectionContext } from '@angular/core';
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import {
+  MJArtifactVersionEntity,
+  SlideDeckEngine,
+  SpreadsheetEngine,
+  type DocumentBlockSpec,
+  type FrozenBlockSnapshot,
+} from '@memberjunction/core-entities';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { ArtifactFileService } from '../services/artifact-file.service';
 import { DocumentCollaborationService } from '../services/document-collaboration.service';
 import { DocumentImportExportService } from '../services/document-import-export.service';
+import { SlideDeckExportService } from '../services/slide-deck-export.service';
+import { MarkdownArtifactViewerComponent } from '../components/plugins/markdown-artifact-viewer.component';
+import { SpreadsheetArtifactViewerComponent } from '../components/plugins/spreadsheet-artifact-viewer.component';
 import type { MammothModuleShim } from '../components/previews/office-preview.logic';
 
 const SAMPLE_COLLAB_DOC = [
@@ -439,4 +452,220 @@ describe('DocumentCollaborationService — ticket-authenticated URL resolution, 
     expect(md).toContain('A \\| B');
   });
 });
+
+describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @mentions, and Sheets C2 Server Freeze', () => {
+  it('SlideDeckExportService.BuildPrintableDeckHtml preserves quoted CSS font-family names inside <style> while blocking </style>', () => {
+    const exportService = new SlideDeckExportService();
+    const deck = SlideDeckEngine.Instance.CreateDefaultDeck('Board Review');
+    deck.Theme = {
+      ...deck.Theme,
+      HeadingFont: `'Playfair Display', "Plus Jakarta Sans", Georgia, serif`,
+      BodyFont: `'Inter', system-ui, sans-serif`,
+    };
+
+    const html = exportService.BuildPrintableDeckHtml(deck, new Map());
+    expect(html).toContain(`font-family: 'Playfair Display', "Plus Jakarta Sans", Georgia, serif;`);
+    expect(html).toContain(`font-family: 'Inter', system-ui, sans-serif;`);
+    expect(html).not.toContain('&#39;Playfair Display&#39;');
+    expect(html).not.toContain('&quot;Plus Jakarta Sans&quot;');
+
+    const maliciousDeck = SlideDeckEngine.Instance.CreateDefaultDeck('Breakout Check');
+    maliciousDeck.Theme = {
+      ...maliciousDeck.Theme,
+      BodyFont: `'Inter'</style><script>alert(1)</script>`,
+    };
+    const safeHtml = exportService.BuildPrintableDeckHtml(maliciousDeck, new Map());
+    expect(safeHtml).not.toContain('<script>');
+  });
+
+  it('MarkdownArtifactViewerComponent (C1): ignores emails, omits fake quotes when unselected, and stays non-destructive on failed @mention', async () => {
+    const collabService = new DocumentCollaborationService();
+    const dispatchCalls: Array<{
+      artifactId: string;
+      agentHandle: string;
+      agentMode: 'comment' | 'suggest' | 'edit';
+      commentBody: string;
+      anchorQuote?: string;
+    }> = [];
+    vi.spyOn(collabService, 'DispatchAnchoredCommentAgentMention').mockImplementation(
+      async (artifactId, agentHandle, agentMode, commentBody, anchorQuote) => {
+        dispatchCalls.push({ artifactId, agentHandle, agentMode, commentBody, anchorQuote });
+        return {
+          HandledByServer: true,
+          Success: false,
+          ErrorMessage: 'Server agent run failed',
+        };
+      },
+    );
+
+    const notifications: string[] = [];
+    const injector = Injector.create({
+      providers: [
+        { provide: ChangeDetectorRef, useValue: { markForCheck: () => {}, detectChanges: () => {} } },
+        { provide: DocumentCollaborationService, useValue: collabService },
+        { provide: DocumentImportExportService, useValue: new DocumentImportExportService() },
+        {
+          provide: MJNotificationService,
+          useValue: {
+            CreateSimpleNotification: (msg: string) => notifications.push(msg),
+          },
+        },
+      ],
+    });
+
+    const viewer = runInInjectionContext(injector, () => new MarkdownArtifactViewerComponent());
+    const initialMarkdown =
+      '# Executive Summary\n\nThis paragraph is over one hundred and twenty characters long so we can verify OpenAnchorCommentForSegment never slices RawMarkdown when no text is selected.';
+    viewer.OnMarkdownChanged(initialMarkdown, true);
+    const firstSeg = viewer.DocumentSegments[0];
+    expect(firstSeg).toBeDefined();
+
+    // 1. OpenAnchorCommentForSegment without selection -> SelectedAnchorQuote is empty (not sliced RawMarkdown)
+    viewer.OpenAnchorCommentForSegment(firstSeg);
+    expect(viewer.SelectedAnchorQuote).toBe('');
+
+    // Explicit user selection -> exact selected quote is preserved
+    viewer.OpenAnchorCommentForSegment(firstSeg, 'Executive Summary');
+    expect(viewer.SelectedAnchorQuote).toBe('Executive Summary');
+
+    // Attach persisted artifact version + mock persistence hook so server @mention path is exercised
+    const ver = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+    Object.defineProperties(ver, {
+      ID: { value: '11111111-1111-4111-8111-111111111111', enumerable: true },
+      ArtifactID: { value: '22222222-2222-4222-8222-222222222222', enumerable: true },
+      VersionNumber: { value: 1, enumerable: true },
+      Content: { value: initialMarkdown, enumerable: true },
+    });
+    viewer.artifactVersion = ver;
+    Reflect.set(viewer, 'persistAnchoredThreadToServer', async () => true);
+
+    // 2. Email addresses in comments NEVER trigger @mention dispatch
+    viewer.SelectedAnchorQuote = '';
+    viewer.NewCommentAgentMode = 'edit';
+    viewer.NewCommentText = 'Please loop in alice@example.com and foo.bar@baz.co for review.';
+    await viewer.PostAnchoredComment();
+    expect(dispatchCalls).toHaveLength(0);
+    expect(viewer.AnchoredThreads[0].Messages[0].Mentions).toEqual([]);
+    expect(viewer.MarkdownContent).toBe(initialMarkdown);
+
+    // 3. Real @DocsAgent mention when server returns Success=false does NOT append fake Role:'Agent' or mutate markdown
+    viewer.SelectedAnchorQuote = '';
+    viewer.NewCommentAgentMode = 'edit';
+    viewer.NewCommentText = 'Hey @DocsAgent tighten the executive summary.';
+    await viewer.PostAnchoredComment();
+
+    expect(dispatchCalls).toHaveLength(1);
+    expect(dispatchCalls[0].agentHandle).toBe('DocsAgent');
+    expect(dispatchCalls[0].anchorQuote).toBeUndefined();
+    expect(viewer.AnchoredThreads[0].Messages).toHaveLength(1);
+    expect(viewer.AnchoredThreads[0].Messages[0].Role).toBe('User');
+    expect(viewer.MarkdownContent).toBe(initialMarkdown);
+    expect(notifications).toContain('Server agent run failed');
+    viewer.ngOnDestroy();
+  });
+
+  it('SpreadsheetArtifactViewerComponent (C2): routes ConfirmFreezeLiveTable through server FreezeLiveBlock and passes preSignedSnapshot as 7th argument', async () => {
+    const collabService = new DocumentCollaborationService();
+    const signedSnapshot: FrozenBlockSnapshot = {
+      FrozenAt: '2026-11-10T20:00:00.000Z',
+      FrozenByUserID: '33333333-3333-4333-8333-333333333333',
+      FrozenByUserName: 'Dana Analyst',
+      Columns: [{ Name: 'Name', DisplayName: 'Name' }],
+      Rows: [{ Name: 'Governed Row 1' }],
+      TotalRowCount: 1,
+      SecurityWarningAcknowledged: true,
+      SnapshotContentHash: 'hmac-v1:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
+    };
+
+    const freezeSpy = vi
+      .spyOn(collabService, 'FreezeLiveBlock')
+      .mockImplementation(async (block: DocumentBlockSpec) => {
+        const updatedSpec: DocumentBlockSpec = {
+          ...block,
+          Mode: 'Frozen',
+          FrozenSnapshot: signedSnapshot,
+        };
+        return {
+          HandledByServer: true,
+          Success: true,
+          UpdatedSpec: updatedSpec,
+        };
+      });
+    vi.spyOn(collabService, 'IsFrozenSnapshotVerified').mockReturnValue(true);
+
+    const engineFreezeSpy = vi.spyOn(SpreadsheetEngine.Instance, 'FreezeLiveTable');
+
+    const injector = Injector.create({
+      providers: [
+        { provide: ChangeDetectorRef, useValue: { markForCheck: () => {}, detectChanges: () => {} } },
+        { provide: DocumentCollaborationService, useValue: collabService },
+        { provide: ArtifactFileService, useValue: null },
+        { provide: MJNotificationService, useValue: { CreateSimpleNotification: () => {} } },
+      ],
+    });
+
+    const sheetViewer = runInInjectionContext(injector, () => new SpreadsheetArtifactViewerComponent());
+    const mockUser = Object.create(null) as UserInfo;
+    Object.assign(mockUser, {
+      ID: '33333333-3333-4333-8333-333333333333',
+      Name: 'Dana Analyst',
+      Email: 'dana@example.com',
+    });
+    const mockProvider = Object.create(null) as IMetadataProvider;
+    Object.assign(mockProvider, {
+      CurrentUser: mockUser,
+      Entities: [],
+    });
+    sheetViewer.Provider = mockProvider;
+
+    const ver = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+    Object.defineProperties(ver, {
+      ID: { value: '44444444-4444-4444-8444-444444444444', enumerable: true },
+      ArtifactID: { value: '55555555-5555-4555-8555-555555555555', enumerable: true },
+      VersionNumber: { value: 1, enumerable: true },
+    });
+    sheetViewer.artifactVersion = ver;
+
+    const wb = SpreadsheetEngine.Instance.CreateEmptyWorkbook('Governed Sheet');
+    const liveTable = {
+      TableID: 'tbl-live-1',
+      Title: 'Active Accounts',
+      SourceType: 'EntityView' as const,
+      EntityName: 'Accounts',
+      ExtraFilter: "Status = 'Active'",
+      MaxRows: 50,
+      AnchorCell: 'A1',
+      Mode: 'Live' as const,
+    };
+    wb.Worksheets[0].LiveTables.push(liveTable);
+    sheetViewer.Workbook = wb;
+
+    sheetViewer.PromptFreezeLiveTable(wb.Worksheets[0].LiveTables[0]);
+    sheetViewer.FreezeConfirmedChecked = true;
+    await sheetViewer.ConfirmFreezeLiveTable();
+
+    expect(freezeSpy).toHaveBeenCalledTimes(1);
+    expect(freezeSpy.mock.calls[0][0]).toMatchObject({
+      BlockID: 'tbl-live-1',
+      Kind: 'EntityView',
+      DisplayMode: 'table',
+      Mode: 'Live',
+      EntityName: 'Accounts',
+      ExtraFilter: "Status = 'Active'",
+      MaxRows: 50,
+    });
+    expect(freezeSpy.mock.calls[0][1]).toBe(true);
+    expect(freezeSpy.mock.calls[0][2]).toBe('55555555-5555-4555-8555-555555555555');
+
+    expect(engineFreezeSpy).toHaveBeenCalledTimes(1);
+    expect(engineFreezeSpy.mock.calls[0][6]).toEqual(signedSnapshot);
+    expect(wb.Worksheets[0].LiveTables[0].Mode).toBe('Frozen');
+    expect(wb.Worksheets[0].LiveTables[0].FrozenSnapshot).toEqual(signedSnapshot);
+    expect(sheetViewer.IsLiveTableSnapshotVerified(wb.Worksheets[0].LiveTables[0])).toBe(true);
+
+    engineFreezeSpy.mockRestore();
+    sheetViewer.ngOnDestroy();
+  });
+});
+
 

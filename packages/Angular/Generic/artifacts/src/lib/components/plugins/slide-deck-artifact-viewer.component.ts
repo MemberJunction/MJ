@@ -38,17 +38,18 @@ import {
   type DocumentBlockSpec,
   type DocumentBlockColumn,
   type DocumentBlockExecutionResult,
-  type ResolvedArtifactPermissions,
 } from '@memberjunction/core-entities';
 import { BaseArtifactViewerPluginComponent, IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
 import { SlidesVersionDiffComponent } from '../version-diff/slides-version-diff.component';
 import {
   DocumentCollaborationService,
   DocumentCollaborationSession,
+  ExtractAnchoredCommentMentions,
   type CollaboratorPresence,
   type CollaborationConnectionStatus,
   type DocumentAnchoredThread,
   type DocumentDiffResult,
+  type VerifiedArtifactPermissions,
 } from '../../services/document-collaboration.service';
 import {
   SlideDeckExportService,
@@ -309,6 +310,40 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
           </button>
         </div>
       </div>
+
+      @if (LiveSyncUnavailable) {
+        <div
+          class="mj-slides-presentation-banner mj-slides-presentation-banner--readonly"
+          role="status"
+          data-testid="slides-live-sync-unavailable-banner"
+        >
+          <div class="mj-slides-presentation-banner-info">
+            <i class="fa-solid fa-plug-circle-xmark"></i>
+            <span>Live collaborative sync is unavailable on this server — viewing in read-only mode.</span>
+          </div>
+        </div>
+      }
+
+      @if (PermissionVerifyError) {
+        <div
+          class="mj-slides-presentation-banner mj-slides-presentation-banner--warning"
+          role="alert"
+          data-testid="slides-permission-verify-error-banner"
+        >
+          <div class="mj-slides-presentation-banner-info">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>Couldn't verify permissions — Retry</span>
+          </div>
+          <button
+            type="button"
+            class="mj-slides-tool-btn"
+            data-testid="slides-permission-retry-btn"
+            (click)="RetryVerifyPermissions()"
+          >
+            Retry
+          </button>
+        </div>
+      }
 
       @if (StatusBannerMessage) {
         <div class="mj-slides-presentation-banner" data-testid="slides-status-banner">
@@ -1304,6 +1339,15 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
         border-bottom: 1px solid var(--mj-border-default);
         font-size: 12px;
       }
+      .mj-slides-presentation-banner--readonly {
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-text-secondary);
+      }
+      .mj-slides-presentation-banner--warning {
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-status-warning);
+        border-bottom-color: var(--mj-status-warning);
+      }
       .mj-slides-presentation-banner-info,
       .mj-slides-presentation-banner-actions {
         display: flex;
@@ -1994,7 +2038,9 @@ export class SlideDeckArtifactViewerComponent
 
   public ConnectionStatus: CollaborationConnectionStatus = 'local';
   public Collaborators: CollaboratorPresence[] = [];
-  public ResolvedPermissions: ResolvedArtifactPermissions | null = null;
+  public ResolvedPermissions: VerifiedArtifactPermissions | null = null;
+  public AccessRevoked = false;
+  public PermissionVerifyError = false;
   public CurrentVersionNumber = 1;
   public LastSavedVersionNumber = 0;
   private lastSavedComparableDeckJson = '';
@@ -3140,7 +3186,7 @@ export class SlideDeckArtifactViewerComponent
       return;
     }
     const user = this.getCurrentUserSummary();
-    const mentions = (trimmed.match(/@[A-Za-z0-9_-]+/g) ?? []).map((m) => m.slice(1));
+    const mentions = ExtractAnchoredCommentMentions(trimmed);
     const nowIso = new Date().toISOString();
 
     const newThread: DocumentAnchoredThread = {
@@ -3527,6 +3573,10 @@ export class SlideDeckArtifactViewerComponent
     return typeRes.Success ? typeRes.Results?.[0]?.ID : undefined;
   }
 
+  public RetryVerifyPermissions(): void {
+    void this.resolveViewerPermissionsAndThreads(this.sessionInitGeneration);
+  }
+
   private async resolveViewerPermissionsAndThreads(gen = this.sessionInitGeneration): Promise<void> {
     const persistedArtifactId = this.artifactVersion?.ArtifactID;
     if (!persistedArtifactId) {
@@ -3538,6 +3588,8 @@ export class SlideDeckArtifactViewerComponent
     const currentUser = this.getSafeCurrentUser();
     if (!provider || !currentUser) {
       this.ResolvedPermissions = null;
+      this.AccessRevoked = false;
+      this.PermissionVerifyError = false;
       this.ConnectionStatus = 'readonly';
       this.session?.SetCanEdit(false);
       this.cdr.markForCheck();
@@ -3553,16 +3605,38 @@ export class SlideDeckArtifactViewerComponent
         return;
       }
       this.ResolvedPermissions = perms;
-      if (!perms || !perms.CanRead) {
+      if (!perms) {
+        this.AccessRevoked = false;
+        this.PermissionVerifyError = false;
+        this.ConnectionStatus = 'readonly';
+        this.session?.SetCanEdit(false);
+      } else if (perms.PermissionVerifyError) {
+        this.AccessRevoked = false;
+        this.PermissionVerifyError = true;
+        this.ConnectionStatus = 'readonly';
+        this.session?.SetCanEdit(false);
+        if (this.WorkspaceMode === 'edit' || this.WorkspaceMode === 'source') {
+          this.EnterPresentationMode('present');
+        }
+      } else if (!perms.CanRead) {
+        this.PermissionVerifyError = false;
+        this.AccessRevoked = true;
         this.ConnectionStatus = 'revoked';
         this.session?.SetCanEdit(false);
         if (this.WorkspaceMode === 'edit' || this.WorkspaceMode === 'source') {
           this.EnterPresentationMode('present');
         }
       } else if (!perms.CanEdit) {
+        this.PermissionVerifyError = false;
+        this.AccessRevoked = false;
         this.ConnectionStatus = 'readonly';
         this.session?.SetCanEdit(false);
       } else {
+        this.PermissionVerifyError = false;
+        this.AccessRevoked = false;
+        if (this.ConnectionStatus === 'readonly' || this.ConnectionStatus === 'revoked') {
+          this.ConnectionStatus = this.session ? this.session.Status : 'local';
+        }
         this.session?.SetCanEdit(this.hasPermissionToEdit);
       }
     } catch (err) {
@@ -3571,6 +3645,8 @@ export class SlideDeckArtifactViewerComponent
         return;
       }
       this.ResolvedPermissions = null;
+      this.AccessRevoked = false;
+      this.PermissionVerifyError = true;
       this.ConnectionStatus = 'readonly';
       this.session?.SetCanEdit(false);
     }
@@ -3593,21 +3669,48 @@ export class SlideDeckArtifactViewerComponent
             return;
           }
           this.ResolvedPermissions = updated;
-          if (!updated || !updated.CanRead) {
+          if (!updated) {
+            this.AccessRevoked = false;
+            this.PermissionVerifyError = false;
+            this.ConnectionStatus = 'readonly';
+            this.session?.SetCanEdit(false);
+          } else if (updated.PermissionVerifyError) {
+            this.AccessRevoked = false;
+            this.PermissionVerifyError = true;
+            this.ConnectionStatus = 'readonly';
+            this.session?.SetCanEdit(false);
+            if (this.WorkspaceMode === 'edit' || this.WorkspaceMode === 'source') {
+              this.EnterPresentationMode('present');
+            }
+          } else if (!updated.CanRead) {
+            this.PermissionVerifyError = false;
+            this.AccessRevoked = true;
             this.ConnectionStatus = 'revoked';
             this.session?.SetCanEdit(false);
             if (this.WorkspaceMode === 'edit' || this.WorkspaceMode === 'source') {
               this.EnterPresentationMode('present');
             }
           } else if (!updated.CanEdit) {
+            this.PermissionVerifyError = false;
+            this.AccessRevoked = false;
             this.ConnectionStatus = 'readonly';
             this.session?.SetCanEdit(false);
           } else {
+            this.PermissionVerifyError = false;
+            this.AccessRevoked = false;
+            if (this.ConnectionStatus === 'readonly' || this.ConnectionStatus === 'revoked') {
+              this.ConnectionStatus = this.session ? this.session.Status : 'local';
+            }
             this.session?.SetCanEdit(this.hasPermissionToEdit);
           }
           this.cdr.markForCheck();
         } catch (err) {
           LogError(err);
+          this.AccessRevoked = false;
+          this.PermissionVerifyError = true;
+          this.ConnectionStatus = 'readonly';
+          this.session?.SetCanEdit(false);
+          this.cdr.markForCheck();
         }
       }
     });
@@ -3727,7 +3830,7 @@ export class SlideDeckArtifactViewerComponent
           Role: (d.Role === 'AI' ? 'Agent' : 'User') as 'User' | 'Agent',
           Message: d.Message,
           CreatedAt: d.__mj_CreatedAt ?? new Date().toISOString(),
-          Mentions: Array.from((d.Message ?? '').matchAll(/@([A-Za-z0-9_-]+)/g)).map((m) => m[1]),
+          Mentions: ExtractAnchoredCommentMentions(d.Message ?? ''),
         }));
 
         const isResolved =

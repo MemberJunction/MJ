@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
     ArtifactLiveMutationEvent,
     ArtifactToolManager,
@@ -8,8 +8,9 @@ import {
 } from '../ArtifactToolManager';
 import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { ArtifactMetadataEngine } from '@memberjunction/core-entities';
+import { ArtifactMetadataEngine, SpreadsheetEngine } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
+import { FileStorageBase, FileStorageEngine } from '@memberjunction/storage';
 
 // Side-effect imports — force the @RegisterClass decorators on the production
 // libraries to run so the P2B.8 parent-chain tests can resolve them via ClassFactory
@@ -1026,6 +1027,179 @@ describe('ArtifactToolManager', () => {
                 });
                 expect(res.result.success).toBe(false);
                 expect(res.result.errorMessage).toContain('not supported on File-mode .xlsx workbooks');
+            }
+        });
+
+        it('E9: reload_artifact re-downloads FileID binary bytes from FileStorageEngine and fails closed on download failure', async () => {
+            const sheetEngine = SpreadsheetEngine.Instance;
+            const wbV1 = sheetEngine.CreateEmptyWorkbook('Forecast', ['Revenue'], 8, 4);
+            sheetEngine.SetCell(wbV1, wbV1.Worksheets[0].SheetID, 'B2', { Value: 100 }, true);
+            const xlsxV1Buffer = Buffer.from(sheetEngine.ExportToXlsxBytes(wbV1));
+
+            const wbV2 = sheetEngine.CreateEmptyWorkbook('Forecast', ['Revenue'], 8, 4);
+            sheetEngine.SetCell(wbV2, wbV2.Worksheets[0].SheetID, 'B2', { Value: 950 }, true);
+            const xlsxV2Buffer = Buffer.from(sheetEngine.ExportToXlsxBytes(wbV2));
+
+            const artifactUuid = 'cccc1111-2222-4333-8444-555555555555';
+            const fileIdV2 = 'dddd1111-2222-4333-8444-666666666666';
+            const user = new UserInfo();
+            user.ID = '11111111-2222-4333-8444-777777777777';
+            user.Name = 'Reload Tester';
+            user.IsActive = true;
+
+            let failStorageDownload = true;
+            const getObjectCalls: string[] = [];
+
+            const configSpy = vi.spyOn(FileStorageEngine.Instance, 'Config').mockResolvedValue();
+            const resolveSpy = vi
+                .spyOn(FileStorageEngine.Instance, 'ResolveFileObject')
+                .mockImplementation(async () => {
+                    if (failStorageDownload) {
+                        throw new Error('Storage driver unreachable');
+                    }
+                    const mockDriver: Pick<FileStorageBase, 'GetObject'> = {
+                        GetObject: async (params: { fullPath?: string }) => {
+                            getObjectCalls.push(params.fullPath ?? '');
+                            return xlsxV2Buffer;
+                        },
+                    };
+                    return {
+                        Driver: mockDriver as FileStorageBase,
+                        ObjectKey: 'uploads/forecast-v2.xlsx',
+                        Account: {} as Awaited<ReturnType<FileStorageEngine['ResolveFileObject']>> extends infer R
+                            ? R extends { Account: infer A }
+                                ? A
+                                : never
+                            : never,
+                    };
+                });
+
+            try {
+                const mockProvider: Pick<IMetadataProvider, 'GetEntityObject'> & {
+                    RunView: (params: { EntityName: string }) => Promise<{
+                        Success: boolean;
+                        Results: Array<Record<string, string | number | boolean | null>>;
+                    }>;
+                } = {
+                    RunView: async (params: { EntityName: string }) => {
+                        if (params.EntityName === 'MJ: Artifacts') {
+                            return {
+                                Success: true,
+                                Results: [
+                                    {
+                                        ID: artifactUuid,
+                                        Name: 'Forecast.xlsx',
+                                        UserID: user.ID,
+                                        DelegateEntityID: null,
+                                        DelegateRecordID: null,
+                                    },
+                                ],
+                            };
+                        }
+                        if (params.EntityName === 'MJ: Files') {
+                            return {
+                                Success: true,
+                                Results: [
+                                    {
+                                        ID: fileIdV2,
+                                        Name: 'forecast-v2.xlsx',
+                                        ContentType:
+                                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                        ProviderID: 'prov-1',
+                                        ProviderKey: 'uploads/forecast-v2.xlsx',
+                                    },
+                                ],
+                            };
+                        }
+                        if (params.EntityName === 'MJ: Artifact Versions') {
+                            return {
+                                Success: true,
+                                Results: [
+                                    {
+                                        ID: 'eeee1111-2222-4333-8444-888888888888',
+                                        ArtifactID: artifactUuid,
+                                        VersionNumber: 2,
+                                        Name: 'Forecast.xlsx',
+                                        ContentMode: 'File',
+                                        FileID: fileIdV2,
+                                        MimeType:
+                                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                        Content: null,
+                                        Configuration: null,
+                                    },
+                                ],
+                            };
+                        }
+                        return { Success: true, Results: [] };
+                    },
+                    GetEntityObject: async () => {
+                        throw new Error('Should not create entity during reload test');
+                    },
+                };
+
+                manager.Initialize(
+                    [
+                        {
+                            name: 'Forecast.xlsx',
+                            typeName: 'Excel Spreadsheet',
+                            toolLibraryClass: 'SpreadsheetToolLibrary',
+                            artifactId: artifactUuid,
+                            versionId: 'ffff1111-2222-4333-8444-999999999999',
+                            versionNumber: 1,
+                            mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                            content: xlsxV1Buffer,
+                        },
+                    ],
+                    { contextUser: user, provider: mockProvider as IMetadataProvider },
+                );
+
+                // 1. Download fails -> reload_artifact MUST fail closed without advancing baseline version 1
+                const failedReload = await manager.ExecuteSingleToolCall({
+                    artifactId: 'A',
+                    tool: 'reload_artifact',
+                    input: {},
+                });
+                expect(failedReload.result.success).toBe(false);
+                expect(failedReload.result.errorMessage).toContain(fileIdV2);
+
+                // Baseline version is still v1, so B2 still holds v1's 100 and mutations still block on v2 > v1
+                const readBefore = await manager.ExecuteSingleToolCall({
+                    artifactId: 'A',
+                    tool: 'read_range',
+                    input: { range: 'B2' },
+                });
+                expect(readBefore.result.success).toBe(true);
+                expect((readBefore.result.data as { cell: { computedValue: number } }).cell.computedValue).toBe(100);
+
+                const blockedMutation = await manager.ExecuteSingleToolCall({
+                    artifactId: 'A',
+                    tool: 'write_cells',
+                    input: { cells: [{ address: 'B3', value: 50 }] },
+                });
+                expect(blockedMutation.result.success).toBe(false);
+                expect(blockedMutation.result.errorMessage).toContain('v2 > v1');
+
+                // 2. Storage succeeds -> reload_artifact re-downloads FileID bytes and refreshes parsed workbook state
+                failStorageDownload = false;
+                const okReload = await manager.ExecuteSingleToolCall({
+                    artifactId: 'A',
+                    tool: 'reload_artifact',
+                    input: {},
+                });
+                expect(okReload.result.success).toBe(true);
+                expect((okReload.result.data as { versionNumber: number }).versionNumber).toBe(2);
+                expect(getObjectCalls).toEqual(['uploads/forecast-v2.xlsx']);
+
+                const readAfter = await manager.ExecuteSingleToolCall({
+                    artifactId: 'A',
+                    tool: 'read_range',
+                    input: { range: 'B2' },
+                });
+                expect(readAfter.result.success).toBe(true);
+                expect((readAfter.result.data as { cell: { computedValue: number } }).cell.computedValue).toBe(950);
+            } finally {
+                configSpy.mockRestore();
+                resolveSpy.mockRestore();
             }
         });
     });
