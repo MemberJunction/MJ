@@ -61,6 +61,7 @@ import { FullTextSearchProvider } from './FullTextSearchProvider';
 import { StorageSearchProvider } from './StorageSearchProvider';
 import { BaseReRanker } from './BaseReRanker';
 import { NoopReRanker, LoadNoopReRanker } from './NoopReRanker';
+import { LoadGraphSearchProvider } from './GraphSearchProvider';
 import { RerankerBudgetGuard } from '../rerankers/RerankerBudgetGuard';
 import { RenderScopeTemplate, RenderScopeJsonTemplate } from './ScopeTemplateRenderer';
 import { LaneKindForIndexType } from './ScopeValueEscaper';
@@ -172,8 +173,9 @@ function refusedLanesDiagnostic(skipped: LaneExplanation[]): string {
         'A search refuses a scope with any unusable lane rather than search the others; fix the lane(s) to make it retrieve.';
 }
 
-// Keep the default re-ranker registration alive under tree-shaking
+// Keep the default re-ranker and graph search provider registrations alive under tree-shaking
 LoadNoopReRanker();
+LoadGraphSearchProvider();
 
 /** Where a content entity sits in the derived-content family (see `SearchEngine.VerifyOriginRecords`). */
 type ContentFamilyLevel = 'chunk' | 'item';
@@ -548,7 +550,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             // ──────────────────────────────────────────────────────────
             // Execute providers — either unscoped (original path) or per-scope
             // ──────────────────────────────────────────────────────────
-            let sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number };
+            let sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number; Tag?: number; Graph?: number };
             let fusedResults: SearchResultItem[];
             // Per-scope decisions, captured for SearchExecutionLog.ScopeDecisionJSON. Empty on
             // the unconstrained path, which resolves no scope and therefore decides nothing.
@@ -561,7 +563,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                     params.Filters,
                     contextUser,
                     isPreview,
-                    undefined,
+                    this.audienceConstraints(params.Audience, contextUser),
                     partialEvents,
                     params.MinScore,
                 );
@@ -583,16 +585,19 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                         this.principalsFrom(params),
                         partialEvents,
                         params.MinScore,
+                        this.distinctReaders(params.Audience, contextUser),
                     )
                 ));
 
-                const sc = { Vector: 0, FullText: 0, Entity: 0, Storage: 0 };
+                const sc = { Vector: 0, FullText: 0, Entity: 0, Storage: 0, Tag: 0, Graph: 0 };
                 const perScopeFused = new Map<string, SearchResultItem[]>();
                 for (const r of perScopeRunResults) {
                     sc.Vector += r.sourceCounts.Vector;
                     sc.FullText += r.sourceCounts.FullText;
                     sc.Entity += r.sourceCounts.Entity;
                     sc.Storage += r.sourceCounts.Storage;
+                    sc.Tag += r.sourceCounts.Tag ?? 0;
+                    sc.Graph += r.sourceCounts.Graph ?? 0;
                     perScopeFused.set(r.scopeID, r.fused);
                     scopeDecisions.push(r.decision);
                 }
@@ -798,6 +803,9 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             fulltext: 'FullText',
             entity: 'Entity',
             storage: 'Storage',
+            tag: 'Tag',
+            graph: 'SemanticGraph',
+            semanticgraph: 'SemanticGraph',
         };
 
         // A provider's hits arrive before any permission pass, so its event carries progress only: the name,
@@ -1031,6 +1039,16 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             readers.push(reader);
         }
         return readers;
+    }
+
+    /**
+     * Constraints for an UNSCOPED search that carry only the audience, so a provider that traverses
+     * (the graph lane) can apply it while it walks; `undefined` — exactly as before — when the audience
+     * adds no reader. Every other field stays `undefined`, which providers read as "unscoped".
+     */
+    private audienceConstraints(audience: SearchAudience | undefined, contextUser: UserInfo): ScopeConstraints | undefined {
+        const readers = this.distinctReaders(audience, contextUser);
+        return readers.length > 0 ? { AudienceReaders: readers } : undefined;
     }
 
     /** The distinct reader IDs, lower-cased and sorted, for the cache key. `undefined` when the audience adds no reader, so it keys like no audience. */
@@ -1777,10 +1795,12 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         principals: ScopePrincipals,
         onProviderResolved?: OnProviderResolved,
         minScore?: number,
+        /** The run's audience beyond the caller, handed to every provider (`ScopeConstraints.AudienceReaders`). */
+        audienceReaders: UserInfo[] = [],
     ): Promise<{
         scopeID: string;
         fused: SearchResultItem[];
-        sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number; Tag?: number };
+        sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number; Tag?: number; Graph?: number };
         /**
          * What this scope decided — dimension provenance and per-lane outcomes.
          *
@@ -1849,7 +1869,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 // under the provider's SourceType in QueryTransforms so the provider finds it.
                 const perProviderConstraints: ScopeConstraints = {
                     ...constraints,
-                    QueryTransforms: { ...perProviderQueryTransforms }
+                    QueryTransforms: { ...perProviderQueryTransforms },
+                    ...(audienceReaders.length > 0 ? { AudienceReaders: audienceReaders } : {}),
                 };
                 // (Note: actual Nunjucks-rendered `QueryTransformTemplateID` resolution for
                 // stored templates lives in AgentPreExecutionRAG/ScopedSearchAction, not here.
@@ -2614,8 +2635,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     /**
      * Count results contributed by each source before fusion.
      */
-    private countSources(lists: LabeledResultList[]): { Vector: number; FullText: number; Entity: number; Storage: number; Tag?: number } {
-        const counts = { Vector: 0, FullText: 0, Entity: 0, Storage: 0, Tag: 0 };
+    private countSources(lists: LabeledResultList[]): { Vector: number; FullText: number; Entity: number; Storage: number; Tag?: number; Graph?: number } {
+        const counts = { Vector: 0, FullText: 0, Entity: 0, Storage: 0, Tag: 0, Graph: 0 };
         for (const list of lists) {
             switch (list.Source) {
                 case 'vector':
@@ -2632,6 +2653,10 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                     break;
                 case 'tag':
                     counts.Tag += list.Results.length;
+                    break;
+                case 'graph':
+                case 'SemanticGraph':
+                    counts.Graph += list.Results.length;
                     break;
             }
         }

@@ -27,6 +27,11 @@ import { BaseSingleton } from '@memberjunction/global';
 
 import { RegisterMLScoringProcessor } from './register';
 import { PipelineAutoTrainer } from './auto-train';
+import {
+  FeatureValueShadowAuditSink,
+  MLModelChallengerScoreRunner,
+  ShadowScoringCoordinator,
+} from './shadow-scoring';
 import { BuildProductionMLInferenceDeps } from '../operations/delegation';
 
 /**
@@ -49,16 +54,21 @@ export class PredictiveStudioScoringStartup extends BaseSingleton<PredictiveStud
 
   /**
    * Boot entry point (per {@link IStartupSink}). Registers the ML scoring processor for the
-   * `'ML Model'` work type with the production deps bundle. No-op-safe to call more than once
-   * (the registry last-wins), and needs neither the `contextUser` nor `provider` — the deps are
-   * constructed without them and take a `provider`/`user` per scoring call.
+   * `'ML Model'` work type with the production deps bundle and a live {@link ShadowScoringCoordinator}.
+   * No-op-safe to call more than once (the registry last-wins), and needs neither the `contextUser`
+   * nor `provider` — the deps are constructed without them and take a `provider`/`user` per scoring call.
    *
    * @param _contextUser unused — the registration is provider/user-agnostic at construction time
    * @param _provider unused — see above
    */
   public async HandleStartup(_contextUser?: UserInfo, _provider?: IMetadataProvider): Promise<void> {
+    const deps = BuildProductionMLInferenceDeps();
+    const shadowCoordinator = new ShadowScoringCoordinator({
+      ChallengerRunner: new MLModelChallengerScoreRunner(deps),
+      AuditSink: new FeatureValueShadowAuditSink(),
+    });
     // The auto-trainer only acts for Record Processes that declare `Configuration.autoTrain`.
-    RegisterMLScoringProcessor(BuildProductionMLInferenceDeps(), new PipelineAutoTrainer());
+    RegisterMLScoringProcessor(deps, new PipelineAutoTrainer(), shadowCoordinator);
     // Routine boot registration — only surface it under verbose logging to keep startup quiet.
     LogStatusEx({
       message: '[PredictiveStudioScoringStartup] Registered ML Model scoring processor for Record Set Processing.',

@@ -915,6 +915,14 @@
       "reason": "Nullable reference to a List row this proc deletes; cleared."
     },
     {
+      "table": "FeatureValue",
+      "column": "MLModelID",
+      "references": "MLModel",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a MLModel row this proc deletes; cleared."
+    },
+    {
       "table": "MLModelScoringBinding",
       "column": "MLModelID",
       "references": "MLModel",

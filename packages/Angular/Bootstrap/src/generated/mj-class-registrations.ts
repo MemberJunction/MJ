@@ -36,11 +36,12 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (492 classes)
+// @memberjunction/core-entities (499 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
     AccessControlRuleProvider,
+    AlternateBaseViewEdgeProvider,
     ApplicationRolePermissionProvider,
     ArtifactDocumentBlock,
     ArtifactPermissionProvider,
@@ -48,9 +49,12 @@ import {
     CollectionPermissionProvider,
     DashboardPartDocumentBlock,
     DashboardPermissionProvider,
+    EntityMetadataEdgeProvider,
     EntityPermissionProvider,
     EntityViewDocumentBlock,
+    ForeignKeyEdgeProvider,
     InteractiveComponentDocumentBlock,
+    JoinEntityEdgeProvider,
     MJAIActionEntity,
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
@@ -527,7 +531,10 @@ import {
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     ParentArtifactPermissionDelegate,
+    QueryEdgeProvider,
+    QueryMetadataEdgeProvider,
     QueryPermissionProvider,
+    RecordLinkEdgeProvider,
     ResourcePermissionProvider,
     SavedQueryDocumentBlock,
 } from '@memberjunction/core-entities';
@@ -937,6 +944,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
     AccessControlRuleProvider,
+    AlternateBaseViewEdgeProvider,
     ApplicationRolePermissionProvider,
     ArtifactDocumentBlock,
     ArtifactPermissionProvider,
@@ -944,9 +952,12 @@ const CLASS_REGISTRATIONS_0: any[] = [
     CollectionPermissionProvider,
     DashboardPartDocumentBlock,
     DashboardPermissionProvider,
+    EntityMetadataEdgeProvider,
     EntityPermissionProvider,
     EntityViewDocumentBlock,
+    ForeignKeyEdgeProvider,
     InteractiveComponentDocumentBlock,
+    JoinEntityEdgeProvider,
     MJAIActionEntity,
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
@@ -1117,14 +1128,14 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
     MJConversationBranchEntity,
-    MJConversationBranchEntityExtended,
-    MJConversationCompactionRunEntity,
-    MJConversationDetailArtifactEntity,
-    MJConversationDetailAttachmentEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJConversationBranchEntityExtended,
+    MJConversationCompactionRunEntity,
+    MJConversationDetailArtifactEntity,
+    MJConversationDetailAttachmentEntity,
     MJConversationDetailEntity,
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
@@ -1321,14 +1332,14 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordProcessEntity,
     MJRecordProcessWatermarkEntity,
     MJRemoteOperationCategoryEntity,
-    MJRemoteOperationEntity,
-    MJResourceLinkEntity,
-    MJResourcePermissionEntity,
-    MJResourcePermissionEntityExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRemoteOperationEntity,
+    MJResourceLinkEntity,
+    MJResourcePermissionEntity,
+    MJResourcePermissionEntityExtended,
     MJResourceTypeEntity,
     MJRoleEntity,
     MJRowLevelSecurityFilterEntity,
@@ -1431,7 +1442,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     ParentArtifactPermissionDelegate,
+    QueryEdgeProvider,
+    QueryMetadataEdgeProvider,
     QueryPermissionProvider,
+    RecordLinkEdgeProvider,
     ResourcePermissionProvider,
     SavedQueryDocumentBlock,
     MJActionEntityExtended,
@@ -1522,6 +1536,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     AIAgentCategoryHeaderPanel,
     AIAgentCategoryHierarchyPanel,
     AIAgentCategoryOverviewPanel,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     AIPromptCategoryHierarchyPanel,
     ActionCategoryHierarchyPanel,
     BrandKitAssetsPanelComponent,
@@ -1529,10 +1547,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     CompanyHeaderPanel,
     CompanyOverviewPanel,
     ContentItemHierarchyPanel,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     ConversationHeaderPanel,
     ConversationOverviewPanel,
     DashboardCategoryHierarchyPanel,
@@ -1726,6 +1740,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     EntityRecordResource,
     LibraryResource,
     ListDetailResource,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     MeetingsResource,
     OmnibarAgentProvider,
     OmnibarCommandProvider,
@@ -1733,10 +1751,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     OmnibarSearchProvider,
     QueryResource,
     SearchResultsResource,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     UserViewResource,
 ];
 
@@ -1753,7 +1767,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 801;
+export const CLASS_REGISTRATIONS_COUNT = 808;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -1,0 +1,54 @@
+[
+  {
+    "fields": {
+      "Name": "MJ Canon",
+      "Description": "Curated graph over MemberJunction's canon: entities, fields, alternate base views, queries and the governed concepts they define, measure or describe. Its structural edges come from metadata providers; its concept edges are stored and reviewed.",
+      "GraphTypeID": "@lookup:MJ: Graph Types.Name=Canon",
+      "LoadMode": "Preload",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "5AF84BF8-84A5-4D38-B6B3-1FC6CFF64A44"
+    },
+    "relatedEntities": {
+      "MJ: Graph Edge Providers": [
+        {
+          "fields": {
+            "GraphID": "@parent:ID",
+            "Name": "Entity Metadata",
+            "Description": "References (foreign keys), Is A (IS-A parents) and Field Of edges projected from loaded entity metadata, with no database queries.",
+            "DriverClass": "EntityMetadataEdgeProvider",
+            "Configuration": { "Include": ["References", "IsA", "FieldOf"] },
+            "Sequence": 10,
+            "IsActive": true
+          },
+          "primaryKey": { "ID": "E1A2C0A2-3052-49FB-A6A4-23426D340107" }
+        },
+        {
+          "fields": {
+            "GraphID": "@parent:ID",
+            "Name": "Query Metadata",
+            "Description": "Reads (query to entity or alternate base view) and Composes (query to query) edges projected from the cached query catalog, with no database queries.",
+            "DriverClass": "QueryMetadataEdgeProvider",
+            "Configuration": { "Include": ["Reads", "Composes"] },
+            "Sequence": 20,
+            "IsActive": true
+          },
+          "primaryKey": { "ID": "B9E71D8B-09F6-42B3-985F-7AF4200FF753" }
+        },
+        {
+          "fields": {
+            "GraphID": "@parent:ID",
+            "Name": "Alternate Base Views",
+            "Description": "Subsets edges from each alternate base view to the entity (and parent view) whose rows it narrows.",
+            "DriverClass": "AlternateBaseViewEdgeProvider",
+            "Configuration": null,
+            "Sequence": 30,
+            "IsActive": true
+          },
+          "primaryKey": { "ID": "5853A7F8-B770-46A5-986D-DF47FA9509BF" }
+        }
+      ]
+    }
+  }
+]

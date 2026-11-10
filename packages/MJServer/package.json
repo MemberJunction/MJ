@@ -19,6 +19,14 @@
     "./middleware/BaseServerMiddleware": {
       "types": "./dist/middleware/BaseServerMiddleware.d.ts",
       "default": "./dist/middleware/BaseServerMiddleware.js"
+    },
+    "./task-graph-action-runner": {
+      "types": "./dist/services/TaskGraphActionRunner.d.ts",
+      "default": "./dist/services/TaskGraphActionRunner.js"
+    },
+    "./rest-entity-crud": {
+      "types": "./dist/rest/EntityCRUDHandler.d.ts",
+      "default": "./dist/rest/EntityCRUDHandler.js"
     }
   },
   "scripts": {

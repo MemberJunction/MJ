@@ -98,12 +98,12 @@ export class MJSidecarPredictor implements ISidecarPredictor {
   constructor(private readonly sidecar: MLSidecar = MLSidecarProvider.Instance.GetSidecar()) {}
 
   /** @inheritdoc */
-  public async predict(req: PredictRequest): Promise<PredictResponse> {
+  public async predict(req: PredictRequest, signal?: AbortSignal): Promise<PredictResponse> {
     if (!this.started) {
       await this.sidecar.Start();
       this.started = true;
     }
-    return this.sidecar.Predict(req);
+    return this.sidecar.Predict(req, signal);
   }
 }
 

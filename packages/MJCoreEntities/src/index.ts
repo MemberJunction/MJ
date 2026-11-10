@@ -60,6 +60,8 @@ export * from './engines/ResourceTypeEngine';
 export * from './engines/IdentityClaimEngine';
 export * from './engines/BrandKitEngine';
 export * from './engines/VideoStudioEngine';
+export * from './engines/CanonGraphEngine';
+export * from './graph';
 
 export * from './custom/PermissionProviders';
 export * from './custom/Permissions';
@@ -80,9 +82,11 @@ import { LoadAuthorizationCheckOperation } from './custom/operations/Authorizati
 import { LoadArtifactPermissionDelegates } from './custom/ArtifactPermissionDelegate';
 import { LoadDocumentLiveBlocks } from './custom/DocumentLiveBlockEngine';
 import { LoadSpreadsheetEngine } from './custom/SpreadsheetEngine';
+import { LoadGraphEdgeProviders } from './graph';
 LoadPermissionProviders();
 LoadPermissionEntityExtensions();
 LoadAuthorizationCheckOperation();
 LoadArtifactPermissionDelegates();
 LoadDocumentLiveBlocks();
 LoadSpreadsheetEngine();
+LoadGraphEdgeProviders();

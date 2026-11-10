@@ -92,6 +92,7 @@ import { ClientToolRequestManager, AgentRunWatchdog, SqlRealtimeRecordingLedger 
 import { BindBridgeEngineHostInstance, SessionJanitor, SetHostInstancePort, StartBridgeOrphanReconciliation } from './agentSessions/index.js';
 import { ApplyHandoffOfferExpirySettings } from './agentSessions/HandoffOfferExpiry.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
+import { RegisterSemanticGraphExpansionService } from './services/RegisterSemanticGraphExpansion.js';
 import { MJServerWorkQueueProviderSource, StartWorkQueueHost } from './services/WorkQueueHostService.js';
 import { GetAttachmentService } from '@memberjunction/aiengine';
 import { MJStorageBlobStore } from './services/MJStorageBlobStore.js';
@@ -506,6 +507,10 @@ const serveBehindStartupGate = async (
   // An anonymous visitor may join only the LiveKit agent-session room it owns by scope; the room gate cannot import
   // this package's session-access decision, so it is handed in here, before any resolver runs (MJ#6044).
   RoomAuthorizationService.Instance.SetAnonymousSessionOwnerCheck(AuthorizeAnonymousRoomSessions);
+  // The semantic-graph search lane and the graphExpand pipeline stage expand only through a registered
+  // service; register the engine-backed one before any search configures its providers (GraphEngine
+  // itself loads lazily on first use).
+  RegisterSemanticGraphExpansionService();
   // Level-gated startup logger. Resolves verbosity from telemetry.level (single
   // operator knob). At `standard` (default), per-phase timings are collapsed into
   // the one-line summary; at `verbose`+ each phase prints inline as before.
