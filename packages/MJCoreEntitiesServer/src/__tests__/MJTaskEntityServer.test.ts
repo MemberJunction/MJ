@@ -54,6 +54,12 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
             result.Success = true;
             return result;
         }
+        /** As `BaseEntity.ValidateAsync`: nothing of its own. */
+        public async ValidateAsync(): Promise<ValidationResult> {
+            const result = new ValidationResult();
+            result.Success = true;
+            return result;
+        }
         /** As `BaseEntity.Save`: validates, and writes only when that passes. */
         public async Save(): Promise<boolean> {
             return this.Validate().Success;
@@ -433,5 +439,40 @@ describe('MJTaskEntityServer: only the task-graph service makes a workflow or a 
         const reparented = created({ ParentID: 'q', parentIsWorkflow: false, nextParentIsWorkflow: true });
         reparented.markSaved();
         expect(await reparented.Save()).toBe(false);
+    });
+});
+
+describe('MJTaskEntityServer: the workflow checks need the save, or ValidateAsync', () => {
+    const SUBMITTER = { ID: '00000000-0000-4000-8000-0000000000a1' };
+    type Row = TestTask & { StepType: string | null; ParentID: string | null; TypeID: string | null;
+        ContextCurrentUser: { ID: string } | undefined; dirtyFields: Set<string> } & FactsHooks;
+    /** A saved row with a parent, renamed by an ordinary caller. */
+    function renamed(fields: Partial<Row>): Row {
+        const t = task({ saved: true }) as Row;
+        t.StepType = null;
+        t.ContextCurrentUser = SUBMITTER;
+        Object.assign(t, fields);
+        t.dirtyFields.add('Name');
+        return t;
+    }
+
+    it('passes a bare Validate on an ordinary subtask, as REST runs it before saving', async () => {
+        const subtask = renamed({ parentIsWorkflow: false, TypeID: '00000000-0000-4000-8000-0000000000ee' });
+        expect(subtask.Validate().Success).toBe(true);
+        expect(await subtask.Save()).toBe(true);
+    });
+
+    it("leaves a real step's rename to the save, which refuses it", async () => {
+        const step = renamed({ StepType: 'Action' });
+        expect(step.Validate().Success).toBe(true);
+        expect(await step.Save()).toBe(false);
+    });
+
+    it('refuses it in ValidateAsync too, for a path that validates without this Save', async () => {
+        const step = renamed({ StepType: 'Action' });
+        const result = await step.ValidateAsync();
+        expect(result.Success).toBe(false);
+        expect(result.Errors.map((e) => e.Source)).toEqual(['Name']);
+        expect((await renamed({ parentIsWorkflow: false }).ValidateAsync()).Success).toBe(true);
     });
 });

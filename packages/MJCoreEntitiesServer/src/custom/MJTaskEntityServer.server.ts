@@ -261,6 +261,8 @@ export class MJTaskEntityServer extends MJTaskEntity {
      */
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         if (!this.inDispatcherScope()) {
+            // Resolved here, before the base save validates, so the checks run in the synchronous Validate, which no
+            // save option skips (SkipAsyncValidation skips only ValidateAsync).
             this.workflowFacts = await this.resolveWorkflowFacts();
             if (this.completesHumanStep()) {
                 const completer = ServerOperationScopeManager.Instance.IsInDirectClientCrud() ? (this.ContextCurrentUser?.ID ?? null) : null;
@@ -274,7 +276,30 @@ export class MJTaskEntityServer extends MJTaskEntity {
         }
     }
 
-    /** Workflow membership of this row before and after the save, for {@link Validate}. */
+    /**
+     * The workflow checks for a save that did not come through {@link Save} (a path that validates a row it then writes
+     * some other way): it resolves the facts itself. Within {@link Save} the synchronous {@link Validate} has already run
+     * them, with the facts {@link Save} resolved.
+     */
+    public override async ValidateAsync(): Promise<ValidationResult> {
+        const result = await super.ValidateAsync();
+        if (this.workflowFacts || this.inDispatcherScope()) {
+            return result;
+        }
+        this.workflowFacts = await this.resolveWorkflowFacts();
+        try {
+            this.applyWorkflowChecks(result);
+        } finally {
+            this.workflowFacts = undefined;
+        }
+        return result;
+    }
+
+    /**
+     * Workflow membership of this row before and after the save. Set only while a save (or {@link ValidateAsync})
+     * validates it: a bare {@link Validate} call (REST validates before it saves) has none, and skips the checks that
+     * need it, which the save that follows runs.
+     */
     private workflowFacts: WorkflowFacts | undefined;
 
     /** Resolves {@link WorkflowFacts}: the workflow type, and whether the stored and the new parent are workflows. */
@@ -308,36 +333,48 @@ export class MJTaskEntityServer extends MJTaskEntity {
                 result.Errors.push(new ValidationErrorInfo('Configuration', runtimeRefusal, this.Configuration, ValidationErrorType.Failure));
                 result.Success = false;
             }
-            const wasWorkflowRow = this.IsSaved && (this.isWorkflowStep('stored') || this.isWorkflowParent('stored'));
-            if (!wasWorkflowRow && (this.isWorkflowStep('next') || this.isWorkflowParent('next'))) {
-                // A workflow, or a step of one, made by an ordinary save: created, or an existing task retyped or
-                // re-parented into one. The dispatcher would run it as the user its metadata names.
-                const field = this.ParentID ? 'ParentID' : 'TypeID';
-                result.Errors.push(new ValidationErrorInfo(field,
-                    'Only the task-graph service creates a workflow or adds a step to one: a workflow\'s steps run as the user it was submitted by.',
-                    null, ValidationErrorType.Failure));
-                result.Success = false;
-            } else if (this.IsSaved && this.isWorkflowStep('stored')) {
-                const changed: string[] = WORKFLOW_STEP_OWNED_FIELDS.filter((field) => this.GetFieldByName(field)?.Dirty);
-                if (this.GetFieldByName('Configuration')?.Dirty && ExecutableConfigurationChanged(storedConfiguration, this.Configuration)) {
-                    changed.push('Configuration');
-                }
-                const dataRefusal = WorkflowStepDataChangeRefusal(changed, this.personCompletesOwnHumanStep());
-                if (dataRefusal) {
-                    result.Errors.push(new ValidationErrorInfo(changed[0], dataRefusal, null, ValidationErrorType.Failure));
-                    result.Success = false;
-                }
-            } else if (this.IsSaved && this.isWorkflowParent('stored')) {
-                const changed = WORKFLOW_PARENT_OWNED_FIELDS.filter((field) => this.GetFieldByName(field)?.Dirty);
-                if (changed.length > 0) {
-                    const message = `${changed.join(', ')} of a workflow cannot be changed: only the task-graph dispatcher writes who it ` +
-                        'runs as, the data its steps read, and what it is attached to.';
-                    result.Errors.push(new ValidationErrorInfo(changed[0], message, null, ValidationErrorType.Failure));
-                    result.Success = false;
-                }
+            if (this.workflowFacts) {
+                this.applyWorkflowChecks(result);
             }
         }
         return result;
+    }
+
+    /**
+     * The checks that need {@link workflowFacts}: a workflow, or a step of one, made by an ordinary save (created, or an
+     * existing task retyped or re-parented into one), and the freezes on a workflow step's and a workflow's own columns.
+     * Called only with the facts resolved, and outside the dispatcher's scope.
+     */
+    private applyWorkflowChecks(result: ValidationResult): void {
+        const storedConfiguration = this.IsSaved ? (this.GetFieldByName('Configuration')?.OldValue as string | null | undefined) : null;
+        const wasWorkflowRow = this.IsSaved && (this.isWorkflowStep('stored') || this.isWorkflowParent('stored'));
+        if (!wasWorkflowRow && (this.isWorkflowStep('next') || this.isWorkflowParent('next'))) {
+            // A workflow, or a step of one, made by an ordinary save: created, or an existing task retyped or
+            // re-parented into one. The dispatcher would run it as the user its metadata names.
+            const field = this.ParentID ? 'ParentID' : 'TypeID';
+            result.Errors.push(new ValidationErrorInfo(field,
+                'Only the task-graph service creates a workflow or adds a step to one: a workflow\'s steps run as the user it was submitted by.',
+                null, ValidationErrorType.Failure));
+            result.Success = false;
+        } else if (this.IsSaved && this.isWorkflowStep('stored')) {
+            const changed: string[] = WORKFLOW_STEP_OWNED_FIELDS.filter((field) => this.GetFieldByName(field)?.Dirty);
+            if (this.GetFieldByName('Configuration')?.Dirty && ExecutableConfigurationChanged(storedConfiguration, this.Configuration)) {
+                changed.push('Configuration');
+            }
+            const dataRefusal = WorkflowStepDataChangeRefusal(changed, this.personCompletesOwnHumanStep());
+            if (dataRefusal) {
+                result.Errors.push(new ValidationErrorInfo(changed[0], dataRefusal, null, ValidationErrorType.Failure));
+                result.Success = false;
+            }
+        } else if (this.IsSaved && this.isWorkflowParent('stored')) {
+            const changed = WORKFLOW_PARENT_OWNED_FIELDS.filter((field) => this.GetFieldByName(field)?.Dirty);
+            if (changed.length > 0) {
+                const message = `${changed.join(', ')} of a workflow cannot be changed: only the task-graph dispatcher writes who it ` +
+                    'runs as, the data its steps read, and what it is attached to.';
+                result.Errors.push(new ValidationErrorInfo(changed[0], message, null, ValidationErrorType.Failure));
+                result.Success = false;
+            }
+        }
     }
 
     /** The column's value before this save (its current value on a create). */
@@ -347,8 +384,8 @@ export class MJTaskEntityServer extends MJTaskEntity {
 
     /**
      * Whether the row, as stored or as this save leaves it, is a step of a task graph: it has a parent, and a `StepType`,
-     * the workflow type (the dispatcher finds graphs by their steps' type), or a parent that is a workflow. Without
-     * resolved facts (a save that skipped {@link Save}), any task with a parent counts (fail closed).
+     * the workflow type (the dispatcher finds graphs by their steps' type), or a parent that is a workflow. Called only
+     * with {@link workflowFacts} resolved; without them it counts any task with a parent (fail closed).
      */
     private isWorkflowStep(state: 'stored' | 'next'): boolean {
         const parent = state === 'stored' ? this.stored('ParentID') : this.ParentID;
