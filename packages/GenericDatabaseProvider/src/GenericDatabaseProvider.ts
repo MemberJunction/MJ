@@ -8243,7 +8243,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 }
             }
         }
-        const projections = this.BuildRLSSyntheticRowProjections(entity, entity.EntityInfo);
+        const projections = this.BuildRLSSyntheticRowProjections(entity, entity.EntityInfo, true);
         const sql = `SELECT CASE WHEN (${trimmed}) THEN 1 ELSE 0 END AS pass FROM (SELECT ${projections}) AS newrow`;
         try {
             const result = await this.ExecuteSQL<Record<string, number | string | boolean | null>>(
@@ -8298,11 +8298,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * `CAST(NULL AS <sqltype>)` using the field's metadata-resolved type. An unresolvable
      * type fails the save (throw) rather than emitting an untyped NULL.
      */
-    protected BuildRLSSyntheticRowProjections(entity: BaseEntity, entityInfo: EntityInfo): string {
+    protected BuildRLSSyntheticRowProjections(
+        entity: BaseEntity,
+        entityInfo: EntityInfo,
+        includeVirtualFields: boolean = false
+    ): string {
         const parts: string[] = [];
         for (const field of entityInfo.Fields) {
-            if (field.IsVirtual) continue;
+            if (field.IsVirtual && !includeVirtualFields) continue;
             const val = entity.Get(field.Name);
+            if (field.IsVirtual && val == null && (!field.Type || field.Type.trim().length === 0)) {
+                const fallbackType = this.getDialect()?.MapDataTypeToString('nvarchar', 4000, 0, 0) ?? 'NVARCHAR(4000)';
+                parts.push(`CAST(NULL AS ${fallbackType}) AS ${this.QuoteIdentifier(field.Name)}`);
+                continue;
+            }
             parts.push(`${this.renderRLSProjectionValue(field, val)} AS ${this.QuoteIdentifier(field.Name)}`);
         }
         return parts.join(', ');

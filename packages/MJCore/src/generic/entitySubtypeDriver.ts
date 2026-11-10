@@ -45,9 +45,11 @@ export abstract class EntitySubtypeDriverBase {
 
     /**
      * Optional post-save hook invoked inside the active transaction (both direct `Save()`'s
-     * `EntityTransactionScope` and `TransactionGroup.Submit()`'s group transaction) before commit,
-     * so side-effect writes performed by the driver participate in the same atomic transaction and
-     * throwing aborts and rolls back the transaction.
+     * `EntityTransactionScope` and `TransactionGroup.Submit()`'s group transaction) after
+     * `finalizeSave` has applied server-returned values and marked `entity.IsSaved = true`, and
+     * before commit, so side-effect writes performed by the driver participate in the same atomic
+     * transaction and throwing aborts and rolls back the transaction (restoring `entity`'s pre-save
+     * state).
      */
     public AfterSave?(
         entity: BaseEntity,

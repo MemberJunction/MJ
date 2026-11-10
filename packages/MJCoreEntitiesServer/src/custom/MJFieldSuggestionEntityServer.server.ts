@@ -179,7 +179,13 @@ export class MJFieldSuggestionEntityServer extends MJFieldSuggestionEntity {
                 await acceptScope?.Commit();
                 return true;
             } catch (err) {
-                await acceptScope?.Rollback().catch(() => undefined);
+                await acceptScope?.Rollback().catch((rollbackErr: unknown) => {
+                    LogError(
+                        `MJFieldSuggestionEntityServer: failed to roll back accept transaction for suggestion '${this.ID}': ${
+                            rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)
+                        }`
+                    );
+                });
                 const message = err instanceof Error ? err.message : String(err);
                 this.recordSaveDenied(message);
                 return false;

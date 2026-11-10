@@ -1310,8 +1310,8 @@ describe('Generic Type Extensions via SubtypeSelector (AutoEnsureOnSave, OnSubty
             }
 
             class TxGroupDriver extends EntitySubtypeDriverBase {
-                public override async AfterSave(_entity: BaseEntity, isNew: boolean): Promise<void> {
-                    events.push(`driver:AfterSave:isNew=${isNew}`);
+                public override async AfterSave(entity: BaseEntity, isNew: boolean): Promise<void> {
+                    events.push(`driver:AfterSave:isNew=${isNew}:isSaved=${entity.IsSaved}`);
                     if (throwInAfterSave) {
                         throw new Error('Transactional AfterSave failure');
                     }
@@ -1328,7 +1328,7 @@ describe('Generic Type Extensions via SubtypeSelector (AutoEnsureOnSave, OnSubty
             });
             MJGlobal.Instance.ClassFactory.Register(EntitySubtypeDriverBase, TxGroupDriver, 'TxGroupDriver');
 
-            // 1. Happy path: AfterSave runs after execute and BEFORE tx:commit
+            // 1. Happy path: AfterSave runs after execute and finalizeSave (IsSaved=true) and BEFORE tx:commit
             const group1 = new TestInMemoryTransactionGroup();
             const conv1 = await provider.GetEntityObject('TestConversations');
             conv1.Set('Name', 'Grouped Driven Conv');
@@ -1336,14 +1336,15 @@ describe('Generic Type Extensions via SubtypeSelector (AutoEnsureOnSave, OnSubty
             conv1.TransactionGroup = group1;
             expect(await conv1.Save()).toBe(true);
             expect(await group1.Submit()).toBe(true);
+            expect(conv1.IsSaved).toBe(true);
             expect(events).toEqual([
                 'tx:begin',
                 'tx:execute',
-                'driver:AfterSave:isNew=true',
+                'driver:AfterSave:isNew=true:isSaved=true',
                 'tx:commit',
             ]);
 
-            // 2. Throw path: AfterSave failure rolls back group transaction and Submit() returns false
+            // 2. Throw path: AfterSave failure rolls back group transaction, restores IsSaved=false, and Submit() returns false
             events.length = 0;
             throwInAfterSave = true;
             const group2 = new TestInMemoryTransactionGroup();
@@ -1353,10 +1354,11 @@ describe('Generic Type Extensions via SubtypeSelector (AutoEnsureOnSave, OnSubty
             conv2.TransactionGroup = group2;
             expect(await conv2.Save()).toBe(true);
             expect(await group2.Submit()).toBe(false);
+            expect(conv2.IsSaved).toBe(false);
             expect(events).toEqual([
                 'tx:begin',
                 'tx:execute',
-                'driver:AfterSave:isNew=true',
+                'driver:AfterSave:isNew=true:isSaved=true',
                 'tx:rollback',
             ]);
             expect(provider.HasRow('TestConversations', String(conv2.Get('ID')))).toBe(false);

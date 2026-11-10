@@ -284,6 +284,45 @@ describe('ClientClauseScreen agent policy & masking screens', () => {
                     MSSQL,
                 ),
             ).toThrow(/set operations .* wildcard/);
+
+            expect(() =>
+                ClientClauseScreen.AssertNoPositionalColumnRenames(
+                    'SELECT (SELECT e2.* FROM __mj.vwContacts e2 WHERE e2.ID = e.ID FOR JSON PATH) AS j FROM __mj.vwContacts e',
+                    MSSQL,
+                ),
+            ).toThrow(/FOR JSON/);
+
+            expect(() =>
+                ClientClauseScreen.AssertNoPositionalColumnRenames(
+                    'SELECT * FROM __mj.vwContacts FOR JSON PATH',
+                    MSSQL,
+                ),
+            ).toThrow(/FOR JSON/);
+
+            expect(() =>
+                ClientClauseScreen.AssertNoPositionalColumnRenames(
+                    'SELECT to_jsonb(e) AS j FROM __mj.vwContacts e',
+                    PG,
+                ),
+            ).toThrow(/to_jsonb/);
+
+            expect(() =>
+                ClientClauseScreen.AssertNoPositionalColumnRenames(
+                    'SELECT ID, Status FROM __mj.vwContacts ORDER BY 2',
+                    MSSQL,
+                ),
+            ).toThrow(/ordinal ORDER BY/);
+
+            expect(() =>
+                ClientClauseScreen.AssertNoPositionalColumnRenames(
+                    'SELECT sub.a FROM (WITH c(a, b) AS (SELECT * FROM __mj.vwContacts) SELECT a, b FROM c) AS sub',
+                    PG,
+                ),
+            ).toThrow(/CTE column-alias lists/);
+
+            expect(() =>
+                ClientClauseScreen.AssertNoWholeRowOrOrdinalInClause('2 DESC', 'OrderBy', MSSQL),
+            ).toThrow(/ordinal ORDER BY/);
         });
 
         it('allows ordinary CTEs, derived tables without column lists, and explicit-column UNIONs', () => {
@@ -435,6 +474,81 @@ describe('ClientClauseScreen agent policy & masking screens', () => {
                 await provider.EvaluateSyntheticRowWhereClause(record, `[Status] = 'Active'`, user, false),
             ).toBe(false);
             consoleSpy.mockRestore();
+
+            // Virtual fields (view columns) are projected into the synthetic row for policy whereClause evaluation
+            const entityWithVirtual = new EntityInfo({
+                ID: contacts.ID,
+                Name: contacts.Name,
+                SchemaName: contacts.SchemaName,
+                BaseTable: contacts.BaseTable,
+                BaseView: contacts.BaseView,
+                VirtualEntity: false,
+                AllowCreateAPI: true,
+                AllowUpdateAPI: true,
+                AllowDeleteAPI: true,
+                IncludeInAPI: true,
+                Status: 'Active',
+                EntityFields: [
+                    ...contacts.Fields.map((f) => ({
+                        ID: f.ID,
+                        EntityID: contacts.ID,
+                        Name: f.Name,
+                        CodeName: f.CodeName,
+                        DisplayName: f.DisplayName,
+                        Type: f.Type,
+                        Length: f.Length,
+                        IsPrimaryKey: f.IsPrimaryKey,
+                        AllowsNull: f.AllowsNull,
+                        IsVirtual: f.IsVirtual,
+                        AllowUpdateAPI: f.AllowUpdateAPI,
+                        Sequence: f.Sequence,
+                        Status: 'Active' as const,
+                        Entity: contacts.Name,
+                        EntityFieldValues: [],
+                        EntityFieldPermissions: [],
+                    })),
+                    {
+                        ID: 'f-virtual-dept',
+                        EntityID: contacts.ID,
+                        Name: 'DepartmentName',
+                        CodeName: 'DepartmentName',
+                        DisplayName: 'Department Name',
+                        Type: 'nvarchar',
+                        Length: 100,
+                        IsPrimaryKey: false,
+                        AllowsNull: true,
+                        IsVirtual: true,
+                        AllowUpdateAPI: false,
+                        Sequence: 4,
+                        Status: 'Active' as const,
+                        Entity: contacts.Name,
+                        EntityFieldValues: [],
+                        EntityFieldPermissions: [],
+                    },
+                ],
+                EntityPermissions: [],
+                EntityRelationships: [],
+                EntitySettings: [],
+            });
+            const recWithVirtual = new BaseEntity(entityWithVirtual);
+            await recWithVirtual.LoadFromData({
+                ID: '11111111-1111-4111-8111-111111111111',
+                Status: 'Active',
+                Amount: 42,
+                DepartmentName: 'Engineering',
+            });
+            provider.ThrowOnExecute = false;
+            provider.SimulatedRows = [{ pass: 1 }];
+            provider.ExecutedSQL = [];
+            expect(
+                await provider.EvaluateSyntheticRowWhereClause(
+                    recWithVirtual,
+                    `[DepartmentName] = 'Engineering'`,
+                    user,
+                    false,
+                ),
+            ).toBe(true);
+            expect(provider.ExecutedSQL[0]).toContain(`'Engineering' AS [DepartmentName]`);
         });
     });
 });

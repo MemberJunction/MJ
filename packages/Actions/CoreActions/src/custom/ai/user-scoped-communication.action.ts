@@ -153,21 +153,13 @@ export abstract class BaseUserScopedCommunicationAction extends BaseAction {
         }
 
         const engine = AgentUserPolicyEngine.Instance;
-        if (typeof engine.ResolvePolicyForAgentAndUser === 'function') {
-            const lookup = await engine.ResolvePolicyForAgentAndUser(agent.ID, contextUser.ID, contextUser, {
-                provider: params.Provider,
-            });
-            if (lookup.status === 'error') {
-                throw new Error(`Failed to verify user communication policy: ${lookup.errorMessage}`);
-            }
-            return { agentId: agent.ID, policy: lookup.policy };
+        const lookup = await engine.ResolvePolicyForAgentAndUser(agent.ID, contextUser.ID, contextUser, {
+            provider: params.Provider,
+        });
+        if (lookup.status === 'error') {
+            throw new Error(`Failed to verify user communication policy: ${lookup.errorMessage}`);
         }
-        const policy = await engine.GetPolicyForAgentAndUser(
-            agent.ID,
-            contextUser.ID,
-            contextUser
-        );
-        return { agentId: agent.ID, policy };
+        return { agentId: agent.ID, policy: lookup.policy };
     }
 
     protected async findUserUtilityMailbox(

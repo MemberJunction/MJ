@@ -6498,16 +6498,29 @@ export abstract class BaseEntity<T = unknown> {
                         else {
                             // Enlist SubtypeSelector.Driver AfterSave inside the open group transaction
                             // so it runs atomically (and rolls back the group if it throws), matching direct Save().
+                            // Finalize the entity before running AfterSave so the hook observes IsSaved === true
+                            // and any server-returned values, restoring the pre-save snapshot if the group rolls back.
+                            let finalizedInAfterSaveHook = false;
+                            const preFinalizeSnapshots = BaseEntity.captureChains([this]);
                             if (!_options.ReplayOnly && this.EntityInfo?.SubtypeSelectorConfig?.Driver) {
-                                this.TransactionGroup.RegisterInTransactionAfterSave(this, () =>
-                                    this.runSubtypeDriverAfterSave(wasNewBeforeFinalize)
-                                );
+                                this.TransactionGroup.RegisterInTransactionAfterSave(this, async (resultRecord) => {
+                                    const finalized = this.finalizeSave(
+                                        resultRecord as BaseEntity | Record<string, unknown> | null | undefined,
+                                        saveSubType,
+                                        _options
+                                    );
+                                    if (!finalized) {
+                                        return;
+                                    }
+                                    finalizedInAfterSaveHook = true;
+                                    await this.runSubtypeDriverAfterSave(wasNewBeforeFinalize);
+                                });
                             }
                             // we are part of a transaction group, so we return true and subscribe to the transaction groups' events and do the finalization work then
                             this.TransactionGroup.TransactionNotifications$.subscribe(({ success, results, error }) => {
                                 const transItem = success && results ? results.find(r => r.Transaction.BaseEntity === this) : undefined;
                                 if (transItem) {
-                                    const finalized = this.finalizeSave(transItem.Result, saveSubType, _options); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
+                                    const finalized = finalizedInAfterSaveHook || this.finalizeSave(transItem.Result, saveSubType, _options); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
                                     if (finalized && !_options.ReplayOnly && !_options.IsParentEntitySave) {
                                         void this.runChainPostSaveHooks().catch(hookErr => {
                                             LogError(`PostSave hook failed after TransactionGroup commit on '${this.EntityInfo?.Name}': ${BaseEntity.errorText(hookErr)}`);
@@ -6515,6 +6528,11 @@ export abstract class BaseEntity<T = unknown> {
                                     }
                                 }
                                 else {
+                                    if (finalizedInAfterSaveHook) {
+                                        this._pendingPostSave = null;
+                                        BaseEntity.restoreChains(preFinalizeSnapshots);
+                                        finalizedInAfterSaveHook = false;
+                                    }
                                     // The transaction group failed / rolled back, OR (should never happen) reported success
                                     // without a result for this entity. Either way, RECORD the failure on ResultHistory rather
                                     // than throwing. This handler runs ASYNCHRONOUSLY — after Save() has already returned true and

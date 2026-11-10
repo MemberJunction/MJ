@@ -255,5 +255,16 @@ describe('ChiefOfStaffGovernanceComponent — generation token, agent mismatch g
         expect(component.SelectedAgentID).toBe(AGENT_COS.ID);
         expect(component.PolicyDirty).toBe(true);
         expect(loadSpy).not.toHaveBeenCalled();
+
+        // 4. When confirmService is absent, switching agents refuses to silently discard dirty edits
+        internal.confirmService = null;
+        component.OnSelectedAgentChange(AGENT_SF.ID);
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(component.SelectedAgentID).toBe(AGENT_COS.ID);
+        expect(component.PolicyDirty).toBe(true);
+        expect(component.FeedbackBanner?.Type).toBe('error');
+        expect(component.FeedbackBanner?.Message).toMatch(/unsaved governance policy changes/i);
+        expect(loadSpy).not.toHaveBeenCalled();
     });
 });

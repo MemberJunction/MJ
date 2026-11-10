@@ -100,6 +100,21 @@ export class AgentDataPolicyGuard {
             return { Allowed: { Active: false } };
         }
 
+        if (
+            input.operation !== 'Read' &&
+            input.entityInfo.Name.trim().toLowerCase() === 'mj: ai agent user policies'
+        ) {
+            return {
+                Blocked: {
+                    Success: false,
+                    ResultCode: 'PERMISSION_DENIED',
+                    Message:
+                        'Direct Create/Update/Delete on "MJ: AI Agent User Policies" via generic CRUD actions is not permitted for agents. Use the "Configure Agent User Policy" action instead, which enforces self-only non-widening rules.',
+                    Params: input.params.Params,
+                },
+            };
+        }
+
         const policyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
             callingAgentId,
             contextUser.ID,
@@ -416,11 +431,32 @@ export class AgentDataPolicyGuard {
         }
 
         const patternList = Array.from(deniedPatterns);
+        const hasRoleDeniedFields = [input.entityInfo, ...subqueryEntities.values()].some((ent) =>
+            Boolean(
+                contextUser &&
+                    typeof ent.GetDeniedReadFields === 'function' &&
+                    ent.GetDeniedReadFields(contextUser).size > 0
+            )
+        );
+        const hasAnyDeniedFields = patternList.length > 0 || hasRoleDeniedFields;
         for (const [label, clause] of [
             ['Filter', input.filter],
             ['OrderBy', input.orderBy],
         ] as const) {
             if (!clause?.trim()) continue;
+            if (hasAnyDeniedFields) {
+                try {
+                    ClientClauseScreen.AssertNoWholeRowOrOrdinalInClause(clause, label, dialect);
+                } catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    return {
+                        Success: false,
+                        ResultCode: 'PERMISSION_DENIED',
+                        Message: `Get Records ${label} rejected by agent field-masking guard: ${msg}`,
+                        Params: input.params.Params,
+                    };
+                }
+            }
             const tokens = ClientClauseScreen.ExtractStatementIdentifierTokens(clause, dialect);
             const offending = tokens.filter((tok) =>
                 AgentDataPolicyGuard.IsFieldReadDeniedForCaller({

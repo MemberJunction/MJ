@@ -4,12 +4,14 @@ import {
     IsKeyword,
     LexSQL,
     SignificantTokens,
+    SqlDocument,
     SQLParser,
     StrictFragmentValidator,
     type SQLLexToken,
     type StrictValidationResult,
 } from '@memberjunction/sql-parser';
-import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
+import { PostgreSQLDialect, SQLServerDialect, type ParserDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
+import { FindProjectionStars } from './fieldSecurity/projectionStars.js';
 
 /** A client-supplied SQL fragment: plain text, or a set of per-platform variants. */
 export type ClientClauseText = string | PlatformSQL | null | undefined;
@@ -561,12 +563,26 @@ export class ClientClauseScreen {
         return Array.from(referenced.values());
     }
 
+    private static readonly WHOLE_ROW_SERIALIZATION_FUNCTIONS = new Set<string>([
+        'to_json',
+        'to_jsonb',
+        'row_to_json',
+        'json_agg',
+        'jsonb_agg',
+        'record_to_json',
+        'checksum',
+        'binary_checksum',
+    ]);
+
     /**
-     * Refuses SQL constructs that rename output columns positionally without naming the underlying
-     * source column:
-     * 1. CTE explicit column-alias lists (`WITH c(a, b) AS (SELECT * FROM ...)`)
+     * Refuses SQL constructs that rename, serialize, or sort by columns without naming the underlying
+     * source column when field-level masking is active:
+     * 1. CTE explicit column-alias lists (`WITH c(a, b) AS (SELECT * FROM ...)` at any depth)
      * 2. Derived-table column-alias lists (`FROM (SELECT * FROM ...) AS t(a, b)`)
      * 3. Set operations (`UNION` / `INTERSECT` / `EXCEPT`) combined with wildcard (`*`) projections
+     * 4. Whole-row constructs (`FOR JSON`, `FOR XML`, `NATURAL JOIN`, `to_jsonb(e)` / `row_to_json(e)`,
+     *    bare whole-row relation references, non-projection `*` / `alias.*` wildcards inside subqueries
+     *    or expressions, and ordinal `ORDER BY` / `GROUP BY`).
      */
     public static AssertNoPositionalColumnRenames(
         sql: string,
@@ -594,42 +610,105 @@ export class ClientClauseScreen {
             }
         }
 
-        // 1. Check CTE header column lists: `WITH [RECURSIVE] name ( ... ) AS (`
-        if (depths[0] === 0 && IsKeyword(tokens[0], 'WITH')) {
-            let idx = 1;
-            if (idx < tokens.length && depths[idx] === 0 && IsKeyword(tokens[idx], 'RECURSIVE')) {
-                idx++;
-            }
-            while (idx < tokens.length) {
-                if (depths[idx] === 0 && (tokens[idx].Kind === 'word' || tokens[idx].Kind === 'identifier')) {
-                    if (IsKeyword(tokens[idx], 'SELECT')) {
-                        break;
+        // 1. Check CTE header column lists at ANY nesting depth: `<cte_name> ( ... ) AS [ [NOT] MATERIALIZED ] (`
+        for (let i = 0; i < tokens.length; i++) {
+            if ((tokens[i].Kind === 'word' || tokens[i].Kind === 'identifier') && tokens[i + 1]?.Kind === 'open') {
+                const isCteHeaderKeyword =
+                    IsKeyword(tokens[i], 'AS') ||
+                    IsKeyword(tokens[i], 'WITH') ||
+                    IsKeyword(tokens[i], 'SELECT') ||
+                    IsKeyword(tokens[i], 'MATERIALIZED') ||
+                    IsKeyword(tokens[i], 'NOT');
+                if (!isCteHeaderKeyword) {
+                    const targetDepth = depths[i];
+                    let closeIdx = -1;
+                    for (let j = i + 2; j < tokens.length; j++) {
+                        if (tokens[j].Kind === 'close' && depths[j] === targetDepth) {
+                            closeIdx = j;
+                            break;
+                        }
                     }
-                    const isCteHeaderKeyword =
-                        IsKeyword(tokens[idx], 'AS') ||
-                        IsKeyword(tokens[idx], 'MATERIALIZED') ||
-                        IsKeyword(tokens[idx], 'NOT');
-                    const afterName = idx + 1;
-                    if (!isCteHeaderKeyword && afterName < tokens.length && tokens[afterName].Kind === 'open') {
-                        throw new Error(
-                            `Invalid ${label}: CTE column-alias lists are not permitted when field-level masking is active`,
-                        );
+                    if (closeIdx > i + 1 && closeIdx + 1 < tokens.length && IsKeyword(tokens[closeIdx + 1], 'AS')) {
+                        let afterAs = closeIdx + 2;
+                        if (afterAs < tokens.length && IsKeyword(tokens[afterAs], 'NOT')) {
+                            afterAs++;
+                        }
+                        if (afterAs < tokens.length && IsKeyword(tokens[afterAs], 'MATERIALIZED')) {
+                            afterAs++;
+                        }
+                        if (afterAs < tokens.length && tokens[afterAs].Kind === 'open') {
+                            throw new Error(
+                                `Invalid ${label}: CTE column-alias lists are not permitted when field-level masking is active`,
+                            );
+                        }
                     }
                 }
-                if (depths[idx] === 0 && IsKeyword(tokens[idx], 'SELECT')) {
-                    break;
-                }
-                idx++;
             }
         }
 
-        // 2. Check derived-table column lists: `) [AS] alias (`
+        // 2. Check derived-table column lists, set operations + *, FOR JSON/XML, whole-row functions, and ordinal ORDER/GROUP BY
         let hasSetOp = false;
         let hasWildcardStar = false;
         for (let i = 0; i < tokens.length; i++) {
             const tok = tokens[i];
             if (IsKeyword(tok, 'UNION') || IsKeyword(tok, 'INTERSECT') || IsKeyword(tok, 'EXCEPT')) {
                 hasSetOp = true;
+            }
+            if (IsKeyword(tok, 'FOR') && tokens[i + 1] && (IsKeyword(tokens[i + 1], 'JSON') || IsKeyword(tokens[i + 1], 'XML'))) {
+                throw new Error(
+                    `Invalid ${label}: FOR ${tokens[i + 1].Text.toUpperCase()} is not permitted when field-level masking is active`,
+                );
+            }
+            if (IsKeyword(tok, 'NATURAL') && tokens[i + 1] && IsKeyword(tokens[i + 1], 'JOIN')) {
+                throw new Error(
+                    `Invalid ${label}: NATURAL JOIN is not permitted when field-level masking is active`,
+                );
+            }
+            if ((tok.Kind === 'word' || tok.Kind === 'identifier') && tokens[i + 1]?.Kind === 'open') {
+                const fnLower = ClientClauseScreen.StripIdentifierQuotes(tok.Text).trim().toLowerCase();
+                if (ClientClauseScreen.WHOLE_ROW_SERIALIZATION_FUNCTIONS.has(fnLower)) {
+                    throw new Error(
+                        `Invalid ${label}: whole-row function ${tok.Text}() is not permitted when field-level masking is active`,
+                    );
+                }
+            }
+            if ((IsKeyword(tok, 'ORDER') || IsKeyword(tok, 'GROUP')) && tokens[i + 1] && IsKeyword(tokens[i + 1], 'BY')) {
+                const clauseDepth = depths[i];
+                let itemStart = true;
+                for (let j = i + 2; j < tokens.length; j++) {
+                    if (depths[j] < clauseDepth && tokens[j].Kind === 'close') {
+                        break;
+                    }
+                    if (depths[j] === clauseDepth) {
+                        if (
+                            IsKeyword(tokens[j], 'OFFSET') ||
+                            IsKeyword(tokens[j], 'FETCH') ||
+                            IsKeyword(tokens[j], 'LIMIT') ||
+                            IsKeyword(tokens[j], 'FOR') ||
+                            IsKeyword(tokens[j], 'HAVING') ||
+                            IsKeyword(tokens[j], 'ORDER') ||
+                            IsKeyword(tokens[j], 'UNION') ||
+                            IsKeyword(tokens[j], 'INTERSECT') ||
+                            IsKeyword(tokens[j], 'EXCEPT')
+                        ) {
+                            break;
+                        }
+                        if (itemStart) {
+                            const isSignedNum =
+                                tokens[j].Kind === 'operator' &&
+                                (tokens[j].Text === '+' || tokens[j].Text === '-') &&
+                                tokens[j + 1]?.Kind === 'number';
+                            if (tokens[j].Kind === 'number' || isSignedNum) {
+                                throw new Error(
+                                    `Invalid ${label}: ordinal ${tok.Text.toUpperCase()} BY is not permitted when field-level masking is active`,
+                                );
+                            }
+                        }
+                        itemStart = tokens[j].Kind === 'comma';
+                    } else {
+                        itemStart = false;
+                    }
+                }
             }
             if (tok.Text === '*' || (tok.Kind === 'operator' && tok.Text.includes('*'))) {
                 const prev = i > 0 ? tokens[i - 1] : undefined;
@@ -680,6 +759,82 @@ export class ClientClauseScreen {
                 `Invalid ${label}: set operations (UNION/INTERSECT/EXCEPT) with wildcard (*) projections are not permitted when field-level masking is active`,
             );
         }
+
+        // 4. Parse with SqlDocument and check CTEs() + WholeRowConstructs() + FindProjectionStars()
+        const parserDialect: ParserDialect =
+            'Key' in dialect && 'Lexical' in dialect && 'Grammar' in dialect
+                ? (dialect as ParserDialect)
+                : dialect.QuoteIdentifier('x').startsWith('[')
+                  ? new SQLServerDialect()
+                  : new PostgreSQLDialect();
+        const doc = SqlDocument.Parse(sql, parserDialect);
+        const ctes = doc.CTEs();
+        if (ctes.Complete && ctes.Value.some((c) => c.ColumnList !== null && c.ColumnList.length > 0)) {
+            throw new Error(
+                `Invalid ${label}: CTE column-alias lists are not permitted when field-level masking is active`,
+            );
+        }
+
+        const wholeRow = doc.WholeRowConstructs();
+        if (!wholeRow.Complete) {
+            throw new Error(
+                `Invalid ${label}: whole-row construct analysis could not complete safely when field-level masking is active`,
+            );
+        }
+        if (wholeRow.Value.length > 0) {
+            const projectionStars = FindProjectionStars(sql, parserDialect);
+            for (const construct of wholeRow.Value) {
+                switch (construct.Kind) {
+                    case 'ForDocument':
+                        throw new Error(
+                            `Invalid ${label}: ${construct.Detail} is not permitted when field-level masking is active`,
+                        );
+                    case 'RowFunction':
+                    case 'RowReference':
+                        throw new Error(
+                            `Invalid ${label}: whole-row construct (${construct.Detail}) is not permitted when field-level masking is active`,
+                        );
+                    case 'NaturalJoin':
+                        throw new Error(
+                            `Invalid ${label}: NATURAL JOIN is not permitted when field-level masking is active`,
+                        );
+                    case 'OrdinalOrderBy':
+                        throw new Error(
+                            `Invalid ${label}: ordinal ${construct.Detail} is not permitted when field-level masking is active`,
+                        );
+                    case 'Star':
+                    case 'QualifiedStar': {
+                        const starOffset = sql.lastIndexOf('*', construct.Span.End - 1);
+                        if (starOffset < construct.Span.Start || !projectionStars.has(starOffset)) {
+                            throw new Error(
+                                `Invalid ${label}: non-projection wildcard (${construct.Detail}) is not permitted when field-level masking is active`,
+                            );
+                        }
+                        break;
+                    }
+                    default:
+                        break;
+                }
+            }
+        }
+    }
+
+    /**
+     * Refuses whole-row constructs (`FOR JSON`/`FOR XML`, `to_jsonb(e)` / `row_to_json(e)`,
+     * subquery `*`/`alias.*`, CTE/derived-table column lists) and ordinal `ORDER BY` inside a
+     * `Filter` or `OrderBy` fragment when the target entity or any subquery entity has denied fields.
+     */
+    public static AssertNoWholeRowOrOrdinalInClause(
+        clause: string | null | undefined,
+        label: string,
+        dialect: SQLParserDialect,
+    ): void {
+        if (!clause?.trim()) return;
+        const wrappedSql =
+            label === 'OrderBy'
+                ? `SELECT 1 FROM [__mj].[vw_clause_check] ORDER BY ${clause}`
+                : `SELECT 1 FROM [__mj].[vw_clause_check] WHERE ${clause}`;
+        ClientClauseScreen.AssertNoPositionalColumnRenames(wrappedSql, dialect, label);
     }
 
     /**

@@ -178,4 +178,45 @@ describe('UserRoutineDispatcherDriver.RunRoutineNow', () => {
         expect(saves).toHaveLength(0);
         expect(driver.logError).toHaveBeenCalledTimes(1);
     });
+
+    it('disables a routine after MAX_OWNER_RESOLVE_RETRIES consecutive owner-resolution failures so it does not retry forever', async () => {
+        UserRoutineDispatcherDriver.ClearOwnerResolveFailures();
+        const pastDue = new Date(Date.now() - 60_000);
+        const { routine } = makeOneShot({
+            ID: '44444444-4444-4444-8444-444444444444',
+            UserID: 'PERMANENTLY-DELETED-USER',
+            NextRunAt: pastDue,
+        });
+
+        globalRef.___SINGLETON__UserCache = {
+            Users: [],
+            FindUser: async () => undefined,
+        };
+
+        const sweepDriver = driver as UserRoutineDispatcherDriver & {
+            loadCandidateRoutines?: (u: UserInfo, now: Date) => Promise<MJUserRoutineEntity[]>;
+        };
+        sweepDriver.loadCandidateRoutines = vi.fn(async () => [routine as Partial<MJUserRoutineEntity> as MJUserRoutineEntity]);
+
+        const scheduleStub = { Configuration: null } as Partial<MJScheduledJobEntity> as MJScheduledJobEntity;
+        const context: ScheduledJobExecutionContext = {
+            Schedule: scheduleStub,
+            ContextUser: SYSTEM as Partial<UserInfo> as UserInfo,
+        };
+
+        // Sweep 1 and 2 preserve NextRunAt for retry
+        await driver.Execute(context);
+        expect(routine.Status).toBe('Active');
+        expect(driver.claimRoutine).not.toHaveBeenCalled();
+
+        await driver.Execute(context);
+        expect(routine.Status).toBe('Active');
+        expect(driver.claimRoutine).not.toHaveBeenCalled();
+
+        // Sweep 3 reaches MAX_OWNER_RESOLVE_RETRIES -> disables routine and claims occurrence
+        await driver.Execute(context);
+        expect(routine.Status).toBe('Disabled');
+        expect(routine.LastRunStatus).toBe('Failed');
+        expect(driver.claimRoutine).toHaveBeenCalledTimes(1);
+    });
 });

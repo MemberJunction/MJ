@@ -22,6 +22,7 @@ import {
 import {
     BaseSingleton,
     EscapeSQLString,
+    GetGlobalObjectStore,
     MJEvent,
     MJEventType,
     MJGlobal,
@@ -179,12 +180,20 @@ const DAY_NAMES: ReadonlyArray<'Sun' | 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | '
     'Sat',
 ];
 
+interface GlobalUserCacheLookup {
+    GetSystemUser?: () => UserInfo | undefined;
+}
+
 /**
  * Singleton engine that loads and evaluates `MJ: AI Agent User Policies` records.
  */
 export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> {
+    private static readonly _providerIds = new WeakMap<object, number>();
+    private static _nextProviderId = 1;
+
     private readonly expressionEvaluator = new SafeExpressionEvaluator();
-    private readonly policyCache = new Map<string, MJAIAgentUserPolicyEntity>();
+    private readonly policyCache = new Map<string, MJAIAgentUserPolicyEntity | null>();
+    private readonly executingAgentStack: string[] = [];
     private entityEventSubscription: Subscription | null = null;
 
     public constructor() {
@@ -243,33 +252,118 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
         return AgentUserPolicyEngine.getInstance<AgentUserPolicyEngine>();
     }
 
-    /** Build a canonical cache key for an `(agentId, userId)` pair. */
-    private buildCacheKey(agentId: string, userId: string): string {
+    /**
+     * Returns the ID of the agent currently executing an action in this call stack, if any.
+     */
+    public GetActiveExecutingAgentID(): string | null {
+        return this.executingAgentStack.length > 0
+            ? this.executingAgentStack[this.executingAgentStack.length - 1]
+            : null;
+    }
+
+    /**
+     * Executes `fn` with `agentId` pushed onto the active executing-agent stack so entity subclasses
+     * (such as `MJAIAgentUserPolicyEntityServer`) can enforce self-only and non-widening rules
+     * regardless of which action or code path saves the entity.
+     */
+    public async RunWithExecutingAgentContext<T>(agentId: string, fn: () => Promise<T>): Promise<T> {
+        const trimmed = agentId.trim();
+        if (!trimmed) {
+            return fn();
+        }
+        this.executingAgentStack.push(trimmed);
+        try {
+            return await fn();
+        } finally {
+            this.executingAgentStack.pop();
+        }
+    }
+
+    private getProviderScopePrefix(provider?: object | null): string {
+        if (!provider || typeof provider !== 'object') {
+            return 'default';
+        }
+        let id = AgentUserPolicyEngine._providerIds.get(provider);
+        if (id === undefined) {
+            id = AgentUserPolicyEngine._nextProviderId++;
+            AgentUserPolicyEngine._providerIds.set(provider, id);
+        }
+        return `p:${id}`;
+    }
+
+    private buildPairSuffix(agentId: string, userId: string): string {
         return `${agentId.trim().toLowerCase()}::${userId.trim().toLowerCase()}`;
     }
 
+    /** Build a canonical provider-scoped cache key for an `(agentId, userId, provider)` tuple. */
+    private buildCacheKey(agentId: string, userId: string, provider?: object | null): string {
+        return `${this.getProviderScopePrefix(provider)}::${this.buildPairSuffix(agentId, userId)}`;
+    }
+
     /** Put or update a policy entity in the in-memory cache. */
-    public SetCachedPolicy(policy: MJAIAgentUserPolicyEntity): void {
-        if (policy.AgentID && policy.UserID) {
-            this.policyCache.set(this.buildCacheKey(policy.AgentID, policy.UserID), policy);
+    public SetCachedPolicy(policy: MJAIAgentUserPolicyEntity, provider?: IMetadataProvider | null): void {
+        if (!policy.AgentID || !policy.UserID) {
+            return;
+        }
+        const entityProvider = (policy as { ProviderToUse?: object | null }).ProviderToUse ?? null;
+        if (provider) {
+            this.policyCache.set(this.buildCacheKey(policy.AgentID, policy.UserID, provider), policy);
+            return;
+        }
+        this.policyCache.set(this.buildCacheKey(policy.AgentID, policy.UserID, null), policy);
+        if (entityProvider) {
+            this.policyCache.set(this.buildCacheKey(policy.AgentID, policy.UserID, entityProvider), policy);
         }
     }
 
     /** Synchronously retrieve a cached policy for `(agentId, userId)` if loaded. */
-    public GetCachedPolicy(agentId: string, userId: string): MJAIAgentUserPolicyEntity | null {
+    public GetCachedPolicy(
+        agentId: string,
+        userId: string,
+        provider?: IMetadataProvider | null
+    ): MJAIAgentUserPolicyEntity | null {
         if (!agentId || !userId) {
             return null;
         }
-        return this.policyCache.get(this.buildCacheKey(agentId, userId)) ?? null;
+        if (provider) {
+            const scopedKey = this.buildCacheKey(agentId, userId, provider);
+            if (this.policyCache.has(scopedKey)) {
+                return this.policyCache.get(scopedKey) ?? null;
+            }
+        }
+        return this.policyCache.get(this.buildCacheKey(agentId, userId, null)) ?? null;
     }
 
-    /** Clear all cached policies (or a single `(agentId, userId)` pair). */
-    public ClearCache(agentId?: string, userId?: string): void {
+    /** Clear all cached policies (or a single `(agentId, userId)` pair across all or one provider). */
+    public ClearCache(agentId?: string, userId?: string, provider?: IMetadataProvider | null): void {
         if (agentId && userId) {
-            this.policyCache.delete(this.buildCacheKey(agentId, userId));
+            if (provider) {
+                this.policyCache.delete(this.buildCacheKey(agentId, userId, provider));
+                return;
+            }
+            const suffix = `::${this.buildPairSuffix(agentId, userId)}`;
+            for (const k of Array.from(this.policyCache.keys())) {
+                if (k.endsWith(suffix)) {
+                    this.policyCache.delete(k);
+                }
+            }
             return;
         }
         this.policyCache.clear();
+    }
+
+    private resolvePolicyLookupUser(contextUser: UserInfo): UserInfo {
+        try {
+            const store = GetGlobalObjectStore() as Record<string, unknown> | null;
+            const userCache = store?.['___SINGLETON__UserCache'] as GlobalUserCacheLookup | undefined;
+            const sysUser = typeof userCache?.GetSystemUser === 'function' ? userCache.GetSystemUser() : undefined;
+            if (sysUser?.ID) {
+                return sysUser;
+            }
+        } catch {
+            // Fall back to contextUser when global store / UserCache is unavailable
+        }
+        return contextUser;
     }
 
     /**
@@ -286,16 +380,26 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
         options?: ResolvePolicyLookupOptions
     ): Promise<PolicyLookupResult> {
         const forceRefresh = options?.forceRefresh === true;
-        const key = this.buildCacheKey(agentId, userId);
-        if (!forceRefresh && this.policyCache.has(key)) {
-            const cached = this.policyCache.get(key) ?? null;
-            return cached ? { status: 'found', policy: cached } : { status: 'none', policy: null };
+        const scopedKey = this.buildCacheKey(agentId, userId, options?.provider);
+        const defaultKey = this.buildCacheKey(agentId, userId, null);
+        if (!forceRefresh) {
+            if (this.policyCache.has(scopedKey)) {
+                const cached = this.policyCache.get(scopedKey) ?? null;
+                return cached ? { status: 'found', policy: cached } : { status: 'none', policy: null };
+            }
+            if (options?.provider && this.policyCache.has(defaultKey)) {
+                const defaultCached = this.policyCache.get(defaultKey) ?? null;
+                if (defaultCached) {
+                    return { status: 'found', policy: defaultCached };
+                }
+            }
         }
 
         try {
             const rv = options?.provider ? RunView.FromMetadataProvider(options.provider) : new RunView();
             const safeAgentId = EscapeSQLString(agentId);
             const safeUserId = EscapeSQLString(userId);
+            const lookupUser = this.resolvePolicyLookupUser(contextUser);
             const result = await rv.RunView<MJAIAgentUserPolicyEntity>(
                 {
                     EntityName: 'MJ: AI Agent User Policies',
@@ -304,7 +408,7 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
                     SkipTotalRowCount: true,
                     ResultType: 'entity_object',
                 },
-                contextUser
+                lookupUser
             );
             if (!result.Success) {
                 const errMessage = result.ErrorMessage || 'RunView returned Success=false loading MJ: AI Agent User Policies';
@@ -315,7 +419,7 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
             }
             if (result.Results.length > 0) {
                 const policy = result.Results[0];
-                this.policyCache.set(key, policy);
+                this.policyCache.set(scopedKey, policy);
                 return { status: 'found', policy };
             }
             return { status: 'none', policy: null };
@@ -363,6 +467,60 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
             AutoApproveAmountThreshold: policy.AutoApproveAmountThreshold ?? null,
             EntityAccessRules: JSON.parse(JSON.stringify(this.resolveEntityRules(policy))) as MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule[],
             ActionPolicyRules: JSON.parse(JSON.stringify(this.resolveActionRules(policy))) as MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule[],
+        };
+    }
+
+    /**
+     * Reconstructs the pre-save {@link AgentPolicyBaselineSnapshot} of an existing (`IsSaved === true`)
+     * policy entity from its `EntityField.OldValue` entries so entity-level `Validate()` / `Save()`
+     * hooks can detect policy widening even after fields have already been mutated in memory.
+     */
+    public SnapshotPolicyFromOldValues(policy: MJAIAgentUserPolicyEntity): AgentPolicyBaselineSnapshot | null {
+        if (!policy.IsSaved) {
+            return null;
+        }
+        const readOld = <K extends keyof MJAIAgentUserPolicyEntity>(
+            fieldName: K
+        ): MJAIAgentUserPolicyEntity[K] => {
+            if (typeof policy.GetFieldByName === 'function') {
+                const field = policy.GetFieldByName(String(fieldName));
+                if (field && field.OldValue !== undefined) {
+                    return field.OldValue as MJAIAgentUserPolicyEntity[K];
+                }
+            }
+            return policy[fieldName];
+        };
+
+        const rawEntityRules = readOld('EntityAccessRules');
+        const parsedEntityRules =
+            typeof rawEntityRules === 'string' && rawEntityRules.trim().length > 0
+                ? SafeJSONParse<MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule[]>(rawEntityRules) ?? []
+                : [];
+        const rawActionRules = readOld('ActionPolicyRules');
+        const parsedActionRules =
+            typeof rawActionRules === 'string' && rawActionRules.trim().length > 0
+                ? SafeJSONParse<MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule[]>(rawActionRules) ?? []
+                : [];
+
+        return {
+            Status: readOld('Status') ?? 'Active',
+            CoordinationMode: readOld('CoordinationMode') ?? 'Observer',
+            AllowInterAgentCoordination: readOld('AllowInterAgentCoordination') ?? true,
+            DefaultDataAccessMode: readOld('DefaultDataAccessMode') ?? 'UserCeiling',
+            EmailChannelMode: readOld('EmailChannelMode') ?? 'DraftOnly',
+            PhoneChannelMode: readOld('PhoneChannelMode') ?? 'InboundOnly',
+            MessagingChannelMode: readOld('MessagingChannelMode') ?? 'Enabled',
+            CalendarChannelMode: readOld('CalendarChannelMode') ?? 'ProposeWithApproval',
+            RequireApprovalForExternalComms: readOld('RequireApprovalForExternalComms') !== false,
+            RequireApprovalForFinancials: readOld('RequireApprovalForFinancials') !== false,
+            RequireApprovalForDestructiveActions: readOld('RequireApprovalForDestructiveActions') !== false,
+            AutoApproveAmountThreshold: readOld('AutoApproveAmountThreshold') ?? null,
+            EntityAccessRules: JSON.parse(
+                JSON.stringify(parsedEntityRules)
+            ) as MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule[],
+            ActionPolicyRules: JSON.parse(
+                JSON.stringify(parsedActionRules)
+            ) as MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule[],
         };
     }
 
@@ -1274,13 +1432,30 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
             }
         }
 
-        if (baselineDefaultMode === 'AllowListOnly') {
-            const baselineKeys = new Set(baselineRules.map((r) => normalizePattern(r.entityPattern)));
-            for (const propRule of proposedRules) {
-                if (!baselineKeys.has(normalizePattern(propRule.entityPattern)) && propRule.access !== 'Deny') {
+        const baselineKeys = new Set(baselineRules.map((r) => normalizePattern(r.entityPattern)));
+        for (const propRule of proposedRules) {
+            if (baselineKeys.has(normalizePattern(propRule.entityPattern))) {
+                continue;
+            }
+            if (
+                (baselineDefaultMode === 'AllowListOnly' || baselineDefaultMode === 'ReadOnly') &&
+                propRule.access !== 'Deny'
+            ) {
+                violations.push(
+                    `Cannot add non-Deny EntityAccessRule '${propRule.entityPattern}' while DefaultDataAccessMode is ${baselineDefaultMode}.`
+                );
+                continue;
+            }
+            for (const baseRule of baselineRules) {
+                if (
+                    (this.matchesWildcardPattern(propRule.entityPattern, baseRule.entityPattern) ||
+                        this.matchesWildcardPattern(baseRule.entityPattern, propRule.entityPattern)) &&
+                    accessRank[propRule.access] > accessRank[baseRule.access]
+                ) {
                     violations.push(
-                        `Cannot add non-Deny EntityAccessRule '${propRule.entityPattern}' while DefaultDataAccessMode is AllowListOnly.`
+                        `Cannot add EntityAccessRule '${propRule.entityPattern}' with access '${propRule.access}' broader than existing rule '${baseRule.entityPattern}' ('${baseRule.access}').`
                     );
+                    break;
                 }
             }
         }

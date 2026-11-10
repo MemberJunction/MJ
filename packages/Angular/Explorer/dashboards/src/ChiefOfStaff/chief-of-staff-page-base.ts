@@ -234,16 +234,27 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
         }
 
         if (this.HasUnsavedPageEdits()) {
-            const confirmed = this.confirmService
-                ? await this.confirmService.Confirm({
-                      title: 'Discard changes?',
-                      message: `Leave "${prevName}" without saving?`,
-                      detail: 'Your unsaved governance policy changes will be lost.',
-                      type: 'warning',
-                      confirmText: 'Discard changes',
-                      cancelText: 'Keep editing',
-                  })
-                : true;
+            if (!this.confirmService) {
+                this.FeedbackBanner = {
+                    Type: 'error',
+                    Message:
+                        'You have unsaved governance policy changes. Please save or reset your changes before switching agents.',
+                };
+                this.SelectedAgentID = prevId;
+                if (!syncQueryParam) {
+                    this.syncSelectedAgentQueryParam();
+                }
+                this.cdr.markForCheck();
+                return false;
+            }
+            const confirmed = await this.confirmService.Confirm({
+                title: 'Discard changes?',
+                message: `Leave "${prevName}" without saving?`,
+                detail: 'Your unsaved governance policy changes will be lost.',
+                type: 'warning',
+                confirmText: 'Discard changes',
+                cancelText: 'Keep editing',
+            });
             if (!confirmed) {
                 this.SelectedAgentID = prevId;
                 if (!syncQueryParam) {

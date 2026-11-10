@@ -12482,7 +12482,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Conversation Core',
    GeneratedFormSection = 'Category',
-   DisplayName = 'Type Name'
+   DisplayName = 'Type'
 WHERE 
    ID = 'D9F8ACBB-E916-4FE3-ABEC-B124BE42FF8D';
 

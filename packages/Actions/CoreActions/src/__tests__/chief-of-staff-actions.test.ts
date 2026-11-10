@@ -909,6 +909,46 @@ describe('Chief of Staff Actions Suite', () => {
             });
             expect(lookupErrRes.Success).toBe(false);
             expect(lookupErrRes.ResultCode).toBe('POLICY_LOOKUP_FAILED');
+
+            // 4. Non-system caller attempting to pass RequestForUserID has RequestForUserID pinned to ContextUser.ID
+            getPolicyMock
+                .mockResolvedValueOnce({
+                    Status: 'Active',
+                    CoordinationMode: 'Autonomous',
+                    AllowInterAgentCoordination: true,
+                })
+                .mockResolvedValueOnce({
+                    Status: 'Active',
+                    AllowInterAgentCoordination: true,
+                });
+            const pinnedReqStub = {
+                ID: 'req-pinned-1',
+                AgentID: '',
+                RequestTypeID: null as string | null,
+                RequestedAt: null as Date | null,
+                RequestForUserID: null as string | null,
+                Status: 'Requested' as MJAIAgentRequestEntity['Status'],
+                Priority: 50,
+                Request: '',
+                Comments: null as string | null,
+                Save: vi.fn().mockResolvedValue(true),
+            };
+            getEntityObjectMock.mockResolvedValueOnce(pinnedReqStub);
+
+            const spoofRequestForUserRes = await invokeAction(new SendInterAgentRequestAction(), {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('dev-1', 'Dev One'),
+                Context: { AgentID: 'factory-agent-id' },
+                Filters: [],
+                Params: [
+                    { Name: 'TargetUserID', Type: 'Input', Value: 'reviewer-2' },
+                    { Name: 'RequestForUserID', Type: 'Input', Value: 'unrelated-user-3' },
+                    { Name: 'Subject', Type: 'Input', Value: 'Check' },
+                    { Name: 'Message', Type: 'Input', Value: 'Hello' },
+                ],
+            });
+            expect(spoofRequestForUserRes.Success).toBe(true);
+            expect(pinnedReqStub.RequestForUserID).toBe('dev-1');
         });
     });
 });

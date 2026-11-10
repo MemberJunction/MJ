@@ -165,6 +165,19 @@ export interface RoutineRunContext {
 @RegisterClass(BaseScheduledJob, 'UserRoutineDispatcherDriver')
 export class UserRoutineDispatcherDriver extends BaseScheduledJob {
     /**
+     * Maximum consecutive sweep failures resolving a routine's owner user before the
+     * routine is disabled (`Status = 'Disabled'`, `LastRunStatus = 'Failed'`) so a
+     * deleted or permanently inactive owner does not retry on every 1-minute sweep forever.
+     */
+    public static readonly MAX_OWNER_RESOLVE_RETRIES = 3;
+
+    private static readonly _ownerResolveFailures = new Map<string, number>();
+
+    public static ClearOwnerResolveFailures(): void {
+        UserRoutineDispatcherDriver._ownerResolveFailures.clear();
+    }
+
+    /**
      * The dispatcher is a by-design 1-minute sweeper: each pass claims due routines and
      * does bounded work, so the engine's high-frequency cron warning doesn't apply.
      */
@@ -188,18 +201,35 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         }
 
         // Resolve each due routine's owner user BEFORE claiming NextRunAt so a transient UserCache
-        // miss never burns a OneShot routine's NextRunAt=null without executing it.
+        // miss never burns a OneShot routine's NextRunAt=null without executing it. Cap consecutive
+        // failures at MAX_OWNER_RESOLVE_RETRIES so a permanently missing/inactive owner does not
+        // retry on every sweep forever.
         const due = candidates.filter(r => IsRoutineDue(r, now));
         const claimed: Array<{ routine: MJUserRoutineEntity; ownerUser: UserInfo }> = [];
         for (const routine of due) {
+            const routineKey = NormalizeUUID(routine.ID);
             let ownerUser: UserInfo;
             try {
                 ownerUser = await this.resolveRoutineOwnerUser(routine, context.ContextUser);
+                UserRoutineDispatcherDriver._ownerResolveFailures.delete(routineKey);
             } catch (error) {
-                this.logError(
-                    `Skipping claim for routine "${routine.Name}" (${routine.ID}) because owner user could not be resolved — NextRunAt preserved for retry`,
-                    error
-                );
+                const failures = (UserRoutineDispatcherDriver._ownerResolveFailures.get(routineKey) ?? 0) + 1;
+                UserRoutineDispatcherDriver._ownerResolveFailures.set(routineKey, failures);
+                if (failures >= UserRoutineDispatcherDriver.MAX_OWNER_RESOLVE_RETRIES) {
+                    UserRoutineDispatcherDriver._ownerResolveFailures.delete(routineKey);
+                    this.logError(
+                        `Disabling routine "${routine.Name}" (${routine.ID}) because owner user could not be resolved after ${failures} consecutive attempts`,
+                        error
+                    );
+                    routine.Status = 'Disabled';
+                    routine.LastRunStatus = 'Failed';
+                    await this.claimRoutine(routine, now);
+                } else {
+                    this.logError(
+                        `Skipping claim for routine "${routine.Name}" (${routine.ID}) because owner user could not be resolved (attempt ${failures}/${UserRoutineDispatcherDriver.MAX_OWNER_RESOLVE_RETRIES}) — NextRunAt preserved for retry`,
+                        error
+                    );
+                }
                 continue;
             }
             if (await this.claimRoutine(routine, now)) {

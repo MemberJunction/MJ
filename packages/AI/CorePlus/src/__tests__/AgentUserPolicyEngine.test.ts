@@ -614,5 +614,61 @@ describe('AgentUserPolicyEngine — ResolvePolicyForAgentAndUser & DetectAgentPo
                 )
                 .join('; ')
         ).toMatch(/Delete/);
+
+        // Adding a new non-Deny rule under ReadOnly baseline is blocked (prevents lifting ReadOnly default via {entityPattern: '*', access: 'ReadWrite'})
+        expect(
+            engine
+                .DetectAgentPolicyWidening(
+                    engine.SnapshotPolicy(
+                        buildPolicy({
+                            DefaultDataAccessMode: 'ReadOnly',
+                            EntityAccessRulesObject: [],
+                        })
+                    ),
+                    buildPolicy({
+                        DefaultDataAccessMode: 'ReadOnly',
+                        EntityAccessRulesObject: [{ entityPattern: '*', access: 'ReadWrite' }],
+                    })
+                )
+                .join('; ')
+        ).toMatch(/Cannot add non-Deny EntityAccessRule '\*' while DefaultDataAccessMode is ReadOnly/);
+
+        // Adding a new rule under UserCeiling that is broader than an overlapping baseline rule is blocked
+        expect(
+            engine
+                .DetectAgentPolicyWidening(
+                    engine.SnapshotPolicy(
+                        buildPolicy({
+                            DefaultDataAccessMode: 'UserCeiling',
+                            EntityAccessRulesObject: [{ entityPattern: 'Finance*', access: 'ReadOnly' }],
+                        })
+                    ),
+                    buildPolicy({
+                        DefaultDataAccessMode: 'UserCeiling',
+                        EntityAccessRulesObject: [
+                            { entityPattern: 'Finance*', access: 'ReadOnly' },
+                            { entityPattern: 'Finance: Invoices', access: 'ReadWrite' },
+                        ],
+                    })
+                )
+                .join('; ')
+        ).toMatch(/broader than existing rule/);
+    });
+
+    it('isolates cached policies across distinct provider instances while preserving default cache fallback', () => {
+        const providerA = {} as Partial<IMetadataProvider> as IMetadataProvider;
+        const providerB = {} as Partial<IMetadataProvider> as IMetadataProvider;
+        const policyA = buildPolicy({ ID: 'pol-provider-a', EmailChannelMode: 'Disabled' });
+        const policyB = buildPolicy({ ID: 'pol-provider-b', EmailChannelMode: 'DraftOnly' });
+
+        engine.SetCachedPolicy(policyA, providerA);
+        engine.SetCachedPolicy(policyB, providerB);
+
+        expect(engine.GetCachedPolicy('agent-cos', 'user-alice-1', providerA)?.ID).toBe('pol-provider-a');
+        expect(engine.GetCachedPolicy('agent-cos', 'user-alice-1', providerB)?.ID).toBe('pol-provider-b');
+
+        engine.ClearCache('agent-cos', 'user-alice-1', providerA);
+        expect(engine.GetCachedPolicy('agent-cos', 'user-alice-1', providerA)).toBeNull();
+        expect(engine.GetCachedPolicy('agent-cos', 'user-alice-1', providerB)?.ID).toBe('pol-provider-b');
     });
 });

@@ -244,14 +244,14 @@ export abstract class TransactionGroupBase {
     }
 
     private _preprocessingItems: TransactionPreprocessingItem[] = [];
-    private _inTransactionAfterSaveHooks = new Map<BaseEntity, Array<() => Promise<void>>>();
+    private _inTransactionAfterSaveHooks = new Map<BaseEntity, Array<(result: unknown) => Promise<void>>>();
 
     /**
      * Enlists an async hook (such as a `SubtypeSelector.Driver` `AfterSave` callback) to be awaited
      * inside the open group transaction after item SQL execution and PK hydration, before
      * `CommitGroupTransaction()` commits. If the hook throws, the group transaction rolls back.
      */
-    public RegisterInTransactionAfterSave(entity: BaseEntity, hook: () => Promise<void>): void {
+    public RegisterInTransactionAfterSave(entity: BaseEntity, hook: (result: unknown) => Promise<void>): void {
         let list = this._inTransactionAfterSaveHooks.get(entity);
         if (!list) {
             list = [];
@@ -496,7 +496,7 @@ export abstract class TransactionGroupBase {
                     const hooks = this._inTransactionAfterSaveHooks.get(result.Transaction.BaseEntity);
                     if (hooks) {
                         for (const hook of hooks) {
-                            await hook();
+                            await hook(result.Result);
                         }
                     }
                 }

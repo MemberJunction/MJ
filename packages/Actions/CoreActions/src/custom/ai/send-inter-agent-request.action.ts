@@ -60,6 +60,7 @@ export class SendInterAgentRequestAction extends BaseAction {
             }
 
             const targetUserId = this.getStringParam(params, 'TargetUserID');
+            const explicitRequestForUserId = this.getStringParam(params, 'RequestForUserID');
             const subject = this.getStringParam(params, 'Subject');
             const message =
                 this.getStringParam(params, 'Message') ?? this.getStringParam(params, 'RequestBody');
@@ -71,6 +72,13 @@ export class SendInterAgentRequestAction extends BaseAction {
                     Params: params.Params,
                 };
             }
+
+            const isSystemOrOwner = this.isSystemOrOwnerUser(contextUser);
+            const effectiveRequestForUserId = explicitRequestForUserId
+                ? isSystemOrOwner
+                    ? explicitRequestForUserId
+                    : contextUser.ID
+                : targetUserId;
 
             await AIEngine.Instance.Config(false, contextUser);
             const senderResolution = this.resolveSenderAgent(params);
@@ -206,14 +214,15 @@ export class SendInterAgentRequestAction extends BaseAction {
             }
 
             const md = params.Provider ?? new Metadata();
+            const requestSaveUser = this.resolveRequestSaveUser(contextUser, effectiveRequestForUserId);
             const requestEntity = await md.GetEntityObject<MJAIAgentRequestEntity>(
                 'MJ: AI Agent Requests',
-                contextUser
+                requestSaveUser
             );
             requestEntity.AgentID = targetAgent.ID;
             requestEntity.RequestTypeID = approvalTypeId;
             requestEntity.RequestedAt = new Date();
-            requestEntity.RequestForUserID = targetUserId;
+            requestEntity.RequestForUserID = effectiveRequestForUserId;
             requestEntity.Status = 'Requested';
             requestEntity.Priority = priority;
             requestEntity.Request = `[${ senderAgent.Name } Follow-Up from ${ envelope.senderUserName }] ${ subject }\n\n${ message }`;
@@ -273,8 +282,12 @@ export class SendInterAgentRequestAction extends BaseAction {
             if (cached) {
                 return cached.IsActive !== false;
             }
-        } catch {
-            // Fall back to RunView when UserCache is not initialized in unit tests
+        } catch (err) {
+            LogError(
+                `SendInterAgentRequestAction.verifyActiveTargetUser UserCache lookup failed for "${targetUserId}": ${
+                    err instanceof Error ? err.message : String(err)
+                }`
+            );
         }
         const rv = params.Provider ? RunView.FromMetadataProvider(params.Provider) : new RunView();
         const res = await rv.RunView<{ ID: string; IsActive?: boolean }>(
@@ -294,6 +307,32 @@ export class SendInterAgentRequestAction extends BaseAction {
                 res.Results.length > 0 &&
                 res.Results[0].IsActive !== false
         );
+    }
+
+    private isSystemOrOwnerUser(user: UserInfo): boolean {
+        if (user.Type?.trim().toLowerCase() === 'owner') {
+            return true;
+        }
+        const roles = user.UserRoles ?? [];
+        return roles.some((r) => {
+            const roleName = r.Role?.trim().toLowerCase();
+            return roleName === 'system' || roleName === 'owner' || roleName === 'administrator';
+        });
+    }
+
+    private resolveRequestSaveUser(contextUser: UserInfo, requestForUserId: string): UserInfo {
+        if (UUIDsEqual(contextUser.ID, requestForUserId)) {
+            return contextUser;
+        }
+        try {
+            const systemUser = UserCache.Instance.GetSystemUser();
+            if (systemUser) {
+                return systemUser;
+            }
+        } catch {
+            // Fall through to contextUser when UserCache is not populated
+        }
+        return contextUser;
     }
 
     private resolveSenderAgent(

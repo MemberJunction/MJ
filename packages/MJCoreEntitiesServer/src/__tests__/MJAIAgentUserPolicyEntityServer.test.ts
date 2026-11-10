@@ -20,10 +20,28 @@ interface FieldState {
     OldValue?: unknown;
 }
 
-vi.mock('@memberjunction/core-entities', () => {
+vi.mock('@memberjunction/core-entities', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core-entities')>();
     class MockMJAIAgentUserPolicyEntity {
         public UserID: string | null = null;
         public AgentID: string | null = 'C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E00';
+        public Status: 'Active' | 'Paused' | 'Revoked' = 'Active';
+        public CoordinationMode: 'Observer' | 'Advisor' | 'Assisted' | 'Autonomous' = 'Assisted';
+        public DefaultDataAccessMode: 'UserCeiling' | 'ReadOnly' | 'AllowListOnly' = 'ReadOnly';
+        public EmailChannelMode: 'Disabled' | 'DraftOnly' | 'SendAsAgent' | 'SendAsUser' = 'DraftOnly';
+        public CalendarChannelMode: 'Disabled' | 'DraftOnly' | 'RespondOnly' | 'FullAccess' = 'DraftOnly';
+        public AllowInternalMessaging = true;
+        public AllowInterAgentCoordination = true;
+        public RequireApprovalForExternalComms = true;
+        public MaxAutoActionsPerRun: number | null = 10;
+        public ActionRules: string | null = null;
+        public ActionRulesObject: unknown = null;
+        public EntityAccessRules: string | null = null;
+        public EntityAccessRulesObject: unknown = null;
+        public AllowedEmailDomainList: string | null = null;
+        public AllowedEmailDomainListObject: unknown = null;
+        public BlockedEmailAddressList: string | null = null;
+        public BlockedEmailAddressListObject: unknown = null;
         public ID = 'PPPPPPPP-0000-0000-0000-00000000000P';
         public IsSaved = false;
         public ContextCurrentUser: { ID: string; Type: string | null } | null = null;
@@ -45,7 +63,7 @@ vi.mock('@memberjunction/core-entities', () => {
             return true;
         }
     }
-    return { MJAIAgentUserPolicyEntity: MockMJAIAgentUserPolicyEntity };
+    return { ...actual, MJAIAgentUserPolicyEntity: MockMJAIAgentUserPolicyEntity };
 });
 
 import { MJAIAgentUserPolicyEntityServer } from '../custom/MJAIAgentUserPolicyEntityServer.server';
@@ -120,5 +138,48 @@ describe('MJAIAgentUserPolicyEntityServer.Save', () => {
         e.ContextCurrentUser = { ID: OWNER, Type: 'Owner' };
         await e.Save();
         expect(e.UserID).toBe(OTHER);
+    });
+});
+
+describe('MJAIAgentUserPolicyEntityServer.Validate — agent context non-widening', () => {
+    const AGENT_A = 'C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E00';
+    const AGENT_B = 'BBBBBBBB-4C11-4E8A-9B01-1A2B3C4D5E99';
+
+    it('refuses cross-agent policy modifications when ExecutingAgentID is set', () => {
+        const e = makeEntity();
+        e.UserID = OWNER;
+        e.AgentID = AGENT_B;
+        e.ExecutingAgentID = AGENT_A;
+        e.ContextCurrentUser = { ID: OWNER, Type: 'User' };
+        const r = e.Validate();
+        expect(r.Success).toBe(false);
+        expect(r.Errors.some((err) => err.Source === 'AgentID')).toBe(true);
+    });
+
+    it('refuses self-widening when ExecutingAgentID is set on an existing policy', () => {
+        const e = makeEntity();
+        e.IsSaved = true;
+        e.UserID = OWNER;
+        e.AgentID = AGENT_A;
+        e.ExecutingAgentID = AGENT_A;
+        e.ContextCurrentUser = { ID: OWNER, Type: 'User' };
+        e.RequireApprovalForExternalComms = false;
+        e.SetFieldState('RequireApprovalForExternalComms', { Dirty: true, OldValue: true });
+        const r = e.Validate();
+        expect(r.Success).toBe(false);
+        expect(r.Errors.some((err) => /cannot widen privileges/i.test(err.Message))).toBe(true);
+    });
+
+    it('allows self-narrowing when ExecutingAgentID is set on an existing policy', () => {
+        const e = makeEntity();
+        e.IsSaved = true;
+        e.UserID = OWNER;
+        e.AgentID = AGENT_A;
+        e.ExecutingAgentID = AGENT_A;
+        e.ContextCurrentUser = { ID: OWNER, Type: 'User' };
+        e.RequireApprovalForExternalComms = true;
+        e.SetFieldState('RequireApprovalForExternalComms', { Dirty: true, OldValue: false });
+        const r = e.Validate();
+        expect(r.Success).toBe(true);
     });
 });

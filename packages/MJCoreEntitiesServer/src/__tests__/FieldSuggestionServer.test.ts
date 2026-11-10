@@ -24,6 +24,7 @@ import {
     FieldSuggestionCommentDriver,
     FieldSuggestionPostSaveHook,
     IsSuggestionAcceptInFlight,
+    MJAIAgentUserPolicyEntityServer,
     MJCommentEntityServer,
     MJFieldSuggestionEntityServer,
 } from '../index';

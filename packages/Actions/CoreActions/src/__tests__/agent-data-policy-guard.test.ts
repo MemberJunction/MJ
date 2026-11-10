@@ -883,4 +883,93 @@ describe('AgentDataPolicyGuard — Runtime Data-Access Narrowing across CRUD & Q
         expect(sameValRes.ResultCode).not.toBe('NO_CHANGES');
         expect(sameValRig.saveMock).toHaveBeenCalledTimes(1);
     });
+
+    it('unconditionally refuses generic CRUD writes to MJ: AI Agent User Policies from an agent context and blocks whole-row / ordinal clauses on GetRecords', async () => {
+        const user = makeUser();
+        const policyEntityInfo = makeEntityInfo(
+            '99999999-0000-4000-8000-000000000099',
+            'MJ: AI Agent User Policies',
+            '__mj',
+            'AIAgentUserPolicy',
+            'vwAIAgentUserPolicies',
+            [makeField('ID', true, true), makeField('RequireApprovalForExternalComms'), makeField('EmailChannelMode')]
+        );
+        const rig = makeProvider({
+            initialValues: {
+                ID: 'policy-1',
+                RequireApprovalForExternalComms: true,
+                EmailChannelMode: 'Disabled',
+            },
+        });
+        const existingEntities = (rig.provider as { Entities: EntityInfo[] }).Entities;
+        existingEntities.push(policyEntityInfo);
+
+        // Even under UserCeiling with full access, generic CRUD actions cannot write to MJ: AI Agent User Policies
+        AgentUserPolicyEngine.Instance.SetCachedPolicy(
+            makePolicy({
+                DefaultDataAccessMode: 'UserCeiling',
+                EntityAccessRulesObject: [
+                    {
+                        entityPattern: '*',
+                        access: 'ReadWrite',
+                    },
+                    {
+                        entityPattern: 'Employees',
+                        access: 'ReadOnly',
+                        flsNarrowing: { deniedFields: ['Salary'] },
+                    },
+                ],
+            })
+        );
+
+        const updatePolicyRes = await invokeAction(new UpdateRecordAction(), {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: user,
+            Context: { AgentID: AGENT_ID },
+            Provider: rig.provider,
+            Filters: [],
+            Params: [
+                { Name: 'EntityName', Type: 'Input', Value: 'MJ: AI Agent User Policies' },
+                { Name: 'PrimaryKey', Type: 'Input', Value: { ID: 'policy-1' } },
+                {
+                    Name: 'Fields',
+                    Type: 'Input',
+                    Value: { RequireApprovalForExternalComms: false, EmailChannelMode: 'SendAsUser' },
+                },
+            ],
+        });
+        expect(updatePolicyRes.Success).toBe(false);
+        expect(updatePolicyRes.ResultCode).toBe('PERMISSION_DENIED');
+        expect(updatePolicyRes.Message).toMatch(/Configure Agent User Policy/);
+        expect(rig.saveMock).not.toHaveBeenCalled();
+
+        // Ordinal OrderBy and whole-row Filter constructs on Employees (which has denied field Salary) are refused
+        const ordinalOrderRes = await invokeAction(new GetRecordsAction(), {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: user,
+            Context: { AgentID: AGENT_ID },
+            Provider: rig.provider,
+            Filters: [],
+            Params: [
+                { Name: 'EntityName', Type: 'Input', Value: 'Employees' },
+                { Name: 'OrderBy', Type: 'Input', Value: '2 DESC' },
+            ],
+        });
+        expect(ordinalOrderRes.Success).toBe(false);
+        expect(ordinalOrderRes.ResultCode).toBe('PERMISSION_DENIED');
+
+        const jsonbFilterRes = await invokeAction(new GetRecordsAction(), {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: user,
+            Context: { AgentID: AGENT_ID },
+            Provider: rig.provider,
+            Filters: [],
+            Params: [
+                { Name: 'EntityName', Type: 'Input', Value: 'Employees' },
+                { Name: 'Filter', Type: 'Input', Value: "to_jsonb(vwEmployees)::text LIKE '%185000%'" },
+            ],
+        });
+        expect(jsonbFilterRes.Success).toBe(false);
+        expect(jsonbFilterRes.ResultCode).toBe('PERMISSION_DENIED');
+    });
 });
