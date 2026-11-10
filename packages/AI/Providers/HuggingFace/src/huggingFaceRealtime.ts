@@ -20,6 +20,7 @@ import {
     RealtimeProxyRegistry,
     REALTIME_PROXY_PATH,
     ResolveRealtimeProxyBaseWsUrl,
+    ResolveRealtimeTiming,
     type ClientRealtimeSessionConfig,
     type IRealtimeSession,
     type RealtimeSessionParams,
@@ -127,6 +128,15 @@ export class HuggingFaceRealtime extends OpenAIRealtime {
     public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = {};
 
     public static override readonly SupportsDynamicToolSet = HUGGINGFACE_REALTIME_PROFILE.supportsDynamicToolSet;
+
+    public override get DefaultCallDurationSeconds(): number | undefined {
+        return undefined;
+    }
+
+    public override get TrustsNativeResumption(): boolean {
+        return false;
+    }
+
     /**
      * @param apiKey The upstream key, or a keyless sentinel (`none` / `self-hosted` / `local` / `n/a`)
      * for unauthenticated self-hosted endpoints. The inherited SDK client is never used for the
@@ -156,8 +166,10 @@ export class HuggingFaceRealtime extends OpenAIRealtime {
      * model is configured before any audio streams. Transport death during startup rejects.
      */
     public override async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
-        const connection = this.createRawConnection(this.resolveUpstreamUrl(params));
-        const session = new HuggingFaceRealtimeSession(connection, RealtimeDriverFactsOf(this));
+        const url = this.resolveUpstreamUrl(params);
+        const connection = this.createRawConnection(url);
+        const session = new HuggingFaceRealtimeSession(connection, RealtimeDriverFactsOf(this), this);
+        session.SetConnectionFactory(() => this.createRawConnection(url));
         session.SetConnectTimeTools(params.Tools ?? []);
         // Declare the PCM rate the HF pipeline actually runs at (native 16 kHz, or the deployment's
         // Config.sampleRate override) so the SERVER-BRIDGED audio plane resamples correctly. Without
@@ -207,6 +219,17 @@ export class HuggingFaceRealtime extends OpenAIRealtime {
             TTLSeconds: HUGGINGFACE_PROXY_TICKET_TTL_SECONDS,
         });
         const proxyUrl = `${this.resolveProxyBaseWsUrl(params)}${REALTIME_PROXY_PATH}?ticket=${encodeURIComponent(ticket.ID)}`;
+        const timing = ResolveRealtimeTiming({
+            Config: params.Config,
+            DriverDefaultConnectionSeconds: this.DefaultCallDurationSeconds,
+            DriverDefaultBufferSeconds: this.ReconnectBufferSeconds,
+            DefaultTrustNativeResumption: this.ClientSessionTrustsNativeResumption('direct'),
+            ZeroDataRetention: params.ZeroDataRetention,
+        });
+        const maxSessionSeconds = this.ClampSessionSeconds(
+            RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds,
+            params.MaxSessionSeconds
+        );
         return {
             Provider: 'huggingface',
             Model: params.Model,
@@ -216,7 +239,10 @@ export class HuggingFaceRealtime extends OpenAIRealtime {
                 session: HuggingFaceRealtime.BuildSessionObject(params),
                 sampleRate: HuggingFaceRealtime.ResolveSampleRate(params),
             },
-            MaxSessionSeconds: this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds),
+            MaxSessionSeconds: maxSessionSeconds,
+            ...(timing.ConnectionMaxSeconds !== undefined ? { ConnectionMaxSeconds: timing.ConnectionMaxSeconds } : {}),
+            ReconnectBufferSeconds: timing.ReconnectBufferSeconds,
+            TrustNativeResumption: timing.TrustNativeResumption,
         };
     }
 
@@ -407,8 +433,12 @@ export class HuggingFaceRealtimeSession extends OpenAIRealtimeSession {
      * @param connection The raw-WS adapter (or an in-memory fake in tests) speaking OpenAI frames.
      * @param driverFacts The creating driver's static facts; defaults to HuggingFace's for direct construction.
      */
-    constructor(connection: IOpenAIRealtimeConnection, driverFacts: Readonly<RealtimeDriverFacts> = HuggingFaceRealtime.DriverFacts) {
-        super(connection, HUGGINGFACE_REALTIME_PROFILE, driverFacts);
+    constructor(
+        connection: IOpenAIRealtimeConnection,
+        driverFacts: Readonly<RealtimeDriverFacts> = HuggingFaceRealtime.DriverFacts,
+        model?: BaseRealtimeModel,
+    ) {
+        super(connection, HUGGINGFACE_REALTIME_PROFILE, driverFacts, model);
     }
 
     /** Records the tool set declared at connect time. Called by {@link HuggingFaceRealtime.StartSession}. */

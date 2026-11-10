@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT164 - Integration and Runtime Schema Typing and Auto-Indexing Pipeline",
+    "Name": "IT165 - Integration and Runtime Schema Typing and Auto-Indexing Pipeline",
     "Description": "Exercises IntegrationSchemaSync DecideTypeOverlay, TypeMapper, SchemaBuilder, and SchemaEngine DDLGenerator/SchemaEvolution against a live database. ISP1: physical tables are created with native SQL column types (INT, DECIMAL(18,2), FLOAT, BIT/BOOLEAN, DATE, DATETIMEOFFSET/TIMESTAMPTZ, UNIQUEIDENTIFIER/UUID), Soft PK/FK/Organic Key string columns are capped at 450 chars on SQL Server, and non-key text columns remain unbounded (NVARCHAR(MAX)/TEXT). ISP2: non-unique auto-indexes (IX_*_PK, IX_*_FK_*, IX_*_OK_*) exist on the live DB, re-running DDL is idempotent, and CreateIndexIfAbsent skips duplicate column tuples across pipelines. ISP3: SchemaEvolution alters an existing indexed column (dropping and recreating its dependent auto-index) and adds capped Soft FK and Organic Key columns with indexes. ISP4: live INSERT + Soft FK JOIN + Organic Key filter round-trips native types and a 2,000-char non-key text value without truncation.",
     "InputDefinition": {},
     "ExpectedOutcomes": {

@@ -42,13 +42,16 @@ import {
   RealtimeClientToolCall,
   RealtimeClientTranscript,
   RealtimeClientUsage,
+  type RealtimeClientTokenRefreshOptions,
+  type RefreshedRealtimeClientCredential,
+  type RealtimeClientTimingFields,
   VideoSourceArbiter,
   type DisplayCaptureOptions,
   type MediaVideoSource,
   type VideoSourceState,
   REQUESTED_TRACKS_SESSION_KEY
 } from '@memberjunction/ai-realtime-client';
-import { DefaultRealtimeSessionLauncher, HasClientCredential, type IRealtimeSessionLauncher } from './session-launcher';
+import { DefaultRealtimeSessionLauncher, HasClientCredential, IsUnsupportedGraphQLExtension, type IRealtimeSessionLauncher } from './session-launcher';
 import { RequestsAgentVideo, ResolveAvatarNotice, type RealtimeAvatarNotice } from './avatar-notice';
 import { ClientSessionDeadline, type SessionDeadlineOptions } from './client-session-deadline';
 import {
@@ -90,6 +93,7 @@ import { RecordingShardQueue } from './RecordingShardQueue';
 import { RecordingShardWindow, type RecordingShard } from './RecordingShardWindow';
 import { CreateRecordingShardStore, type IRecordingShardStore } from './RecordingShardStore';
 import type { IRecordingTransport } from './RecordingTransport';
+import { CreateSessionCloseBeaconForProvider, type ISessionCloseBeacon } from './SessionCloseBeacon';
 import { CreateRecordingTransportForProvider, DeleteStoredRecordingShard, DrainStoredRecordingShardsOnce, MAX_DRAINED_SHARDS_PER_LOAD, type RecordingShardDrainPass } from './RecordingShardDrain';
 
 /**
@@ -134,6 +138,12 @@ interface RecordingShardPipeline {
    * `resendUnacknowledgedWithKeepalive`.
    */
   FinalTerminal?: { LastSealedIndex: number; Acked: Promise<boolean> };
+}
+
+/** Options of {@link RealtimeSessionRuntime.SendPageHideSignals}. */
+export interface PageHideSignalOptions {
+  /** The `pagehide` event's `persisted` flag: true when the page enters the back/forward cache and may come back. */
+  Persisted: boolean;
 }
 
 /** Options of {@link RealtimeSessionRuntime.SendRecordingTerminal}. */
@@ -551,6 +561,36 @@ export interface StartRealtimeClientSessionResult {
    * so it is a credential: never log it. A host that mints for itself must pass it on for a relay session.
    */
   RelayUrl?: string | null;
+  /**
+   * OPTIONAL — the catalog timing the server resolved for this session (`ModelConfiguration.Realtime` on the model and
+   * model-vendor rows, narrowed to the driver's provider ceiling; `TrustNativeResumption` forced `false` for zero data
+   * retention). The runtime hands them to the client driver on the typed `ClientRealtimeSessionConfig` fields, because
+   * the server deliberately keeps them out of `SessionConfigJson`. Absent or null from a server that predates them and
+   * from a host that mints for itself and does not pass them on; the driver then uses its own defaults.
+   */
+  ConnectionMaxSeconds?: number | null;
+  SessionMaxSeconds?: number | null;
+  ReconnectBufferSeconds?: number | null;
+  TrustNativeResumption?: boolean | null;
+}
+
+/** The fields of a mint or refresh result that carry the session's catalog timing (see {@link StartRealtimeClientSessionResult}). */
+type RealtimeTimingResultFields = Pick<
+  StartRealtimeClientSessionResult,
+  'ConnectionMaxSeconds' | 'SessionMaxSeconds' | 'ReconnectBufferSeconds' | 'TrustNativeResumption'
+>;
+
+/**
+ * The timing fields a mint or refresh result carries, as `ClientRealtimeSessionConfig` fields. GraphQL answers an unset
+ * nullable field with `null`; those are left out so the client driver keeps its own value.
+ */
+function timingFieldsOf(result: RealtimeTimingResultFields): RealtimeClientTimingFields {
+  return {
+    ...(result.ConnectionMaxSeconds != null ? { ConnectionMaxSeconds: result.ConnectionMaxSeconds } : {}),
+    ...(result.SessionMaxSeconds != null ? { SessionMaxSeconds: result.SessionMaxSeconds } : {}),
+    ...(result.ReconnectBufferSeconds != null ? { ReconnectBufferSeconds: result.ReconnectBufferSeconds } : {}),
+    ...(result.TrustNativeResumption != null ? { TrustNativeResumption: result.TrustNativeResumption } : {}),
+  };
 }
 
 /**
@@ -1752,7 +1792,9 @@ export class RealtimeSessionRuntime {
    *
    * @param result The minted session — the same ten fields the `StartRealtimeClientSession`
    *   mutation returns. `EphemeralToken` and `Provider` are what actually open the call; a relay
-   *   session opens with its `Transport` and `RelayUrl` instead, so a host must pass those on.
+   *   session opens with its `Transport` and `RelayUrl` instead, so a host must pass those on. A host
+   *   should pass on the catalog timing too (`ConnectionMaxSeconds` and the rest), or the driver
+   *   reconnects on its own defaults.
    * @param options Host-side inputs the result cannot carry; see {@link RealtimeSessionRunOptions}.
    *   Every field defaults exactly as its {@link StartRealtimeSession} counterpart does.
    */
@@ -1880,6 +1922,10 @@ export class RealtimeSessionRuntime {
       }
 
       const clientConfig = this.BuildClientConfig(session);
+      client.ApplySessionConfigTiming(clientConfig);
+      // Forward the driver's options: the Gemini relay seed-fallback asks for AllowFreshReopen, and
+      // only that flag makes the server re-arm the relay's handle-less reopen window.
+      client.SetTokenRefreshCallback((options) => this.refreshClientSessionCredential(session, options));
       const connectError = await this.connectClient(client, clientConfig, microphone.Stream);
       if (this.startGeneration !== generation) {
         await this.unwindAbandonedStart(session, client, lease);
@@ -2621,6 +2667,15 @@ export class RealtimeSessionRuntime {
     return CreateRecordingTransportForProvider(this.Provider);
   }
 
+  /**
+   * Builds the beacon {@link SendPageHideSignals} closes the session with. The default posts a
+   * `keepalive` `CloseAgentSession` to the session's GraphQL provider with the same credentials as the
+   * GraphQL client; null when the provider has no URL. Override to supply another beacon.
+   */
+  protected createSessionCloseBeacon(): ISessionCloseBeacon | null {
+    return CreateSessionCloseBeaconForProvider(this.Provider);
+  }
+
 
   /**
    * Builds the durable local shard store. The default is IndexedDB where the host has it and a no-op
@@ -2918,6 +2973,60 @@ export class RealtimeSessionRuntime {
       void this.dispatchRecordingTerminal(pipeline, sealed, tail, true, final);
     } catch (error) {
       console.warn(`[RealtimeSession] Failed to send the recording terminal for session ${pipeline.SessionID}:`, error);
+    }
+  }
+
+  /**
+   * Whether {@link SendPageHideSignals} closes the live session. True by default. A host that closes the
+   * session from `pagehide` itself (the `<mj-realtime-widget>` element) turns it off: its close and the
+   * beacon would be two `CloseAgentSession` calls for one session, and the server shares overlapping closes
+   * only within one host instance.
+   */
+  public ClosesSessionOnPageHide = true;
+
+  /**
+   * The session this runtime's `CloseAgentSession` closed (the server returned true; {@link closeServerSession}). End's
+   * teardown closes the session, then keeps its id while it waits on the recording terminal's ack, so a
+   * `pagehide` in that window would otherwise send a second close of a closed session. While the close is
+   * still in flight this stays unset and the beacon is still sent: unload can cancel the ordinary close. It
+   * also stays unset when the server did not close the session, so the beacon tries again.
+   */
+  private completedServerCloseSessionId: string | null = null;
+
+  /**
+   * The page-lifecycle `pagehide` handler: the page is being hidden for navigation or unload. Sends the
+   * final recording terminal ({@link SendRecordingTerminal}), then, when the page is going away for good
+   * (`persisted` false, so not entering the back/forward cache, from which it may come back), closes the
+   * live server session with a `keepalive` `CloseAgentSession` ({@link ISessionCloseBeacon}). An
+   * ordinary close is cancelled on unload, so without it a closed tab left the session `Active` until
+   * the server janitor's idle sweep.
+   *
+   * Synchronous, like {@link SendRecordingTerminal}: everything is dispatched before it returns. The
+   * terminal goes first so the recording keeps priority on the browser's ~64 KiB per-page keepalive
+   * budget; the recording uses at most {@link recordingKeepaliveBudgetBytes} of it, and the close body
+   * (a few hundred bytes) fits in the remainder reserved for exactly such a close. Never throws.
+   *
+   * Only for `pagehide`: a hidden tab (`visibilitychange`) must not close the session, the user may
+   * come back. A host that sends its own close beacon turns {@link ClosesSessionOnPageHide} off.
+   */
+  public SendPageHideSignals(options: PageHideSignalOptions): void {
+    this.SendRecordingTerminal({ Final: true });
+    const agentSessionId = this.agentSessionId;
+    if (options.Persisted || !agentSessionId || !this.ClosesSessionOnPageHide) {
+      return;
+    }
+    if (this.completedServerCloseSessionId && UUIDsEqual(this.completedServerCloseSessionId, agentSessionId)) {
+      return;
+    }
+    try {
+      const beacon = this.createSessionCloseBeacon();
+      if (!beacon) {
+        console.warn(`[RealtimeSession] Page closed with session ${agentSessionId} live, but the provider has no endpoint to close it on; the server janitor closes it.`);
+        return;
+      }
+      void beacon.SendClose(agentSessionId, 'Explicit');
+    } catch (error) {
+      console.warn(`[RealtimeSession] Failed to send the page-close CloseAgentSession for session ${agentSessionId}:`, error);
     }
   }
 
@@ -4227,7 +4336,8 @@ export class RealtimeSessionRuntime {
    * Aggregates the tracks active channels source and sink under {@link REQUESTED_TRACKS_SESSION_KEY} so the
    * driver can negotiate them (e.g., inbound video for Whiteboard / RemoteBrowser, outbound video for a
    * channel that shows the agent's video). A track the model does not support resolves to `'unsupported'`.
-   * The session's transport and relay URL go to the driver as minted (an unknown transport is left out: direct).
+   * The session's transport and relay URL go to the driver as minted (an unknown transport is left out: direct), and so
+   * does the catalog timing, on the typed fields.
    */
   public BuildClientConfig(session: StartRealtimeClientSessionResult): ClientRealtimeSessionConfig {
     const sessionConfig = this.parseSessionConfig(session.SessionConfigJson);
@@ -4264,6 +4374,7 @@ export class RealtimeSessionRuntime {
       ExpiresAt: session.ExpiresAt,
       ...(transport ? { Transport: transport } : {}),
       ...(session.RelayUrl ? { RelayUrl: session.RelayUrl } : {}),
+      ...timingFieldsOf(session),
       SessionConfig: sessionConfig
     };
   }
@@ -4287,6 +4398,132 @@ export class RealtimeSessionRuntime {
     } catch (error) {
       console.error('[RealtimeSession] Failed to parse/apply SessionConfigJson:', error);
       return {};
+    }
+  }
+
+  /**
+   * Mints a fresh single-use ephemeral credential (or extends the relay grant) for an active
+   * browser realtime session via `RefreshRealtimeClientSessionToken(agentSessionId, allowFreshReopen)`.
+   * During rolling upgrades where an older MJServer does not expose `RefreshRealtimeClientSessionToken`
+   * yet, falls back once to the initial credential if its `ExpiresAt` is still in the future.
+   */
+  private async refreshClientSessionCredential(
+    initialSession: StartRealtimeClientSessionResult,
+    options?: RealtimeClientTokenRefreshOptions
+  ): Promise<RefreshedRealtimeClientCredential> {
+    const agentSessionId = this.agentSessionId ?? initialSession.AgentSessionId;
+    if (!agentSessionId) {
+      throw new Error('Cannot refresh realtime session credential: no active agentSessionId');
+    }
+    const allowFreshReopen = options?.AllowFreshReopen === true;
+    const buildMutation = (includeKindAndReopen: boolean): string =>
+      includeKindAndReopen && allowFreshReopen
+        ? `
+      mutation RefreshRealtimeClientSessionToken($agentSessionId: String!, $allowFreshReopen: Boolean) {
+        RefreshRealtimeClientSessionToken(agentSessionId: $agentSessionId, allowFreshReopen: $allowFreshReopen) {
+          Success
+          ErrorMessage
+          Kind
+          EphemeralToken
+          ExpiresAt
+          RelayUrl
+          SessionConfigJson
+          ConnectionMaxSeconds
+          SessionMaxSeconds
+          ReconnectBufferSeconds
+          TrustNativeResumption
+        }
+      }
+    `
+        : `
+      mutation RefreshRealtimeClientSessionToken($agentSessionId: String!) {
+        RefreshRealtimeClientSessionToken(agentSessionId: $agentSessionId) {
+          Success
+          ErrorMessage
+          EphemeralToken
+          ExpiresAt
+          RelayUrl
+          SessionConfigJson
+          ConnectionMaxSeconds
+          SessionMaxSeconds
+          ReconnectBufferSeconds
+          TrustNativeResumption
+        }
+      }
+    `;
+    try {
+      type RefreshGraphQLPayload = {
+        RefreshRealtimeClientSessionToken?: {
+          Success: boolean;
+          ErrorMessage?: string;
+          Kind?: string | null;
+          EphemeralToken?: string;
+          ExpiresAt?: string;
+          RelayUrl?: string | null;
+          SessionConfigJson?: string | null;
+        } & RealtimeTimingResultFields;
+      };
+      let response: RefreshGraphQLPayload;
+      if (allowFreshReopen) {
+        try {
+          response = (await this.gql().ExecuteGQL(buildMutation(true), {
+            agentSessionId,
+            allowFreshReopen: true,
+          })) as RefreshGraphQLPayload;
+        } catch (err) {
+          if (
+            IsUnsupportedGraphQLExtension(err, 'allowFreshReopen') ||
+            IsUnsupportedGraphQLExtension(err, 'Kind')
+          ) {
+            response = (await this.gql().ExecuteGQL(buildMutation(false), {
+              agentSessionId,
+            })) as RefreshGraphQLPayload;
+          } else {
+            throw err;
+          }
+        }
+      } else {
+        response = (await this.gql().ExecuteGQL(buildMutation(false), {
+          agentSessionId,
+        })) as RefreshGraphQLPayload;
+      }
+      const result = response?.RefreshRealtimeClientSessionToken;
+      if (!result?.Success) {
+        throw new Error(result?.ErrorMessage ?? 'RefreshRealtimeClientSessionToken failed');
+      }
+      const effectiveRelayUrl = result.RelayUrl || initialSession.RelayUrl;
+      const isRelayRefresh =
+        result.Kind === 'relay' ||
+        initialSession.Transport === 'relay' ||
+        (!result.EphemeralToken && Boolean(effectiveRelayUrl));
+      if (!isRelayRefresh && !result.EphemeralToken) {
+        throw new Error(result?.ErrorMessage ?? 'RefreshRealtimeClientSessionToken returned no token');
+      }
+      return {
+        Kind: isRelayRefresh ? 'relay' : 'token',
+        EphemeralToken: result.EphemeralToken ?? '',
+        ExpiresAt: result.ExpiresAt ?? initialSession.ExpiresAt,
+        ...(effectiveRelayUrl ? { RelayUrl: effectiveRelayUrl } : {}),
+        ...timingFieldsOf(result),
+        SessionConfig: this.parseSessionConfig(result.SessionConfigJson ?? initialSession.SessionConfigJson),
+      };
+    } catch (error) {
+      const initialExpiryMs = Date.parse(initialSession.ExpiresAt);
+      if (
+        IsUnsupportedGraphQLExtension(error, 'RefreshRealtimeClientSessionToken') &&
+        Number.isFinite(initialExpiryMs) &&
+        initialExpiryMs > Date.now()
+      ) {
+        const isRelay = initialSession.Transport === 'relay' || (!initialSession.EphemeralToken && Boolean(initialSession.RelayUrl));
+        return {
+          Kind: isRelay ? 'relay' : 'token',
+          EphemeralToken: initialSession.EphemeralToken,
+          ExpiresAt: initialSession.ExpiresAt,
+          ...(initialSession.RelayUrl ? { RelayUrl: initialSession.RelayUrl } : {}),
+          SessionConfig: this.parseSessionConfig(initialSession.SessionConfigJson),
+        };
+      }
+      throw error;
     }
   }
 
@@ -5690,7 +5927,13 @@ export class RealtimeSessionRuntime {
           CloseAgentSession(agentSessionId: $agentSessionId, closeReason: $closeReason)
         }
       `;
-      await this.gql().ExecuteGQL(mutation, { agentSessionId, closeReason });
+      const result = await this.gql().ExecuteGQL(mutation, { agentSessionId, closeReason });
+      // Only a close the server reports done stops the page-close beacon; `false` means the session did not close.
+      if (result?.CloseAgentSession === true) {
+        this.completedServerCloseSessionId = agentSessionId;
+      } else {
+        console.warn(`[RealtimeSession] The server did not close session ${agentSessionId} (closeReason ${closeReason}).`);
+      }
     } catch (error) {
       console.error(`[RealtimeSession] Failed to close server session ${agentSessionId} (closeReason ${closeReason}):`, error);
     }

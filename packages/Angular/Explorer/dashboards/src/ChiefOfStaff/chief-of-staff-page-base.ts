@@ -10,15 +10,17 @@ import {
     MJUserRoutineEntity,
     ResourceData,
 } from '@memberjunction/core-entities';
-import { UUIDMap, MJGlobal, EscapeSQLString } from '@memberjunction/global';
+import { UUIDMap, MJGlobal, EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { ActionParam } from '@memberjunction/actions-base';
 import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { AgentRequestPanelResult } from '@memberjunction/ng-agent-requests';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
+    AgentDisplayName,
     BuildChiefOfStaffAgentContext,
     BuildChiefOfStaffScopeFilters,
     BuildGovernanceSummary,
@@ -29,7 +31,6 @@ import {
     CHIEF_OF_STAFF_PAGE_ICONS,
     CHIEF_OF_STAFF_PAGE_LABELS,
     CHIEF_OF_STAFF_PAGES,
-    ChiefOfStaffDisplayName,
     ChiefOfStaffMetrics,
     ChiefOfStaffPage,
     FormatEmailDraftForClipboard,
@@ -38,12 +39,16 @@ import {
     IsSpentOneShotRoutine,
     ParseEmailApprovalPayload,
     RequestSummaryItem,
+    ResolveSelectableAgent,
     RoutineDisplayStatus,
     RoutineSummaryItem,
+    SelectableAgentsForGovernance,
     SortRoutinesForDisplay,
     ValidateChiefOfStaffPageParam,
+    ValidateSearchQueryParam,
     type EmailApprovalDraft,
     type RoutineDisplayStatusValue,
+    type SelectableGovernanceAgent,
 } from './chief-of-staff-agent-context';
 import { IsChiefOfStaffEntityChange } from './chief-of-staff-live-refresh';
 
@@ -68,6 +73,7 @@ export interface ChiefOfStaffClientTool {
 export abstract class BaseChiefOfStaffPage extends BaseResourceComponent implements OnInit, OnDestroy {
     protected cdr = inject(ChangeDetectorRef);
     protected appManager = inject(ApplicationManager);
+    protected confirmService = inject(MJConfirmService, { optional: true });
     protected override destroy$ = new Subject<void>();
 
     /** Which page this component is. */
@@ -100,11 +106,23 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
     /** The conversation entity when it could be loaded (title, pinned agent); the chat area loads messages by ID either way. */
     public BriefingConversation: MJConversationEntity | null = null;
 
-    /** Resolved once per load from the agent's metadata name; null until LoadChiefOfStaffData has run. */
+    /** Agents available in the toolbar agent picker (Chief of Staff, Software Factory, etc.). */
+    public AvailableAgents: SelectableGovernanceAgent[] = [];
+    /** Currently selected agent ID for Policy, Wake Routines, and Approvals. */
+    public SelectedAgentID: string | null = null;
+    /** Metadata Name of the currently selected agent. */
+    public SelectedAgentName: string = CHIEF_OF_STAFF_AGENT_NAME;
     protected chiefOfStaffAgentId: string | null = null;
+    private requestedAgentQueryParam: string | null = null;
+    private agentQueryParamInitialized = false;
+    private _loadGeneration = 0;
+
+    public get SelectedAgentDisplayName(): string {
+        return AgentDisplayName(this.DraftPolicy, this.SelectedAgentName ?? CHIEF_OF_STAFF_AGENT_NAME);
+    }
 
     public get ChiefOfStaffDisplayName(): string {
-        return ChiefOfStaffDisplayName(this.DraftPolicy);
+        return this.SelectedAgentDisplayName;
     }
 
     /** Approval requests awaiting a decision, filtered by the search text. */
@@ -142,7 +160,9 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
 
     async ngOnInit(): Promise<void> {
         super.ngOnInit();
+        this.requestedAgentQueryParam = this.GetQueryParams()['agent'] ?? null;
         this.OnPageInit();
+        this.agentQueryParamInitialized = true;
 
         await this.LoadChiefOfStaffData();
         this.navigationService.SetAgentClientTools(this, [...this.coreAgentTools(), ...this.PageAgentTools()]);
@@ -154,6 +174,119 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
         this.subscribeToLiveEntityChanges();
 
         this.NotifyLoadComplete();
+    }
+
+    protected override OnQueryParamsChanged(
+        params: Record<string, string>,
+        _source: 'popstate' | 'deeplink',
+    ): void {
+        const nextAgent = params['agent'] ?? null;
+        const resolved = nextAgent
+            ? ResolveSelectableAgent(this.AvailableAgents, nextAgent)
+            : ResolveSelectableAgent(this.AvailableAgents, CHIEF_OF_STAFF_AGENT_NAME);
+        if (resolved && !UUIDsEqual(resolved.ID, this.chiefOfStaffAgentId ?? this.SelectedAgentID)) {
+            void this.requestAgentSwitch(resolved, false);
+        }
+    }
+
+    public OnSelectedAgentSelectionChanged(): void {
+        if (!this.SelectedAgentID) {
+            return;
+        }
+        void this.applySelectedAgentId(this.SelectedAgentID, true);
+    }
+
+    public OnSelectedAgentChange(agentId: string): void {
+        if (!agentId || UUIDsEqual(agentId, this.chiefOfStaffAgentId ?? this.SelectedAgentID)) {
+            return;
+        }
+        void this.applySelectedAgentId(agentId, false);
+    }
+
+    private async applySelectedAgentId(agentId: string, allowSameId: boolean): Promise<boolean> {
+        if (!allowSameId && UUIDsEqual(agentId, this.SelectedAgentID)) {
+            return false;
+        }
+        const match = this.AvailableAgents.find((a) => UUIDsEqual(a.ID, agentId));
+        if (!match) {
+            return false;
+        }
+        if (UUIDsEqual(match.ID, this.chiefOfStaffAgentId)) {
+            return false;
+        }
+        return this.requestAgentSwitch(match, true);
+    }
+
+    private async requestAgentSwitch(
+        targetAgent: SelectableGovernanceAgent,
+        syncQueryParam: boolean,
+    ): Promise<boolean> {
+        const prevId = this.chiefOfStaffAgentId;
+        const prevName = this.SelectedAgentName ?? CHIEF_OF_STAFF_AGENT_NAME;
+
+        if (this.IsPageSaveInFlight()) {
+            this.SelectedAgentID = prevId;
+            if (!syncQueryParam) {
+                this.syncSelectedAgentQueryParam();
+            }
+            this.cdr.markForCheck();
+            return false;
+        }
+
+        if (this.HasUnsavedPageEdits()) {
+            if (!this.confirmService) {
+                this.FeedbackBanner = {
+                    Type: 'error',
+                    Message:
+                        'You have unsaved governance policy changes. Please save or reset your changes before switching agents.',
+                };
+                this.SelectedAgentID = prevId;
+                if (!syncQueryParam) {
+                    this.syncSelectedAgentQueryParam();
+                }
+                this.cdr.markForCheck();
+                return false;
+            }
+            const confirmed = await this.confirmService.Confirm({
+                title: 'Discard changes?',
+                message: `Leave "${prevName}" without saving?`,
+                detail: 'Your unsaved governance policy changes will be lost.',
+                type: 'warning',
+                confirmText: 'Discard changes',
+                cancelText: 'Keep editing',
+            });
+            if (!confirmed) {
+                this.SelectedAgentID = prevId;
+                if (!syncQueryParam) {
+                    this.syncSelectedAgentQueryParam();
+                }
+                this.cdr.markForCheck();
+                return false;
+            }
+            this.ResetUnsavedPageEdits();
+        }
+
+        this.SelectedAgentID = targetAgent.ID;
+        this.SelectedAgentName = targetAgent.Name;
+        this.chiefOfStaffAgentId = targetAgent.ID;
+        this.requestedAgentQueryParam = null;
+        if (syncQueryParam) {
+            this.syncSelectedAgentQueryParam();
+        }
+        await this.LoadChiefOfStaffData();
+        return true;
+    }
+
+    protected syncSelectedAgentQueryParam(): void {
+        if (!this.agentQueryParamInitialized) {
+            return;
+        }
+        const selectedName = this.SelectedAgentName ?? CHIEF_OF_STAFF_AGENT_NAME;
+        const isDefault =
+            selectedName.trim().toLowerCase() === CHIEF_OF_STAFF_AGENT_NAME.toLowerCase();
+        this.UpdateQueryParams({
+            agent: isDefault ? null : selectedName,
+        });
     }
 
     override ngOnDestroy(): void {
@@ -185,6 +318,21 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
         return [];
     }
 
+    /** True when the page holds unsaved user edits that would be clobbered by an agent switch or live reload. */
+    protected HasUnsavedPageEdits(): boolean {
+        return false;
+    }
+
+    /** True when the page is actively persisting user edits. */
+    protected IsPageSaveInFlight(): boolean {
+        return false;
+    }
+
+    /** Clears unsaved-edit state after the user confirms discarding changes. */
+    protected ResetUnsavedPageEdits(): void {
+        // default: nothing
+    }
+
     /** A change arrived while the tab was detached; reload once when it is shown again. */
     private liveReloadPending = false;
 
@@ -201,7 +349,7 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
             debounceTime(750),
             takeUntil(this.destroy$),
         ).subscribe(() => {
-            if (this.navigationService.IsResourceDetached(this)) {
+            if (this.navigationService.IsResourceDetached(this) || this.HasUnsavedPageEdits() || this.IsPageSaveInFlight()) {
                 this.liveReloadPending = true;
                 return;
             }
@@ -212,12 +360,16 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
             filter((c) => c === this && this.liveReloadPending),
             takeUntil(this.destroy$),
         ).subscribe(() => {
+            if (this.HasUnsavedPageEdits() || this.IsPageSaveInFlight()) {
+                return;
+            }
             this.liveReloadPending = false;
             void this.LoadChiefOfStaffData();
         });
     }
 
     public async LoadChiefOfStaffData(): Promise<void> {
+        const generation = ++this._loadGeneration;
         this.IsLoading = true;
         this.cdr.markForCheck();
 
@@ -230,14 +382,19 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
                 return;
             }
 
-            const chiefOfStaffAgentId = await this.resolveChiefOfStaffAgentId();
-            if (!chiefOfStaffAgentId) {
+            const selectedAgent = await this.resolveSelectedAgent();
+            if (generation !== this._loadGeneration) {
+                return;
+            }
+            if (!selectedAgent) {
                 this.showBanner('error', `The "${CHIEF_OF_STAFF_AGENT_NAME}" agent is not installed in this environment.`);
                 return;
             }
-            this.chiefOfStaffAgentId = chiefOfStaffAgentId;
+            this.SelectedAgentID = selectedAgent.ID;
+            this.SelectedAgentName = selectedAgent.Name;
+            this.chiefOfStaffAgentId = selectedAgent.ID;
 
-            const scope = BuildChiefOfStaffScopeFilters(currentUserId, chiefOfStaffAgentId);
+            const scope = BuildChiefOfStaffScopeFilters(currentUserId, selectedAgent.ID);
 
             const viewParams: RunViewParams[] = [
                 {
@@ -262,12 +419,15 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
             ];
 
             const [policyRes, routineRes, requestRes] = await rv.RunViews(viewParams);
+            if (generation !== this._loadGeneration) {
+                return;
+            }
 
             const policies = policyRes?.Success
                 ? (policyRes.Results as MJAIAgentUserPolicyEntity[])
                 : [];
             this.PolicyEntity = policies.length > 0 ? policies[0] : null;
-            this.DraftPolicy = BuildPolicyDraftFromEntity(this.PolicyEntity);
+            this.DraftPolicy = BuildPolicyDraftFromEntity(this.PolicyEntity, this.SelectedAgentName);
 
             this.Routines = routineRes?.Success
                 ? (routineRes.Results as MJUserRoutineEntity[])
@@ -281,12 +441,17 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
             this.recalculateMetrics();
             this.OnDataLoaded();
         } catch (err) {
+            if (generation !== this._loadGeneration) {
+                return;
+            }
             const msg = err instanceof Error ? err.message : String(err);
             this.showBanner('error', `Failed to load Chief of Staff data: ${msg}`);
         } finally {
-            this.IsLoading = false;
-            this.publishAgentContext();
-            this.cdr.markForCheck();
+            if (generation === this._loadGeneration) {
+                this.IsLoading = false;
+                this.publishAgentContext();
+                this.cdr.markForCheck();
+            }
         }
     }
 
@@ -324,14 +489,34 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
     }
 
     /**
-     * Looks the Chief of Staff agent up by name through the AI engine's cached agents, so the
-     * pages carry no hardcoded agent id and follow whichever provider they are embedded under.
+     * Loads the selectable governance agents from `AIEngineBase` and resolves the currently active
+     * agent from `?agent=` query param, current selection, or `'Chief of Staff'`.
      */
-    private async resolveChiefOfStaffAgentId(): Promise<string | null> {
+    private async resolveSelectedAgent(): Promise<SelectableGovernanceAgent | null> {
         const engine = <AIEngineBase>AIEngineBase.GetProviderInstance(this.ProviderToUse, AIEngineBase);
         await engine.EnsureLoaded(this.ProviderToUse.CurrentUser, this.ProviderToUse);
-        const agent = engine.GetAgentByName(CHIEF_OF_STAFF_AGENT_NAME);
-        return agent?.ID ?? null;
+        this.AvailableAgents = SelectableAgentsForGovernance(engine.Agents);
+
+        if (this.requestedAgentQueryParam) {
+            const matchedFromQuery = ResolveSelectableAgent(this.AvailableAgents, this.requestedAgentQueryParam);
+            this.requestedAgentQueryParam = null;
+            if (matchedFromQuery) {
+                return matchedFromQuery;
+            }
+        }
+
+        if (this.SelectedAgentID) {
+            const existing = this.AvailableAgents.find((a) => UUIDsEqual(a.ID, this.SelectedAgentID));
+            if (existing) {
+                return existing;
+            }
+        }
+
+        return (
+            ResolveSelectableAgent(this.AvailableAgents, CHIEF_OF_STAFF_AGENT_NAME) ??
+            this.AvailableAgents[0] ??
+            null
+        );
     }
 
     private readonly actionIdsByName = new Map<string, string>();
@@ -367,10 +552,27 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
     // Navigation between the Chief of Staff pages
     // =========================================================================
 
-    /** Opens another Chief of Staff page through its nav item. */
+    /** Opens another Chief of Staff page through its nav item, preserving a non-default agent selection. */
     public OpenPage(page: ChiefOfStaffPage): void {
         const app = this.appManager.GetAppByName(CHIEF_OF_STAFF_APP_NAME);
-        void this.navigationService.OpenNavItemByName(CHIEF_OF_STAFF_PAGE_LABELS[page], undefined, app?.ID);
+        const selectedName = this.SelectedAgentName ?? CHIEF_OF_STAFF_AGENT_NAME;
+        const isDefault =
+            selectedName.trim().toLowerCase() === CHIEF_OF_STAFF_AGENT_NAME.toLowerCase();
+        if (isDefault) {
+            void this.navigationService.OpenNavItemByName(
+                CHIEF_OF_STAFF_PAGE_LABELS[page],
+                undefined,
+                app?.ID,
+            );
+            return;
+        }
+        const queryParams = { agent: selectedName };
+        void this.navigationService.OpenNavItemByName(
+            CHIEF_OF_STAFF_PAGE_LABELS[page],
+            queryParams,
+            app?.ID,
+            { queryParams },
+        );
     }
 
     // =========================================================================
@@ -675,8 +877,15 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
         const context = BuildChiefOfStaffAgentContext({
             Page: this.Page,
             SearchText: this.SearchText,
+            SelectedAgentID: this.SelectedAgentID,
+            SelectedAgentName: this.SelectedAgentName,
+            AvailableAgentNames: this.AvailableAgents.map((a) => a.Name),
             Metrics: this.Metrics,
-            Governance: BuildGovernanceSummary(this.DraftPolicy, this.PolicyEntity !== null),
+            Governance: BuildGovernanceSummary(
+                this.DraftPolicy,
+                this.PolicyEntity !== null,
+                this.SelectedAgentName,
+            ),
             Routines: this.Routines.map((r) => this.toRoutineSummary(r)),
             PendingRequests: this.PendingRequests.map((r) => this.toRequestSummary(r)),
         });
@@ -710,6 +919,45 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
                 },
             },
             {
+                Name: 'SelectGovernedAgent',
+                Description:
+                    'Switch the agent picker on the current page (by agent ID or name, e.g. "Chief of Staff" or "Software Factory") to view that agent\'s approvals, wakes, and governance policy.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {
+                        agent: {
+                            type: 'string',
+                            description: 'Agent ID or name',
+                        },
+                    },
+                    required: ['agent'],
+                },
+                Handler: async (params) => {
+                    const check = ValidateSearchQueryParam(params['agent'] as string | undefined);
+                    if (!check.ok) {
+                        return check.result;
+                    }
+                    const match = ResolveSelectableAgent(this.AvailableAgents, check.value);
+                    if (!match) {
+                        return {
+                            Success: false,
+                            Error: `No selectable agent matched "${check.value}". Available agents: ${this.AvailableAgents.map((a) => a.Name).join(', ')}`,
+                        };
+                    }
+                    if (!UUIDsEqual(match.ID, this.chiefOfStaffAgentId) && (this.HasUnsavedPageEdits() || this.IsPageSaveInFlight())) {
+                        return {
+                            Success: false,
+                            Error: `Cannot switch governed agent while "${this.SelectedAgentName}" has unsaved governance policy changes. Ask the user to save or reset their changes first.`,
+                        };
+                    }
+                    await this.applySelectedAgentId(match.ID, false);
+                    return {
+                        Success: true,
+                        Data: { SelectedAgentID: match.ID, SelectedAgentName: match.Name },
+                    };
+                },
+            },
+            {
                 Name: 'RefreshChiefOfStaff',
                 Description:
                     'Reload pending approvals, wake routines and the governance policy from the server.',
@@ -722,6 +970,7 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
                     return {
                         Success: true,
                         Data: {
+                            SelectedAgentName: this.SelectedAgentName,
                             PendingApprovalCount: this.Metrics.PendingApprovalCount,
                             ActiveWakeRoutineCount: this.Metrics.ActiveWakeRoutineCount,
                         },

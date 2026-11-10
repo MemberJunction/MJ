@@ -1,6 +1,6 @@
 /**
  * integration-schema-pipeline.checks.ts — the 'integration-schema-pipeline' bundle (ISP1–ISP4),
- * deterministic tier (IT164).
+ * deterministic tier (IT165).
  *
  * Exercises the Integration & Runtime Schema pipeline against the live database:
  *  - ISP1: DecideTypeOverlay + TypeMapper + SchemaEngine DDLGenerator create physical tables with
