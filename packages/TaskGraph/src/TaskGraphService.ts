@@ -21,6 +21,7 @@ import {
     LogStatus,
     RunInEntityTransaction,
     RunView,
+    ServerOperationScopeManager,
     UserInfo,
     type EntityTransactionScope,
 } from '@memberjunction/core';
@@ -39,6 +40,7 @@ import {
     RankGraphNodes,
     SerializeTaskSecurityEnvelope,
     SanitizeInvocationEnvelope,
+    TASK_GRAPH_RUNTIME_SECURITY_OPERATION,
     ValidateTaskGraphSpec,
     type TaskGraphFailurePolicy,
     type TaskGraphInvocationEnvelope,
@@ -1155,7 +1157,13 @@ export class TaskGraphService {
                 task.InputPayload = json;
             }
             PrepareTaskForRetry(task);
-            if (!(await task.Save())) return { Success: false, ErrorMessage: 'The task could not be saved.' };
+            // A workflow step's data is the dispatcher's (`MJTaskEntityServer`): this save carries the input the
+            // guarded statement above just wrote, and a retried Decision's cleared output, so it runs in that scope.
+            const retried = await ServerOperationScopeManager.Instance.RunWithAuthority(
+                { operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION, source: 'ServerEngine', allowedEntities: ['MJ: Tasks'], userId: context.ContextUser.ID },
+                () => task.Save(),
+            );
+            if (!retried) return { Success: false, ErrorMessage: 'The task could not be saved.' };
 
             for (const sibling of siblings) {
                 if (sibling.Status === 'Blocked') {

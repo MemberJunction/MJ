@@ -28,6 +28,8 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         /** The `Status` the row held before this save. */
         public storedStatus = 'Pending';
         public ContextCurrentUser: { ID: string } | undefined = undefined;
+        /** Other columns this save changes. */
+        public dirtyFields = new Set<string>();
         private saved = false;
         public get IsSaved(): boolean {
             return this.saved;
@@ -39,7 +41,7 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
             if (name === 'SecurityEnvelope') return { Dirty: this.envelopeDirty };
             if (name === 'Configuration') return { Dirty: this.Configuration !== this.storedConfiguration, OldValue: this.storedConfiguration };
             if (name === 'Status') return { Dirty: this.Status !== this.storedStatus, OldValue: this.storedStatus };
-            return undefined;
+            return { Dirty: this.dirtyFields.has(name) };
         }
         public Validate(): ValidationResult {
             const result = new ValidationResult();
@@ -54,7 +56,7 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
     return { ...(await importOriginal<object>()), MJTaskEntity: MockMJTaskEntity };
 });
 
-import { MJTaskEntityServer, RuntimeSecurityChangeRefusal, SecurityEnvelopeChangeRefusal } from '../custom/MJTaskEntityServer.server';
+import { ExecutableConfigurationChanged, MJTaskEntityServer, RuntimeSecurityChangeRefusal, SecurityEnvelopeChangeRefusal } from '../custom/MJTaskEntityServer.server';
 
 type TestTask = MJTaskEntityServer & { envelopeDirty: boolean; storedConfiguration: string | null; markSaved(): void };
 
@@ -232,5 +234,72 @@ describe('MJTaskEntityServer: who completed a Human step, and the dispatcher sco
         const recorded = task({ saved: true, stored: { runtime: { isOutputTainted: true } }, next: { runtime: { isOutputTainted: false } } }) as HumanTask;
         recorded.ContextCurrentUser = DISPATCHER;
         expect(await asDispatcher(() => recorded.Save())).toBe(true);
+    });
+});
+
+describe("MJTaskEntityServer: a workflow step's data is the dispatcher's", () => {
+    const SUBMITTER = { ID: '00000000-0000-4000-8000-0000000000a1' };
+    type Step = TestTask & { StepType: string | null; Status: string; storedStatus: string; ContextCurrentUser: { ID: string } | undefined; dirtyFields: Set<string> };
+    const asClient = <T>(fn: () => T): T => ServerOperationScopeManager.Instance.RunInClientCrudBoundary(fn);
+    const asDispatcher = <T>(fn: () => T): T => ServerOperationScopeManager.Instance.RunWithAuthority(
+        { operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION, source: 'ServerEngine', allowedEntities: ['MJ: Tasks'], userId: SUBMITTER.ID },
+        fn,
+    );
+
+    /** A saved step of `stepType` changing `fields`, saved as the submitter; `completes` moves a Human step to Complete. */
+    function step(stepType: string | null, fields: string[], completes = false): Step {
+        const t = task({ saved: true, stored: { human: { instructions: 'x' } } }) as Step;
+        t.StepType = stepType;
+        t.storedStatus = 'Pending';
+        t.Status = completes ? 'Complete' : 'Pending';
+        t.ContextCurrentUser = SUBMITTER;
+        fields.forEach((f) => t.dirtyFields.add(f));
+        return t;
+    }
+
+    it("refuses server code rewriting a step's output, input, name or description, an agent run as the submitter included", async () => {
+        for (const field of ['OutputPayload', 'InputPayload', 'Name', 'Description']) {
+            expect(await step('Action', [field]).Save()).toBe(false);
+            expect(await asClient(() => step('Action', [field]).Save())).toBe(false);
+        }
+    });
+
+    it("refuses filling in a Human step's answer before the person completes it, and takes the person's own in their completing save", async () => {
+        expect(await step('Human', ['OutputPayload']).Save()).toBe(false);
+        expect(await asClient(() => step('Human', ['OutputPayload']).Save())).toBe(false);
+        // Server code completing the step cannot give it an answer either.
+        expect(await step('Human', ['OutputPayload'], true).Save()).toBe(false);
+        expect(await asClient(() => step('Human', ['OutputPayload'], true).Save())).toBe(true);
+        expect(await asClient(() => step('Human', ['InputPayload'], true).Save())).toBe(false);
+    });
+
+    it('refuses changing what a waiting step runs: its action, agent, prompt, kind or place in the graph', async () => {
+        for (const field of ['ActionID', 'AgentID', 'PromptID', 'StepType', 'ParentID', 'TypeID', 'CompensatesTaskID']) {
+            expect(await step('Action', [field]).Save()).toBe(false);
+        }
+        const remapped = step('Action', []);
+        remapped.Configuration = JSON.stringify({ human: { instructions: 'x' }, inputMapping: { To: 'static:attacker@example.com' } });
+        expect(await remapped.Save()).toBe(false);
+    });
+
+    it("lets anyone move a step on the canvas, or reassign it, without touching what it runs", async () => {
+        const moved = step('Action', ['UserID', 'DueAt']);
+        moved.Configuration = JSON.stringify({ human: { instructions: 'x' }, layout: { x: 10, y: 20 } });
+        expect(await moved.Save()).toBe(true);
+    });
+
+    it("lets the dispatcher write a step's data, and leaves other tasks alone", async () => {
+        expect(await asDispatcher(() => step('Action', ['OutputPayload', 'InputPayload']).Save())).toBe(true);
+        expect(await step(null, ['OutputPayload', 'InputPayload', 'Name']).Save()).toBe(true);
+        expect(await step('External', ['OutputPayload', 'InputPayload']).Save()).toBe(true);
+    });
+});
+
+describe('ExecutableConfigurationChanged', () => {
+    it('ignores layout and runtime, key order included, and reads anything else as a change', () => {
+        expect(ExecutableConfigurationChanged('{"a":1,"layout":{"x":1}}', '{"layout":{"x":2},"a":1,"runtime":{"isOutputTainted":true}}')).toBe(false);
+        expect(ExecutableConfigurationChanged(null, '{"layout":{"x":1}}')).toBe(false);
+        expect(ExecutableConfigurationChanged('{"a":1}', '{"a":2}')).toBe(true);
+        expect(ExecutableConfigurationChanged('{"a":1}', 'not json')).toBe(true);
     });
 });

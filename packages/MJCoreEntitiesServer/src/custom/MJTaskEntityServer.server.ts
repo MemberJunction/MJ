@@ -81,6 +81,65 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
+ * The columns of a workflow step the dispatcher owns: its data (what it was given, what it produced, what a person
+ * is asked) and what it is (its kind, what it runs, where it sits). `Configuration` is checked separately, by
+ * {@link ExecutableConfigurationChanged}. Left writable: progress (status, timing, claim, errors), the assignee,
+ * and the rest, which decide nothing a step runs or reads.
+ */
+const WORKFLOW_STEP_OWNED_FIELDS = [
+    'InputPayload', 'OutputPayload', 'Name', 'Description',
+    'StepType', 'ActionID', 'AgentID', 'PromptID', 'ParentID', 'TypeID', 'CompensatesTaskID',
+] as const;
+
+/** `Configuration` keys anyone may write: `layout` is presentation, and `runtime` has its own guard. */
+const FREE_CONFIGURATION_KEYS = ['layout', 'runtime'];
+
+/**
+ * Whether a save changes what a step's `Configuration` tells it to do (input mapping, action, human step,
+ * compensation and the rest), as opposed to its `layout` or `runtime` keys. A `Configuration` that does not
+ * parse counts as changed.
+ */
+export function ExecutableConfigurationChanged(stored: string | null | undefined, next: string | null | undefined): boolean {
+    const executable = (configuration: string | null | undefined): string | undefined => {
+        if (!configuration) return '[]';
+        try {
+            const parsed: unknown = JSON.parse(configuration);
+            if (!isRecord(parsed)) return undefined;
+            const kept = Object.keys(parsed).filter((key) => !FREE_CONFIGURATION_KEYS.includes(key)).sort();
+            return JSON.stringify(kept.map((key) => [key, parsed[key]]));
+        } catch {
+            return undefined;
+        }
+    };
+    const before = executable(stored);
+    const after = executable(next);
+    return before === undefined || after === undefined || before !== after;
+}
+
+/**
+ * Why a save must not change a workflow step this way, or null when it may.
+ *
+ * A workflow step (`StepType` set, other than an A2A store's `External` row) feeds what it produced into
+ * the steps after it, runs what its definition names, and its name and description become the question its
+ * Human step's request asks. The submitter's own code (an agent run calling Update Record, which runs as the
+ * submitter) could otherwise rewrite the output of a step that ran clean, the input or the action of a step
+ * waiting to run, or the answer a Human step will carry before its person approves it, and the graph would
+ * treat that as trusted. So outside the dispatcher's scope those cannot change on a saved step. The person
+ * completing their own Human step may set its output, which is their answer.
+ *
+ * @param changedFields the data columns this save changes
+ * @param personCompletesHumanStep this save is the step's own Human completion, made as the person's client request
+ */
+export function WorkflowStepDataChangeRefusal(changedFields: readonly string[], personCompletesHumanStep: boolean): string | null {
+    const refused = changedFields.filter((field) => !(personCompletesHumanStep && field === 'OutputPayload'));
+    if (refused.length === 0) {
+        return null;
+    }
+    return `${refused.join(', ')} of a workflow step cannot be changed: only the task-graph dispatcher writes what a step is ` +
+        'and the data it carries, which the steps after it trust as its result.';
+}
+
+/**
  * `configuration` with `runtime.completedByUserID` set to `userID` (removed when `null`). A
  * `Configuration` that does not parse is returned unchanged: the step then records no completer, so its
  * completion clears nothing.
@@ -107,8 +166,9 @@ export function WithCompletedByUserID(configuration: string | null, userID: stri
 
 /**
  * Server-side `MJ: Tasks` entity: keeps a task's security envelope immutable after insert
- * ({@link SecurityEnvelopeChangeRefusal}) and its runtime security fields dispatcher-owned
- * ({@link RuntimeSecurityChangeRefusal}), and records who completes a Human step.
+ * ({@link SecurityEnvelopeChangeRefusal}), its runtime security fields and a workflow step's data
+ * dispatcher-owned ({@link RuntimeSecurityChangeRefusal}, {@link WorkflowStepDataChangeRefusal}), and records
+ * who completes a Human step.
  */
 @RegisterClass(BaseEntity, 'MJ: Tasks')
 export class MJTaskEntityServer extends MJTaskEntity {
@@ -145,6 +205,18 @@ export class MJTaskEntityServer extends MJTaskEntity {
                 result.Errors.push(new ValidationErrorInfo('Configuration', runtimeRefusal, this.Configuration, ValidationErrorType.Failure));
                 result.Success = false;
             }
+            if (this.IsSaved && this.StepType != null && this.StepType !== 'External') {
+                const changed: string[] = WORKFLOW_STEP_OWNED_FIELDS.filter((field) => this.GetFieldByName(field)?.Dirty);
+                if (ExecutableConfigurationChanged(storedConfiguration, this.Configuration)) {
+                    changed.push('Configuration');
+                }
+                const person = this.completesHumanStep() && ServerOperationScopeManager.Instance.IsInDirectClientCrud();
+                const dataRefusal = WorkflowStepDataChangeRefusal(changed, person);
+                if (dataRefusal) {
+                    result.Errors.push(new ValidationErrorInfo(changed[0], dataRefusal, null, ValidationErrorType.Failure));
+                    result.Success = false;
+                }
+            }
         }
         return result;
     }
@@ -157,6 +229,8 @@ export class MJTaskEntityServer extends MJTaskEntity {
 
     /** Whether this save runs inside the dispatcher's runtime-security scope, bound to this row's user. */
     private inDispatcherScope(): boolean {
-        return ServerOperationScopeManager.Instance.IsOperationActive([TASK_GRAPH_RUNTIME_SECURITY_OPERATION], 'MJ: Tasks', this.ContextCurrentUser);
+        // No user, no scope: without one, IsOperationActive would match a frame bound to anybody.
+        return this.ContextCurrentUser != null &&
+            ServerOperationScopeManager.Instance.IsOperationActive([TASK_GRAPH_RUNTIME_SECURITY_OPERATION], 'MJ: Tasks', this.ContextCurrentUser);
     }
 }
