@@ -128,11 +128,10 @@ export class MJInitializationService {
    * Navigate to the initial route after a successful login. A deep link is replayed
    * through the router; a bare `/` is left to the router's default route (the Home app).
    *
-   * @param document Unused since the Kendo drawer was removed; kept so existing callers
-   * (`AuthShellComponent`) and the deprecated alias keep compiling.
+   * @param _document No longer used; kept so existing callers (`AuthShellComponent`) and
+   *                  the deprecated alias keep compiling.
    */
-  NavigateToInitialRoute(initialPath: string, document: Document): void {
-    void document;
+  NavigateToInitialRoute(initialPath: string, _document: Document): void {
     localStorage.removeItem('jwt-retry-ts');
 
     if (initialPath !== '/') {

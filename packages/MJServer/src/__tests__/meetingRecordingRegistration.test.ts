@@ -66,7 +66,7 @@ class FakeEntity {
   // Conversation fields
   set UserID(v: string) { this.fields.UserID = v; }
   set Name(v: string) { this.fields.Name = v; }
-  set Type(v: string) { this.fields.Type = v; }
+  set TypeID(v: string) { this.fields.TypeID = v; }
   set ExternalID(v: string) { this.fields.ExternalID = v; }
   set ApplicationScope(v: string) { this.fields.ApplicationScope = v; }
   set RecordingFileID(v: string) { this.fields.RecordingFileID = v; }
@@ -165,7 +165,7 @@ describe('registerMeetingRecordingFile', () => {
     const result = await RegisterMeetingRecordingFile(egress, user, provider);
     expect(result.Success).toBe(true);
     const conv = created.conversation[0];
-    expect(conv.fields.Type).toBe('Meeting Room');
+    expect(conv.fields.TypeID).toBe('2E9EF85D-D18A-4B8E-B6AB-F65C7F91A926');
     expect(conv.fields.ExternalID).toBe('room-1');
     expect(conv.fields.ApplicationScope).toBe('Application');
   });

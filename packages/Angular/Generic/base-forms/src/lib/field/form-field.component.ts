@@ -382,9 +382,19 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     }
   }
 
-  /** Number of open (unresolved) anchored comment threads targeting this field. */
+  /** Total number of open (unresolved) anchored threads (notes + suggestions) targeting this field. */
   public get FieldOpenCommentCount(): number {
     return this.commentsCoordinator?.GetFieldOpenCommentCount(this.FieldName) ?? 0;
+  }
+
+  /** Number of open non-suggestion note threads targeting this field. */
+  public get FieldOpenNoteCount(): number {
+    return this.commentsCoordinator?.GetFieldOpenNoteCount(this.FieldName) ?? 0;
+  }
+
+  /** Number of open `FIELD_SUGGESTION` threads targeting this field. */
+  public get FieldOpenSuggestionCount(): number {
+    return this.commentsCoordinator?.GetFieldOpenSuggestionCount(this.FieldName) ?? 0;
   }
 
   /** Whether inline field commenting is available on this field. */
@@ -399,7 +409,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   }
 
   /** Opens the inline anchored comment popover (or drawer) targeted at this field. */
-  public OnOpenFieldComments(event: MouseEvent): void {
+  public OnOpenFieldComments(event: MouseEvent, preferredTypeFilter?: string): void {
     event.stopPropagation();
     event.preventDefault();
     if (!this.commentsCoordinator || !this.FieldName) return;
@@ -418,6 +428,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       QuotedValue: formattedVal && formattedVal.trim().length > 0 ? formattedVal : undefined,
       SectionKey: hostPanel?.SectionKey || undefined,
       SectionDisplayName: hostPanel?.SectionName || undefined,
+      PreferredTypeFilter: preferredTypeFilter ?? null,
       AnchorRect: rect
         ? {
             top: rect.top,
@@ -461,13 +472,13 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    * The control type to render in edit mode.
    * Determines which input component is used.
    *
-   * Also accepts deprecated Kendo-style type names for backward compatibility:
+   * Also accepts these deprecated legacy type names for backward compatibility:
    * - `'dropdownlist'` → `'select'`
    * - `'numerictextbox'` → `'number'`
    */
   @Input()
   set Type(value: 'textbox' | 'textarea' | 'number' | 'datepicker' | 'checkbox' | 'select' | 'autocomplete' | 'code' | 'dropdownlist' | 'numerictextbox') {
-    // Normalize deprecated Kendo type names to modern equivalents
+    // Normalize deprecated legacy type names to modern equivalents
     switch (value) {
       case 'dropdownlist':  this._type = 'select'; break;
       case 'numerictextbox': this._type = 'number'; break;

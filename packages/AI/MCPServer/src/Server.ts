@@ -75,6 +75,7 @@ import { Send401Response } from './auth/WWWAuthenticate.js';
 import { CreateOAuthProxyRouter } from './auth/OAuthProxyRouter.js';
 import type { OAuthProxyConfig } from './auth/OAuthProxyTypes.js';
 import { ResolveUpstreamOAuthEndpoints } from './auth/UpstreamEndpoints.js';
+import { ApplyTrustProxy } from './ProxySettings.js';
 
 
 /*******************************************************************************
@@ -1124,6 +1125,13 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
         // Create Express app for SSE transport
         const app = express();
 
+        // Behind a reverse proxy (CloudFront, a load balancer, ...) trust its forwarded client address
+        // before anything reads req.ip; otherwise every client shares the OAuth proxy's per-IP rate limit.
+        const trustProxy = _config.mcpServerSettings?.trustProxy;
+        if (ApplyTrustProxy(app, trustProxy)) {
+            console.log(`[MCP Server] Express trust proxy: ${JSON.stringify(trustProxy)}`);
+        }
+
         // CORS must be FIRST - browser preflight OPTIONS requests need immediate handling
         // before any other middleware touches the request
         app.use((req: Request, res: Response, next: NextFunction) => {
@@ -1250,6 +1258,7 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
                             stateTtlMs: proxySettings?.stateTtlMs,
                             jwt: jwtConfig,
                             enableConsentScreen: proxySettings?.enableConsentScreen ?? false,
+                            rateLimit: proxySettings?.rateLimit,
                         };
 
                         // Create and mount OAuth proxy router

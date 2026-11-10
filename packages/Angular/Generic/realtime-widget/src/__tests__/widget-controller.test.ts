@@ -128,6 +128,19 @@ describe('WidgetController', () => {
       expect(h.closes).toEqual([{ url: 'https://api.example.com/', token: 'live-token', sessionId: SESSION_ID }]);
     });
 
+    it('owns the tab-close: the runtime does not send a second close of the same session on pagehide', async () => {
+      const h = await liveCall();
+      const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
+      vi.stubGlobal('fetch', fetchMock);
+      try {
+        expect(h.runtime.ClosesSessionOnPageHide).toBe(false);
+        h.runtime.SendPageHideSignals({ Persisted: false });
+        expect(fetchMock).not.toHaveBeenCalled();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
     it('does not close the call on a pagehide into the back/forward cache', async () => {
       const h = await liveCall();
       expect(h.controller.OnPageHide(true)).toBe(false);
