@@ -24,7 +24,12 @@ import {
     type ICloneRelationshipPolicy,
     type IEntityFieldCloneConfiguration,
 } from "./entityConfiguration"
-import type { IEntitySubtypeSelectorConfig } from "./JSONType-interfaces/IEntitySubtypeSelectorConfig"
+import type {
+    IEntitySubtypeSelectorConfig,
+    IEntitySubtypeDriverConfig,
+    IEntitySubtypeUIDriverConfig,
+    SubtypeSelectorChangeBehavior,
+} from "./JSONType-interfaces/IEntitySubtypeSelectorConfig"
 import { EntityLifecyclePolicyEngine, type IEntityLifecyclePolicy } from "./entityLifecyclePolicy"
 import { DocumentNumberingEngine, type IDocumentNumberPolicy } from "./documentNumberingEngine"
 import { CrossEntityPolicyEngine, type IDeclarativeParentStateLockPolicy } from "./crossEntityPolicyEngine"
@@ -3217,20 +3222,44 @@ export class EntityInfo extends BaseInfo {
     SubtypeSelector: string = null
 
     private _subtypeSelectorConfig: IEntitySubtypeSelectorConfig | null | undefined = undefined;
+    private _subtypeSelectorRaw: string | null | undefined = undefined;
 
     /**
      * Parsed SubtypeSelector configuration, if configured.
      */
     get SubtypeSelectorConfig(): IEntitySubtypeSelectorConfig | null {
-        if (this._subtypeSelectorConfig === undefined) {
+        if (this._subtypeSelectorConfig === undefined || this._subtypeSelectorRaw !== this.SubtypeSelector) {
+            this._subtypeSelectorRaw = this.SubtypeSelector;
             if (this.SubtypeSelector && typeof this.SubtypeSelector === 'string') {
                 try {
                     const parsed = JSON.parse(this.SubtypeSelector) as Record<string, unknown>;
                     if (parsed && typeof parsed['Path'] === 'string' && parsed['Path'].trim().length > 0) {
-                        this._subtypeSelectorConfig = {
+                        const config: IEntitySubtypeSelectorConfig = {
                             Path: parsed['Path'].trim(),
                             UseForLoadedRecords: this.parseSubtypeSelectorUseForLoadedRecords(parsed),
                         };
+                        if (parsed['AutoEnsureOnSave'] !== undefined && parsed['AutoEnsureOnSave'] !== null) {
+                            config.AutoEnsureOnSave = this.parseSubtypeSelectorBooleanFlag(parsed, 'AutoEnsureOnSave');
+                        }
+                        if (parsed['OnSubtypeChange'] !== undefined && parsed['OnSubtypeChange'] !== null) {
+                            config.OnSubtypeChange = this.parseSubtypeSelectorChangeBehavior(parsed);
+                        }
+                        if (parsed['Driver'] !== undefined && parsed['Driver'] !== null) {
+                            const driver = this.parseSubtypeSelectorDriver(parsed);
+                            if (driver) {
+                                config.Driver = driver;
+                            }
+                        }
+                        if (parsed['FoldIntoForm'] !== undefined && parsed['FoldIntoForm'] !== null) {
+                            config.FoldIntoForm = this.parseSubtypeSelectorBooleanFlag(parsed, 'FoldIntoForm');
+                        }
+                        if (parsed['UIDriver'] !== undefined && parsed['UIDriver'] !== null) {
+                            const uiDriver = this.parseSubtypeSelectorUIDriver(parsed);
+                            if (uiDriver) {
+                                config.UIDriver = uiDriver;
+                            }
+                        }
+                        this._subtypeSelectorConfig = config;
                     } else {
                         LogError(`EntityInfo '${this.Name}': SubtypeSelector JSON must contain a non-empty 'Path' string property. Found: ${this.SubtypeSelector}`);
                         this._subtypeSelectorConfig = null;
@@ -3258,6 +3287,59 @@ export class EntityInfo extends BaseInfo {
         }
         LogError(`EntityInfo '${this.Name}': SubtypeSelector 'UseForLoadedRecords' must be true or false, but is ${JSON.stringify(value)}. Loads of this entity won't use the selector.`);
         return false;
+    }
+
+    private parseSubtypeSelectorBooleanFlag(parsed: Record<string, unknown>, key: string): boolean {
+        const value = parsed[key];
+        if (typeof value === 'boolean') {
+            return value;
+        }
+        LogError(`EntityInfo '${this.Name}': SubtypeSelector '${key}' must be true or false, but is ${JSON.stringify(value)}. Defaulting to false.`);
+        return false;
+    }
+
+    private parseSubtypeSelectorChangeBehavior(parsed: Record<string, unknown>): SubtypeSelectorChangeBehavior {
+        const value = parsed['OnSubtypeChange'];
+        if (value === 'Refuse' || value === 'Replace') {
+            return value;
+        }
+        LogError(`EntityInfo '${this.Name}': SubtypeSelector 'OnSubtypeChange' must be 'Refuse' or 'Replace', but is ${JSON.stringify(value)}. Defaulting to 'Refuse'.`);
+        return 'Refuse';
+    }
+
+    private parseSubtypeSelectorDriver(parsed: Record<string, unknown>): IEntitySubtypeDriverConfig | null {
+        const raw = parsed['Driver'];
+        if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+            const driverObj = raw as Record<string, unknown>;
+            const path = driverObj['Path'];
+            if (typeof path === 'string' && path.trim().length > 0) {
+                const driver: IEntitySubtypeDriverConfig = { Path: path.trim() };
+                const baseClass = driverObj['BaseClass'];
+                if (baseClass !== undefined && baseClass !== null) {
+                    if (typeof baseClass === 'string' && baseClass.trim().length > 0) {
+                        driver.BaseClass = baseClass.trim();
+                    } else {
+                        LogError(`EntityInfo '${this.Name}': SubtypeSelector 'Driver.BaseClass' must be a non-empty string when provided, but is ${JSON.stringify(baseClass)}.`);
+                    }
+                }
+                return driver;
+            }
+        }
+        LogError(`EntityInfo '${this.Name}': SubtypeSelector 'Driver' must be an object with a non-empty 'Path' string, but is ${JSON.stringify(raw)}.`);
+        return null;
+    }
+
+    private parseSubtypeSelectorUIDriver(parsed: Record<string, unknown>): IEntitySubtypeUIDriverConfig | null {
+        const raw = parsed['UIDriver'];
+        if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+            const uiDriverObj = raw as Record<string, unknown>;
+            const path = uiDriverObj['Path'];
+            if (typeof path === 'string' && path.trim().length > 0) {
+                return { Path: path.trim() };
+            }
+        }
+        LogError(`EntityInfo '${this.Name}': SubtypeSelector 'UIDriver' must be an object with a non-empty 'Path' string, but is ${JSON.stringify(raw)}.`);
+        return null;
     }
     /**
      * Whether to audit when users access records from this entity
@@ -3747,6 +3829,43 @@ export class EntityInfo extends BaseInfo {
             }
         }
         return true;
+    }
+
+    /**
+     * Returns true when a comment of the specified `MJ: Comment Types` code or name is permitted
+     * on records of this entity according to `Configuration.Comments.AllowedCommentTypes`.
+     *
+     * - Returns `false` whenever {@link AllowRecordComments} is `false`.
+     * - When `AllowedCommentTypes` is omitted, plain comments (`'COMMENT'` / `'Comment'`) are
+     *   allowed by default while specialized comment types (such as `'FIELD_SUGGESTION'`) must be
+     *   explicitly enabled by the entity.
+     * - When `AllowedCommentTypes` includes `'*'`, every comment type is permitted.
+     */
+    public IsCommentTypeAllowed(codeOrName: string | null | undefined, alternateName?: string | null): boolean {
+        if (!this.AllowRecordComments) {
+            return false;
+        }
+        const primary = (codeOrName ?? '').trim().toLowerCase();
+        const secondary = (alternateName ?? '').trim().toLowerCase();
+        if (!primary && !secondary) {
+            return true;
+        }
+
+        const configured = this.CommentsConfig?.AllowedCommentTypes;
+        if (!Array.isArray(configured)) {
+            return primary === 'comment' || secondary === 'comment';
+        }
+
+        const allowed = new Set(
+            configured.map((entry) => (entry ?? '').trim().toLowerCase()).filter(Boolean),
+        );
+        if (allowed.has('*')) {
+            return true;
+        }
+        return (
+            (primary.length > 0 && allowed.has(primary)) ||
+            (secondary.length > 0 && allowed.has(secondary))
+        );
     }
     /**
      * Date and time when this entity was created

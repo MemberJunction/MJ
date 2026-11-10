@@ -60,7 +60,8 @@ vi.mock('@memberjunction/conversations-runtime', () => ({
     },
 }));
 
-vi.mock('@memberjunction/core', () => {
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
     let seq = 0;
     class FakeDetail {
         ID = `detail-${++seq}`;
@@ -97,7 +98,7 @@ vi.mock('@memberjunction/core', () => {
             return state.runView();
         }
     }
-    return { Metadata, RunView };
+    return { ...actual, Metadata, RunView };
 });
 
 import { LoadAgents, ResolveTargetAgent, SendMessage } from '@/data/services/agents';

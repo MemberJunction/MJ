@@ -68,5 +68,45 @@
       "lastModified": "2026-03-13T19:42:31.019Z",
       "checksum": "eebe568b25ebac87f00cdc638dbebd669fee35bb9bf8b8647f91f422eb7ff239"
     }
+  },
+  {
+    "fields": {
+      "Name": "Plan Approval",
+      "Description": "Agent requests approval on a structured execution or delivery plan contract before beginning implementation.",
+      "Icon": "fa-solid fa-clipboard-check"
+    },
+    "primaryKey": {
+      "ID": "B58964C5-3123-4704-8D77-CDE0ADF3040E"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Criteria Change",
+      "Description": "Agent proposes or requests approval for a change to acceptance criteria, scope, or contract invariants.",
+      "Icon": "fa-solid fa-sliders"
+    },
+    "primaryKey": {
+      "ID": "074B99BF-445E-434D-A2B1-2B1CC3DAF0A7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Budget Increase",
+      "Description": "Agent requests authorization to raise cost, token, iteration, or elapsed-time budget limits for a work item.",
+      "Icon": "fa-solid fa-coins"
+    },
+    "primaryKey": {
+      "ID": "E7BA0BC0-8210-4423-A3A8-033F9144D5CF"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Merge Approval",
+      "Description": "Agent requests human approval to merge a pull request or land validated changes into a protected branch.",
+      "Icon": "fa-solid fa-code-merge"
+    },
+    "primaryKey": {
+      "ID": "C6037B14-B0D2-4C2B-9BE6-DC300AB777FD"
+    }
   }
 ]
