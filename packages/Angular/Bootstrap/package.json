@@ -47,6 +47,7 @@
     "@memberjunction/graphql-dataprovider": "6.2.0",
     "@memberjunction/ng-artifacts": "6.2.0",
     "@memberjunction/ng-auth-services": "6.2.0",
+    "@memberjunction/ng-base-forms": "6.2.0",
     "@memberjunction/ng-clustering": "6.2.0",
     "@memberjunction/ng-conversations": "6.2.0",
     "@memberjunction/ng-core-entity-forms": "6.2.0",

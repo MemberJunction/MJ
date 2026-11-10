@@ -1,0 +1,57 @@
+@if (ShouldRenderSection) {
+  <mj-collapsible-panel
+    [SectionKey]="SectionKey"
+    [SectionName]="SectionTitle"
+    [Icon]="SectionIcon"
+    [Form]="FormComponent"
+    [FormContext]="FormContext"
+    [Order]="SectionOrder"
+    [DefaultExpanded]="true"
+    (Navigate)="OnNavigate($event)">
+
+    @if (RefusalWarningMessage) {
+      <div class="mj-folded-subtype-warning">
+        <mj-alert
+          Variant="warning"
+          Size="sm"
+          Icon="fa-solid fa-triangle-exclamation"
+          Role="status">
+          {{ RefusalWarningMessage }}
+        </mj-alert>
+      </div>
+    }
+
+    @if (ActiveUIDriverKey) {
+      <div class="mj-folded-subtype-driver-host">
+        <ng-container #uiDriverHost></ng-container>
+      </div>
+    } @else if (ActiveChildRecord && GeneratedFieldSpecs.length > 0) {
+      <div class="mj-folded-subtype-fields">
+        @for (spec of GeneratedFieldSpecs; track spec.FieldName) {
+          <mj-form-field
+            [Provider]="Provider"
+            [Record]="ActiveChildRecord"
+            [FieldName]="spec.FieldName"
+            [Type]="spec.ControlType"
+            [LinkType]="spec.LinkType"
+            [ShowLabel]="true"
+            [EditMode]="EditMode && RefusalWarningMessage === null"
+            [FormContext]="FormContext"
+            (Navigate)="OnNavigate($event)">
+          </mj-form-field>
+        }
+      </div>
+    }
+  </mj-collapsible-panel>
+
+  @if (HasNestedFoldedSubtype && ActiveChildRecord) {
+    <mj-folded-subtype-section
+      [Provider]="Provider"
+      [Record]="ActiveChildRecord"
+      [FormComponent]="FormComponent"
+      [FormContext]="FormContext"
+      [EditMode]="EditMode"
+      (Navigate)="OnNavigate($event)">
+    </mj-folded-subtype-section>
+  }
+}

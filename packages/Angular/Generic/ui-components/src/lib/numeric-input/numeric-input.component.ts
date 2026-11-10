@@ -14,7 +14,7 @@ import { MJNamedControlBase } from '../a11y/named-control.base';
 import { WarnIfUnnamed } from '../a11y/unnamed-control-guard';
 
 /**
- * mj-numeric-input — Numeric input with min/max/step. Replaces `<kendo-numerictextbox>`.
+ * mj-numeric-input — Numeric input with min/max/step.
  *
  * A spinbutton with no accessible name announces as "spin button, blank" (WCAG 2.1 4.1.2). Use
  * {@link MJNamedControlBase.AriaLabelledBy} when a visible label exists,

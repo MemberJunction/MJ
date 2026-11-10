@@ -80,6 +80,7 @@ vi.mock('@memberjunction/ai', async (importOriginal) => {
     BaseEmbeddings: MockBaseEmbeddings,
     BaseImageGenerator: MockBaseImageGenerator,
     BaseRealtimeModel: MockBaseRealtimeModel,
+    BaseRealtimeSession: class {},
     ModelUsage: MockModelUsage,
     ChatResult: class {},
     ChatParams: class {},

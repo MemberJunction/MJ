@@ -290,6 +290,8 @@ describe('SchemaBuilder (integration)', () => {
             expect(migration.Content).toContain('CREATE SCHEMA IF NOT EXISTS "hubspot"');
             expect(migration.Content).toContain('"hubspot"."Contact"');
             expect(migration.Content).toContain('"__mj_integration_SyncStatus" VARCHAR(50) NOT NULL');
+            expect(migration.Content).toContain('CREATE INDEX IF NOT EXISTS "IX_hubspot_Contact_PK" ON hubspot."Contact"("ContactID")');
+            expect(migration.Content).toContain('CREATE INDEX IF NOT EXISTS "IX_hubspot_Deal_FK_ContactID" ON hubspot."Deal"("ContactID")');
         });
     });
 

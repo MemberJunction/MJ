@@ -16,8 +16,8 @@ import {
 @RegisterFormToolbarAction({
     Key: 'comments',
     EntityScope: '*',
-    MenuLabel: 'Comments',
-    Description: 'View all comments on this record',
+    MenuLabel: 'Notes & suggestions',
+    Description: 'View notes and field suggestions on this record',
     Icon: 'fa-regular fa-comment-dots',
     Mode: 'read',
     Placement: 'actions',

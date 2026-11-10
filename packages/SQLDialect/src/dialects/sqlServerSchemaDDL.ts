@@ -294,9 +294,26 @@ export class SQLServerSchemaDDL extends BaseSchemaDDL {
         return `IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = '${schemaName}')\n    EXEC('CREATE SCHEMA [${schemaName}]');\nGO`;
     }
 
-    /** SQL Server cannot index NVARCHAR(MAX) columns — cap to NVARCHAR(450). */
+    /**
+     * SQL Server cannot index NVARCHAR(MAX) / VARCHAR(MAX) columns or keys exceeding 900 bytes
+     * (450 NVARCHAR chars / 900 VARCHAR chars) — cap to NVARCHAR(450) / VARCHAR(450).
+     */
     override CapIndexableType(rawSqlType: string): string {
-        return rawSqlType.toUpperCase() === 'NVARCHAR(MAX)' ? 'NVARCHAR(450)' : rawSqlType;
+        const trimmed = (rawSqlType ?? '').trim();
+        const upper = trimmed.toUpperCase();
+        if (upper === 'NVARCHAR(MAX)' || upper === 'NTEXT') return 'NVARCHAR(450)';
+        if (upper === 'VARCHAR(MAX)' || upper === 'TEXT') return 'VARCHAR(450)';
+        const nvarcharMatch = trimmed.match(/^NVARCHAR\s*\(\s*(\d+)\s*\)$/i);
+        if (nvarcharMatch) {
+            const len = parseInt(nvarcharMatch[1], 10);
+            if (len > this.MaxKeyStringLength) return `NVARCHAR(${this.MaxKeyStringLength})`;
+        }
+        const varcharMatch = trimmed.match(/^VARCHAR\s*\(\s*(\d+)\s*\)$/i);
+        if (varcharMatch) {
+            const len = parseInt(varcharMatch[1], 10);
+            if (len > this.MaxKeyStringLength * 2) return `VARCHAR(${this.MaxKeyStringLength * 2})`;
+        }
+        return rawSqlType;
     }
 
     CreateTableIfNotExistsDDL(schema: string, tableName: string, columnsDDL: string): string {
@@ -403,6 +420,29 @@ export class SQLServerSchemaDDL extends BaseSchemaDDL {
         // Single-statement IF guard (no BEGIN/END) so migration chunkers that split on ';\n'
         // boundaries cannot separate the guard from the CREATE. The only ';' is the terminating ');'.
         return `IF OBJECT_ID(N'${fullTable}', N'U') IS NULL\nCREATE TABLE ${fullTable} (\n${columnsBody}\n);`;
+    }
+
+    override CreateIndexIfAbsent(options: IndexOptions): string {
+        const fullTable = `[${options.schema}].[${options.tableName}]`;
+        const escapedIdx = options.indexName.replace(/'/g, "''");
+        const colChecks = options.columns.map((c, idx) => {
+            const escapedCol = c.replace(/'/g, "''");
+            return `EXISTS (SELECT 1 FROM sys.index_columns ic JOIN sys.columns col ON col.object_id = ic.object_id AND col.column_id = ic.column_id WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id AND ic.key_ordinal = ${idx + 1} AND ic.is_included_column = 0 AND col.name = N'${escapedCol}')`;
+        });
+        const tupleGuard = colChecks.length > 0
+            ? ` OR ((SELECT COUNT(*) FROM sys.index_columns ic WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id AND ic.is_included_column = 0) = ${colChecks.length} AND ${colChecks.join(' AND ')})`
+            : '';
+        // Single-statement IF guard (no BEGIN/END) so RSU's ';\n' batch chunker keeps the guard and CREATE together.
+        // Checks both the index name AND the key-column tuple so SchemaEngine (IX_*) and CodeGenLib (IDX_AUTO_MJ_*)
+        // never create duplicate indexes over the same columns.
+        return `IF NOT EXISTS (SELECT 1 FROM sys.indexes i WHERE i.object_id = OBJECT_ID(N'${fullTable}') AND (i.name = N'${escapedIdx}'${tupleGuard}))\n${this.IndexDDL(options)};`;
+    }
+
+    override DropIndexIfExists(schema: string, tableName: string, indexName: string): string {
+        const fullTable = `[${schema}].[${tableName}]`;
+        const escapedIdx = indexName.replace(/'/g, "''");
+        const bracketEscapedIdx = indexName.replace(/]/g, ']]');
+        return `IF EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'${fullTable}') AND name = N'${escapedIdx}')\n    DROP INDEX [${bracketEscapedIdx}] ON ${fullTable};`;
     }
 
     override CommentOnObjectIfAbsent(objectType: string, schema: string, name: string, comment: string): string {
