@@ -1,5 +1,13 @@
 # @memberjunction/ai-heygen
 
+## 6.1.7
+
+### Patch Changes
+
+- @memberjunction/ai@6.1.7
+- @memberjunction/global@6.1.7
+- @memberjunction/network-utils@6.1.7
+
 ## 6.1.6
 
 ### Patch Changes

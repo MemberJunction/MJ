@@ -1,5 +1,34 @@
 # @memberjunction/react-test-harness
 
+## 6.1.7
+
+### Patch Changes
+
+- d3da8ab: React test harness reports what it knows about a failure instead of collapsing it. Field-access violations carry a structured `Details` object with up to three existing fields that resemble the one the component read (`SimilarFields`, from the new `FindSimilarNames` helper) and the complete list of valid fields (`AvailableFields`). A component that fails to register is reported once per component, naming the component and the phase that failed, instead of as one JSON blob. Harness setup failures and unusable component roots get their own rules (`harness-setup-error`, `component-load-error`). A call to a utility the harness was not given (such as `utilities.ai` with no AI tools) is now a medium `sandbox-utility-unavailable` warning, not a critical error that blames the component.
+
+  The linter now follows query and view rows to where generated components read them, so a misnamed field is reported in far more of the places it occurs. It follows rows through a `|| []` or `?? []` fallback, through React state set inside an effect (including `React.useMemo` / `React.useState`), through spread copies such as `[...rows].sort(...)`, and into lodash iteratees such as `_.sumBy(rows, r => ...)`. Variables are now resolved in the scope that reads them, so two callbacks that each name a parameter `row` no longer share a type; this removes false reports where one callback's row type was applied to another.
+
+  "Invalid JSX element type" errors are graded by volume instead of discarded. A few occurrences stay a non-blocking `low` violation (a child component resolving a moment late); 25 or more of the same error is `high` and fails the run, where before a component could throw hundreds and still report success. The detector no longer flags `React.memo`, `forwardRef`, `lazy` or context components, which are valid element types. Text extraction in `AssertionHelpers` and category-path trimming no longer use regular expressions that slow down quadratically on adversarial input, and the unsafe-array-operations suggestion makes every bracket access optional (`data?.[0]?.[1]`), not only the first.
+
+  The `type-mismatch-operation` and `type-compatibility` rules no longer report an array method called on a type that has it too: `Map#forEach`, `Set#forEach`, and `slice`, `concat`, `includes`, `indexOf`, `lastIndexOf` and `at` on strings. Both rules now share one list of array methods instead of two that had drifted apart.
+
+- 46f10f5: Report failed and unfinished data calls in `dataAccess`. `BuildDataAccessRecord` now records a result with `Success: false` as a failure carrying its `ErrorMessage` (a client-database timeout was recorded as a 0-row success), and `RunView` / `RunViews` / `RunQuery` calls are recorded when they start, so a call still running when the test finishes is reported as "still running after Ns" instead of being missing. Debug logs print FAILED for failed results.
+- Updated dependencies [1e9bd0f]
+- Updated dependencies [12663f0]
+- Updated dependencies [d3da8ab]
+  - @memberjunction/core@6.1.7
+  - @memberjunction/core-entities@6.1.7
+  - @memberjunction/react-linter@6.1.7
+  - @memberjunction/ai-core-plus@6.1.7
+  - @memberjunction/aiengine@6.1.7
+  - @memberjunction/ai-vectors-memory@6.1.7
+  - @memberjunction/interactive-component-types@6.1.7
+  - @memberjunction/core-entities-server@6.1.7
+  - @memberjunction/react-runtime@6.1.7
+  - @memberjunction/global@6.1.7
+  - @memberjunction/sql-dialect@6.1.7
+  - @memberjunction/sql-parser@6.1.7
+
 ## 6.1.6
 
 ### Patch Changes

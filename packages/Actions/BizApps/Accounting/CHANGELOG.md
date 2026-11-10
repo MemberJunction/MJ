@@ -1,5 +1,20 @@
 # @memberjunction/actions-bizapps-accounting
 
+## 6.1.7
+
+### Patch Changes
+
+- 4795ddd: Business Central `GetGLEntries` no longer requests or filters on `amount`, which the Business Central API v2.0 `generalLedgerEntry` does not have. It computes `amount` as `debitAmount - creditAmount` and applies `MinAmount` / `MaxAmount` to that value after the read.
+- Updated dependencies [1e9bd0f]
+- Updated dependencies [12663f0]
+- Updated dependencies [4a790a4]
+  - @memberjunction/core@6.1.7
+  - @memberjunction/core-entities@6.1.7
+  - @memberjunction/integration-engine@6.1.7
+  - @memberjunction/actions-base@6.1.7
+  - @memberjunction/actions@6.1.7
+  - @memberjunction/global@6.1.7
+
 ## 6.1.6
 
 ### Patch Changes

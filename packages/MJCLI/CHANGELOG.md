@@ -1,5 +1,34 @@
 # Change Log - @memberjunction/cli
 
+## 6.1.7
+
+### Patch Changes
+
+- 256bcc6: `mj migrate` no longer skips migrations when upgrading a database from a release line. The remote fetch (`--tag` or the install-pinned version) now selects every versioned migration the database has not applied and that lies above its highest baseline row, instead of only files newer than the highest applied version. When core migrations are pending that are older than the database's newest applied migration, and `mj.config.cjs` does not set `outOfOrder`, `mj migrate` enables `outOfOrder` for that run and logs each such file. An explicit `outOfOrder` setting is honoured as written.
+- Updated dependencies [1e9bd0f]
+- Updated dependencies [12663f0]
+  - @memberjunction/core@6.1.7
+  - @memberjunction/core-entities@6.1.7
+  - @memberjunction/server-bootstrap-lite@6.1.7
+  - @memberjunction/ai-cli@6.1.7
+  - @memberjunction/aiengine@6.1.7
+  - @memberjunction/codegen-lib@6.1.7
+  - @memberjunction/db-auto-doc@6.1.7
+  - @memberjunction/generic-database-provider@6.1.7
+  - @memberjunction/metadata-sync@6.1.7
+  - @memberjunction/open-app-engine@6.1.7
+  - @memberjunction/query-gen@6.1.7
+  - @memberjunction/sqlserver-dataprovider@6.1.7
+  - @memberjunction/testing-cli@6.1.7
+  - @memberjunction/cli-core@6.1.7
+  - @memberjunction/config@6.1.7
+  - @memberjunction/dynamic-packages@6.1.7
+  - @memberjunction/global@6.1.7
+  - @memberjunction/installer@6.1.7
+  - @memberjunction/sql-converter@6.1.7
+  - @memberjunction/sqlglot-ts@6.1.7
+  - @memberjunction/standards@6.1.7
+
 ## 6.1.6
 
 ### Patch Changes

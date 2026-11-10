@@ -1,5 +1,18 @@
 # @memberjunction/actions-bizapps-formbuilders
 
+## 6.1.7
+
+### Patch Changes
+
+- Updated dependencies [1e9bd0f]
+- Updated dependencies [12663f0]
+  - @memberjunction/core@6.1.7
+  - @memberjunction/core-entities@6.1.7
+  - @memberjunction/actions-base@6.1.7
+  - @memberjunction/actions@6.1.7
+  - @memberjunction/global@6.1.7
+  - @memberjunction/network-utils@6.1.7
+
 ## 6.1.6
 
 ### Patch Changes

@@ -1,5 +1,15 @@
 # @memberjunction/ng-media-player
 
+## 6.1.7
+
+### Patch Changes
+
+- Updated dependencies [1e9bd0f]
+- Updated dependencies [12663f0]
+  - @memberjunction/core@6.1.7
+  - @memberjunction/ng-base-types@6.1.7
+  - @memberjunction/graphql-dataprovider@6.1.7
+
 ## 6.1.6
 
 ### Patch Changes

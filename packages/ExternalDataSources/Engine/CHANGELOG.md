@@ -1,5 +1,18 @@
 # @memberjunction/external-data-sources
 
+## 6.1.7
+
+### Patch Changes
+
+- Updated dependencies [1e9bd0f]
+- Updated dependencies [12663f0]
+  - @memberjunction/core@6.1.7
+  - @memberjunction/core-entities@6.1.7
+  - @memberjunction/credentials@6.1.7
+  - @memberjunction/global@6.1.7
+  - @memberjunction/sql-dialect@6.1.7
+  - @memberjunction/sql-parser@6.1.7
+
 ## 6.1.6
 
 ### Patch Changes

@@ -1,5 +1,25 @@
 # Change Log - @memberjunction/ai-vector-sync
 
+## 6.1.7
+
+### Patch Changes
+
+- Updated dependencies [1e9bd0f]
+- Updated dependencies [12663f0]
+  - @memberjunction/core@6.1.7
+  - @memberjunction/core-entities@6.1.7
+  - @memberjunction/ai-core-plus@6.1.7
+  - @memberjunction/aiengine@6.1.7
+  - @memberjunction/ai-prompts@6.1.7
+  - @memberjunction/ai-vectors@6.1.7
+  - @memberjunction/ai-vectordb@6.1.7
+  - @memberjunction/ai-vectors-pinecone@6.1.7
+  - @memberjunction/credentials@6.1.7
+  - @memberjunction/templates-base-types@6.1.7
+  - @memberjunction/templates@6.1.7
+  - @memberjunction/ai@6.1.7
+  - @memberjunction/global@6.1.7
+
 ## 6.1.6
 
 ### Patch Changes
