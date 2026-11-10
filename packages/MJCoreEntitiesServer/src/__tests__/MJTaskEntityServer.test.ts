@@ -7,7 +7,7 @@
  * The generated base is mocked to a minimal stub whose `Validate()` succeeds and whose fields report
  * dirtiness and their stored value, so the test exercises only the guards the subclass adds.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { ServerOperationScopeManager, ValidationResult } from '@memberjunction/core';
 import { TASK_GRAPH_RUNTIME_SECURITY_OPERATION } from '@memberjunction/ai-core-plus';
 
@@ -25,6 +25,7 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         public storedConfiguration: string | null = null;
         public StepType: string | null = 'Action';
         public ParentID: string | null = '00000000-0000-4000-8000-0000000000aa';
+        public TypeID: string | null = null;
         public UserID: string | null = null;
         /** The task type's name, as the view joins it. */
         public Type: string | null = null;
@@ -62,6 +63,23 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
 });
 
 import { ExecutableConfigurationChanged, MJTaskEntityServer, RuntimeSecurityChangeRefusal, SecurityEnvelopeChangeRefusal } from '../custom/MJTaskEntityServer.server';
+
+/** The workflow task type's ID in these tests. */
+const WORKFLOW_TYPE = '00000000-0000-4000-8000-0000000000ff';
+
+/**
+ * `Save` resolves workflow membership with database reads; here a row says it directly: `parentIsWorkflow` (default
+ * true) for its stored parent, `nextParentIsWorkflow` (default: the same) for the parent this save gives it.
+ */
+type FactsHooks = { parentIsWorkflow?: boolean; nextParentIsWorkflow?: boolean };
+// Per test: the shared config restores mocks before each one.
+beforeEach(() => {
+    vi.spyOn(MJTaskEntityServer.prototype as unknown as { resolveWorkflowFacts(): Promise<unknown> }, 'resolveWorkflowFacts')
+        .mockImplementation(async function (this: FactsHooks) {
+            const stored = this.parentIsWorkflow ?? true;
+            return { WorkflowTypeID: WORKFLOW_TYPE, StoredParentIsWorkflow: stored, NextParentIsWorkflow: this.nextParentIsWorkflow ?? stored };
+        });
+});
 
 type TestTask = MJTaskEntityServer & { envelopeDirty: boolean; storedConfiguration: string | null; markSaved(): void };
 
@@ -133,8 +151,14 @@ describe('MJTaskEntityServer.Validate', () => {
         expect(result.Errors[0].Source).toBe('SecurityEnvelope');
     });
 
-    it('passes when a new task sets its envelope', () => {
-        expect(task({ saved: false, envelopeDirty: true }).Validate().Success).toBe(true);
+    it('passes when a new task sets its envelope (a graph row, made by the task-graph service)', () => {
+        const asService = <T>(fn: () => T): T => ServerOperationScopeManager.Instance.RunWithAuthority(
+            { operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION, source: 'ServerEngine', allowedEntities: ['MJ: Tasks'] },
+            fn,
+        );
+        const t = task({ saved: false, envelopeDirty: true });
+        t.ContextCurrentUser = { ID: '00000000-0000-4000-8000-0000000000a1' };
+        expect(asService(() => t.Validate().Success)).toBe(true);
     });
 
     it('passes when an existing task saves other fields', () => {
@@ -309,7 +333,9 @@ describe("MJTaskEntityServer: a workflow step's data is the dispatcher's", () =>
 
     it("lets the dispatcher write a step's data, and leaves other tasks alone", async () => {
         expect(await asDispatcher(() => step('Action', ['OutputPayload', 'InputPayload']).Save())).toBe(true);
-        expect(await step(null, ['OutputPayload', 'InputPayload', 'Name']).Save()).toBe(true);
+        const ordinary = step(null, ['OutputPayload', 'InputPayload', 'Name']);
+        (ordinary as FactsHooks).parentIsWorkflow = false;
+        expect(await ordinary.Save()).toBe(true);
         // An A2A store's row: `External`, with no parent.
         const a2a = step('External', ['OutputPayload', 'InputPayload']);
         (a2a as unknown as { ParentID: string | null }).ParentID = null;
@@ -338,6 +364,7 @@ describe("MJTaskEntityServer: a workflow's metadata is the dispatcher's", () => 
         t.StepType = null;
         t.ParentID = null;
         t.Type = type;
+        (t as unknown as { TypeID: string }).TypeID = type === 'AI Workflow' ? WORKFLOW_TYPE : '00000000-0000-4000-8000-0000000000ee';
         t.ContextCurrentUser = SUBMITTER;
         fields.forEach((f) => t.dirtyFields.add(f));
         return t;
@@ -355,5 +382,54 @@ describe("MJTaskEntityServer: a workflow's metadata is the dispatcher's", () => 
         settled.Status = 'Complete';
         expect(await settled.Save()).toBe(true);
         expect(await parent(['InputPayload'], 'A2A Task').Save()).toBe(true);
+    });
+});
+
+describe('MJTaskEntityServer: only the task-graph service makes a workflow or a step', () => {
+    const SUBMITTER = { ID: '00000000-0000-4000-8000-0000000000a1' };
+    const OTHER_TYPE = '00000000-0000-4000-8000-0000000000ee';
+    type Row = TestTask & { StepType: string | null; ParentID: string | null; TypeID: string | null; Status: string; storedStatus: string;
+        ContextCurrentUser: { ID: string } | undefined; dirtyFields: Set<string> } & FactsHooks;
+    const asService = <T>(fn: () => T): T => ServerOperationScopeManager.Instance.RunWithAuthority(
+        { operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION, source: 'ServerEngine', allowedEntities: ['MJ: Tasks'], userId: SUBMITTER.ID },
+        fn,
+    );
+    /** A new row, made by an ordinary save as the submitter. */
+    function created(fields: Partial<Row>): Row {
+        const t = task({ saved: false }) as Row;
+        t.StepType = null;
+        t.ParentID = null;
+        t.TypeID = OTHER_TYPE;
+        t.ContextCurrentUser = SUBMITTER;
+        Object.assign(t, fields);
+        return t;
+    }
+
+    it('refuses creating a workflow, or a step under one, with or without a StepType, outside the service', async () => {
+        expect(await created({ TypeID: WORKFLOW_TYPE }).Save()).toBe(false);
+        expect(await created({ ParentID: 'p', StepType: 'Action' }).Save()).toBe(false);
+        expect(await created({ ParentID: 'p', parentIsWorkflow: true }).Save()).toBe(false);
+        expect(await asService(() => created({ TypeID: WORKFLOW_TYPE }).Save())).toBe(true);
+        expect(await asService(() => created({ ParentID: 'p', StepType: 'Action' }).Save())).toBe(true);
+    });
+
+    it('leaves ordinary tasks and their subtasks alone', async () => {
+        expect(await created({}).Save()).toBe(true);
+        expect(await created({ ParentID: 'p', parentIsWorkflow: false }).Save()).toBe(true);
+    });
+
+    it('refuses turning an ordinary task into a workflow or a step by retyping or re-parenting it', async () => {
+        const retyped = created({});
+        retyped.markSaved();
+        retyped.TypeID = WORKFLOW_TYPE;
+        retyped.dirtyFields.add('TypeID');
+        // The stored type is the ordinary one.
+        (retyped as unknown as { GetFieldByName(n: string): unknown }).GetFieldByName = (name: string) =>
+            name === 'TypeID' ? { Dirty: true, OldValue: OTHER_TYPE, Value: WORKFLOW_TYPE } : { Dirty: false, OldValue: (retyped as unknown as Record<string, unknown>)[name], Value: (retyped as unknown as Record<string, unknown>)[name] };
+        expect(await retyped.Save()).toBe(false);
+
+        const reparented = created({ ParentID: 'q', parentIsWorkflow: false, nextParentIsWorkflow: true });
+        reparented.markSaved();
+        expect(await reparented.Save()).toBe(false);
     });
 });

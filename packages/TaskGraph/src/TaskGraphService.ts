@@ -705,6 +705,18 @@ export class TaskGraphService {
     private readonly claims = new TaskClaimStore('task-graph-service', 0);
 
     /**
+     * Saves a row of a graph inside {@link TASK_GRAPH_RUNTIME_SECURITY_OPERATION}, bound to the caller: a workflow, its
+     * steps and its edges are written only by this service and the dispatcher (`MJTaskEntityServer`,
+     * `MJTaskDependencyEntityServer`), so a graph is created and changed through the service, never by an ordinary save.
+     */
+    private saveAsService(row: { Save(): Promise<boolean> }, entityName: 'MJ: Tasks' | 'MJ: Task Dependencies', context: TaskGraphSubmitContext): Promise<boolean> {
+        return ServerOperationScopeManager.Instance.RunWithAuthority(
+            { operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION, source: 'ServerEngine', allowedEntities: [entityName], userId: context.ContextUser.ID },
+            () => row.Save(),
+        );
+    }
+
+    /**
      * Validates and persists a task graph, returning as soon as it is durable.
      *
      * Deliberately does NOT start execution: the dispatcher discovers `Pending` work by polling
@@ -1160,17 +1172,13 @@ export class TaskGraphService {
             PrepareTaskForRetry(task);
             // A workflow step's status and data are the dispatcher's (`MJTaskEntityServer`): this save carries the
             // input the guarded statement above just wrote and a retried Decision's cleared output, and the
-            // unblocking below changes siblings' status, so they run in that scope.
-            const asService = (row: MJTaskEntity): Promise<boolean> => ServerOperationScopeManager.Instance.RunWithAuthority(
-                { operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION, source: 'ServerEngine', allowedEntities: ['MJ: Tasks'], userId: context.ContextUser.ID },
-                () => row.Save(),
-            );
-            if (!(await asService(task))) return { Success: false, ErrorMessage: 'The task could not be saved.' };
+            // unblocking below changes siblings' status, so they run in the service's scope.
+            if (!(await this.saveAsService(task, 'MJ: Tasks', context))) return { Success: false, ErrorMessage: 'The task could not be saved.' };
 
             for (const sibling of siblings) {
                 if (sibling.Status === 'Blocked') {
                     sibling.Status = 'Pending';
-                    await asService(sibling);
+                    await this.saveAsService(sibling, 'MJ: Tasks', context);
                 }
             }
             return { Success: true };
@@ -1878,7 +1886,7 @@ export class TaskGraphService {
             startPaused: context.Debug?.paused === true,
         }));
         parent.SecurityEnvelope = SerializeTaskSecurityEnvelope(context.SecurityEnvelope);
-        if (!(await parent.Save())) {
+        if (!(await this.saveAsService(parent, 'MJ: Tasks', context))) {
             throw new Error(`Could not create parent task: ${parent.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
         return parent.ID;
@@ -2033,7 +2041,7 @@ export class TaskGraphService {
                 // Input rides in its own column; Description stays human-readable.
                 task.InputPayload = node.inputPayload ? JSON.stringify(node.inputPayload) : null;
 
-                if (!(await task.Save())) {
+                if (!(await this.saveAsService(task, 'MJ: Tasks', context))) {
                     throw new Error(`Could not create task "${node.name}": ${task.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                 }
                 map.set(node.tempId, task.ID);
@@ -2097,7 +2105,7 @@ export class TaskGraphService {
                         dep.ExclusiveGroup = edge.exclusiveGroup ?? null;
                         dep.Priority = edge.priority ?? 0;
                         dep.Sequence = edge.sequence ?? 0;
-                        if (!(await dep.Save())) {
+                        if (!(await this.saveAsService(dep, 'MJ: Task Dependencies', context))) {
                             throw new Error(
                                 `Could not create dependency ${node.tempId} -> ${edge.tempId}: ${dep.LatestResult?.CompleteMessage ?? 'unknown error'}`,
                             );

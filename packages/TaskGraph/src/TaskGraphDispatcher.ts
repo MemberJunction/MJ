@@ -4487,7 +4487,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         const actingUser = await this.sagaActingUser(provider, graph, forwardTask);
         const recordChanges = await this.loadCorrelatedRecordChanges(provider, forwardTask, actingUser);
         compTask.InputPayload = JSON.stringify(this.buildForwardTaskCompensationInput(forwardTask, compensation, recordChanges));
-        if (await compTask.Save()) {
+        if (await this.saveWithRuntimeAuthority(compTask)) {
             this.sagaRowWriteFailures.Delete(forwardTask.ID);
             LogStatus(`[TaskGraphDispatcher] Compensating '${forwardTask.Name}' (${forwardTask.ID}) with task ${compTask.ID}.`);
             return true;
@@ -4556,7 +4556,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         row.CompensatesTaskID = intended.CompensatesTaskID;
         row.SecurityEnvelope = intended.SecurityEnvelope;
         row.Configuration = intended.Configuration;
-        if (await row.Save()) {
+        if (await this.saveWithRuntimeAuthority(row)) {
             this.sagaRowWriteFailures.Delete(intended.CompensatesTaskID);
             LogError(`[TaskGraphDispatcher] ${reason} Recorded as failed step ${row.ID} so the rollback can go on.`);
             return true;
@@ -4613,7 +4613,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         human.CompensatesTaskID = failedCompensation.ID;
         human.SecurityEnvelope = failedCompensation.SecurityEnvelope;
         human.InputPayload = JSON.stringify(escalation.ContextData);
-        if (await human.Save()) {
+        if (await this.saveWithRuntimeAuthority(human)) {
             this.sagaRowWriteFailures.Delete(failedCompensation.ID);
             LogStatus(`[TaskGraphDispatcher] Compensation ${failedCompensation.ID} failed; asked a person to undo '${forwardTask.Name}' (task ${human.ID}).`);
             return true;

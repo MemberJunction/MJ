@@ -1,12 +1,15 @@
 import {
     BaseEntity,
     EntitySaveOptions,
+    IRunViewProvider,
+    RunView,
     ServerOperationScopeManager,
+    UserInfo,
     ValidationErrorInfo,
     ValidationErrorType,
     ValidationResult,
 } from '@memberjunction/core';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { IsValidUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJTaskEntity } from '@memberjunction/core-entities';
 import { TASK_GRAPH_RUNTIME_SECURITY_OPERATION, TASK_GRAPH_WORKFLOW_TYPE_NAME } from '@memberjunction/ai-core-plus';
 
@@ -154,6 +157,59 @@ export function WorkflowStepDataChangeRefusal(changedFields: readonly string[], 
         'and the data it carries, which the steps after it trust as its result.';
 }
 
+/** The workflow task type's ID once found. Never cached while absent: the task-graph service creates the row on first use. */
+let workflowTaskTypeIDCache: string | undefined;
+
+/** The ID of the `MJ: Task Types` row a workflow is filed under ({@link TASK_GRAPH_WORKFLOW_TYPE_NAME}), or null while it does not exist. */
+export async function ResolveWorkflowTaskTypeID(provider: IRunViewProvider, user: UserInfo | undefined): Promise<string | null> {
+    if (workflowTaskTypeIDCache) return workflowTaskTypeIDCache;
+    const result = await new RunView(provider).RunView<{ ID: string }>(
+        { EntityName: 'MJ: Task Types', ExtraFilter: `Name='${TASK_GRAPH_WORKFLOW_TYPE_NAME}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 },
+        user,
+    );
+    const id = result.Success ? result.Results?.[0]?.ID : undefined;
+    if (id) workflowTaskTypeIDCache = id;
+    return id ?? null;
+}
+
+/** A task's membership columns, as stored. Undefined when the ID is not a readable task. */
+async function loadTaskShape(provider: IRunViewProvider, user: UserInfo | undefined, taskID: string): Promise<{ ParentID: string | null; StepType: string | null; TypeID: string } | undefined> {
+    if (!IsValidUUID(taskID)) return undefined;
+    const result = await new RunView(provider).RunView<{ ParentID: string | null; StepType: string | null; TypeID: string }>(
+        { EntityName: 'MJ: Tasks', ExtraFilter: `ID='${taskID}'`, Fields: ['ParentID', 'StepType', 'TypeID'], ResultType: 'simple', MaxRows: 1, BypassCache: true },
+        user,
+    );
+    return result.Success ? result.Results?.[0] : undefined;
+}
+
+/**
+ * Whether `taskID` is a workflow: a task graph's parent, a parentless task of the workflow type. A task this user
+ * cannot read counts as one, so whatever hangs under it is judged as a workflow step (fail closed).
+ */
+export async function IsWorkflowTask(provider: IRunViewProvider, user: UserInfo | undefined, taskID: string, workflowTypeID: string | null): Promise<boolean> {
+    const row = await loadTaskShape(provider, user, taskID);
+    if (!row) return true;
+    return row.ParentID == null && workflowTypeID != null && UUIDsEqual(row.TypeID, workflowTypeID);
+}
+
+/**
+ * Whether `taskID` is a step of a workflow: a task with a parent and a `StepType`, or any task whose parent is a
+ * workflow. A task this user cannot read counts as one (fail closed).
+ */
+export async function IsWorkflowStepTask(provider: IRunViewProvider, user: UserInfo | undefined, taskID: string, workflowTypeID: string | null): Promise<boolean> {
+    const row = await loadTaskShape(provider, user, taskID);
+    if (!row) return true;
+    if (row.ParentID == null) return false;
+    return row.StepType != null || (await IsWorkflowTask(provider, user, row.ParentID, workflowTypeID));
+}
+
+/** What a save needs to know about workflow membership, resolved before it validates (the lookups are asynchronous). */
+interface WorkflowFacts {
+    WorkflowTypeID: string | null;
+    StoredParentIsWorkflow: boolean;
+    NextParentIsWorkflow: boolean;
+}
+
 /**
  * `configuration` with `runtime.completedByUserID` set to `userID` (removed when `null`). A
  * `Configuration` that does not parse is returned unchanged: the step then records no completer, so its
@@ -198,11 +254,37 @@ export class MJTaskEntityServer extends MJTaskEntity {
      * answered request, records the request's responder itself, inside {@link TASK_GRAPH_RUNTIME_SECURITY_OPERATION}.
      */
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
-        if (this.completesHumanStep() && !this.inDispatcherScope()) {
-            const completer = ServerOperationScopeManager.Instance.IsInDirectClientCrud() ? (this.ContextCurrentUser?.ID ?? null) : null;
-            this.Configuration = WithCompletedByUserID(this.Configuration, completer);
+        if (!this.inDispatcherScope()) {
+            this.workflowFacts = await this.resolveWorkflowFacts();
+            if (this.completesHumanStep()) {
+                const completer = ServerOperationScopeManager.Instance.IsInDirectClientCrud() ? (this.ContextCurrentUser?.ID ?? null) : null;
+                this.Configuration = WithCompletedByUserID(this.Configuration, completer);
+            }
         }
-        return super.Save(options);
+        try {
+            return await super.Save(options);
+        } finally {
+            this.workflowFacts = undefined;
+        }
+    }
+
+    /** Workflow membership of this row before and after the save, for {@link Validate}. */
+    private workflowFacts: WorkflowFacts | undefined;
+
+    /** Resolves {@link WorkflowFacts}: the workflow type, and whether the stored and the new parent are workflows. */
+    protected async resolveWorkflowFacts(): Promise<WorkflowFacts> {
+        const provider = this.RunViewProviderToUse;
+        const user = this.ContextCurrentUser;
+        const workflowTypeID = await ResolveWorkflowTaskTypeID(provider, user);
+        const storedParent = this.stored('ParentID') as string | null | undefined;
+        const nextParent = this.ParentID;
+        const storedParentIsWorkflow = storedParent ? await IsWorkflowTask(provider, user, storedParent, workflowTypeID) : false;
+        const nextParentIsWorkflow = !nextParent
+            ? false
+            : storedParent && UUIDsEqual(nextParent, storedParent)
+                ? storedParentIsWorkflow
+                : await IsWorkflowTask(provider, user, nextParent, workflowTypeID);
+        return { WorkflowTypeID: workflowTypeID, StoredParentIsWorkflow: storedParentIsWorkflow, NextParentIsWorkflow: nextParentIsWorkflow };
     }
 
     public override Validate(): ValidationResult {
@@ -220,7 +302,16 @@ export class MJTaskEntityServer extends MJTaskEntity {
                 result.Errors.push(new ValidationErrorInfo('Configuration', runtimeRefusal, this.Configuration, ValidationErrorType.Failure));
                 result.Success = false;
             }
-            if (this.IsSaved && this.isWorkflowStep()) {
+            const wasWorkflowRow = this.IsSaved && (this.isWorkflowStep('stored') || this.isWorkflowParent('stored'));
+            if (!wasWorkflowRow && (this.isWorkflowStep('next') || this.isWorkflowParent('next'))) {
+                // A workflow, or a step of one, made by an ordinary save: created, or an existing task retyped or
+                // re-parented into one. The dispatcher would run it as the user its metadata names.
+                const field = this.ParentID ? 'ParentID' : 'TypeID';
+                result.Errors.push(new ValidationErrorInfo(field,
+                    'Only the task-graph service creates a workflow or adds a step to one: a workflow\'s steps run as the user it was submitted by.',
+                    null, ValidationErrorType.Failure));
+                result.Success = false;
+            } else if (this.IsSaved && this.isWorkflowStep('stored')) {
                 const changed: string[] = WORKFLOW_STEP_OWNED_FIELDS.filter((field) => this.GetFieldByName(field)?.Dirty);
                 if (this.GetFieldByName('Configuration')?.Dirty && ExecutableConfigurationChanged(storedConfiguration, this.Configuration)) {
                     changed.push('Configuration');
@@ -230,7 +321,7 @@ export class MJTaskEntityServer extends MJTaskEntity {
                     result.Errors.push(new ValidationErrorInfo(changed[0], dataRefusal, null, ValidationErrorType.Failure));
                     result.Success = false;
                 }
-            } else if (this.IsSaved && this.isWorkflowParent()) {
+            } else if (this.IsSaved && this.isWorkflowParent('stored')) {
                 const changed = WORKFLOW_PARENT_OWNED_FIELDS.filter((field) => this.GetFieldByName(field)?.Dirty);
                 if (changed.length > 0) {
                     const message = `${changed.join(', ')} of a workflow cannot be changed: only the task-graph dispatcher writes who it ` +
@@ -249,16 +340,32 @@ export class MJTaskEntityServer extends MJTaskEntity {
     }
 
     /**
-     * Whether this row is a step of a task graph: it has a parent and a `StepType` (NULL for a task outside a workflow;
-     * an A2A store's `External` row has no parent). Read from the stored row, so a save cannot change what it is judged as.
+     * Whether the row, as stored or as this save leaves it, is a step of a task graph: it has a parent, and a `StepType`
+     * or a parent that is a workflow. Without resolved facts (a save that skipped {@link Save}), any task with a parent
+     * counts (fail closed).
      */
-    private isWorkflowStep(): boolean {
-        return this.stored('ParentID') != null && this.stored('StepType') != null;
+    private isWorkflowStep(state: 'stored' | 'next'): boolean {
+        const parent = state === 'stored' ? this.stored('ParentID') : this.ParentID;
+        if (parent == null) return false;
+        const stepType = state === 'stored' ? this.stored('StepType') : this.StepType;
+        if (stepType != null) return true;
+        const facts = this.workflowFacts;
+        return facts ? (state === 'stored' ? facts.StoredParentIsWorkflow : facts.NextParentIsWorkflow) : true;
     }
 
-    /** Whether this row is a task graph's workflow (parent) task: no parent, no `StepType`, filed under the workflow type. */
-    private isWorkflowParent(): boolean {
-        return this.stored('ParentID') == null && this.stored('StepType') == null && this.Type === TASK_GRAPH_WORKFLOW_TYPE_NAME;
+    /**
+     * Whether the row, as stored or as this save leaves it, is a task graph's workflow (parent) task: no parent, no
+     * `StepType`, filed under the workflow type. Without resolved facts, the joined type name decides for the stored row,
+     * and a changed type counts (fail closed).
+     */
+    private isWorkflowParent(state: 'stored' | 'next'): boolean {
+        const parent = state === 'stored' ? this.stored('ParentID') : this.ParentID;
+        const stepType = state === 'stored' ? this.stored('StepType') : this.StepType;
+        if (parent != null || stepType != null) return false;
+        const typeID = (state === 'stored' ? this.stored('TypeID') : this.TypeID) as string | null | undefined;
+        const facts = this.workflowFacts;
+        if (facts) return facts.WorkflowTypeID != null && typeof typeID === 'string' && UUIDsEqual(typeID, facts.WorkflowTypeID);
+        return state === 'stored' ? this.Type === TASK_GRAPH_WORKFLOW_TYPE_NAME : (this.GetFieldByName('TypeID')?.Dirty === true || this.Type === TASK_GRAPH_WORKFLOW_TYPE_NAME);
     }
 
     /** Whether this save is the assignee completing their own Human step, as their own client request. */
