@@ -1,5 +1,5 @@
-import { ClientRealtimeSessionConfig, JSONObject, ResolveResponseDoneUsage } from '@memberjunction/ai';
-import { BaseRealtimeClient, RealtimeClientState, ToProviderSessionConfig } from './baseRealtimeClient';
+import { ClientRealtimeSessionConfig, JSONObject, MapRealtimeUsageModalityDetail, RealtimeDiagLog, RealtimeMemorySeed, RealtimeReconnectFailureCode, RealtimeReconnectReason, RenderLateToolResultNote, RenderRealtimeMemorySeed, ResolveResponseDoneUsage } from '@memberjunction/ai';
+import { BaseRealtimeClient, RealtimeClientReconnectContext, RealtimeClientState, ToProviderSessionConfig } from './baseRealtimeClient';
 import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
@@ -38,6 +38,22 @@ export interface OAIProtocolAudioDelta {
 export interface OAIProtocolInputTranscriptionCompleted {
     type: 'conversation.item.input_audio_transcription.completed';
     transcript: string;
+    item_id?: string;
+}
+
+/**
+ * The provider committed the user's audio buffer as a conversation item. It arrives in conversation order, before the
+ * response the turn starts, while the item's transcription may finish only after that response.
+ */
+export interface OAIProtocolInputAudioBufferCommitted {
+    type: 'input_audio_buffer.committed';
+    item_id?: string;
+    previous_item_id?: string | null;
+}
+
+/** The provider could not transcribe a committed user audio item, so no transcript will come for it. */
+export interface OAIProtocolInputTranscriptionFailed {
+    type: 'conversation.item.input_audio_transcription.failed';
     item_id?: string;
 }
 
@@ -119,6 +135,8 @@ export type OpenAIProtocolServerEvent =
     | OAIProtocolTranscriptDone
     | OAIProtocolAudioDelta
     | OAIProtocolInputTranscriptionCompleted
+    | OAIProtocolInputAudioBufferCommitted
+    | OAIProtocolInputTranscriptionFailed
     | OAIProtocolFunctionCallArgumentsDone
     | OAIProtocolSpeechStarted
     | OAIProtocolResponseCreated
@@ -129,6 +147,17 @@ export type OpenAIProtocolServerEvent =
     | OAIProtocolErrorEvent
     | OAIProtocolUnknownEvent;
 
+/**
+ * How long one user utterance may hold a soft-window reconnect without a closing event, counted from its latest
+ * `speech_started` or `committed` frame. A safety net: an utterance whose transcription is off, or whose closing
+ * frame never comes, must not push every move to the hard deadline. The hard deadline stays the absolute bound (or,
+ * when an answer was in progress at it, the controller's last call shortly before the provider limit).
+ */
+export const PENDING_USER_UTTERANCE_MAX_AGE_MS = 15_000;
+
+/** Key for an utterance whose frames carry no `item_id`. */
+const UNIDENTIFIED_UTTERANCE_KEY = '';
+
 // ── OpenAI-protocol CLIENT event interfaces (frames WE send) ───────────────────
 
 /** Applies the server-built session config (instructions + tools) to the live session. */
@@ -137,11 +166,11 @@ export interface OAIProtocolSessionUpdateEvent {
     session: JSONObject;
 }
 
-/** A user or system `message` conversation item. */
+/** A user, assistant, or system `message` conversation item. */
 export interface OAIProtocolMessageItem {
     type: 'message';
-    role: 'user' | 'system';
-    content: Array<{ type: 'input_text'; text: string }>;
+    role: 'user' | 'assistant' | 'system';
+    content: Array<{ type: 'input_text' | 'output_text'; text: string }>;
 }
 
 /** The output of an executed function (tool) call, correlated by `call_id`. */
@@ -217,6 +246,34 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
     // ── Response state machine (shared verbatim across the protocol family) ────
     /** Accumulates the in-flight assistant transcript across delta frames. */
     protected pendingAssistantText = '';
+    /** Typed user turns sent while the call moves to a new connection; see {@link SendText}. */
+    private textHeldDuringReconnect: string[] = [];
+    /** Tool results sent while the call moves to a new connection; see {@link SendToolResult}. */
+    private toolResultsHeldDuringReconnect: Array<{ CallID: string; OutputJson: string }> = [];
+    /**
+     * True while {@link deliverHeldInput} sends the held items, so each item's reply request is collected into one
+     * `response.create` sent after the last item (see {@link responseOwedByHeldInput}).
+     */
+    private deliveringHeldInput = false;
+    /** Set by {@link requestResultResponse} while {@link deliveringHeldInput}: a held item asked for a reply. */
+    private responseOwedByHeldInput = false;
+    /**
+     * Whether the current call went live (`'listening'`) and has not ended since. A lost transport is recovered only
+     * then; see {@link recoverLostTransport}.
+     */
+    private callWentLive = false;
+    /**
+     * Set by {@link seedConversationAfterMove} when the move cut off an answer the seed still owes the user, so
+     * {@link onReconnected} asks the new connection for it. One move asks once; the next move decides afresh.
+     */
+    private answerOwedAfterMove = false;
+    /**
+     * User utterances, by `item_id`, that only the current connection knows about: from `speech_started` until the
+     * model takes the floor for them (`response.created`) or their transcript settles in conversation memory
+     * (`input_audio_transcription.completed` / `.failed` after the commit). A move in that gap would strand the audio
+     * on the closing connection: no answer, and no transcript for the seed. See {@link isTurnActiveForReconnect}.
+     */
+    private readonly pendingUserUtterances = new Map<string, { Committed: boolean; Expiry: ReturnType<typeof setTimeout> }>();
     /** True while the model has a response in flight; gates narration + queues the tool result. */
     protected responseActive = false;
     /** Set when a tool result is ready while a response is active; sent on the next response.done. */
@@ -267,6 +324,13 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
 
     /** Whether the transport can currently deliver client events (channel/socket open). */
     protected abstract canSendEvents(): boolean;
+    /**
+     * Whether the transport can carry the call, which a failed move's return to it needs: by default, whether it can
+     * deliver events ({@link canSendEvents}). A transport whose open state can outlast its network path overrides it.
+     */
+    protected isTransportUsable(): boolean {
+        return this.canSendEvents();
+    }
     /** Delivers one protocol client event over the transport (only called when {@link canSendEvents}). */
     protected abstract sendProtocolEvent(event: OpenAIProtocolClientEvent): void;
     /**
@@ -367,6 +431,38 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
      * active the cancel is a no-op and the reply triggers immediately.
      */
     public SendText(text: string): void {
+        // During a move the old transport is still open but is closed as soon as the new one takes over, so text sent
+        // on it is lost: it is held and goes out on the new connection once the move completes (onReconnected).
+        if (this.IsReconnecting) {
+            this.textHeldDuringReconnect.push(text);
+            return;
+        }
+        this.deliverUserText(text);
+    }
+
+    /**
+     * @inheritdoc
+     *
+     * During a move a result is held, like typed text, and goes out once the call is live again: on the new connection
+     * after the swap ({@link onReconnected}), or on the old one when a planned move goes back to it
+     * ({@link ResumeOnOldConnection}). Sent on now, it would be lost: a lost transport cannot carry it, and a closing
+     * one takes it along after the seed for the new connection was built. It is recorded into memory when it goes out,
+     * so it reaches the model and the seed of a later move exactly once.
+     */
+    public override SendToolResult(callID: string, outputJson: string): void {
+        if (this.IsReconnecting) {
+            this.toolResultsHeldDuringReconnect.push({ CallID: callID, OutputJson: outputJson });
+            return;
+        }
+        super.SendToolResult(callID, outputJson);
+    }
+
+    /**
+     * Sends one typed user turn and records it in conversation memory. The provider sends no input transcription for a
+     * text item (only for audio), so without the record a later reseed would drop the turn. It is recorded when sent,
+     * not when held, so a held turn is not also in the seed of the move it waited for.
+     */
+    private deliverUserText(text: string): void {
         if (!this.canSendEvents()) {
             return;
         }
@@ -375,7 +471,100 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
             type: 'conversation.item.create',
             item: { type: 'message', role: 'user', content: [{ type: 'input_text', text }] },
         });
+        this.ConversationMemory.Record({ Kind: 'user', Text: text });
         this.requestResultResponse();
+    }
+
+    /**
+     * The move has started, so the holds it waited on are spent: the utterances belong to the connection being left,
+     * and the next connection's speech starts holds of its own.
+     */
+    protected override onReconnecting(reason: RealtimeReconnectReason): void {
+        this.forgetUserUtterances();
+        this.answerOwedAfterMove = false;
+        super.onReconnecting(reason);
+    }
+
+    /**
+     * Sends the input held during the move to the new connection, after the seed, and asks for one answer covering it
+     * and an answer the move cut off (see {@link seedConversationAfterMove}). After `super`, so a result for a call
+     * from before a reseed goes out as a late-result note.
+     */
+    protected override onReconnected(usedNativeResumption: boolean): void {
+        super.onReconnected(usedNativeResumption);
+        const answerOwed = this.answerOwedAfterMove;
+        this.answerOwedAfterMove = false;
+        if (answerOwed) {
+            RealtimeDiagLog(`[${this.providerDebugLabel}] the move cut off an answer; asking the new connection for it`);
+        }
+        this.deliverHeldInput(answerOwed);
+    }
+
+    /**
+     * Sends the tool results, then the typed text, held during a move, oldest first, and then ONE `response.create`
+     * when any of them (or `answerOwed`) asks for a reply. One request answers every item, and it comes after the
+     * last one: a reply requested per item would be cancelled by the next typed turn (text implies barge-in).
+     */
+    private deliverHeldInput(answerOwed: boolean): void {
+        const results = this.toolResultsHeldDuringReconnect;
+        const texts = this.textHeldDuringReconnect;
+        this.toolResultsHeldDuringReconnect = [];
+        this.textHeldDuringReconnect = [];
+        this.deliveringHeldInput = true;
+        this.responseOwedByHeldInput = false;
+        try {
+            for (const result of results) {
+                super.SendToolResult(result.CallID, result.OutputJson);
+            }
+            for (const text of texts) {
+                this.deliverUserText(text);
+            }
+        } finally {
+            this.deliveringHeldInput = false;
+        }
+        const owed = answerOwed || this.responseOwedByHeldInput;
+        this.responseOwedByHeldInput = false;
+        if (owed) {
+            this.requestResultResponse();
+        }
+    }
+
+    /**
+     * A planned move's attempt failed and the old transport can still carry the call ({@link isTransportUsable}): the
+     * call goes on there until the next attempt. The state the move replaced is reported again, and the text and tool
+     * results held for the move go out on it now instead of waiting for (or being dropped with) the cycle. `false` when
+     * the old transport is gone too.
+     */
+    protected override ResumeOnOldConnection(): boolean {
+        if (!this.isTransportUsable() || this.currentState === 'error' || this.currentState === 'closed') {
+            return false;
+        }
+        const restore = this.StateToRestoreOnOldConnection;
+        if (restore) {
+            this.setState(restore);
+        }
+        this.deliverHeldInput(false);
+        return true;
+    }
+
+    /** The move failed and the call is over, so the held input has no connection to go to. */
+    protected override onReconnectFailed(error: Error, code: RealtimeReconnectFailureCode): void {
+        this.dropInputHeldDuringReconnect('the reconnect failed');
+        super.onReconnectFailed(error, code);
+    }
+
+    /** Drops the text and tool results held for a move that will not complete, logging how many and why. */
+    protected dropInputHeldDuringReconnect(why: string): void {
+        const texts = this.textHeldDuringReconnect.length;
+        const results = this.toolResultsHeldDuringReconnect.length;
+        this.textHeldDuringReconnect = [];
+        this.toolResultsHeldDuringReconnect = [];
+        if (texts === 0 && results === 0) {
+            return;
+        }
+        RealtimeDiagLog(
+            `[${this.providerDebugLabel}] dropping ${texts} typed turn(s) and ${results} tool result(s) held during a reconnect: ${why}`
+        );
     }
 
     /**
@@ -416,6 +605,7 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
      * 'developer' items ("Developer messages are only supported for quicksilver sessions").
      */
     public SendContextNote(text: string): void {
+        this.ConversationMemory.Record({ Kind: 'note', Text: text });
         if (!this.canSendEvents()) {
             return;
         }
@@ -423,6 +613,81 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
             type: 'conversation.item.create',
             item: { type: 'message', role: 'system', content: [{ type: 'input_text', text }] },
         });
+    }
+
+    /**
+     * Resets the response bookkeeping for a connection that has just replaced the old one, and returns whether an
+     * answer was in flight (or queued) on the old one. Every count and flag here describes the old connection: a
+     * `response.create` it never confirmed would otherwise make the new connection's real `response.done` look stale
+     * and leave {@link IsBusy} stuck.
+     */
+    protected resetResponseStateForNewConnection(): boolean {
+        const answerWasInFlight = this.responseActive || this.pendingResultResponse;
+        this.responseActive = false;
+        this.confirmedResponseActive = false;
+        this.pendingResultResponse = false;
+        this.pendingLocalResponseCreates = 0;
+        this.pendingNarrationKind = false;
+        this.activeResponseKind = 'normal';
+        this.pendingAssistantText = '';
+        return answerWasInFlight;
+    }
+
+    /**
+     * Seeds the new connection after a move (when `sendsSeed`; a natively resumed one already has the history) and
+     * notes whether the move cut off an answer the user is still owed: one was in flight on the old connection
+     * (`answerWasInFlight`, from {@link resetResponseStateForNewConnection}) and the conversation ends with what it
+     * answers (a user turn or a tool result), not counting the context notes after it. Neither a seeded nor a resumed
+     * session replies by itself, so without this the question sits unanswered in every later seed. An answer that
+     * completed is in memory as an assistant turn and is not asked for again.
+     *
+     * A seeded connection knows the conversation as the seed sent it. A resumed one knows it as the provider kept it,
+     * which includes what the old connection heard while the attempt was opening, after `context.Seed` was built: so
+     * then the memory as it is now decides.
+     */
+    protected seedConversationAfterMove(
+        context: RealtimeClientReconnectContext,
+        answerWasInFlight: boolean,
+        sendsSeed: boolean
+    ): void {
+        if (sendsSeed) {
+            this.seedConversationHistory(context.ConversationSeed);
+        }
+        const conversation = sendsSeed ? context.Seed : this.ConversationMemory.Seed();
+        this.answerOwedAfterMove = answerWasInFlight && OpenAIProtocolRealtimeClient.endsAwaitingAnswer(conversation);
+    }
+
+    /** Whether the conversation's last entry other than a context note is a user turn or a tool result. */
+    private static endsAwaitingAnswer(seed: RealtimeMemorySeed): boolean {
+        for (let i = seed.Entries.length - 1; i >= 0; i--) {
+            const kind = seed.Entries[i].Kind;
+            if (kind !== 'note') {
+                return kind === 'user' || kind === 'toolResult';
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Seeds bounded conversation history turns into a freshly reconnected OpenAI-protocol session.
+     */
+    protected seedConversationHistory(seed: RealtimeMemorySeed | null): void {
+        if (!seed || seed.Entries.length === 0) {
+            return;
+        }
+        const turns = RenderRealtimeMemorySeed(seed);
+        for (const turn of turns) {
+            const role: 'user' | 'assistant' = turn.Role === 'model' ? 'assistant' : 'user';
+            const contentType = role === 'assistant' ? 'output_text' : 'input_text';
+            this.sendEvent({
+                type: 'conversation.item.create',
+                item: {
+                    type: 'message',
+                    role,
+                    content: turn.Texts.map((text) => ({ type: contentType, text })),
+                },
+            });
+        }
     }
 
     /**
@@ -541,8 +806,21 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
      * would collide with an in-flight narration and be dropped, leaving the model silent when
      * delegated work comes back.
      */
-    public SendToolResult(callID: string, outputJson: string): void {
+    protected override doSendToolResult(callID: string, outputJson: string): boolean | void {
         if (!this.canSendEvents()) {
+            return false;
+        }
+        const name = this.resolveToolName(callID);
+        if (this.callsFromBeforeReseed.delete(callID)) {
+            this.sendEvent({
+                type: 'conversation.item.create',
+                item: {
+                    type: 'message',
+                    role: 'user',
+                    content: [{ type: 'input_text', text: RenderLateToolResultNote(name, outputJson) }],
+                },
+            });
+            this.requestResultResponse();
             return;
         }
         this.sendEvent({
@@ -566,6 +844,83 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
     /** @inheritdoc */
     public get IsBusy(): boolean {
         return this.responseActive;
+    }
+
+    /**
+     * @inheritdoc
+     *
+     * Adds the user's pending utterances: the controller's turn opens only on `response.created`, and the input meter
+     * sees speech only at the instant it is read (not in a pause between words, nor after the commit).
+     */
+    protected override isTurnActiveForReconnect(): boolean {
+        return this.pendingUserUtterances.size > 0 || super.isTurnActiveForReconnect();
+    }
+
+    /** Starts (or restarts the max age of) the hold for one user utterance. */
+    private trackUserUtterance(itemId: string | undefined, committed: boolean): void {
+        const key = itemId ?? UNIDENTIFIED_UTTERANCE_KEY;
+        const existing = this.pendingUserUtterances.get(key);
+        if (existing) {
+            clearTimeout(existing.Expiry);
+        }
+        const expiry = setTimeout(() => {
+            RealtimeDiagLog(
+                `[${this.providerDebugLabel}] user utterance ${key || '(no id)'} held the reconnect for ${PENDING_USER_UTTERANCE_MAX_AGE_MS} ms with no answer or transcript; releasing it`
+            );
+            this.releaseUserUtterances((_utterance, k) => k === key);
+        }, PENDING_USER_UTTERANCE_MAX_AGE_MS);
+        this.pendingUserUtterances.set(key, { Committed: committed || (existing?.Committed ?? false), Expiry: expiry });
+    }
+
+    /**
+     * The provider committed the utterance's audio. Its `speech_started` may have carried no id (then that entry takes
+     * this id), and a commit with no `speech_started` (a manual commit) is still audio only this connection holds.
+     */
+    private markUserUtteranceCommitted(itemId: string | undefined): void {
+        if (itemId !== undefined && !this.pendingUserUtterances.has(itemId)) {
+            const unidentified = this.pendingUserUtterances.get(UNIDENTIFIED_UTTERANCE_KEY);
+            if (unidentified) {
+                clearTimeout(unidentified.Expiry);
+                this.pendingUserUtterances.delete(UNIDENTIFIED_UTTERANCE_KEY);
+            }
+        }
+        this.trackUserUtterance(itemId, true);
+    }
+
+    /**
+     * The utterance's transcription settled, so the seed of a move carries it (or nothing will). Only a committed
+     * utterance is released: Grok streams `.completed` frames while the user is still speaking. A frame with no id
+     * settles every committed utterance.
+     */
+    private releaseCommittedUserUtterance(itemId: string | undefined): void {
+        this.releaseUserUtterances(
+            (utterance, key) => utterance.Committed && (itemId === undefined || key === itemId)
+        );
+    }
+
+    /** Releases the matching holds and, when none is left, lets a deferred soft-window move go ahead. */
+    private releaseUserUtterances(
+        matches: (utterance: { Committed: boolean }, key: string) => boolean
+    ): void {
+        let released = false;
+        for (const [key, utterance] of this.pendingUserUtterances) {
+            if (matches(utterance, key)) {
+                clearTimeout(utterance.Expiry);
+                this.pendingUserUtterances.delete(key);
+                released = true;
+            }
+        }
+        if (released && this.pendingUserUtterances.size === 0) {
+            this.reconnectController.NotifyIdleStateChanged();
+        }
+    }
+
+    /** Drops every hold without re-checking a move (the connection they belong to is gone). */
+    private forgetUserUtterances(): void {
+        for (const utterance of this.pendingUserUtterances.values()) {
+            clearTimeout(utterance.Expiry);
+        }
+        this.pendingUserUtterances.clear();
     }
 
     // ── Inbound event translation (the shared dispatcher) ──────────────────────
@@ -595,6 +950,20 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
             case 'session.created':
                 this.onSessionCreatedFrame();
                 break;
+            case 'conversation.created': {
+                const conv = (event as { conversation?: { id?: unknown } }).conversation;
+                if (typeof conv?.id === 'string' && conv.id.trim().length > 0) {
+                    this.RecordResumptionHandle(conv.id);
+                }
+                break;
+            }
+            case 'session.going_away':
+            case 'go_away': {
+                const rawMs = (event as { time_left_ms?: unknown }).time_left_ms;
+                const timeLeftMs = typeof rawMs === 'number' && Number.isFinite(rawMs) ? rawMs : undefined;
+                this.NotifyConnectionEnding(timeLeftMs);
+                break;
+            }
             case 'response.output_audio_transcript.delta':
             case 'response.audio_transcript.delta':
                 this.onAssistantDelta((event as OAIProtocolTranscriptDelta).delta);
@@ -610,8 +979,33 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
             case 'conversation.item.input_audio_transcription.completed': {
                 const completed = event as OAIProtocolInputTranscriptionCompleted;
                 this.onUserTranscriptFrame(completed.transcript, completed.item_id);
+                // After the record above, so a move this releases seeds the transcript.
+                this.releaseCommittedUserUtterance(completed.item_id);
                 break;
             }
+            case 'input_audio_buffer.committed': {
+                // Reserve the user turn's place now: its transcription can complete after the model's answer or tool
+                // call, and a reseed must not put the request after what it caused.
+                const itemId = (event as OAIProtocolInputAudioBufferCommitted).item_id;
+                if (typeof itemId === 'string' && itemId.trim().length > 0) {
+                    this.ConversationMemory.ReserveUserTurn(itemId);
+                }
+                this.markUserUtteranceCommitted(itemId);
+                break;
+            }
+            case 'conversation.item.input_audio_transcription.failed': {
+                const itemId = (event as OAIProtocolInputTranscriptionFailed).item_id;
+                RealtimeDiagLog(`[${this.providerDebugLabel}] input transcription failed for item ${itemId ?? '(no id)'}; the turn is left out of conversation memory`);
+                if (typeof itemId === 'string') {
+                    this.ConversationMemory.ReleaseUserTurn(itemId);
+                }
+                this.releaseCommittedUserUtterance(itemId);
+                break;
+            }
+            case 'input_audio_buffer.cleared':
+                // The uncommitted audio is gone, so nothing of it can be lost in a move.
+                this.releaseUserUtterances((utterance) => !utterance.Committed);
+                break;
             case 'response.function_call_arguments.done':
                 this.onToolCallFrame(event as OAIProtocolFunctionCallArgumentsDone);
                 break;
@@ -619,11 +1013,18 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
                 // Raised here, not in onSpeechStartedFrame: the websocket base (HuggingFace, xAI)
                 // overrides that hook without super, and xAI overrides it again, so an override can't drop it.
                 this.emitUserSpeechStart((event as OAIProtocolSpeechStarted).item_id);
+                // Before onSpeechStartedFrame: its 'listening' state ends the turn, which re-checks a deferred move,
+                // and that check must already see the utterance.
+                this.trackUserUtterance((event as OAIProtocolSpeechStarted).item_id, false);
                 this.onSpeechStartedFrame();
                 break;
             case 'response.created': {
                 this.responseActive = true;
                 this.confirmedResponseActive = true; // a real response is now in flight
+                this.reconnectController.TurnStarted();
+                // The open turn now holds any move until the answer is out. Speech not committed yet is not
+                // what this response answers, so it keeps its own hold.
+                this.releaseUserUtterances((utterance) => utterance.Committed);
                 this.onResponseStarted();
                 // Only a LOCALLY-initiated create (counter-tracked) can be our narration. A VAD /
                 // unsolicited response.created arrives with the counter already at 0 — it must NOT
@@ -671,6 +1072,8 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
                 this.flushPendingResultResponse();
                 if (this.currentState === 'speaking') {
                     this.setState('listening');
+                } else if (!this.responseActive) {
+                    this.reconnectController.TurnEnded();
                 }
                 break;
             case 'error':
@@ -757,16 +1160,22 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
     /**
      * Emits the completed response's usage to the host as a DELTA (the `response.done` usage
      * payload covers exactly this response, so it is already incremental — the `OnUsage`
-     * contract's preferred shape). Frames without a usage payload emit nothing.
+     * contract's preferred shape). Frames without a usage payload emit nothing. The per-modality
+     * split (`input_token_details` / `output_token_details`) rides along when the provider sends it,
+     * so pricing can tell audio tokens from text tokens.
      */
     private emitResponseUsage(event: OAIProtocolResponseDone): void {
         const usage = ResolveResponseDoneUsage(event);
         if (!usage) {
             return;
         }
+        const inputDetails = MapRealtimeUsageModalityDetail(usage['input_token_details']);
+        const outputDetails = MapRealtimeUsageModalityDetail(usage['output_token_details']);
         this.emitUsage({
             InputTokens: typeof usage.input_tokens === 'number' ? usage.input_tokens : undefined,
             OutputTokens: typeof usage.output_tokens === 'number' ? usage.output_tokens : undefined,
+            ...(inputDetails ? { InputTokenDetails: inputDetails } : {}),
+            ...(outputDetails ? { OutputTokenDetails: outputDetails } : {}),
             Raw: usage,
         });
     }
@@ -826,6 +1235,10 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
         if (!this.canSendEvents()) {
             return;
         }
+        if (this.deliveringHeldInput) {
+            this.responseOwedByHeldInput = true;
+            return;
+        }
         if (this.responseActive) {
             this.pendingResultResponse = true;
             return;
@@ -851,6 +1264,9 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
 
     /** Resets the per-session response state machine (used on Disconnect). */
     protected resetResponseState(): void {
+        this.dropInputHeldDuringReconnect('the call ended');
+        this.forgetUserUtterances();
+        this.answerOwedAfterMove = false;
         this.pendingAssistantText = '';
         this.responseActive = false;
         this.confirmedResponseActive = false;
@@ -864,8 +1280,51 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
 
     /** Updates the client's own state view and emits the change to the host. */
     protected setState(state: RealtimeClientState): void {
+        if (state === 'listening' || state === 'speaking') {
+            this.callWentLive = true;
+        } else if (state === 'connecting' || state === 'closed' || state === 'error') {
+            // 'connecting' here is a new Connect: a move reports it through emitStateChange, not this method.
+            this.callWentLive = false;
+        }
         this.currentState = state;
         this.emitStateChange(state);
+    }
+
+    /**
+     * Whether an unexpected loss of a live call's transport is handed to the shared `connection-lost` reconnect. On by
+     * default for every driver that can reconnect mid-call; a driver whose transport closes benignly and whose host
+     * reads that close as the end of the session overrides it to `false`.
+     */
+    protected get RecoversLostTransport(): boolean {
+        return this.SupportsMidCallReconnect;
+    }
+
+    /**
+     * Hands an unexpected loss of the live call's transport (a close or error the consumer did not ask for) to the
+     * shared reconnect controller, which retries within its recovery window and reports `reconnect-failed` when the
+     * window closes. Returns `false` when there is no live call to save, so the caller keeps its terminal handling: the
+     * connect has not finished (Connect reports that failure itself), the call already ended, or the driver opts out.
+     *
+     * A loss while a reconnect cycle runs is the loss of the transport the cycle may go back to after a failed attempt
+     * (the callers' identity checks drop events of a transport the cycle opened or already let go of). It goes to the
+     * cycle, even on a driver that opts out of starting one, and returns `true`: the cycle then never returns the call
+     * to a dead transport, and goes on as a lost connection's.
+     *
+     * Live means the call went live and has not ended ({@link callWentLive}), not a speech state: during a tool run the
+     * state is `'connected'` (see {@link onToolCallFrame}), and a loss then is as recoverable as one mid-sentence.
+     */
+    protected recoverLostTransport(detail: string): boolean {
+        if (this.IsReconnectCycleActive) {
+            RealtimeDiagLog(`[${this.providerDebugLabel}] transport lost during a reconnect (${detail}); the reconnect takes it`);
+            void this.TriggerReconnect('connection-lost');
+            return true;
+        }
+        if (!this.callWentLive || !this.RecoversLostTransport) {
+            return false;
+        }
+        RealtimeDiagLog(`[${this.providerDebugLabel}] transport lost during a live call (${detail}); reconnecting`);
+        void this.TriggerReconnect('connection-lost');
+        return true;
     }
 
     /** Logs (diagnostic hook) and delivers one client event when the transport is open. */
@@ -930,6 +1389,8 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
      * Protected so test subclasses can seed it without a full Connect.
      */
     protected sessionObject: JSONObject = {};
+    /** The active ClientRealtimeSessionConfig, updated on credential refresh. */
+    protected activeConfig: ClientRealtimeSessionConfig | null = null;
     /** True once Disconnect ran — an expected socket close must not surface as fatal. */
     protected closedByConsumer = false;
     /** True while the socket is OPEN — gates every send so a CONNECTING socket never throws. */
@@ -942,7 +1403,10 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
     // ── Per-provider transport hooks ────────────────────────────────────────────
 
     /** Opens the provider socket for this connection (drivers own URL/auth specifics). */
-    protected abstract openProviderSocket(config: ClientRealtimeSessionConfig): IOpenAIProtocolClientSocket;
+    protected abstract openProviderSocket(
+        config: ClientRealtimeSessionConfig,
+        resumptionHandle?: string | null
+    ): IOpenAIProtocolClientSocket;
     /**
      * Extracts the wire-shaped `session` object from the server pact. Default: the pact minus the
      * client-only hints ({@link ToProviderSessionConfig}).
@@ -980,6 +1444,8 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
      */
     public async Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream): Promise<void> {
         this.AssertTransportSupported(config);
+        this.ApplySessionConfigTiming(config);
+        this.activeConfig = config;
         this.sessionObject = this.resolveSessionObject(config);
         this.micStream = micStream;
         this.closedByConsumer = false;
@@ -1075,6 +1541,7 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
         // environments simply leave the session un-metered.
         this.attachOutputAudioMeter(this.playback?.CreateMeter?.() ?? null);
         this.attachInputAudioMeter(RealtimeAudioMeter.ForMicStream(micStream));
+        this.ArmConnectionDurationTimer();
         this.setState('listening');
     }
 
@@ -1095,6 +1562,7 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
      */
     public async Disconnect(): Promise<void> {
         this.closedByConsumer = true;
+        this.DisposeReconnectTimers();
         // Release an in-flight Connect (open or created phase) so the awaited promise cannot
         // outlive the session the consumer just tore down.
         this.failPendingConnect?.(new Error(`${this.providerDebugLabel} disconnected during connect`));
@@ -1118,10 +1586,151 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
             this.socket = null;
         }
         this.sessionObject = {};
+        this.activeConfig = null;
         this.resetResponseState();
         if (this.currentState !== 'error') {
             this.setState('closed');
         }
+    }
+
+    /**
+     * Performs an in-place WebSocket swap on duration expiry or provider GoAway while keeping
+     * the existing `micCapture`, `playback`, and audio meters intact.
+     */
+    protected override async Reconnect(context: RealtimeClientReconnectContext): Promise<void> {
+        if (!this.activeConfig) {
+            throw new Error(`${this.providerDebugLabel}: cannot reconnect before Connect`);
+        }
+        if (context.Abandoned) {
+            throw new Error(`${this.providerDebugLabel}: reconnect attempt abandoned`);
+        }
+        const refreshedConfig: ClientRealtimeSessionConfig = {
+            ...this.activeConfig,
+            EphemeralToken: context.Credential.EphemeralToken || this.activeConfig.EphemeralToken,
+            ExpiresAt: context.Credential.ExpiresAt || this.activeConfig.ExpiresAt,
+            ...(context.Credential.RelayUrl !== undefined ? { RelayUrl: context.Credential.RelayUrl } : {}),
+            ...(context.Credential.SessionConfig !== undefined ? { SessionConfig: context.Credential.SessionConfig } : {}),
+        };
+        this.activeConfig = refreshedConfig;
+        this.sessionObject = this.resolveSessionObject(refreshedConfig);
+
+        const prevSocket = this.socket;
+        let openSocket: (() => void) | null = null;
+        const opened = new Promise<void>((resolve) => {
+            openSocket = resolve;
+        });
+        const created = this.waitsForSessionCreated
+            ? new Promise<void>((resolve) => {
+                  this.sessionCreatedResolver = resolve;
+              })
+            : null;
+        let failReconnect: ((error: Error) => void) | null = null;
+        const failure = new Promise<never>((_, reject) => {
+            failReconnect = reject;
+        });
+        failure.catch(() => undefined);
+
+        const nextSocket = this.openProviderSocket(
+            refreshedConfig,
+            context.UseNativeResumption ? context.ResumptionHandle : null
+        );
+        let nextSocketOpen = false;
+        const onAbort = () => {
+            failReconnect?.(new Error(`${this.providerDebugLabel}: reconnect attempt aborted`));
+            try { nextSocket.close(); } catch { /* ignore */ }
+        };
+        if (context.Signal.aborted) {
+            onAbort();
+            throw new Error(`${this.providerDebugLabel}: reconnect attempt aborted`);
+        }
+        context.Signal.addEventListener('abort', onAbort, { once: true });
+
+        nextSocket.onopen = () => {
+            nextSocketOpen = true;
+            openSocket?.();
+        };
+        nextSocket.onmessage = (data) => {
+            if (this.socket === nextSocket) {
+                this.handleProtocolMessage(data);
+                return;
+            }
+            try {
+                const event = JSON.parse(data) as OpenAIProtocolServerEvent;
+                if (event && typeof event === 'object' && event.type === 'session.created') {
+                    this.onSessionCreatedFrame();
+                } else if (event && typeof event === 'object' && event.type === 'conversation.created') {
+                    const conv = (event as { conversation?: { id?: unknown } }).conversation;
+                    if (typeof conv?.id === 'string' && conv.id.trim().length > 0) {
+                        this.RecordResumptionHandle(conv.id);
+                    }
+                }
+            } catch {
+                /* ignore non-JSON during handshake */
+            }
+        };
+        // Each handler fails this attempt while it is in flight. Once the swap adopts the socket it is the call's, so a
+        // later loss goes through the same handling as the first connection's, a later reconnect's attempt included.
+        nextSocket.onerror = (message) => {
+            nextSocketOpen = false;
+            failReconnect?.(new Error(message));
+            if (this.socket === nextSocket) {
+                this.socketOpen = false;
+                this.handleSocketError(message);
+            }
+        };
+        nextSocket.onclose = () => {
+            nextSocketOpen = false;
+            failReconnect?.(new Error(`${this.providerDebugLabel} socket closed during reconnect`));
+            if (this.socket === nextSocket) {
+                this.socketOpen = false;
+                this.handleSocketClose();
+            }
+        };
+
+        try {
+            await Promise.race([opened, failure]);
+            if (context.Abandoned) {
+                throw new Error(`${this.providerDebugLabel}: reconnect attempt abandoned after open`);
+            }
+            if (created) {
+                await Promise.race([created, failure]);
+            }
+            if (context.Abandoned) {
+                throw new Error(`${this.providerDebugLabel}: reconnect attempt abandoned after session.created`);
+            }
+        } catch (err) {
+            nextSocket.onopen = null;
+            nextSocket.onmessage = null;
+            nextSocket.onerror = null;
+            nextSocket.onclose = null;
+            try { nextSocket.close(); } catch { /* ignore */ }
+            throw err;
+        } finally {
+            context.Signal.removeEventListener('abort', onAbort);
+            failReconnect = null;
+            this.sessionCreatedResolver = null;
+        }
+
+        if (prevSocket) {
+            prevSocket.onopen = null;
+            prevSocket.onmessage = null;
+            prevSocket.onerror = null;
+            prevSocket.onclose = null;
+        }
+        this.socket = nextSocket;
+        this.socketOpen = nextSocketOpen;
+
+        try {
+            prevSocket?.close();
+        } catch {
+            /* already closing */
+        }
+
+        const answerWasInFlight = this.resetResponseStateForNewConnection();
+        this.applySessionConfig();
+        const resumedNatively = context.UseNativeResumption && Boolean(context.ResumptionHandle);
+        this.seedConversationAfterMove(context, answerWasInFlight, !resumedNatively);
+        this.setState('listening');
     }
 
     // ── Brain seam implementations ─────────────────────────────────────────────
@@ -1219,9 +1828,17 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
         return `${this.providerDebugLabel} connection closed unexpectedly`;
     }
 
-    /** Surfaces a fatal socket error and marks the session unusable (obligation #6). */
+    /**
+     * A socket error. During a live call it starts the `connection-lost` reconnect, and during a running reconnect it
+     * tells that reconnect the socket is gone; before the call is live it is fatal and marks the session unusable
+     * (obligation #6).
+     */
     protected handleSocketError(message: string): void {
         if (this.currentState === 'error' || this.currentState === 'closed') {
+            return;
+        }
+        // The socket's close follows and reaches the reconnect started here, which takes it as the same loss.
+        if (this.recoverLostTransport(`socket error: ${message}`)) {
             return;
         }
         this.emitError({ Message: this.formatTransportError(message), Fatal: true });
@@ -1229,13 +1846,18 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
     }
 
     /**
-     * A socket close the CONSUMER didn't ask for. Default: FATAL — providers hard-close at
-     * token expiry and when they end the session themselves, so an unexpected close is how
-     * credential / session death reaches the host (obligation #6). Providers with benign
-     * close semantics (a self-hosted proxy hop) override.
+     * A socket close the CONSUMER didn't ask for. During a live call it is a lost connection
+     * (a network cut, a dropped proxy hop), so it goes to the shared `connection-lost`
+     * reconnect, or to the reconnect already running; a session the provider really ended
+     * surfaces as `reconnect-failed` once the recovery window closes. Before the call is live
+     * it is FATAL — that is how a rejected credential or session reaches the host (obligation
+     * #6). Providers with benign close semantics (a self-hosted proxy hop) override.
      */
     protected handleSocketClose(): void {
         if (this.closedByConsumer || this.currentState === 'error' || this.currentState === 'closed') {
+            return;
+        }
+        if (this.recoverLostTransport('socket closed')) {
             return;
         }
         this.emitError({ Message: this.unexpectedCloseMessage, Fatal: true });

@@ -35,6 +35,11 @@ export class GeminiEnterpriseRealtimeClient extends GeminiRealtimeClient {
         return true;
     }
 
+    /** Vertex AI / Gemini Enterprise relay sessions accept sessionResumption.handle natively. */
+    protected override get DefaultTrustsNativeResumption(): boolean {
+        return true;
+    }
+
     /**
      * Opens one Live connection through the relay; a resume opens another with the same URL and the new handle.
      *

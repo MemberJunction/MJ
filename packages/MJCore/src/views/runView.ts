@@ -7,6 +7,9 @@ import { CompositeKey } from '../generic/compositeKey';
 import type { CacheChangedEvent } from '../generic/localCacheManager';
 import { IsExplicitBaseViewOverride } from '../generic/alternateBaseViews';
 import { ViewPropertyValues, ViewPropertyValuesKey } from './viewProperties';
+import type { CompositeFilter } from '../generic/filters/compositeFilter';
+import type { CompositeFilterDescriptor } from '../generic/filters/filter.types';
+import { CanonicalCompositeFilterKey } from '../generic/filters/compositeFilterSQL';
 
 /**
  * Reason codes for {@link AfterKeyNotSupportedError}. Use these to make caller
@@ -387,6 +390,12 @@ export class RunViewParams {
      * before the query is executed.
      */
     ExtraFilter?: string | PlatformSQL;
+    /**
+     * Structured filter, ANDed with {@link ExtraFilter} when both are set. Compiled to parameterized
+     * SQL by the provider; never interpolated. Field names are validated against the entity and its
+     * field-level security; an unknown or unreadable field is refused.
+     */
+    Filter?: CompositeFilterDescriptor | CompositeFilter;
     /**
      * Optional map of named bind parameters referenced as `@paramName` in {@link ExtraFilter}.
      * Keys omit the leading `@` (an optional `@` prefix is normalized).
@@ -825,6 +834,7 @@ export class RunViewParams {
         if (a.ViewName !== b.ViewName) return false;
         if (a.EntityName !== b.EntityName) return false;
         if (!RunViewParams.platformSQLEqual(a.ExtraFilter, b.ExtraFilter)) return false;
+        if (CanonicalCompositeFilterKey(a.Filter) !== CanonicalCompositeFilterKey(b.Filter)) return false;
         if (!RunViewParams.platformSQLEqual(a.OrderBy, b.OrderBy)) return false;
         if (a.UserSearchString !== b.UserSearchString) return false;
         if (a.ExcludeUserViewRunID !== b.ExcludeUserViewRunID) return false;

@@ -13,71 +13,50 @@ vi.mock('@memberjunction/global', () => ({
 // time must exist here alongside BaseModel/BaseRealtimeModel. The realtime type aliases
 // (RealtimeSessionParams, etc.) are compile-time interfaces and need no runtime mock.
 vi.mock('@memberjunction/ai', async () => {
-    class BaseModel {
-        protected _apiKey: string;
-        constructor(apiKey: string) {
-            this._apiKey = apiKey;
-        }
-    }
-    // Mirror the real BaseRealtimeModel's default client-direct surface: SupportsClientDirect
-    // defaults to false and CreateClientSession throws unless overridden (OpenAIRealtime — which
-    // xAIRealtime now subclasses — overrides both, matching Grok Voice's real client-direct support).
-    class BaseRealtimeModel extends BaseModel {
-        public get SupportsClientDirect(): boolean {
-            return false;
-        }
-        // Same body as the real BaseRealtimeModel.ClampSessionSeconds (the real module cannot be imported here; see RealtimeDriverFactsOf below).
-        protected ClampSessionSeconds(...candidates: ReadonlyArray<number | undefined>): number | undefined {
-            let smallest: number | undefined;
-            for (const c of candidates) {
-                if (typeof c !== 'number' || !Number.isInteger(c) || c <= 0) continue;
-                if (smallest === undefined || c < smallest) smallest = c;
-            }
-            return smallest;
-        }
-        public async CreateClientSession(): Promise<never> {
-            throw new Error(`${this.constructor.name} does not support client-direct realtime sessions`);
-        }
-    }
+    const { BaseModel } = await import('../../../../Core/src/generic/baseModel');
+    const baseRealtime = await import('../../../../Core/src/generic/baseRealtime');
+    const realtimeMemory = await import('../../../../Core/src/generic/realtimeConversationMemory');
     // Base classes the OpenAI provider's other modules extend during module evaluation.
     class BaseLLM extends BaseModel {}
     class BaseEmbeddings extends BaseModel {}
     class BaseAudioGenerator extends BaseModel {}
-    // The OpenAI audio driver also registers against the split TTS and STT bases, so its
-    // decorators read these at module evaluation.
     class BaseTextToSpeech extends BaseModel {}
     class BaseSpeechToText extends BaseModel {}
     class BaseImageGenerator extends BaseModel {}
-    // The OpenAI Decisions driver extends BaseSystemOneDecision and registers against BaseDecision.
     class BaseDecision extends BaseModel {}
     class BaseSystemOneDecision extends BaseDecision {}
-    // Static-method error helper referenced by those modules' method bodies.
     class ErrorAnalyzer {
         public static analyzeError(): Record<string, never> {
             return {};
         }
     }
-    // RealtimeDiagLog is a verbose-gated console logger used by the realtime session; a no-op suffices.
     const RealtimeDiagLog = () => { /* no-op in tests */ };
-    // IsTranscriptContinuation is a PURE, dependency-free helper — pull in the REAL implementation
-    // rather than stubbing it, so this driver test asserts against shipped behavior. It lives in its
-    // own module precisely so importing it here can't cascade into other mocked packages.
     const { IsTranscriptContinuation } = await import('../../../../Core/src/generic/transcriptContinuation');
-    // Same reasoning for ResolveResponseDoneUsage — PURE and dependency-free, and it encodes the
-    // provider-specific rule for WHERE usage lives on a response.done frame (xAI puts it at the
-    // top level, OpenAI under response.usage). Stubbing it would let this test restate that rule
-    // and drift from reality, which is how the xAI top-level-usage bug survived here in the first
-    // place — so the real implementation is the thing under test.
-    const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');
-    // NormalizeTurnDetectionSettings is the single shared normalizer — run the real one so tests cannot drift from it.
-    // turnDetectionSettings.ts is dependency-free BY DESIGN and must stay so: it is loaded from source here, under mocks.
+    const { ResolveResponseDoneUsage, MapRealtimeUsageModalityDetail } = await import('../../../../Core/src/generic/realtimeUsage');
     const { NormalizeTurnDetectionSettings } = await import('../../../../Core/src/generic/turnDetectionSettings');
-    // Same for RealtimeDroppedInputReporter, which the shared OpenAI-protocol session uses to report the input it drops.
     const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
-    // Same body as the real RealtimeDriverFactsOf (baseRealtime.ts). The real module cannot be imported here: it pulls in
-    // @memberjunction/global, which these suites mock. The mocked BaseRealtimeModel has no static, so only drivers declaring their own resolve.
-    const RealtimeDriverFactsOf = (driver: object): object => (driver.constructor as { DriverFacts: object }).DriverFacts;
-    return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseTextToSpeech, BaseSpeechToText, BaseImageGenerator, BaseDecision, BaseSystemOneDecision, ErrorAnalyzer, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, NormalizeTurnDetectionSettings, RealtimeDroppedInputReporter, RealtimeDriverFactsOf };
+    const realtimeConnectionSetup = await import('../../../../Core/src/generic/realtimeConnectionSetup');
+    return {
+        BaseModel,
+        ...baseRealtime,
+        ...realtimeMemory,
+        ...realtimeConnectionSetup,
+        BaseLLM,
+        BaseEmbeddings,
+        BaseAudioGenerator,
+        BaseTextToSpeech,
+        BaseSpeechToText,
+        BaseImageGenerator,
+        BaseDecision,
+        BaseSystemOneDecision,
+        ErrorAnalyzer,
+        RealtimeDiagLog,
+        IsTranscriptContinuation,
+        ResolveResponseDoneUsage,
+        MapRealtimeUsageModalityDetail,
+        NormalizeTurnDetectionSettings,
+        RealtimeDroppedInputReporter,
+    };
 });
 
 // Mock the SDK WebSocket so importing the driver never touches the network. The driver's
@@ -821,13 +800,18 @@ describe('xAIRealtime', () => {
     });
 
     describe('lifecycle', () => {
-        it('Close removes the event + error listeners and closes the connection', async () => {
+        it('Close removes the session\'s event + error listeners, leaves a no-op error guard, and closes the connection', async () => {
             const session = await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' });
+            const onError = vi.fn();
+            session.OnError(onError);
             expect(driver.Fake.ListenerCount).toBe(1);
             expect(driver.Fake.ErrorListenerCount).toBe(1);
             await session.Close();
             expect(driver.Fake.ListenerCount).toBe(0);
-            expect(driver.Fake.ErrorListenerCount).toBe(0);
+            // The guard keeps the SDK from turning a late socket error into an unhandled rejection; it reaches no one.
+            expect(driver.Fake.ErrorListenerCount).toBe(1);
+            driver.Fake.FireError(makeSdkError('closed before the connection was established'));
+            expect(onError).not.toHaveBeenCalled();
             expect(driver.Fake.Closed).toBe(true);
         });
 
@@ -1074,5 +1058,70 @@ describe('xAIRealtime edge coverage (shared-driver surface)', () => {
         } else {
             throw new Error('expected realtime session.update from Reconfigure');
         }
+    });
+
+    it('sends resumption: { enabled: true } in session.update on the socket unless ZeroDataRetention is true, while omitting it from the REST client_secrets mint (#12)', async () => {
+        await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' });
+        const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+        if (update?.type === 'session.update' && update.session.type === 'realtime') {
+            const session = update.session as Record<string, unknown>;
+            expect(session['resumption']).toEqual({ enabled: true });
+        } else {
+            throw new Error('expected realtime session.update');
+        }
+
+        const zdrDriver = new TestablexAIRealtime('test-key');
+        await zdrDriver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys', ZeroDataRetention: true });
+        const zdrUpdate = zdrDriver.Fake.Sent.find((e) => e.type === 'session.update');
+        if (zdrUpdate?.type === 'session.update' && zdrUpdate.session.type === 'realtime') {
+            const session = zdrUpdate.session as Record<string, unknown>;
+            expect(session['resumption']).toBeUndefined();
+        } else {
+            throw new Error('expected realtime session.update for ZDR');
+        }
+
+        const cd = new ClientDirectTestablexAI('k');
+        await cd.CreateClientSession({ Model: 'grok-voice', SystemPrompt: 'sys' });
+        const mintSession = cd.LastSecretParams?.session as Record<string, unknown> | undefined;
+        expect(mintSession?.['resumption']).toBeUndefined();
+    });
+});
+
+/** Driver whose every connection is a fresh fake: the first opens on its own, later ones answer only what a test fires. */
+class ReconnectingxAIRealtime extends xAIRealtime {
+    public readonly Connections: FakeConnection[] = [];
+    protected override createConnection(): IxAIRealtimeConnection {
+        const conn = new FakeConnection();
+        conn.AutoSessionCreated = this.Connections.length === 0;
+        this.Connections.push(conn);
+        return conn;
+    }
+}
+
+describe('xAIRealtime reconnect keeps the frames that come with session.created', () => {
+    const conversationCreated = (id: string): RealtimeServerEvent =>
+        ({ type: 'conversation.created', event_id: 'e', conversation: { id, object: 'realtime.conversation' } }) as RealtimeServerEvent;
+
+    it.each([
+        ['a native resumption', true],
+        ['a reseed', false],
+    ])('records the conversation.created that arrives with the new connection\'s session.created, after %s', async (_move, firstConversationKnown) => {
+        const driver = new ReconnectingxAIRealtime('xai-key');
+        const session = (await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' })) as xAIRealtimeSession;
+        await session.WaitForConfigApplied();
+        if (firstConversationKnown) {
+            driver.Connections[0].Fire(conversationCreated('conv_1'));
+            expect(session.ResumptionHandle).toBe('conv_1');
+        }
+
+        const reconnect = session.TriggerReconnect('connection-lost');
+        const second = driver.Connections[1];
+        // One burst, as xAI sends them: both frames arrive before the reconnect's wait for session.created resumes.
+        second.Fire({ type: 'session.created', event_id: 'e2' } as RealtimeServerEvent);
+        second.Fire(conversationCreated('conv_2'));
+        expect(await reconnect).toBe(true);
+
+        expect(session.ResumptionHandle).toBe('conv_2');
+        await session.Close();
     });
 });

@@ -7,6 +7,7 @@
  * Supports both SQL Server and PostgreSQL database platforms via the dbPlatform configuration.
  */
 
+import path from 'path';
 import { GraphQLServerGeneratorBase } from './Misc/graphql_server_codegen';
 import { SQLCodeGenBase, EntitiesNotInExcludedSchemas } from './Database/sql_codegen';
 import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
@@ -26,6 +27,7 @@ import { CreateNewUserBase } from './Misc/createNewUser';
 import { MJGlobal } from '@memberjunction/global';
 import { ActionSubClassGeneratorBase } from './Misc/action_subclasses_codegen';
 import { RemoteOperationGeneratorBase, ResolveRemoteOperationSchema } from './Misc/remote_operations_codegen';
+import { TypedQueryGeneratorBase } from './Misc/typed_query_codegen';
 import { MJRemoteOperationEntity } from '@memberjunction/core-entities';
 import { SQLLogging } from './Misc/sql_logging';
 import { CodeGenConnection, CodeGenDatabaseProvider, DataSourceResult as ProviderDataSourceResult, ResolveCodeGenDatabaseProvider } from './Database/codeGenDatabaseProvider';
@@ -971,7 +973,7 @@ export class RunCodeGenBase {
         );
         const ok = await reporter.phase('generateAngular', async () => {
           for (const [dir, group] of angularGroups) {
-            const groupOk = angularGenerator.generateAngularCode(group, dir, '', currentUser, 'Angular');
+            const groupOk = await angularGenerator.generateAngularCode(group, dir, '', currentUser, 'Angular');
             if (!groupOk) {
               return false;
             }
@@ -1112,6 +1114,59 @@ export class RunCodeGenBase {
           } else if (isVerbose) SucceedSpinner(`${target.label} typed bases generated`);
         }
       } else if (isVerbose) WarnSpinner('Remote Operations output directory NOT found in config file, skipping...');
+
+      // Typed Query Wrappers — emit DefineTypedQuery descriptors + Queries.<Category>.<Name> namespace tree
+      // for approved, reusable queries (Query.Status === 'Approved' && Query.Reusable === true).
+      const coreTypedQueriesDir =
+        OutputDir('CoreTypedQueries', false) ||
+        (coreEntitySubClassOutputDir ? path.join(coreEntitySubClassOutputDir, 'queries') : undefined);
+      const nonCoreTypedQueriesDir =
+        OutputDir('TypedQueries', false) ||
+        (entitySubClassOutputDir ? path.join(entitySubClassOutputDir, 'queries') : undefined);
+      if (coreTypedQueriesDir || nonCoreTypedQueriesDir) {
+        const typedQueryGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<TypedQueryGeneratorBase>(TypedQueryGeneratorBase)!;
+        const allQueries = md.Queries ?? [];
+        const platform = DbPlatform();
+
+        if (coreTypedQueriesDir && !RunCodeGenBase.SkipEmptyCorePass('CORE Typed Queries', coreEntities)) {
+          if (isVerbose) StartSpinner('Generating CORE Typed Query wrappers...');
+          const ok = await reporter.phase('generateTypedQueriesCore', async () =>
+            typedQueryGenerator.GenerateTypedQueriesForDirectory(
+              allQueries,
+              md.Entities,
+              coreTypedQueriesDir,
+              [mjCoreSchema],
+              { platform },
+            ),
+          );
+          if (!ok) {
+            FailSpinner('Error generating CORE Typed Query wrappers');
+            this.RecordStepFailure('FILE_GENERATION', 'Error generating CORE Typed Query wrappers');
+            allSucceeded = false;
+          } else if (isVerbose) SucceedSpinner('CORE Typed Query wrappers generated');
+        }
+
+        const nonCoreSchemaNames = Array.from(
+          new Set(localNonCoreEntities.map((e) => e.SchemaName)),
+        ).filter(Boolean);
+        if (nonCoreTypedQueriesDir && nonCoreSchemaNames.length > 0) {
+          if (isVerbose) StartSpinner('Generating Typed Query wrappers...');
+          const ok = await reporter.phase('generateTypedQueries', async () =>
+            typedQueryGenerator.GenerateTypedQueriesForDirectory(
+              allQueries,
+              md.Entities,
+              nonCoreTypedQueriesDir,
+              nonCoreSchemaNames,
+              { platform },
+            ),
+          );
+          if (!ok) {
+            FailSpinner('Error generating Typed Query wrappers');
+            this.RecordStepFailure('FILE_GENERATION', 'Error generating Typed Query wrappers');
+            allSucceeded = false;
+          } else if (isVerbose) SucceedSpinner('Typed Query wrappers generated');
+        }
+      }
 
       const emit = EmitStats.Snapshot();
       reporter.counter('filesWritten', emit.filesWritten);

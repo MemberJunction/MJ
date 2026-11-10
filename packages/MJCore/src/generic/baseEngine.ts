@@ -19,6 +19,8 @@ import { ProviderBase } from "./providerBase";
 import { DatabaseProviderBase } from "./databaseProviderBase";
 import { TransformSimpleObjectToEntityObject, CanonicalPrimaryKeyValue } from "./util";
 import { WellKnownUserSource } from "./wellKnownUserSource";
+import { CompositeFilter } from "./filters/compositeFilter";
+import type { CompositeFilterDescriptor, FilterDescriptor } from "./filters/filter.types";
 
 /** The primary-key columns a key index is built for. */
 type PrimaryKeyColumn = Pick<EntityFieldInfo, 'Name' | 'IsUniqueIdentifier'>;
@@ -228,8 +230,11 @@ export class BaseEnginePropertyConfig extends BaseInfo {
     Entities?: string[];
     /**
      * Optional, filters to apply to the data load, applies only when type is 'entity'. Use DatasetItemFilters for dataset filters.
+     * Accepts either a SQL WHERE string (passed as `RunViewParams.ExtraFilter`) or a structured
+     * {@link CompositeFilterDescriptor} / {@link CompositeFilter} (passed as `RunViewParams.Filter`
+     * and evaluated in memory on save events for immediate cache mutation).
      */
-    Filter?: string;
+    Filter?: string | CompositeFilterDescriptor | CompositeFilter;
     /**
      * Optional semantic `Name` of a registered `EntityAlternateBaseView` on the target entity
      * (for example, `'Active'`). Applies only when `Type` is `'entity'`.
@@ -547,6 +552,11 @@ interface ExternalChangeReload {
     Again: boolean;
     /** True when the next reload must read past the cache, because an event that asked for it did. */
     BypassCache: boolean;
+    /**
+     * The rows the next reload has to re-read, by canonical primary-key text, when every request
+     * folded into it named its row. Null when any request did not, so the next reload is a full one.
+     */
+    Keys: Map<string, CompositeKey> | null;
     /** Settles when the last requested reload has finished; rejects only when that one threw. */
     Done: Promise<void>;
 }
@@ -672,6 +682,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * 0 restores back-to-back reloads.
      */
     public static ExternalChangeFollowUpDelayMs: number = 1000;
+
+    /**
+     * Most rows one keyed re-fetch reads. A no-row-data invalidation round that names more rows
+     * than this reloads the whole config instead. One `IN` list of this size stays well under the
+     * parameter and statement limits of every supported database.
+     */
+    public static KeyedRefetchMaxKeys: number = 200;
 
     /** When the last reload from {@link reloadAfterExternalChange} ended, per config PropertyName (epoch ms). */
     private _externalChangeReloadEndedAt: Map<string, number> = new Map();
@@ -1393,9 +1410,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 // Fall through to server fetch if direct delete failed
             }
 
-            // Fallback: re-fetch from the server (no row, or it could not be applied).
+            // Fallback: re-fetch from the server (no row, or it could not be applied). When the event
+            // names its row, only that row is re-read (see runOneExternalChangeReload).
+            const key = this.parseRemoteInvalidateKey(payload?.primaryKeyValues);
             for (const config of matchingConfigs) {
-                await this.reloadAfterRemoteInvalidate(config);
+                await this.reloadAfterRemoteInvalidate(config, key);
             }
 
             return true;
@@ -1416,10 +1435,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * stale, and reading back through the cache would restore the pre-write snapshot. A transient
      * failure gets the bounded retry, since the event that asked for this reload is consumed.
      */
-    private async reloadAfterRemoteInvalidate(config: BaseEnginePropertyConfig): Promise<void> {
+    private async reloadAfterRemoteInvalidate(config: BaseEnginePropertyConfig, key: CompositeKey | null = null): Promise<void> {
         let succeeded: boolean;
         try {
-            await this.reloadAfterExternalChange(config, /*bypassCache*/ true);
+            await this.reloadAfterExternalChange(config, /*bypassCache*/ true, key);
             succeeded = this.configLoadedSuccessfully(config.PropertyName);
         } catch (e: unknown) {
             LogError(e);
@@ -1427,6 +1446,28 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         }
         if (!succeeded) {
             this.scheduleEventRefreshRetry(config, 1);
+        }
+    }
+
+    /**
+     * The primary key a remote-invalidate event names, or null when it names none (or it cannot be
+     * read). The payload carries it as a JSON array of `{ FieldName, Value }`.
+     */
+    private parseRemoteInvalidateKey(primaryKeyValuesJSON: string | null | undefined): CompositeKey | null {
+        if (!primaryKeyValuesJSON) {
+            return null;
+        }
+        try {
+            const pairs = JSON.parse(primaryKeyValuesJSON) as Array<{ FieldName: string; Value: string }> | null;
+            if (!Array.isArray(pairs) || pairs.length === 0) {
+                return null;
+            }
+            if (pairs.some(kv => !kv || typeof kv.FieldName !== 'string' || kv.Value === null || kv.Value === undefined)) {
+                return null;
+            }
+            return CompositeKey.FromKeyValuePairs(pairs.map(kv => new KeyValuePair(kv.FieldName, kv.Value)));
+        } catch {
+            return null;
         }
     }
 
@@ -1454,6 +1495,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         recordDataJSON: string
     ): Promise<boolean> {
         try {
+            // Pre-check all matching configs before mutating any in-memory array so we never
+            // leave earlier configs half-mutated when a later config requires a full refresh.
+            if (!matchingConfigs.every(config => this.canUseImmediateMutation(config, /*skipAdditionalLoadingCheck*/ true))) {
+                return false;
+            }
+
             const recordData = JSON.parse(recordDataJSON);
             // Use this engine's bound provider (ProviderToUse) instead of `new Metadata()` so
             // multi-provider client setups instantiate entities against the correct server.
@@ -1463,15 +1510,24 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             await entity.LoadFromData(recordData);
 
             for (const config of matchingConfigs) {
-                // Skip the AdditionalLoading check because we call it ourselves after all mutations
-                if (!this.canUseImmediateMutation(config, /*skipAdditionalLoadingCheck*/ true)) {
-                    return false;
-                }
-
                 const currentData = (this as Record<string, unknown>)[config.PropertyName] as BaseEntity[] | undefined;
                 if (!currentData) continue;
 
                 const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
+                if (this.isStructuredFilter(config.Filter)) {
+                    const matches = this.evaluateStructuredConfigFilter(config.Filter, entity);
+                    if (!matches) {
+                        if (index >= 0) {
+                            const removed = currentData[index];
+                            currentData.splice(index, 1);
+                            primaryKeyIndexRemoved(currentData, index, removed);
+                            this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
+                            this.NotifyDataChange(config, currentData, 'delete', entity);
+                            this.emitPropertyChange(config.PropertyName);
+                        }
+                        continue;
+                    }
+                }
                 if (index >= 0) {
                     currentData[index] = entity;
                     primaryKeyIndexReplaced(currentData, index, entity);
@@ -1919,11 +1975,52 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      *   (e.g., applyRemoteRecordData applies all config mutations then calls AdditionalLoading).
      * @returns true if immediate mutation is safe, false if a full view refresh is needed
      */
+    protected isStructuredFilter(
+        filter: BaseEnginePropertyConfig['Filter'],
+    ): filter is CompositeFilterDescriptor | CompositeFilter {
+        return filter != null && typeof filter === 'object';
+    }
+
+    protected evaluateStructuredConfigFilter(
+        filter: CompositeFilterDescriptor | CompositeFilter,
+        entity: BaseEntity,
+    ): boolean {
+        const compiled = filter instanceof CompositeFilter ? filter : CompositeFilter.FromDescriptor(filter);
+        return compiled.Evaluate({ '': entity.GetAll() });
+    }
+
+    /**
+     * Filters the in-memory array stored at `propertyName` using a structured
+     * {@link CompositeFilterDescriptor}, {@link CompositeFilter}, or single {@link FilterDescriptor}.
+     *
+     * Works with both `BaseEntity` instances (reading fields via `GetAll()`) and plain `'simple'`
+     * record objects.
+     */
+    protected Where<E = BaseEntity>(
+        propertyName: string,
+        filter: CompositeFilterDescriptor | CompositeFilter | FilterDescriptor,
+    ): E[] {
+        const items = (this as Record<string, unknown>)[propertyName];
+        if (!Array.isArray(items) || items.length === 0) {
+            return [];
+        }
+        const compiled = filter instanceof CompositeFilter ? filter : CompositeFilter.FromDescriptor(filter);
+        return (items as E[]).filter((item) => {
+            if (item == null || typeof item !== 'object') return false;
+            const maybeEntity = item as unknown as BaseEntity;
+            const row =
+                typeof maybeEntity.GetAll === 'function'
+                    ? maybeEntity.GetAll()
+                    : (item as unknown as Record<string, unknown>);
+            return compiled.Evaluate({ '': row });
+        });
+    }
+
     protected canUseImmediateMutation(config: BaseEnginePropertyConfig, skipAdditionalLoadingCheck: boolean = false): boolean {
-        // If there's a filter, we can't safely do immediate mutations because:
-        // - For creates: the new entity might not match the filter
-        // - For updates: the entity might now match or no longer match the filter
-        if (config.Filter) {
+        // If there's a string SQL filter, we can't safely do immediate mutations in memory because
+        // SQL predicates cannot be evaluated client-side. Structured CompositeFilter configs CAN be
+        // evaluated in memory via CompositeFilter.Evaluate().
+        if (typeof config.Filter === 'string' && config.Filter.trim().length > 0) {
             return false;
         }
 
@@ -2015,6 +2112,27 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const entity = event.baseEntity;
 
         if (event.type === 'save') {
+            if (this.isStructuredFilter(config.Filter)) {
+                const matches = this.evaluateStructuredConfigFilter(config.Filter, entity);
+                if (!matches) {
+                    const existingIndex = this.indexOfEntityByRefOrKey(currentData, entity);
+                    if (existingIndex >= 0) {
+                        const removed = currentData[existingIndex];
+                        currentData.splice(existingIndex, 1);
+                        primaryKeyIndexRemoved(currentData, existingIndex, removed);
+                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
+                        this.NotifyDataChange(config, currentData, 'delete', entity);
+                        this.emitPropertyChange(config.PropertyName);
+                        if (config.CacheLocal) {
+                            this.syncLocalCacheForConfig(config, event).catch(e => {
+                                LogWarning(`BaseEngine: Failed to sync local cache for ${config.EntityName}: ${e}`, 'Cache');
+                            });
+                        }
+                    }
+                    return;
+                }
+            }
+
             // Clone the entity so the cache holds an instance owned by THIS engine's provider,
             // not the saving provider. Falling back to the original entity here would reintroduce
             // the leak, so on clone failure we bail and let the next full refresh fix the cache.
@@ -2179,7 +2297,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             ? new Date(rawUpdatedAt).toISOString()
             : new Date().toISOString();
 
-        if (event.type === 'delete') {
+        if (event.type === 'delete' || (this.isStructuredFilter(config.Filter) && !this.evaluateStructuredConfigFilter(config.Filter, entity))) {
             await LocalCacheManager.Instance.RemoveSingleEntity(
                 fingerprint,
                 key,
@@ -2315,8 +2433,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const entityConfigsToLoad = configsToLoad.filter(c => c.Type === 'entity');
         const datasetConfigsToLoad = configsToLoad.filter(c => c.Type === 'dataset');
 
-        await Promise.all([...datasetConfigsToLoad.map(c => this.LoadSingleDatasetConfig(c, contextUser, bypassCache)),
-                           this.LoadMultipleEntityConfigs(entityConfigsToLoad, contextUser, bypassCache)]);
+        try {
+            await Promise.all([...datasetConfigsToLoad.map(c => this.LoadSingleDatasetConfig(c, contextUser, bypassCache)),
+                               this.LoadMultipleEntityConfigs(entityConfigsToLoad, contextUser, bypassCache)]);
+        } finally {
+            // Runs even when a read threw, so a failed load still starts (or stops) the timed refresh.
+            this.reconcileExpirationTimers();
+        }
 
         // Register cross-server cache change callbacks for entity configs
         this.RegisterCacheChangeCallbacks(entityConfigs);
@@ -2582,10 +2705,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * and field-security segments; see {@link configFingerprint}.
      */
     protected BuildRunViewParamsForConfig(config: BaseEnginePropertyConfig, bypassCache: boolean = false): RunViewParams {
+        const isStructured = this.isStructuredFilter(config.Filter);
         return {
             EntityName: config.EntityName,
             ResultType: config.ResultType || this.EngineDefaultResultType,
-            ExtraFilter: config.Filter,
+            ExtraFilter: typeof config.Filter === 'string' ? config.Filter : undefined,
+            ...(isStructured ? { Filter: config.Filter } : {}),
             OrderBy: config.OrderBy,
             ...(config.AlternateBaseView ? { AlternateBaseView: config.AlternateBaseView } : {}),
             IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
@@ -3510,15 +3635,23 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      *
      * @param bypassCache - Read past the cache. When any request folded into a reload asks for
      *   it, that reload bypasses the cache.
+     * @param key - The one row this request is about, when it knows. A reload whose requests all
+     *   named their rows re-reads only those rows; one request without a key makes it a full reload.
      */
-    private reloadAfterExternalChange(config: BaseEnginePropertyConfig, bypassCache: boolean = false): Promise<void> {
+    private reloadAfterExternalChange(config: BaseEnginePropertyConfig, bypassCache: boolean = false, key: CompositeKey | null = null): Promise<void> {
         const running = this._externalChangeReloads.get(config.PropertyName);
         if (running) {
             running.Again = true;
             running.BypassCache = running.BypassCache || bypassCache;
+            running.Keys = this.addReloadKey(running.Keys, key);
             return running.Done;
         }
-        const reload: ExternalChangeReload = { Again: false, BypassCache: bypassCache, Done: Promise.resolve() };
+        const reload: ExternalChangeReload = {
+            Again: false,
+            BypassCache: bypassCache,
+            Keys: this.addReloadKey(new Map(), key),
+            Done: Promise.resolve()
+        };
         this._externalChangeReloads.set(config.PropertyName, reload);
         reload.Done = this.runExternalChangeReloads(config, reload);
         return reload.Done;
@@ -3540,9 +3673,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     await new Promise<void>(resolve => setTimeout(resolve, wait));
                 }
                 const bypassCache = reload.BypassCache;
+                const keys = reload.Keys;
                 reload.Again = false;
                 reload.BypassCache = false;
-                lastError = await this.runOneExternalChangeReload(config, bypassCache);
+                reload.Keys = new Map();
+                lastError = await this.runOneExternalChangeReload(config, bypassCache, keys);
                 this._externalChangeReloadEndedAt.set(config.PropertyName, Date.now());
                 if (lastError && reload.Again) {
                     LogError(lastError);
@@ -3562,20 +3697,196 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         return endedAt === undefined ? 0 : Math.max(0, endedAt + BaseEngine.ExternalChangeFollowUpDelayMs - Date.now());
     }
 
-    /** One reload for {@link runExternalChangeReloads}. Returns the error it threw, or null. */
-    private async runOneExternalChangeReload(config: BaseEnginePropertyConfig, bypassCache: boolean): Promise<Error | null> {
+    /**
+     * Folds one request's key into a round's key set. Null (a full reload) absorbs everything: a
+     * request without a key, or a round that already needs a full reload, stays a full reload.
+     */
+    private addReloadKey(keys: Map<string, CompositeKey> | null, key: CompositeKey | null): Map<string, CompositeKey> | null {
+        if (keys === null || key === null) {
+            return null;
+        }
+        keys.set(key.ToConcatenatedString(), key);
+        return keys;
+    }
+
+    /**
+     * One reload for {@link runExternalChangeReloads}. Returns the error it threw, or null.
+     * When the round named its rows and the config qualifies (see {@link canRefetchRowsByKey}), only
+     * those rows are re-read; otherwise, or when that read fails, the whole config is reloaded.
+     */
+    private async runOneExternalChangeReload(
+        config: BaseEnginePropertyConfig,
+        bypassCache: boolean,
+        keys: Map<string, CompositeKey> | null = null
+    ): Promise<Error | null> {
         try {
-            // The reload replaces the property, so the derived state has to be rebuilt too —
-            // and the reload must NOT emit on its own, or a subscriber wakes between the new
+            // Either path changes the property, so the derived state has to be rebuilt too —
+            // and neither may emit on its own, or a subscriber wakes between the new
             // rows and the rebuild and reads derived state still pointing at the instances
             // this reload discarded.
-            await this.LoadSingleConfig(config, this._contextUser, bypassCache, /*suppressEmit*/ true);
+            const refetched = keys !== null && keys.size > 0 && this.canRefetchRowsByKey(config, keys)
+                ? await this.RefetchConfigRowsByKey(config, Array.from(keys.values()))
+                : false;
+            if (!refetched) {
+                await this.LoadSingleConfig(config, this._contextUser, bypassCache, /*suppressEmit*/ true);
+            }
             await this.RebuildDerivedState(this._contextUser);
             this.emitPropertyChange(config.PropertyName);
             return null;
         } catch (e: unknown) {
             return e instanceof Error ? e : new Error(String(e));
         }
+    }
+
+    /**
+     * Whether a no-row-data invalidation round for `config` can re-read just the named rows instead
+     * of the whole table. It cannot when: the config is a dataset; it has an `OrderBy` (the database's
+     * collation decides order, and re-sorting in JS could differ); the entity does not resolve or has
+     * a composite primary key; a key names another field; there are more keys than
+     * {@link KeyedRefetchMaxKeys}; the config is not loaded; or a full refresh of it is in flight.
+     */
+    private canRefetchRowsByKey(config: BaseEnginePropertyConfig, keys: Map<string, CompositeKey>): boolean {
+        if (config.Type === 'dataset' || !config.EntityName || (config.OrderBy && config.OrderBy.trim().length > 0)) {
+            return false;
+        }
+        if (keys.size > BaseEngine.KeyedRefetchMaxKeys) {
+            return false;
+        }
+        if ((this._inFlightFullRefreshCount.get(config.PropertyName) ?? 0) > 0) {
+            return false;
+        }
+        const entry = this._dataMap.get(config.PropertyName);
+        if (!entry?.loadedSuccessfully || !Array.isArray(entry.data)) {
+            return false;
+        }
+        const entityInfo = this.ProviderToUse?.EntityByName?.(config.EntityName);
+        if (!entityInfo || entityInfo.PrimaryKeys.length !== 1) {
+            return false;
+        }
+        const pkName = entityInfo.FirstPrimaryKey.Name.trim().toLowerCase(); // first-pk-ok: guarded by PrimaryKeys.length === 1 just above
+        for (const key of keys.values()) {
+            if (key.KeyValuePairs.length !== 1 || key.KeyValuePairs[0].FieldName.trim().toLowerCase() !== pkName) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Re-reads the given rows of `config` and applies them in place: a returned row replaces the held
+     * one with its key or is appended; a requested key that is not returned is removed (deleted,
+     * filtered out, or no longer visible to the engine's user). One RunView, the config's own filter
+     * AND the key list, past the cache, as the engine's user on the engine's provider.
+     *
+     * Does not emit or rebuild derived state; the caller does both once.
+     *
+     * @returns true when applied; false when the caller must reload the whole config instead (the
+     *   read failed, or a key could not be written as a SQL literal).
+     */
+    protected async RefetchConfigRowsByKey(config: BaseEnginePropertyConfig, keys: CompositeKey[]): Promise<boolean> {
+        const entityInfo = this.ProviderToUse.EntityByName(config.EntityName!);
+        const pkField = entityInfo.FirstPrimaryKey; // first-pk-ok: only reached after canRefetchRowsByKey confirmed a single-column key
+        const literals: string[] = [];
+        for (const key of keys) {
+            const literal = this.keyLiteral(key.KeyValuePairs[0].Value, pkField.NeedsQuotes);
+            if (literal === null) {
+                return false;
+            }
+            literals.push(literal);
+        }
+        const keyFilter = `${pkField.Name} IN (${literals.join(', ')})`;
+        const stringFilter = typeof config.Filter === 'string' ? config.Filter.trim() : '';
+        const params: RunViewParams = {
+            ...this.BuildRunViewParamsForConfig(config, /*bypassCache*/ true),
+            ExtraFilter: stringFilter.length > 0 ? `(${stringFilter}) AND ${keyFilter}` : keyFilter,
+            // A one-off read of a few rows: never worth a cache slot of its own.
+            CacheLocal: false,
+        };
+
+        const generationBefore = this._configRefreshGeneration.get(config.PropertyName) ?? 0;
+        let result: RunViewResult;
+        try {
+            result = await new RunView(this.RunViewProviderToUse).RunView(params, this._contextUser);
+        } catch (e) {
+            LogWarning(`BaseEngine: keyed re-fetch of '${config.PropertyName}' threw (${e instanceof Error ? e.message : String(e)}) — reloading the config instead`, 'Cache');
+            return false;
+        }
+        if (!result.Success) {
+            LogWarning(`BaseEngine: keyed re-fetch of '${config.PropertyName}' failed (${result.ErrorMessage}) — reloading the config instead`, 'Cache');
+            return false;
+        }
+
+        // The config may have been reloaded or dropped while the read ran. A reload that began
+        // meanwhile may hold newer rows than this read, so do not write over it.
+        if (
+            (this._configRefreshGeneration.get(config.PropertyName) ?? 0) !== generationBefore ||
+            (this._inFlightFullRefreshCount.get(config.PropertyName) ?? 0) > 0
+        ) {
+            return false;
+        }
+        const heldNow = this.getHeldRowsForDelta(config);
+        if (!heldNow) {
+            return false;
+        }
+        // Write to a copy: the held array can be frozen when it is shared with a cache.
+        const held = [...heldNow];
+        const pkFields = [pkField.Name];
+        const isUuidPk = [Boolean(pkField.IsUniqueIdentifier)];
+        const requested = new Set<string>();
+        for (const key of keys) {
+            requested.add(CanonicalPrimaryKeyValue(String(key.KeyValuePairs[0].Value), isUuidPk[0]));
+        }
+
+        // Index the held rows once: a burst can name up to KeyedRefetchMaxKeys rows of a large table.
+        const indexByKey = new Map<string, number>();
+        held.forEach((h, i) => {
+            const k = this.canonicalHeldRowPkKey(h, pkFields, isUuidPk);
+            if (k !== null && !indexByKey.has(k)) indexByKey.set(k, i);
+        });
+
+        const returned = new Set<string>();
+        for (const row of (result.Results ?? []) as Array<BaseEntity | Record<string, CacheRowValue>>) {
+            const rowKey = this.canonicalHeldRowPkKey(row, pkFields, isUuidPk);
+            if (rowKey === null) continue;
+            returned.add(rowKey);
+            const index = indexByKey.get(rowKey);
+            if (index !== undefined) {
+                held[index] = row;
+                this.NotifyDataChange(config, held, 'update', row instanceof BaseEntity ? row : undefined);
+            } else {
+                indexByKey.set(rowKey, held.length);
+                held.push(row);
+                this.NotifyDataChange(config, held, 'add', row instanceof BaseEntity ? row : undefined);
+            }
+        }
+
+        // Removals last, highest index first, so earlier indexes stay valid.
+        const removals = Array.from(requested)
+            .filter(k => !returned.has(k))
+            .map(k => indexByKey.get(k))
+            .filter((i): i is number => i !== undefined)
+            .sort((a, b) => b - a);
+        for (const index of removals) {
+            const [removed] = held.splice(index, 1);
+            this.NotifyDataChange(config, held, 'delete', removed instanceof BaseEntity ? removed : undefined);
+        }
+        if (config.AddToObject !== false) {
+            Reflect.set(this, config.PropertyName, held);
+        }
+        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: held, loadedSuccessfully: true });
+        return true;
+    }
+
+    /** A key value as a SQL literal, or null when it cannot be written safely as one. */
+    private keyLiteral(value: unknown, needsQuotes: boolean): string | null {
+        if (value === null || value === undefined) {
+            return null;
+        }
+        const text = value instanceof Date ? value.toISOString() : String(value);
+        if (!needsQuotes) {
+            return /^-?\d+(\.\d+)?$/.test(text.trim()) ? text.trim() : null;
+        }
+        return `'${text.split("'").join("''")}'`;
     }
 
     /**
@@ -3953,8 +4264,61 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (this._expirationTimers.has(propertyName)) {
             clearTimeout(this._expirationTimers.get(propertyName));
         }
-        const timer = setTimeout(() => this.RefreshItem(propertyName), expiration);
+        const timer = setTimeout(() => this.runExpirationRefresh(propertyName, expiration, timer as unknown as number), expiration);
+        // A cache-refresh timer must never keep a Node process alive on its own (CLI tools and
+        // test runners load engines and then expect to exit). Browsers return a number: no-op.
+        if (typeof timer === 'object' && timer !== null && 'unref' in timer && typeof timer.unref === 'function') {
+            timer.unref();
+        }
         this._expirationTimers.set(propertyName, timer as unknown as number);
+    }
+
+    /**
+     * Makes the running timers match the loaded configs: a config with an Expiration and no timer
+     * gets one, and a timer whose config no longer has an Expiration is stopped.
+     *
+     * A successful load arms its own timer from {@link HandleSingleViewResult}, but a failed one does
+     * not — without this a failed first load would leave that property with no refresh until restart.
+     * And a reload that drops the Expiration (an interval set to 0) must stop the timer, which
+     * {@link runExpirationRefresh} would otherwise keep re-arming at the old interval.
+     */
+    private reconcileExpirationTimers(): void {
+        for (const c of this._metadataConfigs) {
+            if (c.Expiration && !this._expirationTimers.has(c.PropertyName)) {
+                this.setExpirationTimer(c.PropertyName, c.Expiration);
+            } else if (!c.Expiration && this._expirationTimers.has(c.PropertyName)) {
+                clearTimeout(this._expirationTimers.get(c.PropertyName));
+                this._expirationTimers.delete(c.PropertyName);
+            }
+        }
+    }
+
+    /**
+     * Runs one timed refresh and keeps the timer alive. A successful load re-arms the timer from
+     * {@link HandleSingleViewResult}; a failed one (an unsuccessful result, or a thrown connection
+     * error) does not, so without this the refresh would stop for good after a single failed read
+     * and the property would keep its last rows indefinitely.
+     * The re-arm uses the config as it is now, so a reload that dropped the Expiration while this
+     * tick was running stops the timer instead of keeping it at the old interval.
+     * @param timer - The handle that fired; if the map no longer holds it, a successful load, a
+     *                {@link reconcileExpirationTimers} or a {@link RemoveDynamicConfig} already
+     *                decided what happens next.
+     */
+    private async runExpirationRefresh(propertyName: string, expiration: number, timer: number): Promise<void> {
+        try {
+            await this.RefreshItem(propertyName);
+        } catch (e) {
+            LogError(`${this.constructor.name}: timed refresh of ${propertyName} failed — ${(e as Error).message}. Retrying in ${expiration} ms.`);
+        }
+        if (this._expirationTimers.get(propertyName) !== timer) {
+            return;
+        }
+        const config = this._metadataConfigs.find(c => c.PropertyName === propertyName) || this._dynamicConfigs.get(propertyName);
+        if (config?.Expiration) {
+            this.setExpirationTimer(propertyName, config.Expiration);
+        } else {
+            this._expirationTimers.delete(propertyName);
+        }
     }
 
     /**
@@ -3996,7 +4360,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     public async RefreshItem(propertyName: string): Promise<void> {
         const config = this._metadataConfigs.find(c => c.PropertyName === propertyName) || this._dynamicConfigs.get(propertyName);
         if (config) {
-            await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ false, /*suppressEmit*/ true);
+            // A config with an Expiration exists to pick up changes made outside this process, which
+            // the local cache never hears about — so its timed refresh must read the database.
+            await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ !!config.Expiration, /*suppressEmit*/ true);
             await this.RebuildDerivedState(this._contextUser);
             this.emitPropertyChange(config.PropertyName);
         }

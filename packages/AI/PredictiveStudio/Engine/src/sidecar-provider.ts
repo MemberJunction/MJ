@@ -17,8 +17,8 @@ import { BaseSingleton, IShutdownable, ShutdownRegistry } from '@memberjunction/
  * `scoring/seams.ts`) defaulted their constructor parameter to `new MLSidecar()`,
  * and every production call site (`train-model.action.ts`, `run-experiment.deps.ts`,
  * `score-record-set.runner.ts`, `operations/delegation.ts`) constructed a fresh
- * trainer/predictor per action run with no injected sidecar. `MLSidecar.start()`
- * spawns a Python child process in managed mode, but nothing ever called `.stop()`
+ * trainer/predictor per action run with no injected sidecar. `MLSidecar.Start()`
+ * spawns a Python child process in managed mode, but nothing ever called `Stop()`
  * on it — every "Train Model" / "Score Record Set" run leaked a live Python
  * subprocess (its own FastAPI server plus xgboost/lightgbm/scikit-learn process
  * memory) for the life of the host process. Mirrors the singleton pattern already
@@ -60,7 +60,7 @@ export class MLSidecarProvider extends BaseSingleton<MLSidecarProvider> implemen
         if (this._sidecar) {
             const sidecar = this._sidecar;
             this._sidecar = null;
-            await sidecar.stop();
+            await sidecar.Stop();
         }
     }
 }

@@ -192,7 +192,7 @@
       "Name": "Train ML Model",
       "OperationKey": "PredictiveStudio.TrainModel",
       "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Predictive Studio",
-      "Description": "Train a predictive model from an MJ: ML Training Pipelines definition. Carves a locked holdout (point-in-time/as-of aware), trains via the sidecar, persists an immutable Draft MJ: ML Models row, and flags single-feature dominance (possible target leakage). Returns the new model id, its honest holdout metrics, the leakage flag, and the model version. Delegates to TrainingEngine.trainModel in @memberjunction/predictive-studio-engine.",
+      "Description": "Trains a predictive model from an ML Training Pipeline under the pipeline's Prediction Unit and Evaluation Protocol: freezes a Training Snapshot, carves the locked holdout by date, selects on inner folds, fits the baselines and stores the three-outcome gate decision with its reason on the training run. Outputs the run's gate outcome and reason, the snapshot and protocol, the model id (none under no-signal), the test-set scores and whether one feature dominates the predictions (possible target leakage).",
       "InputTypeName": "PredictiveStudioTrainModelInput",
       "InputTypeDefinition": "@file:types/predictive-studio-train-model.input.ts",
       "InputTypeIsArray": false,
