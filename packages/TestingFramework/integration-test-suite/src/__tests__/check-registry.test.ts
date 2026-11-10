@@ -117,6 +117,7 @@ import { GraphRuntimeChecks } from '../checks/graph-runtime.checks';
 import { TaskGraphSecurityChecks } from '../checks/task-graph-security.checks';
 import { RunViewFeatureChecks } from '../checks/runview-features.checks';
 import { WorkBusCoreChecks } from '../checks/work-bus-core.checks';
+import { IntegrationSchemaPipelineChecks } from '../checks/integration-schema-pipeline.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -283,9 +284,10 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['ciphertext-cache', CiphertextCacheChecks, 5], // CT0-CT4 ciphertext at rest in the RunViewCache, plaintext to the caller (IT161)
         ['semantic-graph', SemanticGraphChecks, 7], // SG1-SG7 Semantic Graph substrate, Content Pipeline GraphStage overlay, and Executable Canon DAG similarity & telemetry (IT162)
         ['graph-runtime', GraphRuntimeChecks, 6], // GR1-GR6 MJ Canon traversal, per-caller query visibility, the edge approval gate on a real Save, Get Graph Context, JoinEntity and QueryEdgeProvider fixtures (IT167)
-        ['task-graph-security', TaskGraphSecurityChecks, 10], // TGS1-TGS10 envelope on every row and immutable, one compensation per step, A2A store row boundary, dispatcher taint gate & compensation, the real action runner's taint gate, a person's review clears taint, a server-answered request clears nothing, an early settle clears nothing, only the service makes workflows, REST edits ordinary tasks (IT165)
+        ['task-graph-security', TaskGraphSecurityChecks, 10], // TGS1-TGS10 envelope on every row and immutable, one compensation per step, A2A store row boundary, dispatcher taint gate & compensation, the real action runner's taint gate, a person's review clears taint, a server-answered request clears nothing, an early settle clears nothing, only the service makes workflows, REST edits ordinary tasks (IT168)
         ['runview-features', RunViewFeatureChecks, 12], // RVF1-RVF12 RunView cross-feature edges and RunViewParams.Parameters wire binding (IT32)
         ['work-bus-core', WorkBusCoreChecks, 10], // WBC1-WBC10 Conversation Types, Comments IS-A Conversation, Comment Types, Field Suggestions IS-A Comment, SubtypeSelector AutoEnsureOnSave/Refuse, PostSaveHook superseding, and Workstream wakes (IT164)
+        ['integration-schema-pipeline', IntegrationSchemaPipelineChecks, 4], // ISP1-ISP4 live SQL native typing, key capping, and Soft PK/FK/Organic Key auto-indexing (IT165)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -412,6 +414,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'fp-gate-c2-5': 3,
         'fp-live-jobtitle': 1,
         'graph-runtime': 6,
+        'integration-schema-pipeline': 4,
         'jsontype-live-sync': 9,
         'jsontype-live-sync-client': 9,
         'layered-base-views': 6,
@@ -592,7 +595,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(236);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(237);
     });
 });
 
