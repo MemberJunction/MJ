@@ -104,6 +104,23 @@ SELECT [ID] FROM [__mj].[Foo]`;
       expect(result).not.toMatch(/CREATE\s+OR\s+ALTER\s+VIEW/i);
     });
 
+    it('captures dependent functions and grants before the CASCADE and restores them (#5835)', () => {
+      const sql = `CREATE OR ALTER VIEW [__mj].[vwFoo] AS
+SELECT [ID] FROM [__mj].[Foo]`;
+      const result = convert(sql);
+      expect(result).toContain(`v_target_name CONSTANT TEXT := 'vwFoo';`);
+      expect(result).toContain('pg_get_functiondef');
+      expect(result).toContain('aclexplode(c.relacl)');
+      expect(result).toContain('aclexplode(pp.proacl)');
+      expect(result).toContain('v_view_oids || v_target_oid');
+      const restoreView = result.indexOf('Could not restore dependent view');
+      const restoreFn = result.indexOf('Could not restore dependent function');
+      const restoreGrant = result.indexOf('Could not restore grants');
+      expect(restoreView).toBeGreaterThan(result.indexOf('DROP VIEW IF EXISTS'));
+      expect(restoreFn).toBeGreaterThan(restoreView);
+      expect(restoreGrant).toBeGreaterThan(restoreFn);
+    });
+
     it('should use same DO block pattern regardless of HasDDLChanges', () => {
       const ddlContext = CreateConversionContext('tsql', 'postgres');
       ddlContext.HasDDLChanges = true;

@@ -682,7 +682,7 @@ When the dependency includes a `repository`, the CLI will automatically install 
 | 4 | Dependencies | Resolve dependency graph with topological sort |
 | 5 | Dependencies | Recursively install any missing dependency apps |
 | 6 | Schema | Check for schema name collisions |
-| 7 | Schema | Create the database schema (`CREATE SCHEMA acme_crm`; on SQL Server `CREATE SCHEMA acme_crm AUTHORIZATION <core schema owner>` — see [Schema ownership on SQL Server](#schema-ownership-on-sql-server)) |
+| 7 | Schema | Create the database schema (`CREATE SCHEMA acme_crm`; on both platforms `CREATE SCHEMA acme_crm AUTHORIZATION <core schema owner>` when the installer may assign it — see [Schema ownership on SQL Server](#schema-ownership-on-sql-server) and [Schema ownership on PostgreSQL](#schema-ownership-on-postgresql)) |
 | 8 | Migrations | Download and run Skyway migrations against the app's schema |
 | 9 | Record | Create `MJ: Open Apps` record with status `Installing` |
 | 10 | Packages | Add npm packages to server/client workspace `package.json` files |
@@ -800,7 +800,7 @@ Members of `db_owner` have both. When the installer lacks either one — or cann
 
 **What a grant on an app object now reaches.** With the app schema owned by `dbo`, a grant on an app view or procedure also reaches every `dbo`-owned table it reads, `__mj` tables included, without a grant on those tables. That is the point of the fix, but it means granting an app object grants whatever that object reads. Review third-party app views and procedures before you grant them to a role.
 
-**PostgreSQL is not affected.** PostgreSQL has no ownership chaining through schemas: a view checks its base tables' privileges as the *view's* owner, not the schema's, so install creates the schema exactly as before.
+**PostgreSQL** has no ownership chaining through schemas (a view checks its base tables' privileges as the *view's* owner, not the schema's), but it assigns the same owner for a different reason; see [Schema ownership on PostgreSQL](#schema-ownership-on-postgresql).
 
 **Retrofitting an existing install.** An app schema created before this change is owned by whichever login installed it. Look up the core schema's owner, then transfer the app schema to that owner:
 
@@ -839,6 +839,22 @@ WHERE (p.class = 3  AND s.name = @app)
    OR (p.class = 1  AND OBJECT_SCHEMA_NAME(p.major_id) = @app)
    OR (p.class = 6  AND SCHEMA_NAME(t.schema_id) = @app)
    OR (p.class = 10 AND SCHEMA_NAME(x.schema_id) = @app);
+```
+
+### Schema ownership on PostgreSQL
+
+**Why it matters.** CodeGen runs as the owner of the MJ core schema and creates and replaces the app's generated views and functions. PostgreSQL lets only a schema's owner (or a member of the owning role) do that, so an app schema owned by the login that ran the install fails CodeGen with `must be owner of schema acme_crm`.
+
+**What install does.** The engine reads the owner of the core schema (`pg_get_userbyid(nspowner)` from `pg_namespace`) and whether the installing login can act as that role: `pg_has_role(current_user, <owner>, 'USAGE')` and, on PostgreSQL 16 and later, `pg_has_role(current_user, <owner>, 'SET')`; both are true for the owner itself and for superusers. A membership with `ADMIN` alone (the PostgreSQL 16 default for a `CREATEROLE` login that created the role) or without `INHERIT` does not count, because `CREATE SCHEMA … AUTHORIZATION` or the migrations' `CREATE TABLE` would then be refused. If it can, the app schema is created with `CREATE SCHEMA "acme_crm" AUTHORIZATION "<owner>"`. If not, or if the core schema is not visible, the schema is created plain (owned by the installer) and a `Schema` warning names the remedy below. The tables and views the app's migrations create stay owned by the login that ran them, as before; if CodeGen later has to replace one of those, transfer them with `REASSIGN OWNED` as below.
+
+**Fixing an existing install.** As a superuser (or the schema's current owner, if it is also a member of the core owner role):
+
+```sql
+SELECT pg_get_userbyid(nspowner) AS core_owner FROM pg_namespace WHERE nspname = '__mj'; -- your MJ core schema
+ALTER SCHEMA "acme_crm" OWNER TO "<core_owner>";
+-- Objects already created by the app's migrations, if CodeGen must replace them.
+-- REASSIGN OWNED moves EVERY object the login owns in this database, so use it only for a login used solely for installs:
+REASSIGN OWNED BY "<installing_login>" TO "<core_owner>";
 ```
 
 ---

@@ -235,14 +235,8 @@ export function PostProcess(sql: string): string {
   // literals, those TS member accesses get rewritten to `this."GranteeType"` etc.,
   // producing invalid TypeScript that breaks the build when CodeGen re-emits it.
   // A SQL->SQL converter must treat string-literal content as opaque data.
-  sql = TransformCodeOnly(sql, (code) =>
-    code.replace(/(\b\w+)\.(?!")([A-Z][a-zA-Z_]\w*)/g, '$1."$2"')
-  );
-
-  // Also handle quoted schema: "schema".PascalCase → "schema"."PascalCase"
-  sql = TransformCodeOnly(sql, (code) =>
-    code.replace(/"(\w+)"\.(?!")([A-Z][a-zA-Z_]\w*)/g, '"$1"."$2"')
-  );
+  // Also handles a quoted schema: "schema".PascalCase → "schema"."PascalCase".
+  sql = TransformCodeOnly(sql, QuoteSchemaQualifiedPascalCaseNames);
 
   // ISNULL → COALESCE (SQL Server function)
   sql = sql.replace(/\bISNULL\s*\(/gi, 'COALESCE(');
@@ -915,4 +909,17 @@ function convertOrphanedDeclareBlocks(sql: string): string {
     const argList = args.length ? ', ' + args.join(', ') : '';
     return `DO $$ DECLARE v_${varName} TEXT;\nBEGIN\n  ${convertedSelect}\n  IF v_${varName} IS NOT NULL THEN\n    EXECUTE format('${fmt}'${argList});\n  END IF;\nEND $$;`;
   });
+}
+
+/**
+ * Quotes an unquoted PascalCase name after a schema prefix, as the final pass does to all code:
+ * `__mj.OpenApp` → `__mj."OpenApp"` and `"schema".Foo` → `"schema"."Foo"`. A name that is already
+ * quoted, or that does not start with an upper-case letter (`__mj.information_schema`), is left to
+ * PostgreSQL's folding. A rule that must know the catalog name a reference will run against (the
+ * dependent-object rebuild block) applies this first, so its lookup and the statement agree.
+ */
+export function QuoteSchemaQualifiedPascalCaseNames(code: string): string {
+  return code
+    .replace(/(\b\w+)\.(?!")([A-Z][a-zA-Z_]\w*)/g, '$1."$2"')
+    .replace(/"(\w+)"\.(?!")([A-Z][a-zA-Z_]\w*)/g, '"$1"."$2"');
 }

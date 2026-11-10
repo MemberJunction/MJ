@@ -157,14 +157,24 @@ export const PostgreSQLQuotingKeywords: ReadonlySet<string> = new Set([
     // stop an entire statement from being mangled at its first word.
     'REFRESH', 'TRUNCATE', 'EXPLAIN', 'VACUUM', 'REINDEX', 'UNLOGGED', 'PREPARE', 'DEALLOCATE',
     'INCREMENT', 'MINVALUE', 'MAXVALUE', 'CYCLE',
-    // DELIBERATELY ABSENT, for the same reason `USER` is (see the baseline test's reverse guard):
-    // `LEVEL`, `MODE`, `OPTION`, `SHARE`, `START`, `CACHE`, `ROLE`, `PASSWORD`, `LOGIN`, `DOMAIN`,
-    // `CLUSTER`, `POLICY`, `SEQUENCE`, `LOCAL`, `SKIP`, `EXCLUSIVE`, `SOURCE`. Every one is a
-    // NON-reserved PostgreSQL word — legal as a bare column name — and a believable ALL-CAPS
-    // column in a customer schema this repo's baseline cannot see. MJ emits none of them through
-    // `ExecuteSQL` on PostgreSQL, so adding them would trade a real risk for no benefit. If a
-    // future statement needs one, add it WITH the statement, not speculatively.
+    // DELIBERATELY ABSENT: the words in `PostgreSQLDeliberatelyUnquotedWords` below, for the same
+    // reason `USER` is (see the baseline test's reverse guard).
 ]);
+
+/**
+ * Words kept OUT of {@link PostgreSQLQuotingKeywords} on purpose, for the same reason `USER` is.
+ * Every one is a NON-reserved PostgreSQL word — legal as a bare column name — and a believable
+ * ALL-CAPS column in a customer schema this repo's baseline cannot see. MJ emits none of them
+ * through `ExecuteSQL` on PostgreSQL, so adding them would trade a real risk for no benefit. If a
+ * future statement needs one, add it WITH the statement, not speculatively.
+ *
+ * Kept as data (not a comment) so the test suite can assert that none of them ever lands in the
+ * keyword set. Not exported from the package index: it exists for that test only.
+ */
+export const PostgreSQLDeliberatelyUnquotedWords: ReadonlyArray<string> = [
+    'LEVEL', 'MODE', 'OPTION', 'SHARE', 'START', 'CACHE', 'ROLE', 'PASSWORD', 'LOGIN', 'DOMAIN',
+    'CLUSTER', 'POLICY', 'SEQUENCE', 'LOCAL', 'SKIP', 'EXCLUSIVE', 'SOURCE',
+];
 
 /**
  * Structural words matched **case-INsensitively**, unlike {@link PostgreSQLQuotingKeywords}.

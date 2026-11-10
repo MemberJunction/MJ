@@ -746,6 +746,33 @@ describe('ToWhereClause quote escaping', () => {
   });
 });
 
+describe('ToWhereClause Unicode prefix (#5664)', () => {
+  const entity = {
+    Fields: [
+      { Name: 'Code', UnicodePrefix: 'N' },
+      { Name: 'Legacy', UnicodePrefix: '' },
+      { Name: 'LineNo', UnicodePrefix: '' },
+    ],
+  } as unknown as EntityInfo;
+
+  it('prefixes an nvarchar key value with N when the entity is given', () => {
+    const key = new CompositeKey([{ FieldName: 'Code', Value: '日本-01' }, { FieldName: 'LineNo', Value: 3 }]);
+    expect(key.ToWhereClause(true, 'single', entity)).toBe("Code=N'日本-01' AND LineNo=3");
+  });
+
+  it('leaves a varchar key value unprefixed', () => {
+    expect(CompositeKey.FromKeyValuePair('Legacy', 'K12345').ToWhereClause(true, 'single', entity)).toBe("Legacy='K12345'");
+  });
+
+  it('is unchanged without the entity', () => {
+    expect(CompositeKey.FromKeyValuePair('Code', '日本-01').ToWhereClause()).toBe("Code='日本-01'");
+  });
+
+  it('never prefixes a double-quoted value', () => {
+    expect(CompositeKey.FromKeyValuePair('Code', 'x').ToWhereClause(true, 'double', entity)).toBe('Code="x"');
+  });
+});
+
 describe('ResourceUrlsEquivalent with prototype-key query names (#4589)', () => {
   it('compares __proto__ and constructor as ordinary keys and leaves Object.prototype untouched', () => {
     expect(ResourceUrlsEquivalent('/a?__proto__=x&a=1', '/a?a=1&__proto__=x')).toBe(true);

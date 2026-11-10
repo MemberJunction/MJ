@@ -34,6 +34,7 @@ import { CompositeKey } from '@memberjunction/core';
 import { RecordMergeResult } from '@memberjunction/core';
 import { TransactionGroupBase } from '@memberjunction/core';
 import { QueryExecutionSpec } from '@memberjunction/core';
+import { PostgreSQLDialect, SQLServerDialect, type SQLDialect } from '@memberjunction/sql-dialect';
 
 vi.mock('sql-formatter', () => ({
     format: (sql: string) => sql,
@@ -65,6 +66,13 @@ class PrimaryKeyShapeTestProvider extends GenericDatabaseProviderTestBase {
     }
     public assertSingle(entityInfo: EntityInfo, feature: string): void {
         this.assertSingleColumnPrimaryKey(entityInfo, feature);
+    }
+    public exclusion(entityInfo: EntityInfo, scope: { UserViewID: string } | { UserViewRunID: string }): string {
+        return this.BuildUserViewRunExclusionSQL(entityInfo, scope);
+    }
+    public override get MJCoreSchemaName(): string { return '__mj'; }
+    public pkWhere(entityInfo: EntityInfo, key: CompositeKey): string {
+        return this.BuildPrimaryKeyWhereClause(entityInfo, key);
     }
 
     // --- Abstract-member implementations (just enough to satisfy the type system) ---
@@ -125,6 +133,17 @@ class PrimaryKeyShapeTestProvider extends GenericDatabaseProviderTestBase {
     }
 }
 
+/** The same provider with a dialect, as the SQL Server and PostgreSQL providers have. */
+class DialectTestProvider extends PrimaryKeyShapeTestProvider {
+    constructor(private readonly _dialect: SQLDialect) { super(); }
+    protected override getDialect(): SQLDialect | null { return this._dialect; }
+}
+
+/** A provider that drops the N prefix, as the PostgreSQL provider does. */
+class NoUnicodePrefixTestProvider extends PrimaryKeyShapeTestProvider {
+    protected override KeyLiteralUnicodePrefix(_field: EntityFieldInfo): string { return ''; }
+}
+
 // ---------------------------------------------------------------------------
 // Fixtures — only the members the helpers read.
 // ---------------------------------------------------------------------------
@@ -175,5 +194,101 @@ describe('assertSingleColumnPrimaryKey — one-bare-key-value features refuse co
     it('rejects an entity with no primary key at all', () => {
         expect(() => provider.assertSingle(makeEntity('Keyless', []), 'The {%UserView%} template variable'))
             .toThrow(/has 0 primary key columns/);
+    });
+});
+
+describe('BuildUserViewRunExclusionSQL — prior view-run exclusion runs on both platforms', () => {
+    const provider = new PrimaryKeyShapeTestProvider();
+    const ENTITY_ID = '11111111-1111-1111-1111-111111111111';
+    const VIEW_ID = '22222222-2222-2222-2222-222222222222';
+    const RUN_ID = '33333333-3333-3333-3333-333333333333';
+
+    function keyedEntity(pkName: string, pkType: string): EntityInfo {
+        const pk = { Name: pkName, Type: pkType } as unknown as EntityFieldInfo;
+        return { ID: ENTITY_ID, Name: 'Widgets', PrimaryKeys: [pk], FirstPrimaryKey: pk } as unknown as EntityInfo;
+    }
+
+    it('quotes identifiers, quotes the GUID literals and casts RecordID to the key type (one run)', () => {
+        expect(provider.exclusion(keyedEntity('ID', 'uuid'), { UserViewRunID: RUN_ID })).toBe(
+            `[ID] NOT IN (SELECT CAST([RecordID] AS uuid) FROM [__mj].[vwUserViewRunDetails] WHERE [EntityID]='${ENTITY_ID}' AND [UserViewRunID]='${RUN_ID}')`
+        );
+    });
+
+    it('quotes the view ID literal when excluding every prior run of the view', () => {
+        expect(provider.exclusion(keyedEntity('ID', 'uniqueidentifier'), { UserViewID: VIEW_ID })).toBe(
+            `[ID] NOT IN (SELECT CAST([RecordID] AS uniqueidentifier) FROM [__mj].[vwUserViewRunDetails] WHERE [EntityID]='${ENTITY_ID}' AND [UserViewID]='${VIEW_ID}')`
+        );
+    });
+
+    it('compares a text key to RecordID uncast', () => {
+        expect(provider.exclusion(keyedEntity('Code', 'nvarchar'), { UserViewRunID: RUN_ID })).toContain('SELECT [RecordID] FROM');
+    });
+
+    // Metadata types a PostgreSQL uuid key `uniqueidentifier`, which PostgreSQL does not have, so
+    // the cast type goes through the provider's dialect.
+    it('casts to UUID for a key metadata types uniqueidentifier, under the PostgreSQL dialect', () => {
+        const pg = new DialectTestProvider(new PostgreSQLDialect());
+        expect(pg.exclusion(keyedEntity('ID', 'uniqueidentifier'), { UserViewRunID: RUN_ID })).toContain('CAST([RecordID] AS UUID)');
+        expect(pg.exclusion(keyedEntity('ID', 'int'), { UserViewRunID: RUN_ID })).toContain('CAST([RecordID] AS INTEGER)');
+        expect(pg.exclusion(keyedEntity('Code', 'nvarchar'), { UserViewRunID: RUN_ID })).toContain('SELECT [RecordID] FROM');
+    });
+
+    it('keeps UNIQUEIDENTIFIER under the SQL Server dialect', () => {
+        const mssql = new DialectTestProvider(new SQLServerDialect());
+        expect(mssql.exclusion(keyedEntity('ID', 'uniqueidentifier'), { UserViewRunID: RUN_ID })).toContain('CAST([RecordID] AS UNIQUEIDENTIFIER)');
+    });
+
+    it('rejects a view-run ID that is not a GUID before it reaches the SQL', () => {
+        expect(() => provider.exclusion(keyedEntity('ID', 'uuid'), { UserViewRunID: "x') OR 1=1 --" }))
+            .toThrow(/Invalid ExcludeUserViewRunID: must be a GUID/);
+    });
+
+    it('rejects a view ID that is not a GUID', () => {
+        expect(() => provider.exclusion(keyedEntity('ID', 'uuid'), { UserViewID: 'not-a-guid' }))
+            .toThrow(/requires a saved view with a GUID ID/);
+    });
+});
+
+describe('BuildPrimaryKeyWhereClause — key literals follow the key column type (#5664)', () => {
+    const provider = new PrimaryKeyShapeTestProvider();
+
+    function entityWithKeys(keys: Array<{ Name: string; NeedsQuotes: boolean; UnicodePrefix: string }>): EntityInfo {
+        const pks = keys.map(k => ({ ...k, CodeName: k.Name } as unknown as EntityFieldInfo));
+        return { Name: 'Codes', PrimaryKeys: pks, FirstPrimaryKey: pks[0] } as unknown as EntityInfo;
+    }
+
+    it('writes N\'…\' for an nvarchar key', () => {
+        const entity = entityWithKeys([{ Name: 'Code', NeedsQuotes: true, UnicodePrefix: 'N' }]);
+        expect(provider.pkWhere(entity, CompositeKey.FromKeyValuePair('Code', "日本-'01"))).toBe("[Code]=N'日本-''01'");
+    });
+
+    it('keeps a plain literal for a varchar or uuid key', () => {
+        const entity = entityWithKeys([{ Name: 'ID', NeedsQuotes: true, UnicodePrefix: '' }]);
+        expect(provider.pkWhere(entity, CompositeKey.FromKeyValuePair('ID', 'K12345'))).toBe("[ID]='K12345'");
+    });
+
+    it('leaves a numeric key bare', () => {
+        const entity = entityWithKeys([{ Name: 'OrderID', NeedsQuotes: false, UnicodePrefix: '' }]);
+        expect(provider.pkWhere(entity, CompositeKey.FromKeyValuePair('OrderID', 42))).toBe('[OrderID]=42');
+    });
+
+    it('refuses a non-numeric value for a numeric key instead of splicing it bare', () => {
+        const entity = entityWithKeys([{ Name: 'OrderID', NeedsQuotes: false, UnicodePrefix: '' }]);
+        expect(() => provider.pkWhere(entity, CompositeKey.FromKeyValuePair('OrderID', '1 OR 1=1')))
+            .toThrow(/Invalid non-numeric value provided for numeric key field OrderID on entity Codes/);
+    });
+
+    it('ANDs a composite key, prefixing only its nvarchar column', () => {
+        const entity = entityWithKeys([
+            { Name: 'OrderID', NeedsQuotes: false, UnicodePrefix: '' },
+            { Name: 'LineCode', NeedsQuotes: true, UnicodePrefix: 'N' },
+        ]);
+        const key = new CompositeKey([{ FieldName: 'OrderID', Value: 7 }, { FieldName: 'LineCode', Value: 'Ä-3' }]);
+        expect(provider.pkWhere(entity, key)).toBe("[OrderID]=7 AND [LineCode]=N'Ä-3'");
+    });
+
+    it('takes the prefix from KeyLiteralUnicodePrefix, which the PostgreSQL provider empties', () => {
+        const entity = entityWithKeys([{ Name: 'Code', NeedsQuotes: true, UnicodePrefix: 'N' }]);
+        expect(new NoUnicodePrefixTestProvider().pkWhere(entity, CompositeKey.FromKeyValuePair('Code', 'K777'))).toBe("[Code]='K777'");
     });
 });

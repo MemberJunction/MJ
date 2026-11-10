@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PostgreSQLCodeGenProvider } from '../PostgreSQLCodeGenProvider';
+import { FitPGIdentifier, PostgreSQLCodeGenProvider } from '../PostgreSQLCodeGenProvider';
 import { EntityInfo } from '@memberjunction/core';
 
 function createHierarchyEntity(overrides: Record<string, unknown> = {}): EntityInfo {
@@ -182,3 +182,78 @@ describe('PostgreSQLCodeGenProvider — Hierarchy Functions suite', () => {
     });
 });
 
+
+describe('PostgreSQLCodeGenProvider — hierarchy function names fit 63 characters (#5541)', () => {
+    const provider = new PostgreSQLCodeGenProvider();
+
+    function longEntity() {
+        const e = createHierarchyEntity({ BaseTable: 'AccountingCompanyProfile', BaseTableCodeName: 'AccountingCompanyProfile' });
+        const parent = e.Fields.find(f => f.Name === 'ParentID')!;
+        // Rename the hierarchy field to the reported one.
+        Object.defineProperty(parent, 'Name', { value: 'ParentAccountingCompanyID' });
+        return { e, parent };
+    }
+
+    function namesFor(e: EntityInfo, f: EntityInfo['Fields'][number]): string[] {
+        return [
+            provider.getHierarchyMetaFunctionName(e, f),
+            provider.getDescendantsFunctionName(e, f),
+            provider.getAncestorsFunctionName(e, f),
+            provider.getRootIDFunctionName(e, f),
+        ];
+    }
+
+    it('gives four distinct names of at most 63 characters, each keeping its suffix', () => {
+        const { e, parent } = longEntity();
+        const names = namesFor(e, parent);
+        expect(new Set(names).size).toBe(4);
+        for (const n of names) {
+            expect(n.length).toBeLessThanOrEqual(63);
+        }
+        expect(names[0].endsWith('_get_hierarchy_meta')).toBe(true);
+        expect(names[1].endsWith('_get_descendants')).toBe(true);
+        expect(names[2].endsWith('_get_ancestors')).toBe(true);
+        expect(names[3].endsWith('_get_root_id')).toBe(true);
+        expect(names[1]).toMatch(/^fn_accounting_company_profile_parent_[a-z_]*_[0-9a-f]{8}_get_descendants$/);
+        // The untruncated forms are longer than 63 and would collide once PostgreSQL truncated them.
+        expect('fn_accounting_company_profile_parent_accounting_company_id_get_descendants'.length).toBeGreaterThan(63);
+    });
+
+    it('is stable across calls', () => {
+        const { e, parent } = longEntity();
+        expect(namesFor(e, parent)).toEqual(namesFor(e, parent));
+    });
+
+    it('leaves names that already fit unchanged, byte for byte', () => {
+        const e = createHierarchyEntity();
+        const parent = e.Fields.find(f => f.Name === 'ParentID')!;
+        expect(namesFor(e, parent)).toEqual([
+            'fn_category_parent_id_get_hierarchy_meta',
+            'fn_category_parent_id_get_descendants',
+            'fn_category_parent_id_get_ancestors',
+            'fn_category_parent_id_get_root_id',
+        ]);
+    });
+
+    it('uses the fitted names in the lateral joins and the function DDL', () => {
+        const { e, parent } = longEntity();
+        const [meta, , , root] = namesFor(e, parent);
+        expect(provider.generateHierarchyFieldJoin(e, parent, 'hier_P')).toContain(`"sales"."${meta}"(`);
+        expect(provider.generateRootFieldJoin(e, parent, 'root_P')).toContain(root);
+        expect(provider.generateDescendantsFunction(e, parent)).toContain(`"sales"."${provider.getDescendantsFunctionName(e, parent)}"(`);
+    });
+});
+
+describe('FitPGIdentifier', () => {
+    it('returns the name as is when it fits', () => {
+        expect(FitPGIdentifier('fn_a_b', '_get_root_id')).toBe('fn_a_b_get_root_id');
+    });
+
+    it('hashes the prefix tail of a name over 63 characters and keeps the suffix', () => {
+        const prefix = 'fn_' + 'x'.repeat(60);
+        const fitted = FitPGIdentifier(prefix, '_get_descendants');
+        expect(fitted).toHaveLength(63);
+        expect(fitted).toMatch(/^fn_x+_[0-9a-f]{8}_get_descendants$/);
+        expect(FitPGIdentifier(prefix, '_get_ancestors')).not.toBe(fitted.replace('_get_descendants', '_get_ancestors'));
+    });
+});

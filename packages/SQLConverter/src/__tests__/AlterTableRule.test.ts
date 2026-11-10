@@ -147,6 +147,12 @@ describe('AlterTableRule', () => {
       const result = convert(sql);
       expect(result).not.toMatch(/COLLATE/i);
     });
+
+    it('keeps the type change when a COLLATE clause sits between type and nullability', () => {
+      const sql = `ALTER TABLE [__mj].[Foo] ALTER COLUMN [Name] [nvarchar](100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL`;
+      const result = convert(sql);
+      expect(result).toContain('ALTER TABLE __mj."Foo" ALTER COLUMN "Name" TYPE VARCHAR(100), ALTER COLUMN "Name" SET NOT NULL');
+    });
   });
 
   describe('CHECK constraint string literal preservation', () => {
@@ -159,27 +165,70 @@ describe('AlterTableRule', () => {
     });
   });
 
-  describe('ALTER COLUMN nullability', () => {
-    it('should convert ALTER COLUMN TYPE NOT NULL → SET NOT NULL', () => {
-      const sql = `ALTER TABLE [__mj].[Foo] ALTER COLUMN [Status] [nvarchar](20) NOT NULL`;
+  describe('ALTER COLUMN type and nullability (#5539)', () => {
+    it('keeps the type with NOT NULL: TYPE + SET NOT NULL', () => {
+      const sql = `ALTER TABLE [__mj].[Foo] ALTER COLUMN [Status] [nvarchar](50) NOT NULL`;
       const result = convert(sql);
-      expect(result).toContain('SET NOT NULL');
-      expect(result).not.toMatch(/nvarchar.*NOT NULL/i);
+      expect(result).toContain('ALTER COLUMN "Status" TYPE VARCHAR(50), ALTER COLUMN "Status" SET NOT NULL');
+      expect(result).not.toMatch(/nvarchar/i);
     });
 
-    it('should convert ALTER COLUMN TYPE NULL → DROP NOT NULL', () => {
-      const sql = `ALTER TABLE [__mj].[DuplicateRun] ALTER COLUMN [SourceListID] [uniqueidentifier] NULL`;
+    it('keeps the type with NULL: TYPE + DROP NOT NULL', () => {
+      const sql = `ALTER TABLE [__mj].[Foo] ALTER COLUMN [Name] NVARCHAR(1000) NULL`;
       const result = convert(sql);
-      expect(result).toContain('DROP NOT NULL');
-      expect(result).toContain('"SourceListID"');
-      expect(result).not.toMatch(/uniqueidentifier.*NULL/i);
+      expect(result).toContain('ALTER COLUMN "Name" TYPE VARCHAR(1000), ALTER COLUMN "Name" DROP NOT NULL');
     });
 
-    it('should convert ALTER COLUMN with sized type and NULL', () => {
-      const sql = `ALTER TABLE [__mj].[Foo] ALTER COLUMN [Name] [nvarchar](100) NULL`;
-      const result = convert(sql);
-      expect(result).toContain('DROP NOT NULL');
-      expect(result).toContain('"Name"');
+    it('maps uniqueidentifier and MAX types', () => {
+      expect(convert(`ALTER TABLE [__mj].[DuplicateRun] ALTER COLUMN [SourceListID] [uniqueidentifier] NULL`))
+        .toContain('ALTER COLUMN "SourceListID" TYPE UUID, ALTER COLUMN "SourceListID" DROP NOT NULL');
+      expect(convert(`ALTER TABLE [__mj].[Action] ALTER COLUMN [Description] NVARCHAR(MAX) NULL`))
+        .toContain('ALTER COLUMN "Description" TYPE TEXT, ALTER COLUMN "Description" DROP NOT NULL');
+    });
+
+    it('changes only the type when the source gives no nullability', () => {
+      const result = convert(`ALTER TABLE [__mj].[Foo] ALTER COLUMN [Amount] DECIMAL(18, 2)`);
+      expect(result).toContain('ALTER COLUMN "Amount" TYPE NUMERIC(18,2)$vsql$');
+      expect(result).not.toMatch(/NOT NULL\$vsql\$/);
+    });
+
+    it('wraps the change in a dependent-object rebuild limited to the altered column', () => {
+      const result = convert(`ALTER TABLE [__mj].[Foo] ALTER COLUMN [Name] NVARCHAR(1000) NULL`);
+      expect(result).toContain('DO $do$');
+      expect(result).toContain(`v_target_schema CONSTANT TEXT := '__mj';`);
+      expect(result).toContain(`v_target_name CONSTANT TEXT := 'Foo';`);
+      expect(result).toContain(`v_columns CONSTANT TEXT[] := ARRAY['Name']::TEXT[];`);
+      expect(result).toContain('EXCEPTION WHEN feature_not_supported THEN');
+      expect(result).toContain('pg_get_functiondef');
+      expect(result.trimEnd().endsWith('$do$;')).toBe(true);
+    });
+
+    // PostgreSQL compares v_target_name to pg_class as a string, so it must be the name the ALTER
+    // runs against. The final pass quotes a PascalCase name after a schema (`__mj.Foo` → `__mj."Foo"`),
+    // so an unbracketed reference keeps its case; a lower-case one is left to PostgreSQL's folding.
+    it('looks up an unbracketed PascalCase table under the name the ALTER runs against', () => {
+      const result = convert(`ALTER TABLE __mj.DuplicateRun ALTER COLUMN EntityDocumentID UNIQUEIDENTIFIER NULL`);
+      expect(result).toContain(`v_target_name CONSTANT TEXT := 'DuplicateRun';`);
+      expect(result).toContain('$vsql$ALTER TABLE __mj."DuplicateRun" ALTER COLUMN "EntityDocumentID" TYPE UUID');
+    });
+
+    it('gives the same lookup for the bracketed and unbracketed forms of a statement', () => {
+      const bracketed = convert(`ALTER TABLE [__mj].[DuplicateRun] ALTER COLUMN [EntityDocumentID] UNIQUEIDENTIFIER NULL`);
+      const bare = convert(`ALTER TABLE __mj.DuplicateRun ALTER COLUMN EntityDocumentID UNIQUEIDENTIFIER NULL`);
+      const lookup = (sql: string) => sql.match(/v_target_(?:schema|name) CONSTANT TEXT := '[^']*';/g);
+      expect(lookup(bare)).toEqual(lookup(bracketed));
+    });
+
+    it('folds an unquoted lower-case table name, as PostgreSQL does when the ALTER runs', () => {
+      const result = convert(`ALTER TABLE __mj.lower_tbl ALTER COLUMN Baz NVARCHAR(500) NOT NULL`);
+      expect(result).toContain(`v_target_name CONSTANT TEXT := 'lower_tbl';`);
+      expect(result).toContain('$vsql$ALTER TABLE __mj.lower_tbl ALTER COLUMN');
+    });
+
+    it('leaves ALTER COLUMN SET DEFAULT unwrapped', () => {
+      const result = convert(`ALTER TABLE [__mj].[Foo] ADD CONSTRAINT DF_X DEFAULT (0) FOR [Flag]`);
+      expect(result).toContain('ALTER COLUMN "Flag" SET DEFAULT 0');
+      expect(result).not.toContain('DO $do$');
     });
   });
 

@@ -2694,8 +2694,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // (F1=.. AND F2=..) term per record. Hardcoding `ID` here returned nothing for every entity
         // whose key isn't named ID, so SearchEntity silently produced zero results for them.
         const filter = entity.PrimaryKeys.length === 1
-            ? `${entity.FirstPrimaryKey.Name} IN (${ids.map(id => `'${EscapeSQLString(id)}'`).join(',')})` // first-pk-ok: guarded by PrimaryKeys.length === 1
-            : ids.map(id => `(${CompositeKey.FromURLSegment(entity, id).ToWhereClause()})`).join(' OR ');
+            ? `${entity.FirstPrimaryKey.Name} IN (${ids.map(id => `${entity.FirstPrimaryKey.UnicodePrefix}'${EscapeSQLString(id)}'`).join(',')})` // first-pk-ok: guarded by PrimaryKeys.length === 1; N'' for an nvarchar key (#5664)
+            : ids.map(id => `(${CompositeKey.FromURLSegment(entity, id).ToWhereClause(true, 'single', entity)})`).join(' OR ');
         const r = await this.RunView<Record<string, unknown>>({
             EntityName: entity.Name,
             ExtraFilter: filter,

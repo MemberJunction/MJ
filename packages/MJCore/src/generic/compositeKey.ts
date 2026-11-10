@@ -126,10 +126,14 @@ export class FieldValueCollection {
      * Utility function to return a string representation of the composite key in the format "FieldName=Value AND FieldName=Value"
      * @param useIsNull if true, will return "FieldName IS NULL" for any key value pair that has a null or undefined value, if false, will return "FieldName=Value"
      * @param quoteString is either 'single' or 'double' and will determine if the string values are quoted with single or double quotes. Quotes are only applied to values that are of type string or Date.
+     * @param entity optional: when given, each quoted value takes its field's `UnicodePrefix` (`N'…'` for an
+     * nchar/nvarchar key), so non-ASCII keys match on SQL Server and the key's index can be used (#5664).
+     * Metadata reports text keys as nvarchar on PostgreSQL too, so the prefix appears there as well; the
+     * PostgreSQL provider drops it when it runs the filter. Without `entity` the output is unchanged.
      * @returns a string representation of the composite key in the format "FieldName=Value AND FieldName=Value"
      * @example "ID=1 AND Name='John'"
      */
-    ToWhereClause(useIsNull: boolean = true, quoteStyle: 'single' | 'double' = 'single'): string {
+    ToWhereClause(useIsNull: boolean = true, quoteStyle: 'single' | 'double' = 'single', entity?: EntityInfo): string {
         return this.KeyValuePairs.map((keyValue: KeyValuePair) => {
             let value = keyValue.Value;
             if (useIsNull && (value === null || value === undefined)) {
@@ -141,7 +145,12 @@ export class FieldValueCollection {
                     // record id lifted from an external index — cannot break out of the literal.
                     const quote = quoteStyle === 'single' ? "'" : '"';
                     const text = typeof value === 'string' ? value.split(quote).join(quote + quote) : `${value}`;
-                    value = `${quote}${text}${quote}`;
+                    // N is a SQL string-literal prefix, so only a single-quoted value takes it.
+                    const field = quoteStyle === 'single'
+                        ? entity?.Fields.find(f => f.Name.trim().toLowerCase() === keyValue.FieldName?.trim().toLowerCase())
+                        : undefined;
+                    const prefix = field?.UnicodePrefix ?? '';
+                    value = `${prefix}${quote}${text}${quote}`;
                 }
                 return `${keyValue.FieldName}=${value}`;
             }

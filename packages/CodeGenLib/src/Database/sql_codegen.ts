@@ -1392,6 +1392,10 @@ export class SQLCodeGenBase {
             }
         }
 
+        // Index DDL. Before this phase PostgreSQL CodeGen wrote the index file but never ran it,
+        // so foreign-key and soft-PK indexes were missing from every PG database it built (#5217).
+        const indexStatements = this.BuildEntityIndexStatements(pool, entity).filter(statement => statement.trim().length > 0);
+
         return this._dbProvider.executeEntityPhased!({
             entity,
             tvfSQL,
@@ -1400,6 +1404,7 @@ export class SQLCodeGenBase {
             crudUpdateSQL,
             crudDeleteSQL,
             ftsSQL,
+            indexStatements,
             viewPermSQL: viewPieces.viewPermSQL,
             willRegenerate,
         });
@@ -1866,21 +1871,11 @@ export class SQLCodeGenBase {
             let baseViewChanged = false;
             // Indexes for Fkeys for the table (skip for virtual entities — views can't have indexes)
             if (!options.onlyPermissions && !options.entity.VirtualEntity){
-                const forceIndexes = !!(configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.indexes);
-                const shouldGenerateIndexes = AutoIndexForeignKeys() || forceIndexes;
-                const indexSQL = shouldGenerateIndexes ? this.GenerateIndexesForForeignKeys(options.pool, options.entity) : ''; // generate indexes if auto-indexing is on OR force regeneration is enabled
-                // The soft-PK index rides in the same generated file (and therefore the same
-                // migration log), but on its own setting — see generateIndexForSoftPrimaryKey.
-                // Appended rather than prepended so the file's existing content stays
-                // byte-identical for every entity that has no soft PK, which is nearly all of
-                // them: writeFileIfChanged compares content, and reordering would rewrite the
-                // whole tree for no functional gain.
-                const softPKSQL = (AutoIndexSoftPrimaryKeys() || forceIndexes)
-                    ? this.GenerateIndexForSoftPrimaryKey(options.entity)
-                    : '';
+                // The index file is never forced into the migration log by a base-view change:
+                // indexes do not depend on the view, so they follow the same new/modified-entity
+                // and forceRegeneration.indexes rules as every other generated object.
                 const s = this.GenerateSingleEntitySQLFileHeader(options.entity, 'Index for Foreign Keys')
-                    + indexSQL
-                    + (softPKSQL ? (indexSQL ? '\n\n' : '') + softPKSQL : '');
+                    + this.BuildEntityIndexStatements(options.pool, options.entity).join('\n\n');
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('index', options.entity.SchemaName, options.entity.BaseTable, false, true));
                     this.writeFileIfChanged(filePath, s);
@@ -2533,6 +2528,26 @@ export class SQLCodeGenBase {
      * Generates the SQL for creating indexes for the foreign keys in the entity.
      * Delegates to the database provider for platform-specific index DDL.
      */
+    /**
+     * The entity's automatic index statements, honoring the settings: foreign-key indexes when
+     * `AutoIndexForeignKeys` is on, then the soft-PK index when `AutoIndexSoftPrimaryKeys` is on
+     * (both when `forceRegeneration.indexes` is). Empty for a virtual entity. Shared by the index
+     * file and the phased executor, so the SQL that is written is the SQL that runs.
+     *
+     * The soft-PK index is appended rather than prepended so the joined file content stays
+     * byte-identical for every entity that has no soft PK, which is nearly all of them:
+     * writeFileIfChanged compares content, and reordering would rewrite the whole tree.
+     */
+    BuildEntityIndexStatements(pool: CodeGenConnection, entity: EntityInfo): string[] {
+        if (entity.VirtualEntity) {
+            return [];
+        }
+        const forceIndexes = !!(configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.indexes);
+        const fkIndexes = AutoIndexForeignKeys() || forceIndexes ? this._dbProvider.generateForeignKeyIndexes(entity) : [];
+        const softPKIndex = AutoIndexSoftPrimaryKeys() || forceIndexes ? this._dbProvider.generateSoftPrimaryKeyIndex(entity) : [];
+        return [...fkIndexes, ...softPKIndex];
+    }
+
     GenerateIndexesForForeignKeys(pool: CodeGenConnection, entity: EntityInfo): string {
         const indexStatements = this._dbProvider.generateForeignKeyIndexes(entity);
         return indexStatements.join('\n\n');

@@ -133,14 +133,14 @@ describe('BuildFullPrimaryKeyPredicate', () => {
     expect(host.BuildFullPrimaryKeyPredicate(INDIVIDUALS, key)).toBe('individual_id=42');
   });
 
-  it('composite key ANDs every column, quoting each per its own type', () => {
+  it('composite key ANDs every column, quoting each per its own type (N prefix for the nvarchar one)', () => {
     const key = new CompositeKey([{ FieldName: 'OrderID', Value: 7 }, { FieldName: 'LineCode', Value: 'L-3' }]);
-    expect(host.BuildFullPrimaryKeyPredicate(ORDER_LINES, key)).toBe("OrderID=7 AND LineCode='L-3'");
+    expect(host.BuildFullPrimaryKeyPredicate(ORDER_LINES, key)).toBe("OrderID=7 AND LineCode=N'L-3'");
   });
 
   it('matches key values by field name regardless of pair order', () => {
     const key = new CompositeKey([{ FieldName: 'LineCode', Value: 'L-3' }, { FieldName: 'OrderID', Value: 7 }]);
-    expect(host.BuildFullPrimaryKeyPredicate(ORDER_LINES, key)).toBe("OrderID=7 AND LineCode='L-3'");
+    expect(host.BuildFullPrimaryKeyPredicate(ORDER_LINES, key)).toBe("OrderID=7 AND LineCode=N'L-3'");
   });
 });
 
@@ -165,7 +165,7 @@ describe('GetRecordDependencyLinkSQL — FK to a non-key column identifies the r
     const dep: EntityDependency = { EntityName: 'Order Lines', RelatedEntityName: 'Shipments', FieldName: 'LineSKU' };
     const key = new CompositeKey([{ FieldName: 'OrderID', Value: 7 }, { FieldName: 'LineCode', Value: 'L-3' }]);
     const sql = host.GetRecordDependencyLinkSQL(dep, ORDER_LINES, related, key);
-    expect(sql).toBe("(SELECT SKU FROM [sales].vwOrderLines WHERE OrderID=7 AND LineCode='L-3')");
+    expect(sql).toBe("(SELECT SKU FROM [sales].vwOrderLines WHERE OrderID=7 AND LineCode=N'L-3')");
   });
 
   it('FK to the `id` column still short-circuits to the bare quoted value', () => {
@@ -191,6 +191,53 @@ describe('BuildSiblingRecordChangeSQL — IS-A sibling read uses the real key co
   it('ID-keyed entity is unchanged', () => {
     const sql = host.BuildSiblingRecordChangeSQL('@_rc_prop_0', WIDGETS, '{}', 'desc', 'abc-123', 'u-1');
     expect(sql).toContain('FROM [dbo].[vwWidgets] WHERE [ID] = \'abc-123\'');
+  });
+});
+
+/** Single nvarchar key — the shape #5664 reported. */
+const CODES = makeEntity('A4000000-0000-0000-0000-000000000004', 'Codes', 'dbo', 'vwCodes', [
+  { Name: 'Code', Type: 'nvarchar', Length: 40, IsPrimaryKey: true },
+]);
+/** Single varchar key — no Unicode prefix. */
+const LEGACY_CODES = makeEntity('A5000000-0000-0000-0000-000000000005', 'Legacy Codes', 'dbo', 'vwLegacyCodes', [
+  { Name: 'Code', Type: 'varchar', Length: 40, IsPrimaryKey: true },
+]);
+
+describe('Unicode key literals (#5664)', () => {
+  const host = makeHost();
+
+  it('an nvarchar key renders N\'…\' so non-ASCII keys match', () => {
+    const key = new CompositeKey([{ FieldName: 'Code', Value: '日本-01' }]);
+    expect(host.BuildFullPrimaryKeyPredicate(CODES, key)).toBe("Code=N'日本-01'");
+  });
+
+  it('a varchar key keeps a plain literal', () => {
+    const key = new CompositeKey([{ FieldName: 'Code', Value: 'K12345' }]);
+    expect(host.BuildFullPrimaryKeyPredicate(LEGACY_CODES, key)).toBe("Code='K12345'");
+  });
+
+  it('a composite key prefixes only its nvarchar column', () => {
+    const key = new CompositeKey([{ FieldName: 'OrderID', Value: 7 }, { FieldName: 'LineCode', Value: 'Ä-3' }]);
+    expect(host.BuildFullPrimaryKeyPredicate(ORDER_LINES, key)).toBe("OrderID=7 AND LineCode=N'Ä-3'");
+  });
+
+  it('a uuid key is unchanged', () => {
+    const key = new CompositeKey([{ FieldName: 'ID', Value: 'abc-123' }]);
+    expect(host.BuildFullPrimaryKeyPredicate(WIDGETS, key)).toBe("ID='abc-123'");
+  });
+
+  it('an FK to an nvarchar key renders N\'…\'', () => {
+    const related = makeEntity('B4000000-0000-0000-0000-000000000004', 'Code Notes', 'dbo', 'vwCodeNotes', [
+      { Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true },
+      { Name: 'Code', Type: 'nvarchar', RelatedEntityFieldName: 'Code' },
+    ]);
+    const dep: EntityDependency = { EntityName: 'Codes', RelatedEntityName: 'Code Notes', FieldName: 'Code' };
+    expect(host.GetRecordDependencyLinkSQL(dep, CODES, related, new CompositeKey([{ FieldName: 'Code', Value: '日本-01' }]))).toBe("N'日本-01'");
+  });
+
+  it('the IS-A sibling read uses N\'…\' for an nvarchar key', () => {
+    const sql = host.BuildSiblingRecordChangeSQL('@_rc_prop_0', CODES, '{}', 'desc', '日本-01', 'u-1');
+    expect(sql).toContain("FROM [dbo].[vwCodes] WHERE [Code] = N'日本-01'");
   });
 });
 

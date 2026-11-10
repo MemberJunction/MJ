@@ -640,6 +640,15 @@ const configInfoSchema = z.object({
    */
   includeSchemas: z.string().array().optional(),
   /**
+   * Canonical (case-stable) names for schemas that are not Open Apps, keyed by schema name in any
+   * case, e.g. `{ crm: 'CRM' }`. CodeGen fills a NULL `SchemaInfo.CanonicalSchemaName` from it after
+   * the installed Open App records, so generated class names keep their casing on PostgreSQL, which
+   * folds unquoted schema names to lowercase. A value must match its key apart from case; a non-NULL
+   * CanonicalSchemaName is never overwritten. Has no effect on SQL Server names, which keep their
+   * casing (issue #5641).
+   */
+  canonicalSchemaNames: z.record(z.string(), z.string()).optional(),
+  /**
    * Field names to KEEP OUT of generated base views. Empty by default, and an empty list changes
    * nothing: the base view is emitted as `SELECT alias.*` exactly as before, byte for byte.
    *

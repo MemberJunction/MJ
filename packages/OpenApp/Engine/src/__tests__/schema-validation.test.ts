@@ -305,10 +305,10 @@ describe('CreateAppSchema — dialect-aware identifier quoting', () => {
     });
 
     it('PostgreSQL quotes with "double quotes"', async () => {
-        const { provider, executeSql } = makeMockProvider([[]], 'postgresql');
+        const { provider, executeSql } = makeMockProvider([[], [{ OwnerName: 'mj_codegen', IsMember: true }]], 'postgresql');
         const result = await CreateAppSchema('bcsaas', provider);
         expect(result.Success).toBe(true);
-        expect(executeSql.mock.calls[1][0] as string).toBe('CREATE SCHEMA "bcsaas"');
+        expect(executeSql.mock.calls[2][0] as string).toBe('CREATE SCHEMA "bcsaas" AUTHORIZATION "mj_codegen"');
     });
 });
 
@@ -465,15 +465,14 @@ describe('CreateAppSchema — SQL Server schema owner (#4756)', () => {
         expect(result.ErrorMessage).toContain('boom');
     });
 
-    it('PostgreSQL issues no owner probe and the same CREATE SCHEMA as before', async () => {
-        const { provider, executeSql } = makeMockProvider([[]], 'postgresql');
+    it('PostgreSQL never queries the SQL Server catalog (its own owner probe is covered in schema-owner-pg.test.ts)', async () => {
+        const { provider, executeSql } = makeMockProvider([[], [{ OwnerName: 'mj_codegen', IsMember: true }]], 'postgresql');
         const result = await CreateAppSchema('bcsaas', provider, { CoreSchema: '__mj' });
         expect(result.Success).toBe(true);
         expect(result.Warning).toBeUndefined();
-        expect(executeSql).toHaveBeenCalledTimes(2);
-        expect(executeSql.mock.calls[1][0] as string).toBe('CREATE SCHEMA "bcsaas"');
         for (const call of executeSql.mock.calls) {
             expect(call[0] as string).not.toContain('sys.schemas');
+            expect(call[0] as string).not.toContain('HAS_PERMS_BY_NAME');
         }
     });
 });

@@ -16,6 +16,7 @@ import { MJApplicationEntity, MJEntityFieldSchema, MJQueryParameterEntity } from
 import { logError, LogMessage, logStatus, LogWarning, StartSpinner, UpdateSpinner, SucceedSpinner } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { ApplyIncludeSchemaScope, FindUnmatchedIncludeSchemas } from "./schema-scope";
+import { BuildCanonicalSchemaCandidatesSQL, BuildCanonicalSchemaUpdateSQL, BuildOpenAppSchemaNamesSQL, ResolveCanonicalSchemaNames } from "./canonical-schema-backfill";
 import { BuildHealSchemaRoutineParams, GetAuthoredExcludeSchemas, SnapshotAuthoredExcludeSchemas } from "./heal-schema-params";
 import { JSON_VALIDATOR_CATEGORY_NAME, JSONCheckStore, JSONCheckTranslator, JSONFieldRow, JSONValidatorResult, ResolveJSONCheckValidators } from "./json-check-validators";
 import { AdvancedGeneration, EntityDescriptionResult, EntityDisplayNameResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult, IsPlausibleEntityName } from "../Misc/advanced_generation";
@@ -3385,6 +3386,10 @@ export class ManageMetadataBase {
       logStatus('   Syncing schema info from database...');
       if (! await this.updateSchemaInfoFromDatabase(pool, excludeSchemas)) {
          logError('   Error syncing schema info');
+         bSuccess = false;
+      }
+      else if (! await this.backfillCanonicalSchemaNames(pool, excludeSchemas)) {
+         logError('   Error backfilling canonical schema names');
          bSuccess = false;
       }
       logStatus(`    > Synced schema info in ${(new Date().getTime() - start.getTime()) / 1000} seconds`);
@@ -7043,6 +7048,47 @@ export class ManageMetadataBase {
             this.cacheSchemaInfoRecords(result);
          }
 
+         return true;
+      }
+      catch (e) {
+         logError(e as string);
+         return false;
+      }
+   }
+
+   /**
+    * Fills NULL `SchemaInfo.CanonicalSchemaName` values from the installed Open App records, then
+    * from the `canonicalSchemaNames` config map (issue #5641). Never overwrites a value. Each
+    * UPDATE is logged, so an Open App publisher's migration carries the declared casing to installs
+    * that never run CodeGen; a run with nothing to fill logs nothing.
+    * @param pool - SQL connection pool
+    * @param excludeSchemas - schemas CodeGen does not process this run
+    * @returns true if successful, false otherwise
+    */
+   protected async backfillCanonicalSchemaNames(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
+      try {
+         const core = MjCoreSchema();
+         const candidates = await this.runQuery(pool, BuildCanonicalSchemaCandidatesSQL(this.dialect, core));
+         const rows = (candidates?.recordset ?? []).map(r => ({ ID: String(r.ID), SchemaName: String(r.SchemaName) }));
+         if (rows.length === 0) {
+            return true;
+         }
+         const apps = await this.runQuery(pool, BuildOpenAppSchemaNamesSQL(this.dialect, core));
+         const appNames = (apps?.recordset ?? []).map(r => String(r.SchemaName));
+         const resolution = ResolveCanonicalSchemaNames(rows, appNames, configInfo.canonicalSchemaNames, excludeSchemas);
+         for (const message of resolution.Ignored) {
+            LogWarning(`   ${message}`);
+         }
+         for (const assignment of resolution.Assignments) {
+            await this.logSQLAndExecute(
+               pool,
+               BuildCanonicalSchemaUpdateSQL(this.dialect, core, assignment),
+               `Set canonical schema name for ${assignment.SchemaName} (from ${assignment.Source === 'OpenApp' ? 'Open App record' : 'mj.config canonicalSchemaNames'})`,
+            );
+         }
+         if (resolution.Assignments.length > 0) {
+            logStatus(`   > Backfilled CanonicalSchemaName on ${resolution.Assignments.length} SchemaInfo record${resolution.Assignments.length === 1 ? '' : 's'}`);
+         }
          return true;
       }
       catch (e) {

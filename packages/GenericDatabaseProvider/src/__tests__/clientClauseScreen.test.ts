@@ -4,7 +4,7 @@
  * harmless (stacked `SELECT`s).
  */
 import { describe, it, expect } from 'vitest';
-import type { EntityInfo, UserInfo } from '@memberjunction/core';
+import { ListMembershipFilter, type EntityInfo, type UserInfo } from '@memberjunction/core';
 import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
 import { SQLParser } from '@memberjunction/sql-parser';
 import { ClientClauseScreen, IsClientClauseScreeningProvider, type ClientViewClauseSet, type StatementRelation } from '../clientClauseScreen';
@@ -108,6 +108,37 @@ describe('ClientClauseScreen — PostgreSQL bracket identifiers', () => {
         expect(screen(`EXISTS (SELECT 1 FROM [__mj].[User])`, 'ExtraFilter', PG)).toThrow(/entity base view/);
         expect(screen(`[a;b] = 1`, 'ExtraFilter', PG)).toThrow(/Invalid ExtraFilter/);
         expect(screen(`[x'y] = 1`, 'ExtraFilter', PG)).toThrow(/Invalid ExtraFilter/);
+    });
+});
+
+/**
+ * The list grid builds its membership filter in the browser, which cannot know the platform, from
+ * `EntityFieldInfo.Type`. Metadata types a uuid key `uniqueidentifier` on PostgreSQL too, so the
+ * filter must pass the screen under both dialects (#5253).
+ */
+describe('ClientClauseScreen — list membership filter on both platforms', () => {
+    const LIST_ENTITIES = [...ENTITIES, entity('MJ: List Details', '__mj', 'vwListDetails')];
+    const screenList = (clause: string, dialect: SQLParserDialect) =>
+        () => ClientClauseScreen.AssertClauseUsesEntityBaseViews(clause, 'ExtraFilter', LIST_ENTITIES, dialect, USER);
+
+    it.each([
+        ['a uuid key (uniqueidentifier)', { Name: 'ID', Type: 'uniqueidentifier' }],
+        ['an integer key', { Name: 'ID', Type: 'int' }],
+        ['a text key', { Name: 'Code', Type: 'nvarchar' }],
+    ])('passes for %s under SQL Server and PostgreSQL', (_label, key) => {
+        const filter = ListMembershipFilter(key, '__mj.vwListDetails', 'list-1');
+        expect(screenList(filter, MSSQL)).not.toThrow();
+        expect(screenList(filter, PG)).not.toThrow();
+    });
+
+    it('passes the composite form under both dialects', () => {
+        const filter = ListMembershipFilter([{ Name: 'OrderID', Type: 'uniqueidentifier' }, { Name: 'LineNo', Type: 'int' }], '__mj.vwListDetails', 'list-1');
+        expect(screenList(filter, MSSQL)).not.toThrow();
+        expect(screenList(filter, PG)).not.toThrow();
+    });
+
+    it('still refuses the cast form when it reads a base table', () => {
+        expect(screenList(`ID IN (SELECT CAST(RecordID AS uniqueidentifier) FROM __mj.ListDetail)`, PG)).toThrow(/entity base view/);
     });
 });
 

@@ -6,6 +6,7 @@ import { simpleGit, SimpleGit } from 'simple-git';
 import { z } from 'zod';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
+import { GetDialect } from '@memberjunction/sql-dialect';
 import { DEFAULT_MIGRATION_REQUEST_TIMEOUT_MS } from './lib/migration-timeout';
 
 export type MJConfig = z.infer<typeof mjConfigSchema>;
@@ -302,8 +303,12 @@ export const GetSkywayConfig = async (
   schema?: string,
   dir?: string
 ): Promise<SkywayConfig> => {
-  const targetSchema = schema || mjConfig.coreSchema;
   const isPG = mjConfig.dbPlatform === 'postgresql';
+  const dialect: DatabaseDialect = isPG ? 'postgresql' : 'sqlserver';
+  // Canonicalize the target schema for the platform (PostgreSQL folds unquoted DDL to
+  // lowercase), the same way the Open App engine does, so `mj migrate --schema X` and an
+  // app install land in the same physical schema and history table (#3548).
+  const targetSchema = GetDialect(dialect).CanonicalSchemaName(schema || mjConfig.coreSchema);
 
   let location = mjConfig.migrationsLocation;
 
@@ -358,8 +363,6 @@ export const GetSkywayConfig = async (
     // Legacy behavior: Add mjSchema placeholder for non-core schemas
     placeholders['mjSchema'] = mjConfig.coreSchema;
   }
-
-  const dialect: DatabaseDialect = mjConfig.dbPlatform === 'postgresql' ? 'postgresql' : 'sqlserver';
 
   const dbConfig = {
     Dialect: dialect,

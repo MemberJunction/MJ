@@ -28,6 +28,7 @@ export {
 export { ResolveDbPlatformFromEnv, resolveDbPlatformFromEnv } from './dbPlatformEnv.js';
 export { UserCache } from './UserCache.js';
 export { ClientClauseScreen, IsClientClauseScreeningProvider } from './clientClauseScreen.js';
+export { MapTSQLCastTypesForPostgreSQL } from './postgresqlClauseTypes.js';
 export type { ClientClauseText, ClientViewClauseSet, EntityBaseViewAllowList, ClientClauseScreeningProvider, StatementReads, StatementRelation } from './clientClauseScreen.js';
 export {
     SystemUserFieldAccessLossReason,

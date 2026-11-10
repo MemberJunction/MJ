@@ -29,6 +29,7 @@ import {
 import { PGConnection, GetPgConfig } from '../../../Config/pg-connection';
 import { PostgreSQLCodeGenConnection } from './PostgreSQLCodeGenConnection';
 import * as fs from 'fs';
+import { createHash } from 'crypto';
 import path from 'path';
 import { ExecuteWithFallback } from './viewFallback';
 import type { PGQueryable } from './viewDependencyCapture';
@@ -1483,15 +1484,20 @@ $$ LANGUAGE sql STABLE;
     }
 
     public getHierarchyMetaFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
-        return `fn_${this.toSnakeCase(entity.BaseTable)}_${this.toSnakeCase(field.Name)}_get_hierarchy_meta`;
+        return FitPGIdentifier(this.hierarchyFunctionPrefix(entity, field), '_get_hierarchy_meta');
     }
 
     public getDescendantsFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
-        return `fn_${this.toSnakeCase(entity.BaseTable)}_${this.toSnakeCase(field.Name)}_get_descendants`;
+        return FitPGIdentifier(this.hierarchyFunctionPrefix(entity, field), '_get_descendants');
     }
 
     public getAncestorsFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
-        return `fn_${this.toSnakeCase(entity.BaseTable)}_${this.toSnakeCase(field.Name)}_get_ancestors`;
+        return FitPGIdentifier(this.hierarchyFunctionPrefix(entity, field), '_get_ancestors');
+    }
+
+    /** `fn_<table>_<field>`, the shared stem of an entity field's hierarchy function names. */
+    protected hierarchyFunctionPrefix(entity: EntityInfo, field: EntityFieldInfo): string {
+        return `fn_${this.toSnakeCase(entity.BaseTable)}_${this.toSnakeCase(field.Name)}`;
     }
 
     /** @inheritdoc */
@@ -1589,7 +1595,7 @@ $$ LANGUAGE sql STABLE;
      * is consistent with how downstream views are emitted.
      */
     public getRootIDFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
-        return `fn_${this.toSnakeCase(entity.BaseTable)}_${this.toSnakeCase(field.Name)}_get_root_id`;
+        return FitPGIdentifier(this.hierarchyFunctionPrefix(entity, field), '_get_root_id');
     }
 
     /** @inheritdoc */
@@ -2596,7 +2602,9 @@ WHERE p.prokind IN ('f', 'p')
      * batch on the first failure; running them separately gives a per-routine
      * error signal. Phase 3 installs the full-text objects, whose search
      * function returns the base view's rowtype and so depends on phase 1.
-     * Phase 4 applies view-level GRANTs.
+     * Phase 4 creates the entity's foreign-key and soft-PK indexes, one
+     * statement at a time; a failed index is reported (phase `indexes`) but
+     * does not skip phase 5, the view-level GRANTs.
      */
     override async executeEntityPhased(opts: {
         entity: EntityInfo;
@@ -2606,6 +2614,7 @@ WHERE p.prokind IN ('f', 'p')
         crudUpdateSQL: string;
         crudDeleteSQL: string;
         ftsSQL: string;
+        indexStatements?: ReadonlyArray<string>;
         viewPermSQL: string;
         willRegenerate?: Set<string>;
     }): Promise<PhasedExecutionResult> {
@@ -2686,7 +2695,16 @@ WHERE p.prokind IN ('f', 'p')
                 }
             }
 
-            // ── Phase 4: view permissions ────────────────────────────────
+            // ── Phase 4: indexes ─────────────────────────────────────────
+            // CodeGen generated these and wrote them to the index file, but no
+            // phase ran them on PostgreSQL, so FK and soft-PK indexes were never
+            // created (#5217). Each statement runs on its own so one bad index
+            // does not stop the rest. A failure is reported but does not skip
+            // the permissions phase: a missing index costs speed, a missing
+            // GRANT costs access.
+            const indexFailure = await this.runIndexPhase(client, opts.entity, opts.indexStatements ?? []);
+
+            // ── Phase 5: view permissions ────────────────────────────────
             if (opts.viewPermSQL && opts.viewPermSQL.trim()) {
                 try {
                     await client.query(opts.viewPermSQL);
@@ -2699,9 +2717,66 @@ WHERE p.prokind IN ('f', 'p')
                 }
             }
 
+            if (indexFailure) {
+                return { success: false, phase: 'indexes', error: indexFailure };
+            }
             return { success: true, phase: null };
         } finally {
             client.release();
+        }
+    }
+
+    /**
+     * Runs the entity's index statements one at a time (`CREATE INDEX IF NOT EXISTS`, so a rerun is
+     * a no-op), then reports any index on the entity's table that PostgreSQL marks invalid
+     * (`pg_index.indisvalid = false`, left behind by an interrupted build): `IF NOT EXISTS` skips
+     * such an index forever, so it needs a manual `REINDEX`. Returns the first statement error, or
+     * null when every statement ran.
+     */
+    protected async runIndexPhase(client: PGQueryable, entity: EntityInfo, statements: ReadonlyArray<string>): Promise<Error | null> {
+        const runnable = statements.filter(statement => statement.trim().length > 0);
+        if (runnable.length === 0) {
+            return null;
+        }
+        const failures: string[] = [];
+        for (const statement of runnable) {
+            try {
+                await client.query(statement);
+            } catch (e) {
+                failures.push(e instanceof Error ? e.message : String(e));
+            }
+        }
+        await this.reportInvalidIndexes(client, entity);
+        if (failures.length === 0) {
+            return null;
+        }
+        return new Error(
+            `${failures.length} of ${runnable.length} index statement(s) failed on ${entity.SchemaName}.${entity.BaseTable}: ${failures.join('; ')}`
+        );
+    }
+
+    /** Logs a warning naming each invalid index on the entity's table. Never throws. */
+    protected async reportInvalidIndexes(client: PGQueryable, entity: EntityInfo): Promise<void> {
+        try {
+            const result = await client.query(
+                `SELECT c.relname AS "IndexName"
+                   FROM pg_index i
+                   JOIN pg_class c ON c.oid = i.indexrelid
+                   JOIN pg_class t ON t.oid = i.indrelid
+                   JOIN pg_namespace n ON n.oid = t.relnamespace
+                  WHERE n.nspname = '${EscapeSQLString(entity.SchemaName)}'
+                    AND t.relname = '${EscapeSQLString(entity.BaseTable)}'
+                    AND i.indisvalid = false`
+            );
+            const names = (result.rows ?? []).map(row => String((row as { IndexName?: unknown }).IndexName));
+            if (names.length > 0) {
+                LogWarning(
+                    `Invalid index(es) on ${entity.SchemaName}.${entity.BaseTable}: ${names.join(', ')}. ` +
+                    `CREATE INDEX IF NOT EXISTS skips an existing invalid index; run REINDEX INDEX on each to rebuild it.`
+                );
+            }
+        } catch (e) {
+            LogWarning(`Could not check for invalid indexes on ${entity.SchemaName}.${entity.BaseTable}: ${e instanceof Error ? e.message : String(e)}`);
         }
     }
 
@@ -3282,4 +3357,24 @@ WHERE vf."IsVirtual" = true
 `;
     }
 
+}
+
+/** PostgreSQL's identifier limit (NAMEDATALEN - 1). Longer names are silently truncated. */
+export const PG_MAX_IDENTIFIER_LENGTH = 63;
+
+/**
+ * `prefix + suffix` when it fits PostgreSQL's 63-character identifier limit; otherwise the suffix is
+ * kept whole and the prefix's tail is replaced with `_` plus the first 8 hex characters of a SHA-1
+ * of the full name. PostgreSQL truncates a longer name silently, so `fn_<long table>_<field>_get_descendants`
+ * and `..._get_ancestors` could truncate to the same name and overwrite each other (#5541). The hash
+ * keeps each fitted name distinct and stable across runs; a name that already fits is unchanged.
+ */
+export function FitPGIdentifier(prefix: string, suffix: string): string {
+    const full = `${prefix}${suffix}`;
+    if (full.length <= PG_MAX_IDENTIFIER_LENGTH) {
+        return full;
+    }
+    const hash = createHash('sha1').update(full).digest('hex').substring(0, 8);
+    const keep = Math.max(0, PG_MAX_IDENTIFIER_LENGTH - suffix.length - hash.length - 1);
+    return `${prefix.substring(0, keep)}_${hash}${suffix}`;
 }

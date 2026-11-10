@@ -1,5 +1,8 @@
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
 import { ConvertIdentifiers, RemoveCollate, ConvertCommonFunctions, TransformCodeOnly, RemoveNPrefix, ConvertBooleanLiteralComparisons, CollectBooleanColumnNames, QuoteConstraintNames } from './ExpressionHelpers.js';
+import { ResolveType } from './TypeResolver.js';
+import { BuildDependentRebuildBlock, ParseSchemaQualifiedName } from './DependentObjectRebuild.js';
+import { QuoteSchemaQualifiedPascalCaseNames } from './PostProcessor.js';
 
 export class AlterTableRule implements IConversionRule {
   Name = 'AlterTableRule';
@@ -8,11 +11,16 @@ export class AlterTableRule implements IConversionRule {
   AppliesTo: StatementType[] = ['FK_CONSTRAINT', 'PK_CONSTRAINT', 'CHECK_CONSTRAINT', 'UNIQUE_CONSTRAINT', 'ENABLE_CONSTRAINT', 'ALTER_TABLE'];
   Priority = 60;
   BypassSqlglot = true;
-  BypassJustification = 'sqlglot does not handle T-SQL ALTER TABLE patterns: multi-column ADD with inline CONSTRAINT clauses, ADD CONSTRAINT name DEFAULT val FOR col syntax (T-SQL named defaults), inline FOREIGN KEY in ADD COLUMN, ALTER COLUMN type NOT NULL (must become SET NOT NULL in PG), or DEFERRABLE INITIALLY DEFERRED FK behavior we add. Custom rule produces idiomatic PG output and applies PG case-sensitive identifier quoting.';
+  BypassJustification = 'sqlglot does not handle T-SQL ALTER TABLE patterns: multi-column ADD with inline CONSTRAINT clauses, ADD CONSTRAINT name DEFAULT val FOR col syntax (T-SQL named defaults), inline FOREIGN KEY in ADD COLUMN, ALTER COLUMN type [NOT] NULL (must become TYPE plus SET/DROP NOT NULL in PG), or DEFERRABLE INITIALLY DEFERRED FK behavior we add. Custom rule produces idiomatic PG output and applies PG case-sensitive identifier quoting.';
 
   PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
     let result = ConvertIdentifiers(sql);
     result = RemoveCollate(result);
+
+    // T-SQL ALTER COLUMN <col> <type> [NOT] NULL → PG ALTER COLUMN "col" TYPE <pg type>,
+    // ALTER COLUMN "col" {SET|DROP} NOT NULL. Runs before the type conversion below, which
+    // does not handle the bracket-quoted `"nvarchar"(100)` form.
+    result = this.convertAlterColumn(result);
 
     // Convert SQL Server types to PG types (for ALTER TABLE ADD COLUMN)
     result = this.convertTypes(result);
@@ -40,13 +48,6 @@ export class AlterTableRule implements IConversionRule {
       // PG constraints are always enforced, so this is a no-op
       return `-- Constraint enable (no-op in PostgreSQL)\n-- ${result.slice(0, 200)}\n`;
     }
-
-    // Convert ALTER COLUMN ... TYPE NOT NULL → ALTER COLUMN ... SET NOT NULL
-    result = this.convertAlterColumnNotNull(result);
-
-    // Convert ALTER COLUMN ... TYPE NULL → ALTER COLUMN ... DROP NOT NULL
-    // (mirror of convertAlterColumnNotNull above for the SQL-Server-allows-NULL-again form)
-    result = this.convertAlterColumnDropNotNull(result);
 
     // Convert DEFAULT (val) FOR col → ALTER COLUMN col SET DEFAULT val
     result = this.convertDefaultFor(result);
@@ -115,6 +116,10 @@ export class AlterTableRule implements IConversionRule {
 
     // Quote PascalCase column names inside CHECK constraint bodies (preserve string literals)
     result = this.quoteCheckColumns(result);
+
+    // A column type change fails while a view reads the column (every entity column is in its
+    // base view), so it runs inside a block that rebuilds the dependent views, functions and grants.
+    result = this.wrapAlterColumnTypeInRebuild(result);
 
     result = result.trimEnd();
     if (!result.endsWith(';')) result += ';';
@@ -289,35 +294,41 @@ export class AlterTableRule implements IConversionRule {
   }
 
   /**
-   * Convert ALTER COLUMN col TYPE NOT NULL → ALTER COLUMN "col" SET NOT NULL
-   * SQL Server: ALTER TABLE t ALTER COLUMN col TYPE NOT NULL
-   * PostgreSQL: ALTER TABLE t ALTER COLUMN "col" SET NOT NULL
+   * T-SQL `ALTER COLUMN` restates the column's type with its nullability; PostgreSQL changes them
+   * separately. Every T-SQL `ALTER TABLE t ALTER COLUMN col TYPE [NOT] NULL` becomes
+   * `ALTER TABLE t ALTER COLUMN "col" TYPE <pg type>, ALTER COLUMN "col" {SET|DROP} NOT NULL`, so a
+   * widening such as `NVARCHAR(1000)` reaches PostgreSQL instead of being reduced to the
+   * nullability change (#5539). With no nullability clause only the type changes. Matches within
+   * one line; T-SQL allows one ALTER COLUMN per statement.
    */
-  private convertAlterColumnNotNull(sql: string): string {
-    // After convertIdentifiers, types may be quoted: "nvarchar"(100), "UUID", etc.
-    // Match both quoted and unquoted type names.
-    const typePattern = '"?\\w+"?(?:\\s*\\([^)]*\\))?';
+  private convertAlterColumn(sql: string): string {
+    const re =
+      /ALTER\s+COLUMN\s+("?)(\w+)\1[ \t]+(?!(?:SET|DROP|ADD|TYPE)\b)"?(\w+)"?([ \t]*\([^)\n]*\))?(?:[ \t]+(NOT[ \t]+)?NULL\b)?/gi;
+    return sql.replace(re, (match: string, _q: string, col: string, typeName: string, typeArgs: string | undefined, notNull: string | undefined) => {
+      const nullability = /\bNULL\s*$/i.test(match) ? (notNull ? ' SET NOT NULL' : ' DROP NOT NULL') : '';
+      const pgType = ResolveType(`${typeName}${(typeArgs ?? '').replace(/\s+/g, '')}`);
+      const typeClause = `ALTER COLUMN "${col}" TYPE ${pgType}`;
+      return nullability ? `${typeClause}, ALTER COLUMN "${col}"${nullability}` : typeClause;
+    });
+  }
 
-    // T-SQL: ALTER COLUMN col TYPE NOT NULL → PG: ALTER COLUMN "col" SET NOT NULL
-    let result = sql.replace(
-      new RegExp(`ALTER\\s+COLUMN\\s+("?\\w+"?)\\s+${typePattern}\\s+NOT\\s+NULL`, 'gi'),
-      (_match, col: string) => {
-        const quotedCol = col.startsWith('"') ? col : `"${col}"`;
-        return `ALTER COLUMN ${quotedCol} SET NOT NULL`;
-      }
-    );
-
-    // T-SQL: ALTER COLUMN col TYPE NULL → PG: ALTER COLUMN "col" DROP NOT NULL
-    // (T-SQL requires repeating the type when changing nullability; PG just uses DROP NOT NULL)
-    result = result.replace(
-      new RegExp(`ALTER\\s+COLUMN\\s+("?\\w+"?)\\s+${typePattern}\\s+NULL\\b(?!\\s*,)`, 'gi'),
-      (_match, col: string) => {
-        const quotedCol = col.startsWith('"') ? col : `"${col}"`;
-        return `ALTER COLUMN ${quotedCol} DROP NOT NULL`;
-      }
-    );
-
-    return result;
+  /**
+   * Wraps each `ALTER TABLE t ALTER COLUMN "c" TYPE …` statement produced by
+   * {@link convertAlterColumn} in a block that tries the ALTER first and, when PostgreSQL refuses it
+   * because a view reads the column, drops those views, runs the ALTER and restores the views, the
+   * functions CASCADE dropped with them, and their grants (see {@link BuildDependentRebuildBlock}).
+   */
+  private wrapAlterColumnTypeInRebuild(sql: string): string {
+    const re = /ALTER\s+TABLE\s+([^\s;]+)\s+(ALTER\s+COLUMN\s+"(\w+)"\s+TYPE\b[^;\n]*)(;?)/gi;
+    return sql.replace(re, (_match, rawTable: string, clauses: string, col: string) => {
+      // The final pass quotes a PascalCase name after a schema (`__mj.Foo` → `__mj."Foo"`), and
+      // PostgreSQL compares the block's name to pg_class as a string, so the reference is quoted
+      // the same way first: the name looked up is then the name the ALTER runs against.
+      const table = QuoteSchemaQualifiedPascalCaseNames(rawTable);
+      const { Schema, Name } = ParseSchemaQualifiedName(table);
+      const statement = `ALTER TABLE ${table} ${clauses.trimEnd()}`;
+      return BuildDependentRebuildBlock({ Schema, Name, Kind: 'table', Columns: [col] }, statement);
+    });
   }
 
   /**
@@ -446,26 +457,6 @@ export class AlterTableRule implements IConversionRule {
   private makeForeignKeysDeferrable(sql: string): string {
     const re = /(REFERENCES\s+[\w".]+\s*\([^)]*\)(?:\s+ON\s+(?:DELETE|UPDATE)\s+(?:NO\s+ACTION|CASCADE|SET\s+NULL|SET\s+DEFAULT|RESTRICT))*)(?!\s+DEFERRABLE)/gi;
     return sql.replace(re, '$1 DEFERRABLE INITIALLY DEFERRED');
-  }
-
-  /**
-   * Convert ALTER COLUMN col TYPE NULL → ALTER COLUMN "col" DROP NOT NULL.
-   * SQL Server: `ALTER TABLE t ALTER COLUMN col TYPE NULL` (re-allows NULLs)
-   * PostgreSQL: `ALTER TABLE t ALTER COLUMN "col" DROP NOT NULL`
-   *
-   * Mirror of convertAlterColumnNotNull above which handles the NOT NULL form.
-   * Without this rule, the literal `ALTER COLUMN col TYPE NULL` reaches PG and
-   * raises a syntax error (PG has no `TYPE NULL` form — nullability is a
-   * separate clause).
-   */
-  private convertAlterColumnDropNotNull(sql: string): string {
-    return sql.replace(
-      /ALTER\s+COLUMN\s+("?\w+"?)\s+\w+(?:\s*\([^)]*\))?\s+NULL\b/gi,
-      (_match, col: string) => {
-        const quotedCol = col.startsWith('"') ? col : `"${col}"`;
-        return `ALTER COLUMN ${quotedCol} DROP NOT NULL`;
-      }
-    );
   }
 
   /**

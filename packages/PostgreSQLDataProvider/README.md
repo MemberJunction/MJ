@@ -169,6 +169,18 @@ const perRequest = new PGConnectionManager();
 perRequest.InitializeWithExistingPool(primary.Pool, config);
 ```
 
+### User search is case-insensitive
+
+PostgreSQL compares text case-sensitively; SQL Server's default collation does not. So that a `UserSearchString` of "smith" finds "Smith" on both, the built-in search predicates compare lowercased values: `LOWER("Col") = LOWER('term')` for `Exact` and `LOWER("Col") LIKE LOWER('term%')` for `BeginsWith` (likewise `EndsWith` and `Contains`). A field with a `UserSearchParamFormatAPI` keeps its own SQL.
+
+A plain index on the column is not used by these predicates. To keep `Exact` and `BeginsWith` index-seekable, create an expression index:
+
+```sql
+CREATE INDEX "IX_Person_LastName_lower" ON app."Person" (LOWER("LastName") varchar_pattern_ops);
+```
+
+`varchar_pattern_ops` is what lets a prefix `LIKE` use the index in a database whose collation is not `C`. `Contains` and `EndsWith` cannot use a b-tree index either way.
+
 ## CodeGen Provider
 
 ### What It Generates

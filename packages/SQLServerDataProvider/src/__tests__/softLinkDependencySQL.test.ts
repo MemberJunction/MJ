@@ -28,6 +28,8 @@ type MockField = {
   RelatedEntity?: string | null;
   RelatedEntityFieldName?: string | null;
   IsVirtual?: boolean;
+  /** `EntityFieldInfo.UnicodePrefix`: `N` for an nchar/nvarchar/ntext column, else empty. */
+  UnicodePrefix?: string;
 };
 
 function mockEntity(opts: {
@@ -47,7 +49,7 @@ function mockEntity(opts: {
     BaseTable: opts.BaseTable,
     PrimaryKeys: pk,
     FirstPrimaryKey: pk[0],
-    Fields: opts.Fields ?? [],
+    Fields: (opts.Fields ?? []).map((f) => ({ UnicodePrefix: '', ...f })),
   } as unknown as EntityInfo;
 }
 
@@ -333,5 +335,30 @@ describe('SQLServerDataProvider.BuildHardLinkDependencySQL', () => {
 
     expect(sql).toContain("'Tasks' AS RelatedEntityName");
     expect(sql).not.toContain('MJ: Audit Logs');
+  });
+});
+
+describe('SQLServerDataProvider.BuildSoftLinkDependencySQL — Unicode record ids (#5664)', () => {
+  function fixture(recordIdPrefix: string) {
+    const target = mockEntity({ Name: 'Persons', ID: TARGET_ENTITY_ID, BaseView: 'vwPersons' });
+    const holder = mockEntity({
+      Name: 'Task Links',
+      ID: HOLDER_ENTITY_ID,
+      BaseView: 'vwTaskLinks',
+      Fields: [{ Name: 'RecordID', EntityIDFieldName: 'EntityID', UnicodePrefix: recordIdPrefix }],
+    });
+    return new TestProvider([target, holder]);
+  }
+
+  it('writes both record-id literals as N\'\' for an nvarchar RecordID column', () => {
+    const sql = fixture('N').buildSoftLinkSQL('Persons', CompositeKey.FromID('日本-01'));
+    expect(sql).toContain(`[RecordID] IN (N'ID|日本-01', N'日本-01')`);
+    // The discriminator is a uniqueidentifier and stays a plain literal.
+    expect(sql).toContain(`[EntityID] = '${TARGET_ENTITY_ID}'`);
+  });
+
+  it('keeps a plain literal for a varchar RecordID column', () => {
+    const sql = fixture('').buildSoftLinkSQL('Persons', CompositeKey.FromID('K12345'));
+    expect(sql).toContain(`[RecordID] IN ('ID|K12345', 'K12345')`);
   });
 });
