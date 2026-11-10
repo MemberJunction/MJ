@@ -386,7 +386,7 @@ it('system prompt tells the agent that files are type-checked and abstract class
 - Produces:
   ```ts
   // GitRepo
-  /** SHAs of commits after `sha` on origin/next that touch any of `paths` (git log --format=%H <sha>..origin/next -- <paths>). */
+  /** SHAs of landing commits after `sha` on origin/next that touch any of `paths` (git log --first-parent --format=%H <sha>..origin/next -- <paths>). */
   public async LaterCommitsTouching(sha: string, paths: string[]): Promise<string[]>;
   /** For each line range, the first-parent landing commit that last changed each line (git blame -l --first-parent -L a,b <sha> -- <path>); one SHA per line. */
   public async BlameFirstParent(sha: string, path: string, ranges: { Start: number; End: number }[]): Promise<string[]>;
@@ -398,15 +398,15 @@ it('system prompt tells the agent that files are type-checked and abstract class
   export function IsEligibleSource(path: string, map: Pick<PackageMap, 'PackageForPath'>): boolean;
   /** PR number from a landing commit subject: "Merge pull request #n from …" or a trailing "(#n)"; null otherwise. */
   export function PullRequestNumberOf(subject: string): number | null;
-  /** Merged PRs in the window that changed eligible source and whose changed files no later commit touched. */
+  /** Merged PRs in the window that changed eligible source and none of whose lines a later fix PR's landing commit on origin/next removed. */
   export async function MineClean(d: MinerDeps, window: { Since: string; Until: string }): Promise<CleanCandidate[]>;
   /** For each fix PR (title /^fix[(:!]/i) in the window: blame the lines its diff removed at the fix's parent, map the landing commits to PRs, keep the PR with the most blamed lines when it changed eligible source. */
   export async function MineBugs(d: MinerDeps, window: { Since: string; Until: string }): Promise<BugCandidate[]>;
   ```
   CLI: `corpus mine --since <YYYY-MM-DD> --until <YYYY-MM-DD> --out <file>` writes `{ Clean, Bug }` and prints the counts; the miner splits the window into calendar months for `ListMergedPullRequests`.
 
-- [ ] **Step 1: Failing tests** with fake deps: `PullRequestNumberOf` on both subject forms and on a plain subject; `MineClean` drops a PR whose file a later commit touched and a PR with only `.md` changes; `MineBugs` blames two removed ranges, picks the landing commit with more lines, skips a self-blame (introducer = fix), and maps a squash subject `(#123)`; `BlameFirstParent` parses `git blame -l` output (first 40 hex chars per line); `cli` dispatches `corpus mine`.
-- [ ] **Step 2: Implementation.** Removed-line ranges: from each hunk, old-side lines (`-` and context) numbered from `OldStart`; keep runs of `-` lines as `{ Start, End }`. Blame at `FixM^1` (`FirstParent(FixMergeSHA)`). Map each blamed SHA to a PR with `PullRequestNumberOf(await Subject(sha))`; a SHA with no number is counted under `null` and ignored. Eligibility of the bug PR is checked with `GetMergedPullRequest(BugPR).Files`.
+- [ ] **Step 1: Failing tests** with fake deps: `PullRequestNumberOf` on both subject forms and on a plain subject; `MineClean` drops a PR whose line a later fix landing commit removed (the removed line first-parent-blames to the PR's landing commit) and a PR with only `.md` changes, and keeps a PR whose file only a later non-fix commit, or a fix whose removed lines blame to another PR, touched; `MineBugs` blames two removed ranges, picks the landing commit with more lines, skips a self-blame (introducer = fix), and maps a squash subject `(#123)`; `BlameFirstParent` parses `git blame -l` output (first 40 hex chars per line); `cli` dispatches `corpus mine`.
+- [ ] **Step 2: Implementation.** Removed-line ranges: from each hunk, old-side lines (`-` and context) numbered from `OldStart`; keep runs of `-` lines as `{ Start, End }`. Blame at `FixM^1` (`FirstParent(FixMergeSHA)`). Map each blamed SHA to a PR with `PullRequestNumberOf(await Subject(sha))`; a SHA with no number is counted under `null` and ignored. Eligibility of the bug PR is checked with `GetMergedPullRequest(BugPR).Files`. Clean rule: for each landing commit from `LaterCommitsTouching`, read the PR number from its subject and the title from `GetMergedPullRequest`; when the title matches the fix pattern, run the same blame as the bug side on that commit, and drop the candidate when its PR number has blamed lines. PR lookups and blame results are cached per mine run.
 - [ ] **Step 3: Run tests** → PASS. **Commit:** `feat(jit-catching): corpus miner (clean set and SZZ bug pairs)`.
 
 ### Task 2.9: Curate the gate-1 corpus (human gate)
