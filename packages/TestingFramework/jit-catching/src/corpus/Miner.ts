@@ -80,15 +80,43 @@ function eligibleFiles(pr: MergedPullRequestDetail, map: Pick<PackageMap, 'Packa
     return files.length > 0 ? files : null;
 }
 
-/** Merged PRs in the window that changed eligible source and whose changed source files no later commit touched. */
+/** Per-run memo of GitHub PR lookups and blame results, so PRs and fixes shared across candidates are resolved once. */
+interface MineCache { PullRequests: Map<number, MergedPullRequestDetail | null>; BlamedLines: Map<string, Map<number, number>>; }
+function newCache(): MineCache { return { PullRequests: new Map(), BlamedLines: new Map() }; }
+
+/** Merged PRs in the window that changed eligible source and none of whose lines a later fix PR's landing commit on origin/next removed. */
 export async function MineClean(d: MinerDeps, window: Window): Promise<CleanCandidate[]> {
+    const cache = newCache();
     const out: CleanCandidate[] = [];
     for (const p of await listWindow(d, window)) {
         const files = eligibleFiles(await d.GitHub.GetMergedPullRequest(p.Number), d.PackageMap);
-        if (!files || (await d.Repo.LaterCommitsTouching(p.MergeSHA, files)).length > 0) continue;
+        if (!files || (await laterFixRemovedLinesOf(d, cache, p, files))) continue;
         out.push({ PR: p.Number, MergeSHA: p.MergeSHA, MergedAt: p.MergedAt, Title: p.Title, Files: files });
     }
     return out;
+}
+
+/** True when a later landing commit touching `files` belongs to a fix PR and removed a line that blames to `p`. */
+async function laterFixRemovedLinesOf(d: MinerDeps, cache: MineCache, p: MergedPullRequest, files: string[]): Promise<boolean> {
+    for (const sha of await d.Repo.LaterCommitsTouching(p.MergeSHA, files)) {
+        const n = PullRequestNumberOf(await d.Repo.Subject(sha));
+        if (n === null || n === p.Number) continue;
+        const fix = await cachedPullRequest(d, cache, n);
+        if (!fix || !FIX_TITLE_RE.test(fix.Title)) continue;
+        if ((await cachedBlamedLines(d, cache, sha)).has(p.Number)) return true;
+    }
+    return false;
+}
+
+async function cachedPullRequest(d: MinerDeps, cache: MineCache, n: number): Promise<MergedPullRequestDetail | null> {
+    if (!cache.PullRequests.has(n)) cache.PullRequests.set(n, await mergedPullRequestOrNull(d, n));
+    return cache.PullRequests.get(n) ?? null;
+}
+
+async function cachedBlamedLines(d: MinerDeps, cache: MineCache, landingSHA: string): Promise<Map<number, number>> {
+    let counts = cache.BlamedLines.get(landingSHA);
+    if (!counts) { counts = await blamedLinesByPR(d, landingSHA); cache.BlamedLines.set(landingSHA, counts); }
+    return counts;
 }
 
 /** For each fix PR (title /^fix[(:!]/i) in the window: blame the lines its diff removed at the fix's parent, map the landing commits to PRs, keep the PR with the most blamed lines when it changed eligible source. */

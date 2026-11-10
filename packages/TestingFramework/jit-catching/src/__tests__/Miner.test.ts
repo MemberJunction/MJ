@@ -64,28 +64,6 @@ describe('IsEligibleSource', () => {
   });
 });
 
-describe('MineClean', () => {
-  it('splits the window into months, de-duplicates PRs, and drops later-touched, source-free and too-large PRs', async () => {
-    const p10 = pr(10, 'feat: clean', 'a'); const p11 = pr(11, 'feat: touched later', 'b'); const p12 = pr(12, 'docs: readme', 'c'); const p13 = pr(13, 'feat: huge', 'd');
-    const d = fakeDeps({
-      windows: { '2026-01-15..2026-01-31': [p10, p11, p12], '2026-02-01..2026-02-10': [p10, p13] },
-      details: [
-        detail(p10, ['packages/X/src/a.ts', 'packages/X/src/__tests__/a.test.ts', 'README.md']),
-        detail(p11, ['packages/X/src/b.ts']),
-        detail(p12, ['packages/X/README.md']),
-        detail(p13, Array.from({ length: 100 }, (_, i) => `packages/X/src/f${i}.ts`)),
-      ],
-      later: { [sha('b')]: [sha('e')] },
-    });
-    const clean = await MineClean(d, { Since: '2026-01-15', Until: '2026-02-10' });
-    expect(d.GitHub.ListMergedPullRequests).toHaveBeenCalledTimes(2);
-    expect(d.GitHub.ListMergedPullRequests).toHaveBeenNthCalledWith(1, { Since: '2026-01-15', Until: '2026-01-31' });
-    expect(d.GitHub.ListMergedPullRequests).toHaveBeenNthCalledWith(2, { Since: '2026-02-01', Until: '2026-02-10' });
-    expect(clean).toEqual([{ PR: 10, MergeSHA: sha('a'), MergedAt: p10.MergedAt, Title: 'feat: clean', Files: ['packages/X/src/a.ts'] }]);
-    expect(d.Repo.LaterCommitsTouching).toHaveBeenCalledWith(sha('a'), ['packages/X/src/a.ts']);
-  });
-});
-
 const fixDiff = [
   'diff --git a/packages/X/src/a.ts b/packages/X/src/a.ts',
   '--- a/packages/X/src/a.ts',
@@ -107,6 +85,67 @@ const fixDiff = [
   '+new',
   '',
 ].join('\n');
+
+describe('MineClean', () => {
+  it('splits the window into months, de-duplicates PRs, and drops source-free and too-large PRs', async () => {
+    const p10 = pr(10, 'feat: clean', 'a'); const p12 = pr(12, 'docs: readme', 'c'); const p13 = pr(13, 'feat: huge', 'd');
+    const d = fakeDeps({
+      windows: { '2026-01-15..2026-01-31': [p10, p12], '2026-02-01..2026-02-10': [p10, p13] },
+      details: [
+        detail(p10, ['packages/X/src/a.ts', 'packages/X/src/__tests__/a.test.ts', 'README.md']),
+        detail(p12, ['packages/X/README.md']),
+        detail(p13, Array.from({ length: 100 }, (_, i) => `packages/X/src/f${i}.ts`)),
+      ],
+    });
+    const clean = await MineClean(d, { Since: '2026-01-15', Until: '2026-02-10' });
+    expect(d.GitHub.ListMergedPullRequests).toHaveBeenCalledTimes(2);
+    expect(d.GitHub.ListMergedPullRequests).toHaveBeenNthCalledWith(1, { Since: '2026-01-15', Until: '2026-01-31' });
+    expect(d.GitHub.ListMergedPullRequests).toHaveBeenNthCalledWith(2, { Since: '2026-02-01', Until: '2026-02-10' });
+    expect(clean).toEqual([{ PR: 10, MergeSHA: sha('a'), MergedAt: p10.MergedAt, Title: 'feat: clean', Files: ['packages/X/src/a.ts'] }]);
+    expect(d.Repo.LaterCommitsTouching).toHaveBeenCalledWith(sha('a'), ['packages/X/src/a.ts']);
+  });
+
+  const candidate = pr(20, 'feat: candidate', 'a');
+  const window = { Since: '2026-01-01', Until: '2026-01-31' };
+  const later = (fix: MergedPullRequest, blamed: string, extra: Partial<Fakes> = {}): Fakes => ({
+    windows: { '2026-01-01..2026-01-31': [candidate] },
+    details: [detail(candidate, ['packages/X/src/a.ts']), detail(fix, ['packages/X/src/a.ts'])],
+    later: { [sha('a')]: [fix.MergeSHA] },
+    diffs: { [fix.MergeSHA]: fixDiff },
+    blames: { [`${fix.MergeSHA}^1:packages/X/src/a.ts`]: [blamed] },
+    subjects: { [fix.MergeSHA]: `Merge pull request #${fix.Number} from MemberJunction/b${fix.Number}`, [sha('a')]: 'feat: candidate (#20)', [sha('9')]: 'feat: other (#99)' },
+    ...extra,
+  });
+
+  it('keeps a PR whose file a later non-fix landing commit rewrote', async () => {
+    const d = fakeDeps(later(pr(30, 'feat: rewrite a', 'e'), sha('a')));
+    expect((await MineClean(d, window)).map((c) => c.PR)).toEqual([20]);
+  });
+
+  it('keeps a PR whose file a later fix touched when the removed lines blame to another PR', async () => {
+    const d = fakeDeps(later(pr(31, 'fix: other bug', 'e'), sha('9')));
+    expect((await MineClean(d, window)).map((c) => c.PR)).toEqual([20]);
+  });
+
+  it('drops a PR whose line a later fix removed', async () => {
+    const d = fakeDeps(later(pr(31, 'fix: candidate bug', 'e'), sha('a')));
+    expect(await MineClean(d, window)).toEqual([]);
+  });
+
+  it('fetches a later fix PR once when two candidates share it', async () => {
+    const fix = pr(31, 'fix: other bug', 'e'); const second = pr(21, 'feat: second', 'b');
+    const f = later(fix, sha('9'));
+    const d = fakeDeps({
+      ...f,
+      windows: { '2026-01-01..2026-01-31': [candidate, second] },
+      details: [...f.details, detail(second, ['packages/X/src/a.ts'])],
+      later: { [sha('a')]: [fix.MergeSHA], [sha('b')]: [fix.MergeSHA] },
+    });
+    expect((await MineClean(d, window)).map((c) => c.PR)).toEqual([20, 21]);
+    expect(vi.mocked(d.GitHub.GetMergedPullRequest).mock.calls.filter(([n]) => n === 31)).toHaveLength(1);
+  });
+});
+
 
 describe('MineBugs', () => {
   it('blames the removed ranges at the fix parent, picks the PR with most lines, and skips self-blame and too-large bug PRs', async () => {
