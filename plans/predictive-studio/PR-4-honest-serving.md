@@ -211,7 +211,9 @@ approved (below); `packages/Angular/Explorer/dashboards/src/__tests__/**`,
 refused. The owner's ruling of 2026-11-10 (D4-69, program D-082): updating the in-repo Predictive Studio tests and rigs
 and `.github/workflows/integration.yml` for this PR's own changes is caller/CI maintenance, not a D-062 scope addition,
 so the six paths under "Caller and CI maintenance" below are listed — two named files of the dashboards' `__tests__`
-folder, not the folder; `…/custom/RecordProcesses/**` stays out (OF4-3, §9.4). D-062 (4)'s foundational list is unchanged: `@memberjunction/core`,
+folder, not the folder; `…/custom/RecordProcesses/**` stays out (OF4-3, §9.4). By the same reasoning (program D-082:
+any in-repo caller of an output or symbol PR 4 changes), the controller's ruling of the same day adds three more under
+"Callers of PR 4's own changes" (D4-70). D-062 (4)'s foundational list is unchanged: `@memberjunction/core`,
 `global`, `record-set-processor*` (beyond the one `writeBack.ts` seam, needed only if the guard interface gains a
 member), `scheduling-engine`, `testing-engine`, `testing-integration`, `ai-core-plus`, `ng-base-forms`,
 `ng-core-entity-forms` outside the `MLModels` and `model-predictions` folders. CodeGenLib source and
@@ -251,6 +253,13 @@ packages/TestingFramework/integration-test-suite/rigs/ps-live-*.ts
 packages/TestingFramework/integration-test-suite/rigs/lib/ps-promote.ts
 # M1.6: the sidecar pytest job (D-077's "CI does not run the Python suites" closed at M1)
 .github/workflows/integration.yml
+# Callers of PR 4's own changes (controller ruling 2026-11-10 under D-082's reasoning, D4-70)
+# M5.6: score() reads the Score Record Set op's scored/failed/skipped (:324-326), which M5.6 removes
+packages/React/runtime/src/utilities/runtime-utilities.ts
+# M5.6: mocks that op's output with wroteBack (:150)
+packages/React/runtime/src/__tests__/runtime-utilities-ml.test.ts
+# M3.4: RD9's documentation row names ProductionModelPromotionGate (:340), which M3.4 deletes
+packages/TestingFramework/integration-test-suite/docs/platform-suite.md
 # The bundle barrel and the pinned bundle counts
 packages/TestingFramework/integration-test-suite/src/__tests__/check-registry.test.ts
 packages/TestingFramework/integration-test-suite/src/index.ts
@@ -1399,7 +1408,7 @@ Python assets as shipped. Exit counts are measured on the agent's database at ea
 | G6.12 | `R1 -> S7.6` | `mutation` · `client` | Monitoring | `ps-gate-r1-s7-6` | parity does not recompute, or its tolerance hides a 1e-6 skew |
 
 **Mutation check G0.2:** make `LifecycleGate.WriteRefusalRecord` return without saving (no `refusal` record, model-level or run-level, for an automatic attempt that does not publish) → `ps-gate-w2-c1-1` fails its "60 of 60 runs consistent" assertion on every run that does not publish (at least 54 of 60 under `noise-publish-60`, so red whatever W2's outcome mix is; D4-64). The Outline's mutation (call `ApplyTransition` without `CheckPublishable`) goes red only when one of s100–s159 stores `keep-simple-baseline` with an artifact, a count no run has measured (`W2-noise 1/400` in PR 3's final verification counts the `model` outcome only); it is run as well when Task M1.1's mix shows at least one such seed, its output pasted beside this one.
-**Mutation check G0.3:** delete the `unacknowledged-leakage-flags` refusal from `LifecycleGate.CheckPublishable` → `ps-gate-w3-c1-1` reports the lr-first run `Published`, 1 of 2.
+**Mutation check G0.3:** delete the `unacknowledged-leakage-flags` refusal from `LifecycleGate.CheckLeakageFlags` → `ps-gate-w3-c1-1` reports the lr-first run `Published`, 1 of 2.
 **Mutation check G3.1:** make the artifact registry's `Load` return `verified` when the stored object is absent → `ps-gate-w1-s7-1` fails "run fails loudly, 1 of 1" (the run ends `completed`).
 **Mutation check G3.2:** skip the SHA-256 comparison in the artifact registry's `Load` → `ps-gate-r1-s7-1` fails "refused by SHA-256 mismatch, 1 of 1" (the swap scores).
 **Mutation check G3.3:** make `StatusWriteRules.DecideStatusWrite` allow `Draft → Published` without an authorisation → `ps-gate-w3-s7-2` counts 0 of 5 refused.
@@ -1445,7 +1454,7 @@ Python assets as shipped. Exit counts are measured on the agent's database at ea
 | The promote gate's refusal of a missing/empty sign-off reason on a flagged model, and of Published without an artifact (#5295) | Kept as `LifecycleTransition` checks (the part of D-012 that D-029 did not supersede) | M3 exit test |
 | Scoring `Preflight()` refuses the whole run once instead of failing every record (#5295) | Kept and reused (the part of D-012 that D-029 did not supersede) | M5 exit test |
 | Unattended training **and publishing** by auto-train (`Configuration.autoTrain`, #5295) and by the agent (`autoPublish`) — MoreCheese's daily renewal process depends on it (D-030) | D-029: a supported path; this PR changes how it publishes, not whether. MoreCheese's shipped pipelines have no Prediction Unit, so §5.6 cannot retrain them before PR 6: their pre-change Published model keeps serving, `Unevaluated` and flagged (`ServingWhileUnevaluated`, D4-61), and its daily scoring continues | M4b exit tests (auto-train publishes a W1-signal model automatically with a publish record; G0.2/G0.3); M7's `pre-gate-model-migration.test.ts › a legacy Published model without evidence keeps serving, Unevaluated and flagged` |
-| IT51's RD9 (`realtime-deterministic.checks.ts:1264`): the promotion gate refuses deterministically — a non-UUID id, a leakage flag, a missing reason, an illegal jump — and no refusal changes the model | The same four refusals, now asserted against `LifecycleGate`/`StatusWriteRules`; RD9 and the `ps-live-*` rigs (`ps-live-multimodel-lifecycle.ts:357`, `ps-live-renewal-lifecycle.ts:235`, `rigs/lib/ps-promote.ts`) are rewritten in M3.4 as caller maintenance (owner ruling 2026-11-10, D4-57, D4-69) and `ProductionModelPromotionGate` is deleted (D-042) | `Integration Tests — Deterministic` (IT51's rewritten RD9) → 0 failed; `lifecycle-gate.test.ts`'s `model-not-found`, `illegal-transition` and `reason-required` cases (M3.2) |
+| IT51's RD9 (`realtime-deterministic.checks.ts:1264`): the promotion gate refuses deterministically — a non-UUID id, a leakage flag, a missing reason, an illegal jump — and no refusal changes the model | Four refusals, now asserted against `LifecycleGate`/`StatusWriteRules`; RD9 and the `ps-live-*` rigs (`ps-live-multimodel-lifecycle.ts:357`, `ps-live-renewal-lifecycle.ts:235`, `rigs/lib/ps-promote.ts`) are rewritten in M3.4 as caller maintenance (owner ruling 2026-11-10, D4-57, D4-69) and `ProductionModelPromotionGate` is deleted (D-042) | `Integration Tests — Deterministic` (IT51's rewritten RD9) → 0 failed; `lifecycle-gate.test.ts`'s `model-not-found`, `illegal-transition` and `reason-required` cases (M3.2). Three legs keep their meaning; the third, "sign-off without a reason", becomes "archive without a reason" at M3 (a sign-off is a `SignOffModel` record), and the sign-off refusal is pinned at M4 by `sign-off-service.test.ts › refuses overridesFlags without a reason` (M4 exit test) |
 | PR 1's Feature Pipeline writes and reads: `Pipeline` and `Human` Feature Value rows keep their key, writer, history and visibility (the view-gate filter matches only `Source = 'Model'` rows) | D-058 adds a source to PR 1's store; it must not change PR 1's behaviour | PR 1's FeaturePipelines unit tests and its gates (`C1 → C2.1`, `C1 → C2.2`, `C1 → C2.3`, `C1 → C2.5`, `C1 → C3.3`) by name; an M5b test reads pipeline rows as a user without any prediction authorization and gets them all |
 | PR 1's human-value guard on column write-back (a person's value is kept unless the run is told to overwrite) | Reused by the binding's column copy (§5.8.3) | PR 1's writeBack tests + an M5 copy test |
 | Existing apps that read a model's score from an entity column (MoreCheese `MemberProfile.RenewalProbability`, PR 6) | The binding's `TargetColumn` copy keeps the column filled (D-058 decision 3) | M5 copy test; PR 6 re-applies it |
@@ -1743,7 +1752,7 @@ CREATE UNIQUE INDEX UX_MLModel_PipelineVersion ON ${flyway:defaultSchema}.MLMode
   existing `Lineage` JSON (PR 5 writes them). Unit/protocol **version numbers** are reached through the version rows
   (D-014), so there are no `ProtocolVersion`/`PredictionUnitVersion` columns.
 - `StatusReason`, `ArtifactStatus`, `ArtifactCheckedAt` are additions beyond D-015 (D4-07; program decision D-080,
-  confirmed by the owner 2026-11-10): G3.4 needs the reason for a `KeepBaseline` outcome stored, and G3.1 needs "shown
+  decided under D-033 per the owner ruling of 2026-11-10): G3.4 needs the reason for a `KeepBaseline` outcome stored, and G3.1 needs "shown
   unscorable" to be a stored fact the registry job maintains, not a render-time guess from an empty `ArtifactFileID`.
   Writing `ArtifactStatus` is not a `Status` write; the hook allows it. `ServingWhileUnevaluated` (D4-61) is the stored
   fact that a pre-change Published model keeps serving its pipeline, flagged, until a model published through the gate
@@ -1889,7 +1898,8 @@ require and the frozen union (`psi | ks | chi-square`, block replay) cannot.
   with no `ArtifactSha256` (a pre-change model until M7, §5.6); `Actor`'s `system` variant gains `processRunId?: string`
   (the Initiator example of §5.1); `TransitionRefusal` gains `calibration-held` and `not-servable` (the old
   promotion gate's two refusals, kept as `LifecycleGate` refusals when the gate class is deleted; D4-57), `model-not-found`
-  (an id that is not a UUID or names no row, refused before any read) and `reason-required` (an archive or rollback
+  (an id that is not a UUID, refused before any read, or a UUID that names no row, refused after the one read that
+  finds none) and `reason-required` (an archive or rollback
   without a reason) — RD9's first and third cases on the new gate (D4-57, D4-69); `PersistedModelStatus` is written out in `Core` (which may not import entities,
   D-041) with a test asserting it equals `MJMLModelEntity['Status']`; `StoredPublishInputs` carries `GateGuards:
   GateGuardInputs` and `ProtocolRow.Promotion: PromotionRule`, so `PublishRules.ReverifyPublish(inputs)` keeps the
@@ -1952,7 +1962,8 @@ export class LifecycleGate {
   public AdoptPublished(modelId: string, initiator: Actor, ctx: GateContext): Promise<AdoptOutcome>;
   // Publish is a short composer over JSDoc'd protected steps (standards §3), each overridable and unit-tested on its
   // own: LockPipelineAndModel (the two stored lock Queries, pipeline first), LoadStoredPublishInputs (stored rows
-  // only; IDs compared with UUIDsEqual, §3.3), CheckPublishable (PublishRules.ReverifyPublish, SemanticsCheck, ArtifactLoad, flags, sign-off),
+  // only; IDs compared with UUIDsEqual, §3.3), after the idempotency short-circuit CheckPersistedStatus and CheckLeakageFlags,
+  // CheckPublishable (PublishRules.ReverifyPublish, SemanticsCheck, ArtifactLoad, sign-off), SyncScoringAction after commit,
   // ApplyTransition (the authorised Save() on ctx.Provider plus the archive of `Replaces`), WritePublishRecord,
   // WriteRefusalRecord, CreateMonitoringJob.
 }
@@ -2955,8 +2966,8 @@ Later milestones extend the migration only at M5 (binding reshape, Feature Value
 
 **Decided at the tier upgrade (recorded in §9.1 by this milestone's checkpoint commit):** D4-02 adopted (statuses
 `KeepBaseline`, `Unevaluated`; `NoSignal` withdrawn at the kickoff review because a no-signal run has no model row,
-D4-56; program decision D-079, confirmed by the owner 2026-11-10); D4-07 and D4-08 adopted as §5.1 lists them (D-080,
-confirmed by the owner 2026-11-10;
+D4-56; program decision D-079, decided under D-033 per the owner ruling of 2026-11-10); D4-07 and D4-08 adopted as §5.1
+lists them (D-080, decided under D-033 per the owner ruling of 2026-11-10;
 `MLModelPublishRecord.ModelID` nullable with `CK_MLModelPublishRecord_Subject`, and `MLModel.ServingWhileUnevaluated`,
 D4-56, D4-61); D4-10's filtered index waits for
 M7 (it needs M7's data migration first); duplicate `(PipelineID, Version)` rows are renumbered above the pipeline's
@@ -3350,10 +3361,13 @@ skip the weekly live-model cron), `runs-on: ubuntu-latest`, `actions/checkout@v7
 Python step is new: `actions/setup-python` with `python-version: '3.11'`, pinned as the workflow pins its third-party
 action (a commit SHA with the tag in a comment, as `:172`), the SHA read at M1 with
 `gh api repos/actions/setup-python/releases/latest --jq .tag_name` then
-`gh api repos/actions/setup-python/git/ref/tags/<tag> --jq .object.sha`
+`gh api repos/actions/setup-python/git/ref/tags/<tag> --jq '.object.type + " " + .object.sha'` → `commit <sha>` (an
+annotated tag answers `tag <sha>`: dereference it with `gh api repos/actions/setup-python/git/tags/<sha> --jq
+'.object.type + " " + .object.sha'` until the type is `commit`; only a commit SHA is pinned)
 
 - [ ] Step 1: The failing checks: `test -f .changeset/ps-honest-serving.md; echo $?` and
-  `git show HEAD:.github/workflows/integration.yml | grep -c "pnpm run test:python"`.
+  `grep -c "pnpm run test:python" .github/workflows/integration.yml` (the working tree: the file stays uncommitted until
+  M1's checkpoint commit).
 - [ ] Step 2: Run them → `1` and `0` (`0` on `origin/next` @ `25f11768a7`, run 2026-11-10). The job's command goes red
   on a failing test: `cd packages/AI/PredictiveStudio/Sidecar && pnpm run setup:python && pnpm run test:python` → 0
   failed (count recorded); a scratch `src/python/tests/test_ci_red.py` holding `def test_ci_red(): assert False` →
@@ -3856,9 +3870,13 @@ its `holdout`, and a stored leakage flag (`MJ: ML Training Runs.ValidationResult
 authored `{kind: 'agent', agentRunId}`; the shipped calibration-hold and not-servable refusals of the old gate (deleted
 in M3.4, D4-57) (`promote-model.action.ts:56-66` on `599c288dee`) are kept as `TransitionRefusal` kinds `calibration-held`
 and `not-servable`; RD9's first and third cases become the kinds `model-not-found` (refused before any read) and
-`reason-required` (D4-69); `LifecycleGate.Publish` reads the persisted status first and refuses a transition outside
-`StatusWriteRules.IsAuthorisedTransition` with `illegal-transition` before any other check, and `CheckPublishable` reads
-the stored leakage flags before it loads the artifact (stored-row refusals before storage I/O).
+`reason-required` (D4-69); in `LifecycleGate.Publish`, under both locks and after the idempotency short-circuit (so a
+retried publish of an applied run still returns `already-published`, R1), `CheckPersistedStatus` refuses a transition
+outside `StatusWriteRules.IsAuthorisedTransition(persisted, 'Published')` with `illegal-transition`, then
+`CheckLeakageFlags` reads the run's stored leakage flags (`unacknowledged-leakage-flags` unless an approving `sign-off`
+record's `OverridesFlags` covers them; M3's `SignOffLookup` finds none, M4 fills it), both before
+`LoadStoredPublishInputs` (stored-row refusals before the stored inputs and the artifact); the per-model scoring Action
+is synced after the commit (`SyncScoringAction`, M3.4).
 
 **PR 3 interfaces consumed:** `StoredGateRecord` (`ValidationResults.gate`: `intervals`, `guards`, `decision`,
 `incumbentDiff`, `evaluationProtocolId`, `margin`; `Core/src/run-evaluation.ts:33-50`), `GateRules.DecideGuardedGate`
@@ -3935,7 +3953,8 @@ call at `:815` → `ModelVersions.AllocateUnderLock` inside the model-row transa
 
 **Interfaces:** `LifecycleGate.Evaluate(subject: EvaluateSubject, actor, ctx): Promise<EvaluateOutcome>` (§5.2), `Publish(request, ctx):
 Promise<PublishOutcome>`, `Archive(modelId, reason, actor, ctx): Promise<GateApplyResult>`, protected
-`LockPipelineAndModel`, `LoadStoredPublishInputs`, `CheckPublishable`, `ApplyTransition`, `WritePublishRecord`,
+`LockPipelineAndModel`, `CheckPersistedStatus`, `CheckLeakageFlags`, `LoadStoredPublishInputs`, `CheckPublishable`,
+`ApplyTransition`, `SyncScoringAction`, `WritePublishRecord`,
 `WriteRefusalRecord`, `CreateMonitoringJob` (§5.2, each JSDoc'd and unit-tested); every read and write on `ctx.Provider`
 
 - [ ] Step 1: Write the failing tests (`lifecycle-gate.test.ts` over the Engine's fakes, one `describe` per row of
@@ -3999,14 +4018,31 @@ Promise<PublishOutcome>`, `Archive(modelId, reason, actor, ctx): Promise<GateApp
     expect(await gate.Evaluate({ modelId: `x' OR 1=1 --` }, human, ctx)).toMatchObject({ Kind: 'refused', Refusal: { kind: 'model-not-found' } });
     expect(store.ReadCount()).toBe(reads);
   });
-  it('Publish of a Draft model is illegal-transition and writes nothing', async () => {
+  it('a UUID that names no model is model-not-found after one read and changes nothing', async () => {
+    const reads = store.ReadCount();
+    expect(await gate.Evaluate({ modelId: NO_SUCH_MODEL_ID }, human, ctx)).toMatchObject({ Kind: 'refused', Refusal: { kind: 'model-not-found' } });
+    expect([store.ReadCount() - reads, store.SaveCount()]).toEqual([1, 0]);
+  });
+  it('Publish of a Draft model is illegal-transition, leaves it Draft and writes only the refusal record', async () => {
     expect(await gate.Publish({ ...request, modelId: draftModel.ID }, ctx)).toMatchObject({ Kind: 'withheld', Refusal: { kind: 'illegal-transition', from: 'draft', to: 'published' } });
-    expect([store.Status(draftModel.ID), store.PublishRecords(draftModel.ID).filter((r) => r.Kind === 'publish').length]).toEqual(['Draft', 0]);
+    expect(store.Status(draftModel.ID)).toBe('Draft');
+    expect(store.PublishRecords(draftModel.ID).map((r) => r.Kind)).toEqual(['refusal']);
+  });
+  it('a retried Publish of an applied run is already-published, never illegal-transition', async () => {
+    await gate.Publish(request, ctx);
+    expect(await gate.Publish(request, ctx)).toMatchObject({ Kind: 'already-published' });
+  });
+  it('a scoring-Action sync failure after the commit leaves the publish applied and is logged', async () => {
+    generator.FailNext = 'action save refused';
+    expect(await gate.Publish(request, ctx)).toMatchObject({ Kind: 'published' });
+    expect([store.Status(candidate.ID), logged.Errors()]).toEqual(['Published', [expect.stringContaining('action save refused')]]);
   });
   ```
   (`store` is the test's `GateTestStore`, a fake provider over in-memory rows that records every save, built on the
   Engine's `__tests__/fakes`; `PinProtocol`, `FlagLeakage`, `Status`, `StatusReason`, `PublishRecords`, `PublishRecordsOfRun` (by `TrainingRunID`),
-  `ScheduledJobs` and `ReadCount` (reads served so far) are its members.) `ml-model-publish-record.test.ts`:
+  `ScheduledJobs`, `ReadCount` (reads served so far) and `SaveCount` are its members; `NO_SUCH_MODEL_ID` is a
+  well-formed UUID with no row; `generator` is a recording `ModelScoringActionGenerator` fake whose `FailNext` makes its
+  next call throw; `logged` captures `LogError`.) `ml-model-publish-record.test.ts`:
   ```ts
   it('refuses an update of a saved publish record', async () => {
     const r = await SavedPublishRecord(provider);          // a loaded, saved row
@@ -4022,7 +4058,10 @@ Promise<PublishOutcome>`, `Archive(modelId, reason, actor, ctx): Promise<GateApp
   Evaluate(subject: EvaluateSubject, actor: Actor, ctx: GateContext): Promise<EvaluateOutcome>`, `public Publish(request:
   PublishRequest, ctx: GateContext): Promise<PublishOutcome>`, `public Archive(modelId: string, reason: string, actor:
   Actor, ctx: GateContext): Promise<GateApplyResult>` and the protected steps `LockPipelineAndModel(pipelineId: string,
-  modelId: string, ctx: GateContext): Promise<LockResult>`, `LoadStoredPublishInputs(modelId: string, ctx: GateContext):
+  modelId: string, ctx: GateContext): Promise<LockResult>`, `CheckPersistedStatus(model: MJMLModelEntity, to:
+  MJMLModelEntity['Status']): TransitionRefusal | null`, `CheckLeakageFlags(model: MJMLModelEntity, ctx: GateContext):
+  Promise<TransitionRefusal | null>`, `SyncScoringAction(model: MJMLModelEntity, to: MJMLModelEntity['Status'], ctx:
+  GateContext): Promise<void>`, `LoadStoredPublishInputs(modelId: string, ctx: GateContext):
   Promise<StoredPublishInputs | TransitionRefusal>`, `CheckPublishable(inputs: StoredPublishInputs, request:
   PublishRequest, ctx: GateContext): Promise<PublishCheck>`, `ApplyTransition(model: MJMLModelEntity, to:
   MJMLModelEntity['Status'], replaces: string | null, ctx: GateContext): Promise<void>`, `WritePublishRecord(model: MJMLModelEntity,
@@ -4033,11 +4072,15 @@ Promise<PublishOutcome>`, `Archive(modelId, reason, actor, ctx): Promise<GateApp
   `model-versions.ts` `ModelVersions.AllocateUnderLock(pipelineId: string, ctx: RegistryContext): Promise<number>`; in
   `MJMLModelPublishRecordEntityServer.server.ts` `public override Validate(): ValidationResult`. `Publish` is a short composer: begin a transaction on `ctx.Provider` → `LockPipelineAndModel`
   (the two stored Queries through `new RunQuery(ctx.Provider as unknown as IRunQueryProvider)`, pipeline first) →
-  idempotency (`FindPublishForRun` by `TrainingRunID` → `already-published`, or R1's restore) → `LoadStoredPublishInputs`
-  → `CheckPublishable` (`PublishRules.ReverifyPublish`, the `SemanticsCheck` seam, `ArtifactRegistry.Load` = `verified`,
-  leakage flags, the sign-off seam only when the pinned protocol's `requiresHumanSignOff` is true) → `ApplyTransition`
+  idempotency (`FindPublishForRun` by `TrainingRunID` → `already-published`, or R1's restore; it runs first, so a retry
+  of an applied run is never `illegal-transition`) → `CheckPersistedStatus` (the persisted `Status` read under the locks;
+  outside `StatusWriteRules.IsAuthorisedTransition(persisted, 'Published')` → `illegal-transition`) → `CheckLeakageFlags`
+  (the run's stored leakage flags → `unacknowledged-leakage-flags` unless the `SignOffLookup` seam returns an approving
+  `sign-off` whose `OverridesFlags` covers them) → `LoadStoredPublishInputs` → `CheckPublishable`
+  (`PublishRules.ReverifyPublish`, the `SemanticsCheck` seam, `ArtifactRegistry.Load` = `verified`, the sign-off seam only
+  when the pinned protocol's `requiresHumanSignOff` is true) → `ApplyTransition`
   (`StatusWriteAuthorisations` set for the instance, `Save()` checked, the archive of `Replaces`) →
-  `WritePublishRecord` → `CreateMonitoringJob` → commit; a refusal rolls back, then `WriteRefusalRecord` and the
+  `WritePublishRecord` → `CreateMonitoringJob` → commit → `SyncScoringAction` (outside the transaction, M3.4); a refusal rolls back, then `WriteRefusalRecord` and the
   `StatusReason` save run in their own short transaction; `Evaluate` resolves a `{ trainingRunId }` subject to the run's
   `ResultingModelID` and picks the target from `ValidationResults.gate.decision.outcome` (`model` → Validated,
   `keep-simple-baseline` with a model row → KeepBaseline with the decision's reason); a run with no model row — `no-signal`,
@@ -4224,8 +4267,11 @@ ProductionModelPromotionGate`, `:239`, the `describe` at `:262` and the `req` he
 removed), `Engine/src/actions/promote-model.action.ts` (calls `LifecycleGate`, takes a `Transition` param; removed:
 `PromotableStatus` (`:33`), `PROMOTABLE_STATUSES` (`:36`), `PromoteModelRequest` (`:39`), `PromoteModelOutcome`
 (`:56`), `IModelPromotionGate` (`:76`), `parseTargetStatus` (`:198`) and `createGate` (`:210`)),
-`Engine/src/registry/lifecycle-gate.ts` (`ApplyTransition` calls `ModelScoringActionGenerator.GenerateForModel` on a
-transition into `Published` and `DisableForModel` on one out of it, the shipped `syncScoringAction`'s rule),
+`Engine/src/registry/lifecycle-gate.ts` (`SyncScoringAction`, run after the gate's transaction commits, calls
+`ModelScoringActionGenerator.GenerateForModel` on a transition into `Published` and `DisableForModel` on one out of it,
+the shipped `syncScoringAction`'s rule; a failure is logged with `LogError` and leaves the transition applied, as the
+shipped gate did (`promote-model.gate.ts:301-306`, `:327-331`), and the registry job's step (d) `ResyncScoringActions`
+(M6.4) repairs the Action on its next run; it never runs inside the transaction, so it can never roll back a publish),
 `Engine/src/operations/promote-model.operation.ts` (`:55-62` read `targetStatus`; now `transition` only, refusing an
 input without it; `:144` `gate(): IModelPromotionGate` removed), `Engine/src/operations/delegation.ts` (`:50` imports
 the class, `:52-54` the types, `:239-241` the promote delegation's `request: PromoteModelRequest, gate: IModelPromotionGate
@@ -4280,9 +4326,26 @@ a recording `LifecycleGate` fake; `:98`'s `targetStatus` assertion becomes `tran
 `:170-184` a `RecordingGate` behind `CreatePromotionGate`, `:273`, `:289` assert `targetStatus`; rewritten over a
 recording `LifecycleGate` fake asserting `Evaluate({ trainingRunId })`), `Engine/src/scoring/__tests__/model-readiness.test.ts`
 (`:23` imports the same types, `:253-266` a `RecordingGate` passed to auto-train; rewritten the same way),
-`packages/Angular/Explorer/core-entity-forms/src/lib/custom/MLModels/ps-model-detail.component.dom.test.ts`. Not changed:
-`packages/TestingFramework/integration-test-suite/docs/platform-suite.md` (`:340`, RD9's row names the class; outside
-the allowlist and not among the ruling's paths, D4-69)
+`packages/Angular/Explorer/core-entity-forms/src/lib/custom/MLModels/ps-model-detail.component.dom.test.ts` · Modify
+`packages/TestingFramework/integration-test-suite/docs/platform-suite.md` (RD9's row, `:340`, renamed and its legs
+described on `LifecycleGate`; allowlisted by D4-70), `metadata/actions/predictive-studio/.predictive-studio-actions.json`
+("Promote ML Model": the header lines `:727-728` and `Description` `:733` describe the `Transition` contract; the
+`TargetStatus` param (`:762`, key `D70D7ADE-5394-40B5-97B1-DADCFE9A173F`) and the `SignOff` param (`:780`, key
+`556E4BEE-7D99-429A-84F0-B29C61C96C94`) get `"deleteRecord": {"delete": true}` and a "Retired." description, as PR 3
+retired `MaxRows` in the same file (`:40-57`); new Input params `Transition` (required: `evaluate`, `publish`, `archive`,
+`rollback`) and `Reason` (optional; `promote-model.action.ts:104` reads it today without a declared param), each with a
+`uuidgen` key; the result codes `LEAKAGE_SIGNOFF_REQUIRED` (`:848`, `4F4E1851-A9A2-4D76-8668-71E3A5FA3A58`),
+`SIGNOFF_REASON_REQUIRED` (`:908`, `2210EFA6-996E-4B50-BBDD-2EDD89BB2B7B`) and `SAVE_FAILED` (`:878`,
+`52D24616-B50F-4660-8775-198FEC5D295A`; the Action no longer saves) retired the same way; `VALIDATION_ERROR`'s
+description (`:835`) names `Transition`; `SUCCESS`, `MODEL_NOT_FOUND` (`model-not-found`), `PROMOTION_FAILED`,
+`CALIBRATION_HOLD` (`calibration-held`) and `MODEL_NOT_SERVABLE` (`not-servable`) kept; new codes, `uuidgen` keys:
+`LEAKAGE_FLAGGED` (`unacknowledged-leakage-flags`), `ILLEGAL_TRANSITION`, `REASON_REQUIRED` and `TRANSITION_REFUSED`
+(every other `TransitionRefusal` kind, the kind in the message), each mapped by `PredictiveStudioPromoteModelAction`),
+`metadata/prompts/templates/model-development-agent/model-development-agent.template.md` (`:83-84`: call **Promote ML
+Model** with `Transition` `evaluate`, then `publish`, and report the status reached or the refusal returned; `:106`: a
+leakage-flagged model is refused by the gate (`LEAKAGE_FLAGGED`) and is published only after a person records a
+sign-off in the model detail, which an agent cannot make, D4-04 — the agent no longer passes a `SignOff`; the agent is
+wired to that Action at `metadata/agents/.model-development-agent.json:87`, unchanged)
 
 **Interfaces:** the op and the Action take `transition` only (§5.3); an input without `transition` is refused before
 any read; `publish`/`rollback` run `LifecycleGate.Publish` with the caller as initiator; a leakage flag is acknowledged
@@ -4304,7 +4367,16 @@ still `Validated`; (4) missing reason: `Archive(model.ID, '', actor, gateCtx)` �
 still `Validated`; then a `BypassCache` re-read → `Validated` and 0 `publish` rows in `MJ: ML Model Publish Records` for
 the model. The `finally` deletes, each `Delete()` checked (not `.catch(() => undefined)` as `:1332`, `:1335` today), the
 model's publish records, then the model after clearing the run's `ResultingModelID`, then the run, then the pipeline
-(D4-62's order)
+(D4-62's order). Two behaviour changes, intended: (a) RD9's shipped third leg, "a leakage sign-off without a reason",
+has no counterpart on `LifecycleGate` (a sign-off is a `SignOffModel` record, M4), so at M3 the leg asserts "an archive
+without a reason" (`reason-required`); the sign-off-without-reason refusal is pinned at M4 by
+`sign-off-service.test.ts › refuses overridesFlags without a reason` (`overrides-without-reason`), and §4.2's row says
+so. (b) `PromoteToPublished` used to send `signOff: true`, so a leakage-flagged model reached `Published`; with
+`evaluate` then `publish` a flagged model is now withheld `unacknowledged-leakage-flags` and the helper throws with the
+refusal — the behaviour D4-04 and D4-16 require (only a person's sign-off overrides a flag). No rig records a sign-off:
+from M4 a rig that must publish a flagged model would call `PredictiveStudio.SignOffModel` as an interactive user and pass
+the returned id as `signOffId`, and `SignOffModel` refuses API keys, the system user and agent runs (D4-65), so a rig
+that hits a flagged model stops with the refusal text, which its log records
 
 - [ ] Step 1: Write the failing tests:
   ```ts
@@ -4355,9 +4427,8 @@ model's publish records, then the model after clearing the run's `ResultingModel
   union, `metadata/remote-operations/types/predictive-studio-promote-model.input.ts`), RD9, the rig helper and the three
   rigs; delete `promote-model.gate.ts`; then the greps below. Each expected result is `origin/next`'s output (run
   2026-11-10 at `25f11768a7`, pasted with its file list) minus the files this task deletes or rewrites:
-  - `git grep -lw "ProductionModelPromotionGate" -- packages` → exactly
-    `packages/TestingFramework/integration-test-suite/docs/platform-suite.md` (RD9's row, `:340`; not changed, see
-    **Files**). On `origin/next` it lists 15 files: `AI/PredictiveStudio/Engine/README.md`,
+  - `git grep -lw "ProductionModelPromotionGate" -- packages` → 0 files (D4-70 allowlists the doc). On `origin/next` it
+    lists 15 files: `AI/PredictiveStudio/Engine/README.md`,
     `Engine/src/actions/__tests__/promote-model.action.test.ts`, `Engine/src/actions/promote-model.action.ts`,
     `Engine/src/actions/promote-model.gate.ts`, `Engine/src/agent/pipeline-builder.ts`, `Engine/src/operations/delegation.ts`,
     `Engine/src/operations/promote-model.operation.ts`, `Engine/src/scoring/auto-train.ts`,
@@ -4392,6 +4463,15 @@ model's publish records, then the model after clearing the run's `ResultingModel
   - `git grep -lw "generateForModel\|disableForModel" -- packages` → 0 files (on `origin/next`: 4 —
     `model-scoring-action-generator.test.ts`, `model-scoring-action-generator.ts`, `promote-model.gate.ts`,
     `rigs/ps-live-modelaction-generation.ts`).
+  - `git grep -n -i -w "TargetStatus" -- metadata/actions metadata/prompts metadata/agents` → exactly 1 hit, the retired
+    param's `"Name": "TargetStatus"` inside its `deleteRecord` record (on `origin/next`: 3 —
+    `.predictive-studio-actions.json:762`, `:835`, `model-development-agent.template.md:84`).
+  - `git grep -n -w "SignOff" -- metadata/actions metadata/prompts metadata/agents` → exactly 1 hit, the retired param's
+    `"Name": "SignOff"` (on `origin/next`: 5 — `.predictive-studio-actions.json:728`, `:733`, `:780`, `:850`,
+    `model-development-agent.template.md:106`).
+  - `git grep -n "LEAKAGE_SIGNOFF_REQUIRED\|SIGNOFF_REASON_REQUIRED" -- metadata packages` → exactly 2 hits, the two
+    retired result-code records (on `origin/next`: 8 — `.predictive-studio-actions.json:848`, `:908`,
+    `promote-model.action.ts:138`, `:140`, `promote-model.action.test.ts:103`, `:112`, `:146`, `:155`).
   - `test -e packages/AI/PredictiveStudio/Engine/src/actions/promote-model.gate.ts; echo $?` → `1`.
   The release note (§10) names the deleted class, the removed types, input fields and output field, and the two removed
   aliases (D4-57, D4-69).
@@ -4833,7 +4913,8 @@ InvertedRisk })`, so the call sites derive `InvertedRisk` from the binding row
   it modifies and move their in-repo callers, `predictive-studio-grid-record-names.test.ts` among them
   (`git grep -n "@deprecated" -- <each modified file>` → 0 hits, the grid included;
   `git grep -nw "setupColumnDefs\|resolvedEntityName\|allRows\|filteredRows" -- packages/Angular/Explorer/dashboards/src/PredictiveStudio packages/Angular/Explorer/dashboards/src/__tests__/predictive-studio-grid-record-names.test.ts`
-  → 0 hits (on `25f11768a7`: the grid's `.ts`, its `.html` at `:26`, `:59`, `:79`, `:101`, `:119`, `:247`, and the test);
+  → 0 hits (on `25f11768a7`: the grid's `.ts`, its `.html` at `:26`, `:59`, `:79`, `:94`, `:101`, `:119`, `:247`, `:263`,
+  and the test);
   `git grep -nw "columnDefs" -- <same paths>` → only AG Grid's own input and option name, `[columnDefs]="ColumnDefs"` in
   the grid's `.html` (today `[columnDefs]="columnDefs"` at `:91`, `:260`) and `setGridOption('columnDefs', …)` in the
   `.ts` (`:686`, `:689`); for every other removed alias `git grep -nw "<alias>" -- packages` → 0 hits); the release note
@@ -4989,8 +5070,8 @@ new surface, D-076's browser walk is M5b's and M7's; the DOM tests of Task M4.3 
 - [ ] Task M4.6's harness run by the reviewer (D-071), its counts, cells and claims in §11
 - [ ] self-audit of every added and changed line against `reference/coding-standards.md`, findings fixed
 - [ ] tasks ticked
-- [ ] §11 entry `### <date> — <agent> — M4` with the counts, the four `**Mutation output G3.x:**` lines, the four kept
-  grid aliases and #6180's merge state
+- [ ] §11 entry `### <date> — <agent> — M4` with the counts, the four `**Mutation output G3.x:**` lines, the grid's
+  `git grep -c "@deprecated"` → 0 and #6180's merge state
 - [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
 - [ ] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M4` → exit 0, summary in the commit body
@@ -6020,6 +6101,18 @@ and `…/ps-operate-dialog.mapping.ts` (read the union), the three live rigs tha
 (`packages/TestingFramework/integration-test-suite/rigs/ps-live-multimodel-lifecycle.ts:348-349`,
 `…/rigs/ps-live-renewal-lifecycle.ts:226`, `…/rigs/ps-live-writeback-demo.ts:351-353`; they read the union, and
 `tsconfig.rigs.json` type-checks them in the package's `pnpm test`; caller maintenance, D4-69),
+`Engine/src/maintenance/seams.ts` (`:177` maps the runner's `result.scoredCount`/`failedCount` into the maintenance
+module's own `RescoreResult`; the module stays until M6, so this line reads the union now or M5 breaks the Engine
+build), the `ScoreAttempt.Scored` readers `packages/AI/PredictiveStudio/TruthSuite/src/harness/containment-probe.ts`
+(`:56`), `packages/TestingFramework/integration-test-suite/src/checks/ps-gate-w1-s7-3.checks.ts` (`:47`, `:56`, `:62`)
+and `…/src/checks/ps-gate-w1-s7-5.checks.ts` (`:27`, `:36`) (each moves to `Written`),
+`packages/React/runtime/src/utilities/runtime-utilities.ts` (`:324-326` read the op's `scored`/`failed`/`skipped`; they
+read the union and keep the runtime's own `{ scoredCount, failedCount, skippedCount, predictions }` result, the shape
+`packages/InteractiveComponents/src/shared.ts:356` declares, unchanged) and its test
+`packages/React/runtime/src/__tests__/runtime-utilities-ml.test.ts` (`:150` mocks the op output with `wroteBack`; both
+allowlisted by D4-70), `metadata/actions/predictive-studio/.predictive-studio-actions.json` (the "Score Record Set"
+Action's output params `ScoredCount` `:344` and `WroteBack` `:362` follow the params the Action writes from the union,
+`score-record-set.action.ts:171-174` today),
 `packages/MJCoreEntities/src/generated/remote_operations.ts`
 (regenerated) · Test `Engine/src/actions/__tests__/score-record-set.binding.test.ts` (new), the existing
 `score-record-set.*.test.ts`, `operations/__tests__/score-record-set.operation.test.ts`,
@@ -6098,8 +6191,20 @@ base's FORBIDDEN / SUCCESS / EXECUTION_ERROR shapes)
   `binding-withdrawn`, `binding-not-authorized`, `as-of-unsupported`, `leakage-unknown`, `artifact-unverified`) — and one
   for the `failed` status, 15 cases, each asserting its code and that every kind has one (a kind without a code fails
   to compile through an exhaustive `switch` with a `never` default); every in-repo reader of the old
-  output fields moves (`git grep -n "wroteBack\|scoredCount\|\.Scored\b" -- packages` → only generated code removed by
-  CodeGen, 0 hits elsewhere); the `@deprecated` aliases of each modified PS file go (§2.5).
+  output fields moves:
+  `git grep -n -P '\bwroteBack\b|\.scoredCount\b|\.Scored\b|\.scored\b' -- 'packages/AI/PredictiveStudio/*.ts' 'packages/TestingFramework/integration-test-suite/*.ts' 'packages/Angular/Explorer/dashboards/src/PredictiveStudio' 'packages/React/runtime/src' ':!packages/AI/PredictiveStudio/Engine/src/maintenance/maintenance-engine.ts' ':!packages/AI/PredictiveStudio/Engine/src/maintenance/__tests__'`
+  → 0 hits (the two exclusions are the maintenance module's own `RescoreResult.scoredCount`, deleted at M6; the
+  runtime's own `scoredCount` key and `InteractiveComponents/src/shared.ts:356` are object keys, which the pattern does
+  not match). On `origin/next` @ `25f11768a7` it gives 85 hits in 18 files: `score-record-set.action.test.ts` 17,
+  `score-record-set.list-scope.test.ts` 2, `score-record-set.writeback.test.ts` 16, `score-record-set.action.ts` 7,
+  `score-record-set.runner.ts` 8, `maintenance/seams.ts` 1 (`:177`), `score-record-set.operation.test.ts` 10,
+  `score-record-set.operation.ts` 5, `ml-model-score-enricher.test.ts` 1, `TruthSuite/src/harness/containment-probe.ts` 1,
+  `TruthSuite/src/harness/score.ts` 2, `React/runtime/src/__tests__/runtime-utilities-ml.test.ts` 1,
+  `React/runtime/src/utilities/runtime-utilities.ts` 1, `rigs/ps-live-multimodel-lifecycle.ts` 3,
+  `rigs/ps-live-renewal-lifecycle.ts` 1, `rigs/ps-live-writeback-demo.ts` 3, `ps-gate-w1-s7-3.checks.ts` 3,
+  `ps-gate-w1-s7-5.checks.ts` 3 — every file in this task's Files. And
+  `git grep -n "out\.\(scored\|failed\|skipped\)" -- packages/React/runtime/src/utilities/runtime-utilities.ts` → 0 (on
+  `origin/next`: 3, `:324-326`). The `@deprecated` aliases of each modified PS file go (§2.5).
 - [ ] Step 4: Step 2's command → passes; Engine and TruthSuite `pnpm test` → 0 failed; dashboards `pnpm test` → 0 failed.
 - [ ] Step 5: Runtime on MJAPI :4041 (`"$PLANS/tools/ps-env.sh" bash -c 'cd packages/MJAPI && pnpm run start'`): 20
   Score Record Set calls with a `BindingID` on the R1 model →
@@ -8151,7 +8256,7 @@ with `next`; a CI unit-shard failure with exit 143 and "runner has received a sh
 - [ ] Step 4: The merge-readiness check: Step 1's count → `0`; Step 2's rollup all `SUCCESS`, `mergeable: MERGEABLE`;
   `node $PLANS/tools/milestone-exit.mjs --mode pre-push --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"`
   → exit 0 (the repo guards included, M8 having its §11 entry); `gh pr view --json body --jq .body | grep -c "expiry"` →
-  4; then `gh pr ready` → the PR leaves draft.
+  1 (OF4-5's; OF4-3 carries none, D4-50); then `gh pr ready` → the PR leaves draft.
 - [ ] Step 5: From here until merge the review-quiet rules hold; each later push is recorded in §11 with the review item it
   resolves or the `next` merge it carries (a review round's entry `### <date> — <agent> — R<k>`, D-073).
 
@@ -8510,7 +8615,7 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   model's state). If adopted, add a program decision (it changes PR 5/PR 6 status handling). **Amended at the kickoff
   review (D4-56, controller ruling C1):** `NoSignal` is withdrawn — PR 3's trainer creates no model row for a no-signal
   run, so the persisted statuses added are `KeepBaseline` and `Unevaluated`, and a no-signal outcome is a run-level
-  `refusal` record. Program decision **D-079** (proposed at the PR 4 kickoff; confirmed by the owner 2026-11-10) records it.
+  `refusal` record. Program decision **D-079** (proposed at the PR 4 kickoff; decided under D-033 per the owner ruling of 2026-11-10) records it.
 - **D4-03 · Where `ScoredRow`s live** (decided, D-058). Each `ScoredRow` a scoring binding produces is one
   effective-dated `MJ: Feature Values` row with `Source = 'Model'`, keyed `(MLModelScoringBindingID, EntityID, RecordID,
   EffectiveAsOf)`, carrying `MLModelID`, `MLScoringRunID` and `InTraining`, with the rest of the lineage read through
@@ -8536,7 +8641,7 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   G3.1's "remove the artifact directory" then means removing the stored object **and** any local copy.
 - **D4-07 · `StatusReason`, `ArtifactStatus`, `ArtifactCheckedAt` on `MJ: ML Models`** (adopt; record as a program
   decision extending D-015 at kickoff). Recorded as program decision **D-080** (proposed at the PR 4 kickoff;
-  confirmed by the owner 2026-11-10), which also carries the kickoff review's two lineage changes: `ServingWhileUnevaluated`
+  decided under D-033 per the owner ruling of 2026-11-10), which also carries the kickoff review's two lineage changes: `ServingWhileUnevaluated`
   (D4-61) and the nullable `MLModelPublishRecord.ModelID` (D4-56).
 - **D4-08 · Sign-offs generalised into `MJ: ML Model Publish Records`** (adopt; D-029). One immutable ledger with
   `Kind` `sign-off` | `publish` | `refusal`, `ApproverKind` `automated-gate` | `user`, `Initiator`, `GateDecision`,
@@ -8884,8 +8989,8 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   `KeepBaseline` stays for runs that shipped a baseline model row; `TransitionRefusal` gains `kept-existing-rule`; G3.4,
   §5.7 R4, M4b.1's test and G0.2's check count outcomes by `TrainingRunID` (§4.1's reading); M2.3's "if any" hedge is
   resolved; the delete procedure deletes a deleted run's publish records instead of nulling `TrainingRunID` (§5.9,
-  M1.3). Amends D4-02 (program decision D-079, confirmed by the owner 2026-11-10) and D4-07 (D-080, confirmed by the
-  owner 2026-11-10). Delivering a kept heuristic rule is out of scope (OF4-5, D-062; decided under D-033, D4-69). Alternative rejected (controller): option (i), a `NoSignal` model row per run (rewrites two PR 3
+  M1.3). Amends D4-02 (program decision D-079) and D4-07 (D-080), both decided under D-033 per the owner ruling of
+  2026-11-10. Delivering a kept heuristic rule is out of scope (OF4-5, D-062; decided under D-033, D4-69). Alternative rejected (controller): option (i), a `NoSignal` model row per run (rewrites two PR 3
   tests and keep-list row 2).
 - **D4-57 · `ProductionModelPromotionGate` is deleted; RD9 and the rigs move to the new gate** (decided at the kickoff
   review, controller ruling C2, finding C2; amended by the owner ruling of 2026-11-10, D4-69). IT51's RD9 imports the
@@ -8899,9 +9004,11 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   `PredictiveStudioModelTargetStatus` and the `promoted` output — as D-042 (which names the `targetStatus` mapping among
   PR 4's removals) and D-053 require; RD9 keeps its four refusal cases, asserted against `LifecycleGate`/`StatusWriteRules`
   (`model-not-found`, `unacknowledged-leakage-flags`, `reason-required`, `illegal-transition`; M3.2 adds the first and
-  third kinds), and the rigs send `transition`. M3.4's greps expect 0 hits for every removed name, except
-  `ProductionModelPromotionGate` in `packages/TestingFramework/integration-test-suite/docs/platform-suite.md:340` (RD9's
-  documentation row, outside the allowlist and not among the ruling's paths). Alternatives rejected: a deprecated adapter
+  third kinds; the shipped "sign-off without a reason" leg becomes "archive without a reason", the sign-off refusal
+  pinned at M4 by `sign-off-service.test.ts`), and the rigs send `transition`; the "Promote ML Model" Action metadata and
+  the Model Development Agent's prompt move to `Transition` in the same task, and RD9's documentation row
+  (`docs/platform-suite.md:340`) is rewritten (D4-70), so M3.4's greps expect 0 hits for every removed name (the retired
+  Action param and result-code records keep their names under `deleteRecord`). Alternatives rejected: a deprecated adapter
   kept for RD9 and the rigs (the kickoff review's version, withdrawn with program D-081: a compatibility shim, D-042,
   dev-best-practices.md §3 and §13); an RD9 replacement in `ps-gates/**` (leaves RD9's own file broken).
 - **D4-58 · The PreSave hook re-derives every authorised publish** (decided at the kickoff review; controller ruling
@@ -9030,15 +9137,30 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   `packages/TestingFramework/integration-test-suite/rigs/lib/ps-promote.ts`, `.github/workflows/integration.yml`. Under
   the same rule M5.6 moves the three `ps-live-*` rigs that read Score Record Set's removed counts
   (`ps-live-multimodel-lifecycle.ts:348-349`, `ps-live-renewal-lifecycle.ts:226`, `ps-live-writeback-demo.ts:351-353`).
-  (3) **Decided and recorded autonomously** (D-033, `AGENTS.md` §6): D-079 and D-080 confirmed by the owner (no "owner
+  (3) **Decided and recorded autonomously** (D-033, `AGENTS.md` §6): D-079 and D-080 decided under D-033 per the owner ruling (no "owner
   to confirm" marker left); R8 and R10 stand (D4-61); OF4-3 (`…/custom/RecordProcesses/**`) stays out of scope by
   layering — the Record Process form belongs to the Record Set Processor subsystem and `ng-core-entity-forms` outside
   `MLModels` and `model-predictions` is foundational (D-062 (4)) — and OF4-5 (delivering a kept incumbent-heuristic rule)
   stays out of scope as a new model kind (D-062 (2)), expiry PR 6, PR 3's default implemented.
-  Not covered by the ruling's paths: `packages/TestingFramework/integration-test-suite/docs/platform-suite.md:340` names
-  `ProductionModelPromotionGate` in RD9's documentation row; it is left unchanged (M3.4's grep expects that one hit).
-  Alternatives rejected: keeping D-081's time-boxed adapter (a shim, D-042); widening the allowlist to the whole
+  `packages/TestingFramework/integration-test-suite/docs/platform-suite.md:340` (RD9's documentation row) was left out
+  here and is added by D4-70. Alternatives rejected: keeping D-081's time-boxed adapter (a shim, D-042); widening the allowlist to the whole
   dashboards `__tests__` folder or `.github/workflows/**` (the ruling names six paths).
+- **D4-70 · Callers of PR 4's own changes are allowlisted** (controller ruling 2026-11-10, extending D-082 by its own
+  reasoning; recorded at the amendment's fix round 1). Program D-082 now reads: the paths the owner named and, by the
+  same reasoning, any in-repo caller of an output or symbol PR 4 changes; each addition is recorded here. Added to §2.6,
+  each with a `#` note: `packages/React/runtime/src/utilities/runtime-utilities.ts` (reads the Score Record Set op's
+  `scored`/`failed`/`skipped` at `:324-326` on `25f11768a7`; M5.6 moves it to the union and keeps the runtime's own
+  `{ scoredCount, failedCount, skippedCount, predictions }` result), `packages/React/runtime/src/__tests__/runtime-utilities-ml.test.ts`
+  (mocks that output with `wroteBack` at `:150`; M5.6), `packages/TestingFramework/integration-test-suite/docs/platform-suite.md`
+  (names `ProductionModelPromotionGate` at `:340`; M3.4). Not added: `packages/InteractiveComponents/src/shared.ts`
+  (`:356` declares the runtime's own `scoredCount` shape, which PR 4 does not change; M5.6's grep excludes object keys
+  instead). Already allowlisted under `metadata/**` and now in M3.4's Files: the "Promote ML Model" Action
+  (`metadata/actions/predictive-studio/.predictive-studio-actions.json:762`, `:780`, `:848`, `:908`) and the Model
+  Development Agent's prompt (`metadata/prompts/templates/model-development-agent/model-development-agent.template.md:83-84`,
+  `:106`). Same round: M5.6 also moves `Engine/src/maintenance/seams.ts:177` and the `ScoreAttempt.Scored` readers
+  (`containment-probe.ts:56`, `ps-gate-w1-s7-3.checks.ts:47`, `:56`, `:62`, `ps-gate-w1-s7-5.checks.ts:27`, `:36`), and
+  `LifecycleGate.Publish` checks the persisted status and the stored leakage flags after the idempotency short-circuit,
+  under the locks (M3, M3.2). Alternative rejected: an owner flag per caller (D-033: nothing waits on a person).
 
 #### Kickoff review (D-070)
 
@@ -9048,7 +9170,7 @@ Critical finding is not copied to MJ.
 
 | # | Severity | Finding (section) | Evidence (command the reviewer ran) | Outcome (accepted: change · rejected: reason) |
 |---|---|---|---|---|
-| C1 | Critical | PR 3 creates no model row for a no-signal run or a kept heuristic rule, so the `NoSignal` lifecycle, refusal records, G3.4, R4's test and G0.2's mutation cannot run (§5.1, §5.2, M2.3, M3.2, M3.5, M4b.1, §4.1a) | `sed -n "540p;603p;635p;637p"` over `origin/next:…/training-engine.ts`; PR 3 tests `:1007`, `:1049`; PR 3 Q3-5 at `PR-3-honest-training.md:30940-30942` | accepted (plan changed at §4.1, §4.1a, §4.3, §5.1, §5.2, §5.4, §5.7 R4, §5.9, M1, M1.2, M1.3, M1.4, M2.3, M3, M3.2, M3.5, M4b, M4b.1–M4b.5, M7, M7.3, M7.5, §9.2, §10; D4-56, OF4-5, D-079/D-080 proposed; both confirmed by the owner 2026-11-10, D4-69) |
+| C1 | Critical | PR 3 creates no model row for a no-signal run or a kept heuristic rule, so the `NoSignal` lifecycle, refusal records, G3.4, R4's test and G0.2's mutation cannot run (§5.1, §5.2, M2.3, M3.2, M3.5, M4b.1, §4.1a) | `sed -n "540p;603p;635p;637p"` over `origin/next:…/training-engine.ts`; PR 3 tests `:1007`, `:1049`; PR 3 Q3-5 at `PR-3-honest-training.md:30940-30942` | accepted (plan changed at §4.1, §4.1a, §4.3, §5.1, §5.2, §5.4, §5.7 R4, §5.9, M1, M1.2, M1.3, M1.4, M2.3, M3, M3.2, M3.5, M4b, M4b.1–M4b.5, M7, M7.3, M7.5, §9.2, §10; D4-56, OF4-5, D-079/D-080 proposed; both decided under D-033 per the owner ruling of 2026-11-10, D4-69) |
 | C2 | Critical | M3.4 deletes `ProductionModelPromotionGate`, which IT51's RD9 and three `ps-live-*` rigs (outside the allowlist) use (M3.4) | `git grep -lw ProductionModelPromotionGate origin/next -- packages/TestingFramework/integration-test-suite` → 5 files; RD9 at `realtime-deterministic.checks.ts:97-98`, `:1264-1266`; `tsconfig.json` `include: src/**/*`; IT51 in `.integration-suite.json:463`; `PathsOutsideAllowlist` over the five → all five | accepted (plan changed at §4.2, §5.3, M3, M3.4, M3 coverage, §9.4, §10; D4-57, OF4-6, D-081 proposed) — superseded 2026-11-10 by the owner ruling (D4-69): OF4-6 removed, D-081 withdrawn, the class deleted and RD9 and the rigs rewritten in M3.4 |
 | I1 | Important | The hook no longer re-runs `ReverifyPublish` on `validated → published` (M3.3) | `reference/architecture.md:1231-1232`; plan HEAD M3.3 → 0 `ReverifyPublish`; `StatusWriteAuthorisations` is an exported singleton its own test fills directly (plan HEAD `:3745`, `:3771`) | accepted (plan changed at M3, M3.2, M3.3, M3.6, M3 coverage; D4-58) |
 | I2 | Important | G3.1 never restarts, so the durability half passes by construction (M2.4) | plan HEAD M2.4 → 0 `restart`; sidecar warm cache keyed by content hash, also answering a bare `model_id` (`artifacts.py:275-287`); no harness restart (`git grep -n -i restart origin/next -- …/TruthSuite/src` → 2 comments) | accepted (plan changed at §4.1a G3.1, M2.4, M2 exit tests; D4-59) |
@@ -9200,7 +9322,10 @@ are monitored on real outcomes.
 `rollback`); its `targetStatus`/`signOff` input, the `PredictiveStudioModelTargetStatus` type and the `promoted` output
 are removed, and a leakage flag is acknowledged only by a `SignOffModel` record; `ProductionModelPromotionGate`
 (`promote-model.gate.ts`) is deleted with `IModelPromotionGate`, `PROMOTABLE_STATUSES`, `PromoteModelRequest`,
-`PromoteModelOutcome` and `PromotableStatus` (callers use `LifecycleGate`); Score Record Set no longer returns
+`PromoteModelOutcome` and `PromotableStatus` (callers use `LifecycleGate`); the "Promote ML Model" Action takes
+`Transition` (and an optional `Reason`) instead of `TargetStatus`/`SignOff`, and its `LEAKAGE_SIGNOFF_REQUIRED`,
+`SIGNOFF_REASON_REQUIRED` and `SAVE_FAILED` result codes are retired for `LEAKAGE_FLAGGED`, `ILLEGAL_TRANSITION`,
+`REASON_REQUIRED` and `TRANSITION_REFUSED`; Score Record Set no longer returns
 `scored`/`failed`/`skipped`/`wroteBack` (read the `ScoringResult` union) and returns `Success = false` for refusals and
 failed runs; direct status writes are refused; `MJ: ML Model Scoring Bindings` loses `MLModelID`,
 `MaterializedResultID` and the `'Materialized'` mode (a binding names `MLTrainingPipelineID`), and `ModeBadgeClass`
@@ -9403,6 +9528,34 @@ plus the keep-list, runtime verification against MJAPI and the database (§7 of 
   (`tsc -p tsconfig.rigs.json`, `package.json:13`), so every rig edit is caught at the package's test. No workflow on
   `origin/next` sets up Python, so M1.6's `actions/setup-python` pin is read at M1.
 
+### 2026-11-10 — Claude (Fable 5.1) — kickoff amendment fix round 1
+
+- **Branch / HEAD:** `ps/pr-4-honest-serving` @ `352c5ee346` before this commit (pushed: no). MJ read at `origin/next`
+  @ `25f11768a7`.
+- **Database / ports:** none (plan only).
+- **Done this session:** the amendment review's fix round 1 and the controller's ruling (D4-70, program D-082 reworded):
+  §2.6 gains `packages/React/runtime/src/utilities/runtime-utilities.ts`,
+  `packages/React/runtime/src/__tests__/runtime-utilities-ml.test.ts` and
+  `packages/TestingFramework/integration-test-suite/docs/platform-suite.md`; M3.4 adds the "Promote ML Model" Action
+  metadata (`Transition`/`Reason` params, `TargetStatus`/`SignOff` params and `LEAKAGE_SIGNOFF_REQUIRED`/
+  `SIGNOFF_REASON_REQUIRED`/`SAVE_FAILED` codes retired with `deleteRecord`, new codes), the agent prompt
+  (`model-development-agent.template.md:83-84`, `:106`) and the doc row, with metadata greps and their `origin/next`
+  baselines; the `ProductionModelPromotionGate` grep now expects 0; RD9's third leg and `PromoteToPublished`'s behaviour
+  change stated; `SyncScoringAction` runs after the commit, a failure logged; M3 and M3.2: `CheckPersistedStatus` and
+  `CheckLeakageFlags` after the idempotency short-circuit, under the locks, three new `lifecycle-gate.test.ts` cases and
+  the Draft test renamed to assert the refusal record; G0.3's mutation names `CheckLeakageFlags`; §5.2's
+  `model-not-found` wording; M4.3's `.html` baseline (`:94`, `:263`); M4 exit and M8.4 Step 4 (`expiry` → 1); M5.6
+  adds `maintenance/seams.ts:177`, the `ScoreAttempt.Scored` readers, the React runtime pair and the Score Record Set
+  Action's output params, with a narrowed grep (85 hits in 18 files on `origin/next`, 0 expected); M1.6 reads the
+  working tree and checks `object.type == commit`; D-079/D-080 read "decided under D-033 per the owner ruling".
+- **Tests:** plan checks: `ParseAllowlist` → 55 globs; `PathsOutsideAllowlist` over the Files of M1, M3.4, M4.3, M5.4
+  and M5.6 → `[]` each; `CoverageTableCheck` ok for all ten milestones; anchors and the pre-push dry run as in the
+  amendment report's "Fix round 1".
+- **Runtime verification:** read-only `git grep`/`git show` at `origin/next` for every new path, line and baseline.
+- **State left behind:** none.
+- **Next step (exact):** M1 starts with M1.1 on `MJ_PS_PR4_claude`.
+- **Gotchas / decisions:** D4-70. `git grep -E` on this macOS build has no `\b`; M5.6's grep uses `-P`.
+
 ## 12. Refresh log (append-only)
 
 ### 2026-10-12 — refresh (written; equivalent to trigger d baseline) — Claude (Opus 5.5)
@@ -9544,3 +9697,6 @@ plus the keep-list, runtime verification against MJAPI and the database (§7 of 
 - **Kickoff amendment 2026-11-10 (owner ruling, D4-69):** no shims or deprecated aliases kept (D-081, OF4-2, OF4-4,
   OF4-6 dropped; OF4-1 closed by M1.6's sidecar pytest job); six caller/CI paths allowlisted (program D-082); D-079 and
   D-080 confirmed; anchors `ok 140 · moved 0 · changed 0 · missing 0 · skipped 0` at `origin/next` @ `25f11768a7`.
+- **Kickoff amendment fix round 1 2026-11-10 (D4-70):** three caller paths allowlisted (React runtime pair, RD9's doc row);
+  the Promote ML Model Action and the agent prompt move to `Transition`; M5.6's readers and grep; `Publish`'s status and
+  leakage checks after idempotency; anchors re-run at `origin/next` @ `25f11768a7`.
