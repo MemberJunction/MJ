@@ -1,5 +1,6 @@
 ---
 "@memberjunction/ai-agent-harness": minor
+"@memberjunction/core-entities": minor
 "@memberjunction/server-bootstrap": patch
 "@memberjunction/server-bootstrap-lite": patch
 "@memberjunction/integration-test-suite": patch
