@@ -217,6 +217,10 @@ describe('stripHtml and entity decoding', () => {
         expect(StripHtml('<p>One</p>\n\n  <p>Two</p>')).toBe('One Two');
     });
 
+    it('leaves no tag behind in nested markup', () => {
+        expect(StripHtml('<<script>script>alert(1)<</script>/script> ok')).not.toMatch(/<[a-z/]/i);
+    });
+
     it('decodes named and numeric entities', () => {
         expect(StripHtml('&quot;q&quot; &#39;a&#39; &#x27;b&#x27; &nbsp;end')).toBe('"q" \'a\' \'b\' end');
     });

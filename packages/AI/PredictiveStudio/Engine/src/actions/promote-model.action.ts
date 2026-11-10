@@ -9,7 +9,8 @@
  *
  * Per CLAUDE.md "Actions are boundaries": this action does NOT mutate the model's
  * metrics, artifact, or any training payload — promotion is a **lifecycle-only**
- * transition (the model is immutable, §6.4). It validates `ModelID` +
+ * transition (the model is immutable, §6.4). A calibration-held model is never moved to Validated or Published (no
+ * sign-off overrides it), and a model whose artifact `/predict` does not serve is never published. It validates `ModelID` +
  * `TargetStatus`, delegates the leakage check + transition to an injectable
  * {@link IModelPromotionGate}, and maps the new status back.
  *
@@ -56,6 +57,10 @@ export type PromoteModelOutcome =
   | { kind: 'promoted'; newStatus: PromotableStatus; signOffNote?: string }
   | { kind: 'refused-leakage'; topFeature?: string; topShare?: number }
   | { kind: 'signoff-reason-required'; topFeature?: string; topShare?: number }
+  /** The model's family is hidden for its holdout calibration (its Lineage's `calibrationHold`); no sign-off overrides it. */
+  | { kind: 'refused-calibration'; slope: number | null }
+  /** The model's artifact is not served by the sidecar's `/predict` (a forecast's series forecaster), so it is not published. */
+  | { kind: 'not-servable'; message: string }
   | { kind: 'invalid-transition'; currentStatus: string; targetStatus: PromotableStatus }
   | { kind: 'needs-training'; message: string }
   | { kind: 'not-found' }
@@ -133,6 +138,10 @@ export class PredictiveStudioPromoteModelAction extends BasePredictiveStudioActi
         return this.fail('LEAKAGE_SIGNOFF_REQUIRED', this.leakageRefusalMessage(modelId, outcome));
       case 'signoff-reason-required':
         return this.fail('SIGNOFF_REASON_REQUIRED', this.signOffReasonRequiredMessage(modelId, outcome));
+      case 'refused-calibration':
+        return this.fail('CALIBRATION_HOLD', ProductionModelPromotionGate.CalibrationRefusalMessage(modelId, outcome.slope));
+      case 'not-servable':
+        return this.fail('MODEL_NOT_SERVABLE', outcome.message);
       case 'invalid-transition':
         return this.fail(
           'INVALID_TRANSITION',

@@ -13,6 +13,7 @@
     "test:db": "vitest run --config vitest.db.config.ts",
     "test:regeneration": "vitest run --config vitest.regeneration.config.ts",
     "test:python": "node scripts/run-pytest.mjs && node scripts/run-pytest.mjs --mypy",
+    "test:gate-parity-refpipe": "node scripts/run-pytest.mjs -p no:cacheprovider tests/test_gate_parity_refpipe.py",
     "truth:loom": "node scripts/fetch-loom.mjs",
     "truth:data": "tsx src/data/cli.ts",
     "truth:provision": "node scripts/provision.mjs",
@@ -28,6 +29,7 @@
     "@memberjunction/predictive-studio": "6.2.0",
     "@memberjunction/predictive-studio-core": "6.2.0",
     "@memberjunction/predictive-studio-sidecar": "6.2.0",
+    "@memberjunction/storage": "6.2.0",
     "@memberjunction/testing-integration": "6.2.0",
     "mssql": "^12.2.0"
   },
