@@ -64,6 +64,8 @@ class FakeDataChannel implements IRealtimeDataChannel {
 
 class FakePeerConnection implements IRealtimeLivePeerConnection {
     public ontrack: ((event: RTCTrackEvent) => void) | null = null;
+    public connectionState: RTCPeerConnectionState = 'new';
+    public onconnectionstatechange: ((event: Event) => void) | null = null;
     public AddedTracks: MediaStreamTrack[] = [];
     /** The sender handed back for each added track. */
     public Senders: FakeRtpSender[] = [];

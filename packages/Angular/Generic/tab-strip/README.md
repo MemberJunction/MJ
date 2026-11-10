@@ -18,7 +18,7 @@ npm install @memberjunction/ng-tabstrip
 
 ## Overview
 
-The tab strip renders a row of tab headers with corresponding body panels. It handles overflow with horizontal scroll buttons, supports closeable tabs with cancelable close events, and provides a rich event system for tab lifecycle management. Unlike Kendo UI tabs, this component has no external dependencies beyond Angular.
+The tab strip renders a row of tab headers with corresponding body panels. It handles overflow with horizontal scroll buttons, supports closeable tabs with cancelable close events, and provides a rich event system for tab lifecycle management. It pulls in no third-party UI library beyond Angular and the MJ UI component kit.
 
 ```mermaid
 flowchart TD

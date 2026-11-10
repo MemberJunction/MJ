@@ -79,6 +79,7 @@ export class ConversationRemoteBrowserController {
   private provider: GraphQLDataProvider | null = null;
   private pushSub: Subscription | null = null;
   private conversationId: string | null = null;
+  private standbyConversationId: string | null = null;
   private currentUrl: string | null = null;
   private stateVersion = 0;
   private disposed = false;
@@ -118,6 +119,33 @@ export class ConversationRemoteBrowserController {
   }
 
   /**
+   * Registers the `browser_*` tools for `conversationId` in standby mode when `AllowRemoteBrowser` is enabled,
+   * so an agent turn can call `browser_OpenUrl` (auto-opening the browser drawer) before the user manually
+   * opens the drawer. Does not start a server browser or light the header button until {@link Open} or
+   * {@link ExecuteBrowserTool} runs.
+   */
+  public SetConversation(conversationId: string | null): void {
+    const nextId = conversationId?.trim() || null;
+    if (!nextId) {
+      if (!this.standbyConversationId) {
+        return;
+      }
+      this.standbyConversationId = null;
+      if (!this.conversationId) {
+        this.unregisterBrowserTools();
+      }
+      this.changed();
+      return;
+    }
+    if (this.standbyConversationId && UUIDsEqual(this.standbyConversationId, nextId) && this.OwnsTools) {
+      return;
+    }
+    this.standbyConversationId = nextId;
+    this.registerBrowserTools();
+    this.changed();
+  }
+
+  /**
    * Opens the browser for `conversationId` and claims the `browser_*` tools. A browser this controller
    * held for a different conversation is ended first.
    */
@@ -138,7 +166,13 @@ export class ConversationRemoteBrowserController {
    */
   public async Close(): Promise<void> {
     const conversationId = this.conversationId;
+    const hadStandby = this.standbyConversationId !== null;
+    this.standbyConversationId = null;
     if (!conversationId) {
+      if (hadStandby) {
+        this.unregisterBrowserTools();
+        this.changed();
+      }
       return;
     }
     // Unbinding reads the session ID synchronously, so it must run before the ID is cleared.
@@ -171,6 +205,9 @@ export class ConversationRemoteBrowserController {
 
   /** Runs one `browser_*` tool against this conversation's browser. */
   public async ExecuteBrowserTool(toolName: string, params: Record<string, unknown>): Promise<{ Success: boolean; Data?: JSONValue; ErrorMessage?: string }> {
+    if (!this.conversationId && this.standbyConversationId) {
+      this.Open(this.standbyConversationId);
+    }
     if (!this.conversationId) {
       return { Success: false, ErrorMessage: 'No browser is open for this conversation.' };
     }
@@ -194,13 +231,13 @@ export class ConversationRemoteBrowserController {
   }
 
   /**
-   * Adds the browser to an app context while it is open: its state under
-   * `AdditionalContext.RemoteBrowser`, and, while this controller owns them, the `browser_*` tools
+   * Adds the browser to an app context while it is open or in standby for an allowed conversation: its state
+   * under `AdditionalContext.RemoteBrowser`, and, while this controller owns them, the `browser_*` tools
    * under `Capabilities.Tools`, the tier an agent run reads a surface's tools from. Returns `base`
-   * unchanged while no browser is open.
+   * unchanged while no browser is open or in standby.
    */
   public WithBrowserContext(base: Record<string, unknown> | null): Record<string, unknown> | null {
-    if (!this.conversationId) {
+    if (!this.conversationId && !this.standbyConversationId) {
       return base;
     }
     const context = base ?? {};

@@ -329,7 +329,7 @@ export interface RetrainOutcome {
   stalenessReasons: StalenessReason[];
   /** The newly-trained challenger model + run (present only when `retrained`). */
   challenger?: TrainModelResult;
-  /** Challenger-vs-incumbent comparison (present only when `retrained`). */
+  /** Challenger-vs-incumbent comparison (present only when `retrained` and the retrain shipped a model). */
   comparison?: ChallengerComparison;
 }
 

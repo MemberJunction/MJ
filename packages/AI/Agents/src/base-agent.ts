@@ -14031,7 +14031,7 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         // Enforce per-(Agent, User) action policy narrowing rules when a user policy is active
-        const policyBlocked = this.checkUserActionPolicy(params, action, actionEntity, contextUser ?? params.contextUser);
+        const policyBlocked = await this.checkUserActionPolicy(params, action, actionEntity, contextUser ?? params.contextUser);
         if (policyBlocked) {
             return policyBlocked;
         }
@@ -14045,15 +14045,19 @@ The context is now within limits. Please retry your request with the recovered c
 
         try {
             // Execute the action and return the full ActionResult
-            const result = await ActionEngineServer.Instance.RunAction({
-                Action: actionEntity,
-                Params: this.toActionParams(binding, actionEntity),
-                ContextUser: contextUser,
-                Filters: [],
-                SkipActionLog: false,
-                Context: this.stampActionContext(params),
-                ...this.runBoundDispatchParams(params, actionEntity, audience.Readers, contextUser),
-            });
+            const result = await AgentUserPolicyEngine.Instance.RunWithExecutingAgentContext(
+                params.agent?.ID ?? '',
+                () =>
+                    ActionEngineServer.Instance.RunAction({
+                        Action: actionEntity,
+                        Params: this.toActionParams(binding, actionEntity),
+                        ContextUser: contextUser,
+                        Filters: [],
+                        SkipActionLog: false,
+                        Context: this.stampActionContext(params),
+                        ...this.runBoundDispatchParams(params, actionEntity, audience.Readers, contextUser),
+                    })
+            );
             this.recordDispatchOutcome(params, action, actionEntity, result, normalizedParams, skipBreaker);
             return result;
 
@@ -14075,19 +14079,47 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Checks per-(Agent, User) action policy narrowing rules (`MJ: AI Agent User Policies`)
-     * before dispatching an action. Returns a synthetic ActionResult when the action is denied,
-     * deferred outside a configured time window, or requires explicit user approval.
+     * before dispatching an action. Loads the user's policy on cold cache (failing closed on
+     * lookup error) and returns a synthetic ActionResult when the action is denied, deferred
+     * outside a configured time window, or requires explicit user approval.
      */
-    protected checkUserActionPolicy(
+    protected async checkUserActionPolicy(
         params: ExecuteAgentParams,
         action: AgentAction,
         actionEntity: MJActionEntityExtended,
         contextUser?: UserInfo
-    ): ActionResult | null {
+    ): Promise<ActionResult | null> {
         if (!contextUser?.ID || !params?.agent?.ID) {
             return null;
         }
-        const policy = AgentUserPolicyEngine.Instance.GetCachedPolicy(params.agent.ID, contextUser.ID);
+        let policy = AgentUserPolicyEngine.Instance.GetCachedPolicy(
+            params.agent.ID,
+            contextUser.ID,
+            params.provider
+        );
+        if (!policy) {
+            const lookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
+                params.agent.ID,
+                contextUser.ID,
+                contextUser,
+                { provider: params.provider }
+            );
+            if (lookup.status === 'error') {
+                return {
+                    Success: false,
+                    ResultCode: POLICY_DENIED_RESULT_CODE,
+                    Message: `Action "${actionEntity.Name || action.name}" blocked (fail-closed): user policy lookup failed (${lookup.errorMessage}).`,
+                    Params: [],
+                    RunParams: {
+                        Action: actionEntity,
+                        Params: this.toActionParams({ Params: action.params ?? {}, Bound: [] }, actionEntity),
+                        ContextUser: contextUser,
+                        Filters: [],
+                    },
+                };
+            }
+            policy = lookup.policy;
+        }
         if (!policy) {
             return null;
         }

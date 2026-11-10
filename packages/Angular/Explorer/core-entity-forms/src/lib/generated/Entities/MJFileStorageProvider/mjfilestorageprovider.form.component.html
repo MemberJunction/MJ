@@ -229,6 +229,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- ML Training Snapshots Section -->
+    <mj-collapsible-panel
+        SectionKey="mJMLTrainingSnapshots"
+        SectionName="ML Training Snapshots"
+        Icon="fa fa-database"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJMLTrainingSnapshots')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Training Snapshots','StorageProviderID')"
+                [NewRecordValues]="NewRecordValues('MJ: ML Training Snapshots','StorageProviderID')"
+                [AllowLoad]="IsSectionExpanded('mJMLTrainingSnapshots')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJMLTrainingSnapshots', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- AI Configurations Section -->
     <mj-collapsible-panel
         SectionKey="mJAIConfigurations"
