@@ -108,6 +108,95 @@ describe('chat area: conversation browser lifecycle', () => {
     expect(component.ShowRemoteBrowserPanel).toBe(false);
   });
 
+  it('re-advertises browser_* tools in standby after closing the drawer with x, and keeps Hide Browser separate', async () => {
+    const { service, tools } = makeFakeAgentClient();
+    const component = createComponent('conv-1', null);
+    const open = component as unknown as Record<string, unknown>;
+    open['agentClientService'] = service;
+    open['resetArtifactPaneSizing'] = vi.fn();
+
+    const serverCalls: Array<{ query: string; variables: Record<string, unknown> }> = [];
+    const controller = (
+      component as unknown as {
+        ensureRemoteBrowser(): {
+          options: { ExecuteServerAction?: <T>(query: string, variables: Record<string, unknown>) => Promise<T | null> };
+        };
+      }
+    ).ensureRemoteBrowser();
+    controller.options.ExecuteServerAction = async <T>(query: string, variables: Record<string, unknown>): Promise<T | null> => {
+      serverCalls.push({ query, variables });
+      if (query.includes('ExecuteRemoteBrowserAction')) {
+        return {
+          ExecuteRemoteBrowserAction: {
+            Success: true,
+            CurrentUrl: String(variables['url'] ?? 'https://chat.bettybot.ai/aiia-membership-application.html'),
+            Detail: 'Opened URL',
+          },
+        } as unknown as T;
+      }
+      return { EndRemoteBrowserSession: true } as unknown as T;
+    };
+
+    const readContext = () => {
+      const ctx = component.EffectiveAppContext;
+      const toolList = (ctx?.['Capabilities'] as { Tools?: unknown[] } | undefined)?.Tools ?? [];
+      const remoteBrowser = (ctx?.['AdditionalContext'] as { RemoteBrowser?: { Open: boolean; CurrentUrl: string | null } } | undefined)?.RemoteBrowser;
+      return { toolCount: toolList.length, remoteBrowser };
+    };
+
+    // Step 1: Turn 1 advertises the 13 tools in standby; agent calls browser_OpenUrl and auto-opens the drawer.
+    expect(readContext()).toEqual({ toolCount: 13, remoteBrowser: { Open: false, CurrentUrl: null } });
+    const openUrlTool = tools.get('browser_OpenUrl');
+    expect(openUrlTool).toBeDefined();
+    await openUrlTool!.Handler({ url: 'https://chat.bettybot.ai/aiia-membership-application.html' });
+
+    expect(component.ShowRemoteBrowserPanel).toBe(true);
+    expect(component.IsRemoteBrowserLive).toBe(true);
+    expect(readContext()).toEqual({
+      toolCount: 13,
+      remoteBrowser: { Open: true, CurrentUrl: 'https://chat.bettybot.ai/aiia-membership-application.html' },
+    });
+
+    // Hide Browser (header toggle button) hides the drawer while keeping the current session and page alive.
+    component.ToggleRemoteBrowserPanel();
+    expect(component.ShowRemoteBrowserPanel).toBe(false);
+    expect(component.IsRemoteBrowserLive).toBe(true);
+    expect(readContext()).toEqual({
+      toolCount: 13,
+      remoteBrowser: { Open: true, CurrentUrl: 'https://chat.bettybot.ai/aiia-membership-application.html' },
+    });
+    expect(serverCalls.some((c) => c.query.includes('EndRemoteBrowserSession'))).toBe(false);
+
+    // Clicking the header Browser button again re-shows the drawer on the preserved page.
+    component.ToggleRemoteBrowserPanel();
+    expect(component.ShowRemoteBrowserPanel).toBe(true);
+    expect(component.IsRemoteBrowserLive).toBe(true);
+
+    // Step 2: User clicks x in the drawer (CloseRemoteBrowserPanel) — ends the session.
+    component.CloseRemoteBrowserPanel();
+    expect(component.ShowRemoteBrowserPanel).toBe(false);
+    expect(component.IsRemoteBrowserLive).toBe(false);
+    expect(serverCalls.some((c) => c.query.includes('EndRemoteBrowserSession'))).toBe(true);
+
+    // Step 3: Ordinary question in the same chat ("What does AIIA stand for?") — drawer stays closed
+    // and no browser is launched, while the 13 browser_* tools are re-advertised in standby.
+    const callsBeforeOrdinaryTurn = serverCalls.length;
+    expect(readContext()).toEqual({ toolCount: 13, remoteBrowser: { Open: false, CurrentUrl: null } });
+    expect(tools.size).toBe(13);
+    expect(component.ShowRemoteBrowserPanel).toBe(false);
+    expect(component.IsRemoteBrowserLive).toBe(false);
+    expect(serverCalls.length).toBe(callsBeforeOrdinaryTurn);
+
+    // Step 4: Asking to open the same URL again in the same chat launches a fresh browser session and opens the drawer.
+    await tools.get('browser_OpenUrl')!.Handler({ url: 'https://chat.bettybot.ai/aiia-membership-application.html' });
+    expect(component.ShowRemoteBrowserPanel).toBe(true);
+    expect(component.IsRemoteBrowserLive).toBe(true);
+    expect(readContext()).toEqual({
+      toolCount: 13,
+      remoteBrowser: { Open: true, CurrentUrl: 'https://chat.bettybot.ai/aiia-membership-application.html' },
+    });
+  });
+
   it('ends the browser and hides the drawer when AllowRemoteBrowser is turned off', () => {
     const { service, tools } = makeFakeAgentClient();
     const component = createComponent('conv-1', null);
