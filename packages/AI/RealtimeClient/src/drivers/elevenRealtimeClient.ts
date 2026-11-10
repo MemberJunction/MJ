@@ -74,6 +74,10 @@ export class ElevenRealtimeClient extends OpenAIProtocolWebSocketRealtimeClient 
         return 'ElevenRealtimeClient';
     }
 
+    protected override get DefaultCallDurationSeconds(): number | undefined {
+        return undefined;
+    }
+
     // ── Transport hooks ────────────────────────────────────────────────────────
 
     /** @inheritdoc — model on the URL, client secret in the OpenAI-SDK subprotocol slot. */

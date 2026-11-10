@@ -3,6 +3,7 @@ import { SimpleChange, type ChangeDetectorRef } from '@angular/core';
 import type {
   BaseEntity,
   BaseEntityResult,
+  CompositeFilterDescriptor,
   CompositeKey,
   EntityFieldInfo,
   EntityInfo,
@@ -10,7 +11,6 @@ import type {
   UserInfo,
 } from '@memberjunction/core';
 import { UserInfoEngine, type MJUserViewEntityExtended } from '@memberjunction/core-entities';
-import { CompositeFilterDescriptor } from '@memberjunction/ng-filter-builder';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ViewWorkspaceComponent } from './view-workspace.component';
 import { ViewConfigPanelComponent, type ViewSaveEvent } from '../view-config-panel/view-config-panel.component';

@@ -135,7 +135,7 @@ describe('UserRoutineDispatcherDriver run-row status', () => {
         driver.createRunRow = async () => run;
         driver.runAndRecord = async () => { throw new Error('routine row update blew up'); };
 
-        const summary = await driver.executeRoutine({ ID: 'R-1', Name: 'R' }, { ContextUser: { ID: 'u' } });
+        const summary = await driver.executeRoutine({ ID: 'R-1', Name: 'R', UserID: 'u' }, { ContextUser: { ID: 'u' } });
 
         expect(run.Status, 'the committed outcome must survive').toBe('Success');
         expect(summary.RunStatus, 'and the summary must report what is on disk').toBe('Success');
@@ -154,7 +154,7 @@ describe('UserRoutineDispatcherDriver run-row status', () => {
         driver.createRunRow = async () => run;
         driver.runAndRecord = async (_r, runRow) => driver.finalizeRunRow(runRow, OUTCOME, 'summary', 'hash');
 
-        const summary = await driver.executeRoutine({ ID: 'R-1', Name: 'R' }, { ContextUser: { ID: 'u' } });
+        const summary = await driver.executeRoutine({ ID: 'R-1', Name: 'R', UserID: 'u' }, { ContextUser: { ID: 'u' } });
 
         expect(saves.length, 'nothing reached the database').toBe(0);
         expect(persisted(), 'so the row is still Running on disk').toBe('Running');
@@ -167,7 +167,7 @@ describe('UserRoutineDispatcherDriver run-row status', () => {
         driver.createRunRow = async () => run;
         driver.runAndRecord = async () => { throw new Error('exploded before finalize'); };
 
-        const summary = await driver.executeRoutine({ ID: 'R-1', Name: 'R' }, { ContextUser: { ID: 'u' } });
+        const summary = await driver.executeRoutine({ ID: 'R-1', Name: 'R', UserID: 'u' }, { ContextUser: { ID: 'u' } });
 
         expect(run.Status).toBe('Failed');
         expect(summary.RunStatus).toBe('Failed');
