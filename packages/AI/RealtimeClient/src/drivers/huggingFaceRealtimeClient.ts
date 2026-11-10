@@ -80,12 +80,28 @@ export class HuggingFaceRealtimeClient extends OpenAIProtocolWebSocketRealtimeCl
     /**
      * @inheritdoc
      *
+     * Off: the proxy hop closes benignly and the host reads `'closed'` as the end of the session
+     * (see {@link handleSocketClose}), so a lost socket does not start a reconnect and a socket
+     * error stays fatal. A loss during a planned move still goes to that move's reconnect.
+     */
+    protected override get RecoversLostTransport(): boolean {
+        return false;
+    }
+
+    /**
+     * @inheritdoc
+     *
      * A close the consumer didn't ask for is reported as a terminal `'closed'` — NOT the fatal
      * error the cloud providers surface: the self-hosted proxy hop closes benignly (ticket
      * expiry, upstream restart), and the host treats `'closed'` as the session-over signal.
+     * During a planned move the closed socket is the one the move may go back to, so the move's
+     * reconnect takes the loss and the call goes on (`recoverLostTransport` answers `true` only then).
      */
     protected override handleSocketClose(): void {
         if (this.closedByConsumer) {
+            return;
+        }
+        if (this.recoverLostTransport('socket closed')) {
             return;
         }
         if (this.currentState !== 'error') {

@@ -32,7 +32,8 @@ export class MJAIPromptRunFormComponent extends BaseFormComponent {
             { sectionKey: 'mJDuplicateRunDetailMatches', sectionName: 'Duplicate Run Detail Matches', isExpanded: false },
             { sectionKey: 'mJUserRoutineRuns', sectionName: 'User Routine Runs', isExpanded: false },
             { sectionKey: 'mJConversationCompactionRuns', sectionName: 'Conversation Compaction Runs', isExpanded: false },
-            { sectionKey: 'mJRubricEvaluations', sectionName: 'Rubric Evaluations', isExpanded: false }
+            { sectionKey: 'mJRubricEvaluations', sectionName: 'Rubric Evaluations', isExpanded: false },
+            { sectionKey: 'mJFieldSuggestions', sectionName: 'Field Suggestions', isExpanded: false }
         ]);
     }
 }

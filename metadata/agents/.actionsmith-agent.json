@@ -145,6 +145,56 @@
             "lastModified": "2026-04-23T21:33:34.810Z",
             "checksum": "92455f8e2545c27c8abcae2c023f2fd838e5b780c9430bf238fe308effa4eccd"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Find Candidate Skills",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6A3F8E02-1C5B-4B42-8F23-9A1B2C3D4E51"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=GitHub - Get Repository Context",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6A3F8E02-1C5B-4B42-8F23-9A1B2C3D4E52"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=GitHub - List Repository Tree",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6A3F8E02-1C5B-4B42-8F23-9A1B2C3D4E53"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=GitHub - Read Repository File",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6A3F8E02-1C5B-4B42-8F23-9A1B2C3D4E54"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=GitHub - Search Code",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6A3F8E02-1C5B-4B42-8F23-9A1B2C3D4E55"
+          }
         }
       ],
       "MJ: AI Agent Relationships": [

@@ -6273,8 +6273,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
             if (this.isBooleanSqlType(targetType)) {
                 const lower = trimmed.toLowerCase();
-                if (lower === 'true' || lower === '1' || lower === 'yes') return true;
-                if (lower === 'false' || lower === '0' || lower === 'no') return false;
+                if (lower === 'true' || lower === '1' || lower === 'yes' || lower === 't') return true;
+                if (lower === 'false' || lower === '0' || lower === 'no' || lower === 'f') return false;
                 return null;
             }
             if (this.isDateSqlType(targetType)) {

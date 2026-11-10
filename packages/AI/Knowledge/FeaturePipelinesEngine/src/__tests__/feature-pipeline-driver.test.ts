@@ -410,6 +410,23 @@ describe('Feature Pipeline driver seam', () => {
             expect(processor.Calls.map((c) => c.Hook)).toEqual(['beforeBuildContext', 'buildPromptData', 'beforePromptExecute']);
         });
 
+        it('drops the champion inputs captured for a challenger when ProcessRecord ends without a Feature Value write, failed or thrown (P13)', async () => {
+            const processor = new InferProcessor(PROMPT_ID, undefined, buildSpec(), null);
+            processor.ChallengerConfig = { Enabled: true, SampleRate: 1, WorkType: 'Infer', ChallengerPromptID: 'PROMPT-CHALLENGER', MaxLatencyMs: 5000 };
+            // The capture maps are private; reached the way inferHooks.test.ts reaches them.
+            const captured = processor as unknown as { championPromptDataByRecord: Map<string, unknown>; championUserMessageByRecord: Map<string, unknown> };
+
+            // Called per record, as RecordSetProcessor does: no batch ever starts to reset them.
+            executePrompt.mockResolvedValueOnce({ success: false, errorMessage: 'model unavailable', promptRun: { ID: 'PROMPT-RUN-2' } });
+            expect((await processor.ProcessRecord(makeRecord('rec-failed'), context)).Status).toBe('Failed');
+            executePrompt.mockRejectedValueOnce(new Error('socket hang up'));
+            await expect(processor.ProcessRecord(makeRecord('rec-threw'), context)).rejects.toThrow('socket hang up');
+
+            expect(executePrompt).toHaveBeenCalledTimes(2);
+            expect(captured.championPromptDataByRecord.size).toBe(0);
+            expect(captured.championUserMessageByRecord.size).toBe(0);
+        });
+
         it('uses the default failure message when the prompt fails without one', async () => {
             executePrompt.mockResolvedValue({ success: false });
             const driver = new LLMFeaturePipelineDriver();

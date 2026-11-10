@@ -1,0 +1,11 @@
+[
+  {
+    "fields": {
+      "Name": "A2A Task",
+      "Description": "Tasks created through the A2A (agent-to-agent) protocol and kept by the durable A2A task store (a2aServerSettings.taskStoreMode = 'entity'). The store finds this type by name and never creates it."
+    },
+    "primaryKey": {
+      "ID": "D9B0026D-7E3C-40B5-9DA0-D22CE651E8A7"
+    }
+  }
+]

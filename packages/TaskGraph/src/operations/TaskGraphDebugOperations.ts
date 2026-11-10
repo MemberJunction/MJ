@@ -90,7 +90,7 @@ function submitContext(provider: IMetadataProvider, user: UserInfo): TaskGraphSu
  * entity permissions never see them. Fails closed: a graph with no recorded owner (submitted before
  * ownership stamping) is controllable only by Owner-type users.
  */
-async function authorizeGraphControl(
+export async function AuthorizeGraphControl(
     parentTaskID: string,
     provider: IMetadataProvider,
     user: UserInfo,
@@ -115,7 +115,7 @@ async function authorizeGraphControl(
  * the table, and for an Owner-type caller that gate returns before loading anything. The guarded
  * statements carry the same discriminator as a second layer; this is the first.
  */
-async function graphOfTask(
+export async function GraphOfTask(
     taskID: string,
     provider: IMetadataProvider,
     user: UserInfo,
@@ -170,7 +170,7 @@ export class TaskGraphPauseServerOperation extends BaseRemotableOperation<TaskGr
 
     protected async InternalExecute(input: TaskGraphPauseInput, provider: IMetadataProvider, user: UserInfo): Promise<TaskGraphDebugControlOutput> {
         if (!input?.parentTaskID) throw new Error('parentTaskID is required');
-        const denied = await authorizeGraphControl(input.parentTaskID, provider, user);
+        const denied = await AuthorizeGraphControl(input.parentTaskID, provider, user);
         if (denied) return failed(denied);
         const result = await new TaskGraphService().PauseGraph(input.parentTaskID, submitContext(provider, user), user.ID);
         return { success: result.Success, debug: result.Debug, errorMessage: result.ErrorMessage };
@@ -186,7 +186,7 @@ export class TaskGraphResumeServerOperation extends BaseRemotableOperation<TaskG
 
     protected async InternalExecute(input: TaskGraphPauseInput, provider: IMetadataProvider, user: UserInfo): Promise<TaskGraphDebugControlOutput> {
         if (!input?.parentTaskID) throw new Error('parentTaskID is required');
-        const denied = await authorizeGraphControl(input.parentTaskID, provider, user);
+        const denied = await AuthorizeGraphControl(input.parentTaskID, provider, user);
         if (denied) return failed(denied);
         const result = await new TaskGraphService().ResumeGraph(input.parentTaskID, submitContext(provider, user));
         return { success: result.Success, debug: result.Debug, errorMessage: result.ErrorMessage };
@@ -202,7 +202,7 @@ export class TaskGraphStepServerOperation extends BaseRemotableOperation<TaskGra
 
     protected async InternalExecute(input: TaskGraphStepInput, provider: IMetadataProvider, user: UserInfo): Promise<TaskGraphDebugControlOutput> {
         if (!input?.parentTaskID) throw new Error('parentTaskID is required');
-        const denied = await authorizeGraphControl(input.parentTaskID, provider, user);
+        const denied = await AuthorizeGraphControl(input.parentTaskID, provider, user);
         if (denied) return failed(denied);
         const target: StepTarget = input.target === 'wave' || input.target === 'one'
             ? input.target
@@ -222,7 +222,7 @@ export class TaskGraphSetBreakpointsServerOperation extends BaseRemotableOperati
     protected async InternalExecute(input: TaskGraphSetBreakpointsInput, provider: IMetadataProvider, user: UserInfo): Promise<TaskGraphDebugControlOutput> {
         if (!input?.parentTaskID) throw new Error('parentTaskID is required');
         if (!Array.isArray(input.taskIDs)) throw new Error('taskIDs is required (empty array clears)');
-        const denied = await authorizeGraphControl(input.parentTaskID, provider, user);
+        const denied = await AuthorizeGraphControl(input.parentTaskID, provider, user);
         if (denied) return failed(denied);
         const result = await new TaskGraphService().SetBreakpoints(input.parentTaskID, input.taskIDs, submitContext(provider, user));
         return { success: result.Success, debug: result.Debug, errorMessage: result.ErrorMessage };
@@ -239,7 +239,7 @@ export class TaskGraphOverrideEdgeServerOperation extends BaseRemotableOperation
     protected async InternalExecute(input: TaskGraphOverrideEdgeInput, provider: IMetadataProvider, user: UserInfo): Promise<TaskGraphDebugControlOutput> {
         if (!input?.parentTaskID) throw new Error('parentTaskID is required');
         if (!input?.edgeID) throw new Error('edgeID is required');
-        const denied = await authorizeGraphControl(input.parentTaskID, provider, user);
+        const denied = await AuthorizeGraphControl(input.parentTaskID, provider, user);
         if (denied) return failed(denied);
         const verdict: EdgeOverrideVerdict | null =
             input.verdict === 'true' || input.verdict === 'false' ? input.verdict : null;
@@ -257,9 +257,9 @@ export class TaskGraphSkipTaskServerOperation extends BaseRemotableOperation<Tas
 
     protected async InternalExecute(input: TaskGraphTaskInterventionInput, provider: IMetadataProvider, user: UserInfo): Promise<TaskGraphDebugControlOutput> {
         if (!input?.taskID) throw new Error('taskID is required');
-        const graph = await graphOfTask(input.taskID, provider, user);
+        const graph = await GraphOfTask(input.taskID, provider, user);
         if ('error' in graph) return failed(graph.error);
-        const denied = await authorizeGraphControl(graph.parentTaskID, provider, user);
+        const denied = await AuthorizeGraphControl(graph.parentTaskID, provider, user);
         if (denied) return failed(denied);
         const result = await new TaskGraphService().SkipTask(input.taskID, submitContext(provider, user));
         return { success: result.Success, errorMessage: result.ErrorMessage };
@@ -275,9 +275,9 @@ export class TaskGraphForceCompleteTaskServerOperation extends BaseRemotableOper
 
     protected async InternalExecute(input: TaskGraphTaskInterventionInput, provider: IMetadataProvider, user: UserInfo): Promise<TaskGraphDebugControlOutput> {
         if (!input?.taskID) throw new Error('taskID is required');
-        const graph = await graphOfTask(input.taskID, provider, user);
+        const graph = await GraphOfTask(input.taskID, provider, user);
         if ('error' in graph) return failed(graph.error);
-        const denied = await authorizeGraphControl(graph.parentTaskID, provider, user);
+        const denied = await AuthorizeGraphControl(graph.parentTaskID, provider, user);
         if (denied) return failed(denied);
         const result = await new TaskGraphService().ForceCompleteTask(input.taskID, input.payload ?? null, submitContext(provider, user));
         return { success: result.Success, errorMessage: result.ErrorMessage };
@@ -294,9 +294,9 @@ export class TaskGraphUpdateTaskInputServerOperation extends BaseRemotableOperat
     protected async InternalExecute(input: TaskGraphTaskInterventionInput, provider: IMetadataProvider, user: UserInfo): Promise<TaskGraphDebugControlOutput> {
         if (!input?.taskID) throw new Error('taskID is required');
         if (input.payload === undefined) throw new Error('payload is required');
-        const graph = await graphOfTask(input.taskID, provider, user);
+        const graph = await GraphOfTask(input.taskID, provider, user);
         if ('error' in graph) return failed(graph.error);
-        const denied = await authorizeGraphControl(graph.parentTaskID, provider, user);
+        const denied = await AuthorizeGraphControl(graph.parentTaskID, provider, user);
         if (denied) return failed(denied);
         const result = await new TaskGraphService().UpdateTaskInput(input.taskID, input.payload, submitContext(provider, user));
         return { success: result.Success, errorMessage: result.ErrorMessage };

@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseEntity, EntityInfo, IMetadataProvider, Metadata, LogError, CompositeKey } from "@memberjunction/core";
 import { BaseAction } from "@memberjunction/actions";
+import { AgentDataPolicyGuard } from "./agent-data-policy-guard";
 
 /**
  * The shape of the dynamic field-name -> value map this action accepts.
@@ -112,6 +113,22 @@ export class WriteEntityFieldsAction extends BaseAction {
 
             // Decide create vs. update based on whether a primary key was supplied.
             const isCreate = primaryKey === undefined;
+            const canonicalMutatedFields = Object.keys(fields).map((fieldName) => {
+                const match = entityInfo.Fields.find(
+                    (f) => f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase()
+                );
+                return match ? match.Name : fieldName;
+            });
+            const prePolicy = await AgentDataPolicyGuard.EvaluateRecordOperation({
+                params,
+                entityInfo,
+                operation: isCreate ? 'Create' : 'Update',
+                mutatedFields: canonicalMutatedFields,
+            });
+            if ('Blocked' in prePolicy) {
+                return prePolicy.Blocked;
+            }
+
             if (isCreate) {
                 if (!createIfMissing) {
                     return this.fail(
@@ -121,13 +138,74 @@ export class WriteEntityFieldsAction extends BaseAction {
                 }
                 entity.NewRecord();
             } else {
+                if (prePolicy.Allowed.Active && prePolicy.Allowed.EffectiveWhereClause) {
+                    const keyData: FieldMap = {};
+                    for (const pkField of entityInfo.PrimaryKeys) {
+                        if (pkField.Name in primaryKey) {
+                            keyData[pkField.Name] = primaryKey[pkField.Name];
+                        }
+                    }
+                    const rlsError = await AgentDataPolicyGuard.VerifyPrimaryKeyPassesWhereClause({
+                        params,
+                        entityInfo,
+                        primaryKey: CompositeKey.FromObject(keyData),
+                        effectiveWhereClause: prePolicy.Allowed.EffectiveWhereClause,
+                    });
+                    if (rlsError) {
+                        return rlsError;
+                    }
+                }
                 const loadError = await this.loadExistingRecord(entity, entityInfo, primaryKey, entityName);
                 if (loadError) {
                     return loadError;
                 }
+                if (prePolicy.Allowed.Active && prePolicy.Allowed.HasRecordConditionRules) {
+                    // fls-guard: loaded as params.ContextUser and passed only to internal agent policy evaluation (not returned to caller)
+                    const preWriteRecord = entity.GetAll();
+                    const preCondError = AgentDataPolicyGuard.CheckRecordCondition({
+                        params,
+                        policy: prePolicy.Allowed.Policy,
+                        entityInfo,
+                        operation: 'Update',
+                        mutatedFields: canonicalMutatedFields,
+                        record: preWriteRecord,
+                    });
+                    if (preCondError) {
+                        return preCondError;
+                    }
+                }
             }
 
             this.applyFieldMap(entity, entityInfo, fields);
+
+            if (prePolicy.Allowed.Active && prePolicy.Allowed.EffectiveWhereClause) {
+                const postWhereError = await AgentDataPolicyGuard.VerifyEntityStatePassesWhereClause({
+                    params,
+                    entity,
+                    entityInfo,
+                    effectiveWhereClause: prePolicy.Allowed.EffectiveWhereClause,
+                    dirtyOnlyOptimization: !isCreate,
+                });
+                if (postWhereError) {
+                    return postWhereError;
+                }
+            }
+
+            if (prePolicy.Allowed.Active && prePolicy.Allowed.HasRecordConditionRules) {
+                // fls-guard: instantiated/loaded as params.ContextUser and passed only to internal agent policy evaluation (not returned to caller)
+                const postWriteRecord = entity.GetAll();
+                const postCondError = AgentDataPolicyGuard.CheckRecordCondition({
+                    params,
+                    policy: prePolicy.Allowed.Policy,
+                    entityInfo,
+                    operation: isCreate ? 'Create' : 'Update',
+                    mutatedFields: canonicalMutatedFields,
+                    record: postWriteRecord,
+                });
+                if (postCondError) {
+                    return postCondError;
+                }
+            }
 
             const saved = await entity.Save();
             if (!saved) {

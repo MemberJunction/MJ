@@ -175,6 +175,24 @@ describe('GeminiRealtime client-direct (CreateClientSession)', () => {
         expect(mintConfig.uses).toBeGreaterThanOrEqual(2);
     });
 
+    // Each connection the browser opens spends one use, and it opens one per effective connection length (the catalog's
+    // connectionMaxSeconds), not one per Gemini's 10-minute ceiling. Live: a 45 s cap ran out after 6 opens and the 7th
+    // connection was refused "Token has been used too many times".
+    it('sizes the token uses from the effective connection length, not the 10-minute provider ceiling', async () => {
+        const driver = new ClientDirectTestable('k');
+        const cfg = await driver.CreateClientSession(makeParams({ MaxSessionSeconds: 1800, Config: { connectionMaxSeconds: 45 } }));
+        expect(cfg.ConnectionMaxSeconds).toBe(45);
+        expect(driver.MintParams!.config!.uses).toBeGreaterThanOrEqual(Math.ceil(1800 / 45));
+    });
+
+    // The browser counts the opens it spends on the token and refreshes before the last one is gone, which covers what
+    // no mint-time formula can bound (dropped connections, the 120 s uncompressed-video cap). It needs the minted count.
+    it('tells the browser how many connections the token opens', async () => {
+        const driver = new ClientDirectTestable('k');
+        const cfg = await driver.CreateClientSession(makeParams({ Config: { connectionMaxSeconds: 45 } }));
+        expect((cfg.SessionConfig as Record<string, unknown>)['tokenUses']).toBe(driver.MintParams!.config!.uses);
+    });
+
     it('carries the same model + config in SessionConfig for the client to pass at connect', async () => {
         const driver = new ClientDirectTestable('k');
         const cfg = await driver.CreateClientSession(makeParams({
@@ -2000,10 +2018,11 @@ class PactProbe extends EnterpriseClientDirect {
 }
 
 describe('SessionPactFor: the pact a client-direct mint returns', () => {
-    it('is what CreateClientSession mints: the full config by default, with the model facts', async () => {
+    it('is what CreateClientSession mints: the full config by default, with the model facts (plus the token uses)', async () => {
         const driver = new PactProbe('k');
         const params = makeParams({ Model: 'gemini-3.8-live', Avatar: BEN });
-        const minted = (await driver.CreateClientSession(params)).SessionConfig;
+        const { tokenUses, ...minted } = (await driver.CreateClientSession(params)).SessionConfig as Record<string, unknown>;
+        expect(typeof tokenUses).toBe('number');
         expect(driver.Pact('gemini-3.8-live', driver.Config(params))).toEqual(minted);
     });
 

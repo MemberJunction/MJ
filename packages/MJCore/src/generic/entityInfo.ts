@@ -24,7 +24,12 @@ import {
     type ICloneRelationshipPolicy,
     type IEntityFieldCloneConfiguration,
 } from "./entityConfiguration"
-import type { IEntitySubtypeSelectorConfig } from "./JSONType-interfaces/IEntitySubtypeSelectorConfig"
+import type {
+    IEntitySubtypeSelectorConfig,
+    IEntitySubtypeDriverConfig,
+    IEntitySubtypeUIDriverConfig,
+    SubtypeSelectorChangeBehavior,
+} from "./JSONType-interfaces/IEntitySubtypeSelectorConfig"
 import { EntityLifecyclePolicyEngine, type IEntityLifecyclePolicy } from "./entityLifecyclePolicy"
 import { DocumentNumberingEngine, type IDocumentNumberPolicy } from "./documentNumberingEngine"
 import { CrossEntityPolicyEngine, type IDeclarativeParentStateLockPolicy } from "./crossEntityPolicyEngine"
@@ -370,6 +375,51 @@ export class EntityOrganicKeyRelatedEntityInfo extends BaseInfo {
         }
     }
 
+}
+
+/**
+ * A unique index or unique constraint on an entity's base table, as a set of columns. CodeGen
+ * keeps these in step with the database catalog; primary keys are not included (see
+ * {@link EntityFieldInfo.IsPrimaryKey}).
+ *
+ * {@link EntityFieldInfo.IsUnique} is true only for a column that is a key on its own. A composite
+ * key — for example Action Params' (ActionID, Name) — appears here and not on its columns.
+ * Maps to the MJ: Entity Unique Keys metadata entity.
+ */
+export class EntityUniqueKeyInfo extends BaseInfo {
+    ID: string = null
+    EntityID: string = null
+    /** Name of the unique index or constraint in the database. */
+    Name: string = null
+    /** Comma-separated key column names, in key order. Use {@link FieldNamesArray}. */
+    FieldNames: string = null
+    /** Predicate of a filtered (SQL Server) or partial (PostgreSQL) index; null when the key covers every row. */
+    FilterDefinition: string | null = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
+
+    // virtual fields from the database view
+    Entity: string = null
+
+    /** The key's field names, in key order. */
+    get FieldNamesArray(): string[] {
+        return this.FieldNames ? this.FieldNames.split(',').map(f => f.trim()).filter(f => f.length > 0) : [];
+    }
+
+    /**
+     * True when the key only applies to rows matching {@link FilterDefinition}. Such a key does not
+     * make its columns unique across the whole table.
+     */
+    get IsFiltered(): boolean {
+        return this.FilterDefinition != null && this.FilterDefinition.trim().length > 0;
+    }
+
+    constructor(initData: Record<string, unknown> = null) {
+        super();
+        if (initData) {
+            this.copyInitData(initData);
+        }
+    }
 }
 
 /**
@@ -1099,7 +1149,10 @@ export class EntityFieldInfo extends BaseInfo {
      */
     IsSoftForeignKey: boolean = null
     /**
-     * If true, the field is a unique key for the entity. There can be zero to many unique key fields per entity.
+     * True only when this column alone is a key: the sole key column of an unfiltered unique index or
+     * unique constraint, or the sole column of the primary key. Columns of a composite unique key, of a
+     * composite primary key, or of a filtered (partial) unique index are false; unique keys are
+     * recorded as column sets in {@link EntityInfo.UniqueKeySets}.
      */
     IsUnique: boolean = null
     Category: string = null
@@ -3169,20 +3222,44 @@ export class EntityInfo extends BaseInfo {
     SubtypeSelector: string = null
 
     private _subtypeSelectorConfig: IEntitySubtypeSelectorConfig | null | undefined = undefined;
+    private _subtypeSelectorRaw: string | null | undefined = undefined;
 
     /**
      * Parsed SubtypeSelector configuration, if configured.
      */
     get SubtypeSelectorConfig(): IEntitySubtypeSelectorConfig | null {
-        if (this._subtypeSelectorConfig === undefined) {
+        if (this._subtypeSelectorConfig === undefined || this._subtypeSelectorRaw !== this.SubtypeSelector) {
+            this._subtypeSelectorRaw = this.SubtypeSelector;
             if (this.SubtypeSelector && typeof this.SubtypeSelector === 'string') {
                 try {
                     const parsed = JSON.parse(this.SubtypeSelector) as Record<string, unknown>;
                     if (parsed && typeof parsed['Path'] === 'string' && parsed['Path'].trim().length > 0) {
-                        this._subtypeSelectorConfig = {
+                        const config: IEntitySubtypeSelectorConfig = {
                             Path: parsed['Path'].trim(),
                             UseForLoadedRecords: this.parseSubtypeSelectorUseForLoadedRecords(parsed),
                         };
+                        if (parsed['AutoEnsureOnSave'] !== undefined && parsed['AutoEnsureOnSave'] !== null) {
+                            config.AutoEnsureOnSave = this.parseSubtypeSelectorBooleanFlag(parsed, 'AutoEnsureOnSave');
+                        }
+                        if (parsed['OnSubtypeChange'] !== undefined && parsed['OnSubtypeChange'] !== null) {
+                            config.OnSubtypeChange = this.parseSubtypeSelectorChangeBehavior(parsed);
+                        }
+                        if (parsed['Driver'] !== undefined && parsed['Driver'] !== null) {
+                            const driver = this.parseSubtypeSelectorDriver(parsed);
+                            if (driver) {
+                                config.Driver = driver;
+                            }
+                        }
+                        if (parsed['FoldIntoForm'] !== undefined && parsed['FoldIntoForm'] !== null) {
+                            config.FoldIntoForm = this.parseSubtypeSelectorBooleanFlag(parsed, 'FoldIntoForm');
+                        }
+                        if (parsed['UIDriver'] !== undefined && parsed['UIDriver'] !== null) {
+                            const uiDriver = this.parseSubtypeSelectorUIDriver(parsed);
+                            if (uiDriver) {
+                                config.UIDriver = uiDriver;
+                            }
+                        }
+                        this._subtypeSelectorConfig = config;
                     } else {
                         LogError(`EntityInfo '${this.Name}': SubtypeSelector JSON must contain a non-empty 'Path' string property. Found: ${this.SubtypeSelector}`);
                         this._subtypeSelectorConfig = null;
@@ -3210,6 +3287,59 @@ export class EntityInfo extends BaseInfo {
         }
         LogError(`EntityInfo '${this.Name}': SubtypeSelector 'UseForLoadedRecords' must be true or false, but is ${JSON.stringify(value)}. Loads of this entity won't use the selector.`);
         return false;
+    }
+
+    private parseSubtypeSelectorBooleanFlag(parsed: Record<string, unknown>, key: string): boolean {
+        const value = parsed[key];
+        if (typeof value === 'boolean') {
+            return value;
+        }
+        LogError(`EntityInfo '${this.Name}': SubtypeSelector '${key}' must be true or false, but is ${JSON.stringify(value)}. Defaulting to false.`);
+        return false;
+    }
+
+    private parseSubtypeSelectorChangeBehavior(parsed: Record<string, unknown>): SubtypeSelectorChangeBehavior {
+        const value = parsed['OnSubtypeChange'];
+        if (value === 'Refuse' || value === 'Replace') {
+            return value;
+        }
+        LogError(`EntityInfo '${this.Name}': SubtypeSelector 'OnSubtypeChange' must be 'Refuse' or 'Replace', but is ${JSON.stringify(value)}. Defaulting to 'Refuse'.`);
+        return 'Refuse';
+    }
+
+    private parseSubtypeSelectorDriver(parsed: Record<string, unknown>): IEntitySubtypeDriverConfig | null {
+        const raw = parsed['Driver'];
+        if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+            const driverObj = raw as Record<string, unknown>;
+            const path = driverObj['Path'];
+            if (typeof path === 'string' && path.trim().length > 0) {
+                const driver: IEntitySubtypeDriverConfig = { Path: path.trim() };
+                const baseClass = driverObj['BaseClass'];
+                if (baseClass !== undefined && baseClass !== null) {
+                    if (typeof baseClass === 'string' && baseClass.trim().length > 0) {
+                        driver.BaseClass = baseClass.trim();
+                    } else {
+                        LogError(`EntityInfo '${this.Name}': SubtypeSelector 'Driver.BaseClass' must be a non-empty string when provided, but is ${JSON.stringify(baseClass)}.`);
+                    }
+                }
+                return driver;
+            }
+        }
+        LogError(`EntityInfo '${this.Name}': SubtypeSelector 'Driver' must be an object with a non-empty 'Path' string, but is ${JSON.stringify(raw)}.`);
+        return null;
+    }
+
+    private parseSubtypeSelectorUIDriver(parsed: Record<string, unknown>): IEntitySubtypeUIDriverConfig | null {
+        const raw = parsed['UIDriver'];
+        if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+            const uiDriverObj = raw as Record<string, unknown>;
+            const path = uiDriverObj['Path'];
+            if (typeof path === 'string' && path.trim().length > 0) {
+                return { Path: path.trim() };
+            }
+        }
+        LogError(`EntityInfo '${this.Name}': SubtypeSelector 'UIDriver' must be an object with a non-empty 'Path' string, but is ${JSON.stringify(raw)}.`);
+        return null;
     }
     /**
      * Whether to audit when users access records from this entity
@@ -3700,6 +3830,43 @@ export class EntityInfo extends BaseInfo {
         }
         return true;
     }
+
+    /**
+     * Returns true when a comment of the specified `MJ: Comment Types` code or name is permitted
+     * on records of this entity according to `Configuration.Comments.AllowedCommentTypes`.
+     *
+     * - Returns `false` whenever {@link AllowRecordComments} is `false`.
+     * - When `AllowedCommentTypes` is omitted, plain comments (`'COMMENT'` / `'Comment'`) are
+     *   allowed by default while specialized comment types (such as `'FIELD_SUGGESTION'`) must be
+     *   explicitly enabled by the entity.
+     * - When `AllowedCommentTypes` includes `'*'`, every comment type is permitted.
+     */
+    public IsCommentTypeAllowed(codeOrName: string | null | undefined, alternateName?: string | null): boolean {
+        if (!this.AllowRecordComments) {
+            return false;
+        }
+        const primary = (codeOrName ?? '').trim().toLowerCase();
+        const secondary = (alternateName ?? '').trim().toLowerCase();
+        if (!primary && !secondary) {
+            return true;
+        }
+
+        const configured = this.CommentsConfig?.AllowedCommentTypes;
+        if (!Array.isArray(configured)) {
+            return primary === 'comment' || secondary === 'comment';
+        }
+
+        const allowed = new Set(
+            configured.map((entry) => (entry ?? '').trim().toLowerCase()).filter(Boolean),
+        );
+        if (allowed.has('*')) {
+            return true;
+        }
+        return (
+            (primary.length > 0 && allowed.has(primary)) ||
+            (secondary.length > 0 && allowed.has(secondary))
+        );
+    }
     /**
      * Date and time when this entity was created
      */
@@ -3816,6 +3983,7 @@ export class EntityInfo extends BaseInfo {
     private _settings: EntitySettingInfo[]
     private _fieldCategories: Record<string, FieldCategoryInfo> | null = null
     private _organicKeys: EntityOrganicKeyInfo[] = []
+    private _uniqueKeySets: EntityUniqueKeyInfo[] = []
     private _alternateBaseViews: EntityAlternateBaseViewInfo[] = []
     HasIdField: boolean = false
 
@@ -4335,8 +4503,11 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
-     * Returns an array of all fields that have unique constraints on them.
-     * @returns {EntityFieldInfo[]} Array of fields with unique constraints
+     * Returns the fields that are unique on their own ({@link EntityFieldInfo.IsUnique}): a
+     * single-column primary key, or the only key column of an unfiltered unique index or
+     * constraint. Columns of a composite unique key are not included; use {@link UniqueKeySets}
+     * or {@link IsUniqueFieldSet} for those.
+     * @returns {EntityFieldInfo[]} Array of fields that are unique on their own
      */
     get UniqueKeys(): EntityFieldInfo[] {
         if (this._uniqueKeysCache === null) {
@@ -4498,6 +4669,47 @@ export class EntityInfo extends BaseInfo {
      */
     get OrganicKeys(): EntityOrganicKeyInfo[] {
         return this._organicKeys;
+    }
+
+    /**
+     * The unique indexes and unique constraints on this entity's base table, each as a set of
+     * columns, sorted by name. Primary keys are not included. Maintained by CodeGen from the
+     * database catalog.
+     * @returns {EntityUniqueKeyInfo[]} Array of unique key definitions
+     */
+    get UniqueKeySets(): EntityUniqueKeyInfo[] {
+        return this._uniqueKeySets;
+    }
+
+    /**
+     * Whether a row is identified by its values in `fieldNames`: true when the names include every
+     * primary key field, a field that is unique on its own ({@link EntityFieldInfo.IsUnique}, which
+     * also covers uniqueness declared by configuration on a view), or every field of an unfiltered
+     * unique key ({@link UniqueKeySets}). Matching is case-insensitive. A filtered key does not
+     * count, since rows outside its filter can repeat its values.
+     *
+     * `IsUniqueFieldSet(['ActionID'])` asks whether that column alone is unique — for a foreign key,
+     * whether the relationship is one-to-one.
+     */
+    public IsUniqueFieldSet(fieldNames: string[]): boolean {
+        return EntityInfo.IsUniqueFieldSetOf(this, fieldNames);
+    }
+
+    /**
+     * {@link IsUniqueFieldSet} over any object carrying an entity's `Fields` and `UniqueKeySets`,
+     * for callers that hold entity metadata in a plain shape. Missing collections count as empty.
+     */
+    public static IsUniqueFieldSetOf(entity: Pick<EntityInfo, 'Fields' | 'UniqueKeySets'>, fieldNames: string[]): boolean {
+        const names = new Set(fieldNames.map(n => n.trim().toLowerCase()));
+        if (names.size === 0) {
+            return false;
+        }
+        const covers = (keyFields: string[]) => keyFields.length > 0 && keyFields.every(f => names.has(f.toLowerCase()));
+        const fields = entity.Fields ?? [];
+        if (covers(fields.filter(f => f.IsPrimaryKey).map(f => f.Name)) || fields.some(f => f.IsUnique && names.has(f.Name.toLowerCase()))) {
+            return true;
+        }
+        return (entity.UniqueKeySets ?? []).some(k => !k.IsFiltered && covers(k.FieldNamesArray));
     }
 
     /**
@@ -5585,6 +5797,7 @@ export class EntityInfo extends BaseInfo {
         'EntitySettings', '_Settings', 'Settings',
         'EntityRelationships', '_RelatedEntities', 'RelatedEntities',
         'EntityOrganicKeys', '_OrganicKeys', 'OrganicKeys',
+        'EntityUniqueKeys', '_UniqueKeySets', 'UniqueKeySets',
         'EntityAlternateBaseViews', '_AlternateBaseViews', 'AlternateBaseViews',
     ]);
 
@@ -5695,6 +5908,16 @@ export class EntityInfo extends BaseInfo {
                 for (const item of ok) {
                     this._organicKeys.push(new EntityOrganicKeyInfo(item));
                 }
+            }
+
+            // copy the Unique Key Sets, sorted by name so consumers see a stable order
+            this._uniqueKeySets = [];
+            const uk = initData.EntityUniqueKeys || initData._UniqueKeySets || initData.UniqueKeySets;
+            if (uk && Array.isArray(uk)) {
+                for (const item of uk) {
+                    this._uniqueKeySets.push(new EntityUniqueKeyInfo(item as Record<string, unknown>));
+                }
+                this._uniqueKeySets.sort((a, b) => ordinalCompare(a.Name, b.Name) || ordinalCompare(a.ID, b.ID));
             }
 
             // copy the Alternate Base Views (sorted by Sequence, Name, ID, then linked via ParentID)
