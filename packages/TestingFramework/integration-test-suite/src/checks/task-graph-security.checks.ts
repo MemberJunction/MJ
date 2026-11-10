@@ -26,6 +26,8 @@
  *   tainted (see {@link checkEarlySettleClearsNothing}).
  * - TGS9: only the task-graph service creates a workflow, adds a step to one, or changes its edges; ordinary tasks are
  *   unaffected (see {@link checkOnlyTheServiceMakesWorkflows}).
+ * - TGS10: the REST entity handler, which validates before it saves, renames an ordinary subtask and still cannot rename
+ *   a workflow step or create a workflow (see {@link checkRestEditsOrdinaryTasks}).
  *
  * Fixtures: one start-paused Human-only graph (so no dispatcher picks it up) and the rows the checks
  * create, all removed in teardown, rows that reference another first.
@@ -60,6 +62,8 @@ import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunct
 import { A2A_TASK_TYPE_NAME, DurableEntityA2ATaskStore, type Task } from '@memberjunction/a2aserver/task-store';
 // The runner's own entry, for the same reason: the server package root loads the server's config on import.
 import { TaskGraphActionRunner } from '@memberjunction/server/task-graph-action-runner';
+// MJAPI's REST entity handler, by its own entry for the same reason.
+import { EntityCRUDHandler } from '@memberjunction/server/rest-entity-crud';
 import { UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual, IntegrationCheckRegistry, SkipCheck, settle } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
@@ -1164,6 +1168,73 @@ async function checkOnlyTheServiceMakesWorkflows(ctx: IntegrationCheckContext): 
     Assert(cleanupFailures.length === 0, `TGS9: cleanup left rows behind: ${cleanupFailures.join('; ')}`);
 }
 
+/**
+ * TGS10 — the REST entity handler (`EntityCRUDHandler`, what MJAPI's `/api/v1/entities` routes run) validates a row
+ * before it saves it. The workflow checks judge a row with facts the save resolves, so that early validation must not
+ * mistake an ordinary subtask for a workflow step: renaming one over REST saves. The same handler still cannot rename
+ * a real workflow step or create a workflow.
+ */
+async function checkRestEditsOrdinaryTasks(ctx: IntegrationCheckContext): Promise<void> {
+    if (!MutationTierOn(ctx)) {
+        SkipCheck(MUTATION_TIER_OFF_REASON);
+        return;
+    }
+    const rv = RunView.FromMetadataProvider(ctx.Provider);
+    const types = await rv.RunView<{ ID: string; Name: string }>({ EntityName: 'MJ: Task Types', Fields: ['ID', 'Name'], ResultType: 'simple' }, ctx.User);
+    const workflowType = types.Results?.find((t) => t.Name === TASK_GRAPH_WORKFLOW_TYPE_NAME);
+    const otherType = types.Results?.find((t) => t.Name !== TASK_GRAPH_WORKFLOW_TYPE_NAME);
+    Assert(workflowType != null && otherType != null, 'TGS10: needs the workflow task type and one other');
+    const actions = await rv.RunView<{ Name: string }>({ EntityName: 'MJ: Actions', Fields: ['Name'], MaxRows: 1, ResultType: 'simple' }, ctx.User);
+    Assert(actions.Success && (actions.Results?.length ?? 0) === 1, 'TGS10: failed to query an action from MJ: Actions');
+    const environmentID = MJEnvironmentEntityExtended.DefaultEnvironmentID;
+    const text = (outcome: unknown): string => JSON.stringify(outcome);
+
+    const ordinaryRows: MJTaskEntity[] = [];
+    let parentID: string | undefined;
+    let cleanupFailures: string[] = [];
+    try {
+        for (const parent of [null, 'child'] as const) {
+            const task = await ctx.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', ctx.User);
+            task.NewRecord();
+            task.Name = `it165 TGS10 ordinary ${parent ?? 'parent'}`;
+            task.TypeID = otherType!.ID;
+            task.EnvironmentID = environmentID;
+            task.Status = 'Pending';
+            if (parent) task.ParentID = ordinaryRows[0].ID;
+            Assert(await task.Save(), `TGS10: an ordinary task was refused: ${task.LatestResult?.CompleteMessage ?? ''}`);
+            ordinaryRows.unshift(task);
+        }
+        const subtaskID = ordinaryRows[0].ID;
+        const renamed = await EntityCRUDHandler.UpdateEntity('MJ: Tasks', subtaskID, { Name: 'it165 TGS10 renamed over REST' }, ctx.User);
+        Assert(renamed.success, `TGS10: REST could not rename an ordinary subtask: ${text(renamed)}`);
+        AssertEqual((await loadTask(ctx, subtaskID)).Name, 'it165 TGS10 renamed over REST', 'TGS10: the subtask name after the REST rename');
+
+        const submitted = await new TaskGraphService().Submit(
+            {
+                workflowName: `it165-TGS10-${Date.now()} (mj-integration-test — safe to delete)`,
+                continuation: 'none',
+                tasks: [{ tempId: 'only', name: 'it165 TGS10 step', description: 'fixture', kind: 'Action', configuration: { actionName: actions.Results![0].Name }, dependsOn: [] }],
+            } as TaskGraphSpec,
+            { EnvironmentID: environmentID, Provider: ctx.Provider, ContextUser: ctx.User, SecurityEnvelope: { Version: TASK_SECURITY_ENVELOPE_VERSION, IsRunTainted: false }, Debug: { paused: true } },
+        );
+        Assert(submitted.Success && !!submitted.ParentTaskID, `TGS10: the service could not submit a graph: ${submitted.ErrorMessage ?? ''}`);
+        parentID = submitted.ParentTaskID!;
+        const stepID = (await rv.RunView<{ ID: string }>({ EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${parentID}'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true }, ctx.User)).Results?.[0]?.ID;
+        Assert(stepID != null, 'TGS10: the submitted step was not found');
+        const stepRenamed = await EntityCRUDHandler.UpdateEntity('MJ: Tasks', stepID!, { Name: 'it165 TGS10 step renamed over REST' }, ctx.User);
+        Assert(!stepRenamed.success && text(stepRenamed).includes('of a workflow step cannot be changed'), `TGS10: REST renamed a workflow step, or was refused for another reason: ${text(stepRenamed)}`);
+
+        const forged = await EntityCRUDHandler.CreateEntity('MJ: Tasks', { Name: 'it165 TGS10 forged workflow', TypeID: workflowType!.ID, EnvironmentID: environmentID, Status: 'In Progress' }, ctx.User);
+        const forgedID = (forged.entity as { ID?: string } | undefined)?.ID;
+        if (forgedID) ordinaryRows.push(await loadTask(ctx, forgedID));
+        Assert(!forged.success && text(forged).includes('Only the task-graph service creates a workflow'), `TGS10: REST created a workflow, or was refused for another reason: ${text(forged)}`);
+    } finally {
+        for (const row of ordinaryRows) await row.Delete().catch(() => false);
+        if (parentID) cleanupFailures = await DeleteTaskGraph(ctx.Provider, ctx.User, parentID).catch((e: unknown) => [String(e)]);
+    }
+    Assert(cleanupFailures.length === 0, `TGS10: cleanup left rows behind: ${cleanupFailures.join('; ')}`);
+}
+
 export const TaskGraphSecurityChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.TGS1`, Name: 'TGS1: every row of a submitted graph carries its envelope, and the envelope cannot be edited', Fn: checkEnvelopeOnEveryRowAndImmutable, RequiresMutation: true },
     { Id: `${BUNDLE}.TGS2`, Name: 'TGS2: of two concurrent compensation rows for one forward step, exactly one lands', Fn: checkOneCompensationPerForwardStep, RequiresMutation: true },
@@ -1174,6 +1245,7 @@ export const TaskGraphSecurityChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.TGS7`, Name: "TGS7: only the dispatcher raises a workflow step's request; the submitter's own answer clears taint, and server code's answer settles the step but clears nothing", Fn: checkServerAnsweredRequestClearsNothing, RequiresMutation: true },
     { Id: `${BUNDLE}.TGS8`, Name: "TGS8: a step completed outside the dispatcher before what feeds it has finished leaves its next step tainted", Fn: checkEarlySettleClearsNothing, RequiresMutation: true },
     { Id: `${BUNDLE}.TGS9`, Name: 'TGS9: only the task-graph service creates a workflow, adds a step to one, or changes its edges', Fn: checkOnlyTheServiceMakesWorkflows, RequiresMutation: true },
+    { Id: `${BUNDLE}.TGS10`, Name: "TGS10: REST renames an ordinary subtask, and still cannot rename a workflow step or create a workflow", Fn: checkRestEditsOrdinaryTasks, RequiresMutation: true },
 ];
 
 for (const check of TaskGraphSecurityChecks) {
