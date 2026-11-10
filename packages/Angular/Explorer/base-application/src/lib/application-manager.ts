@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { IndexByUUID, MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, MJGlobal, MJEventType, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { Metadata, ApplicationInfo, LogError, LogStatus, StartupManager, IMetadataProvider, PermissionConstrainedError } from '@memberjunction/core';
 import { MJUserApplicationEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseApplication } from './base-application';
@@ -472,6 +472,7 @@ export class ApplicationManager {
     }
 
     const engine = UserInfoEngine.Instance;
+    const existingAppIds = new UUIDSet(userApps.map((ua) => ua.ApplicationID));
     const missingHeaderApps = md.Applications.filter((appInfo) => {
       const navStyle: string = appInfo.NavigationStyle;
       return (
@@ -481,7 +482,7 @@ export class ApplicationManager {
         (navStyle === 'Both' || navStyle === 'Nav Bar' || navStyle === 'Top Bar') &&
         engine.UserHasApplicationAccess(appInfo.ID) &&
         !this.provisionedHeaderAppIds.has(appInfo.ID.toLowerCase()) &&
-        !userApps.some((ua) => UUIDsEqual(ua.ApplicationID, appInfo.ID))
+        !existingAppIds.Has(appInfo.ID)
       );
     }).sort((a, b) => (a.DefaultSequence ?? 100) - (b.DefaultSequence ?? 100));
 
@@ -490,6 +491,9 @@ export class ApplicationManager {
     }
 
     const combined = [...userApps];
+    const engineAppIds = new UUIDSet(
+      Array.isArray(engine.UserApplications) ? engine.UserApplications.map((ua) => ua.ApplicationID) : [],
+    );
     let createdCount = 0;
 
     for (const appInfo of missingHeaderApps) {
@@ -508,11 +512,9 @@ export class ApplicationManager {
         const saved = await newUserApp.Save();
         if (saved) {
           combined.push(newUserApp);
-          if (
-            Array.isArray(engine.UserApplications) &&
-            !engine.UserApplications.some((ua) => UUIDsEqual(ua.ApplicationID, appInfo.ID))
-          ) {
+          if (Array.isArray(engine.UserApplications) && !engineAppIds.Has(appInfo.ID)) {
             engine.UserApplications.push(newUserApp);
+            engineAppIds.Add(appInfo.ID);
           }
           createdCount++;
           LogStatus(

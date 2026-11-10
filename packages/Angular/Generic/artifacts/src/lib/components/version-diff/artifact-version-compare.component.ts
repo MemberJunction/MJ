@@ -13,6 +13,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
 import {
   ArtifactVersionDiffService,
@@ -262,7 +263,7 @@ export type UniversalCompareMode = 'visual' | 'json-tree' | 'unified' | 'split';
             <div class="mj-vcomp__loading">
               <span>Select two versions to compare.</span>
             </div>
-          } @else if (BaseVersion.ID === TargetVersion.ID) {
+          } @else if (IsSameUuid(BaseVersion.ID, TargetVersion.ID)) {
             <div class="mj-vcomp__same-notice">
               <i class="fas fa-circle-info"></i>
               <span>Both Base and Target are set to <strong>v{{ BaseVersion.VersionNumber }}</strong>. Pick a different version on the left to inspect changes.</span>
@@ -1062,8 +1063,12 @@ export class ArtifactVersionCompareComponent implements OnChanges {
     this.cdr.markForCheck();
   }
 
+  public IsSameUuid(a: string | null | undefined, b: string | null | undefined): boolean {
+    return Boolean(a && b && UUIDsEqual(a, b));
+  }
+
   private ensureDiffForActiveMode(): void {
-    if (!this.BaseVersion || !this.TargetVersion || this.BaseVersion.ID === this.TargetVersion.ID) {
+    if (!this.BaseVersion || !this.TargetVersion || UUIDsEqual(this.BaseVersion.ID, this.TargetVersion.ID)) {
       this.JsonDiff = null;
       this.TextDiff = null;
       return;

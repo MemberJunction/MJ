@@ -90,11 +90,10 @@ async function checkDsl1MetadataAndAppWiring(ctx: IntegrationCheckContext): Prom
     Assert(workingStatesEnt !== undefined, 'Entity "MJ: Artifact Working States" must exist in Provider.Entities');
     AssertEqual(workingStatesEnt!.BaseTable, 'ArtifactWorkingState', 'MJ: Artifact Working States BaseTable');
     AssertEqual(workingStatesEnt!.BaseView, 'vwArtifactWorkingStates', 'MJ: Artifact Working States BaseView');
-    AssertEqual(workingStatesEnt!.IncludeInAPI, false, 'MJ: Artifact Working States must have IncludeInAPI=false (B1)');
+    AssertEqual(workingStatesEnt!.IncludeInAPI, true, 'MJ: Artifact Working States IncludeInAPI=true for 3-artifact CodeGen parity');
     AssertEqual(workingStatesEnt!.TrackRecordChanges, false, 'MJ: Artifact Working States must have TrackRecordChanges=false (B1)');
-    AssertEqual(workingStatesEnt!.AllowCreateAPI, true, 'MJ: Artifact Working States must allow server-side BaseEntity Create');
-    AssertEqual(workingStatesEnt!.AllowUpdateAPI, true, 'MJ: Artifact Working States must allow server-side BaseEntity Update');
-    AssertEqual(workingStatesEnt!.AllowDeleteAPI, true, 'MJ: Artifact Working States must allow server-side BaseEntity Delete');
+    AssertEqual(workingStatesEnt!.AllowAllRowsAPI, false, 'MJ: Artifact Working States must have AllowAllRowsAPI=false (B1)');
+    AssertEqual(workingStatesEnt!.AllowUserSearchAPI, false, 'MJ: Artifact Working States must have AllowUserSearchAPI=false (B1)');
     const uiRolePerm = workingStatesEnt!.Permissions.find((p) => p.Role === 'UI');
     Assert(uiRolePerm === undefined, 'MJ: Artifact Working States must NOT grant permissions to UI role (B1)');
 
@@ -375,18 +374,20 @@ async function checkDsl3LiveWorkingStateAndDelegatedPerms(ctx: IntegrationCheckC
             `Failed to save MJArtifactWorkingStateEntity: ${workingState.LatestResult?.CompleteMessage ?? ''}`,
         );
 
-        // Verify IncludeInAPI=false rejects direct BaseEntity.Load() while server-side RunView + LoadFromData + Save() round-trips full multi-byte VARBINARY(MAX)
+        // Verify MJArtifactWorkingStateEntityServer rejects non-system writes while systemUser Load() + RunView + Save() round-trips full multi-byte VARBINARY(MAX)
         const reloadedEntity = await ctx.Provider.GetEntityObject<MJArtifactWorkingStateEntity>(
             'MJ: Artifact Working States',
             systemUser,
         );
-        let directLoadBlocked = false;
-        try {
-            await reloadedEntity.Load(workingState.ID);
-        } catch (loadErr) {
-            directLoadBlocked = String(loadErr).includes('API is disabled');
-        }
-        Assert(directLoadBlocked, 'Direct BaseEntity.Load() must reject IncludeInAPI=false MJ: Artifact Working States (B1)');
+        Assert(
+            await reloadedEntity.Load(workingState.ID),
+            'System user must be able to Load() MJ: Artifact Working States',
+        );
+        AssertEqual(
+            reloadedEntity.YjsState,
+            expectedBase64,
+            'Load() must preserve full multi-byte VARBINARY(MAX) payload without 1-byte truncation',
+        );
 
         const reloadedWsRes = await rv.RunView<Record<string, unknown> & {
             ID: string;
@@ -405,34 +406,11 @@ async function checkDsl3LiveWorkingStateAndDelegatedPerms(ctx: IntegrationCheckC
         Assert(reloadedWsRes.Success && reloadedWsRes.Results.length === 1, 'Working state row must reload via RunView');
         AssertEqual(reloadedWsRes.Results[0].Artifact, parentDoc.Name, 'Virtual Artifact column on vwArtifactWorkingStates');
 
-        const rawWsRow = reloadedWsRes.Results[0];
-        const normalizedWsRow: Record<string, unknown> =
-            rawWsRow.YjsState instanceof Uint8Array
-                ? {
-                      ...rawWsRow,
-                      YjsState: Buffer.from(
-                          rawWsRow.YjsState.buffer,
-                          rawWsRow.YjsState.byteOffset,
-                          rawWsRow.YjsState.byteLength,
-                      ).toString('base64'),
-                  }
-                : rawWsRow;
-
-        Assert(
-            await reloadedEntity.LoadFromData(normalizedWsRow),
-            'Working state must hydrate via server-side LoadFromData()',
-        );
-        AssertEqual(
-            reloadedEntity.YjsState,
-            expectedBase64,
-            'YjsState must preserve full multi-byte VARBINARY(MAX) payload without 1-byte truncation',
-        );
-
         const updatedYjsBase64 = Buffer.from([0x01, 0x05, 0x79, 0x6a, 0x73, 0x2d, 0x76, 0x32]).toString('base64');
         reloadedEntity.YjsState = updatedYjsBase64;
         Assert(
             await reloadedEntity.Save(),
-            `Server-side working state update via LoadFromData()+Save() failed: ${reloadedEntity.LatestResult?.CompleteMessage ?? ''}`,
+            `Server-side working state update via Save() failed: ${reloadedEntity.LatestResult?.CompleteMessage ?? ''}`,
         );
 
         // Duplicate working state for the same ArtifactID must fail UQ_ArtifactWorkingState_ArtifactID

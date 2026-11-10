@@ -3471,14 +3471,20 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     'July', 'August', 'September', 'October', 'November', 'December'
                 ];
                 let formatted = p;
-                formatted = formatted.replace(/yyyy/gi, yyyy).replace(/yy/gi, yy);
+                formatted = formatted.replace(/yyyy/gi, () => yyyy).replace(/yy/gi, () => yy);
                 formatted = formatted
-                    .replace(/mmmm/gi, monthNamesFull[dt.getUTCMonth()])
-                    .replace(/mmm/gi, monthNamesShort[dt.getUTCMonth()]);
+                    .replace(/mmmm/gi, () => monthNamesFull[dt.getUTCMonth()])
+                    .replace(/mmm/gi, () => monthNamesShort[dt.getUTCMonth()]);
                 // Replace hh:mm(:ss) minutes before date mm
-                formatted = formatted.replace(/hh:mm:ss/gi, `${hh}:${min}:${ss}`).replace(/hh:mm/gi, `${hh}:${min}`);
-                formatted = formatted.replace(/mm/gi, mm).replace(/\bm\b/gi, String(dt.getUTCMonth() + 1));
-                formatted = formatted.replace(/dd/gi, dd).replace(/\bd\b/gi, String(dt.getUTCDate()));
+                formatted = formatted
+                    .replace(/hh:mm:ss/gi, () => `${hh}:${min}:${ss}`)
+                    .replace(/hh:mm/gi, () => `${hh}:${min}`);
+                formatted = formatted
+                    .replace(/mm/gi, () => mm)
+                    .replace(/\bm\b/gi, () => String(dt.getUTCMonth() + 1));
+                formatted = formatted
+                    .replace(/dd/gi, () => dd)
+                    .replace(/\bd\b/gi, () => String(dt.getUTCDate()));
                 return formatted;
             }
             if (p.endsWith('%')) {
@@ -3509,9 +3515,27 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
      */
     public InferFormatTypeFromPattern(pattern?: string | null): SpreadsheetCellFormatType {
         if (!pattern) return 'general';
-        // Strip Excel color/locale tokens like [Red] or [$-409] and trailing ;@ sections
+        // Strip Excel color/locale tokens like [Red] or [$-409] and trailing ;@ sections in O(N) without regex backtracking
         const primarySection = pattern.split(';')[0] ?? pattern;
-        const p = primarySection.replace(/\[[^\]]*\]/g, '').trim();
+        let stripped = '';
+        let inBrackets = false;
+        for (let i = 0; i < primarySection.length; i++) {
+            const ch = primarySection[i];
+            if (!inBrackets && ch === '[') {
+                const closeAt = primarySection.indexOf(']', i + 1);
+                if (closeAt !== -1) {
+                    inBrackets = true;
+                    continue;
+                }
+            } else if (inBrackets && ch === ']') {
+                inBrackets = false;
+                continue;
+            }
+            if (!inBrackets) {
+                stripped += ch;
+            }
+        }
+        const p = stripped.trim();
         if (!p || p.toLowerCase() === 'general') return 'general';
         if (p === '@') return 'text';
         if (p.includes('$') || p.includes('¤')) return 'currency';
@@ -4658,7 +4682,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         if (trimmed === '') return null;
         if (trimmed.toUpperCase() === 'TRUE') return true;
         if (trimmed.toUpperCase() === 'FALSE') return false;
-        if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(trimmed)) {
+        if (/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(trimmed)) {
             return Number(trimmed);
         }
         return token;
@@ -4788,21 +4812,13 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
         const files = this.extractZipArchive(u8);
 
-        // Parse sharedStrings.xml if present
+        // Parse sharedStrings.xml if present using O(N) indexOf tag scanning (avoids polynomial regex backtracking)
         const sharedStrings: string[] = [];
         const ssBytes = files.get('xl/sharedStrings.xml');
         if (ssBytes) {
             const ssXml = this.decodeUtf8(ssBytes);
-            const siRegex = /<si\b[^>]*>([\s\S]*?)<\/si>/g;
-            let siMatch: RegExpExecArray | null;
-            while ((siMatch = siRegex.exec(ssXml)) !== null) {
-                const inner = siMatch[1];
-                const tParts: string[] = [];
-                const tRegex = /<t(?:\s+[^>]*)?>([\s\S]*?)<\/t>/g;
-                let tMatch: RegExpExecArray | null;
-                while ((tMatch = tRegex.exec(inner)) !== null) {
-                    tParts.push(this.unescapeXml(tMatch[1]));
-                }
+            for (const siInner of this.extractXmlElementBodies(ssXml, 'si')) {
+                const tParts = this.extractXmlElementBodies(siInner, 't').map((part) => this.unescapeXml(part));
                 sharedStrings.push(tParts.join(''));
             }
         }
@@ -5086,6 +5102,42 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         ].join('');
     }
 
+    /**
+     * Linear O(N) XML element body scanner (`<tag ...>body</tag>`) that avoids polynomial regex backtracking on untrusted OOXML.
+     */
+    private extractXmlElementBodies(xml: string, tagName: string): string[] {
+        const results: string[] = [];
+        const openPrefix = `<${tagName}`;
+        const closeTag = `</${tagName}>`;
+        let cursor = 0;
+        while (cursor < xml.length) {
+            const openIdx = xml.indexOf(openPrefix, cursor);
+            if (openIdx === -1) break;
+            const afterNameIdx = openIdx + openPrefix.length;
+            const nextCh = xml[afterNameIdx];
+            if (nextCh !== '>' && nextCh !== ' ' && nextCh !== '\t' && nextCh !== '\r' && nextCh !== '\n' && nextCh !== '/') {
+                cursor = afterNameIdx;
+                continue;
+            }
+            const tagEndIdx = xml.indexOf('>', afterNameIdx);
+            if (tagEndIdx === -1) break;
+            if (xml[tagEndIdx - 1] === '/') {
+                cursor = tagEndIdx + 1;
+                continue;
+            }
+            const closeIdx = xml.indexOf(closeTag, tagEndIdx + 1);
+            if (closeIdx === -1) break;
+            results.push(xml.slice(tagEndIdx + 1, closeIdx));
+            cursor = closeIdx + closeTag.length;
+        }
+        return results;
+    }
+
+    private extractFirstXmlElementBody(xml: string, tagName: string): string | null {
+        const bodies = this.extractXmlElementBodies(xml, tagName);
+        return bodies.length > 0 ? bodies[0] : null;
+    }
+
     private extractMetadataFromHiddenSheetXml(wsXml: string, sharedStrings: string[]): string | null {
         const chunks: string[] = [];
         const cRegex = /<c\b([^>]*)>([\s\S]*?)<\/c>/g;
@@ -5095,14 +5147,14 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             const inner = match[2];
             const t = this.extractXmlAttr(attrs, 't');
             if (t === 's') {
-                const vMatch = /<v>(\d+)<\/v>/.exec(inner);
-                if (vMatch) {
-                    chunks.push(sharedStrings[parseInt(vMatch[1], 10)] ?? '');
+                const vBody = this.extractFirstXmlElementBody(inner, 'v');
+                if (vBody !== null && /^\d+$/.test(vBody.trim())) {
+                    chunks.push(sharedStrings[parseInt(vBody.trim(), 10)] ?? '');
                 }
             } else {
-                const tMatch = /<t(?:\s+[^>]*)?>([\s\S]*?)<\/t>/.exec(inner);
-                if (tMatch) {
-                    chunks.push(this.unescapeXml(tMatch[1]));
+                const tBody = this.extractFirstXmlElementBody(inner, 't');
+                if (tBody !== null) {
+                    chunks.push(this.unescapeXml(tBody));
                 }
             }
         }
@@ -5165,25 +5217,26 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             const styleInfo = styleLookup[styleIdx];
 
             const fTagMatch = /<f\b([^>]*?)(?:\/>|>([\s\S]*?)<\/f>)/.exec(inner);
-            const vMatch = /<v>([\s\S]*?)<\/v>/.exec(inner);
-            const isTMatch = /<is>[\s\S]*?<t(?:\s+[^>]*)?>([\s\S]*?)<\/t>[\s\S]*?<\/is>/.exec(inner);
+            const vBody = this.extractFirstXmlElementBody(inner, 'v');
+            const isBody = this.extractFirstXmlElementBody(inner, 'is');
+            const isTBody = isBody !== null ? this.extractFirstXmlElementBody(isBody, 't') : null;
 
             let rawVal: SpreadsheetCellValue = null;
-            if (tAttr === 's' && vMatch) {
-                const ssIdx = parseInt(vMatch[1].trim(), 10);
+            if (tAttr === 's' && vBody !== null) {
+                const ssIdx = parseInt(vBody.trim(), 10);
                 rawVal = sharedStrings[ssIdx] ?? '';
-            } else if (tAttr === 'inlineStr' && isTMatch) {
-                rawVal = this.unescapeXml(isTMatch[1]);
-            } else if (tAttr === 'b' && vMatch) {
-                rawVal = vMatch[1].trim() === '1' || vMatch[1].trim().toLowerCase() === 'true';
-            } else if ((tAttr === 'str' || tAttr === 'e') && vMatch) {
-                rawVal = this.unescapeXml(vMatch[1]);
-            } else if (vMatch) {
-                const vText = this.unescapeXml(vMatch[1].trim());
+            } else if (tAttr === 'inlineStr' && isTBody !== null) {
+                rawVal = this.unescapeXml(isTBody);
+            } else if (tAttr === 'b' && vBody !== null) {
+                rawVal = vBody.trim() === '1' || vBody.trim().toLowerCase() === 'true';
+            } else if ((tAttr === 'str' || tAttr === 'e') && vBody !== null) {
+                rawVal = this.unescapeXml(vBody);
+            } else if (vBody !== null) {
+                const vText = this.unescapeXml(vBody.trim());
                 const num = Number(vText);
                 rawVal = vText !== '' && !Number.isNaN(num) ? num : vText;
-            } else if (isTMatch) {
-                rawVal = this.unescapeXml(isTMatch[1]);
+            } else if (isTBody !== null) {
+                rawVal = this.unescapeXml(isTBody);
             }
 
             let formula: string | null = null;

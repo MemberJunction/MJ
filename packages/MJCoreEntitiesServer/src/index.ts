@@ -18,6 +18,7 @@ export * from './custom/MJComponentEntityServer.server';
 export * from './custom/MJDashboardEntityServer.server';
 export * from './custom/approvalStamp';
 export * from './custom/MJArtifactEntityServer.server';
+export * from './custom/MJArtifactWorkingStateEntityServer.server';
 export * from './custom/MJArtifactVersionEntityServer.server';
 export * from './custom/MJAIAgentNoteEntityServer.server';
 export * from './custom/MJAIAgentUserPolicyEntityServer.server';

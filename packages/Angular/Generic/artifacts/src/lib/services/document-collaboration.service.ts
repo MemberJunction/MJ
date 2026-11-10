@@ -94,7 +94,7 @@ function resolveDefaultMetadataProvider(explicitProvider?: IMetadataProvider | n
   if (explicitProvider) {
     return explicitProvider;
   }
-  return Metadata.Provider ?? null;
+  return Metadata.Provider ?? null; // global-provider-ok: fallback when Angular caller did not supply a bound provider
 }
 
 /**

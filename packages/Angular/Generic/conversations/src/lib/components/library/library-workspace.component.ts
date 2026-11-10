@@ -24,7 +24,7 @@ import {
   MJEnvironmentEntityExtended,
   UserInfoEngine,
 } from '@memberjunction/core-entities';
-import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
 import { ArtifactIconService } from '@memberjunction/ng-artifacts';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -337,14 +337,13 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
 
   public get SelectedCollectionAncestors(): LibraryCollectionNode[] {
     const chain: LibraryCollectionNode[] = [];
+    const flatById = IndexByUUID(this.FlatCollections, (c) => c.Id);
     let cursor = this.SelectedCollectionNode;
     const visited = new Set<string>();
     while (cursor && !visited.has(cursor.Id)) {
       visited.add(cursor.Id);
       chain.unshift(cursor);
-      cursor = cursor.ParentId
-        ? this.FlatCollections.find((c) => UUIDsEqual(c.Id, cursor!.ParentId)) ?? null
-        : null;
+      cursor = cursor.ParentId ? flatById.Get(cursor.ParentId) ?? null : null;
     }
     return chain;
   }
@@ -1608,13 +1607,14 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   }
 
   private expandAncestorsOf(collectionId: string): void {
-    let cur = this.FlatCollections.find((c) => UUIDsEqual(c.Id, collectionId)) ?? null;
+    const flatById = IndexByUUID(this.FlatCollections, (c) => c.Id);
+    let cur = flatById.Get(collectionId) ?? null;
     const guard = new Set<string>();
     while (cur && !guard.has(cur.Id)) {
       guard.add(cur.Id);
       if (cur.ParentId) {
         this.ExpandedCollectionIds.add(NormalizeUUID(cur.ParentId));
-        cur = this.FlatCollections.find((c) => UUIDsEqual(c.Id, cur!.ParentId)) ?? null;
+        cur = flatById.Get(cur.ParentId) ?? null;
       } else {
         cur = null;
       }

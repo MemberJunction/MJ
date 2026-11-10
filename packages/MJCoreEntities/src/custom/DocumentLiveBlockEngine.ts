@@ -425,11 +425,14 @@ export class EntityViewDocumentBlock extends BaseDocumentBlock {
         const visibleFieldNames = requestedFields.filter((f) => !deniedFields.has(f.trim().toLowerCase()));
 
         // Ensure Primary Key and companion FK ID columns are fetched so PK/FK cells are linkable
-        // first-pk-ok: entity record links resolve the entity's primary key column (or 'ID') for CompositeKey navigation
-        const pkFieldName = entityInfo.FirstPrimaryKey?.Name ?? 'ID';
+        const primaryKeys = entityInfo.PrimaryKeys ?? [];
+        const singlePkFieldName = primaryKeys.length === 1 ? entityInfo.FirstPrimaryKey?.Name : primaryKeys.length === 0 ? 'ID' : undefined; // first-pk-ok: guarded by primaryKeys.length === 1
+        const pkFieldNames = primaryKeys.length > 0 ? primaryKeys.map((pk) => pk.Name) : ['ID'];
         const fetchFieldSet = new Set<string>(visibleFieldNames);
-        if (!deniedFields.has(pkFieldName.trim().toLowerCase())) {
-            fetchFieldSet.add(pkFieldName);
+        for (const pkName of pkFieldNames) {
+            if (!deniedFields.has(pkName.trim().toLowerCase())) {
+                fetchFieldSet.add(pkName);
+            }
         }
         for (const fName of visibleFieldNames) {
             const companionFk = entityInfo.Fields.find(
@@ -465,7 +468,9 @@ export class EntityViewDocumentBlock extends BaseDocumentBlock {
 
         const columns: DocumentBlockColumn[] = visibleFieldNames.map((fieldName) => {
             const fInfo = entityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase());
-            const isPk = Boolean(fInfo?.IsPrimaryKey) || fieldName.trim().toLowerCase() === pkFieldName.toLowerCase();
+            const isPk =
+                Boolean(fInfo?.IsPrimaryKey) ||
+                Boolean(singlePkFieldName && fieldName.trim().toLowerCase() === singlePkFieldName.toLowerCase());
             const isNameField = Boolean(fInfo?.IsNameField) || fieldName.trim().toLowerCase() === 'name';
             const directFkEntity = fInfo?.RelatedEntity ? fInfo.RelatedEntity : undefined;
             const companionFkField = !directFkEntity
@@ -479,7 +484,7 @@ export class EntityViewDocumentBlock extends BaseDocumentBlock {
             const isFk = Boolean(directFkEntity || companionFkField?.RelatedEntity);
             const targetEntityName = isFk
                 ? directFkEntity || companionFkField?.RelatedEntity
-                : isPk || isNameField
+                : (isPk || isNameField) && singlePkFieldName
                   ? entityInfo.Name
                   : undefined;
             const recordIdFieldName = isFk
@@ -487,7 +492,7 @@ export class EntityViewDocumentBlock extends BaseDocumentBlock {
                     ? fInfo.Name
                     : companionFkField?.Name
                 : isPk || isNameField
-                  ? pkFieldName
+                  ? singlePkFieldName
                   : undefined;
 
             return {

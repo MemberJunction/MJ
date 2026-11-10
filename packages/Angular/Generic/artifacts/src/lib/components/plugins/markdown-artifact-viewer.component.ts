@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ChangeDetectorRef, ViewChild, ElementRef, Type, inject } from '@angular/core';
 import { CompositeKey, DataSnapshot, LogError, RunView, type EntityInfo, type IMetadataProvider, type QueryInfo } from '@memberjunction/core';
-import { EscapeSQLString, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
   ArtifactMetadataEngine,
   DocumentLiveBlockEngine,
@@ -1777,7 +1777,7 @@ export interface DocsPermissionEntry {
                               type="button"
                               class="mj-docs-saved-view-item"
                               [class.mj-docs-saved-view-item--active]="
-                                NewBlockViewID === viewOpt.ID || NewBlockViewName === viewOpt.Name
+                                IsSameUuid(NewBlockViewID, viewOpt.ID) || NewBlockViewName === viewOpt.Name
                               "
                               (click)="SelectSavedViewOption(viewOpt)"
                               [attr.data-testid]="'saved-view-option-' + viewOpt.ID"
@@ -1789,7 +1789,7 @@ export interface DocsPermissionEntry {
                                   <span>{{ viewOpt.Description }}</span>
                                 }
                               </div>
-                              @if (NewBlockViewID === viewOpt.ID || NewBlockViewName === viewOpt.Name) {
+                              @if (IsSameUuid(NewBlockViewID, viewOpt.ID) || NewBlockViewName === viewOpt.Name) {
                                 <i class="fas fa-circle-check mj-docs-picker-option__check"></i>
                               }
                             </button>
@@ -1855,7 +1855,7 @@ export interface DocsPermissionEntry {
                         <button
                           type="button"
                           class="mj-docs-saved-view-item"
-                          [class.mj-docs-saved-view-item--active]="NewBlockArtifactID === artOpt.ID"
+                          [class.mj-docs-saved-view-item--active]="IsSameUuid(NewBlockArtifactID, artOpt.ID)"
                           (click)="SelectArtifactOption(artOpt)"
                         >
                           <i class="fas fa-cube"></i>
@@ -4301,13 +4301,17 @@ export class MarkdownArtifactViewerComponent
   }
 
   public UpdateTableBodyCell(seg: DocumentRenderSegment, rowIndex: number, colIndex: number, event: Event): void {
+    if (!Number.isInteger(rowIndex) || rowIndex < 0 || !Number.isInteger(colIndex) || colIndex < 0) {
+      return;
+    }
     const el = event.target as HTMLElement | null;
     const nextVal = (el?.textContent ?? '').replace(/\|/g, '/').trim();
     const parsed = this.GetParsedTable(seg);
-    if (!parsed.Rows[rowIndex] || parsed.Rows[rowIndex][colIndex] === nextVal) {
+    const targetRow = parsed.Rows.at(rowIndex);
+    if (!targetRow || colIndex >= targetRow.length || targetRow.at(colIndex) === nextVal) {
       return;
     }
-    parsed.Rows[rowIndex][colIndex] = nextVal;
+    targetRow.splice(colIndex, 1, nextVal);
     this.ApplyInPlaceSegmentChange(
       seg,
       this.serializeParsedTable(parsed.Headers, parsed.Rows),
@@ -4348,31 +4352,50 @@ export class MarkdownArtifactViewerComponent
   }> {
     const lines = seg.RawMarkdown.split('\n').filter((l) => l.trim().length > 0);
     return lines.map((line, idx) => {
-      const taskMatch = /^(\s*[-*+]\s+)\[([ xX])\]\s*(.*)$/.exec(line);
-      if (taskMatch) {
-        return {
-          Index: idx,
-          IsTask: true,
-          Checked: taskMatch[2].toLowerCase() === 'x',
-          Text: taskMatch[3],
-        };
-      }
-      const orderedMatch = /^(\s*\d+\.)\s+(.*)$/.exec(line);
-      if (orderedMatch) {
+      const trimmed = line.trimStart();
+      const bulletChar = trimmed[0];
+      if (
+        (bulletChar === '-' || bulletChar === '*' || bulletChar === '+') &&
+        (trimmed[1] === ' ' || trimmed[1] === '\t')
+      ) {
+        const afterBullet = trimmed.slice(2).trimStart();
+        if (
+          afterBullet.startsWith('[ ]') ||
+          afterBullet.startsWith('[x]') ||
+          afterBullet.startsWith('[X]')
+        ) {
+          return {
+            Index: idx,
+            IsTask: true,
+            Checked: afterBullet[1].toLowerCase() === 'x',
+            Text: afterBullet.slice(3).trimStart(),
+          };
+        }
         return {
           Index: idx,
           IsTask: false,
           Checked: false,
-          OrderedPrefix: orderedMatch[1].trim(),
-          Text: orderedMatch[2],
+          Text: afterBullet,
         };
       }
-      const bulletMatch = /^(\s*[-*+])\s+(.*)$/.exec(line);
+      let dEnd = 0;
+      while (dEnd < trimmed.length && trimmed.charCodeAt(dEnd) >= 48 && trimmed.charCodeAt(dEnd) <= 57) {
+        dEnd++;
+      }
+      if (dEnd > 0 && trimmed[dEnd] === '.' && (trimmed[dEnd + 1] === ' ' || trimmed[dEnd + 1] === '\t')) {
+        return {
+          Index: idx,
+          IsTask: false,
+          Checked: false,
+          OrderedPrefix: trimmed.slice(0, dEnd + 1),
+          Text: trimmed.slice(dEnd + 2).trimStart(),
+        };
+      }
       return {
         Index: idx,
         IsTask: false,
         Checked: false,
-        Text: bulletMatch ? bulletMatch[2] : line.trim(),
+        Text: line.trim(),
       };
     });
   }
@@ -4464,12 +4487,23 @@ export class MarkdownArtifactViewerComponent
   } {
     const lines = seg.RawMarkdown.split('\n').map((l) => l.replace(/^>\s?/, ''));
     const first = lines[0]?.trim() ?? '';
-    const match = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*)$/i.exec(first);
-    if (match) {
-      const kind = match[1].toUpperCase() as 'NOTE' | 'TIP' | 'IMPORTANT' | 'WARNING' | 'CAUTION';
-      const restFirst = match[2] ? [match[2]] : [];
-      const body = [...restFirst, ...lines.slice(1)].join('\n').trim();
-      return { CalloutType: kind, BodyText: body || 'Callout details…' };
+    if (first.startsWith('[!')) {
+      const closeBracketIdx = first.indexOf(']');
+      if (closeBracketIdx > 2) {
+        const rawTag = first.slice(2, closeBracketIdx).toUpperCase();
+        if (
+          rawTag === 'NOTE' ||
+          rawTag === 'TIP' ||
+          rawTag === 'IMPORTANT' ||
+          rawTag === 'WARNING' ||
+          rawTag === 'CAUTION'
+        ) {
+          const trailingFirst = first.slice(closeBracketIdx + 1).trim();
+          const restFirst = trailingFirst ? [trailingFirst] : [];
+          const body = [...restFirst, ...lines.slice(1)].join('\n').trim();
+          return { CalloutType: rawTag, BodyText: body || 'Callout details…' };
+        }
+      }
     }
     return {
       CalloutType: 'NOTE',
@@ -5626,6 +5660,7 @@ export class MarkdownArtifactViewerComponent
 
       const ownerUserId = artRes.Success ? artRes.Results?.[0]?.UserID : undefined;
       const allUsers = usersRes.Success && Array.isArray(usersRes.Results) ? usersRes.Results : [];
+      const usersById = IndexByUUID(allUsers);
       this.AvailableUsersForSharing = allUsers.filter(
         (u) => !UUIDsEqual(u.ID, user.ID) && (!ownerUserId || !UUIDsEqual(u.ID, ownerUserId)),
       );
@@ -5633,7 +5668,7 @@ export class MarkdownArtifactViewerComponent
       if (ownerUserId) {
         const ownerUser = UUIDsEqual(ownerUserId, user.ID)
           ? { ID: user.ID, Name: user.Name || 'Artifact Owner', Email: user.Email || '' }
-          : allUsers.find((u) => UUIDsEqual(u.ID, ownerUserId));
+          : usersById.Get(ownerUserId);
         entries.push({
           ID: `owner-${ownerUserId}`,
           UserID: ownerUserId,
@@ -5653,7 +5688,7 @@ export class MarkdownArtifactViewerComponent
           }
           const matchedUser = UUIDsEqual(p.UserID, user.ID)
             ? { ID: user.ID, Name: user.Name || p.User || p.UserID, Email: user.Email || '' }
-            : allUsers.find((u) => UUIDsEqual(u.ID, p.UserID));
+            : usersById.Get(p.UserID);
           entries.push({
             ID: p.ID,
             UserID: p.UserID,
@@ -5784,13 +5819,17 @@ export class MarkdownArtifactViewerComponent
         this.notifyError(msg);
         return;
       }
-      this.ArtifactPermissionEntries = this.ArtifactPermissionEntries.filter((e) => e.ID !== entry.ID);
+      this.ArtifactPermissionEntries = this.ArtifactPermissionEntries.filter((e) => !UUIDsEqual(e.ID, entry.ID));
       this.StatusBannerMessage = `Removed access for ${entry.UserName}.`;
       this.cdr.markForCheck();
     } catch (err) {
       LogError(err);
       this.notifyError(err instanceof Error ? err.message : `Failed to revoke access for ${entry.UserName}.`);
     }
+  }
+
+  public IsSameUuid(a: string | null | undefined, b: string | null | undefined): boolean {
+    return Boolean(a && b && UUIDsEqual(a, b));
   }
 
   private resolveArtifactsEntityId(provider: IMetadataProvider): string | undefined {

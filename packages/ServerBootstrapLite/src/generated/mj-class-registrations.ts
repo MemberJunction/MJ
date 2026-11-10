@@ -1190,7 +1190,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (74 classes)
+// @memberjunction/core-entities-server (75 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1215,6 +1215,7 @@ import {
     MJApplicationEntityServer,
     MJArtifactEntityServer,
     MJArtifactVersionEntityServer,
+    MJArtifactWorkingStateEntityServer,
     MJBrandKitEntityServer,
     MJCompanyIntegrationEntityServer,
     MJComponentEntityServer,
@@ -2427,6 +2428,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJApplicationEntityServer,
     MJArtifactEntityServer,
     MJArtifactVersionEntityServer,
+    MJArtifactWorkingStateEntityServer,
     MJBrandKitEntityServer,
     MJCompanyIntegrationEntityServer,
     MJComponentEntityServer,
@@ -2528,11 +2530,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ExcelReaderAction,
     ExecuteAIPromptAction,
     ExecuteAgentAction,
-    ExecuteCodeAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ExecuteCodeAction,
     ExecuteMCPToolAction,
     ExploreDatabaseSchemaAction,
     ExternalChangeDetectionAction,
@@ -2706,7 +2708,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1157;
+export const CLASS_REGISTRATIONS_COUNT = 1158;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
