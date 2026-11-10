@@ -6787,6 +6787,11 @@ export class BaseAgent {
             replace(promptParams.conversationMessages);
             replace(params.conversationMessages);
             this._lastVolatileStateMessage = rebuilt;
+            // The fingerprints were taken before the swap; without this, an append-only history
+            // reads the swapped message as changed next turn and drops the reasoning after it.
+            if (promptParams.conversationMessages) {
+                this._lastSentFingerprints = promptParams.conversationMessages.map(BaseAgent.messageFingerprint);
+            }
         } catch (error) {
             this.logStatus(`Kept the trailing message as first built: re-rendering it with the final template data failed (${error instanceof Error ? error.message : String(error)})`, true, params);
         }
