@@ -304,7 +304,7 @@ describe('ManageMetadataBase — Source stamping', () => {
       ];
       await mm.Sync(connection(() => []), 'F1', ['A', 'B'], rows, 'Config');
       expect(logged).toHaveLength(1);
-      expect(logged[0][1]).toBe(`UPDATE [__mj].[EntityFieldValue] SET [Source]='Config' WHERE ID='V1'`);
+      expect(logged[0][1]).toBe(`UPDATE [__mj].[EntityFieldValue] SET [Source]='Config' WHERE ID='V1';`);
    });
 
    it('writes nothing on a second CHECK-pass run over rows the first run stamped (warm-twice drift gate)', async () => {
@@ -316,7 +316,7 @@ describe('ManageMetadataBase — Source stamping', () => {
          { ID: 'V2', EntityFieldID: 'F1', Value: 'Janitor', Sequence: '2', Source: 'Check' },
       ];
       await mm.Sync(connection(() => []), 'F1', ['Idle', 'Janitor'], rows, 'Check');
-      expect(logged.map(c => c[1])).toEqual([`UPDATE [__mj].[EntityFieldValue] SET [Source]='Check' WHERE ID='V1'`]);
+      expect(logged.map(c => c[1])).toEqual([`UPDATE [__mj].[EntityFieldValue] SET [Source]='Check' WHERE ID='V1';`]);
 
       logged = [];
       const afterFirstRun = rows.map(r => ({ ...r, Source: 'Check' }));

@@ -246,7 +246,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (480 classes)
+// @memberjunction/core-entities (481 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -495,6 +495,7 @@ import {
     MJEntityRelationshipDisplayComponentEntity,
     MJEntityRelationshipEntity,
     MJEntitySettingEntity,
+    MJEntityUniqueKeyEntity,
     MJEnvironmentEntity,
     MJEnvironmentEntityExtended,
     MJErrorLogEntity,
@@ -2156,6 +2157,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEntityRelationshipDisplayComponentEntity,
     MJEntityRelationshipEntity,
     MJEntitySettingEntity,
+    MJEntityUniqueKeyEntity,
     MJEnvironmentEntity,
     MJEnvironmentEntityExtended,
     MJErrorLogEntity,
@@ -3157,7 +3159,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1286;
+export const CLASS_REGISTRATIONS_COUNT = 1287;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

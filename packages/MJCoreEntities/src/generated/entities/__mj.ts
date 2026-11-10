@@ -20135,7 +20135,8 @@ export const MJEntitySchema = z.object({
     BaseTableCodeName: z.string().nullable().describe(`
         * * Field Name: BaseTableCodeName
         * * Display Name: Base Table Code Name
-        * * SQL Data Type: nvarchar(MAX)`),
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Programmatic name of the base table plus NameSuffix, without a schema prefix: GetProgrammaticName(BaseTable + NameSuffix). Used to name generated procedures and triggers. Maintained by trigger; read-only.`),
     ParentEntity: z.string().nullable().describe(`
         * * Field Name: ParentEntity
         * * Display Name: Parent Entity
@@ -21633,7 +21634,8 @@ export const MJEntityFieldSchema = z.object({
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
-        * * SQL Data Type: nvarchar(MAX)`),
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Programmatic name of the field: GetProgrammaticName of the Name with spaces removed. Maintained by trigger; read-only.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
@@ -22686,6 +22688,54 @@ export const MJEntitySettingSchema = z.object({
 });
 
 export type MJEntitySettingEntityType = z.infer<typeof MJEntitySettingSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Entity Unique Keys
+ */
+export const MJEntityUniqueKeySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Entity whose base table has this unique key.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the unique index or unique constraint in the database.`),
+    FieldNames: z.string().describe(`
+        * * Field Name: FieldNames
+        * * Display Name: Field Names
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Comma-separated names of the key columns, in key order. INCLUDE columns are not part of the key and are not listed.`),
+    FilterDefinition: z.string().nullable().describe(`
+        * * Field Name: FilterDefinition
+        * * Display Name: Filter Definition
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Predicate of a filtered (SQL Server) or partial (PostgreSQL) unique index, as the database reports it. NULL when the key applies to every row. A filtered key only guarantees uniqueness among the rows that match it.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().nullable().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJEntityUniqueKeyEntityType = z.infer<typeof MJEntityUniqueKeySchema>;
 
 /**
  * zod schema definition for the entity MJ: Environments
@@ -59538,6 +59588,44 @@ export interface MJAIModelTypeEntity_RealtimeConfigurationSettings {
      * model-vendor row.
      */
     Pricing?: MJAIModelTypeEntity_RealtimePricingSettings | null;
+
+    /**
+     * Maximum duration in seconds of a single underlying provider transport connection
+     * (WebSocket or WebRTC call) before the provider closes or resets the socket
+     * (for example, 600s on Gemini Live WebSockets, 3600s on OpenAI Realtime, 7200s on xAI).
+     *
+     * Set on `MJ: AI Models.ModelConfiguration` and overridable on
+     * `MJ: AI Model Vendors.ModelConfiguration`. When elapsed (minus `ReconnectBufferSeconds`),
+     * the realtime framework triggers a proactive in-place reconnect on `BaseRealtimeModel` /
+     * `BaseRealtimeClient`.
+     */
+    ConnectionMaxSeconds?: number | null;
+
+    /**
+     * Maximum duration in seconds of a single provider credential or session ceiling
+     * when it differs from `ConnectionMaxSeconds` (for example, 1800s ephemeral token ceiling
+     * on Gemini Developer API vs. 600s per WebSocket connection, or 3600s client_secret TTL on xAI
+     * vs. 7200s WebSocket session ceiling). Overridable at the `MJ: AI Model Vendors` level.
+     */
+    SessionMaxSeconds?: number | null;
+
+    /**
+     * Buffer in seconds before `ConnectionMaxSeconds` expiry at which the framework initiates
+     * a proactive reconnect. Defaults to 10 seconds when omitted.
+     */
+    ReconnectBufferSeconds?: number | null;
+
+    /**
+     * Whether the provider's native session resumption handle/ID reliably restores prior
+     * conversation turns on this endpoint.
+     *
+     * - `true`: pass the native resumption handle/ID and do NOT re-inject conversation history
+     *   (e.g., Gemini Enterprise / Vertex AI `v1`, xAI `resumption.enabled` + `conversation_id`).
+     * - `false`: feed `RealtimeConversationMemory` history into the reconnected session even if
+     *   the provider emits a resumption handle (e.g., Gemini Developer API `v1alpha` ephemeral tokens).
+     * - `null` / `undefined`: defer to the driver's runtime default.
+     */
+    TrustNativeResumption?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -60252,6 +60340,44 @@ export interface MJAIModelVendorEntity_RealtimeConfigurationSettings {
      * model-vendor row.
      */
     Pricing?: MJAIModelVendorEntity_RealtimePricingSettings | null;
+
+    /**
+     * Maximum duration in seconds of a single underlying provider transport connection
+     * (WebSocket or WebRTC call) before the provider closes or resets the socket
+     * (for example, 600s on Gemini Live WebSockets, 3600s on OpenAI Realtime, 7200s on xAI).
+     *
+     * Set on `MJ: AI Models.ModelConfiguration` and overridable on
+     * `MJ: AI Model Vendors.ModelConfiguration`. When elapsed (minus `ReconnectBufferSeconds`),
+     * the realtime framework triggers a proactive in-place reconnect on `BaseRealtimeModel` /
+     * `BaseRealtimeClient`.
+     */
+    ConnectionMaxSeconds?: number | null;
+
+    /**
+     * Maximum duration in seconds of a single provider credential or session ceiling
+     * when it differs from `ConnectionMaxSeconds` (for example, 1800s ephemeral token ceiling
+     * on Gemini Developer API vs. 600s per WebSocket connection, or 3600s client_secret TTL on xAI
+     * vs. 7200s WebSocket session ceiling). Overridable at the `MJ: AI Model Vendors` level.
+     */
+    SessionMaxSeconds?: number | null;
+
+    /**
+     * Buffer in seconds before `ConnectionMaxSeconds` expiry at which the framework initiates
+     * a proactive reconnect. Defaults to 10 seconds when omitted.
+     */
+    ReconnectBufferSeconds?: number | null;
+
+    /**
+     * Whether the provider's native session resumption handle/ID reliably restores prior
+     * conversation turns on this endpoint.
+     *
+     * - `true`: pass the native resumption handle/ID and do NOT re-inject conversation history
+     *   (e.g., Gemini Enterprise / Vertex AI `v1`, xAI `resumption.enabled` + `conversation_id`).
+     * - `false`: feed `RealtimeConversationMemory` history into the reconnected session even if
+     *   the provider emits a resumption handle (e.g., Gemini Developer API `v1alpha` ephemeral tokens).
+     * - `null` / `undefined`: defer to the driver's runtime default.
+     */
+    TrustNativeResumption?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -61158,6 +61284,44 @@ export interface MJAIModelEntity_RealtimeConfigurationSettings {
      * model-vendor row.
      */
     Pricing?: MJAIModelEntity_RealtimePricingSettings | null;
+
+    /**
+     * Maximum duration in seconds of a single underlying provider transport connection
+     * (WebSocket or WebRTC call) before the provider closes or resets the socket
+     * (for example, 600s on Gemini Live WebSockets, 3600s on OpenAI Realtime, 7200s on xAI).
+     *
+     * Set on `MJ: AI Models.ModelConfiguration` and overridable on
+     * `MJ: AI Model Vendors.ModelConfiguration`. When elapsed (minus `ReconnectBufferSeconds`),
+     * the realtime framework triggers a proactive in-place reconnect on `BaseRealtimeModel` /
+     * `BaseRealtimeClient`.
+     */
+    ConnectionMaxSeconds?: number | null;
+
+    /**
+     * Maximum duration in seconds of a single provider credential or session ceiling
+     * when it differs from `ConnectionMaxSeconds` (for example, 1800s ephemeral token ceiling
+     * on Gemini Developer API vs. 600s per WebSocket connection, or 3600s client_secret TTL on xAI
+     * vs. 7200s WebSocket session ceiling). Overridable at the `MJ: AI Model Vendors` level.
+     */
+    SessionMaxSeconds?: number | null;
+
+    /**
+     * Buffer in seconds before `ConnectionMaxSeconds` expiry at which the framework initiates
+     * a proactive reconnect. Defaults to 10 seconds when omitted.
+     */
+    ReconnectBufferSeconds?: number | null;
+
+    /**
+     * Whether the provider's native session resumption handle/ID reliably restores prior
+     * conversation turns on this endpoint.
+     *
+     * - `true`: pass the native resumption handle/ID and do NOT re-inject conversation history
+     *   (e.g., Gemini Enterprise / Vertex AI `v1`, xAI `resumption.enabled` + `conversation_id`).
+     * - `false`: feed `RealtimeConversationMemory` history into the reconnected session even if
+     *   the provider emits a resumption handle (e.g., Gemini Developer API `v1alpha` ephemeral tokens).
+     * - `null` / `undefined`: defer to the driver's runtime default.
+     */
+    TrustNativeResumption?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -62787,6 +62951,44 @@ export interface MJAIPromptModelEntity_RealtimeConfigurationSettings {
      * model-vendor row.
      */
     Pricing?: MJAIPromptModelEntity_RealtimePricingSettings | null;
+
+    /**
+     * Maximum duration in seconds of a single underlying provider transport connection
+     * (WebSocket or WebRTC call) before the provider closes or resets the socket
+     * (for example, 600s on Gemini Live WebSockets, 3600s on OpenAI Realtime, 7200s on xAI).
+     *
+     * Set on `MJ: AI Models.ModelConfiguration` and overridable on
+     * `MJ: AI Model Vendors.ModelConfiguration`. When elapsed (minus `ReconnectBufferSeconds`),
+     * the realtime framework triggers a proactive in-place reconnect on `BaseRealtimeModel` /
+     * `BaseRealtimeClient`.
+     */
+    ConnectionMaxSeconds?: number | null;
+
+    /**
+     * Maximum duration in seconds of a single provider credential or session ceiling
+     * when it differs from `ConnectionMaxSeconds` (for example, 1800s ephemeral token ceiling
+     * on Gemini Developer API vs. 600s per WebSocket connection, or 3600s client_secret TTL on xAI
+     * vs. 7200s WebSocket session ceiling). Overridable at the `MJ: AI Model Vendors` level.
+     */
+    SessionMaxSeconds?: number | null;
+
+    /**
+     * Buffer in seconds before `ConnectionMaxSeconds` expiry at which the framework initiates
+     * a proactive reconnect. Defaults to 10 seconds when omitted.
+     */
+    ReconnectBufferSeconds?: number | null;
+
+    /**
+     * Whether the provider's native session resumption handle/ID reliably restores prior
+     * conversation turns on this endpoint.
+     *
+     * - `true`: pass the native resumption handle/ID and do NOT re-inject conversation history
+     *   (e.g., Gemini Enterprise / Vertex AI `v1`, xAI `resumption.enabled` + `conversation_id`).
+     * - `false`: feed `RealtimeConversationMemory` history into the reconnected session even if
+     *   the provider emits a resumption handle (e.g., Gemini Developer API `v1alpha` ephemeral tokens).
+     * - `null` / `undefined`: defer to the driver's runtime default.
+     */
+    TrustNativeResumption?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -65639,6 +65841,44 @@ export interface MJAIPromptEntity_RealtimeConfigurationSettings {
      * model-vendor row.
      */
     Pricing?: MJAIPromptEntity_RealtimePricingSettings | null;
+
+    /**
+     * Maximum duration in seconds of a single underlying provider transport connection
+     * (WebSocket or WebRTC call) before the provider closes or resets the socket
+     * (for example, 600s on Gemini Live WebSockets, 3600s on OpenAI Realtime, 7200s on xAI).
+     *
+     * Set on `MJ: AI Models.ModelConfiguration` and overridable on
+     * `MJ: AI Model Vendors.ModelConfiguration`. When elapsed (minus `ReconnectBufferSeconds`),
+     * the realtime framework triggers a proactive in-place reconnect on `BaseRealtimeModel` /
+     * `BaseRealtimeClient`.
+     */
+    ConnectionMaxSeconds?: number | null;
+
+    /**
+     * Maximum duration in seconds of a single provider credential or session ceiling
+     * when it differs from `ConnectionMaxSeconds` (for example, 1800s ephemeral token ceiling
+     * on Gemini Developer API vs. 600s per WebSocket connection, or 3600s client_secret TTL on xAI
+     * vs. 7200s WebSocket session ceiling). Overridable at the `MJ: AI Model Vendors` level.
+     */
+    SessionMaxSeconds?: number | null;
+
+    /**
+     * Buffer in seconds before `ConnectionMaxSeconds` expiry at which the framework initiates
+     * a proactive reconnect. Defaults to 10 seconds when omitted.
+     */
+    ReconnectBufferSeconds?: number | null;
+
+    /**
+     * Whether the provider's native session resumption handle/ID reliably restores prior
+     * conversation turns on this endpoint.
+     *
+     * - `true`: pass the native resumption handle/ID and do NOT re-inject conversation history
+     *   (e.g., Gemini Enterprise / Vertex AI `v1`, xAI `resumption.enabled` + `conversation_id`).
+     * - `false`: feed `RealtimeConversationMemory` history into the reconnected session even if
+     *   the provider emits a resumption handle (e.g., Gemini Developer API `v1alpha` ephemeral tokens).
+     * - `null` / `undefined`: defer to the driver's runtime default.
+     */
+    TrustNativeResumption?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -69075,6 +69315,44 @@ export interface MJAIVendorEntity_RealtimeConfigurationSettings {
      * model-vendor row.
      */
     Pricing?: MJAIVendorEntity_RealtimePricingSettings | null;
+
+    /**
+     * Maximum duration in seconds of a single underlying provider transport connection
+     * (WebSocket or WebRTC call) before the provider closes or resets the socket
+     * (for example, 600s on Gemini Live WebSockets, 3600s on OpenAI Realtime, 7200s on xAI).
+     *
+     * Set on `MJ: AI Models.ModelConfiguration` and overridable on
+     * `MJ: AI Model Vendors.ModelConfiguration`. When elapsed (minus `ReconnectBufferSeconds`),
+     * the realtime framework triggers a proactive in-place reconnect on `BaseRealtimeModel` /
+     * `BaseRealtimeClient`.
+     */
+    ConnectionMaxSeconds?: number | null;
+
+    /**
+     * Maximum duration in seconds of a single provider credential or session ceiling
+     * when it differs from `ConnectionMaxSeconds` (for example, 1800s ephemeral token ceiling
+     * on Gemini Developer API vs. 600s per WebSocket connection, or 3600s client_secret TTL on xAI
+     * vs. 7200s WebSocket session ceiling). Overridable at the `MJ: AI Model Vendors` level.
+     */
+    SessionMaxSeconds?: number | null;
+
+    /**
+     * Buffer in seconds before `ConnectionMaxSeconds` expiry at which the framework initiates
+     * a proactive reconnect. Defaults to 10 seconds when omitted.
+     */
+    ReconnectBufferSeconds?: number | null;
+
+    /**
+     * Whether the provider's native session resumption handle/ID reliably restores prior
+     * conversation turns on this endpoint.
+     *
+     * - `true`: pass the native resumption handle/ID and do NOT re-inject conversation history
+     *   (e.g., Gemini Enterprise / Vertex AI `v1`, xAI `resumption.enabled` + `conversation_id`).
+     * - `false`: feed `RealtimeConversationMemory` history into the reconnected session even if
+     *   the provider emits a resumption handle (e.g., Gemini Developer API `v1alpha` ephemeral tokens).
+     * - `null` / `undefined`: defer to the driver's runtime default.
+     */
+    TrustNativeResumption?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -100702,6 +100980,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     * * Field Name: BaseTableCodeName
     * * Display Name: Base Table Code Name
     * * SQL Data Type: nvarchar(MAX)
+    * * Description: Programmatic name of the base table plus NameSuffix, without a schema prefix: GetProgrammaticName(BaseTable + NameSuffix). Used to name generated procedures and triggers. Maintained by trigger; read-only.
     */
     get BaseTableCodeName(): string | null {
         return this.Get('BaseTableCodeName');
@@ -104507,6 +104786,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     * * Field Name: FieldCodeName
     * * Display Name: Field Code Name
     * * SQL Data Type: nvarchar(MAX)
+    * * Description: Programmatic name of the field: GetProgrammaticName of the Name with spaces removed. Maintained by trigger; read-only.
     */
     get FieldCodeName(): string | null {
         return this.Get('FieldCodeName');
@@ -107716,6 +107996,133 @@ export class MJEntitySettingEntity extends BaseEntity<MJEntitySettingEntityType>
     /**
     * * Field Name: __mj_UpdatedAt
     * * Display Name: __mj _Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string | null {
+        return this.Get('Entity');
+    }
+}
+
+
+/**
+ * MJ: Entity Unique Keys - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: EntityUniqueKey
+ * * Base View: vwEntityUniqueKeys
+ * * @description Unique keys of an entity's base table as column sets: one row per unique index or unique constraint, primary keys excluded. Maintained by CodeGen from the database catalog on every run; edits are overwritten. EntityField.IsUnique is set only when a column alone is such a key, so a composite key appears here and not on its columns.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Entity Unique Keys')
+export class MJEntityUniqueKeyEntity extends BaseEntity<MJEntityUniqueKeyEntityType> {
+    /**
+    * Loads the MJ: Entity Unique Keys record from the database
+    * @param ID: string - primary key value to load the MJ: Entity Unique Keys record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJEntityUniqueKeyEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Entity whose base table has this unique key.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Name of the unique index or unique constraint in the database.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: FieldNames
+    * * Display Name: Field Names
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Comma-separated names of the key columns, in key order. INCLUDE columns are not part of the key and are not listed.
+    */
+    get FieldNames(): string {
+        return this.Get('FieldNames');
+    }
+    set FieldNames(value: string) {
+        this.Set('FieldNames', value);
+    }
+
+    /**
+    * * Field Name: FilterDefinition
+    * * Display Name: Filter Definition
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Predicate of a filtered (SQL Server) or partial (PostgreSQL) unique index, as the database reports it. NULL when the key applies to every row. A filtered key only guarantees uniqueness among the rows that match it.
+    */
+    get FilterDefinition(): string | null {
+        return this.Get('FilterDefinition');
+    }
+    set FilterDefinition(value: string | null) {
+        this.Set('FilterDefinition', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */

@@ -1,7 +1,7 @@
 /**
  * OOP wrapper around {@link CompositeFilterDescriptor}.
  *
- * The descriptor stays the portable JSON (Kendo / User Views). This class is how you
+ * The descriptor stays the portable JSON that User Views persist. This class is how you
  * construct, evaluate, and summarize that JSON. Views still compile to SQL via
  * `GenerateWhereClause`; `Evaluate` is for prices, processes, and anything that is
  * not a single-table WHERE.
