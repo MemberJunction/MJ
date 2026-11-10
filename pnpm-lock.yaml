@@ -4633,6 +4633,9 @@ importers:
       '@memberjunction/ng-auth-services':
         specifier: 6.2.0
         version: link:../Explorer/auth-services
+      '@memberjunction/ng-base-forms':
+        specifier: 6.2.0
+        version: link:../Generic/base-forms
       '@memberjunction/ng-clustering':
         specifier: 6.2.0
         version: link:../Generic/clustering
@@ -4749,6 +4752,9 @@ importers:
       '@memberjunction/ng-auth-services':
         specifier: 6.2.0
         version: link:../Explorer/auth-services
+      '@memberjunction/ng-base-forms':
+        specifier: 6.2.0
+        version: link:../Generic/base-forms
       '@memberjunction/ng-conversations':
         specifier: 6.2.0
         version: link:../Generic/conversations

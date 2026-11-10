@@ -109,6 +109,7 @@ vi.mock('@memberjunction/ai', () => {
     CHAT_FINISH_REASON_TOOL_CALLS: 'tool_calls',
     ErrorAnalyzer: { analyzeError: vi.fn().mockReturnValue({ category: 'unknown' }) },
     BaseImageGenerator: MockBaseImageGenerator,
+    BaseRealtimeSession: class {},
     ImageGenerationParams: class {},
     ImageGenerationResult: class {},
     ImageEditParams: class {},

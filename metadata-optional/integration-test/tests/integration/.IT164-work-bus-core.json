@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT164 - Work Bus Core Layers",
+    "Description": "Deterministic integration checks (WBC1-WBC10) for MJ 6.3 Work Bus & Software Factory core layers with zero LLM calls and zero Open App dependency. Covers MJ: Conversation Types & virtual Conversation.Type parity, type-row ExtensionEntity IS-A validation, 2-level IS-A chain saves (Field Suggestion -> Comment -> Conversation), OnSubtypeChange='Refuse' vs promotion, AllowedCommentTypes opt-in gating, newer-suggestion superseding, AcceptFieldSuggestion / RejectFieldSuggestion authorization and writeback, FieldSuggestionPostSaveHook direct-edit superseding, AnchoredConversationPostRunViewHook security across IS-A views, and AgentWakeTriggerService.TriggerWakeForWorkstream coalescing + Schedule Next Agent Wake gate alias normalization.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "All 10 WBC checks pass deterministically: IS-A subtypes auto-ensure and guard against subtype drift, Field Suggestions enforce entity opt-in and record permissions, direct field edits supersede pending suggestions, and workstream agent wakes coalesce cleanly."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "work-bus-core"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "03483FE2-E657-42D4-999E-5750283CFE01"
+  }
+}

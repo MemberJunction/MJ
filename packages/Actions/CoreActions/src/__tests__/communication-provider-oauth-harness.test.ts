@@ -15,6 +15,7 @@ const {
     providerInstancesMap,
     runViewMock,
     getPolicyMock,
+    resolvePolicyMock,
     credentialEngineMock,
 } = vi.hoisted(() => ({
     agentsList: [{ ID: 'cos-agent-id', Name: 'Chief of Staff' }],
@@ -22,6 +23,7 @@ const {
     providerInstancesMap: new Map<string, BaseCommunicationProvider>(),
     runViewMock: vi.fn(),
     getPolicyMock: vi.fn(),
+    resolvePolicyMock: vi.fn(),
     credentialEngineMock: {
         StoreUserDelegatedCredential: vi.fn(async () => ({ ID: 'cred-from-engine' })),
         GetUserDelegatedCredential: vi.fn(async () => null),
@@ -68,6 +70,7 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
     AgentUserPolicyEngine: {
         Instance: {
             GetPolicyForAgentAndUser: (...args: [string, string, UserInfo]) => getPolicyMock(...args),
+            ResolvePolicyForAgentAndUser: (...args: [string, string, UserInfo]) => resolvePolicyMock(...args),
             EvaluateCalendarOperation: () => ({ verdict: 'Allow', reason: 'Allowed' }),
             EvaluateEmailOperation: () => ({ verdict: 'Allow', reason: 'Allowed' }),
         },
@@ -135,6 +138,10 @@ describe('Stage 8 Deliverable 3 — Communication Provider Integration Harness (
             PhoneChannelMode: 'OutboundWithApproval',
             MessagingChannelMode: 'Enabled',
         } as unknown as MJAIAgentUserPolicyEntity);
+        resolvePolicyMock.mockReset().mockImplementation(async (...args: [string, string, UserInfo]) => {
+            const policy = await getPolicyMock(...args);
+            return policy ? { status: 'found', policy } : { status: 'none', policy: null };
+        });
     });
 
     it('validates Posture 1 (UtilityMailboxesOnly): routes Mail to dedicated utility mailbox and blocks personal Calendar access', async () => {
@@ -375,6 +382,25 @@ describe('Stage 8 Deliverable 3 — Communication Provider Integration Harness (
         } finally {
             fetchSpy.mockRestore();
         }
+    });
+
+    it('fails closed when ResolvePolicyForAgentAndUser returns status === "error"', async () => {
+        resolvePolicyMock.mockResolvedValueOnce({
+            status: 'error',
+            policy: null,
+            errorMessage: 'x',
+        });
+
+        const action = new VerifyMyCommunicationCapabilitiesAction();
+        const params: RunActionParams = {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: alice,
+            Params: [],
+        };
+
+        const result = await invokeAction(action, params);
+        expect(result.Success).toBe(false);
+        expect(result.Message).toContain('Failed to verify user communication policy: x');
     });
 });
 

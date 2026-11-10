@@ -903,6 +903,19 @@ The `<mj-record-changes>` history drawer and `<mj-record-form-container>` work t
 - **Interactive Scrubber & Changed-Field Jump Chips**: The top scrubber bar provides `◀ Prev` / `Next ▶` version stepping, clickable changed-field diff chips (which scroll to and highlight the modified field in the form), a `"Timeline"` button to pop the `<mj-record-changes>` drawer back open with the active version highlighted, `"Restore This Version"`, and `"Exit Preview"`.
 - **Burst-Aware Cluster Strip (`<mj-burst-cluster-strip>`) & Multi-Year Semantic Zoom**: `<mj-record-changes>` embeds `<mj-burst-cluster-strip>` from `@memberjunction/ng-ui-components` to group irregular change histories into active editing sessions separated by non-linear quiet-gap connectors (`⋯ 11 mos quiet ⋯`), automatically coalescing multi-year histories into zoomable calendar eras (`Year` → `Month` → `Session Burst`).
 
+### 7h. Folded IS-A Subtype Sections (`<mj-folded-subtype-section>`) & "Notes & suggestions" UI Drivers (`FieldSuggestionCardComponent`)
+
+Two metadata-driven extension mechanisms in `@memberjunction/ng-base-forms` connect generated forms to `MJ: Entities.SubtypeSelector` and `MJ: Comment Types`:
+
+1. **Opt-In Folded IS-A Subtype Sections (`SubtypeSelector.FoldIntoForm = true`)**:
+   - When a parent entity opts into `FoldIntoForm: true` (for example `MJ_BizApps_Tasks: Tasks` with `Path: "TypeID.ExtensionEntity"`), `<mj-record-form-container>` mounts `<mj-folded-subtype-section>` directly inside the form's field area.
+   - As soon as a user picks a type — **even on a brand-new record before its first save** — `<mj-folded-subtype-section>` calls `Record.ReconcileISAChild()` and renders the subtype's own fields inside an `<mj-collapsible-panel>` (or dynamically mounts a custom `EntitySubtypeUIDriverBase` component if the type row names a `SubtypeSelector.UIDriver`).
+   - `BaseFormComponent` folds the attached IS-A child into dirty tracking (`hasFoldedSubtypeDirtyState()`), `Validate()`, and `CancelEdit()` revert, while `<mj-isa-related-panel>` suppresses duplicate subtype cards so extension fields appear cleanly in one place.
+2. **"Notes & suggestions" Drawer, Per-Type Field Badges & `FieldSuggestionCardComponent`**:
+   - `<mj-record-comments>` and `RecordCommentsToolbarAction` expose the **Notes & suggestions** drawer and field popover, supporting type filter pills (`All`, `Notes`, `Suggestions`, plus custom `MJ: Comment Types`) when an entity enables multiple `AllowedCommentTypes` in `Configuration.Comments`.
+   - `<mj-form-field>` renders separate badges for open plain notes and pending `MJ: Field Suggestions`, opening the popover pre-filtered to that comment type.
+   - `<mj-comment-card-driver-host>` resolves `CommentType.UIDriverClass` via `MJGlobal.Instance.ClassFactory` (`EntitySubtypeUIDriverBase`), mounting `FieldSuggestionCardComponent` for `FIELD_SUGGESTION` threads (showing current vs. suggested ghost value, confidence/source badges, **Accept**, **Reject**, and on-demand **Discuss**) while keeping plain comments unchanged. See the [Anchored Conversations, Typed Record Comments & Field Suggestions Guide](ANCHORED_CONVERSATIONS_AND_RECORD_COMMENTS_GUIDE.md).
+
 ---
 
 ## 8. Navigation from inside a dialog / slide-in

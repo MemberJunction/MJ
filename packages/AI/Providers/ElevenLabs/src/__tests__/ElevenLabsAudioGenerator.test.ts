@@ -76,6 +76,7 @@ vi.mock('@memberjunction/ai', () => {
     // Read only as the driver's second @RegisterClass argument; RegisterClass is a no-op here.
     BaseTextToSpeech: class MockBaseTextToSpeech {},
     BaseRealtimeModel: MockBaseRealtimeModel,
+    BaseRealtimeSession: class MockBaseRealtimeSession {},
     TextToSpeechParams: class {},
     SpeechResult: MockSpeechResult,
     SpeechToTextParams: class {},

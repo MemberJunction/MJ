@@ -433,6 +433,13 @@ class LoopHarness {
             }
             throw new Error(`LoopHarness: unexpected GetEntityObject('${entityName}') — a DB boundary leaked into the loop test`);
         },
+        RunView: async (): Promise<Record<string, unknown>> => ({
+            Success: true,
+            Results: [],
+            RowCount: 0,
+            TotalRowCount: 0,
+            ExecutionTime: 0,
+        }),
     };
 
     public get run(): FakeAgentRun {
