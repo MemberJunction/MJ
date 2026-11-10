@@ -58,8 +58,16 @@ vi.mock('@memberjunction/ng-conversations', () => ({
   TasksFullViewComponent: class {},
   LibraryWorkspaceComponent: class {},
   BuildAgentBackedTaskExtraFilter: vi.fn(
-    () =>
-      "ParentID IS NULL AND ([AgentRunID] IS NOT NULL OR [AgentID] IS NOT NULL OR [ConversationDetailID] IS NOT NULL OR [ID] IN (SELECT [TargetLogID] FROM [__mj].[vwAIAgentRunSteps] WHERE [StepType] = 'Sub-Agent' AND [TargetLogID] IS NOT NULL) OR [ParentID] IN (SELECT [ID] FROM [__mj].[vwTasks] WHERE [AgentRunID] IS NOT NULL) OR [ID] IN (SELECT [ParentID] FROM [__mj].[vwTasks] WHERE ([AgentRunID] IS NOT NULL OR [AgentID] IS NOT NULL OR [ConversationDetailID] IS NOT NULL) AND [ParentID] IS NOT NULL))",
+    (_provider?: unknown, user?: { ID?: string } | null) =>
+      user?.ID
+        ? `ParentID IS NULL AND UserID = '${user.ID}' AND ([AgentRunID] IS NOT NULL OR [AgentID] IS NOT NULL OR [ConversationDetailID] IS NOT NULL OR [ID] IN (SELECT [ParentID] FROM [__mj].[vwTasks] WHERE ([AgentRunID] IS NOT NULL OR [AgentID] IS NOT NULL OR [ConversationDetailID] IS NOT NULL) AND [ParentID] IS NOT NULL))`
+        : '1 = 0',
+  ),
+  BuildAgentActivityTasksFilter: vi.fn(
+    async (_provider: unknown, user: { ID: string }, opts?: { includeAllUsers?: boolean }) =>
+      opts?.includeAllUsers
+        ? "ParentID IS NULL AND ([AgentRunID] IS NOT NULL OR [AgentID] IS NOT NULL OR [ConversationDetailID] IS NOT NULL OR [ID] IN (SELECT [ParentID] FROM [__mj].[vwTasks] WHERE ([AgentRunID] IS NOT NULL OR [AgentID] IS NOT NULL OR [ConversationDetailID] IS NOT NULL) AND [ParentID] IS NOT NULL))"
+        : `(ParentID IS NULL AND UserID = '${user.ID}') AND ([AgentRunID] IS NOT NULL OR [AgentID] IS NOT NULL OR [ConversationDetailID] IS NOT NULL OR [ID] IN (SELECT [ParentID] FROM [__mj].[vwTasks] WHERE ([AgentRunID] IS NOT NULL OR [AgentID] IS NOT NULL OR [ConversationDetailID] IS NOT NULL) AND [ParentID] IS NOT NULL))`,
   ),
 }));
 
@@ -178,10 +186,11 @@ describe('LibraryResource, ChatCollectionsResource & FileBrowserResource isolati
 });
 
 describe('ChatTasksResource (Agent Activity) filter & cold-mount URL handling', () => {
-  it('uses the server-side SQL subquery filter without restricting to UserID or running IgnoreMaxRows client queries', async () => {
+  it('defaults to the current user and their conversations while passing ScopeMode=all-users when toggled', async () => {
     const resource = Object.create(ChatTasksResource.prototype) as ChatTasksResource;
     Object.assign(resource as object, {
       CurrentUser: { ID: 'u-42' } as UserInfo,
+      TasksView: { ScopeMode: 'mine' },
     });
     Object.defineProperty(resource, 'ProviderToUse', {
       configurable: true,
@@ -194,14 +203,18 @@ describe('ChatTasksResource (Agent Activity) filter & cold-mount URL handling', 
         }) as Partial<IMetadataProvider> as IMetadataProvider,
     });
 
-    expect(resource.AgentActivityBaseFilter).toContain('ParentID IS NULL');
-    expect(resource.AgentActivityBaseFilter).not.toContain('UserID');
+    expect(resource.AgentActivityBaseFilter).toContain("UserID = 'u-42'");
 
     const resolved = await resource.ResolveAgentActivityFilter();
-    expect(resolved).toContain('ParentID IS NULL');
+    expect(resolved).toContain("UserID = 'u-42'");
     expect(resolved).toContain('[AgentRunID] IS NOT NULL');
-    expect(resolved).toContain('[__mj].[vwAIAgentRunSteps]');
-    expect(resolved).not.toContain('UserID');
+    expect(resolved).not.toContain('vwAIAgentRunSteps');
+
+    Object.assign(resource as object, {
+      TasksView: { ScopeMode: 'all-users' },
+    });
+    const resolvedAll = await resource.ResolveAgentActivityFilter();
+    expect(resolvedAll).not.toContain("UserID = 'u-42'");
   });
 
   it('does not rewrite query params on cold mount when taskId is absent or already in URL', () => {

@@ -13,7 +13,6 @@ import {
   DocumentLiveBlockEngine,
   SlideDeckEngine,
   SpreadsheetEngine,
-  ValidateFrozenBlockSnapshot,
   type DocumentBlockSpec,
   type DocumentBlockKind,
   type ResolvedArtifactPermissions,
@@ -44,9 +43,48 @@ const MINT_COLLABORATION_TICKET_MUTATION = `
       Success
       Ticket
       WsPath
+      WsUrl
       ExpiresAt
       CanRead
       CanEdit
+      ErrorMessage
+    }
+  }
+`;
+
+const COMMIT_ARTIFACT_INLINE_EDIT_MUTATION = `
+  mutation CommitArtifactInlineEdit($artifactId: String!, $content: String!, $saveVersion: Boolean) {
+    CommitArtifactInlineEdit(artifactId: $artifactId, content: $content, saveVersion: $saveVersion) {
+      Success
+      VersionID
+      VersionNumber
+      ErrorMessage
+    }
+  }
+`;
+
+const EXECUTE_ANCHORED_COMMENT_AGENT_MENTION_MUTATION = `
+  mutation ExecuteAnchoredCommentAgentMention(
+    $artifactId: String!
+    $agentHandle: String!
+    $agentMode: String!
+    $commentBody: String!
+    $anchorQuote: String
+  ) {
+    ExecuteAnchoredCommentAgentMention(
+      artifactId: $artifactId
+      agentHandle: $agentHandle
+      agentMode: $agentMode
+      commentBody: $commentBody
+      anchorQuote: $anchorQuote
+    ) {
+      Success
+      AgentHandle
+      AgentMode
+      ReplyBody
+      UpdatedContent
+      VersionID
+      VersionNumber
       ErrorMessage
     }
   }
@@ -128,12 +166,32 @@ export interface ServerVerifyFrozenSnapshotPayload {
   ErrorMessage?: string | null;
 }
 
+export interface ServerCommitInlineEditPayload {
+  Success: boolean;
+  VersionID?: string | null;
+  VersionNumber?: number | null;
+  ErrorMessage?: string | null;
+}
+
+export interface ServerAnchoredCommentAgentMentionPayload {
+  Success: boolean;
+  AgentHandle?: string | null;
+  AgentMode?: string | null;
+  ReplyBody?: string | null;
+  UpdatedContent?: string | null;
+  VersionID?: string | null;
+  VersionNumber?: number | null;
+  ErrorMessage?: string | null;
+}
+
 export interface CollaborationGraphQLResponseMap {
   MintArtifactCollaborationTicket?: CollaborationTicketPayload | null;
   ResolveArtifactPermissions?: ServerArtifactPermissionsPayload | null;
   ResolveArtifactUserPermissions?: ServerArtifactPermissionsPayload | null;
   FreezeDocumentLiveBlock?: ServerFreezeLiveBlockPayload | null;
   VerifyFrozenBlockSnapshot?: ServerVerifyFrozenSnapshotPayload | null;
+  CommitArtifactInlineEdit?: ServerCommitInlineEditPayload | null;
+  ExecuteAnchoredCommentAgentMention?: ServerAnchoredCommentAgentMentionPayload | null;
 }
 
 export interface CollaborationGraphQLProviderLike {
@@ -382,7 +440,15 @@ export class DocumentCollaborationSession {
   private canEdit: boolean;
   private applyingRemote = false;
   private readonly initialSeedContent: string;
+  private overrideSeedContent: string | null = null;
   private seededInDoc = false;
+  private hasCompletedInitialSync = false;
+  private liveSyncUnavailable = false;
+  private lastSyncedRemoteContent = '';
+  private hasUnsentLocalEdits = false;
+  private docUpdateHandler:
+    | ((update: Uint8Array, origin: string | number | symbol | object | null | undefined) => void)
+    | null = null;
   private destroyed = false;
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -406,6 +472,22 @@ export class DocumentCollaborationSession {
 
   public get Transport(): 'websocket' | 'local-only' {
     return this.transport;
+  }
+
+  public get HasCompletedInitialSync(): boolean {
+    return this.hasCompletedInitialSync;
+  }
+
+  public get LiveSyncUnavailable(): boolean {
+    return this.liveSyncUnavailable;
+  }
+
+  /**
+   * True only when the user has edit permission AND (either the session is local-only
+   * or the initial `syncStep2` handshake from `/collaboration/yjs` has completed).
+   */
+  public get CanMutateDocument(): boolean {
+    return this.canEdit && (this.transport === 'local-only' || this.hasCompletedInitialSync);
   }
 
   public get ContentChanged$(): Observable<string> {
@@ -489,8 +571,9 @@ export class DocumentCollaborationSession {
       }
     }
     const yText = this.ContentText.toString();
-    if (yText.length === 0 && !this.seededInDoc && this.initialSeedContent.length > 0) {
-      return this.initialSeedContent;
+    const seedFallback = this.overrideSeedContent ?? this.initialSeedContent;
+    if (yText.length === 0 && !this.seededInDoc && seedFallback.length > 0) {
+      return seedFallback;
     }
     return yText;
   }
@@ -510,7 +593,9 @@ export class DocumentCollaborationSession {
     this.ArtifactID = artifactId;
     this.canEdit = canEdit;
     this.transport = deferInitialSeedForRemoteSync ? 'websocket' : 'local-only';
+    this.hasCompletedInitialSync = this.transport === 'local-only';
     this.initialSeedContent = initialContent ?? '';
+    this.lastSyncedRemoteContent = this.initialSeedContent;
     this.endpointResolver = endpointResolver;
     this.Doc = new Y.Doc();
     this.ContentText = this.Doc.getText('content');
@@ -540,30 +625,62 @@ export class DocumentCollaborationSession {
   }
 
   private bindDocObservers(doc: Y.Doc): void {
-    doc.on('update', (update: Uint8Array, origin: string | number | symbol | object | null | undefined) => {
+    const handler = (
+      update: Uint8Array,
+      origin: string | number | symbol | object | null | undefined,
+    ): void => {
       if (doc !== this.Doc) {
         return;
       }
-      if (origin !== 'remote') {
-        this.sendYjsUpdate(update);
+      if (origin === 'remote') {
+        if (
+          this.ContentText.length > 0 ||
+          doc.getArray<string>('slideOrder').length > 0 ||
+          doc.getMap<string>('worksheetsById').size > 0
+        ) {
+          this.seededInDoc = true;
+          this.hasCompletedInitialSync = true;
+          this.liveSyncUnavailable = false;
+        }
+      } else if (origin !== 'init') {
+        const sent = this.sendYjsUpdate(update);
+        if (!sent) {
+          this.hasUnsentLocalEdits = true;
+        }
       }
       this.contentChanged$.next(this.GetContent());
-    });
+    };
+    this.docUpdateHandler = handler;
+    doc.on('update', handler);
+  }
+
+  private detachDocObservers(doc: Y.Doc): void {
+    if (this.docUpdateHandler) {
+      doc.off('update', this.docUpdateHandler);
+      this.docUpdateHandler = null;
+    }
   }
 
   /**
-   * Replaces `YDoc` with a fresh `new Y.Doc()`, applies a server `'room-reset'` payload,
+   * Replaces `YDoc` with a fresh `new Y.Doc()`, applies a server `'room-reset'` payload without
+   * destroying `this.Awareness`, preserves any unsent local line edits on top of the reset baseline,
    * rebinds observers, and emits `RemoteContent$` / `ContentChanged$`.
    */
   public ApplyRoomReset(payload: string): void {
     if (this.destroyed) {
       return;
     }
+    const unsentLocalSnapshot = this.hasUnsentLocalEdits ? this.GetContent() : null;
+    const baseBeforeReset = this.lastSyncedRemoteContent;
+
     const previousDoc = this.Doc;
+    this.detachDocObservers(previousDoc);
+
     const nextDoc = new Y.Doc();
     this.Doc = nextDoc;
     this.ContentText = nextDoc.getText('content');
     this.seededInDoc = false;
+    this.overrideSeedContent = null;
 
     this.applyingRemote = true;
     try {
@@ -598,13 +715,86 @@ export class DocumentCollaborationSession {
       this.applyingRemote = false;
     }
 
+    this.hasCompletedInitialSync = true;
+    this.liveSyncUnavailable = false;
+    this.hasUnsentLocalEdits = false;
+    const resetBaseline = this.GetContent();
+    this.lastSyncedRemoteContent = resetBaseline;
+
     this.bindDocObservers(nextDoc);
-    try {
-      previousDoc.destroy();
-    } catch (err) {
-      LogError(err);
+
+    // Re-apply any unsynced local prose hunks on top of the reset baseline so local edits are never dropped
+    if (
+      unsentLocalSnapshot !== null &&
+      unsentLocalSnapshot !== baseBeforeReset &&
+      unsentLocalSnapshot !== resetBaseline &&
+      !unsentLocalSnapshot.trim().startsWith('{') &&
+      this.canEdit
+    ) {
+      const replayed = this.replayLocalLineDiffOntoReset(
+        baseBeforeReset,
+        unsentLocalSnapshot,
+        resetBaseline,
+      );
+      if (replayed !== resetBaseline) {
+        this.SetContent(replayed);
+      }
     }
+
+    this.statusChanged$.next(this.status);
     this.contentChanged$.next(this.GetContent());
+  }
+
+  /**
+   * Resets unsent local CRDT items after an out-of-band server commit (`CommitInlineEditOnServer`
+   * while the WebSocket is disconnected) so a subsequent reconnect receives the server's state
+   * cleanly without duplicating items committed over HTTP.
+   */
+  public AdoptOutOfBandCommittedContent(committedContent: string): void {
+    if (this.destroyed || this.transport !== 'websocket') {
+      return;
+    }
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      return;
+    }
+    const previousDoc = this.Doc;
+    this.detachDocObservers(previousDoc);
+    const nextDoc = new Y.Doc();
+    this.Doc = nextDoc;
+    this.ContentText = nextDoc.getText('content');
+    this.seededInDoc = false;
+    this.overrideSeedContent = committedContent;
+    this.lastSyncedRemoteContent = committedContent;
+    this.hasUnsentLocalEdits = false;
+    this.hasCompletedInitialSync = false;
+    this.bindDocObservers(nextDoc);
+    this.statusChanged$.next(this.status);
+  }
+
+  private replayLocalLineDiffOntoReset(
+    baseBeforeReset: string,
+    localBeforeReset: string,
+    resetBaseline: string,
+  ): string {
+    const baseLines = baseBeforeReset.replace(/\r\n/g, '\n').split('\n');
+    const localLines = localBeforeReset.replace(/\r\n/g, '\n').split('\n');
+    const resetLines = resetBaseline.replace(/\r\n/g, '\n').split('\n');
+    const ops = computeBoundedSequenceDiffFromUtil(
+      baseLines,
+      localLines,
+      (a, b) => a === b,
+      (s) => s,
+    );
+    const addedLines: string[] = [];
+    for (const op of ops) {
+      if (op.Kind === 'insert') {
+        addedLines.push(localLines[op.NewIndex]);
+      }
+    }
+    if (addedLines.length === 0) {
+      return resetBaseline;
+    }
+    return [...resetLines, ...addedLines].join('\n');
   }
 
   /**
@@ -628,46 +818,49 @@ export class DocumentCollaborationSession {
     const generation = ++this.connectGeneration;
 
     let targetWsUrl = wsUrl ?? '';
-    if (this.endpointResolver) {
-      const resolved = await this.endpointResolver(this.ArtifactID, wsUrl, provider);
-      if (this.destroyed || generation !== this.connectGeneration) {
-        return;
-      }
-      if (resolved.Mode === 'revoked') {
-        this.canEdit = false;
-        this.clearReconnectTimer();
-        this.setStatus('revoked');
-        return;
-      }
-      if (resolved.CanEdit === false) {
-        this.canEdit = false;
-      }
-      if (resolved.Mode === 'local' || !resolved.WsUrl) {
-        if (resolved.HasBackend === false && this.transport === 'local-only') {
+    try {
+      if (this.endpointResolver) {
+        const resolved = await this.endpointResolver(this.ArtifactID, wsUrl, provider);
+        if (this.destroyed || generation !== this.connectGeneration) {
+          return;
+        }
+        if (resolved.Mode === 'revoked') {
+          this.canEdit = false;
+          this.clearReconnectTimer();
+          this.setStatus('revoked');
+          return;
+        }
+        if (resolved.CanEdit === false) {
+          this.canEdit = false;
+        }
+        if (resolved.Mode === 'local' || !resolved.WsUrl) {
+          if (resolved.HasBackend === false && this.transport === 'local-only') {
+            this.ensureLocalSeedIfUnseeded();
+          }
+          this.setStatus(this.canEdit ? 'local' : 'readonly');
+          if (resolved.HasBackend !== false && this.transport === 'websocket') {
+            this.scheduleReconnect();
+          }
+          return;
+        }
+        this.transport = 'websocket';
+        targetWsUrl = resolved.WsUrl;
+      } else if (!targetWsUrl) {
+        if (this.transport === 'local-only') {
           this.ensureLocalSeedIfUnseeded();
         }
         this.setStatus(this.canEdit ? 'local' : 'readonly');
         return;
+      } else {
+        this.transport = 'websocket';
       }
-      this.transport = 'websocket';
-      targetWsUrl = resolved.WsUrl;
-    } else if (!targetWsUrl) {
-      if (this.transport === 'local-only') {
-        this.ensureLocalSeedIfUnseeded();
+
+      if (this.destroyed || generation !== this.connectGeneration) {
+        return;
       }
-      this.setStatus(this.canEdit ? 'local' : 'readonly');
-      return;
-    } else {
-      this.transport = 'websocket';
-    }
 
-    if (this.destroyed || generation !== this.connectGeneration) {
-      return;
-    }
+      this.closeActiveSocketWithoutReconnect();
 
-    this.closeActiveSocketWithoutReconnect();
-
-    try {
       this.setStatus('connecting');
       const ws = new WebSocket(targetWsUrl);
       ws.binaryType = 'arraybuffer';
@@ -679,6 +872,7 @@ export class DocumentCollaborationSession {
           return;
         }
         this.reconnectAttempts = 0;
+        this.liveSyncUnavailable = false;
         this.clearReconnectTimer();
         this.setStatus(this.canEdit ? 'connected' : 'readonly');
 
@@ -694,7 +888,7 @@ export class DocumentCollaborationSession {
         encoding.writeVarUint(awarenessEncoder, MSG_AWARENESS);
         encoding.writeVarUint8Array(
           awarenessEncoder,
-          awarenessProtocol.encodeAwarenessUpdate(this.Awareness, [this.Doc.clientID]),
+          awarenessProtocol.encodeAwarenessUpdate(this.Awareness, [this.Awareness.clientID]),
         );
         ws.send(encoding.toUint8Array(awarenessEncoder));
       };
@@ -749,6 +943,9 @@ export class DocumentCollaborationSession {
     } catch (err) {
       LogError(err);
       this.setStatus(this.canEdit ? 'local' : 'readonly');
+      if (this.transport === 'websocket') {
+        this.scheduleReconnect();
+      }
     }
   }
 
@@ -756,7 +953,7 @@ export class DocumentCollaborationSession {
    * Updates the local `Y.Text('content')` value with minimal diff insertion/deletion.
    */
   public SetContent(newMarkdown: string): void {
-    if (!this.canEdit || this.applyingRemote) {
+    if (!this.CanMutateDocument || this.applyingRemote) {
       return;
     }
     const current = this.ContentText.toString();
@@ -802,7 +999,7 @@ export class DocumentCollaborationSession {
    * if not yet present, enabling conflict-free concurrent multi-slide editing (`Accept #1`).
    */
   public UpdateSlideInDeck(slide: SlideSpec, fullDeckFallback?: SlideDeckSpec): void {
-    if (!this.canEdit || this.applyingRemote) {
+    if (!this.CanMutateDocument || this.applyingRemote) {
       return;
     }
     this.seededInDoc = true;
@@ -828,7 +1025,7 @@ export class DocumentCollaborationSession {
    * without overwriting individual slide contents in `slidesById` (`Accept #1`).
    */
   public ReorderSlidesInDeck(orderedSlideIds: string[], fullDeckFallback?: SlideDeckSpec): void {
-    if (!this.canEdit || this.applyingRemote) {
+    if (!this.CanMutateDocument || this.applyingRemote) {
       return;
     }
     this.seededInDoc = true;
@@ -856,7 +1053,7 @@ export class DocumentCollaborationSession {
    * Deletes a slide by `slideId` from `slidesById` (`Y.Map`) and `slideOrder` (`Y.Array`).
    */
   public DeleteSlideFromDeck(slideId: string, fullDeckFallback?: SlideDeckSpec): void {
-    if (!this.canEdit || this.applyingRemote) {
+    if (!this.CanMutateDocument || this.applyingRemote) {
       return;
     }
     this.seededInDoc = true;
@@ -881,7 +1078,7 @@ export class DocumentCollaborationSession {
    * without touching individual slide entries in `slidesById`.
    */
   public UpdateDeckMeta(deck: SlideDeckSpec): void {
-    if (!this.canEdit || this.applyingRemote) {
+    if (!this.CanMutateDocument || this.applyingRemote) {
       return;
     }
     this.seededInDoc = true;
@@ -913,7 +1110,7 @@ export class DocumentCollaborationSession {
     cell: SpreadsheetCellSpec,
     fullWorkbookFallback?: WorkbookSpec,
   ): void {
-    if (!this.canEdit || this.applyingRemote) {
+    if (!this.CanMutateDocument || this.applyingRemote) {
       return;
     }
     this.seededInDoc = true;
@@ -940,7 +1137,7 @@ export class DocumentCollaborationSession {
     colId: string,
     fullWorkbookFallback?: WorkbookSpec,
   ): void {
-    if (!this.canEdit || this.applyingRemote) {
+    if (!this.CanMutateDocument || this.applyingRemote) {
       return;
     }
     this.seededInDoc = true;
@@ -967,7 +1164,7 @@ export class DocumentCollaborationSession {
     sheet: WorksheetSpec,
     fullWorkbookFallback?: WorkbookSpec,
   ): void {
-    if (!this.canEdit || this.applyingRemote) {
+    if (!this.CanMutateDocument || this.applyingRemote) {
       return;
     }
     this.seededInDoc = true;
@@ -999,7 +1196,7 @@ export class DocumentCollaborationSession {
    * in `workbookMeta` (`Y.Map`) and `sheetOrder` (`Y.Array`).
    */
   public UpdateWorkbookMetadata(workbook: WorkbookSpec): void {
-    if (!this.canEdit || this.applyingRemote) {
+    if (!this.CanMutateDocument || this.applyingRemote) {
       return;
     }
     this.seededInDoc = true;
@@ -1122,20 +1319,41 @@ export class DocumentCollaborationSession {
       if (encoding.length(encoder) > 1 && this.socket?.readyState === WebSocket.OPEN) {
         this.socket.send(encoding.toUint8Array(encoder));
       }
-      if (
-        syncMsgType === syncProtocol.messageYjsSyncStep2 &&
-        this.transport === 'local-only' &&
-        !this.seededInDoc &&
-        this.ContentText.length === 0 &&
-        this.initialSeedContent.length > 0 &&
-        this.canEdit
-      ) {
-        this.seededInDoc = true;
-        this.Doc.transact(() => {
-          this.ContentText.insert(0, this.initialSeedContent);
-          this.populateSlideDeckCrdtIfPresentation(this.initialSeedContent);
-          this.populateSpreadsheetCrdtIfWorkbook(this.initialSeedContent);
-        }, 'local');
+      if (syncMsgType === syncProtocol.messageYjsSyncStep2) {
+        this.hasCompletedInitialSync = true;
+        this.liveSyncUnavailable = false;
+        this.overrideSeedContent = null;
+        if (
+          this.transport === 'local-only' &&
+          !this.seededInDoc &&
+          this.ContentText.length === 0 &&
+          this.initialSeedContent.length > 0 &&
+          this.canEdit
+        ) {
+          this.seededInDoc = true;
+          this.Doc.transact(() => {
+            this.ContentText.insert(0, this.initialSeedContent);
+            this.populateSlideDeckCrdtIfPresentation(this.initialSeedContent);
+            this.populateSpreadsheetCrdtIfWorkbook(this.initialSeedContent);
+          }, 'local');
+        } else if (
+          this.ContentText.length > 0 ||
+          this.Doc.getArray<string>('slideOrder').length > 0 ||
+          this.Doc.getMap<string>('worksheetsById').size > 0
+        ) {
+          this.seededInDoc = true;
+        }
+        this.lastSyncedRemoteContent = this.GetContent();
+        this.statusChanged$.next(this.status);
+      } else if (syncMsgType === syncProtocol.messageYjsUpdate) {
+        if (
+          this.ContentText.length > 0 ||
+          this.Doc.getArray<string>('slideOrder').length > 0 ||
+          this.Doc.getMap<string>('worksheetsById').size > 0
+        ) {
+          this.seededInDoc = true;
+        }
+        this.lastSyncedRemoteContent = this.GetContent();
       } else if (this.ContentText.length > 0) {
         this.seededInDoc = true;
       }
@@ -1185,7 +1403,14 @@ export class DocumentCollaborationSession {
   }
 
   private scheduleReconnect(): void {
-    if (this.destroyed || this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+    if (this.destroyed) {
+      return;
+    }
+    if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      if (this.transport === 'websocket' && !this.hasCompletedInitialSync) {
+        this.liveSyncUnavailable = true;
+      }
+      this.statusChanged$.next(this.status);
       return;
     }
     this.clearReconnectTimer();
@@ -1549,14 +1774,16 @@ export class DocumentCollaborationSession {
     }
   }
 
-  private sendYjsUpdate(update: Uint8Array): void {
+  private sendYjsUpdate(update: Uint8Array): boolean {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN || !this.canEdit) {
-      return;
+      return false;
     }
     const encoder = encoding.createEncoder();
     encoding.writeVarUint(encoder, MSG_SYNC);
     syncProtocol.writeUpdate(encoder, update);
     this.socket.send(encoding.toUint8Array(encoder));
+    this.hasUnsentLocalEdits = false;
+    return true;
   }
 
   private setStatus(next: CollaborationConnectionStatus): void {
@@ -1573,6 +1800,7 @@ export class DocumentCollaborationSession {
   providedIn: 'root',
 })
 export class DocumentCollaborationService {
+  private readonly verifiedFrozenHashes = new Map<string, boolean>();
   private readonly slashCommands: ReadonlyArray<DocumentSlashCommand> = [
     {
       Command: '/heading-1',
@@ -1957,6 +2185,16 @@ export class DocumentCollaborationService {
       } catch (err) {
         LogError(err);
       }
+      // Fail closed when a GraphQL collaboration provider is configured and permission verification fails
+      return {
+        ArtifactID: artifactId,
+        CanRead: false,
+        CanEdit: false,
+        CanDelete: false,
+        CanShare: false,
+        Source: 'Denied',
+        Reason: 'Failed to verify artifact permissions on server.',
+      };
     }
 
     const currentUser = provider.CurrentUser;
@@ -1976,9 +2214,8 @@ export class DocumentCollaborationService {
   }
 
   /**
-   * Freezes a live MJ block via the server `FreezeDocumentLiveBlock` GraphQL mutation so the snapshot
-   * receives a server-signed `hmac-sha256:...` `SnapshotContentHash` (`Blocker 3`), falling back to
-   * `DocumentLiveBlockEngine.Instance.FreezeBlock` in offline/unit-test environments.
+   * Freezes a live MJ block strictly via the server `FreezeDocumentLiveBlock` GraphQL mutation so the snapshot
+   * receives a server-signed `hmac-sha256:...` `SnapshotContentHash`. Never falls back to client-side signing.
    */
   public async FreezeLiveBlockOnServer(
     spec: DocumentBlockSpec,
@@ -2005,11 +2242,20 @@ export class DocumentCollaborationService {
           const rawJson = freezePayload.UpdatedSpecJSON ?? freezePayload.UpdatedBlockSpecJson;
           const parsedSpec = rawJson ? SafeJSONParse<DocumentBlockSpec>(rawJson) : null;
           if (parsedSpec) {
+            this.recordFrozenSnapshotVerification(parsedSpec, true);
             return { Success: true, UpdatedSpec: parsedSpec };
           }
         }
+        return {
+          Success: false,
+          ErrorMessage: 'Server did not return a frozen block payload.',
+        };
       } catch (err) {
         LogError(err);
+        return {
+          Success: false,
+          ErrorMessage: err instanceof Error ? err.message : 'Failed to freeze live block on server.',
+        };
       }
     }
 
@@ -2020,17 +2266,57 @@ export class DocumentCollaborationService {
         ErrorMessage: 'Metadata provider or user context unavailable.',
       };
     }
-    return await DocumentLiveBlockEngine.Instance.FreezeBlock(
-      spec,
-      user,
-      acknowledgeSecurityWarning,
-      provider,
-    );
+    try {
+      const localRes = await DocumentLiveBlockEngine.Instance.FreezeBlock(
+        spec,
+        user,
+        acknowledgeSecurityWarning,
+        provider,
+      );
+      if (localRes.Success && localRes.UpdatedSpec) {
+        this.recordFrozenSnapshotVerification(localRes.UpdatedSpec, true);
+      }
+      return localRes;
+    } catch (err) {
+      return {
+        Success: false,
+        ErrorMessage:
+          err instanceof Error
+            ? err.message
+            : 'Server collaboration endpoint is required to freeze live blocks.',
+      };
+    }
+  }
+
+  private computeFrozenVerificationCacheKey(block: DocumentBlockSpec): string {
+    const snap = block.FrozenSnapshot;
+    if (!snap) {
+      return '';
+    }
+    return JSON.stringify({
+      BlockID: block.BlockID,
+      FrozenAt: snap.FrozenAt,
+      FrozenByUserID: snap.FrozenByUserID,
+      FrozenByUserName: snap.FrozenByUserName,
+      Columns: snap.Columns,
+      Rows: snap.Rows,
+      TotalRowCount: snap.TotalRowCount,
+      SecurityWarningAcknowledged: snap.SecurityWarningAcknowledged,
+      SnapshotContentHash: snap.SnapshotContentHash ?? '',
+    });
+  }
+
+  private recordFrozenSnapshotVerification(block: DocumentBlockSpec, verified: boolean): void {
+    const key = this.computeFrozenVerificationCacheKey(block);
+    if (key) {
+      this.verifiedFrozenHashes.set(key, verified);
+    }
   }
 
   /**
-   * Verifies a frozen block snapshot's integrity (`SnapshotContentHash`) via server-side
-   * `VerifyFrozenBlockSnapshot` or `ValidateFrozenBlockSnapshot` (`Blocker 3`).
+   * Returns true ONLY when a frozen block's `FrozenSnapshot` has been verified by the server
+   * (`VerifyFrozenSnapshotOnServer` or `FreezeLiveBlockOnServer`, or an explicit server execution result).
+   * Never uses client-side secrets or format-only regex matching (`Blocker 1`).
    */
   public IsFrozenSnapshotVerified(
     block: DocumentBlockSpec | null | undefined,
@@ -2062,26 +2348,28 @@ export class DocumentCollaborationService {
     ) {
       return false;
     }
-    const validation = ValidateFrozenBlockSnapshot(snap);
-    if (validation.SnapshotVerified) {
-      return true;
-    }
-    // Accept server-issued HMAC signatures (hmac-sha256:<64-hex-chars>) returned by FreezeDocumentLiveBlock
-    if (/^hmac-sha256:[0-9a-f]{64}$/i.test(snap.SnapshotContentHash.trim())) {
-      return true;
-    }
-    return false;
+    const key = this.computeFrozenVerificationCacheKey(block);
+    return key ? this.verifiedFrozenHashes.get(key) === true : false;
   }
 
   /**
-   * Queries the server `VerifyFrozenBlockSnapshot` endpoint when `GraphQLDataProvider` is configured,
-   * falling back to `IsFrozenSnapshotVerified`.
+   * Verifies a frozen snapshot strictly on the server via `VerifyFrozenBlockSnapshot` and caches
+   * the boolean result for synchronous template rendering via {@link IsFrozenSnapshotVerified}.
    */
   public async VerifyFrozenSnapshotOnServer(
     block: DocumentBlockSpec,
     providerOverride?: IMetadataProvider | null,
   ): Promise<boolean> {
     if (!block || block.Mode !== 'Frozen' || !block.FrozenSnapshot) {
+      return false;
+    }
+    const snap = block.FrozenSnapshot;
+    if (
+      snap.SecurityWarningAcknowledged !== true ||
+      typeof snap.SnapshotContentHash !== 'string' ||
+      snap.SnapshotContentHash.trim().length === 0
+    ) {
+      this.recordFrozenSnapshotVerification(block, false);
       return false;
     }
     const provider = resolveDefaultMetadataProvider(providerOverride);
@@ -2092,13 +2380,127 @@ export class DocumentCollaborationService {
         });
         const verifyPayload = gqlRes?.VerifyFrozenBlockSnapshot;
         if (verifyPayload && typeof verifyPayload.SnapshotVerified === 'boolean') {
+          this.recordFrozenSnapshotVerification(block, verifyPayload.SnapshotVerified);
           return verifyPayload.SnapshotVerified;
         }
       } catch (err) {
         LogError(err);
       }
+      this.recordFrozenSnapshotVerification(block, false);
+      return false;
     }
     return this.IsFrozenSnapshotVerified(block);
+  }
+
+  /**
+   * Commits an artifact content save through the server collaboration room (`CommitArtifactInlineEdit`)
+   * when a GraphQL provider is active so the live Yjs room and working state stay synchronized with the saved version.
+   */
+  public async CommitInlineEditOnServer(
+    artifactId: string,
+    content: string,
+    saveVersion = true,
+    providerOverride?: IMetadataProvider | null,
+  ): Promise<{
+    HandledByServer: boolean;
+    Success: boolean;
+    VersionID?: string;
+    VersionNumber?: number;
+    ErrorMessage?: string;
+  }> {
+    const provider = resolveDefaultMetadataProvider(providerOverride);
+    if (!isGraphQLCollaborationProvider(provider)) {
+      return { HandledByServer: false, Success: false };
+    }
+    try {
+      const gqlRes = await provider.ExecuteGQL(COMMIT_ARTIFACT_INLINE_EDIT_MUTATION, {
+        artifactId,
+        content,
+        saveVersion,
+      });
+      const payload = gqlRes?.CommitArtifactInlineEdit;
+      if (!payload) {
+        return {
+          HandledByServer: true,
+          Success: false,
+          ErrorMessage: 'Server did not return CommitArtifactInlineEdit response.',
+        };
+      }
+      return {
+        HandledByServer: true,
+        Success: Boolean(payload.Success),
+        VersionID: payload.VersionID ?? undefined,
+        VersionNumber: typeof payload.VersionNumber === 'number' ? payload.VersionNumber : undefined,
+        ErrorMessage: payload.ErrorMessage ?? undefined,
+      };
+    } catch (err) {
+      LogError(err);
+      return {
+        HandledByServer: true,
+        Success: false,
+        ErrorMessage: err instanceof Error ? err.message : 'Failed to commit artifact edit on server.',
+      };
+    }
+  }
+
+  /**
+   * Dispatches an `@mention` in an anchored comment thread to the server (`ExecuteAnchoredCommentAgentMention`),
+   * enforcing `ArtifactPermissionEngine` (`CanEdit` for `'edit'`, `CanRead` for `'comment'`/`'suggest'`).
+   */
+  public async ExecuteAnchoredCommentAgentMention(
+    artifactId: string,
+    agentHandle: string,
+    agentMode: 'comment' | 'suggest' | 'edit',
+    commentBody: string,
+    anchorQuote?: string,
+    providerOverride?: IMetadataProvider | null,
+  ): Promise<{
+    HandledByServer: boolean;
+    Success: boolean;
+    ReplyBody?: string;
+    UpdatedContent?: string;
+    VersionID?: string;
+    VersionNumber?: number;
+    ErrorMessage?: string;
+  }> {
+    const provider = resolveDefaultMetadataProvider(providerOverride);
+    if (!isGraphQLCollaborationProvider(provider)) {
+      return { HandledByServer: false, Success: false };
+    }
+    try {
+      const gqlRes = await provider.ExecuteGQL(EXECUTE_ANCHORED_COMMENT_AGENT_MENTION_MUTATION, {
+        artifactId,
+        agentHandle,
+        agentMode,
+        commentBody,
+        anchorQuote: anchorQuote ?? null,
+      });
+      const payload = gqlRes?.ExecuteAnchoredCommentAgentMention;
+      if (!payload) {
+        return {
+          HandledByServer: true,
+          Success: false,
+          ErrorMessage: 'Server did not return ExecuteAnchoredCommentAgentMention response.',
+        };
+      }
+      return {
+        HandledByServer: true,
+        Success: Boolean(payload.Success),
+        ReplyBody: payload.ReplyBody ?? undefined,
+        UpdatedContent: payload.UpdatedContent ?? undefined,
+        VersionID: payload.VersionID ?? undefined,
+        VersionNumber: typeof payload.VersionNumber === 'number' ? payload.VersionNumber : undefined,
+        ErrorMessage: payload.ErrorMessage ?? undefined,
+      };
+    } catch (err) {
+      LogError(err);
+      return {
+        HandledByServer: true,
+        Success: false,
+        ErrorMessage:
+          err instanceof Error ? err.message : 'Failed to execute anchored comment agent mention.',
+      };
+    }
   }
 
   /**

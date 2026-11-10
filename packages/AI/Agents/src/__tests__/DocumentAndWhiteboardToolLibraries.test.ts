@@ -657,9 +657,81 @@ describe('SpreadsheetToolLibrary (Wave 3 — MJ Sheets § 3.6 & § 6)', () => {
     expect(unsafeSheetRegex.success).toBe(false);
     expect(unsafeSheetRegex.errorMessage).toContain('Unsafe or overly complex regular expression rejected');
 
+    const unsafeAltSheetRegex = await sheetLib.InvokeTool('search_cells', { query: '(a|a)*$' }, wbJson);
+    expect(unsafeAltSheetRegex.success).toBe(false);
+    expect(unsafeAltSheetRegex.errorMessage).toContain('Unsafe or overly complex regular expression rejected');
+
     const docLib = new DocumentToolLibrary();
     const unsafeDocGrep = await docLib.InvokeTool('grep', { pattern: '(a+)+$' }, '# Heading\n\nBody text');
     expect(unsafeDocGrep.success).toBe(false);
     expect(unsafeDocGrep.errorMessage).toContain('Unsafe or overly complex regular expression rejected');
+
+    const unsafeAltDocGrep = await docLib.InvokeTool('grep', { pattern: '(a|a)*$' }, '# Heading\n\nBody text');
+    expect(unsafeAltDocGrep.success).toBe(false);
+    expect(unsafeAltDocGrep.errorMessage).toContain('Unsafe or overly complex regular expression rejected');
+
+    // Plain literals like "C++" work via literal fallback in search_blocks, grep, and search_cells (Round 3 Item 19)
+    const cppDoc = '# Languages\n\nWe support TypeScript, Rust, and C++ runtimes.';
+    const cppSearchBlocks = await docLib.InvokeTool('search_blocks', { query: 'C++' }, cppDoc);
+    expect(cppSearchBlocks.success).toBe(true);
+    expect((cppSearchBlocks.data as { matchCount: number }).matchCount).toBe(1);
+
+    const cppGrep = await docLib.InvokeTool('grep', { pattern: 'C++' }, cppDoc);
+    expect(cppGrep.success).toBe(true);
+    expect((cppGrep.data as Array<{ text: string }>)).toHaveLength(1);
+
+    const cppSheetWrite = await sheetLib.InvokeTool(
+      'write_cells',
+      { cells: [{ address: 'A5', value: 'C++ Runtime' }] },
+      wbJson,
+    );
+    const cppSheetSearch = await sheetLib.InvokeTool(
+      'search_cells',
+      { query: 'C++' },
+      (cppSheetWrite.data as { updatedContent: string }).updatedContent,
+    );
+    expect(cppSheetSearch.success).toBe(true);
+    expect((cppSheetSearch.data as { matches: Array<{ cell: string }> }).matches).toHaveLength(1);
+  });
+
+  it('Blocker 7: rename_sheet rewrites cross-sheet formulas in WorkbookSpec and exported .xlsx without #REF!', async () => {
+    const addTwo = await sheetLib.InvokeTool('add_sheet', { name: 'Two' }, '');
+    expect(addTwo.success).toBe(true);
+    let wbJson = (addTwo.data as { updatedContent: string }).updatedContent;
+
+    const seedTwo = await sheetLib.InvokeTool(
+      'write_cells',
+      { sheet: 'Two', cells: [{ address: 'B2', value: 41 }] },
+      wbJson,
+    );
+    wbJson = (seedTwo.data as { updatedContent: string }).updatedContent;
+
+    const seedRef = await sheetLib.InvokeTool(
+      'write_cells',
+      { sheet: 'Sheet 1', cells: [{ address: 'A1', formula: '=Two!B2+1' }] },
+      wbJson,
+    );
+    expect(seedRef.success).toBe(true);
+    wbJson = (seedRef.data as { updatedContent: string }).updatedContent;
+
+    const renameRes = await sheetLib.InvokeTool(
+      'rename_sheet',
+      { sheet: 'Two', newName: 'Assumptions 2026' },
+      wbJson,
+    );
+    expect(renameRes.success).toBe(true);
+    const renameData = renameRes.data as { updatedContent: string; xlsxBase64: string };
+
+    const readAfter = await sheetLib.InvokeTool('read_range', { sheet: 'Sheet 1', range: 'A1' }, renameData.updatedContent);
+    expect(readAfter.success).toBe(true);
+    const cellA1 = (readAfter.data as { cell: { formula: string; computedValue: number } }).cell;
+    expect(cellA1.formula).toBe("='Assumptions 2026'!B2+1");
+    expect(cellA1.computedValue).toBe(42);
+
+    const exportedWb = new ExcelJS.Workbook();
+    await exportedWb.xlsx.load(Buffer.from(renameData.xlsxBase64, 'base64'));
+    const sheet1 = exportedWb.getWorksheet('Sheet 1');
+    expect(sheet1?.getCell('A1').formula).toBe("'Assumptions 2026'!B2+1");
+    expect(sheet1?.getCell('A1').result).toBe(42);
   });
 });

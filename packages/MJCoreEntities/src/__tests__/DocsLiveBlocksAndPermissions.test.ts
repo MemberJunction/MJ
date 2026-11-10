@@ -16,6 +16,7 @@ import {
 
 LoadArtifactPermissionDelegates();
 LoadDocumentLiveBlocks();
+DocumentLiveBlockEngine.Instance.SetSigningSecret('test-frozen-block-hmac-secret-at-least-32-bytes!!');
 
 function createMockUser(id: string, name = 'Test User'): UserInfo {
   const u = new UserInfo();
@@ -726,7 +727,36 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
     expect(missingSnapRes.Success).toBe(false);
     expect(missingSnapRes.Mode).toBe('Frozen');
 
-    // B7: FreezeBlock computes HMAC-SHA256 SnapshotContentHash (including FrozenByUserName) and rejects forged/unprefixed hashes
+    // B7: FreezeBlock requires a >= 32-byte HMAC secret and computes HMAC-SHA256 SnapshotContentHash (including FrozenByUserName)
+    DocumentLiveBlockEngine.Instance.SetSigningSecret(null);
+    const prevSecret = process.env.MJ_FROZEN_BLOCK_HMAC_SECRET;
+    delete process.env.MJ_FROZEN_BLOCK_HMAC_SECRET;
+    await expect(
+      DocumentLiveBlockEngine.Instance.FreezeBlock(
+        { BlockID: 'blk-hash-no-secret', Kind: 'EntityView', Mode: 'Live', EntityName: 'Accounts' },
+        viewer,
+        true,
+        provider,
+      ),
+    ).rejects.toThrow(/MJ_FROZEN_BLOCK_HMAC_SECRET/);
+    if (prevSecret) process.env.MJ_FROZEN_BLOCK_HMAC_SECRET = prevSecret;
+
+    DocumentLiveBlockEngine.Instance.SetSigningSecret('test-frozen-block-hmac-secret-at-least-32-bytes!!');
+
+    // Grouping parentheses AND (...), OR (...), NOT (...), IN (...) are allowed in ExtraFilter
+    const groupedFilterExec = await DocumentLiveBlockEngine.Instance.ExecuteBlock(
+      {
+        BlockID: 'blk-grouped',
+        Kind: 'EntityView',
+        Mode: 'Live',
+        EntityName: 'Accounts',
+        ExtraFilter: "Status = 'Active' AND (Name = 'Acme' OR NOT (Status = 'Closed')) AND Status IN ('Active', 'Pending')",
+      },
+      viewer,
+      provider,
+    );
+    expect(groupedFilterExec.Success).toBe(true);
+
     const frozenWrap = await DocumentLiveBlockEngine.Instance.FreezeBlock(
       { BlockID: 'blk-hash', Kind: 'EntityView', Mode: 'Live', EntityName: 'Accounts' },
       viewer,

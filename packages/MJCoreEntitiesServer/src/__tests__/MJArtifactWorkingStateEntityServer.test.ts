@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
+import { BaseEntity, IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
 import { ArtifactPermissionEngine } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import {
     ArtifactWorkingStatePostRunViewHook,
     MJArtifactWorkingStateEntityServer
 } from '../custom/MJArtifactWorkingStateEntityServer.server';
+import { ArtifactVersionPostRunViewHook } from '../custom/MJArtifactVersionEntityServer.server';
 
 function makeUser(id: string, email: string): UserInfo {
     const u = new UserInfo(null, {
@@ -32,10 +33,10 @@ describe('MJArtifactWorkingStateEntityServer & ArtifactWorkingStatePostRunViewHo
 
     it('blocks non-system Save() and Delete() while allowing systemUser writes', async () => {
         const superSaveSpy = vi
-            .spyOn(Object.getPrototypeOf(MJArtifactWorkingStateEntityServer.prototype), 'Save')
+            .spyOn(BaseEntity.prototype, 'Save')
             .mockResolvedValue(true);
         const superDeleteSpy = vi
-            .spyOn(Object.getPrototypeOf(MJArtifactWorkingStateEntityServer.prototype), 'Delete')
+            .spyOn(BaseEntity.prototype, 'Delete')
             .mockResolvedValue(true);
 
         const entity = Object.create(MJArtifactWorkingStateEntityServer.prototype) as MJArtifactWorkingStateEntityServer;
@@ -58,7 +59,7 @@ describe('MJArtifactWorkingStateEntityServer & ArtifactWorkingStatePostRunViewHo
         expect(superDeleteSpy).toHaveBeenCalledTimes(1);
     });
 
-    it('filters non-system RunView rows on MJ: Artifact Working States through ArtifactPermissionEngine', async () => {
+    it('filters non-system RunView rows on MJ: Artifact Working States and MJ: Artifact Versions through ArtifactPermissionEngine', async () => {
         const fakeDbProvider = { ProviderType: 'Database' } as unknown as IMetadataProvider;
         Object.defineProperty(devUser, 'OwningProvider', { value: fakeDbProvider, configurable: true });
 
@@ -98,5 +99,24 @@ describe('MJArtifactWorkingStateEntityServer & ArtifactWorkingStatePostRunViewHo
 
         const unfilteredForSystem = await ArtifactWorkingStatePostRunViewHook(params, rawResults, systemUser);
         expect(unfilteredForSystem.Results).toHaveLength(2);
+
+        const versionParams: RunViewParams = {
+            EntityName: 'MJ: Artifact Versions',
+            ResultType: 'simple'
+        };
+        const versionResults: RunViewResult = {
+            Success: true,
+            Results: [
+                { ID: 'v-1', ArtifactID: allowedArtifactId, Content: 'Allowed' },
+                { ID: 'v-2', ArtifactID: deniedArtifactId, Content: 'Secret' }
+            ],
+            RowCount: 2,
+            TotalRowCount: 2,
+            ExecutionTime: 1,
+            ErrorMessage: ''
+        };
+        const filteredVersions = await ArtifactVersionPostRunViewHook(versionParams, versionResults, devUser);
+        expect(filteredVersions.Results).toHaveLength(1);
+        expect((filteredVersions.Results[0] as { ArtifactID: string }).ArtifactID).toBe(allowedArtifactId);
     });
 });

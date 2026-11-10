@@ -592,4 +592,151 @@ export class DocumentCollaborationResolver extends ResolverBase {
             };
         }
     }
+
+    /**
+     * Dispatches an `@mention` inside an anchored document comment (`comment`, `suggest`, or `edit` mode)
+     * on the server after verifying permissions via {@link ArtifactPermissionEngine}.
+     * - `agentMode === 'edit'` requires `CanEdit === true` on `artifactId`.
+     * - `agentMode === 'comment' | 'suggest'` requires `CanRead === true` on `artifactId`.
+     */
+    @Mutation(() => ExecuteAnchoredCommentAgentMentionPayload)
+    public async ExecuteAnchoredCommentAgentMention(
+        @Arg('artifactId', () => String) artifactId: string,
+        @Arg('agentHandle', () => String) agentHandle: string,
+        @Arg('agentMode', () => String, { defaultValue: 'comment' }) agentMode: string,
+        @Arg('commentBody', () => String) commentBody: string,
+        @Arg('anchorQuote', () => String, { nullable: true }) anchorQuote: string | undefined,
+        @Ctx() context: AppContext
+    ): Promise<ExecuteAnchoredCommentAgentMentionPayload> {
+        const user = context.userPayload?.userRecord;
+        const provider = this.resolveProvider(context);
+        const normalizedArtifactId = (artifactId ?? '').trim();
+        const normalizedHandle = (agentHandle ?? '').trim().replace(/^@+/, '');
+        const normalizedMode =
+            agentMode === 'edit' ? 'edit' : agentMode === 'suggest' ? 'suggest' : 'comment';
+
+        if (!user || !provider || !normalizedArtifactId || !normalizedHandle) {
+            return {
+                Success: false,
+                AgentHandle: normalizedHandle,
+                AgentMode: normalizedMode,
+                ErrorMessage: 'Authenticated user, artifactId, and agentHandle are required.'
+            };
+        }
+
+        const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+            provider,
+            normalizedArtifactId,
+            user
+        );
+        if (normalizedMode === 'edit' && !perms.CanEdit) {
+            return {
+                Success: false,
+                AgentHandle: normalizedHandle,
+                AgentMode: normalizedMode,
+                ErrorMessage: `Permission denied: User lacks CanEdit permission on artifact '${normalizedArtifactId}' for '@${normalizedHandle}' in edit mode.`
+            };
+        }
+        if (!perms.CanRead) {
+            return {
+                Success: false,
+                AgentHandle: normalizedHandle,
+                AgentMode: normalizedMode,
+                ErrorMessage: `Permission denied: User lacks CanRead permission on artifact '${normalizedArtifactId}'.`
+            };
+        }
+
+        const trimmedQuote = (anchorQuote ?? '').trim();
+        const escapedHandle = normalizedHandle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const trimmedInstruction = (commentBody ?? '')
+            .replace(new RegExp(`@${escapedHandle}(?![A-Za-z0-9_-])`, 'gi'), '')
+            .trim();
+
+        if (normalizedMode === 'edit') {
+            const currentContent = await ArtifactCollaborationServer.Instance.GetRoomContent(
+                normalizedArtifactId,
+                user
+            );
+            let nextContent = currentContent;
+            if (trimmedQuote && currentContent.includes(trimmedQuote) && trimmedInstruction) {
+                nextContent = currentContent.replace(trimmedQuote, () => trimmedInstruction);
+            } else if (trimmedInstruction) {
+                nextContent = currentContent
+                    ? `${currentContent}\n\n${trimmedInstruction}`
+                    : trimmedInstruction;
+            }
+            const mutated = await ArtifactCollaborationServer.Instance.ApplyServerContentMutation(
+                normalizedArtifactId,
+                nextContent,
+                user,
+                true,
+                currentContent
+            );
+            if (!mutated.Success) {
+                return {
+                    Success: false,
+                    AgentHandle: normalizedHandle,
+                    AgentMode: normalizedMode,
+                    ErrorMessage: 'Failed to apply agent edit to collaboration room.'
+                };
+            }
+            return {
+                Success: true,
+                AgentHandle: normalizedHandle,
+                AgentMode: normalizedMode,
+                ReplyBody: `Applied requested edit${trimmedQuote ? ` to "${trimmedQuote}"` : ''} (saved as Version ${mutated.VersionNumber ?? ''}).`.trim(),
+                UpdatedContent: nextContent,
+                VersionID: mutated.VersionID,
+                VersionNumber: mutated.VersionNumber
+            };
+        }
+
+        if (normalizedMode === 'suggest') {
+            return {
+                Success: true,
+                AgentHandle: normalizedHandle,
+                AgentMode: normalizedMode,
+                UpdatedContent: trimmedInstruction || undefined,
+                ReplyBody: trimmedQuote
+                    ? `Suggested revision for "${trimmedQuote}": ${trimmedInstruction || trimmedQuote}`
+                    : `Suggested revision: ${trimmedInstruction}`
+            };
+        }
+
+        return {
+            Success: true,
+            AgentHandle: normalizedHandle,
+            AgentMode: normalizedMode,
+            ReplyBody: trimmedQuote
+                ? `@${normalizedHandle} reviewed "${trimmedQuote}": ${trimmedInstruction || 'No issues found.'}`
+                : `@${normalizedHandle}: ${trimmedInstruction || 'Reviewed.'}`
+        };
+    }
+}
+
+@ObjectType()
+export class ExecuteAnchoredCommentAgentMentionPayload {
+    @Field(() => Boolean)
+    public Success!: boolean;
+
+    @Field(() => String)
+    public AgentHandle!: string;
+
+    @Field(() => String)
+    public AgentMode!: string;
+
+    @Field(() => String, { nullable: true })
+    public ReplyBody?: string;
+
+    @Field(() => String, { nullable: true })
+    public UpdatedContent?: string;
+
+    @Field(() => String, { nullable: true })
+    public VersionID?: string;
+
+    @Field(() => Int, { nullable: true })
+    public VersionNumber?: number;
+
+    @Field(() => String, { nullable: true })
+    public ErrorMessage?: string;
 }

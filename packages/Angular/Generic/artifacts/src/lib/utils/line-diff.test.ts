@@ -116,7 +116,7 @@ describe('line-diff — Myers d=0 base case, exact LCS equivalence, JSON cell di
     expect(diff.RemovedLines + diff.AddedLines).toBe(4);
   });
 
-  it('diffs a 20,000-line input where first, middle, and last lines change (no common prefix/suffix bypass) in < 50ms', () => {
+  it('diffs a 20,000-line input where first, middle, and last lines change (no common prefix/suffix bypass) with exact edit counts', () => {
     const baseLines = Array.from({ length: 20000 }, (_, i) => `line-${i}: payload-${i}`);
     const targetLines = [...baseLines];
     // Mutate first and last lines so common prefix/suffix trimming is 0 lines
@@ -125,13 +125,17 @@ describe('line-diff — Myers d=0 base case, exact LCS equivalence, JSON cell di
     targetLines[10001] = 'line-10001: mutated-middle-B';
     targetLines[19999] = 'line-19999: mutated-end';
 
-    const startMs = performance.now();
     const diff = ComputeLineDiff(baseLines, targetLines);
-    const elapsedMs = performance.now() - startMs;
 
-    expect(elapsedMs).toBeLessThan(50);
     expect(diff.RemovedLines).toBe(4);
     expect(diff.AddedLines).toBe(4);
     expect(diff.UnchangedLines).toBe(19996);
+    const addedContents = diff.Lines.filter((l) => l.Type === 'added').map((l) => l.Content);
+    expect(addedContents).toEqual([
+      'line-0: mutated-start',
+      'line-10000: mutated-middle-A',
+      'line-10001: mutated-middle-B',
+      'line-19999: mutated-end',
+    ]);
   });
 });

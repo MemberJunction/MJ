@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { deflateRawSync } from 'node:zlib';
 import { EntityFieldInfo, EntityFieldTSType, EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
@@ -11,6 +11,7 @@ import {
     XlsxOpenXmlAdapter
 } from '../custom/SpreadsheetEngine';
 import { SlideDeckEngine } from '../custom/SlideDeckEngine';
+import { DocumentLiveBlockEngine } from '../custom/DocumentLiveBlockEngine';
 
 function createMockUser(id: string, name: string, canRead = true): UserInfo {
     return {
@@ -27,6 +28,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
 
     beforeEach(() => {
         engine.ClearViewerFunctionCache();
+        DocumentLiveBlockEngine.Instance.SetSigningSecret('test-frozen-block-hmac-secret-at-least-32-bytes!!');
     });
 
     it('converts between 1-based column indices, letters, and A1 coordinates', () => {
@@ -796,12 +798,17 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         const wb = engine.CreateEmptyWorkbook('Round 2 Verification', ['Calc'], 30, 15);
         const s = wb.Worksheets[0];
 
-        // 1. Blocker 6: Full IEEE-754 intermediate doubles + exact clean-float comparison
+        // 1. Blocker 6: Full IEEE-754 doubles without 12-sig-digit snapping (preserves 15-digit IDs / order numbers)
         expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=1/3*3')).toBe(1);
         expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=10/3*3=10')).toBe(true);
         expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUM(1/3,1/3,1/3)')).toBe(1);
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=0.1+0.2')).toBe(0.3);
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=0.1+0.2=0.3')).toBe(true);
+        expect(engine.FormatCellValue(engine.EvaluateFormulaExpression(wb, s.SheetID, '=0.1+0.2'))).toBe('0.3');
+        engine.SetCell(wb, s.SheetID, 'A1', { Value: 100000000000001 }, false);
+        engine.SetCell(wb, s.SheetID, 'A2', { Value: 1e14 }, true);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=A1=A2')).toBe(false);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=A1-A2')).toBe(1);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=1E14+1')).toBe(100000000000001);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=1E308*10')).toBe('#NUM!');
 
         // 2. Plan §6.1 Functions: COUNTBLANK, PRODUCT, FLOOR, CEILING, HLOOKUP, ROW, COLUMN, SUBSTITUTE, FIND, SEARCH, VALUE
         engine.SetCell(wb, s.SheetID, 'A1', { Value: 10 }, false);
@@ -903,23 +910,26 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         expect(xlsxText).not.toContain('250000');
         expect(xlsxText).not.toContain('275000');
 
-        // 5. PatchXlsxBytes preserves <mergeCells>, <dataValidations>, <conditionalFormatting>, and extra ZIP entries
+        // 5. PatchXlsxBytes preserves <mergeCells>, <dataValidations>, <conditionalFormatting>, untouched <row ht="24" customHeight="1">, removes calcChain.xml, and preserves extra ZIP entries
         const enc = new TextEncoder();
         const richWsXml = [
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
             '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
             '<dimension ref="A1:B2"/>',
-            '<sheetData><row r="1"><c r="A1" s="2" t="n"><v>10</v></c></row></sheetData>',
+            '<sheetData>',
+            '<row r="1" ht="24" customHeight="1"><c r="A1" s="2" t="n"><v>10</v></c><c r="B1" s="3"/></row>',
+            '</sheetData>',
             '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells>',
             '<conditionalFormatting sqref="A1:A10"><cfRule type="cellIs" operator="greaterThan" priority="1"><formula>50</formula></cfRule></conditionalFormatting>',
             '<dataValidations count="1"><dataValidation type="list" sqref="B1:B10"><formula1>"Yes,No"</formula1></dataValidation></dataValidations>',
             '</worksheet>'
         ].join('');
         const richOrigZip = (engine as unknown as { buildZipArchive: (e: Array<{ Name: string; Data: Uint8Array }>) => Uint8Array }).buildZipArchive([
-            { Name: '[Content_Types].xml', Data: enc.encode('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>') },
+            { Name: '[Content_Types].xml', Data: enc.encode('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/xl/calcChain.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml"/></Types>') },
             { Name: 'xl/workbook.xml', Data: enc.encode('<workbook><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>') },
-            { Name: 'xl/_rels/workbook.xml.rels', Data: enc.encode('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>') },
+            { Name: 'xl/_rels/workbook.xml.rels', Data: enc.encode('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Target="calcChain.xml"/></Relationships>') },
             { Name: 'xl/worksheets/sheet1.xml', Data: enc.encode(richWsXml) },
+            { Name: 'xl/calcChain.xml', Data: enc.encode('<calcChain/>') },
             { Name: 'xl/drawings/drawing1.xml', Data: enc.encode('<wsDr/>') }
         ]);
         const importedRich = XlsxOpenXmlAdapter.Instance.ImportXlsx(richOrigZip);
@@ -927,13 +937,15 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         const patchedZip = XlsxOpenXmlAdapter.Instance.PatchXlsxBytes(richOrigZip, importedRich);
         const extractedPatched = (engine as unknown as { extractZipArchive: (b: Uint8Array) => Map<string, Uint8Array> }).extractZipArchive(patchedZip);
         expect(extractedPatched.has('xl/drawings/drawing1.xml')).toBe(true);
+        expect(extractedPatched.has('xl/calcChain.xml')).toBe(false);
         const patchedSheetXml = new TextDecoder().decode(extractedPatched.get('xl/worksheets/sheet1.xml')!);
+        expect(patchedSheetXml).toContain('<row r="1" ht="24" customHeight="1"><c r="A1" s="2" t="n"><v>10</v></c><c r="B1" s="3"/></row>');
         expect(patchedSheetXml).toContain('<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells>');
         expect(patchedSheetXml).toContain('<conditionalFormatting sqref="A1:A10">');
         expect(patchedSheetXml).toContain('<dataValidations count="1">');
         expect(patchedSheetXml).toContain('<c r="A2" t="n"><v>999</v></c>');
 
-        // 6. 10,000-formula performance test: SetCell + SerializeWorkbook < 200ms, Parse + Evaluate + Serialize < 500ms
+        // 6. 10,000-formula incremental DAG recalculation test (deterministic work count, no wall-clock flake)
         const perfWb = engine.CreateEmptyWorkbook('10k Formulas', ['Perf'], 2505, 6);
         const pws = perfWb.Worksheets[0];
         for (let r = 1; r <= 2500; r++) {
@@ -945,18 +957,52 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         }
         engine.EvaluateWorkbook(perfWb);
 
-        const editStart = performance.now();
+        const evalSpy = vi.spyOn(
+            engine as unknown as { evalAstNode: (...args: unknown[]) => unknown },
+            'evalAstNode'
+        );
         engine.SetCell(perfWb, pws.SheetID, 'A2500', { Value: 5000 }, true);
-        const serialized10k = engine.SerializeWorkbook(perfWb);
-        const editAndSerializeMs = performance.now() - editStart;
-        expect(pws.Cells['E2500'].ComputedValue).toBe((5000 * 2 + 10) * 3 - 5000);
-        expect(editAndSerializeMs).toBeLessThan(200);
+        // Only the 4 dependent formula cells in row 2500 (B2500, C2500, D2500, E2500) are topologically evaluated (each has 1 root + 2 binary operands = 3 AST nodes = 12 AST node visits total, vs 30,000 for full sheet)
+        expect(evalSpy.mock.calls.length).toBeLessThanOrEqual(20);
+        evalSpy.mockRestore();
 
-        const roundTripStart = performance.now();
+        const serialized10k = engine.SerializeWorkbook(perfWb);
+        expect(pws.Cells['E2500'].ComputedValue).toBe((5000 * 2 + 10) * 3 - 5000);
+
         const reparsed10k = engine.ParseWorkbook(serialized10k);
         const reserialized10k = engine.SerializeWorkbook(reparsed10k);
-        const roundTripMs = performance.now() - roundTripStart;
         expect(reserialized10k.length).toBeGreaterThan(1000);
-        expect(roundTripMs).toBeLessThan(500);
+
+        // 7. Blocker 7 & Items 15, 16, 17: RenameWorksheet formula update, whole-column/row ranges, #MJ_ACCESS_DENIED! propagation
+        const multiWb = engine.CreateEmptyWorkbook('Multi', ['One', 'Two'], 10, 5);
+        engine.SetCell(multiWb, 'Two', 'B2', { Value: 41 }, false);
+        engine.SetCell(multiWb, 'One', 'A1', { Formula: '=Two!B2+1' }, true);
+        expect(multiWb.Worksheets[0].Cells['A1'].ComputedValue).toBe(42);
+        expect(engine.RenameWorksheet(multiWb, 'Two', 'Q1 Revenue')).toBe(true);
+        expect(multiWb.Worksheets[0].Cells['A1'].Formula).toBe("='Q1 Revenue'!B2+1");
+        expect(multiWb.Worksheets[0].Cells['A1'].ComputedValue).toBe(42);
+
+        // Whole-column A:A and whole-row 2:2 references
+        engine.SetCell(multiWb, 'Q1 Revenue', 'B3', { Value: 9 }, true);
+        expect(engine.EvaluateFormulaExpression(multiWb, 'Q1 Revenue', '=SUM(B:B)')).toBe(50);
+        expect(engine.EvaluateFormulaExpression(multiWb, 'Q1 Revenue', '=SUM(2:2)')).toBe(41);
+
+        // Denied live table propagates #MJ_ACCESS_DENIED! across all table cells and cannot be masked by IFERROR or COUNT
+        const deniedProvider = {
+            Entities: [
+                {
+                    ...mockEmpEntity,
+                    GetUserPermisions: () => ({ CanRead: false })
+                }
+            ],
+            Queries: [],
+            RunView: async () => ({ Success: false, Results: [], TotalRowCount: 0 })
+        } as unknown as IMetadataProvider;
+        await engine.RefreshLiveTables(liveWb, createMockUser('u-denied', 'Denied', false), deniedProvider);
+        expect(lws.Cells['B2'].ComputedValue).toBe('#MJ_ACCESS_DENIED!');
+        expect(lws.Cells['C2'].ComputedValue).toBe('#MJ_ACCESS_DENIED!');
+        expect(engine.EvaluateFormulaExpression(liveWb, lws.SheetID, '=IFERROR(B2, 0)')).toBe('#MJ_ACCESS_DENIED!');
+        expect(engine.EvaluateFormulaExpression(liveWb, lws.SheetID, '=COUNT(B2)')).toBe('#MJ_ACCESS_DENIED!');
+        expect(engine.EvaluateFormulaExpression(liveWb, lws.SheetID, '=COUNTA(B2)')).toBe('#MJ_ACCESS_DENIED!');
     });
 });

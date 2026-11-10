@@ -4039,8 +4039,24 @@ export class MarkdownArtifactViewerComponent
     return DocsVersionDiffComponent;
   }
 
-  public get CanUserEdit(): boolean {
+  private get hasPermissionToEdit(): boolean {
     return !this.readonly && this.HasEditPermission && this.CollaborationStatus !== 'revoked';
+  }
+
+  public get IsWaitingForInitialCollabSync(): boolean {
+    return Boolean(
+      this.session &&
+      this.session.Transport === 'websocket' &&
+      !this.session.HasCompletedInitialSync,
+    );
+  }
+
+  public get LiveSyncUnavailable(): boolean {
+    return Boolean(this.session?.LiveSyncUnavailable);
+  }
+
+  public get CanUserEdit(): boolean {
+    return this.hasPermissionToEdit && !this.IsWaitingForInitialCollabSync;
   }
 
   /**
@@ -4091,7 +4107,7 @@ export class MarkdownArtifactViewerComponent
       if (!this.artifactVersion?.ArtifactID) {
         this.HasEditPermission = !this.readonly;
       }
-      this.session?.SetCanEdit(this.CanUserEdit);
+      this.session?.SetCanEdit(this.hasPermissionToEdit);
       this.cdr.markForCheck();
     }
   }
@@ -6660,13 +6676,14 @@ export class MarkdownArtifactViewerComponent
    * - `'suggest'`: creates a track-changes suggestion (`CreateSuggestion`) from `proposedMarkdown` and appends the reply.
    * - `'edit'`: when `CanUserEdit` is true, applies `proposedMarkdown` directly to the anchored segment and posts a confirmation reply.
    */
-  public dispatchAgentCommentMention(
+  public DispatchAgentCommentMention(
     thread: DocumentAnchoredThread,
     agentHandle: string,
     response: {
       replyMessage: string;
       proposedMarkdown?: string;
       rationale?: string;
+      appliedOnServer?: boolean;
     },
   ): void {
     const mode = thread.AgentMode ?? this.NewCommentAgentMode;
@@ -6690,7 +6707,11 @@ export class MarkdownArtifactViewerComponent
     }
 
     if (mode === 'edit' && this.CanUserEdit && targetSeg) {
-      this.ReplaceSegmentMarkdown(targetSeg, response.proposedMarkdown);
+      if (response.appliedOnServer) {
+        this.OnMarkdownChanged(response.proposedMarkdown, true);
+      } else {
+        this.ReplaceSegmentMarkdown(targetSeg, response.proposedMarkdown);
+      }
       thread.Messages.push({
         DetailID: `msg-${Date.now()}-agent`,
         UserName: normalizedAuthor,
@@ -6789,6 +6810,35 @@ export class MarkdownArtifactViewerComponent
     this.NewCommentText = '';
     this.StatusBannerMessage = 'Posted anchored comment.';
     this.cdr.markForCheck();
+
+    if (artifactId && mentions.length > 0) {
+      const provider = this.getSafeProvider();
+      const firstHandle = mentions[0];
+      const serverMention = await this.collabService.ExecuteAnchoredCommentAgentMention(
+        artifactId,
+        firstHandle,
+        newThread.AgentMode,
+        message,
+        newThread.QuotedText,
+        provider,
+      );
+      if (this.isComponentDestroyed) {
+        return;
+      }
+      if (serverMention.HandledByServer) {
+        if (!serverMention.Success) {
+          this.notifyError(
+            serverMention.ErrorMessage || `Failed to run @${firstHandle} in ${newThread.AgentMode} mode.`,
+          );
+          return;
+        }
+        this.DispatchAgentCommentMention(newThread, firstHandle, {
+          replyMessage: serverMention.ReplyBody || `Processed @${firstHandle}.`,
+          proposedMarkdown: serverMention.UpdatedContent,
+          appliedOnServer: newThread.AgentMode === 'edit' && Boolean(serverMention.UpdatedContent),
+        });
+      }
+    }
   }
 
   public ToggleResolveThread(thread: DocumentAnchoredThread): void {
@@ -6967,6 +7017,32 @@ export class MarkdownArtifactViewerComponent
         ok: false,
         versionNumber: 0,
         errorMessage: 'Metadata provider or user context unavailable.',
+      };
+    }
+
+    const serverCommit = await this.collabService.CommitInlineEditOnServer(
+      artifactId,
+      content,
+      true,
+      provider,
+    );
+    if (serverCommit.HandledByServer) {
+      if (!serverCommit.Success) {
+        return {
+          ok: false,
+          versionNumber: 0,
+          errorMessage: serverCommit.ErrorMessage || 'Failed to save document version on server.',
+        };
+      }
+      this.session?.AdoptOutOfBandCommittedContent(content);
+      return {
+        ok: true,
+        versionNumber:
+          serverCommit.VersionNumber ??
+          Math.max(
+            this.artifactVersion?.VersionNumber ?? 1,
+            ...this.SavedVersionSnapshots.map((s) => s.VersionNumber),
+          ) + 1,
       };
     }
 
@@ -7193,13 +7269,26 @@ export class MarkdownArtifactViewerComponent
       if (seg.Kind === 'mj-block' && seg.Descriptor) {
         if (seg.Descriptor.Kind === 'Artifact') {
           this.GetEmbeddedArtifactVersion(seg.Descriptor);
-        } else if (seg.Descriptor.Mode !== 'Frozen' && !this.blockResults.has(seg.Descriptor.BlockID)) {
+        } else if (seg.Descriptor.Mode === 'Frozen') {
+          void this.verifyFrozenBlockOnServer(seg.Descriptor);
+        } else if (!this.blockResults.has(seg.Descriptor.BlockID)) {
           void this.RefreshLiveBlock(seg.Descriptor);
         }
       }
     }
     if (this.ViewMode === 'diff') {
       this.RecomputeDiff();
+    }
+  }
+
+  private async verifyFrozenBlockOnServer(block: DocumentBlockSpec): Promise<void> {
+    const provider = this.getSafeProvider();
+    if (!provider || !this.collabService.HasCollaborationBackend(provider)) {
+      return;
+    }
+    await this.collabService.VerifyFrozenSnapshotOnServer(block, provider);
+    if (!this.isComponentDestroyed) {
+      this.cdr.markForCheck();
     }
   }
 
@@ -7218,7 +7307,7 @@ export class MarkdownArtifactViewerComponent
         name: user?.Name ?? 'Collaborator',
         email: user?.Email,
       },
-      this.CanUserEdit,
+      this.hasPermissionToEdit,
       hasRemoteBackend,
     );
 
@@ -7324,7 +7413,7 @@ export class MarkdownArtifactViewerComponent
         this.ViewMode = 'preview';
         this.session?.SetCanEdit(false);
       } else {
-        this.session?.SetCanEdit(this.CanUserEdit);
+        this.session?.SetCanEdit(this.hasPermissionToEdit);
         if (!perms.CanEdit && (this.ViewMode === 'edit' || this.ViewMode === 'suggest')) {
           this.ViewMode = 'preview';
         }
@@ -7378,7 +7467,7 @@ export class MarkdownArtifactViewerComponent
             this.ViewMode = 'preview';
             this.session?.SetCanEdit(false);
           } else {
-            this.session?.SetCanEdit(this.CanUserEdit);
+            this.session?.SetCanEdit(this.hasPermissionToEdit);
             if (!updated.CanEdit) {
               this.CollaborationStatus = 'readonly';
               if (this.ViewMode === 'edit' || this.ViewMode === 'suggest') {

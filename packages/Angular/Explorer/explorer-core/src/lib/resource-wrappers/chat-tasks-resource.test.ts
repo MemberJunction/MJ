@@ -18,8 +18,14 @@ vi.mock('@memberjunction/ng-shared', () => ({
 vi.mock('@memberjunction/ng-conversations', () => ({
   TasksFullViewComponent: class {},
   BuildAgentBackedTaskExtraFilter: vi.fn(
-    () =>
-      "ParentID IS NULL AND ([AgentRunID] IS NOT NULL OR [AgentID] IS NOT NULL OR [ConversationDetailID] IS NOT NULL OR [ID] IN (SELECT [TargetLogID] FROM [__mj].[vwAIAgentRunSteps] WHERE [StepType] = 'Sub-Agent' AND [TargetLogID] IS NOT NULL) OR [ParentID] IN (SELECT [ID] FROM [__mj].[vwTasks] WHERE [AgentRunID] IS NOT NULL) OR [ID] IN (SELECT [ParentID] FROM [__mj].[vwTasks] WHERE ([AgentRunID] IS NOT NULL OR [AgentID] IS NOT NULL OR [ConversationDetailID] IS NOT NULL) AND [ParentID] IS NOT NULL))",
+    (_provider?: unknown, user?: { ID?: string } | null) =>
+      user?.ID
+        ? `ParentID IS NULL AND UserID = '${user.ID}' AND ([AgentRunID] IS NOT NULL OR [AgentID] IS NOT NULL OR [ConversationDetailID] IS NOT NULL)`
+        : '1 = 0',
+  ),
+  BuildAgentActivityTasksFilter: vi.fn(
+    async (_provider: unknown, user: { ID: string }) =>
+      `(ParentID IS NULL AND UserID = '${user.ID}') AND ([AgentRunID] IS NOT NULL OR [AgentID] IS NOT NULL OR [ConversationDetailID] IS NOT NULL OR [ID] IN (SELECT [ParentID] FROM [__mj].[vwTasks] WHERE ([AgentRunID] IS NOT NULL OR [AgentID] IS NOT NULL OR [ConversationDetailID] IS NOT NULL) AND [ParentID] IS NOT NULL))`,
   ),
 }));
 
@@ -52,11 +58,11 @@ describe('ChatTasksResource (Agent Activity)', () => {
 
     const filter = await resource.ResolveAgentActivityFilter();
     expect(filter).toContain('ParentID IS NULL');
-    expect(filter).not.toContain("UserID = 'u-1'");
+    expect(filter).toContain("UserID = 'u-1'");
     expect(filter).toContain('[ConversationDetailID] IS NOT NULL');
     expect(filter).toContain('[AgentID] IS NOT NULL');
     expect(filter).toContain('[AgentRunID] IS NOT NULL');
-    expect(filter).toContain('[__mj].[vwAIAgentRunSteps]');
+    expect(filter).not.toContain('vwAIAgentRunSteps');
     expect(filter).toContain('[__mj].[vwTasks]');
   });
 });

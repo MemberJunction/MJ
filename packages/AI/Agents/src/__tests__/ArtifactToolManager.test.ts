@@ -597,11 +597,13 @@ describe('ArtifactToolManager', () => {
             expect(mut2Data.persisted).toBe(true);
             expect(mut2Data.versionNumber).toBe(2);
 
-            // Verify only ONE version row was created for the entire agent run, stamped with D5 attribution
+            // Verify only ONE version row was created for the entire agent run, preserving artifact Name (Blocker 4) and recording D5 attribution in Comments
             expect(savedVersions).toHaveLength(1);
             const runVersion = savedVersions[0];
             expect(runVersion.VersionNumber).toBe(2);
-            expect(runVersion.Name).toBe('Edited by Docs Strategist');
+            expect(runVersion.Name).toBe('Board Strategy.md');
+            expect(runVersion.Comments).toContain("Edited by Docs Strategist via 'replace_block'");
+            expect(runVersion.Comments).toContain('run-xyz-999');
             expect(runVersion.Content).toContain('# Updated Title Step 1');
             expect(runVersion.Content).toContain('Updated body paragraph in Step 2.');
             expect(JSON.parse(runVersion.Configuration ?? '{}')).toMatchObject({
@@ -882,6 +884,149 @@ describe('ArtifactToolManager', () => {
             const toolNames = manager.GetAvailableToolNames();
             expect(toolNames).toContain('write_cells');
             expect(toolNames).toContain('get_sheets');
+            expect(toolNames).toContain('reload_artifact');
+        });
+
+        it('recovers from concurrent human modification via reload_artifact and fails closed when concurrency RunView fails (Round 3 Item 9)', async () => {
+            const savedVersions = [
+                {
+                    ID: 'ver-initial',
+                    ArtifactID: 'aaaa1111-2222-4333-8444-555555555555',
+                    VersionNumber: 1,
+                    Content: '# Original\n\nBody v1.',
+                    ContentMode: 'Text' as const,
+                },
+                {
+                    ID: 'ver-human-2',
+                    ArtifactID: 'aaaa1111-2222-4333-8444-555555555555',
+                    VersionNumber: 2,
+                    Content: '# Human v2 Heading\n\nHuman v2 body.',
+                    ContentMode: 'Text' as const,
+                },
+            ];
+            let failVersionLookup = false;
+            const mockUser = { ID: 'user-agent-1', Name: 'Docs Agent User' } as unknown as UserInfo;
+            const mockProvider = {
+                RunView: async (params: { EntityName: string }) => {
+                    if (params.EntityName === 'MJ: Artifacts') {
+                        return {
+                            Success: true,
+                            Results: [{ ID: 'aaaa1111-2222-4333-8444-555555555555', UserID: 'user-agent-1' }],
+                        };
+                    }
+                    if (failVersionLookup) {
+                        return { Success: false, Results: [], ErrorMessage: 'Database connection timeout' };
+                    }
+                    const latest = savedVersions[savedVersions.length - 1];
+                    return {
+                        Success: true,
+                        Results: [latest],
+                    };
+                },
+                GetEntityObject: async () => {
+                    const draft = {
+                        ID: '',
+                        ArtifactID: '',
+                        VersionNumber: 0,
+                        UserID: '',
+                        Name: '' as string | null,
+                        Comments: '' as string | null,
+                        ContentHash: '' as string | null,
+                        ContentMode: 'Text' as const,
+                        FileID: null as string | null,
+                        Content: null as string | null,
+                        Configuration: null as string | null,
+                        NewRecord: () => undefined,
+                        Save: async () => {
+                            draft.ID = `ver-agent-${draft.VersionNumber}`;
+                            savedVersions.push({
+                                ID: draft.ID,
+                                ArtifactID: draft.ArtifactID,
+                                VersionNumber: draft.VersionNumber,
+                                Content: draft.Content ?? '',
+                                ContentMode: 'Text',
+                            });
+                            return true;
+                        },
+                    };
+                    return draft;
+                },
+            } as unknown as IMetadataProvider;
+
+            manager.Initialize(
+                [
+                    {
+                        name: 'Strategy.md',
+                        typeName: 'Markdown Document',
+                        toolLibraryClass: 'DocumentToolLibrary',
+                        artifactId: 'aaaa1111-2222-4333-8444-555555555555',
+                        versionId: 'ver-initial',
+                        versionNumber: 1,
+                        content: '# Original\n\nBody v1.',
+                    },
+                ],
+                { contextUser: mockUser, provider: mockProvider },
+            );
+
+            // 1. Fail closed when concurrency RunView fails
+            failVersionLookup = true;
+            const failedCheck = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'insert_block_after',
+                input: { markdown: 'Should fail closed.' },
+            });
+            expect(failedCheck.result.success).toBe(false);
+            expect(failedCheck.result.errorMessage).toContain('Database connection timeout');
+
+            // 2. Concurrency conflict trips against v2, then reload_artifact recovers so the next mutation writes v3!
+            failVersionLookup = false;
+            const conflictRes = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'insert_block_after',
+                input: { markdown: 'Stale write.' },
+            });
+            expect(conflictRes.result.success).toBe(false);
+            expect(conflictRes.result.errorMessage).toContain('reload_artifact');
+
+            const reloadRes = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'reload_artifact',
+                input: {},
+            });
+            expect(reloadRes.result.success).toBe(true);
+            expect((reloadRes.result.data as { versionNumber: number }).versionNumber).toBe(2);
+
+            const afterReloadWrite = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'insert_block_after',
+                input: { markdown: 'Appended cleanly on top of v2!' },
+            });
+            expect(afterReloadWrite.result.success).toBe(true);
+            expect((afterReloadWrite.result.data as { versionNumber: number }).versionNumber).toBe(3);
+            expect(savedVersions[savedVersions.length - 1].Content).toContain('# Human v2 Heading');
+            expect(savedVersions[savedVersions.length - 1].Content).toContain('Appended cleanly on top of v2!');
+        });
+
+        it('refuses structural spreadsheet tools on File-mode .xlsx workbooks to preserve OpenXML fidelity (Round 3 Item 12)', async () => {
+            const fakeXlsxHeader = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00]);
+            manager.Initialize([
+                {
+                    name: 'UploadedModel.xlsx',
+                    typeName: 'Excel Spreadsheet',
+                    toolLibraryClass: 'SpreadsheetToolLibrary',
+                    content: fakeXlsxHeader,
+                },
+            ]);
+
+            for (const structuralTool of ['insert_rows', 'insert_columns', 'add_sheet', 'rename_sheet', 'delete_sheet']) {
+                const res = await manager.ExecuteSingleToolCall({
+                    artifactId: 'A',
+                    tool: structuralTool,
+                    input: { sheet: 'Sheet1', name: 'New', newName: 'New', atRowNumber: 1, atColumnNumber: 1 },
+                });
+                expect(res.result.success).toBe(false);
+                expect(res.result.errorMessage).toContain('not supported on File-mode .xlsx workbooks');
+            }
         });
     });
 });

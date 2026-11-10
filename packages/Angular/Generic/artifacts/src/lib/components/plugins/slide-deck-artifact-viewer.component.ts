@@ -23,7 +23,6 @@ import {
   ArtifactMetadataEngine,
   UserInfoEngine,
   DocumentLiveBlockEngine,
-  ComputeFrozenSnapshotHash,
   ArtifactPermissionEngine,
   FilterReadableAnchoredConversations,
   SlideDeckEngine,
@@ -2072,7 +2071,7 @@ export class SlideDeckArtifactViewerComponent
   private sessionInitGeneration = 0;
   private isComponentDestroyed = false;
 
-  public get IsEditable(): boolean {
+  private get hasPermissionToEdit(): boolean {
     if (this.readonly) {
       return false;
     }
@@ -2083,6 +2082,22 @@ export class SlideDeckArtifactViewerComponent
       return this.ResolvedPermissions?.CanEdit === true;
     }
     return true;
+  }
+
+  public get IsWaitingForInitialCollabSync(): boolean {
+    return Boolean(
+      this.session &&
+      this.session.Transport === 'websocket' &&
+      !this.session.HasCompletedInitialSync,
+    );
+  }
+
+  public get LiveSyncUnavailable(): boolean {
+    return Boolean(this.session?.LiveSyncUnavailable);
+  }
+
+  public get IsEditable(): boolean {
+    return this.hasPermissionToEdit && !this.IsWaitingForInitialCollabSync;
   }
 
   public get CanComment(): boolean {
@@ -2184,7 +2199,7 @@ export class SlideDeckArtifactViewerComponent
       this.setupCollaborationSession(artifactId, SlideDeckEngine.Instance.SerializeDeckSpec(this.Deck));
     }
     if (changes['readonly']) {
-      this.session?.SetCanEdit(this.IsEditable);
+      this.session?.SetCanEdit(this.hasPermissionToEdit);
       this.cdr.markForCheck();
     }
   }
@@ -2787,7 +2802,13 @@ export class SlideDeckArtifactViewerComponent
       return;
     }
     if (block.Mode === 'Frozen' && block.FrozenSnapshot) {
-      const verified = this.IsSnapshotVerified(block);
+      const provider = this.getSafeProvider();
+      const verified = provider && this.collabService.HasCollaborationBackend(provider)
+        ? await this.collabService.VerifyFrozenSnapshotOnServer(block, provider)
+        : this.IsSnapshotVerified(block);
+      if (this.isComponentDestroyed) {
+        return;
+      }
       this.blockResultsByBlockId.set(block.BlockID, {
         Success: true,
         BlockID: block.BlockID,
@@ -2932,61 +2953,37 @@ export class SlideDeckArtifactViewerComponent
 
   public async FreezeLiveBlock(region: SlideRegionSpec, block: DocumentBlockSpec): Promise<void> {
     const provider = this.getSafeProvider();
-    if (provider) {
-      try {
-        const serverRes = await this.collabService.FreezeLiveBlockOnServer(
-          block,
-          true,
-          this.artifactVersion?.ArtifactID,
-          provider,
-        );
-        if (this.isComponentDestroyed) {
-          return;
-        }
-        if (serverRes.Success && serverRes.UpdatedSpec) {
-          this.applySingleSlideRegionPatch(this.ActiveSlide.SlideID, {
-            RegionID: region.RegionID,
-            Kind: 'mj-block',
-            BlockSpec: serverRes.UpdatedSpec,
-            MarkdownContent: DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(
-              serverRes.UpdatedSpec,
-            ),
-          });
-          this.cdr.markForCheck();
-          return;
-        }
-      } catch (err) {
-        LogError(err);
-      }
+    if (!provider) {
+      this.notifyError('Cannot freeze block: metadata provider unavailable.');
+      return;
     }
-
-    const display = this.GetDisplayRowsForBlock(block);
-    const user = this.getCurrentUserSummary();
-    const frozenAt = new Date().toISOString();
-    const baseSnapshot = {
-      FrozenAt: frozenAt,
-      FrozenByUserID: user.ID,
-      FrozenByUserName: user.Name,
-      Columns: display.Columns,
-      Rows: display.Rows,
-      TotalRowCount: display.Rows.length,
-      SecurityWarningAcknowledged: true,
-    };
-    const frozenBlock: DocumentBlockSpec = {
-      ...block,
-      Mode: 'Frozen',
-      FrozenSnapshot: {
-        ...baseSnapshot,
-        SnapshotContentHash: ComputeFrozenSnapshotHash(baseSnapshot),
-      },
-    };
-
-    this.applySingleSlideRegionPatch(this.ActiveSlide.SlideID, {
-      RegionID: region.RegionID,
-      Kind: 'mj-block',
-      BlockSpec: frozenBlock,
-      MarkdownContent: DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(frozenBlock),
-    });
+    try {
+      const serverRes = await this.collabService.FreezeLiveBlockOnServer(
+        block,
+        true,
+        this.artifactVersion?.ArtifactID,
+        provider,
+      );
+      if (this.isComponentDestroyed) {
+        return;
+      }
+      if (!serverRes.Success || !serverRes.UpdatedSpec) {
+        this.notifyError(serverRes.ErrorMessage || 'Failed to freeze live block on server.');
+        return;
+      }
+      this.applySingleSlideRegionPatch(this.ActiveSlide.SlideID, {
+        RegionID: region.RegionID,
+        Kind: 'mj-block',
+        BlockSpec: serverRes.UpdatedSpec,
+        MarkdownContent: DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(
+          serverRes.UpdatedSpec,
+        ),
+      });
+      this.cdr.markForCheck();
+    } catch (err) {
+      LogError(err);
+      this.notifyError(err instanceof Error ? err.message : 'Failed to freeze live block on server.');
+    }
   }
 
   public UnfreezeSlideRegionBlock(region: SlideRegionSpec, block: DocumentBlockSpec): void {
@@ -3348,7 +3345,7 @@ export class SlideDeckArtifactViewerComponent
       artifactId,
       initialSerializedDeck,
       { id: user.ID, name: user.Name, email: user.Email },
-      this.IsEditable,
+      this.hasPermissionToEdit,
       hasRemoteBackend,
     );
 
@@ -3566,7 +3563,7 @@ export class SlideDeckArtifactViewerComponent
         this.ConnectionStatus = 'readonly';
         this.session?.SetCanEdit(false);
       } else {
-        this.session?.SetCanEdit(this.IsEditable);
+        this.session?.SetCanEdit(this.hasPermissionToEdit);
       }
     } catch (err) {
       LogError(err);
@@ -3606,7 +3603,7 @@ export class SlideDeckArtifactViewerComponent
             this.ConnectionStatus = 'readonly';
             this.session?.SetCanEdit(false);
           } else {
-            this.session?.SetCanEdit(this.IsEditable);
+            this.session?.SetCanEdit(this.hasPermissionToEdit);
           }
           this.cdr.markForCheck();
         } catch (err) {
@@ -3861,6 +3858,30 @@ export class SlideDeckArtifactViewerComponent
     const user = this.getSafeCurrentUser();
     if (!provider || !user) {
       this.notifyError('Cannot save presentation version: metadata provider or user context unavailable.');
+      return;
+    }
+
+    const serverCommit = await this.collabService.CommitInlineEditOnServer(
+      artifactId,
+      serializedContent,
+      true,
+      provider,
+    );
+    if (serverCommit.HandledByServer) {
+      if (!serverCommit.Success) {
+        this.notifyError(serverCommit.ErrorMessage || 'Failed to save presentation version on server.');
+        return;
+      }
+      this.session?.AdoptOutOfBandCommittedContent(serializedContent);
+      const nextVerNum =
+        serverCommit.VersionNumber ??
+        Math.max(this.CurrentVersionNumber, this.LastSavedVersionNumber) + 1;
+      this.lastSavedComparableDeckJson = this.getComparableDeckJson(this.Deck);
+      this.CurrentVersionNumber = nextVerNum;
+      this.LastSavedVersionNumber = nextVerNum;
+      this.StatusBannerMessage = `Saved presentation version v${nextVerNum}.`;
+      this.ContentCommitted.emit(serializedContent);
+      this.cdr.markForCheck();
       return;
     }
 

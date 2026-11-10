@@ -268,28 +268,36 @@ function buildSafeViewExtraFilter(entity: EntityInfo, user: UserInfo, rawFilter:
     if (!trimmed) {
         return undefined;
     }
+    const quotedLiterals: string[] = [];
+    const masked = trimmed.replace(/'(?:''|[^'])*'|"[^"]*"/g, (lit) => {
+        const idx = quotedLiterals.length;
+        quotedLiterals.push(lit);
+        return `__MJ_LIT_${idx}__`;
+    });
     if (
         /;|--|\/\*|\*\/|\b(SELECT|UNION|DROP|DELETE|UPDATE|INSERT|EXEC|EXECUTE|ALTER|CREATE|TRUNCATE|MERGE|GRANT|REVOKE|WAITFOR|OPENROWSET)\b/i.test(
-            trimmed,
+            masked,
         ) ||
-        /\bxp_[A-Za-z0-9_]*/i.test(trimmed)
+        /\bxp_[A-Za-z0-9_]*/i.test(masked)
     ) {
-        throw new ExcelSourceError('Unsafe SQL filter expression refused in =MJ.VIEW.');
+        throw new ExcelSourceError('#VALUE! Unsafe SQL filter expression refused in =MJ.VIEW.');
     }
 
-    const clauses = trimmed.split(/\s+AND\s+/i);
+    const clauses = masked.split(/\s+\bAND\b\s+/i);
     const denied = entity.GetDeniedReadFields ? entity.GetDeniedReadFields(user) : new Set<string>();
     const safeClauses: string[] = [];
 
-    for (const rawClause of clauses) {
-        const clause = rawClause.trim();
+    for (const maskedClause of clauses) {
+        const clause = maskedClause
+            .replace(/__MJ_LIT_(\d+)__/g, (_m, idxStr: string) => quotedLiterals[Number(idxStr)] ?? '')
+            .trim();
         const cmpMatch =
             /^([A-Za-z_][A-Za-z0-9_]*)\s*(=|!=|<>|<=|>=|<|>)\s*(?:'((?:''|[^'])*)'|"([^"]*)"|([+-]?\d+(?:\.\d+)?)|(TRUE|FALSE))$/i.exec(
                 clause,
             );
         if (!cmpMatch) {
             throw new ExcelSourceError(
-                'Only simple Field <op> Value comparison filters (joined by AND) are permitted in =MJ.VIEW.',
+                '#VALUE! Only simple Field <op> Value comparison filters (joined by AND) are permitted in =MJ.VIEW.',
             );
         }
 
@@ -297,7 +305,7 @@ function buildSafeViewExtraFilter(entity: EntityInfo, user: UserInfo, rawFilter:
         const op = cmpMatch[2] === '!=' ? '<>' : cmpMatch[2];
         const matchedField = entity.Fields.find(f => f.Name.toLowerCase() === fieldName.toLowerCase());
         if (!matchedField) {
-            throw new ExcelSourceError(`The entity "${entity.DisplayNameOrName}" has no field "${fieldName}".`);
+            throw new ExcelSourceError(`#VALUE! The entity "${entity.DisplayNameOrName}" has no field "${fieldName}".`);
         }
         for (const d of denied) {
             if (d.toLowerCase() === matchedField.Name.toLowerCase()) {

@@ -1370,7 +1370,15 @@ export function ValidateFrozenBlockSnapshot(
         };
     }
 
-    const expectedHash = ComputeFrozenSnapshotHash(snap, signingSecret);
+    const secret = resolveFrozenSnapshotSigningSecret(signingSecret);
+    if (!secret) {
+        return {
+            Valid: true,
+            SnapshotVerified: false
+        };
+    }
+
+    const expectedHash = ComputeFrozenSnapshotHash(snap, secret);
     const snapshotVerified = constantTimeStringEqual(snap.SnapshotContentHash, expectedHash);
     return {
         Valid: true,
@@ -1397,6 +1405,12 @@ export function ComputeFrozenSnapshotHash(
     >,
     signingSecret?: string
 ): string {
+    const secret = resolveFrozenSnapshotSigningSecret(signingSecret);
+    if (!secret) {
+        throw new Error(
+            'MJ_FROZEN_BLOCK_HMAC_SECRET (>= 32 bytes) must be configured on the server before signing or verifying frozen block snapshots.'
+        );
+    }
     const payload = canonicalizeForHash({
         FrozenAt: snap.FrozenAt,
         FrozenByUserID: snap.FrozenByUserID,
@@ -1408,28 +1422,31 @@ export function ComputeFrozenSnapshotHash(
         ArtifactTypeSnapshot: snap.ArtifactTypeSnapshot ?? null,
         SecurityWarningAcknowledged: snap.SecurityWarningAcknowledged === true
     });
-    const secret = resolveFrozenSnapshotSigningSecret(signingSecret);
     return `hmac-sha256:${hmacSha256HexUtf8(secret, payload)}`;
 }
 
-function resolveFrozenSnapshotSigningSecret(explicitSecret?: string): string {
+const MIN_FROZEN_SNAPSHOT_SECRET_BYTES = 32;
+
+function resolveFrozenSnapshotSigningSecret(explicitSecret?: string): string | null {
+    const enc = new TextEncoder();
     if (explicitSecret && explicitSecret.trim().length > 0) {
-        return explicitSecret.trim();
+        const trimmed = explicitSecret.trim();
+        return enc.encode(trimmed).length >= MIN_FROZEN_SNAPSHOT_SECRET_BYTES ? trimmed : null;
     }
     const configured = DocumentLiveBlockEngine.Instance.GetSigningSecret();
     if (configured && configured.trim().length > 0) {
-        return configured.trim();
+        const trimmed = configured.trim();
+        return enc.encode(trimmed).length >= MIN_FROZEN_SNAPSHOT_SECRET_BYTES ? trimmed : null;
     }
     const env =
         typeof globalThis !== 'undefined' && 'process' in globalThis
             ? (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
             : undefined;
-    return (
-        env?.MJ_FROZEN_SNAPSHOT_SECRET ||
-        env?.JWT_SECRET ||
-        env?.GRAPHQL_SECRET ||
-        'mj-default-server-freeze-hmac-key-change-in-prod'
-    );
+    const candidate = (env?.MJ_FROZEN_BLOCK_HMAC_SECRET || env?.MJ_FROZEN_SNAPSHOT_SECRET || '').trim();
+    if (enc.encode(candidate).length < MIN_FROZEN_SNAPSHOT_SECRET_BYTES) {
+        return null;
+    }
+    return candidate;
 }
 
 function constantTimeStringEqual(a: string, b: string): boolean {
@@ -1659,12 +1676,22 @@ function validateEntityViewExtraFilter(
             ErrorMessage: 'Schema- or table-qualified identifiers and user-defined functions are not permitted in ExtraFilter.'
         };
     }
-    const withoutInLists = masked.replace(/\b(?:NOT\s+)?IN\s*\(/gi, 'IN ');
-    if (/(?:\b[A-Za-z_][A-Za-z0-9_]*|\])\s*\(/.test(withoutInLists)) {
+    const allowedLogicalParenKeywords = new Set(['AND', 'OR', 'NOT', 'IN']);
+    if (/\]\s*\(/.test(masked)) {
         return {
             Valid: false,
             ErrorMessage: 'Scalar or user-defined SQL function calls are not permitted in ExtraFilter.'
         };
+    }
+    const fnCallRegex = /\b([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
+    let fnMatch: RegExpExecArray | null;
+    while ((fnMatch = fnCallRegex.exec(masked)) !== null) {
+        if (!allowedLogicalParenKeywords.has(fnMatch[1].toUpperCase())) {
+            return {
+                Valid: false,
+                ErrorMessage: 'Scalar or user-defined SQL function calls are not permitted in ExtraFilter.'
+            };
+        }
     }
 
     const allowedFieldNames = new Set(entityInfo.Fields.map((f) => f.Name.trim().toLowerCase()));

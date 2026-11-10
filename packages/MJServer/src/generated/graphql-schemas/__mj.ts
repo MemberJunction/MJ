@@ -27181,6 +27181,103 @@ export class MJArtifactVersionResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Artifact Working States
+//****************************************************************************
+@ObjectType({ description: "Stores the live compacted Yjs CRDT binary working state (1:1 per Artifact) for active collaborative editing sessions across MJ Docs, Slides, Sheets, and inline OLE artifacts before compaction into immutable MJ: Artifact Versions checkpoints." })
+export class MJArtifactWorkingState_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "The Artifact whose active collaborative CRDT state is stored in this working state record (1:1 relationship)."}) 
+    @MaxLength(36)
+    ArtifactID?: string;
+        
+    @Field({nullable: true, description: "Compacted Yjs CRDT state vector (Y.encodeStateAsUpdate) stored as binary bytes (exposed as base64 in TypeScript entities). Periodically checkpointed during active editing and compacted into MJ: Artifact Versions on save or session close."}) 
+    YjsState?: string;
+        
+    @Field({nullable: true, description: "User who most recently modified or checkpointed this working state."}) 
+    @MaxLength(36)
+    LastModifiedByUserID?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Artifact?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    LastModifiedByUser?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+//****************************************************************************
+// RESOLVER for MJ: Artifact Working States
+//****************************************************************************
+@ObjectType()
+export class RunMJArtifactWorkingStateViewResult {
+    @Field(() => [MJArtifactWorkingState_])
+    Results: MJArtifactWorkingState_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJArtifactWorkingState_)
+export class MJArtifactWorkingStateResolver extends ResolverBase {
+    @Query(() => RunMJArtifactWorkingStateViewResult)
+    async RunMJArtifactWorkingStateViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJArtifactWorkingStateViewResult)
+    async RunMJArtifactWorkingStateViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJArtifactWorkingStateViewResult)
+    async RunMJArtifactWorkingStateDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Artifact Working States';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJArtifactWorkingState_, { nullable: true })
+    async MJArtifactWorkingState(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJArtifactWorkingState_ | null> {
+        this.CheckUserReadPermissions('MJ: Artifact Working States', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArtifactWorkingStates')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Artifact Working States', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Artifact Working States', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Artifacts
 //****************************************************************************
 @ObjectType({ description: "Independent content items (code, documents, charts) that can be linked to multiple conversations and collections. Supports versioning and sharing." })

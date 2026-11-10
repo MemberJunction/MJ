@@ -104,17 +104,19 @@ function extractToolData<T extends object>(res: ArtifactToolResult, contextLabel
 // ─── DSL1: Metadata coherence, Artifact Types, and Library / Chat wiring ──────
 
 async function checkDsl1MetadataAndAppWiring(ctx: IntegrationCheckContext): Promise<void> {
-    // 1. MJ: Artifact Working States entity & FK metadata (locked down: TrackRecordChanges=false, AllowAllRowsAPI=false, AllowUserSearchAPI=false, zero UI role permissions)
+    // 1. MJ: Artifact Working States entity & FK metadata (IncludeInAPI=true for CodeGen entity class, all 5 Allow*API=false, TrackRecordChanges=false, zero EntityPermission rows)
     const workingStatesEnt = ctx.Provider.Entities.find((e) => e.Name === 'MJ: Artifact Working States');
     Assert(workingStatesEnt !== undefined, 'Entity "MJ: Artifact Working States" must exist in Provider.Entities');
     AssertEqual(workingStatesEnt!.BaseTable, 'ArtifactWorkingState', 'MJ: Artifact Working States BaseTable');
     AssertEqual(workingStatesEnt!.BaseView, 'vwArtifactWorkingStates', 'MJ: Artifact Working States BaseView');
     AssertEqual(workingStatesEnt!.TrackRecordChanges, false, 'MJ: Artifact Working States must have TrackRecordChanges=false (B1)');
-    AssertEqual(workingStatesEnt!.IncludeInAPI, false, 'MJ: Artifact Working States must have IncludeInAPI=false so no GraphQL resolver is emitted (B5)');
+    AssertEqual(workingStatesEnt!.IncludeInAPI, true, 'MJ: Artifact Working States must keep IncludeInAPI=true so CodeGen generates MJArtifactWorkingStateEntity');
+    AssertEqual(workingStatesEnt!.AllowCreateAPI, false, 'MJ: Artifact Working States must have AllowCreateAPI=false');
+    AssertEqual(workingStatesEnt!.AllowUpdateAPI, false, 'MJ: Artifact Working States must have AllowUpdateAPI=false');
+    AssertEqual(workingStatesEnt!.AllowDeleteAPI, false, 'MJ: Artifact Working States must have AllowDeleteAPI=false');
     AssertEqual(workingStatesEnt!.AllowAllRowsAPI, false, 'MJ: Artifact Working States must have AllowAllRowsAPI=false (B1)');
     AssertEqual(workingStatesEnt!.AllowUserSearchAPI, false, 'MJ: Artifact Working States must have AllowUserSearchAPI=false (B1)');
-    const uiRolePerm = workingStatesEnt!.Permissions.find((p) => p.Role === 'UI');
-    Assert(uiRolePerm === undefined, 'MJ: Artifact Working States must NOT grant permissions to UI role (B1)');
+    AssertEqual(workingStatesEnt!.Permissions.length, 0, 'MJ: Artifact Working States must have zero EntityPermission rows across all roles');
 
     const wsFields = new Set(workingStatesEnt!.Fields.map((f) => f.Name));
     for (const reqField of ['ID', 'ArtifactID', 'YjsState', 'LastModifiedByUserID', 'Artifact', 'LastModifiedByUser']) {
@@ -481,11 +483,26 @@ async function checkDsl3LiveWorkingStateAndDelegatedPerms(ctx: IntegrationCheckC
         );
         Assert(ownerChildPerms.CanRead && ownerChildPerms.CanEdit, 'Parent owner must have CanRead + CanEdit on child');
 
-        // Unshared outsider (with valid entity-level roles) is denied on childWhiteboard via parent delegation
+        // Resolve a real seeded second user from MJ: Users so FK constraints on UserID are satisfied and refusals come strictly from ACL checks
+        const seededPeerRes = await rv.RunView<MJUserEntityType>(
+            {
+                EntityName: 'MJ: Users',
+                ExtraFilter: `ID <> '${ctx.User.ID}' AND IsActive = 1`,
+                OrderBy: "CASE WHEN Email = 'it-artifact-viewer@integration.test' THEN 0 ELSE 1 END",
+                MaxRows: 1,
+                ResultType: 'simple',
+            },
+            ctx.User,
+        );
+        Assert(
+            seededPeerRes.Success && seededPeerRes.Results.length > 0 && Boolean(seededPeerRes.Results[0].ID),
+            'DSL3 requires at least one real active non-owner user row in MJ: Users (seed metadata-optional/integration-test)',
+        );
+        const peerRow = seededPeerRes.Results[0];
         const outsider = new UserInfo(ctx.Provider, {
-            ID: '00000000-0000-0000-0000-000000000099',
-            Name: 'Unshared Outsider',
-            Email: 'outsider-it164@example.invalid',
+            ID: peerRow.ID!,
+            Name: peerRow.Name ?? 'Unshared Outsider',
+            Email: peerRow.Email ?? 'it-artifact-viewer@integration.test',
             IsActive: true,
             UserRoles: ctx.User.UserRoles,
         });
@@ -514,7 +531,7 @@ async function checkDsl3LiveWorkingStateAndDelegatedPerms(ctx: IntegrationCheckC
         const unauthorizedWsSaved = await unauthorizedWs.Save();
         Assert(!unauthorizedWsSaved, 'Non-system restricted user must be refused Save() on MJ: Artifact Working States');
 
-        // Verify restricted user without CanEdit is refused Save() on MJ: Artifact Versions (Blocker 2)
+        // Verify real seeded user without CanEdit is refused Save() on MJ: Artifact Versions specifically by MJArtifactVersionEntityServer ACL check
         const unauthorizedVer = await ctx.Provider.GetEntityObject<MJArtifactVersionEntity>(
             'MJ: Artifact Versions',
             outsider,
@@ -527,7 +544,12 @@ async function checkDsl3LiveWorkingStateAndDelegatedPerms(ctx: IntegrationCheckC
         unauthorizedVer.ContentMode = 'Text';
         unauthorizedVer.Content = '# Unauthorized Version Injection';
         const unauthorizedVerSaved = await unauthorizedVer.Save();
+        const verErrorMsg = unauthorizedVer.LatestResult?.CompleteMessage ?? '';
         Assert(!unauthorizedVerSaved, 'Restricted user without CanEdit must be refused Save() on MJ: Artifact Versions');
+        Assert(
+            verErrorMsg.includes('does not have Edit permission on artifact'),
+            `MJArtifactVersionEntityServer must refuse Save() with artifact ACL message, not FK error (got: ${verErrorMsg})`,
+        );
 
         // Verify ArtifactToolManager refuses mutating agent tool calls when running as a user without CanEdit
         const readonlyToolMgr = new ArtifactToolManager();
@@ -558,51 +580,31 @@ async function checkDsl3LiveWorkingStateAndDelegatedPerms(ctx: IntegrationCheckC
         });
         Assert(!deniedToolRes.result.success, 'ArtifactToolManager must refuse mutating tool calls for a user without CanEdit');
 
-        // If a second active user exists in MJ: Users, grant Read-Only on parentDoc and verify cascade to childWhiteboard
-        const otherUsersRes = await rv.RunView<MJUserEntityType>(
-            {
-                EntityName: 'MJ: Users',
-                ExtraFilter: `ID <> '${ctx.User.ID}' AND IsActive = 1`,
-                MaxRows: 1,
-                ResultType: 'simple',
-            },
+        // Grant Read-Only on parentDoc to the real seeded user and verify cascade to childWhiteboard
+        sharedPerm = await ctx.Provider.GetEntityObject<MJArtifactPermissionEntity>(
+            'MJ: Artifact Permissions',
             ctx.User,
         );
-        if (otherUsersRes.Success && otherUsersRes.Results.length > 0 && otherUsersRes.Results[0].ID) {
-            const peerRow = otherUsersRes.Results[0];
-            const peerUser = new UserInfo(ctx.Provider, {
-                ID: peerRow.ID!,
-                Name: peerRow.Name ?? 'Peer User',
-                Email: peerRow.Email ?? 'peer@example.invalid',
-                IsActive: true,
-                UserRoles: ctx.User.UserRoles,
-            });
+        sharedPerm.NewRecord();
+        sharedPerm.ArtifactID = parentDoc.ID;
+        sharedPerm.UserID = outsider.ID;
+        sharedPerm.CanRead = true;
+        sharedPerm.CanEdit = false;
+        sharedPerm.CanDelete = false;
+        sharedPerm.CanShare = false;
+        Assert(
+            await sharedPerm.Save(),
+            `Failed to save parent MJArtifactPermissionEntity: ${sharedPerm.LatestResult?.CompleteMessage ?? ''}`,
+        );
 
-            sharedPerm = await ctx.Provider.GetEntityObject<MJArtifactPermissionEntity>(
-                'MJ: Artifact Permissions',
-                ctx.User,
-            );
-            sharedPerm.NewRecord();
-            sharedPerm.ArtifactID = parentDoc.ID;
-            sharedPerm.UserID = peerUser.ID;
-            sharedPerm.CanRead = true;
-            sharedPerm.CanEdit = false;
-            sharedPerm.CanDelete = false;
-            sharedPerm.CanShare = false;
-            Assert(
-                await sharedPerm.Save(),
-                `Failed to save parent MJArtifactPermissionEntity: ${sharedPerm.LatestResult?.CompleteMessage ?? ''}`,
-            );
-
-            const cascadedPeerPerms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
-                ctx.Provider,
-                childWhiteboard.ID,
-                peerUser,
-            );
-            AssertEqual(cascadedPeerPerms.CanRead, true, 'Parent Read share must cascade CanRead=true to child OLE artifact');
-            AssertEqual(cascadedPeerPerms.CanEdit, false, 'Parent Read-only share must keep CanEdit=false on child OLE artifact');
-            AssertEqual(cascadedPeerPerms.Source, 'Delegate', 'Cascaded child permission Source must be Delegate');
-        }
+        const cascadedPeerPerms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+            ctx.Provider,
+            childWhiteboard.ID,
+            outsider,
+        );
+        AssertEqual(cascadedPeerPerms.CanRead, true, 'Parent Read share must cascade CanRead=true to child OLE artifact');
+        AssertEqual(cascadedPeerPerms.CanEdit, false, 'Parent Read-only share must keep CanEdit=false on child OLE artifact');
+        AssertEqual(cascadedPeerPerms.Source, 'Delegate', 'Cascaded child permission Source must be Delegate');
     } finally {
         if (sharedPerm?.IsSaved) {
             await sharedPerm.Delete();
@@ -1016,6 +1018,7 @@ export const DocsSlidesSheetsLibraryChecks: NamedCheck[] = [
         Id: 'docs-slides-sheets-library.DSL3',
         Name: 'DSL3: live DB CRUD for MJArtifactWorkingStateEntity, 1:1 UQ & DelegateBinding CHECK enforcement, and O4 ParentArtifactPermissionDelegate cascade',
         Fn: checkDsl3LiveWorkingStateAndDelegatedPerms,
+        RequiresMutation: true,
     },
     {
         Id: 'docs-slides-sheets-library.DSL4',
@@ -1046,7 +1049,7 @@ for (const c of DocsSlidesSheetsLibraryChecks) {
 // ─── IT165: Client-transport wire checks (DSLC1–DSLC4) ───────────────────────
 
 const CLIENT_BUNDLE = 'docs-slides-sheets-library-client';
-const GRANTEE_EMAIL = 'it-authorship-grantee@integration.test';
+const GRANTEE_EMAIL = 'it-artifact-viewer@integration.test';
 
 interface DslClientFixture extends MintedUserKeyIds {
     SkipReason?: string;
@@ -1253,10 +1256,15 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(CLIENT_BUNDLE, {
                         MJArtifactPermissionEntity | MJArtifactVersionEntity | MJArtifactEntity
                     >(entityName, ctx.User);
                     if (await ent.Load(id)) {
-                        await ent.Delete();
+                        const deleted = await ent.Delete();
+                        if (!deleted) {
+                            console.warn(
+                                `[${CLIENT_BUNDLE}] teardown Delete() returned false for ${entityName}(${id}): ${ent.LatestResult?.CompleteMessage ?? ''}`,
+                            );
+                        }
                     }
-                } catch {
-                    // best-effort teardown
+                } catch (err) {
+                    console.warn(`[${CLIENT_BUNDLE}] teardown failed for ${entityName}(${id}):`, err);
                 }
             };
             await deleteById('MJ: Artifact Permissions', fx.SharedPermID);
@@ -1273,21 +1281,14 @@ async function checkDslc1WorkingStateUnreachableOverGraphQL(ctx: IntegrationChec
     const fx = requireDslClientFixture();
     const wsEnt = ctx.Provider.Entities.find((e) => e.Name === 'MJ: Artifact Working States');
     Assert(wsEnt !== undefined, 'MJ: Artifact Working States metadata must exist');
-    AssertEqual(wsEnt!.IncludeInAPI, false, 'MJ: Artifact Working States IncludeInAPI must be false');
+    AssertEqual(wsEnt!.IncludeInAPI, true, 'MJ: Artifact Working States IncludeInAPI must be true for CodeGen entity support');
+    AssertEqual(wsEnt!.AllowCreateAPI, false, 'MJ: Artifact Working States AllowCreateAPI must be false');
+    AssertEqual(wsEnt!.AllowUpdateAPI, false, 'MJ: Artifact Working States AllowUpdateAPI must be false');
+    AssertEqual(wsEnt!.AllowDeleteAPI, false, 'MJ: Artifact Working States AllowDeleteAPI must be false');
+    AssertEqual(wsEnt!.Permissions.length, 0, 'MJ: Artifact Working States must have zero EntityPermission rows');
 
-    const queryErr = await executeGqlExpectingError(
-        fx.OwnerProvider!,
-        `query ProbeWorkingState($id: String!) {
-            MJArtifactWorkingState(ID: $id) { ID }
-        }`,
-        { id: '00000000-0000-0000-0000-000000000000' },
-    );
-    Assert(
-        queryErr.includes('MJArtifactWorkingState'),
-        `Querying MJArtifactWorkingState over GraphQL must be rejected by the schema (got: ${queryErr || 'no error'})`,
-    );
-
-    const mutationErr = await executeGqlExpectingError(
+    // 1. Create / Update / Delete mutations are omitted from the GraphQL schema entirely (AllowCreate/Update/DeleteAPI=false)
+    const createMutationErr = await executeGqlExpectingError(
         fx.OwnerProvider!,
         `mutation ProbeCreateWorkingState($input: CreateMJArtifactWorkingStateInput!) {
             CreateMJArtifactWorkingState(input: $input) { ID }
@@ -1300,8 +1301,51 @@ async function checkDslc1WorkingStateUnreachableOverGraphQL(ctx: IntegrationChec
         },
     );
     Assert(
-        mutationErr.includes('CreateMJArtifactWorkingState') || mutationErr.includes('CreateMJArtifactWorkingStateInput'),
-        `CreateMJArtifactWorkingState mutation over GraphQL must be rejected by the schema (got: ${mutationErr || 'no error'})`,
+        createMutationErr.includes('CreateMJArtifactWorkingState') ||
+            createMutationErr.includes('CreateMJArtifactWorkingStateInput'),
+        `CreateMJArtifactWorkingState mutation over GraphQL must be rejected by the schema (got: ${createMutationErr || 'no error'})`,
+    );
+
+    const updateMutationErr = await executeGqlExpectingError(
+        fx.OwnerProvider!,
+        `mutation ProbeUpdateWorkingState($input: UpdateMJArtifactWorkingStateInput!) {
+            UpdateMJArtifactWorkingState(input: $input) { ID }
+        }`,
+        {
+            input: {
+                ID: '00000000-0000-0000-0000-000000000000',
+                ArtifactID: fx.ParentDocID!,
+                YjsState: 'AQID',
+            },
+        },
+    );
+    Assert(
+        updateMutationErr.includes('UpdateMJArtifactWorkingState') ||
+            updateMutationErr.includes('UpdateMJArtifactWorkingStateInput'),
+        `UpdateMJArtifactWorkingState mutation over GraphQL must be rejected by the schema (got: ${updateMutationErr || 'no error'})`,
+    );
+
+    // 2. Restricted non-system user querying MJArtifactWorkingState(ID) or RunView over GraphQL is denied
+    const singleQueryErr = await executeGqlExpectingError(
+        fx.GranteeProvider!,
+        `query ProbeWorkingState($id: String!) {
+            MJArtifactWorkingState(ID: $id) { ID }
+        }`,
+        { id: '00000000-0000-0000-0000-000000000000' },
+    );
+    Assert(
+        singleQueryErr.toLowerCase().includes('permission') || singleQueryErr.includes('MJArtifactWorkingState'),
+        `Non-system user querying MJArtifactWorkingState(ID) must be denied (got: ${singleQueryErr || 'no error'})`,
+    );
+
+    const granteeRv = RunView.FromMetadataProvider(fx.GranteeProvider!);
+    const granteeWsView = await granteeRv.RunView<{ ID: string }>({
+        EntityName: 'MJ: Artifact Working States',
+        ResultType: 'simple',
+    });
+    Assert(
+        !granteeWsView.Success || granteeWsView.Results.length === 0,
+        'Non-system user RunView on MJ: Artifact Working States must return zero rows or fail closed',
     );
 }
 
@@ -1309,7 +1353,7 @@ async function checkDslc2RestrictedUserVersionSaveRefusedOverApi(ctx: Integratio
     const fx = requireDslClientFixture();
     const granteeProvider = fx.GranteeProvider!;
 
-    // 1. Raw GraphQL CreateMJArtifactVersion mutation as Read-Only grantee must be refused by MJArtifactVersionEntityServer
+    // 1. Raw GraphQL CreateMJArtifactVersion mutation as Read-Only grantee (who holds entity-level CanCreate on MJ: Artifact Versions via 'Integration Test: Collaborative Artifacts') must be refused specifically by MJArtifactVersionEntityServer's artifact-level CanEdit check
     const createErr = await executeGqlExpectingError(
         granteeProvider,
         `mutation UnauthorizedCreateVersion($input: CreateMJArtifactVersionInput!) {
@@ -1327,11 +1371,11 @@ async function checkDslc2RestrictedUserVersionSaveRefusedOverApi(ctx: Integratio
         },
     );
     Assert(
-        createErr.toLowerCase().includes('edit permission') || createErr.toLowerCase().includes('permission'),
-        `Read-only grantee CreateMJArtifactVersion over GraphQL must be refused for lack of edit permission (got: ${createErr || 'no error'})`,
+        createErr.includes('does not have Edit permission on artifact'),
+        `Read-only grantee CreateMJArtifactVersion over GraphQL must be refused by MJArtifactVersionEntityServer artifact ACL check (got: ${createErr || 'no error'})`,
     );
 
-    // 2. Raw GraphQL UpdateMJArtifactVersion mutation on version 1 as Read-Only grantee must be refused
+    // 2. Raw GraphQL UpdateMJArtifactVersion mutation on version 1 as Read-Only grantee must be refused specifically by MJArtifactVersionEntityServer's artifact-level CanEdit check
     const updateErr = await executeGqlExpectingError(
         granteeProvider,
         `mutation UnauthorizedUpdateVersion($input: UpdateMJArtifactVersionInput!) {
@@ -1350,11 +1394,37 @@ async function checkDslc2RestrictedUserVersionSaveRefusedOverApi(ctx: Integratio
         },
     );
     Assert(
-        updateErr.toLowerCase().includes('edit permission') || updateErr.toLowerCase().includes('permission'),
-        `Read-only grantee UpdateMJArtifactVersion over GraphQL must be refused for lack of edit permission (got: ${updateErr || 'no error'})`,
+        updateErr.includes('does not have Edit permission on artifact'),
+        `Read-only grantee UpdateMJArtifactVersion over GraphQL must be refused by MJArtifactVersionEntityServer artifact ACL check (got: ${updateErr || 'no error'})`,
     );
 
-    // 3. Verify database still holds only version 1 with its original content untouched
+    // 3. Verify PostRunView read enforcement on MJ: Artifact Versions: grantee cannot read unshared PrivateDocID versions via RunView, while readable ParentDocID version is returned
+    const granteeRv = RunView.FromMetadataProvider(granteeProvider);
+    const privateVers = await granteeRv.RunView<{ ID: string; Content: string | null }>({
+        EntityName: 'MJ: Artifact Versions',
+        ExtraFilter: `ArtifactID = '${fx.PrivateDocID!}'`,
+        Fields: ['ID', 'Content'],
+        ResultType: 'simple',
+        BypassCache: true,
+    });
+    Assert(
+        !privateVers.Success || privateVers.Results.length === 0,
+        'PostRunView on MJArtifactVersionEntityServer must strip unshared artifact versions from RunView results',
+    );
+
+    const readableVers = await granteeRv.RunView<{ ID: string }>({
+        EntityName: 'MJ: Artifact Versions',
+        ExtraFilter: `ArtifactID = '${fx.ParentDocID!}'`,
+        Fields: ['ID'],
+        ResultType: 'simple',
+        BypassCache: true,
+    });
+    Assert(
+        readableVers.Success && readableVers.Results.length === 1,
+        'Shared Read-Only grantee must still receive versions for readable ParentDocID',
+    );
+
+    // 4. Verify database still holds only version 1 with its original content untouched
     const rv = RunView.FromMetadataProvider(fx.OwnerProvider!);
     const verRows = await rv.RunView<{ ID: string; VersionNumber: number; Content: string | null }>(
         {
@@ -1483,8 +1553,8 @@ async function checkDslc3TicketMintSocketUpgradeAndReadOnlyRejection(): Promise<
     Assert(wsOutcome.upgraded, 'WebSocket upgrade to /collaboration/yjs with valid ticket must succeed');
     Assert(wsOutcome.readonlyRejected, 'Read-only peer Yjs update frame must be rejected with readonly-rejected');
 
-    // 4. Reusing the same single-use ticket on a second WebSocket connection must be rejected
-    const replayClosedCode = await new Promise<number>((resolve) => {
+    // 4. Reusing the same single-use ticket on a second WebSocket connection must close immediately with 1008 (never pass on timeout)
+    const replayOutcome = await new Promise<{ closedCode: number; timedOut: boolean }>((resolve) => {
         const replaySocket = new WebSocket(wsUrl);
         const timer = setTimeout(() => {
             try {
@@ -1492,19 +1562,19 @@ async function checkDslc3TicketMintSocketUpgradeAndReadOnlyRejection(): Promise<
             } catch {
                 // ignore
             }
-            resolve(0);
+            resolve({ closedCode: 0, timedOut: true });
         }, 5_000);
         replaySocket.addEventListener('close', (ev: CloseEvent) => {
             clearTimeout(timer);
-            resolve(ev.code);
+            resolve({ closedCode: ev.code, timedOut: false });
         });
         replaySocket.addEventListener('error', () => {
             // close event follows error
         });
     });
     Assert(
-        replayClosedCode === 1008 || replayClosedCode !== 1000,
-        `Replaying a consumed single-use collaboration ticket must close with policy violation (got code ${replayClosedCode})`,
+        !replayOutcome.timedOut && replayOutcome.closedCode === 1008,
+        `Replaying a consumed single-use collaboration ticket must close with 1008 Policy Violation without timing out (got code=${replayOutcome.closedCode}, timedOut=${replayOutcome.timedOut})`,
     );
 }
 

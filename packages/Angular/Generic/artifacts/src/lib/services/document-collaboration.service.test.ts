@@ -101,15 +101,18 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
       true,
     );
     expect(wsSession.Transport).toBe('websocket');
+    expect(wsSession.HasCompletedInitialSync).toBe(false);
+    expect(wsSession.CanMutateDocument).toBe(false);
     expect(wsSession.YDoc.getText('content').toString()).toBe('');
 
     await wsSession.Connect(null, failingTicketProvider);
-    // Must NOT insert initialContent into Y.Doc as local items when Transport === 'websocket'
+    // Must refuse unseeded local edits before first sync-step-2 so reconnect never doubles text
+    wsSession.SetContent('# Premature Unseeded Edit');
     expect(wsSession.YDoc.getText('content').toString()).toBe('');
     // UI still reads initialSeedContent via GetContent() fallback while waiting for server sync
     expect(wsSession.GetContent()).toBe('# Initial Server Content');
 
-    // Now test room-reset replacing session.YDoc and emitting RemoteContent$
+    // Now test room-reset replacing session.YDoc WITHOUT destroying Awareness, unlocking sync, and emitting RemoteContent$
     const oldDoc = wsSession.YDoc;
     const emitted: string[] = [];
     const sub = wsSession.RemoteContent$.subscribe((c) => emitted.push(c));
@@ -125,6 +128,9 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
 
     wsSession.ApplyRoomReset(base64Payload);
     expect(wsSession.YDoc).not.toBe(oldDoc);
+    expect(wsSession.HasCompletedInitialSync).toBe(true);
+    expect(wsSession.CanMutateDocument).toBe(true);
+    expect(wsSession.GetCollaborators().length).toBeGreaterThanOrEqual(1);
     expect(wsSession.YDoc.getText('content').toString()).toBe('# Restored Version Content');
     expect(emitted).toContain('# Restored Version Content');
 
@@ -132,7 +138,7 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
     wsSession.Destroy();
   });
 
-  it('Blocker 3 & Delegate Permissions: ResolvePermissionsFromServer queries ResolveArtifactPermissions and IsFrozenSnapshotVerified rejects unsigned/tampered snapshots', async () => {
+  it('Blocker 1 & Delegate Permissions: ResolvePermissionsFromServer fails closed on GraphQL error and IsFrozenSnapshotVerified renders strictly from VerifyFrozenSnapshotOnServer', async () => {
     const delegateProvider = {
       CurrentUser: { ID: 'u-space-member' },
       ExecuteGQL: async (query: string) => {
@@ -158,42 +164,65 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
     expect(perms?.CanEdit).toBe(true);
     expect(perms?.Source).toBe('Delegate');
 
-    // Unsigned frozen block -> IsFrozenSnapshotVerified === false
+    // GraphQL error / scope rejection MUST fail closed rather than falling back to browser engine
+    const failingGraphQLProvider = {
+      CurrentUser: { ID: 'u-owner' },
+      ExecuteGQL: async () => {
+        throw new Error('API key scope rejected');
+      },
+    } as unknown as IMetadataProvider;
+    const deniedPerms = await service.ResolvePermissionsFromServer('art-delegated-1', failingGraphQLProvider);
+    expect(deniedPerms?.CanRead).toBe(false);
+    expect(deniedPerms?.CanEdit).toBe(false);
+    expect(deniedPerms?.Source).toBe('Denied');
+
+    const forgedHmacBlock = {
+      BlockID: 'blk-forged-regex',
+      Kind: 'EntityView' as const,
+      Mode: 'Frozen' as const,
+      FrozenSnapshot: {
+        FrozenAt: '2026-11-10T00:00:00.000Z',
+        FrozenByUserID: 'u-admin',
+        FrozenByUserName: 'Admin',
+        Columns: [],
+        Rows: [],
+        TotalRowCount: 0,
+        SecurityWarningAcknowledged: true,
+        SnapshotContentHash:
+          'hmac-sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      },
+    };
+
+    // Format-matching hmac-sha256 string MUST NOT verify without server confirmation (no regex fallback!)
+    expect(service.IsFrozenSnapshotVerified(forgedHmacBlock)).toBe(false);
+
+    const verifyingServerProvider = {
+      ExecuteGQL: async (query: string) => {
+        if (query.includes('VerifyFrozenBlockSnapshot')) {
+          return {
+            VerifyFrozenBlockSnapshot: {
+              Valid: true,
+              SnapshotVerified: true,
+            },
+          };
+        }
+        return null;
+      },
+    } as unknown as IMetadataProvider;
+
+    const serverVerified = await service.VerifyFrozenSnapshotOnServer(forgedHmacBlock, verifyingServerProvider);
+    expect(serverVerified).toBe(true);
+    expect(service.IsFrozenSnapshotVerified(forgedHmacBlock)).toBe(true);
+
+    // Mutating any snapshot field while keeping the same SnapshotContentHash immediately invalidates verification
     expect(
       service.IsFrozenSnapshotVerified({
-        BlockID: 'blk-unsigned',
-        Kind: 'EntityView',
-        Mode: 'Frozen',
+        ...forgedHmacBlock,
         FrozenSnapshot: {
-          FrozenAt: '2026-11-10T00:00:00.000Z',
-          FrozenByUserID: 'u-spoofed',
-          FrozenByUserName: 'Spoofed Admin',
-          Columns: [],
-          Rows: [],
-          TotalRowCount: 0,
-          SecurityWarningAcknowledged: true,
+          ...forgedHmacBlock.FrozenSnapshot,
+          FrozenByUserName: 'Tampered Attribution',
         },
       }),
     ).toBe(false);
-
-    // Server-signed hmac-sha256 frozen block -> IsFrozenSnapshotVerified === true
-    expect(
-      service.IsFrozenSnapshotVerified({
-        BlockID: 'blk-signed',
-        Kind: 'EntityView',
-        Mode: 'Frozen',
-        FrozenSnapshot: {
-          FrozenAt: '2026-11-10T00:00:00.000Z',
-          FrozenByUserID: 'u-admin',
-          FrozenByUserName: 'Admin',
-          Columns: [],
-          Rows: [],
-          TotalRowCount: 0,
-          SecurityWarningAcknowledged: true,
-          SnapshotContentHash:
-            'hmac-sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-        },
-      }),
-    ).toBe(true);
   });
 });

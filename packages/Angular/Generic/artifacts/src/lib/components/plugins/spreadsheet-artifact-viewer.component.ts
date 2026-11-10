@@ -2242,7 +2242,7 @@ export class SpreadsheetArtifactViewerComponent
     );
   }
 
-  public get CanEdit(): boolean {
+  private get hasPermissionToEdit(): boolean {
     if (this.readonly || this.FallbackXlsxBytes !== null) {
       return false;
     }
@@ -2253,6 +2253,22 @@ export class SpreadsheetArtifactViewerComponent
       return this.Permissions?.CanEdit === true;
     }
     return true;
+  }
+
+  public get IsWaitingForInitialCollabSync(): boolean {
+    return Boolean(
+      this.CollaborationSession &&
+      this.CollaborationSession.Transport === 'websocket' &&
+      !this.CollaborationSession.HasCompletedInitialSync,
+    );
+  }
+
+  public get LiveSyncUnavailable(): boolean {
+    return Boolean(this.CollaborationSession?.LiveSyncUnavailable);
+  }
+
+  public get CanEdit(): boolean {
+    return this.hasPermissionToEdit && !this.IsWaitingForInitialCollabSync;
   }
 
   public get CanComment(): boolean {
@@ -2319,7 +2335,7 @@ export class SpreadsheetArtifactViewerComponent
       return;
     }
     if (changes['readonly']) {
-      this.CollaborationSession?.SetCanEdit(this.CanEdit);
+      this.CollaborationSession?.SetCanEdit(this.hasPermissionToEdit);
       this.cdr.markForCheck();
     }
   }
@@ -2486,7 +2502,7 @@ export class SpreadsheetArtifactViewerComponent
         name: currentUser?.Name || 'Collaborator',
         email: currentUser?.Email,
       },
-      this.CanEdit,
+      this.hasPermissionToEdit,
       hasRemoteBackend,
     );
     this.CollaborationSession = session;
@@ -2589,7 +2605,7 @@ export class SpreadsheetArtifactViewerComponent
         this.ConnectionStatus = 'readonly';
         this.CollaborationSession?.SetCanEdit(false);
       } else {
-        this.CollaborationSession?.SetCanEdit(this.CanEdit);
+        this.CollaborationSession?.SetCanEdit(this.hasPermissionToEdit);
       }
       await this.loadPersistedSheetRangeComments();
       if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
@@ -3719,6 +3735,28 @@ export class SpreadsheetArtifactViewerComponent
       const user = this.resolveCurrentUser();
       if (!md || !user) {
         this.notifyError('Cannot save workbook version: metadata provider or user context unavailable.');
+        return;
+      }
+
+      const serverCommit = await this.collaborationService.CommitInlineEditOnServer(
+        artifactId,
+        serialized,
+        true,
+        md,
+      );
+      if (serverCommit.HandledByServer) {
+        if (!serverCommit.Success) {
+          this.notifyError(serverCommit.ErrorMessage || 'Failed to save workbook version on server.');
+          return;
+        }
+        this.CollaborationSession?.AdoptOutOfBandCommittedContent(serialized);
+        const nextVerNum =
+          serverCommit.VersionNumber ??
+          (this.LastSavedVersionNumber ?? this.artifactVersion.VersionNumber ?? 0) + 1;
+        this.lastSavedComparableJson = this.getComparableWorkbookJson(this.Workbook);
+        this.LastSavedVersionNumber = nextVerNum;
+        this.StatusBannerMessage = `Saved Artifact Version v${nextVerNum}`;
+        this.ContentCommitted.emit(serialized);
         return;
       }
 

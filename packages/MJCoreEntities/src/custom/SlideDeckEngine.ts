@@ -1,7 +1,6 @@
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
-    ComputeFrozenSnapshotHash,
     DocumentBlockExecutionResult,
     DocumentBlockSpec,
     DocumentLiveBlockEngine,
@@ -394,18 +393,48 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
     }
 
     /**
-     * Sanitizes a CSS property value (color, font family, etc.) before interpolating it into a `<style>` block
-     * or theme spec, stripping `;`, `{`, `}`, `<`, `>`, `\`, `url(`, `@import`, and `expression(`.
+     * Validates a CSS property value (color, gradient, font family, or length) against a strict
+     * allow-list before interpolating it into a `<style>` block or theme spec.
+     * Any value not matching the allow-list returns `fallback`.
      */
     public SanitizeCssValue(raw: string | undefined | null, fallback = ''): string {
-        const cleaned = String(raw ?? '')
-            .replace(/[;{}<>\\]/g, '')
-            .replace(/url\s*\(/gi, '')
-            .replace(/@import/gi, '')
-            .replace(/expression\s*\(/gi, '')
-            .replace(/\/\*[\s\S]*?\*\//g, '')
-            .trim();
-        return cleaned || fallback;
+        const trimmed = String(raw ?? '').trim();
+        if (!trimmed || trimmed.length > 300) {
+            return fallback;
+        }
+        // Reject any comment delimiters, statement/block delimiters, escapes, or forbidden functions
+        if (/[;{}<>\\/*@]/.test(trimmed) || /\b(?:url|image-set|expression|javascript|vbscript)\b/i.test(trimmed)) {
+            return fallback;
+        }
+        // 1. Hex colors (#rgb, #rgba, #rrggbb, #rrggbbaa)
+        if (/^#[0-9a-f]{3,8}$/i.test(trimmed)) {
+            return trimmed;
+        }
+        // 2. Functional colors: rgb(), rgba(), hsl(), hsla()
+        if (/^(?:rgba?|hsla?)\(\s*[0-9.%\s,/+-]+\s*\)$/i.test(trimmed)) {
+            return trimmed;
+        }
+        // 3. CSS custom property reference: var(--name) or var(--name, #hex)
+        if (/^var\(\s*--[a-z0-9_-]+(?:\s*,\s*#[0-9a-f]{3,8})?\s*\)$/i.test(trimmed)) {
+            return trimmed;
+        }
+        // 4. Safe gradients: linear-gradient(...) or radial-gradient(...) with only color/angle/stop tokens
+        if (/^(?:linear|radial)-gradient\(\s*[#a-z0-9.%,\s()-]+\s*\)$/i.test(trimmed)) {
+            // Ensure the only nested functions inside a gradient are rgb/rgba/hsl/hsla
+            const innerFns = trimmed
+                .replace(/^(?:linear|radial)-gradient\(/i, '')
+                .match(/[a-z_-]+\s*\(/gi);
+            const allInnerSafe = !innerFns || innerFns.every((fn) => /^(?:rgba?|hsla?)\s*\($/i.test(fn));
+            if (allInnerSafe) {
+                return trimmed;
+            }
+            return fallback;
+        }
+        // 5. Font-family stacks, named colors, or simple numeric lengths (no colons, parens, or slashes)
+        if (/^[a-z0-9\s,'".%-]+$/i.test(trimmed)) {
+            return trimmed;
+        }
+        return fallback;
     }
 
     /**
@@ -1293,10 +1322,7 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                 const frozenBlock: DocumentBlockSpec = {
                     ...block,
                     Mode: 'Frozen',
-                    FrozenSnapshot: {
-                        ...snapshotBase,
-                        SnapshotContentHash: ComputeFrozenSnapshotHash(snapshotBase)
-                    }
+                    FrozenSnapshot: snapshotBase
                 };
                 return {
                     ...region,

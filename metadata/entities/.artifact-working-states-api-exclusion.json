@@ -2,16 +2,16 @@
   {
     "fields": {
       "Name": "MJ: Artifact Working States",
-      "IncludeInAPI": false,
+      "IncludeInAPI": true,
       "AllowAllRowsAPI": false,
-      "AllowCreateAPI": true,
-      "AllowUpdateAPI": true,
-      "AllowDeleteAPI": true,
+      "AllowCreateAPI": false,
+      "AllowUpdateAPI": false,
+      "AllowDeleteAPI": false,
       "AllowUserSearchAPI": false,
       "TrackRecordChanges": false
     },
     "primaryKey": {
-      "ID": "0BA6990D-DC4F-408E-A748-8F64B3039533"
+      "ID": "@lookup:MJ: Entities.Name=MJ: Artifact Working States"
     }
   }
 ]

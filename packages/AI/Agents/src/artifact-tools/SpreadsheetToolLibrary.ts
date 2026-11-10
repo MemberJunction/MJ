@@ -711,11 +711,16 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
         }
-        const newName = typeof input.newName === 'string' ? input.newName.trim().slice(0, 31) : '';
+        const newName = typeof input.newName === 'string' ? input.newName.replace(/[\[\]:*?/\\]/g, ' ').trim().slice(0, 31) : '';
         if (!newName) {
             return this.errorResult('Parameter "newName" is required.');
         }
-        sheet.Name = newName;
+        if (workbook.Worksheets.some((w) => w.SheetID !== sheet.SheetID && w.Name.toLowerCase() === newName.toLowerCase())) {
+            return this.errorResult(`A worksheet named '${newName}' already exists.`);
+        }
+        if (!SpreadsheetEngine.Instance.RenameWorksheet(workbook, sheet.SheetID, newName, false)) {
+            return this.errorResult(`Failed to rename worksheet '${sheet.Name}' to '${newName}'.`);
+        }
         return this.buildMutationSuccess(workbook, {
             sheetId: sheet.SheetID,
             name: sheet.Name
@@ -1000,15 +1005,24 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         if (!query) {
             return this.errorResult('Parameter "query" is required.');
         }
-        if (query.length > 256 || !safeRegexCheck(query)) {
+        if (query.length > 256) {
             return this.errorResult('Unsafe or overly complex regular expression rejected');
         }
-        let regex: RegExp;
-        try {
-            regex = new RegExp(query, 'i');
-        } catch {
-            return this.errorResult(`Invalid regex pattern: "${query}".`);
+        let regex: RegExp | null = null;
+        if (input.useRegex !== false) {
+            try {
+                regex = new RegExp(query, 'i');
+            } catch {
+                if (input.useRegex === true) {
+                    return this.errorResult(`Invalid regex pattern: "${query}".`);
+                }
+                regex = null;
+            }
+            if (regex && !this.isSafeSearchRegex(query)) {
+                return this.errorResult('Unsafe or overly complex regular expression rejected');
+            }
         }
+        const literalNeedle = query.toLowerCase();
 
         const sheetScope = input.sheet ?? input.sheetName;
         let targetSheets: WorksheetSpec[];
@@ -1036,7 +1050,10 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                 const val = cell.ComputedValue ?? cell.RawValue;
                 if (val === null || val === undefined || val === '') continue;
                 const text = cell.DisplayValue || String(val);
-                if (regex.test(text) || regex.test(String(val))) {
+                const matched = regex
+                    ? (regex.test(text) || regex.test(String(val)))
+                    : (text.toLowerCase().includes(literalNeedle) || String(val).toLowerCase().includes(literalNeedle));
+                if (matched) {
                     matches.push({
                         sheet: ws.Name,
                         cell: cell.Address,
@@ -1047,6 +1064,50 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         }
 
         return this.successResult({ matches });
+    }
+
+    private isSafeSearchRegex(pattern: string): boolean {
+        if (!pattern || pattern.length > 256 || !safeRegexCheck(pattern) || /\\[1-9]/.test(pattern)) {
+            return false;
+        }
+        const groupStack: Array<{ hasAlternation: boolean }> = [];
+        let inCharClass = false;
+        for (let i = 0; i < pattern.length; i++) {
+            const ch = pattern[i];
+            if (ch === '\\') {
+                i++;
+                continue;
+            }
+            if (inCharClass) {
+                if (ch === ']') inCharClass = false;
+                continue;
+            }
+            if (ch === '[') {
+                inCharClass = true;
+                continue;
+            }
+            if (ch === '(') {
+                groupStack.push({ hasAlternation: false });
+                continue;
+            }
+            if (ch === '|' && groupStack.length > 0) {
+                groupStack[groupStack.length - 1].hasAlternation = true;
+                continue;
+            }
+            if (ch === ')' && groupStack.length > 0) {
+                const closed = groupStack.pop()!;
+                let nextIdx = i + 1;
+                while (nextIdx < pattern.length && /\s/.test(pattern[nextIdx])) nextIdx++;
+                const nextCh = pattern[nextIdx];
+                if (closed.hasAlternation && (nextCh === '*' || nextCh === '+' || nextCh === '{')) {
+                    return false;
+                }
+                if (closed.hasAlternation && groupStack.length > 0) {
+                    groupStack[groupStack.length - 1].hasAlternation = true;
+                }
+            }
+        }
+        return true;
     }
 
     private handleAggregateColumn(

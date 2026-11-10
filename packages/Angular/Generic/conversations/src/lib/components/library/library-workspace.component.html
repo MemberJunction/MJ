@@ -176,7 +176,7 @@
         <div class="library-loading-box">
           <mj-loading text="Loading your Library..." size="large"></mj-loading>
         </div>
-      } @else if (LoadError) {
+      } @else if (LoadError && AllItems.length === 0) {
         <mj-empty-state
           Variant="error"
           Title="Could not load Library"
@@ -186,6 +186,15 @@
           (Action)="ReloadWorkspaceData()"
         ></mj-empty-state>
       } @else {
+        @if (LoadError) {
+          <div class="library-inline-error-banner" role="alert" data-testid="library-refresh-error-banner">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>{{ LoadError }}</span>
+            <button type="button" mjButton variant="secondary" size="sm" (click)="ReloadWorkspaceData()">
+              Try Again
+            </button>
+          </div>
+        }
         @switch (HubTab) {
           @case ('overview') {
             <div class="hub-overview-stack" data-testid="library-hub-overview">
@@ -973,6 +982,12 @@
   }
   @if (HasMoreArtifacts) {
     <div class="library-load-more-row" data-testid="library-load-more-container">
+      @if (LoadMoreError) {
+        <span class="library-load-more-error" role="alert" data-testid="library-load-more-error">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          {{ LoadMoreError }}
+        </span>
+      }
       <button
         type="button"
         mjButton

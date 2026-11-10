@@ -1,5 +1,14 @@
 import { RunView, type EntityInfo, type IMetadataProvider, type RunViewParams, type UserInfo } from '@memberjunction/core';
-import { EscapeSQLString } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID } from '@memberjunction/global';
+import { UserHoldsAuthorization } from './user-authorization';
+
+/**
+ * Optional MJ Authorization name granting non-owner / non-administrator roles access to the
+ * "All Users" scope toggle in Agent Activity.
+ */
+export const AGENT_ACTIVITY_VIEW_ALL_USERS_AUTHORIZATION = 'Agent Activity: View All Users';
+
+const ALL_USERS_AUTHORIZED_ROLE_NAMES = new Set(['administrator', 'system administrator']);
 
 /** The ExtraFilter for the top-level tasks a user owns. */
 export function OwnTasksFilter(user: UserInfo): string {
@@ -7,30 +16,99 @@ export function OwnTasksFilter(user: UserInfo): string {
 }
 
 /**
- * Single server-side SQL subquery `ExtraFilter` for Agent Activity (`MJ: Tasks`).
- *
- * Eliminates client-side `IgnoreMaxRows` round-trips during 4-second live workflow polling and
- * does NOT restrict to `UserID = '${currentUserId}'`, so managers and admins see all readable
- * agent-backed tasks while non-agent human deliverables from other apps are excluded.
+ * Returns `true` only when `user` is authorized to switch Agent Activity from personal/conversation
+ * scope to the organization-wide "All Users" scope (`User.Type === 'Owner'`, `Administrator` /
+ * `System Administrator` role, or the explicit `Agent Activity: View All Users` authorization).
+ * Standard `UI`, `Developer`, and `Integration` roles default strictly to their own workflows.
  */
-export function BuildAgentBackedTaskExtraFilter(provider?: IMetadataProvider | null): string {
+export function CanUserViewAllAgentTasks(
+  user: UserInfo | null | undefined,
+  provider?: IMetadataProvider | null,
+): boolean {
+  if (!user) {
+    return false;
+  }
+  if ((user.Type ?? '').trim().toLowerCase() === 'owner') {
+    return true;
+  }
+  if (UserHoldsAuthorization(user, AGENT_ACTIVITY_VIEW_ALL_USERS_AUTHORIZATION, provider ?? undefined)) {
+    return true;
+  }
+  const providerRoles = provider?.Roles ?? [];
+  const rolesById = providerRoles.length > 0 ? IndexByUUID(providerRoles) : null;
+  for (const userRole of user.UserRoles ?? []) {
+    const directName = (userRole.Role ?? '').trim().toLowerCase();
+    if (ALL_USERS_AUTHORIZED_ROLE_NAMES.has(directName)) {
+      return true;
+    }
+    if (userRole.RoleID && rolesById) {
+      const matched = rolesById.Get(userRole.RoleID);
+      const resolvedName = (matched?.Name ?? '').trim().toLowerCase();
+      if (ALL_USERS_AUTHORIZED_ROLE_NAMES.has(resolvedName)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function buildAgentBackedClause(provider?: IMetadataProvider | null): string {
   const tasksEntity = provider?.EntityByName('MJ: Tasks');
-  const stepsEntity = provider?.EntityByName('MJ: AI Agent Run Steps');
   const schemaName = tasksEntity?.SchemaName || '__mj';
   const tasksView = tasksEntity?.BaseView || 'vwTasks';
-  const stepsSchema = stepsEntity?.SchemaName || schemaName;
-  const stepsView = stepsEntity?.BaseView || 'vwAIAgentRunSteps';
 
   return (
-    `ParentID IS NULL AND (` +
+    `(` +
     `[AgentRunID] IS NOT NULL ` +
     `OR [AgentID] IS NOT NULL ` +
     `OR [ConversationDetailID] IS NOT NULL ` +
-    `OR [ID] IN (SELECT [TargetLogID] FROM [${stepsSchema}].[${stepsView}] WHERE [StepType] = 'Sub-Agent' AND [TargetLogID] IS NOT NULL) ` +
-    `OR [ParentID] IN (SELECT [ID] FROM [${schemaName}].[${tasksView}] WHERE [AgentRunID] IS NOT NULL) ` +
     `OR [ID] IN (SELECT [ParentID] FROM [${schemaName}].[${tasksView}] WHERE ([AgentRunID] IS NOT NULL OR [AgentID] IS NOT NULL OR [ConversationDetailID] IS NOT NULL) AND [ParentID] IS NOT NULL)` +
     `)`
   );
+}
+
+/**
+ * Server-side SQL `ExtraFilter` for Agent Activity (`MJ: Tasks`), excluding non-agent human
+ * deliverables.
+ *
+ * When `user` is supplied, restricts to `UserID = '<user.ID>'` unless `options?.includeAllUsers`
+ * is `true` AND {@link CanUserViewAllAgentTasks} authorizes organization-wide visibility.
+ */
+export function BuildAgentBackedTaskExtraFilter(
+  provider?: IMetadataProvider | null,
+  user?: UserInfo | null,
+  options?: { includeAllUsers?: boolean },
+): string {
+  const agentClause = buildAgentBackedClause(provider);
+  const allowAllUsers = Boolean(options?.includeAllUsers && CanUserViewAllAgentTasks(user, provider));
+  if (user && !allowAllUsers) {
+    return `ParentID IS NULL AND UserID = '${EscapeSQLString(user.ID)}' AND ${agentClause}`;
+  }
+  if (!user && !options?.includeAllUsers) {
+    return `1 = 0`;
+  }
+  return `ParentID IS NULL AND ${agentClause}`;
+}
+
+/**
+ * Builds the default user-scoped Agent Activity `ExtraFilter` by combining
+ * {@link BuildConversationTasksFilter} (the user's own tasks plus tasks linked to messages in
+ * conversations the user owns or wrote) with the agent-backed task predicate.
+ *
+ * When `options?.includeAllUsers` is `true` and {@link CanUserViewAllAgentTasks} is satisfied,
+ * returns the organization-wide agent-backed task filter.
+ */
+export async function BuildAgentActivityTasksFilter(
+  provider: IMetadataProvider,
+  user: UserInfo,
+  options?: { includeAllUsers?: boolean },
+): Promise<string> {
+  if (options?.includeAllUsers && CanUserViewAllAgentTasks(user, provider)) {
+    return BuildAgentBackedTaskExtraFilter(provider, user, { includeAllUsers: true });
+  }
+  const conversationScopedFilter = await BuildConversationTasksFilter(provider, user);
+  const agentClause = buildAgentBackedClause(provider);
+  return `(${conversationScopedFilter}) AND ${agentClause}`;
 }
 
 /**

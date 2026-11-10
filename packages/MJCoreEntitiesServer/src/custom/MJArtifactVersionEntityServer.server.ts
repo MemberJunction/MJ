@@ -4,11 +4,16 @@ import {
     CompositeKey,
     EntityDeleteOptions,
     EntitySaveOptions,
+    GetDataHooks,
     IEntityDataProvider,
     IMetadataProvider,
     LogError,
     Metadata,
+    PostRunViewHook,
+    RegisterDataHook,
     RunView,
+    RunViewParams,
+    RunViewResult,
     UserInfo,
     WellKnownUserSource
 } from '@memberjunction/core';
@@ -18,11 +23,23 @@ import {
     MJArtifactEntity,
     MJArtifactTypeEntity,
     MJArtifactVersionAttributeEntity,
-    MJArtifactVersionEntity
+    MJArtifactVersionEntity,
+    type MJUserViewEntity
 } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { MJEventType, MJGlobal, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { createHash } from 'crypto';
+
+export const ARTIFACT_VERSION_SAVED_EVENT_CODE = 'MJ_ARTIFACT_VERSION_SAVED';
+
+export interface ArtifactVersionSavedEventPayload {
+    ArtifactID: string;
+    VersionID: string;
+    VersionNumber: number;
+    Content: string;
+    PreviousContent?: string | null;
+    UpdatedByUserID?: string;
+}
 
 type ExtractedAttributeItem = Parameters<typeof ArtifactExtractor.SerializeForStorage>[0][number];
 
@@ -56,6 +73,110 @@ function resolveMetadataProvider(
         null
     );
 }
+
+function resolveTargetEntityName(params: RunViewParams): string {
+    if (typeof params.EntityName === 'string' && params.EntityName.trim().length > 0) {
+        return params.EntityName.trim();
+    }
+    const viewEntity = params.ViewEntity as MJUserViewEntity | undefined;
+    const viewEntityName = viewEntity?.Entity;
+    if (typeof viewEntityName === 'string' && viewEntityName.trim().length > 0) {
+        return viewEntityName.trim();
+    }
+    return '';
+}
+
+function readVersionArtifactId(row: unknown): string | null {
+    if (!row || typeof row !== 'object') {
+        return null;
+    }
+    if (row instanceof MJArtifactVersionEntity) {
+        return row.ArtifactID || null;
+    }
+    const candidate = (row as Record<string, unknown>)['ArtifactID'];
+    return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate.trim() : null;
+}
+
+/**
+ * Server-side `PostRunView` data hook enforcing `ArtifactPermissionEngine` `CanRead`
+ * authorization on `MJ: Artifact Versions` across `RunView` and `RunMJArtifactVersionDynamicView`.
+ */
+export const ArtifactVersionPostRunViewHook: PostRunViewHook = async (
+    params: RunViewParams,
+    results: RunViewResult,
+    contextUser: UserInfo | undefined
+): Promise<RunViewResult> => {
+    if (!results?.Success || resolveTargetEntityName(params) !== 'MJ: Artifact Versions') {
+        return results;
+    }
+
+    if (isServerSystemUser(contextUser)) {
+        return results;
+    }
+
+    if (!contextUser) {
+        return {
+            ...results,
+            Results: [],
+            RowCount: 0,
+            TotalRowCount: 0
+        };
+    }
+
+    const provider = resolveMetadataProvider(undefined, contextUser);
+    if (!provider || provider.ProviderType !== 'Database') {
+        return results;
+    }
+
+    if (!Array.isArray(results.Results) || results.Results.length === 0) {
+        return results;
+    }
+
+    const readAllowedByArtifact = new Map<string, boolean>();
+    const keptRows: unknown[] = [];
+
+    for (const row of results.Results) {
+        const artifactId = readVersionArtifactId(row);
+        if (!artifactId) {
+            continue;
+        }
+        const normId = NormalizeUUID(artifactId);
+        let allowed = readAllowedByArtifact.get(normId);
+        if (allowed === undefined) {
+            const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+                provider,
+                artifactId,
+                contextUser
+            );
+            allowed = perms.CanRead;
+            readAllowedByArtifact.set(normId, allowed);
+        }
+        if (allowed) {
+            keptRows.push(row);
+        }
+    }
+
+    if (keptRows.length === results.Results.length) {
+        return results;
+    }
+
+    const removedCount = results.Results.length - keptRows.length;
+    return {
+        ...results,
+        Results: keptRows,
+        RowCount: keptRows.length,
+        TotalRowCount: Math.max(0, (results.TotalRowCount ?? results.Results.length) - removedCount)
+    };
+};
+
+export function EnsureArtifactVersionReadHookRegistered(): void {
+    const existing = GetDataHooks<PostRunViewHook>('PostRunView');
+    if (!existing.includes(ArtifactVersionPostRunViewHook)) {
+        RegisterDataHook('PostRunView', ArtifactVersionPostRunViewHook);
+    }
+}
+
+EnsureArtifactVersionReadHookRegistered();
 
 /**
  * Returns the UTF-8 byte length of `content`. Used by the Save hook to
@@ -172,7 +293,10 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
             }
         }
 
-        const contentDirty = this.IsSaved === false || this.GetFieldByName('Content')?.Dirty;
+        const contentField = this.GetFieldByName('Content');
+        const previousContentValue =
+            typeof contentField?.OldValue === 'string' ? contentField.OldValue : null;
+        const contentDirty = this.IsSaved === false || contentField?.Dirty;
 
         if (contentDirty && this.Content) {
             try {
@@ -196,6 +320,33 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
 
         // Save the main entity
         const saveResult = await super.Save(options);
+
+        // Notify ArtifactCollaborationServer when a version's content is saved so active Yjs rooms
+        // or persisted working states reconcile out-of-band version writes (REST save, Restore, Library edit).
+        if (saveResult && contentDirty && typeof this.Content === 'string' && this.ArtifactID) {
+            try {
+                const payload: ArtifactVersionSavedEventPayload = {
+                    ArtifactID: this.ArtifactID,
+                    VersionID: this.ID,
+                    VersionNumber: this.VersionNumber,
+                    Content: this.Content,
+                    PreviousContent: previousContentValue,
+                    UpdatedByUserID: this.UserID || this.ContextCurrentUser?.ID
+                };
+                MJGlobal.Instance.RaiseEvent({
+                    component: this,
+                    event: MJEventType.ComponentEvent,
+                    eventCode: ARTIFACT_VERSION_SAVED_EVENT_CODE,
+                    args: payload
+                });
+            } catch (error) {
+                LogError(
+                    `Error raising ${ARTIFACT_VERSION_SAVED_EVENT_CODE} in MJArtifactVersionEntityServer.Save: ${
+                        error instanceof Error ? error.message : String(error)
+                    }`
+                );
+            }
+        }
 
         // After successful save, create ArtifactVersionAttribute records
         if (saveResult && this._pendingAttributes && this._pendingAttributes.length > 0) {

@@ -386,6 +386,9 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         // Reset shutdown flag and rooms via Shutdown, then re-configure
         await server.Shutdown();
         (server as unknown as { _shuttingDown: boolean })._shuttingDown = false;
+        server.SetTicketHmacSecret('test-collab-ticket-hmac-secret-at-least-32-bytes!!');
+        server.SetTicketReplayStore(null);
+        DocumentLiveBlockEngine.Instance.SetSigningSecret('test-frozen-block-hmac-secret-at-least-32-bytes!!');
         server.SetRoomRelay(new InMemoryYjsRoomRelay());
         server.SetMetadataProviderOverride(createMockProvider());
         server.SetAuthResolverOverride(async (req: IncomingMessage) => {
@@ -417,6 +420,9 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         await ArtifactCollaborationServer.Instance.Shutdown();
         ArtifactCollaborationServer.Instance.SetMetadataProviderOverride(null);
         ArtifactCollaborationServer.Instance.SetAuthResolverOverride(null);
+        ArtifactCollaborationServer.Instance.SetTicketHmacSecret(null);
+        ArtifactCollaborationServer.Instance.SetTicketReplayStore(null);
+        DocumentLiveBlockEngine.Instance.SetSigningSecret(null);
         await new Promise<void>((resolve) => {
             httpServer.close(() => resolve());
         });
@@ -1816,7 +1822,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             { timeout: 1500 }
         );
 
-        // 2. Room whose working-state flush persistently fails retries at most 3 times and is then evicted
+        // 2. Room whose working-state flush persistently fails retries at most 3 times and retains dirty state in memory
         const failingArtifactId = 'ffffffff-1111-4222-8333-999999999999';
         let flushFailures = 0;
         const baseProvider = createMockProvider();
@@ -1841,10 +1847,239 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
 
         await vi.waitFor(
             () => {
-                expect(server.HasActiveRoom(failingArtifactId)).toBe(false);
+                expect(flushFailures).toBeGreaterThanOrEqual(3);
             },
             { timeout: 2500 }
         );
         expect(flushFailures).toBeLessThanOrEqual(4);
+        // Dirty room must be retained in memory so unpersisted user edits are never dropped
+        expect(server.HasActiveRoom(failingArtifactId)).toBe(true);
+    });
+
+    it('requires a >= 32-byte ticket HMAC secret, caps TTL at 5 minutes, rejects forged constants, and enforces distributed TicketReplayStore (Blocker 1)', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+
+        // 1. Refuse to mint or consume tickets when secret is unset or < 32 bytes
+        server.SetTicketHmacSecret(null);
+        expect(() =>
+            server.IssueTicket({
+                ArtifactID: artifactId,
+                User: editorUser
+            })
+        ).toThrow(/MJ_ARTIFACT_COLLAB_HMAC_SECRET, >= 32 bytes/);
+
+        server.SetTicketHmacSecret('too-short-secret');
+        expect(() =>
+            server.IssueTicket({
+                ArtifactID: artifactId,
+                User: editorUser
+            })
+        ).toThrow(/MJ_ARTIFACT_COLLAB_HMAC_SECRET, >= 32 bytes/);
+
+        // 2. Restore >= 32-byte secret and verify server-side TTL cap (MAX = 300s)
+        server.SetTicketHmacSecret('test-collab-ticket-hmac-secret-at-least-32-bytes!!');
+        const capped = server.IssueTicket({
+            ArtifactID: artifactId,
+            User: editorUser,
+            TTLSeconds: 86400 * 365 // 1 year requested -> capped to 300s
+        });
+        const expDeltaMs = new Date(capped.ExpiresAt).getTime() - Date.now();
+        expect(expDeltaMs).toBeLessThanOrEqual(305_000);
+        expect(expDeltaMs).toBeGreaterThan(290_000);
+
+        // 3. Distributed TicketReplayStore allows cross-instance first use and blocks replay on second instance
+        const claimedNonces = new Set<string>();
+        server.SetTicketReplayStore({
+            ConsumeNonce(nonce: string): boolean {
+                if (claimedNonces.has(nonce)) {
+                    return false;
+                }
+                claimedNonces.add(nonce);
+                return true;
+            }
+        });
+        const getUserSpy = vi
+            .spyOn(UserCache.Instance, 'Users', 'get')
+            .mockReturnValue([editorUser]);
+        try {
+            const crossTicket = server.IssueTicket({
+                ArtifactID: artifactId,
+                User: editorUser
+            });
+            // Simulate consumption on a peer replica that does not have crossTicket in local _tickets
+            (server as unknown as { _tickets: Map<string, unknown> })._tickets.clear();
+            const firstUse = await server.ConsumeTicket(crossTicket.Ticket, artifactId);
+            expect(firstUse?.User.ID).toBe(editorUser.ID);
+
+            (server as unknown as { _consumedTickets: Map<string, number> })._consumedTickets.clear();
+            const secondUseOnPeer = await server.ConsumeTicket(crossTicket.Ticket, artifactId);
+            expect(secondUseOnPeer).toBeNull();
+        } finally {
+            getUserSpy.mockRestore();
+        }
+    });
+
+    it('prevents duplication across multi-instance cold opens, out-of-band version writes, 3-way repeated-line merges, and REST save reconnects (Blocker 2 & Item 5)', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+
+        // 1. Multi-instance cold open: two servers cold-seed from the same ArtifactVersion before WorkingState exists
+        class PeerServer1 extends ArtifactCollaborationServer {
+            public constructor() {
+                super();
+            }
+        }
+        class PeerServer2 extends ArtifactCollaborationServer {
+            public constructor() {
+                super();
+            }
+        }
+        const sharedBus = new InMemoryYjsRelayBus();
+        const peer1 = new PeerServer1();
+        const peer2 = new PeerServer2();
+        peer1.SetRoomRelay(new InMemoryYjsRoomRelay(sharedBus, 'cold-1'));
+        peer2.SetRoomRelay(new InMemoryYjsRoomRelay(sharedBus, 'cold-2'));
+        peer1.SetMetadataProviderOverride(createMockProvider());
+        peer2.SetMetadataProviderOverride(createMockProvider());
+
+        try {
+            // Clear working states so both peers cold-seed from versions[0]
+            workingStates.clear();
+            await peer1.GetOrCreateRoom(artifactId, editorUser);
+            workingStates.clear();
+            await peer2.GetOrCreateRoom(artifactId, secondEditorUser);
+
+            const content1 = await peer1.GetRoomContent(artifactId, editorUser);
+            const content2 = await peer2.GetRoomContent(artifactId, secondEditorUser);
+            expect(content1).toBe('# Initial Strategy Document\n\nBaseline paragraph.');
+            expect(content2).toBe('# Initial Strategy Document\n\nBaseline paragraph.');
+        } finally {
+            await peer1.Shutdown();
+            await peer2.Shutdown();
+        }
+
+        // 2. 3-way merge with repeated blank lines and repeated '- todo' items
+        workingStates.clear();
+        const repeatedBaseline = [
+            '# Title',
+            '',
+            '## One',
+            '- todo',
+            '- todo',
+            '',
+            '## Two',
+            ''
+        ].join('\n');
+        versions[0].Content = repeatedBaseline;
+
+        const client = await connectYjsClient(editorUser.ID);
+        await client.waitForText('## Two');
+
+        // Human edits Section One header in live room
+        client.doc.transact(() => {
+            const yText = client.doc.getText('content');
+            const idx = yText.toString().indexOf('## One');
+            yText.delete(idx, '## One'.length);
+            yText.insert(idx, '## One (Human Edited)');
+        }, 'human');
+
+        await vi.waitFor(async () => {
+            expect(await server.GetRoomContent(artifactId, editorUser)).toContain('## One (Human Edited)');
+        });
+
+        // Agent deletes the SECOND '- todo' and inserts content under '## Two' starting from repeatedBaseline
+        const agentTarget = [
+            '# Title',
+            '',
+            '## One',
+            '- todo',
+            '',
+            '## Two',
+            'Inserted in Section Two by Agent.'
+        ].join('\n');
+
+        await server.ApplyServerContentMutation(
+            artifactId,
+            agentTarget,
+            editorUser,
+            false,
+            repeatedBaseline
+        );
+
+        const merged3Way = await server.GetRoomContent(artifactId, editorUser);
+        expect(merged3Way).toBe(
+            [
+                '# Title',
+                '',
+                '## One (Human Edited)',
+                '- todo',
+                '',
+                '## Two',
+                'Inserted in Section Two by Agent.'
+            ].join('\n')
+        );
+        client.ws.close();
+
+        // 3. Out-of-band version write while room is open is reconciled, not overwritten on next compaction
+        versions.push({
+            ID: 'ver-oob-99',
+            ArtifactID: artifactId,
+            VersionNumber: 99,
+            Content: '# Out-of-Band Restored Version 99',
+            ContentHash: 'oob-hash-99',
+            UserID: secondEditorUser.ID,
+            __mj_CreatedAt: new Date(Date.now() + 5000).toISOString(),
+            __mj_UpdatedAt: new Date(Date.now() + 5000).toISOString()
+        });
+
+        const compactedAfterOob = await server.CompactRoomToArtifactVersion(artifactId, editorUser);
+        expect(compactedAfterOob.Saved).toBe(true);
+        expect(await server.GetRoomContent(artifactId, editorUser)).toContain(
+            '# Out-of-Band Restored Version 99'
+        );
+    });
+
+    it('ExecuteAnchoredCommentAgentMention enforces CanEdit for edit mode and succeeds for editors (Item 20)', async () => {
+        const resolver = new DocumentCollaborationResolver();
+        const mockProvider = createMockProvider();
+        const editorCtx: AppContext = {
+            dataSource: {} as AppContext['dataSource'],
+            dataSources: [],
+            providers: [{ provider: mockProvider, type: 'Read-Write' }],
+            userPayload: {
+                userRecord: editorUser,
+                email: editorUser.Email,
+                sessionId: 'sess-mention-editor'
+            }
+        };
+        const viewerCtx: AppContext = {
+            ...editorCtx,
+            userPayload: {
+                userRecord: viewerUser,
+                email: viewerUser.Email,
+                sessionId: 'sess-mention-viewer'
+            }
+        };
+
+        const deniedEdit = await resolver.ExecuteAnchoredCommentAgentMention(
+            artifactId,
+            'Skip',
+            'edit',
+            '@Skip replace Baseline paragraph.',
+            'Baseline paragraph.',
+            viewerCtx
+        );
+        expect(deniedEdit.Success).toBe(false);
+        expect(deniedEdit.ErrorMessage).toContain('CanEdit');
+
+        const allowedEdit = await resolver.ExecuteAnchoredCommentAgentMention(
+            artifactId,
+            'Skip',
+            'edit',
+            '@Skip Replaced paragraph via anchored comment.',
+            'Baseline paragraph.',
+            editorCtx
+        );
+        expect(allowedEdit.Success).toBe(true);
+        expect(allowedEdit.UpdatedContent).toContain('Replaced paragraph via anchored comment.');
     });
 });

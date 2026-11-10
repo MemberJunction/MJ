@@ -20,7 +20,17 @@ import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { EscapeSQLString, ExcludeByUUIDs, IndexByUUID, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
-import { BuildAgentBackedTaskExtraFilter } from '../../services/conversation-tasks-filter';
+import {
+  BuildAgentActivityTasksFilter,
+  BuildAgentBackedTaskExtraFilter,
+  CanUserViewAllAgentTasks,
+} from '../../services/conversation-tasks-filter';
+
+/**
+ * Visibility scope for Agent Activity (`'mine'` = current user & their conversations;
+ * `'all-users'` = organization-wide, available only to authorized roles).
+ */
+export type WorkflowScopeMode = 'mine' | 'all-users';
 
 /**
  * Normalized status filter categories in the AI Agent Workflows & Tasks Command Center.
@@ -133,6 +143,27 @@ export interface WorkflowCommandCenterKPIs {
         </div>
 
         <div class="cc-header-actions">
+          @if (CanViewAllUsersTasks) {
+            <div class="cc-view-switcher" role="tablist" aria-label="Workflow Scope" data-testid="agent-activity-scope-switcher">
+              <button
+                type="button"
+                class="cc-view-btn"
+                [class.active]="ScopeMode === 'mine'"
+                (click)="SetScopeMode('mine')">
+                <i class="fa-solid fa-user"></i>
+                <span>My Workflows</span>
+              </button>
+              <button
+                type="button"
+                class="cc-view-btn"
+                [class.active]="ScopeMode === 'all-users'"
+                (click)="SetScopeMode('all-users')">
+                <i class="fa-solid fa-users"></i>
+                <span>All Users</span>
+              </button>
+            </div>
+          }
+
           <!-- View Mode Switcher -->
           <div class="cc-view-switcher" role="tablist" aria-label="View Mode">
             <button
@@ -308,6 +339,16 @@ export interface WorkflowCommandCenterKPIs {
       <!-- Main Body: Content List + Slide-Over Inspector Drawer -->
       <div class="cc-workspace-body" [class.drawer-open]="!!InspectedGroup">
         <div class="cc-main-scroll">
+          @if (LoadError && WorkflowGroups.length > 0) {
+            <div class="cc-load-error-banner" role="alert" data-testid="agent-activity-error-banner">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+              <span>{{ LoadError }}</span>
+              <button type="button" class="cc-reset-filters-btn" (click)="LoadTasks()">
+                <i class="fa-solid fa-rotate-right"></i>
+                <span>Retry</span>
+              </button>
+            </div>
+          }
           @if (isLoading && WorkflowGroups.length === 0) {
             <div class="cc-empty-state">
               <div class="cc-empty-icon">
@@ -315,6 +356,18 @@ export interface WorkflowCommandCenterKPIs {
               </div>
               <h3>Loading AI Agent Workflows...</h3>
               <p>Fetching orchestrated task graphs, specialist agent steps, and execution telemetry.</p>
+            </div>
+          } @else if (LoadError && WorkflowGroups.length === 0) {
+            <div class="cc-empty-state" role="alert" data-testid="agent-activity-load-error">
+              <div class="cc-empty-icon">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+              </div>
+              <h3>Unable to Load Agent Workflows</h3>
+              <p>{{ LoadError }}</p>
+              <button type="button" class="cc-reset-filters-btn" (click)="LoadTasks()">
+                <i class="fa-solid fa-rotate-right"></i>
+                <span>Try Again</span>
+              </button>
             </div>
           } @else if (FilteredWorkflowGroups.length === 0) {
             <div class="cc-empty-state">
@@ -1180,6 +1233,24 @@ export interface WorkflowCommandCenterKPIs {
       min-width: 0;
       overflow-y: auto;
       padding: 20px 24px;
+    }
+
+    .cc-load-error-banner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      max-width: 1280px;
+      margin: 0 auto 14px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: var(--mj-status-error-bg, var(--mj-bg-surface-sunken));
+      border: 1px solid var(--mj-status-error-border, var(--mj-border-default));
+      color: var(--mj-status-error, var(--mj-text-primary));
+      font-size: 13px;
+    }
+
+    .cc-load-error-banner span {
+      flex: 1;
     }
 
     .cc-workflow-grid {
@@ -2287,6 +2358,8 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
   }
 
   public isLoading: boolean = false;
+  public LoadError: string | null = null;
+  public ScopeMode: WorkflowScopeMode = 'mine';
   private aiEngineConfigured: boolean = false;
 
   // Command Center state
@@ -2376,8 +2449,23 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
     }
   }
 
+  public get CanViewAllUsersTasks(): boolean {
+    return CanUserViewAllAgentTasks(this.CurrentUser, this.ProviderToUse);
+  }
+
+  public SetScopeMode(mode: WorkflowScopeMode): void {
+    if (mode === 'all-users' && !this.CanViewAllUsersTasks) {
+      return;
+    }
+    if (this.ScopeMode !== mode) {
+      this.ScopeMode = mode;
+      void this.LoadTasks();
+    }
+  }
+
   public async LoadTasks(): Promise<void> {
     this.isLoading = true;
+    this.LoadError = null;
 
     try {
       if (!this.aiEngineConfigured) {
@@ -2386,9 +2474,19 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
       }
 
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const filter = this.BaseFilterResolver
-        ? await this.BaseFilterResolver()
-        : this.BaseFilter || this.buildAgentBackedTaskExtraFilter();
+      const includeAllUsers = this.ScopeMode === 'all-users' && this.CanViewAllUsersTasks;
+      let filter: string;
+      if (includeAllUsers) {
+        filter = BuildAgentBackedTaskExtraFilter(this.ProviderToUse, this.CurrentUser, { includeAllUsers: true });
+      } else if (this.BaseFilterResolver) {
+        filter = await this.BaseFilterResolver();
+      } else if (this.BaseFilter && this.BaseFilter !== '1=1') {
+        filter = this.BaseFilter;
+      } else if (this.CurrentUser) {
+        filter = await BuildAgentActivityTasksFilter(this.ProviderToUse, this.CurrentUser);
+      } else {
+        filter = this.BuildAgentBackedTaskExtraFilter();
+      }
 
       const tasksResult = await rv.RunView<MJTaskEntity>(
         {
@@ -2403,24 +2501,17 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
       );
 
       if (tasksResult.Success) {
+        this.LoadError = null;
         this.AllTasks = tasksResult.Results || [];
         this.FilteredTasks = this.AllTasks;
         await this.loadChildTasksAndDependencies(rv, this.AllTasks);
         this.rebuildWorkflowCommandCenter();
       } else {
-        this.AllTasks = [];
-        this.FilteredTasks = [];
-        this.allHierarchyTasks = [];
-        this.WorkflowGroups = [];
-        this.FilteredWorkflowGroups = [];
+        this.LoadError = tasksResult.ErrorMessage || 'Failed to load AI agent workflows.';
       }
     } catch (error) {
       console.error('Failed to load tasks:', error);
-      this.AllTasks = [];
-      this.FilteredTasks = [];
-      this.allHierarchyTasks = [];
-      this.WorkflowGroups = [];
-      this.FilteredWorkflowGroups = [];
+      this.LoadError = error instanceof Error ? error.message : 'Failed to load AI agent workflows.';
     } finally {
       this.isLoading = false;
       this.updateLivePollingState();
@@ -2434,11 +2525,12 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
   }
 
   /**
-   * Builds the server-side SQL subquery `ExtraFilter` for agent-backed tasks without running
-   * client-side `IgnoreMaxRows` queries or restricting to `UserID = '${currentUserId}'`.
+   * Builds the server-side SQL `ExtraFilter` for agent-backed tasks, defaulting to the current
+   * user's scope unless `ScopeMode === 'all-users'` is active for an authorized role.
    */
-  public buildAgentBackedTaskExtraFilter(): string {
-    return BuildAgentBackedTaskExtraFilter(this.ProviderToUse);
+  public BuildAgentBackedTaskExtraFilter(): string {
+    const includeAllUsers = this.ScopeMode === 'all-users' && this.CanViewAllUsersTasks;
+    return BuildAgentBackedTaskExtraFilter(this.ProviderToUse, this.CurrentUser, { includeAllUsers });
   }
 
   /**

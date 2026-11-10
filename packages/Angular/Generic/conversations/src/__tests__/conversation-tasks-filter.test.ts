@@ -8,10 +8,14 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { EntityInfo, IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
 import { CreateFakeProvider } from '@memberjunction/ng-test-utils';
 import {
+  AGENT_ACTIVITY_VIEW_ALL_USERS_AUTHORIZATION,
+  BuildAgentActivityTasksFilter,
   BuildAgentBackedTaskExtraFilter,
   BuildConversationTasksFilter,
+  CanUserViewAllAgentTasks,
   OwnTasksFilter,
 } from '../lib/services/conversation-tasks-filter';
+import { TasksFullViewComponent } from '../lib/components/task/tasks-full-view.component';
 
 const USER = { ID: 'user-1' } as unknown as UserInfo;
 const TASKS = { Name: 'MJ: Tasks', SchemaName: '__mj', BaseView: 'vwTasks' } as unknown as EntityInfo;
@@ -101,30 +105,90 @@ describe('BuildConversationTasksFilter', () => {
     expect(OwnTasksFilter({ ID: "o'brien" } as unknown as UserInfo)).toBe("ParentID IS NULL AND UserID = 'o''brien'");
   });
 
-  it('builds the server-side SQL subquery filter for Agent Activity with zero IgnoreMaxRows client queries and no UserID restriction', () => {
-    const queries: RunViewParams[] = [];
-    const source = CreateFakeProvider<object>({
-      runViewResults: (params) => {
-        queries.push(params);
-        return [];
-      },
-      entityByName: (name) => {
-        if (name === 'MJ: Tasks') return TASKS;
-        if (name === 'MJ: AI Agent Run Steps') {
-          return { Name: 'MJ: AI Agent Run Steps', SchemaName: '__mj', BaseView: 'vwAIAgentRunSteps' } as EntityInfo;
-        }
-        return undefined;
-      },
+  it('scopes Agent Activity to the current user and their conversations by default, drops dead TargetLogID/ParentID subqueries, and gates All Users to authorized roles', async () => {
+    const { source } = provider({
+      'MJ: Conversations': [{ ID: 'c1' }],
+      'MJ: Conversation Details': [{ ID: 'd1' }],
     });
 
-    const filter = BuildAgentBackedTaskExtraFilter(source);
-    expect(queries).toHaveLength(0);
-    expect(filter).not.toContain('UserID');
-    expect(filter).toContain('[AgentRunID] IS NOT NULL');
-    expect(filter).toContain(
-      "SELECT [TargetLogID] FROM [__mj].[vwAIAgentRunSteps] WHERE [StepType] = 'Sub-Agent' AND [TargetLogID] IS NOT NULL",
-    );
-    expect(filter).toContain('SELECT [ID] FROM [__mj].[vwTasks] WHERE [AgentRunID] IS NOT NULL');
-    expect(filter).toContain('SELECT [ParentID] FROM [__mj].[vwTasks]');
+    const uiUser = {
+      ID: 'user-1',
+      Type: 'User',
+      UserRoles: [{ Role: 'UI', RoleID: 'role-ui' }],
+    } as unknown as UserInfo;
+    const adminUser = {
+      ID: 'admin-1',
+      Type: 'User',
+      UserRoles: [{ Role: 'Administrator', RoleID: 'role-admin' }],
+    } as unknown as UserInfo;
+    const ownerUser = {
+      ID: 'owner-1',
+      Type: 'Owner',
+      UserRoles: [{ Role: 'UI', RoleID: 'role-ui' }],
+    } as unknown as UserInfo;
+
+    expect(CanUserViewAllAgentTasks(uiUser, source)).toBe(false);
+    expect(CanUserViewAllAgentTasks(adminUser, source)).toBe(true);
+    expect(CanUserViewAllAgentTasks(ownerUser, source)).toBe(true);
+
+    // Explicit MJ Authorization also authorizes non-admin roles
+    const delegatedSource = {
+      ...source,
+      Authorizations: [{ ID: 'auth-1', Name: AGENT_ACTIVITY_VIEW_ALL_USERS_AUTHORIZATION, IsActive: true }],
+      AuthorizationRoles: [{ AuthorizationID: 'auth-1', RoleID: 'role-ui', Type: 'Allow' }],
+    } as unknown as IMetadataProvider;
+    expect(CanUserViewAllAgentTasks(uiUser, delegatedSource)).toBe(true);
+
+    // Default filter restricts to user-1 + their conversation messages, with zero dead subqueries
+    const defaultFilter = await BuildAgentActivityTasksFilter(source, uiUser);
+    expect(defaultFilter).toContain("UserID = 'user-1'");
+    expect(defaultFilter).toContain("ConversationDetailID IN ('d1')");
+    expect(defaultFilter).toContain('[AgentRunID] IS NOT NULL');
+    expect(defaultFilter).toContain('SELECT [ParentID] FROM [__mj].[vwTasks]');
+    expect(defaultFilter).not.toContain('TargetLogID');
+    expect(defaultFilter).not.toContain('vwAIAgentRunSteps');
+    expect(defaultFilter).not.toContain('[ParentID] IN (SELECT [ID]');
+
+    // Unauthorized UI user requesting includeAllUsers still remains user-scoped
+    const deniedAllFilter = await BuildAgentActivityTasksFilter(source, uiUser, { includeAllUsers: true });
+    expect(deniedAllFilter).toContain("UserID = 'user-1'");
+
+    // Authorized admin requesting includeAllUsers gets organization-wide agent-backed filter
+    const adminAllFilter = await BuildAgentActivityTasksFilter(source, adminUser, { includeAllUsers: true });
+    expect(adminAllFilter).not.toContain('UserID =');
+    expect(adminAllFilter).toContain('[AgentRunID] IS NOT NULL');
+    expect(adminAllFilter).not.toContain('TargetLogID');
+
+    // Calling BuildAgentBackedTaskExtraFilter without a user fails closed
+    expect(BuildAgentBackedTaskExtraFilter(source)).toBe('1 = 0');
+  });
+
+  it('surfaces LoadError in TasksFullViewComponent instead of rendering load failures as an empty workflow list', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const failingSource = {
+      EntityByName: (name: string) => (name === 'MJ: Tasks' ? TASKS : undefined),
+      RunView: async (): Promise<RunViewResult> =>
+        ({ Success: false, ErrorMessage: 'Database connection timeout', Results: [] }) as unknown as RunViewResult,
+    } as unknown as IMetadataProvider;
+
+    const view = Object.create(TasksFullViewComponent.prototype) as TasksFullViewComponent;
+    Object.assign(view, {
+      Provider: failingSource,
+      CurrentUser: USER,
+      ScopeMode: 'mine',
+      LoadError: null,
+      aiEngineConfigured: true,
+      AllTasks: [],
+      FilteredTasks: [],
+      TaskDependencies: [],
+      AgentRunMap: new Map<string, string>(),
+      WorkflowGroups: [],
+      FilteredWorkflowGroups: [],
+      AvailableAgents: [],
+      BaseFilter: "ParentID IS NULL AND UserID = 'user-1'",
+    });
+
+    await view.LoadTasks();
+    expect(view.LoadError).toBe('Database connection timeout');
   });
 });

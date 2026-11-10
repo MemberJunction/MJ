@@ -1,7 +1,7 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { renderComponentFixture } from '@memberjunction/ng-test-utils';
 import type { MJArtifactVersionEntity } from '@memberjunction/core-entities';
@@ -286,6 +286,10 @@ function createDocsMockProvider(opts: MockDocsProviderOptions = {}) {
 }
 
 describe('MarkdownArtifactViewerComponent (DOM)', () => {
+  beforeEach(() => {
+    process.env.MJ_FROZEN_BLOCK_HMAC_SECRET =
+      'test-docs-dom-frozen-hmac-secret-at-least-32-bytes!!';
+  });
   async function renderDocsViewer(
     content = INITIAL_DOC_CONTENT,
     readonly = false,
@@ -802,7 +806,7 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
     expect(warningBanner?.textContent).not.toContain('Spoofed CFO');
     expect(root.querySelector('[data-testid="frozen-provenance-banner"]')).toBeNull();
 
-    // Verify dispatchAgentCommentMention modes ('comment' | 'suggest' | 'edit')
+    // Verify DispatchAgentCommentMention modes ('comment' | 'suggest' | 'edit')
     const firstSeg = comp.DocumentSegments[0];
     comp.OpenAnchorCommentForSegment(firstSeg);
     comp.NewCommentAgentMode = 'comment';
@@ -810,7 +814,7 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
     await comp.PostAnchoredComment();
     const thread = comp.AnchoredThreads[0];
 
-    comp.dispatchAgentCommentMention(thread, 'Assistant', {
+    comp.DispatchAgentCommentMention(thread, 'Assistant', {
       replyMessage: 'Looks well structured.',
       proposedMarkdown: '# Should Not Apply In Comment Mode',
     });
@@ -819,7 +823,7 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
     expect(comp.MarkdownContent).toContain('# Governance Report');
 
     thread.AgentMode = 'suggest';
-    comp.dispatchAgentCommentMention(thread, 'Assistant', {
+    comp.DispatchAgentCommentMention(thread, 'Assistant', {
       replyMessage: 'Here is a suggested title.',
       proposedMarkdown: '# Governance Report — Q4',
       rationale: 'Add quarter',
@@ -828,7 +832,7 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
     expect(comp.MarkdownContent).toContain('# Governance Report');
 
     thread.AgentMode = 'edit';
-    comp.dispatchAgentCommentMention(thread, 'Assistant', {
+    comp.DispatchAgentCommentMention(thread, 'Assistant', {
       replyMessage: 'Applied title update.',
       proposedMarkdown: '# Governance Report — Final',
     });

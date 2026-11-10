@@ -152,6 +152,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   public IsLoading = true;
   public IsLoadingMore = false;
   public LoadError: string | null = null;
+  public LoadMoreError: string | null = null;
   public LoadedArtifactCount = 0;
   public TotalArtifactCount = 0;
   public AllItems: LibraryItemSummary[] = [];
@@ -994,6 +995,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
 
     this.IsLoading = true;
     this.LoadError = null;
+    this.LoadMoreError = null;
     try {
       const md = this.ProviderToUse;
 
@@ -1048,7 +1050,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     }
 
     this.IsLoadingMore = true;
-    this.LoadError = null;
+    this.LoadMoreError = null;
     try {
       const md = this.ProviderToUse;
       const rv = RunView.FromMetadataProvider(md);
@@ -1084,31 +1086,16 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       let nextVersions: VersionSummaryRow[] = [];
 
       if (newArtIds.length > 0) {
-        const inList = this.sqlUuidInList(newArtIds);
-        const verBatch = await rv.RunViews(
-          [
-            {
-              EntityName: 'MJ: Artifact Versions',
-              ExtraFilter: `ArtifactID IN (${inList}) AND VersionNumber = 1`,
-              Fields: VERSION_SUMMARY_FIELDS,
-              MaxRows: this.ArtifactPageSize,
-              ResultType: 'simple',
-            },
-            {
-              EntityName: 'MJ: Artifact Versions',
-              ExtraFilter: `ArtifactID IN (${inList})`,
-              Fields: VERSION_SUMMARY_FIELDS,
-              OrderBy: 'VersionNumber DESC',
-              MaxRows: 2000,
-              ResultType: 'simple',
-            },
-          ],
-          user,
-        );
+        const verQueries = this.buildScopedArtifactVersionQueries(newArtIds);
+        const verBatch = await rv.RunViews(verQueries, user);
         this.assertRunViewsSucceeded(verBatch);
-        const baseVers = (verBatch[0]?.Results ?? []) as VersionSummaryRow[];
-        const latestVers = (verBatch[1]?.Results ?? []) as VersionSummaryRow[];
-        nextVersions = this.dedupeEntitiesById([...latestVers, ...baseVers]);
+        const collected: VersionSummaryRow[] = [];
+        for (const res of verBatch) {
+          if (res?.Results) {
+            collected.push(...(res.Results as VersionSummaryRow[]));
+          }
+        }
+        nextVersions = this.dedupeEntitiesById(collected);
       }
 
       const prev = this.cachedWorkspaceRecords ?? {
@@ -1149,7 +1136,9 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
         collectionPerms: prev.collectionPerms,
       });
     } catch (err) {
-      this.LoadError = err instanceof Error ? err.message : 'Failed to load Library items.';
+      const msg = err instanceof Error ? err.message : 'Failed to load additional Library items.';
+      this.LoadMoreError = msg;
+      this.notifications?.CreateSimpleNotification(msg, 'error', 4000);
     } finally {
       this.IsLoadingMore = false;
       this.emitWorkspaceState();
@@ -1165,7 +1154,6 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     for (const res of results) {
       if (!res || res.Success === false) {
         const msg = res?.ErrorMessage || 'Failed to load Library items.';
-        this.LoadError = msg;
         throw new Error(msg);
       }
     }
@@ -1193,7 +1181,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     const envFilter = `EnvironmentID='${safeEnvId}'`;
     const visibleFilter = `(Visibility IS NULL OR Visibility <> 'System Only')`;
 
-    // Batch 1: First page of owned artifacts, user artifact grants, owned collections, user collection grants
+    // Batch 1: First page of owned artifacts, plus all user artifact grants, owned collections, and user collection grants
     const batch1Results = await rv.RunViews(
       [
         {
@@ -1207,20 +1195,20 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
         {
           EntityName: 'MJ: Artifact Permissions',
           ExtraFilter: `UserID='${safeUserId}' AND CanRead=1`,
-          MaxRows: 500,
+          IgnoreMaxRows: true,
           ResultType: 'entity_object',
         },
         {
           EntityName: 'MJ: Collections',
           ExtraFilter: `${envFilter} AND OwnerID='${safeUserId}'`,
           OrderBy: 'Name ASC',
-          MaxRows: 500,
+          IgnoreMaxRows: true,
           ResultType: 'entity_object',
         },
         {
           EntityName: 'MJ: Collection Permissions',
           ExtraFilter: `UserID='${safeUserId}' AND CanRead=1`,
-          MaxRows: 500,
+          IgnoreMaxRows: true,
           ResultType: 'entity_object',
         },
       ],
@@ -1252,43 +1240,42 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       ...sharedColIds,
     ]);
 
-    // Batch 2: Shared collections, collection-artifact links, and directly shared artifacts
+    // Batch 2: Shared collections, collection-artifact links, and directly shared artifacts (chunked, uncapped)
     const batch2Queries: RunViewParams[] = [];
-    let sharedColIndex = -1;
-    let colLinksIndex = -1;
-    let directSharedArtIndex = -1;
-    let immediateBaseVersionsIndex = -1;
-    let immediateLatestVersionsIndex = -1;
+    const sharedColIndices: number[] = [];
+    const colLinksIndices: number[] = [];
+    const directSharedArtIndices: number[] = [];
+    const immediateVersionIndices: number[] = [];
 
-    if (sharedColIds.length > 0) {
-      sharedColIndex = batch2Queries.length;
+    for (const chunk of this.chunkIds(sharedColIds)) {
+      sharedColIndices.push(batch2Queries.length);
       batch2Queries.push({
         EntityName: 'MJ: Collections',
-        ExtraFilter: `${envFilter} AND ID IN (${this.sqlUuidInList(sharedColIds)})`,
+        ExtraFilter: `${envFilter} AND ID IN (${this.sqlUuidInList(chunk)})`,
         OrderBy: 'Name ASC',
-        MaxRows: 500,
+        IgnoreMaxRows: true,
         ResultType: 'entity_object',
       });
     }
 
-    if (accessibleColIds.length > 0) {
-      colLinksIndex = batch2Queries.length;
+    for (const chunk of this.chunkIds(accessibleColIds)) {
+      colLinksIndices.push(batch2Queries.length);
       batch2Queries.push({
         EntityName: 'MJ: Collection Artifacts',
-        ExtraFilter: `CollectionID IN (${this.sqlUuidInList(accessibleColIds)})`,
+        ExtraFilter: `CollectionID IN (${this.sqlUuidInList(chunk)})`,
         Fields: ['ID', 'CollectionID', 'ArtifactVersionID', 'Sequence'],
-        MaxRows: 5000,
+        IgnoreMaxRows: true,
         ResultType: 'simple',
       });
     }
 
-    if (directSharedArtIds.length > 0) {
-      directSharedArtIndex = batch2Queries.length;
+    for (const chunk of this.chunkIds(directSharedArtIds)) {
+      directSharedArtIndices.push(batch2Queries.length);
       batch2Queries.push({
         EntityName: 'MJ: Artifacts',
-        ExtraFilter: `${envFilter} AND ${visibleFilter} AND ID IN (${this.sqlUuidInList(directSharedArtIds)})`,
+        ExtraFilter: `${envFilter} AND ${visibleFilter} AND ID IN (${this.sqlUuidInList(chunk)})`,
         OrderBy: '__mj_UpdatedAt DESC',
-        MaxRows: this.ArtifactPageSize,
+        IgnoreMaxRows: true,
         ResultType: 'entity_object',
       });
     }
@@ -1298,61 +1285,48 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       ...directSharedArtIds,
     ]);
 
-    // Fast path when user has zero collections: include Artifact Versions scoped to initialArtIds inside Batch 2
+    // Fast path when user has zero collections: include per-artifact VersionNumber=1 + Latest inside Batch 2
     if (accessibleColIds.length === 0 && initialArtIds.length > 0) {
-      const initialArtInList = this.sqlUuidInList(initialArtIds);
-      immediateBaseVersionsIndex = batch2Queries.length;
-      batch2Queries.push({
-        EntityName: 'MJ: Artifact Versions',
-        ExtraFilter: `ArtifactID IN (${initialArtInList}) AND VersionNumber = 1`,
-        Fields: VERSION_SUMMARY_FIELDS,
-        MaxRows: initialArtIds.length,
-        ResultType: 'simple',
-      });
-      immediateLatestVersionsIndex = batch2Queries.length;
-      batch2Queries.push({
-        EntityName: 'MJ: Artifact Versions',
-        ExtraFilter: `ArtifactID IN (${initialArtInList})`,
-        Fields: VERSION_SUMMARY_FIELDS,
-        OrderBy: 'VersionNumber DESC',
-        MaxRows: 2000,
-        ResultType: 'simple',
-      });
+      for (const verQuery of this.buildScopedArtifactVersionQueries(initialArtIds)) {
+        immediateVersionIndices.push(batch2Queries.length);
+        batch2Queries.push(verQuery);
+      }
     }
 
     const batch2Results = batch2Queries.length > 0 ? await rv.RunViews(batch2Queries, user) : [];
     this.assertRunViewsSucceeded(batch2Results);
 
-    const sharedCollections =
-      sharedColIndex >= 0 && batch2Results[sharedColIndex]?.Results
-        ? (batch2Results[sharedColIndex].Results as MJCollectionEntity[])
-        : [];
-    const rawCollectionLinks =
-      colLinksIndex >= 0 && batch2Results[colLinksIndex]?.Results
-        ? (batch2Results[colLinksIndex].Results as CollectionArtifactLinkRow[])
-        : [];
-    const directSharedArtifacts =
-      directSharedArtIndex >= 0 && batch2Results[directSharedArtIndex]?.Results
-        ? (batch2Results[directSharedArtIndex].Results as MJArtifactEntity[])
-        : [];
+    const sharedCollections: MJCollectionEntity[] = [];
+    for (const idx of sharedColIndices) {
+      if (batch2Results[idx]?.Results) {
+        sharedCollections.push(...(batch2Results[idx].Results as MJCollectionEntity[]));
+      }
+    }
+    const rawCollectionLinks: CollectionArtifactLinkRow[] = [];
+    for (const idx of colLinksIndices) {
+      if (batch2Results[idx]?.Results) {
+        rawCollectionLinks.push(...(batch2Results[idx].Results as CollectionArtifactLinkRow[]));
+      }
+    }
+    const directSharedArtifacts: MJArtifactEntity[] = [];
+    for (const idx of directSharedArtIndices) {
+      if (batch2Results[idx]?.Results) {
+        directSharedArtifacts.push(...(batch2Results[idx].Results as MJArtifactEntity[]));
+      }
+    }
 
     const allCollections = this.dedupeEntitiesById([...ownedCollections, ...sharedCollections]);
     const envColNormIds = new Set(allCollections.map((c) => NormalizeUUID(c.ID)));
     const collectionLinks = rawCollectionLinks.filter((l) => envColNormIds.has(NormalizeUUID(l.CollectionID)));
 
     let allArtifacts = this.dedupeEntitiesById([...ownedArtifacts, ...directSharedArtifacts]);
-    const immediateBaseVersions =
-      immediateBaseVersionsIndex >= 0 && batch2Results[immediateBaseVersionsIndex]?.Results
-        ? (batch2Results[immediateBaseVersionsIndex].Results as VersionSummaryRow[])
-        : [];
-    const immediateLatestVersions =
-      immediateLatestVersionsIndex >= 0 && batch2Results[immediateLatestVersionsIndex]?.Results
-        ? (batch2Results[immediateLatestVersionsIndex].Results as VersionSummaryRow[])
-        : [];
-    let allVersions: VersionSummaryRow[] = this.dedupeEntitiesById([
-      ...immediateLatestVersions,
-      ...immediateBaseVersions,
-    ]);
+    const immediateVersions: VersionSummaryRow[] = [];
+    for (const idx of immediateVersionIndices) {
+      if (batch2Results[idx]?.Results) {
+        immediateVersions.push(...(batch2Results[idx].Results as VersionSummaryRow[]));
+      }
+    }
+    let allVersions: VersionSummaryRow[] = this.dedupeEntitiesById(immediateVersions);
 
     if (accessibleColIds.length > 0) {
       const knownArtIds = allArtifacts.map((a) => a.ID);
@@ -1361,29 +1335,14 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
 
       const versionQueries: RunViewParams[] = [];
       if (knownArtIds.length > 0) {
-        const knownInList = this.sqlUuidInList(knownArtIds);
-        versionQueries.push({
-          EntityName: 'MJ: Artifact Versions',
-          ExtraFilter: `ArtifactID IN (${knownInList}) AND VersionNumber = 1`,
-          Fields: VERSION_SUMMARY_FIELDS,
-          MaxRows: knownArtIds.length,
-          ResultType: 'simple',
-        });
-        versionQueries.push({
-          EntityName: 'MJ: Artifact Versions',
-          ExtraFilter: `ArtifactID IN (${knownInList})`,
-          Fields: VERSION_SUMMARY_FIELDS,
-          OrderBy: 'VersionNumber DESC',
-          MaxRows: 2000,
-          ResultType: 'simple',
-        });
+        versionQueries.push(...this.buildScopedArtifactVersionQueries(knownArtIds));
       }
-      if (linkedVersionIds.length > 0) {
+      for (const chunk of this.chunkIds(linkedVersionIds)) {
         versionQueries.push({
           EntityName: 'MJ: Artifact Versions',
-          ExtraFilter: `ID IN (${this.sqlUuidInList(linkedVersionIds)})`,
+          ExtraFilter: `ID IN (${this.sqlUuidInList(chunk)})`,
           Fields: VERSION_SUMMARY_FIELDS,
-          MaxRows: linkedVersionIds.length,
+          IgnoreMaxRows: true,
           ResultType: 'simple',
         });
       }
@@ -1407,31 +1366,37 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
         );
 
         if (collectionOnlyArtIds.length > 0) {
-          const colOnlyInList = this.sqlUuidInList(collectionOnlyArtIds);
-          const colArtBatch = await rv.RunViews(
-            [
-              {
-                EntityName: 'MJ: Artifacts',
-                ExtraFilter: `${envFilter} AND ${visibleFilter} AND ID IN (${colOnlyInList})`,
-                OrderBy: '__mj_UpdatedAt DESC',
-                MaxRows: this.ArtifactPageSize,
-                ResultType: 'entity_object',
-              },
-              {
-                EntityName: 'MJ: Artifact Versions',
-                ExtraFilter: `ArtifactID IN (${colOnlyInList})`,
-                Fields: VERSION_SUMMARY_FIELDS,
-                OrderBy: 'VersionNumber DESC',
-                MaxRows: 1000,
-                ResultType: 'simple',
-              },
-            ],
-            user,
-          );
+          const colOnlyQueries: RunViewParams[] = [];
+          const colArtIndices: number[] = [];
+          const colVerIndices: number[] = [];
+          for (const chunk of this.chunkIds(collectionOnlyArtIds)) {
+            colArtIndices.push(colOnlyQueries.length);
+            colOnlyQueries.push({
+              EntityName: 'MJ: Artifacts',
+              ExtraFilter: `${envFilter} AND ${visibleFilter} AND ID IN (${this.sqlUuidInList(chunk)})`,
+              OrderBy: '__mj_UpdatedAt DESC',
+              IgnoreMaxRows: true,
+              ResultType: 'entity_object',
+            });
+          }
+          for (const verQuery of this.buildScopedArtifactVersionQueries(collectionOnlyArtIds)) {
+            colVerIndices.push(colOnlyQueries.length);
+            colOnlyQueries.push(verQuery);
+          }
+          const colArtBatch = await rv.RunViews(colOnlyQueries, user);
           this.assertRunViewsSucceeded(colArtBatch);
-          const [colArtRes, colArtVerRes] = colArtBatch;
-          const colSharedArts = (colArtRes?.Results ?? []) as MJArtifactEntity[];
-          const colSharedVers = (colArtVerRes?.Results ?? []) as VersionSummaryRow[];
+          const colSharedArts: MJArtifactEntity[] = [];
+          for (const idx of colArtIndices) {
+            if (colArtBatch[idx]?.Results) {
+              colSharedArts.push(...(colArtBatch[idx].Results as MJArtifactEntity[]));
+            }
+          }
+          const colSharedVers: VersionSummaryRow[] = [];
+          for (const idx of colVerIndices) {
+            if (colArtBatch[idx]?.Results) {
+              colSharedVers.push(...(colArtBatch[idx].Results as VersionSummaryRow[]));
+            }
+          }
 
           allArtifacts = this.dedupeEntitiesById([...allArtifacts, ...colSharedArts]);
           allVersions = this.dedupeEntitiesById([...allVersions, ...colSharedVers]);
@@ -1465,6 +1430,52 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     };
   }
 
+  /**
+   * Builds per-chunk version summary queries (`VersionNumber = 1` + exact single latest version
+   * per artifact via `ROW_NUMBER() OVER (PARTITION BY [ArtifactID] ORDER BY [VersionNumber] DESC) = 1`)
+   * so an artifact with thousands of historical versions never crowds out other artifacts on the page.
+   */
+  private buildScopedArtifactVersionQueries(artifactIds: ReadonlyArray<string>): RunViewParams[] {
+    const queries: RunViewParams[] = [];
+    const verEntity = this.ProviderToUse?.EntityByName?.('MJ: Artifact Versions');
+    const schemaName = verEntity?.SchemaName || '__mj';
+    const baseView = verEntity?.BaseView || 'vwArtifactVersions';
+
+    for (const chunk of this.chunkIds(artifactIds)) {
+      const inList = this.sqlUuidInList(chunk);
+      queries.push({
+        EntityName: 'MJ: Artifact Versions',
+        ExtraFilter: `ArtifactID IN (${inList}) AND VersionNumber = 1`,
+        Fields: VERSION_SUMMARY_FIELDS,
+        IgnoreMaxRows: true,
+        ResultType: 'simple',
+      });
+      queries.push({
+        EntityName: 'MJ: Artifact Versions',
+        ExtraFilter:
+          `ArtifactID IN (${inList}) AND [ID] IN (` +
+          `SELECT [ID] FROM (` +
+          `SELECT [ID], ROW_NUMBER() OVER (PARTITION BY [ArtifactID] ORDER BY [VersionNumber] DESC) AS [__rn] ` +
+          `FROM [${schemaName}].[${baseView}] ` +
+          `WHERE [ArtifactID] IN (${inList})` +
+          `) AS [__latest_ver] WHERE [__latest_ver].[__rn] = 1` +
+          `)`,
+        Fields: VERSION_SUMMARY_FIELDS,
+        IgnoreMaxRows: true,
+        ResultType: 'simple',
+      });
+    }
+    return queries;
+  }
+
+  private chunkIds(ids: ReadonlyArray<string>, chunkSize = 400): string[][] {
+    const chunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      chunks.push(ids.slice(i, i + chunkSize));
+    }
+    return chunks;
+  }
+
   private uniqueIds(ids: ReadonlyArray<string | null | undefined>): string[] {
     const seen = new Set<string>();
     const out: string[] = [];
@@ -1477,7 +1488,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
         out.push(trimmed);
       }
     }
-    return out.slice(0, 500);
+    return out;
   }
 
   private dedupeEntitiesById<T extends { ID: string }>(rows: ReadonlyArray<T>): T[] {
@@ -1677,7 +1688,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
         CategoryBadge: categoryInfo.Badge,
         LatestVersionId: latest?.ID ?? null,
         LatestVersionNumber: latest?.VersionNumber ?? 1,
-        VersionCount: Math.max(versions.length, 1),
+        VersionCount: Math.max(latest?.VersionNumber ?? 1, versions.length, 1),
         ContentMode: latest?.ContentMode ?? 'Text',
         MimeType: latest?.MimeType ?? typeEntity?.ContentType ?? null,
         FileName: latest?.FileName ?? null,

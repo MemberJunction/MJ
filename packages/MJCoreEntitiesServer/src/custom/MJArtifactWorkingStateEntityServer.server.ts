@@ -11,6 +11,7 @@ import {
     Metadata,
     PostRunViewHook,
     RegisterDataHook,
+    DatabaseProviderBase,
     RunViewParams,
     RunViewResult,
     UserInfo,
@@ -235,7 +236,10 @@ export class MJArtifactWorkingStateEntityServer extends MJArtifactWorkingStateEn
             this.ResultHistory.push(res);
             return false;
         }
-        return super.Save(options);
+        if (this.ProviderToUse instanceof DatabaseProviderBase) {
+            return this.saveDirectlyViaDatabaseProvider(this.ProviderToUse, actor);
+        }
+        return BaseEntity.prototype.Save.call(this, options);
     }
 
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
@@ -251,7 +255,91 @@ export class MJArtifactWorkingStateEntityServer extends MJArtifactWorkingStateEn
             this.ResultHistory.push(res);
             return false;
         }
-        return super.Delete(options);
+        if (this.ProviderToUse instanceof DatabaseProviderBase) {
+            return this.deleteDirectlyViaDatabaseProvider(this.ProviderToUse, actor);
+        }
+        return BaseEntity.prototype.Delete.call(this, options);
+    }
+
+    private async saveDirectlyViaDatabaseProvider(
+        dbProvider: DatabaseProviderBase,
+        actor: UserInfo | undefined
+    ): Promise<boolean> {
+        const res = new BaseEntityResult();
+        res.Type = this.IsSaved ? 'update' : 'create';
+        res.StartedAt = new Date();
+        try {
+            const schema = dbProvider.ConfigData.MJCoreSchemaName || '__mj';
+            const table = dbProvider.QuoteSchemaAndView(schema, 'ArtifactWorkingState');
+            const view = dbProvider.QuoteSchemaAndView(schema, 'vwArtifactWorkingStates');
+            const p0 = dbProvider.BuildParameterPlaceholder(0);
+            const p1 = dbProvider.BuildParameterPlaceholder(1);
+            const p2 = dbProvider.BuildParameterPlaceholder(2);
+            const yjsBytes = this.YjsState ? Buffer.from(this.YjsState, 'base64') : null;
+            const lastModUserId = this.LastModifiedByUserID || null;
+            const sql = `
+                DECLARE @Upserted TABLE ([ID] UNIQUEIDENTIFIER);
+                MERGE ${table} AS target
+                USING (SELECT CAST(${p0} AS UNIQUEIDENTIFIER) AS [ArtifactID]) AS source
+                ON target.[ArtifactID] = source.[ArtifactID]
+                WHEN MATCHED THEN
+                    UPDATE SET
+                        [YjsState] = CAST(${p1} AS VARBINARY(MAX)),
+                        [LastModifiedByUserID] = CAST(${p2} AS UNIQUEIDENTIFIER)
+                WHEN NOT MATCHED THEN
+                    INSERT ([ArtifactID], [YjsState], [LastModifiedByUserID])
+                    VALUES (CAST(${p0} AS UNIQUEIDENTIFIER), CAST(${p1} AS VARBINARY(MAX)), CAST(${p2} AS UNIQUEIDENTIFIER))
+                OUTPUT INSERTED.[ID] INTO @Upserted;
+                SELECT * FROM ${view} WHERE [ID] = (SELECT TOP 1 [ID] FROM @Upserted);
+            `;
+            const rows = await dbProvider.ExecuteSQL<Record<string, unknown>>(
+                sql,
+                [this.ArtifactID, yjsBytes, lastModUserId],
+                undefined,
+                actor
+            );
+            if (rows && rows.length > 0) {
+                await this.LoadFromData(rows[0]);
+            }
+            res.Success = true;
+            res.EndedAt = new Date();
+            this.ResultHistory.push(res);
+            return true;
+        } catch (err) {
+            res.Success = false;
+            res.EndedAt = new Date();
+            res.Message = err instanceof Error ? err.message : String(err);
+            this.ResultHistory.push(res);
+            return false;
+        }
+    }
+
+    private async deleteDirectlyViaDatabaseProvider(
+        dbProvider: DatabaseProviderBase,
+        actor: UserInfo | undefined
+    ): Promise<boolean> {
+        const res = new BaseEntityResult();
+        res.Type = 'delete';
+        res.StartedAt = new Date();
+        try {
+            const schema = dbProvider.ConfigData.MJCoreSchemaName || '__mj';
+            const table = dbProvider.QuoteSchemaAndView(schema, 'ArtifactWorkingState');
+            const p0 = dbProvider.BuildParameterPlaceholder(0);
+            const p1 = dbProvider.BuildParameterPlaceholder(1);
+            const sql = `DELETE FROM ${table} WHERE [ID] = CAST(${p0} AS UNIQUEIDENTIFIER) OR [ArtifactID] = CAST(${p1} AS UNIQUEIDENTIFIER);`;
+            await dbProvider.ExecuteSQL(sql, [this.ID || null, this.ArtifactID || null], undefined, actor);
+            this.NewRecord();
+            res.Success = true;
+            res.EndedAt = new Date();
+            this.ResultHistory.push(res);
+            return true;
+        } catch (err) {
+            res.Success = false;
+            res.EndedAt = new Date();
+            res.Message = err instanceof Error ? err.message : String(err);
+            this.ResultHistory.push(res);
+            return false;
+        }
     }
 
     private async enforceArtifactReadPermission(): Promise<boolean> {

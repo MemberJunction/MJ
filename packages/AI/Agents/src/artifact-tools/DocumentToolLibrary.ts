@@ -11,6 +11,67 @@ import {
 } from '@memberjunction/core-entities';
 
 /**
+ * Validates that a user/agent-supplied regular expression is safe against both star-height
+ * ReDoS (`safe-regex`) and exponential alternation/backreference patterns (e.g. `(a|a)*$`)
+ * that bypass star-height checks (`Round 3 Item 19`).
+ */
+function isSafeUserRegex(pattern: string): boolean {
+    if (!pattern || pattern.length > 256) {
+        return false;
+    }
+    if (!safeRegexCheck(pattern)) {
+        return false;
+    }
+    // Reject backreferences (\1..\9) which can exhibit super-linear backtracking
+    if (/\\[1-9]/.test(pattern)) {
+        return false;
+    }
+    // Reject any parenthesized group containing alternation ('|') when followed by a quantifier (*, +, {)
+    const groupStack: Array<{ hasAlternation: boolean }> = [];
+    let inCharClass = false;
+    for (let i = 0; i < pattern.length; i++) {
+        const ch = pattern[i];
+        if (ch === '\\') {
+            i++;
+            continue;
+        }
+        if (inCharClass) {
+            if (ch === ']') {
+                inCharClass = false;
+            }
+            continue;
+        }
+        if (ch === '[') {
+            inCharClass = true;
+            continue;
+        }
+        if (ch === '(') {
+            groupStack.push({ hasAlternation: false });
+            continue;
+        }
+        if (ch === '|' && groupStack.length > 0) {
+            groupStack[groupStack.length - 1].hasAlternation = true;
+            continue;
+        }
+        if (ch === ')' && groupStack.length > 0) {
+            const closed = groupStack.pop()!;
+            let nextIdx = i + 1;
+            while (nextIdx < pattern.length && /\s/.test(pattern[nextIdx])) {
+                nextIdx++;
+            }
+            const nextCh = pattern[nextIdx];
+            if (closed.hasAlternation && (nextCh === '*' || nextCh === '+' || nextCh === '{')) {
+                return false;
+            }
+            if (closed.hasAlternation && groupStack.length > 0) {
+                groupStack[groupStack.length - 1].hasAlternation = true;
+            }
+        }
+    }
+    return true;
+}
+
+/**
  * Logical block parsed from a Markdown Document.
  */
 export interface ParsedMarkdownLogicalBlock {
@@ -115,19 +176,27 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                 inputSchema: {
                     type: 'object',
                     properties: {
-                        query: { type: 'string', description: 'Case-insensitive text or regex pattern to find.' }
+                        query: { type: 'string', description: 'Case-insensitive text or regex pattern to find.' },
+                        useRegex: {
+                            type: 'boolean',
+                            description: 'Optional: set false to force literal substring matching, or true to require regex syntax.'
+                        }
                     },
                     required: ['query']
                 }
             },
             {
                 name: 'grep',
-                description: 'Search for regex matches in the text. Returns matching lines with line numbers.',
+                description: 'Search for regex or literal matches in the text. Returns matching lines with line numbers.',
                 inputSchema: {
                     type: 'object',
                     properties: {
-                        pattern: { type: 'string', description: 'Regex pattern to search for.' },
-                        flags: { type: 'string', description: 'Optional regex flags (e.g., "i" for case-insensitive).' }
+                        pattern: { type: 'string', description: 'Regex pattern (or literal text when useRegex is false) to search for.' },
+                        flags: { type: 'string', description: 'Optional regex flags (e.g., "i" for case-insensitive).' },
+                        useRegex: {
+                            type: 'boolean',
+                            description: 'Optional: set false to match pattern as a literal substring instead of a regular expression.'
+                        }
                     },
                     required: ['pattern']
                 }
@@ -643,7 +712,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         if (!query) {
             return { success: false, data: null, errorMessage: 'search_blocks requires a non-empty query.' };
         }
-        if (query.length > 256 || !safeRegexCheck(query)) {
+        if (query.length > 256) {
             return {
                 success: false,
                 data: null,
@@ -651,13 +720,55 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             };
         }
         const blocks = this.ParseLogicalBlocks(content);
-        let regex: RegExp;
-        try {
-            regex = new RegExp(query, 'i');
-        } catch {
-            regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+        if (input.useRegex === false) {
+            const needle = query.toLowerCase();
+            const matches = blocks.filter((b) => b.rawMarkdown.toLowerCase().includes(needle));
+            return {
+                success: true,
+                data: {
+                    revisionHash: this.ComputeRevisionHash(content),
+                    matchCount: matches.length,
+                    matches
+                }
+            };
         }
-        const matches = blocks.filter((b) => regex.test(b.rawMarkdown));
+
+        let compiledRegex: RegExp | null = null;
+        try {
+            compiledRegex = new RegExp(query, 'i');
+        } catch (err) {
+            if (input.useRegex === true) {
+                return {
+                    success: false,
+                    data: null,
+                    errorMessage: `Invalid regular expression: ${err instanceof Error ? err.message : String(err)}`
+                };
+            }
+            compiledRegex = null;
+        }
+
+        if (compiledRegex) {
+            if (!isSafeUserRegex(query)) {
+                return {
+                    success: false,
+                    data: null,
+                    errorMessage: 'Unsafe or overly complex regular expression rejected'
+                };
+            }
+            const matches = blocks.filter((b) => compiledRegex!.test(b.rawMarkdown));
+            return {
+                success: true,
+                data: {
+                    revisionHash: this.ComputeRevisionHash(content),
+                    matchCount: matches.length,
+                    matches
+                }
+            };
+        }
+
+        // Literal fallback for plain strings containing unescaped regex metacharacters like "C++"
+        const needle = query.toLowerCase();
+        const matches = blocks.filter((b) => b.rawMarkdown.toLowerCase().includes(needle));
         return {
             success: true,
             data: {
@@ -673,7 +784,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         if (!patternStr) {
             return { success: false, data: null, errorMessage: 'grep requires a non-empty pattern.' };
         }
-        if (patternStr.length > 256 || !safeRegexCheck(patternStr)) {
+        if (patternStr.length > 256) {
             return {
                 success: false,
                 data: null,
@@ -681,17 +792,53 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             };
         }
         const flags = input.flags != null ? String(input.flags) : undefined;
+        const lines = content.split('\n');
+
+        if (input.useRegex === false) {
+            const caseInsensitive = Boolean(flags?.includes('i'));
+            const needle = caseInsensitive ? patternStr.toLowerCase() : patternStr;
+            const matches: Array<{ lineNumber: number; text: string }> = [];
+            for (let i = 0; i < lines.length; i++) {
+                const hay = caseInsensitive ? lines[i].toLowerCase() : lines[i];
+                if (hay.includes(needle)) {
+                    matches.push({ lineNumber: i, text: lines[i] });
+                }
+            }
+            return { success: true, data: matches };
+        }
+
         let regex: RegExp;
         try {
             regex = new RegExp(patternStr, flags);
         } catch (err) {
+            if (input.useRegex === true) {
+                return {
+                    success: false,
+                    data: null,
+                    errorMessage: `Invalid regular expression: ${err instanceof Error ? err.message : String(err)}`
+                };
+            }
+            // Literal fallback for plain strings like "C++" when useRegex was not explicitly true
+            const caseInsensitive = Boolean(flags?.includes('i'));
+            const needle = caseInsensitive ? patternStr.toLowerCase() : patternStr;
+            const matches: Array<{ lineNumber: number; text: string }> = [];
+            for (let i = 0; i < lines.length; i++) {
+                const hay = caseInsensitive ? lines[i].toLowerCase() : lines[i];
+                if (hay.includes(needle)) {
+                    matches.push({ lineNumber: i, text: lines[i] });
+                }
+            }
+            return { success: true, data: matches };
+        }
+
+        if (!isSafeUserRegex(patternStr)) {
             return {
                 success: false,
                 data: null,
-                errorMessage: `Invalid regular expression: ${err instanceof Error ? err.message : String(err)}`
+                errorMessage: 'Unsafe or overly complex regular expression rejected'
             };
         }
-        const lines = content.split('\n');
+
         const matches: Array<{ lineNumber: number; text: string }> = [];
         for (let i = 0; i < lines.length; i++) {
             if (regex.test(lines[i])) {

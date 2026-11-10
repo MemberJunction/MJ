@@ -991,7 +991,26 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     expect(component.LoadedArtifactCount).toBe(2);
     expect(component.HasMoreArtifacts).toBe(false);
 
-    // Verify failed RunView sets LoadError instead of silently returning []
+    // Verify failed LoadMoreArtifacts preserves already-loaded AllItems and surfaces LoadMoreError instead of replacing the list
+    component.TotalArtifactCount = 3;
+    expect(component.HasMoreArtifacts).toBe(true);
+    mockRunViews.mockImplementationOnce(async () => [
+      { Success: false, ErrorMessage: 'Transient paging failure', Results: [] },
+    ]);
+    await component.LoadMoreArtifacts();
+    expect(component.AllItems.map((i) => i.Id)).toEqual(['art-owned-1', 'art-owned-2']);
+    expect(component.LoadError).toBeNull();
+    expect(component.LoadMoreError).toBe('Transient paging failure');
+    expect(notifySpy).toHaveBeenCalledWith('Transient paging failure', 'error', 4000);
+
+    // Verify per-artifact latest version query uses ROW_NUMBER() OVER (PARTITION BY [ArtifactID] ...) = 1 and IgnoreMaxRows
+    const allQueries = runViewsCalls.flat();
+    const latestVerQueries = allQueries.filter(
+      (q) => q.EntityName === 'MJ: Artifact Versions' && (q.ExtraFilter ?? '').includes('ROW_NUMBER() OVER'),
+    );
+    expect(latestVerQueries.length).toBeGreaterThan(0);
+
+    // Verify failed initial/full ReloadWorkspaceData sets LoadError instead of silently returning []
     mockRunViews.mockImplementationOnce(async () => [
       { Success: false, ErrorMessage: 'Database connection timeout', Results: [] },
       { Success: true, Results: [] },

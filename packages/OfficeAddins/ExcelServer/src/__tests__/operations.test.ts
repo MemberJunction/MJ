@@ -207,6 +207,22 @@ describe('ExcelAddin operations, add-in on', () => {
         ]);
         expect(runViewCalls.some(c => c.ViewID === viewId && c.ExtraFilter === "Status = 'Active'")).toBe(true);
 
+        const quotedAnd = await new ExcelAddinEvaluateCustomFunctionServerOperation().ExecuteServer(
+            {
+                Kind: 'View',
+                Target: 'MJ: Members',
+                ViewNameOrId: 'Active Members',
+                Filter: "FirstName='Ada AND Grace' AND Status='Active'",
+            },
+            viewContext,
+        );
+        expect(quotedAnd.Success).toBe(true);
+        expect(
+            runViewCalls.some(
+                c => c.ViewID === viewId && c.ExtraFilter === "FirstName = 'Ada AND Grace' AND Status = 'Active'",
+            ),
+        ).toBe(true);
+
         const sqli = await new ExcelAddinEvaluateCustomFunctionServerOperation().ExecuteServer(
             {
                 Kind: 'View',

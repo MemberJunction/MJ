@@ -1310,9 +1310,36 @@
 
 .library-load-more-row {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: var(--mj-space-2);
   padding: var(--mj-space-4) var(--mj-space-3);
+}
+
+.library-load-more-error {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  font-size: 12.5px;
+  color: var(--mj-status-error);
+}
+
+.library-inline-error-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-3);
+  padding: var(--mj-space-3) var(--mj-space-4);
+  margin-bottom: var(--mj-space-3);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-status-error);
+  color: var(--mj-status-error);
+  font-size: 13px;
+}
+
+.library-inline-error-banner span {
+  flex: 1;
 }
 
 @media (max-width: 820px) {

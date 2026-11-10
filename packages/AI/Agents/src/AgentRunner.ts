@@ -1679,7 +1679,20 @@ export class AgentRunner {
                 contextUser
             );
 
-            if (!(await version.Load(junction.ArtifactVersionID))) {
+            let loaded = false;
+            try {
+                loaded = await version.Load(junction.ArtifactVersionID);
+            } catch (loadError) {
+                LogStatus(
+                    `Previous artifact version ${junction.ArtifactVersionID} is not accessible to user ${contextUser.ID} (${(loadError as Error)?.message ?? 'access denied'}) — falling back to create-new`
+                );
+                return null;
+            }
+
+            if (!loaded) {
+                LogStatus(
+                    `Previous artifact version ${junction.ArtifactVersionID} could not be loaded for user ${contextUser.ID} — falling back to create-new`
+                );
                 return null;
             }
 
@@ -1869,9 +1882,31 @@ export class AgentRunner {
                 LogStatus(`Creating version ${newVersionNumber} of artifact ${artifactId} (${plan.source === 'directive' ? 'agent directive' : 'sourceArtifactId'})`);
             } else {
                 // Legacy: look behind this message (only inside a conversation). 'create-new' skips the lookup.
-                const previousArtifact = (plan.kind === 'legacy' && conversationDetailId)
+                let previousArtifact = (plan.kind === 'legacy' && conversationDetailId)
                     ? await this.FindPreviousArtifactForMessage(conversationDetailId, contextUser, md)
                     : null;
+
+                if (previousArtifact) {
+                    const vettedPrevious = await this.VetArtifactVersionTarget(
+                        { kind: 'version', artifactId: previousArtifact.artifactId, source: 'caller' },
+                        contextUser,
+                        md,
+                        agent?.Name,
+                        rejectedIds,
+                        'legacy previousArtifact'
+                    );
+                    if (!vettedPrevious) {
+                        LogStatus(
+                            `Previous artifact ${previousArtifact.artifactId} is not editable by user ${contextUser.ID} — falling back to create-new`
+                        );
+                        previousArtifact = null;
+                    } else {
+                        previousArtifact = {
+                            artifactId: vettedPrevious.artifactId,
+                            versionNumber: previousArtifact.versionNumber
+                        };
+                    }
+                }
 
                 if (previousArtifact) {
                     artifactId = previousArtifact.artifactId;
@@ -2149,9 +2184,11 @@ export class AgentRunner {
         contextUser: UserInfo,
         md: IMetadataProvider,
         agentName: string | undefined,
-        rejectedIds: Set<string>
+        rejectedIds: Set<string>,
+        originLabel?: string
     ): Promise<Extract<ArtifactTargetPlan, { kind: 'version' }> | null> {
-        const origin = plan.source === 'directive' ? `artifact directive from agent "${agentName}"` : 'sourceArtifactId';
+        const origin = originLabel
+            ?? (plan.source === 'directive' ? `artifact directive from agent "${agentName}"` : 'sourceArtifactId');
 
         if (typeof plan.artifactId !== 'string' || !IsValidUUID(plan.artifactId)) {
             LogError(`Ignoring ${origin}: "${AgentRunner.describeUntrustedValue(plan.artifactId)}" is not a valid artifact ID`);
@@ -2163,13 +2200,10 @@ export class AgentRunner {
             LogError(`Ignoring ${origin}: artifact ${artifactId} was already rejected for this run`);
             return null;
         }
-        if (plan.source !== 'directive') {
-            return { ...plan, artifactId };
-        }
 
         const reject = (reason: string): null => {
             rejectedIds.add(artifactId.toLowerCase());
-            LogError(`Ignoring ${origin}: target artifact ${artifactId} ${reason}`);
+            LogError(`Ignoring ${origin}: target artifact ${artifactId} ${reason} — falling back to create-new`);
             return null;
         };
 

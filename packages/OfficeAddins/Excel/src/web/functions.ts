@@ -13,7 +13,6 @@ import {
     ExcelCustomFunctionCoordinator,
 } from '../custom-functions';
 import {
-    FindFirstStoredConnection,
     HydrateConnectionsFromOfficeStorage,
     LoadConnection,
     OnConnectionChanged,
@@ -33,8 +32,7 @@ interface OfficeCustomFunctionsApi {
 }
 
 let cachedAddinUrlPromise: Promise<string> | null = null;
-let resolvedHostAddinUrl: string = '';
-let sharedCoordinator: ExcelCustomFunctionCoordinator | null = null;
+let sharedCoordinator: ExcelCustomFunctionCoordinator<StoredConnection> | null = null;
 let functionsAssociated = false;
 let connectionListenerRegistered = false;
 
@@ -56,10 +54,7 @@ async function resolveActiveAddinUrl(): Promise<string> {
     const savedUrl = LoadSavedServerUrl();
     if (!cachedAddinUrlPromise) {
         cachedAddinUrlPromise = LoadPaneConfig()
-            .then(cfg => {
-                resolvedHostAddinUrl = cfg.AddinUrl;
-                return cfg.AddinUrl;
-            })
+            .then(cfg => cfg.AddinUrl)
             .catch(() => '');
     }
     const hostAddinUrl = await cachedAddinUrlPromise;
@@ -74,27 +69,24 @@ async function resolveActiveAddinUrl(): Promise<string> {
     return hostAddinUrl || savedUrl || '';
 }
 
-async function resolveActiveConnection(): Promise<StoredConnection> {
+/**
+ * Resolves the active server connection ONCE for the workbook's configured server URL (`Round 3 Item 17`).
+ * Never falls back to an unrelated server's stored connection (`FindFirstStoredConnection`), preventing
+ * cross-environment data leakage (e.g. a prod workbook serving dev data).
+ */
+export async function ResolveActiveCustomFunctionConnection(): Promise<StoredConnection> {
     const addinUrl = await resolveActiveAddinUrl();
     if (addinUrl) {
         const connection = LoadConnection(addinUrl);
-        if (connection) {
+        if (connection && connection.APIKey) {
             return connection;
         }
-    }
-    const fallbackConn = FindFirstStoredConnection();
-    if (fallbackConn) {
-        return fallbackConn;
     }
     throw new Error(EXCEL_CUSTOM_FUNCTION_AUTH_REQUIRED);
 }
 
-function readCurrentViewerScopeKey(): string {
-    const candidateUrl = LoadSavedServerUrl() || resolvedHostAddinUrl;
-    const conn = candidateUrl ? LoadConnection(candidateUrl) : FindFirstStoredConnection();
-    if (!conn || !conn.APIKey) {
-        return '';
-    }
+/** Derives the deterministic cache scope key directly from a resolved {@link StoredConnection}. */
+export function BuildConnectionScopeKey(conn: StoredConnection): string {
     return `${conn.AddinUrl}::${conn.UserEmail || conn.UserName || 'user'}::${fingerprintToken(conn.APIKey)}`;
 }
 
@@ -103,12 +95,7 @@ export function ClearCustomFunctionCache(): void {
     sharedCoordinator?.ClearCache();
 }
 
-/** Lowercase alias for {@link ClearCustomFunctionCache}. */
-export function clearCustomFunctionCache(): void {
-    ClearCustomFunctionCache();
-}
-
-export function GetOrCreateCustomFunctionCoordinator(): ExcelCustomFunctionCoordinator {
+export function GetOrCreateCustomFunctionCoordinator(): ExcelCustomFunctionCoordinator<StoredConnection> {
     if (!connectionListenerRegistered) {
         OnConnectionChanged(() => {
             ClearCustomFunctionCache();
@@ -116,16 +103,22 @@ export function GetOrCreateCustomFunctionCoordinator(): ExcelCustomFunctionCoord
         connectionListenerRegistered = true;
     }
     if (!sharedCoordinator) {
-        sharedCoordinator = new ExcelCustomFunctionCoordinator(
+        sharedCoordinator = new ExcelCustomFunctionCoordinator<StoredConnection>(
             async (
                 input: ExcelAddinEvaluateCustomFunctionInput,
-                options?: { signal?: AbortSignal },
+                options?: { signal?: AbortSignal; connection?: StoredConnection },
             ): Promise<ExcelAddinEvaluateCustomFunctionOutput> => {
-                const conn = await resolveActiveConnection();
+                const conn = options?.connection ?? (await ResolveActiveCustomFunctionConnection());
                 return EvaluateCustomFunctionOnServer(conn, input, options);
             },
             {
-                ViewerScopeKey: readCurrentViewerScopeKey,
+                ResolveContext: async () => {
+                    const conn = await ResolveActiveCustomFunctionConnection();
+                    return {
+                        ScopeKey: BuildConnectionScopeKey(conn),
+                        Connection: conn,
+                    };
+                },
             },
         );
     }

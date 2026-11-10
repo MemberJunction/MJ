@@ -169,11 +169,61 @@ describe('Excel Custom Functions (=MJ.QUERY & =MJ.VIEW, § 7.1/7.2 & O8)', () =>
             'includeHeaders',
         ]);
 
-        // 7. Rejects invalid or unsafe filter expressions in =MJ.VIEW with #VALUE! instead of silently ignoring them
+        // 7. Rejects invalid or unsafe filter expressions in =MJ.VIEW with #VALUE! instead of silently ignoring them, while preserving quoted ' AND ' values
         const badFilterRes = await viewCoordinator.EvaluateView('Members', 'Active Members', "Status LIKE '%Active%'");
         expect(String(badFilterRes[0][0])).toContain('#VALUE!');
+        expect(String(badFilterRes[0][0])).not.toContain(EXCEL_CUSTOM_FUNCTION_ACCESS_DENIED);
         const sqlInjFilterRes = await viewCoordinator.EvaluateView('Members', 'Active Members', "Status='Active'; DROP TABLE Users");
         expect(String(sqlInjFilterRes[0][0])).toContain('#VALUE!');
+
+        const quotedAndMatrix = await viewCoordinator.EvaluateView(
+            'Members',
+            'Active Members',
+            "Name='Acme AND Sons' AND Status='Active'",
+            false,
+        );
+        expect(quotedAndMatrix).toEqual([['Name'], ['Alice']]);
+        expect(capturedViewInput?.Filter).toBe("Name='Acme AND Sons' AND Status='Active'");
+    });
+
+    it('resolves connection once via ResolveContext and refuses cross-server fallback (Round 3 Item 17)', async () => {
+        let resolveCount = 0;
+        let activeServerHasConnection = false;
+        const coord = new ExcelCustomFunctionCoordinator<{ AddinUrl: string; APIKey: string }>(
+            async (_inp, opts) => {
+                expect(opts?.connection?.AddinUrl).toBe('https://prod.example.org/office/excel');
+                return {
+                    Columns: [{ Name: 'Revenue', Header: 'Revenue', DataType: 'Number' }],
+                    Matrix: [[999]],
+                    ScalarValue: 999,
+                    TotalRowCount: 1,
+                };
+            },
+            {
+                ResolveContext: async () => {
+                    resolveCount++;
+                    if (!activeServerHasConnection) {
+                        throw new Error(EXCEL_CUSTOM_FUNCTION_AUTH_REQUIRED);
+                    }
+                    return {
+                        ScopeKey: 'https://prod.example.org/office/excel::alice::fp1',
+                        Connection: { AddinUrl: 'https://prod.example.org/office/excel', APIKey: 'mj_sk_prod' },
+                    };
+                },
+            },
+        );
+
+        // Unconnected prod workbook returns #MJ_SIGN_IN_REQUIRED! and never caches dev data
+        const unconn = await coord.EvaluateQuery('ProdRevenue');
+        expect(unconn).toEqual([[EXCEL_CUSTOM_FUNCTION_AUTH_REQUIRED]]);
+        expect(coord.CacheSize).toBe(0);
+
+        // Connected prod workbook resolves connection ONCE and caches under that connection's scope
+        activeServerHasConnection = true;
+        resolveCount = 0;
+        const connRes = await coord.EvaluateQuery('ProdRevenue');
+        expect(connRes).toEqual([[999]]);
+        expect(resolveCount).toBe(1);
     });
 
     it('enforces bounded cache size (MaxCacheEntries) and propagates invocation.onCanceled to AbortSignal', async () => {

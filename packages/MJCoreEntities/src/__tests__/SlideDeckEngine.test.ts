@@ -1,13 +1,17 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
     SlideDeckEngine,
     SLIDE_LAYOUT_CATALOG,
     SLIDE_DECK_THEME_PRESETS
 } from '../custom/SlideDeckEngine';
-import { DocumentBlockExecutionResult } from '../custom/DocumentLiveBlockEngine';
+import { DocumentBlockExecutionResult, DocumentLiveBlockEngine } from '../custom/DocumentLiveBlockEngine';
 
 describe('SlideDeckEngine (Wave 2 Slides Schema, Layouts, Theme Seeds, Freeze & Markdown Conversion)', () => {
     const engine = SlideDeckEngine.Instance;
+
+    beforeEach(() => {
+        DocumentLiveBlockEngine.Instance.SetSigningSecret('test-frozen-block-hmac-secret-at-least-32-bytes!!');
+    });
 
     it('creates a default 16:9 deck and builds regions for all canonical layouts', () => {
         const deck = engine.CreateDefaultDeck('Q4 Board Review', 'deck-q4');

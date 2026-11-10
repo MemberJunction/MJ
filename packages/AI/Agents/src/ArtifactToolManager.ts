@@ -274,6 +274,18 @@ export class ArtifactToolManager {
     'AutoLayout',
   ]);
 
+  private static readonly STRUCTURAL_SPREADSHEET_TOOLS: ReadonlySet<string> = new Set([
+    'insert_rows',
+    'delete_rows',
+    'insert_columns',
+    'delete_columns',
+    'add_sheet',
+    'delete_sheet',
+    'rename_sheet',
+    'merge_cells',
+    'unmerge_cells',
+  ]);
+
   // ─── LIFECYCLE ───
 
   /** Sets or updates the agent run attribution context (`D5`). */
@@ -565,6 +577,9 @@ export class ArtifactToolManager {
         names.add(tool.name);
       }
     }
+    if (this.artifacts.size > 0) {
+      names.add('reload_artifact');
+    }
     return [...names];
   }
 
@@ -649,6 +664,9 @@ export class ArtifactToolManager {
         const params = Object.keys((tool.inputSchema.properties as Record<string, unknown>) || {}).join(', ');
         sections.push(`- **${tool.name}**(artifactId${params ? ', ' + params : ''}) — ${tool.description}`);
       }
+      sections.push(
+        `- **reload_artifact**(artifactId) — Reloads the latest persisted version of the artifact from the database to recover after a concurrent modification conflict.`,
+      );
       sections.push('');
     }
 
@@ -833,6 +851,21 @@ export class ArtifactToolManager {
         }
       }
 
+      // 1b. Handle universal reload_artifact recovery tool (Round 3 Item 9)
+      if (call.tool === 'reload_artifact') {
+        const reloadResult = await this.reloadArtifactFromDatabase(targetEntry);
+        const reloadStored: StoredToolResult = {
+          artifactId: call.artifactId,
+          tool: call.tool,
+          input: call.input,
+          result: reloadResult,
+          timestamp: new Date(),
+          durationMs: Date.now() - startedAt,
+        };
+        this.toolResults.push(reloadStored);
+        return reloadStored;
+      }
+
       // 2. Real DB concurrency pre-check before mutating in-memory session state
       if (isMutatingTool && targetEntry.artifactId && this.contextUser && this.provider) {
         const conflictError = await this.checkConcurrentDatabaseModification(targetEntry);
@@ -852,6 +885,27 @@ export class ArtifactToolManager {
           this.toolResults.push(conflictStored);
           return conflictStored;
         }
+      }
+
+      // 2b. Refuse structural mutations on File-mode .xlsx workbooks to preserve OpenXML fidelity (Round 3 Item 12)
+      if (
+        (targetEntry.contentMode === 'File' || Boolean(targetEntry.originalXlsxBytes)) &&
+        ArtifactToolManager.STRUCTURAL_SPREADSHEET_TOOLS.has(call.tool)
+      ) {
+        const refusedStored: StoredToolResult = {
+          artifactId: call.artifactId,
+          tool: call.tool,
+          input: call.input,
+          result: {
+            success: false,
+            data: null,
+            errorMessage: `Structural spreadsheet tool "${call.tool}" is not supported on File-mode .xlsx workbooks to preserve OpenXML fidelity. Only cell value/formula updates (e.g. write_cells) are allowed on uploaded .xlsx files.`,
+          },
+          timestamp: new Date(),
+          durationMs: Date.now() - startedAt,
+        };
+        this.toolResults.push(refusedStored);
+        return refusedStored;
       }
 
       // Wrap InvokeTool so any exception inside a handler becomes a structured
@@ -883,7 +937,7 @@ export class ArtifactToolManager {
         const previousContent = targetEntry.content;
         const previousOriginalXlsxBytes = targetEntry.originalXlsxBytes;
 
-        // If the spreadsheet started from an uploaded .xlsx binary, patch the original ZIP bytes in-place
+        // If the spreadsheet started from an uploaded .xlsx binary, patch the original ZIP bytes in-place (fail closed on error)
         if (targetEntry.originalXlsxBytes) {
           try {
             const parsedWorkbook = SpreadsheetEngine.Instance.ParseWorkbook(updatedContent);
@@ -893,8 +947,21 @@ export class ArtifactToolManager {
             );
             targetEntry.originalXlsxBytes = patchedBytes;
             xlsxBase64 = Buffer.from(patchedBytes).toString('base64');
-          } catch {
-            // Keep xlsxBase64 returned by tool library if updatedContent is not a WorkbookSpec
+          } catch (patchErr) {
+            const failedPatch: StoredToolResult = {
+              artifactId: call.artifactId,
+              tool: call.tool,
+              input: call.input,
+              result: {
+                success: false,
+                data: null,
+                errorMessage: `Failed to patch File-mode .xlsx binary in-place: ${patchErr instanceof Error ? patchErr.message : String(patchErr)}`,
+              },
+              timestamp: new Date(),
+              durationMs: Date.now() - startedAt,
+            };
+            this.toolResults.push(failedPatch);
+            return failedPatch;
           }
         }
 
@@ -1030,7 +1097,10 @@ export class ArtifactToolManager {
         },
         this.contextUser,
       );
-      if (!latestRes.Success || !latestRes.Results?.length) {
+      if (!latestRes.Success) {
+        return `Failed to verify artifact concurrency before mutation: ${latestRes.ErrorMessage || 'RunView failed'}`;
+      }
+      if (!latestRes.Results?.length) {
         return null;
       }
       const latestRow = latestRes.Results[0];
@@ -1042,12 +1112,91 @@ export class ArtifactToolManager {
         latestRow.VersionNumber > expectedVersion &&
         (!entry.agentRunVersionId || !UUIDsEqual(latestRow.ID, entry.agentRunVersionId))
       ) {
-        return `Artifact was modified concurrently (v${latestRow.VersionNumber} > v${expectedVersion}); reload required before mutating`;
+        return `Artifact was modified concurrently (v${latestRow.VersionNumber} > v${expectedVersion}); call reload_artifact before mutating`;
       }
-    } catch {
-      // Proceed if RunView is unavailable in minimal test stubs
+    } catch (err) {
+      if (this.provider && typeof (this.provider as unknown as { RunView?: unknown }).RunView === 'function') {
+        return `Failed to verify artifact concurrency before mutation: ${err instanceof Error ? err.message : String(err)}`;
+      }
     }
     return null;
+  }
+
+  /**
+   * Reloads the latest persisted `MJ: Artifact Versions` record from the database into the in-memory
+   * session entry so an agent run can recover after a concurrent modification conflict (`Round 3 Item 9`).
+   */
+  private async reloadArtifactFromDatabase(entry: ArtifactEntry): Promise<ArtifactToolResult> {
+    if (!entry.artifactId || !this.contextUser || !this.provider) {
+      return {
+        success: false,
+        data: null,
+        errorMessage: 'Cannot reload artifact without artifactId, contextUser, and provider.',
+      };
+    }
+    try {
+      const rv = RunView.FromMetadataProvider(this.provider);
+      const latestRes = await rv.RunView<{
+        ID: string;
+        VersionNumber: number;
+        Name?: string | null;
+        Content?: string | null;
+        Configuration?: string | null;
+        ContentMode?: 'File' | 'Text' | null;
+        FileID?: string | null;
+      }>(
+        {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ArtifactID='${EscapeSQLString(entry.artifactId)}'`,
+          OrderBy: 'VersionNumber DESC',
+          Fields: ['ID', 'VersionNumber', 'Name', 'Content', 'Configuration', 'ContentMode', 'FileID'],
+          MaxRows: 1,
+          SkipTotalRowCount: true,
+          ResultType: 'simple',
+        },
+        this.contextUser,
+      );
+      if (!latestRes.Success || !latestRes.Results?.length) {
+        return {
+          success: false,
+          data: null,
+          errorMessage: latestRes.ErrorMessage || `No persisted versions found for artifact '${entry.artifactId}'.`,
+        };
+      }
+      const latest = latestRes.Results[0];
+      entry.versionId = latest.ID;
+      entry.versionNumber = latest.VersionNumber;
+      entry.baseVersionNumber = latest.VersionNumber;
+      entry.currentVersionNumber = latest.VersionNumber;
+      entry.agentRunVersionId = undefined;
+      entry.agentRunVersionEntity = undefined;
+      if (latest.ContentMode === 'File' || latest.ContentMode === 'Text') {
+        entry.contentMode = latest.ContentMode;
+      }
+      const nextContent =
+        latest.ContentMode === 'File'
+          ? (latest.Configuration ?? latest.Content)
+          : (latest.Content ?? latest.Configuration);
+      if (typeof nextContent === 'string') {
+        entry.content = nextContent;
+      }
+      return {
+        success: true,
+        data: {
+          artifactId: entry.artifactId,
+          alphaId: entry.alphaId,
+          versionId: latest.ID,
+          versionNumber: latest.VersionNumber,
+          reloaded: true,
+        },
+      };
+    } catch (err) {
+      return {
+        success: false,
+        data: null,
+        errorMessage: `Failed to reload artifact '${entry.artifactId}': ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
   }
 
   /**
@@ -1075,17 +1224,22 @@ export class ArtifactToolManager {
     // Ensure .xlsx bytes exist when operating on a File-mode spreadsheet
     let effectiveXlsxBase64 = xlsxBase64;
     if (!effectiveXlsxBase64 && isFileMode) {
+      if (!entry.originalXlsxBytes) {
+        return {
+          persisted: false,
+          errorMessage:
+            'Failed to upload updated .xlsx binary to FileStorageEngine for File-mode artifact; refusing to downgrade ContentMode to Text',
+        };
+      }
       try {
         const workbook = SpreadsheetEngine.Instance.ParseWorkbook(updatedContent);
-        const bytes = entry.originalXlsxBytes
-          ? XlsxOpenXmlAdapter.Instance.PatchXlsxBytes(entry.originalXlsxBytes, workbook)
-          : SpreadsheetEngine.Instance.ExportToXlsxBytes(workbook);
+        const bytes = XlsxOpenXmlAdapter.Instance.PatchXlsxBytes(entry.originalXlsxBytes, workbook);
         entry.originalXlsxBytes = bytes;
         effectiveXlsxBase64 = Buffer.from(bytes).toString('base64');
       } catch (err) {
         return {
           persisted: false,
-          errorMessage: `Failed to generate .xlsx binary for File-mode artifact: ${err instanceof Error ? err.message : String(err)}`,
+          errorMessage: `Failed to patch .xlsx binary for File-mode artifact: ${err instanceof Error ? err.message : String(err)}`,
         };
       }
     }
@@ -1151,10 +1305,11 @@ export class ArtifactToolManager {
         versionEntity.UserID = this.contextUser.ID;
       }
 
-      versionEntity.Name = activeAgentName ? `Edited by ${activeAgentName}` : entry.name;
+      versionEntity.Name = entry.name;
+      const runNote = activeAgentRunId ? ` (agentRunId: ${activeAgentRunId})` : '';
       versionEntity.Comments = activeAgentName
-        ? `Edited by ${activeAgentName} via '${toolName}'`
-        : `Updated via agent tool '${toolName}'`;
+        ? `Edited by ${activeAgentName} via '${toolName}'${runNote}`
+        : `Updated via agent tool '${toolName}'${runNote}`;
       versionEntity.ContentHash = contentHash;
 
       if (uploadedFileId) {

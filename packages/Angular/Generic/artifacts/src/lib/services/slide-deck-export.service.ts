@@ -173,7 +173,18 @@ export class SlideDeckExportService {
       blockResultsByBlockId,
       user,
     );
-    const theme = frozenDeck.Theme;
+    const engine = SlideDeckEngine.Instance;
+    const rawTheme = frozenDeck.Theme;
+    const theme = {
+      PrimaryColor: engine.SanitizeCssValue(rawTheme?.PrimaryColor, '#4f46e5'),
+      AccentColor: engine.SanitizeCssValue(rawTheme?.AccentColor, '#0ea5e9'),
+      BackgroundColor: engine.SanitizeCssValue(rawTheme?.BackgroundColor, '#ffffff'),
+      SurfaceColor: engine.SanitizeCssValue(rawTheme?.SurfaceColor, '#f8fafc'),
+      TextColor: engine.SanitizeCssValue(rawTheme?.TextColor, '#0f172a'),
+      MutedTextColor: engine.SanitizeCssValue(rawTheme?.MutedTextColor, '#475569'),
+      HeadingFont: engine.SanitizeCssValue(rawTheme?.HeadingFont, 'Inter, system-ui, sans-serif'),
+      BodyFont: engine.SanitizeCssValue(rawTheme?.BodyFont, 'Inter, system-ui, sans-serif'),
+    };
     const total = frozenDeck.Slides.length;
 
     const slideSections = frozenDeck.Slides.filter((s) => !s.Hidden).map((slide, idx) => {

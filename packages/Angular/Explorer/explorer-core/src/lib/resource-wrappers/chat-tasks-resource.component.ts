@@ -4,7 +4,11 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
-import { BuildAgentBackedTaskExtraFilter, TasksFullViewComponent } from '@memberjunction/ng-conversations';
+import {
+  BuildAgentActivityTasksFilter,
+  BuildAgentBackedTaskExtraFilter,
+  TasksFullViewComponent,
+} from '@memberjunction/ng-conversations';
 /**
  * Chat Agent Activity Resource (`ChatTasksResource`) — displays live multi-agent orchestrations,
  * step dependency DAGs, and background agent activity launched from conversations.
@@ -76,24 +80,28 @@ export class ChatTasksResource extends BaseResourceComponent implements OnDestro
   public activeTaskId?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   /**
-   * Server-side SQL subquery `ExtraFilter` scoping `MJ: Tasks` to agent-backed and conversation-linked
-   * workflows without running client-side `IgnoreMaxRows` `RunView` round-trips on 4-second polling
-   * and without restricting to `UserID = '${currentUserId}'`, so managers and admins see all readable
-   * agent-backed tasks while non-agent human deliverables from other apps are excluded.
+   * Default user-scoped `ExtraFilter` for `MJ: Tasks` in Agent Activity. Restricts to the
+   * current user's agent-backed workflows while excluding non-agent human deliverables.
    */
   public get AgentActivityBaseFilter(): string {
-    return BuildAgentBackedTaskExtraFilter(this.ProviderToUse);
+    return BuildAgentBackedTaskExtraFilter(this.ProviderToUse, this.CurrentUser);
   }
 
   /**
-   * Resolves the server-side SQL subquery filter for `TasksFullViewComponent` without client-side
-   * `IgnoreMaxRows` round-trips.
+   * Resolves the user-scoped Agent Activity `ExtraFilter` (user's own tasks plus tasks linked to
+   * their conversations) via {@link BuildAgentActivityTasksFilter}, allowing organization-wide
+   * scope only when an authorized role explicitly activates `ScopeMode === 'all-users'`.
    */
   public readonly AgentActivityFilterResolver: () => Promise<string> = () =>
     this.ResolveAgentActivityFilter();
 
   public async ResolveAgentActivityFilter(): Promise<string> {
-    return BuildAgentBackedTaskExtraFilter(this.ProviderToUse);
+    if (!this.CurrentUser) {
+      return '1 = 0';
+    }
+    return BuildAgentActivityTasksFilter(this.ProviderToUse, this.CurrentUser, {
+      includeAllUsers: this.TasksView?.ScopeMode === 'all-users',
+    });
   }
 
   ngOnInit() {

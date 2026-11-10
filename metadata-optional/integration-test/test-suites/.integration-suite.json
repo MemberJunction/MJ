@@ -1932,7 +1932,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT165 - Collaborative Docs, Slides, Sheets & Working States over GraphQL and WebSocket",
+            "TestID": "@lookup:MJ: Tests.Name=IT165 - Collaborative Docs, Slides, Sheets and Working States over GraphQL and WebSocket",
             "Sequence": 83,
             "Status": "Active"
           },
