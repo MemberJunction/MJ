@@ -59542,6 +59542,44 @@ export interface MJAIModelTypeEntity_RealtimeConfigurationSettings {
      * model-vendor row.
      */
     Pricing?: MJAIModelTypeEntity_RealtimePricingSettings | null;
+
+    /**
+     * Maximum duration in seconds of a single underlying provider transport connection
+     * (WebSocket or WebRTC call) before the provider closes or resets the socket
+     * (for example, 600s on Gemini Live WebSockets, 3600s on OpenAI Realtime, 7200s on xAI).
+     *
+     * Set on `MJ: AI Models.ModelConfiguration` and overridable on
+     * `MJ: AI Model Vendors.ModelConfiguration`. When elapsed (minus `ReconnectBufferSeconds`),
+     * the realtime framework triggers a proactive in-place reconnect on `BaseRealtimeModel` /
+     * `BaseRealtimeClient`.
+     */
+    ConnectionMaxSeconds?: number | null;
+
+    /**
+     * Maximum duration in seconds of a single provider credential or session ceiling
+     * when it differs from `ConnectionMaxSeconds` (for example, 1800s ephemeral token ceiling
+     * on Gemini Developer API vs. 600s per WebSocket connection, or 3600s client_secret TTL on xAI
+     * vs. 7200s WebSocket session ceiling). Overridable at the `MJ: AI Model Vendors` level.
+     */
+    SessionMaxSeconds?: number | null;
+
+    /**
+     * Buffer in seconds before `ConnectionMaxSeconds` expiry at which the framework initiates
+     * a proactive reconnect. Defaults to 10 seconds when omitted.
+     */
+    ReconnectBufferSeconds?: number | null;
+
+    /**
+     * Whether the provider's native session resumption handle/ID reliably restores prior
+     * conversation turns on this endpoint.
+     *
+     * - `true`: pass the native resumption handle/ID and do NOT re-inject conversation history
+     *   (e.g., Gemini Enterprise / Vertex AI `v1`, xAI `resumption.enabled` + `conversation_id`).
+     * - `false`: feed `RealtimeConversationMemory` history into the reconnected session even if
+     *   the provider emits a resumption handle (e.g., Gemini Developer API `v1alpha` ephemeral tokens).
+     * - `null` / `undefined`: defer to the driver's runtime default.
+     */
+    TrustNativeResumption?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -60256,6 +60294,44 @@ export interface MJAIModelVendorEntity_RealtimeConfigurationSettings {
      * model-vendor row.
      */
     Pricing?: MJAIModelVendorEntity_RealtimePricingSettings | null;
+
+    /**
+     * Maximum duration in seconds of a single underlying provider transport connection
+     * (WebSocket or WebRTC call) before the provider closes or resets the socket
+     * (for example, 600s on Gemini Live WebSockets, 3600s on OpenAI Realtime, 7200s on xAI).
+     *
+     * Set on `MJ: AI Models.ModelConfiguration` and overridable on
+     * `MJ: AI Model Vendors.ModelConfiguration`. When elapsed (minus `ReconnectBufferSeconds`),
+     * the realtime framework triggers a proactive in-place reconnect on `BaseRealtimeModel` /
+     * `BaseRealtimeClient`.
+     */
+    ConnectionMaxSeconds?: number | null;
+
+    /**
+     * Maximum duration in seconds of a single provider credential or session ceiling
+     * when it differs from `ConnectionMaxSeconds` (for example, 1800s ephemeral token ceiling
+     * on Gemini Developer API vs. 600s per WebSocket connection, or 3600s client_secret TTL on xAI
+     * vs. 7200s WebSocket session ceiling). Overridable at the `MJ: AI Model Vendors` level.
+     */
+    SessionMaxSeconds?: number | null;
+
+    /**
+     * Buffer in seconds before `ConnectionMaxSeconds` expiry at which the framework initiates
+     * a proactive reconnect. Defaults to 10 seconds when omitted.
+     */
+    ReconnectBufferSeconds?: number | null;
+
+    /**
+     * Whether the provider's native session resumption handle/ID reliably restores prior
+     * conversation turns on this endpoint.
+     *
+     * - `true`: pass the native resumption handle/ID and do NOT re-inject conversation history
+     *   (e.g., Gemini Enterprise / Vertex AI `v1`, xAI `resumption.enabled` + `conversation_id`).
+     * - `false`: feed `RealtimeConversationMemory` history into the reconnected session even if
+     *   the provider emits a resumption handle (e.g., Gemini Developer API `v1alpha` ephemeral tokens).
+     * - `null` / `undefined`: defer to the driver's runtime default.
+     */
+    TrustNativeResumption?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -61162,6 +61238,44 @@ export interface MJAIModelEntity_RealtimeConfigurationSettings {
      * model-vendor row.
      */
     Pricing?: MJAIModelEntity_RealtimePricingSettings | null;
+
+    /**
+     * Maximum duration in seconds of a single underlying provider transport connection
+     * (WebSocket or WebRTC call) before the provider closes or resets the socket
+     * (for example, 600s on Gemini Live WebSockets, 3600s on OpenAI Realtime, 7200s on xAI).
+     *
+     * Set on `MJ: AI Models.ModelConfiguration` and overridable on
+     * `MJ: AI Model Vendors.ModelConfiguration`. When elapsed (minus `ReconnectBufferSeconds`),
+     * the realtime framework triggers a proactive in-place reconnect on `BaseRealtimeModel` /
+     * `BaseRealtimeClient`.
+     */
+    ConnectionMaxSeconds?: number | null;
+
+    /**
+     * Maximum duration in seconds of a single provider credential or session ceiling
+     * when it differs from `ConnectionMaxSeconds` (for example, 1800s ephemeral token ceiling
+     * on Gemini Developer API vs. 600s per WebSocket connection, or 3600s client_secret TTL on xAI
+     * vs. 7200s WebSocket session ceiling). Overridable at the `MJ: AI Model Vendors` level.
+     */
+    SessionMaxSeconds?: number | null;
+
+    /**
+     * Buffer in seconds before `ConnectionMaxSeconds` expiry at which the framework initiates
+     * a proactive reconnect. Defaults to 10 seconds when omitted.
+     */
+    ReconnectBufferSeconds?: number | null;
+
+    /**
+     * Whether the provider's native session resumption handle/ID reliably restores prior
+     * conversation turns on this endpoint.
+     *
+     * - `true`: pass the native resumption handle/ID and do NOT re-inject conversation history
+     *   (e.g., Gemini Enterprise / Vertex AI `v1`, xAI `resumption.enabled` + `conversation_id`).
+     * - `false`: feed `RealtimeConversationMemory` history into the reconnected session even if
+     *   the provider emits a resumption handle (e.g., Gemini Developer API `v1alpha` ephemeral tokens).
+     * - `null` / `undefined`: defer to the driver's runtime default.
+     */
+    TrustNativeResumption?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -62791,6 +62905,44 @@ export interface MJAIPromptModelEntity_RealtimeConfigurationSettings {
      * model-vendor row.
      */
     Pricing?: MJAIPromptModelEntity_RealtimePricingSettings | null;
+
+    /**
+     * Maximum duration in seconds of a single underlying provider transport connection
+     * (WebSocket or WebRTC call) before the provider closes or resets the socket
+     * (for example, 600s on Gemini Live WebSockets, 3600s on OpenAI Realtime, 7200s on xAI).
+     *
+     * Set on `MJ: AI Models.ModelConfiguration` and overridable on
+     * `MJ: AI Model Vendors.ModelConfiguration`. When elapsed (minus `ReconnectBufferSeconds`),
+     * the realtime framework triggers a proactive in-place reconnect on `BaseRealtimeModel` /
+     * `BaseRealtimeClient`.
+     */
+    ConnectionMaxSeconds?: number | null;
+
+    /**
+     * Maximum duration in seconds of a single provider credential or session ceiling
+     * when it differs from `ConnectionMaxSeconds` (for example, 1800s ephemeral token ceiling
+     * on Gemini Developer API vs. 600s per WebSocket connection, or 3600s client_secret TTL on xAI
+     * vs. 7200s WebSocket session ceiling). Overridable at the `MJ: AI Model Vendors` level.
+     */
+    SessionMaxSeconds?: number | null;
+
+    /**
+     * Buffer in seconds before `ConnectionMaxSeconds` expiry at which the framework initiates
+     * a proactive reconnect. Defaults to 10 seconds when omitted.
+     */
+    ReconnectBufferSeconds?: number | null;
+
+    /**
+     * Whether the provider's native session resumption handle/ID reliably restores prior
+     * conversation turns on this endpoint.
+     *
+     * - `true`: pass the native resumption handle/ID and do NOT re-inject conversation history
+     *   (e.g., Gemini Enterprise / Vertex AI `v1`, xAI `resumption.enabled` + `conversation_id`).
+     * - `false`: feed `RealtimeConversationMemory` history into the reconnected session even if
+     *   the provider emits a resumption handle (e.g., Gemini Developer API `v1alpha` ephemeral tokens).
+     * - `null` / `undefined`: defer to the driver's runtime default.
+     */
+    TrustNativeResumption?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -65643,6 +65795,44 @@ export interface MJAIPromptEntity_RealtimeConfigurationSettings {
      * model-vendor row.
      */
     Pricing?: MJAIPromptEntity_RealtimePricingSettings | null;
+
+    /**
+     * Maximum duration in seconds of a single underlying provider transport connection
+     * (WebSocket or WebRTC call) before the provider closes or resets the socket
+     * (for example, 600s on Gemini Live WebSockets, 3600s on OpenAI Realtime, 7200s on xAI).
+     *
+     * Set on `MJ: AI Models.ModelConfiguration` and overridable on
+     * `MJ: AI Model Vendors.ModelConfiguration`. When elapsed (minus `ReconnectBufferSeconds`),
+     * the realtime framework triggers a proactive in-place reconnect on `BaseRealtimeModel` /
+     * `BaseRealtimeClient`.
+     */
+    ConnectionMaxSeconds?: number | null;
+
+    /**
+     * Maximum duration in seconds of a single provider credential or session ceiling
+     * when it differs from `ConnectionMaxSeconds` (for example, 1800s ephemeral token ceiling
+     * on Gemini Developer API vs. 600s per WebSocket connection, or 3600s client_secret TTL on xAI
+     * vs. 7200s WebSocket session ceiling). Overridable at the `MJ: AI Model Vendors` level.
+     */
+    SessionMaxSeconds?: number | null;
+
+    /**
+     * Buffer in seconds before `ConnectionMaxSeconds` expiry at which the framework initiates
+     * a proactive reconnect. Defaults to 10 seconds when omitted.
+     */
+    ReconnectBufferSeconds?: number | null;
+
+    /**
+     * Whether the provider's native session resumption handle/ID reliably restores prior
+     * conversation turns on this endpoint.
+     *
+     * - `true`: pass the native resumption handle/ID and do NOT re-inject conversation history
+     *   (e.g., Gemini Enterprise / Vertex AI `v1`, xAI `resumption.enabled` + `conversation_id`).
+     * - `false`: feed `RealtimeConversationMemory` history into the reconnected session even if
+     *   the provider emits a resumption handle (e.g., Gemini Developer API `v1alpha` ephemeral tokens).
+     * - `null` / `undefined`: defer to the driver's runtime default.
+     */
+    TrustNativeResumption?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -69079,6 +69269,44 @@ export interface MJAIVendorEntity_RealtimeConfigurationSettings {
      * model-vendor row.
      */
     Pricing?: MJAIVendorEntity_RealtimePricingSettings | null;
+
+    /**
+     * Maximum duration in seconds of a single underlying provider transport connection
+     * (WebSocket or WebRTC call) before the provider closes or resets the socket
+     * (for example, 600s on Gemini Live WebSockets, 3600s on OpenAI Realtime, 7200s on xAI).
+     *
+     * Set on `MJ: AI Models.ModelConfiguration` and overridable on
+     * `MJ: AI Model Vendors.ModelConfiguration`. When elapsed (minus `ReconnectBufferSeconds`),
+     * the realtime framework triggers a proactive in-place reconnect on `BaseRealtimeModel` /
+     * `BaseRealtimeClient`.
+     */
+    ConnectionMaxSeconds?: number | null;
+
+    /**
+     * Maximum duration in seconds of a single provider credential or session ceiling
+     * when it differs from `ConnectionMaxSeconds` (for example, 1800s ephemeral token ceiling
+     * on Gemini Developer API vs. 600s per WebSocket connection, or 3600s client_secret TTL on xAI
+     * vs. 7200s WebSocket session ceiling). Overridable at the `MJ: AI Model Vendors` level.
+     */
+    SessionMaxSeconds?: number | null;
+
+    /**
+     * Buffer in seconds before `ConnectionMaxSeconds` expiry at which the framework initiates
+     * a proactive reconnect. Defaults to 10 seconds when omitted.
+     */
+    ReconnectBufferSeconds?: number | null;
+
+    /**
+     * Whether the provider's native session resumption handle/ID reliably restores prior
+     * conversation turns on this endpoint.
+     *
+     * - `true`: pass the native resumption handle/ID and do NOT re-inject conversation history
+     *   (e.g., Gemini Enterprise / Vertex AI `v1`, xAI `resumption.enabled` + `conversation_id`).
+     * - `false`: feed `RealtimeConversationMemory` history into the reconnected session even if
+     *   the provider emits a resumption handle (e.g., Gemini Developer API `v1alpha` ephemeral tokens).
+     * - `null` / `undefined`: defer to the driver's runtime default.
+     */
+    TrustNativeResumption?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
