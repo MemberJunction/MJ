@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "D1c -> S6.4",
+    "Description": "Gate G2.37 (phase 2, dataset D1c, criterion S6.4): on D1c each post-cutoff year of the holdout is its own out-of-time slice with a 95% interval on either side of its score, 100% of periods. It fails when post-cutoff periods are merged into one slice (fewer than 100% of periods).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.37\",\"owner:PR3\",\"phase:2\",\"dataset:D1c\",\"criterion:S6.4\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Each post-cutoff year of D1c is its own slice with a 95% interval (1 of 1 pytest case passes)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-d1c-s6-4"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "F3860823-D4FB-405C-A8D3-B8FA69DCD786"
+  }
+}
