@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdirSync, mkdtempSync, realpathSync, symlinkSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -104,5 +104,19 @@ describe('Sandbox.Run', () => {
     expect(name).toMatch(/^jit-[0-9a-f]{12}$/);
     expect(calls).toHaveLength(2);
     expect(calls[1]).toEqual({ file: 'docker', args: ['rm', '-f', name] });
+  });
+});
+
+describe('Sandbox identity', () => {
+  it('mounts passwd and group entries for the host user, so os.userInfo() resolves inside the container', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'jit-sandbox-id-'));
+    const s = new Sandbox(DEFAULT_SETTINGS.Sandbox, undefined, { Uid: 1234, Gid: 5678, Home: homedir() }, dir);
+    const a = s.BuildArgs(base);
+    const passwd = join(dir, 'passwd-1234');
+    const group = join(dir, 'group-5678');
+    expect(a).toContain(`${realpathSync.native(passwd)}:/etc/passwd:ro`);
+    expect(a).toContain(`${realpathSync.native(group)}:/etc/group:ro`);
+    expect(readFileSync(passwd, 'utf8')).toContain('jit:x:1234:5678:');
+    expect(readFileSync(group, 'utf8')).toContain('jit:x:5678:');
   });
 });

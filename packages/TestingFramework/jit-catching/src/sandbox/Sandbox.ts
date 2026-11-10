@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, realpathSync } from 'node:fs';
-import { homedir, userInfo } from 'node:os';
+import { existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir, userInfo } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import type { Settings } from '../settings';
 import { InfrastructureError } from '../target/VitestCatchTarget';
@@ -33,11 +33,13 @@ function currentHost(): SandboxHost { const u = userInfo(); return { Uid: u.uid,
 /**
  * Runs untrusted code in a Docker container with no network, no secrets and its own PID namespace (D28).
  * Refuses to run when the host user is root, since the container would then run as root too.
+ * The container runs as the host uid, which the image does not know; `identityDir` holds the passwd and
+ * group files mounted over `/etc/passwd` and `/etc/group` so that `os.userInfo()` resolves in the container.
  */
 export class Sandbox {
     private readonly deniedRoots: string[];
     private readonly homes: string[];
-    constructor(private readonly settings: Settings['Sandbox'], private readonly runner: CommandRunner = execFileRunner, private readonly host: SandboxHost = currentHost()) {
+    constructor(private readonly settings: Settings['Sandbox'], private readonly runner: CommandRunner = execFileRunner, private readonly host: SandboxHost = currentHost(), private readonly identityDir: string = join(tmpdir(), 'jit-catch-sandbox')) {
         this.homes = [...new Set([resolve(host.Home), resolveExisting(resolve(host.Home))])];
         this.deniedRoots = [...SYSTEM_DENIED_ROOTS, ...this.homes.flatMap((h) => [join(h, '.docker'), join(h, 'Library', 'Containers', 'com.docker.docker')])];
     }
@@ -59,13 +61,23 @@ export class Sandbox {
         const args = ['run', '--rm', '--name', name, '--network', 'none', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
             '--pids-limit', String(this.settings.PidsLimit), '--memory', `${this.settings.MemoryGB}g`, '--cpus', String(this.settings.Cpus),
             '--user', `${this.host.Uid}:${this.host.Gid}`, '--workdir', o.WorkDir];
-        for (const m of o.Mounts) args.push('-v', `${this.checkedHost(m)}:${m.Container}:${m.Mode}`);
+        for (const m of [...this.identityMounts(), ...o.Mounts]) args.push('-v', `${this.checkedHost(m)}:${m.Container}:${m.Mode}`);
         for (const t of o.Tmpfs ?? []) args.push('--tmpfs', `${t}:rw,size=256m,mode=1777`);
         for (const [k, v] of Object.entries(o.Env ?? {})) {
             if (!ENV_ALLOW.has(k)) throw new Error(`environment variable ${k} is not allowed in the sandbox`);
             args.push('-e', `${k}=${v}`);
         }
         return [...args, this.settings.Image, ...o.Command];
+    }
+
+    /** Writes the passwd and group files for the host user (home `/tmp`, no shell) and returns their read-only mounts. */
+    private identityMounts(): SandboxMount[] {
+        mkdirSync(this.identityDir, { recursive: true });
+        const passwd = join(this.identityDir, `passwd-${this.host.Uid}`);
+        const group = join(this.identityDir, `group-${this.host.Gid}`);
+        writeFileSync(passwd, `root:x:0:0:root:/root:/usr/sbin/nologin\njit:x:${this.host.Uid}:${this.host.Gid}:jit:/tmp:/usr/sbin/nologin\n`);
+        writeFileSync(group, `root:x:0:\njit:x:${this.host.Gid}:\n`);
+        return [{ Host: passwd, Container: '/etc/passwd', Mode: 'ro' }, { Host: group, Container: '/etc/group', Mode: 'ro' }];
     }
 
     /**
