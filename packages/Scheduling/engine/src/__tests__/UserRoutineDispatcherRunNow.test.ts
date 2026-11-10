@@ -9,6 +9,10 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+const { runViewProbeMock } = vi.hoisted(() => ({
+    runViewProbeMock: vi.fn(),
+}));
+
 vi.mock('@memberjunction/global', async (importOriginal) => ({
     ...(await importOriginal() as Record<string, unknown>),
     RegisterClass: () => (target: unknown) => target,
@@ -18,6 +22,11 @@ vi.mock('@memberjunction/core', async (importOriginal) => ({
     LogError: vi.fn(),
     LogStatusEx: vi.fn(),
     Metadata: vi.fn().mockImplementation(() => ({ GetEntityObject: vi.fn(), Provider: {} })),
+    RunView: class MockRunView {
+        public RunView(...args: unknown[]): Promise<unknown> {
+            return runViewProbeMock(...args);
+        }
+    },
 }));
 vi.mock('@memberjunction/ai-agents', () => ({ AgentRunner: class {} }));
 vi.mock('@memberjunction/ai-prompts', () => ({ AIPromptRunner: class {} }));
@@ -199,12 +208,15 @@ describe('UserRoutineDispatcherDriver.RunRoutineNow', () => {
             ContextUser: SYSTEM as Partial<UserInfo> as UserInfo,
         };
 
-        // 1. Transient lookup errors (FindUser throwing or empty UserCache) NEVER disable the routine even across 4 sweeps
+        // 1. Transient lookup errors (FindUser returning undefined because DB failed during UserCache refresh -> RunView probe returns Success: false) NEVER disable the routine even across 4 sweeps
+        runViewProbeMock.mockReset().mockResolvedValue({
+            Success: false,
+            Results: [],
+            ErrorMessage: 'DB connection timeout',
+        });
         globalRef.___SINGLETON__UserCache = {
             Users: [SYSTEM as Partial<UserInfo> as UserInfo],
-            FindUser: async () => {
-                throw new Error('DB connection timeout');
-            },
+            FindUser: async () => undefined,
         };
         for (let i = 0; i < 4; i++) {
             await driver.Execute(context);
@@ -212,7 +224,11 @@ describe('UserRoutineDispatcherDriver.RunRoutineNow', () => {
         expect(routine.Status).toBe('Active');
         expect(driver.claimRoutine).not.toHaveBeenCalled();
 
-        // 2. Populated UserCache where owner is permanently missing disables after MAX_OWNER_RESOLVE_RETRIES (3) sweeps
+        // 2. Populated UserCache where RunView confirms the owner row is permanently missing (Success: true, Results: []) disables after MAX_OWNER_RESOLVE_RETRIES (3) sweeps
+        runViewProbeMock.mockReset().mockResolvedValue({
+            Success: true,
+            Results: [],
+        });
         globalRef.___SINGLETON__UserCache = {
             Users: [SYSTEM as Partial<UserInfo> as UserInfo],
             FindUser: async () => undefined,

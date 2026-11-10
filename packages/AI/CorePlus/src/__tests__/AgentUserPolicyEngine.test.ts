@@ -688,4 +688,52 @@ describe('AgentUserPolicyEngine — ResolvePolicyForAgentAndUser & DetectAgentPo
         engine.SetCachedPolicy(savedPolicy);
         expect(engine.GetCachedPolicy('agent-cos', 'user-alice-1', providerB)?.ID).toBe('pol-saved-fresh');
     });
+
+    it('never leaks a cached "none" across providers and expires negative cache entries after TTL', async () => {
+        const policyOnProviderB = buildPolicy({ ID: 'pol-b-only', DefaultDataAccessMode: 'ReadOnly' });
+        const runViewFn = vi
+            .fn()
+            .mockResolvedValueOnce({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1 })
+            .mockResolvedValueOnce({
+                Success: true,
+                Results: [policyOnProviderB],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+            })
+            .mockResolvedValueOnce({
+                Success: true,
+                Results: [policyOnProviderB],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+            });
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: runViewFn,
+        } as Partial<RunView> as RunView);
+        vi.spyOn(RunView.prototype, 'RunView').mockImplementation(runViewFn);
+
+        // 1. Default provider caches 'none' (null)
+        const defaultNone = await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser);
+        expect(defaultNone).toEqual({ status: 'none', policy: null });
+        expect(runViewFn).toHaveBeenCalledTimes(1);
+
+        // 2. Custom providerB MUST NOT fall back to the default provider's cached 'none'; it queries providerB and finds policyOnProviderB
+        const providerB = {} as Partial<IMetadataProvider & IRunViewProvider> as IMetadataProvider;
+        const bFound = await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser, {
+            provider: providerB,
+        });
+        expect(bFound).toEqual({ status: 'found', policy: policyOnProviderB });
+        expect(runViewFn).toHaveBeenCalledTimes(2);
+
+        // 3. After TTL expires, the default provider's negative cache entry expires and re-queries RunView
+        const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 31_000);
+        try {
+            const refreshedAfterTtl = await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser);
+            expect(refreshedAfterTtl).toEqual({ status: 'found', policy: policyOnProviderB });
+            expect(runViewFn).toHaveBeenCalledTimes(3);
+        } finally {
+            nowSpy.mockRestore();
+        }
+    });
 });

@@ -820,7 +820,13 @@ describe('Chief of Staff Actions Suite', () => {
                 ActionPolicyRulesObject: [],
                 Save: vi.fn().mockResolvedValue(true),
             };
+            const reloadPausedStub = {
+                ...existingPausedStub,
+                InnerLoad: vi.fn().mockResolvedValue(true),
+                Save: vi.fn().mockResolvedValue(true),
+            };
             getPolicyMock.mockResolvedValueOnce(existingPausedStub);
+            getEntityObjectMock.mockResolvedValueOnce(reloadPausedStub);
 
             const widenRes = await invokeAction(new ConfigureAgentUserPolicyAction(), {
                 Action: {} as RunActionParams['Action'],
@@ -835,7 +841,9 @@ describe('Chief of Staff Actions Suite', () => {
             expect(widenRes.Success).toBe(false);
             expect(widenRes.ResultCode).toBe('PERMISSION_DENIED');
             expect(widenRes.Message).toMatch(/Cannot widen|Cannot increase/);
+            expect(existingPausedStub.Status).toBe('Paused');
             expect(existingPausedStub.Save).not.toHaveBeenCalled();
+            expect(reloadPausedStub.Save).not.toHaveBeenCalled();
 
             // 2b. When ResolvePolicyForAgentAndUser returns a system-user-loaded policy, Configure reloads and saves as ContextUser (and enforces CanUpdate)
             const sysLoadedExisting = {

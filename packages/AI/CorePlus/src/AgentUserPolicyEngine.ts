@@ -204,9 +204,11 @@ interface NodeProcessWithBuiltinModule {
 export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> {
     private static readonly _providerIds = new WeakMap<object, number>();
     private static _nextProviderId = 1;
+    private static readonly NONE_POLICY_CACHE_TTL_MS = 30_000;
 
     private readonly expressionEvaluator = new SafeExpressionEvaluator();
     private readonly policyCache = new Map<string, MJAIAgentUserPolicyEntity | null>();
+    private readonly nonePolicyCacheExpiry = new Map<string, number>();
     private executingAgentStore: ExecutingAgentContextStore | null = null;
     private entityEventSubscription: Subscription | null = null;
 
@@ -340,7 +342,9 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
         }
         const entityProvider = (policy as { ProviderToUse?: object | null }).ProviderToUse ?? null;
         if (provider) {
-            this.policyCache.set(this.buildCacheKey(policy.AgentID, policy.UserID, provider), policy);
+            const key = this.buildCacheKey(policy.AgentID, policy.UserID, provider);
+            this.nonePolicyCacheExpiry.delete(key);
+            this.policyCache.set(key, policy);
             return;
         }
         // Evict any stale copies cached under other providers for this (agentId, userId) pair first.
@@ -373,18 +377,22 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
     public ClearCache(agentId?: string, userId?: string, provider?: IMetadataProvider | null): void {
         if (agentId && userId) {
             if (provider) {
-                this.policyCache.delete(this.buildCacheKey(agentId, userId, provider));
+                const key = this.buildCacheKey(agentId, userId, provider);
+                this.policyCache.delete(key);
+                this.nonePolicyCacheExpiry.delete(key);
                 return;
             }
             const suffix = `::${this.buildPairSuffix(agentId, userId)}`;
             for (const k of Array.from(this.policyCache.keys())) {
                 if (k.endsWith(suffix)) {
                     this.policyCache.delete(k);
+                    this.nonePolicyCacheExpiry.delete(k);
                 }
             }
             return;
         }
         this.policyCache.clear();
+        this.nonePolicyCacheExpiry.clear();
     }
 
     private resolvePolicyLookupUser(contextUser: UserInfo): UserInfo {
@@ -424,11 +432,21 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
         if (!forceRefresh) {
             if (this.policyCache.has(scopedKey)) {
                 const cached = this.policyCache.get(scopedKey) ?? null;
-                return cached ? { status: 'found', policy: cached } : { status: 'none', policy: null };
+                if (cached) {
+                    return { status: 'found', policy: cached };
+                }
+                const exp = this.nonePolicyCacheExpiry.get(scopedKey) ?? 0;
+                if (Date.now() < exp) {
+                    return { status: 'none', policy: null };
+                }
+                this.policyCache.delete(scopedKey);
+                this.nonePolicyCacheExpiry.delete(scopedKey);
             }
-            if (options?.provider && this.policyCache.has(defaultKey)) {
+            if (options?.provider) {
                 const defaultCached = this.policyCache.get(defaultKey) ?? null;
-                return defaultCached ? { status: 'found', policy: defaultCached } : { status: 'none', policy: null };
+                if (defaultCached) {
+                    return { status: 'found', policy: defaultCached };
+                }
             }
         }
 
@@ -456,10 +474,12 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
             }
             if (result.Results.length > 0) {
                 const policy = result.Results[0];
+                this.nonePolicyCacheExpiry.delete(scopedKey);
                 this.policyCache.set(scopedKey, policy);
                 return { status: 'found', policy };
             }
             this.policyCache.set(scopedKey, null);
+            this.nonePolicyCacheExpiry.set(scopedKey, Date.now() + AgentUserPolicyEngine.NONE_POLICY_CACHE_TTL_MS);
             return { status: 'none', policy: null };
         } catch (error) {
             const errMessage = error instanceof Error ? error.message : String(error);

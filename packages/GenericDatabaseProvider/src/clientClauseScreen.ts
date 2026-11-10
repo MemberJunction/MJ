@@ -833,12 +833,13 @@ export class ClientClauseScreen {
         dialect: SQLParserDialect,
     ): void {
         if (!clause?.trim()) return;
+        const fragment = ClientClauseScreen.toDialectQuoting(clause, dialect);
         const quotedSchema = dialect.QuoteIdentifier('__mj');
         const quotedView = dialect.QuoteIdentifier('vw_clause_check');
         const wrappedSql =
             label === 'OrderBy'
-                ? `SELECT 1 FROM ${quotedSchema}.${quotedView} ORDER BY ${clause}`
-                : `SELECT 1 FROM ${quotedSchema}.${quotedView} WHERE ${clause}`;
+                ? `SELECT 1 FROM ${quotedSchema}.${quotedView} ORDER BY ${fragment}`
+                : `SELECT 1 FROM ${quotedSchema}.${quotedView} WHERE ${fragment}`;
         ClientClauseScreen.AssertNoPositionalColumnRenames(wrappedSql, dialect, label);
     }
 

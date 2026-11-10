@@ -12,7 +12,7 @@
  * @module @memberjunction/scheduling-engine
  */
 
-import { RegisterClass, SafeJSONParse, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { RegisterClass, SafeJSONParse, UUIDsEqual, NormalizeUUID, EscapeSQLString } from '@memberjunction/global';
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import {
     BUILT_IN_CONVERSATION_TYPE_IDS,
@@ -453,9 +453,40 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         }
         if (!found) {
             const cachePopulated = Array.isArray(userCache.Users) && userCache.Users.length > 0;
+            if (!cachePopulated) {
+                throw new RoutineOwnerResolutionError(
+                    `Routine "${routine.Name}" owner (${ownerUserId}) not found in unpopulated UserCache — refusing to execute.`,
+                    'transient'
+                );
+            }
+            // UserCache.FindUser catches and swallows DB errors during its refresh query, returning undefined.
+            // Probe MJ: Users via RunView so a transient DB error is distinguished from a deleted owner row.
+            let verifyKind: 'permanent' | 'transient' = 'transient';
+            try {
+                const rv = new RunView();
+                const verifyRes = await rv.RunView<{ ID: string; IsActive?: boolean }>(
+                    {
+                        EntityName: 'MJ: Users',
+                        ExtraFilter: `ID = '${EscapeSQLString(ownerUserId)}'`,
+                        Fields: ['ID', 'IsActive'],
+                        MaxRows: 1,
+                        SkipTotalRowCount: true,
+                        ResultType: 'simple',
+                    },
+                    fallbackContextUser
+                );
+                if (verifyRes?.Success) {
+                    const row = verifyRes.Results?.[0];
+                    if (!row || row.IsActive === false) {
+                        verifyKind = 'permanent';
+                    }
+                }
+            } catch {
+                verifyKind = 'transient';
+            }
             throw new RoutineOwnerResolutionError(
                 `Routine "${routine.Name}" owner (${ownerUserId}) not found in UserCache — refusing to execute.`,
-                cachePopulated ? 'permanent' : 'transient'
+                verifyKind
             );
         }
         if (found.IsActive === false) {

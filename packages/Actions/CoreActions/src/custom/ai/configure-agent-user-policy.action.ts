@@ -129,38 +129,22 @@ export class ConfigureAgentUserPolicyAction extends BaseAction {
                 }
             }
 
-            let policy: MJAIAgentUserPolicyEntity | null = null;
+            const policy = await md.GetEntityObject<MJAIAgentUserPolicyEntity>(
+                'MJ: AI Agent User Policies',
+                contextUser
+            );
             if (existing) {
-                const existingContextUser = (existing as { ContextCurrentUser?: { ID?: string } | null }).ContextCurrentUser;
-                if (existingContextUser?.ID && !UUIDsEqual(existingContextUser.ID, contextUser.ID)) {
-                    const userScopedPolicy = await md.GetEntityObject<MJAIAgentUserPolicyEntity>(
-                        'MJ: AI Agent User Policies',
-                        contextUser
-                    );
-                    if (userScopedPolicy && typeof userScopedPolicy.InnerLoad === 'function' && existing.ID) {
-                        const loaded = await userScopedPolicy.InnerLoad(
-                            new CompositeKey([{ FieldName: 'ID', Value: existing.ID }])
-                        );
-                        if (!loaded) {
-                            return {
-                                Success: false,
-                                ResultCode: 'POLICY_LOOKUP_FAILED',
-                                Message: `Failed to load existing agent user policy "${existing.ID}" under caller context.`,
-                                Params: params.Params,
-                            };
-                        }
-                        policy = userScopedPolicy;
-                    } else if (userScopedPolicy) {
-                        policy = userScopedPolicy;
-                    }
-                } else {
-                    policy = existing;
+                const loaded =
+                    Boolean(policy && existing.ID && typeof policy.InnerLoad === 'function') &&
+                    (await policy!.InnerLoad(CompositeKey.FromID(existing.ID))); // first-pk-ok: MJ: AI Agent User Policies is keyed by ID
+                if (!loaded) {
+                    return {
+                        Success: false,
+                        ResultCode: 'POLICY_LOOKUP_FAILED',
+                        Message: `Failed to load existing agent user policy "${existing.ID}" under caller context.`,
+                        Params: params.Params,
+                    };
                 }
-            } else {
-                policy = await md.GetEntityObject<MJAIAgentUserPolicyEntity>(
-                    'MJ: AI Agent User Policies',
-                    contextUser
-                );
             }
             if (!policy) {
                 return {

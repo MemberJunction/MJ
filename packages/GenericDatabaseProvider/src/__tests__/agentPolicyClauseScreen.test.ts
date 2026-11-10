@@ -584,13 +584,16 @@ describe('ClientClauseScreen agent policy & masking screens', () => {
             expect(provider.ExecutedSQL).toHaveLength(0);
             virtualConsoleSpy.mockRestore();
 
-            // PostgreSQL dialect AssertNoWholeRowOrOrdinalInClause accepts valid PG filters and EXISTS (SELECT * ...)
+            // PostgreSQL dialect AssertNoWholeRowOrOrdinalInClause accepts valid PG filters, bracket-quoted filters, and EXISTS (SELECT * ...)
             expect(() =>
                 ClientClauseScreen.AssertNoWholeRowOrOrdinalInClause(
                     `"Status" = 'Active' AND EXISTS (SELECT * FROM "crm"."vwContacts" c2 WHERE c2."ID" = "ID")`,
                     'Filter',
                     PG,
                 ),
+            ).not.toThrow();
+            expect(() =>
+                ClientClauseScreen.AssertNoWholeRowOrOrdinalInClause(`[Status] = 'Active'`, 'Filter', PG),
             ).not.toThrow();
             expect(() =>
                 ClientClauseScreen.AssertNoWholeRowOrOrdinalInClause(`"Amount" DESC`, 'OrderBy', PG),
