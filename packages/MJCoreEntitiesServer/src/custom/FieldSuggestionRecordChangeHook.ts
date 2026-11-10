@@ -17,8 +17,8 @@ import {
 } from '@memberjunction/core-entities';
 import { EscapeSQLString, MJGlobal, NormalizeUUID } from '@memberjunction/global';
 import {
-    buildLinkedRecordIdCandidates,
-    collectISAFamilyEntityIds,
+    BuildLinkedRecordIdCandidates,
+    CollectISAFamilyEntityIds,
     CommentTypeDriver,
     FieldSuggestionCommentDriver,
     IsSuggestionAcceptInFlight,
@@ -97,10 +97,9 @@ export const FieldSuggestionPostSaveHook: PostSaveHook = async (
         return;
     }
 
+    const fallbackProvider = contextUser?.OwningProvider ?? Metadata.Provider;
     const provider =
-        (entity.ProviderToUse as unknown as IMetadataProvider | null) ??
-        contextUser?.OwningProvider ??
-        Metadata.Provider;
+        (entity.ProviderToUse as unknown as IMetadataProvider | null) ?? fallbackProvider;
     if (!provider || provider.ProviderType !== 'Database') {
         return;
     }
@@ -117,8 +116,8 @@ export const FieldSuggestionPostSaveHook: PostSaveHook = async (
             return;
         }
 
-        const entityIds = collectISAFamilyEntityIds(entityInfo, entityInfo.ID);
-        const recordIdCandidates = buildLinkedRecordIdCandidates(entityInfo, rawRecordId);
+        const entityIds = CollectISAFamilyEntityIds(entityInfo, entityInfo.ID);
+        const recordIdCandidates = BuildLinkedRecordIdCandidates(entityInfo, rawRecordId);
         if (entityIds.length === 0 || recordIdCandidates.length === 0) {
             return;
         }

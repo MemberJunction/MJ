@@ -79,22 +79,24 @@ export class CreateRecordAction extends BaseRecordMutationAction {
             const mutatedFields = Object.keys(fields).map(
                 (fieldName) => this.resolveEntityFieldName(entity!, fieldName, entityInfo) ?? fieldName
             );
+            // fls-guard: entity was instantiated for params.ContextUser and is passed only to internal agent policy evaluation (never serialized to caller)
+            const pendingCreateRecord = entity!.GetAll();
             const policyOutcome = await AgentDataPolicyGuard.EvaluateRecordOperation({
                 params,
                 entityInfo: entityInfo!,
                 operation: 'Create',
                 mutatedFields,
-                record: entity!.GetAll(),
+                record: pendingCreateRecord,
             });
-            if ('blocked' in policyOutcome) {
-                return policyOutcome.blocked;
+            if ('Blocked' in policyOutcome) {
+                return policyOutcome.Blocked;
             }
-            if (policyOutcome.allowed.active && policyOutcome.allowed.effectiveWhereClause) {
+            if (policyOutcome.Allowed.Active && policyOutcome.Allowed.EffectiveWhereClause) {
                 const whereError = await AgentDataPolicyGuard.VerifyEntityStatePassesWhereClause({
                     params,
                     entity: entity!,
                     entityInfo: entityInfo!,
-                    effectiveWhereClause: policyOutcome.allowed.effectiveWhereClause,
+                    effectiveWhereClause: policyOutcome.Allowed.EffectiveWhereClause,
                 });
                 if (whereError) {
                     return whereError;

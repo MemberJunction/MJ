@@ -83,7 +83,7 @@ export class GetRecordsAction extends BaseAction {
             const entityInfo = md?.EntityByName ? md.EntityByName(entityName) : undefined;
             const callingAgentId = AgentDataPolicyGuard.GetCallingAgentID(params);
             let policyState: Awaited<ReturnType<typeof AgentDataPolicyGuard.EvaluateRecordOperation>> = {
-                allowed: { active: false },
+                Allowed: { Active: false },
             };
             if (callingAgentId) {
                 if (!entityInfo) {
@@ -98,13 +98,13 @@ export class GetRecordsAction extends BaseAction {
                     entityInfo,
                     operation: 'Read',
                 });
-                if ('blocked' in policyState) {
-                    return policyState.blocked;
+                if ('Blocked' in policyState) {
+                    return policyState.Blocked;
                 }
                 const clauseError = AgentDataPolicyGuard.ScreenGetRecordsClauses({
                     params,
                     entityInfo,
-                    evalState: policyState.allowed,
+                    evalState: policyState.Allowed,
                     filter,
                     orderBy,
                     alternateBaseView,
@@ -128,10 +128,10 @@ export class GetRecordsAction extends BaseAction {
                 ResultType: 'simple'
             };
 
-            const effectiveFilter = policyState.allowed.active
+            const effectiveFilter = policyState.Allowed.Active
                 ? AgentDataPolicyGuard.CombineExtraFilters(
                       filter,
-                      policyState.allowed.effectiveWhereClause,
+                      policyState.Allowed.EffectiveWhereClause,
                       params.Provider
                   )
                 : filter;
@@ -162,14 +162,14 @@ export class GetRecordsAction extends BaseAction {
             const rawRecords = result.Results || [];
             const records = AgentDataPolicyGuard.FilterAndMaskRows({
                 rows: rawRecords,
-                evalState: policyState.allowed,
+                evalState: policyState.Allowed,
                 entityInfo,
                 contextUser: params.ContextUser,
                 provider: params.Provider,
             });
             const wasConditionFiltered =
-                policyState.allowed.active &&
-                policyState.allowed.hasRecordConditionRules &&
+                policyState.Allowed.Active &&
+                policyState.Allowed.HasRecordConditionRules &&
                 records.length !== rawRecords.length;
             const totalCount = wasConditionFiltered
                 ? records.length

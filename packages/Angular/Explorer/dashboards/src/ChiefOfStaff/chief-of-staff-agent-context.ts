@@ -25,7 +25,7 @@ import type {
     MJUserRoutineEntity,
     MJAIAgentRequestEntity,
 } from '@memberjunction/core-entities';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
     AGENT_CONTEXT_NAME_LIST_CAP,
     BoundNameList,
@@ -66,6 +66,7 @@ export function SelectableAgentsForGovernance(
 ): SelectableGovernanceAgent[] {
     const seen = new Set<string>();
     const out: SelectableGovernanceAgent[] = [];
+    const extraRefSet = extraReferencedIds ? new UUIDSet(extraReferencedIds) : null;
 
     for (const a of agents) {
         const name = a.Name?.trim() ?? '';
@@ -79,9 +80,7 @@ export function SelectableAgentsForGovernance(
         const isCos = name.toLowerCase() === CHIEF_OF_STAFF_AGENT_NAME.toLowerCase();
         const isTopLevelActive =
             a.ParentID == null && (a.Status == null || a.Status === 'Active');
-        const isReferenced = extraReferencedIds
-            ? Array.from(extraReferencedIds).some((refId) => UUIDsEqual(refId, a.ID))
-            : false;
+        const isReferenced = extraRefSet ? extraRefSet.Has(a.ID) : false;
 
         if (isCos || isTopLevelActive || isReferenced) {
             seen.add(key);

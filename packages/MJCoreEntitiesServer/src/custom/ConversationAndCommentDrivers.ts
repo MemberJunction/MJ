@@ -649,8 +649,8 @@ export class FieldSuggestionCommentDriver extends CommentTypeDriver {
         }
 
         const targetEntityInfo = resolveEntityInfoById(provider, linkedEntityId);
-        const entityIds = collectISAFamilyEntityIds(targetEntityInfo, linkedEntityId);
-        const recordIdVariants = buildLinkedRecordIdCandidates(targetEntityInfo, linkedRecordId);
+        const entityIds = CollectISAFamilyEntityIds(targetEntityInfo, linkedEntityId);
+        const recordIdVariants = BuildLinkedRecordIdCandidates(targetEntityInfo, linkedRecordId);
 
         const entityInList = entityIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
         const recordInList = recordIdVariants.map((rid) => `'${EscapeSQLString(rid)}'`).join(',');
@@ -689,7 +689,7 @@ export class FieldSuggestionCommentDriver extends CommentTypeDriver {
  * descendants) so a suggestion anchored to `Task` or `GitHubIssueTask` is matched regardless
  * of which level in the hierarchy is saved or queried.
  */
-export function collectISAFamilyEntityIds(
+export function CollectISAFamilyEntityIds(
     entityInfo: EntityInfo | null | undefined,
     fallbackEntityId?: string | null
 ): string[] {
@@ -729,7 +729,7 @@ export function collectISAFamilyEntityIds(
  * Produces both scalar (`'uuid'`) and `CompositeKey.ToConcatenatedString()` (`'ID|uuid'`)
  * forms for single-PK entities so `LinkedRecordID` lookups match whichever form was stored.
  */
-export function buildLinkedRecordIdCandidates(
+export function BuildLinkedRecordIdCandidates(
     entityInfo: EntityInfo | null | undefined,
     rawRecordId: string
 ): string[] {

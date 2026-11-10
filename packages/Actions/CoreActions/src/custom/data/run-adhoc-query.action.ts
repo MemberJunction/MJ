@@ -124,8 +124,8 @@ export class RunAdhocQueryAction extends BaseAction {
                 normalizedQuery,
                 readOnlyProvider
             );
-            if ('blocked' in agentPolicyGuard) {
-                return agentPolicyGuard.blocked;
+            if ('Blocked' in agentPolicyGuard) {
+                return agentPolicyGuard.Blocked;
             }
 
             try {
@@ -144,7 +144,7 @@ export class RunAdhocQueryAction extends BaseAction {
                 }
                 const results = AgentDataPolicyGuard.MaskRows(
                     (queryResult.Results || []) as Record<string, unknown>[],
-                    agentPolicyGuard.allowed.deniedFieldPatterns
+                    agentPolicyGuard.Allowed.DeniedFieldPatterns
                 );
 
                 const executionTimeMs = Date.now() - queryStartTime;

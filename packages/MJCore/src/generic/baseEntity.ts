@@ -1158,6 +1158,7 @@ interface SubtypeTypeFieldRule {
     TerminalFieldName: string;
     ParentEntity: EntityInfo;
     SelectorPath: string;
+    DeclaredChildNamesLower: Set<string>;
 }
 
 type SubtypeChainReconcileOutcome =
@@ -2974,9 +2975,7 @@ export abstract class BaseEntity<T = unknown> {
             if (candidate.length === 0) {
                 continue;
             }
-            const isDeclaredChild =
-                (rule.ParentEntity.ChildEntities?.some(c => sameEntityName(c.Name, candidate)) ?? false) ||
-                entities.some(e => UUIDsEqual(e.ParentID, rule.ParentEntity.ID) && sameEntityName(e.Name, candidate));
+            const isDeclaredChild = rule.DeclaredChildNamesLower.has(candidate.toLowerCase());
             if (!isDeclaredChild) {
                 result.Errors.push(
                     new ValidationErrorInfo(
@@ -3008,6 +3007,19 @@ export abstract class BaseEntity<T = unknown> {
         const signature = `${entities.length}|${sigParts.join('||')}`;
         if (!BaseEntity._subtypeTypeFieldRulesCache || BaseEntity._subtypeTypeFieldRulesCache.Signature !== signature) {
             const byTypeEntity = new Map<string, SubtypeTypeFieldRule[]>();
+            const childNamesByParentId = new Map<string, Set<string>>();
+            for (const ent of entities) {
+                if (!ent.ParentID || !ent.Name) {
+                    continue;
+                }
+                const parentKey = NormalizeUUID(ent.ParentID);
+                let set = childNamesByParentId.get(parentKey);
+                if (!set) {
+                    set = new Set<string>();
+                    childNamesByParentId.set(parentKey, set);
+                }
+                set.add(ent.Name.trim().toLowerCase());
+            }
             for (const parentEntity of entities) {
                 const selector = parentEntity.SubtypeSelectorConfig;
                 if (!selector?.Path) {
@@ -3033,6 +3045,14 @@ export abstract class BaseEntity<T = unknown> {
                     f => f.Name.trim().toLowerCase() === terminalSegment.toLowerCase()
                 );
                 if (currentInfo && terminalField) {
+                    const declaredChildNamesLower = new Set<string>(
+                        childNamesByParentId.get(NormalizeUUID(parentEntity.ID)) ?? []
+                    );
+                    for (const child of parentEntity.ChildEntities ?? []) {
+                        if (child.Name) {
+                            declaredChildNamesLower.add(child.Name.trim().toLowerCase());
+                        }
+                    }
                     const key = currentInfo.Name.trim().toLowerCase();
                     let list = byTypeEntity.get(key);
                     if (!list) {
@@ -3043,6 +3063,7 @@ export abstract class BaseEntity<T = unknown> {
                         TerminalFieldName: terminalField.Name,
                         ParentEntity: parentEntity,
                         SelectorPath: selector.Path,
+                        DeclaredChildNamesLower: declaredChildNamesLower,
                     });
                 }
             }

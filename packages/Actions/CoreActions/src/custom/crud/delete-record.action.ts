@@ -83,15 +83,15 @@ export class DeleteRecordAction extends BaseRecordMutationAction {
                 entityInfo: entityInfo!,
                 operation: 'Delete',
             });
-            if ('blocked' in policyOutcome) {
-                return policyOutcome.blocked;
+            if ('Blocked' in policyOutcome) {
+                return policyOutcome.Blocked;
             }
-            if (policyOutcome.allowed.active && policyOutcome.allowed.effectiveWhereClause) {
+            if (policyOutcome.Allowed.Active && policyOutcome.Allowed.EffectiveWhereClause) {
                 const rlsError = await AgentDataPolicyGuard.VerifyPrimaryKeyPassesWhereClause({
                     params,
                     entityInfo: entityInfo!,
                     primaryKey,
-                    effectiveWhereClause: policyOutcome.allowed.effectiveWhereClause,
+                    effectiveWhereClause: policyOutcome.Allowed.EffectiveWhereClause,
                 });
                 if (rlsError) {
                     return rlsError;
@@ -105,10 +105,10 @@ export class DeleteRecordAction extends BaseRecordMutationAction {
             // Store the record data before deletion
             // fls-guard: loaded as params.ContextUser; width follows its user
             const rawDeletedRecordData = entity.GetAll();
-            if (policyOutcome.allowed.active && policyOutcome.allowed.hasRecordConditionRules) {
+            if (policyOutcome.Allowed.Active && policyOutcome.Allowed.HasRecordConditionRules) {
                 const conditionError = AgentDataPolicyGuard.CheckRecordCondition({
                     params,
-                    policy: policyOutcome.allowed.policy,
+                    policy: policyOutcome.Allowed.Policy,
                     entityInfo: entityInfo!,
                     operation: 'Delete',
                     record: rawDeletedRecordData,
@@ -117,10 +117,10 @@ export class DeleteRecordAction extends BaseRecordMutationAction {
                     return conditionError;
                 }
             }
-            const deletedRecordData = policyOutcome.allowed.active
+            const deletedRecordData = policyOutcome.Allowed.Active
                 ? AgentDataPolicyGuard.MaskRecord(
                       rawDeletedRecordData,
-                      policyOutcome.allowed.evalResult.deniedFieldPatterns
+                      policyOutcome.Allowed.EvalResult.deniedFieldPatterns
                   )
                 : rawDeletedRecordData;
 

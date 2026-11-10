@@ -45,8 +45,8 @@ export class RunStoredQueryAction extends BaseAction {
                 queryName,
                 queryParameters
             );
-            if ('blocked' in policyGuard) {
-                return policyGuard.blocked;
+            if ('Blocked' in policyGuard) {
+                return policyGuard.Blocked;
             }
 
             // Build RunQueryParams
@@ -86,7 +86,7 @@ export class RunStoredQueryAction extends BaseAction {
             }
 
             const rawResults = (result.Results || []) as Record<string, unknown>[];
-            const results = AgentDataPolicyGuard.MaskRows(rawResults, policyGuard.allowed.deniedFieldPatterns);
+            const results = AgentDataPolicyGuard.MaskRows(rawResults, policyGuard.Allowed.DeniedFieldPatterns);
             const executionTimeMs = result.ExecutionTime || 0;
 
             // Format output

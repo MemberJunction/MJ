@@ -21,30 +21,30 @@ import {
     EntityAccessEvaluationResult,
 } from '@memberjunction/ai-core-plus';
 import { ClientClauseScreen, RenderPipeline } from '@memberjunction/generic-database-provider';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID, UUIDsEqual } from '@memberjunction/global';
 
 type ScalarFieldValue = string | number | boolean | null | undefined;
 type ScalarRecord = Record<string, ScalarFieldValue>;
 
 export interface ActiveAgentPolicyEvaluation {
-    active: true;
-    policy: MJAIAgentUserPolicyEntity;
-    evalResult: EntityAccessEvaluationResult;
-    effectiveWhereClause: string;
-    hasRecordConditionRules: boolean;
+    Active: true;
+    Policy: MJAIAgentUserPolicyEntity;
+    EvalResult: EntityAccessEvaluationResult;
+    EffectiveWhereClause: string;
+    HasRecordConditionRules: boolean;
 }
 
 export interface InactiveAgentPolicyEvaluation {
-    active: false;
+    Active: false;
 }
 
 export type AgentPolicyGuardOutcome =
-    | { blocked: ActionResultSimple }
-    | { allowed: ActiveAgentPolicyEvaluation | InactiveAgentPolicyEvaluation };
+    | { Blocked: ActionResultSimple }
+    | { Allowed: ActiveAgentPolicyEvaluation | InactiveAgentPolicyEvaluation };
 
 export type QueryPolicyGuardOutcome =
-    | { blocked: ActionResultSimple }
-    | { allowed: { active: boolean; deniedFieldPatterns: string[] } };
+    | { Blocked: ActionResultSimple }
+    | { Allowed: { Active: boolean; DeniedFieldPatterns: string[] } };
 
 interface SyntheticRowWhereEvaluatorProvider {
     EvaluateSyntheticRowWhereClause(
@@ -97,7 +97,7 @@ export class AgentDataPolicyGuard {
         const callingAgentId = AgentDataPolicyGuard.GetCallingAgentID(input.params);
         const contextUser = input.params.ContextUser;
         if (!callingAgentId || !contextUser?.ID) {
-            return { allowed: { active: false } };
+            return { Allowed: { Active: false } };
         }
 
         const policyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
@@ -108,7 +108,7 @@ export class AgentDataPolicyGuard {
         );
         if (policyLookup.status === 'error') {
             return {
-                blocked: {
+                Blocked: {
                     Success: false,
                     ResultCode: 'PERMISSION_DENIED',
                     Message: `Agent data-access policy lookup failed; refusing operation (fail-closed): ${policyLookup.errorMessage}`,
@@ -118,7 +118,7 @@ export class AgentDataPolicyGuard {
         }
         const policy = policyLookup.policy;
         if (!policy) {
-            return { allowed: { active: false } };
+            return { Allowed: { Active: false } };
         }
 
         const evalResult = AgentUserPolicyEngine.Instance.EvaluateEntityAccess({
@@ -133,7 +133,7 @@ export class AgentDataPolicyGuard {
 
         const verdictError = AgentDataPolicyGuard.verdictToActionError(evalResult, input.params);
         if (verdictError) {
-            return { blocked: verdictError };
+            return { Blocked: verdictError };
         }
 
         const rlsResolution = AgentDataPolicyGuard.resolveEffectiveWhereClause(
@@ -141,17 +141,17 @@ export class AgentDataPolicyGuard {
             contextUser,
             input.params.Provider
         );
-        if ('blocked' in rlsResolution) {
+        if ('Blocked' in rlsResolution) {
             return rlsResolution;
         }
 
         return {
-            allowed: {
-                active: true,
-                policy,
-                evalResult,
-                effectiveWhereClause: rlsResolution.whereClause,
-                hasRecordConditionRules: AgentDataPolicyGuard.hasRecordConditionRulesForEntity(
+            Allowed: {
+                Active: true,
+                Policy: policy,
+                EvalResult: evalResult,
+                EffectiveWhereClause: rlsResolution.whereClause,
+                HasRecordConditionRules: AgentDataPolicyGuard.hasRecordConditionRulesForEntity(
                     policy,
                     input.entityInfo
                 ),
@@ -271,9 +271,11 @@ export class AgentDataPolicyGuard {
                 );
             } else {
                 const dialect = ClientClauseScreen.DialectFor(candidateProvider);
+                // fls-guard: built as input.params.ContextUser and evaluated in-process against the agent row policy (never returned to caller)
+                const pendingState = input.entity.GetAll();
                 passed = ClientClauseScreen.EvaluateSimpleSqlWherePredicate(
                     clause,
-                    input.entity.GetAll(),
+                    pendingState,
                     dialect
                 );
             }
@@ -394,21 +396,21 @@ export class AgentDataPolicyGuard {
         }
 
         const deniedPatterns = new Set<string>(
-            input.evalState.active ? input.evalState.evalResult.deniedFieldPatterns : []
+            input.evalState.Active ? input.evalState.EvalResult.deniedFieldPatterns : []
         );
 
-        if (subqueryEntities.size > 0 && input.evalState.active && contextUser) {
+        if (subqueryEntities.size > 0 && input.evalState.Active && contextUser) {
             const subEval = AgentDataPolicyGuard.evaluateEntitiesForSqlRead(
                 input.params,
-                input.evalState.policy,
+                input.evalState.Policy,
                 contextUser,
                 Array.from(subqueryEntities.values()),
                 'Get Records subquery'
             );
-            if ('blocked' in subEval) {
-                return subEval.blocked;
+            if ('Blocked' in subEval) {
+                return subEval.Blocked;
             }
-            for (const pat of subEval.allowed.deniedFieldPatterns) {
+            for (const pat of subEval.Allowed.DeniedFieldPatterns) {
                 deniedPatterns.add(pat);
             }
         }
@@ -479,10 +481,11 @@ export class AgentDataPolicyGuard {
         contextUser?: UserInfo;
         provider?: IMetadataProvider;
     }): Record<string, unknown>[] {
-        if (!input.evalState.active) {
+        if (!input.evalState.Active) {
             return input.rows;
         }
-        const { policy, evalResult, hasRecordConditionRules } = input.evalState;
+        const { Policy: policy, EvalResult: evalResult, HasRecordConditionRules: hasRecordConditionRules } =
+            input.evalState;
         let filtered = input.rows;
         if (hasRecordConditionRules && input.entityInfo && input.contextUser) {
             filtered = input.rows.filter((row) => {
@@ -548,7 +551,7 @@ export class AgentDataPolicyGuard {
         const callingAgentId = AgentDataPolicyGuard.GetCallingAgentID(params);
         const contextUser = params.ContextUser;
         if (!callingAgentId || !contextUser?.ID) {
-            return { allowed: { active: false, deniedFieldPatterns: [] } };
+            return { Allowed: { Active: false, DeniedFieldPatterns: [] } };
         }
 
         const policyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
@@ -559,7 +562,7 @@ export class AgentDataPolicyGuard {
         );
         if (policyLookup.status === 'error') {
             return {
-                blocked: {
+                Blocked: {
                     Success: false,
                     ResultCode: 'PERMISSION_DENIED',
                     Message: `Agent data-access policy lookup failed; refusing stored query (fail-closed): ${policyLookup.errorMessage}`,
@@ -569,11 +572,11 @@ export class AgentDataPolicyGuard {
         }
         const policy = policyLookup.policy;
         if (!policy) {
-            return { allowed: { active: false, deniedFieldPatterns: [] } };
+            return { Allowed: { Active: false, DeniedFieldPatterns: [] } };
         }
         if (policy.Status === 'Disabled') {
             return {
-                blocked: {
+                Blocked: {
                     Success: false,
                     ResultCode: 'PERMISSION_DENIED',
                     Message: 'Agent user policy status is Disabled; stored query execution is denied.',
@@ -587,7 +590,7 @@ export class AgentDataPolicyGuard {
         if (!queryInfo) {
             if (AgentDataPolicyGuard.policyNarrowsEntityReads(policy)) {
                 return {
-                    blocked: {
+                    Blocked: {
                         Success: false,
                         ResultCode: 'PERMISSION_DENIED',
                         Message: `Stored query "${ queryName ?? queryId }" metadata could not be resolved to verify agent data-access policy.`,
@@ -595,14 +598,14 @@ export class AgentDataPolicyGuard {
                     },
                 };
             }
-            return { allowed: { active: true, deniedFieldPatterns: [] } };
+            return { Allowed: { Active: true, DeniedFieldPatterns: [] } };
         }
 
         const dialect = ClientClauseScreen.DialectFor(md);
         const renderedOutcome = AgentDataPolicyGuard.renderStoredQuerySql(md, queryInfo, contextUser, queryParameters);
         if ('blockedMessage' in renderedOutcome) {
             return {
-                blocked: {
+                Blocked: {
                     Success: false,
                     ResultCode: 'PERMISSION_DENIED',
                     Message: renderedOutcome.blockedMessage,
@@ -619,7 +622,7 @@ export class AgentDataPolicyGuard {
         );
         if (referencedEntities === null) {
             return {
-                blocked: {
+                Blocked: {
                     Success: false,
                     ResultCode: 'PERMISSION_DENIED',
                     Message: `Stored query "${ queryInfo.Name }" entity references could not be verified against the calling agent's data-access policy.`,
@@ -630,7 +633,7 @@ export class AgentDataPolicyGuard {
 
         if (referencedEntities.length === 0 && AgentDataPolicyGuard.policyNarrowsEntityReads(policy)) {
             return {
-                blocked: {
+                Blocked: {
                     Success: false,
                     ResultCode: 'PERMISSION_DENIED',
                     Message: `Stored query "${ queryInfo.Name }" has no verifiable entity lineage and cannot be executed under a narrowed agent data-access policy.`,
@@ -646,15 +649,15 @@ export class AgentDataPolicyGuard {
             referencedEntities,
             `stored query "${ queryInfo.Name }"`
         );
-        if ('blocked' in entityCheck) {
+        if ('Blocked' in entityCheck) {
             return entityCheck;
         }
 
-        const { deniedFieldPatterns } = entityCheck.allowed;
+        const { DeniedFieldPatterns: deniedFieldPatterns } = entityCheck.Allowed;
         if (deniedFieldPatterns.length > 0) {
             if (!renderedOutcome.renderedSql) {
                 return {
-                    blocked: {
+                    Blocked: {
                         Success: false,
                         ResultCode: 'PERMISSION_DENIED',
                         Message: `Stored query "${ queryInfo.Name }" SQL is unavailable to verify field-level masking rules.`,
@@ -671,7 +674,7 @@ export class AgentDataPolicyGuard {
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
                 return {
-                    blocked: {
+                    Blocked: {
                         Success: false,
                         ResultCode: 'PERMISSION_DENIED',
                         Message: `Stored query "${ queryInfo.Name }" rejected by agent field-masking guard: ${ msg }`,
@@ -691,7 +694,7 @@ export class AgentDataPolicyGuard {
             );
             if (unmaskable.length > 0) {
                 return {
-                    blocked: {
+                    Blocked: {
                         Success: false,
                         ResultCode: 'PERMISSION_DENIED',
                         Message: `Stored query "${ queryInfo.Name }" aliases, aggregates, or filters on field(s) denied by the calling agent's policy (${ unmaskable.join(', ') }), which output column masking cannot strip safely.`,
@@ -715,7 +718,7 @@ export class AgentDataPolicyGuard {
         const callingAgentId = AgentDataPolicyGuard.GetCallingAgentID(params);
         const contextUser = params.ContextUser;
         if (!callingAgentId || !contextUser?.ID) {
-            return { allowed: { active: false, deniedFieldPatterns: [] } };
+            return { Allowed: { Active: false, DeniedFieldPatterns: [] } };
         }
 
         const policyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
@@ -726,7 +729,7 @@ export class AgentDataPolicyGuard {
         );
         if (policyLookup.status === 'error') {
             return {
-                blocked: {
+                Blocked: {
                     Success: false,
                     ResultCode: 'PERMISSION_DENIED',
                     Message: `Agent data-access policy lookup failed; refusing ad-hoc query (fail-closed): ${policyLookup.errorMessage}`,
@@ -736,11 +739,11 @@ export class AgentDataPolicyGuard {
         }
         const policy = policyLookup.policy;
         if (!policy) {
-            return { allowed: { active: false, deniedFieldPatterns: [] } };
+            return { Allowed: { Active: false, DeniedFieldPatterns: [] } };
         }
         if (policy.Status === 'Disabled') {
             return {
-                blocked: {
+                Blocked: {
                     Success: false,
                     ResultCode: 'PERMISSION_DENIED',
                     Message: 'Agent user policy status is Disabled; ad-hoc query execution is denied.',
@@ -765,7 +768,7 @@ export class AgentDataPolicyGuard {
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             return {
-                blocked: {
+                Blocked: {
                     Success: false,
                     ResultCode: 'PERMISSION_DENIED',
                     Message: `Ad-hoc SQL could not be rendered safely for agent data-policy verification: ${ msg }`,
@@ -785,7 +788,7 @@ export class AgentDataPolicyGuard {
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             return {
-                blocked: {
+                Blocked: {
                     Success: false,
                     ResultCode: 'PERMISSION_DENIED',
                     Message: `Ad-hoc SQL rejected by agent data-policy guard: ${ msg }`,
@@ -796,7 +799,7 @@ export class AgentDataPolicyGuard {
 
         if (referencedEntities.length === 0 && policy.DefaultDataAccessMode === 'AllowListOnly') {
             return {
-                blocked: {
+                Blocked: {
                     Success: false,
                     ResultCode: 'PERMISSION_DENIED',
                     Message: 'Agent DefaultDataAccessMode is AllowListOnly; ad-hoc queries that do not reference an allow-listed entity are denied.',
@@ -812,18 +815,18 @@ export class AgentDataPolicyGuard {
             referencedEntities,
             'ad-hoc SQL'
         );
-        if ('blocked' in entityCheck) {
+        if ('Blocked' in entityCheck) {
             return entityCheck;
         }
 
-        const { deniedFieldPatterns } = entityCheck.allowed;
+        const { DeniedFieldPatterns: deniedFieldPatterns } = entityCheck.Allowed;
         if (deniedFieldPatterns.length > 0) {
             try {
                 ClientClauseScreen.AssertNoPositionalColumnRenames(renderedSql, dialect, 'ad-hoc SQL');
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
                 return {
-                    blocked: {
+                    Blocked: {
                         Success: false,
                         ResultCode: 'PERMISSION_DENIED',
                         Message: `Ad-hoc SQL rejected by agent field-masking guard: ${ msg }`,
@@ -841,7 +844,7 @@ export class AgentDataPolicyGuard {
             const referencedDeniedTokens = sqlTokens.filter((token) => !(token in survivingTokens));
             if (referencedDeniedTokens.length > 0) {
                 return {
-                    blocked: {
+                    Blocked: {
                         Success: false,
                         ResultCode: 'PERMISSION_DENIED',
                         Message: `Ad-hoc SQL references field(s) denied by the calling agent's policy: ${ referencedDeniedTokens.join(', ') }.`,
@@ -898,7 +901,7 @@ export class AgentDataPolicyGuard {
             });
             const verdictError = AgentDataPolicyGuard.verdictToActionError(evalResult, params);
             if (verdictError) {
-                return { blocked: verdictError };
+                return { Blocked: verdictError };
             }
 
             const rlsResolution = AgentDataPolicyGuard.resolveEffectiveWhereClause(
@@ -906,7 +909,7 @@ export class AgentDataPolicyGuard {
                 contextUser,
                 params.Provider
             );
-            if ('blocked' in rlsResolution) {
+            if ('Blocked' in rlsResolution) {
                 return rlsResolution;
             }
             if (
@@ -914,7 +917,7 @@ export class AgentDataPolicyGuard {
                 AgentDataPolicyGuard.hasRecordConditionRulesForEntity(policy, entity)
             ) {
                 return {
-                    blocked: {
+                    Blocked: {
                         Success: false,
                         ResultCode: 'PERMISSION_DENIED',
                         Message: `Cannot execute ${ queryLabel }: calling agent policy narrows rows on entity "${ entity.Name }", which raw/stored SQL cannot enforce. Read "${ entity.Name }" with Get Records instead.`,
@@ -929,9 +932,9 @@ export class AgentDataPolicyGuard {
         }
 
         return {
-            allowed: {
-                active: true,
-                deniedFieldPatterns: Array.from(deniedPatterns),
+            Allowed: {
+                Active: true,
+                DeniedFieldPatterns: Array.from(deniedPatterns),
             },
         };
     }
@@ -1000,10 +1003,11 @@ export class AgentDataPolicyGuard {
         policyNarrowsReads: boolean
     ): EntityInfo[] | null {
         const entities = md?.Entities ?? [];
+        const entityById = IndexByUUID(entities);
         const resolved = new Map<string, EntityInfo>();
         for (const qe of queryInfo.Entities ?? []) {
             const match =
-                (qe.EntityID ? entities.find((e) => UUIDsEqual(e.ID, qe.EntityID)) : undefined) ??
+                (qe.EntityID ? entityById.Get(qe.EntityID) : undefined) ??
                 (qe.Entity ? entities.find((e) => e.Name.trim().toLowerCase() === qe.Entity.trim().toLowerCase()) : undefined);
             if (!match) {
                 return null;
@@ -1049,7 +1053,7 @@ export class AgentDataPolicyGuard {
         evalResult: EntityAccessEvaluationResult,
         contextUser: UserInfo,
         provider?: IMetadataProvider
-    ): { whereClause: string } | { blocked: ActionResultSimple } {
+    ): { whereClause: string } | { Blocked: ActionResultSimple } {
         const clauses: string[] = [];
         const inlineClause = evalResult.combinedRlsWhereClause?.trim() ?? '';
         if (inlineClause.length > 0) {
@@ -1057,11 +1061,12 @@ export class AgentDataPolicyGuard {
         }
         if (evalResult.rlsFilterIds.length > 0) {
             const rlsCatalog = (provider ?? Metadata.Provider)?.RowLevelSecurityFilters ?? [];
+            const rlsById = IndexByUUID(rlsCatalog);
             for (const filterId of evalResult.rlsFilterIds) {
-                const found = rlsCatalog.find((f) => UUIDsEqual(f.ID, filterId));
+                const found = rlsById.Get(filterId);
                 if (!found || !found.FilterText?.trim()) {
                     return {
-                        blocked: {
+                        Blocked: {
                             Success: false,
                             ResultCode: 'PERMISSION_DENIED',
                             Message: `Agent policy references Row Level Security Filter "${ filterId }" which could not be resolved; failing closed.`,
@@ -1071,7 +1076,7 @@ export class AgentDataPolicyGuard {
                 const expanded = found.MarkupFilterText(contextUser).trim();
                 if (!expanded) {
                     return {
-                        blocked: {
+                        Blocked: {
                             Success: false,
                             ResultCode: 'PERMISSION_DENIED',
                             Message: `Agent policy Row Level Security Filter "${ found.Name || filterId }" rendered an empty predicate; failing closed.`,

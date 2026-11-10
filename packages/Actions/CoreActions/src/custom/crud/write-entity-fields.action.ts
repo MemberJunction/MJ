@@ -125,8 +125,8 @@ export class WriteEntityFieldsAction extends BaseAction {
                 operation: isCreate ? 'Create' : 'Update',
                 mutatedFields: canonicalMutatedFields,
             });
-            if ('blocked' in prePolicy) {
-                return prePolicy.blocked;
+            if ('Blocked' in prePolicy) {
+                return prePolicy.Blocked;
             }
 
             if (isCreate) {
@@ -138,7 +138,7 @@ export class WriteEntityFieldsAction extends BaseAction {
                 }
                 entity.NewRecord();
             } else {
-                if (prePolicy.allowed.active && prePolicy.allowed.effectiveWhereClause) {
+                if (prePolicy.Allowed.Active && prePolicy.Allowed.EffectiveWhereClause) {
                     const keyData: FieldMap = {};
                     for (const pkField of entityInfo.PrimaryKeys) {
                         if (pkField.Name in primaryKey) {
@@ -149,7 +149,7 @@ export class WriteEntityFieldsAction extends BaseAction {
                         params,
                         entityInfo,
                         primaryKey: CompositeKey.FromObject(keyData),
-                        effectiveWhereClause: prePolicy.allowed.effectiveWhereClause,
+                        effectiveWhereClause: prePolicy.Allowed.EffectiveWhereClause,
                     });
                     if (rlsError) {
                         return rlsError;
@@ -159,14 +159,16 @@ export class WriteEntityFieldsAction extends BaseAction {
                 if (loadError) {
                     return loadError;
                 }
-                if (prePolicy.allowed.active && prePolicy.allowed.hasRecordConditionRules) {
+                if (prePolicy.Allowed.Active && prePolicy.Allowed.HasRecordConditionRules) {
+                    // fls-guard: loaded as params.ContextUser and passed only to internal agent policy evaluation (not returned to caller)
+                    const preWriteRecord = entity.GetAll();
                     const preCondError = AgentDataPolicyGuard.CheckRecordCondition({
                         params,
-                        policy: prePolicy.allowed.policy,
+                        policy: prePolicy.Allowed.Policy,
                         entityInfo,
                         operation: 'Update',
                         mutatedFields: canonicalMutatedFields,
-                        record: entity.GetAll(),
+                        record: preWriteRecord,
                     });
                     if (preCondError) {
                         return preCondError;
@@ -176,12 +178,12 @@ export class WriteEntityFieldsAction extends BaseAction {
 
             this.applyFieldMap(entity, entityInfo, fields);
 
-            if (prePolicy.allowed.active && prePolicy.allowed.effectiveWhereClause) {
+            if (prePolicy.Allowed.Active && prePolicy.Allowed.EffectiveWhereClause) {
                 const postWhereError = await AgentDataPolicyGuard.VerifyEntityStatePassesWhereClause({
                     params,
                     entity,
                     entityInfo,
-                    effectiveWhereClause: prePolicy.allowed.effectiveWhereClause,
+                    effectiveWhereClause: prePolicy.Allowed.EffectiveWhereClause,
                     dirtyOnlyOptimization: !isCreate,
                 });
                 if (postWhereError) {
@@ -189,14 +191,16 @@ export class WriteEntityFieldsAction extends BaseAction {
                 }
             }
 
-            if (prePolicy.allowed.active && prePolicy.allowed.hasRecordConditionRules) {
+            if (prePolicy.Allowed.Active && prePolicy.Allowed.HasRecordConditionRules) {
+                // fls-guard: instantiated/loaded as params.ContextUser and passed only to internal agent policy evaluation (not returned to caller)
+                const postWriteRecord = entity.GetAll();
                 const postCondError = AgentDataPolicyGuard.CheckRecordCondition({
                     params,
-                    policy: prePolicy.allowed.policy,
+                    policy: prePolicy.Allowed.Policy,
                     entityInfo,
                     operation: isCreate ? 'Create' : 'Update',
                     mutatedFields: canonicalMutatedFields,
-                    record: entity.GetAll(),
+                    record: postWriteRecord,
                 });
                 if (postCondError) {
                     return postCondError;

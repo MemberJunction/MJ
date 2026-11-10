@@ -86,15 +86,15 @@ export class UpdateRecordAction extends BaseRecordMutationAction {
                 operation: 'Update',
                 mutatedFields: requestedMutatedFields,
             });
-            if ('blocked' in preLoadPolicy) {
-                return preLoadPolicy.blocked;
+            if ('Blocked' in preLoadPolicy) {
+                return preLoadPolicy.Blocked;
             }
-            if (preLoadPolicy.allowed.active && preLoadPolicy.allowed.effectiveWhereClause) {
+            if (preLoadPolicy.Allowed.Active && preLoadPolicy.Allowed.EffectiveWhereClause) {
                 const rlsError = await AgentDataPolicyGuard.VerifyPrimaryKeyPassesWhereClause({
                     params,
                     entityInfo: entityInfo!,
                     primaryKey,
-                    effectiveWhereClause: preLoadPolicy.allowed.effectiveWhereClause,
+                    effectiveWhereClause: preLoadPolicy.Allowed.EffectiveWhereClause,
                 });
                 if (rlsError) {
                     return rlsError;
@@ -105,14 +105,16 @@ export class UpdateRecordAction extends BaseRecordMutationAction {
             const loadResult = await this.loadRecord(entity!, entityInfo!, primaryKey, entityName);
             if (!loadResult.success) return loadResult.error!;
 
-            if (preLoadPolicy.allowed.active && preLoadPolicy.allowed.hasRecordConditionRules) {
+            if (preLoadPolicy.Allowed.Active && preLoadPolicy.Allowed.HasRecordConditionRules) {
+                // fls-guard: loaded as params.ContextUser and passed only to internal agent policy evaluation (not returned to caller)
+                const preUpdateRecord = entity!.GetAll();
                 const preConditionError = AgentDataPolicyGuard.CheckRecordCondition({
                     params,
-                    policy: preLoadPolicy.allowed.policy,
+                    policy: preLoadPolicy.Allowed.Policy,
                     entityInfo: entityInfo!,
                     operation: 'Update',
                     mutatedFields: requestedMutatedFields,
-                    record: entity!.GetAll(),
+                    record: preUpdateRecord,
                 });
                 if (preConditionError) {
                     return preConditionError;
@@ -122,8 +124,8 @@ export class UpdateRecordAction extends BaseRecordMutationAction {
             // Track which fields are actually being changed
             const updatedFields: Record<string, { oldValue?: unknown, newValue: unknown }> = {};
             let hasChanges = false;
-            const deniedPatterns = preLoadPolicy.allowed.active
-                ? preLoadPolicy.allowed.evalResult.deniedFieldPatterns
+            const deniedPatterns = preLoadPolicy.Allowed.Active
+                ? preLoadPolicy.Allowed.EvalResult.deniedFieldPatterns
                 : [];
 
             // Set each field value (every name resolved above, so resolution cannot miss here)
@@ -164,12 +166,12 @@ export class UpdateRecordAction extends BaseRecordMutationAction {
                 };
             }
 
-            if (preLoadPolicy.allowed.active && preLoadPolicy.allowed.effectiveWhereClause) {
+            if (preLoadPolicy.Allowed.Active && preLoadPolicy.Allowed.EffectiveWhereClause) {
                 const postWhereError = await AgentDataPolicyGuard.VerifyEntityStatePassesWhereClause({
                     params,
                     entity: entity!,
                     entityInfo: entityInfo!,
-                    effectiveWhereClause: preLoadPolicy.allowed.effectiveWhereClause,
+                    effectiveWhereClause: preLoadPolicy.Allowed.EffectiveWhereClause,
                     dirtyOnlyOptimization: true,
                 });
                 if (postWhereError) {
@@ -177,14 +179,16 @@ export class UpdateRecordAction extends BaseRecordMutationAction {
                 }
             }
 
-            if (preLoadPolicy.allowed.active && preLoadPolicy.allowed.hasRecordConditionRules) {
+            if (preLoadPolicy.Allowed.Active && preLoadPolicy.Allowed.HasRecordConditionRules) {
+                // fls-guard: loaded as params.ContextUser and passed only to internal agent policy evaluation (not returned to caller)
+                const postUpdateRecord = entity!.GetAll();
                 const postConditionError = AgentDataPolicyGuard.CheckRecordCondition({
                     params,
-                    policy: preLoadPolicy.allowed.policy,
+                    policy: preLoadPolicy.Allowed.Policy,
                     entityInfo: entityInfo!,
                     operation: 'Update',
                     mutatedFields: Object.keys(updatedFields),
-                    record: entity!.GetAll(),
+                    record: postUpdateRecord,
                 });
                 if (postConditionError) {
                     return postConditionError;
