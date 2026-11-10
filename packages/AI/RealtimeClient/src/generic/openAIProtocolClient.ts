@@ -1,4 +1,4 @@
-import { ClientRealtimeSessionConfig, JSONObject, MapRealtimeUsageModalityDetail, RealtimeDiagLog, RealtimeMemorySeed, RealtimeReconnectFailureCode, RealtimeReconnectReason, RenderLateToolResultNote, RenderRealtimeMemorySeed, ResolveResponseDoneUsage } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, JSONObject, MapRealtimeUsageModalityDetail, RealtimeContextNoteOptions, RealtimeDiagLog, RealtimeMemorySeed, RealtimeReconnectFailureCode, RealtimeReconnectReason, RenderLateToolResultNote, RenderRealtimeMemorySeed, ResolveResponseDoneUsage } from '@memberjunction/ai';
 import { BaseRealtimeClient, RealtimeClientReconnectContext, RealtimeClientState, ToProviderSessionConfig } from './baseRealtimeClient';
 import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
@@ -604,8 +604,8 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
      * NOTE: role must be 'system' — gpt-realtime (and the compatible endpoints) reject
      * 'developer' items ("Developer messages are only supported for quicksilver sessions").
      */
-    public SendContextNote(text: string): void {
-        this.ConversationMemory.Record({ Kind: 'note', Text: text });
+    public SendContextNote(text: string, options?: RealtimeContextNoteOptions): void {
+        this.ConversationMemory.Record({ Kind: 'note', Text: text, ...options });
         if (!this.canSendEvents()) {
             return;
         }
@@ -1610,6 +1610,9 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
             ExpiresAt: context.Credential.ExpiresAt || this.activeConfig.ExpiresAt,
             ...(context.Credential.RelayUrl !== undefined ? { RelayUrl: context.Credential.RelayUrl } : {}),
             ...(context.Credential.SessionConfig !== undefined ? { SessionConfig: context.Credential.SessionConfig } : {}),
+            ...(context.Credential.TrustNativeResumption !== undefined
+                ? { TrustNativeResumption: context.Credential.TrustNativeResumption }
+                : {}),
         };
         this.activeConfig = refreshedConfig;
         this.sessionObject = this.resolveSessionObject(refreshedConfig);

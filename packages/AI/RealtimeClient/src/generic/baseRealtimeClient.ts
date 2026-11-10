@@ -7,6 +7,7 @@ import {
     DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS,
     ExtractRealtimeTimingConfig,
     JSONObject,
+    RealtimeContextNoteOptions,
     RealtimeConversationMemory,
     RealtimeDiagLog,
     RealtimeMemorySeed,
@@ -739,8 +740,9 @@ export abstract class BaseRealtimeClient {
      * e.g. delegated-run progress the model can draw on the next time it speaks.
      *
      * @param text The context note text (the host owns any prefixing/formatting policy).
+     * @param options Optional reconnect-memory persistence options (`StateKey`, `Ephemeral`, `MemoryText`).
      */
-    public abstract SendContextNote(text: string): void;
+    public abstract SendContextNote(text: string, options?: RealtimeContextNoteOptions): void;
 
     /**
      * Asks the model for ONE brief interim utterance (e.g. a spoken progress update while
@@ -1048,6 +1050,7 @@ export abstract class BaseRealtimeClient {
         HoldsHardMove: () => this.holdsHardReconnectPoint(),
         TrustsNativeResumption: () => this.TrustsNativeResumption,
         RequiresPostTurnHandle: () => this.RequiresPostTurnResumptionHandle,
+        IsNetworkOnline: () => this.isHostNetworkOnline(),
         Log: (msg) => RealtimeDiagLog(msg),
     });
 
@@ -1352,6 +1355,15 @@ export abstract class BaseRealtimeClient {
         this.reconnectController.NotifyNetworkOnline();
     };
     private watchingNetworkOnline = false;
+
+    /**
+     * Returns whether the host environment reports a live network interface (`navigator.onLine !== false`).
+     * Overridable by subclasses and tests so offline retry attempts do not invalidate a resumable provider handle.
+     */
+    protected isHostNetworkOnline(): boolean {
+        const nav = (globalThis as { navigator?: { onLine?: boolean } }).navigator;
+        return nav?.onLine !== false;
+    }
 
     /**
      * Listens for the browser's `online` event while a reconnect runs. Outside a browser (a Node host or test) there is
