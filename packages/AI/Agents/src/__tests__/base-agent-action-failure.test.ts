@@ -240,6 +240,13 @@ class FailureHarness {
             throw new Error(`Unexpected GetEntityObject('${entityName}')`);
         },
         EntityByName: () => undefined,
+        RunView: async (): Promise<Record<string, unknown>> => ({
+            Success: true,
+            Results: [],
+            RowCount: 0,
+            TotalRowCount: 0,
+            ExecutionTime: 0,
+        }),
     } as unknown as IMetadataProvider;
 
     public get run(): FakeAgentRun {
