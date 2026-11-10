@@ -36,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (481 classes)
+// @memberjunction/core-entities (484 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -352,10 +352,13 @@ import {
     MJMLAlgorithmEntity,
     MJMLAlgorithmUseCaseEntity,
     MJMLAlgorithmUseCaseRankingEntity,
+    MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
     MJMLModelScoringBindingEntity,
+    MJMLPredictionUnitEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
+    MJMLTrainingSnapshotEntity,
     MJMagicLinkInviteAllowedDomainEntity,
     MJMagicLinkInviteAllowedPathEntity,
     MJMagicLinkInviteApplicationEntity,
@@ -755,7 +758,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (116 classes)
+// @memberjunction/ng-dashboards (120 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -827,9 +830,13 @@ import {
     MappingWorkspaceComponent,
     ModelManagementComponent,
     OverviewComponent,
+    PSModelEvaluationPanel,
     PSModelsResourceComponent,
+    PSPipelineBindingsPanel,
     PSPredictionsResourceComponent,
+    PSProtocolVersionsPanel,
     PSStudioResourceComponent,
+    PSUnitVersionsPanel,
     PermissionsAuditLogResourceComponent,
     PermissionsResourceAccessResourceComponent,
     PermissionsUserAccessResourceComponent,
@@ -1233,10 +1240,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMLAlgorithmEntity,
     MJMLAlgorithmUseCaseEntity,
     MJMLAlgorithmUseCaseRankingEntity,
+    MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
     MJMLModelScoringBindingEntity,
+    MJMLPredictionUnitEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
+    MJMLTrainingSnapshotEntity,
     MJMagicLinkInviteAllowedDomainEntity,
     MJMagicLinkInviteAllowedPathEntity,
     MJMagicLinkInviteApplicationEntity,
@@ -1303,13 +1313,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRubricBandEntity,
     MJRubricCategoryEntity,
     MJRubricCriterionEntity,
-    MJRubricCriterionLevelEntity,
-    MJRubricEntity,
-    MJRubricEvaluationEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRubricCriterionLevelEntity,
+    MJRubricEntity,
+    MJRubricEvaluationEntity,
     MJRubricEvaluationScoreEntity,
     MJRubricScaleEntity,
     MJRubricScaleLevelEntity,
@@ -1507,13 +1517,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ListCategoryHierarchyPanel,
     MJAIAgentChannelFormComponentExtended,
     MJAIAgentFormComponentExtended,
-    MJAIAgentRubricFormComponentExtended,
-    MJAIAgentRunFormComponentExtended,
-    MJAIAgentSessionFormComponentExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    MJAIAgentRubricFormComponentExtended,
+    MJAIAgentRunFormComponentExtended,
+    MJAIAgentSessionFormComponentExtended,
     MJAIPromptFormComponentExtended,
     MJAIPromptRunFormComponentExtended,
     MJActionExecutionLogFormComponentExtended,
@@ -1636,9 +1646,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MappingWorkspaceComponent,
     ModelManagementComponent,
     OverviewComponent,
+    PSModelEvaluationPanel,
     PSModelsResourceComponent,
+    PSPipelineBindingsPanel,
     PSPredictionsResourceComponent,
+    PSProtocolVersionsPanel,
     PSStudioResourceComponent,
+    PSUnitVersionsPanel,
     PermissionsAuditLogResourceComponent,
     PermissionsResourceAccessResourceComponent,
     PermissionsUserAccessResourceComponent,
@@ -1710,7 +1724,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 782;
+export const CLASS_REGISTRATIONS_COUNT = 789;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

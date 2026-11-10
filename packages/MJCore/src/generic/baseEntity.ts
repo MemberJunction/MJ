@@ -946,6 +946,14 @@ export class BaseEntityResult {
      */
     EndedAt: Date;
 
+    /**
+     * Populated when a server-side UPDATE fails (or records a conflict) due to a field-level
+     * concurrency conflict detected under a row lock.
+     */
+    ConcurrencyConflict?: {
+        ConflictingFields: string[];
+    };
+
     constructor(success?: boolean, message?: string, type? : 'create' | 'update' | 'delete') {
         this.Success = success === undefined ? false : success;
         this.Type = type === undefined ? 'create' : type;
@@ -6219,6 +6227,27 @@ export abstract class BaseEntity<T = unknown> {
                 parentSaveOptions.SkipEntityActions = _options.SkipEntityActions;
                 parentSaveOptions.ReplayOnly = _options.ReplayOnly;
                 parentSaveOptions.SkipOldValuesCheck = _options.SkipOldValuesCheck;
+                if (_options.ConcurrencyBaseline) {
+                    const parentChainFieldNames = new Set<string>();
+                    for (let anc: BaseEntity | null = this._parentEntity; anc; anc = anc._parentEntity) {
+                        for (const f of anc.EntityInfo.Fields) {
+                            parentChainFieldNames.add(f.Name);
+                            parentChainFieldNames.add(f.CodeName);
+                        }
+                    }
+                    const filteredParentBaseline: Record<string, unknown> = {};
+                    let hasParentBaseline = false;
+                    for (const [k, v] of Object.entries(_options.ConcurrencyBaseline)) {
+                        if (parentChainFieldNames.has(k)) {
+                            filteredParentBaseline[k] = v;
+                            hasParentBaseline = true;
+                        }
+                    }
+                    if (hasParentBaseline) {
+                        parentSaveOptions.ConcurrencyBaseline = filteredParentBaseline;
+                    }
+                }
+                parentSaveOptions.ConcurrencyCheck = _options.ConcurrencyCheck;
                 parentSaveOptions.SkipAsyncValidation = _options.SkipAsyncValidation;
                 parentSaveOptions.IsParentEntitySave = true;
                 parentSaveOptions.ISAActiveChildEntityName = this.EntityInfo.Name;
@@ -6255,6 +6284,9 @@ export abstract class BaseEntity<T = unknown> {
                             `Failed to save parent entity '${this._parentEntity.EntityInfo?.Name}': ${detail}`;
                         // Surface the parent's field-level errors so the caller can act on them.
                         newResult.Errors = parentErrors;
+                        if (parentLatest?.ConcurrencyConflict) {
+                            newResult.ConcurrencyConflict = parentLatest.ConcurrencyConflict;
+                        }
                         // When `detail` was built from `parentErrors` (no parent Message), `Message` already renders
                         // them — say so, or CompleteMessage repeats every one.
                         newResult.MessageIncludesErrors = !parentLatest?.Message && parentErrors.length > 0;
@@ -8901,14 +8933,67 @@ export abstract class BaseEntity<T = unknown> {
      */
     private _jsonFieldBindings: Map<string, JSONFieldBinding> | undefined;
 
+    /**
+     * Walks this instance's prototype chain up to (but excluding) `BaseEntity.prototype` and
+     * `Object.prototype` to resolve the most-derived property `get` and `set` accessors for
+     * `codeName`. Resolving `get` and `set` independently supports multi-level subclasses where an
+     * intermediate class defines both and a leaf subclass overrides only `set` (or only `get`).
+     */
+    private resolveSubclassFieldAccessors(codeName: string): {
+        get?: (this: BaseEntity) => unknown;
+        set?: (this: BaseEntity, value: string | null) => void;
+    } {
+        let getter: ((this: BaseEntity) => unknown) | undefined;
+        let setter: ((this: BaseEntity, value: string | null) => void) | undefined;
+        let proto: object | null = Object.getPrototypeOf(this);
+        while (proto && proto !== BaseEntity.prototype && proto !== Object.prototype && (!getter || !setter)) {
+            const desc = Object.getOwnPropertyDescriptor(proto, codeName);
+            if (desc) {
+                if (!getter && typeof desc.get === 'function') {
+                    getter = desc.get;
+                }
+                if (!setter && typeof desc.set === 'function') {
+                    setter = desc.set;
+                }
+            }
+            proto = Object.getPrototypeOf(proto);
+        }
+        return { get: getter, set: setter };
+    }
+
     private getJSONFieldBinding(fieldName: string): JSONFieldBinding {
         this._jsonFieldBindings ??= new Map<string, JSONFieldBinding>();
         let binding = this._jsonFieldBindings.get(fieldName);
         if (!binding) {
+            const codeName = this.EntityInfo?.FieldByName(fieldName)?.CodeName ?? fieldName;
+            const accessors = this.resolveSubclassFieldAccessors(codeName);
+            let inAccessorRead = false;
+            let inAccessorWrite = false;
             binding = new JSONFieldBinding(
                 fieldName,
-                () => this.Get(fieldName),
-                (raw) => this.Set(fieldName, raw),
+                () => {
+                    if (!inAccessorRead && accessors.get) {
+                        inAccessorRead = true;
+                        try {
+                            return accessors.get.call(this);
+                        } finally {
+                            inAccessorRead = false;
+                        }
+                    }
+                    return this.Get(fieldName);
+                },
+                (raw) => {
+                    if (!inAccessorWrite && accessors.set) {
+                        inAccessorWrite = true;
+                        try {
+                            accessors.set.call(this, raw);
+                            return;
+                        } finally {
+                            inAccessorWrite = false;
+                        }
+                    }
+                    this.Set(fieldName, raw);
+                },
             );
             this._jsonFieldBindings.set(fieldName, binding);
         }

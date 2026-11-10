@@ -19,6 +19,7 @@ import type { BaseEntity, UserInfo, IMetadataProvider } from '@memberjunction/co
 import type {
   ModelingPlanSpec,
   Budget,
+  Budgets,
   LeaderboardEntry,
 } from '@memberjunction/predictive-studio-core';
 import type {
@@ -35,6 +36,32 @@ import type {
  * the orchestrator code reads against a named type.
  */
 export type ProposedExperiment = ModelingPlanSpec['ProposedExperiments'][number];
+
+/** A model's normalized leaderboard score and the holdout metric it was read from. */
+export interface ExperimentScore {
+  /** The normalized score: higher is always better (a lower-is-better metric is negated). */
+  readonly Score: number;
+  /** The holdout metric the score was read from, lower-cased as the model's `HoldoutMetrics` key. */
+  readonly Metric: string;
+}
+
+/**
+ * An experiment session's leaderboard entry: the Core entry plus the holdout metric its normalized `Metric` was read
+ * from, so the leaderboard (the session's snapshot and the run's result) states each entry's metric.
+ */
+export interface ExperimentLeaderboardEntry extends LeaderboardEntry {
+  /**
+   * The holdout metric `Metric` was read from: the plan's success metric, or the model's primary proper score when its
+   * holdout gave no score on the success metric (a kept simple baseline stores its primary score alone).
+   */
+  readonly ScoreMetric: string;
+  /**
+   * True when `ScoreMetric` is the plan's success metric. Numbers of two metrics are not comparable, so an entry on the
+   * success metric ranks above every entry on a fallback metric: a kept simple baseline is the model a shipped
+   * finalist of the same unit and protocol beat at its own gate.
+   */
+  readonly OnSuccessMetric: boolean;
+}
 
 /**
  * Factory seam for creating strongly-typed entity objects. Wraps
@@ -104,6 +131,11 @@ export interface TrainExperimentInput {
   contextUser?: UserInfo;
   /** Optional provider for multi-provider correctness. */
   provider?: IMetadataProvider;
+  /**
+   * Compute seconds the session has left: the attempt's trainer timeout is at most this. Null when the session has no
+   * compute-seconds bound.
+   */
+  timeoutSeconds: number | null;  // case-violation-ok-legacy-back-compat: matches the existing TrainExperimentInput member casing
 }
 
 /**
@@ -112,14 +144,22 @@ export interface TrainExperimentInput {
  * compute/token cost attributed to the attempt (for budget enforcement, §8.4).
  */
 export interface TrainExperimentResult {
-  /** The immutable `MJ: ML Models` row produced (Draft). */
-  model: MJMLModelEntity;
+  /** The immutable `MJ: ML Models` row produced (Draft); null when the run's gate decision shipped no artifact. */
+  model: MJMLModelEntity | null;
   /** The `MJ: ML Training Runs` leaf recording the attempt (linked to the iteration). */
   run: MJMLTrainingRunEntity;
-  /** Normalized holdout metric for the plan's `SuccessMetric` — drives the leaderboard. */
-  Score: number;
-  /** Compute cost attributed to this attempt (defaults to 0 when unknown). */
+  /**
+   * Normalized holdout score (higher is better) — drives the leaderboard: on the plan's `SuccessMetric`, or on the model's
+   * primary proper score when its holdout gave no score on the success metric; null when neither gives one (or no model
+   * shipped).
+   */
+  Score: number | null;
+  /** The holdout metric `Score` was read from ({@link ExperimentScore.Metric}); null exactly when `Score` is null. */
+  ScoreMetric: string | null;
+  /** Compute cost attributed to this attempt, in USD (defaults to 0 when unknown). */
   ComputeCost?: number;
+  /** Compute seconds the attempt spent (defaults to 0 when unknown); the session's compute-seconds bound sums these. */
+  ComputeSeconds?: number;
   /** LLM tokens used by this attempt (defaults to 0 when unknown). */
   TokensUsed?: number;
 }
@@ -154,7 +194,7 @@ export interface WaveStrategistContext {
   /** Experiments NOT yet dispatched (deterministic default draws from here, priority-ordered). */
   remaining: ProposedExperiment[];
   /** The current leaderboard, best-first, across all completed iterations so far. */
-  leaderboard: LeaderboardEntry[];
+  leaderboard: ExperimentLeaderboardEntry[];
   /** Index of the wave about to be produced (0-based). */
   waveIndex: number;
   /** The max iterations this wave may contain (the configured concurrency). */
@@ -180,8 +220,10 @@ export interface ExperimentRunOptions {
   /**
    * Prune any completed iteration whose Score is below
    * `bestScore * relativePruneThreshold` (a fraction in [0,1]). E.g. `0.8`
-   * prunes anything scoring under 80% of the current best. When omitted, no
-   * relative prune is applied.
+   * prunes anything scoring under 80% of the current best. A negative best (a
+   * negated loss) is bounded the other way: `0.8` prunes a loss more than
+   * `bestLoss / 0.8`. Only scores on the best's own metric are compared. When
+   * omitted, no relative prune is applied.
    */
   relativePruneThreshold?: number;
   /**
@@ -198,6 +240,12 @@ export interface ExperimentRunOptions {
    * omitted, the orchestrator creates a new durable Experiment definition.
    */
   experimentID?: string;
+  /**
+   * The trainer budgets of the Evaluation Protocol the session's pipeline is bound to
+   * (`ExperimentBudget.ProtocolBudgetsFor`). They tighten the session budget: at most `maxCandidates` attempts and
+   * `maxComputeSeconds` compute seconds in total, failed attempts included. Omitted when the session runs under no protocol.
+   */
+  protocolBudgets?: Budgets;  // case-violation-ok-legacy-back-compat: matches the existing ExperimentRunOptions member casing
 }
 
 /**
@@ -228,7 +276,7 @@ export interface ExperimentDeps {
 export type SessionStopReason =
   | 'completed' // all proposed experiments executed (or strategist ended the loop)
   | 'budget-maxRuns' // MaxRuns budget reached → Paused
-  | 'budget-maxComputeCost' // MaxComputeCost budget reached → Paused
+  | 'budget-maxComputeCost' // MaxComputeCost (USD) or MaxComputeSeconds budget reached → Paused
   | 'budget-maxWallclock'; // MaxWallclockMinutes budget reached → Paused
 
 /**
@@ -244,7 +292,7 @@ export interface ExperimentSessionResult {
   /** All `MJ: Experiment Session Iterations` created during the run. */
   iterations: MJExperimentSessionIterationEntity[];
   /** The final leaderboard, best-first. */
-  leaderboard: LeaderboardEntry[];
+  leaderboard: ExperimentLeaderboardEntry[];
   /** The best (winning) model surfaced, if any iteration produced one. */
   bestModel: MJMLModelEntity | null;
   /** Why the session stopped (completed vs. a clean budget pause). */
