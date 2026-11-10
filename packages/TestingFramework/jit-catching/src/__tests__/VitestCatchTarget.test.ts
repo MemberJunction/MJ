@@ -177,6 +177,13 @@ describe('VitestCatchTarget.BuildPackages', () => {
     await target.BuildPackages({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: head }, ['@memberjunction/a2aserver']);
     expect(calls[0].Command.join(' ')).toContain('--filter=@memberjunction/a2aserver... --filter=!@memberjunction/cli');
   });
+  it('limits turbo to one task per sandbox cpu, so parallel compilers stay under the memory cap', async () => {
+    const work = mkdtempSync(join(tmpdir(), 'jit-build-')); const head = join(work, 'head');
+    const { target, calls } = fakeTarget(() => ({ Stdout: '', ExitCode: 0 }));
+    (target as never as { o: object }).o = { ...(target as never as { o: object }).o, WorkRoot: work } as never;
+    await target.BuildPackages({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: head }, ['@memberjunction/core']);
+    expect(calls[0].Command.join(' ')).toContain('--concurrency=3');
+  });
   it('copies only regular summary files and skips a symlinked entry', async () => {
     const work = mkdtempSync(join(tmpdir(), 'jit-build-')); const head = join(work, 'head'); const secret = join(mkdtempSync(join(tmpdir(), 'jit-outside-')), 'host.json');
     writeFileSync(secret, '{"host":true}');

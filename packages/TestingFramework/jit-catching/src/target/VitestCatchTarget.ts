@@ -107,11 +107,15 @@ export class VitestCatchTarget extends BaseCatchTarget {
         if (actual !== pinned) throw new InfrastructureError(`host pnpm is ${actual} with the pin, but the sandbox image uses ${pinned}`);
     }
 
-    /** `turbo run build --filter=<pkg>...` for the packages under test, minus `Sandbox.BuildExclude`, inside the sandbox with the local cache only. */
+    /**
+     * `turbo run build --filter=<pkg>...` for the packages under test, minus `Sandbox.BuildExclude`, inside the sandbox with the
+     * local cache only. Concurrency is one task per sandbox cpu: turbo's default of ten parallel compilers exceeds the memory cap.
+     */
     public async BuildPackages(revision: PreparedRevision, packages: string[]): Promise<void> {
         if (packages.length === 0) return;
-        const filters = [...packages.map((p) => `--filter=${p}...`), ...this.o.Settings.Sandbox.BuildExclude.map((p) => `--filter=!${p}`)].join(' ');
-        const cmd = `npx turbo run build ${filters} --cache=local:rw,remote:r --log-order=stream --summarize`;
+        const sandbox = this.o.Settings.Sandbox;
+        const filters = [...packages.map((p) => `--filter=${p}...`), ...sandbox.BuildExclude.map((p) => `--filter=!${p}`)].join(' ');
+        const cmd = `npx turbo run build ${filters} --concurrency=${Math.max(1, Math.floor(sandbox.Cpus))} --cache=local:rw,remote:r --log-order=stream --summarize`;
         const r = await this.inSandbox(revision, 'rw', ['sh', '-c', cmd], 45 * 60_000, { TURBO_CACHE_DIR: `${CONTAINER_ROOT}/.turbo/cache`, TURBO_TELEMETRY_DISABLED: '1' });
         this.keepTurboSummaries(revision);
         if (r.ExitCode !== 0) throw new Error(`build failed on ${revision.Ref.Kind}: ${RedactTail(tail(r))}`);
