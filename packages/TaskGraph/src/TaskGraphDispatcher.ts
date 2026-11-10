@@ -2666,8 +2666,15 @@ export class TaskGraphDispatcher implements IShutdownable {
         // writes nothing, so their `__mj_UpdatedAt` has stopped advancing and the third arm below
         // will eventually stop finding them — which would turn a retry into a silent abandonment.
         for (const id of this.retryingSettlement.keys()) ids.add(id);
+        // A parent counts only when the other two arms prove it a workflow (a parentless task of the workflow type): the
+        // first arm finds parents by their steps' type alone, and a workflow-typed row under any other task must not turn
+        // that task into a graph whose metadata the dispatcher would trust.
+        const workflowParents = new Set([
+            ...((unsettledParents?.Results ?? []) as Array<{ ID: string }>).map((r) => r.ID?.toUpperCase()),
+            ...((terminalRecent?.Results ?? []) as Array<{ ID: string }>).map((r) => r.ID?.toUpperCase()),
+        ]);
         for (const r of (withPendingWork?.Results ?? []) as Array<{ ParentID: string }>) {
-            if (r.ParentID) ids.add(r.ParentID);
+            if (r.ParentID && workflowParents.has(r.ParentID.toUpperCase())) ids.add(r.ParentID);
         }
         // Childless tasks match the second query too; propagateAndRollup skips anything with no
         // nodes, so they cost one empty load and nothing else.
@@ -3417,6 +3424,20 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /** Loads a graph's children and edges in the shapes both the algorithms and mutation need. */
+    /** A graph state with no steps: what a parent with no children, or one that is not a workflow, loads as. */
+    private emptyGraphState(parentTaskID: string, parent: MJTaskEntity | null): GraphState {
+        return {
+            parentTaskID,
+            parent,
+            parentMetadata: ParseTaskGraphParentMetadata(parent?.InputPayload ?? null),
+            nodes: [], edges: [], entityById: new Map(),
+            rawDependencies: [],
+            unreachableTaskIDs: new Set(), cascadeSkipTaskIDs: new Set(),
+            skipSeedTaskIDs: new Set(), holdTaskIDs: new Set(),
+            handledFailureIDs: new Set(),
+        };
+    }
+
     private async loadGraphState(
         provider: IMetadataProvider,
         parentTaskID: string,
@@ -3432,16 +3453,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         );
         const children = (childrenResult.Success ? childrenResult.Results : []) ?? [];
         if (children.length === 0) {
-            return {
-                parentTaskID,
-                parent: preloadedParent ?? null,
-                parentMetadata: ParseTaskGraphParentMetadata(preloadedParent?.InputPayload ?? null),
-                nodes: [], edges: [], entityById: new Map(),
-                rawDependencies: [],
-                unreachableTaskIDs: new Set(), cascadeSkipTaskIDs: new Set(),
-                skipSeedTaskIDs: new Set(), holdTaskIDs: new Set(),
-                handledFailureIDs: new Set(),
-            };
+            return this.emptyGraphState(parentTaskID, preloadedParent ?? null);
         }
 
         const idList = children.map((c) => `'${c.ID}'`).join(',');
@@ -3459,6 +3471,13 @@ export class TaskGraphDispatcher implements IShutdownable {
         const parent = preloadedParent !== undefined
             ? preloadedParent
             : await this.loadParentTask(provider, parentTaskID);
+        // Only a workflow's steps run: its metadata names the user they run as, and a graph is trusted on that alone. A
+        // missing parent, or one that is not a parentless task of the workflow type, runs nothing.
+        const workflowTypeID = await this.workflowTaskTypeID(provider);
+        if (!parent || parent.ParentID != null || !workflowTypeID || !UUIDsEqual(parent.TypeID, workflowTypeID)) {
+            LogError(`[TaskGraphDispatcher] ${parentTaskID} has workflow steps but is not a workflow; its steps are not run.`);
+            return this.emptyGraphState(parentTaskID, parent ?? null);
+        }
         const parentMeta = parent
             ? ParseTaskGraphParentMetadata(parent.InputPayload)
             : ParseTaskGraphParentMetadata(null);

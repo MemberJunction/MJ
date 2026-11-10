@@ -1070,7 +1070,8 @@ async function checkEarlySettleClearsNothing(ctx: IntegrationCheckContext): Prom
  * TGS9 — only the task-graph service creates a workflow, adds a step to one, or changes its edges. A workflow's steps
  * run as the user its metadata names, so an ordinary save as the submitter (an agent run calling Create Record or
  * Update Record) must not be able to make one: not a new workflow, not a step under a real one (with a `StepType` or
- * without), not an ordinary task retyped into a workflow, and not an edge added to or removed from a real one. Ordinary
+ * without), not a workflow-typed task under an ordinary one, not an ordinary task retyped into a workflow, and not an
+ * edge added to or removed from a real one. Ordinary
  * tasks, and subtasks under them, still save as before.
  */
 async function checkOnlyTheServiceMakesWorkflows(ctx: IntegrationCheckContext): Promise<void> {
@@ -1134,6 +1135,8 @@ async function checkOnlyTheServiceMakesWorkflows(ctx: IntegrationCheckContext): 
         const subtask = await newTask({ TypeID: otherType!.ID, ParentID: ordinary.ID });
         Assert(await subtask.Save(), `TGS9: an ordinary subtask was refused: ${subtask.LatestResult?.CompleteMessage ?? ''}`);
         ordinaryRows.unshift(subtask);
+        // Filed under the workflow type, under an ordinary task: the dispatcher finds graphs by their steps' type.
+        await assertRefused(await newTask({ TypeID: workflowType!.ID, ParentID: ordinary.ID, ActionID: action.ID }), creates, 'TGS9: a workflow-typed task added under an ordinary task');
         ordinary.TypeID = workflowType!.ID;
         ordinary.Status = 'In Progress';
         await assertRefused(ordinary, creates, 'TGS9: an ordinary task retyped into a workflow');

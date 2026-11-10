@@ -10,6 +10,7 @@ import {
     ValidationResult,
 } from '@memberjunction/core';
 import { IsValidUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { MJTaskEntity } from '@memberjunction/core-entities';
 import { TASK_GRAPH_RUNTIME_SECURITY_OPERATION, TASK_GRAPH_WORKFLOW_TYPE_NAME } from '@memberjunction/ai-core-plus';
 
@@ -160,12 +161,15 @@ export function WorkflowStepDataChangeRefusal(changedFields: readonly string[], 
 /** The workflow task type's ID once found. Never cached while absent: the task-graph service creates the row on first use. */
 let workflowTaskTypeIDCache: string | undefined;
 
-/** The ID of the `MJ: Task Types` row a workflow is filed under ({@link TASK_GRAPH_WORKFLOW_TYPE_NAME}), or null while it does not exist. */
+/**
+ * The ID of the `MJ: Task Types` row a workflow is filed under ({@link TASK_GRAPH_WORKFLOW_TYPE_NAME}), or null while it
+ * does not exist. Read as the system user, so a caller who cannot read task types cannot make the guards miss it.
+ */
 export async function ResolveWorkflowTaskTypeID(provider: IRunViewProvider, user: UserInfo | undefined): Promise<string | null> {
     if (workflowTaskTypeIDCache) return workflowTaskTypeIDCache;
     const result = await new RunView(provider).RunView<{ ID: string }>(
         { EntityName: 'MJ: Task Types', ExtraFilter: `Name='${TASK_GRAPH_WORKFLOW_TYPE_NAME}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 },
-        user,
+        UserCache.Instance.GetSystemUser() ?? user,
     );
     const id = result.Success ? result.Results?.[0]?.ID : undefined;
     if (id) workflowTaskTypeIDCache = id;
@@ -193,14 +197,15 @@ export async function IsWorkflowTask(provider: IRunViewProvider, user: UserInfo 
 }
 
 /**
- * Whether `taskID` is a step of a workflow: a task with a parent and a `StepType`, or any task whose parent is a
- * workflow. A task this user cannot read counts as one (fail closed).
+ * Whether `taskID` is a step of a workflow: a task with a parent and a `StepType` or the workflow type, or any task
+ * whose parent is a workflow. A task this user cannot read counts as one (fail closed).
  */
 export async function IsWorkflowStepTask(provider: IRunViewProvider, user: UserInfo | undefined, taskID: string, workflowTypeID: string | null): Promise<boolean> {
     const row = await loadTaskShape(provider, user, taskID);
     if (!row) return true;
     if (row.ParentID == null) return false;
-    return row.StepType != null || (await IsWorkflowTask(provider, user, row.ParentID, workflowTypeID));
+    if (row.StepType != null || (workflowTypeID != null && UUIDsEqual(row.TypeID, workflowTypeID))) return true;
+    return IsWorkflowTask(provider, user, row.ParentID, workflowTypeID);
 }
 
 /** What a save needs to know about workflow membership, resolved before it validates (the lookups are asynchronous). */
@@ -340,9 +345,9 @@ export class MJTaskEntityServer extends MJTaskEntity {
     }
 
     /**
-     * Whether the row, as stored or as this save leaves it, is a step of a task graph: it has a parent, and a `StepType`
-     * or a parent that is a workflow. Without resolved facts (a save that skipped {@link Save}), any task with a parent
-     * counts (fail closed).
+     * Whether the row, as stored or as this save leaves it, is a step of a task graph: it has a parent, and a `StepType`,
+     * the workflow type (the dispatcher finds graphs by their steps' type), or a parent that is a workflow. Without
+     * resolved facts (a save that skipped {@link Save}), any task with a parent counts (fail closed).
      */
     private isWorkflowStep(state: 'stored' | 'next'): boolean {
         const parent = state === 'stored' ? this.stored('ParentID') : this.ParentID;
@@ -350,7 +355,10 @@ export class MJTaskEntityServer extends MJTaskEntity {
         const stepType = state === 'stored' ? this.stored('StepType') : this.StepType;
         if (stepType != null) return true;
         const facts = this.workflowFacts;
-        return facts ? (state === 'stored' ? facts.StoredParentIsWorkflow : facts.NextParentIsWorkflow) : true;
+        if (!facts) return true;
+        const typeID = (state === 'stored' ? this.stored('TypeID') : this.TypeID) as string | null | undefined;
+        if (facts.WorkflowTypeID != null && typeof typeID === 'string' && UUIDsEqual(typeID, facts.WorkflowTypeID)) return true;
+        return state === 'stored' ? facts.StoredParentIsWorkflow : facts.NextParentIsWorkflow;
     }
 
     /**

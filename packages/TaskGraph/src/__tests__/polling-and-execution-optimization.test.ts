@@ -20,6 +20,9 @@ const WORKFLOW_TYPE_ID = '11111111-1111-4111-8111-111111111111';
 
 interface MockParentRecord {
     ID: string;
+    /** A workflow: filed under the workflow type, with no parent of its own. */
+    TypeID: string;
+    ParentID: string | null;
     Name: string;
     Status: string;
     PercentComplete: number;
@@ -45,6 +48,8 @@ function makeParentRecord(id: string, name: string, invocationData?: Record<stri
     });
     return {
         ID: id,
+        TypeID: WORKFLOW_TYPE_ID,
+        ParentID: null,
         Name: name,
         Status: 'In Progress',
         PercentComplete: 0,

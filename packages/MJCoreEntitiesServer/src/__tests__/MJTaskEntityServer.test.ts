@@ -409,6 +409,8 @@ describe('MJTaskEntityServer: only the task-graph service makes a workflow or a 
         expect(await created({ TypeID: WORKFLOW_TYPE }).Save()).toBe(false);
         expect(await created({ ParentID: 'p', StepType: 'Action' }).Save()).toBe(false);
         expect(await created({ ParentID: 'p', parentIsWorkflow: true }).Save()).toBe(false);
+        // Filed under the workflow type under any parent: the dispatcher finds graphs by their steps' type.
+        expect(await created({ ParentID: 'p', parentIsWorkflow: false, TypeID: WORKFLOW_TYPE }).Save()).toBe(false);
         expect(await asService(() => created({ TypeID: WORKFLOW_TYPE }).Save())).toBe(true);
         expect(await asService(() => created({ ParentID: 'p', StepType: 'Action' }).Save())).toBe(true);
     });
