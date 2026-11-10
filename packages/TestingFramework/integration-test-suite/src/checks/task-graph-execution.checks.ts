@@ -400,13 +400,26 @@ class CountingDeliverer implements TaskContinuationDeliverer {
  * wrote — stays exactly as the dispatcher left it, so what the sweep sees is the real shape a crash
  * between the terminal write and the delivery produces.
  */
+/**
+ * Runs `save` in the task-graph dispatcher's runtime-security scope, bound to the check's user: how a fixture stages
+ * state the dispatcher would have written (a claim a crashed instance left, a workflow's metadata), now that a workflow
+ * step's status and data and a workflow's metadata are the dispatcher's (`MJTaskEntityServer`).
+ */
+function asDispatcher(ctx: IntegrationCheckContext, save: () => Promise<boolean>): Promise<boolean> {
+    return ServerOperationScopeManager.Instance.RunWithAuthority(
+        { operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION, source: 'ServerEngine', allowedEntities: ['MJ: Tasks'], userId: ctx.User.ID },
+        save,
+    );
+}
+
 async function stripDeliveryMarker(ctx: IntegrationCheckContext, parentID: string): Promise<void> {
     const parent = await loadTask(ctx, parentID);
     const meta = ParseTaskGraphParentMetadata(parent.InputPayload) as Record<string, unknown>;
     delete meta.continuationDeliveredAt;
     delete meta.continuationDeliveredAs;
     parent.InputPayload = JSON.stringify(meta);
-    Assert(await parent.Save(), `could not strip the delivery marker: ${parent.LatestResult?.CompleteMessage ?? 'unknown'}`);
+    // A workflow's metadata is the dispatcher's (`MJTaskEntityServer`): written here as the dispatcher would.
+    Assert(await asDispatcher(ctx, () => parent.Save()), `could not strip the delivery marker: ${parent.LatestResult?.CompleteMessage ?? 'unknown'}`);
 }
 
 /** The delivery marker on a graph's parent, or null while it has not been claimed. */
@@ -748,7 +761,8 @@ async function repointSubmittingRun(
     const meta = ParseTaskGraphParentMetadata(parent.InputPayload) as Record<string, unknown>;
     meta.submittedByAgentRunID = runID;
     parent.InputPayload = JSON.stringify(meta);
-    Assert(await parent.Save(), `could not repoint the submitting run: ${parent.LatestResult?.CompleteMessage ?? 'unknown'}`);
+    // A workflow's metadata is the dispatcher's (`MJTaskEntityServer`): written here as the dispatcher would.
+    Assert(await asDispatcher(ctx, () => parent.Save()), `could not repoint the submitting run: ${parent.LatestResult?.CompleteMessage ?? 'unknown'}`);
 }
 
 /** Creates an agent run in a chosen state, for the settle-path checks. */
@@ -1078,7 +1092,7 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
             child.Status = 'In Progress';
             child.ClaimedBy = 'it-tx7-dead-instance';
             child.ClaimExpiresAt = new Date(Date.now() - 60_000); // lease already expired
-            Assert(await child.Save(), `could not stage the orphaned claim: ${child.LatestResult?.CompleteMessage ?? 'unknown'}`);
+            Assert(await asDispatcher(ctx, () => child.Save()), `could not stage the orphaned claim: ${child.LatestResult?.CompleteMessage ?? 'unknown'}`);
 
             const mine = await taskNames(ctx, parentID);
             const survivor = buildDispatcher(ctx, RUNNER, 'it-tx7-survivor');
@@ -1350,7 +1364,7 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
             child.Status = 'In Progress';
             child.ClaimedBy = 'it-tx12-dead-instance';
             child.ClaimExpiresAt = new Date(Date.now() - 60_000);
-            Assert(await child.Save(), `could not stage the orphaned prompt claim: ${child.LatestResult?.CompleteMessage ?? 'unknown'}`);
+            Assert(await asDispatcher(ctx, () => child.Save()), `could not stage the orphaned prompt claim: ${child.LatestResult?.CompleteMessage ?? 'unknown'}`);
 
             const survivor = buildDispatcher(ctx, RUNNER, 'it-tx12', undefined, undefined, TEST_POLL_SECONDS, promptRunner);
             await survivor.Reconcile();
@@ -1900,7 +1914,7 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
             child.Status = 'In Progress';
             child.ClaimedBy = 'it-tx26-dead-peer';
             child.ClaimExpiresAt = new Date(Date.now() - 60_000);
-            Assert(await child.Save(), `could not stage the orphaned claim: ${child.LatestResult?.CompleteMessage ?? 'unknown'}`);
+            Assert(await asDispatcher(ctx, () => child.Save()), `could not stage the orphaned claim: ${child.LatestResult?.CompleteMessage ?? 'unknown'}`);
 
             await settle(4_000);   // several reconcile intervals, had one been installed
 
