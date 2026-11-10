@@ -280,6 +280,22 @@ on; pnpm-linked apps such as MJ Explorer are not affected.
 **Migration:** move your Angular pin to `^21.2.22` and check `angular.json` asset paths that
 climb out of the project.
 
+### Remove `@memberjunction/*` from your app's `prebundle.exclude`
+
+App shells copied MJ Explorer's `angular.json`, which excludes `@memberjunction/*` (and often other
+scopes such as `@mj-biz-apps/*`) from the dev server's pre-bundling. MJ needs that in its monorepo,
+where its packages are symlinked and rebuilt in place. An app that installs MJ from npm does not, and
+under pnpm it breaks `ng serve`: the dev server compiles the excluded packages into the app's own
+chunks and resolves their third-party imports from the app's folder, where pnpm does not put a
+dependency's dependencies. The page then fails to load with *Failed to resolve import "katex"* (6.2's
+markdown component lazy-loads katex) until the app declares each such package itself. Production
+builds are not affected.
+
+**Migration:** in your app's `angular.json`, remove `@memberjunction/*` from
+`serve.options.prebundle.exclude`, along with any other scope you install from npm. Keep the list,
+even empty (`"exclude": []`), so `mj dev workspace` can add linked scopes to it when you join one.
+New installs from the distribution already ship it this way.
+
 ### Minor: ElevenLabs realtime session initiation
 
 `ElevenLabsRealtimeSession.SendInitiation` now takes the wire-shaped overrides object rather
