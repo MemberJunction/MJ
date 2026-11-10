@@ -216,7 +216,7 @@ The `TestHarnessWindowManagerService` coordinates multiple floating test windows
 | `@memberjunction/ng-shared` | Shared Angular utilities |
 | `@memberjunction/ng-shared-generic` | Shared generic components |
 | `@memberjunction/ng-task-graph-editor` | Drop-in `<mj-task-graph-debugger>` for Flow agent Debug |
-| `@progress/kendo-angular-*` | Kendo UI components |
+| `@memberjunction/ng-ui-components` | MJ UI components |
 
 ### Peer Dependencies
 

@@ -3,6 +3,8 @@ import { AggregateResult, DatasetItemFilterType, DatasetResultType, IMetadataPro
 import { AggregateExpression, RunViewParams, RunViewParametersKey, IsMaterializedDataSource, NormalizeAlternateBaseViewName } from "../views/runView";
 import { GetEffectiveAlternateBaseViewName } from "./alternateBaseViews";
 import { ViewPropertyValuesKey } from "../views/viewProperties";
+import { CompositeFilter } from "./filters/compositeFilter";
+import { CanonicalCompositeFilterKey } from "./filters/compositeFilterSQL";
 import { LogError, LogStatusEx, LogWarning } from "./logging";
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { Metadata } from "./metadata";
@@ -2035,16 +2037,25 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         savesComplete: boolean = LocalCacheManager.everySavedRowComplete(changes),
     ): Promise<void> {
         const hasSave = changes.some(c => c.Type === 'save');
+        const structuredFilters = hasSave ? this.extractStructuredFiltersOnly(fingerprint) : null;
         // Subset and aggregate slots cannot be maintained in place; filtered slots cannot take an
-        // upsert (the new row may not match the filter) but can drop deleted rows.
+        // upsert (unless their only filter is a structured `cf:` filter evaluated below) but can drop deleted rows.
         // A saved row missing columns cannot replace a full-width row either (see RowHasEveryField).
         if (this.isSubsetFingerprint(fingerprint) || this.hasAggregates(fingerprint.split('|'))
-            || (hasSave && this.isFilteredFingerprint(fingerprint))
+            || (hasSave && this.isFilteredFingerprint(fingerprint) && !structuredFilters)
             || !savesComplete) {
             await this.InvalidateRunViewResult(fingerprint);
             return;
         }
-        const rowChanges = changes.map(c => ({ Key: c.Key, Row: c.Type === 'save' ? c.Record : null }));
+        const rowChanges = changes.map(c => {
+            if (c.Type !== 'save') {
+                return { Key: c.Key, Row: null };
+            }
+            if (structuredFilters && (!c.Record || !structuredFilters.every(f => f.Evaluate({ '': c.Record })))) {
+                return { Key: c.Key, Row: null };
+            }
+            return { Key: c.Key, Row: c.Record };
+        });
         const maintained = await this.ApplyRowChanges(fingerprint, rowChanges, nowISO);
         await this.invalidateIfNotMaintained(fingerprint, maintained);
     }
@@ -2153,10 +2164,15 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                     && !LocalCacheManager.RowContainsPlaintextEncryptedField(entityInfo, recordData); // per row, not per slot
                 for (const fingerprint of fingerprintSnapshot) {
                     try {
-                        // Subset slot (MaxRows/StartRow): upserting would grow the slot past the
-                        // caller's own row limit. Invalidate, same as a filtered slot.
-                        if (rowComplete && !this.isFilteredFingerprint(fingerprint) && !this.isSubsetFingerprint(fingerprint)) {
-                            await this.UpsertSingleEntity(fingerprint, recordData, key, nowISO);
+                        // Subset slot (MaxRows/StartRow) or aggregate slot: upserting/removing would corrupt row limits or aggregates.
+                        if (rowComplete && !this.isSubsetFingerprint(fingerprint) && !this.hasAggregates(fingerprint.split('|'))) {
+                            if (!this.isFilteredFingerprint(fingerprint) || this.matchesStructuredFilterOnlyFingerprint(fingerprint, recordData)) {
+                                await this.UpsertSingleEntity(fingerprint, recordData, key, nowISO);
+                            } else if (this.isStructuredFilterOnlyFingerprint(fingerprint)) {
+                                await this.RemoveSingleEntity(fingerprint, key, nowISO);
+                            } else {
+                                await this.InvalidateRunViewResult(fingerprint);
+                            }
                         } else {
                             await this.InvalidateRunViewResult(fingerprint);
                         }
@@ -2274,10 +2290,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             LogStatusVerbose(`LocalCacheManager: Removing entity ${keyStr} from cache "${fingerprint.substring(0, 60)}"`);
             const maintained = await this.RemoveSingleEntity(fingerprint, key, nowISO);
             await this.invalidateIfNotMaintained(fingerprint, maintained);
-        } else if (!this.isFilteredFingerprint(fingerprint)) {
-            // Unfiltered cache: update the record in place, unless the saved row is missing columns
-            // or carries decrypted plaintext on an Encrypt=true field (BaseEntity.GetAll() holds
-            // in-memory plaintext after Save(), which must never be persisted to shared cache/Redis).
+        } else if (!this.isFilteredFingerprint(fingerprint) || this.isStructuredFilterOnlyFingerprint(fingerprint)) {
+            // Unfiltered or structured-filter-only (`cf:`) cache: update or remove the record in place,
+            // unless the saved row is missing columns or carries decrypted plaintext on an Encrypt=true field
+            // (BaseEntity.GetAll() holds in-memory plaintext after Save(), which must never be persisted to shared cache/Redis).
             const entityData = baseEntity.GetAll() as Record<string, unknown>;
             if (
                 !LocalCacheManager.RowHasEveryField(baseEntity.EntityInfo, entityData) ||
@@ -2287,9 +2303,15 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 await this.InvalidateRunViewResult(fingerprint);
                 return;
             }
-            LogStatusVerbose(`LocalCacheManager: Upserting entity ${keyStr} in unfiltered cache "${fingerprint.substring(0, 60)}"`);
-            const maintained = await this.UpsertSingleEntity(fingerprint, entityData, key, nowISO);
-            await this.invalidateIfNotMaintained(fingerprint, maintained);
+            if (!this.isFilteredFingerprint(fingerprint) || this.matchesStructuredFilterOnlyFingerprint(fingerprint, entityData)) {
+                LogStatusVerbose(`LocalCacheManager: Upserting entity ${keyStr} in cache "${fingerprint.substring(0, 60)}"`);
+                const maintained = await this.UpsertSingleEntity(fingerprint, entityData, key, nowISO);
+                await this.invalidateIfNotMaintained(fingerprint, maintained);
+            } else {
+                LogStatusVerbose(`LocalCacheManager: Removing non-matching entity ${keyStr} from structured-filtered cache "${fingerprint.substring(0, 60)}"`);
+                const maintained = await this.RemoveSingleEntity(fingerprint, key, nowISO);
+                await this.invalidateIfNotMaintained(fingerprint, maintained);
+            }
         } else {
             // Filtered cache: conservatively invalidate (can't verify filter match)
             LogStatusVerbose(`LocalCacheManager: Invalidating filtered cache "${fingerprint.substring(0, 60)}"`);
@@ -2379,18 +2401,92 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
     /**
      * True when a saved row may be written into `fingerprint`'s slot in place: the slot is neither
-     * filtered (including row-security and field-security segments) nor a subset, and the row
-     * carries every column ({@link RowHasEveryField}) with no plaintext secrets. Otherwise the slot must be invalidated.
+     * filtered (including row-security and field-security segments) nor a subset — or its only
+     * narrowing predicate is a structured `CompositeFilter` (`cf:...`) that `row` satisfies — and
+     * the row carries every column ({@link RowHasEveryField}) with no plaintext secrets.
+     * Otherwise the slot must be invalidated.
      *
      * @param fingerprint - The slot to maintain
      * @param entity - The saved record's entity
      * @param row - The values the save carries
      */
     public CanUpsertRowIntoSlot(fingerprint: string, entity: EntityInfo | null | undefined, row: Record<string, unknown> | null | undefined): boolean {
-        return !this.isFilteredFingerprint(fingerprint)
+        return (!this.isFilteredFingerprint(fingerprint) || this.matchesStructuredFilterOnlyFingerprint(fingerprint, row))
             && !this.isSubsetFingerprint(fingerprint)
             && LocalCacheManager.RowHasEveryField(entity, row)
             && !LocalCacheManager.RowContainsPlaintextEncryptedField(entity, row);
+    }
+
+    /**
+     * Parses and returns the structured `CompositeFilter` list when `fingerprint`'s only narrowing
+     * segment is one or more `cf:<json>` segments (no SQL `ExtraFilter`, `OrderBy`, `UserSearch`,
+     * aggregates, or other narrowing segments such as `vw:`, `rls:`, `fls:`, `abv:`, `prm:`, `ds:`,
+     * or narrow `f:`). Returns `null` otherwise.
+     */
+    protected extractStructuredFiltersOnly(fingerprint: string): CompositeFilter[] | null {
+        const parts = fingerprint.split('|');
+        const BASE_SEGMENTS = 7;
+        if (parts.length < BASE_SEGMENTS) {
+            return null;
+        }
+        if ((parts[1] !== '_' && parts[1] !== '')
+            || this.hasOrderBy(parts)
+            || this.hasUserSearch(parts)
+            || this.hasAggregates(parts)) {
+            return null;
+        }
+        const cfSegments: string[] = [];
+        for (let i = BASE_SEGMENTS; i < parts.length; i++) {
+            const seg = parts[i];
+            if (!seg || seg.startsWith('imr:') || seg.includes('://') || seg === 'f:*') {
+                continue;
+            }
+            if (seg.startsWith('cf:')) {
+                cfSegments.push(seg.slice(3).replace(/\\u007c/g, '|'));
+                continue;
+            }
+            return null;
+        }
+        if (cfSegments.length === 0) {
+            return null;
+        }
+        try {
+            return cfSegments.map(cfJson => CompositeFilter.FromJSON(cfJson));
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Returns true when `fingerprint`'s only narrowing segment is one or more valid structured
+     * `CompositeFilter` segments (`cf:<json>`).
+     */
+    protected isStructuredFilterOnlyFingerprint(fingerprint: string): boolean {
+        return this.extractStructuredFiltersOnly(fingerprint) !== null;
+    }
+
+    /**
+     * Returns true when `fingerprint`'s only narrowing segment is one or more structured
+     * `CompositeFilter` segments (`cf:<json>`) and `row` satisfies every such filter in memory.
+     * Any SQL `ExtraFilter`, `OrderBy`, `UserSearch`, aggregate, or other narrowing segment
+     * (`vw:`, `rls:`, `fls:`, `abv:`, `prm:`, `ds:`, narrow `f:`) returns false.
+     */
+    protected matchesStructuredFilterOnlyFingerprint(
+        fingerprint: string,
+        row: Record<string, unknown> | null | undefined
+    ): boolean {
+        if (!row || typeof row !== 'object') {
+            return false;
+        }
+        const filters = this.extractStructuredFiltersOnly(fingerprint);
+        if (!filters) {
+            return false;
+        }
+        try {
+            return filters.every(f => f.Evaluate({ '': row }));
+        } catch {
+            return false;
+        }
     }
 
     /**
@@ -2935,6 +3031,11 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const paramsKey = RunViewParametersKey(params.Parameters);
         if (paramsKey.length > 0) {
             parts.push(`prm:${paramsKey}`);
+        }
+
+        const filterKey = CanonicalCompositeFilterKey(params.Filter);
+        if (filterKey.length > 0) {
+            parts.push(`cf:${filterKey.replace(/\|/g, '\\u007c')}`);
         }
 
         // Dataset namespace. `GetDatasetByName` caches each dataset ITEM's rows through this same

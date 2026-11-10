@@ -13,5 +13,7 @@ export * from './types';
 export * from './leaderboard';
 export * from './concurrency';
 export * from './wave-strategist';
+export * from './scores';
 export * from './seams';
+export * from './budget';
 export * from './experiment-orchestrator';

@@ -21,7 +21,7 @@ const DETERMINISM_ALGORITHMS = ['logistic_regression', 'xgboost', 'lightgbm', 'r
 class DeterminismSteps {
   /** Train the pipeline, promote the model to Validated (Draft models are refused for scoring) and score `records`. */
   public static async TrainAndScore(h: TruthHarness, p: MJMLTrainingPipelineEntity, records: string[], label: string): Promise<number[]> {
-    const t = await h.Train(p, { MaxRows: 1_000_000 });
+    const t = await h.Train(p); // every unit row: a unit pipeline refuses a row cap
     if (!t.ModelID) throw new Error(`${label} failed: ${t.ErrorMessage}`);
     // The promote is the product's promote operation.
     const promoted = await h.Promote(t.ModelID, 'Validated', 'truth suite fixture: promote (G0.10)');

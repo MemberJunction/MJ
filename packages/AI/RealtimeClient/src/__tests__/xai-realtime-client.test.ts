@@ -755,21 +755,22 @@ describe('xAIRealtimeClient', () => {
             expect(client.Fake.Sent.length).toBe(framesBefore);
         });
 
-        it('should surface a socket error as a FATAL error and not emit closed afterwards', () => {
+        it('should hand a live socket error and its close to the connection-lost reconnect, not end the call', () => {
+            const reconnect = vi.spyOn(client, 'TriggerReconnect').mockResolvedValue(true);
             const { errors, states } = collect(client);
             client.Fake.onerror?.('socket dropped');
-            expect(errors).toEqual([{ Message: 'xAI Grok Voice realtime transport error: socket dropped', Fatal: true }]);
-            expect(states.at(-1)).toBe('error');
-
             client.Fake.onclose?.();
-            expect(states.at(-1)).toBe('error');
+            expect(reconnect).toHaveBeenCalledWith('connection-lost');
+            expect(errors).toEqual([]);
+            expect(states).toEqual([]);
         });
 
-        it('should surface an UNEXPECTED socket close as FATAL', () => {
-            const { errors, states } = collect(client);
+        it('should hand an UNEXPECTED live socket close to the connection-lost reconnect', () => {
+            const reconnect = vi.spyOn(client, 'TriggerReconnect').mockResolvedValue(true);
+            const { errors } = collect(client);
             client.Fake.onclose?.();
-            expect(errors).toEqual([{ Message: 'xAI Grok Voice realtime connection closed unexpectedly', Fatal: true }]);
-            expect(states.at(-1)).toBe('error');
+            expect(reconnect).toHaveBeenCalledWith('connection-lost');
+            expect(errors).toEqual([]);
         });
     });
 

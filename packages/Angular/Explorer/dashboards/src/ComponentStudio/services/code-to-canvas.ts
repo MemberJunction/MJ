@@ -132,13 +132,16 @@ function findSectionIndex(charIndex: number, headings: Array<{ index: number; ti
     return 0;
 }
 
+const JSX_ENTITIES: Record<string, string> = {
+    '&lt;': '<',
+    '&gt;': '>',
+    '&amp;': '&',
+    '&#123;': '{',
+    '&#125;': '}',
+};
+
 /** Strip simple JSX/HTML escapes so titles render cleanly. */
 function stripJsx(s: string): string {
-    return s
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&amp;/g, '&')
-        .replace(/&#123;/g, '{')
-        .replace(/&#125;/g, '}')
-        .trim();
+    // One pass, so a decoded '&' never starts a second entity
+    return s.replace(/&(?:lt|gt|amp|#123|#125);/g, (entity) => JSX_ENTITIES[entity]).trim();
 }
