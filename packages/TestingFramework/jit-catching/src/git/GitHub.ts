@@ -31,7 +31,7 @@ const DEFINITIVE_FAILURE_RE = /is not merged|Could not resolve to a PullRequest|
 export class GitHub {
     private readonly sleep: (ms: number) => Promise<void>;
     private readonly warn: (line: string) => void;
-    constructor(private readonly runner: (args: string[]) => Promise<string> = defaultRunner, o: GitHubRetryOptions = {}) {
+    constructor(private readonly runner: (args: string[]) => Promise<string> = ExecRunner(), o: GitHubRetryOptions = {}) {
         this.sleep = o.Sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
         this.warn = o.Warn ?? ((line) => { process.stderr.write(`${line}\n`); });
     }
@@ -80,4 +80,31 @@ function failureText(e: unknown): string {
     return e instanceof Error ? e.message : String(e);
 }
 function firstLine(text: string): string { return text.trim().split('\n')[0]; }
-async function defaultRunner(args: string[]): Promise<string> { return (await run('gh', args, { maxBuffer: 16 * 1024 * 1024 })).stdout; }
+/** How `ExecRunner` starts a command: the program, arguments placed before the caller's, and the per-call timeout. */
+export interface ExecRunnerOptions { Command?: string; PrefixArgs?: string[]; TimeoutMs?: number; }
+
+/** True when `execFile` killed the command for running past its timeout (not for exceeding `maxBuffer`). */
+function isTimeoutKill(e: unknown): boolean {
+    if (!(e instanceof Error) || !('killed' in e) || e.killed !== true) return false;
+    return !('code' in e && e.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER');
+}
+/** Default per-call limit for one `gh` command. */
+const GH_TIMEOUT_MS = 120_000;
+
+/**
+ * A runner that executes `Command` (default `gh`) through `execFile` and resolves with stdout.
+ * A command still running after `TimeoutMs` (default 120 s) is killed and rejects with "timed out after <n> ms".
+ */
+export function ExecRunner(o: ExecRunnerOptions = {}): (args: string[]) => Promise<string> {
+    const command = o.Command ?? 'gh';
+    const prefix = o.PrefixArgs ?? [];
+    const timeout = o.TimeoutMs ?? GH_TIMEOUT_MS;
+    return async (args) => {
+        try { return (await run(command, [...prefix, ...args], { maxBuffer: 16 * 1024 * 1024, timeout })).stdout; }
+        catch (e) {
+            if (isTimeoutKill(e)) throw new Error(`timed out after ${timeout} ms: ${command} ${args.join(' ')}`, { cause: e });
+            throw e;
+        }
+    };
+}
+

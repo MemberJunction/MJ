@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { GitHub } from '../git/GitHub';
+import { GitHub, ExecRunner } from '../git/GitHub';
 
 const payload = { number: 7, title: 'perf: cache', body: 'desc', headRefOid: 'c'.repeat(40), baseRefName: 'next', headRepository: { name: 'MJ' }, headRepositoryOwner: { login: 'MemberJunction' }, author: { login: 'dev' } };
 
@@ -81,5 +81,18 @@ describe('GitHub retries', () => {
     expect(f.calls).toHaveLength(3);
     expect(f.waits).toEqual([2000, 8000]);
     expect(f.lines).toEqual(['gh retry 1/3 after timeout 1', 'gh retry 2/3 after timeout 2']);
+  });
+});
+
+describe('ExecRunner', () => {
+  it('times out a hung command so the client retries it and then fails', { timeout: 5000 }, async () => {
+    const lines: string[] = []; let attempts = 0;
+    const hang = ExecRunner({ Command: process.execPath, PrefixArgs: ['-e', 'setTimeout(() => {}, 5000)'], TimeoutMs: 200 });
+    const gh = new GitHub(async (args) => { attempts++; return hang(args); }, { Sleep: async () => {}, Warn: (line) => { lines.push(line); } });
+    const started = Date.now();
+    await expect(gh.GetMergedPullRequest(9)).rejects.toThrow(/timed out after 200 ms/);
+    expect(Date.now() - started).toBeLessThan(2000);
+    expect(attempts).toBe(3);
+    expect(lines).toEqual([expect.stringMatching(/^gh retry 1\/3 after timed out after 200 ms/), expect.stringMatching(/^gh retry 2\/3 after timed out after 200 ms/)]);
   });
 });
