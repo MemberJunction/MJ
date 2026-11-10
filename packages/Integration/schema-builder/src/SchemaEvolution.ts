@@ -77,6 +77,14 @@ export class SchemaEvolution {
             } else {
                 const existingCol = existing.Columns.find(c => c.Name.toLowerCase() === lowerName);
                 if (existingCol && this.hasColumnChanged(existingCol, col)) {
+                    const existingFamily = this.sqlTypeFamily(existingCol.SqlType);
+                    const targetFamily = this.sqlTypeFamily(col.TargetSqlType);
+                    if (existingFamily !== targetFamily) {
+                        warnings.push(
+                            `Column '${col.TargetColumnName}' type family changed from ${existingCol.SqlType} to ${col.TargetSqlType} — skipped on existing table to prevent data conversion errors or precision loss`
+                        );
+                        continue;
+                    }
                     modified.push({
                         ColumnName: col.TargetColumnName,
                         OldType: existingCol.SqlType,
@@ -304,5 +312,47 @@ export class SchemaEvolution {
         if (normalizedExisting !== normalizedTarget) return true;
         if (existing.IsNullable !== target.IsNullable) return true;
         return false;
+    }
+
+    /**
+     * Classify a physical SQL type string into its broad type family so SchemaEvolution can
+     * distinguish safe within-family adjustments (e.g. NVARCHAR(100) → NVARCHAR(255) or INT → BIGINT)
+     * from cross-family conversions (e.g. NVARCHAR(255) → INT or DECIMAL) that can fail on stored
+     * string values or silently round decimal places on existing tables.
+     */
+    private sqlTypeFamily(sqlType: string): string {
+        const base = (sqlType ?? '')
+            .toLowerCase()
+            .replace(/\(.*\)/, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+        if (base === 'nvarchar' || base === 'varchar' || base === 'nchar' || base === 'char' || base === 'ntext' || base === 'text' || base === 'string') {
+            return 'string';
+        }
+        if (base === 'int' || base === 'integer' || base === 'bigint' || base === 'smallint' || base === 'tinyint') {
+            return 'integer';
+        }
+        if (base === 'decimal' || base === 'numeric' || base === 'money' || base === 'smallmoney') {
+            return 'decimal';
+        }
+        if (base === 'float' || base === 'real' || base === 'double precision' || base === 'double') {
+            return 'float';
+        }
+        if (base === 'bit' || base === 'boolean' || base === 'bool') {
+            return 'boolean';
+        }
+        if (base === 'datetimeoffset' || base === 'datetime2' || base === 'datetime' || base === 'smalldatetime' || base === 'timestamptz' || base === 'timestamp' || base === 'timestamp with time zone' || base === 'timestamp without time zone') {
+            return 'datetime';
+        }
+        if (base === 'date') {
+            return 'date';
+        }
+        if (base === 'time') {
+            return 'time';
+        }
+        if (base === 'uniqueidentifier' || base === 'uuid') {
+            return 'uuid';
+        }
+        return base;
     }
 }

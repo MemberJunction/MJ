@@ -42,7 +42,7 @@ export interface TargetTableConfig {
     Description?: string;
     /**
      * Primary key field name(s) from the source system.
-     * These columns get a UNIQUE constraint and are registered as soft PKs.
+     * These columns receive a non-unique index (`IX_{Schema}_{Table}_PK`) and are registered as soft PKs.
      * Supports composite PKs (multiple fields). Must be a subset of Columns.
      */
     PrimaryKeyFields: string[];

@@ -551,6 +551,56 @@ export const IntegrationSchemaPipelineChecks: NamedCheck[] = [
                 'ISP3: SchemaBuilder emitted Organic Key index in migration DDL'
             );
 
+            // Verify SchemaBuilder warns & skips cross-family ALTER COLUMN on existing columns (e.g. legacy NVARCHAR(255) -> INT/DECIMAL)
+            const evoOut = builder.BuildSchema({
+                SourceSchema: sourceSchema,
+                TargetConfigs: [
+                    {
+                        ...targetConfig,
+                        Columns: [
+                            ...targetConfig.Columns,
+                            {
+                                SourceFieldName: 'LegacyAmount',
+                                TargetColumnName: 'LegacyAmount',
+                                TargetSqlType: 'DECIMAL(28,2)',
+                                IsNullable: true,
+                                MaxLength: null,
+                                Precision: 28,
+                                Scale: 2,
+                                DefaultValue: null,
+                            },
+                        ],
+                    },
+                ],
+                Platform: f.Platform,
+                MJVersion: '5.27.0',
+                SourceType: 'IntegrationTest',
+                ExistingTables: [
+                    {
+                        SchemaName: f.SchemaName,
+                        TableName: 'Account',
+                        Columns: [
+                            { Name: 'ExternalId', SqlType: 'NVARCHAR(450)', IsNullable: false, MaxLength: 450, Precision: null, Scale: null },
+                            { Name: 'TaxId', SqlType: 'NVARCHAR(450)', IsNullable: true, MaxLength: 450, Precision: null, Scale: null },
+                            { Name: 'ParentAccountId', SqlType: 'NVARCHAR(450)', IsNullable: true, MaxLength: 450, Precision: null, Scale: null },
+                            { Name: 'LegacyAmount', SqlType: 'NVARCHAR(255)', IsNullable: true, MaxLength: 255, Precision: null, Scale: null },
+                        ],
+                    },
+                ],
+                EntitySettingsForTargets: {},
+                MigrationsDir: '/tmp',
+                AdditionalSchemaInfoPath: '/tmp/additionalSchemaInfo.json',
+                MetadataDir: '/tmp/metadata',
+            });
+            Assert(
+                evoOut.Warnings.some(w => w.includes("Column 'LegacyAmount' type family changed")),
+                'ISP3: SchemaBuilder warns and skips cross-family NVARCHAR -> DECIMAL conversion on existing column'
+            );
+            Assert(
+                !(evoOut.MigrationFiles[0]?.Content.includes('ALTER COLUMN [LegacyAmount]') ?? false),
+                'ISP3: SchemaBuilder does not emit ALTER COLUMN for cross-family type change on existing column'
+            );
+
             // Verify live DB state after SchemaEvolution migration
             const cols = await readLiveColumns(ctx, f.SchemaName, 'Account', f.Platform);
             const indexes = await readLiveIndexes(ctx, f.SchemaName, 'Account', f.Platform);

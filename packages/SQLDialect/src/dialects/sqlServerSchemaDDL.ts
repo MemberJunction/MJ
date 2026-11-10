@@ -441,7 +441,8 @@ export class SQLServerSchemaDDL extends BaseSchemaDDL {
     override DropIndexIfExists(schema: string, tableName: string, indexName: string): string {
         const fullTable = `[${schema}].[${tableName}]`;
         const escapedIdx = indexName.replace(/'/g, "''");
-        return `IF EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'${fullTable}') AND name = N'${escapedIdx}')\n    DROP INDEX [${indexName}] ON ${fullTable};`;
+        const bracketEscapedIdx = indexName.replace(/]/g, ']]');
+        return `IF EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'${fullTable}') AND name = N'${escapedIdx}')\n    DROP INDEX [${bracketEscapedIdx}] ON ${fullTable};`;
     }
 
     override CommentOnObjectIfAbsent(objectType: string, schema: string, name: string, comment: string): string {
