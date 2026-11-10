@@ -61,8 +61,9 @@ export function ResolveStoredNodeSecurity(
  * A `Human` step that its assignee completed in person never does: a person reviewed what flowed
  * through it, which is the only thing that clears taint inside a graph ({@link HumanReviewClearsTaint}).
  * Any other node carries what it recorded when it ran (`Configuration.runtime.isOutputTainted`, which
- * every node the dispatcher runs writes as its input taint OR its own). A node `Complete` with nothing
- * recorded and no person recorded as completing it is tainted: it was completed outside the dispatcher
+ * every node the dispatcher runs writes as its input taint OR its own). In a graph whose steps record their
+ * taint (`recordsTaint`, every graph submitted since), a node `Complete` with nothing recorded and no person
+ * recorded as completing it is tainted: it was completed outside the dispatcher
  * (forced, or saved or answered by code), so its output is nobody's vouched-for result, and what ran
  * before it may not have run yet. Any other node that recorded nothing (a Human step a person other than
  * its assignee completed, skipped, failed before recording) is never read as clean: it is tainted when the graph is, or when anything it depends on
@@ -74,18 +75,21 @@ export function UpstreamCarriesTaint(
     upstream: UpstreamTaskTaintFields,
     graphTainted: boolean,
     upstreamOf?: UpstreamTaintLookup,
+    recordsTaint = true,
 ): boolean {
-    return carriesTaint(upstream, newTaintWalk(graphTainted, upstreamOf));
+    return carriesTaint(upstream, newTaintWalk(graphTainted, upstreamOf, recordsTaint));
 }
 
-function newTaintWalk(graphTainted: boolean, upstreamOf: UpstreamTaintLookup | undefined): TaintWalk {
-    return { GraphTainted: graphTainted, UpstreamOf: upstreamOf, Known: new UUIDMap(), Visiting: new UUIDSet() };
+function newTaintWalk(graphTainted: boolean, upstreamOf: UpstreamTaintLookup | undefined, recordsTaint: boolean): TaintWalk {
+    return { GraphTainted: graphTainted, UpstreamOf: upstreamOf, RecordsTaint: recordsTaint, Known: new UUIDMap(), Visiting: new UUIDSet() };
 }
 
 /** One taint walk's inputs and memo: each unrecorded node is resolved once, and a cycle fails closed. */
 type TaintWalk = {
     GraphTainted: boolean;
     UpstreamOf: UpstreamTaintLookup | undefined;
+    /** The graph's steps record their taint (`TaskGraphParentMetadata.recordsTaint`); false for a graph from before. */
+    RecordsTaint: boolean;
     Known: UUIDMap<boolean>;
     Visiting: UUIDSet;
 };
@@ -127,7 +131,7 @@ function carriesTaint(node: UpstreamTaskTaintFields, walk: TaintWalk): boolean {
     if (recorded !== undefined) {
         return recorded;
     }
-    if (node.Status === 'Complete' && !completedByAPerson(node)) {
+    if (walk.RecordsTaint && node.Status === 'Complete' && !completedByAPerson(node)) {
         // Complete with nothing recorded and no person recorded as completing it: it did not finish through the
         // dispatcher, which records every run's taint. Its output (forced from the debugger, saved by code, or an
         // answer server code gave) is untrusted whatever ran before it, which may not have run yet. A Human step
@@ -183,11 +187,13 @@ export function ComputeNodeInputTaint(args: {
     Upstream: readonly UpstreamTaskTaintFields[];
     /** The graph's prerequisites by task, for prerequisites that recorded no taint. Omitted: they read as tainted. */
     UpstreamOf?: UpstreamTaintLookup;
+    /** The graph's steps record their taint (`TaskGraphParentMetadata.recordsTaint`). Omitted: true. */
+    RecordsTaint?: boolean;
 }): boolean {
     if (args.Upstream.length === 0) {
         return args.EnvelopeTainted;
     }
-    const walk = newTaintWalk(args.EnvelopeTainted, args.UpstreamOf);
+    const walk = newTaintWalk(args.EnvelopeTainted, args.UpstreamOf, args.RecordsTaint !== false);
     const fromUpstream = args.Upstream.some((u) => carriesTaint(u, walk));
     return fromUpstream || (args.IsCompensation && args.EnvelopeTainted);
 }

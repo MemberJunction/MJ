@@ -128,6 +128,15 @@ describe('UpstreamCarriesTaint', () => {
         expect(UpstreamCarriesTaint(reviewedEarly, false, lookup({ approve: [fetchNotRunYet], fetch: [] }))).toBe(false);
     });
 
+    it('reads such a step through to what fed it in a graph from before steps recorded taint', () => {
+        const fetchClean = upstream({ ID: 'fetch', Configuration: ranClean });
+        const forcedEarlier = upstream({ ID: 'step' });
+        expect(UpstreamCarriesTaint(forcedEarlier, false, lookup({ step: [fetchClean] }), false)).toBe(false);
+        expect(UpstreamCarriesTaint(forcedEarlier, false, lookup({ step: [upstream({ ID: 'fetch', Configuration: ranTainted })] }), false)).toBe(true);
+        expect(ComputeNodeInputTaint({ EnvelopeTainted: false, IsCompensation: false, Upstream: [forcedEarlier], UpstreamOf: lookup({ step: [fetchClean] }), RecordsTaint: false })).toBe(false);
+        expect(ComputeNodeInputTaint({ EnvelopeTainted: false, IsCompensation: false, Upstream: [forcedEarlier], UpstreamOf: lookup({ step: [fetchClean] }) })).toBe(true);
+    });
+
     it('passes what fed it through a Human step a person other than its assignee completed (a delegated approval)', () => {
         const delegated = upstream({ ID: 'approve', StepType: 'Human', UserID: REVIEWER, Configuration: completedBy(RUN_USER) });
         expect(UpstreamCarriesTaint(delegated, false, lookup({ approve: [upstream({ ID: 'fetch', Configuration: ranClean })] }))).toBe(false);

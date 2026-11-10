@@ -61,7 +61,7 @@ import {
     type TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
 import { DatabaseProviderBase, IMetadataProvider, IRunQueryProvider, LogError, LogStatus, RunView, ServerOperationScopeManager, UserInfo } from '@memberjunction/core';
-import { EscapeSQLString, GroupByUUID, IShutdownable, IndexByUUID, ShutdownRegistry, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, GroupByUUID, IShutdownable, IndexByUUID, IsValidUUID, ShutdownRegistry, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity, MJAIAgentRequestEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 import type { MJActionExecutionLogEntity, MJRecordChangeEntity } from '@memberjunction/core-entities';
 import type { MJTaskEntity_ITaskStepConfiguration, MJTaskEntity_ITaskLoopIteration } from '@memberjunction/core-entities';
@@ -353,6 +353,8 @@ type GraphContext = {
      * a per-task clone stamped with it (never the shared user itself).
      */
     Security: NodeSecurity;
+    /** The graph's steps record their taint (`TaskGraphParentMetadata.recordsTaint`); true when its parent cannot be read. */
+    RecordsTaint: boolean;
 };
 
 /**
@@ -2077,6 +2079,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         // The parent's stored envelope. Every child carries its own copy too, so a parent that cannot
         // be read still leaves the node constrained by its own row.
         let parentEnvelopeColumn: string | null = null;
+        let recordsTaint = true;
 
         if (task.ParentID && prehydrated && (prehydrated.parentMetadata || prehydrated.parentTask)) {
             const parent = prehydrated.parentTask ?? null;
@@ -2089,6 +2092,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             invocation = { data: meta.invocation?.data, context: meta.invocation?.context };
             submittedByUserID = meta.submittedByUserID ?? parent?.UserID ?? task.UserID;
             parentEnvelopeColumn = parent?.SecurityEnvelope ?? null;
+            recordsTaint = meta.recordsTaint === true;
         } else if (task.ParentID && typeof provider?.GetEntityObject === 'function') {
             try {
                 const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
@@ -2102,6 +2106,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     invocation = { data: meta.invocation?.data, context: meta.invocation?.context };
                     submittedByUserID = meta.submittedByUserID ?? parent.UserID ?? task.UserID;
                     parentEnvelopeColumn = parent.SecurityEnvelope;
+                    recordsTaint = meta.recordsTaint === true;
                 }
             } catch (e) {
                 // An unreadable parent must not stop the work; depth zero is the safe reading, and the
@@ -2123,6 +2128,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             Invocation: invocation,
             ExecutionUser: tenant ? CloneUserWithTenantContext(submitter, tenant, provider) : submitter,
             Security: security,
+            RecordsTaint: recordsTaint,
         };
     }
 
@@ -2376,7 +2382,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         }
         const graphTainted = stored.Envelope?.IsRunTainted === true;
         const lookup = this.upstreamLookupInGraph(graph);
-        const outputsTainted = [...graph.entityById.values()].some((task) => UpstreamCarriesTaint(task, graphTainted, lookup));
+        const outputsTainted = [...graph.entityById.values()].some((task) => UpstreamCarriesTaint(task, graphTainted, lookup, graph.parentMetadata?.recordsTaint === true));
         return { Envelope: WithInputTaint(stored.Envelope, graphTainted || outputsTainted) };
     }
 
@@ -2666,15 +2672,31 @@ export class TaskGraphDispatcher implements IShutdownable {
         // writes nothing, so their `__mj_UpdatedAt` has stopped advancing and the third arm below
         // will eventually stop finding them — which would turn a retry into a silent abandonment.
         for (const id of this.retryingSettlement.keys()) ids.add(id);
-        // A parent counts only when the other two arms prove it a workflow (a parentless task of the workflow type): the
-        // first arm finds parents by their steps' type alone, and a workflow-typed row under any other task must not turn
-        // that task into a graph whose metadata the dispatcher would trust.
+        // A parent counts only when it is a workflow (a parentless task of the workflow type): the first arm finds parents
+        // by their steps' type alone, and a workflow-typed row under any other task must not turn that task into a graph
+        // whose metadata the dispatcher would trust. The other two arms prove most of them; the rest (a step retried in a
+        // run that settled before the sweep window) are checked with one read, whatever their status or age.
         const workflowParents = new Set([
             ...((unsettledParents?.Results ?? []) as Array<{ ID: string }>).map((r) => r.ID?.toUpperCase()),
             ...((terminalRecent?.Results ?? []) as Array<{ ID: string }>).map((r) => r.ID?.toUpperCase()),
         ]);
-        for (const r of (withPendingWork?.Results ?? []) as Array<{ ParentID: string }>) {
-            if (r.ParentID && workflowParents.has(r.ParentID.toUpperCase())) ids.add(r.ParentID);
+        const pendingParents = ((withPendingWork?.Results ?? []) as Array<{ ParentID: string }>).map((r) => r.ParentID).filter(Boolean);
+        const unproven = [...new Set(pendingParents.map((id) => id.toUpperCase()))].filter((id) => !workflowParents.has(id) && IsValidUUID(id));
+        if (unproven.length > 0) {
+            const proven = await rv.RunView<{ ID: string }>(
+                {
+                    EntityName: 'MJ: Tasks',
+                    ExtraFilter: `${ofWorkflowType} AND ParentID IS NULL AND ID IN (${unproven.map((id) => `'${id}'`).join(',')})`,
+                    Fields: ['ID'],
+                    ResultType: 'simple',
+                    BypassCache: true,
+                },
+                this.contextUser,
+            );
+            for (const r of (proven.Success ? proven.Results : []) ?? []) workflowParents.add(r.ID.toUpperCase());
+        }
+        for (const parentID of pendingParents) {
+            if (workflowParents.has(parentID.toUpperCase())) ids.add(parentID);
         }
         // Childless tasks match the second query too; propagateAndRollup skips anything with no
         // nodes, so they cost one empty load and nothing else.
@@ -3956,6 +3978,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             IsCompensation: IsCompensationTask(task),
             Upstream: prehydrated?.upstreamTasks ?? [],
             UpstreamOf: prehydrated?.upstreamOf,
+            RecordsTaint: context.RecordsTaint,
         });
         return { Envelope: WithInputTaint(stored, inputTainted) };
     }
@@ -4697,7 +4720,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             return stored;
         }
         const graphTainted = stored.Envelope?.IsRunTainted === true;
-        const forwardTainted = UpstreamCarriesTaint(forwardTask, graphTainted, this.upstreamLookupInGraph(graph));
+        const forwardTainted = UpstreamCarriesTaint(forwardTask, graphTainted, this.upstreamLookupInGraph(graph), graph.parentMetadata?.recordsTaint === true);
         return { Envelope: forwardTainted ? WithInputTaint(stored.Envelope, true) : stored.Envelope };
     }
 

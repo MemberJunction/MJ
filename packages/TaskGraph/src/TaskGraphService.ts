@@ -157,6 +157,13 @@ export type TaskGraphParentMetadata = {
      */
     submittedByUserID?: string | null;
     /**
+     * Set on every graph submitted since steps record their output taint. The taint walk then reads a step that is
+     * Complete with nothing recorded, and no person recorded as completing it, as tainted: it did not finish through the
+     * dispatcher. A graph without it was submitted before the upgrade, when no step recorded taint, so its steps are
+     * read through to what fed them instead. Only the service writes this metadata, and it cannot be changed after.
+     */
+    recordsTaint?: boolean;
+    /**
      * Set once the completion handler has delivered. Written with a compare-and-swap guard, which is
      * what turns at-least-once delivery into effectively-once: a crash between "graph complete" and
      * "continuation delivered" leaves this unset, so the next sweep retries, and two instances
@@ -318,6 +325,7 @@ export function BuildTaskGraphParentInputPayload(args: {
         ...(args.sagaState ? { sagaState: args.sagaState } : {}),
         submittedByAgentRunID: args.submittedByAgentRunID,
         submittedByUserID: args.submittedByUserID,
+        recordsTaint: true,
         ...(parentAgentHierarchy.length > 0 ? { parentAgentHierarchy } : {}),
         ...(args.invocation
             ? { invocation: { data: args.invocation.data, context: args.invocation.context } }
