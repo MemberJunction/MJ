@@ -85,8 +85,13 @@ describe('channel scope protection', () => {
 });
 
 describe('PROTECTED_SESSION_CONFIG_KEYS', () => {
-    it('protects the janitor deadline and the verification state', () => {
-        expect(PROTECTED_SESSION_CONFIG_KEYS).toEqual(['maxSessionDeadlineIso', 'identityVerification', 'channels']);
+    it('protects the janitor deadline, verification state, channel scope, and mint snapshot', () => {
+        expect(PROTECTED_SESSION_CONFIG_KEYS).toEqual([
+            'maxSessionDeadlineIso',
+            'identityVerification',
+            'channels',
+            'realtimeMintSnapshot',
+        ]);
     });
 });
 

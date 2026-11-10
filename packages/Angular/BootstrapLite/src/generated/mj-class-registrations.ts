@@ -36,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (484 classes)
+// @memberjunction/core-entities (485 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -288,6 +288,7 @@ import {
     MJEntityRelationshipDisplayComponentEntity,
     MJEntityRelationshipEntity,
     MJEntitySettingEntity,
+    MJEntityUniqueKeyEntity,
     MJEnvironmentEntity,
     MJEnvironmentEntityExtended,
     MJErrorLogEntity,
@@ -1032,6 +1033,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEntityRelationshipDisplayComponentEntity,
     MJEntityRelationshipEntity,
     MJEntitySettingEntity,
+    MJEntityUniqueKeyEntity,
     MJEnvironmentEntity,
     MJEnvironmentEntityExtended,
     MJErrorLogEntity,
@@ -1168,11 +1170,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRowLevelSecurityFilterEntity,
     MJRubricBandEntity,
     MJRubricCategoryEntity,
-    MJRubricCriterionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRubricCriterionEntity,
     MJRubricCriterionLevelEntity,
     MJRubricEntity,
     MJRubricEvaluationEntity,
@@ -1372,11 +1374,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ContentItemHierarchyPanel,
     ConversationHeaderPanel,
     ConversationOverviewPanel,
-    DashboardCategoryHierarchyPanel,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    DashboardCategoryHierarchyPanel,
     EmployeeHeaderPanel,
     EmployeeOverviewPanel,
     FileCategoryHierarchyPanel,
@@ -1452,7 +1454,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 661;
+export const CLASS_REGISTRATIONS_COUNT = 662;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

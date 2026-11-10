@@ -24,6 +24,8 @@
  * - **Session `Config`**: the owner can edit it through the generic entity API, so nothing in it is
  *   trusted. Execute re-checks `CanRun` on its target, direct actions never come from it, and its
  *   run ids are used only when {@link SessionRunIDVerifier} finds them to be records of the session.
+ *   A credential refresh re-checks `CanRun` on the target recorded in the server-protected mint
+ *   snapshot instead, because it re-mints what was built for that agent.
  * - **Scope-limited callers** (anonymous and resource-scoped magic-link sessions, including public
  *   web-widget guests): no direct actions. Their scope exists only as row-level filters, which an
  *   action can read around, and a scoped anonymous caller's relay runs as the system user. They
@@ -34,7 +36,7 @@
 import { Resolver, Mutation, Arg, Ctx, Int, Float, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { AuthorizationEvaluator, UserInfo, IMetadataProvider, DatabaseProviderBase, LogError, LogErrorEx, LogStatus, RunView, BaseEntity } from '@memberjunction/core';
-import { EscapeSQLString, UUIDsEqual, IsValidUUID } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual, IsValidUUID, NormalizeUUID, MJLruCache } from '@memberjunction/global';
 import {
     MJAIAgentEntity,
     MJAIAgentSessionEntity,
@@ -51,6 +53,8 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { AIAgentPermissionHelper, AIEngineBase, HasRealtimeUsage, ParseRealtimeUsageRecord, type RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
 import {
     RealtimeClientSessionService,
+    RealtimeMintSnapshotRegistry,
+    type PersistedRealtimeMintSnapshot,
     DelegatedRunArtifact,
     RealtimeChannelServerHost,
     RealtimeCoAgentConfig,
@@ -79,12 +83,18 @@ import {
     type RealtimeChannelCandidate,
     type RealtimeSessionClientPolicy
 } from '@memberjunction/ai-core-plus';
-import { ChatMessage, RealtimeToolDefinition } from '@memberjunction/ai';
+import {
+    ChatMessage,
+    ExtractRealtimeTimingConfig,
+    REALTIME_MAX_SOFT_WINDOW_DURATION_SHARE,
+    RealtimeToolDefinition,
+} from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SessionManager } from '../agentSessions/index.js';
 import { SessionRunIDVerifier } from '../agentSessions/SessionRunIDVerifier.js';
+import { IsMaxSessionDeadlineElapsed, RemainingSessionSeconds } from '../agentSessions/sessionDeadline.js';
 import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 import { ResolveWidgetGuestRunContext, ResolveScopedAnonymousRunUser, ResolveRecordingStoreUser } from '../realtimeWidget/widgetGuestElevation.js';
 import { RunWithTrustedSessionConfigWrites } from '@memberjunction/core-entities-server';
@@ -240,6 +250,13 @@ interface RealtimeSessionConfig {
      * (an unscoped session: a client that reported no channel candidates) ⇒ no channel check.
      */
     channels?: string[];
+    /**
+     * Server-authoritative mint snapshot persisted at session start for cross-instance credential
+     * refresh (`RefreshRealtimeClientSessionToken`), and the target agent a refresh re-authorizes.
+     * Protected from owner writes by `MJAIAgentSessionEntityServer` (`PROTECTED_SESSION_CONFIG_KEYS`),
+     * but readable by the owner, so it is the owner-safe copy (see `PersistedRealtimeMintSnapshot`).
+     */
+    realtimeMintSnapshot?: PersistedRealtimeMintSnapshot;
 }
 
 /**
@@ -365,6 +382,30 @@ export class StartRealtimeClientSessionResult {
      */
     @Field(() => String, { nullable: true })
     AvatarStatusJson?: string;
+
+    /**
+     * Seconds one provider connection lasts before the browser must reconnect: the catalog value
+     * (`ModelConfiguration.Realtime` on the model / model-vendor rows) narrowed to the driver's provider ceiling.
+     * Carried as its own field because the server keeps framework timing out of `SessionConfigJson` (that bag goes
+     * to the provider verbatim). Null when neither the catalog nor the driver knows one.
+     */
+    @Field(() => Int, { nullable: true })
+    ConnectionMaxSeconds?: number;
+
+    /** Credential / relay-ticket lifetime in seconds that the browser schedules its refresh by. Null when not configured. */
+    @Field(() => Int, { nullable: true })
+    SessionMaxSeconds?: number;
+
+    /** Seconds before {@link StartRealtimeClientSessionResult.ConnectionMaxSeconds} at which the browser reconnects. */
+    @Field(() => Int, { nullable: true })
+    ReconnectBufferSeconds?: number;
+
+    /**
+     * Whether the browser may resume with the provider's native resumption handle. Always `false` for a zero data
+     * retention session, whatever the driver's default.
+     */
+    @Field(() => Boolean, { nullable: true })
+    TrustNativeResumption?: boolean;
 }
 
 /**
@@ -443,6 +484,85 @@ export class UploadRealtimeRecordingResult {
     @Field(() => String, { nullable: true })
     FileID?: string;
 }
+
+/**
+ * Result of {@link RealtimeClientSessionResolver.RefreshRealtimeClientSessionToken} — a structured
+ * success/failure envelope returning freshly minted ephemeral credentials or an extended relay grant
+ * for an active client-direct session.
+ */
+@ObjectType()
+export class RefreshRealtimeClientSessionTokenResult {
+    @Field(() => Boolean)
+    Success: boolean;
+
+    /** Discriminator for the refreshed credential: `'token'` or `'relay'`. */
+    @Field(() => String, { nullable: true })
+    Kind?: 'token' | 'relay';
+
+    @Field(() => String, { nullable: true })
+    EphemeralToken?: string;
+
+    @Field(() => String, { nullable: true })
+    ExpiresAt?: string;
+
+    @Field(() => String, { nullable: true })
+    RelayUrl?: string;
+
+    @Field(() => String, { nullable: true })
+    SessionConfigJson?: string;
+
+    /** The re-stamped catalog timing (see {@link StartRealtimeClientSessionResult.ConnectionMaxSeconds}); null on an in-place relay extension. */
+    @Field(() => Int, { nullable: true })
+    ConnectionMaxSeconds?: number;
+
+    @Field(() => Int, { nullable: true })
+    SessionMaxSeconds?: number;
+
+    @Field(() => Int, { nullable: true })
+    ReconnectBufferSeconds?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    TrustNativeResumption?: boolean;
+
+    @Field(() => String, { nullable: true })
+    ErrorMessage?: string;
+}
+
+const REFRESH_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+/**
+ * Mints per window allowed on top of the planned connection moves: reconnects after a lost connection (OpenAI and xAI
+ * mint a fresh token on each), the proactive refresh before a credential expires, and slack. It covers one burst the
+ * client's rapid-reconnect breaker lets through (5) plus a few more drops, and still stops a client minting in a loop.
+ * It is also the whole limit when the session's connection length is unknown.
+ */
+const REFRESH_RATE_LIMIT_DROP_ALLOWANCE = 8;
+/**
+ * The shortest connection the mint limit is sized for. The limit grows as the connection shortens (a planned move per
+ * soft window), so without a floor a mis-entered catalog length (1 s) would allow over a thousand mints per window. The
+ * floor caps the limit at 40 planned moves plus {@link REFRESH_RATE_LIMIT_DROP_ALLOWANCE}; the shortest real provider
+ * connection is minutes long, and the 45 s test override stays above the floor.
+ */
+const REFRESH_RATE_LIMIT_MIN_CONNECTION_SECONDS = 30;
+/**
+ * Refresh calls per window allowed beyond the mint limit, so failed refreshes stay bounded too. A reconnect cycle can
+ * retry a failing refresh on every attempt: a planned move's recovery (about 85 s at one attempt per 5 s) makes about
+ * 17. This covers two such cycles plus slack. It is the server's own budget, kept apart from the client's per-cycle
+ * attempt cap so a client-side tuning change cannot widen what the server lets through.
+ */
+const REFRESH_RATE_LIMIT_FAILED_CALL_ALLOWANCE = 40;
+
+/** The refresh history of one session within the rate-limit window. */
+interface RefreshRateLimitBucket {
+    /** Every refresh call admitted, failed or not. */
+    Calls: number[];
+    /** Refreshes that minted a credential, plus those still in flight (released if they fail). */
+    Mints: number[];
+}
+
+const refreshRateLimitBuckets = new MJLruCache<string, RefreshRateLimitBucket>({
+    maxSize: 5000,
+    ttlMs: REFRESH_RATE_LIMIT_WINDOW_MS,
+});
 
 /**
  * Resolver for the client-direct realtime voice topology. A single {@link SessionManager} and a
@@ -632,6 +752,155 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         // board). Strictly tolerant — any problem yields a null field, never a failed start.
         result.PriorChannelStatesJson = (await this.loadPriorChannelStatesJson(lastSessionId, contextUser, provider)) ?? undefined;
         return result;
+    }
+
+    /**
+     * Refresh the short-lived ephemeral credential (or extend the MJAPI relay ticket) for an
+     * already-running client-direct voice session without creating a new `AIAgentSession` row.
+     */
+    @Mutation(() => RefreshRealtimeClientSessionTokenResult)
+    async RefreshRealtimeClientSessionToken(
+        @Arg('agentSessionId', () => String) agentSessionId: string,
+        @Ctx() { userPayload, providers }: AppContext,
+        @Arg('allowFreshReopen', () => Boolean, { nullable: true }) allowFreshReopen?: boolean,
+    ): Promise<RefreshRealtimeClientSessionTokenResult> {
+        const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
+        const session = await this.loadOwnedActiveSession(agentSessionId, contextUser, provider);
+
+        if (IsMaxSessionDeadlineElapsed(session.Config_)) {
+            await this.sessionManager.CloseSession(session.ID, contextUser, provider, 'TimeLimit');
+            return {
+                Success: false,
+                ErrorMessage: 'Session time limit reached.',
+            };
+        }
+
+        const config = this.readSessionConfig(session);
+        const maxMints = this.resolveRefreshRateLimit(session.ID, config);
+        const reservedAtMs = this.reserveRefreshUnderRateLimit(session.ID, maxMints);
+        if (reservedAtMs === null) {
+            return {
+                Success: false,
+                ErrorMessage: 'Rate limit exceeded: too many token refreshes for this session.',
+            };
+        }
+
+        // A refresh that mints nothing gives its mint slot back: a reconnect retries a failing refresh on each attempt,
+        // and those failures must not use up the budget the call needs once the provider recovers.
+        let minted = false;
+        let refreshed: Awaited<ReturnType<RealtimeClientSessionService['RefreshClientSessionCredential']>>;
+        try {
+            await this.assertCanRunTarget(this.mintedTargetAgentID(session.ID, config), contextUser, provider);
+
+            const runUser = ResolveScopedAnonymousRunUser(contextUser);
+            const remainingSeconds = RemainingSessionSeconds(session.Config_);
+            refreshed = await this.clientSessionService.RefreshClientSessionCredential(
+                {
+                    AgentSessionID: session.ID,
+                    CoAgentID: session.AgentID,
+                    ...(config.realtimeMintSnapshot ? { PersistedMintSnapshot: config.realtimeMintSnapshot } : {}),
+                    RemainingSessionSeconds: remainingSeconds,
+                    ...(allowFreshReopen === true ? { AllowFreshReopen: true } : {}),
+                },
+                runUser,
+                provider,
+            );
+            minted = refreshed.Success;
+        } finally {
+            if (!minted) {
+                this.releaseRefreshMint(session.ID, reservedAtMs);
+            }
+        }
+
+        if (refreshed.Success) {
+            await this.sessionManager.Heartbeat(agentSessionId, contextUser, provider);
+        }
+
+        return {
+            Success: refreshed.Success,
+            ...(refreshed.Kind ? { Kind: refreshed.Kind } : {}),
+            ...(refreshed.EphemeralToken !== undefined ? { EphemeralToken: refreshed.EphemeralToken } : {}),
+            ...(refreshed.ExpiresAt !== undefined ? { ExpiresAt: refreshed.ExpiresAt } : {}),
+            ...(refreshed.RelayUrl !== undefined ? { RelayUrl: refreshed.RelayUrl } : {}),
+            ...(refreshed.SessionConfigJson !== undefined ? { SessionConfigJson: refreshed.SessionConfigJson } : {}),
+            ...(refreshed.ConnectionMaxSeconds !== undefined ? { ConnectionMaxSeconds: refreshed.ConnectionMaxSeconds } : {}),
+            ...(refreshed.SessionMaxSeconds !== undefined ? { SessionMaxSeconds: refreshed.SessionMaxSeconds } : {}),
+            ...(refreshed.ReconnectBufferSeconds !== undefined ? { ReconnectBufferSeconds: refreshed.ReconnectBufferSeconds } : {}),
+            ...(refreshed.TrustNativeResumption !== undefined ? { TrustNativeResumption: refreshed.TrustNativeResumption } : {}),
+            ...(refreshed.ErrorMessage !== undefined ? { ErrorMessage: refreshed.ErrorMessage } : {}),
+        };
+    }
+
+    /**
+     * The agent the session was minted to voice, from the server-written mint snapshot: this instance's copy, else the
+     * protected `realtimeMintSnapshot` on the session row. Never `Config.targetAgentID`: the owner can rewrite it, and a
+     * refresh re-mints the snapshot built for the original agent, so pointing it at another agent the owner can run would
+     * keep the call minting after the owner lost `CanRun` on the original. Throws when neither copy names one, so the
+     * refresh is refused.
+     */
+    private mintedTargetAgentID(sessionID: string, config: RealtimeSessionConfig): string {
+        const target = RealtimeMintSnapshotRegistry.Instance.Get(sessionID)?.targetAgentID ?? config.realtimeMintSnapshot?.targetAgentID;
+        if (typeof target !== 'string' || target.length === 0) {
+            throw new Error(`Realtime session ${sessionID} has no server-recorded target agent, so its credential cannot be refreshed`);
+        }
+        return target;
+    }
+
+    /**
+     * The credential mints one session may make per rate-limit window. A connection with a known length is moved before
+     * it ends: at the earliest, once its soft window opens, which the client never lets start before
+     * `REALTIME_MAX_SOFT_WINDOW_DURATION_SHARE` of the connection has passed. So the planned moves per window are sized
+     * from that shortest cadence (a 45 s connection moves about every 29 s, not every 45 s), and
+     * {@link REFRESH_RATE_LIMIT_DROP_ALLOWANCE} is added for drops and proactive refreshes. A length below
+     * {@link REFRESH_RATE_LIMIT_MIN_CONNECTION_SECONDS} is sized as that floor, which caps the limit.
+     */
+    private resolveRefreshRateLimit(sessionID: string, config: RealtimeSessionConfig): number {
+        const snapshot = RealtimeMintSnapshotRegistry.Instance.Get(sessionID) ?? config.realtimeMintSnapshot;
+        const connectionMaxSeconds =
+            snapshot?.connectionMaxSeconds ??
+            ExtractRealtimeTimingConfig(snapshot?.sessionParams?.Config).ConnectionMaxSeconds;
+        if (!connectionMaxSeconds || connectionMaxSeconds <= 0) {
+            return REFRESH_RATE_LIMIT_DROP_ALLOWANCE;
+        }
+        const sizedConnectionSeconds = Math.max(connectionMaxSeconds, REFRESH_RATE_LIMIT_MIN_CONNECTION_SECONDS);
+        const shortestMoveSeconds = sizedConnectionSeconds * (1 - REALTIME_MAX_SOFT_WINDOW_DURATION_SHARE);
+        const plannedMoves = Math.ceil(REFRESH_RATE_LIMIT_WINDOW_MS / 1000 / shortestMoveSeconds);
+        return plannedMoves + REFRESH_RATE_LIMIT_DROP_ALLOWANCE;
+    }
+
+    /**
+     * Admits one refresh under the session's rolling-window limits and reserves a mint slot for it: at most `maxMints`
+     * mints (counting refreshes in flight), and at most `maxMints + REFRESH_RATE_LIMIT_FAILED_CALL_ALLOWANCE` calls in
+     * all, so a client whose refreshes keep failing is stopped too.
+     *
+     * @returns The reservation's timestamp, to pass to {@link releaseRefreshMint} if the refresh mints nothing; or
+     *   `null` when the refresh is refused.
+     */
+    private reserveRefreshUnderRateLimit(sessionID: string, maxMints: number, nowMs: number = Date.now()): number | null {
+        const key = NormalizeUUID(sessionID);
+        const cutoff = nowMs - REFRESH_RATE_LIMIT_WINDOW_MS;
+        const existing = refreshRateLimitBuckets.Get(key);
+        const bucket: RefreshRateLimitBucket = {
+            Calls: (existing?.Calls ?? []).filter((ts) => ts > cutoff),
+            Mints: (existing?.Mints ?? []).filter((ts) => ts > cutoff),
+        };
+        const refused =
+            bucket.Mints.length >= maxMints || bucket.Calls.length >= maxMints + REFRESH_RATE_LIMIT_FAILED_CALL_ALLOWANCE;
+        if (!refused) {
+            bucket.Calls.push(nowMs);
+            bucket.Mints.push(nowMs);
+        }
+        refreshRateLimitBuckets.Set(key, bucket);
+        return refused ? null : nowMs;
+    }
+
+    /** Gives back the mint slot {@link reserveRefreshUnderRateLimit} reserved for a refresh that minted nothing. */
+    private releaseRefreshMint(sessionID: string, reservedAtMs: number): void {
+        const bucket = refreshRateLimitBuckets.Get(NormalizeUUID(sessionID));
+        const index = bucket?.Mints.indexOf(reservedAtMs) ?? -1;
+        if (bucket && index >= 0) {
+            bucket.Mints.splice(index, 1);
+        }
     }
 
     /**
@@ -1879,6 +2148,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             prep.EffectiveConfig?.realtime?.directActions,
             prep.ClientPolicy?.Channels.map((c) => c.Key),
             appContext,
+            prep.MintSnapshot,
         );
         this.pruneExcludedServerChannels(session.ID, prep.ClientPolicy);
 
@@ -1900,6 +2170,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             EffectiveConfigJson: prep.EffectiveConfig ? JSON.stringify(prep.EffectiveConfig) : undefined,
             ClientPolicyJson: prep.ClientPolicy ? JSON.stringify(prep.ClientPolicy) : undefined,
             AvatarStatusJson: prep.AvatarStatus ? JSON.stringify(prep.AvatarStatus) : undefined,
+            ConnectionMaxSeconds: cfg.ConnectionMaxSeconds,
+            SessionMaxSeconds: cfg.SessionMaxSeconds,
+            ReconnectBufferSeconds: cfg.ReconnectBufferSeconds,
+            TrustNativeResumption: cfg.TrustNativeResumption,
         };
     }
 
@@ -1939,6 +2213,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         directActions?: RealtimeDirectActionsConfig,
         channels?: string[],
         appContext?: AppContextSnapshot,
+        realtimeMintSnapshot?: PersistedRealtimeMintSnapshot,
     ): Promise<void> {
         // Start from the RAW stored config so every key set at session start survives — the
         // server-authoritative voice deadline (`maxSessionDeadlineIso`) and the per-session media-kit
@@ -1954,6 +2229,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             allowedAgents: allowedAgents && allowedAgents.length > 0 ? allowedAgents : undefined,
             directActions,
             channels,
+            ...(realtimeMintSnapshot ? { realtimeMintSnapshot } : {}),
         };
         session.Config_ = JSON.stringify(config);
         // Every value written here is server-decided (run ids, the resolved target, the in-scope channel
@@ -2869,6 +3145,12 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                         conversationBranchID: typeof parsed.conversationBranchID === 'string' ? parsed.conversationBranchID : undefined,
                         mediaCollectionID: typeof parsed.mediaCollectionID === 'string' ? parsed.mediaCollectionID : undefined,
                         channels: Array.isArray(parsed.channels) ? parsed.channels.filter((k): k is string => typeof k === 'string') : undefined,
+                        realtimeMintSnapshot:
+                            parsed.realtimeMintSnapshot &&
+                            typeof parsed.realtimeMintSnapshot === 'object' &&
+                            !Array.isArray(parsed.realtimeMintSnapshot)
+                                ? parsed.realtimeMintSnapshot
+                                : undefined,
                     };
                 }
             } catch {
