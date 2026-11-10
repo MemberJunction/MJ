@@ -148,9 +148,9 @@ describe('FieldSuggestionCardComponent & Notes & suggestions panel (DOM)', () =>
         expect(card?.textContent).toContain('2026-11-15');
         expect(card?.textContent).toContain('2026-12-01');
 
-        const acceptBtn = query<HTMLButtonElement>(f, '.mj-field-suggestion-card__btn--accept');
-        const rejectBtn = query<HTMLButtonElement>(f, '.mj-field-suggestion-card__btn--reject');
-        const discussBtn = query<HTMLButtonElement>(f, '.mj-field-suggestion-card__btn--discuss');
+        const acceptBtn = query(f, '.mj-field-suggestion-card__btn--accept') as HTMLButtonElement | null;
+        const rejectBtn = query(f, '.mj-field-suggestion-card__btn--reject') as HTMLButtonElement | null;
+        const discussBtn = query(f, '.mj-field-suggestion-card__btn--discuss') as HTMLButtonElement | null;
         expect(acceptBtn).toBeTruthy();
         expect(rejectBtn).toBeTruthy();
         expect(discussBtn).toBeTruthy();
@@ -215,9 +215,9 @@ describe('FieldSuggestionCardComponent & Notes & suggestions panel (DOM)', () =>
         });
         await settleFixture(fReadOnly);
 
-        const acceptBtn = query<HTMLButtonElement>(fReadOnly, '.mj-field-suggestion-card__btn--accept');
-        const rejectBtn = query<HTMLButtonElement>(fReadOnly, '.mj-field-suggestion-card__btn--reject');
-        const discussBtn = query<HTMLButtonElement>(fReadOnly, '.mj-field-suggestion-card__btn--discuss');
+        const acceptBtn = query(fReadOnly, '.mj-field-suggestion-card__btn--accept') as HTMLButtonElement | null;
+        const rejectBtn = query(fReadOnly, '.mj-field-suggestion-card__btn--reject') as HTMLButtonElement | null;
+        const discussBtn = query(fReadOnly, '.mj-field-suggestion-card__btn--discuss') as HTMLButtonElement | null;
         expect(acceptBtn?.disabled).toBe(true);
         expect(rejectBtn?.disabled).toBe(true);
         expect(discussBtn?.disabled).toBe(false);
@@ -324,7 +324,7 @@ describe('FieldSuggestionCardComponent & Notes & suggestions panel (DOM)', () =>
 
             expect(query(f, '.mj-record-comments__title')?.textContent?.trim()).toBe('Notes & suggestions');
 
-            const typePills = queryAll<HTMLButtonElement>(f, '.mj-record-comments__type-pill');
+            const typePills = queryAll(f, '.mj-record-comments__type-pill') as HTMLButtonElement[];
             expect(typePills.length).toBeGreaterThanOrEqual(3);
             expect(
                 typePills.map((p) => {
@@ -339,7 +339,7 @@ describe('FieldSuggestionCardComponent & Notes & suggestions panel (DOM)', () =>
 
             // Suggestion thread initially hides its reply textarea until Discuss is clicked
             expect(query(f, `[id="mj-reply-${suggId}"]`)).toBeNull();
-            const discussBtn = query<HTMLButtonElement>(f, '.mj-field-suggestion-card__btn--discuss');
+            const discussBtn = query(f, '.mj-field-suggestion-card__btn--discuss') as HTMLButtonElement | null;
             expect(discussBtn).toBeTruthy();
             discussBtn!.click();
             await settleFixture(f);

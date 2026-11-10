@@ -17405,7 +17405,7 @@ export const MJConversationSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     Type: z.string().nullable().describe(`
         * * Field Name: Type
-        * * Display Name: Type Name
+        * * Display Name: Type
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -93656,7 +93656,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: Type
-    * * Display Name: Type Name
+    * * Display Name: Type
     * * SQL Data Type: nvarchar(100)
     */
     get Type(): string | null {

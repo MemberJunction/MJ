@@ -45,15 +45,26 @@ interface GovernanceInternalShape {
     UpdateQueryParams: (params: Record<string, string | null>) => void;
 }
 
+function okRunView<T>(results: T[]): RunViewResult<T> {
+    return {
+        Success: true,
+        Results: results,
+        RowCount: results.length,
+        TotalRowCount: results.length,
+        ExecutionTime: 0,
+        ErrorMessage: '',
+        UserViewRunID: '',
+    };
+}
+
 function createGovernanceHarness(): {
     component: ChiefOfStaffGovernanceComponent;
     internal: GovernanceInternalShape;
     markForCheck: ReturnType<typeof vi.fn>;
 } {
-    const component = Object.create(
-        ChiefOfStaffGovernanceComponent.prototype,
-    ) as ChiefOfStaffGovernanceComponent;
-    const internal = component as ChiefOfStaffGovernanceComponent & GovernanceInternalShape;
+    const rawInstance: object = Object.create(ChiefOfStaffGovernanceComponent.prototype) as object;
+    const component = rawInstance as ChiefOfStaffGovernanceComponent;
+    const internal = rawInstance as GovernanceInternalShape;
 
     const markForCheck = vi.fn();
     internal._loadGeneration = 0;
@@ -118,7 +129,7 @@ describe('ChiefOfStaffGovernanceComponent — generation token, agent mismatch g
             ID: 'P-COS',
             AgentID: AGENT_COS.ID,
             Status: 'Active',
-            CoordinationMode: 'Assistant',
+            CoordinationMode: 'Coordinator',
         } as Partial<MJAIAgentUserPolicyEntity> as MJAIAgentUserPolicyEntity;
 
         const sfPolicy = {
@@ -138,9 +149,9 @@ describe('ChiefOfStaffGovernanceComponent — generation token, agent mismatch g
                         return firstRunViewsPromise;
                     }
                     return Promise.resolve([
-                        { Success: true, Results: [sfPolicy] } as RunViewResult,
-                        { Success: true, Results: [] } as RunViewResult,
-                        { Success: true, Results: [] } as RunViewResult,
+                        okRunView([sfPolicy]),
+                        okRunView([]),
+                        okRunView([]),
                     ]);
                 }),
             } as Partial<RunView> as RunView;
@@ -164,9 +175,9 @@ describe('ChiefOfStaffGovernanceComponent — generation token, agent mismatch g
 
         // Now resolve stale load #1 — must NOT overwrite Software Factory's policy or selection
         resolveFirstRunViews([
-            { Success: true, Results: [cosPolicy] } as RunViewResult,
-            { Success: true, Results: [] } as RunViewResult,
-            { Success: true, Results: [] } as RunViewResult,
+            okRunView([cosPolicy]),
+            okRunView([]),
+            okRunView([]),
         ]);
         await load1;
 

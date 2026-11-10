@@ -56,12 +56,17 @@ function makeChildEntity(
     parentFieldNames: string[] = ['ID', 'Name', 'Status'],
     readablePredicate: (fieldName: string) => boolean = () => true,
 ): EntityInfo {
-    return {
-        Name: 'GitHub Issue Tasks',
-        Fields: fields,
-        ParentEntityFieldNames: new Set(parentFieldNames),
-        IsFieldReadableByUser: (fieldName: string) => readablePredicate(fieldName),
-    } as EntityInfo;
+    const proto: EntityInfo = Object.create(EntityInfo.prototype) as EntityInfo;
+    return Object.defineProperties(proto, {
+        Name: { value: 'GitHub Issue Tasks', configurable: true, enumerable: true },
+        Fields: { value: fields, configurable: true, enumerable: true },
+        ParentEntityFieldNames: { value: new Set(parentFieldNames), configurable: true, enumerable: true },
+        IsFieldReadableByUser: {
+            value: (fieldName: string) => readablePredicate(fieldName),
+            configurable: true,
+            enumerable: true,
+        },
+    });
 }
 
 class ConcreteTestUIDriver extends EntitySubtypeUIDriverBase {}

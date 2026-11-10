@@ -101,8 +101,16 @@ class TestCustomSubtypeUIDriverComponent extends EntitySubtypeUIDriverBase {
 }
 
 function makeChildEntityInfo(name: string, codeName: string, fieldNames: string[]): EntityInfo {
+    const mkField = (overrides: Record<string, string | number | boolean | null>): EntityFieldInfo => {
+        const proto: EntityFieldInfo = Object.create(EntityFieldInfo.prototype) as EntityFieldInfo;
+        const descriptors: PropertyDescriptorMap = {};
+        for (const [k, v] of Object.entries(overrides)) {
+            descriptors[k] = { value: v, configurable: true, enumerable: true, writable: true };
+        }
+        return Object.defineProperties(proto, descriptors);
+    };
     const fields: EntityFieldInfo[] = [
-        {
+        mkField({
             Name: 'ID',
             DisplayNameOrName: 'ID',
             Sequence: 1,
@@ -119,37 +127,40 @@ function makeChildEntityInfo(name: string, codeName: string, fieldNames: string[
             MaxLength: 36,
             ExtendedType: null,
             RelatedEntity: null,
-        } as EntityFieldInfo,
-        ...fieldNames.map((fn, idx) => ({
-            Name: fn,
-            DisplayNameOrName: fn,
-            Sequence: idx + 2,
-            IsPrimaryKey: false,
-            IncludeInGeneratedForm: true,
-            Status: 'Active',
-            IsVirtual: false,
-            RelatedEntityNameFieldMap: '',
-            IsBinaryFieldType: false,
-            ReadOnly: false,
-            ValueListTypeEnum: EntityFieldValueListType.None,
-            TSType: EntityFieldTSType.String,
-            Length: 200,
-            MaxLength: 200,
-            ExtendedType: null,
-            RelatedEntity: null,
-        } as EntityFieldInfo)),
+        }),
+        ...fieldNames.map((fn, idx) =>
+            mkField({
+                Name: fn,
+                DisplayNameOrName: fn,
+                Sequence: idx + 2,
+                IsPrimaryKey: false,
+                IncludeInGeneratedForm: true,
+                Status: 'Active',
+                IsVirtual: false,
+                RelatedEntityNameFieldMap: '',
+                IsBinaryFieldType: false,
+                ReadOnly: false,
+                ValueListTypeEnum: EntityFieldValueListType.None,
+                TSType: EntityFieldTSType.String,
+                Length: 200,
+                MaxLength: 200,
+                ExtendedType: null,
+                RelatedEntity: null,
+            }),
+        ),
     ];
 
-    return {
-        Name: name,
-        CodeName: codeName,
-        DisplayNameOrName: name,
-        Icon: 'fa-brands fa-github',
-        Fields: fields,
-        ParentEntityFieldNames: new Set(['ID', 'Name', 'TypeID']),
-        IsFieldReadableByUser: () => true,
-        SubtypeSelectorConfig: null,
-    } as unknown as EntityInfo;
+    const entityProto: EntityInfo = Object.create(EntityInfo.prototype) as EntityInfo;
+    return Object.defineProperties(entityProto, {
+        Name: { value: name, configurable: true, enumerable: true },
+        CodeName: { value: codeName, configurable: true, enumerable: true },
+        DisplayNameOrName: { value: name, configurable: true, enumerable: true },
+        Icon: { value: 'fa-brands fa-github', configurable: true, enumerable: true },
+        Fields: { value: fields, configurable: true, enumerable: true },
+        ParentEntityFieldNames: { value: new Set(['ID', 'Name', 'TypeID']), configurable: true, enumerable: true },
+        IsFieldReadableByUser: { value: () => true, configurable: true, enumerable: true },
+        SubtypeSelectorConfig: { value: null, configurable: true, enumerable: true },
+    });
 }
 
 interface MockSubtypeParentOptions {
@@ -242,7 +253,9 @@ function makeMockChildRecord(entityInfo: EntityInfo, isSaved = false, dirtyField
 }
 
 @Component({ standalone: true, selector: 'test-host-form', template: '' })
-class TestFormHostComponent extends BaseFormComponent {}
+class TestFormHostComponent extends BaseFormComponent {
+    public override record!: BaseEntity;
+}
 
 async function settleFixture(f: { changeDetectorRef: { markForCheck(): void }; detectChanges(): void }): Promise<void> {
     f.changeDetectorRef.markForCheck();
@@ -476,7 +489,7 @@ describe('MjFoldedSubtypeSectionComponent (DOM)', () => {
             resolveEntityByType: () => dirtyChild,
             resolveEntityNameByType: () => 'GitHub Issue Tasks',
         });
-        parent.Dirty = false; // Parent's own fields are clean; only folded child's Milestone is dirty
+        expect(parent.Dirty).toBe(false); // Parent's own fields are clean; only folded child's Milestone is dirty
 
         const hostForm = renderComponentFixture(TestFormHostComponent, {
             imports: [TestFormHostComponent],
