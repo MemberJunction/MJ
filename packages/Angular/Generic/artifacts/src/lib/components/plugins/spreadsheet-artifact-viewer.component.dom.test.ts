@@ -1,11 +1,35 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TestBed } from '@angular/core/testing';
+import type { IMetadataProvider } from '@memberjunction/core';
 import { MJArtifactVersionEntity, SpreadsheetEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
 import { SpreadsheetArtifactViewerComponent } from './spreadsheet-artifact-viewer.component';
+
+@Component({
+  standalone: true,
+  selector: 'mj-artifact-type-plugin-viewer',
+  template: '<div data-testid="sheet-plugin-viewer-stub"></div>',
+})
+class SheetPluginViewerStubComponent {
+  @Input() Provider: IMetadataProvider | null = null;
+  @Input() artifactVersion: unknown;
+  @Input() artifactTypeName = '';
+  @Input() ArtifactTypeName = '';
+  @Input() readonly = true;
+  @Output() ContentCommitted = new EventEmitter<string>();
+}
+
+@Component({
+  standalone: true,
+  selector: 'mj-xlsx-preview',
+  template: '<div data-testid="xlsx-preview-stub"></div>',
+})
+class XlsxPreviewStubComponent {
+  @Input() ArrayBuffer: ArrayBuffer | null = null;
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -31,10 +55,9 @@ function makeSheetVersion(): MJArtifactVersionEntity {
 describe('SpreadsheetArtifactViewerComponent DOM', () => {
   it('mounts read-only by default (B3) and renders the spreadsheet shell', () => {
     const f = renderComponentFixture(SpreadsheetArtifactViewerComponent, {
-      imports: [FormsModule],
+      imports: [FormsModule, SheetPluginViewerStubComponent, XlsxPreviewStubComponent],
       declarations: [SpreadsheetArtifactViewerComponent],
       providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
-      schemas: [NO_ERRORS_SCHEMA],
       inputs: {
         artifactVersion: makeSheetVersion(),
         readonly: true,
@@ -47,10 +70,9 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
 
   it('resolves ActiveCellAddress from ActiveRowIndex and ActiveColumnIndex', () => {
     const f = renderComponentFixture(SpreadsheetArtifactViewerComponent, {
-      imports: [FormsModule],
+      imports: [FormsModule, SheetPluginViewerStubComponent, XlsxPreviewStubComponent],
       declarations: [SpreadsheetArtifactViewerComponent],
       providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
-      schemas: [NO_ERRORS_SCHEMA],
       inputs: {
         artifactVersion: makeSheetVersion(),
         readonly: true,
@@ -66,10 +88,9 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
 
   it('wires ContentCommitted output on base viewer contract', () => {
     const f = renderComponentFixture(SpreadsheetArtifactViewerComponent, {
-      imports: [FormsModule],
+      imports: [FormsModule, SheetPluginViewerStubComponent, XlsxPreviewStubComponent],
       declarations: [SpreadsheetArtifactViewerComponent],
       providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
-      schemas: [NO_ERRORS_SCHEMA],
       inputs: {
         artifactVersion: makeSheetVersion(),
         readonly: true,

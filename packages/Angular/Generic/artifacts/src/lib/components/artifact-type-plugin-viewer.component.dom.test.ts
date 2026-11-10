@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { CompositeKey } from '@memberjunction/core';
 import { renderComponentFixture, query, text, capture } from '@memberjunction/ng-test-utils';
 import { ArtifactTypePluginViewerComponent } from './artifact-type-plugin-viewer.component';
+import { BaseArtifactViewerPluginComponent } from './base-artifact-viewer.component';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -14,7 +15,6 @@ describe('ArtifactTypePluginViewerComponent DOM', () => {
     vi.spyOn(ArtifactTypePluginViewerComponent.prototype, 'ngOnInit').mockImplementation(() => {});
     const f = renderComponentFixture(ArtifactTypePluginViewerComponent, {
       declarations: [ArtifactTypePluginViewerComponent],
-      schemas: [NO_ERRORS_SCHEMA],
       setup: (inst) => {
         inst.isLoading = true;
       },
@@ -28,7 +28,6 @@ describe('ArtifactTypePluginViewerComponent DOM', () => {
     vi.spyOn(ArtifactTypePluginViewerComponent.prototype, 'ngOnInit').mockImplementation(() => {});
     const f = renderComponentFixture(ArtifactTypePluginViewerComponent, {
       declarations: [ArtifactTypePluginViewerComponent],
-      schemas: [NO_ERRORS_SCHEMA],
       setup: (inst) => {
         inst.isLoading = false;
         inst.errorTitle = 'Plugin Missing';
@@ -46,7 +45,6 @@ describe('ArtifactTypePluginViewerComponent DOM', () => {
     vi.spyOn(ArtifactTypePluginViewerComponent.prototype, 'ngOnInit').mockImplementation(() => {});
     const f = renderComponentFixture(ArtifactTypePluginViewerComponent, {
       declarations: [ArtifactTypePluginViewerComponent],
-      schemas: [NO_ERRORS_SCHEMA],
     });
     f.detectChanges();
     const committed = capture(f.componentInstance.ContentCommitted);
@@ -54,10 +52,17 @@ describe('ArtifactTypePluginViewerComponent DOM', () => {
     const nav = capture(f.componentInstance.navigationRequest);
     const loaded = capture(f.componentInstance.pluginLoaded);
     const tabs = capture(f.componentInstance.tabsChanged);
+    const pluginDouble = {
+      isLoading: false,
+      hasDisplayContent: true,
+    } satisfies Pick<BaseArtifactViewerPluginComponent, 'isLoading' | 'hasDisplayContent'>;
     f.componentInstance.ContentCommitted.emit('updated');
-    f.componentInstance.openEntityRecord.emit({ entityName: 'Accounts', compositeKey: undefined as never });
+    f.componentInstance.openEntityRecord.emit({
+      entityName: 'Accounts',
+      compositeKey: new CompositeKey([{ FieldName: 'ID', Value: 'acc-1' }]),
+    });
     f.componentInstance.navigationRequest.emit({ appName: 'Chat' });
-    f.componentInstance.pluginLoaded.emit(null as never);
+    f.componentInstance.pluginLoaded.emit(pluginDouble as unknown as BaseArtifactViewerPluginComponent);
     f.componentInstance.tabsChanged.emit([]);
     expect(committed).toEqual(['updated']);
     expect(opened.length).toBe(1);
