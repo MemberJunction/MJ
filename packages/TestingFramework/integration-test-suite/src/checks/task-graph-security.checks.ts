@@ -182,8 +182,9 @@ async function checkEnvelopeOnEveryRowAndImmutable(ctx: IntegrationCheckContext)
     Assert(!(await child.Save()), 'TGS1: an edit to an existing task\'s SecurityEnvelope was saved');
     AssertEqual((await loadTask(ctx, f.ChildIDs[0])).SecurityEnvelope, original, 'TGS1: the stored envelope after the refused edit');
 
+    // An ordinary edit: a due date, not what the step is or carries (those are the dispatcher's, TGS6).
     const other = await loadTask(ctx, f.ChildIDs[0]);
-    other.Description = 'it164 edited description';
+    other.DueAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     Assert(await other.Save(), `TGS1: an ordinary edit was refused: ${other.LatestResult?.CompleteMessage ?? ''}`);
 }
 
@@ -821,6 +822,13 @@ function assertReviewOutcome(run: ReviewGraphRun, ctx: IntegrationCheckContext, 
     AssertEqual(run.RanTainted.get(REVIEW.AfterServer), true, `${check}: the step after the server-code completion ran clean`);
 }
 
+/** Asserts `row`'s save is refused, for the reason `because` names (a fragment of the refusal message). */
+async function assertRefused(row: { Save(): Promise<boolean>; LatestResult?: { CompleteMessage?: string } | null }, because: string, what: string): Promise<void> {
+    Assert(!(await row.Save()), `${what} was saved`);
+    const message = row.LatestResult?.CompleteMessage ?? '';
+    Assert(message.includes(because), `${what} was refused for another reason: ${message}`);
+}
+
 /** The TGS6 way: the person saves the step Complete through a client CRUD boundary, server code saves it plainly. */
 async function completeTheSteps(check: string, byPerson: MJTaskEntity, byServer: MJTaskEntity): Promise<void> {
     byPerson.Status = 'Complete';
@@ -841,7 +849,21 @@ async function checkPersonsReviewClearsTaint(ctx: IntegrationCheckContext): Prom
         SkipCheck(MUTATION_TIER_OFF_REASON);
         return;
     }
-    const run = await runReviewGraph(ctx, 'TGS6', (byPerson, byServer) => completeTheSteps('TGS6', byPerson, byServer));
+    const run = await runReviewGraph(ctx, 'TGS6', async (byPerson, byServer) => {
+        // Server code, as the submitter, cannot write a step's data: not the answer a Human step will carry once its
+        // person approves, nor the output of a step that already ran.
+        const prefill = await loadTask(ctx, byPerson.ID);
+        prefill.OutputPayload = JSON.stringify({ BCC: 'it165-attacker@example.com' });
+        await assertRefused(prefill, 'of a workflow step cannot be changed', "TGS6: server code's answer filled in on the person's Human step");
+        const fetch = (await RunView.FromMetadataProvider(ctx.Provider).RunView<MJTaskEntity>(
+            { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${byPerson.ParentID}' AND Name='${REVIEW.Fetch}'`, ResultType: 'entity_object', BypassCache: true },
+            ctx.User,
+        )).Results?.[0];
+        Assert(fetch != null, 'TGS6: the fetch step row was not found');
+        fetch!.OutputPayload = JSON.stringify({ page: 'rewritten by server code' });
+        await assertRefused(fetch!, 'of a workflow step cannot be changed', "TGS6: server code's rewrite of the fetch step's output");
+        await completeTheSteps('TGS6', byPerson, byServer);
+    });
     assertReviewOutcome(run, ctx, 'TGS6');
 }
 
@@ -899,7 +921,7 @@ async function checkServerAnsweredRequestClearsNothing(ctx: IntegrationCheckCont
         const run = await runReviewGraph(ctx, 'TGS7', async (byPerson, byServer) => {
             // The review's reproduction: created already Approved, naming the step. Refused outright now.
             const forged = await newRequest({ OriginatingTaskID: byServer.ID, Status: 'Approved' });
-            Assert(!(await forged.Save()), 'TGS7: server code created an Approved request for a workflow step');
+            await assertRefused(forged, 'Only the task-graph dispatcher raises a request', 'TGS7: an Approved request server code created for a workflow step');
 
             // An answer the person gave to something else, pointed at the step afterwards. Refused.
             // Created answered in one save, so it wakes no agent; the person's own request, so it records them.
@@ -907,11 +929,15 @@ async function checkServerAnsweredRequestClearsNothing(ctx: IntegrationCheckCont
             Assert(await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() => elsewhere!.Save()), `TGS7: could not create the person's unrelated answer: ${elsewhere.LatestResult?.CompleteMessage ?? ''}`);
             Assert(UUIDsEqual(elsewhere.ResponseByUserID ?? undefined, ctx.User.ID), "TGS7: the person's unrelated answer did not record them");
             elsewhere.OriginatingTaskID = byServer.ID;
-            Assert(!(await elsewhere.Save()), "TGS7: server code pointed the person's other answer at a workflow step");
+            await assertRefused(elsewhere, 'OriginatingTaskID cannot change', "TGS7: the person's other answer, pointed at a workflow step by server code");
 
             const personal = await raisedRequestFor(byPerson);
             const serverSide = await raisedRequestFor(byServer);
             Assert(personal != null && serverSide != null, 'TGS7: the dispatcher did not raise a request for each Human step within 30s');
+            // Server code cannot fill in the answer the person's approval would then carry into the step's output.
+            const prefill = (await raisedRequestFor(byPerson))!;
+            prefill.ResponseData = JSON.stringify({ BCC: 'it165-attacker@example.com' });
+            await assertRefused(prefill, 'only from the save that answers it', "TGS7: server code's answer filled in on the person's request");
             personal!.Status = 'Approved';
             Assert(await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() => personal!.Save()), `TGS7: the person's answer was refused: ${personal!.LatestResult?.CompleteMessage ?? ''}`);
             serverSide!.Status = 'Approved';
