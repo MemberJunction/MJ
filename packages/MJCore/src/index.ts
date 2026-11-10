@@ -11,6 +11,7 @@ export * from "./generic/wellKnownUserSource";
 export * from "./views/runView";
 export * from "./views/viewProperties";
 export * from "./generic/runQuery";
+export * from "./generic/typedQuery";
 export * from "./generic/queryResultEnricher";
 export * from "./generic/interfaces";
 export * from "./generic/scoring/ReciprocalRankFusion";

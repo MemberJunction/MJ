@@ -225,7 +225,7 @@ describe('AtRiskRules.LabelFromRecord', () => {
   });
 });
 
-describe('driver direction follows the displayed risk (W1 → S9.4, F-UI-3)', () => {
+describe('driver direction follows the displayed risk', () => {
   it('a positive contribution to P(renew) lowers risk', () => {
     expect(AtRiskRules.DriverRaisesRisk(1.135756, true)).toBe(false);
   });
@@ -241,7 +241,7 @@ describe('driver direction follows the displayed risk (W1 → S9.4, F-UI-3)', ()
   });
 });
 
-describe('the At-Risk list is the highest-risk rows (W1 → S9.5, F-UI-4)', () => {
+describe('the At-Risk list is the highest-risk rows', () => {
   // W1-shaped payloads: target "Renewed", classes "0"/"1", score = P("1") = P(renew).
   const truth: Record<string, number> = { a: 0.95, b: 0.9, c: 0.85, d: 0.6, e: 0.4, f: 0.3, g: 0.2 };
   const scores: Record<string, number> = { a: 0.96, b: 0.92, c: 0.88, d: 0.62, e: 0.41, f: 0.33, g: 0.18 };
@@ -260,6 +260,16 @@ describe('the At-Risk list is the highest-risk rows (W1 → S9.5, F-UI-4)', () =
     expect(list.every((r) => r.RiskPct >= AT_RISK_LIST_MIN_RISK_PCT)).toBe(true);
     const mean = (ids: string[]): number => ids.reduce((s, id) => s + truth[id], 0) / ids.length;
     expect(mean(list.map((r) => r.RecordID))).toBeLessThan(mean(Object.keys(truth)));
+  });
+
+  it('lists the same records whatever the read order when the limit falls inside a run of equal risks', () => {
+    const row = (id: string, riskPct: number): AtRiskRow => ({ RecordID: id, Label: null, Score: 1 - riskPct / 100, RiskPct: riskPct, Class: null, Band: 'high', Status: 'At risk', BadgeColor: 'red', Icon: 'fa-triangle-exclamation', Drivers: null });
+    const tied = ['0C1D-B', '0c1d-a', '9F2E-D', '0C1D-C', '5A5A-E'].map((id) => row(id, 61));
+    const rows = [row('ffff-top', 90), ...tied, row('aaaa-low', 45)];
+    const expected = ['ffff-top', '0c1d-a', '0C1D-B', '0C1D-C'];
+    // Every rotation and the reverse of the input give the same members, in the same order.
+    const orders = [...rows.map((_, k) => [...rows.slice(k), ...rows.slice(0, k)]), [...rows].reverse()];
+    for (const order of orders) expect(AtRiskRules.SelectAtRiskListMembers(order, 4).map((r) => r.RecordID)).toEqual(expected);
   });
 
   it('never pads the list with low-risk rows', () => {

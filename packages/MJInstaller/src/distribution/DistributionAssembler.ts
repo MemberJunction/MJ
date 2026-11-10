@@ -109,7 +109,6 @@ const ANGULAR_IGNORE: readonly string[] = [
   ...COMMON_IGNORE,
   'src/app/generated/**',
   'src/environments/**',
-  'kendo-ui-license.txt',
   'tsconfig.json',
   'package.json',
 ];

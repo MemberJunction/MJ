@@ -101,11 +101,45 @@ export class xAIRealtimeClient extends OpenAIProtocolWebSocketRealtimeClient {  
         return 'xAIRealtimeClient';
     }
 
+    protected override get DefaultCallDurationSeconds(): number | undefined {
+        return 7200;
+    }
+
+    protected override get DefaultTrustsNativeResumption(): boolean {
+        return true;
+    }
+
     // ── Transport hooks ────────────────────────────────────────────────────────
 
+    protected override resolveSessionObject(config: ClientRealtimeSessionConfig): ReturnType<OpenAIProtocolWebSocketRealtimeClient['resolveSessionObject']> {
+        const sessionObj = super.resolveSessionObject(config);
+        const explicitlyTrusted =
+            config.TrustNativeResumption === true ||
+            config.SessionConfig?.['trustNativeResumption'] === true ||
+            config.SessionConfig?.['TrustNativeResumption'] === true;
+        if (
+            explicitlyTrusted &&
+            this.TrustsNativeResumption &&
+            Object.keys(sessionObj).length > 0 &&
+            sessionObj['resumption'] === undefined
+        ) {
+            return {
+                ...sessionObj,
+                resumption: { enabled: true },
+            };
+        }
+        return sessionObj;
+    }
+
     /** @inheritdoc — model on the URL, ephemeral secret as the subprotocol. */
-    protected openProviderSocket(config: ClientRealtimeSessionConfig): IOpenAIProtocolClientSocket {
-        const url = `${XAI_REALTIME_WS_URL}?model=${encodeURIComponent(config.Model)}`;
+    protected openProviderSocket(
+        config: ClientRealtimeSessionConfig,
+        resumptionHandle?: string | null
+    ): IOpenAIProtocolClientSocket {
+        let url = `${XAI_REALTIME_WS_URL}?model=${encodeURIComponent(config.Model)}`;
+        if (resumptionHandle && resumptionHandle.trim().length > 0) {
+            url += `&conversation_id=${encodeURIComponent(resumptionHandle.trim())}`;
+        }
         const subprotocol = `${XAI_CLIENT_SECRET_SUBPROTOCOL_PREFIX}${config.EphemeralToken}`;
         return this.createSocket(url, subprotocol);
     }
@@ -167,7 +201,7 @@ export class xAIRealtimeClient extends OpenAIProtocolWebSocketRealtimeClient {  
         // provider re-emits the whole thing with more words). The second case rescues a mid-sentence
         // pause — the VAD fires speech_started and clears the flag even though the user never
         // stopped, which would otherwise split one spoken thought into several growing bubbles. The
-        // item check exists only here; the server session (packages/AI/Providers/xAI) does not have it.
+        // server session (packages/AI/Providers/OpenAI, which xAI's server session extends) makes the same item check.
         const sameItem = itemId === undefined || this.userTurnItemId === undefined || itemId === this.userTurnItemId;
         const replacesPrevious = (this.userTurnTranscribed && sameItem) || IsTranscriptContinuation(this.lastUserTranscript, transcript);
         this.emitTranscript({

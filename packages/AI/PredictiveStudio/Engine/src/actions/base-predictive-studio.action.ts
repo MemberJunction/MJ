@@ -21,6 +21,7 @@
 
 import type { ActionResultSimple, RunActionParams, ActionParam } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
+import { JsonParse, type JsonValue } from '@memberjunction/predictive-studio-core';
 
 /** A plain JSON object map parsed from a JSON-string or object-valued param. */
 export type JsonObject = Record<string, unknown>;
@@ -75,6 +76,27 @@ export abstract class BasePredictiveStudioAction extends BaseAction {
     }
     const parsed = Number(param.Value);
     return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  /**
+   * Read a string-array param: an array value, a JSON array of strings, or a comma-separated list. Blank entries are
+   * dropped; an absent param is an empty list.
+   */
+  protected getStringArrayParam(params: RunActionParams, name: string): string[] {
+    const param = this.findParam(params, name);
+    if (!param || param.Value === undefined || param.Value === null) return [];
+    const items = Array.isArray(param.Value) ? param.Value : this.parseListText(String(param.Value));
+    return items.filter((v): v is string => typeof v === 'string').map((v) => v.trim()).filter((v) => v.length > 0);
+  }
+
+  /** A JSON array's elements (typed JSON, narrowed by the caller's `typeof` filter), or the comma-separated parts of any other text. */
+  private parseListText(text: string): JsonValue[] {
+    const trimmed = text.trim();
+    if (trimmed.startsWith('[')) {
+      const parsed = JsonParse.ParseJsonText(trimmed, 'list');
+      if (parsed.Ok === true && Array.isArray(parsed.Value)) return parsed.Value;
+    }
+    return trimmed.split(',');
   }
 
   /**
