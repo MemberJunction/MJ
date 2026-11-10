@@ -150,7 +150,7 @@ stubs (`DatabaseProviderStub`, `EntitiesOnlyProvider`, `TestLLM`); `@vitest/cove
 | D45 | Base source snapshot | Before the base worktree is removed, `src/`, `tsconfig.json` and `package.json` of every tested package are copied to `<run>/base-src/`; `assess` reads them when the worktree is gone | The rule filter needs base's sources for the checker; without the snapshot a run cannot be re-assessed after `run` finished. Cross-package types are not in the snapshot, a known limit |
 | D46 | Store cleanup | A run removes its pnpm store and fetch folders when it ends; `jit-catch clean` removes work folders of finished runs | Phase 1 left ~4 GB per run in the per-run store |
 | D47 | Backtest ledger | `backtest` keeps one ledger per corpus slice, set and generator model under `.jit-catch/backtests/`; a stopped backtest resumes from the ledger; `--max-usd` stops it at a spend | Backtests run for hours and fail for infrastructure reasons; a resumable ledger means no PR is paid for twice |
-| D48 | Match check | A weak catch on a bug-set PR is re-run on the landing commit plus the fix PR's diff (`git apply --3way` on the host, in the run's head worktree); a test that passes there matched the fix | §14.1 defines a catch as one the fix PR makes pass; applying the fix's diff is the cheapest check that stays on the PR's own base |
+| D48 | Match check | A weak catch on a bug-set PR is re-run on the landing commit plus the fix PR's diff (`git apply --3way` on the host in a scratch worktree the sandbox never mounts, committed on top of the landing commit before the sandbox prepares it); a test that passes there matched the fix | §14.1 defines a catch as one the fix PR makes pass; applying the fix's diff is the cheapest check that stays on the PR's own base |
 | D49 | Judge calibration before gate 1 | No judge or threshold changes before the tuning-slice report; the report gives each judge's agreement with the labels and TP Prob by label class, and §9.3 calibration decides | Phase 1 saw GPT-5.1 say High on 10 of 11 intended changes, but 11 catches are too few to act on |
 
 ---
@@ -735,16 +735,17 @@ apply to the held-out slice.
 
 | Measure | Definition | Pass |
 |---|---|---|
-| Bug-set catch rate | Bug PRs with ≥ 1 reported catch that **matches the known bug** ÷ bug PRs | ≥ 25% |
+| Bug-set catch rate | Bug PRs with ≥ 1 reported catch that **matches the known bug** ÷ **all** curated bug PRs of the slice (a PR whose run failed, was not run, is not yet matched, or whose fix did not apply counts as not caught; `report` also prints a progress rate over the PRs that ran and matched, and a "gate blocked" line while any of those cases is open) | ≥ 25% |
 | Clean-set false-alarm rate | Clean PRs with ≥ 1 reported catch labeled *Intended* or *TestFault* ÷ clean PRs | ≤ 10% |
 | Cost | Tokens and dollars per PR and per matched catch, per generator model | Reported; basis for the spend limit |
 
-**Match check (automatic).** Apply the fix PR's diff on top of the bug PR's merge commit `M` (`git apply --3way`) and
-re-run the catching test. If it passes after the fix, the catch matches the known bug. If the fix does not apply, a person
-decides.
+**Match check (automatic).** Build the fixed head on the host as a commit: apply the fix PR's diff (`git apply --3way`)
+in a scratch worktree the sandbox never mounts, commit the tree on top of the bug PR's merge commit `M`, then prepare that
+commit in the sandbox and re-run the catching test. Host git never runs inside a worktree the sandbox has mounted. If the
+test passes after the fix, the catch matches the known bug. If the fix does not apply, a person decides.
 
-**Clean-set labels (human).** Each reported clean-set catch gets one label: *RealBug*, *Intended* or *TestFault*. Only
-*Intended* and *TestFault* count as false alarms. A *RealBug* counts for the pipeline and is filed as an issue: a clean
+**Clean-set labels (human).** Each reported clean-set catch gets one label: *Bug*, *Intended* or *TestFault*. Only
+*Intended* and *TestFault* count as false alarms. A *Bug* counts for the pipeline and is filed as an issue: a clean
 set selected by "no later fix" can still contain bugs nobody found.
 
 The **original PR author** labels each catch, because only the author knows what the change was meant to do. If the

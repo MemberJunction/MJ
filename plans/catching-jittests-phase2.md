@@ -42,9 +42,9 @@ Copied from the spec and the repo rules. Every task's requirements include this 
 | D46 | 9. 4 GB store per run stays | Store and fetch folders removed at the end of a run; `jit-catch clean` for work folders |
 | D44 | 10. Session details not stored | `Session` record per generation session; `TokenUsage.Role` (Generator, Analyzer, Judge) |
 | — | 11. Haiku cache-read price | `claude-haiku-5-5` `CachedInput` 0.01; the report compares table cost with the SDK's recorded cost per model |
-| — | 12. Log noise | The SDK's `stderr` option drops the `CLAUDE_SDK_CAN_USE_TOOL_SHADOWED` line |
+| — | 12. Log noise | A host `warning` listener (`FilterProcessWarnings`, installed from the bin entry) drops the `CLAUDE_SDK_CAN_USE_TOOL_SHADOWED` process warning; the SDK emits it with `process.emitWarning`, not on the child's stderr |
 | D47 | — | Backtest ledger per corpus slice, set and model; resumable; `--max-usd` spend stop |
-| D48 | — | Match check: head plus the fix PR's diff (`git apply --3way` on the host), rebuild, re-run the weak catches |
+| D48 | — | Match check: the fix PR's diff is applied with `git apply --3way` in a host-only scratch worktree and committed on top of the head before `Prepare`; host git never runs inside a sandbox-mounted worktree; rebuild, re-run the weak catches |
 
 ---
 
@@ -64,7 +64,7 @@ src/
   contracts/BaseCatchStore.ts     # SaveSessions, ListSessions
   store/FileCatchStore.ts         # sessions.jsonl
   generator/UsageCounter.ts       # largest output snapshot per message id
-  generator/ClaudeAgentGenerator.ts  # EndReason and Turns on GenerationResult; stderr filter in BuildSdkOptions
+  generator/ClaudeAgentGenerator.ts  # EndReason and Turns on GenerationResult; `FilterProcessWarnings` for the SDK shadow warning
   generator/prompts.ts            # abstract-class rule
   rules/TestAst.ts                # ReceiverDeclaredInTest
   rules/drop/PrivateAccess.ts     # D43
@@ -367,7 +367,7 @@ it('system prompt tells the agent that files are type-checked and abstract class
   export async function RevisionsOf(mergeSHA: string, repo: Pick<GitRepo, 'FirstParent'>): Promise<{ BaseSHA: string; HeadSHA: string }>;
   ```
 
-- [ ] **Step 1: Failing tests** — same seed gives the same assignment; 45 entries → 15 held out; 12 entries → 10 held out; 6 entries → all held out; `RevisionsOf` uses `FirstParent`; `LoadCorpus` rejects a duplicate PR number (refine).
+- [ ] **Step 1: Failing tests** — same seed gives the same assignment; 45 entries → 15 held out; 12 entries → 10 held out; 6 entries → all held out; `RevisionsOf` uses `FirstParent`; `LoadCorpus` rejects a bug PR number that appears again as a bug, fix or clean PR; a fix PR may also be a clean PR (refine).
 - [ ] **Step 2: Implementation.** mulberry32:
   ```ts
   function random(seed: number): () => number { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -453,7 +453,7 @@ it('system prompt tells the agent that files are type-checked and abstract class
   export async function BacktestStep(o: BacktestOptions): Promise<BacktestLedger>;
   ```
   `MatchRecordSchema` is defined here as a placeholder for 2.12: `z.object({ Status: z.enum(['Matched', 'NotMatched', 'ApplyFailed', 'NoCatch']), ReportedMatched: z.boolean(), Tests: z.record(z.string(), z.boolean()), At: iso })`.
-  CLI: `backtest --corpus <file> --slice Tuning|HeldOut --set Bug|Clean|Both --model <generator> [--max-usd <n, default 50>] [--only <n,n>]`.
+  CLI: `backtest --corpus <file> --slice Tuning|HeldOut --set Bug|Clean|Both --model <generator> --max-usd <n> [--only <n,n>]` (`--max-usd` is required; the command exits 3 when the cap or the failure limit stops it; a model without a price in `Settings.Prices` is refused`.
 
 - [ ] **Step 1: Failing tests** with a fake `RunAll` that records its options and a fake store that returns a run with `TokensByModel` costs: creates the ledger with one entry per corpus PR of the slice and set; passes `Trigger: 'Backtest'`, `Settings.GeneratorModel === Model`, `BaseSHA = FirstParent(MergeSHA)`; a `RunAll` that throws marks the entry `Failed` with the redacted first line and continues; a second call skips `Assessed` and `Failed` entries (only `Pending` run); stops when accumulated cost ≥ `MaxUsd` and leaves the rest `Pending`; `--only` limits the entries. `LedgerFile.Write` refuses a ledger holding a secret.
 - [ ] **Step 2: Implementation.** `Fetch('next')` once before the loop. After `RunAll` returns `{ RunID }`, `CostUSD = (await Store.GetRun(RunID))?.TokensByModel.reduce((s, u) => s + u.CostUSD, 0) ?? 0`. Write the ledger after every entry. Print one line per PR: `backtest <ledger ID>: PR #n → run <id> (<cost> USD, total <sum>)`.
@@ -473,9 +473,8 @@ it('system prompt tells the agent that files are type-checked and abstract class
   // GitRepo
   /** git -C <dir> apply --3way --whitespace=nowarn <patchFile>; returns false when git exits non-zero (conflict). */
   public async ApplyPatch(dir: string, patchFile: string): Promise<boolean>;
-  // VitestCatchTarget
-  /** Writes the patch to <WorkRoot>/fix.patch and applies it in the revision's worktree with the host's git. */
-  public async ApplyPatch(revision: PreparedRevision, patch: string): Promise<boolean>;
+  /** Commit of baseSHA plus the patch, built in a host-only scratch worktree that is removed before this returns; null when the patch does not apply. MatchStep calls it before Prepare. */
+  public async CommitWithPatch(baseSHA: string, patchFile: string, scratchDir: string): Promise<string | null>;
   // Match
   export interface MatchDeps { Target: Pick<VitestCatchTarget, 'Prepare' | 'ApplyPatch' | 'BuildPackages' | 'WriteTests' | 'Run' | 'Cleanup'>; Repo: Pick<GitRepo, 'Diff' | 'FirstParent'>; Store: Pick<BaseCatchStore, 'ListCatches'>; }
   /** For every Bug entry that is Assessed and has no Match: the weak, non-dropped catches of its run; none → NoCatch. Else prepare head, apply the fix PR's diff (ApplyFailed when it does not apply), build the tested packages, write and run those tests Repeats times; a test that passes every time matches. ReportedMatched is true when a Reported catch matched. */
@@ -550,7 +549,7 @@ it('system prompt tells the agent that files are type-checked and abstract class
 - Modify: `README.md` (package), `src/generator/ClaudeAgentGenerator.ts`
 - Test: `src/__tests__/ClaudeAgentGenerator.test.ts`
 
-- [ ] **Step 1: Failing test** — `BuildSdkOptions(...).stderr` is a function that forwards an ordinary line to the given sink and drops a line containing `CLAUDE_SDK_CAN_USE_TOOL_SHADOWED`. (`Options.stderr?: (data: string) => void` in the Agent SDK; pass a sink through the `x` argument with `process.stderr.write` as the default.)
+- [ ] **Step 1: Failing test** — `FilterProcessWarnings(codes, sink)` replaces the default process `warning` listeners with one that drops a warning whose `code` is in `codes` and writes every other warning as one line in Node's format to `sink` (default `process.stderr.write`); it writes nothing under `--no-warnings` (command line or `NODE_OPTIONS`) or `NODE_NO_WARNINGS=1`. The SDK shadow notice is a host `process.emitWarning` with code `CLAUDE_SDK_CAN_USE_TOOL_SHADOWED`, not child stderr. `bin/jit-catch.js` installs the filter so vitest workers that call `Main` keep their listeners.
 - [ ] **Step 2:** Implement; README: a "Commands" section listing `run`, `generate`, `execute`, `assess`, `corpus mine`, `backtest`, `backtest match`, `label`, `report`, `clean` with one line each and the gate-1 procedure (§14.1) in five steps.
 - [ ] **Step 3: Run tests** → PASS. **Commit:** `docs(jit-catching): commands and gate-1 procedure; drop the SDK shadow notice`.
 
