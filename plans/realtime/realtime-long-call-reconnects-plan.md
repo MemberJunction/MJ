@@ -1,10 +1,21 @@
 # Generic Long-Call Reconnects in Core MJ Realtime — Architecture & Implementation Plan (Issue #6460)
 
-_Status: **Plan-Only PR (Deliverable 1 of #6460 — Awaiting Senior Engineer Review)**_
+_Status: **Implemented in PR #6462** (this plan is the design record; where it differs from the code, the code and `guides/REALTIME_CO_AGENTS_GUIDE.md` win)._
 _Date: 2026-11-07_
 _Target Branch: `next`_
 _Companion Research & Claim Ledger: [`realtime-long-call-reconnects-research.md`](realtime-long-call-reconnects-research.md)_
 _Originating Issue: [MemberJunction/MJ#6460](https://github.com/MemberJunction/MJ/issues/6460) (supersedes narrow scope of [#6403](https://github.com/MemberJunction/MJ/issues/6403), open PR [#6458](https://github.com/MemberJunction/MJ/pull/6458), and closed reference PR [#6453](https://github.com/MemberJunction/MJ/pull/6453))_
+
+## Where the shipped code differs from this plan
+
+- **Timing for a host with its own mint.** The plan (§8 item 2, §11.1) puts `connectionMaxSeconds`, `reconnectBufferSeconds` and `trustNativeResumption` in `SessionConfigJson` for Caliber. The code returns the timing as separate fields of the `StartRealtimeClientSession` and `RefreshRealtimeClientSessionToken` results and keeps it out of `SessionConfigJson`, so a host with its own mint shape must forward those fields, or its client driver uses its own limits.
+- **Where the mint snapshot is persisted.** The plan (§4.4, §6, §8, Slice 2, §11.1) stores it on `MJ: AI Agent Run Steps.InputData`. The code stores it in the agent session's config, under the server-protected `realtimeMintSnapshot` key.
+- **How long a reconnect keeps trying.** The plan (§5, §9.1) stops after `MAX_RECONNECT_ATTEMPTS = 3` ("failed after 3 attempts"). The code keeps trying while a 45 s recovery window is open, up to 40 attempts.
+- **Refresh rate limit.** The plan (§6) allows at most 6 refreshes per session per 10 minutes. The code allows as many mints as the planned connection moves in each 10-minute window plus 8, sizing the moves from a connection of at least 30 s (8 in all when the connection length is unknown).
+- **Connection length.** The plan (§4.2, §4.3, §7 Question 1, §9.1, Slices 1 and 3, §11.1, §12 #3) resolves `ClampSessionSecondsValue(RuntimeCallDurationSeconds, configuredCallDurationSeconds) ?? DefaultCallDurationSeconds`. The code takes the smallest of all three, so a catalog value never widens the driver's own limit.
+- **Relay re-arm.** The plan (§4.4, §4.5 item 2, §7 Question 5, Slice 2, §12 #12) has `ExtendRelaySession` reset `FreshOpened` on every refresh. The code never resets it once the fresh connection has opened: a refresh re-arms one handle-less open, within 5 minutes, only when the client passes `allowFreshReopen` (a mutation argument the plan does not have) and no tunnel is open.
+- **Artifacts that do not exist.** The S2-CALIBER-ZERO-CHANGE check's `npm run test -- caliberCompat` matches no test file (the Caliber case is in `packages/MJServer/src/__tests__/RealtimeClientSessionResolver.test.ts`), and `plans/realtime/realtime-long-call-reconnects-progress.json` (§10) was never created.
+- **Package names.** Slice 4 names `@memberjunction/ai-provider-gemini` and `@memberjunction/ai-provider-vertex`, and §9.1 names `@memberjunction/ai-providers-*`; the packages are `@memberjunction/ai-gemini`, `@memberjunction/ai-vertex`, `@memberjunction/ai-xai`, `@memberjunction/ai-openai` and `@memberjunction/ai-elevenlabs`.
 
 ---
 
@@ -759,7 +770,7 @@ sequenceDiagram
 
 ## 8. Proof That Caliber (`bizapps-caliber`) Needs Zero Changes
 
-We traced every integration point in `/Users/sohamdesai/Projects/mj-edge/bizapps-caliber`:
+We traced every integration point in `bizapps-caliber`:
 
 1. **Server-Side Subclass (`CaliberPersonaClientSessionService` in `bizapps-caliber/packages/Server/src/runtime/launch/client-direct-launcher.ts:58-110`):**
    - Caliber subclasses `RealtimeClientSessionService` and overrides `protected buildCompanionSystemPrompt` (`:93-109`) and calls `protected selectRealtimeVendor` (`:89-91`) and `public PrepareClientSession` (`:359-381`).
