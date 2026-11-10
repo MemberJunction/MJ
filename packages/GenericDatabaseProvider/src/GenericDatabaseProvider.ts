@@ -18,6 +18,8 @@
 
 import {
     BaseEntity,
+    BaseEntityResult,
+    ConcurrencyCheckMode,
     SerializeCloneChangeContext,
     DatabaseProviderBase,
     EntityInfo,
@@ -76,6 +78,7 @@ import {
     CachedRunViewResult,
     FieldSecurityViolation,
     LogError,
+    LogErrorEx,
     LogStatus,
     LogStatusEx,
     DiagnosticContext,
@@ -103,9 +106,10 @@ import {
     BuildViewPropertyFilter,
     ServerOperationScopeManager,
     NormalizeRunViewParameters,
+    CompositeFilterSQLCompiler,
 } from '@memberjunction/core';
 
-import { BytesToBase64, GroupByUUID, IndexByUUID, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, ScanSQLForScreening, SQLExpressionValidator, UUIDsEqual, UUIDSet } from '@memberjunction/global';
+import { BytesToBase64, GroupByUUID, IndexByUUID, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, ScanSQLForScreening, SQLExpressionValidator, UnwrapPhraseQuotes, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
 import { createHash } from 'node:crypto';
@@ -124,6 +128,13 @@ import { UndescribedColumnNames, WithheldColumnNames, WithholdColumns } from './
 import { RenderPipeline, type RenderResult } from './renderPipeline.js';
 import { CRUDSprocType, UseJsonArgShape } from './crudSprocFieldRules.js';
 import { SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext } from './saveTypes.js';
+import {
+    AreEntityFieldValuesDifferent,
+    ClientOldValueToFieldValue,
+    DetectFieldConcurrencyConflicts,
+    FindEntityFieldByCodeNameOrName,
+    IsFieldOpaqueToClient,
+} from './concurrency/fieldConflictDetector.js';
 import type { RecordChangePayload } from '@memberjunction/core';
 
 import {
@@ -534,6 +545,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Server-side concurrency check mode for entity UPDATEs (`'off' | 'log' | 'enforce'`).
+     * Defaults to `'off'` so direct server-side background saves pay zero extra lock-read or
+     * transaction round-trips unless opted in via provider configuration or per-save
+     * `EntitySaveOptions.ConcurrencyCheck` (GraphQL mutations with `OldValues___` always pass `'enforce'`).
+     */
+    public ConcurrencyCheck: ConcurrencyCheckMode = 'off';
+
+    /**
+     * Controls whether entity UPDATEs against CodeGen-generated routines (`spUpdateGenerated === true`)
+     * bind only dirty columns instead of every loaded column. Defaults to `true`. Set to `false`
+     * (or configure `databaseSettings.deltaUpdates: false`) as an operational kill-switch to restore
+     * legacy full-row parameter binding across all saves.
+     */
+    public DeltaUpdates: boolean = true;
+
+    /**
      * Installs {@link ProviderConfigDataBase.LocalStorageProvider}, when the configuration carries
      * one, before the base configuration loads metadata. A server fleet passes its shared (Redis)
      * store this way so the metadata load and the engines loaded at startup use it from the first
@@ -543,6 +570,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     public override async Config(data: ProviderConfigDataBase, providerToUse?: IMetadataProvider): Promise<boolean> {
         if (data?.LocalStorageProvider) {
             this.SetLocalStorageProvider(data.LocalStorageProvider);
+        }
+        if (data?.ConcurrencyCheck) {
+            this.ConcurrencyCheck = data.ConcurrencyCheck;
+        }
+        if (data?.DeltaUpdates !== undefined) {
+            this.DeltaUpdates = data.DeltaUpdates;
         }
         return super.Config(data, providerToUse);
     }
@@ -1094,6 +1127,184 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         return activeActions.some((a) => a.RunMode === 'Durable' && !originatingSet?.Has(a.ID));
     }
 
+    /**
+     * Dialect hook for reading a row under an exclusive/update row lock inside the save transaction
+     * immediately before `spUpdate*` executes.
+     *
+     * - SQL Server overrides to emit `SELECT [col1], ... FROM [schema].[BaseTable] WITH (UPDLOCK, ROWLOCK) WHERE ...`
+     * - PostgreSQL overrides to emit `SELECT "col1", ... FROM "schema"."BaseTable" WHERE ... FOR UPDATE`
+     */
+    protected RenderLockedRowReadSQL(
+        _entityInfo: EntityInfo,
+        _pkWhereClause: string,
+        _columns: string[],
+    ): string | null {
+        return null;
+    }
+
+    protected getEffectiveConcurrencyCheckMode(options?: EntitySaveOptions): ConcurrencyCheckMode {
+        return options?.ConcurrencyCheck ?? this.ConcurrencyCheck;
+    }
+
+    protected override ShouldCheckUpdateConcurrency(
+        entity: BaseEntity,
+        options: EntitySaveOptions,
+    ): boolean {
+        if (this.getEffectiveConcurrencyCheckMode(options) === 'off') {
+            return false;
+        }
+        if (options?.SkipOldValuesCheck || options?.IgnoreDirtyState || options?.ReplayOnly) {
+            return false;
+        }
+        if (!entity.PrimaryKey || entity.PrimaryKey.KeyValuePairs.length === 0) {
+            return false;
+        }
+        if (options?.ConcurrencyBaseline) {
+            for (const [key, rawBaseline] of Object.entries(options.ConcurrencyBaseline)) {
+                const f = FindEntityFieldByCodeNameOrName(entity.EntityInfo, key);
+                if (!f || f.ReadOnly || f.IsVirtual || f.IsPrimaryKey || IsFieldOpaqueToClient(f)) {
+                    continue;
+                }
+                const coercedBaseline = ClientOldValueToFieldValue(f, rawBaseline);
+                const currentVal = entity.GetFieldByName(f.Name)?.Value;
+                if (AreEntityFieldValuesDifferent(f, coercedBaseline, currentVal, false)) {
+                    return true;
+                }
+            }
+        }
+        return entity.Fields.some(
+            (f) =>
+                f.Dirty &&
+                !f.EntityFieldInfo.ReadOnly &&
+                !f.EntityFieldInfo.IsVirtual &&
+                !f.EntityFieldInfo.IsPrimaryKey &&
+                !IsFieldOpaqueToClient(f.EntityFieldInfo),
+        );
+    }
+
+    protected override async CheckUpdateConcurrency(
+        entity: BaseEntity,
+        user: UserInfo,
+        options: EntitySaveOptions,
+        entityResult: BaseEntityResult,
+    ): Promise<boolean> {
+        if (!this.ShouldCheckUpdateConcurrency(entity, options)) {
+            return true;
+        }
+
+        const effectiveMode = this.getEffectiveConcurrencyCheckMode(options);
+        const baselineValues: Record<string, unknown> = {};
+        const newValues: Record<string, unknown> = {};
+
+        if (options?.ConcurrencyBaseline) {
+            for (const [key, rawBaseline] of Object.entries(options.ConcurrencyBaseline)) {
+                const f = FindEntityFieldByCodeNameOrName(entity.EntityInfo, key);
+                if (!f || f.ReadOnly || f.IsVirtual || f.IsPrimaryKey || IsFieldOpaqueToClient(f)) {
+                    continue;
+                }
+                const coercedBaseline = ClientOldValueToFieldValue(f, rawBaseline);
+                const entityField = entity.GetFieldByName(f.Name);
+                const currentVal = entityField ? entityField.Value : undefined;
+                if (AreEntityFieldValuesDifferent(f, coercedBaseline, currentVal, false)) {
+                    baselineValues[f.Name] = coercedBaseline;
+                    newValues[f.Name] = currentVal;
+                }
+            }
+        }
+
+        for (const entityField of entity.Fields) {
+            const f = entityField.EntityFieldInfo;
+            if (
+                entityField.Dirty &&
+                !f.ReadOnly &&
+                !f.IsVirtual &&
+                !f.IsPrimaryKey &&
+                !IsFieldOpaqueToClient(f) &&
+                !(f.Name in baselineValues)
+            ) {
+                baselineValues[f.Name] = entityField.OldValue;
+                newValues[f.Name] = entityField.Value;
+            }
+        }
+
+        const columnsToRead = Object.keys(baselineValues);
+        if (columnsToRead.length === 0) {
+            return true;
+        }
+
+        const pkWhereClause = this.BuildPrimaryKeyWhereClause(entity.EntityInfo, entity.PrimaryKey);
+        if (!pkWhereClause) {
+            return true;
+        }
+
+        const sql = this.RenderLockedRowReadSQL(entity.EntityInfo, pkWhereClause, columnsToRead);
+        if (!sql) {
+            return true;
+        }
+
+        const rawRows = await this.ExecuteSQL<Record<string, unknown>>(
+            sql,
+            undefined,
+            {
+                description: `Concurrency check lock read for ${entity.EntityInfo.Name}`,
+                ignoreLogging: true,
+            },
+            user,
+        );
+        if (!rawRows || rawRows.length === 0) {
+            return true;
+        }
+
+        const processedRows = await this.PostProcessRows(rawRows, entity.EntityInfo, user);
+        const storedRow = processedRows[0] ?? rawRows[0];
+        this.TrimFixedWidthValues(entity.EntityInfo, storedRow);
+
+        const checkResult = DetectFieldConcurrencyConflicts(
+            entity.EntityInfo,
+            baselineValues,
+            newValues,
+            storedRow,
+        );
+
+        if (checkResult.ConflictingFields.length === 0) {
+            return true;
+        }
+
+        const msg = {
+            Message:
+                'Concurrent modification conflict: one or more fields modified by the caller were updated in the database since the record was loaded.',
+            ClientDifferences: checkResult.ClientDifferences,
+            DBDifferences: checkResult.DBDifferences,
+            Overlap: checkResult.Overlap,
+        };
+
+        LogErrorEx({
+            message: `Entity save concurrency conflict detected on ${entity.EntityInfo.Name}: ${JSON.stringify(msg)}`,
+            severity: 'warning',
+            category: 'GenericDatabaseProvider.CheckUpdateConcurrency',
+            metadata: {
+                entityName: entity.EntityInfo.Name,
+                mode: effectiveMode,
+                conflictingFields: checkResult.ConflictingFields,
+                clientDifferences: checkResult.ClientDifferences,
+                dbDifferences: checkResult.DBDifferences,
+                overlap: checkResult.Overlap,
+            },
+        });
+
+        if (effectiveMode === 'enforce') {
+            entityResult.Success = false;
+            entityResult.EndedAt = new Date();
+            entityResult.ConcurrencyConflict = {
+                ConflictingFields: checkResult.ConflictingFields,
+            };
+            entityResult.Message = `Concurrent modification conflict on ${entity.EntityInfo.Name} for field(s): ${checkResult.ConflictingFields.join(', ')}. Reload the record and retry your changes.`;
+            return false;
+        }
+
+        return true;
+    }
+
     protected override async OnDurableAfterSaveExecute(
         entity: BaseEntity,
         user: UserInfo,
@@ -1340,6 +1551,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                         // fault: one warning per key, and the value stays encrypted.
                         if (IsEncryptionKeyUnavailable(decryptError)) {
                             ReportEncryptionKeyUnavailable(decryptError);
+                            continue;
+                        }
+                        // Inactive rows (e.g., disabled template credentials seeded before activation)
+                        // may hold placeholder ciphertext from another environment; preserve ciphertext without spamming error logs.
+                        if (processedRow['IsActive'] === false || processedRow['IsActive'] === 0) {
                             continue;
                         }
                         const message = decryptError instanceof Error ? decryptError.message : String(decryptError);
@@ -2034,11 +2250,28 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             }
         }
 
-        // 2. Encrypt — between coercion and rendering, mutates the map in place.
-        await this.EncryptFieldValuesForSave(entity, fieldValueMap, user);
+        // 2. On normal UPDATEs where DeltaUpdates is enabled, the entity's spUpdate is CodeGen-generated,
+        //    and at least one field is dirty, pass ONLY the dirty fields (plus the PK appended by
+        //    RenderSaveCallBinding) to the stored procedure / function so untouched columns default to NULL
+        //    and retain their stored database values via ISNULL(@Param, [Col]) / COALESCE(p_param, "Col").
+        //    Provider-wide DeltaUpdates=false, forced saves (IgnoreDirtyState), ReplayOnly saves, and
+        //    entities with custom spUpdate implementations keep the full-row parameter map.
+        const useDeltaUpdate =
+            this.DeltaUpdates &&
+            isUpdate &&
+            !options?.IgnoreDirtyState &&
+            !options?.ReplayOnly &&
+            entity.EntityInfo.spUpdateGenerated &&
+            (dirtyFields?.size ?? 0) > 0;
+        const effectiveFieldValueMap = useDeltaUpdate
+            ? this.changedFieldValues(entity, fieldValueMap, dirtyFields)
+            : fieldValueMap;
 
-        // 3. Render the provider-specific binding.
-        const binding = this.RenderSaveCallBinding(entity, fieldValueMap, isUpdate, spName);
+        // 3. Encrypt — between coercion and rendering, mutates the map in place.
+        await this.EncryptFieldValuesForSave(entity, effectiveFieldValueMap, user);
+
+        // 4. Render the provider-specific binding.
+        const binding = this.RenderSaveCallBinding(entity, effectiveFieldValueMap, isUpdate, spName);
 
         // 4. Resolve SaveReturnContext and wrap with result capture.
         //    `unprojectedSaveSQL` is the bare SP/function call (kept for `simpleSQL` fallback so
@@ -2068,10 +2301,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         const computeSimpleSQL = (): string => {
             if (cachedSimpleSQL === undefined) {
                 const replaySQL = isNew
-                    ? this.RenderReplaySaveSQL(binding, entity, fieldValueMap)
+                    ? this.RenderReplaySaveSQL(binding, entity, effectiveFieldValueMap)
                     : options?.IgnoreDirtyState
                       ? undefined
-                      : this.RenderReplayUpdateSQL(binding, entity, this.changedFieldValues(entity, fieldValueMap, dirtyFields));
+                      : this.RenderReplayUpdateSQL(
+                            binding,
+                            entity,
+                            useDeltaUpdate
+                                ? effectiveFieldValueMap
+                                : this.changedFieldValues(entity, effectiveFieldValueMap, dirtyFields),
+                        );
                 // A statement that runs with parameters is logged in its literal form, which replays alone.
                 cachedSimpleSQL = replaySQL ?? unprojectedSaveSQL.literalSQL ?? unprojectedSaveSQL.sql;
             }
@@ -2888,6 +3127,31 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Compiles `params.Filter` (a structured `CompositeFilter` / `CompositeFilterDescriptor`) into a
+     * parameterized SQL WHERE fragment for `entityInfo` using {@link CompositeFilterSQLCompiler.Compile}
+     * and binds its parameters onto `queryParameters` via {@link BindExtraFilterParameters}.
+     */
+    protected CompileStructuredRunViewFilter(
+        params: RunViewParams,
+        entityInfo: EntityInfo,
+        user: UserInfo,
+        queryParameters?: NamedQueryParameter[],
+    ): string {
+        if (!params.Filter) {
+            return '';
+        }
+        const compiled = CompositeFilterSQLCompiler.Compile(params.Filter, entityInfo, {
+            platform: this.PlatformKey,
+            user,
+            parameterPrefix: '_cf_',
+        });
+        if (!compiled.whereClause) {
+            return '';
+        }
+        return this.BindExtraFilterParameters(compiled.whereClause, compiled.parameters, queryParameters);
+    }
+
+    /**
      * Optionally wraps a view query with user view run logging.
      * SQL Server overrides to use spCreateUserViewRunWithDetail.
      * Default: returns null (no view run logging).
@@ -3168,7 +3432,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // A saved view's stored WhereClause/OrderBy live on viewEntity, not params, and the
                 // normal SQL path that applies them runs below this early return — so fold them in
                 // here, else a UserView over an external entity silently returns unfiltered rows.
-                const externalParams = await this.mergeExternalViewParams(params, viewEntity, user);
+                const externalParams = await this.mergeExternalViewParams(params, viewEntity, user, entityInfo);
                 this.assertExternalClausesRespectFieldSecurity(entityInfo, externalParams, user);
                 const externalRouter = this.resolveExternalReadRouterOrThrow(`Entity '${entityInfo.Name}'`);
                 const externalResult = await externalRouter.RunViewExternal<T>(entityInfo, externalParams, user, this);
@@ -3189,6 +3453,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             // ── Parameters (transform user-provided SQL clauses for platform compatibility) ──
             const queryParameters: NamedQueryParameter[] = [];
             const extraFilter: string = this.PrepareExtraFilterSQL((params.ExtraFilter as string) || '', entityInfo, params.Parameters, queryParameters);
+            const structuredFilter: string = this.CompileStructuredRunViewFilter(params, entityInfo, user, queryParameters);
             const userSearchString: string = params.UserSearchString ?? '';
             const excludeUserViewRunID: string = params.ExcludeUserViewRunID ?? '';
             const overrideExcludeFilter: string = params.OverrideExcludeFilter ?? '';
@@ -3303,6 +3568,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 if (!this.ValidateUserProvidedSQLClause(extraFilter))
                     throw new Error(`Invalid Extra Filter: ${extraFilter}, contains one more for forbidden keywords`);
                 whereSQL = bHasWhere ? `${whereSQL} AND (${extraFilter})` : `(${extraFilter})`;
+                bHasWhere = true;
+            }
+
+            // 2a. Structured Filter (CompositeFilter / CompositeFilterDescriptor)
+            if (structuredFilter.length > 0) {
+                whereSQL = bHasWhere ? `${whereSQL} AND (${structuredFilter})` : `(${structuredFilter})`;
                 bHasWhere = true;
             }
 
@@ -4113,11 +4384,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     `tokens, such as an unbalanced quote or bracket.`,
                 );
             }
-            const escapedTerm = this.escapeLikeTerm(safeUserSearchString);
+            // The built-in predicates have no phrase syntax, so they search a quoted phrase without its
+            // quotes (UnwrapPhraseQuotes). A custom format is SQL, screened above as typed, so it gets
+            // the term as typed.
+            const phraseTerm = UnwrapPhraseQuotes(safeUserSearchString);
+            const escapedTerm = this.escapeLikeTerm(phraseTerm);
             for (const field of entityInfo.Fields) {
                 if (!field.IncludeInUserSearchAPI) continue;
                 if (deniedSearchFields.has(field.Name.trim().toLowerCase())) continue; // field security: not searchable
-                const sParam = this.buildPerFieldSearchPredicate(field, escapedTerm, safeUserSearchString);
+                const sParam = this.buildPerFieldSearchPredicate(field, escapedTerm, field.UserSearchParamFormatAPI ? safeUserSearchString : phraseTerm);
                 if (!sParam) continue;
                 if (sUserSearchSQL.length > 0) sUserSearchSQL += ' OR ';
                 sUserSearchSQL += `(${this.QuoteIdentifier(field.Name)} ${sParam})`;
@@ -4187,6 +4462,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
     /**
      * Build the SQL fragment that compares one EntityField against a user search term.
+     *
+     * `createViewUserSearchSQL` passes the term without wrapping phrase quotes (`UnwrapPhraseQuotes`)
+     * as `escapedTerm`, and as `rawSafeTerm` for a field without a custom format; a custom format
+     * receives the term as typed. An override receives the same values.
      *
      * Resolution order:
      *   1. UserSearchParamFormatAPI (custom override) wins if set, with `{0}` replaced
@@ -5002,6 +5281,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             bHasWhere = true;
         }
 
+        const structuredFilter = this.CompileStructuredRunViewFilter(params, entityInfo, user, queryParameters);
+        if (structuredFilter.length > 0) {
+            whereSQL = bHasWhere ? `${whereSQL} AND (${structuredFilter})` : `(${structuredFilter})`;
+            bHasWhere = true;
+        }
+
         // Free text, not a SQL fragment — deliberately NOT run through
         // ValidateUserProvidedSQLClause. See the equivalent note on the view path above (#4392).
         if (params.UserSearchString && params.UserSearchString.length > 0) {
@@ -5315,10 +5600,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         params: RunViewParams,
         viewEntity: MJUserViewEntityExtended | null,
         user: UserInfo,
+        entityInfo?: EntityInfo,
     ): Promise<RunViewParams> {
-        if (!viewEntity) return params;
+        if (!viewEntity && !params.Filter) return params;
         const merged: RunViewParams = { ...params };
-        const callerFilter = (params.ExtraFilter as string) || '';
+        let callerFilter = (params.ExtraFilter as string) || '';
+        if (params.Filter && entityInfo) {
+            const literalStructured = CompositeFilterSQLCompiler.CompileLiteral(params.Filter, entityInfo, {
+                platform: this.PlatformKey,
+                user,
+            }).trim();
+            if (literalStructured) {
+                callerFilter = callerFilter ? `(${callerFilter}) AND (${literalStructured})` : literalStructured;
+                merged.ExtraFilter = callerFilter;
+            }
+            delete merged.Filter;
+        }
+        if (!viewEntity) return merged;
         if (viewEntity.WhereClause && viewEntity.WhereClause.length > 0) {
             const renderedWhere = (await this.RenderViewWhereClause(viewEntity, user))?.trim();
             if (renderedWhere) {

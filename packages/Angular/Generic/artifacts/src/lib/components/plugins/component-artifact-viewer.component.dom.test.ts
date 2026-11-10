@@ -8,6 +8,12 @@ import type { FormPanelHostProps } from '@memberjunction/interactive-component-t
 import { AngularAdapterService } from '@memberjunction/ng-react';
 import { renderComponentFixture, query, text, capture, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { ComponentArtifactViewerComponent } from './component-artifact-viewer.component';
+import { ExpectConsoleLines } from '@memberjunction/ng-test-utils';
+
+/** The lines these tests log on purpose: the viewer's component-event trace. Any other line fails its test. */
+ExpectConsoleLines({
+  log: [/^Component event: /],
+});
 
 /**
  * DOM coverage for the viewer's form-panel branch: a `componentRole: 'form-panel'` artifact

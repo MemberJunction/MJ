@@ -36,6 +36,7 @@
  */
 
 import { LogError } from '@memberjunction/core';
+import { ImportFromHost } from '@memberjunction/dynamic-packages';
 import {
     IDiscordVoiceSdk,
     DiscordAudioFrame,
@@ -287,10 +288,9 @@ function unwrapDefault(mod: unknown): unknown {
  */
 export const DefaultNativeLoader: NativeModuleLoader = async (specifier: string): Promise<NativeMeetingModule> => {
     try {
-        // Runtime plugin discovery from config: the addon specifier is deployment-supplied (not known at
-        // build time), so this dynamic import cannot be a static import. `@vite-ignore` stops Vite from
-        // trying to pre-bundle a specifier it cannot resolve at build time.
-        const mod: unknown = await import(/* @vite-ignore */ specifier);
+        // A bare package name is installed by the host application, not by this package, so it loads
+        // through ImportFromHost (#3741); a path specifier imports as before.
+        const mod: unknown = await ImportFromHost(specifier);
         const resolved = unwrapDefault(mod);
         if (!isNativeModule(resolved)) {
             throw new Error('resolved module has no createClient() factory');

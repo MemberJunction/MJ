@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W3 -> S2.4",
+    "Description": "Gate G2.10 (phase 2, dataset W3, criterion S2.4): on W3-leak-row s42, 4 of 4 candidates are flagged and a candidate above the oracle on the same rows (paired DeLong, one-sided p < 0.001) is treated as a leak (T3; 1 of 4 flagged today). The audit runs before any candidate is fitted, so one run per candidate kind (logistic regression, random forest, XGBoost, LightGBM) shows that none of them reaches the leaked column Status; the oracle node raises the single-feature ceiling to 1.0 and gives the planted true probability as the reference score. It fails when the trainer keeps the flagged source columns (Status reaches the shipped model) or when the implausible-gain comparison never finds a candidate above the reference (no drop-column flag names Status).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.10\",\"owner:PR3\",\"phase:2\",\"dataset:W3\",\"criterion:S2.4\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Status is flagged and kept out of what ships in 4 of 4 single-candidate runs on W3-leak-row s42, and with the ceiling at 1.0 a candidate above the oracle is treated as a leak: the drop-column test names Status (5 of 5 pytest cases pass)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w3-s2-4"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "55BC876A-2A93-475E-8C19-381648715FA1"
+  }
+}

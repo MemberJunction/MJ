@@ -29,6 +29,21 @@ import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeC
 type SearchableAccount = StorageAccountWithProvider;
 
 /**
+ * Removes `<...>` tags. One global pass already leaves no complete tag (each match runs from the
+ * first remaining `<` to the next `>`); the loop exists so CodeQL's
+ * js/incomplete-multi-character-sanitization check can see the removal repeats to a fixed point.
+ */
+function removeTags(text: string): string {
+    let previous: string;
+    let current = text;
+    do {
+        previous = current;
+        current = current.replace(/<[^>]*>/g, '');
+    } while (current !== previous);
+    return current;
+}
+
+/**
  * Provides file-level search across MJ File Storage accounts using each
  * provider's native SearchFiles() API. Only accounts with
  * IncludeInGlobalSearch=true on active providers with SupportsSearch=true are searched.
@@ -310,7 +325,7 @@ export class StorageSearchProvider extends BaseSearchProvider {
 
         // If provider returned a content excerpt, lead with that
         if (file.excerpt) {
-            const cleanExcerpt = file.excerpt.replace(/<[^>]*>/g, '').trim();
+            const cleanExcerpt = removeTags(file.excerpt).trim();
             if (cleanExcerpt.length > 0) {
                 parts.push(cleanExcerpt.length > 150 ? cleanExcerpt.substring(0, 150) + '...' : cleanExcerpt);
             }

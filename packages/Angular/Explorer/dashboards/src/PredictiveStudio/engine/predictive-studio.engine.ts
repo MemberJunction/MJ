@@ -7,7 +7,7 @@ import {
   RunView,
   UserInfo,
 } from '@memberjunction/core';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
   MJMLAlgorithmEntity,
   MJMLAlgorithmUseCaseEntity,
@@ -49,7 +49,7 @@ export const RECOMMENDATION_RANK: Record<RecommendationLevel, number> = {
   Primary: 4,
 };
 
-/** Minimal shape of a ranking row consumed by {@link computeBestLevels} (decoupled from the entity). */
+/** Minimal shape of a ranking row consumed by {@link ComputeBestLevels} (decoupled from the entity). */
 export interface RankingRow {
   MLAlgorithmID: string;
   MLAlgorithmUseCaseID: string;
@@ -61,21 +61,22 @@ export interface RankingRow {
  * algorithm's BEST recommendation level (max by rank) across those scenarios. Extracted from the
  * engine so it is unit-testable without a metadata provider / DB.
  */
-export function ComputeBestLevels(rankings: RankingRow[], useCaseIds: string[]): Map<string, RecommendationLevel> {
-  const out = new Map<string, RecommendationLevel>();
+export function ComputeBestLevels(rankings: RankingRow[], useCaseIds: string[]): UUIDMap<RecommendationLevel> {
+  const out = new UUIDMap<RecommendationLevel>();
   if (useCaseIds.length === 0) return out;
+  const selected = new UUIDSet(useCaseIds);
   for (const ranking of rankings) {
-    if (!useCaseIds.some((id) => UUIDsEqual(id, ranking.MLAlgorithmUseCaseID))) continue;
-    const current = out.get(ranking.MLAlgorithmID);
+    if (!selected.Has(ranking.MLAlgorithmUseCaseID)) continue;
+    const current = out.Get(ranking.MLAlgorithmID);
     if (!current || RECOMMENDATION_RANK[ranking.RecommendationLevel] > RECOMMENDATION_RANK[current]) {
-      out.set(ranking.MLAlgorithmID, ranking.RecommendationLevel);
+      out.Set(ranking.MLAlgorithmID, ranking.RecommendationLevel);
     }
   }
   return out;
 }
 
 /** @deprecated Use {@link ComputeBestLevels}. */
-export function computeBestLevels(rankings: RankingRow[], useCaseIds: string[]): Map<string, RecommendationLevel> {
+export function computeBestLevels(rankings: RankingRow[], useCaseIds: string[]): UUIDMap<RecommendationLevel> {
   return ComputeBestLevels(rankings, useCaseIds);
 }
 
@@ -193,9 +194,9 @@ export class PredictiveStudioEngine extends BaseEngine<PredictiveStudioEngine> {
   /**
    * Given a set of selected use-case IDs, compute each algorithm's BEST recommendation level
    * across those scenarios (max by rank) — the core of the catalog "Guide me" picker.
-   * Returns a map of algorithmId → best level, omitting algorithms with no ranking row.
+   * Returns a map of algorithmId → best level (keyed case-insensitively), omitting algorithms with no ranking row.
    */
-  public BestLevelsForScenarios(useCaseIds: string[]): Map<string, RecommendationLevel> {
+  public BestLevelsForScenarios(useCaseIds: string[]): UUIDMap<RecommendationLevel> {
     return ComputeBestLevels(this.Rankings, useCaseIds);
   }
 
