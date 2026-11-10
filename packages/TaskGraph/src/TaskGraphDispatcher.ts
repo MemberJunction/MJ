@@ -1584,7 +1584,8 @@ export class TaskGraphDispatcher implements IShutdownable {
             const entity = graph.entityById.get(taskID);
             if (!entity) continue;
             entity.Status = 'Blocked';
-            if (await entity.Save()) {
+            // A workflow step's status is the dispatcher's (`MJTaskEntityServer`), so the write runs in its scope.
+            if (await this.saveWithRuntimeAuthority(entity)) {
                 const node = graph.nodes.find((n) => n.id === taskID);
                 if (node) node.status = 'Blocked';
                 LogStatus(`[TaskGraphDispatcher] Blocked '${entity.Name}' (${taskID}) — a dependency can never be satisfied.`);

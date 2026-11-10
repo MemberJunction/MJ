@@ -46,6 +46,9 @@ export const TASK_RUNTIME_SECURITY_KEYS: readonly string[] = ['isOutputTainted',
  */
 export const TASK_GRAPH_RUNTIME_SECURITY_OPERATION = 'TaskGraph.Dispatcher.WriteRuntimeSecurity';
 
+/** Name of the `MJ: Task Types` row a task graph's workflow (parent) task is filed under. */
+export const TASK_GRAPH_WORKFLOW_TYPE_NAME = 'AI Workflow';
+
 /**
  * The run's validated scope, exactly as `BaseAgent` hands it to each action dispatch
  * (`ActionRunScope` in `@memberjunction/actions-base`, which the action runner passes on as `RunScope`).

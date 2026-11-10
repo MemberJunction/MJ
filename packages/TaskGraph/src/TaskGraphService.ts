@@ -41,6 +41,7 @@ import {
     SerializeTaskSecurityEnvelope,
     SanitizeInvocationEnvelope,
     TASK_GRAPH_RUNTIME_SECURITY_OPERATION,
+    TASK_GRAPH_WORKFLOW_TYPE_NAME,
     ValidateTaskGraphSpec,
     type TaskGraphFailurePolicy,
     type TaskGraphInvocationEnvelope,
@@ -376,7 +377,7 @@ export type TaskGraphSubmitResult = {
 };
 
 /** Name of the task type used for agent-orchestrated graphs. */
-export const TASK_TYPE_NAME = 'AI Workflow';
+export const TASK_TYPE_NAME = TASK_GRAPH_WORKFLOW_TYPE_NAME;
 
 /**
  * The node kinds a `Task` row can actually represent, and therefore the ones the dispatcher can run.
@@ -1157,18 +1158,19 @@ export class TaskGraphService {
                 task.InputPayload = json;
             }
             PrepareTaskForRetry(task);
-            // A workflow step's data is the dispatcher's (`MJTaskEntityServer`): this save carries the input the
-            // guarded statement above just wrote, and a retried Decision's cleared output, so it runs in that scope.
-            const retried = await ServerOperationScopeManager.Instance.RunWithAuthority(
+            // A workflow step's status and data are the dispatcher's (`MJTaskEntityServer`): this save carries the
+            // input the guarded statement above just wrote and a retried Decision's cleared output, and the
+            // unblocking below changes siblings' status, so they run in that scope.
+            const asService = (row: MJTaskEntity): Promise<boolean> => ServerOperationScopeManager.Instance.RunWithAuthority(
                 { operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION, source: 'ServerEngine', allowedEntities: ['MJ: Tasks'], userId: context.ContextUser.ID },
-                () => task.Save(),
+                () => row.Save(),
             );
-            if (!retried) return { Success: false, ErrorMessage: 'The task could not be saved.' };
+            if (!(await asService(task))) return { Success: false, ErrorMessage: 'The task could not be saved.' };
 
             for (const sibling of siblings) {
                 if (sibling.Status === 'Blocked') {
                     sibling.Status = 'Pending';
-                    await sibling.Save();
+                    await asService(sibling);
                 }
             }
             return { Success: true };

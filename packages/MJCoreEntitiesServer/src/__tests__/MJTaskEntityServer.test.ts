@@ -24,6 +24,10 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         /** The `Configuration` the row held before this save. */
         public storedConfiguration: string | null = null;
         public StepType: string | null = 'Action';
+        public ParentID: string | null = '00000000-0000-4000-8000-0000000000aa';
+        public UserID: string | null = null;
+        /** The task type's name, as the view joins it. */
+        public Type: string | null = null;
         public Status = 'Pending';
         /** The `Status` the row held before this save. */
         public storedStatus = 'Pending';
@@ -41,7 +45,8 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
             if (name === 'SecurityEnvelope') return { Dirty: this.envelopeDirty };
             if (name === 'Configuration') return { Dirty: this.Configuration !== this.storedConfiguration, OldValue: this.storedConfiguration };
             if (name === 'Status') return { Dirty: this.Status !== this.storedStatus, OldValue: this.storedStatus };
-            return { Dirty: this.dirtyFields.has(name) };
+            const value = (this as unknown as Record<string, unknown>)[name];
+            return { Dirty: this.dirtyFields.has(name), OldValue: value, Value: value };
         }
         public Validate(): ValidationResult {
             const result = new ValidationResult();
@@ -114,7 +119,10 @@ describe('RuntimeSecurityChangeRefusal', () => {
     it('allows an edit that leaves them as they were, and rows that have none', () => {
         expect(RuntimeSecurityChangeRefusal(tainted, JSON.stringify({ ...JSON.parse(tainted), layout: { x: 1, y: 2 } }))).toBeNull();
         expect(RuntimeSecurityChangeRefusal(null, JSON.stringify({ inputMapping: '{}' }))).toBeNull();
-        expect(RuntimeSecurityChangeRefusal(config({ actionLogID: 'a' }), config({ actionLogID: 'b' }))).toBeNull();
+    });
+
+    it('refuses changing any other key the step recorded when it ran, such as the action log its compensation undoes', () => {
+        expect(RuntimeSecurityChangeRefusal(config({ actionLogID: 'a' }), config({ actionLogID: 'b' }))).toContain('actionLogID');
     });
 });
 
@@ -155,6 +163,7 @@ describe('MJTaskEntityServer: who completed a Human step, and the dispatcher sco
     function human(user: { ID: string }, opts: { storedStatus?: string; stored?: object | null; next?: object | null } = {}): HumanTask {
         const t = task({ saved: true, stored: opts.stored ?? { human: { instructions: 'x' } }, next: opts.next }) as HumanTask;
         t.StepType = 'Human';
+        (t as unknown as { UserID: string }).UserID = REVIEWER.ID;
         t.storedStatus = opts.storedStatus ?? 'Pending';
         t.Status = 'Complete';
         t.ContextCurrentUser = user;
@@ -174,33 +183,23 @@ describe('MJTaskEntityServer: who completed a Human step, and the dispatcher sco
         expect(JSON.parse(t.Configuration!).human).toEqual({ instructions: 'x' });
     });
 
-    it('records the client who saved, never the completer a caller wrote in', async () => {
-        const forged = { human: { instructions: 'x' }, runtime: { completedByUserID: REVIEWER.ID } };
-        const byClient = human(OTHER, { next: forged });
+    it('records the assignee who saved, never the completer a caller wrote in', async () => {
+        const forged = { human: { instructions: 'x' }, runtime: { completedByUserID: OTHER.ID } };
+        const byClient = human(REVIEWER, { next: forged });
         expect(await asClient(() => byClient.Save())).toBe(true);
-        expect(completedBy(byClient)).toBe(OTHER.ID);
+        expect(completedBy(byClient)).toBe(REVIEWER.ID);
     });
 
-    it('records nobody when server code completes the step, even as the assignee, so it clears no taint', async () => {
-        // An agent or action run saves as the graph's submitter, who is the step's assignee.
-        const byServerCode = human(REVIEWER);
-        expect(await byServerCode.Save()).toBe(true);
-        expect(completedBy(byServerCode)).toBeUndefined();
-
-        const forged = human(REVIEWER, { next: { human: { instructions: 'x' }, runtime: { completedByUserID: REVIEWER.ID } } });
-        expect(await forged.Save()).toBe(true);
-        expect(completedBy(forged)).toBeUndefined();
-
+    it('refuses completing the step for anyone but its assignee, in their own client request', async () => {
+        // Someone else, as their own client request.
+        expect(await asClient(() => human(OTHER).Save())).toBe(false);
+        // Server code as the assignee: an agent or action run saves as the graph's submitter, who is the assignee.
+        expect(await human(REVIEWER).Save()).toBe(false);
         // Server authority entered inside a client request is server code too.
-        const insideAuthority = human(REVIEWER);
         const otherOperation = { operationKey: 'some-server-operation', source: 'ServerEngine' as const, allowedEntities: ['MJ: Tasks'] };
-        expect(await asClient(() => ServerOperationScopeManager.Instance.RunWithAuthority(otherOperation, () => insideAuthority.Save()))).toBe(true);
-        expect(completedBy(insideAuthority)).toBeUndefined();
-
+        expect(await asClient(() => ServerOperationScopeManager.Instance.RunWithAuthority(otherOperation, () => human(REVIEWER).Save()))).toBe(false);
         // So is server work a client request started (an agent run, a dispatcher pass).
-        const insideServerWork = human(REVIEWER);
-        expect(await asClient(() => ServerOperationScopeManager.Instance.RunAsServerWork(() => insideServerWork.Save()))).toBe(true);
-        expect(completedBy(insideServerWork)).toBeUndefined();
+        expect(await asClient(() => ServerOperationScopeManager.Instance.RunAsServerWork(() => human(REVIEWER).Save()))).toBe(false);
     });
 
     it('refuses editing the recorded completer of a step already complete, by a client or by server code', async () => {
@@ -250,6 +249,8 @@ describe("MJTaskEntityServer: a workflow step's data is the dispatcher's", () =>
     function step(stepType: string | null, fields: string[], completes = false): Step {
         const t = task({ saved: true, stored: { human: { instructions: 'x' } } }) as Step;
         t.StepType = stepType;
+        // Every Human step of a real graph is assigned to its submitter.
+        (t as unknown as { UserID: string | null }).UserID = stepType === 'Human' ? SUBMITTER.ID : null;
         t.storedStatus = 'Pending';
         t.Status = completes ? 'Complete' : 'Pending';
         t.ContextCurrentUser = SUBMITTER;
@@ -282,16 +283,37 @@ describe("MJTaskEntityServer: a workflow step's data is the dispatcher's", () =>
         expect(await remapped.Save()).toBe(false);
     });
 
-    it("lets anyone move a step on the canvas, or reassign it, without touching what it runs", async () => {
-        const moved = step('Action', ['UserID', 'DueAt']);
+    it('lets anyone move a step on the canvas or give it a due date', async () => {
+        const moved = step('Action', ['DueAt']);
         moved.Configuration = JSON.stringify({ human: { instructions: 'x' }, layout: { x: 10, y: 20 } });
         expect(await moved.Save()).toBe(true);
+    });
+
+    it('refuses reassigning a step, or rerunning, skipping or settling one by its status', async () => {
+        expect(await step('Human', ['UserID']).Save()).toBe(false);
+        expect(await asClient(() => step('Human', ['UserID']).Save())).toBe(false);
+        const rerun = step('Action', []);
+        rerun.storedStatus = 'Complete';
+        rerun.Status = 'Pending';
+        expect(await rerun.Save()).toBe(false);
+        const skipped = step('Human', []);
+        skipped.Status = 'Skipped';
+        expect(await skipped.Save()).toBe(false);
+    });
+
+    it('refuses changing any of what a step recorded when it ran, its action log included', async () => {
+        const t = task({ saved: true, stored: { runtime: { actionLogID: 'log-1', isOutputTainted: false } }, next: { runtime: { actionLogID: 'log-2', isOutputTainted: false } } }) as Step;
+        t.ContextCurrentUser = SUBMITTER;
+        expect(await t.Save()).toBe(false);
     });
 
     it("lets the dispatcher write a step's data, and leaves other tasks alone", async () => {
         expect(await asDispatcher(() => step('Action', ['OutputPayload', 'InputPayload']).Save())).toBe(true);
         expect(await step(null, ['OutputPayload', 'InputPayload', 'Name']).Save()).toBe(true);
-        expect(await step('External', ['OutputPayload', 'InputPayload']).Save()).toBe(true);
+        // An A2A store's row: `External`, with no parent.
+        const a2a = step('External', ['OutputPayload', 'InputPayload']);
+        (a2a as unknown as { ParentID: string | null }).ParentID = null;
+        expect(await a2a.Save()).toBe(true);
     });
 });
 
@@ -301,5 +323,37 @@ describe('ExecutableConfigurationChanged', () => {
         expect(ExecutableConfigurationChanged(null, '{"layout":{"x":1}}')).toBe(false);
         expect(ExecutableConfigurationChanged('{"a":1}', '{"a":2}')).toBe(true);
         expect(ExecutableConfigurationChanged('{"a":1}', 'not json')).toBe(true);
+    });
+});
+
+describe("MJTaskEntityServer: a workflow's metadata is the dispatcher's", () => {
+    const SUBMITTER = { ID: '00000000-0000-4000-8000-0000000000a1' };
+    type Parent = TestTask & { StepType: string | null; ParentID: string | null; Type: string | null; Status: string; storedStatus: string; ContextCurrentUser: { ID: string } | undefined; dirtyFields: Set<string> };
+    const asDispatcher = <T>(fn: () => T): T => ServerOperationScopeManager.Instance.RunWithAuthority(
+        { operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION, source: 'ServerEngine', allowedEntities: ['MJ: Tasks'], userId: SUBMITTER.ID },
+        fn,
+    );
+    function parent(fields: string[], type = 'AI Workflow'): Parent {
+        const t = task({ saved: true }) as Parent;
+        t.StepType = null;
+        t.ParentID = null;
+        t.Type = type;
+        t.ContextCurrentUser = SUBMITTER;
+        fields.forEach((f) => t.dirtyFields.add(f));
+        return t;
+    }
+
+    it('refuses rewriting who a workflow runs as, the data its steps read, or what it is attached to', async () => {
+        for (const field of ['InputPayload', 'OutputPayload', 'AgentRunID', 'UserID', 'ConversationDetailID', 'TypeID', 'EnvironmentID']) {
+            expect(await parent([field]).Save()).toBe(false);
+        }
+    });
+
+    it("lets the dispatcher write them, leaves a workflow's status writable, and leaves other parentless tasks alone", async () => {
+        expect(await asDispatcher(() => parent(['InputPayload']).Save())).toBe(true);
+        const settled = parent([]);
+        settled.Status = 'Complete';
+        expect(await settled.Save()).toBe(true);
+        expect(await parent(['InputPayload'], 'A2A Task').Save()).toBe(true);
     });
 });
