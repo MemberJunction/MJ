@@ -32,7 +32,7 @@ export class GitRepo {
     }
     /** SHAs of commits after `sha` on origin/next that touch any of `paths`. */
     public async LaterCommitsTouching(sha: string, paths: string[]): Promise<string[]> {
-        return (await this.git(['log', '--format=%H', `${sha}..origin/next`, '--', ...paths])).split('\n').filter(Boolean);
+        return (await this.git(['log', '--first-parent', '--format=%H', `${sha}..origin/next`, '--', ...paths])).split('\n').filter(Boolean);
     }
     /**
      * For each line range at `sha`, the first-parent landing commit that last changed each line; one SHA per line.

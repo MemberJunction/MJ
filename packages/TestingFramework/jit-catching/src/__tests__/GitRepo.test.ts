@@ -106,11 +106,11 @@ describe('GitRepo', () => {
     await fake.Diff('aaa1111', 'bbb2222', [], { NoRenames: true });
     expect(calls[0]).toContain('--no-renames');
   });
-  it('LaterCommitsTouching lists the SHAs after a commit on origin/next that touch the paths', async () => {
+  it('LaterCommitsTouching lists the landing commits after a commit on origin/next that touch the paths', async () => {
     const calls: string[][] = [];
     const fake = new GitRepo('/repo', async (args) => { calls.push(args); return 'a'.repeat(40) + '\n' + 'b'.repeat(40) + '\n'; });
     expect(await fake.LaterCommitsTouching('abc1234', ['packages/X/src/a.ts', 'packages/X/src/b.ts'])).toEqual(['a'.repeat(40), 'b'.repeat(40)]);
-    expect(calls).toEqual([['-c', 'core.quotePath=false', 'log', '--format=%H', 'abc1234..origin/next', '--', 'packages/X/src/a.ts', 'packages/X/src/b.ts']]);
+    expect(calls).toEqual([['-c', 'core.quotePath=false', 'log', '--first-parent', '--format=%H', 'abc1234..origin/next', '--', 'packages/X/src/a.ts', 'packages/X/src/b.ts']]);
   });
   it('BlameFirstParent returns one 40-hex SHA per blamed line', async () => {
     const calls: string[][] = [];
