@@ -51,6 +51,7 @@ const startSessionMock = vi.fn<[], Promise<FakeSession>>(async () => deadSession
 const recoverDeadSessionMock = vi.fn<[], Promise<FakeSession | null>>(async () => null);
 const endSessionMock = vi.fn(async (_agentSessionID: string) => true);
 const restrictMock = vi.fn(async (_agentSessionID: string, _allowedHosts: string[]) => undefined);
+const getSessionMock = vi.fn<[], unknown>(() => undefined);
 vi.mock('@memberjunction/remote-browser-server', () => ({
   NormalizeInstanceKey: (key?: string) => key?.trim() || null,
   RemoteBrowserEngine: {
@@ -59,7 +60,7 @@ vi.mock('@memberjunction/remote-browser-server', () => ({
       RecoverDeadAgentSession: (...args: unknown[]) => recoverDeadSessionMock(...(args as [])),
       EndSessionForAgentSession: (agentSessionID: string) => endSessionMock(agentSessionID),
       RestrictPrivateNetworkForAgentSession: (agentSessionID: string, allowedHosts: string[]) => restrictMock(agentSessionID, allowedHosts),
-      GetSessionForAgentSession: () => undefined,
+      GetSessionForAgentSession: (...args: unknown[]) => getSessionMock(...(args as [])),
     },
   },
 }));
@@ -457,4 +458,31 @@ describe('RemoteBrowserActionResolver — conversation-scoped ownership & struct
     expect(clickRes.Success).toBe(true);
     expect(deadSession.ExecuteAction).toHaveBeenLastCalledWith({ Kind: 'click', Selector: undefined, Ref: 'a1', Text: 'Learn more', X: undefined, Y: undefined });
   });
+
+  it('ResizeRemoteBrowserViewport checks ownership, resizes the already-open browser session in place, and does not launch a new session when closed', async () => {
+    const resizeViewport = vi.fn(async (_w: number, _h: number) => undefined);
+    startSessionMock.mockReset();
+    getSessionMock.mockReset().mockReturnValue({ ...makeSession(), ResizeViewport: resizeViewport });
+    const resolver = conversationResolver(userID);
+
+    await expect(resolver.ResizeRemoteBrowserViewport(convID, 540, 760, ctx)).resolves.toBe(true);
+    expect(resizeViewport).toHaveBeenCalledWith(540, 760);
+    expect(startSessionMock).not.toHaveBeenCalled();
+
+    // No open browser session -> returns false without launching one
+    getSessionMock.mockReturnValue(undefined);
+    await expect(resolver.ResizeRemoteBrowserViewport(convID, 540, 760, ctx)).resolves.toBe(false);
+    expect(startSessionMock).not.toHaveBeenCalled();
+
+    // Non-positive dimensions -> returns false without touching the session
+    getSessionMock.mockReturnValue({ ...makeSession(), ResizeViewport: resizeViewport });
+    resizeViewport.mockClear();
+    await expect(resolver.ResizeRemoteBrowserViewport(convID, 0, 760, ctx)).resolves.toBe(false);
+    expect(resizeViewport).not.toHaveBeenCalled();
+
+    // Another user's conversation -> refused by ownership check
+    await expect(conversationResolver(otherUserID).ResizeRemoteBrowserViewport(convID, 540, 760, ctx)).rejects.toThrow('Not authorized');
+    expect(resizeViewport).not.toHaveBeenCalled();
+  });
 });
+

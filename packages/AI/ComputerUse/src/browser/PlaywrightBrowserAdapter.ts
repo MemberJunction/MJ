@@ -702,6 +702,29 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
         onFrame(frame);
     }
 
+    /**
+     * Resize the active browser page's viewport in place without navigating or reloading.
+     *
+     * Updates {@link BrowserConfig.ViewportWidth} and {@link BrowserConfig.ViewportHeight} so subsequent
+     * {@link CaptureScreencastFrame} keyframes stamp the new dimensions, and invokes Playwright's
+     * `page.setViewportSize({ width, height })` when a page is currently open.
+     *
+     * @param width - Target viewport width in CSS pixels (must be a positive finite number).
+     * @param height - Target viewport height in CSS pixels (must be a positive finite number).
+     */
+    public override async SetViewportSize(width: number, height: number): Promise<void> {
+        const nextWidth = Math.round(width);
+        const nextHeight = Math.round(height);
+        if (!Number.isFinite(nextWidth) || !Number.isFinite(nextHeight) || nextWidth <= 0 || nextHeight <= 0) {
+            return;
+        }
+        this.config.ViewportWidth = nextWidth;
+        this.config.ViewportHeight = nextHeight;
+        if (this.page) {
+            await this.page.setViewportSize({ width: nextWidth, height: nextHeight });
+        }
+    }
+
     // ─── Audio capture (in-page tab-audio feed) ────────────
 
     /**

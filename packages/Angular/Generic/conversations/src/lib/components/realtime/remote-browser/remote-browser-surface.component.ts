@@ -1,6 +1,6 @@
 import {
-  ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, NgZone, OnDestroy,
-  OnInit, Output, ViewChild, inject
+  AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, NgZone,
+  OnDestroy, OnInit, Output, ViewChild, inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -14,8 +14,19 @@ const POINTER_MOVE_THROTTLE_MS = 50;
 /** Min interval between forwarded scroll samples during takeover; the deltas coalesce between sends (~25/sec). */
 const SCROLL_THROTTLE_MS = 40;
 
+/** Debounce delay (ms) before forwarding a ResizeObserver viewport change to the server. */
+const VIEWPORT_RESIZE_DEBOUNCE_MS = 120;
+
 /** Radius (px) of the synthetic cursor ring drawn on the overlay so the user can see their pointer. */
 const SYNTHETIC_CURSOR_RADIUS = 6;
+
+/** Usable drawer viewport dimensions (CSS pixels) reported by {@link RemoteBrowserSurfaceComponent.ViewportResize}. */
+export interface RemoteBrowserViewportSize {
+  /** Usable viewport width in CSS pixels. */
+  Width: number;
+  /** Usable viewport height in CSS pixels. */
+  Height: number;
+}
 
 /** A keyboard modifier held during a relayed human input (Shift-click selection, Ctrl/Cmd+key chords). */
 export type RemoteBrowserModifier = 'Shift' | 'Control' | 'Alt' | 'Meta';
@@ -97,6 +108,43 @@ export function MapToViewportCoords(
 }
 
 /**
+ * Computes the largest CSS display box (in integer pixels) that fits within `viewportWidth × viewportHeight`
+ * while preserving the frame's exact aspect ratio (`frameWidth / frameHeight`).
+ *
+ * Pure + framework-free so it's unit-testable without a DOM.
+ *
+ * @param viewportWidth Usable container width in CSS pixels.
+ * @param viewportHeight Usable container height in CSS pixels.
+ * @param frameWidth Frame bitmap width in pixels.
+ * @param frameHeight Frame bitmap height in pixels.
+ * @returns Fitted CSS display box `{ Width, Height }`, or `null` when any dimension is non-positive.
+ */
+export function ComputeFittedFrameSize(
+  viewportWidth: number,
+  viewportHeight: number,
+  frameWidth: number,
+  frameHeight: number,
+): RemoteBrowserViewportSize | null {
+  if (
+    !Number.isFinite(viewportWidth) ||
+    !Number.isFinite(viewportHeight) ||
+    !Number.isFinite(frameWidth) ||
+    !Number.isFinite(frameHeight) ||
+    viewportWidth <= 0 ||
+    viewportHeight <= 0 ||
+    frameWidth <= 0 ||
+    frameHeight <= 0
+  ) {
+    return null;
+  }
+  const scale = Math.min(viewportWidth / frameWidth, viewportHeight / frameHeight);
+  return {
+    Width: Math.max(1, Math.round(frameWidth * scale)),
+    Height: Math.max(1, Math.round(frameHeight * scale)),
+  };
+}
+
+/**
  * One snapshot of the server-hosted browser — the shape the surface's {@link RemoteBrowserSurfaceComponent.Fetch}
  * callback resolves to. Mirrors the server's `RemoteBrowserSnapshot` query payload.
  */
@@ -173,7 +221,7 @@ export type RemoteBrowserSelectionFetcher = () => Promise<string>;
           </button>
         }
       </div>
-      <div class="rb-viewport">
+      <div #viewportEl class="rb-viewport">
         @if (Streaming) {
           <div class="rb-canvas-stack" [class.rb-hidden]="!HasFrame">
             <canvas #frameCanvas class="rb-screenshot" [class.rb-screenshot--interactive]="CanTakeOver"></canvas>
@@ -244,20 +292,24 @@ export type RemoteBrowserSelectionFetcher = () => Promise<string>;
     .rb-viewport {
       flex: 1 1 auto;
       min-height: 0;
+      min-width: 0;
       display: flex;
       align-items: center;
       justify-content: center;
-      overflow: auto;
-      padding: 12px;
+      overflow: hidden;
+      padding: 0;
     }
     .rb-screenshot {
       max-width: 100%;
       max-height: 100%;
+      width: auto;
+      height: auto;
       object-fit: contain;
-      border: 1px solid var(--mj-border-default);
-      border-radius: var(--mj-radius-md, 6px);
-      box-shadow: var(--mj-shadow-sm, 0 1px 3px color-mix(in srgb, var(--mj-text-primary) 12%, transparent));
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
       background: var(--mj-bg-surface);
+      display: block;
     }
     .rb-screenshot--interactive {
       /* Hide the OS cursor — we render a synthetic cursor on the overlay so there's exactly one pointer
@@ -266,8 +318,7 @@ export type RemoteBrowserSelectionFetcher = () => Promise<string>;
       outline: none;
     }
     .rb-screenshot--interactive:focus-visible {
-      border-color: var(--mj-border-focus);
-      box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
+      box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
     }
     /* Frame canvas + synthetic-cursor overlay share one box; the stack shrinks to the frame canvas so the
        absolutely-positioned overlay (inset:0, same object-fit) lines up pixel-for-pixel with it. */
@@ -339,7 +390,7 @@ export type RemoteBrowserSelectionFetcher = () => Promise<string>;
     }
   `]
 })
-export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
+export class RemoteBrowserSurfaceComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Snapshot fetcher supplied by the channel plugin (closes over the session id + provider). */
   @Input() Fetch: RemoteBrowserSnapshotFetcher | null = null;
 
@@ -426,6 +477,12 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
   @Output() HumanInput = new EventEmitter<RemoteBrowserHumanInputEvent>();
 
   /**
+   * Emits the usable drawer viewport size (`{ Width, Height }` below the toolbar) when the first frame
+   * arrives and whenever the user resizes or maximizes/restores the pane (debounced, keeping the latest size).
+   */
+  @Output() ViewportResize = new EventEmitter<RemoteBrowserViewportSize>();
+
+  /**
    * Whether the live tab-audio stream is available — the channel sets this `true` when the server confirms
    * it is pushing audio. Drives whether the speaker toggle renders in the live-view bar.
    */
@@ -468,6 +525,9 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
   /** Whether at least one pushed screencast frame has been painted (drives the canvas placeholder). */
   public HasFrame = false;
 
+  /** The usable area below the toolbar whose dimensions drive remote viewport resizing. */
+  @ViewChild('viewportEl') private viewportEl?: ElementRef<HTMLElement>;
+
   /** The canvas the pushed screencast frames are painted onto (present only while {@link Streaming}). */
   @ViewChild('frameCanvas') private frameCanvas?: ElementRef<HTMLCanvasElement>;
 
@@ -495,6 +555,15 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
   private pendingFrameDataUrl: string | null = null;
   /** True while a paint is scheduled, so rapid frames coalesce to one `requestAnimationFrame`. */
   private framePaintScheduled = false;
+
+  /** Active ResizeObserver watching {@link viewportEl}; `null` when not attached. */
+  private resizeObserver: ResizeObserver | null = null;
+  /** Pending debounce timer for {@link ViewportResize} emissions during a divider drag / pane resize. */
+  private resizeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Most recent measured usable viewport size (`{ Width, Height }`). */
+  private latestViewportSize: RemoteBrowserViewportSize | null = null;
+  /** Last viewport size emitted through {@link ViewportResize}, used to deduplicate unchanged measurements. */
+  private lastEmittedViewportSize: RemoteBrowserViewportSize | null = null;
 
   /** The canvas element takeover listeners are currently bound to, or `null` when detached. */
   private takeoverCanvas: HTMLCanvasElement | null = null;
@@ -554,9 +623,14 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
     this.resumePolling();
   }
 
+  ngAfterViewInit(): void {
+    this.attachViewportResizeObserver();
+  }
+
   ngOnDestroy(): void {
     this.destroyed = true;
     this.stopPolling();
+    this.detachViewportResizeObserver();
     this.detachTakeoverListeners();
   }
 
@@ -616,6 +690,7 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
     if (this.destroyed) {
       return;
     }
+    const hadSnapshot = this.HasSnapshot;
     const base64 = snapshot?.ScreenshotBase64 ?? null;
     const nextUrl = snapshot?.CurrentUrl ?? null;
     const nextDataUrl = base64 ? `data:image/png;base64,${base64}` : this.ScreenshotDataUrl;
@@ -626,6 +701,9 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
     this.CurrentUrl = nextUrl;
     // Re-enter the zone for the OnPush update (the poll runs outside Angular).
     this.zone.run(() => this.cdr.markForCheck());
+    if (!hadSnapshot && this.HasSnapshot) {
+      this.notifyInitialViewportSize();
+    }
   }
 
   /**
@@ -689,17 +767,180 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
     if (w > 0 && h > 0 && (canvas.width !== w || canvas.height !== h)) {
       canvas.width = w;
       canvas.height = h;
+      this.updateCanvasDisplaySize();
+      if (this.cursorViewportPoint) {
+        this.scheduleCursorPaint();
+      } else {
+        const overlay = this.cursorCanvas?.nativeElement;
+        if (overlay && (overlay.width !== w || overlay.height !== h)) {
+          overlay.width = w;
+          overlay.height = h;
+        }
+      }
     }
     ctx.drawImage(this.frameImage, 0, 0);
     if (!this.HasFrame) {
       // First frame arrived — re-enter the zone to clear the placeholder + flip the "Live" indicator,
-      // and attach takeover listeners now that the canvas element exists in the DOM.
+      // attach takeover listeners now that the canvas element exists in the DOM, and report the usable
+      // drawer viewport size so the server resizes the remote page in place.
       this.zone.run(() => {
         this.HasFrame = true;
         this.cdr.markForCheck();
       });
       this.syncTakeoverListeners();
+      this.updateCanvasDisplaySize();
+      this.notifyInitialViewportSize();
     }
+  }
+
+  // ----- viewport measurement & resize observation ------------------------------------------
+
+  /**
+   * Attaches a `ResizeObserver` to `.rb-viewport` (the usable space below the toolbar) outside Angular's
+   * zone. Sends the usable width and height when the first frame arrives and whenever the user drags the
+   * divider or maximizes/restores the pane (debounced, keeping the latest size).
+   */
+  private attachViewportResizeObserver(): void {
+    const el = this.viewportEl?.nativeElement;
+    if (!el || this.destroyed) {
+      return;
+    }
+    const initial = this.measureViewport();
+    if (initial) {
+      this.latestViewportSize = initial;
+      this.updateCanvasDisplaySize();
+      if (this.HasSnapshot) {
+        this.emitViewportResizeImmediate(initial);
+      }
+    }
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    this.zone.runOutsideAngular(() => {
+      this.resizeObserver = new ResizeObserver((entries: ResizeObserverEntry[]) => {
+        if (this.destroyed) {
+          return;
+        }
+        const latestEntry = entries.length > 0 ? entries[entries.length - 1] : undefined;
+        const measured = this.measureViewport(latestEntry);
+        if (!measured) {
+          return;
+        }
+        this.latestViewportSize = measured;
+        this.updateCanvasDisplaySize();
+        if (this.HasSnapshot) {
+          this.scheduleViewportResizeEmit();
+        }
+      });
+      this.resizeObserver.observe(el);
+    });
+  }
+
+  /** Disconnects the `ResizeObserver` and cancels any pending debounce timer. */
+  private detachViewportResizeObserver(): void {
+    if (this.resizeDebounceTimer !== null) {
+      clearTimeout(this.resizeDebounceTimer);
+      this.resizeDebounceTimer = null;
+    }
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
+  }
+
+  /**
+   * Measures the usable viewport container (`.rb-viewport`) in integer CSS pixels, preferring a
+   * `ResizeObserverEntry`'s `contentRect` and falling back to `clientWidth`/`clientHeight` or
+   * `getBoundingClientRect()`. Returns `null` when the element has zero or non-finite dimensions.
+   */
+  private measureViewport(entry?: ResizeObserverEntry): RemoteBrowserViewportSize | null {
+    const contentWidth = entry?.contentRect?.width ?? 0;
+    const contentHeight = entry?.contentRect?.height ?? 0;
+    const el = this.viewportEl?.nativeElement;
+    const rect = el?.getBoundingClientRect?.();
+    const rawWidth = contentWidth > 0 ? contentWidth : (el && el.clientWidth > 0 ? el.clientWidth : (rect?.width ?? 0));
+    const rawHeight = contentHeight > 0 ? contentHeight : (el && el.clientHeight > 0 ? el.clientHeight : (rect?.height ?? 0));
+    const width = Math.floor(rawWidth);
+    const height = Math.floor(rawHeight);
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+      return null;
+    }
+    return { Width: width, Height: height };
+  }
+
+  /** Sends the current usable viewport size immediately when the first frame/snapshot arrives. */
+  private notifyInitialViewportSize(): void {
+    const size = this.measureViewport() ?? this.latestViewportSize;
+    if (!size) {
+      return;
+    }
+    this.latestViewportSize = size;
+    this.emitViewportResizeImmediate(size);
+  }
+
+  /** Debounces rapid `ResizeObserver` notifications, keeping {@link latestViewportSize}. */
+  private scheduleViewportResizeEmit(): void {
+    if (this.resizeDebounceTimer !== null) {
+      clearTimeout(this.resizeDebounceTimer);
+    }
+    this.zone.runOutsideAngular(() => {
+      this.resizeDebounceTimer = setTimeout(() => {
+        this.resizeDebounceTimer = null;
+        if (this.destroyed || !this.latestViewportSize) {
+          return;
+        }
+        this.emitViewportResizeIfChanged(this.latestViewportSize);
+      }, VIEWPORT_RESIZE_DEBOUNCE_MS);
+    });
+  }
+
+  /** Clears any pending debounce timer and emits `size` immediately if it changed. */
+  private emitViewportResizeImmediate(size: RemoteBrowserViewportSize): void {
+    if (this.resizeDebounceTimer !== null) {
+      clearTimeout(this.resizeDebounceTimer);
+      this.resizeDebounceTimer = null;
+    }
+    this.emitViewportResizeIfChanged(size);
+  }
+
+  /** Emits `size` through {@link ViewportResize} when it differs from {@link lastEmittedViewportSize}. */
+  private emitViewportResizeIfChanged(size: RemoteBrowserViewportSize): void {
+    if (
+      this.lastEmittedViewportSize &&
+      this.lastEmittedViewportSize.Width === size.Width &&
+      this.lastEmittedViewportSize.Height === size.Height
+    ) {
+      return;
+    }
+    this.lastEmittedViewportSize = { Width: size.Width, Height: size.Height };
+    this.zone.run(() => this.ViewportResize.emit({ Width: size.Width, Height: size.Height }));
+  }
+
+  /**
+   * Sizes the frame canvas's CSS box (and thus `.rb-canvas-stack` + `.rb-cursor-overlay`) to fit the
+   * usable `.rb-viewport` area while preserving the frame's exact aspect ratio (`canvas.width / canvas.height`),
+   * so the frame fills the pane edge-to-edge (including when maximized above `1280 × 800`) and clicks
+   * always map accurately via {@link MapToViewportCoords}.
+   */
+  private updateCanvasDisplaySize(): void {
+    const canvas = this.frameCanvas?.nativeElement;
+    if (!canvas) {
+      return;
+    }
+    const viewport = this.latestViewportSize ?? this.measureViewport();
+    if (!viewport || canvas.width <= 0 || canvas.height <= 0) {
+      canvas.style.width = '';
+      canvas.style.height = '';
+      return;
+    }
+    const fitted = ComputeFittedFrameSize(viewport.Width, viewport.Height, canvas.width, canvas.height);
+    if (!fitted) {
+      canvas.style.width = '';
+      canvas.style.height = '';
+      return;
+    }
+    canvas.style.width = `${fitted.Width}px`;
+    canvas.style.height = `${fitted.Height}px`;
   }
 
   // ----- human takeover (Collaborative control) --------------------------------------------

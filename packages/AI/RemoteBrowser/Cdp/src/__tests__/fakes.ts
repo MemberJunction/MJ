@@ -160,6 +160,13 @@ export class FakePlaywrightBrowserAdapter extends PlaywrightBrowserAdapter {
         this.LastOnAudioChunk = null;
     }
 
+    /** Viewport sizes passed to {@link SetViewportSize}, in order. */
+    public ViewportResizes: Array<{ Width: number; Height: number }> = [];
+
+    public override async SetViewportSize(width: number, height: number): Promise<void> {
+        this.ViewportResizes.push({ Width: width, Height: height });
+    }
+
     public override get CurrentUrl(): string {
         return this.CurrentUrlValue;
     }
