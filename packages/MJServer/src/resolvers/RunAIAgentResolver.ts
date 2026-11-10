@@ -1036,7 +1036,10 @@ export class RunAIAgentResolver extends ResolverBase {
             const rv = RunView.FromMetadataProvider(provider);
             const result = await rv.RunView<MJAIAgentRequestEntity>({
                 EntityName: 'MJ: AI Agent Requests',
-                ExtraFilter: `OriginatingAgentRunID='${EscapeSQLString(trimmedLastRunId)}' AND Status='Requested'`,
+                // Not a workflow step's request (OriginatingTaskID): the graph's own run is its provenance, so a
+                // follow-up message to that run is not an answer to it. A person answers a workflow step on purpose,
+                // through the request itself; resumption and AgentWake skip those requests the same way.
+                ExtraFilter: `OriginatingAgentRunID='${EscapeSQLString(trimmedLastRunId)}' AND Status='Requested' AND OriginatingTaskID IS NULL`,
                 MaxRows: 1,
                 SkipTotalRowCount: true,
                 ResultType: 'entity_object'
