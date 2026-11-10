@@ -3498,7 +3498,6 @@ export class SpreadsheetArtifactViewerComponent
         conv.NewRecord();
         conv.Name = anchorLabel;
         conv.UserID = user.ID;
-        conv.Type = 'chat';
         conv.Status = 'Available';
         conv.LinkedEntityID = artifactsEntityId;
         conv.LinkedRecordID = this.artifactVersion.ArtifactID;

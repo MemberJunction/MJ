@@ -204,7 +204,7 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
 
         it('falls back to "AgentWake (<key>)" when no policy names the agent', async () => {
             const { provider, savedRoutines } = createMockMetadataProvider();
-            runViewMock.mockResolvedValueOnce({ Success: true, Results: [] });
+            runViewMock.mockResolvedValue({ Success: true, Results: [] });
 
             const approvalRequest = {
                 ID: 'req-name-2', AgentID: COS_AGENT_ID, RequestForUserID: USER_ALICE_ID,
@@ -649,6 +649,213 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
 
             expect(result.triggered).toBe(false);
             expect(result.resultCode).toBe('POLICY_DENIED');
+            expect(savedRoutines).toHaveLength(0);
+        });
+    });
+
+    describe('3. Generic Workstream Wake (TriggerWakeForWorkstream)', () => {
+        const FACTORY_AGENT_ID = '00000000-0000-0000-0000-0000FAC70711';
+
+        it('schedules an immediate AgentWake routine for a named non-Chief-of-Staff agent (Software Factory) and workstream when called by system/Owner user', async () => {
+            const { provider, savedRoutines, capturedContextUsers } = createMockMetadataProvider();
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(
+                createPolicy({
+                    AgentID: FACTORY_AGENT_ID,
+                    UserID: USER_ALICE_ID,
+                    Agent: 'Software Factory',
+                    Status: 'Active',
+                })
+            );
+            findUserMock.mockResolvedValue(aliceUser);
+            runViewMock
+                .mockResolvedValueOnce({
+                    Success: true,
+                    Results: [{ ID: FACTORY_AGENT_ID, Name: 'Software Factory' }],
+                })
+                .mockResolvedValueOnce({
+                    Success: true,
+                    Results: [],
+                });
+
+            const result = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+                targetUserID: USER_ALICE_ID,
+                targetAgentName: 'Software Factory',
+                workstreamKey: 'task:task-42',
+                wakeReason: 'Factory task moved to Ready for Build',
+                resumeState: {
+                    triggerType: 'TaskStatusChanged',
+                    recordID: 'task-42',
+                    status: 'Ready for Build',
+                    workstreamKey: 'spoofed-workstream',
+                    wakeReason: 'spoofed-reason',
+                },
+                contextUser: systemUser,
+                metadataProvider: provider,
+                now: FIXED_NOW,
+            });
+
+            expect(result.triggered).toBe(true);
+            expect(result.resultCode).toBe('WAKE_SCHEDULED');
+            expect(result.targetAgentID).toBe(FACTORY_AGENT_ID);
+            expect(result.targetUserID).toBe(USER_ALICE_ID);
+            expect(result.workstreamKey).toBe('task:task-42');
+            expect(savedRoutines).toHaveLength(1);
+            expect(savedRoutines[0].TargetID).toBe(FACTORY_AGENT_ID);
+            expect(savedRoutines[0].UserID).toBe(USER_ALICE_ID);
+            expect(savedRoutines[0].Name).toContain('Software Factory');
+            expect(capturedContextUsers[0]).toBe(systemUser);
+            // Canonical wake envelope fields must never be overwritten by caller resumeState
+            expect(savedRoutines[0].WakeConfigurationObject?.resumeState?.['workstreamKey']).toBe('task:task-42');
+            expect(savedRoutines[0].WakeConfigurationObject?.resumeState?.['wakeReason']).toBe(
+                'Factory task moved to Ready for Build'
+            );
+        });
+
+        it('rejects cross-user TriggerWakeForWorkstream from non-Owner callers, inactive target users, and policy lookup errors', async () => {
+            const { provider, savedRoutines } = createMockMetadataProvider();
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(
+                createPolicy({
+                    AgentID: FACTORY_AGENT_ID,
+                    UserID: USER_ALICE_ID,
+                    Agent: 'Software Factory',
+                    Status: 'Active',
+                })
+            );
+
+            // 1. Non-system, non-Owner caller (bobUser / serviceUser) attempting cross-user wake is rejected
+            const unauthorizedCrossUser = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+                targetUserID: USER_ALICE_ID,
+                targetAgentID: FACTORY_AGENT_ID,
+                workstreamKey: 'task:task-42',
+                wakeReason: 'Cross-user spoof',
+                contextUser: bobUser,
+                metadataProvider: provider,
+                now: FIXED_NOW,
+            });
+            expect(unauthorizedCrossUser.triggered).toBe(false);
+            expect(unauthorizedCrossUser.resultCode).toBe('POLICY_DENIED');
+
+            // 2. Inactive target user is rejected even for systemUser
+            findUserMock.mockResolvedValue({ ...aliceUser, IsActive: false } as UserInfo);
+            const inactiveTarget = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+                targetUserID: USER_ALICE_ID,
+                targetAgentID: FACTORY_AGENT_ID,
+                workstreamKey: 'task:task-42',
+                wakeReason: 'Wake inactive user',
+                contextUser: systemUser,
+                metadataProvider: provider,
+                now: FIXED_NOW,
+            });
+            expect(inactiveTarget.triggered).toBe(false);
+            expect(inactiveTarget.resultCode).toBe('POLICY_DENIED');
+
+            // 3. Policy lookup failure (Success: false) fails closed instead of defaulting to allowed
+            AgentUserPolicyEngine.Instance.ClearCache();
+            runViewMock.mockResolvedValueOnce({
+                Success: false,
+                Results: [],
+                ErrorMessage: 'Transient SQL timeout',
+            });
+            const lookupFailed = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+                targetUserID: USER_ALICE_ID,
+                targetAgentID: FACTORY_AGENT_ID,
+                workstreamKey: 'task:task-42',
+                wakeReason: 'Self wake during DB blip',
+                contextUser: aliceUser,
+                metadataProvider: provider,
+                now: FIXED_NOW,
+            });
+            expect(lookupFailed.triggered).toBe(false);
+            expect(lookupFailed.resultCode).toBe('POLICY_DENIED');
+            expect(savedRoutines).toHaveLength(0);
+        });
+
+        it('coalesces two rapid external events for the same workstream into pendingEvents without dropping either', async () => {
+            const { provider, savedRoutines } = createMockMetadataProvider();
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(
+                createPolicy({ AgentID: FACTORY_AGENT_ID, UserID: USER_ALICE_ID, Agent: 'Software Factory', Status: 'Active' })
+            );
+
+            runViewMock.mockImplementation(async (params: { EntityName: string }) => {
+                if (params.EntityName === 'MJ: AI Agents') {
+                    return { Success: true, Results: [{ ID: FACTORY_AGENT_ID, Name: 'Software Factory' }] };
+                }
+                return { Success: true, Results: savedRoutines };
+            });
+
+            await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+                targetUserID: USER_ALICE_ID,
+                targetAgentID: FACTORY_AGENT_ID,
+                workstreamKey: 'task:task-99',
+                wakeReason: 'GitHub CI check suite succeeded',
+                resumeState: { triggerType: 'GitHubWebhook', eventID: 'gh-evt-1' },
+                contextUser: aliceUser,
+                metadataProvider: provider,
+                now: FIXED_NOW,
+            });
+            await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+                targetUserID: USER_ALICE_ID,
+                targetAgentID: FACTORY_AGENT_ID,
+                workstreamKey: 'task:task-99',
+                wakeReason: 'GitHub PR approved by reviewer',
+                resumeState: { triggerType: 'GitHubWebhook', eventID: 'gh-evt-2' },
+                contextUser: aliceUser,
+                metadataProvider: provider,
+                now: FIXED_NOW,
+            });
+
+            expect(new Set(savedRoutines).size).toBe(1);
+            const pending = (savedRoutines[0].WakeConfigurationObject?.resumeState?.['pendingEvents'] ?? []) as Array<Record<string, unknown>>;
+            expect(pending).toHaveLength(2);
+            expect(pending.map((p) => p['eventID'])).toEqual(['gh-evt-1', 'gh-evt-2']);
+        });
+
+        it('suppresses workstream wake when target user policy is Paused or Disabled, and rejects unknown agent names', async () => {
+            const { provider, savedRoutines } = createMockMetadataProvider();
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(
+                createPolicy({ AgentID: FACTORY_AGENT_ID, UserID: USER_ALICE_ID, Status: 'Paused' })
+            );
+            runViewMock.mockResolvedValueOnce({
+                Success: true,
+                Results: [{ ID: FACTORY_AGENT_ID, Name: 'Software Factory' }],
+            });
+
+            const paused = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+                targetUserID: USER_ALICE_ID,
+                targetAgentID: FACTORY_AGENT_ID,
+                workstreamKey: 'task:task-1',
+                wakeReason: 'Task created',
+                contextUser: aliceUser,
+                metadataProvider: provider,
+                now: FIXED_NOW,
+            });
+            expect(paused.triggered).toBe(false);
+            expect(paused.resultCode).toBe('POLICY_DENIED');
+
+            runViewMock.mockResolvedValueOnce({ Success: true, Results: [] });
+            const missing = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+                targetUserID: USER_ALICE_ID,
+                targetAgentName: 'Nonexistent Agent',
+                workstreamKey: 'task:task-1',
+                wakeReason: 'Task created',
+                contextUser: aliceUser,
+                metadataProvider: provider,
+                now: FIXED_NOW,
+            });
+            expect(missing.triggered).toBe(false);
+            expect(missing.resultCode).toBe('AGENT_NOT_FOUND');
+
+            const invalid = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+                targetUserID: '',
+                targetAgentID: FACTORY_AGENT_ID,
+                workstreamKey: 'task:task-1',
+                wakeReason: 'Task created',
+                contextUser: aliceUser,
+                metadataProvider: provider,
+                now: FIXED_NOW,
+            });
+            expect(invalid.triggered).toBe(false);
+            expect(invalid.resultCode).toBe('MISSING_REQUIRED_INPUT');
             expect(savedRoutines).toHaveLength(0);
         });
     });

@@ -1365,5 +1365,51 @@
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Version Labels"
     }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Comments (inherited from MJ: Conversations): LinkedRecordID points to LinkedEntityID."
+    ],
+    "fields": {
+      "Name": "MJ: Comments"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "LinkedEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Comments&Name=LinkedRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Comments"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Field Suggestions (inherited from MJ: Conversations via MJ: Comments): LinkedRecordID points to LinkedEntityID."
+    ],
+    "fields": {
+      "Name": "MJ: Field Suggestions"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "LinkedEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Field Suggestions&Name=LinkedRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Field Suggestions"
+    }
   }
 ]

@@ -5,18 +5,18 @@
         [class.mj-record-comments-drawer--resizing]="IsResizingDrawer"
         [style.width.px]="EffectiveDrawerWidthPx"
         role="complementary"
-        aria-label="Record comments">
+        aria-label="Notes and suggestions">
         <div
             class="mj-record-comments-drawer__resize-handle"
-            title="Drag to resize comments panel"
+            title="Drag to resize notes and suggestions panel"
             (mousedown)="OnDrawerResizeStart($event)"></div>
         <!-- Header -->
         <header class="mj-record-comments__header">
             <div class="mj-record-comments__title-group">
                 <i class="fa-regular fa-comment-dots mj-record-comments__title-icon" aria-hidden="true"></i>
-                <h3 class="mj-record-comments__title">Comments</h3>
+                <h3 class="mj-record-comments__title">Notes &amp; suggestions</h3>
                 @if (OpenCount > 0) {
-                    <span class="mj-record-comments__count-badge" [attr.aria-label]="OpenCount + ' open comment threads'">
+                    <span class="mj-record-comments__count-badge" [attr.aria-label]="OpenCount + ' open items'">
                         {{ OpenCount }}
                     </span>
                 }
@@ -25,8 +25,8 @@
                 <button
                     type="button"
                     class="mj-record-comments__icon-btn"
-                    title="Refresh comments"
-                    aria-label="Refresh comments"
+                    title="Refresh notes and suggestions"
+                    aria-label="Refresh notes and suggestions"
                     [disabled]="IsLoading"
                     (click)="OnRefresh()">
                     <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsLoading" aria-hidden="true"></i>
@@ -34,8 +34,8 @@
                 <button
                     type="button"
                     class="mj-record-comments__icon-btn"
-                    title="Close comments"
-                    aria-label="Close comments"
+                    title="Close notes and suggestions"
+                    aria-label="Close notes and suggestions"
                     (click)="OnClose()">
                     <i class="fa-solid fa-xmark" aria-hidden="true"></i>
                 </button>
@@ -44,7 +44,7 @@
 
         <!-- Filter Bar -->
         <div class="mj-record-comments__filters">
-            <div class="mj-record-comments__status-tabs" role="tablist" aria-label="Filter comments by status">
+            <div class="mj-record-comments__status-tabs" role="tablist" aria-label="Filter by status">
                 <button
                     type="button"
                     role="tab"
@@ -72,6 +72,23 @@
                     (click)="OnStatusFilterChange('all')">
                     All
                 </button>
+            </div>
+
+            <div class="mj-record-comments__type-pills" role="group" aria-label="Filter by type">
+                @for (opt of AvailableTypeFilters; track opt.Code) {
+                    <button
+                        type="button"
+                        class="mj-record-comments__type-pill"
+                        [class.mj-record-comments__type-pill--active]="TypeFilter.toUpperCase() === opt.Code.toUpperCase()"
+                        [attr.aria-pressed]="TypeFilter.toUpperCase() === opt.Code.toUpperCase()"
+                        (click)="OnTypeFilterChange(opt.Code)">
+                        @if (opt.Icon) {
+                            <i [class]="opt.Icon" aria-hidden="true"></i>
+                        }
+                        <span>{{ opt.Label }}</span>
+                        <span class="mj-record-comments__type-pill-count">{{ opt.Count }}</span>
+                    </button>
+                }
             </div>
 
             @if (TargetFilter) {
@@ -214,7 +231,8 @@
                         @for (thread of group.Threads; track thread.Conversation.ID) {
                             <article
                                 class="mj-record-comments__thread"
-                                [class.mj-record-comments__thread--resolved]="thread.Conversation.IsResolved">
+                                [class.mj-record-comments__thread--resolved]="thread.Conversation.IsResolved"
+                                [class.mj-record-comments__thread--suggestion]="thread.IsFieldSuggestion">
                                 <div class="mj-record-comments__thread-header">
                                     <button
                                         type="button"
@@ -236,7 +254,7 @@
                                         </span>
                                     }
 
-                                    @if (CanUserPostComments) {
+                                    @if (CanUserPostComments && !thread.IsFieldSuggestion) {
                                         <div class="mj-record-comments__thread-actions">
                                             <button
                                                 type="button"
@@ -252,7 +270,18 @@
                                     }
                                 </div>
 
-                                @if (thread.QuotedValue !== null) {
+                                @if (thread.UIDriverClass) {
+                                    <mj-comment-card-driver-host
+                                        [Provider]="ProviderToUse"
+                                        [UIDriverKey]="thread.UIDriverClass"
+                                        [CommentRecord]="thread.Comment"
+                                        [ChildRecord]="thread.FieldSuggestion"
+                                        [TargetRecord]="Record"
+                                        [DriverContext]="thread.DriverContext"
+                                        (Navigate)="OnMentionRecordNavigate($event)"
+                                        (RecordMutated)="OnDriverRecordMutated()">
+                                    </mj-comment-card-driver-host>
+                                } @else if (thread.QuotedValue !== null) {
                                     <div
                                         class="mj-record-comments__quoted-value"
                                         [class.mj-record-comments__quoted-value--changed]="thread.HasValueChangedSinceComment">
@@ -267,58 +296,60 @@
                                     </div>
                                 }
 
-                                <div class="mj-record-comments__messages">
-                                    @for (msg of thread.Messages; track msg.ID) {
-                                        <div class="mj-record-comments__message" [class.mj-record-comments__message--ai]="msg.Role === 'AI'">
-                                            <div class="mj-record-comments__avatar" [class.mj-record-comments__avatar--ai]="msg.Role === 'AI'">
-                                                {{ FormatAuthorInitials(msg) }}
-                                            </div>
-                                            <div class="mj-record-comments__message-content">
-                                                <div class="mj-record-comments__message-meta">
-                                                    <span class="mj-record-comments__author">
-                                                        {{ msg.Role === 'AI' ? 'AI Assistant' : (msg.User || 'User') }}
-                                                    </span>
-                                                    <span class="mj-record-comments__timestamp">
-                                                        {{ FormatRelativeTime(msg.__mj_CreatedAt) }}
-                                                    </span>
+                                @if (thread.Messages.length > 0) {
+                                    <div class="mj-record-comments__messages">
+                                        @for (msg of thread.Messages; track msg.ID) {
+                                            <div class="mj-record-comments__message" [class.mj-record-comments__message--ai]="msg.Role === 'AI'">
+                                                <div class="mj-record-comments__avatar" [class.mj-record-comments__avatar--ai]="msg.Role === 'AI'">
+                                                    {{ FormatAuthorInitials(msg) }}
                                                 </div>
-                                                <div class="mj-record-comments__message-body">
-                                                    @for (seg of ParseMessageSegments(msg.Message); track $index) {
-                                                        @if (seg.Kind === 'mention' && seg.ID) {
-                                                            <button
-                                                                type="button"
-                                                                class="mj-record-comments__mention-pill mj-record-comments__mention-pill--clickable"
-                                                                [class.mj-record-comments__mention-pill--agent]="seg.MentionType === 'agent'"
-                                                                [class.mj-record-comments__mention-pill--user]="seg.MentionType === 'user'"
-                                                                mjRecordLink
-                                                                [EntityName]="seg.EntityName"
-                                                                [RecordID]="seg.ID"
-                                                                [DisplayName]="seg.Name"
-                                                                [title]="'Open ' + seg.Name + ' (' + (seg.MentionType === 'agent' ? 'AI Agent' : 'User') + ')'"
-                                                                (Navigate)="OnMentionRecordNavigate($event)">
-                                                                <i [class]="seg.MentionType === 'agent' ? 'fa-solid fa-robot' : 'fa-solid fa-user'" aria-hidden="true"></i>
-                                                                <span>&#64;{{ seg.Name }}</span>
-                                                            </button>
-                                                        } @else if (seg.Kind === 'mention') {
-                                                            <span
-                                                                class="mj-record-comments__mention-pill"
-                                                                [class.mj-record-comments__mention-pill--agent]="seg.MentionType === 'agent'"
-                                                                [class.mj-record-comments__mention-pill--user]="seg.MentionType === 'user'">
-                                                                <i [class]="seg.MentionType === 'agent' ? 'fa-solid fa-robot' : 'fa-solid fa-user'" aria-hidden="true"></i>
-                                                                <span>&#64;{{ seg.Name }}</span>
-                                                            </span>
-                                                        } @else {
-                                                            <span class="mj-record-comments__message-text">{{ seg.Text }}</span>
+                                                <div class="mj-record-comments__message-content">
+                                                    <div class="mj-record-comments__message-meta">
+                                                        <span class="mj-record-comments__author">
+                                                            {{ msg.Role === 'AI' ? 'AI Assistant' : (msg.User || 'User') }}
+                                                        </span>
+                                                        <span class="mj-record-comments__timestamp">
+                                                            {{ FormatRelativeTime(msg.__mj_CreatedAt) }}
+                                                        </span>
+                                                    </div>
+                                                    <div class="mj-record-comments__message-body">
+                                                        @for (seg of ParseMessageSegments(msg.Message); track $index) {
+                                                            @if (seg.Kind === 'mention' && seg.ID) {
+                                                                <button
+                                                                    type="button"
+                                                                    class="mj-record-comments__mention-pill mj-record-comments__mention-pill--clickable"
+                                                                    [class.mj-record-comments__mention-pill--agent]="seg.MentionType === 'agent'"
+                                                                    [class.mj-record-comments__mention-pill--user]="seg.MentionType === 'user'"
+                                                                    mjRecordLink
+                                                                    [EntityName]="seg.EntityName"
+                                                                    [RecordID]="seg.ID"
+                                                                    [DisplayName]="seg.Name"
+                                                                    [title]="'Open ' + seg.Name + ' (' + (seg.MentionType === 'agent' ? 'AI Agent' : 'User') + ')'"
+                                                                    (Navigate)="OnMentionRecordNavigate($event)">
+                                                                    <i [class]="seg.MentionType === 'agent' ? 'fa-solid fa-robot' : 'fa-solid fa-user'" aria-hidden="true"></i>
+                                                                    <span>&#64;{{ seg.Name }}</span>
+                                                                </button>
+                                                            } @else if (seg.Kind === 'mention') {
+                                                                <span
+                                                                    class="mj-record-comments__mention-pill"
+                                                                    [class.mj-record-comments__mention-pill--agent]="seg.MentionType === 'agent'"
+                                                                    [class.mj-record-comments__mention-pill--user]="seg.MentionType === 'user'">
+                                                                    <i [class]="seg.MentionType === 'agent' ? 'fa-solid fa-robot' : 'fa-solid fa-user'" aria-hidden="true"></i>
+                                                                    <span>&#64;{{ seg.Name }}</span>
+                                                                </span>
+                                                            } @else {
+                                                                <span class="mj-record-comments__message-text">{{ seg.Text }}</span>
+                                                            }
                                                         }
-                                                    }
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    }
-                                </div>
+                                        }
+                                    </div>
+                                }
 
                                 <!-- Reply Composer -->
-                                @if (CanUserPostComments) {
+                                @if (CanUserPostComments && thread.ShowReplyComposer) {
                                     @let drawerReplyDraftMentions = GetDraftMentions(thread.Conversation.ID);
                                     @if (drawerReplyDraftMentions.length > 0) {
                                         <div class="mj-record-comments__draft-mentions" aria-label="Tagged in this reply">
@@ -438,6 +469,27 @@
             </div>
         </header>
 
+        @if (ShowPopoverTypeFilters) {
+            <div class="mj-record-comments__filters mj-record-comments__filters--popover">
+                <div class="mj-record-comments__type-pills" role="group" aria-label="Filter by type">
+                    @for (opt of AvailableTypeFilters; track opt.Code) {
+                        <button
+                            type="button"
+                            class="mj-record-comments__type-pill"
+                            [class.mj-record-comments__type-pill--active]="TypeFilter.toUpperCase() === opt.Code.toUpperCase()"
+                            [attr.aria-pressed]="TypeFilter.toUpperCase() === opt.Code.toUpperCase()"
+                            (click)="OnTypeFilterChange(opt.Code)">
+                            @if (opt.Icon) {
+                                <i [class]="opt.Icon" aria-hidden="true"></i>
+                            }
+                            <span>{{ opt.Label }}</span>
+                            <span class="mj-record-comments__type-pill-count">{{ opt.Count }}</span>
+                        </button>
+                    }
+                </div>
+            </div>
+        }
+
         @if (ErrorBannerMessage) {
             <div class="mj-record-comments__error-banner" role="alert">
                 <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
@@ -447,74 +499,93 @@
 
         <div class="mj-record-comments__body mj-record-comments__body--popover">
             @for (thread of VisibleThreads; track thread.Conversation.ID) {
-                <article class="mj-record-comments__thread mj-record-comments__thread--compact">
-                    <div class="mj-record-comments__thread-header">
-                        <span class="mj-record-comments__thread-title">
-                            {{ thread.Messages.length }} {{ thread.Messages.length === 1 ? 'comment' : 'comments' }}
-                        </span>
-                        @if (CanUserPostComments) {
-                            <button
-                                type="button"
-                                class="mj-record-comments__resolve-btn"
-                                [disabled]="ResolvingConversationId === thread.Conversation.ID"
-                                (click)="OnToggleResolve(thread, $event)">
-                                <i class="fa-solid fa-check" aria-hidden="true"></i>
-                                <span>Resolve</span>
-                            </button>
-                        }
-                    </div>
+                <article
+                    class="mj-record-comments__thread mj-record-comments__thread--compact"
+                    [class.mj-record-comments__thread--suggestion]="thread.IsFieldSuggestion">
+                    @if (!thread.IsFieldSuggestion) {
+                        <div class="mj-record-comments__thread-header">
+                            <span class="mj-record-comments__thread-title">
+                                {{ thread.Messages.length }} {{ thread.Messages.length === 1 ? 'comment' : 'comments' }}
+                            </span>
+                            @if (CanUserPostComments) {
+                                <button
+                                    type="button"
+                                    class="mj-record-comments__resolve-btn"
+                                    [disabled]="ResolvingConversationId === thread.Conversation.ID"
+                                    (click)="OnToggleResolve(thread, $event)">
+                                    <i class="fa-solid fa-check" aria-hidden="true"></i>
+                                    <span>Resolve</span>
+                                </button>
+                            }
+                        </div>
+                    }
 
-                    <div class="mj-record-comments__messages">
-                        @for (msg of thread.Messages; track msg.ID) {
-                            <div class="mj-record-comments__message" [class.mj-record-comments__message--ai]="msg.Role === 'AI'">
-                                <div class="mj-record-comments__avatar" [class.mj-record-comments__avatar--ai]="msg.Role === 'AI'">
-                                    {{ FormatAuthorInitials(msg) }}
-                                </div>
-                                <div class="mj-record-comments__message-content">
-                                    <div class="mj-record-comments__message-meta">
-                                        <span class="mj-record-comments__author">
-                                            {{ msg.Role === 'AI' ? 'AI Assistant' : (msg.User || 'User') }}
-                                        </span>
-                                        <span class="mj-record-comments__timestamp">
-                                            {{ FormatRelativeTime(msg.__mj_CreatedAt) }}
-                                        </span>
+                    @if (thread.UIDriverClass) {
+                        <mj-comment-card-driver-host
+                            [Provider]="ProviderToUse"
+                            [UIDriverKey]="thread.UIDriverClass"
+                            [CommentRecord]="thread.Comment"
+                            [ChildRecord]="thread.FieldSuggestion"
+                            [TargetRecord]="Record"
+                            [DriverContext]="thread.DriverContext"
+                            (Navigate)="OnMentionRecordNavigate($event)"
+                            (RecordMutated)="OnDriverRecordMutated()">
+                        </mj-comment-card-driver-host>
+                    }
+
+                    @if (thread.Messages.length > 0) {
+                        <div class="mj-record-comments__messages">
+                            @for (msg of thread.Messages; track msg.ID) {
+                                <div class="mj-record-comments__message" [class.mj-record-comments__message--ai]="msg.Role === 'AI'">
+                                    <div class="mj-record-comments__avatar" [class.mj-record-comments__avatar--ai]="msg.Role === 'AI'">
+                                        {{ FormatAuthorInitials(msg) }}
                                     </div>
-                                    <div class="mj-record-comments__message-body">
-                                        @for (seg of ParseMessageSegments(msg.Message); track $index) {
-                                            @if (seg.Kind === 'mention' && seg.ID) {
-                                                <button
-                                                    type="button"
-                                                    class="mj-record-comments__mention-pill mj-record-comments__mention-pill--clickable"
-                                                    [class.mj-record-comments__mention-pill--agent]="seg.MentionType === 'agent'"
-                                                    [class.mj-record-comments__mention-pill--user]="seg.MentionType === 'user'"
-                                                    mjRecordLink
-                                                    [EntityName]="seg.EntityName"
-                                                    [RecordID]="seg.ID"
-                                                    [DisplayName]="seg.Name"
-                                                    [title]="'Open ' + seg.Name + ' (' + (seg.MentionType === 'agent' ? 'AI Agent' : 'User') + ')'"
-                                                    (Navigate)="OnMentionRecordNavigate($event)">
-                                                    <i [class]="seg.MentionType === 'agent' ? 'fa-solid fa-robot' : 'fa-solid fa-user'" aria-hidden="true"></i>
-                                                    <span>&#64;{{ seg.Name }}</span>
-                                                </button>
-                                            } @else if (seg.Kind === 'mention') {
-                                                <span
-                                                    class="mj-record-comments__mention-pill"
-                                                    [class.mj-record-comments__mention-pill--agent]="seg.MentionType === 'agent'"
-                                                    [class.mj-record-comments__mention-pill--user]="seg.MentionType === 'user'">
-                                                    <i [class]="seg.MentionType === 'agent' ? 'fa-solid fa-robot' : 'fa-solid fa-user'" aria-hidden="true"></i>
-                                                    <span>&#64;{{ seg.Name }}</span>
-                                                </span>
-                                            } @else {
-                                                <span class="mj-record-comments__message-text">{{ seg.Text }}</span>
+                                    <div class="mj-record-comments__message-content">
+                                        <div class="mj-record-comments__message-meta">
+                                            <span class="mj-record-comments__author">
+                                                {{ msg.Role === 'AI' ? 'AI Assistant' : (msg.User || 'User') }}
+                                            </span>
+                                            <span class="mj-record-comments__timestamp">
+                                                {{ FormatRelativeTime(msg.__mj_CreatedAt) }}
+                                            </span>
+                                        </div>
+                                        <div class="mj-record-comments__message-body">
+                                            @for (seg of ParseMessageSegments(msg.Message); track $index) {
+                                                @if (seg.Kind === 'mention' && seg.ID) {
+                                                    <button
+                                                        type="button"
+                                                        class="mj-record-comments__mention-pill mj-record-comments__mention-pill--clickable"
+                                                        [class.mj-record-comments__mention-pill--agent]="seg.MentionType === 'agent'"
+                                                        [class.mj-record-comments__mention-pill--user]="seg.MentionType === 'user'"
+                                                        mjRecordLink
+                                                        [EntityName]="seg.EntityName"
+                                                        [RecordID]="seg.ID"
+                                                        [DisplayName]="seg.Name"
+                                                        [title]="'Open ' + seg.Name + ' (' + (seg.MentionType === 'agent' ? 'AI Agent' : 'User') + ')'"
+                                                        (Navigate)="OnMentionRecordNavigate($event)">
+                                                        <i [class]="seg.MentionType === 'agent' ? 'fa-solid fa-robot' : 'fa-solid fa-user'" aria-hidden="true"></i>
+                                                        <span>&#64;{{ seg.Name }}</span>
+                                                    </button>
+                                                } @else if (seg.Kind === 'mention') {
+                                                    <span
+                                                        class="mj-record-comments__mention-pill"
+                                                        [class.mj-record-comments__mention-pill--agent]="seg.MentionType === 'agent'"
+                                                        [class.mj-record-comments__mention-pill--user]="seg.MentionType === 'user'">
+                                                        <i [class]="seg.MentionType === 'agent' ? 'fa-solid fa-robot' : 'fa-solid fa-user'" aria-hidden="true"></i>
+                                                        <span>&#64;{{ seg.Name }}</span>
+                                                    </span>
+                                                } @else {
+                                                    <span class="mj-record-comments__message-text">{{ seg.Text }}</span>
+                                                }
                                             }
-                                        }
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        }
-                    </div>
+                            }
+                        </div>
+                    }
 
-                    @if (CanUserPostComments) {
+                    @if (CanUserPostComments && thread.ShowReplyComposer) {
                         @let popoverReplyDraftMentions = GetDraftMentions(thread.Conversation.ID);
                         @if (popoverReplyDraftMentions.length > 0) {
                             <div class="mj-record-comments__draft-mentions" aria-label="Tagged in this reply">

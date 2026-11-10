@@ -6,7 +6,7 @@
  * @module @memberjunction/realtime-runtime
  */
 import type { IMetadataProvider } from '@memberjunction/core';
-import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { ProviderRequestAuthFor } from './provider-request-auth';
 import { CreateRecordingShardStore, type IRecordingShardStore } from './RecordingShardStore';
 import { FetchRecordingTransport, RecordingBaseURLFromGraphQLURL, type IRecordingTransport, type RecordingUploadOutcome } from './RecordingTransport';
 
@@ -33,23 +33,11 @@ function describeFailure(failure: unknown): string {
  * the provider has no URL (a test double, a provider that is not GraphQL, or one not configured yet).
  */
 export function CreateRecordingTransportForProvider(provider: IMetadataProvider | null | undefined): IRecordingTransport | null {
-  // Typed as GraphQL, but read defensively: a test double or a non-GraphQL provider has no ConfigData.
-  const graphQL = provider as GraphQLDataProvider | null | undefined;
-  const url = graphQL?.ConfigData?.URL;
-  if (!graphQL || !url) {
+  const auth = ProviderRequestAuthFor(provider);
+  if (!auth) {
     return null;
   }
-  return new FetchRecordingTransport({
-    BaseURL: RecordingBaseURLFromGraphQLURL(url),
-    Headers: () => {
-      const config = graphQL.ConfigData;
-      const headers: Record<string, string> = {};
-      if (config?.Token) headers.authorization = `Bearer ${config.Token}`;
-      if (config?.MJAPIKey) headers['x-mj-api-key'] = config.MJAPIKey;
-      if (config?.UserAPIKey) headers['x-api-key'] = config.UserAPIKey;
-      return headers;
-    },
-  });
+  return new FetchRecordingTransport({ BaseURL: RecordingBaseURLFromGraphQLURL(auth.GraphQLURL), Headers: auth.Headers });
 }
 
 /**

@@ -12345,6 +12345,222 @@ export const MJCollectionSchema = z.object({
 export type MJCollectionEntityType = z.infer<typeof MJCollectionSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Comment Types
+ */
+export const MJCommentTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Human-readable display name of the comment type (for example Comment or Field Suggestion).`),
+    Code: z.string().describe(`
+        * * Field Name: Code
+        * * Display Name: Code
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Stable uppercase programmatic code for this comment type (for example COMMENT or FIELD_SUGGESTION), referenced in Entity Configuration.Comments.AllowedCommentTypes and driver lookups.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Explanation of this comment type and its collaboration or review workflow.`),
+    ExtensionEntity: z.string().nullable().describe(`
+        * * Field Name: ExtensionEntity
+        * * Display Name: Extension Entity
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Optional MJ entity name of the declared IS-A child of MJ: Comments holding structured fields for this comment type (for example MJ: Field Suggestions).`),
+    DriverClass: z.string().nullable().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Optional ClassFactory registration key of a CommentTypeDriver subclass implementing server behavior such as OnAccept, OnReject, and OnRecordChanged.`),
+    UIDriverClass: z.string().nullable().describe(`
+        * * Field Name: UIDriverClass
+        * * Display Name: UI Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Optional ClassFactory registration key of an EntitySubtypeUIDriverBase component used by the Notes & suggestions panel to render cards of this comment type (for example FieldSuggestionCardComponent).`),
+    AllowedAnchorTypes: z.string().nullable().describe(`
+        * * Field Name: AllowedAnchorTypes
+        * * Display Name: Allowed Anchor Types
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional JSON array of Conversation.AnchorType values permitted for this comment type (for example ["Field"] for Field Suggestion). NULL allows all anchor types.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJCommentTypeEntityType = z.infer<typeof MJCommentTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Comments
+ */
+export const MJCommentSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)`),
+    CommentTypeID: z.string().describe(`
+        * * Field Name: CommentTypeID
+        * * Display Name: Comment Type
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Comment Types (vwCommentTypes.ID)
+        * * Default Value: 4B3A3797-EFA5-419F-80FF-F9515E5F4AA8
+        * * Description: Foreign key to CommentType classifying this comment (defaults to plain Comment) and driving its optional IS-A extension entity, server driver, and UI card component.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
+    ExternalID: z.string().nullable().describe(`
+        * * Field Name: ExternalID
+        * * Display Name: External ID
+        * * SQL Data Type: nvarchar(500)`),
+    Name: z.string().nullable().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    IsArchived: z.boolean().describe(`
+        * * Field Name: IsArchived
+        * * Display Name: Is Archived
+        * * SQL Data Type: bit`),
+    LinkedEntityID: z.string().nullable().describe(`
+        * * Field Name: LinkedEntityID
+        * * Display Name: Linked Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
+    LinkedRecordID: z.string().nullable().describe(`
+        * * Field Name: LinkedRecordID
+        * * Display Name: Linked Record
+        * * SQL Data Type: nvarchar(500)`),
+    DataContextID: z.string().nullable().describe(`
+        * * Field Name: DataContextID
+        * * Display Name: Data Context
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Data Contexts (vwDataContexts.ID)`),
+    Status: z.string().describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)`),
+    EnvironmentID: z.string().describe(`
+        * * Field Name: EnvironmentID
+        * * Display Name: Environment
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)`),
+    ProjectID: z.string().nullable().describe(`
+        * * Field Name: ProjectID
+        * * Display Name: Project
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)`),
+    IsPinned: z.boolean().describe(`
+        * * Field Name: IsPinned
+        * * Display Name: Is Pinned
+        * * SQL Data Type: bit`),
+    TestRunID: z.string().nullable().describe(`
+        * * Field Name: TestRunID
+        * * Display Name: Test Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)`),
+    ApplicationScope: z.string().describe(`
+        * * Field Name: ApplicationScope
+        * * Display Name: Application Scope
+        * * SQL Data Type: nvarchar(20)`),
+    ApplicationID: z.string().nullable().describe(`
+        * * Field Name: ApplicationID
+        * * Display Name: Application
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)`),
+    DefaultAgentID: z.string().nullable().describe(`
+        * * Field Name: DefaultAgentID
+        * * Display Name: Default Agent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)`),
+    AdditionalData: z.string().nullable().describe(`
+        * * Field Name: AdditionalData
+        * * Display Name: Additional Data
+        * * SQL Data Type: nvarchar(MAX)`),
+    RecordingFileID: z.string().nullable().describe(`
+        * * Field Name: RecordingFileID
+        * * Display Name: Recording File
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)`),
+    EgressID: z.string().nullable().describe(`
+        * * Field Name: EgressID
+        * * Display Name: Egress ID
+        * * SQL Data Type: nvarchar(255)`),
+    VisitorKey: z.string().nullable().describe(`
+        * * Field Name: VisitorKey
+        * * Display Name: Visitor Key
+        * * SQL Data Type: nvarchar(255)`),
+    LastConversationID: z.string().nullable().describe(`
+        * * Field Name: LastConversationID
+        * * Display Name: Last Conversation
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)`),
+    AnchorType: z.string().nullable().describe(`
+        * * Field Name: AnchorType
+        * * Display Name: Anchor Type
+        * * SQL Data Type: nvarchar(30)`),
+    AnchorKey: z.string().nullable().describe(`
+        * * Field Name: AnchorKey
+        * * Display Name: Anchor Key
+        * * SQL Data Type: nvarchar(255)`),
+    AnchorMetadata: z.string().nullable().describe(`
+        * * Field Name: AnchorMetadata
+        * * Display Name: Anchor Metadata
+        * * SQL Data Type: nvarchar(MAX)`),
+    IsResolved: z.boolean().describe(`
+        * * Field Name: IsResolved
+        * * Display Name: Is Resolved
+        * * SQL Data Type: bit`),
+    ResolvedByUserID: z.string().nullable().describe(`
+        * * Field Name: ResolvedByUserID
+        * * Display Name: Resolved By User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
+    ResolvedAt: z.date().nullable().describe(`
+        * * Field Name: ResolvedAt
+        * * Display Name: Resolved At
+        * * SQL Data Type: datetimeoffset`),
+    TypeID: z.string().describe(`
+        * * Field Name: TypeID
+        * * Display Name: Type
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversation Types (vwConversationTypes.ID)`),
+    CommentType: z.string().nullable().describe(`
+        * * Field Name: CommentType
+        * * Display Name: Comment Type Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJCommentEntityType = z.infer<typeof MJCommentSchema>;
+
+/**
  * zod schema definition for the entity MJ: Communication Base Message Types
  */
 export const MJCommunicationBaseMessageTypeSchema = z.object({
@@ -16829,6 +17045,54 @@ export const MJConversationSkillSchema = z.object({
 export type MJConversationSkillEntityType = z.infer<typeof MJConversationSkillSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Conversation Types
+ */
+export const MJConversationTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Human-readable display name of the conversation type (exposed on vwConversations as the virtual Type field).`),
+    Code: z.string().describe(`
+        * * Field Name: Code
+        * * Display Name: Code
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Stable uppercase programmatic identifier for looking up this conversation type in code (for example CHAT, SKIP, ROUTINE, MEETING_ROOM, COMMENT) without coupling to display names.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Explanation of when this conversation type is used and how surfaces treat conversations of this type.`),
+    ExtensionEntity: z.string().nullable().describe(`
+        * * Field Name: ExtensionEntity
+        * * Display Name: Extension Entity
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Optional MJ entity name of the declared IS-A child of MJ: Conversations automatically created and loaded for conversations of this type (for example MJ: Comments).`),
+    DriverClass: z.string().nullable().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Optional ClassFactory registration key of a ConversationTypeDriver subclass providing custom validation and save lifecycle behavior for conversations of this type.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJConversationTypeEntityType = z.infer<typeof MJConversationTypeSchema>;
+
+/**
  * zod schema definition for the entity MJ: Conversation Widget Instances
  */
 export const MJConversationWidgetInstanceSchema = z.object({
@@ -16993,12 +17257,6 @@ export const MJConversationSchema = z.object({
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    Type: z.string().describe(`
-        * * Field Name: Type
-        * * Display Name: Type
-        * * SQL Data Type: nvarchar(50)
-        * * Default Value: Skip
-        * * Description: The type or category of conversation (Skip, Support, Chat, etc.).`),
     IsArchived: z.boolean().describe(`
         * * Field Name: IsArchived
         * * Display Name: Is Archived
@@ -17157,6 +17415,13 @@ export const MJConversationSchema = z.object({
         * * Display Name: Resolved At
         * * SQL Data Type: datetimeoffset
         * * Description: UTC timestamp when this anchored conversation thread was most recently marked resolved. NULL when IsResolved = 0.`),
+    TypeID: z.string().describe(`
+        * * Field Name: TypeID
+        * * Display Name: Type
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversation Types (vwConversationTypes.ID)
+        * * Default Value: 7F81FF57-C5A8-464D-B3B4-35A4FCF10717
+        * * Description: Foreign key to ConversationType identifying the kind of conversation (defaults to Chat). CodeGen exposes the joined ConversationType.Name as the virtual Type field.`),
     User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -17200,6 +17465,10 @@ export const MJConversationSchema = z.object({
     ResolvedByUser: z.string().nullable().describe(`
         * * Field Name: ResolvedByUser
         * * Display Name: Resolved By User
+        * * SQL Data Type: nvarchar(100)`),
+    Type: z.string().nullable().describe(`
+        * * Field Name: Type
+        * * Display Name: Type
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -22753,6 +23022,54 @@ export const MJEntitySettingSchema = z.object({
 export type MJEntitySettingEntityType = z.infer<typeof MJEntitySettingSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Entity Unique Keys
+ */
+export const MJEntityUniqueKeySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Entity whose base table has this unique key.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the unique index or unique constraint in the database.`),
+    FieldNames: z.string().describe(`
+        * * Field Name: FieldNames
+        * * Display Name: Field Names
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Comma-separated names of the key columns, in key order. INCLUDE columns are not part of the key and are not listed.`),
+    FilterDefinition: z.string().nullable().describe(`
+        * * Field Name: FilterDefinition
+        * * Display Name: Filter Definition
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Predicate of a filtered (SQL Server) or partial (PostgreSQL) unique index, as the database reports it. NULL when the key applies to every row. A filtered key only guarantees uniqueness among the rows that match it.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().nullable().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJEntityUniqueKeyEntityType = z.infer<typeof MJEntityUniqueKeySchema>;
+
+/**
  * zod schema definition for the entity MJ: Environments
  */
 export const MJEnvironmentSchema = z.object({
@@ -23923,6 +24240,200 @@ export const MJFeatureValueSchema = z.object({
 });
 
 export type MJFeatureValueEntityType = z.infer<typeof MJFeatureValueSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Field Suggestions
+ */
+export const MJFieldSuggestionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Comments (vwComments.ID)`),
+    SuggestedValue: z.string().nullable().describe(`
+        * * Field Name: SuggestedValue
+        * * Display Name: Suggested Value
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Proposed value for the target field serialized as text (or JSON for structured fields). NULL proposes clearing the field.`),
+    Confidence: z.number().nullable().describe(`
+        * * Field Name: Confidence
+        * * Display Name: Confidence
+        * * SQL Data Type: decimal(5, 4)
+        * * Description: Optional confidence score between 0.0000 and 1.0000 reported by the model, agent, or integration that proposed the value.`),
+    Source: z.union([z.literal('Agent'), z.literal('Integration'), z.literal('LLM'), z.literal('Person')]).describe(`
+        * * Field Name: Source
+        * * Display Name: Source
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Agent
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Agent
+    *   * Integration
+    *   * LLM
+    *   * Person
+        * * Description: Origin category of the suggestion: LLM (prompt inference), Integration (external system sync), Agent (autonomous AI agent), or Person (human collaborator).`),
+    Outcome: z.union([z.literal('Accepted'), z.literal('Rejected'), z.literal('Superseded')]).nullable().describe(`
+        * * Field Name: Outcome
+        * * Display Name: Outcome
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Accepted
+    *   * Rejected
+    *   * Superseded
+        * * Description: Terminal disposition of the suggestion: NULL while pending review, Accepted when applied to the record, Rejected when declined by a user, or Superseded when replaced by a newer suggestion or direct field edit. Who closed it and when live on Conversation.ResolvedByUserID and Conversation.ResolvedAt.`),
+    AIPromptRunID: z.string().nullable().describe(`
+        * * Field Name: AIPromptRunID
+        * * Display Name: AI Prompt Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+        * * Description: Optional foreign key to AIPromptRun linking an LLM- or agent-generated suggestion to the exact prompt execution that produced it.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    CommentTypeID: z.string().describe(`
+        * * Field Name: CommentTypeID
+        * * Display Name: Comment Type
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Comment Types (vwCommentTypes.ID)`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
+    ExternalID: z.string().nullable().describe(`
+        * * Field Name: ExternalID
+        * * Display Name: External ID
+        * * SQL Data Type: nvarchar(500)`),
+    Name: z.string().nullable().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    IsArchived: z.boolean().describe(`
+        * * Field Name: IsArchived
+        * * Display Name: Is Archived
+        * * SQL Data Type: bit`),
+    LinkedEntityID: z.string().nullable().describe(`
+        * * Field Name: LinkedEntityID
+        * * Display Name: Linked Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
+    LinkedRecordID: z.string().nullable().describe(`
+        * * Field Name: LinkedRecordID
+        * * Display Name: Linked Record
+        * * SQL Data Type: nvarchar(500)`),
+    DataContextID: z.string().nullable().describe(`
+        * * Field Name: DataContextID
+        * * Display Name: Data Context
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Data Contexts (vwDataContexts.ID)`),
+    Status: z.string().describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)`),
+    EnvironmentID: z.string().describe(`
+        * * Field Name: EnvironmentID
+        * * Display Name: Environment
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)`),
+    ProjectID: z.string().nullable().describe(`
+        * * Field Name: ProjectID
+        * * Display Name: Project
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)`),
+    IsPinned: z.boolean().describe(`
+        * * Field Name: IsPinned
+        * * Display Name: Is Pinned
+        * * SQL Data Type: bit`),
+    TestRunID: z.string().nullable().describe(`
+        * * Field Name: TestRunID
+        * * Display Name: Test Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)`),
+    ApplicationScope: z.string().describe(`
+        * * Field Name: ApplicationScope
+        * * Display Name: Application Scope
+        * * SQL Data Type: nvarchar(20)`),
+    ApplicationID: z.string().nullable().describe(`
+        * * Field Name: ApplicationID
+        * * Display Name: Application
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)`),
+    DefaultAgentID: z.string().nullable().describe(`
+        * * Field Name: DefaultAgentID
+        * * Display Name: Default Agent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)`),
+    AdditionalData: z.string().nullable().describe(`
+        * * Field Name: AdditionalData
+        * * Display Name: Additional Data
+        * * SQL Data Type: nvarchar(MAX)`),
+    RecordingFileID: z.string().nullable().describe(`
+        * * Field Name: RecordingFileID
+        * * Display Name: Recording File
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)`),
+    EgressID: z.string().nullable().describe(`
+        * * Field Name: EgressID
+        * * Display Name: Egress ID
+        * * SQL Data Type: nvarchar(255)`),
+    VisitorKey: z.string().nullable().describe(`
+        * * Field Name: VisitorKey
+        * * Display Name: Visitor Key
+        * * SQL Data Type: nvarchar(255)`),
+    LastConversationID: z.string().nullable().describe(`
+        * * Field Name: LastConversationID
+        * * Display Name: Last Conversation
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)`),
+    AnchorType: z.string().nullable().describe(`
+        * * Field Name: AnchorType
+        * * Display Name: Anchor Type
+        * * SQL Data Type: nvarchar(30)`),
+    AnchorKey: z.string().nullable().describe(`
+        * * Field Name: AnchorKey
+        * * Display Name: Anchor Key
+        * * SQL Data Type: nvarchar(255)`),
+    AnchorMetadata: z.string().nullable().describe(`
+        * * Field Name: AnchorMetadata
+        * * Display Name: Anchor Metadata
+        * * SQL Data Type: nvarchar(MAX)`),
+    IsResolved: z.boolean().describe(`
+        * * Field Name: IsResolved
+        * * Display Name: Is Resolved
+        * * SQL Data Type: bit`),
+    ResolvedByUserID: z.string().nullable().describe(`
+        * * Field Name: ResolvedByUserID
+        * * Display Name: Resolved By User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
+    ResolvedAt: z.date().nullable().describe(`
+        * * Field Name: ResolvedAt
+        * * Display Name: Resolved At
+        * * SQL Data Type: datetimeoffset`),
+    TypeID: z.string().describe(`
+        * * Field Name: TypeID
+        * * Display Name: Type
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversation Types (vwConversationTypes.ID)`),
+    AIPromptRun: z.string().nullable().describe(`
+        * * Field Name: AIPromptRun
+        * * Display Name: AI Prompt Run Details
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJFieldSuggestionEntityType = z.infer<typeof MJFieldSuggestionSchema>;
 
 /**
  * zod schema definition for the entity MJ: File Categories
@@ -59605,6 +60116,44 @@ export interface MJAIModelTypeEntity_RealtimeConfigurationSettings {
      * model-vendor row.
      */
     Pricing?: MJAIModelTypeEntity_RealtimePricingSettings | null;
+
+    /**
+     * Maximum duration in seconds of a single underlying provider transport connection
+     * (WebSocket or WebRTC call) before the provider closes or resets the socket
+     * (for example, 600s on Gemini Live WebSockets, 3600s on OpenAI Realtime, 7200s on xAI).
+     *
+     * Set on `MJ: AI Models.ModelConfiguration` and overridable on
+     * `MJ: AI Model Vendors.ModelConfiguration`. When elapsed (minus `ReconnectBufferSeconds`),
+     * the realtime framework triggers a proactive in-place reconnect on `BaseRealtimeModel` /
+     * `BaseRealtimeClient`.
+     */
+    ConnectionMaxSeconds?: number | null;
+
+    /**
+     * Maximum duration in seconds of a single provider credential or session ceiling
+     * when it differs from `ConnectionMaxSeconds` (for example, 1800s ephemeral token ceiling
+     * on Gemini Developer API vs. 600s per WebSocket connection, or 3600s client_secret TTL on xAI
+     * vs. 7200s WebSocket session ceiling). Overridable at the `MJ: AI Model Vendors` level.
+     */
+    SessionMaxSeconds?: number | null;
+
+    /**
+     * Buffer in seconds before `ConnectionMaxSeconds` expiry at which the framework initiates
+     * a proactive reconnect. Defaults to 10 seconds when omitted.
+     */
+    ReconnectBufferSeconds?: number | null;
+
+    /**
+     * Whether the provider's native session resumption handle/ID reliably restores prior
+     * conversation turns on this endpoint.
+     *
+     * - `true`: pass the native resumption handle/ID and do NOT re-inject conversation history
+     *   (e.g., Gemini Enterprise / Vertex AI `v1`, xAI `resumption.enabled` + `conversation_id`).
+     * - `false`: feed `RealtimeConversationMemory` history into the reconnected session even if
+     *   the provider emits a resumption handle (e.g., Gemini Developer API `v1alpha` ephemeral tokens).
+     * - `null` / `undefined`: defer to the driver's runtime default.
+     */
+    TrustNativeResumption?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -60319,6 +60868,44 @@ export interface MJAIModelVendorEntity_RealtimeConfigurationSettings {
      * model-vendor row.
      */
     Pricing?: MJAIModelVendorEntity_RealtimePricingSettings | null;
+
+    /**
+     * Maximum duration in seconds of a single underlying provider transport connection
+     * (WebSocket or WebRTC call) before the provider closes or resets the socket
+     * (for example, 600s on Gemini Live WebSockets, 3600s on OpenAI Realtime, 7200s on xAI).
+     *
+     * Set on `MJ: AI Models.ModelConfiguration` and overridable on
+     * `MJ: AI Model Vendors.ModelConfiguration`. When elapsed (minus `ReconnectBufferSeconds`),
+     * the realtime framework triggers a proactive in-place reconnect on `BaseRealtimeModel` /
+     * `BaseRealtimeClient`.
+     */
+    ConnectionMaxSeconds?: number | null;
+
+    /**
+     * Maximum duration in seconds of a single provider credential or session ceiling
+     * when it differs from `ConnectionMaxSeconds` (for example, 1800s ephemeral token ceiling
+     * on Gemini Developer API vs. 600s per WebSocket connection, or 3600s client_secret TTL on xAI
+     * vs. 7200s WebSocket session ceiling). Overridable at the `MJ: AI Model Vendors` level.
+     */
+    SessionMaxSeconds?: number | null;
+
+    /**
+     * Buffer in seconds before `ConnectionMaxSeconds` expiry at which the framework initiates
+     * a proactive reconnect. Defaults to 10 seconds when omitted.
+     */
+    ReconnectBufferSeconds?: number | null;
+
+    /**
+     * Whether the provider's native session resumption handle/ID reliably restores prior
+     * conversation turns on this endpoint.
+     *
+     * - `true`: pass the native resumption handle/ID and do NOT re-inject conversation history
+     *   (e.g., Gemini Enterprise / Vertex AI `v1`, xAI `resumption.enabled` + `conversation_id`).
+     * - `false`: feed `RealtimeConversationMemory` history into the reconnected session even if
+     *   the provider emits a resumption handle (e.g., Gemini Developer API `v1alpha` ephemeral tokens).
+     * - `null` / `undefined`: defer to the driver's runtime default.
+     */
+    TrustNativeResumption?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -61225,6 +61812,44 @@ export interface MJAIModelEntity_RealtimeConfigurationSettings {
      * model-vendor row.
      */
     Pricing?: MJAIModelEntity_RealtimePricingSettings | null;
+
+    /**
+     * Maximum duration in seconds of a single underlying provider transport connection
+     * (WebSocket or WebRTC call) before the provider closes or resets the socket
+     * (for example, 600s on Gemini Live WebSockets, 3600s on OpenAI Realtime, 7200s on xAI).
+     *
+     * Set on `MJ: AI Models.ModelConfiguration` and overridable on
+     * `MJ: AI Model Vendors.ModelConfiguration`. When elapsed (minus `ReconnectBufferSeconds`),
+     * the realtime framework triggers a proactive in-place reconnect on `BaseRealtimeModel` /
+     * `BaseRealtimeClient`.
+     */
+    ConnectionMaxSeconds?: number | null;
+
+    /**
+     * Maximum duration in seconds of a single provider credential or session ceiling
+     * when it differs from `ConnectionMaxSeconds` (for example, 1800s ephemeral token ceiling
+     * on Gemini Developer API vs. 600s per WebSocket connection, or 3600s client_secret TTL on xAI
+     * vs. 7200s WebSocket session ceiling). Overridable at the `MJ: AI Model Vendors` level.
+     */
+    SessionMaxSeconds?: number | null;
+
+    /**
+     * Buffer in seconds before `ConnectionMaxSeconds` expiry at which the framework initiates
+     * a proactive reconnect. Defaults to 10 seconds when omitted.
+     */
+    ReconnectBufferSeconds?: number | null;
+
+    /**
+     * Whether the provider's native session resumption handle/ID reliably restores prior
+     * conversation turns on this endpoint.
+     *
+     * - `true`: pass the native resumption handle/ID and do NOT re-inject conversation history
+     *   (e.g., Gemini Enterprise / Vertex AI `v1`, xAI `resumption.enabled` + `conversation_id`).
+     * - `false`: feed `RealtimeConversationMemory` history into the reconnected session even if
+     *   the provider emits a resumption handle (e.g., Gemini Developer API `v1alpha` ephemeral tokens).
+     * - `null` / `undefined`: defer to the driver's runtime default.
+     */
+    TrustNativeResumption?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -62854,6 +63479,44 @@ export interface MJAIPromptModelEntity_RealtimeConfigurationSettings {
      * model-vendor row.
      */
     Pricing?: MJAIPromptModelEntity_RealtimePricingSettings | null;
+
+    /**
+     * Maximum duration in seconds of a single underlying provider transport connection
+     * (WebSocket or WebRTC call) before the provider closes or resets the socket
+     * (for example, 600s on Gemini Live WebSockets, 3600s on OpenAI Realtime, 7200s on xAI).
+     *
+     * Set on `MJ: AI Models.ModelConfiguration` and overridable on
+     * `MJ: AI Model Vendors.ModelConfiguration`. When elapsed (minus `ReconnectBufferSeconds`),
+     * the realtime framework triggers a proactive in-place reconnect on `BaseRealtimeModel` /
+     * `BaseRealtimeClient`.
+     */
+    ConnectionMaxSeconds?: number | null;
+
+    /**
+     * Maximum duration in seconds of a single provider credential or session ceiling
+     * when it differs from `ConnectionMaxSeconds` (for example, 1800s ephemeral token ceiling
+     * on Gemini Developer API vs. 600s per WebSocket connection, or 3600s client_secret TTL on xAI
+     * vs. 7200s WebSocket session ceiling). Overridable at the `MJ: AI Model Vendors` level.
+     */
+    SessionMaxSeconds?: number | null;
+
+    /**
+     * Buffer in seconds before `ConnectionMaxSeconds` expiry at which the framework initiates
+     * a proactive reconnect. Defaults to 10 seconds when omitted.
+     */
+    ReconnectBufferSeconds?: number | null;
+
+    /**
+     * Whether the provider's native session resumption handle/ID reliably restores prior
+     * conversation turns on this endpoint.
+     *
+     * - `true`: pass the native resumption handle/ID and do NOT re-inject conversation history
+     *   (e.g., Gemini Enterprise / Vertex AI `v1`, xAI `resumption.enabled` + `conversation_id`).
+     * - `false`: feed `RealtimeConversationMemory` history into the reconnected session even if
+     *   the provider emits a resumption handle (e.g., Gemini Developer API `v1alpha` ephemeral tokens).
+     * - `null` / `undefined`: defer to the driver's runtime default.
+     */
+    TrustNativeResumption?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -65706,6 +66369,44 @@ export interface MJAIPromptEntity_RealtimeConfigurationSettings {
      * model-vendor row.
      */
     Pricing?: MJAIPromptEntity_RealtimePricingSettings | null;
+
+    /**
+     * Maximum duration in seconds of a single underlying provider transport connection
+     * (WebSocket or WebRTC call) before the provider closes or resets the socket
+     * (for example, 600s on Gemini Live WebSockets, 3600s on OpenAI Realtime, 7200s on xAI).
+     *
+     * Set on `MJ: AI Models.ModelConfiguration` and overridable on
+     * `MJ: AI Model Vendors.ModelConfiguration`. When elapsed (minus `ReconnectBufferSeconds`),
+     * the realtime framework triggers a proactive in-place reconnect on `BaseRealtimeModel` /
+     * `BaseRealtimeClient`.
+     */
+    ConnectionMaxSeconds?: number | null;
+
+    /**
+     * Maximum duration in seconds of a single provider credential or session ceiling
+     * when it differs from `ConnectionMaxSeconds` (for example, 1800s ephemeral token ceiling
+     * on Gemini Developer API vs. 600s per WebSocket connection, or 3600s client_secret TTL on xAI
+     * vs. 7200s WebSocket session ceiling). Overridable at the `MJ: AI Model Vendors` level.
+     */
+    SessionMaxSeconds?: number | null;
+
+    /**
+     * Buffer in seconds before `ConnectionMaxSeconds` expiry at which the framework initiates
+     * a proactive reconnect. Defaults to 10 seconds when omitted.
+     */
+    ReconnectBufferSeconds?: number | null;
+
+    /**
+     * Whether the provider's native session resumption handle/ID reliably restores prior
+     * conversation turns on this endpoint.
+     *
+     * - `true`: pass the native resumption handle/ID and do NOT re-inject conversation history
+     *   (e.g., Gemini Enterprise / Vertex AI `v1`, xAI `resumption.enabled` + `conversation_id`).
+     * - `false`: feed `RealtimeConversationMemory` history into the reconnected session even if
+     *   the provider emits a resumption handle (e.g., Gemini Developer API `v1alpha` ephemeral tokens).
+     * - `null` / `undefined`: defer to the driver's runtime default.
+     */
+    TrustNativeResumption?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -69142,6 +69843,44 @@ export interface MJAIVendorEntity_RealtimeConfigurationSettings {
      * model-vendor row.
      */
     Pricing?: MJAIVendorEntity_RealtimePricingSettings | null;
+
+    /**
+     * Maximum duration in seconds of a single underlying provider transport connection
+     * (WebSocket or WebRTC call) before the provider closes or resets the socket
+     * (for example, 600s on Gemini Live WebSockets, 3600s on OpenAI Realtime, 7200s on xAI).
+     *
+     * Set on `MJ: AI Models.ModelConfiguration` and overridable on
+     * `MJ: AI Model Vendors.ModelConfiguration`. When elapsed (minus `ReconnectBufferSeconds`),
+     * the realtime framework triggers a proactive in-place reconnect on `BaseRealtimeModel` /
+     * `BaseRealtimeClient`.
+     */
+    ConnectionMaxSeconds?: number | null;
+
+    /**
+     * Maximum duration in seconds of a single provider credential or session ceiling
+     * when it differs from `ConnectionMaxSeconds` (for example, 1800s ephemeral token ceiling
+     * on Gemini Developer API vs. 600s per WebSocket connection, or 3600s client_secret TTL on xAI
+     * vs. 7200s WebSocket session ceiling). Overridable at the `MJ: AI Model Vendors` level.
+     */
+    SessionMaxSeconds?: number | null;
+
+    /**
+     * Buffer in seconds before `ConnectionMaxSeconds` expiry at which the framework initiates
+     * a proactive reconnect. Defaults to 10 seconds when omitted.
+     */
+    ReconnectBufferSeconds?: number | null;
+
+    /**
+     * Whether the provider's native session resumption handle/ID reliably restores prior
+     * conversation turns on this endpoint.
+     *
+     * - `true`: pass the native resumption handle/ID and do NOT re-inject conversation history
+     *   (e.g., Gemini Enterprise / Vertex AI `v1`, xAI `resumption.enabled` + `conversation_id`).
+     * - `false`: feed `RealtimeConversationMemory` history into the reconnected session even if
+     *   the provider emits a resumption handle (e.g., Gemini Developer API `v1alpha` ephemeral tokens).
+     * - `null` / `undefined`: defer to the driver's runtime default.
+     */
+    TrustNativeResumption?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -79550,6 +80289,627 @@ export class MJCollectionEntity extends BaseEntity<MJCollectionEntityType> {
     */
     get ParentIDChildCount(): number | null {
         return this.Get('ParentIDChildCount');
+    }
+}
+
+
+/**
+ * MJ: Comment Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CommentType
+ * * Base View: vwCommentTypes
+ * * @description Lookup table of anchored comment classifications (plain Comment, Field Suggestion, and extensible domain comment types) with optional IS-A extension entity, server driver class, and UI card component.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Comment Types')
+export class MJCommentTypeEntity extends BaseEntity<MJCommentTypeEntityType> {
+    /**
+    * Loads the MJ: Comment Types record from the database
+    * @param ID: string - primary key value to load the MJ: Comment Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCommentTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Human-readable display name of the comment type (for example Comment or Field Suggestion).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Code
+    * * Display Name: Code
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Stable uppercase programmatic code for this comment type (for example COMMENT or FIELD_SUGGESTION), referenced in Entity Configuration.Comments.AllowedCommentTypes and driver lookups.
+    */
+    get Code(): string {
+        return this.Get('Code');
+    }
+    set Code(value: string) {
+        this.Set('Code', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Explanation of this comment type and its collaboration or review workflow.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ExtensionEntity
+    * * Display Name: Extension Entity
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional MJ entity name of the declared IS-A child of MJ: Comments holding structured fields for this comment type (for example MJ: Field Suggestions).
+    */
+    get ExtensionEntity(): string | null {
+        return this.Get('ExtensionEntity');
+    }
+    set ExtensionEntity(value: string | null) {
+        this.Set('ExtensionEntity', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional ClassFactory registration key of a CommentTypeDriver subclass implementing server behavior such as OnAccept, OnReject, and OnRecordChanged.
+    */
+    get DriverClass(): string | null {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string | null) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: UIDriverClass
+    * * Display Name: UI Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional ClassFactory registration key of an EntitySubtypeUIDriverBase component used by the Notes & suggestions panel to render cards of this comment type (for example FieldSuggestionCardComponent).
+    */
+    get UIDriverClass(): string | null {
+        return this.Get('UIDriverClass');
+    }
+    set UIDriverClass(value: string | null) {
+        this.Set('UIDriverClass', value);
+    }
+
+    /**
+    * * Field Name: AllowedAnchorTypes
+    * * Display Name: Allowed Anchor Types
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON array of Conversation.AnchorType values permitted for this comment type (for example ["Field"] for Field Suggestion). NULL allows all anchor types.
+    */
+    get AllowedAnchorTypes(): string | null {
+        return this.Get('AllowedAnchorTypes');
+    }
+    set AllowedAnchorTypes(value: string | null) {
+        this.Set('AllowedAnchorTypes', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Comments - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Comment
+ * * Base View: vwComments
+ * * @description IS-A child extension of Conversation for anchored record, field, section, and artifact comments. Shares Conversation.ID as its primary key and classifies each comment via CommentTypeID.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Comments')
+export class MJCommentEntity extends BaseEntity<MJCommentEntityType> {
+    /**
+    * Loads the MJ: Comments record from the database
+    * @param ID: string - primary key value to load the MJ: Comments record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCommentEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CommentTypeID
+    * * Display Name: Comment Type
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Comment Types (vwCommentTypes.ID)
+    * * Default Value: 4B3A3797-EFA5-419F-80FF-F9515E5F4AA8
+    * * Description: Foreign key to CommentType classifying this comment (defaults to plain Comment) and driving its optional IS-A extension entity, server driver, and UI card component.
+    */
+    get CommentTypeID(): string {
+        return this.Get('CommentTypeID');
+    }
+    set CommentTypeID(value: string) {
+        this.Set('CommentTypeID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: ExternalID
+    * * Display Name: External ID
+    * * SQL Data Type: nvarchar(500)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ExternalID(): string | null {
+        return this.Get('ExternalID');
+    }
+    set ExternalID(value: string | null) {
+        this.Set('ExternalID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get Name(): string | null {
+        return this.Get('Name');
+    }
+    set Name(value: string | null) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: IsArchived
+    * * Display Name: Is Archived
+    * * SQL Data Type: bit
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get IsArchived(): boolean {
+        return this.Get('IsArchived');
+    }
+    set IsArchived(value: boolean) {
+        this.Set('IsArchived', value);
+    }
+
+    /**
+    * * Field Name: LinkedEntityID
+    * * Display Name: Linked Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get LinkedEntityID(): string | null {
+        return this.Get('LinkedEntityID');
+    }
+    set LinkedEntityID(value: string | null) {
+        this.Set('LinkedEntityID', value);
+    }
+
+    /**
+    * * Field Name: LinkedRecordID
+    * * Display Name: Linked Record
+    * * SQL Data Type: nvarchar(500)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get LinkedRecordID(): string | null {
+        return this.Get('LinkedRecordID');
+    }
+    set LinkedRecordID(value: string | null) {
+        this.Set('LinkedRecordID', value);
+    }
+
+    /**
+    * * Field Name: DataContextID
+    * * Display Name: Data Context
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Data Contexts (vwDataContexts.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get DataContextID(): string | null {
+        return this.Get('DataContextID');
+    }
+    set DataContextID(value: string | null) {
+        this.Set('DataContextID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get Status(): string {
+        return this.Get('Status');
+    }
+    set Status(value: string) {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: EnvironmentID
+    * * Display Name: Environment
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get EnvironmentID(): string {
+        return this.Get('EnvironmentID');
+    }
+    set EnvironmentID(value: string) {
+        this.Set('EnvironmentID', value);
+    }
+
+    /**
+    * * Field Name: ProjectID
+    * * Display Name: Project
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ProjectID(): string | null {
+        return this.Get('ProjectID');
+    }
+    set ProjectID(value: string | null) {
+        this.Set('ProjectID', value);
+    }
+
+    /**
+    * * Field Name: IsPinned
+    * * Display Name: Is Pinned
+    * * SQL Data Type: bit
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get IsPinned(): boolean {
+        return this.Get('IsPinned');
+    }
+    set IsPinned(value: boolean) {
+        this.Set('IsPinned', value);
+    }
+
+    /**
+    * * Field Name: TestRunID
+    * * Display Name: Test Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get TestRunID(): string | null {
+        return this.Get('TestRunID');
+    }
+    set TestRunID(value: string | null) {
+        this.Set('TestRunID', value);
+    }
+
+    /**
+    * * Field Name: ApplicationScope
+    * * Display Name: Application Scope
+    * * SQL Data Type: nvarchar(20)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ApplicationScope(): string {
+        return this.Get('ApplicationScope');
+    }
+    set ApplicationScope(value: string) {
+        this.Set('ApplicationScope', value);
+    }
+
+    /**
+    * * Field Name: ApplicationID
+    * * Display Name: Application
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ApplicationID(): string | null {
+        return this.Get('ApplicationID');
+    }
+    set ApplicationID(value: string | null) {
+        this.Set('ApplicationID', value);
+    }
+
+    /**
+    * * Field Name: DefaultAgentID
+    * * Display Name: Default Agent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get DefaultAgentID(): string | null {
+        return this.Get('DefaultAgentID');
+    }
+    set DefaultAgentID(value: string | null) {
+        this.Set('DefaultAgentID', value);
+    }
+
+    /**
+    * * Field Name: AdditionalData
+    * * Display Name: Additional Data
+    * * SQL Data Type: nvarchar(MAX)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get AdditionalData(): string | null {
+        return this.Get('AdditionalData');
+    }
+    set AdditionalData(value: string | null) {
+        this.Set('AdditionalData', value);
+    }
+
+    /**
+    * * Field Name: RecordingFileID
+    * * Display Name: Recording File
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get RecordingFileID(): string | null {
+        return this.Get('RecordingFileID');
+    }
+    set RecordingFileID(value: string | null) {
+        this.Set('RecordingFileID', value);
+    }
+
+    /**
+    * * Field Name: EgressID
+    * * Display Name: Egress ID
+    * * SQL Data Type: nvarchar(255)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get EgressID(): string | null {
+        return this.Get('EgressID');
+    }
+    set EgressID(value: string | null) {
+        this.Set('EgressID', value);
+    }
+
+    /**
+    * * Field Name: VisitorKey
+    * * Display Name: Visitor Key
+    * * SQL Data Type: nvarchar(255)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get VisitorKey(): string | null {
+        return this.Get('VisitorKey');
+    }
+    set VisitorKey(value: string | null) {
+        this.Set('VisitorKey', value);
+    }
+
+    /**
+    * * Field Name: LastConversationID
+    * * Display Name: Last Conversation
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get LastConversationID(): string | null {
+        return this.Get('LastConversationID');
+    }
+    set LastConversationID(value: string | null) {
+        this.Set('LastConversationID', value);
+    }
+
+    /**
+    * * Field Name: AnchorType
+    * * Display Name: Anchor Type
+    * * SQL Data Type: nvarchar(30)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get AnchorType(): string | null {
+        return this.Get('AnchorType');
+    }
+    set AnchorType(value: string | null) {
+        this.Set('AnchorType', value);
+    }
+
+    /**
+    * * Field Name: AnchorKey
+    * * Display Name: Anchor Key
+    * * SQL Data Type: nvarchar(255)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get AnchorKey(): string | null {
+        return this.Get('AnchorKey');
+    }
+    set AnchorKey(value: string | null) {
+        this.Set('AnchorKey', value);
+    }
+
+    /**
+    * * Field Name: AnchorMetadata
+    * * Display Name: Anchor Metadata
+    * * SQL Data Type: nvarchar(MAX)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get AnchorMetadata(): string | null {
+        return this.Get('AnchorMetadata');
+    }
+    set AnchorMetadata(value: string | null) {
+        this.Set('AnchorMetadata', value);
+    }
+
+    /**
+    * * Field Name: IsResolved
+    * * Display Name: Is Resolved
+    * * SQL Data Type: bit
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get IsResolved(): boolean {
+        return this.Get('IsResolved');
+    }
+    set IsResolved(value: boolean) {
+        this.Set('IsResolved', value);
+    }
+
+    /**
+    * * Field Name: ResolvedByUserID
+    * * Display Name: Resolved By User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ResolvedByUserID(): string | null {
+        return this.Get('ResolvedByUserID');
+    }
+    set ResolvedByUserID(value: string | null) {
+        this.Set('ResolvedByUserID', value);
+    }
+
+    /**
+    * * Field Name: ResolvedAt
+    * * Display Name: Resolved At
+    * * SQL Data Type: datetimeoffset
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ResolvedAt(): Date | null {
+        return this.Get('ResolvedAt');
+    }
+    set ResolvedAt(value: Date | null) {
+        this.Set('ResolvedAt', value);
+    }
+
+    /**
+    * * Field Name: TypeID
+    * * Display Name: Type
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversation Types (vwConversationTypes.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get TypeID(): string {
+        return this.Get('TypeID');
+    }
+    set TypeID(value: string) {
+        this.Set('TypeID', value);
+    }
+
+    /**
+    * * Field Name: CommentType
+    * * Display Name: Comment Type Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CommentType(): string | null {
+        return this.Get('CommentType');
     }
 }
 
@@ -91518,6 +92878,136 @@ export class MJConversationSkillEntity extends BaseEntity<MJConversationSkillEnt
 
 
 /**
+ * MJ: Conversation Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ConversationType
+ * * Base View: vwConversationTypes
+ * * @description Lookup table of conversation classifications (Chat, Skip, Routine, Meeting Room, Comment, etc.). Drives IS-A extension entities via ExtensionEntity and server behavior hooks via DriverClass.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Conversation Types')
+export class MJConversationTypeEntity extends BaseEntity<MJConversationTypeEntityType> {
+    /**
+    * Loads the MJ: Conversation Types record from the database
+    * @param ID: string - primary key value to load the MJ: Conversation Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJConversationTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Human-readable display name of the conversation type (exposed on vwConversations as the virtual Type field).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Code
+    * * Display Name: Code
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Stable uppercase programmatic identifier for looking up this conversation type in code (for example CHAT, SKIP, ROUTINE, MEETING_ROOM, COMMENT) without coupling to display names.
+    */
+    get Code(): string {
+        return this.Get('Code');
+    }
+    set Code(value: string) {
+        this.Set('Code', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Explanation of when this conversation type is used and how surfaces treat conversations of this type.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ExtensionEntity
+    * * Display Name: Extension Entity
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional MJ entity name of the declared IS-A child of MJ: Conversations automatically created and loaded for conversations of this type (for example MJ: Comments).
+    */
+    get ExtensionEntity(): string | null {
+        return this.Get('ExtensionEntity');
+    }
+    set ExtensionEntity(value: string | null) {
+        this.Set('ExtensionEntity', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional ClassFactory registration key of a ConversationTypeDriver subclass providing custom validation and save lifecycle behavior for conversations of this type.
+    */
+    get DriverClass(): string | null {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string | null) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
  * MJ: Conversation Widget Instances - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ConversationWidgetInstance
@@ -92210,20 +93700,6 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     }
 
     /**
-    * * Field Name: Type
-    * * Display Name: Type
-    * * SQL Data Type: nvarchar(50)
-    * * Default Value: Skip
-    * * Description: The type or category of conversation (Skip, Support, Chat, etc.).
-    */
-    get Type(): string {
-        return this.Get('Type');
-    }
-    set Type(value: string) {
-        this.Set('Type', value);
-    }
-
-    /**
     * * Field Name: IsArchived
     * * Display Name: Is Archived
     * * SQL Data Type: bit
@@ -92591,6 +94067,21 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     }
 
     /**
+    * * Field Name: TypeID
+    * * Display Name: Type
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversation Types (vwConversationTypes.ID)
+    * * Default Value: 7F81FF57-C5A8-464D-B3B4-35A4FCF10717
+    * * Description: Foreign key to ConversationType identifying the kind of conversation (defaults to Chat). CodeGen exposes the joined ConversationType.Name as the virtual Type field.
+    */
+    get TypeID(): string {
+        return this.Get('TypeID');
+    }
+    set TypeID(value: string) {
+        this.Set('TypeID', value);
+    }
+
+    /**
     * * Field Name: User
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
@@ -92687,6 +94178,15 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     */
     get ResolvedByUser(): string | null {
         return this.Get('ResolvedByUser');
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Type(): string | null {
+        return this.Get('Type');
     }
 }
 
@@ -99310,6 +100810,15 @@ export interface MJEntityEntity_IEntityCommentsConfiguration {
      * {@link RequiredPermission} may comment.
      */
     AllowedRoles?: string[];
+
+    /**
+     * Optional list of comment type codes or names (`MJ: Comment Types.Code` or `Name`,
+     * case-insensitive, or `'*'` for all registered comment types) allowed on this entity.
+     *
+     * When omitted, plain discussion comments (`'COMMENT'`) are allowed and specialized
+     * comment types (such as `'FIELD_SUGGESTION'`) require explicit opt-in.
+     */
+    AllowedCommentTypes?: string[];
 }
 
 /**
@@ -99690,13 +101199,57 @@ export interface MJEntityEntity_IDeclarativeParentStateLockConfiguration {
 }
 
 /**
- * Declarative configuration for prospective IsA subtype resolution on an entity.
+ * Policy controlling what happens when a saved record's subtype selector now resolves to a
+ * different child entity (or to no child entity when a child row already exists).
+ *
+ * - `'Refuse'` (default): fails the save rather than leaving or replacing the existing child row.
+ * - `'Replace'`: deletes the existing child subtree and creates the newly resolved child row (if any)
+ *   atomically in one transaction, recording the deletion in Record Changes.
+ *
+ * Moving a saved record from a type with **no** extension entity to a type **with** an extension
+ * entity is always allowed under both policies.
+ */
+export type MJEntityEntity_SubtypeSelectorChangeBehavior = 'Refuse' | 'Replace';
+
+/**
+ * Declarative configuration for resolving a per-type behavior driver class through `ClassFactory`.
+ */
+export interface MJEntityEntity_IEntitySubtypeDriverConfig {
+    /**
+     * Dotted foreign-key dereference path from this entity to the column holding the driver's
+     * `ClassFactory` registration key (for example, `"TypeID.DriverClass"`).
+     * Empty string or null on the target row resolves to no driver.
+     */
+    Path: string;
+
+    /**
+     * Optional base class name under which drivers for this type family register in `ClassFactory`
+     * (for example, `"ConversationTypeDriver"` or `"CommentTypeDriver"`).
+     * Defaults to `"EntitySubtypeDriverBase"` when omitted.
+     */
+    BaseClass?: string;
+}
+
+/**
+ * Declarative configuration for resolving a per-type UI component/driver class through `ClassFactory`.
+ */
+export interface MJEntityEntity_IEntitySubtypeUIDriverConfig {
+    /**
+     * Dotted foreign-key dereference path from this entity to the column holding the UI driver's
+     * `ClassFactory` registration key (for example, `"CommentTypeID.UIDriverClass"`).
+     * Empty string or null on the target row resolves to no custom UI driver.
+     */
+    Path: string;
+}
+
+/**
+ * Declarative configuration for prospective IsA subtype resolution and type-driven extensions on an entity.
  *
  * Stored in the `SubtypeSelector` column of `MJ: Entities`.
  *
- * Used by `BaseEntity.ResolveSubtypeEntityName()` as a fallback when no runtime
- * `EntitySubtypeResolver` is registered, and by offline generators like Loom
- * that inspect metadata without executing the MJ runtime.
+ * Used by `BaseEntity` to resolve and auto-create IS-A child rows, enforce subtype-change policies,
+ * invoke per-type behavior drivers, validate type-table extension entity references, and fold
+ * subtype fields or custom UI drivers into generated forms.
  *
  * @see plans/sync-composition-axes.md
  */
@@ -99725,6 +101278,44 @@ export interface MJEntityEntity_IEntitySubtypeSelectorConfig {
      * rule, and gives load hints by overriding its `ResolveLoadHint` method.
      */
     UseForLoadedRecords?: boolean;
+
+    /**
+     * When `true`, `BaseEntity.Save()` automatically creates and links the resolved IS-A child row
+     * in the same transaction whenever it is missing, so callers do not need to call `EnsureISAChild()`
+     * manually. Defaults to `false`.
+     */
+    AutoEnsureOnSave?: boolean;
+
+    /**
+     * Controls what happens when a saved record's selector resolves to a different child entity than
+     * its existing child row (or resolves to `null` when a child row already exists).
+     *
+     * Defaults to `'Refuse'`. Moving from no extension entity (`null`) to an extension entity is
+     * always allowed.
+     */
+    OnSubtypeChange?: MJEntityEntity_SubtypeSelectorChangeBehavior;
+
+    /**
+     * Optional per-type behavior driver resolved through `ClassFactory` and cached per type.
+     * `BaseEntity` invokes `Validate`, `BeforeSave`, `AfterSave`, and `OnFieldChanged` when implemented
+     * on the resolved driver; type-family-specific methods live on the configured `BaseClass`.
+     */
+    Driver?: MJEntityEntity_IEntitySubtypeDriverConfig;
+
+    /**
+     * When `true`, the parent entity's generated Angular form automatically displays the resolved
+     * child entity's fields (or its {@link UIDriver} component, if configured) in a dedicated section
+     * as soon as a type is selected — including on unsaved new records before their first save.
+     * Defaults to `false`.
+     */
+    FoldIntoForm?: boolean;
+
+    /**
+     * Optional per-type UI component/driver class resolved through `ClassFactory`.
+     * Used in place of generated child fields when {@link FoldIntoForm} is `true`, and usable by
+     * specialized panels (such as the Notes & suggestions panel) to render records of that type.
+     */
+    UIDriver?: MJEntityEntity_IEntitySubtypeUIDriverConfig;
 }
 
 /**
@@ -107989,6 +109580,133 @@ export class MJEntitySettingEntity extends BaseEntity<MJEntitySettingEntityType>
 
 
 /**
+ * MJ: Entity Unique Keys - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: EntityUniqueKey
+ * * Base View: vwEntityUniqueKeys
+ * * @description Unique keys of an entity's base table as column sets: one row per unique index or unique constraint, primary keys excluded. Maintained by CodeGen from the database catalog on every run; edits are overwritten. EntityField.IsUnique is set only when a column alone is such a key, so a composite key appears here and not on its columns.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Entity Unique Keys')
+export class MJEntityUniqueKeyEntity extends BaseEntity<MJEntityUniqueKeyEntityType> {
+    /**
+    * Loads the MJ: Entity Unique Keys record from the database
+    * @param ID: string - primary key value to load the MJ: Entity Unique Keys record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJEntityUniqueKeyEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Entity whose base table has this unique key.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Name of the unique index or unique constraint in the database.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: FieldNames
+    * * Display Name: Field Names
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Comma-separated names of the key columns, in key order. INCLUDE columns are not part of the key and are not listed.
+    */
+    get FieldNames(): string {
+        return this.Get('FieldNames');
+    }
+    set FieldNames(value: string) {
+        this.Set('FieldNames', value);
+    }
+
+    /**
+    * * Field Name: FilterDefinition
+    * * Display Name: Filter Definition
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Predicate of a filtered (SQL Server) or partial (PostgreSQL) unique index, as the database reports it. NULL when the key applies to every row. A filtered key only guarantees uniqueness among the rows that match it.
+    */
+    get FilterDefinition(): string | null {
+        return this.Get('FilterDefinition');
+    }
+    set FilterDefinition(value: string | null) {
+        this.Set('FilterDefinition', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string | null {
+        return this.Get('Entity');
+    }
+}
+
+
+/**
  * MJ: Environments - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: Environment
@@ -110902,6 +112620,548 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     */
     get AIModel(): string | null {
         return this.Get('AIModel');
+    }
+}
+
+
+/**
+ * MJ: Field Suggestions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: FieldSuggestion
+ * * Base View: vwFieldSuggestions
+ * * @description IS-A child extension of Comment representing a proposed value for a specific field on a linked record (AnchorType = Field, AnchorKey = EntityField.Name), with provenance, confidence, outcome, and discussion thread.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Field Suggestions')
+export class MJFieldSuggestionEntity extends BaseEntity<MJFieldSuggestionEntityType> {
+    /**
+    * Loads the MJ: Field Suggestions record from the database
+    * @param ID: string - primary key value to load the MJ: Field Suggestions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJFieldSuggestionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Comments (vwComments.ID)
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SuggestedValue
+    * * Display Name: Suggested Value
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Proposed value for the target field serialized as text (or JSON for structured fields). NULL proposes clearing the field.
+    */
+    get SuggestedValue(): string | null {
+        return this.Get('SuggestedValue');
+    }
+    set SuggestedValue(value: string | null) {
+        this.Set('SuggestedValue', value);
+    }
+
+    /**
+    * * Field Name: Confidence
+    * * Display Name: Confidence
+    * * SQL Data Type: decimal(5, 4)
+    * * Description: Optional confidence score between 0.0000 and 1.0000 reported by the model, agent, or integration that proposed the value.
+    */
+    get Confidence(): number | null {
+        return this.Get('Confidence');
+    }
+    set Confidence(value: number | null) {
+        this.Set('Confidence', value);
+    }
+
+    /**
+    * * Field Name: Source
+    * * Display Name: Source
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Agent
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Agent
+    *   * Integration
+    *   * LLM
+    *   * Person
+    * * Description: Origin category of the suggestion: LLM (prompt inference), Integration (external system sync), Agent (autonomous AI agent), or Person (human collaborator).
+    */
+    get Source(): 'Agent' | 'Integration' | 'LLM' | 'Person' {
+        return this.Get('Source');
+    }
+    set Source(value: 'Agent' | 'Integration' | 'LLM' | 'Person') {
+        this.Set('Source', value);
+    }
+
+    /**
+    * * Field Name: Outcome
+    * * Display Name: Outcome
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Accepted
+    *   * Rejected
+    *   * Superseded
+    * * Description: Terminal disposition of the suggestion: NULL while pending review, Accepted when applied to the record, Rejected when declined by a user, or Superseded when replaced by a newer suggestion or direct field edit. Who closed it and when live on Conversation.ResolvedByUserID and Conversation.ResolvedAt.
+    */
+    get Outcome(): 'Accepted' | 'Rejected' | 'Superseded' | null {
+        return this.Get('Outcome');
+    }
+    set Outcome(value: 'Accepted' | 'Rejected' | 'Superseded' | null) {
+        this.Set('Outcome', value);
+    }
+
+    /**
+    * * Field Name: AIPromptRunID
+    * * Display Name: AI Prompt Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+    * * Description: Optional foreign key to AIPromptRun linking an LLM- or agent-generated suggestion to the exact prompt execution that produced it.
+    */
+    get AIPromptRunID(): string | null {
+        return this.Get('AIPromptRunID');
+    }
+    set AIPromptRunID(value: string | null) {
+        this.Set('AIPromptRunID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CommentTypeID
+    * * Display Name: Comment Type
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Comment Types (vwCommentTypes.ID)
+    * * IS-A Source: Inherited from MJ: Comments
+    */
+    get CommentTypeID(): string {
+        return this.Get('CommentTypeID');
+    }
+    set CommentTypeID(value: string) {
+        this.Set('CommentTypeID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: ExternalID
+    * * Display Name: External ID
+    * * SQL Data Type: nvarchar(500)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ExternalID(): string | null {
+        return this.Get('ExternalID');
+    }
+    set ExternalID(value: string | null) {
+        this.Set('ExternalID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get Name(): string | null {
+        return this.Get('Name');
+    }
+    set Name(value: string | null) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: IsArchived
+    * * Display Name: Is Archived
+    * * SQL Data Type: bit
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get IsArchived(): boolean {
+        return this.Get('IsArchived');
+    }
+    set IsArchived(value: boolean) {
+        this.Set('IsArchived', value);
+    }
+
+    /**
+    * * Field Name: LinkedEntityID
+    * * Display Name: Linked Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get LinkedEntityID(): string | null {
+        return this.Get('LinkedEntityID');
+    }
+    set LinkedEntityID(value: string | null) {
+        this.Set('LinkedEntityID', value);
+    }
+
+    /**
+    * * Field Name: LinkedRecordID
+    * * Display Name: Linked Record
+    * * SQL Data Type: nvarchar(500)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get LinkedRecordID(): string | null {
+        return this.Get('LinkedRecordID');
+    }
+    set LinkedRecordID(value: string | null) {
+        this.Set('LinkedRecordID', value);
+    }
+
+    /**
+    * * Field Name: DataContextID
+    * * Display Name: Data Context
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Data Contexts (vwDataContexts.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get DataContextID(): string | null {
+        return this.Get('DataContextID');
+    }
+    set DataContextID(value: string | null) {
+        this.Set('DataContextID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get Status(): string {
+        return this.Get('Status');
+    }
+    set Status(value: string) {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: EnvironmentID
+    * * Display Name: Environment
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get EnvironmentID(): string {
+        return this.Get('EnvironmentID');
+    }
+    set EnvironmentID(value: string) {
+        this.Set('EnvironmentID', value);
+    }
+
+    /**
+    * * Field Name: ProjectID
+    * * Display Name: Project
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ProjectID(): string | null {
+        return this.Get('ProjectID');
+    }
+    set ProjectID(value: string | null) {
+        this.Set('ProjectID', value);
+    }
+
+    /**
+    * * Field Name: IsPinned
+    * * Display Name: Is Pinned
+    * * SQL Data Type: bit
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get IsPinned(): boolean {
+        return this.Get('IsPinned');
+    }
+    set IsPinned(value: boolean) {
+        this.Set('IsPinned', value);
+    }
+
+    /**
+    * * Field Name: TestRunID
+    * * Display Name: Test Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get TestRunID(): string | null {
+        return this.Get('TestRunID');
+    }
+    set TestRunID(value: string | null) {
+        this.Set('TestRunID', value);
+    }
+
+    /**
+    * * Field Name: ApplicationScope
+    * * Display Name: Application Scope
+    * * SQL Data Type: nvarchar(20)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ApplicationScope(): string {
+        return this.Get('ApplicationScope');
+    }
+    set ApplicationScope(value: string) {
+        this.Set('ApplicationScope', value);
+    }
+
+    /**
+    * * Field Name: ApplicationID
+    * * Display Name: Application
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ApplicationID(): string | null {
+        return this.Get('ApplicationID');
+    }
+    set ApplicationID(value: string | null) {
+        this.Set('ApplicationID', value);
+    }
+
+    /**
+    * * Field Name: DefaultAgentID
+    * * Display Name: Default Agent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get DefaultAgentID(): string | null {
+        return this.Get('DefaultAgentID');
+    }
+    set DefaultAgentID(value: string | null) {
+        this.Set('DefaultAgentID', value);
+    }
+
+    /**
+    * * Field Name: AdditionalData
+    * * Display Name: Additional Data
+    * * SQL Data Type: nvarchar(MAX)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get AdditionalData(): string | null {
+        return this.Get('AdditionalData');
+    }
+    set AdditionalData(value: string | null) {
+        this.Set('AdditionalData', value);
+    }
+
+    /**
+    * * Field Name: RecordingFileID
+    * * Display Name: Recording File
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get RecordingFileID(): string | null {
+        return this.Get('RecordingFileID');
+    }
+    set RecordingFileID(value: string | null) {
+        this.Set('RecordingFileID', value);
+    }
+
+    /**
+    * * Field Name: EgressID
+    * * Display Name: Egress ID
+    * * SQL Data Type: nvarchar(255)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get EgressID(): string | null {
+        return this.Get('EgressID');
+    }
+    set EgressID(value: string | null) {
+        this.Set('EgressID', value);
+    }
+
+    /**
+    * * Field Name: VisitorKey
+    * * Display Name: Visitor Key
+    * * SQL Data Type: nvarchar(255)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get VisitorKey(): string | null {
+        return this.Get('VisitorKey');
+    }
+    set VisitorKey(value: string | null) {
+        this.Set('VisitorKey', value);
+    }
+
+    /**
+    * * Field Name: LastConversationID
+    * * Display Name: Last Conversation
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get LastConversationID(): string | null {
+        return this.Get('LastConversationID');
+    }
+    set LastConversationID(value: string | null) {
+        this.Set('LastConversationID', value);
+    }
+
+    /**
+    * * Field Name: AnchorType
+    * * Display Name: Anchor Type
+    * * SQL Data Type: nvarchar(30)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get AnchorType(): string | null {
+        return this.Get('AnchorType');
+    }
+    set AnchorType(value: string | null) {
+        this.Set('AnchorType', value);
+    }
+
+    /**
+    * * Field Name: AnchorKey
+    * * Display Name: Anchor Key
+    * * SQL Data Type: nvarchar(255)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get AnchorKey(): string | null {
+        return this.Get('AnchorKey');
+    }
+    set AnchorKey(value: string | null) {
+        this.Set('AnchorKey', value);
+    }
+
+    /**
+    * * Field Name: AnchorMetadata
+    * * Display Name: Anchor Metadata
+    * * SQL Data Type: nvarchar(MAX)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get AnchorMetadata(): string | null {
+        return this.Get('AnchorMetadata');
+    }
+    set AnchorMetadata(value: string | null) {
+        this.Set('AnchorMetadata', value);
+    }
+
+    /**
+    * * Field Name: IsResolved
+    * * Display Name: Is Resolved
+    * * SQL Data Type: bit
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get IsResolved(): boolean {
+        return this.Get('IsResolved');
+    }
+    set IsResolved(value: boolean) {
+        this.Set('IsResolved', value);
+    }
+
+    /**
+    * * Field Name: ResolvedByUserID
+    * * Display Name: Resolved By User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ResolvedByUserID(): string | null {
+        return this.Get('ResolvedByUserID');
+    }
+    set ResolvedByUserID(value: string | null) {
+        this.Set('ResolvedByUserID', value);
+    }
+
+    /**
+    * * Field Name: ResolvedAt
+    * * Display Name: Resolved At
+    * * SQL Data Type: datetimeoffset
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ResolvedAt(): Date | null {
+        return this.Get('ResolvedAt');
+    }
+    set ResolvedAt(value: Date | null) {
+        this.Set('ResolvedAt', value);
+    }
+
+    /**
+    * * Field Name: TypeID
+    * * Display Name: Type
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversation Types (vwConversationTypes.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get TypeID(): string {
+        return this.Get('TypeID');
+    }
+    set TypeID(value: string) {
+        this.Set('TypeID', value);
+    }
+
+    /**
+    * * Field Name: AIPromptRun
+    * * Display Name: AI Prompt Run Details
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AIPromptRun(): string | null {
+        return this.Get('AIPromptRun');
     }
 }
 
