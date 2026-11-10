@@ -14,10 +14,10 @@ import { IsWorkflowStepTask, ResolveWorkflowTaskTypeID } from './MJTaskEntitySer
  * Server-side `MJ: Task Dependencies` entity: a workflow's edges are the task-graph service's.
  *
  * An edge decides when a step may run and what it reads: deleting the one into a send step would release it without
- * the approval step before it, and adding one would hand a step another's output. So an edge that touches a workflow
+ * the approval step before it, and adding one would hand a step another's output. So an edge that gates a workflow
  * step, before or after the write, is created, changed or deleted only inside the dispatcher's runtime-security scope
- * ({@link TASK_GRAPH_RUNTIME_SECURITY_OPERATION}), where the task-graph service writes a graph's edges. Edges between
- * other tasks are left alone.
+ * ({@link TASK_GRAPH_RUNTIME_SECURITY_OPERATION}), where the task-graph service writes a graph's edges. An edge that gates no
+ * workflow step, an ordinary task waiting on one included, is left alone.
  */
 @RegisterClass(BaseEntity, 'MJ: Task Dependencies')
 export class MJTaskDependencyEntityServer extends MJTaskDependencyEntity {
@@ -35,14 +35,15 @@ export class MJTaskDependencyEntityServer extends MJTaskDependencyEntity {
         return super.Delete(options);
     }
 
-    /** Whether either end of the edge, as stored or as this write leaves it, is a step of a workflow. */
+    /**
+     * Whether the edge gates a step of a workflow: its `TaskID`, as stored or as this write leaves it, is one. That is the
+     * end the dispatcher reads (a step's prerequisites); an ordinary task waiting on a step changes nothing it runs.
+     */
     private async touchesWorkflowStep(): Promise<boolean> {
         const ends = new Set<string>();
-        for (const field of ['TaskID', 'DependsOnTaskID']) {
-            const entityField = this.GetFieldByName(field);
-            for (const value of [entityField?.Value, this.IsSaved ? entityField?.OldValue : undefined]) {
-                if (typeof value === 'string' && value) ends.add(value.toUpperCase());
-            }
+        const entityField = this.GetFieldByName('TaskID');
+        for (const value of [entityField?.Value, this.IsSaved ? entityField?.OldValue : undefined]) {
+            if (typeof value === 'string' && value) ends.add(value.toUpperCase());
         }
         if (ends.size === 0) return false;
         const provider = this.RunViewProviderToUse;

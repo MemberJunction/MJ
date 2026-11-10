@@ -220,6 +220,17 @@ describe('MJTaskEntityServer: who completed a Human step, and the dispatcher sco
         expect(completedBy(byClient)).toBe(REVIEWER.ID);
     });
 
+    it('lets the assignee reject their own Human step in their own client request, and nobody else', async () => {
+        const rejected = (user: { ID: string }) => {
+            const t = human(user);
+            t.Status = 'Failed';
+            return t;
+        };
+        expect(await asClient(() => rejected(REVIEWER).Save())).toBe(true);
+        expect(await asClient(() => rejected(OTHER).Save())).toBe(false);
+        expect(await rejected(REVIEWER).Save()).toBe(false);
+    });
+
     it('refuses completing the step for anyone but its assignee, in their own client request', async () => {
         // Someone else, as their own client request.
         expect(await asClient(() => human(OTHER).Save())).toBe(false);

@@ -106,7 +106,7 @@ const WORKFLOW_PARENT_OWNED_FIELDS = [
     'InputPayload', 'OutputPayload', 'AgentRunID', 'UserID', 'ConversationDetailID', 'TypeID', 'EnvironmentID', 'StepType', 'ParentID',
 ] as const;
 
-/** What the person completing their own Human step may set in that save: its status, and its output, their answer. */
+/** What the person settling their own Human step (completing or rejecting it) may set in that save: its status, and its output, their answer. */
 const PERSON_COMPLETION_FIELDS = ['Status', 'OutputPayload'];
 
 /** `Configuration` keys anyone may write: `layout` is presentation, and `runtime` has its own guard. */
@@ -144,7 +144,7 @@ export function ExecutableConfigurationChanged(stored: string | null | undefined
  * of a step waiting to run, the answer a Human step will carry before its person approves it, or who that
  * person is; or rerun, skip or settle a step by its status. The graph would treat the result as trusted. So
  * outside the dispatcher's scope those cannot change on a saved step, except that the person a Human step is
- * assigned to may complete it and give its output, their answer, in their own client request.
+ * assigned to may complete or reject it and give its output, their answer, in their own client request.
  *
  * @param changedFields the owned columns this save changes
  * @param personCompletesOwnHumanStep this save is the assignee completing their Human step, as their own client request
@@ -361,7 +361,7 @@ export class MJTaskEntityServer extends MJTaskEntity {
             if (this.GetFieldByName('Configuration')?.Dirty && ExecutableConfigurationChanged(storedConfiguration, this.Configuration)) {
                 changed.push('Configuration');
             }
-            const dataRefusal = WorkflowStepDataChangeRefusal(changed, this.personCompletesOwnHumanStep());
+            const dataRefusal = WorkflowStepDataChangeRefusal(changed, this.personSettlesOwnHumanStep());
             if (dataRefusal) {
                 result.Errors.push(new ValidationErrorInfo(changed[0], dataRefusal, null, ValidationErrorType.Failure));
                 result.Success = false;
@@ -414,10 +414,16 @@ export class MJTaskEntityServer extends MJTaskEntity {
         return state === 'stored' ? this.Type === TASK_GRAPH_WORKFLOW_TYPE_NAME : (this.GetFieldByName('TypeID')?.Dirty === true || this.Type === TASK_GRAPH_WORKFLOW_TYPE_NAME);
     }
 
-    /** Whether this save is the assignee completing their own Human step, as their own client request. */
-    private personCompletesOwnHumanStep(): boolean {
+    /**
+     * Whether this save is the assignee settling their own Human step, as their own client request: completing it
+     * (approving) or failing it (rejecting), from a status that is neither.
+     */
+    private personSettlesOwnHumanStep(): boolean {
         const assignee = this.stored('UserID');
-        return this.completesHumanStep() &&
+        const storedStatus = this.stored('Status');
+        const settles = this.StepType === 'Human' && (this.Status === 'Complete' || this.Status === 'Failed') &&
+            storedStatus !== 'Complete' && storedStatus !== 'Failed';
+        return settles &&
             ServerOperationScopeManager.Instance.IsInDirectClientCrud() &&
             typeof assignee === 'string' && this.ContextCurrentUser != null && UUIDsEqual(assignee, this.ContextCurrentUser.ID);
     }

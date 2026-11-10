@@ -64,12 +64,17 @@ const asService = <T>(fn: () => T): T => ServerOperationScopeManager.Instance.Ru
 );
 
 describe("MJTaskDependencyEntityServer: a workflow's edges are the task-graph service's", () => {
-    it('refuses adding, changing or deleting an edge that touches a workflow step, with the reason', async () => {
+    it('refuses adding, changing or deleting an edge that gates a workflow step, with the reason', async () => {
         const added = edge(STEP, OTHER_STEP);
         expect(await added.Save()).toBe(false);
         expect(added.ResultHistory.at(-1)?.Message).toContain('written only by the task-graph service');
         expect(await edge(STEP, TODO, true).Save()).toBe(false);
-        expect(await edge(TODO, STEP, true).Delete()).toBe(false);
+        expect(await edge(STEP, TODO, true).Delete()).toBe(false);
+    });
+
+    it('leaves an ordinary task waiting on a workflow step alone: the dispatcher never reads that edge', async () => {
+        expect(await edge(TODO, STEP).Save()).toBe(true);
+        expect(await edge(TODO, STEP, true).Delete()).toBe(true);
     });
 
     it('lets the task-graph service write them', async () => {
