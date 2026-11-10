@@ -83,6 +83,7 @@ vi.mock('@memberjunction/aiengine', () => ({
 //     the channel-plugin host (SaveSessionChannelState's pre-persistence normalization hook) ---
 const prepareClientSessionMock = vi.fn();
 const executeRelayedToolMock = vi.fn();
+const refreshClientSessionCredentialMock = vi.fn();
 const cancelInFlightMock = vi.fn((_agentSessionID: string, _callID?: string): number => 0);
 // Recording-store helpers (module-level exports of ai-agents) — mocked so the recording mutations'
 // identity threading is observable without touching MJStorage. vi.hoisted because the factory below
@@ -115,6 +116,7 @@ vi.mock('@memberjunction/ai-agents', async (importOriginal) => {
         RealtimeClientSessionService: class {
             PrepareClientSession = prepareClientSessionMock;
             ExecuteRelayedTool = executeRelayedToolMock;
+            RefreshClientSessionCredential = refreshClientSessionCredentialMock;
             CancelInFlightDelegations = cancelInFlightMock;
             AppendPromptRunMessage = (...a: unknown[]) => realService.AppendPromptRunMessage(...a);
             AccumulatePromptRunUsage = (...a: unknown[]) => realService.AccumulatePromptRunUsage(...a);
@@ -168,6 +170,7 @@ import { RealtimeClientSessionResolver } from '../resolvers/RealtimeClientSessio
 import type { AppContext } from '../types.js';
 import type { UserInfo } from '@memberjunction/core';
 import type { StoreRealtimeRecordingResult } from '@memberjunction/ai-agents';
+import { RealtimeMintSnapshotRegistry } from '@memberjunction/ai-agents';
 
 const USER = { ID: 'user-1', Email: 'tester@example.com' };
 
@@ -304,6 +307,8 @@ beforeEach(() => {
     engineConfigMock.mockResolvedValue(undefined);
     prepareClientSessionMock.mockReset();
     executeRelayedToolMock.mockReset();
+    // Reset too, or one test's refresh calls count toward the next test's call-count assertions.
+    refreshClientSessionCredentialMock.mockReset();
     cancelInFlightMock.mockReset();
     cancelInFlightMock.mockReturnValue(0);
     onChannelStateSaveMock.mockReset();
@@ -4561,5 +4566,452 @@ describe('RealtimeClientSessionResolver — save endpoints honor the session\'s 
         const result = await makeResolver().SaveSessionChannelArtifact('session-1', 'Whiteboard', 'Board', '{}', makeCtx());
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toContain('not in session');
+    });
+});
+
+/** A persisted mint snapshot with no known connection length, naming the target the session was minted for. */
+const MINT_SNAPSHOT_FOR_TARGET_1 = {
+    coAgentID: 'co-agent-1',
+    targetAgentID: 'target-1',
+    modelID: 'm-1',
+    driverClass: 'OpenAIRealtime',
+    credentialScope: 'Any',
+    sessionParams: { Model: 'gpt-realtime', SystemPrompt: 'prompt' },
+};
+
+describe('RealtimeClientSessionResolver.RefreshRealtimeClientSessionToken', () => {
+    it('enforces session ownership and active status before refreshing', async () => {
+        const closedSession = makeSessionEntity({ ID: 'session-closed-1', Status: 'Closed' });
+        currentProvider = makeProvider(() => closedSession);
+
+        await expect(
+            makeResolver().RefreshRealtimeClientSessionToken('session-closed-1', makeCtx()),
+        ).rejects.toThrow(/closed/i);
+
+        expect(refreshClientSessionCredentialMock).not.toHaveBeenCalled();
+    });
+
+    it('closes the session with TimeLimit and refuses refresh when maxSessionDeadlineIso has elapsed', async () => {
+        const pastIso = new Date(Date.now() - 5_000).toISOString();
+        const session = makeSessionEntity({
+            ID: '11111111-0000-4000-8000-000000000001',
+            AgentID: 'co-agent-1',
+            Config_: JSON.stringify({ targetAgentID: 'target-1', maxSessionDeadlineIso: pastIso }),
+        });
+        currentProvider = makeProvider(() => session);
+
+        const result = await makeResolver().RefreshRealtimeClientSessionToken(session.ID as string, makeCtx());
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('time limit');
+        expect(closeSessionMock).toHaveBeenCalledWith(session.ID, USER, currentProvider, 'TimeLimit');
+        expect(refreshClientSessionCredentialMock).not.toHaveBeenCalled();
+    });
+
+    it('re-checks CanRun on the minted target, forwards persisted mint snapshot, passes remaining seconds, and heartbeats on success', async () => {
+        const futureIso = new Date(Date.now() + 900_000).toISOString();
+        const sessionId = '22222222-0000-4000-8000-000000000002';
+        const mintSnapshot = {
+            coAgentID: 'co-agent-1',
+            targetAgentID: 'target-1',
+            modelID: 'm-1',
+            driverClass: 'OpenAIRealtime',
+            credentialScope: 'Any' as const,
+            sessionParams: { Model: 'gpt-realtime', SystemPrompt: 'prompt' },
+        };
+        const session = makeSessionEntity({
+            ID: sessionId,
+            AgentID: 'co-agent-1',
+            Config_: JSON.stringify({
+                targetAgentID: 'target-1',
+                coAgentRunID: CO_RUN_ID,
+                maxSessionDeadlineIso: futureIso,
+                realtimeMintSnapshot: mintSnapshot,
+            }),
+        });
+        currentProvider = makeProvider(() => session, sessionRunLookups([CO_RUN_ID], PROMPT_RUN_ID));
+        refreshClientSessionCredentialMock.mockResolvedValue({
+            Success: true,
+            Kind: 'token',
+            EphemeralToken: 'ek_fresh_123',
+            ExpiresAt: '2026-12-01T00:00:00Z',
+            SessionConfigJson: '{"voice":"alloy"}',
+        });
+
+        const result = await makeResolver().RefreshRealtimeClientSessionToken(sessionId, makeCtx());
+
+        expect(hasPermissionMock).toHaveBeenCalledWith('target-1', USER, 'run');
+        expect(refreshClientSessionCredentialMock).toHaveBeenCalledTimes(1);
+        const [refreshInput] = refreshClientSessionCredentialMock.mock.calls[0] as [
+            {
+                AgentSessionID: string;
+                CoAgentID: string;
+                PersistedMintSnapshot?: unknown;
+                RemainingSessionSeconds?: number;
+            },
+        ];
+        expect(refreshInput.AgentSessionID).toBe(sessionId);
+        expect(refreshInput.CoAgentID).toBe('co-agent-1');
+        expect(refreshInput.PersistedMintSnapshot).toEqual(mintSnapshot);
+        expect(refreshInput.RemainingSessionSeconds).toBeGreaterThan(800);
+        expect(heartbeatMock).toHaveBeenCalledWith(sessionId, USER, currentProvider);
+        expect(result).toEqual({
+            Success: true,
+            Kind: 'token',
+            EphemeralToken: 'ek_fresh_123',
+            ExpiresAt: '2026-12-01T00:00:00Z',
+            SessionConfigJson: '{"voice":"alloy"}',
+        });
+    });
+
+    describe('authorizes against the target the session was minted for, not the owner-editable Config.targetAgentID', () => {
+        const MINTED_TARGET = 'aaaaaaaa-0000-4000-8000-00000000000a';
+        const OWNER_PICKED_TARGET = 'bbbbbbbb-0000-4000-8000-00000000000b';
+
+        // The owner lost CanRun on the minted target...
+        beforeEach(() => {
+            hasPermissionMock.mockImplementation(async (...args: unknown[]) => args[0] !== MINTED_TARGET);
+        });
+
+        /** ...and rewrote Config.targetAgentID to an agent they can still run. */
+        function tamperedSession(sessionId: string, persistedSnapshot?: object) {
+            return makeSessionEntity({
+                ID: sessionId,
+                AgentID: 'co-agent-1',
+                Config_: JSON.stringify({
+                    targetAgentID: OWNER_PICKED_TARGET,
+                    ...(persistedSnapshot ? { realtimeMintSnapshot: persistedSnapshot } : {}),
+                }),
+            });
+        }
+
+        it('refuses the refresh when the caller can no longer run the target in the persisted mint snapshot', async () => {
+            const sessionId = '22222222-0000-4000-8000-0000000000a1';
+            currentProvider = makeProvider(() => tamperedSession(sessionId, { ...MINT_SNAPSHOT_FOR_TARGET_1, targetAgentID: MINTED_TARGET }));
+
+            await expect(makeResolver().RefreshRealtimeClientSessionToken(sessionId, makeCtx())).rejects.toThrow(/Not authorized/);
+
+            expect(hasPermissionMock).toHaveBeenCalledWith(MINTED_TARGET, USER, 'run');
+            expect(hasPermissionMock).not.toHaveBeenCalledWith(OWNER_PICKED_TARGET, expect.anything(), expect.anything());
+            expect(refreshClientSessionCredentialMock).not.toHaveBeenCalled();
+        });
+
+        it('reads the target from this instance\'s mint snapshot first', async () => {
+            const sessionId = '22222222-0000-4000-8000-0000000000a2';
+            currentProvider = makeProvider(() => tamperedSession(sessionId));
+            RealtimeMintSnapshotRegistry.Instance.Set(sessionId, {
+                ...MINT_SNAPSHOT_FOR_TARGET_1,
+                credentialScope: 'Any',
+                targetAgentID: MINTED_TARGET,
+            });
+            try {
+                await expect(makeResolver().RefreshRealtimeClientSessionToken(sessionId, makeCtx())).rejects.toThrow(/Not authorized/);
+            } finally {
+                RealtimeMintSnapshotRegistry.Instance.Delete(sessionId);
+            }
+
+            expect(hasPermissionMock).toHaveBeenCalledWith(MINTED_TARGET, USER, 'run');
+            expect(refreshClientSessionCredentialMock).not.toHaveBeenCalled();
+        });
+
+        it('refuses the refresh when no server-written snapshot names a target', async () => {
+            const sessionId = '22222222-0000-4000-8000-0000000000a3';
+            currentProvider = makeProvider(() => tamperedSession(sessionId));
+
+            await expect(makeResolver().RefreshRealtimeClientSessionToken(sessionId, makeCtx())).rejects.toThrow(
+                /no server-recorded target agent/,
+            );
+            expect(refreshClientSessionCredentialMock).not.toHaveBeenCalled();
+        });
+    });
+
+    it('enforces the per-session rate limit (8 mints per 10m window with no known connection length, scaled upward for short ConnectionMaxSeconds)', async () => {
+        const sessionId = '33333333-0000-4000-8000-000000000003';
+        const session = makeSessionEntity({
+            ID: sessionId,
+            AgentID: 'co-agent-1',
+            Config_: JSON.stringify({ targetAgentID: 'target-1', realtimeMintSnapshot: MINT_SNAPSHOT_FOR_TARGET_1 }),
+        });
+        currentProvider = makeProvider(() => session);
+        refreshClientSessionCredentialMock.mockResolvedValue({
+            Success: true,
+            EphemeralToken: 'ek_rate',
+            ExpiresAt: '2026-12-01T00:00:00Z',
+        });
+        const resolver = makeResolver();
+
+        for (let i = 0; i < 8; i++) {
+            const ok = await resolver.RefreshRealtimeClientSessionToken(sessionId, makeCtx());
+            expect(ok.Success).toBe(true);
+        }
+
+        const ninth = await resolver.RefreshRealtimeClientSessionToken(sessionId, makeCtx());
+        expect(ninth.Success).toBe(false);
+        expect(ninth.ErrorMessage).toMatch(/rate limit/i);
+        expect(refreshClientSessionCredentialMock).toHaveBeenCalledTimes(8);
+
+        // With a 45 s ConnectionMaxSeconds test override, 10 refreshes within 10 minutes are allowed (#10):
+        const shortSessionId = '33333333-0000-4000-8000-000000000045';
+        const shortSession = makeSessionEntity({
+            ID: shortSessionId,
+            AgentID: 'co-agent-1',
+            Config_: JSON.stringify({
+                targetAgentID: 'target-1',
+                realtimeMintSnapshot: { ...MINT_SNAPSHOT_FOR_TARGET_1, connectionMaxSeconds: 45 },
+            }),
+        });
+        currentProvider = makeProvider(() => shortSession);
+        for (let i = 0; i < 10; i++) {
+            const ok = await resolver.RefreshRealtimeClientSessionToken(shortSessionId, makeCtx());
+            expect(ok.Success).toBe(true);
+        }
+    });
+
+    describe('refresh rate limit sizing (F13)', () => {
+        /** A session whose mint snapshot carries `connectionMaxSeconds` (omitted when undefined). */
+        function sessionWithConnection(id: string, connectionMaxSeconds: number | undefined) {
+            return makeSessionEntity({
+                ID: id,
+                AgentID: 'co-agent-1',
+                Config_: JSON.stringify({
+                    targetAgentID: 'target-1',
+                    realtimeMintSnapshot: {
+                        ...MINT_SNAPSHOT_FOR_TARGET_1,
+                        ...(connectionMaxSeconds !== undefined ? { connectionMaxSeconds } : {}),
+                    },
+                }),
+            });
+        }
+
+        async function refreshTimes(sessionId: string, times: number): Promise<boolean[]> {
+            const resolver = makeResolver();
+            const results: boolean[] = [];
+            for (let i = 0; i < times; i++) {
+                results.push((await resolver.RefreshRealtimeClientSessionToken(sessionId, makeCtx())).Success);
+            }
+            return results;
+        }
+
+        it('allows every planned move of a short connection: a 45 s connection moves at its soft window (~every 29 s), 21 times in 10 minutes', async () => {
+            const sessionId = '33333333-0000-4000-8000-0000000f1301';
+            currentProvider = makeProvider(() => sessionWithConnection(sessionId, 45));
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: true, EphemeralToken: 'ek', ExpiresAt: '2026-12-01T00:00:00Z' });
+
+            // 20 soft-window moves (OpenAI/xAI mint a fresh token on each) plus one connection drop.
+            const results = await refreshTimes(sessionId, 21);
+
+            expect(results.filter((ok) => !ok)).toHaveLength(0);
+        });
+
+        it('allows several connection drops in 10 minutes on a long OpenAI/xAI connection (each drop mints a token)', async () => {
+            const sessionId = '33333333-0000-4000-8000-0000000f1302';
+            currentProvider = makeProvider(() => sessionWithConnection(sessionId, 7200));
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: true, EphemeralToken: 'ek', ExpiresAt: '2026-12-01T00:00:00Z' });
+
+            // One proactive refresh, one planned move, and six drops (more than one burst the client's rapid-reconnect breaker allows).
+            const results = await refreshTimes(sessionId, 8);
+
+            expect(results.filter((ok) => !ok)).toHaveLength(0);
+        });
+
+        it('does not spend the budget on failed refreshes: a refresh retried through a provider mint outage succeeds once the provider recovers', async () => {
+            const sessionId = '33333333-0000-4000-8000-0000000f1303';
+            currentProvider = makeProvider(() => sessionWithConnection(sessionId, 3600));
+            // An 85 s planned-move recovery window retries every 5 s: about 17 failed mints before the provider is back.
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: false, ErrorMessage: 'provider mint failed (503)' });
+            const resolver = makeResolver();
+            for (let i = 0; i < 17; i++) {
+                const failed = await resolver.RefreshRealtimeClientSessionToken(sessionId, makeCtx());
+                expect(failed.ErrorMessage).toBe('provider mint failed (503)');
+            }
+
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: true, EphemeralToken: 'ek_back', ExpiresAt: '2026-12-01T00:00:00Z' });
+            const recovered = await resolver.RefreshRealtimeClientSessionToken(sessionId, makeCtx());
+
+            expect(recovered.ErrorMessage).toBeUndefined();
+            expect(recovered.Success).toBe(true);
+        });
+
+        it('a refresh that throws does not spend the mint budget either', async () => {
+            const sessionId = '33333333-0000-4000-8000-0000000f1304';
+            currentProvider = makeProvider(() => sessionWithConnection(sessionId, 3600));
+            refreshClientSessionCredentialMock.mockRejectedValue(new Error('mint transport error'));
+            const resolver = makeResolver();
+            for (let i = 0; i < 12; i++) {
+                await expect(resolver.RefreshRealtimeClientSessionToken(sessionId, makeCtx())).rejects.toThrow('mint transport error');
+            }
+
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: true, EphemeralToken: 'ek_back', ExpiresAt: '2026-12-01T00:00:00Z' });
+            expect((await resolver.RefreshRealtimeClientSessionToken(sessionId, makeCtx())).Success).toBe(true);
+        });
+
+        it('still refuses a runaway client minting tokens in a loop', async () => {
+            const sessionId = '33333333-0000-4000-8000-0000000f1305';
+            currentProvider = makeProvider(() => sessionWithConnection(sessionId, 7200));
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: true, EphemeralToken: 'ek', ExpiresAt: '2026-12-01T00:00:00Z' });
+
+            const results = await refreshTimes(sessionId, 60);
+
+            const firstRefusal = results.indexOf(false);
+            expect(firstRefusal).toBeGreaterThan(0);
+            expect(firstRefusal).toBeLessThan(15);
+            expect(results.slice(firstRefusal).every((ok) => !ok)).toBe(true);
+            expect(refreshClientSessionCredentialMock).toHaveBeenCalledTimes(firstRefusal);
+        });
+
+        it('caps the mint limit for a very short catalog connection: a 1 s connection does not allow ~1200 mints in 10 minutes', async () => {
+            const sessionId = '33333333-0000-4000-8000-0000000f1307';
+            currentProvider = makeProvider(() => sessionWithConnection(sessionId, 1));
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: true, EphemeralToken: 'ek', ExpiresAt: '2026-12-01T00:00:00Z' });
+
+            const results = await refreshTimes(sessionId, 100);
+
+            // The cap is the limit of a 30 s connection: 40 planned moves plus the 8 drop allowance.
+            expect(results.indexOf(false)).toBe(48);
+            expect(refreshClientSessionCredentialMock).toHaveBeenCalledTimes(48);
+        });
+
+        it('still refuses a runaway client whose refreshes keep failing, before it reaches the provider without bound', async () => {
+            const sessionId = '33333333-0000-4000-8000-0000000f1306';
+            currentProvider = makeProvider(() => sessionWithConnection(sessionId, 7200));
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: false, ErrorMessage: 'provider mint failed (400)' });
+
+            const resolver = makeResolver();
+            let refusedAt = -1;
+            for (let i = 0; i < 200 && refusedAt < 0; i++) {
+                const result = await resolver.RefreshRealtimeClientSessionToken(sessionId, makeCtx());
+                if (result.ErrorMessage?.match(/rate limit/i)) {
+                    refusedAt = i;
+                }
+            }
+
+            expect(refusedAt).toBeGreaterThan(17);
+            expect(refusedAt).toBeLessThan(100);
+            expect(refreshClientSessionCredentialMock).toHaveBeenCalledTimes(refusedAt);
+        });
+
+        it('bounds failed refreshes by the server-owned allowance: the mint limit (9 for a 2 h connection) plus 40 calls', async () => {
+            const sessionId = '33333333-0000-4000-8000-0000000f1308';
+            currentProvider = makeProvider(() => sessionWithConnection(sessionId, 7200));
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: false, ErrorMessage: 'provider mint failed (400)' });
+
+            const results = await refreshTimes(sessionId, 60);
+
+            expect(results.every((ok) => !ok)).toBe(true);
+            expect(refreshClientSessionCredentialMock).toHaveBeenCalledTimes(49);
+        });
+    });
+
+    it('Caliber zero-change compatibility: preserves a single stable AgentSessionId across multiple token refreshes and transcript/tool relays', async () => {
+        const caliberSessionId = 'ca11be20-0000-4000-8000-000000000001';
+        const createdSession = makeSessionEntity({
+            ID: caliberSessionId,
+            AgentID: 'co-agent-1',
+            ConversationID: 'conv-caliber-1',
+            Config_: JSON.stringify({ targetAgentID: 'target-1' }),
+        });
+        const conversation = makeSessionEntity({ ID: 'conv-caliber-1', UserID: USER.ID });
+        const detail = makeSessionEntity({ ID: 'detail-1' });
+        currentProvider = makeProvider((name: string) => {
+            if (name === 'MJ: Conversations') return conversation;
+            if (name === 'MJ: Conversation Details') return detail;
+            return createdSession;
+        });
+        createSessionMock.mockResolvedValue(createdSession);
+        prepareClientSessionMock.mockResolvedValue({
+            Success: true,
+            CoAgentRunID: CO_RUN_ID,
+            PromptRunID: PROMPT_RUN_ID,
+            CoAgentRunStepID: 'c0c0c0c0-0000-4000-8000-0000000000a1',
+            ClientConfig: {
+                Provider: 'gemini-enterprise',
+                Model: 'gemini-live-2.5-flash-native-audio',
+                EphemeralToken: '',
+                ExpiresAt: '2026-12-01T00:15:00Z',
+                Transport: 'relay',
+                RelayUrl: 'wss://mjapi.example.test/realtime/relay/ticket-caliber-1',
+                SessionConfig: { model: 'gemini-live-2.5-flash-native-audio', connectionMaxSeconds: 600 },
+            },
+            MintSnapshot: {
+                coAgentID: 'co-agent-1',
+                targetAgentID: 'target-1',
+                modelID: 'm-1',
+                driverClass: 'GeminiEnterpriseRealtime',
+                credentialScope: 'Any',
+                transport: 'relay',
+            },
+        });
+        refreshClientSessionCredentialMock.mockResolvedValue({
+            Success: true,
+            EphemeralToken: '',
+            ExpiresAt: '2026-12-01T00:30:00Z',
+            RelayUrl: 'wss://mjapi.example.test/realtime/relay/ticket-caliber-1',
+        });
+
+        const resolver = makeResolver();
+        const started = await resolver.StartRealtimeClientSession('target-1', makeCtx(), 'conv-caliber-1');
+        expect(started.AgentSessionId).toBe(caliberSessionId);
+        expect(createSessionMock).toHaveBeenCalledTimes(1);
+
+        // Two mid-call reconnects refresh credentials against the SAME AgentSessionId:
+        const refresh1 = await resolver.RefreshRealtimeClientSessionToken(started.AgentSessionId, makeCtx());
+        const refresh2 = await resolver.RefreshRealtimeClientSessionToken(started.AgentSessionId, makeCtx());
+        expect(refresh1.Success).toBe(true);
+        expect(refresh2.Success).toBe(true);
+        expect(createSessionMock).toHaveBeenCalledTimes(1); // No new AIAgentSession rows created!
+
+        // Post-reconnect transcript relays still stamp the original AgentSessionId:
+        const relayed = await resolver.RelayRealtimeTranscript(
+            started.AgentSessionId,
+            'user',
+            'Answer after second reconnect',
+            makeCtx(),
+        );
+        expect(relayed).toBe(true);
+        expect(detail.AgentSessionID).toBe(caliberSessionId);
+    });
+});
+
+
+describe('RealtimeClientSessionResolver — catalog timing reaches the browser (F1)', () => {
+    const TIMING = { ConnectionMaxSeconds: 45, SessionMaxSeconds: 1200, ReconnectBufferSeconds: 7, TrustNativeResumption: false };
+
+    it('returns the typed ClientConfig timing fields on the StartRealtimeClientSession result', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        currentProvider = makeProvider(() => makeSessionEntity());
+        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-f1', ConversationID: 'conv-f1' }));
+        prepareClientSessionMock.mockResolvedValue({
+            Success: true,
+            ClientConfig: {
+                Provider: 'gemini', Model: 'gemini-live', EphemeralToken: 'ek', ExpiresAt: '2099-01-01T00:00:00Z',
+                SessionConfig: {}, ...TIMING,
+            },
+        });
+
+        const result = await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-f1');
+
+        expect(result.ConnectionMaxSeconds).toBe(45);
+        expect(result.SessionMaxSeconds).toBe(1200);
+        expect(result.ReconnectBufferSeconds).toBe(7);
+        expect(result.TrustNativeResumption).toBe(false);
+    });
+
+    it('returns the timing fields on the RefreshRealtimeClientSessionToken result', async () => {
+        const sessionId = 'f1f1f1f1-0000-4000-8000-0000000000f1';
+        const session = makeSessionEntity({
+            ID: sessionId,
+            AgentID: 'co-agent-1',
+            Config_: JSON.stringify({ targetAgentID: 'target-1', realtimeMintSnapshot: MINT_SNAPSHOT_FOR_TARGET_1 }),
+        });
+        currentProvider = makeProvider(() => session);
+        hasPermissionMock.mockResolvedValue(true);
+        refreshClientSessionCredentialMock.mockResolvedValue({
+            Success: true, Kind: 'token', EphemeralToken: 'ek2', ExpiresAt: '2099-01-01T00:00:00Z', SessionConfigJson: '{}',
+            ...TIMING,
+        });
+
+        const result = await makeResolver().RefreshRealtimeClientSessionToken(sessionId, makeCtx());
+
+        expect(result).toMatchObject({ Success: true, ...TIMING });
     });
 });

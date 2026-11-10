@@ -140,7 +140,7 @@ export class FileGridComponent implements OnInit, OnChanges {
   }
 
   /**
-   * Currently selected item keys in the grid (Kendo stores keys, not full objects)
+   * Currently selected item keys in the grid (keys, not full objects)
    */
   public SelectedItems: string[] = [];
 
@@ -901,7 +901,7 @@ export class FileGridComponent implements OnInit, OnChanges {
   }
 
   /**
-   * Handles item selection change (not used - Kendo handles selection internally)
+   * Handles item selection change (not used - the grid handles selection internally)
    */
   public OnSelectionChange(selectedKeys: string[]): void {
     this.SelectedItems = selectedKeys;

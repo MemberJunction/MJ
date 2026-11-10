@@ -22,12 +22,20 @@ import type { BaseEntityResult } from '@memberjunction/core';
 import { SerializeValidationErrors, type SerializedValidationError } from '@memberjunction/global';
 
 /** Error codes the write resolvers use; kept distinct so a client can tell the operations apart. */
-export type WriteRefusalCode = 'CREATE_ENTITY_ERROR' | 'SAVE_ENTITY_ERROR' | 'DELETE_ENTITY_ERROR';
+export type WriteRefusalCode =
+    | 'CREATE_ENTITY_ERROR'
+    | 'SAVE_ENTITY_ERROR'
+    | 'DELETE_ENTITY_ERROR'
+    | 'CONCURRENT_MODIFICATION_CONFLICT';
 
 /** The `extensions` payload of a write-refusal `GraphQLError`. */
 export type WriteRefusalExtensions = {
     code: WriteRefusalCode;
     entityName: string;
+    /**
+     * Present when the refusal was caused by a server-side field-level concurrency conflict.
+     */
+    conflictingFields?: string[];
     /**
      * Present only when the refusal carried structured errors. Absent (not an empty array) otherwise,
      * so a client can distinguish "validation said no" from "the database said no".
@@ -52,6 +60,13 @@ export type WriteRefusalExtensions = {
  * @returns `{ code, entityName }`, plus `validationErrors` when `result.Errors` had anything to carry.
  */
 export function RefusalExtensions(code: WriteRefusalCode, entityName: string, result: BaseEntityResult | null | undefined): WriteRefusalExtensions {
+    if (result?.ConcurrencyConflict?.ConflictingFields?.length) {
+        return {
+            code: 'CONCURRENT_MODIFICATION_CONFLICT',
+            entityName,
+            conflictingFields: result.ConcurrencyConflict.ConflictingFields,
+        };
+    }
     const validationErrors = SerializeValidationErrors(result?.Errors);
     return validationErrors.length > 0
         ? { code, entityName, validationErrors, messageIncludesValidationErrors: true }

@@ -49760,7 +49760,7 @@ export class MJEntity_ {
     @Field({nullable: true, description: "Schema-based programmatic class name used for TypeScript entity classes, Zod schemas, and Angular form components. Computed as GetProgrammaticName(GetClassNameSchemaPrefix(SchemaName) + BaseTable + NameSuffix). The prefix is derived from SchemaName (guaranteed unique by SQL Server), not from EntityNamePrefix. For the core __mj schema, the prefix is \"MJ\"; for all other schemas it is the alphanumeric-sanitized schema name. This prevents cross-schema collisions and aligns with GraphQL type naming in getGraphQLTypeNameBase()."}) 
     ClassName?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: "Programmatic name of the base table plus NameSuffix, without a schema prefix: GetProgrammaticName(BaseTable + NameSuffix). Used to name generated procedures and triggers. Maintained by trigger; read-only."}) 
     BaseTableCodeName?: string;
         
     @Field({nullable: true}) 
@@ -53593,7 +53593,7 @@ export class MJEntityField_ {
     @MaxLength(500)
     RelatedEntityOrderBy?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: "Programmatic name of the field: GetProgrammaticName of the Name with spaces removed. Maintained by trigger; read-only."}) 
     FieldCodeName?: string;
         
     @Field({nullable: true}) 
@@ -79599,6 +79599,9 @@ export class MJQueryField_ {
     @MaxLength(500)
     SourceObjectName?: string;
         
+    @Field(() => Boolean, {nullable: true, description: "True when this output field is returned by every branch variant of a templated query (or when the query does not use template branches). False when the field is only returned by a subset of conditional {% if %} branches, so generated TypeScript row interfaces mark the property optional."}) 
+    InAllBranchVariants?: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Query?: string;
@@ -79675,6 +79678,9 @@ export class CreateMJQueryFieldInput {
     @Field({ nullable: true })
     SourceObjectName: string | null;
 
+    @Field(() => Boolean, { nullable: true })
+    InAllBranchVariants?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -79738,6 +79744,9 @@ export class UpdateMJQueryFieldInput {
 
     @Field({ nullable: true })
     SourceObjectName?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    InAllBranchVariants?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
