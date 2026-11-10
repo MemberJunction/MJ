@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocket as WsClient, WebSocketServer, type RawData } from 'ws';
@@ -69,6 +69,7 @@ export const DEFAULT_COLLABORATION_HEARTBEAT_MS = 30_000;
 const WORKING_STATE_FLUSH_DEBOUNCE_MS = 2500;
 const MAX_COLLAB_FRAME_BYTES = 16 * 1024 * 1024; // 16 MB
 const MAX_VERSION_SAVE_ATTEMPTS = 3;
+const MAX_IDLE_FLUSH_RETRIES = 3;
 const COLLABORATION_ALLOWED_ORIGINS_ENV = 'MJ_COLLABORATION_ALLOWED_ORIGINS';
 const REALTIME_ALLOWED_ORIGINS_ENV = 'MJ_REALTIME_PROXY_ALLOWED_ORIGINS';
 const MAX_LOGGED_ORIGIN_CHARS = 200;
@@ -138,6 +139,8 @@ export interface CollaborationRoom {
     DirtyWorkingState: boolean;
     /** Whether `Doc` has changes not yet compacted into an immutable `MJ: Artifact Versions` row. */
     DirtyVersion: boolean;
+    /** Consecutive failed flush/compaction attempts during idle room disposal (capped at `MAX_IDLE_FLUSH_RETRIES`). */
+    CompactionRetryCount: number;
     /** User who most recently applied an edit in this room. */
     LastModifiedByUser: UserInfo | null;
     /** Debounce timer for periodic working-state checkpointing. */
@@ -260,6 +263,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     private readonly _rooms = new Map<string, CollaborationRoom>();
     private readonly _roomInitPromises = new Map<string, Promise<CollaborationRoom>>();
     private readonly _tickets = new Map<string, StoredCollaborationTicket>();
+    private readonly _consumedTickets = new Map<string, number>();
     private _relay: IYjsRoomRelay = new InMemoryYjsRoomRelay();
     private _dataSources: DataSourceInfo[] = [];
     private _providerOverride: IMetadataProvider | null = null;
@@ -348,10 +352,20 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         return this._rooms.size;
     }
 
+    private getTicketHmacSecret(): string {
+        return (
+            process.env['MJ_COLLABORATION_TICKET_SECRET'] ||
+            process.env['MJ_FROZEN_SNAPSHOT_SECRET'] ||
+            process.env['JWT_SECRET'] ||
+            'mj-artifact-collaboration-ticket-secret-v1'
+        );
+    }
+
     /**
      * Mints a cryptographically random, single-use, short-lived ticket (`TTLSeconds = 60` default)
      * bound to a specific `(ArtifactID, User)` pair so browser WebSockets never pass JWTs or API keys
-     * in URL query parameters (`A3`).
+     * in URL query parameters (`A3`). Also signs the ticket payload with HMAC-SHA256 so multi-instance
+     * deployments can validate and consume tickets across peer instances.
      */
     public IssueTicket(params: IssueCollaborationTicketParams): IssuedCollaborationTicket {
         this.ensureShutdownRegistered();
@@ -364,7 +378,19 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         }
         const ttlSeconds = Math.max(1, params.TTLSeconds ?? DEFAULT_COLLABORATION_TICKET_TTL_SECONDS);
         const expiresAtMs = Date.now() + ttlSeconds * 1000;
-        const ticket = randomBytes(24).toString('base64url');
+        const nonce = randomBytes(18).toString('base64url');
+        const payloadJson = JSON.stringify({
+            n: nonce,
+            a: artifactId,
+            u: params.User.ID,
+            k: params.ApiKeyHash ?? undefined,
+            e: expiresAtMs
+        });
+        const payloadB64 = Buffer.from(payloadJson, 'utf8').toString('base64url');
+        const sigB64 = createHmac('sha256', this.getTicketHmacSecret())
+            .update(payloadB64, 'utf8')
+            .digest('base64url');
+        const ticket = `${payloadB64}.${sigB64}`;
 
         this._tickets.set(ticket, {
             ArtifactID: artifactId,
@@ -381,7 +407,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
     /**
      * Atomically consumes a single-use collaboration ticket and verifies it matches `expectedArtifactId`
-     * and has not expired. Always deletes the ticket on first lookup so replay is impossible (`A3`).
+     * and has not expired. Always deletes and records the ticket on first lookup so replay is impossible (`A3`).
      */
     public ConsumeTicket(
         ticket: string,
@@ -393,30 +419,83 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         if (!normalizedTicket || !normalizedArtifactId) {
             return null;
         }
+        if (this._consumedTickets.has(normalizedTicket)) {
+            this._tickets.delete(normalizedTicket);
+            return null;
+        }
 
         const entry = this._tickets.get(normalizedTicket);
-        if (!entry) {
-            return null;
-        }
-        // Single-use: delete unconditionally on first presentation
-        this._tickets.delete(normalizedTicket);
+        if (entry) {
+            // Single-use: delete and mark consumed unconditionally on first presentation
+            this._tickets.delete(normalizedTicket);
+            this._consumedTickets.set(normalizedTicket, entry.ExpiresAtMs);
 
-        if (entry.ExpiresAtMs <= Date.now()) {
+            if (entry.ExpiresAtMs <= Date.now()) {
+                return null;
+            }
+            const sameArtifact =
+                UUIDsEqual(entry.ArtifactID, normalizedArtifactId) ||
+                entry.ArtifactID.toLowerCase() === normalizedArtifactId.toLowerCase();
+            if (!sameArtifact) {
+                return null;
+            }
+            if (entry.User.IsActive === false) {
+                return null;
+            }
+            return {
+                User: entry.User,
+                ApiKeyHash: entry.ApiKeyHash
+            };
+        }
+
+        // Cross-instance verification for HMAC-signed tickets minted on a peer server instance
+        const dotIdx = normalizedTicket.indexOf('.');
+        if (dotIdx <= 0 || dotIdx >= normalizedTicket.length - 1) {
             return null;
         }
-        const sameArtifact =
-            UUIDsEqual(entry.ArtifactID, normalizedArtifactId) ||
-            entry.ArtifactID.toLowerCase() === normalizedArtifactId.toLowerCase();
-        if (!sameArtifact) {
+        const payloadB64 = normalizedTicket.slice(0, dotIdx);
+        const sigB64 = normalizedTicket.slice(dotIdx + 1);
+        const expectedSigB64 = createHmac('sha256', this.getTicketHmacSecret())
+            .update(payloadB64, 'utf8')
+            .digest('base64url');
+        const sigBuf = Buffer.from(sigB64, 'utf8');
+        const expectedBuf = Buffer.from(expectedSigB64, 'utf8');
+        if (sigBuf.length !== expectedBuf.length || !timingSafeEqual(sigBuf, expectedBuf)) {
             return null;
         }
-        if (entry.User.IsActive === false) {
+
+        try {
+            const parsed = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8')) as {
+                n?: string;
+                a?: string;
+                u?: string;
+                k?: string;
+                e?: number;
+            };
+            if (!parsed || typeof parsed.a !== 'string' || typeof parsed.u !== 'string' || typeof parsed.e !== 'number') {
+                return null;
+            }
+            this._consumedTickets.set(normalizedTicket, parsed.e);
+            if (parsed.e <= Date.now()) {
+                return null;
+            }
+            const sameArtifact =
+                UUIDsEqual(parsed.a, normalizedArtifactId) ||
+                parsed.a.toLowerCase() === normalizedArtifactId.toLowerCase();
+            if (!sameArtifact) {
+                return null;
+            }
+            const cachedUser = UserCache.Instance.Users?.find((u) => UUIDsEqual(u.ID, parsed.u));
+            if (!cachedUser || cachedUser.IsActive === false) {
+                return null;
+            }
+            return {
+                User: cachedUser,
+                ApiKeyHash: parsed.k
+            };
+        } catch {
             return null;
         }
-        return {
-            User: entry.User,
-            ApiKeyHash: entry.ApiKeyHash
-        };
     }
 
     /**
@@ -704,6 +783,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             const saved = await entity.Save();
             if (saved) {
                 room.DirtyWorkingState = false;
+                room.CompactionRetryCount = 0;
             } else {
                 room.DirtyWorkingState = true;
                 LogError(
@@ -727,7 +807,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     /**
      * Compacts the room's current collaborative content into a new immutable `MJ: Artifact Versions`
      * record if the content hash differs from the latest persisted version, retrying up to 3 times
-     * on concurrent `VersionNumber` conflicts (`C5`), and flushes `MJ: Artifact Working States`.
+     * on concurrent `VersionNumber` conflicts (`C5`), and flushes `MJ: Artifact Working States`
+     * AFTER the version row and `meta` map are updated so `WorkingState.__mj_UpdatedAt >= Version.__mj_CreatedAt`
+     * (`Blocker 1`).
      */
     public async CompactRoomToArtifactVersion(
         artifactId: string,
@@ -751,8 +833,6 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         if (!room) {
             return { Saved: false };
         }
-
-        await this.FlushWorkingState(artifactId, contextUser);
 
         const currentContent = this.extractRoomSerializedContent(room.Doc);
         const contentHash = createHash('sha256').update(currentContent, 'utf8').digest('hex');
@@ -782,6 +862,13 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             const latest = latestRes.Success ? latestRes.Results?.[0] : undefined;
             if (latest && (latest.ContentHash === contentHash || latest.Content === currentContent)) {
                 room.DirtyVersion = false;
+                room.CompactionRetryCount = 0;
+                if (room.DirtyWorkingState) {
+                    await this.FlushWorkingState(artifactId, contextUser);
+                }
+                if (room.Connections.size === 0 && !this._shuttingDown) {
+                    this.scheduleIdleRoomDisposal(room);
+                }
                 return {
                     Saved: true,
                     VersionID: latest.ID,
@@ -817,10 +904,15 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
             if (saved) {
                 room.DirtyVersion = false;
+                room.CompactionRetryCount = 0;
                 room.Doc.transact(() => {
                     room.Doc.getMap('meta').set('versionNumber', versionEntity.VersionNumber);
                     room.Doc.getMap('meta').set('versionId', versionEntity.ID);
                 }, 'version-meta');
+
+                // Flush working state AFTER saving the version and updating `meta` so the working state
+                // timestamp is never older than the version and includes the updated `versionNumber`/`versionId`.
+                await this.FlushWorkingState(artifactId, contextUser);
 
                 this.broadcastControlFrame(room, {
                     action: 'version-saved',
@@ -844,12 +936,20 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     );
                 }
 
+                if (room.Connections.size === 0 && !this._shuttingDown) {
+                    this.scheduleIdleRoomDisposal(room);
+                }
+
                 return {
                     Saved: true,
                     VersionID: versionEntity.ID,
                     VersionNumber: versionEntity.VersionNumber
                 };
             }
+        }
+
+        if (room.Connections.size === 0 && !this._shuttingDown) {
+            this.scheduleIdleRoomDisposal(room);
         }
 
         LogError(
@@ -861,14 +961,15 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     /**
      * Applies a server-side content mutation (e.g., from `DocumentToolLibrary`, `WhiteboardToolLibrary`,
      * `SlideDeckToolLibrary`, or `SpreadsheetToolLibrary` during an `@mention` agent run) directly to
-     * the live Yjs room so connected browsers see the diff immediately, and optionally compacts a new
-     * `MJ: Artifact Versions` checkpoint.
+     * the live Yjs room using minimal CRDT diffs so connected browsers preserve their Yjs item lineage
+     * and concurrent human additions (`Blocker 1` & `Blocker 2`).
      */
     public async ApplyServerContentMutation(
         artifactId: string,
         newContent: string,
         user: UserInfo,
-        saveVersion: boolean = true
+        saveVersion: boolean = true,
+        previousContent?: string
     ): Promise<{ Success: boolean; VersionID?: string; VersionNumber?: number }> {
         this.ensureShutdownRegistered();
         const provider = this.activeProvider();
@@ -893,14 +994,22 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         const existing = this.extractRoomSerializedContent(room.Doc);
         if (existing !== newContent) {
             room.Doc.transact(() => {
-                if (yText.length > 0) {
-                    yText.delete(0, yText.length);
+                this.applyMinimalTextDiff(yText, yText.toString(), newContent, previousContent);
+                this.syncSlideDeckStructuresIfPresent(room.Doc, newContent, {
+                    preserveConcurrentAdditions: true,
+                    baselineContent: previousContent
+                });
+                this.syncSpreadsheetStructuresIfPresent(room.Doc, newContent, null, {
+                    preserveConcurrentAdditions: true,
+                    baselineContent: previousContent
+                });
+                if (
+                    room.Doc.getMap('slidesById').size > 0 ||
+                    room.Doc.getMap('worksheetsById').size > 0
+                ) {
+                    const mergedSerialized = this.extractRoomSerializedContent(room.Doc);
+                    this.applyMinimalTextDiff(yText, yText.toString(), mergedSerialized);
                 }
-                if (newContent.length > 0) {
-                    yText.insert(0, newContent);
-                }
-                this.syncSlideDeckStructuresIfPresent(room.Doc, newContent);
-                this.syncSpreadsheetStructuresIfPresent(room.Doc, newContent);
             }, 'server-agent');
             room.LastModifiedByUser = user;
             room.DirtyWorkingState = true;
@@ -909,6 +1018,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
         if (saveVersion) {
             const compacted = await this.CompactRoomToArtifactVersion(artifactId, user);
+            if (room.Connections.size === 0 && !this._shuttingDown) {
+                this.scheduleIdleRoomDisposal(room);
+            }
             return {
                 Success: compacted.Saved,
                 VersionID: compacted.VersionID,
@@ -917,6 +1029,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         }
 
         await this.FlushWorkingState(artifactId, user);
+        if (room.Connections.size === 0 && !this._shuttingDown) {
+            this.scheduleIdleRoomDisposal(room);
+        }
         return { Success: true };
     }
 
@@ -934,7 +1049,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
         const existing = this._rooms.get(key);
         if (existing) {
-            if (existing.IdleDisposeTimer) {
+            if (existing.Connections.size === 0 && !this._shuttingDown) {
+                this.scheduleIdleRoomDisposal(existing);
+            } else if (existing.IdleDisposeTimer) {
                 clearTimeout(existing.IdleDisposeTimer);
                 existing.IdleDisposeTimer = null;
             }
@@ -957,6 +1074,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
      */
     public async GetRoomContent(artifactId: string, contextUser: UserInfo): Promise<string> {
         const room = await this.GetOrCreateRoom(artifactId, contextUser);
+        if (room && room.Connections.size === 0 && !this._shuttingDown) {
+            this.scheduleIdleRoomDisposal(room);
+        }
         return room ? this.extractRoomSerializedContent(room.Doc) : '';
     }
 
@@ -1001,6 +1121,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
         this._rooms.clear();
         this._tickets.clear();
+        this._consumedTickets.clear();
         await this._relay.Shutdown();
     }
 
@@ -1033,6 +1154,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 const payload = event.args as {
                     ArtifactID?: string;
                     NewContent?: string;
+                    PreviousContent?: string;
                     User?: UserInfo;
                     SaveVersion?: boolean;
                 };
@@ -1041,7 +1163,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         payload.ArtifactID,
                         payload.NewContent,
                         payload.User,
-                        payload.SaveVersion ?? true
+                        payload.SaveVersion ?? true,
+                        payload.PreviousContent
                     );
                 }
             }
@@ -1102,6 +1225,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         for (const [ticket, entry] of this._tickets) {
             if (entry.ExpiresAtMs <= now) {
                 this._tickets.delete(ticket);
+            }
+        }
+        for (const [ticket, expiresAtMs] of this._consumedTickets) {
+            if (expiresAtMs <= now) {
+                this._consumedTickets.delete(ticket);
             }
         }
     }
@@ -1384,6 +1512,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             Connections: new Set(),
             DirtyWorkingState: false,
             DirtyVersion: false,
+            CompactionRetryCount: 0,
             LastModifiedByUser: contextUser,
             WorkingStateTimer: null,
             IdleDisposeTimer: null,
@@ -1426,6 +1555,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         syncReqErr instanceof Error ? syncReqErr.message : String(syncReqErr)
                     }`
                 );
+            }
+
+            if (room.Connections.size === 0 && !this._shuttingDown) {
+                this.scheduleIdleRoomDisposal(room);
             }
 
             return room;
@@ -1509,29 +1642,52 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 Number.isFinite(workingUpdatedMs) &&
                 versionCreatedMs > workingUpdatedMs;
 
-            if (workingRow?.YjsState && !versionNewerThanWorkingState) {
+            let appliedWorkingState = false;
+            if (workingRow?.YjsState) {
                 const stateBytes = DecodeWorkingStateBytes(workingRow.YjsState);
                 if (stateBytes.byteLength > 0) {
+                    // Always apply the persisted Yjs working state first so CRDT item IDs (`clientID, clock`)
+                    // are preserved across room disposals and client reconnections (`Blocker 1`).
                     Y.applyUpdate(room.Doc, stateBytes, 'hydrate');
+                    appliedWorkingState = true;
                 }
             }
 
             const yText = room.Doc.getText('content');
-            if (yText.length === 0 && (versionRow?.Content || versionRow?.Configuration)) {
+            const versionTargetText = versionRow?.Content || versionRow?.Configuration || '';
+            let seededOrUpdatedWorkingState = false;
+
+            if (!appliedWorkingState && yText.length === 0 && versionTargetText) {
                 room.Doc.transact(() => {
-                    const initialText = versionRow.Content || versionRow.Configuration || '';
-                    if (initialText) {
-                        yText.insert(0, initialText);
-                    }
-                    this.syncSlideDeckStructuresIfPresent(room.Doc, initialText);
+                    yText.insert(0, versionTargetText);
+                    this.syncSlideDeckStructuresIfPresent(room.Doc, versionTargetText);
                     this.syncSpreadsheetStructuresIfPresent(
                         room.Doc,
-                        versionRow.Content ?? '',
-                        versionRow.Configuration ?? null
+                        versionRow?.Content ?? '',
+                        versionRow?.Configuration ?? null
                     );
+                    if (versionRow) {
+                        room.Doc.getMap('meta').set('versionNumber', versionRow.VersionNumber);
+                        room.Doc.getMap('meta').set('versionId', versionRow.ID);
+                    }
+                }, 'hydrate');
+                seededOrUpdatedWorkingState = true;
+            } else if (appliedWorkingState && versionNewerThanWorkingState && versionRow) {
+                const currentSerialized = this.extractRoomSerializedContent(room.Doc);
+                room.Doc.transact(() => {
+                    if (versionTargetText && currentSerialized !== versionTargetText) {
+                        this.applyMinimalTextDiff(yText, yText.toString(), versionTargetText);
+                        this.syncSlideDeckStructuresIfPresent(room.Doc, versionTargetText);
+                        this.syncSpreadsheetStructuresIfPresent(
+                            room.Doc,
+                            versionRow.Content ?? '',
+                            versionRow.Configuration ?? null
+                        );
+                    }
                     room.Doc.getMap('meta').set('versionNumber', versionRow.VersionNumber);
                     room.Doc.getMap('meta').set('versionId', versionRow.ID);
                 }, 'hydrate');
+                seededOrUpdatedWorkingState = true;
             } else if (versionRow) {
                 room.Doc.transact(() => {
                     room.Doc.getMap('meta').set('versionNumber', versionRow.VersionNumber);
@@ -1539,7 +1695,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 }, 'hydrate');
             }
 
-            return { overwriteStaleWorkingState: versionNewerThanWorkingState };
+            return { overwriteStaleWorkingState: seededOrUpdatedWorkingState };
         } catch (err) {
             LogError(
                 `ArtifactCollaborationServer.hydrateRoomStateFromDatabase error on '${room.ArtifactID}': ${
@@ -1991,11 +2147,18 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     await this.FlushWorkingState(room.ArtifactID, actor);
                 }
             }
-            if (room.Connections.size > 0 || room.DirtyWorkingState || room.DirtyVersion) {
-                if (room.Connections.size === 0 && !this._shuttingDown) {
-                    this.scheduleIdleRoomDisposal(room);
-                }
+            if (room.Connections.size > 0) {
                 return;
+            }
+            if (room.DirtyWorkingState || room.DirtyVersion) {
+                room.CompactionRetryCount += 1;
+                if (room.CompactionRetryCount < MAX_IDLE_FLUSH_RETRIES && !this._shuttingDown) {
+                    this.scheduleIdleRoomDisposal(room);
+                    return;
+                }
+                LogError(
+                    `ArtifactCollaborationServer.disposeRoomIfIdle evicting room '${room.ArtifactID}' after ${room.CompactionRetryCount} failed flush/compaction attempts.`
+                );
             }
         }
 
@@ -2087,11 +2250,307 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     }
 
     /**
+     * Applies a minimal line- and character-level diff to `yText` so unchanged lines/paragraphs
+     * retain their original Yjs CRDT item IDs (`clientID, clock`), preventing cursor jumps and
+     * duplicate merges when reconnecting or merging concurrent human + agent edits (`Blocker 1` & `Blocker 2`).
+     */
+    private applyMinimalTextDiff(
+        yText: Y.Text,
+        currentText: string,
+        targetText: string,
+        baselineText?: string
+    ): void {
+        if (currentText === targetText) {
+            return;
+        }
+
+        // If a baseline snapshot is provided and differs from currentText (a human edited concurrently
+        // in the live room while an agent edited starting from baselineText), apply the baseline -> targetText
+        // hunks by locating their baseline context in `yText` so the human's concurrent edits are preserved.
+        if (
+            typeof baselineText === 'string' &&
+            baselineText.length > 0 &&
+            baselineText !== currentText &&
+            baselineText !== targetText
+        ) {
+            const baselineLines = this.splitTextIntoLineTokens(baselineText);
+            const targetLines = this.splitTextIntoLineTokens(targetText);
+            const hunks = this.computeLineReplacementHunks(baselineLines, targetLines);
+            if (hunks.length > 0) {
+                let allLocated = true;
+                const locatedSplices: Array<{ start: number; deleteCount: number; insertText: string }> = [];
+                const liveStr = yText.toString();
+
+                for (const hunk of hunks) {
+                    const oldHunkText = baselineLines.slice(hunk.oldStart, hunk.oldEnd).join('');
+                    const newHunkText = targetLines.slice(hunk.newStart, hunk.newEnd).join('');
+                    if (oldHunkText.length > 0) {
+                        const idx = liveStr.indexOf(oldHunkText);
+                        if (idx === -1) {
+                            allLocated = false;
+                            break;
+                        }
+                        const refined = this.refineCharSplice(idx, oldHunkText, newHunkText);
+                        locatedSplices.push(refined);
+                    } else if (hunk.oldStart === 0) {
+                        locatedSplices.push({ start: 0, deleteCount: 0, insertText: newHunkText });
+                    } else {
+                        const prevAnchor = baselineLines[hunk.oldStart - 1];
+                        const anchorIdx = liveStr.indexOf(prevAnchor);
+                        if (anchorIdx === -1) {
+                            allLocated = false;
+                            break;
+                        }
+                        locatedSplices.push({
+                            start: anchorIdx + prevAnchor.length,
+                            deleteCount: 0,
+                            insertText: newHunkText
+                        });
+                    }
+                }
+
+                if (allLocated && locatedSplices.length > 0) {
+                    locatedSplices.sort((a, b) => b.start - a.start);
+                    for (const sp of locatedSplices) {
+                        if (sp.deleteCount > 0) {
+                            yText.delete(sp.start, sp.deleteCount);
+                        }
+                        if (sp.insertText.length > 0) {
+                            yText.insert(sp.start, sp.insertText);
+                        }
+                    }
+                    return;
+                }
+            }
+        }
+
+        const oldLines = this.splitTextIntoLineTokens(currentText);
+        const newLines = this.splitTextIntoLineTokens(targetText);
+        const hunks = this.computeLineReplacementHunks(oldLines, newLines);
+        if (hunks.length === 0) {
+            return;
+        }
+
+        const oldLineOffsets: number[] = new Array<number>(oldLines.length + 1);
+        oldLineOffsets[0] = 0;
+        for (let i = 0; i < oldLines.length; i++) {
+            oldLineOffsets[i + 1] = oldLineOffsets[i] + oldLines[i].length;
+        }
+
+        for (let h = hunks.length - 1; h >= 0; h--) {
+            const hunk = hunks[h];
+            const startOffset = oldLineOffsets[hunk.oldStart];
+            const oldSlice = oldLines.slice(hunk.oldStart, hunk.oldEnd).join('');
+            const newSlice = newLines.slice(hunk.newStart, hunk.newEnd).join('');
+            const refined = this.refineCharSplice(startOffset, oldSlice, newSlice);
+            if (refined.deleteCount > 0) {
+                yText.delete(refined.start, refined.deleteCount);
+            }
+            if (refined.insertText.length > 0) {
+                yText.insert(refined.start, refined.insertText);
+            }
+        }
+    }
+
+    private splitTextIntoLineTokens(text: string): string[] {
+        if (!text) {
+            return [];
+        }
+        const out: string[] = [];
+        let start = 0;
+        for (let i = 0; i < text.length; i++) {
+            if (text[i] === '\n') {
+                out.push(text.slice(start, i + 1));
+                start = i + 1;
+            }
+        }
+        if (start < text.length) {
+            out.push(text.slice(start));
+        }
+        return out;
+    }
+
+    private refineCharSplice(
+        baseOffset: number,
+        oldSlice: string,
+        newSlice: string
+    ): { start: number; deleteCount: number; insertText: string } {
+        let prefix = 0;
+        const minLen = Math.min(oldSlice.length, newSlice.length);
+        while (prefix < minLen && oldSlice.charCodeAt(prefix) === newSlice.charCodeAt(prefix)) {
+            prefix++;
+        }
+        let suffix = 0;
+        const maxSuffix = minLen - prefix;
+        while (
+            suffix < maxSuffix &&
+            oldSlice.charCodeAt(oldSlice.length - 1 - suffix) ===
+                newSlice.charCodeAt(newSlice.length - 1 - suffix)
+        ) {
+            suffix++;
+        }
+        return {
+            start: baseOffset + prefix,
+            deleteCount: oldSlice.length - prefix - suffix,
+            insertText: newSlice.slice(prefix, newSlice.length - suffix)
+        };
+    }
+
+    private computeLineReplacementHunks(
+        oldLines: string[],
+        newLines: string[]
+    ): Array<{ oldStart: number; oldEnd: number; newStart: number; newEnd: number }> {
+        let prefix = 0;
+        const minLen = Math.min(oldLines.length, newLines.length);
+        while (prefix < minLen && oldLines[prefix] === newLines[prefix]) {
+            prefix++;
+        }
+        let suffix = 0;
+        const maxSuffix = minLen - prefix;
+        while (
+            suffix < maxSuffix &&
+            oldLines[oldLines.length - 1 - suffix] === newLines[newLines.length - 1 - suffix]
+        ) {
+            suffix++;
+        }
+
+        const oldMid = oldLines.slice(prefix, oldLines.length - suffix);
+        const newMid = newLines.slice(prefix, newLines.length - suffix);
+        if (oldMid.length === 0 && newMid.length === 0) {
+            return [];
+        }
+        if (oldMid.length === 0 || newMid.length === 0) {
+            return [
+                {
+                    oldStart: prefix,
+                    oldEnd: oldLines.length - suffix,
+                    newStart: prefix,
+                    newEnd: newLines.length - suffix
+                }
+            ];
+        }
+
+        const n = oldMid.length;
+        const m = newMid.length;
+        const maxD = Math.min(n + m, 2048);
+        const offset = n + m;
+        const vSize = 2 * offset + 1;
+        const v = new Int32Array(vSize).fill(-1);
+        v[offset + 1] = 0;
+        const trace: Int32Array[] = [];
+        let reached = false;
+
+        for (let d = 0; d <= maxD; d++) {
+            const vSnap = new Int32Array(vSize).fill(-1);
+            for (let k = -d; k <= d; k += 2) {
+                const idx = offset + k;
+                let x: number;
+                if (k === -d || (k !== d && v[idx - 1] < v[idx + 1])) {
+                    x = v[idx + 1];
+                } else {
+                    x = v[idx - 1] + 1;
+                }
+                if (x < 0) {
+                    continue;
+                }
+                let y = x - k;
+                while (x < n && y < m && oldMid[x] === newMid[y]) {
+                    x++;
+                    y++;
+                }
+                v[idx] = x;
+                vSnap[idx] = x;
+                if (x >= n && y >= m) {
+                    reached = true;
+                    break;
+                }
+            }
+            trace.push(vSnap);
+            if (reached) {
+                break;
+            }
+        }
+
+        if (!reached) {
+            return [
+                {
+                    oldStart: prefix,
+                    oldEnd: oldLines.length - suffix,
+                    newStart: prefix,
+                    newEnd: newLines.length - suffix
+                }
+            ];
+        }
+
+        // Backtrack Myers trace into matched line pairs
+        const matches: Array<{ oldIdx: number; newIdx: number }> = [];
+        let cx = n;
+        let cy = m;
+        for (let d = trace.length - 1; d > 0; d--) {
+            const k = cx - cy;
+            const prevV = trace[d - 1];
+            const prevIdx = offset + k;
+            let prevK: number;
+            if (k === -d || (k !== d && prevV[prevIdx - 1] < prevV[prevIdx + 1])) {
+                prevK = k + 1;
+            } else {
+                prevK = k - 1;
+            }
+            const prevX = prevV[offset + prevK];
+            const prevY = prevX - prevK;
+            while (cx > prevX && cy > prevY) {
+                cx--;
+                cy--;
+                matches.push({ oldIdx: prefix + cx, newIdx: prefix + cy });
+            }
+            cx = prevX;
+            cy = prevY;
+        }
+        while (cx > 0 && cy > 0) {
+            cx--;
+            cy--;
+            matches.push({ oldIdx: prefix + cx, newIdx: prefix + cy });
+        }
+        matches.reverse();
+
+        const hunks: Array<{ oldStart: number; oldEnd: number; newStart: number; newEnd: number }> = [];
+        let curOld = prefix;
+        let curNew = prefix;
+        for (const match of matches) {
+            if (curOld < match.oldIdx || curNew < match.newIdx) {
+                hunks.push({
+                    oldStart: curOld,
+                    oldEnd: match.oldIdx,
+                    newStart: curNew,
+                    newEnd: match.newIdx
+                });
+            }
+            curOld = match.oldIdx + 1;
+            curNew = match.newIdx + 1;
+        }
+        const endOld = oldLines.length - suffix;
+        const endNew = newLines.length - suffix;
+        if (curOld < endOld || curNew < endNew) {
+            hunks.push({
+                oldStart: curOld,
+                oldEnd: endOld,
+                newStart: curNew,
+                newEnd: endNew
+            });
+        }
+        return hunks;
+    }
+
+    /**
      * When `rawContent` represents a serialized {@link SlideDeckSpec} (`Presentation` artifact),
      * populates `doc.getMap('deckMeta')`, `doc.getMap('slidesById')`, and `doc.getArray('slideOrder')`
      * so concurrent per-slide edits and slide reorders merge cleanly across Yjs CRDT maps/arrays (`§ 5.1`, `Accept #1`).
      */
-    private syncSlideDeckStructuresIfPresent(doc: Y.Doc, rawContent: string): void {
+    private syncSlideDeckStructuresIfPresent(
+        doc: Y.Doc,
+        rawContent: string,
+        options?: { preserveConcurrentAdditions?: boolean; baselineContent?: string }
+    ): void {
         const trimmed = (rawContent ?? '').trim();
         if (!trimmed.startsWith('{')) {
             return;
@@ -2105,6 +2564,16 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             const deckMeta = doc.getMap<string>('deckMeta');
             const slidesById = doc.getMap<string>('slidesById');
             const slideOrder = doc.getArray<string>('slideOrder');
+
+            let baselineSlideIds: Set<string> | null = null;
+            if (options?.baselineContent && options.baselineContent.trim().startsWith('{')) {
+                try {
+                    const baseDeck = SlideDeckEngine.Instance.ParseDeckSpec(options.baselineContent.trim());
+                    baselineSlideIds = new Set(baseDeck.Slides.map((s) => s.SlideID));
+                } catch {
+                    baselineSlideIds = null;
+                }
+            }
 
             const nextDeckId = deck.DeckID || 'deck-1';
             const nextTitle = deck.Title || 'Presentation';
@@ -2140,14 +2609,33 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     slidesById.set(slide.SlideID, slideJson);
                 }
             }
+
+            const preservedConcurrentSlideIds = new Set<string>();
             for (const existingKey of Array.from(slidesById.keys())) {
                 if (!nextIds.has(existingKey)) {
-                    slidesById.delete(existingKey);
+                    const wasDeletedFromBaseline = baselineSlideIds ? baselineSlideIds.has(existingKey) : false;
+                    if (options?.preserveConcurrentAdditions && !wasDeletedFromBaseline) {
+                        preservedConcurrentSlideIds.add(existingKey);
+                    } else {
+                        slidesById.delete(existingKey);
+                    }
                 }
             }
 
             const currentOrder = slideOrder.toArray();
             const targetOrder = deck.Slides.map((s) => s.SlideID);
+            if (preservedConcurrentSlideIds.size > 0) {
+                for (const id of currentOrder) {
+                    if (preservedConcurrentSlideIds.has(id) && !targetOrder.includes(id)) {
+                        targetOrder.push(id);
+                    }
+                }
+                for (const id of preservedConcurrentSlideIds) {
+                    if (!targetOrder.includes(id)) {
+                        targetOrder.push(id);
+                    }
+                }
+            }
             if (
                 currentOrder.length !== targetOrder.length ||
                 currentOrder.some((id, idx) => id !== targetOrder[idx])
@@ -2171,7 +2659,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     private syncSpreadsheetStructuresIfPresent(
         doc: Y.Doc,
         rawContent: string,
-        rawConfiguration?: string | null
+        rawConfiguration?: string | null,
+        options?: { preserveConcurrentAdditions?: boolean; baselineContent?: string }
     ): void {
         const candidate = (rawConfiguration || rawContent || '').trim();
         if (!candidate) return;
@@ -2190,6 +2679,31 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             const sheetOrder = doc.getArray<string>('sheetOrder');
             const worksheetsById = doc.getMap<string>('worksheetsById');
             const sheetCellsByCoord = doc.getMap<string>('sheetCellsByCoord');
+
+            let baselineSheetIds: Set<string> | null = null;
+            let baselineCoordKeys: Set<string> | null = null;
+            const baselineRowIdsBySheet = new Map<string, Set<string>>();
+            const baselineColIdsBySheet = new Map<string, Set<string>>();
+            if (options?.baselineContent && options.baselineContent.trim().length > 0) {
+                try {
+                    const baseWb = SpreadsheetEngine.Instance.ParseWorkbook(options.baselineContent);
+                    if (baseWb && Array.isArray(baseWb.Worksheets)) {
+                        baselineSheetIds = new Set<string>();
+                        baselineCoordKeys = new Set<string>();
+                        for (const bws of baseWb.Worksheets) {
+                            baselineSheetIds.add(bws.SheetID);
+                            baselineRowIdsBySheet.set(bws.SheetID, new Set(bws.Rows.map((r) => r.RowID)));
+                            baselineColIdsBySheet.set(bws.SheetID, new Set(bws.Columns.map((c) => c.ColumnID)));
+                            for (const cell of Object.values(bws.Cells ?? {})) {
+                                baselineCoordKeys.add(`${bws.SheetID}::${cell.RowID}::${cell.ColumnID}`);
+                            }
+                        }
+                    }
+                } catch {
+                    baselineSheetIds = null;
+                    baselineCoordKeys = null;
+                }
+            }
 
             if (workbookMeta.get('WorkbookID') !== wb.WorkbookID) {
                 workbookMeta.set('WorkbookID', wb.WorkbookID);
@@ -2210,8 +2724,41 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
             for (const ws of wb.Worksheets) {
                 validSheetIds.add(ws.SheetID);
+                let mergedRows = ws.Rows;
+                let mergedCols = ws.Columns;
+
+                if (options?.preserveConcurrentAdditions) {
+                    const existingSheetRaw = worksheetsById.get(ws.SheetID);
+                    if (existingSheetRaw) {
+                        try {
+                            const existingSheet = JSON.parse(existingSheetRaw) as WorksheetSpec;
+                            const targetRowIds = new Set(ws.Rows.map((r) => r.RowID));
+                            const baseRowIds = baselineRowIdsBySheet.get(ws.SheetID);
+                            const concurrentRows = (existingSheet.Rows ?? []).filter(
+                                (r) => !targetRowIds.has(r.RowID) && !(baseRowIds && baseRowIds.has(r.RowID))
+                            );
+                            if (concurrentRows.length > 0) {
+                                mergedRows = [...ws.Rows, ...concurrentRows];
+                            }
+
+                            const targetColIds = new Set(ws.Columns.map((c) => c.ColumnID));
+                            const baseColIds = baselineColIdsBySheet.get(ws.SheetID);
+                            const concurrentCols = (existingSheet.Columns ?? []).filter(
+                                (c) => !targetColIds.has(c.ColumnID) && !(baseColIds && baseColIds.has(c.ColumnID))
+                            );
+                            if (concurrentCols.length > 0) {
+                                mergedCols = [...ws.Columns, ...concurrentCols];
+                            }
+                        } catch {
+                            // Ignore malformed existing sheet JSON
+                        }
+                    }
+                }
+
                 const sheetStruct: WorksheetSpec = {
                     ...ws,
+                    Rows: mergedRows,
+                    Columns: mergedCols,
                     Cells: {}
                 };
                 const sheetStructJson = JSON.stringify(sheetStruct);
@@ -2229,19 +2776,42 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 }
             }
 
+            const preservedConcurrentSheetIds = new Set<string>();
             for (const existingSheetId of Array.from(worksheetsById.keys())) {
                 if (!validSheetIds.has(existingSheetId)) {
-                    worksheetsById.delete(existingSheetId);
+                    const wasDeletedFromBaseline = baselineSheetIds ? baselineSheetIds.has(existingSheetId) : false;
+                    if (options?.preserveConcurrentAdditions && !wasDeletedFromBaseline) {
+                        preservedConcurrentSheetIds.add(existingSheetId);
+                    } else {
+                        worksheetsById.delete(existingSheetId);
+                    }
                 }
             }
             for (const existingCoordKey of Array.from(sheetCellsByCoord.keys())) {
                 if (!validCellCoordKeys.has(existingCoordKey)) {
-                    sheetCellsByCoord.delete(existingCoordKey);
+                    const wasDeletedFromBaseline = baselineCoordKeys ? baselineCoordKeys.has(existingCoordKey) : false;
+                    if (options?.preserveConcurrentAdditions && !wasDeletedFromBaseline) {
+                        // Preserve cell added concurrently by another client in the live room
+                    } else {
+                        sheetCellsByCoord.delete(existingCoordKey);
+                    }
                 }
             }
 
             const currentOrder = sheetOrder.toArray();
             const targetOrder = wb.Worksheets.map((w) => w.SheetID);
+            if (preservedConcurrentSheetIds.size > 0) {
+                for (const sId of currentOrder) {
+                    if (preservedConcurrentSheetIds.has(sId) && !targetOrder.includes(sId)) {
+                        targetOrder.push(sId);
+                    }
+                }
+                for (const sId of preservedConcurrentSheetIds) {
+                    if (!targetOrder.includes(sId)) {
+                        targetOrder.push(sId);
+                    }
+                }
+            }
             if (
                 currentOrder.length !== targetOrder.length ||
                 currentOrder.some((id, idx) => id !== targetOrder[idx])

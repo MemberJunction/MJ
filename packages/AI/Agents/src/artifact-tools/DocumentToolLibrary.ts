@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import safeRegexCheck from 'safe-regex';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
 import {
@@ -642,6 +643,13 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         if (!query) {
             return { success: false, data: null, errorMessage: 'search_blocks requires a non-empty query.' };
         }
+        if (query.length > 256 || !safeRegexCheck(query)) {
+            return {
+                success: false,
+                data: null,
+                errorMessage: 'Unsafe or overly complex regular expression rejected'
+            };
+        }
         const blocks = this.ParseLogicalBlocks(content);
         let regex: RegExp;
         try {
@@ -662,8 +670,27 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
 
     private handleGrep(content: string, input: Record<string, unknown>): ArtifactToolResult {
         const patternStr = String(input.pattern ?? '');
+        if (!patternStr) {
+            return { success: false, data: null, errorMessage: 'grep requires a non-empty pattern.' };
+        }
+        if (patternStr.length > 256 || !safeRegexCheck(patternStr)) {
+            return {
+                success: false,
+                data: null,
+                errorMessage: 'Unsafe or overly complex regular expression rejected'
+            };
+        }
         const flags = input.flags != null ? String(input.flags) : undefined;
-        const regex = new RegExp(patternStr, flags);
+        let regex: RegExp;
+        try {
+            regex = new RegExp(patternStr, flags);
+        } catch (err) {
+            return {
+                success: false,
+                data: null,
+                errorMessage: `Invalid regular expression: ${err instanceof Error ? err.message : String(err)}`
+            };
+        }
         const lines = content.split('\n');
         const matches: Array<{ lineNumber: number; text: string }> = [];
         for (let i = 0; i < lines.length; i++) {

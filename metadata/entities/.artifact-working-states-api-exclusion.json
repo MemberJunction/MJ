@@ -1,0 +1,17 @@
+[
+  {
+    "fields": {
+      "Name": "MJ: Artifact Working States",
+      "IncludeInAPI": false,
+      "AllowAllRowsAPI": false,
+      "AllowCreateAPI": true,
+      "AllowUpdateAPI": true,
+      "AllowDeleteAPI": true,
+      "AllowUserSearchAPI": false,
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "0BA6990D-DC4F-408E-A748-8F64B3039533"
+    }
+  }
+]

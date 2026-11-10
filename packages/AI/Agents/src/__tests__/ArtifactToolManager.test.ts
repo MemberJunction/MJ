@@ -440,24 +440,42 @@ describe('ArtifactToolManager', () => {
             SetArtifactLiveMutationHook(null);
         });
 
-        it('updates entry.content across sequential mutations, persists MJ: Artifact Versions with collision retry, fires SetArtifactLiveMutationHook, and sanitizes StoredToolResult', async () => {
+        it('reuses a single MJ: Artifact Versions record per agent run (D5 attribution), fires SetArtifactLiveMutationHook on every step, and sanitizes StoredToolResult', async () => {
             const savedVersions: Array<{
                 ID: string;
                 ArtifactID: string;
                 VersionNumber: number;
+                Name: string | null;
+                Comments: string | null;
                 Content: string | null;
+                Configuration: string | null;
                 ContentMode: 'File' | 'Text';
             }> = [];
-            let simulateFirstSaveCollision = true;
 
             const mockUser = { ID: 'user-agent-1', Name: 'Docs Agent User' } as unknown as UserInfo;
             const mockProvider = {
-                RunView: async () => ({
-                    Success: true,
-                    Results: savedVersions.length > 0
-                        ? [{ ID: savedVersions[savedVersions.length - 1].ID, VersionNumber: savedVersions[savedVersions.length - 1].VersionNumber }]
-                        : [{ ID: 'ver-initial', VersionNumber: 1 }],
-                }),
+                RunView: async (params: { EntityName: string }) => {
+                    if (params.EntityName === 'MJ: Artifacts') {
+                        return {
+                            Success: true,
+                            Results: [
+                                {
+                                    ID: 'aaaa1111-2222-4333-8444-555555555555',
+                                    Name: 'Board Strategy.md',
+                                    UserID: 'user-agent-1',
+                                    DelegateEntityID: null,
+                                    DelegateRecordID: null,
+                                },
+                            ],
+                        };
+                    }
+                    return {
+                        Success: true,
+                        Results: savedVersions.length > 0
+                            ? [{ ID: savedVersions[savedVersions.length - 1].ID, VersionNumber: savedVersions[savedVersions.length - 1].VersionNumber, ContentMode: 'Text' }]
+                            : [{ ID: 'ver-initial', VersionNumber: 1, ContentMode: 'Text' }],
+                    };
+                },
                 GetEntityObject: async () => {
                     const draft = {
                         ID: '',
@@ -476,26 +494,28 @@ describe('ArtifactToolManager', () => {
                         Configuration: null as string | null,
                         NewRecord: () => undefined,
                         Save: async () => {
-                            if (simulateFirstSaveCollision) {
-                                simulateFirstSaveCollision = false;
-                                // Simulate concurrent writer saving VersionNumber 2 right before us
+                            if (!draft.ID) {
+                                draft.ID = `ver-agent-run-${draft.VersionNumber}`;
                                 savedVersions.push({
-                                    ID: 'ver-concurrent-2',
+                                    ID: draft.ID,
                                     ArtifactID: draft.ArtifactID,
-                                    VersionNumber: 2,
-                                    Content: '# Concurrent Edit',
-                                    ContentMode: 'Text',
+                                    VersionNumber: draft.VersionNumber,
+                                    Name: draft.Name,
+                                    Comments: draft.Comments,
+                                    Content: draft.Content,
+                                    Configuration: draft.Configuration,
+                                    ContentMode: draft.ContentMode,
                                 });
-                                return false;
+                            } else {
+                                const existing = savedVersions.find((v) => v.ID === draft.ID);
+                                if (existing) {
+                                    existing.Name = draft.Name;
+                                    existing.Comments = draft.Comments;
+                                    existing.Content = draft.Content;
+                                    existing.Configuration = draft.Configuration;
+                                    existing.ContentMode = draft.ContentMode;
+                                }
                             }
-                            draft.ID = `ver-saved-${draft.VersionNumber}`;
-                            savedVersions.push({
-                                ID: draft.ID,
-                                ArtifactID: draft.ArtifactID,
-                                VersionNumber: draft.VersionNumber,
-                                Content: draft.Content,
-                                ContentMode: draft.ContentMode,
-                            });
                             return true;
                         },
                     };
@@ -525,7 +545,7 @@ describe('ArtifactToolManager', () => {
                 {
                     contextUser: mockUser,
                     provider: mockProvider,
-                    getAgentRun: () => ({ ID: 'run-xyz-999' }),
+                    getAgentRun: () => ({ ID: 'run-xyz-999', Agent: 'Docs Strategist' }),
                 },
             );
 
@@ -541,7 +561,7 @@ describe('ArtifactToolManager', () => {
                 blocks: Array<{ blockId: string }>;
             };
 
-            // 2. Mutation #1: replace_block on block 0 with initial revisionHash (also exercises save collision retry -> Version 3!)
+            // 2. Mutation #1: creates the single agent-run version (Version 2)
             const mut1 = await manager.ExecuteSingleToolCall({
                 artifactId: 'A',
                 tool: 'replace_block',
@@ -559,10 +579,10 @@ describe('ArtifactToolManager', () => {
                 updatedContent?: string;
             };
             expect(mut1Data.persisted).toBe(true);
-            expect(mut1Data.versionNumber).toBe(3); // Retried past concurrent v2!
+            expect(mut1Data.versionNumber).toBe(2);
             expect(mut1Data.updatedContent).toBeUndefined(); // Sanitized from StoredToolResult
 
-            // 3. Mutation #2: replace_block on block 1 using the NEW revisionHash from Mutation #1!
+            // 3. Mutation #2: updates the SAME Version 2 record in-place (1 version per agent run!)
             const mut2 = await manager.ExecuteSingleToolCall({
                 artifactId: 'A',
                 tool: 'replace_block',
@@ -575,20 +595,286 @@ describe('ArtifactToolManager', () => {
             expect(mut2.result.success).toBe(true);
             const mut2Data = mut2.result.data as { persisted: boolean; versionNumber: number };
             expect(mut2Data.persisted).toBe(true);
-            expect(mut2Data.versionNumber).toBe(4);
+            expect(mut2Data.versionNumber).toBe(2);
 
-            // Verify both mutations accumulated in persisted Content and fired live collaboration hook
-            const latestSaved = savedVersions[savedVersions.length - 1];
-            expect(latestSaved.Content).toContain('# Updated Title Step 1');
-            expect(latestSaved.Content).toContain('Updated body paragraph in Step 2.');
+            // Verify only ONE version row was created for the entire agent run, stamped with D5 attribution
+            expect(savedVersions).toHaveLength(1);
+            const runVersion = savedVersions[0];
+            expect(runVersion.VersionNumber).toBe(2);
+            expect(runVersion.Name).toBe('Edited by Docs Strategist');
+            expect(runVersion.Content).toContain('# Updated Title Step 1');
+            expect(runVersion.Content).toContain('Updated body paragraph in Step 2.');
+            expect(JSON.parse(runVersion.Configuration ?? '{}')).toMatchObject({
+                agentRunId: 'run-xyz-999',
+                agentName: 'Docs Strategist',
+            });
+
+            // Both steps still broadcast incremental live collaboration updates
             expect(hookEvents).toHaveLength(2);
             expect(hookEvents[1]).toMatchObject({
                 artifactId: 'aaaa1111-2222-4333-8444-555555555555',
                 alphaId: 'A',
-                versionNumber: 4,
+                versionNumber: 2,
                 tool: 'replace_block',
                 agentRunId: 'run-xyz-999',
+                agentName: 'Docs Strategist',
             });
+        });
+
+        it('detects concurrent human version saves and refuses to overwrite them (Blocker 2)', async () => {
+            const savedVersions = [
+                {
+                    ID: 'ver-initial',
+                    ArtifactID: 'aaaa1111-2222-4333-8444-555555555555',
+                    VersionNumber: 1,
+                    Content: '# Original Title\n\nInitial body paragraph.',
+                    ContentMode: 'Text' as const,
+                },
+            ];
+
+            const mockUser = { ID: 'user-agent-1', Name: 'Docs Agent User' } as unknown as UserInfo;
+            const mockProvider = {
+                RunView: async (params: { EntityName: string }) => {
+                    if (params.EntityName === 'MJ: Artifacts') {
+                        return {
+                            Success: true,
+                            Results: [
+                                {
+                                    ID: 'aaaa1111-2222-4333-8444-555555555555',
+                                    Name: 'Board Strategy.md',
+                                    UserID: 'user-agent-1',
+                                    DelegateEntityID: null,
+                                    DelegateRecordID: null,
+                                },
+                            ],
+                        };
+                    }
+                    const latest = savedVersions[savedVersions.length - 1];
+                    return {
+                        Success: true,
+                        Results: [{ ID: latest.ID, VersionNumber: latest.VersionNumber, ContentMode: latest.ContentMode }],
+                    };
+                },
+                GetEntityObject: async () => ({
+                    NewRecord: () => undefined,
+                    Save: async () => true,
+                }),
+            } as unknown as IMetadataProvider;
+
+            const hookEvents: ArtifactLiveMutationEvent[] = [];
+            SetArtifactLiveMutationHook((evt) => hookEvents.push(evt));
+
+            manager.Initialize(
+                [
+                    {
+                        name: 'Board Strategy.md',
+                        typeName: 'Markdown Document',
+                        toolLibraryClass: 'DocumentToolLibrary',
+                        artifactId: 'aaaa1111-2222-4333-8444-555555555555',
+                        versionId: 'ver-initial',
+                        versionNumber: 1,
+                        content: '# Original Title\n\nInitial body paragraph.',
+                    },
+                ],
+                { contextUser: mockUser, provider: mockProvider },
+            );
+
+            const blocksCall = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'get_blocks',
+                input: {},
+            });
+            const initialBlocksData = blocksCall.result.data as {
+                revisionHash: string;
+                blocks: Array<{ blockId: string }>;
+            };
+
+            // Simulate a human saving Version 2 concurrently before the agent's write tool runs
+            savedVersions.push({
+                ID: 'ver-human-concurrent-2',
+                ArtifactID: 'aaaa1111-2222-4333-8444-555555555555',
+                VersionNumber: 2,
+                Content: '# Human Concurrent Edit\n\nDo not clobber me.',
+                ContentMode: 'Text',
+            });
+
+            const conflictCall = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'replace_block',
+                input: {
+                    blockId: initialBlocksData.blocks[0].blockId,
+                    markdown: '# Stale Agent Overwrite',
+                    expectedRevisionHash: initialBlocksData.revisionHash,
+                },
+            });
+
+            expect(conflictCall.result.success).toBe(false);
+            expect(conflictCall.result.errorMessage).toContain('Artifact was modified concurrently (v2 > v1)');
+            expect(savedVersions).toHaveLength(2);
+            expect(savedVersions[1].Content).toContain('# Human Concurrent Edit');
+            expect(hookEvents).toHaveLength(0);
+        });
+
+        it('enforces ArtifactPermissionEngine.ResolvePermissions before mutating or reading artifacts (Blocker 2)', async () => {
+            const mockViewerUser = { ID: 'user-viewer-only', Name: 'Read Only Viewer' } as unknown as UserInfo;
+            let saveCalled = false;
+            const mockProvider = {
+                RunView: async (params: { EntityName: string }) => {
+                    if (params.EntityName === 'MJ: Artifacts') {
+                        return {
+                            Success: true,
+                            Results: [
+                                {
+                                    ID: 'aaaa1111-2222-4333-8444-555555555555',
+                                    Name: 'Restricted.md',
+                                    UserID: 'user-owner-999', // Viewer is NOT owner
+                                    DelegateEntityID: null,
+                                    DelegateRecordID: null,
+                                },
+                            ],
+                        };
+                    }
+                    if (params.EntityName === 'MJ: Artifact Permissions') {
+                        return {
+                            Success: true,
+                            Results: [
+                                {
+                                    ID: 'perm-1',
+                                    ArtifactID: 'aaaa1111-2222-4333-8444-555555555555',
+                                    UserID: 'user-viewer-only',
+                                    CanRead: true,
+                                    CanEdit: false,
+                                    CanDelete: false,
+                                    CanShare: false,
+                                },
+                            ],
+                        };
+                    }
+                    return { Success: true, Results: [] };
+                },
+                GetEntityObject: async () => ({
+                    NewRecord: () => undefined,
+                    Save: async () => {
+                        saveCalled = true;
+                        return true;
+                    },
+                }),
+            } as unknown as IMetadataProvider;
+
+            const hookEvents: ArtifactLiveMutationEvent[] = [];
+            SetArtifactLiveMutationHook((evt) => hookEvents.push(evt));
+
+            manager.Initialize(
+                [
+                    {
+                        name: 'Restricted.md',
+                        typeName: 'Markdown Document',
+                        toolLibraryClass: 'DocumentToolLibrary',
+                        artifactId: 'aaaa1111-2222-4333-8444-555555555555',
+                        versionId: 'ver-1',
+                        versionNumber: 1,
+                        content: '# Restricted Heading\n\nBody text.',
+                    },
+                ],
+                { contextUser: mockViewerUser, provider: mockProvider },
+            );
+
+            // Read tool is allowed because CanRead = true
+            const readRes = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'get_blocks',
+                input: {},
+            });
+            expect(readRes.result.success).toBe(true);
+            const blocksData = readRes.result.data as {
+                revisionHash: string;
+                blocks: Array<{ blockId: string }>;
+            };
+
+            // Mutating tool is denied because CanEdit = false
+            const writeRes = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'replace_block',
+                input: {
+                    blockId: blocksData.blocks[0].blockId,
+                    markdown: '# Unauthorized Edit',
+                    expectedRevisionHash: blocksData.revisionHash,
+                },
+            });
+            expect(writeRes.result.success).toBe(false);
+            expect(writeRes.result.errorMessage).toBe('Permission denied: user does not have edit access to this artifact');
+            expect(saveCalled).toBe(false);
+            expect(hookEvents).toHaveLength(0);
+        });
+
+        it('refuses to downgrade ContentMode from File to Text when FileStorageEngine upload fails (Blocker 2)', async () => {
+            const mockUser = { ID: 'user-agent-1', Name: 'Sheets Agent User' } as unknown as UserInfo;
+            let saveCalled = false;
+            const mockProvider = {
+                RunView: async (params: { EntityName: string }) => {
+                    if (params.EntityName === 'MJ: Artifacts') {
+                        return {
+                            Success: true,
+                            Results: [
+                                {
+                                    ID: 'bbbb1111-2222-4333-8444-555555555555',
+                                    Name: 'Budget.xlsx',
+                                    UserID: 'user-agent-1',
+                                    DelegateEntityID: null,
+                                    DelegateRecordID: null,
+                                },
+                            ],
+                        };
+                    }
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: 'ver-xlsx-1',
+                                VersionNumber: 1,
+                                ContentMode: 'File',
+                                FileID: 'file-orig-1',
+                            },
+                        ],
+                    };
+                },
+                GetEntityObject: async () => ({
+                    NewRecord: () => undefined,
+                    Save: async () => {
+                        saveCalled = true;
+                        return true;
+                    },
+                }),
+            } as unknown as IMetadataProvider;
+
+            manager.Initialize(
+                [
+                    {
+                        name: 'Budget.xlsx',
+                        typeName: 'Excel Spreadsheet',
+                        toolLibraryClass: 'SpreadsheetToolLibrary',
+                        artifactId: 'bbbb1111-2222-4333-8444-555555555555',
+                        versionId: 'ver-xlsx-1',
+                        versionNumber: 1,
+                        content: '',
+                    },
+                ],
+                { contextUser: mockUser, provider: mockProvider },
+            );
+
+            // Because FileStorageEngine has no storage accounts configured in the unit test environment,
+            // mutating a File-mode artifact must fail closed rather than downgrading ContentMode to Text!
+            const writeCall = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'write_cells',
+                input: {
+                    sheetName: 'Sheet1',
+                    cells: [{ address: 'A1', value: 'Revenue' }],
+                },
+            });
+            expect(writeCall.result.success).toBe(false);
+            expect(writeCall.result.errorMessage).toContain('refusing to downgrade ContentMode to Text');
+            expect(saveCalled).toBe(false);
         });
 
         it('resolves SpreadsheetToolLibrary ahead of ExcelToolLibrary in fallback heuristics', async () => {

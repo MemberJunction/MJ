@@ -116,6 +116,7 @@ Located in `packages/MJServer/src/collaboration/`:
   - **Checkpointing & Compaction**: Debounces binary checkpoints to `MJ: Artifact Working States` during active sessions and compacts into an immutable `MJ: Artifact Versions` record on explicit checkpoint save, last-client disconnect, or server-side agent tool mutation.
 - **Multi-Instance Horizontal Scaling (`YjsRoomRelay.ts`, `O3`)**:
   - `IYjsRoomRelay` abstracts room fan-out behind `InMemoryYjsRoomRelay` (single-node default) and `RedisYjsRoomRelay` (broadcasting binary CRDT & awareness frames across MJAPI cluster nodes on `yjs:room:<artifactId>`).
+  - **Multi-Instance Deployment & Ticket Verification**: Tickets minted by `MintArtifactCollaborationTicket` are statelessly verifiable across cluster instances via HMAC-SHA256 signatures paired with single-use nonce consumption and Redis PubSub replay protection, so a WebSocket upgrade can land on any MJAPI instance even before sticky-session affinity is established. In multi-node production deployments, configuring WebSocket sticky sessions (e.g., load-balancer affinity on `?artifactId=<uuid>`) is recommended to minimize cross-node Redis relay chatter while `RedisYjsRoomRelay` guarantees full CRDT convergence across nodes.
 
 ---
 
@@ -129,9 +130,10 @@ Located in `packages/MJCoreEntities/src/custom/DocumentLiveBlockEngine.ts`:
   - Executes `RunView` and `RunQuery` strictly under the **viewing user's** `UserInfo` (never the document author's credentials).
   - Strips any parameter whose query metadata declares `IsServerSet === true` or matches `SERVER_ONLY_RUN_QUERY_PARAMS` (`StripServerOnlyRunQueryParams`) so untrusted block JSON can never spoof tenant or identity parameters.
   - Projects output columns and rows through Field-Level Security (`ProjectEntityValueRowsForUser`) so restricted columns are omitted from both `Columns` and `Rows`.
-- **Explicit `Live` vs. `Frozen` Governance (`O5`)**:
+- **Explicit `Live` vs. `Frozen` Governance & HMAC-SHA256 Signature Verification (`O5`, `B7`)**:
   - Blocks default to `Mode: 'Live'`.
-  - Converting a block to `Mode: 'Frozen'` bakes the freezing user's visible rows into the shared artifact payload. Therefore, `DocumentLiveBlockEngine.FreezeBlock` fails closed unless `acknowledgeSecurityWarning === true` (paired with a confirmation modal in the UI), stamping `FrozenAt`, `FrozenByUserID`, `FrozenByUserName`, and `SecurityWarningAcknowledged: true`. Executing a tampered `FrozenSnapshot` whose `SecurityWarningAcknowledged` is `false` is rejected at runtime.
+  - Converting a block to `Mode: 'Frozen'` bakes the freezing user's visible rows into the shared artifact payload. Therefore, `DocumentLiveBlockEngine.FreezeBlock` fails closed unless `acknowledgeSecurityWarning === true` (paired with a confirmation modal in the UI), stamping `FrozenAt`, `FrozenByUserID`, `FrozenByUserName`, `SecurityWarningAcknowledged: true`, and a server-side HMAC-SHA256 signature (`SnapshotContentHash: 'hmac-sha256:<hex>'` computed via `ComputeFrozenSnapshotHash` over the canonical snapshot payload including `FrozenByUserName`).
+  - On evaluation (`ExecuteBlock` / `ValidateFrozenBlockSnapshot`), any frozen snapshot with `SecurityWarningAcknowledged !== true` is rejected, and any snapshot whose `SnapshotContentHash` is missing, uses a plain unkeyed SHA-256 hash, or fails HMAC verification (e.g., tampered rows or spoofed `FrozenByUserName`) sets `SnapshotVerified = false` and renders an explicit **Unverified Snapshot** warning badge in the UI instead of a trusted freeze attribution badge.
 
 ---
 
@@ -178,7 +180,7 @@ Located in `packages/AI/Agents/src/artifact-tools/`, all 4 tool libraries regist
 
 - **`SpreadsheetEngine` (`packages/MJCoreEntities/src/custom/SpreadsheetEngine.ts`)**:
   - **Stable Row/Column ID Formula Compilation**: Compiles A1 formulas (`=SUM(B2:B5)`) into immutable `RowID`/`ColumnID` tokens (`@CELL(...)`, `@RANGE(...)`) stored in `FormulaStable`. When collaborators insert or delete rows/columns concurrently over Yjs (`worksheetsById` + `sheetCellsByCoord`), `ResolveFormulaFromStableIds` deterministically reconstructs shifted A1 coordinates (`=SUM(B3:B6)`).
-  - **Headless 35+ Function Evaluator**: Evaluates math, logical, conditional (`SUMIF`, `COUNTIF`, `AVERAGEIF`), lookup (`VLOOKUP`, `XLOOKUP`, `INDEX`, `MATCH`), text, date, and financial (`NPV`, `PMT`) formulas, cross-sheet references (`'Rates'!B2`), and named ranges with `#CYCLE!` detection.
+  - **Headless 35+ Function Evaluator**: Evaluates math, logical, conditional (`SUMIF`, `COUNTIF`, `AVERAGEIF`), lookup (`VLOOKUP`, `XLOOKUP`, `INDEX`, `MATCH`), text, date, and financial (`NPV`, `PMT`) formulas, cross-sheet references (`'Rates'!B2`), and named ranges with `#CYCLE!` detection and O(dirty-subgraph) topological DAG recalculation (`~10ms` for a 10k-formula dirty subgraph).
   - **Viewer-Scoped `=MJ.QUERY` / `=MJ.VIEW` & Bound Live Tables**: Enforces viewer RLS + FLS, strips `IsServerSet` parameters, rejects raw SQL injection tokens in filter strings (`#MJ_ACCESS_DENIED!`), caches per-viewer results for 60 seconds, and auto-fills `CalculatedColumns` (`=ROUND(B{ROW}*1.03, 2)`).
   - **Isomorphic `.xlsx` OpenXML Round-Trip**: `ExportToXlsxBytes` and `ImportFromXlsxBytes` (with RFC 1951 DEFLATE support for Excel / `exceljs` workbooks) preserve `<f>` formulas, currency/percent/date `numFmt` styles, column widths, and hidden `_mj_sheets_meta` workbook state.
   - **Cross-Artifact Live Range Charts**: `ExtractChartDataset` feeds live Sheet charts directly into MJ Slides and MJ Docs `Artifact` blocks.
@@ -221,7 +223,7 @@ Located in `packages/Angular/Generic/artifacts/src/lib/components/version-diff/`
 ### 11.1 Top-Bar Pinned `Library` Application (`LibraryResource` & `<mj-library-workspace>`)
 
 - **Application Metadata (`metadata/applications/.library-application.json`)**:
-  - Dedicated top-level **`Library`** application (`ID: DB6B9D62-CB8E-417D-8A04-4CBC5F65CD9A`, `Icon: fa-solid fa-book-open`, `DefaultForNewUser: true`, `NavigationStyle: Both`, `TopNavLocation: Left of User Menu`, `DefaultSequence: 2` directly beside `Chat`), while preserving `File Browser` (`EB07016C-AE35-4EF9-804B-91563529A08A`) intact. `ApplicationManager` automatically provisions newly introduced header-pinned default apps for existing users who have no prior `MJ: User Applications` row for that app.
+  - Dedicated top-level **`Library`** application (`ID: DB6B9D62-CB8E-417D-8A04-4CBC5F65CD9A`, `Icon: fa-solid fa-book-open`, `DefaultForNewUser: true`, `NavigationStyle: Both`, `TopNavLocation: Left of User Menu`, `DefaultSequence: 2` directly beside `Chat`), while preserving `File Browser` (`EB07016C-AE35-4EF9-804B-91563529A08A`) intact. Existing users are provisioned via an idempotent migration step, while new users receive `Library` automatically via `DefaultForNewUser: true`.
 - **3 Progressive Workspace Modes (`LibraryWorkspaceComponent`)**:
   1. **Hub Mode** (default landing): *Create New* quick-launch strip (`Blank Document`, `Blank Spreadsheet`, `Blank Presentation`, `New Collection`, `Upload File` via `LibraryCreationService`), *Continue Working* recent items, curated *Collections*, and *Connected Cloud Drives* overview cards.
   2. **Power Navigator Mode**: Split-pane hierarchy with nested `MJ: Collections` + Connected Cloud Drive folders on the left, `MJFilterPanelComponent` faceted search & list/grid toggle in the center, and a contextual preview/metadata drawer on the right. User preferences (`Library.SurfaceMode`, `Library.ListStyle`, `Library.StarredArtifactIDs`) persist server-side via `UserInfoEngine.Instance`.
@@ -245,7 +247,7 @@ For binary-backed artifacts (`ContentMode = 'File'`), `packages/MJServer/src/res
 ### 11.4 Chat `Collections` & `Agent Activity` Navigation
 
 - In `metadata/applications/.chat-application.json` (`7A873E1A-692E-43FA-97F8-57D8161A985C`), `Chat` exposes **`Conversations`**, **`Collections`** (`ChatCollectionsResource`, opening `<mj-library-workspace>` directly on Collections), and **`Agent Activity`** (`Icon: fa-solid fa-diagram-project`, `ChatTasksResource`), with `MOVED_NAV_ITEMS` retargeting legacy `Chat -> Tasks` links/pins to `Agent Activity`.
-- `ChatTasksResource` (`BuildConversationTasksFilter`) scopes `MJ: Tasks` queries strictly to `(ConversationDetailID IS NOT NULL OR AgentID IS NOT NULL OR AgentRunID IS NOT NULL)`, guaranteeing human-only tasks never bleed into the Chat `Agent Activity` view.
+- `ChatTasksResource` (`BuildAgentBackedTaskExtraFilter`) scopes `MJ: Tasks` queries via a single server-side SQL subquery filter (`[AgentRunID] IS NOT NULL`, `vwAIAgentRunSteps` `StepType = 'Sub-Agent'`, and parent/child task subqueries) without client-side `IgnoreMaxRows` round-trips or `UserID` restriction, so managers and admins see all readable agent-backed tasks while non-agent human deliverables never bleed into the Chat `Agent Activity` view.
 
 ---
 

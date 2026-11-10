@@ -699,8 +699,15 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
     expect(deniedOrderRes.Success).toBe(false);
     expect(deniedOrderRes.AccessDenied).toBe(true);
 
-    // ExtraFilter with SQL comment, unknown column, or FLS-denied column fails closed
-    for (const badFilter of ["Status = 'Active' -- comment", "NonExistentCol = 'x'", 'SecretRevenue > 1000', "Status = 'Active'; SELECT 1"]) {
+    // ExtraFilter with SQL comment, unknown column, FLS-denied column, or scalar/UDF function call fails closed
+    for (const badFilter of [
+      "Status = 'Active' -- comment",
+      "NonExistentCol = 'x'",
+      'SecretRevenue > 1000',
+      "Status = 'Active'; SELECT 1",
+      '__mj.fnSecret(ID) = 1',
+      "REPLICATE('a', 100000000) = 'a'",
+    ]) {
       const badRes = await DocumentLiveBlockEngine.Instance.ExecuteBlock(
         { BlockID: 'blk-flt', Kind: 'EntityView', Mode: 'Live', EntityName: 'Accounts', ExtraFilter: badFilter },
         viewer,
@@ -719,14 +726,14 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
     expect(missingSnapRes.Success).toBe(false);
     expect(missingSnapRes.Mode).toBe('Frozen');
 
-    // B7: FreezeBlock computes SnapshotContentHash and verifies tampering
+    // B7: FreezeBlock computes HMAC-SHA256 SnapshotContentHash (including FrozenByUserName) and rejects forged/unprefixed hashes
     const frozenWrap = await DocumentLiveBlockEngine.Instance.FreezeBlock(
       { BlockID: 'blk-hash', Kind: 'EntityView', Mode: 'Live', EntityName: 'Accounts' },
       viewer,
       true,
       provider,
     );
-    expect(frozenWrap.UpdatedSpec?.FrozenSnapshot?.SnapshotContentHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(frozenWrap.UpdatedSpec?.FrozenSnapshot?.SnapshotContentHash).toMatch(/^hmac-sha256:[0-9a-f]{64}$/);
     const verifiedExec = await DocumentLiveBlockEngine.Instance.ExecuteBlock(frozenWrap.UpdatedSpec!, viewer, provider);
     expect(verifiedExec.Success).toBe(true);
     expect(verifiedExec.FrozenSnapshot?.SnapshotVerified).toBe(true);
@@ -741,5 +748,27 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
     const tamperedHashExec = await DocumentLiveBlockEngine.Instance.ExecuteBlock(mutatedRowsSpec, viewer, provider);
     expect(tamperedHashExec.Success).toBe(true);
     expect(tamperedHashExec.FrozenSnapshot?.SnapshotVerified).toBe(false);
+
+    // Mutating FrozenByUserName (e.g. spoofing 'Jane CEO') invalidates HMAC signature
+    const spoofedAuthorSpec: DocumentBlockSpec = {
+      ...frozenWrap.UpdatedSpec!,
+      FrozenSnapshot: {
+        ...frozenWrap.UpdatedSpec!.FrozenSnapshot!,
+        FrozenByUserName: 'Jane CEO',
+      },
+    };
+    const spoofedAuthorExec = await DocumentLiveBlockEngine.Instance.ExecuteBlock(spoofedAuthorSpec, viewer, provider);
+    expect(spoofedAuthorExec.FrozenSnapshot?.SnapshotVerified).toBe(false);
+
+    // Plain SHA-256 hash without 'hmac-sha256:' prefix or missing hash is rejected
+    const plainShaSpec: DocumentBlockSpec = {
+      ...frozenWrap.UpdatedSpec!,
+      FrozenSnapshot: {
+        ...frozenWrap.UpdatedSpec!.FrozenSnapshot!,
+        SnapshotContentHash: 'a'.repeat(64),
+      },
+    };
+    const plainShaExec = await DocumentLiveBlockEngine.Instance.ExecuteBlock(plainShaSpec, viewer, provider);
+    expect(plainShaExec.FrozenSnapshot?.SnapshotVerified).toBe(false);
   });
 });

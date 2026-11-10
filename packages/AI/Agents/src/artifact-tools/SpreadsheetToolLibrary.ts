@@ -1,3 +1,4 @@
+import safeRegexCheck from 'safe-regex';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
 import {
@@ -329,6 +330,8 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         ];
     }
 
+    private activeOriginalXlsxBytes: Uint8Array | null = null;
+
     protected override async invokeSubclassTool(
         toolName: string,
         input: Record<string, unknown>,
@@ -336,9 +339,17 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
     ): Promise<ArtifactToolResult> {
         const engine = SpreadsheetEngine.Instance;
         let workbook: WorkbookSpec;
+        this.activeOriginalXlsxBytes =
+            Buffer.isBuffer(artifactContent) &&
+            artifactContent.length > 4 &&
+            artifactContent[0] === 0x50 &&
+            artifactContent[1] === 0x4b
+                ? new Uint8Array(artifactContent)
+                : null;
         try {
             workbook = this.loadWorkbookFromContent(artifactContent);
         } catch (err) {
+            this.activeOriginalXlsxBytes = null;
             return this.errorResult(`Failed to parse spreadsheet content: ${err instanceof Error ? err.message : String(err)}`);
         }
         const currentHash = engine.ComputeRevisionHash(workbook);
@@ -426,7 +437,9 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         const engine = SpreadsheetEngine.Instance;
         engine.EvaluateWorkbook(workbook);
         const serializedJson = engine.SerializeWorkbook(workbook);
-        const xlsxBytes = engine.ExportToXlsxBytes(workbook);
+        const xlsxBytes = this.activeOriginalXlsxBytes
+            ? engine.PatchXlsxBytes(this.activeOriginalXlsxBytes, workbook)
+            : engine.ExportToXlsxBytes(workbook);
         const xlsxBase64 = Buffer.from(xlsxBytes).toString('base64');
         const revisionHash = engine.ComputeRevisionHash(workbook);
         return this.successResult({
@@ -986,6 +999,9 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         const query = typeof input.query === 'string' ? input.query : '';
         if (!query) {
             return this.errorResult('Parameter "query" is required.');
+        }
+        if (query.length > 256 || !safeRegexCheck(query)) {
+            return this.errorResult('Unsafe or overly complex regular expression rejected');
         }
         let regex: RegExp;
         try {

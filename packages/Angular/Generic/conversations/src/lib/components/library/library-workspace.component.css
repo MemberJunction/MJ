@@ -1308,6 +1308,13 @@
   min-height: 0;
 }
 
+.library-load-more-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--mj-space-4) var(--mj-space-3);
+}
+
 @media (max-width: 820px) {
   .starter-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));

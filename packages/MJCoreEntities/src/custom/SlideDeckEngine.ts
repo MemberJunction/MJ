@@ -394,15 +394,81 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
     }
 
     /**
+     * Sanitizes a CSS property value (color, font family, etc.) before interpolating it into a `<style>` block
+     * or theme spec, stripping `;`, `{`, `}`, `<`, `>`, `\`, `url(`, `@import`, and `expression(`.
+     */
+    public SanitizeCssValue(raw: string | undefined | null, fallback = ''): string {
+        const cleaned = String(raw ?? '')
+            .replace(/[;{}<>\\]/g, '')
+            .replace(/url\s*\(/gi, '')
+            .replace(/@import/gi, '')
+            .replace(/expression\s*\(/gi, '')
+            .replace(/\/\*[\s\S]*?\*\//g, '')
+            .trim();
+        return cleaned || fallback;
+    }
+
+    /**
+     * Renders a standalone printable HTML document for `deck` with sanitized CSS theme tokens.
+     */
+    public RenderPrintHtml(deck: SlideDeckSpec): string {
+        const escapeHtml = (str: string): string =>
+            String(str ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        const primary = this.SanitizeCssValue(deck.Theme?.PrimaryColor, '#4f46e5');
+        const accent = this.SanitizeCssValue(deck.Theme?.AccentColor, '#0ea5e9');
+        const bg = this.SanitizeCssValue(deck.Theme?.BackgroundColor, '#ffffff');
+        const surface = this.SanitizeCssValue(deck.Theme?.SurfaceColor, '#f8fafc');
+        const text = this.SanitizeCssValue(deck.Theme?.TextColor, '#0f172a');
+        const muted = this.SanitizeCssValue(deck.Theme?.MutedTextColor, '#475569');
+        const headingFont = this.SanitizeCssValue(deck.Theme?.HeadingFont, 'Inter, system-ui, sans-serif');
+        const bodyFont = this.SanitizeCssValue(deck.Theme?.BodyFont, 'Inter, system-ui, sans-serif');
+
+        const slideBlocks = (deck.Slides ?? [])
+            .filter((s) => !s.Hidden)
+            .map((slide) => {
+                const regionsHtml = (slide.Regions ?? [])
+                    .map(
+                        (r) =>
+                            `<div class="slide-region" data-region-id="${escapeHtml(r.RegionID)}">${escapeHtml(r.MarkdownContent)}</div>`
+                    )
+                    .join('');
+                return `<section class="slide-page" data-slide-id="${escapeHtml(slide.SlideID)}"><h1>${escapeHtml(slide.Title)}</h1>${
+                    slide.Subtitle ? `<h2>${escapeHtml(slide.Subtitle)}</h2>` : ''
+                }<div class="slide-regions">${regionsHtml}</div>${
+                    deck.Master?.FooterText ? `<footer>${escapeHtml(deck.Master.FooterText)}</footer>` : ''
+                }</section>`;
+            })
+            .join('\n');
+
+        return [
+            '<!DOCTYPE html>',
+            '<html><head><meta charset="utf-8"/>',
+            `<title>${escapeHtml(deck.Title)}</title>`,
+            '<style>',
+            `:root { --slide-primary: ${primary}; --slide-accent: ${accent}; --slide-bg: ${bg}; --slide-surface: ${surface}; --slide-text: ${text}; --slide-muted: ${muted}; --slide-heading-font: ${headingFont}; --slide-body-font: ${bodyFont}; }`,
+            'body { margin: 0; background: var(--slide-bg); color: var(--slide-text); font-family: var(--slide-body-font); }',
+            'h1, h2 { font-family: var(--slide-heading-font); color: var(--slide-primary); }',
+            '.slide-page { page-break-after: always; padding: 32px; background: var(--slide-bg); }',
+            '</style></head>',
+            `<body>${slideBlocks}</body></html>`
+        ].join('\n');
+    }
+
+    /**
      * Derives a complete {@link SlideDeckThemeSpec} from organization brand color seeds (`Accept #4`).
      */
     public DeriveThemeFromBrandSeeds(seeds: OrganizationBrandThemeSeeds): SlideDeckThemeSpec {
-        const primary = (seeds.PrimaryColor || '#4f46e5').trim();
-        const accent = (seeds.AccentColor || primary).trim();
-        const bg = (seeds.BackgroundColor || '#ffffff').trim();
+        const primary = this.SanitizeCssValue(seeds.PrimaryColor, '#4f46e5');
+        const accent = this.SanitizeCssValue(seeds.AccentColor, primary);
+        const bg = this.SanitizeCssValue(seeds.BackgroundColor, '#ffffff');
         const isDarkBg = /^#(0|1|2)[0-9a-f]{5}$/i.test(bg);
-        const surface = (seeds.SurfaceColor || (isDarkBg ? '#1e293b' : '#f8fafc')).trim();
-        const text = (seeds.TextColor || (isDarkBg ? '#f8fafc' : '#0f172a')).trim();
+        const surface = this.SanitizeCssValue(seeds.SurfaceColor, isDarkBg ? '#1e293b' : '#f8fafc');
+        const text = this.SanitizeCssValue(seeds.TextColor, isDarkBg ? '#f8fafc' : '#0f172a');
         const muted = isDarkBg ? '#cbd5e1' : '#475569';
 
         return {
@@ -414,8 +480,8 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
             SurfaceColor: surface,
             TextColor: text,
             MutedTextColor: muted,
-            HeadingFont: seeds.HeadingFont || 'Inter, system-ui, sans-serif',
-            BodyFont: seeds.BodyFont || 'Inter, system-ui, sans-serif',
+            HeadingFont: this.SanitizeCssValue(seeds.HeadingFont, 'Inter, system-ui, sans-serif'),
+            BodyFont: this.SanitizeCssValue(seeds.BodyFont, 'Inter, system-ui, sans-serif'),
             BrandSeedSource: seeds.BrandSeedSource || seeds.OrganizationName || 'Organization Brand Seeds'
         };
     }
@@ -652,8 +718,8 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
             AspectRatio: '16:9',
             Theme: defaultTheme,
             Master: {
-                HeaderText: 'MemberJunction Enterprise Strategy',
-                FooterText: 'Confidential · Internal Governance Review',
+                HeaderText: '',
+                FooterText: '',
                 ShowSlideNumbers: true,
                 ShowDate: true,
                 OrganizationName: 'MemberJunction'
@@ -1499,20 +1565,20 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                 ? {
                       ThemeID: raw.Theme.ThemeID || defaultTheme.ThemeID,
                       Name: raw.Theme.Name || defaultTheme.Name,
-                      PrimaryColor: raw.Theme.PrimaryColor || defaultTheme.PrimaryColor,
-                      AccentColor: raw.Theme.AccentColor || defaultTheme.AccentColor,
-                      BackgroundColor: raw.Theme.BackgroundColor || defaultTheme.BackgroundColor,
-                      SurfaceColor: raw.Theme.SurfaceColor || defaultTheme.SurfaceColor,
-                      TextColor: raw.Theme.TextColor || defaultTheme.TextColor,
-                      MutedTextColor: raw.Theme.MutedTextColor || defaultTheme.MutedTextColor,
-                      HeadingFont: raw.Theme.HeadingFont || defaultTheme.HeadingFont,
-                      BodyFont: raw.Theme.BodyFont || defaultTheme.BodyFont,
+                      PrimaryColor: this.SanitizeCssValue(raw.Theme.PrimaryColor, defaultTheme.PrimaryColor),
+                      AccentColor: this.SanitizeCssValue(raw.Theme.AccentColor, defaultTheme.AccentColor),
+                      BackgroundColor: this.SanitizeCssValue(raw.Theme.BackgroundColor, defaultTheme.BackgroundColor),
+                      SurfaceColor: this.SanitizeCssValue(raw.Theme.SurfaceColor, defaultTheme.SurfaceColor),
+                      TextColor: this.SanitizeCssValue(raw.Theme.TextColor, defaultTheme.TextColor),
+                      MutedTextColor: this.SanitizeCssValue(raw.Theme.MutedTextColor, defaultTheme.MutedTextColor),
+                      HeadingFont: this.SanitizeCssValue(raw.Theme.HeadingFont, defaultTheme.HeadingFont),
+                      BodyFont: this.SanitizeCssValue(raw.Theme.BodyFont, defaultTheme.BodyFont),
                       BrandSeedSource: raw.Theme.BrandSeedSource
                   }
                 : { ...defaultTheme },
             Master: {
-                HeaderText: raw.Master?.HeaderText ?? (raw.Title || fallbackTitle || 'Presentation'),
-                FooterText: raw.Master?.FooterText ?? 'Confidential',
+                HeaderText: raw.Master?.HeaderText ?? '',
+                FooterText: raw.Master?.FooterText ?? '',
                 ShowSlideNumbers: raw.Master?.ShowSlideNumbers ?? true,
                 ShowDate: raw.Master?.ShowDate ?? true,
                 OrganizationName: raw.Master?.OrganizationName ?? 'MemberJunction',

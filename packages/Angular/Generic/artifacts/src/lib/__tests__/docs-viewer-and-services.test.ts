@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as encoding from 'lib0/encoding';
+import * as decoding from 'lib0/decoding';
 import * as syncProtocol from 'y-protocols/sync';
 import * as Y from 'yjs';
 import type { IMetadataProvider } from '@memberjunction/core';
@@ -359,17 +360,20 @@ describe('DocumentCollaborationService — ticket-authenticated URL resolution, 
       createdSockets[0].onopen?.();
       expect(session.Status).toBe('connected');
 
-      // Server sends empty SyncStep2 -> session seeds initial content
+      // Server has seeded "# Initial" in its room Y.Doc and sends SyncStep2
       const serverDoc = new Y.Doc();
+      serverDoc.getText('content').insert(0, '# Initial');
       const step2Encoder = encoding.createEncoder();
       encoding.writeVarUint(step2Encoder, 0);
       syncProtocol.writeSyncStep2(step2Encoder, serverDoc);
       createdSockets[0].onmessage?.({ data: encoding.toUint8Array(step2Encoder).buffer } as MessageEvent);
 
-      // Transient network drop (code 1006)
+      // Transient network drop (code 1006) — does NOT locally re-seed Y.Text
       createdSockets[0].readyState = FakeWebSocket.CLOSED;
       createdSockets[0].onclose?.({ code: 1006 } as CloseEvent);
       expect(session.Status).toBe('local');
+      expect(session.Transport).toBe('websocket');
+      expect(session.YDoc.getText('content').toString()).toBe('# Initial');
 
       // User makes an offline edit while disconnected
       session.SetContent('# Initial\n\nOffline paragraph added.');
@@ -382,8 +386,22 @@ describe('DocumentCollaborationService — ticket-authenticated URL resolution, 
       createdSockets[1].readyState = FakeWebSocket.OPEN;
       createdSockets[1].onopen?.();
       expect(session.Status).toBe('connected');
-      // Sent syncStep1 + offline Y.Doc state update + awareness
+      // On open, sends ONLY syncStep1 + awareness (2 frames), NOT a blind full Y.encodeStateAsUpdate resend
+      expect(createdSockets[1].sentFrames).toHaveLength(2);
+
+      // When server sends its syncStep1, client replies with syncStep2 containing the offline edit
+      const serverStep1Encoder = encoding.createEncoder();
+      encoding.writeVarUint(serverStep1Encoder, 0);
+      syncProtocol.writeSyncStep1(serverStep1Encoder, serverDoc);
+      createdSockets[1].onmessage?.({ data: encoding.toUint8Array(serverStep1Encoder).buffer } as MessageEvent);
       expect(createdSockets[1].sentFrames.length).toBeGreaterThanOrEqual(3);
+
+      // Apply the client's syncStep2 reply to serverDoc -> serverDoc now has the offline paragraph without duplication!
+      const replyDecoder = decoding.createDecoder(createdSockets[1].sentFrames[2]);
+      decoding.readVarUint(replyDecoder); // MSG_SYNC
+      const dummyEncoder = encoding.createEncoder();
+      syncProtocol.readSyncMessage(replyDecoder, dummyEncoder, serverDoc, 'client');
+      expect(serverDoc.getText('content').toString()).toBe('# Initial\n\nOffline paragraph added.');
 
       // Destroy stops future reconnect timers and closes socket cleanly
       session.Destroy();

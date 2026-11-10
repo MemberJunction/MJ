@@ -23,6 +23,7 @@ import {
   ArtifactMetadataEngine,
   UserInfoEngine,
   DocumentLiveBlockEngine,
+  ComputeFrozenSnapshotHash,
   ArtifactPermissionEngine,
   FilterReadableAnchoredConversations,
   SlideDeckEngine,
@@ -690,6 +691,34 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
                               </div>
 
                               <!-- Inline OLE Artifact / Whiteboard Region (§ 3.4.1 & § 5.1) -->
+                              @if (block.Mode === 'Frozen' && block.FrozenSnapshot) {
+                                @if (IsSnapshotVerified(block)) {
+                                  <div
+                                    class="mj-slide-block-provenance"
+                                    [attr.data-testid]="'slide-frozen-provenance-' + region.RegionID"
+                                  >
+                                    <i class="fa-solid fa-shield-halved"></i>
+                                    <span>
+                                      Frozen snapshot captured at {{ block.FrozenSnapshot.FrozenAt }}
+                                      @if (block.FrozenSnapshot.FrozenByUserName || block.FrozenSnapshot.FrozenByUserID) {
+                                        by
+                                        <strong>{{
+                                          block.FrozenSnapshot.FrozenByUserName || block.FrozenSnapshot.FrozenByUserID
+                                        }}</strong>
+                                      }
+                                    </span>
+                                  </div>
+                                } @else {
+                                  <div
+                                    class="mj-slide-block-error"
+                                    data-testid="unverified-snapshot-banner"
+                                    [attr.data-region-id]="region.RegionID"
+                                  >
+                                    <i class="fa-solid fa-triangle-exclamation"></i>
+                                    <span>Unverified Snapshot — signature missing or invalid</span>
+                                  </div>
+                                }
+                              }
                               @if (IsInlineOleArtifactBlock(block)) {
                                 <div
                                   class="mj-slide-ole-viewer-container"
@@ -2040,6 +2069,8 @@ export class SlideDeckArtifactViewerComponent
   private session: DocumentCollaborationSession | null = null;
   private permissionUnsub: (() => void) | null = null;
   private readonly subs: Subscription[] = [];
+  private sessionInitGeneration = 0;
+  private isComponentDestroyed = false;
 
   public get IsEditable(): boolean {
     if (this.readonly) {
@@ -2159,6 +2190,8 @@ export class SlideDeckArtifactViewerComponent
   }
 
   public ngOnDestroy(): void {
+    this.isComponentDestroyed = true;
+    this.sessionInitGeneration++;
     this.destroyCollaborationSession();
   }
 
@@ -2754,6 +2787,7 @@ export class SlideDeckArtifactViewerComponent
       return;
     }
     if (block.Mode === 'Frozen' && block.FrozenSnapshot) {
+      const verified = this.IsSnapshotVerified(block);
       this.blockResultsByBlockId.set(block.BlockID, {
         Success: true,
         BlockID: block.BlockID,
@@ -2762,6 +2796,19 @@ export class SlideDeckArtifactViewerComponent
         Columns: block.FrozenSnapshot.Columns,
         Rows: block.FrozenSnapshot.Rows,
         TotalRowCount: block.FrozenSnapshot.TotalRowCount,
+        FrozenMetadata: {
+          FrozenAt: block.FrozenSnapshot.FrozenAt,
+          FrozenByUserID: verified ? block.FrozenSnapshot.FrozenByUserID : '',
+          FrozenByUserName: verified ? block.FrozenSnapshot.FrozenByUserName : '',
+          SnapshotVerified: verified,
+        },
+        FrozenSnapshot: {
+          SnapshotVerified: verified,
+          FrozenAt: block.FrozenSnapshot.FrozenAt,
+          FrozenByUserID: verified ? block.FrozenSnapshot.FrozenByUserID : '',
+          FrozenByUserName: verified ? block.FrozenSnapshot.FrozenByUserName : '',
+          SnapshotContentHash: block.FrozenSnapshot.SnapshotContentHash,
+        },
       });
       this.cdr.markForCheck();
       return;
@@ -2862,31 +2909,78 @@ export class SlideDeckArtifactViewerComponent
     this.cdr.markForCheck();
   }
 
+  public IsSnapshotVerified(block: DocumentBlockSpec | null | undefined): boolean {
+    if (!block) {
+      return false;
+    }
+    return this.collabService.IsFrozenSnapshotVerified(
+      block,
+      this.blockResultsByBlockId.get(block.BlockID),
+    );
+  }
+
   public ConfirmFreezeSlideBlock(): void {
     if (!this.PendingFreezeRegion || !this.PendingFreezeBlock) {
       return;
     }
     const region = this.PendingFreezeRegion;
     const block = this.PendingFreezeBlock;
+    this.PendingFreezeRegion = null;
+    this.PendingFreezeBlock = null;
+    void this.FreezeLiveBlock(region, block);
+  }
+
+  public async FreezeLiveBlock(region: SlideRegionSpec, block: DocumentBlockSpec): Promise<void> {
+    const provider = this.getSafeProvider();
+    if (provider) {
+      try {
+        const serverRes = await this.collabService.FreezeLiveBlockOnServer(
+          block,
+          true,
+          this.artifactVersion?.ArtifactID,
+          provider,
+        );
+        if (this.isComponentDestroyed) {
+          return;
+        }
+        if (serverRes.Success && serverRes.UpdatedSpec) {
+          this.applySingleSlideRegionPatch(this.ActiveSlide.SlideID, {
+            RegionID: region.RegionID,
+            Kind: 'mj-block',
+            BlockSpec: serverRes.UpdatedSpec,
+            MarkdownContent: DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(
+              serverRes.UpdatedSpec,
+            ),
+          });
+          this.cdr.markForCheck();
+          return;
+        }
+      } catch (err) {
+        LogError(err);
+      }
+    }
+
     const display = this.GetDisplayRowsForBlock(block);
     const user = this.getCurrentUserSummary();
-
+    const frozenAt = new Date().toISOString();
+    const baseSnapshot = {
+      FrozenAt: frozenAt,
+      FrozenByUserID: user.ID,
+      FrozenByUserName: user.Name,
+      Columns: display.Columns,
+      Rows: display.Rows,
+      TotalRowCount: display.Rows.length,
+      SecurityWarningAcknowledged: true,
+    };
     const frozenBlock: DocumentBlockSpec = {
       ...block,
       Mode: 'Frozen',
       FrozenSnapshot: {
-        FrozenAt: new Date().toISOString(),
-        FrozenByUserID: user.ID,
-        FrozenByUserName: user.Name,
-        Columns: display.Columns,
-        Rows: display.Rows,
-        TotalRowCount: display.Rows.length,
-        SecurityWarningAcknowledged: true,
+        ...baseSnapshot,
+        SnapshotContentHash: ComputeFrozenSnapshotHash(baseSnapshot),
       },
     };
 
-    this.PendingFreezeRegion = null;
-    this.PendingFreezeBlock = null;
     this.applySingleSlideRegionPatch(this.ActiveSlide.SlideID, {
       RegionID: region.RegionID,
       Kind: 'mj-block',
@@ -3229,9 +3323,10 @@ export class SlideDeckArtifactViewerComponent
     this.BaselineDeckJsonText = serialized;
     this.lastSavedComparableDeckJson = this.getComparableDeckJson(this.Deck);
 
+    const gen = ++this.sessionInitGeneration;
     this.restoreWorkspacePreferences();
     this.setupCollaborationSession(artifactId, serialized);
-    void this.resolveViewerPermissionsAndThreads();
+    void this.resolveViewerPermissionsAndThreads(gen);
     void this.executeAllLiveBlocksInDeck(this.Deck);
   }
 
@@ -3435,7 +3530,7 @@ export class SlideDeckArtifactViewerComponent
     return typeRes.Success ? typeRes.Results?.[0]?.ID : undefined;
   }
 
-  private async resolveViewerPermissionsAndThreads(): Promise<void> {
+  private async resolveViewerPermissionsAndThreads(gen = this.sessionInitGeneration): Promise<void> {
     const persistedArtifactId = this.artifactVersion?.ArtifactID;
     if (!persistedArtifactId) {
       this.cdr.markForCheck();
@@ -3453,13 +3548,15 @@ export class SlideDeckArtifactViewerComponent
     }
 
     try {
-      const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
-        provider,
+      const perms = await this.collabService.ResolvePermissionsFromServer(
         persistedArtifactId,
-        currentUser,
+        provider,
       );
+      if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+        return;
+      }
       this.ResolvedPermissions = perms;
-      if (!perms.CanRead) {
+      if (!perms || !perms.CanRead) {
         this.ConnectionStatus = 'revoked';
         this.session?.SetCanEdit(false);
         if (this.WorkspaceMode === 'edit' || this.WorkspaceMode === 'source') {
@@ -3473,6 +3570,9 @@ export class SlideDeckArtifactViewerComponent
       }
     } catch (err) {
       LogError(err);
+      if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+        return;
+      }
       this.ResolvedPermissions = null;
       this.ConnectionStatus = 'readonly';
       this.session?.SetCanEdit(false);
@@ -3483,15 +3583,20 @@ export class SlideDeckArtifactViewerComponent
       this.permissionUnsub = null;
     }
     this.permissionUnsub = ArtifactPermissionEngine.Instance.OnPermissionsChanged(async (evt) => {
+      if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+        return;
+      }
       if (UUIDsEqual(evt.ArtifactID, persistedArtifactId)) {
         try {
-          const updated = await ArtifactPermissionEngine.Instance.ResolvePermissions(
-            provider,
+          const updated = await this.collabService.ResolvePermissionsFromServer(
             persistedArtifactId,
-            currentUser,
+            provider,
           );
+          if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+            return;
+          }
           this.ResolvedPermissions = updated;
-          if (!updated.CanRead) {
+          if (!updated || !updated.CanRead) {
             this.ConnectionStatus = 'revoked';
             this.session?.SetCanEdit(false);
             if (this.WorkspaceMode === 'edit' || this.WorkspaceMode === 'source') {
@@ -3510,7 +3615,10 @@ export class SlideDeckArtifactViewerComponent
       }
     });
 
-    await this.hydrateAnchoredSlideThreadsFromServer(persistedArtifactId, currentUser, provider);
+    await this.hydrateAnchoredSlideThreadsFromServer(persistedArtifactId, currentUser, provider, gen);
+    if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+      return;
+    }
     this.cdr.markForCheck();
   }
 
@@ -3518,6 +3626,7 @@ export class SlideDeckArtifactViewerComponent
     artifactId: string,
     user: UserInfo,
     provider: IMetadataProvider,
+    gen = this.sessionInitGeneration,
   ): Promise<void> {
     try {
       const artifactEntityId = this.resolveArtifactsEntityId(provider);
@@ -3547,6 +3656,9 @@ export class SlideDeckArtifactViewerComponent
         },
         user,
       );
+      if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+        return;
+      }
 
       const rawRows = convRes.Success ? convRes.Results ?? [] : [];
       if (rawRows.length === 0) {
@@ -3554,7 +3666,7 @@ export class SlideDeckArtifactViewerComponent
       }
 
       const readableRows = await FilterReadableAnchoredConversations(provider, user, rawRows);
-      if (readableRows.length === 0) {
+      if (this.isComponentDestroyed || gen !== this.sessionInitGeneration || readableRows.length === 0) {
         return;
       }
 
@@ -3563,13 +3675,21 @@ export class SlideDeckArtifactViewerComponent
         .map((c) => `'${EscapeSQLString(c.ID)}'`);
       const detailsByConv = new Map<
         string,
-        Array<{ ID: string; ConversationID: string; Role: string; Message: string; __mj_CreatedAt?: string }>
+        Array<{
+          ID: string;
+          ConversationID: string;
+          User?: string | null;
+          Role: string;
+          Message: string;
+          __mj_CreatedAt?: string;
+        }>
       >();
 
       if (convIds.length > 0) {
         const detailRes = await rv.RunView<{
           ID: string;
           ConversationID: string;
+          User?: string | null;
           Role: string;
           Message: string;
           __mj_CreatedAt?: string;
@@ -3583,6 +3703,9 @@ export class SlideDeckArtifactViewerComponent
           },
           user,
         );
+        if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+          return;
+        }
         for (const d of detailRes.Results ?? []) {
           const list = detailsByConv.get(d.ConversationID) ?? [];
           list.push(d);
@@ -3597,13 +3720,13 @@ export class SlideDeckArtifactViewerComponent
               regionId?: string;
               anchorDisplayName?: string;
               quotedText?: string;
-              agentMode?: 'suggest' | 'edit';
+              agentMode?: 'suggest' | 'edit' | 'comment';
               status?: 'Open' | 'Resolved';
             }>(c.AnchorMetadata) ?? {})
           : {};
         const msgs = (detailsByConv.get(c.ID) ?? []).map((d) => ({
           DetailID: d.ID,
-          UserName: d.Role === 'AI' ? 'AI Assistant' : user.Name || 'Collaborator',
+          UserName: d.Role === 'AI' ? 'AI Assistant' : d.User || 'Unknown User',
           Role: (d.Role === 'AI' ? 'Agent' : 'User') as 'User' | 'Agent',
           Message: d.Message,
           CreatedAt: d.__mj_CreatedAt ?? new Date().toISOString(),

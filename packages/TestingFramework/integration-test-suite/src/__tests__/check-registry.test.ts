@@ -112,7 +112,7 @@ import { VideoStudioHandoffChecks } from '../checks/video-studio-handoff.checks'
 import { VideoStudioProductionChecks } from '../checks/video-studio-production.checks';
 import { VideoStudioLiveSmokeChecks } from '../checks/video-studio-live-smoke.checks';
 import { SemanticGraphChecks } from '../checks/semantic-graph.checks';
-import { DocsSlidesSheetsLibraryChecks } from '../checks/docs-slides-sheets-library.checks';
+import { DocsSlidesSheetsLibraryChecks, DocsSlidesSheetsLibraryClientChecks } from '../checks/docs-slides-sheets-library.checks';
 import { RunViewFeatureChecks } from '../checks/runview-features.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
@@ -279,6 +279,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['ciphertext-cache', CiphertextCacheChecks, 5], // CT0-CT4 ciphertext at rest in the RunViewCache, plaintext to the caller (IT161)
         ['semantic-graph', SemanticGraphChecks, 7], // SG1-SG7 Semantic Graph substrate, Content Pipeline GraphStage overlay, and Executable Canon DAG similarity & telemetry (IT162)
         ['docs-slides-sheets-library', DocsSlidesSheetsLibraryChecks, 7], // DSL1-DSL7 Collaborative Docs, Slides, Sheets, Yjs working states, delegated OLE permissions, and Library/Chat wiring (IT164)
+        ['docs-slides-sheets-library-client', DocsSlidesSheetsLibraryClientChecks, 4], // DSLC1-DSLC4 Client-transport GraphQL + WebSocket collaboration checks (IT165)
         ['runview-features', RunViewFeatureChecks, 12], // RVF1-RVF12 RunView cross-feature edges and RunViewParams.Parameters wire binding (IT32)
     ];
 
@@ -383,6 +384,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'dataset-cache': 4,
         'diagnostics': 4,
         'docs-slides-sheets-library': 7,
+        'docs-slides-sheets-library-client': 4,
         'encrypted-read-client': 4,
         'entity-actions': 8,
         'entity-embedded': 6,
@@ -583,7 +585,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(233);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(234);
     });
 });
 
@@ -692,7 +694,6 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'conversation-authorship-client.CA7',
         'conversation-authorship-client.CA8',
         'conversation-authorship-client.CA9',
-        'docs-slides-sheets-library.DSL3',
         'encrypted-read-client.ER1',
         'encrypted-read-client.ER2',
         'encrypted-read-client.ER3',

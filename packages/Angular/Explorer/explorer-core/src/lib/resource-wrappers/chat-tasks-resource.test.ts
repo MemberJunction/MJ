@@ -17,7 +17,10 @@ vi.mock('@memberjunction/ng-shared', () => ({
 
 vi.mock('@memberjunction/ng-conversations', () => ({
   TasksFullViewComponent: class {},
-  BuildConversationTasksFilter: vi.fn(async () => "ParentID IS NULL AND UserID = 'u-1'"),
+  BuildAgentBackedTaskExtraFilter: vi.fn(
+    () =>
+      "ParentID IS NULL AND ([AgentRunID] IS NOT NULL OR [AgentID] IS NOT NULL OR [ConversationDetailID] IS NOT NULL OR [ID] IN (SELECT [TargetLogID] FROM [__mj].[vwAIAgentRunSteps] WHERE [StepType] = 'Sub-Agent' AND [TargetLogID] IS NOT NULL) OR [ParentID] IN (SELECT [ID] FROM [__mj].[vwTasks] WHERE [AgentRunID] IS NOT NULL) OR [ID] IN (SELECT [ParentID] FROM [__mj].[vwTasks] WHERE ([AgentRunID] IS NOT NULL OR [AgentID] IS NOT NULL OR [ConversationDetailID] IS NOT NULL) AND [ParentID] IS NOT NULL))",
+  ),
 }));
 
 import type { EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
@@ -48,10 +51,12 @@ describe('ChatTasksResource (Agent Activity)', () => {
     });
 
     const filter = await resource.ResolveAgentActivityFilter();
-    expect(filter).toContain("ParentID IS NULL AND UserID = 'u-1'");
-    expect(filter).toContain('ConversationDetailID IS NOT NULL');
-    expect(filter).toContain('AgentID IS NOT NULL');
-    expect(filter).toContain('AgentRunID IS NOT NULL');
+    expect(filter).toContain('ParentID IS NULL');
+    expect(filter).not.toContain("UserID = 'u-1'");
+    expect(filter).toContain('[ConversationDetailID] IS NOT NULL');
+    expect(filter).toContain('[AgentID] IS NOT NULL');
+    expect(filter).toContain('[AgentRunID] IS NOT NULL');
+    expect(filter).toContain('[__mj].[vwAIAgentRunSteps]');
     expect(filter).toContain('[__mj].[vwTasks]');
   });
 });

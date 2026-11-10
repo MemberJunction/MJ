@@ -163,8 +163,10 @@ export class ArtifactResource extends BaseResourceComponent {
   }
 
   /**
-   * Resolves viewer-scoped `CanEdit` and `CanShare` permissions for the active `artifactId`
-   * via `ArtifactPermissionEngine.Instance.ResolvePermissions`.
+   * Resolves viewer-scoped `CanEdit` and `CanShare` permissions for the active `artifactId`,
+   * consulting the server's `ResolveArtifactUserPermissions` GraphQL query first (so server-only
+   * `IArtifactPermissionDelegate` registrations are evaluated) with fallback to
+   * `ArtifactPermissionEngine.Instance.ResolvePermissions`.
    */
   public async ResolveArtifactPermissions(): Promise<void> {
     const targetArtifactId = this._artifactId;
@@ -179,11 +181,7 @@ export class ArtifactResource extends BaseResourceComponent {
 
     const reqId = ++this.permissionRequestSeq;
     try {
-      const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
-        this.ProviderToUse,
-        targetArtifactId,
-        user,
-      );
+      const perms = await this.fetchPermissionsFromServerOrFallback(targetArtifactId, user);
       if (reqId !== this.permissionRequestSeq || this._artifactId !== targetArtifactId) {
         return;
       }
@@ -199,6 +197,53 @@ export class ArtifactResource extends BaseResourceComponent {
         this.cdr?.markForCheck();
       }
     }
+  }
+
+  private async fetchPermissionsFromServerOrFallback(
+    targetArtifactId: string,
+    user: UserInfo,
+  ): Promise<{ CanEdit?: boolean; CanShare?: boolean }> {
+    const providerWithGql = this.ProviderToUse as unknown as {
+      ExecuteGQL?: (
+        query: string,
+        variables?: Record<string, unknown>,
+      ) => Promise<{
+        ResolveArtifactUserPermissions?: { CanEdit?: boolean; CanShare?: boolean };
+        ResolveArtifactPermissions?: { CanEdit?: boolean; CanShare?: boolean };
+      }>;
+    };
+
+    if (typeof providerWithGql?.ExecuteGQL === 'function') {
+      try {
+        const query = `
+          query ResolveArtifactUserPermissions($artifactId: String!) {
+            ResolveArtifactUserPermissions(artifactId: $artifactId) {
+              ArtifactID
+              CanRead
+              CanEdit
+              CanDelete
+              CanShare
+              Source
+              Reason
+            }
+          }
+        `;
+        const gqlResult = await providerWithGql.ExecuteGQL(query, { artifactId: targetArtifactId });
+        const resolved =
+          gqlResult?.ResolveArtifactUserPermissions ?? gqlResult?.ResolveArtifactPermissions;
+        if (resolved && typeof resolved.CanEdit === 'boolean') {
+          return resolved;
+        }
+      } catch {
+        // Fall back to in-process ArtifactPermissionEngine when server GQL is unavailable
+      }
+    }
+
+    return ArtifactPermissionEngine.Instance.ResolvePermissions(
+      this.ProviderToUse,
+      targetArtifactId,
+      user,
+    );
   }
 
   /**

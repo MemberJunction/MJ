@@ -7,6 +7,33 @@ export function OwnTasksFilter(user: UserInfo): string {
 }
 
 /**
+ * Single server-side SQL subquery `ExtraFilter` for Agent Activity (`MJ: Tasks`).
+ *
+ * Eliminates client-side `IgnoreMaxRows` round-trips during 4-second live workflow polling and
+ * does NOT restrict to `UserID = '${currentUserId}'`, so managers and admins see all readable
+ * agent-backed tasks while non-agent human deliverables from other apps are excluded.
+ */
+export function BuildAgentBackedTaskExtraFilter(provider?: IMetadataProvider | null): string {
+  const tasksEntity = provider?.EntityByName('MJ: Tasks');
+  const stepsEntity = provider?.EntityByName('MJ: AI Agent Run Steps');
+  const schemaName = tasksEntity?.SchemaName || '__mj';
+  const tasksView = tasksEntity?.BaseView || 'vwTasks';
+  const stepsSchema = stepsEntity?.SchemaName || schemaName;
+  const stepsView = stepsEntity?.BaseView || 'vwAIAgentRunSteps';
+
+  return (
+    `ParentID IS NULL AND (` +
+    `[AgentRunID] IS NOT NULL ` +
+    `OR [AgentID] IS NOT NULL ` +
+    `OR [ConversationDetailID] IS NOT NULL ` +
+    `OR [ID] IN (SELECT [TargetLogID] FROM [${stepsSchema}].[${stepsView}] WHERE [StepType] = 'Sub-Agent' AND [TargetLogID] IS NOT NULL) ` +
+    `OR [ParentID] IN (SELECT [ID] FROM [${schemaName}].[${tasksView}] WHERE [AgentRunID] IS NOT NULL) ` +
+    `OR [ID] IN (SELECT [ParentID] FROM [${schemaName}].[${tasksView}] WHERE ([AgentRunID] IS NOT NULL OR [AgentID] IS NOT NULL OR [ConversationDetailID] IS NOT NULL) AND [ParentID] IS NOT NULL)` +
+    `)`
+  );
+}
+
+/**
  * The ExtraFilter for the top-level tasks the conversations UI shows a user: the tasks the user
  * owns, and the tasks linked to a message the user wrote or that is in a conversation the user
  * owns.

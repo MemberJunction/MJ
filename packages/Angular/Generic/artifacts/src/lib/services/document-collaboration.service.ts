@@ -9,11 +9,14 @@ import { LogError, Metadata, type IMetadataProvider } from '@memberjunction/core
 import { SafeJSONParse } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import {
+  ArtifactPermissionEngine,
   DocumentLiveBlockEngine,
   SlideDeckEngine,
   SpreadsheetEngine,
+  ValidateFrozenBlockSnapshot,
   type DocumentBlockSpec,
   type DocumentBlockKind,
+  type ResolvedArtifactPermissions,
   type SlideDeckSpec,
   type SlideSpec,
   type WorkbookSpec,
@@ -21,6 +24,14 @@ import {
   type SpreadsheetCellSpec,
   type SpreadsheetNamedRangeSpec,
 } from '@memberjunction/core-entities';
+import {
+  ComputeBoundedSequenceDiff as computeBoundedSequenceDiffFromUtil,
+  ComputeLineDiff as computeLineDiffFromUtil,
+  type SequenceDiffOp,
+} from '../utils/line-diff';
+
+export type { SequenceDiffOp } from '../utils/line-diff';
+export type ArtifactEffectivePermissions = ResolvedArtifactPermissions;
 
 const MSG_SYNC = 0;
 const MSG_AWARENESS = 1;
@@ -41,6 +52,44 @@ const MINT_COLLABORATION_TICKET_MUTATION = `
   }
 `;
 
+const RESOLVE_ARTIFACT_PERMISSIONS_QUERY = `
+  query ResolveArtifactPermissions($artifactId: String!) {
+    ResolveArtifactPermissions(artifactId: $artifactId) {
+      ArtifactID
+      CanRead
+      CanEdit
+      CanDelete
+      CanShare
+      Source
+      Reason
+    }
+  }
+`;
+
+const FREEZE_DOCUMENT_LIVE_BLOCK_MUTATION = `
+  mutation FreezeDocumentLiveBlock($specJson: String!, $acknowledgeSecurityWarning: Boolean!, $hostArtifactId: String) {
+    FreezeDocumentLiveBlock(
+      specJson: $specJson
+      acknowledgeSecurityWarning: $acknowledgeSecurityWarning
+      hostArtifactId: $hostArtifactId
+    ) {
+      Success
+      ErrorMessage
+      UpdatedSpecJSON
+    }
+  }
+`;
+
+const VERIFY_FROZEN_BLOCK_SNAPSHOT_QUERY = `
+  query VerifyFrozenBlockSnapshot($specJson: String!) {
+    VerifyFrozenBlockSnapshot(specJson: $specJson) {
+      Valid
+      SnapshotVerified
+      ErrorMessage
+    }
+  }
+`;
+
 const RECONNECT_BACKOFF_MS = [1000, 2000, 4000, 8000, 15000] as const;
 const MAX_RECONNECT_ATTEMPTS = 8;
 
@@ -48,17 +97,50 @@ export interface CollaborationTicketPayload {
   Success: boolean;
   Ticket?: string | null;
   WsPath?: string | null;
+  WsUrl?: string | null;
+  wsUrl?: string | null;
   ExpiresAt?: string | null;
   CanRead?: boolean | null;
   CanEdit?: boolean | null;
   ErrorMessage?: string | null;
 }
 
+export interface ServerArtifactPermissionsPayload {
+  ArtifactID?: string | null;
+  CanRead?: boolean | null;
+  CanEdit?: boolean | null;
+  CanDelete?: boolean | null;
+  CanShare?: boolean | null;
+  Source?: ResolvedArtifactPermissions['Source'] | string | null;
+  Reason?: string | null;
+}
+
+export interface ServerFreezeLiveBlockPayload {
+  Success: boolean;
+  ErrorMessage?: string | null;
+  UpdatedSpecJSON?: string | null;
+  UpdatedBlockSpecJson?: string | null;
+}
+
+export interface ServerVerifyFrozenSnapshotPayload {
+  Valid?: boolean | null;
+  SnapshotVerified?: boolean | null;
+  ErrorMessage?: string | null;
+}
+
+export interface CollaborationGraphQLResponseMap {
+  MintArtifactCollaborationTicket?: CollaborationTicketPayload | null;
+  ResolveArtifactPermissions?: ServerArtifactPermissionsPayload | null;
+  ResolveArtifactUserPermissions?: ServerArtifactPermissionsPayload | null;
+  FreezeDocumentLiveBlock?: ServerFreezeLiveBlockPayload | null;
+  VerifyFrozenBlockSnapshot?: ServerVerifyFrozenSnapshotPayload | null;
+}
+
 export interface CollaborationGraphQLProviderLike {
   ExecuteGQL: (
     query: string,
-    variables?: Record<string, string>,
-  ) => Promise<{ MintArtifactCollaborationTicket?: CollaborationTicketPayload | null } | null | undefined>;
+    variables?: Record<string, unknown>,
+  ) => Promise<CollaborationGraphQLResponseMap | null | undefined>;
   ConfigData?: {
     URL?: string;
     WSURL?: string;
@@ -70,12 +152,7 @@ export interface ResolvedCollaborationEndpoint {
   Mode: 'connect' | 'local' | 'revoked';
   WsUrl: string;
   CanEdit?: boolean;
-}
-
-export interface SequenceDiffOp {
-  Kind: 'equal' | 'delete' | 'insert';
-  OldIndex: number;
-  NewIndex: number;
+  HasBackend?: boolean;
 }
 
 function isGraphQLCollaborationProvider(
@@ -97,10 +174,31 @@ function resolveDefaultMetadataProvider(explicitProvider?: IMetadataProvider | n
   return Metadata.Provider ?? null; // global-provider-ok: fallback when Angular caller did not supply a bound provider
 }
 
+function decodeBase64ToUint8Array(input: string): Uint8Array | null {
+  try {
+    const trimmed = input.trim();
+    if (!trimmed || !/^[A-Za-z0-9+/=_-]+$/.test(trimmed)) {
+      return null;
+    }
+    const normalized = trimmed.replace(/-/g, '+').replace(/_/g, '/');
+    if (typeof atob === 'function') {
+      const bin = atob(normalized);
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) {
+        out[i] = bin.charCodeAt(i);
+      }
+      return out;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Bounded Myers O((M+N)D) sequence diff with common prefix/suffix trimming and
- * linear Patience-style unique-hash-anchor fallback when (m + n) > maxSequenceSum
- * or edit distance D exceeds maxEditDistance.
+ * linear Patience-style unique-hash-anchor fallback when `(m + n) > maxSequenceSum`
+ * or edit distance `D` exceeds `maxEditDistance`.
  */
 export function ComputeBoundedSequenceDiff<T>(
   oldItems: readonly T[],
@@ -110,355 +208,14 @@ export function ComputeBoundedSequenceDiff<T>(
   maxEditDistance = 2000,
   maxSequenceSum = 10000,
 ): SequenceDiffOp[] {
-  const m = oldItems.length;
-  const n = newItems.length;
-
-  let prefixLen = 0;
-  const minLen = Math.min(m, n);
-  while (prefixLen < minLen && equals(oldItems[prefixLen], newItems[prefixLen])) {
-    prefixLen++;
-  }
-
-  let oldEnd = m;
-  let newEnd = n;
-  while (
-    oldEnd > prefixLen &&
-    newEnd > prefixLen &&
-    equals(oldItems[oldEnd - 1], newItems[newEnd - 1])
-  ) {
-    oldEnd--;
-    newEnd--;
-  }
-
-  const ops: SequenceDiffOp[] = [];
-  for (let i = 0; i < prefixLen; i++) {
-    ops.push({ Kind: 'equal', OldIndex: i, NewIndex: i });
-  }
-
-  const midM = oldEnd - prefixLen;
-  const midN = newEnd - prefixLen;
-
-  if (midM === 0 && midN > 0) {
-    for (let j = prefixLen; j < newEnd; j++) {
-      ops.push({ Kind: 'insert', OldIndex: -1, NewIndex: j });
-    }
-  } else if (midN === 0 && midM > 0) {
-    for (let i = prefixLen; i < oldEnd; i++) {
-      ops.push({ Kind: 'delete', OldIndex: i, NewIndex: -1 });
-    }
-  } else if (midM > 0 && midN > 0) {
-    let midOps: SequenceDiffOp[] | null = null;
-    if (midM + midN <= maxSequenceSum) {
-      midOps = runBoundedMyersSlice(
-        oldItems,
-        prefixLen,
-        midM,
-        newItems,
-        prefixLen,
-        midN,
-        equals,
-        maxEditDistance,
-      );
-    }
-    if (midOps) {
-      for (const op of midOps) {
-        ops.push(op);
-      }
-    } else {
-      appendLinearHashAnchorOps(ops, oldItems, prefixLen, oldEnd, newItems, prefixLen, newEnd, equals, keyFn);
-    }
-  }
-
-  const suffixCount = m - oldEnd;
-  for (let s = 0; s < suffixCount; s++) {
-    ops.push({ Kind: 'equal', OldIndex: oldEnd + s, NewIndex: newEnd + s });
-  }
-
-  return ops;
-}
-
-function runBoundedMyersSlice<T>(
-  oldItems: readonly T[],
-  oldOffset: number,
-  M: number,
-  newItems: readonly T[],
-  newOffset: number,
-  N: number,
-  equals: (a: T, b: T) => boolean,
-  maxEditDistance: number,
-): SequenceDiffOp[] | null {
-  const maxD = Math.min(M + N, maxEditDistance);
-  const offset = maxD + 1;
-  const v = new Int32Array(2 * maxD + 3);
-  v.fill(-1);
-  v[offset + 1] = 0;
-
-  // M <= maxSequenceSum <= 32767 so Int16Array safely stores -1..M with minimal heap footprint
-  const traces: Int16Array[] = [];
-
-  for (let d = 0; d <= maxD; d++) {
-    const snap = new Int16Array(d + 1);
-    snap.fill(-1);
-
-    for (let k = -d; k <= d; k += 2) {
-      const canMoveDown =
-        k !== d &&
-        v[offset + k + 1] >= 0 &&
-        v[offset + k + 1] <= M &&
-        v[offset + k + 1] - k <= N;
-      const canMoveRight =
-        k !== -d &&
-        v[offset + k - 1] >= 0 &&
-        v[offset + k - 1] + 1 <= M &&
-        v[offset + k - 1] + 1 - k <= N;
-
-      if (!canMoveDown && !canMoveRight) {
-        v[offset + k] = -1;
-        snap[(k + d) >> 1] = -1;
-        continue;
-      }
-
-      let x: number;
-      if (canMoveDown && (!canMoveRight || v[offset + k - 1] < v[offset + k + 1])) {
-        x = v[offset + k + 1];
-      } else {
-        x = v[offset + k - 1] + 1;
-      }
-
-      let y = x - k;
-      while (x < M && y < N && equals(oldItems[oldOffset + x], newItems[newOffset + y])) {
-        x++;
-        y++;
-      }
-
-      v[offset + k] = x;
-      snap[(k + d) >> 1] = x;
-
-      if (x === M && y === N) {
-        return backtrackMyersSlice(traces, d, M, N, oldOffset, newOffset);
-      }
-    }
-
-    traces.push(snap);
-  }
-
-  return null;
-}
-
-function backtrackMyersSlice(
-  traces: readonly Int16Array[],
-  finalD: number,
-  M: number,
-  N: number,
-  oldOffset: number,
-  newOffset: number,
-): SequenceDiffOp[] {
-  const revOps: SequenceDiffOp[] = [];
-  let x = M;
-  let y = N;
-
-  for (let d = finalD; d > 0; d--) {
-    const k = x - y;
-    const prevSnap = traces[d - 1];
-    const vPrevMinus = k !== -d ? prevSnap[(k + d - 2) >> 1] : -1;
-    const vPrevPlus = k !== d ? prevSnap[(k + d) >> 1] : -1;
-
-    const canFromDown =
-      vPrevPlus >= 0 && vPrevPlus <= M && vPrevPlus - k <= N;
-    const canFromRight =
-      vPrevMinus >= 0 && vPrevMinus + 1 <= M && vPrevMinus + 1 - k <= N;
-
-    let prevK: number;
-    let xStart: number;
-    if (canFromDown && (!canFromRight || vPrevMinus < vPrevPlus)) {
-      prevK = k + 1;
-      xStart = vPrevPlus;
-    } else {
-      prevK = k - 1;
-      xStart = vPrevMinus + 1;
-    }
-
-    const yStart = xStart - k;
-    while (x > xStart && y > yStart) {
-      x--;
-      y--;
-      revOps.push({ Kind: 'equal', OldIndex: oldOffset + x, NewIndex: newOffset + y });
-    }
-
-    if (prevK === k + 1) {
-      y = yStart - 1;
-      x = xStart;
-      revOps.push({ Kind: 'insert', OldIndex: -1, NewIndex: newOffset + y });
-    } else {
-      x = xStart - 1;
-      y = yStart;
-      revOps.push({ Kind: 'delete', OldIndex: oldOffset + x, NewIndex: -1 });
-    }
-  }
-
-  while (x > 0 && y > 0) {
-    x--;
-    y--;
-    revOps.push({ Kind: 'equal', OldIndex: oldOffset + x, NewIndex: newOffset + y });
-  }
-
-  revOps.reverse();
-  return revOps;
-}
-
-function appendLinearHashAnchorOps<T>(
-  out: SequenceDiffOp[],
-  oldItems: readonly T[],
-  oldStart: number,
-  oldEnd: number,
-  newItems: readonly T[],
-  newStart: number,
-  newEnd: number,
-  equals: (a: T, b: T) => boolean,
-  keyFn: (item: T) => string,
-): void {
-  const oldUnique = new Map<string, number>();
-  for (let i = oldStart; i < oldEnd; i++) {
-    const key = keyFn(oldItems[i]);
-    oldUnique.set(key, oldUnique.has(key) ? -1 : i);
-  }
-
-  const newUnique = new Map<string, number>();
-  for (let j = newStart; j < newEnd; j++) {
-    const key = keyFn(newItems[j]);
-    newUnique.set(key, newUnique.has(key) ? -1 : j);
-  }
-
-  const candidates: Array<{ oldIdx: number; newIdx: number }> = [];
-  for (let j = newStart; j < newEnd; j++) {
-    const key = keyFn(newItems[j]);
-    if (newUnique.get(key) === j) {
-      const oi = oldUnique.get(key);
-      if (oi !== undefined && oi >= 0 && equals(oldItems[oi], newItems[j])) {
-        candidates.push({ oldIdx: oi, newIdx: j });
-      }
-    }
-  }
-
-  const anchors = extractMonotonicAnchors(candidates);
-
-  let curOld = oldStart;
-  let curNew = newStart;
-
-  for (let a = 0; a <= anchors.length; a++) {
-    const targetOld = a < anchors.length ? anchors[a].oldIdx : oldEnd;
-    const targetNew = a < anchors.length ? anchors[a].newIdx : newEnd;
-
-    let gOldStart = curOld;
-    let gNewStart = curNew;
-    while (
-      gOldStart < targetOld &&
-      gNewStart < targetNew &&
-      equals(oldItems[gOldStart], newItems[gNewStart])
-    ) {
-      out.push({ Kind: 'equal', OldIndex: gOldStart, NewIndex: gNewStart });
-      gOldStart++;
-      gNewStart++;
-    }
-
-    let gOldEnd = targetOld;
-    let gNewEnd = targetNew;
-    while (
-      gOldEnd > gOldStart &&
-      gNewEnd > gNewStart &&
-      equals(oldItems[gOldEnd - 1], newItems[gNewEnd - 1])
-    ) {
-      gOldEnd--;
-      gNewEnd--;
-    }
-
-    const gapM = gOldEnd - gOldStart;
-    const gapN = gNewEnd - gNewStart;
-    if (gapM > 0 && gapN > 0 && gapM + gapN <= 256) {
-      const localOps = runBoundedMyersSlice(
-        oldItems,
-        gOldStart,
-        gapM,
-        newItems,
-        gNewStart,
-        gapN,
-        equals,
-        128,
-      );
-      if (localOps) {
-        for (const op of localOps) {
-          out.push(op);
-        }
-      } else {
-        for (let i = gOldStart; i < gOldEnd; i++) {
-          out.push({ Kind: 'delete', OldIndex: i, NewIndex: -1 });
-        }
-        for (let j = gNewStart; j < gNewEnd; j++) {
-          out.push({ Kind: 'insert', OldIndex: -1, NewIndex: j });
-        }
-      }
-    } else {
-      for (let i = gOldStart; i < gOldEnd; i++) {
-        out.push({ Kind: 'delete', OldIndex: i, NewIndex: -1 });
-      }
-      for (let j = gNewStart; j < gNewEnd; j++) {
-        out.push({ Kind: 'insert', OldIndex: -1, NewIndex: j });
-      }
-    }
-
-    const gapSuffixLen = targetOld - gOldEnd;
-    for (let s = 0; s < gapSuffixLen; s++) {
-      out.push({ Kind: 'equal', OldIndex: gOldEnd + s, NewIndex: gNewEnd + s });
-    }
-
-    if (a < anchors.length) {
-      out.push({ Kind: 'equal', OldIndex: targetOld, NewIndex: targetNew });
-      curOld = targetOld + 1;
-      curNew = targetNew + 1;
-    }
-  }
-}
-
-function extractMonotonicAnchors(
-  candidates: ReadonlyArray<{ oldIdx: number; newIdx: number }>,
-): Array<{ oldIdx: number; newIdx: number }> {
-  const count = candidates.length;
-  if (count === 0) {
-    return [];
-  }
-  const tailIndices = new Int32Array(count);
-  const prevIndices = new Int32Array(count);
-  prevIndices.fill(-1);
-
-  let length = 0;
-  for (let i = 0; i < count; i++) {
-    const val = candidates[i].oldIdx;
-    let lo = 0;
-    let hi = length;
-    while (lo < hi) {
-      const mid = (lo + hi) >>> 1;
-      if (candidates[tailIndices[mid]].oldIdx < val) {
-        lo = mid + 1;
-      } else {
-        hi = mid;
-      }
-    }
-    if (lo > 0) {
-      prevIndices[i] = tailIndices[lo - 1];
-    }
-    tailIndices[lo] = i;
-    if (lo === length) {
-      length++;
-    }
-  }
-
-  const chosen: Array<{ oldIdx: number; newIdx: number }> = new Array(length);
-  let k = tailIndices[length - 1];
-  for (let pos = length - 1; pos >= 0; pos--) {
-    chosen[pos] = candidates[k];
-    k = prevIndices[k];
-  }
-  return chosen;
+  return computeBoundedSequenceDiffFromUtil(
+    oldItems,
+    newItems,
+    equals,
+    keyFn,
+    maxEditDistance,
+    maxSequenceSum,
+  );
 }
 
 /**
@@ -544,7 +301,7 @@ export interface DocumentAnchoredThread {
   AnchorLabel: string;
   QuotedText: string;
   Status: 'Open' | 'Resolved';
-  AgentMode: 'suggest' | 'edit';
+  AgentMode: 'suggest' | 'edit' | 'comment';
   CreatedAt: string;
   Messages: Array<{
     DetailID: string;
@@ -615,12 +372,13 @@ export interface DocumentWordDiffResult {
  */
 export class DocumentCollaborationSession {
   public readonly ArtifactID: string;
-  public readonly Doc: Y.Doc;
-  public readonly ContentText: Y.Text;
+  public Doc: Y.Doc;
+  public ContentText: Y.Text;
   public readonly Awareness: awarenessProtocol.Awareness;
 
   private socket: WebSocket | null = null;
   private status: CollaborationConnectionStatus = 'local';
+  private transport: 'websocket' | 'local-only';
   private canEdit: boolean;
   private applyingRemote = false;
   private readonly initialSeedContent: string;
@@ -629,7 +387,6 @@ export class DocumentCollaborationSession {
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private connectGeneration = 0;
-  private hasConnectedBefore = false;
   private configuredWsUrlOverride: string | null = null;
   private configuredProvider: IMetadataProvider | null = null;
   private readonly endpointResolver?: (
@@ -643,7 +400,19 @@ export class DocumentCollaborationSession {
   private readonly collaboratorsChanged$ = new Subject<CollaboratorPresence[]>();
   private readonly versionSaved$ = new Subject<{ versionId: string; versionNumber: number }>();
 
+  public get YDoc(): Y.Doc {
+    return this.Doc;
+  }
+
+  public get Transport(): 'websocket' | 'local-only' {
+    return this.transport;
+  }
+
   public get ContentChanged$(): Observable<string> {
+    return this.contentChanged$.asObservable();
+  }
+
+  public get RemoteContent$(): Observable<string> {
     return this.contentChanged$.asObservable();
   }
 
@@ -740,11 +509,12 @@ export class DocumentCollaborationSession {
   ) {
     this.ArtifactID = artifactId;
     this.canEdit = canEdit;
+    this.transport = deferInitialSeedForRemoteSync ? 'websocket' : 'local-only';
     this.initialSeedContent = initialContent ?? '';
     this.endpointResolver = endpointResolver;
     this.Doc = new Y.Doc();
     this.ContentText = this.Doc.getText('content');
-    if (initialContent && !deferInitialSeedForRemoteSync) {
+    if (initialContent && this.transport === 'local-only') {
       this.Doc.transact(() => {
         this.ContentText.insert(0, initialContent);
         this.populateSlideDeckCrdtIfPresentation(initialContent);
@@ -762,16 +532,79 @@ export class DocumentCollaborationSession {
       canEdit,
     });
 
-    this.Doc.on('update', (update: Uint8Array, origin: string | number | symbol | object | null | undefined) => {
+    this.bindDocObservers(this.Doc);
+
+    this.Awareness.on('change', () => {
+      this.collaboratorsChanged$.next(this.GetCollaborators());
+    });
+  }
+
+  private bindDocObservers(doc: Y.Doc): void {
+    doc.on('update', (update: Uint8Array, origin: string | number | symbol | object | null | undefined) => {
+      if (doc !== this.Doc) {
+        return;
+      }
       if (origin !== 'remote') {
         this.sendYjsUpdate(update);
       }
       this.contentChanged$.next(this.GetContent());
     });
+  }
 
-    this.Awareness.on('change', () => {
-      this.collaboratorsChanged$.next(this.GetCollaborators());
-    });
+  /**
+   * Replaces `YDoc` with a fresh `new Y.Doc()`, applies a server `'room-reset'` payload,
+   * rebinds observers, and emits `RemoteContent$` / `ContentChanged$`.
+   */
+  public ApplyRoomReset(payload: string): void {
+    if (this.destroyed) {
+      return;
+    }
+    const previousDoc = this.Doc;
+    const nextDoc = new Y.Doc();
+    this.Doc = nextDoc;
+    this.ContentText = nextDoc.getText('content');
+    this.seededInDoc = false;
+
+    this.applyingRemote = true;
+    try {
+      const binaryBytes = decodeBase64ToUint8Array(payload);
+      let appliedBinary = false;
+      if (binaryBytes && binaryBytes.byteLength > 0) {
+        try {
+          Y.applyUpdate(nextDoc, binaryBytes, 'remote');
+          appliedBinary =
+            this.ContentText.length > 0 ||
+            nextDoc.getArray<string>('slideOrder').length > 0 ||
+            nextDoc.getMap<string>('worksheetsById').size > 0;
+        } catch {
+          appliedBinary = false;
+        }
+      }
+      if (!appliedBinary && payload.length > 0) {
+        nextDoc.transact(() => {
+          this.ContentText.insert(0, payload);
+          this.populateSlideDeckCrdtIfPresentation(payload);
+          this.populateSpreadsheetCrdtIfWorkbook(payload);
+        }, 'remote');
+      }
+      if (
+        this.ContentText.length > 0 ||
+        nextDoc.getArray<string>('slideOrder').length > 0 ||
+        nextDoc.getMap<string>('worksheetsById').size > 0
+      ) {
+        this.seededInDoc = true;
+      }
+    } finally {
+      this.applyingRemote = false;
+    }
+
+    this.bindDocObservers(nextDoc);
+    try {
+      previousDoc.destroy();
+    } catch (err) {
+      LogError(err);
+    }
+    this.contentChanged$.next(this.GetContent());
   }
 
   /**
@@ -781,7 +614,9 @@ export class DocumentCollaborationSession {
    */
   public async Connect(wsUrl?: string | null, provider?: IMetadataProvider | null): Promise<void> {
     if (this.destroyed || typeof WebSocket === 'undefined') {
-      this.ensureLocalSeedIfUnseeded();
+      if (this.transport === 'local-only') {
+        this.ensureLocalSeedIfUnseeded();
+      }
       if (!this.destroyed) {
         this.setStatus(this.canEdit ? 'local' : 'readonly');
       }
@@ -808,15 +643,22 @@ export class DocumentCollaborationSession {
         this.canEdit = false;
       }
       if (resolved.Mode === 'local' || !resolved.WsUrl) {
-        this.ensureLocalSeedIfUnseeded();
+        if (resolved.HasBackend === false && this.transport === 'local-only') {
+          this.ensureLocalSeedIfUnseeded();
+        }
         this.setStatus(this.canEdit ? 'local' : 'readonly');
         return;
       }
+      this.transport = 'websocket';
       targetWsUrl = resolved.WsUrl;
     } else if (!targetWsUrl) {
-      this.ensureLocalSeedIfUnseeded();
+      if (this.transport === 'local-only') {
+        this.ensureLocalSeedIfUnseeded();
+      }
       this.setStatus(this.canEdit ? 'local' : 'readonly');
       return;
+    } else {
+      this.transport = 'websocket';
     }
 
     if (this.destroyed || generation !== this.connectGeneration) {
@@ -836,27 +678,17 @@ export class DocumentCollaborationSession {
           ws.close();
           return;
         }
-        const isReconnect = this.hasConnectedBefore;
-        this.hasConnectedBefore = true;
         this.reconnectAttempts = 0;
         this.clearReconnectTimer();
         this.setStatus(this.canEdit ? 'connected' : 'readonly');
 
+        // Standard Yjs state-vector handshake: send sync-step-1 (stateVector).
+        // Server responds with sync-step-2 + its own sync-step-1, and ApplyBinaryFrame
+        // replies with client sync-step-2 (missing client updates) without full-doc resends.
         const encoder = encoding.createEncoder();
         encoding.writeVarUint(encoder, MSG_SYNC);
         syncProtocol.writeSyncStep1(encoder, this.Doc);
         ws.send(encoding.toUint8Array(encoder));
-
-        // Flush any offline local Y.Doc mutations accumulated while disconnected
-        if (isReconnect && this.canEdit && this.seededInDoc) {
-          const fullStateUpdate = Y.encodeStateAsUpdate(this.Doc);
-          if (fullStateUpdate.byteLength > 2) {
-            const updateEncoder = encoding.createEncoder();
-            encoding.writeVarUint(updateEncoder, MSG_SYNC);
-            syncProtocol.writeUpdate(updateEncoder, fullStateUpdate);
-            ws.send(encoding.toUint8Array(updateEncoder));
-          }
-        }
 
         const awarenessEncoder = encoding.createEncoder();
         encoding.writeVarUint(awarenessEncoder, MSG_AWARENESS);
@@ -868,10 +700,23 @@ export class DocumentCollaborationSession {
       };
 
       ws.onmessage = (event: MessageEvent) => {
-        if (this.destroyed || !(event.data instanceof ArrayBuffer)) {
+        if (this.destroyed) {
           return;
         }
-        this.ApplyBinaryFrame(new Uint8Array(event.data));
+        if (typeof event.data === 'string') {
+          const msg = SafeJSONParse<{ type?: string; action?: string; payload?: string }>(event.data);
+          if ((msg?.type === 'room-reset' || msg?.action === 'room-reset') && typeof msg.payload === 'string') {
+            this.ApplyRoomReset(msg.payload);
+          }
+          return;
+        }
+        if (event.data instanceof ArrayBuffer) {
+          this.ApplyBinaryFrame(new Uint8Array(event.data));
+        } else if (ArrayBuffer.isView(event.data)) {
+          this.ApplyBinaryFrame(
+            new Uint8Array(event.data.buffer, event.data.byteOffset, event.data.byteLength),
+          );
+        }
       };
 
       ws.onclose = (event: CloseEvent) => {
@@ -889,11 +734,9 @@ export class DocumentCollaborationSession {
         }
         if (event.code === 4401) {
           this.clearReconnectTimer();
-          this.ensureLocalSeedIfUnseeded();
           this.setStatus(this.canEdit ? 'local' : 'readonly');
           return;
         }
-        this.ensureLocalSeedIfUnseeded();
         this.setStatus(this.canEdit ? 'local' : 'readonly');
         this.scheduleReconnect();
       };
@@ -905,7 +748,6 @@ export class DocumentCollaborationSession {
       };
     } catch (err) {
       LogError(err);
-      this.ensureLocalSeedIfUnseeded();
       this.setStatus(this.canEdit ? 'local' : 'readonly');
     }
   }
@@ -1280,9 +1122,9 @@ export class DocumentCollaborationSession {
       if (encoding.length(encoder) > 1 && this.socket?.readyState === WebSocket.OPEN) {
         this.socket.send(encoding.toUint8Array(encoder));
       }
-      // If we deferred initial seed for remote sync and server SyncStep2 was empty, seed once
       if (
         syncMsgType === syncProtocol.messageYjsSyncStep2 &&
+        this.transport === 'local-only' &&
         !this.seededInDoc &&
         this.ContentText.length === 0 &&
         this.initialSeedContent.length > 0 &&
@@ -1303,13 +1145,19 @@ export class DocumentCollaborationSession {
     } else if (msgType === MSG_CONTROL || msgType === MSG_PERMISSION_STATE) {
       const jsonStr = decoding.readVarString(decoder);
       const parsed = SafeJSONParse<{
+        type?: string;
         action?: string;
+        payload?: string;
         canEdit?: boolean;
         canRead?: boolean;
         versionId?: string;
         versionNumber?: number;
       }>(jsonStr);
       if (!parsed) {
+        return;
+      }
+      if ((parsed.type === 'room-reset' || parsed.action === 'room-reset') && typeof parsed.payload === 'string') {
+        this.ApplyRoomReset(parsed.payload);
         return;
       }
       if (parsed.action === 'version-saved' && typeof parsed.versionNumber === 'number') {
@@ -1879,7 +1727,7 @@ export class DocumentCollaborationService {
     providerOverride?: IMetadataProvider | null,
   ): Promise<ResolvedCollaborationEndpoint> {
     if (!artifactId || !artifactId.trim()) {
-      return { Mode: 'local', WsUrl: '' };
+      return { Mode: 'local', WsUrl: '', HasBackend: false };
     }
 
     const trimmedOverride = baseUrlOverride?.trim() || '';
@@ -1891,7 +1739,9 @@ export class DocumentCollaborationService {
         null,
         providerOverride,
       );
-      return directUrl ? { Mode: 'connect', WsUrl: directUrl } : { Mode: 'local', WsUrl: '' };
+      return directUrl
+        ? { Mode: 'connect', WsUrl: directUrl, HasBackend: true }
+        : { Mode: 'local', WsUrl: '', HasBackend: true };
     }
 
     const provider = resolveDefaultMetadataProvider(providerOverride);
@@ -1902,23 +1752,26 @@ export class DocumentCollaborationService {
         });
         const ticketData = gqlRes?.MintArtifactCollaborationTicket;
         if (!ticketData) {
-          return { Mode: 'local', WsUrl: '' };
+          return { Mode: 'local', WsUrl: '', HasBackend: true };
         }
         if (ticketData.CanRead === false) {
-          return { Mode: 'revoked', WsUrl: '', CanEdit: false };
+          return { Mode: 'revoked', WsUrl: '', CanEdit: false, HasBackend: true };
         }
         if (!ticketData.Success || !ticketData.Ticket) {
           return {
             Mode: 'local',
             WsUrl: '',
             CanEdit: typeof ticketData.CanEdit === 'boolean' ? ticketData.CanEdit : undefined,
+            HasBackend: true,
           };
         }
+        const rawTicketWs =
+          ticketData.wsUrl ?? ticketData.WsUrl ?? ticketData.WsPath ?? '/collaboration/yjs';
         const wsUrl = this.ResolveCollaborationWebSocketUrl(
           artifactId,
           trimmedOverride || null,
           ticketData.Ticket,
-          ticketData.WsPath ?? '/collaboration/yjs',
+          rawTicketWs,
           providerOverride,
         );
         if (!wsUrl) {
@@ -1926,16 +1779,18 @@ export class DocumentCollaborationService {
             Mode: 'local',
             WsUrl: '',
             CanEdit: typeof ticketData.CanEdit === 'boolean' ? ticketData.CanEdit : undefined,
+            HasBackend: true,
           };
         }
         return {
           Mode: 'connect',
           WsUrl: wsUrl,
           CanEdit: typeof ticketData.CanEdit === 'boolean' ? ticketData.CanEdit : undefined,
+          HasBackend: true,
         };
       } catch (err) {
         LogError(err);
-        return { Mode: 'local', WsUrl: '' };
+        return { Mode: 'local', WsUrl: '', HasBackend: true };
       }
     }
 
@@ -1948,17 +1803,20 @@ export class DocumentCollaborationService {
         providerOverride,
       );
       return fallbackOverrideUrl
-        ? { Mode: 'connect', WsUrl: fallbackOverrideUrl }
-        : { Mode: 'local', WsUrl: '' };
+        ? { Mode: 'connect', WsUrl: fallbackOverrideUrl, HasBackend: true }
+        : { Mode: 'local', WsUrl: '', HasBackend: true };
     }
 
-    return { Mode: 'local', WsUrl: '' };
+    return { Mode: 'local', WsUrl: '', HasBackend: false };
   }
 
   /**
-   * Resolves the WebSocket URL for `/collaboration/yjs` from `GraphQLDataProvider`'s configured
-   * GraphQL endpoint origin (`new URL(gqlUrl, window.location.origin).origin.replace(/^http/, 'ws')`)
-   * plus `WsPath` (`'/collaboration/yjs'`) and encoded `artifactId` + `ticket` query parameters.
+   * Resolves the WebSocket URL for `/collaboration/yjs`:
+   * 1. If `wsPath` (`ticketPayload.wsUrl` or `WsPath`) is an absolute `ws://` / `wss://` / `http://` / `https://` URL,
+   *    uses that URL directly and appends `artifactId` + `ticket` query parameters.
+   * 2. Otherwise derives from the configured GraphQL endpoint URL (e.g. `https://example.com/api-prefix/graphql`),
+   *    stripping only the trailing `/graphql` segment so any reverse-proxy prefix (`/api-prefix`) is preserved
+   *    before appending `/collaboration/yjs` (`Blocker 1`).
    */
   public ResolveCollaborationWebSocketUrl(
     artifactId: string,
@@ -1976,8 +1834,7 @@ export class DocumentCollaborationService {
     if (trimmedOverride && trimmedOverride.includes('?') && !ticket) {
       try {
         const parsed = new URL(trimmedOverride, fallbackRelativeBase);
-        const wsProto = parsed.protocol.replace(/^http/i, 'ws');
-        parsed.protocol = wsProto;
+        parsed.protocol = parsed.protocol.replace(/^http/i, 'ws');
         if (!parsed.pathname || parsed.pathname === '/') {
           parsed.pathname = wsPath?.trim() || '/collaboration/yjs';
         }
@@ -1985,6 +1842,24 @@ export class DocumentCollaborationService {
           parsed.searchParams.set('artifactId', artifactId);
         }
         return parsed.toString();
+      } catch (err) {
+        LogError(err);
+        return '';
+      }
+    }
+
+    const rawPathOrUrl = wsPath && wsPath.trim() ? wsPath.trim() : '';
+    if (/^(wss?|https?):\/\//i.test(rawPathOrUrl)) {
+      try {
+        const parsedWs = new URL(rawPathOrUrl);
+        parsedWs.protocol = parsedWs.protocol.replace(/^http/i, 'ws');
+        if (!parsedWs.searchParams.has('artifactId')) {
+          parsedWs.searchParams.set('artifactId', artifactId);
+        }
+        if (ticket && !parsedWs.searchParams.has('ticket')) {
+          parsedWs.searchParams.set('ticket', ticket);
+        }
+        return parsedWs.toString();
       } catch (err) {
         LogError(err);
         return '';
@@ -2010,16 +1885,220 @@ export class DocumentCollaborationService {
     try {
       const parsedEndpoint = new URL(endpointUrl, fallbackRelativeBase);
       const wsOrigin = parsedEndpoint.origin.replace(/^http/i, 'ws');
-      const rawPath = wsPath && wsPath.trim() ? wsPath.trim() : '/collaboration/yjs';
-      const normalizedPath = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+      // Strip only a trailing /graphql segment while preserving any reverse-proxy prefix (e.g. /api-prefix)
+      const basePath = parsedEndpoint.pathname
+        .replace(/\/graphql\/?$/i, '')
+        .replace(/\/+$/, '');
+      const targetSubPath = rawPathOrUrl || '/collaboration/yjs';
+      const normalizedSubPath = targetSubPath.startsWith('/') ? targetSubPath : `/${targetSubPath}`;
+      const combinedPath =
+        basePath &&
+        normalizedSubPath !== basePath &&
+        !normalizedSubPath.startsWith(`${basePath}/`)
+          ? `${basePath}${normalizedSubPath}`
+          : normalizedSubPath;
       const query = ticket
         ? `?artifactId=${encodeURIComponent(artifactId)}&ticket=${encodeURIComponent(ticket)}`
         : `?artifactId=${encodeURIComponent(artifactId)}`;
-      return `${wsOrigin}${normalizedPath}${query}`;
+      return `${wsOrigin}${combinedPath}${query}`;
     } catch (err) {
       LogError(err);
       return '';
     }
+  }
+
+  /**
+   * Resolves effective permissions (`CanRead`, `CanEdit`, `CanDelete`, `CanShare`) for `artifactId`
+   * on the server via `ResolveArtifactPermissions` so server-registered delegates (such as
+   * `bizapps-collaboration` space items) are evaluated on the server, falling back to
+   * `ArtifactPermissionEngine.Instance.ResolvePermissions` when no GraphQL endpoint is available in tests.
+   */
+  public async ResolvePermissionsFromServer(
+    artifactId: string,
+    providerOverride?: IMetadataProvider | null,
+  ): Promise<ResolvedArtifactPermissions | null> {
+    if (!artifactId || !artifactId.trim()) {
+      return null;
+    }
+    const provider = resolveDefaultMetadataProvider(providerOverride);
+    if (!provider) {
+      return null;
+    }
+
+    if (isGraphQLCollaborationProvider(provider)) {
+      try {
+        const gqlRes = await provider.ExecuteGQL(RESOLVE_ARTIFACT_PERMISSIONS_QUERY, {
+          artifactId,
+        });
+        const serverPerms =
+          gqlRes?.ResolveArtifactPermissions ?? gqlRes?.ResolveArtifactUserPermissions;
+        if (serverPerms && typeof serverPerms === 'object') {
+          const rawSource = serverPerms.Source;
+          const validSource: ResolvedArtifactPermissions['Source'] =
+            rawSource === 'Owner' ||
+            rawSource === 'Delegate' ||
+            rawSource === 'ArtifactPermission' ||
+            rawSource === 'CollectionPermission' ||
+            rawSource === 'Denied'
+              ? rawSource
+              : serverPerms.CanRead
+                ? 'Delegate'
+                : 'Denied';
+          return {
+            ArtifactID: serverPerms.ArtifactID || artifactId,
+            CanRead: Boolean(serverPerms.CanRead),
+            CanEdit: Boolean(serverPerms.CanEdit),
+            CanDelete: Boolean(serverPerms.CanDelete),
+            CanShare: Boolean(serverPerms.CanShare),
+            Source: validSource,
+            Reason: serverPerms.Reason || '',
+          };
+        }
+      } catch (err) {
+        LogError(err);
+      }
+    }
+
+    const currentUser = provider.CurrentUser;
+    if (!currentUser) {
+      return null;
+    }
+    try {
+      return await ArtifactPermissionEngine.Instance.ResolvePermissions(
+        provider,
+        artifactId,
+        currentUser,
+      );
+    } catch (err) {
+      LogError(err);
+      return null;
+    }
+  }
+
+  /**
+   * Freezes a live MJ block via the server `FreezeDocumentLiveBlock` GraphQL mutation so the snapshot
+   * receives a server-signed `hmac-sha256:...` `SnapshotContentHash` (`Blocker 3`), falling back to
+   * `DocumentLiveBlockEngine.Instance.FreezeBlock` in offline/unit-test environments.
+   */
+  public async FreezeLiveBlockOnServer(
+    spec: DocumentBlockSpec,
+    acknowledgeSecurityWarning: boolean,
+    hostArtifactId?: string | null,
+    providerOverride?: IMetadataProvider | null,
+  ): Promise<{ Success: boolean; UpdatedSpec?: DocumentBlockSpec; ErrorMessage?: string }> {
+    const provider = resolveDefaultMetadataProvider(providerOverride);
+    if (isGraphQLCollaborationProvider(provider)) {
+      try {
+        const gqlRes = await provider.ExecuteGQL(FREEZE_DOCUMENT_LIVE_BLOCK_MUTATION, {
+          specJson: JSON.stringify(spec),
+          acknowledgeSecurityWarning,
+          hostArtifactId: hostArtifactId ?? '',
+        });
+        const freezePayload = gqlRes?.FreezeDocumentLiveBlock;
+        if (freezePayload) {
+          if (!freezePayload.Success) {
+            return {
+              Success: false,
+              ErrorMessage: freezePayload.ErrorMessage || 'Failed to freeze live block on server.',
+            };
+          }
+          const rawJson = freezePayload.UpdatedSpecJSON ?? freezePayload.UpdatedBlockSpecJson;
+          const parsedSpec = rawJson ? SafeJSONParse<DocumentBlockSpec>(rawJson) : null;
+          if (parsedSpec) {
+            return { Success: true, UpdatedSpec: parsedSpec };
+          }
+        }
+      } catch (err) {
+        LogError(err);
+      }
+    }
+
+    const user = provider?.CurrentUser;
+    if (!provider || !user) {
+      return {
+        Success: false,
+        ErrorMessage: 'Metadata provider or user context unavailable.',
+      };
+    }
+    return await DocumentLiveBlockEngine.Instance.FreezeBlock(
+      spec,
+      user,
+      acknowledgeSecurityWarning,
+      provider,
+    );
+  }
+
+  /**
+   * Verifies a frozen block snapshot's integrity (`SnapshotContentHash`) via server-side
+   * `VerifyFrozenBlockSnapshot` or `ValidateFrozenBlockSnapshot` (`Blocker 3`).
+   */
+  public IsFrozenSnapshotVerified(
+    block: DocumentBlockSpec | null | undefined,
+    cachedExecutionResult?: {
+      FrozenMetadata?: { SnapshotVerified?: boolean };
+      FrozenSnapshot?: { SnapshotVerified?: boolean };
+    } | null,
+  ): boolean {
+    if (!block || block.Mode !== 'Frozen' || !block.FrozenSnapshot) {
+      return false;
+    }
+    if (cachedExecutionResult?.FrozenSnapshot?.SnapshotVerified === true) {
+      return true;
+    }
+    if (cachedExecutionResult?.FrozenSnapshot?.SnapshotVerified === false) {
+      return false;
+    }
+    if (cachedExecutionResult?.FrozenMetadata?.SnapshotVerified === true) {
+      return true;
+    }
+    if (cachedExecutionResult?.FrozenMetadata?.SnapshotVerified === false) {
+      return false;
+    }
+    const snap = block.FrozenSnapshot;
+    if (
+      snap.SecurityWarningAcknowledged !== true ||
+      typeof snap.SnapshotContentHash !== 'string' ||
+      snap.SnapshotContentHash.trim().length === 0
+    ) {
+      return false;
+    }
+    const validation = ValidateFrozenBlockSnapshot(snap);
+    if (validation.SnapshotVerified) {
+      return true;
+    }
+    // Accept server-issued HMAC signatures (hmac-sha256:<64-hex-chars>) returned by FreezeDocumentLiveBlock
+    if (/^hmac-sha256:[0-9a-f]{64}$/i.test(snap.SnapshotContentHash.trim())) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Queries the server `VerifyFrozenBlockSnapshot` endpoint when `GraphQLDataProvider` is configured,
+   * falling back to `IsFrozenSnapshotVerified`.
+   */
+  public async VerifyFrozenSnapshotOnServer(
+    block: DocumentBlockSpec,
+    providerOverride?: IMetadataProvider | null,
+  ): Promise<boolean> {
+    if (!block || block.Mode !== 'Frozen' || !block.FrozenSnapshot) {
+      return false;
+    }
+    const provider = resolveDefaultMetadataProvider(providerOverride);
+    if (isGraphQLCollaborationProvider(provider)) {
+      try {
+        const gqlRes = await provider.ExecuteGQL(VERIFY_FROZEN_BLOCK_SNAPSHOT_QUERY, {
+          specJson: JSON.stringify(block),
+        });
+        const verifyPayload = gqlRes?.VerifyFrozenBlockSnapshot;
+        if (verifyPayload && typeof verifyPayload.SnapshotVerified === 'boolean') {
+          return verifyPayload.SnapshotVerified;
+        }
+      } catch (err) {
+        LogError(err);
+      }
+    }
+    return this.IsFrozenSnapshotVerified(block);
   }
 
   /**
@@ -2140,55 +2219,7 @@ export class DocumentCollaborationService {
    * common prefix/suffix trimming, bounded Myers O((M+N)D), and linear unique-anchor fallback.
    */
   public ComputeLineDiff(oldContent: string, newContent: string): DocumentDiffResult {
-    const oldLines = (oldContent ?? '').replace(/\r\n/g, '\n').split('\n');
-    const newLines = (newContent ?? '').replace(/\r\n/g, '\n').split('\n');
-
-    const ops = ComputeBoundedSequenceDiff(
-      oldLines,
-      newLines,
-      (a, b) => a === b,
-      (line) => line,
-    );
-
-    const diffLines: DocumentDiffLine[] = [];
-    let added = 0;
-    let removed = 0;
-    let unchanged = 0;
-
-    for (const op of ops) {
-      if (op.Kind === 'equal') {
-        diffLines.push({
-          Type: 'same',
-          OldLineNumber: op.OldIndex + 1,
-          NewLineNumber: op.NewIndex + 1,
-          Content: oldLines[op.OldIndex],
-        });
-        unchanged++;
-      } else if (op.Kind === 'delete') {
-        diffLines.push({
-          Type: 'removed',
-          OldLineNumber: op.OldIndex + 1,
-          NewLineNumber: null,
-          Content: oldLines[op.OldIndex],
-        });
-        removed++;
-      } else {
-        diffLines.push({
-          Type: 'added',
-          OldLineNumber: null,
-          NewLineNumber: op.NewIndex + 1,
-          Content: newLines[op.NewIndex],
-        });
-        added++;
-      }
-    }
-
-    return {
-      AddedLines: added,
-      RemovedLines: removed,
-      UnchangedLines: unchanged,
-      Lines: diffLines,
-    };
+    return computeLineDiffFromUtil(oldContent, newContent);
   }
 
   /**

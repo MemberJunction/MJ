@@ -7,7 +7,11 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { EntityInfo, IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
 import { CreateFakeProvider } from '@memberjunction/ng-test-utils';
-import { BuildConversationTasksFilter, OwnTasksFilter } from '../lib/services/conversation-tasks-filter';
+import {
+  BuildAgentBackedTaskExtraFilter,
+  BuildConversationTasksFilter,
+  OwnTasksFilter,
+} from '../lib/services/conversation-tasks-filter';
 
 const USER = { ID: 'user-1' } as unknown as UserInfo;
 const TASKS = { Name: 'MJ: Tasks', SchemaName: '__mj', BaseView: 'vwTasks' } as unknown as EntityInfo;
@@ -95,5 +99,32 @@ describe('BuildConversationTasksFilter', () => {
 
   it('quotes the user ID in the filter for the tasks the user owns', () => {
     expect(OwnTasksFilter({ ID: "o'brien" } as unknown as UserInfo)).toBe("ParentID IS NULL AND UserID = 'o''brien'");
+  });
+
+  it('builds the server-side SQL subquery filter for Agent Activity with zero IgnoreMaxRows client queries and no UserID restriction', () => {
+    const queries: RunViewParams[] = [];
+    const source = CreateFakeProvider<object>({
+      runViewResults: (params) => {
+        queries.push(params);
+        return [];
+      },
+      entityByName: (name) => {
+        if (name === 'MJ: Tasks') return TASKS;
+        if (name === 'MJ: AI Agent Run Steps') {
+          return { Name: 'MJ: AI Agent Run Steps', SchemaName: '__mj', BaseView: 'vwAIAgentRunSteps' } as EntityInfo;
+        }
+        return undefined;
+      },
+    });
+
+    const filter = BuildAgentBackedTaskExtraFilter(source);
+    expect(queries).toHaveLength(0);
+    expect(filter).not.toContain('UserID');
+    expect(filter).toContain('[AgentRunID] IS NOT NULL');
+    expect(filter).toContain(
+      "SELECT [TargetLogID] FROM [__mj].[vwAIAgentRunSteps] WHERE [StepType] = 'Sub-Agent' AND [TargetLogID] IS NOT NULL",
+    );
+    expect(filter).toContain('SELECT [ID] FROM [__mj].[vwTasks] WHERE [AgentRunID] IS NOT NULL');
+    expect(filter).toContain('SELECT [ParentID] FROM [__mj].[vwTasks]');
   });
 });

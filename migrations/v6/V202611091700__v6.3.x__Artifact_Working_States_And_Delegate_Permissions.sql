@@ -597,7 +597,7 @@ GO
          'ArtifactWorkingState',
          'vwArtifactWorkingStates',
          '${flyway:defaultSchema}',
-         1,
+         0,
          0,
          0
          , 0

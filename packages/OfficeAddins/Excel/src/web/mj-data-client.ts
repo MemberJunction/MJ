@@ -121,11 +121,13 @@ export async function ResolveWorkbookSourceOnServer(
 export async function EvaluateCustomFunctionOnServer(
     connection: StoredConnection,
     input: ExcelAddinEvaluateCustomFunctionInput,
+    options?: { signal?: AbortSignal },
 ): Promise<ExcelAddinEvaluateCustomFunctionOutput> {
     return ExecuteRemoteOp<ExcelAddinEvaluateCustomFunctionOutput>(
         connection,
         EXCEL_ADDIN_OPERATION_KEYS.EvaluateCustomFunction,
         input,
+        options,
     );
 }
 
@@ -134,14 +136,20 @@ export async function ExecuteRemoteOp<TOutput>(
     connection: StoredConnection,
     operationKey: string,
     input: object,
+    options?: { signal?: AbortSignal },
 ): Promise<TOutput> {
-    const data = await post<ExecuteRemoteOperationResponse>(connection, EXECUTE_REMOTE_OP_MUTATION, {
-        input: {
-            operationKey,
-            inputJSON: JSON.stringify(input),
-            invokeMode: 'Sync',
+    const data = await post<ExecuteRemoteOperationResponse>(
+        connection,
+        EXECUTE_REMOTE_OP_MUTATION,
+        {
+            input: {
+                operationKey,
+                inputJSON: JSON.stringify(input),
+                invokeMode: 'Sync',
+            },
         },
-    });
+        options?.signal,
+    );
     const envelope = data.ExecuteRemoteOperation;
     if (!envelope.success) {
         const message = envelope.errorMessage || `Operation ${operationKey} failed.`;
@@ -215,13 +223,19 @@ async function fetchQueryRows(connection: StoredConnection, source: ExcelWorkboo
     return { Rows: rows, TotalRowCount: result.TotalRowCount ?? rows.length };
 }
 
-async function post<T>(connection: StoredConnection, query: string, variables: Record<string, unknown>): Promise<T> {
+async function post<T>(
+    connection: StoredConnection,
+    query: string,
+    variables: Record<string, unknown>,
+    signal?: AbortSignal,
+): Promise<T> {
     let response: Response;
     try {
         response = await fetch(connection.GraphQLUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-api-key': connection.APIKey },
             body: JSON.stringify({ query, variables }),
+            ...(signal ? { signal } : {}),
         });
     } catch {
         throw new Error('MemberJunction couldn\'t be reached. Check your connection and try again.');

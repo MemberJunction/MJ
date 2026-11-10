@@ -7,7 +7,8 @@ import {
     FormatCellAddress,
     ParseCellAddress,
     ParseRangeAddress,
-    SpreadsheetEngine
+    SpreadsheetEngine,
+    XlsxOpenXmlAdapter
 } from '../custom/SpreadsheetEngine';
 import { SlideDeckEngine } from '../custom/SlideDeckEngine';
 
@@ -789,5 +790,173 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         expect(impWs.Cells['B3'].ComputedValue).toBe(50);
         expect(impWs.Cells['C1'].Style?.FormatType).toBe('date');
         expect(impWs.Cells['C1'].DisplayValue).toBe('2026-01-15');
+    });
+
+    it('Round 2 Blockers 4 & 6, Plan §6.1 Functions, PatchXlsxBytes, UUID Row/Col IDs, and 10k-formula Recalc + Serialize Perf', async () => {
+        const wb = engine.CreateEmptyWorkbook('Round 2 Verification', ['Calc'], 30, 15);
+        const s = wb.Worksheets[0];
+
+        // 1. Blocker 6: Full IEEE-754 intermediate doubles + exact clean-float comparison
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=1/3*3')).toBe(1);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=10/3*3=10')).toBe(true);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUM(1/3,1/3,1/3)')).toBe(1);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=0.1+0.2')).toBe(0.3);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=0.1+0.2=0.3')).toBe(true);
+
+        // 2. Plan §6.1 Functions: COUNTBLANK, PRODUCT, FLOOR, CEILING, HLOOKUP, ROW, COLUMN, SUBSTITUTE, FIND, SEARCH, VALUE
+        engine.SetCell(wb, s.SheetID, 'A1', { Value: 10 }, false);
+        engine.SetCell(wb, s.SheetID, 'A2', { Value: null }, false);
+        engine.SetCell(wb, s.SheetID, 'A3', { Value: 5 }, false);
+        engine.SetCell(wb, s.SheetID, 'B1', { Value: 'Q1' }, false);
+        engine.SetCell(wb, s.SheetID, 'C1', { Value: 'Q2' }, false);
+        engine.SetCell(wb, s.SheetID, 'D1', { Value: 'Q3' }, false);
+        engine.SetCell(wb, s.SheetID, 'B2', { Value: 110 }, false);
+        engine.SetCell(wb, s.SheetID, 'C2', { Value: 220 }, false);
+        engine.SetCell(wb, s.SheetID, 'D2', { Value: 330 }, false);
+        const rowSelfCell = engine.SetCell(wb, s.SheetID, 'E7', { Formula: '=ROW()' }, false);
+        const colSelfCell = engine.SetCell(wb, s.SheetID, 'E7', { Formula: '=COLUMN()' }, true);
+        expect(colSelfCell.ComputedValue).toBe(5);
+        engine.SetCell(wb, s.SheetID, 'E6', { Formula: '=ROW()' }, true);
+        expect(s.Cells['E6'].ComputedValue).toBe(6);
+        expect(rowSelfCell).toBeTruthy();
+
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTBLANK(A1:A4)')).toBe(2);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=PRODUCT(A1, A3, 2)')).toBe(100);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=FLOOR(23.7, 5)')).toBe(20);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=CEILING(21.2, 5)')).toBe(25);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=HLOOKUP("Q2", B1:D2, 2, FALSE)')).toBe(220);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=ROW(C9)')).toBe(9);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COLUMN(C9)')).toBe(3);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUBSTITUTE("2025-Q1-2025", "2025", "2026", 2)')).toBe('2025-Q1-2026');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=FIND("Budget", "Annual Budget Plan")')).toBe(8);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=FIND("budget", "Annual Budget Plan")')).toBe('#VALUE!');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SEARCH("bud*plan", "Annual Budget Plan")')).toBe(8);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=VALUE("$1,250.50")')).toBe(1250.5);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=VALUE("12.5%")')).toBe(0.125);
+
+        // 3. Collaborative UUID RowID / ColumnID on InsertRows / InsertColumns
+        const insRows = engine.InsertRows(wb, s.SheetID, 2, 1);
+        const insCols = engine.InsertColumns(wb, s.SheetID, 2, 1);
+        expect(insRows[0].RowID).not.toContain('-row-ins-');
+        expect(insCols[0].ColumnID).not.toContain('-col-ins-');
+        expect(insRows[0].RowID).toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}/i);
+        expect(insCols[0].ColumnID).toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}/i);
+
+        // 4. Blocker 4: Styling or adding a Note to a live-table cell + dependent formula NEVER leaks live values on Serialize or ExportToXlsxBytes
+        const liveWb = engine.CreateEmptyWorkbook('Exec Salaries', ['Payroll'], 15, 8);
+        const lws = liveWb.Worksheets[0];
+        lws.LiveTables.push({
+            TableID: 'tbl-payroll',
+            Title: 'Payroll',
+            SourceType: 'EntityView',
+            EntityName: 'Employees',
+            AnchorCell: 'A1',
+            IncludeHeaders: true,
+            Mode: 'Live'
+        });
+        const mockEmpEntity = {
+            ID: 'ent-emp',
+            Name: 'Employees',
+            DisplayNameOrName: 'Employees',
+            PrimaryKeys: [{ Name: 'ID', IsPrimaryKey: true, TSType: EntityFieldTSType.String }],
+            Fields: [
+                { Name: 'ID', DisplayNameOrName: 'ID', IsPrimaryKey: true, DefaultInView: true, TSType: EntityFieldTSType.String },
+                { Name: 'Salary', DisplayNameOrName: 'Salary', IsPrimaryKey: false, DefaultInView: true, TSType: EntityFieldTSType.Number }
+            ] as unknown as EntityFieldInfo[],
+            FieldLevelSecurityApplies: false,
+            GetUserPermisions: () => ({ CanRead: true }),
+            GetDeniedReadFields: () => new Set<string>()
+        } as unknown as EntityInfo;
+        const provider = {
+            Entities: [mockEmpEntity],
+            Queries: [],
+            RunView: async () => ({
+                Success: true,
+                Results: [{ ID: 'emp-1', Salary: 250000 }],
+                TotalRowCount: 1
+            })
+        } as unknown as IMetadataProvider;
+
+        const admin = createMockUser('u-admin', 'Admin', true);
+        await engine.RefreshLiveTables(liveWb, admin, provider);
+        expect(lws.Cells['B2'].ComputedValue).toBe(250000);
+        expect(lws.Cells['B2'].LiveTableID).toBe('tbl-payroll');
+
+        // Admin bolds B2 and adds a Note, and writes a formula C2 = B2 * 1.1 (= 275000)
+        engine.SetCell(liveWb, lws.SheetID, 'B2', { Style: { Bold: true }, Note: 'CEO base' }, true);
+        engine.SetCell(liveWb, lws.SheetID, 'C2', { Formula: '=B2*1.1' }, true);
+        expect(lws.Cells['B2'].LiveTableID).toBe('tbl-payroll');
+        expect(lws.Cells['C2'].ComputedValue).toBe(275000);
+
+        const serializedPayroll = engine.SerializeWorkbook(liveWb);
+        expect(serializedPayroll).not.toContain('250000');
+        expect(serializedPayroll).not.toContain('275000');
+        const parsedPayroll = JSON.parse(serializedPayroll);
+        expect(parsedPayroll.Worksheets[0].Cells['B2']?.RawValue).toBeNull();
+        expect(parsedPayroll.Worksheets[0].Cells['B2']?.ComputedValue).toBeNull();
+        expect(parsedPayroll.Worksheets[0].Cells['B2']?.Note).toBe('CEO base');
+        expect(parsedPayroll.Worksheets[0].Cells['C2']?.Formula).toBe('=B2*1.1');
+        expect(parsedPayroll.Worksheets[0].Cells['C2']?.ComputedValue).toBeNull();
+
+        const xlsxPayroll = engine.ExportToXlsxBytes(liveWb, true);
+        const xlsxText = new TextDecoder().decode(xlsxPayroll);
+        expect(xlsxText).not.toContain('250000');
+        expect(xlsxText).not.toContain('275000');
+
+        // 5. PatchXlsxBytes preserves <mergeCells>, <dataValidations>, <conditionalFormatting>, and extra ZIP entries
+        const enc = new TextEncoder();
+        const richWsXml = [
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+            '<dimension ref="A1:B2"/>',
+            '<sheetData><row r="1"><c r="A1" s="2" t="n"><v>10</v></c></row></sheetData>',
+            '<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells>',
+            '<conditionalFormatting sqref="A1:A10"><cfRule type="cellIs" operator="greaterThan" priority="1"><formula>50</formula></cfRule></conditionalFormatting>',
+            '<dataValidations count="1"><dataValidation type="list" sqref="B1:B10"><formula1>"Yes,No"</formula1></dataValidation></dataValidations>',
+            '</worksheet>'
+        ].join('');
+        const richOrigZip = (engine as unknown as { buildZipArchive: (e: Array<{ Name: string; Data: Uint8Array }>) => Uint8Array }).buildZipArchive([
+            { Name: '[Content_Types].xml', Data: enc.encode('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>') },
+            { Name: 'xl/workbook.xml', Data: enc.encode('<workbook><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>') },
+            { Name: 'xl/_rels/workbook.xml.rels', Data: enc.encode('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>') },
+            { Name: 'xl/worksheets/sheet1.xml', Data: enc.encode(richWsXml) },
+            { Name: 'xl/drawings/drawing1.xml', Data: enc.encode('<wsDr/>') }
+        ]);
+        const importedRich = XlsxOpenXmlAdapter.Instance.ImportXlsx(richOrigZip);
+        engine.SetCell(importedRich, importedRich.Worksheets[0].SheetID, 'A2', { Value: 999 }, true);
+        const patchedZip = XlsxOpenXmlAdapter.Instance.PatchXlsxBytes(richOrigZip, importedRich);
+        const extractedPatched = (engine as unknown as { extractZipArchive: (b: Uint8Array) => Map<string, Uint8Array> }).extractZipArchive(patchedZip);
+        expect(extractedPatched.has('xl/drawings/drawing1.xml')).toBe(true);
+        const patchedSheetXml = new TextDecoder().decode(extractedPatched.get('xl/worksheets/sheet1.xml')!);
+        expect(patchedSheetXml).toContain('<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells>');
+        expect(patchedSheetXml).toContain('<conditionalFormatting sqref="A1:A10">');
+        expect(patchedSheetXml).toContain('<dataValidations count="1">');
+        expect(patchedSheetXml).toContain('<c r="A2" t="n"><v>999</v></c>');
+
+        // 6. 10,000-formula performance test: SetCell + SerializeWorkbook < 200ms, Parse + Evaluate + Serialize < 500ms
+        const perfWb = engine.CreateEmptyWorkbook('10k Formulas', ['Perf'], 2505, 6);
+        const pws = perfWb.Worksheets[0];
+        for (let r = 1; r <= 2500; r++) {
+            pws.Cells[`A${r}`] = { RowID: pws.Rows[r - 1].RowID, ColumnID: pws.Columns[0].ColumnID, Address: `A${r}`, RawValue: r };
+            pws.Cells[`B${r}`] = { RowID: pws.Rows[r - 1].RowID, ColumnID: pws.Columns[1].ColumnID, Address: `B${r}`, RawValue: null, Formula: `=A${r}*2`, FormulaStable: `@CELL(${pws.Rows[r - 1].RowID},${pws.Columns[0].ColumnID})*2` };
+            pws.Cells[`C${r}`] = { RowID: pws.Rows[r - 1].RowID, ColumnID: pws.Columns[2].ColumnID, Address: `C${r}`, RawValue: null, Formula: `=B${r}+10`, FormulaStable: `@CELL(${pws.Rows[r - 1].RowID},${pws.Columns[1].ColumnID})+10` };
+            pws.Cells[`D${r}`] = { RowID: pws.Rows[r - 1].RowID, ColumnID: pws.Columns[3].ColumnID, Address: `D${r}`, RawValue: null, Formula: `=C${r}*3`, FormulaStable: `@CELL(${pws.Rows[r - 1].RowID},${pws.Columns[2].ColumnID})*3` };
+            pws.Cells[`E${r}`] = { RowID: pws.Rows[r - 1].RowID, ColumnID: pws.Columns[4].ColumnID, Address: `E${r}`, RawValue: null, Formula: `=D${r}-A${r}`, FormulaStable: `@CELL(${pws.Rows[r - 1].RowID},${pws.Columns[3].ColumnID})-@CELL(${pws.Rows[r - 1].RowID},${pws.Columns[0].ColumnID})` };
+        }
+        engine.EvaluateWorkbook(perfWb);
+
+        const editStart = performance.now();
+        engine.SetCell(perfWb, pws.SheetID, 'A2500', { Value: 5000 }, true);
+        const serialized10k = engine.SerializeWorkbook(perfWb);
+        const editAndSerializeMs = performance.now() - editStart;
+        expect(pws.Cells['E2500'].ComputedValue).toBe((5000 * 2 + 10) * 3 - 5000);
+        expect(editAndSerializeMs).toBeLessThan(200);
+
+        const roundTripStart = performance.now();
+        const reparsed10k = engine.ParseWorkbook(serialized10k);
+        const reserialized10k = engine.SerializeWorkbook(reparsed10k);
+        const roundTripMs = performance.now() - roundTripStart;
+        expect(reserialized10k.length).toBeGreaterThan(1000);
+        expect(roundTripMs).toBeLessThan(500);
     });
 });

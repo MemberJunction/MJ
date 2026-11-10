@@ -45,9 +45,11 @@ describe('BuildExcelAddinManifest', () => {
         expect(xml).toContain('xsi:type="VersionOverridesV1_0"');
     });
 
-    it('declares VersionOverridesV1_1 CustomFunctions under the MJ namespace', () => {
+    it('declares VersionOverridesV1_1 CustomFunctions with SharedRuntime under the MJ namespace', () => {
         expect(xml).toContain('xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides/1.1" xsi:type="VersionOverridesV1_1"');
         expect(xml).toContain('<bt:Set Name="CustomFunctionsRuntime" MinVersion="1.1"/>');
+        expect(xml).toContain('<bt:Set Name="SharedRuntime" MinVersion="1.1"/>');
+        expect(xml).toContain('<Runtime resid="Taskpane.Url" lifetime="long"/>');
         expect(xml).toContain('<ExtensionPoint xsi:type="CustomFunctions">');
         expect(xml).toContain('<SourceLocation resid="Functions.Script.Url"/>');
         expect(xml).toContain('<SourceLocation resid="Functions.Metadata.Url"/>');

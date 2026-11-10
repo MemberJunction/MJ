@@ -20,6 +20,7 @@ import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { EscapeSQLString, ExcludeByUUIDs, IndexByUUID, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
+import { BuildAgentBackedTaskExtraFilter } from '../../services/conversation-tasks-filter';
 
 /**
  * Normalized status filter categories in the AI Agent Workflows & Tasks Command Center.
@@ -2385,7 +2386,9 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
       }
 
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const filter = this.BaseFilterResolver ? await this.BaseFilterResolver() : this.BaseFilter;
+      const filter = this.BaseFilterResolver
+        ? await this.BaseFilterResolver()
+        : this.BaseFilter || this.buildAgentBackedTaskExtraFilter();
 
       const tasksResult = await rv.RunView<MJTaskEntity>(
         {
@@ -2428,6 +2431,14 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
   /** @deprecated Use {@link LoadTasks}. */
   public async loadTasks(): Promise<void> {
     return this.LoadTasks();
+  }
+
+  /**
+   * Builds the server-side SQL subquery `ExtraFilter` for agent-backed tasks without running
+   * client-side `IgnoreMaxRows` queries or restricting to `UserID = '${currentUserId}'`.
+   */
+  public buildAgentBackedTaskExtraFilter(): string {
+    return BuildAgentBackedTaskExtraFilter(this.ProviderToUse);
   }
 
   /**

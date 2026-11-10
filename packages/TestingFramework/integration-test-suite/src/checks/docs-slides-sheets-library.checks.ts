@@ -13,9 +13,10 @@
  *   - `docs-slides-sheets-library.DSL7` — `MJGlobal.ClassFactory` resolution and headless execution of `DocumentToolLibrary`, `SlideDeckToolLibrary`, `SpreadsheetToolLibrary`, and `WhiteboardToolLibrary` with SHA-256 optimistic concurrency guards
  */
 
-import { RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/generic-database-provider';
+import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import {
     ArtifactPermissionEngine,
     BaseArtifactPermissionDelegate,
@@ -36,9 +37,16 @@ import {
     SLIDE_DECK_THEME_PRESETS,
     SlideDeckEngine,
     SpreadsheetEngine,
+    ValidateFrozenBlockSnapshot,
 } from '@memberjunction/core-entities';
 import { ArtifactToolResult, BaseArtifactToolLibrary } from '@memberjunction/ai-core-plus';
 import {
+    MJArtifactEntityServer,
+    MJArtifactVersionEntityServer,
+    MJArtifactWorkingStateEntityServer,
+} from '@memberjunction/core-entities-server';
+import {
+    ArtifactToolManager,
     DocumentToolLibrary,
     SlideDeckToolLibrary,
     SpreadsheetToolLibrary,
@@ -49,13 +57,24 @@ import {
     AssertEqual,
     IntegrationCheckContext,
     IntegrationCheckRegistry,
+    LoadClientConfig,
     NamedCheck,
     SkipCheck,
 } from '@memberjunction/testing-integration';
+import {
+    BuildUserKeyProviderWithRetry,
+    DeleteMintedUserKeys,
+    MintFullAccessUserKey,
+    MintedUserKeyIds,
+} from './fls-client.checks';
+import { CloseWireSession } from './wire-sessions';
 
 // Ensure side-effect @RegisterClass registrations are active when this bundle is imported
 LoadArtifactPermissionDelegates();
 LoadDocumentLiveBlocks();
+void MJArtifactEntityServer;
+void MJArtifactVersionEntityServer;
+void MJArtifactWorkingStateEntityServer;
 void DocumentToolLibrary;
 void SlideDeckToolLibrary;
 void SpreadsheetToolLibrary;
@@ -85,13 +104,13 @@ function extractToolData<T extends object>(res: ArtifactToolResult, contextLabel
 // ─── DSL1: Metadata coherence, Artifact Types, and Library / Chat wiring ──────
 
 async function checkDsl1MetadataAndAppWiring(ctx: IntegrationCheckContext): Promise<void> {
-    // 1. MJ: Artifact Working States entity & FK metadata (locked down: IncludeInAPI=false, TrackRecordChanges=false)
+    // 1. MJ: Artifact Working States entity & FK metadata (locked down: TrackRecordChanges=false, AllowAllRowsAPI=false, AllowUserSearchAPI=false, zero UI role permissions)
     const workingStatesEnt = ctx.Provider.Entities.find((e) => e.Name === 'MJ: Artifact Working States');
     Assert(workingStatesEnt !== undefined, 'Entity "MJ: Artifact Working States" must exist in Provider.Entities');
     AssertEqual(workingStatesEnt!.BaseTable, 'ArtifactWorkingState', 'MJ: Artifact Working States BaseTable');
     AssertEqual(workingStatesEnt!.BaseView, 'vwArtifactWorkingStates', 'MJ: Artifact Working States BaseView');
-    AssertEqual(workingStatesEnt!.IncludeInAPI, true, 'MJ: Artifact Working States IncludeInAPI=true for 3-artifact CodeGen parity');
     AssertEqual(workingStatesEnt!.TrackRecordChanges, false, 'MJ: Artifact Working States must have TrackRecordChanges=false (B1)');
+    AssertEqual(workingStatesEnt!.IncludeInAPI, false, 'MJ: Artifact Working States must have IncludeInAPI=false so no GraphQL resolver is emitted (B5)');
     AssertEqual(workingStatesEnt!.AllowAllRowsAPI, false, 'MJ: Artifact Working States must have AllowAllRowsAPI=false (B1)');
     AssertEqual(workingStatesEnt!.AllowUserSearchAPI, false, 'MJ: Artifact Working States must have AllowUserSearchAPI=false (B1)');
     const uiRolePerm = workingStatesEnt!.Permissions.find((p) => p.Role === 'UI');
@@ -484,6 +503,61 @@ async function checkDsl3LiveWorkingStateAndDelegatedPerms(ctx: IntegrationCheckC
             `Delegated denial Reason must cite delegate entity (got: ${outsiderPerms.Reason})`,
         );
 
+        // Verify non-system restricted user cannot Save() MJ: Artifact Working States directly
+        const unauthorizedWs = await ctx.Provider.GetEntityObject<MJArtifactWorkingStateEntity>(
+            'MJ: Artifact Working States',
+            outsider,
+        );
+        unauthorizedWs.NewRecord();
+        unauthorizedWs.ArtifactID = parentDoc.ID;
+        unauthorizedWs.YjsState = expectedBase64;
+        const unauthorizedWsSaved = await unauthorizedWs.Save();
+        Assert(!unauthorizedWsSaved, 'Non-system restricted user must be refused Save() on MJ: Artifact Working States');
+
+        // Verify restricted user without CanEdit is refused Save() on MJ: Artifact Versions (Blocker 2)
+        const unauthorizedVer = await ctx.Provider.GetEntityObject<MJArtifactVersionEntity>(
+            'MJ: Artifact Versions',
+            outsider,
+        );
+        unauthorizedVer.NewRecord();
+        unauthorizedVer.ArtifactID = parentDoc.ID;
+        unauthorizedVer.VersionNumber = 2;
+        unauthorizedVer.Name = 'Unauthorized Version Save';
+        unauthorizedVer.UserID = outsider.ID;
+        unauthorizedVer.ContentMode = 'Text';
+        unauthorizedVer.Content = '# Unauthorized Version Injection';
+        const unauthorizedVerSaved = await unauthorizedVer.Save();
+        Assert(!unauthorizedVerSaved, 'Restricted user without CanEdit must be refused Save() on MJ: Artifact Versions');
+
+        // Verify ArtifactToolManager refuses mutating agent tool calls when running as a user without CanEdit
+        const readonlyToolMgr = new ArtifactToolManager();
+        readonlyToolMgr.Initialize(
+            [
+                {
+                    artifactId: parentDoc.ID,
+                    versionId: parentVer.ID,
+                    versionNumber: 1,
+                    name: parentDoc.Name,
+                    typeName: 'Markdown Document',
+                    toolLibraryClass: 'DocumentToolLibrary',
+                    content: parentVer.Content ?? '',
+                },
+            ],
+            {
+                contextUser: outsider,
+                provider: ctx.Provider,
+            },
+        );
+        const deniedToolRes = await readonlyToolMgr.ExecuteSingleToolCall({
+            artifactId: 'A',
+            tool: 'replace_block',
+            input: {
+                blockId: 'b-0',
+                markdown: '# Unauthorized Agent Mutation',
+            },
+        });
+        Assert(!deniedToolRes.result.success, 'ArtifactToolManager must refuse mutating tool calls for a user without CanEdit');
+
         // If a second active user exists in MJ: Users, grant Read-Only on parentDoc and verify cascade to childWhiteboard
         const otherUsersRes = await rv.RunView<MJUserEntityType>(
             {
@@ -599,6 +673,27 @@ async function checkDsl4DocumentLiveBlocksAndFreeze(ctx: IntegrationCheckContext
     };
     const tamperedExec = await engine.ExecuteBlock(tamperedSpec, ctx.User, ctx.Provider);
     Assert(!tamperedExec.Success, 'Tampered FrozenSnapshot without SecurityWarningAcknowledged must fail closed');
+
+    // 4b. ValidateFrozenBlockSnapshot accepts server HMAC-SHA256 signatures and flags unsigned or plain-SHA256 forged hashes as unverified
+    const validSigCheck = ValidateFrozenBlockSnapshot(frozenSpec.FrozenSnapshot);
+    Assert(validSigCheck.Valid && validSigCheck.SnapshotVerified, 'HMAC-signed FrozenSnapshot must verify as SnapshotVerified=true');
+
+    const forgedPlainShaCheck = ValidateFrozenBlockSnapshot({
+        ...frozenSpec.FrozenSnapshot!,
+        SnapshotContentHash: 'a'.repeat(64),
+    });
+    AssertEqual(forgedPlainShaCheck.SnapshotVerified, false, 'Plain SHA-256 without hmac-sha256: prefix must be rejected as SnapshotVerified=false');
+
+    // 4c. Live EntityView block evaluation is denied for a user without read access to the target entity
+    const zeroRolesUser = new UserInfo(ctx.Provider, {
+        ID: '00000000-0000-0000-0000-000000000098',
+        Name: 'No Roles Viewer',
+        Email: 'noroles-it164@example.invalid',
+        IsActive: true,
+        UserRoles: [],
+    });
+    const deniedLiveExec = await engine.ExecuteBlock(liveSpec, zeroRolesUser, ctx.Provider);
+    Assert(!deniedLiveExec.Success && deniedLiveExec.AccessDenied === true, 'Live EntityView execution must be denied for a user without entity CanRead');
 
     // 5. Markdown :::mj-block directive lossless round-trip
     const directive = engine.SerializeBlockToMarkdownDirective(frozenSpec);
@@ -921,7 +1016,6 @@ export const DocsSlidesSheetsLibraryChecks: NamedCheck[] = [
         Id: 'docs-slides-sheets-library.DSL3',
         Name: 'DSL3: live DB CRUD for MJArtifactWorkingStateEntity, 1:1 UQ & DelegateBinding CHECK enforcement, and O4 ParentArtifactPermissionDelegate cascade',
         Fn: checkDsl3LiveWorkingStateAndDelegatedPerms,
-        RequiresMutation: true,
     },
     {
         Id: 'docs-slides-sheets-library.DSL4',
@@ -946,5 +1040,611 @@ export const DocsSlidesSheetsLibraryChecks: NamedCheck[] = [
 ];
 
 for (const c of DocsSlidesSheetsLibraryChecks) {
+    IntegrationCheckRegistry.Instance.Register(c);
+}
+
+// ─── IT165: Client-transport wire checks (DSLC1–DSLC4) ───────────────────────
+
+const CLIENT_BUNDLE = 'docs-slides-sheets-library-client';
+const GRANTEE_EMAIL = 'it-authorship-grantee@integration.test';
+
+interface DslClientFixture extends MintedUserKeyIds {
+    SkipReason?: string;
+    ProvisionError?: string;
+    OwnerProvider?: GraphQLDataProvider;
+    GranteeProvider?: GraphQLDataProvider;
+    GranteeUserID?: string;
+    ParentDocID?: string;
+    ParentVerID?: string;
+    ParentVerContent?: string;
+    PrivateDocID?: string;
+    PrivateVerID?: string;
+    SharedPermID?: string;
+}
+
+let dslClientFixture: DslClientFixture = { CreatedKeyIds: [], CreatedScopeRuleIds: [] };
+
+function resolveDslWireProvider(ctx: IntegrationCheckContext): GraphQLDataProvider | null {
+    if (ctx.Provider instanceof GraphQLDataProvider) {
+        return ctx.Provider;
+    }
+    const globalProvider: IMetadataProvider = Metadata.Provider; // global-provider-ok: client bootstrap installs GraphQLDataProvider as process global
+    return globalProvider instanceof GraphQLDataProvider ? globalProvider : null;
+}
+
+function requireDslClientFixture(): DslClientFixture {
+    if (dslClientFixture.ProvisionError) {
+        Assert(false, `${CLIENT_BUNDLE} fixture provisioning failed: ${dslClientFixture.ProvisionError}`);
+    }
+    if (dslClientFixture.SkipReason || !dslClientFixture.OwnerProvider || !dslClientFixture.GranteeProvider) {
+        SkipCheck(
+            dslClientFixture.SkipReason ??
+                'client-transport fixture not provisioned (seed metadata-optional/integration-test and start MJAPI)',
+        );
+    }
+    return dslClientFixture;
+}
+
+async function executeGqlExpectingError(
+    provider: GraphQLDataProvider,
+    query: string,
+    variables?: Record<string, unknown>,
+): Promise<string> {
+    try {
+        const res = (await provider.ExecuteGQL(query, variables ?? {})) as {
+            errors?: Array<{ message?: string }>;
+        } | null;
+        if (res && Array.isArray(res.errors) && res.errors.length > 0) {
+            return res.errors.map((e) => e.message ?? '').join('; ');
+        }
+        return '';
+    } catch (err) {
+        return err instanceof Error ? err.message : String(err);
+    }
+}
+
+IntegrationCheckRegistry.Instance.RegisterLifecycle(CLIENT_BUNDLE, {
+    Setup: async (ctx: IntegrationCheckContext) => {
+        dslClientFixture = { CreatedKeyIds: [], CreatedScopeRuleIds: [] };
+        const ownerProvider = resolveDslWireProvider(ctx);
+        if (!ownerProvider) {
+            dslClientFixture.SkipReason = 'no GraphQL wire provider (runs on client transport against a live MJAPI)';
+            return;
+        }
+        dslClientFixture.OwnerProvider = ownerProvider;
+
+        const rv = RunView.FromMetadataProvider(ownerProvider);
+        const granteeRes = await rv.RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Users',
+                ExtraFilter: `Email = '${GRANTEE_EMAIL}' AND IsActive = 1`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+            },
+            ctx.User,
+        );
+        const granteeId = granteeRes.Success && granteeRes.Results.length === 1 ? granteeRes.Results[0].ID : undefined;
+        if (!granteeId) {
+            dslClientFixture.SkipReason = `seeded user '${GRANTEE_EMAIL}' not found (run: pnpm mj sync push --dir=metadata-optional/integration-test)`;
+            return;
+        }
+        dslClientFixture.GranteeUserID = granteeId;
+
+        try {
+            const rawKey = await MintFullAccessUserKey(
+                ctx,
+                dslClientFixture,
+                granteeId,
+                'IT165 DSL client grantee (mj-integration-test)',
+            );
+            const builtProvider = await BuildUserKeyProviderWithRetry(rawKey);
+            dslClientFixture.GranteeProvider = builtProvider as GraphQLDataProvider;
+
+            const typesRes = await rv.RunView<{ ID: string; Name: string }>(
+                {
+                    EntityName: 'MJ: Artifact Types',
+                    ExtraFilter: "Name = 'Markdown Document'",
+                    Fields: ['ID', 'Name'],
+                    ResultType: 'simple',
+                },
+                ctx.User,
+            );
+            if (!typesRes.Success || typesRes.Results.length === 0) {
+                throw new Error("Markdown Document artifact type not found over GraphQL wire");
+            }
+            const docTypeId = typesRes.Results[0].ID;
+            const suffix = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+            // 1. Shared Read-Only artifact + version 1
+            const parentDoc = await ownerProvider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', ctx.User);
+            parentDoc.NewRecord();
+            parentDoc.Name = `__IT165_SharedDoc_${suffix} (mj-integration-test — safe to delete)`;
+            parentDoc.TypeID = docTypeId;
+            parentDoc.UserID = ctx.User.ID;
+            parentDoc.Visibility = 'Always';
+            if (!(await parentDoc.Save())) {
+                throw new Error(`Failed to create shared parentDoc: ${parentDoc.LatestResult?.CompleteMessage ?? ''}`);
+            }
+            dslClientFixture.ParentDocID = parentDoc.ID;
+
+            const initialContent = `# IT165 Shared Strategy Document ${suffix}\n\nOwner baseline content.`;
+            const parentVer = await ownerProvider.GetEntityObject<MJArtifactVersionEntity>(
+                'MJ: Artifact Versions',
+                ctx.User,
+            );
+            parentVer.NewRecord();
+            parentVer.ArtifactID = parentDoc.ID;
+            parentVer.VersionNumber = 1;
+            parentVer.Name = parentDoc.Name;
+            parentVer.UserID = ctx.User.ID;
+            parentVer.ContentMode = 'Text';
+            parentVer.Content = initialContent;
+            if (!(await parentVer.Save())) {
+                throw new Error(`Failed to create shared parentVer: ${parentVer.LatestResult?.CompleteMessage ?? ''}`);
+            }
+            dslClientFixture.ParentVerID = parentVer.ID;
+            dslClientFixture.ParentVerContent = initialContent;
+
+            // Grant Read-Only permission (CanRead=true, CanEdit=false) to grantee
+            const sharedPerm = await ownerProvider.GetEntityObject<MJArtifactPermissionEntity>(
+                'MJ: Artifact Permissions',
+                ctx.User,
+            );
+            sharedPerm.NewRecord();
+            sharedPerm.ArtifactID = parentDoc.ID;
+            sharedPerm.UserID = granteeId;
+            sharedPerm.CanRead = true;
+            sharedPerm.CanEdit = false;
+            sharedPerm.CanDelete = false;
+            sharedPerm.CanShare = false;
+            if (!(await sharedPerm.Save())) {
+                throw new Error(`Failed to create read-only MJArtifactPermission: ${sharedPerm.LatestResult?.CompleteMessage ?? ''}`);
+            }
+            dslClientFixture.SharedPermID = sharedPerm.ID;
+
+            // 2. Private unshared artifact + version 1
+            const privateDoc = await ownerProvider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', ctx.User);
+            privateDoc.NewRecord();
+            privateDoc.Name = `__IT165_PrivateDoc_${suffix} (mj-integration-test — safe to delete)`;
+            privateDoc.TypeID = docTypeId;
+            privateDoc.UserID = ctx.User.ID;
+            privateDoc.Visibility = 'Always';
+            if (!(await privateDoc.Save())) {
+                throw new Error(`Failed to create privateDoc: ${privateDoc.LatestResult?.CompleteMessage ?? ''}`);
+            }
+            dslClientFixture.PrivateDocID = privateDoc.ID;
+
+            const privateVer = await ownerProvider.GetEntityObject<MJArtifactVersionEntity>(
+                'MJ: Artifact Versions',
+                ctx.User,
+            );
+            privateVer.NewRecord();
+            privateVer.ArtifactID = privateDoc.ID;
+            privateVer.VersionNumber = 1;
+            privateVer.Name = privateDoc.Name;
+            privateVer.UserID = ctx.User.ID;
+            privateVer.ContentMode = 'Text';
+            privateVer.Content = `# IT165 Private Document ${suffix}\n\nConfidential owner content.`;
+            if (!(await privateVer.Save())) {
+                throw new Error(`Failed to create privateVer: ${privateVer.LatestResult?.CompleteMessage ?? ''}`);
+            }
+            dslClientFixture.PrivateVerID = privateVer.ID;
+        } catch (err) {
+            dslClientFixture.ProvisionError = err instanceof Error ? err.message : String(err);
+        }
+    },
+    Teardown: async (ctx: IntegrationCheckContext) => {
+        const fx = dslClientFixture;
+        dslClientFixture = { CreatedKeyIds: [], CreatedScopeRuleIds: [] };
+        const ownerProvider = fx.OwnerProvider ?? resolveDslWireProvider(ctx);
+        if (fx.GranteeProvider) {
+            CloseWireSession(fx.GranteeProvider);
+        }
+        if (ownerProvider) {
+            const deleteById = async (
+                entityName: 'MJ: Artifact Permissions' | 'MJ: Artifact Versions' | 'MJ: Artifacts',
+                id: string | undefined,
+            ): Promise<void> => {
+                if (!id) {
+                    return;
+                }
+                try {
+                    const ent = await ownerProvider.GetEntityObject<
+                        MJArtifactPermissionEntity | MJArtifactVersionEntity | MJArtifactEntity
+                    >(entityName, ctx.User);
+                    if (await ent.Load(id)) {
+                        await ent.Delete();
+                    }
+                } catch {
+                    // best-effort teardown
+                }
+            };
+            await deleteById('MJ: Artifact Permissions', fx.SharedPermID);
+            await deleteById('MJ: Artifact Versions', fx.ParentVerID);
+            await deleteById('MJ: Artifacts', fx.ParentDocID);
+            await deleteById('MJ: Artifact Versions', fx.PrivateVerID);
+            await deleteById('MJ: Artifacts', fx.PrivateDocID);
+        }
+        await DeleteMintedUserKeys(ctx, fx);
+    },
+});
+
+async function checkDslc1WorkingStateUnreachableOverGraphQL(ctx: IntegrationCheckContext): Promise<void> {
+    const fx = requireDslClientFixture();
+    const wsEnt = ctx.Provider.Entities.find((e) => e.Name === 'MJ: Artifact Working States');
+    Assert(wsEnt !== undefined, 'MJ: Artifact Working States metadata must exist');
+    AssertEqual(wsEnt!.IncludeInAPI, false, 'MJ: Artifact Working States IncludeInAPI must be false');
+
+    const queryErr = await executeGqlExpectingError(
+        fx.OwnerProvider!,
+        `query ProbeWorkingState($id: String!) {
+            MJArtifactWorkingState(ID: $id) { ID }
+        }`,
+        { id: '00000000-0000-0000-0000-000000000000' },
+    );
+    Assert(
+        queryErr.includes('MJArtifactWorkingState'),
+        `Querying MJArtifactWorkingState over GraphQL must be rejected by the schema (got: ${queryErr || 'no error'})`,
+    );
+
+    const mutationErr = await executeGqlExpectingError(
+        fx.OwnerProvider!,
+        `mutation ProbeCreateWorkingState($input: CreateMJArtifactWorkingStateInput!) {
+            CreateMJArtifactWorkingState(input: $input) { ID }
+        }`,
+        {
+            input: {
+                ArtifactID: fx.ParentDocID!,
+                YjsState: 'AQID',
+            },
+        },
+    );
+    Assert(
+        mutationErr.includes('CreateMJArtifactWorkingState') || mutationErr.includes('CreateMJArtifactWorkingStateInput'),
+        `CreateMJArtifactWorkingState mutation over GraphQL must be rejected by the schema (got: ${mutationErr || 'no error'})`,
+    );
+}
+
+async function checkDslc2RestrictedUserVersionSaveRefusedOverApi(ctx: IntegrationCheckContext): Promise<void> {
+    const fx = requireDslClientFixture();
+    const granteeProvider = fx.GranteeProvider!;
+
+    // 1. Raw GraphQL CreateMJArtifactVersion mutation as Read-Only grantee must be refused by MJArtifactVersionEntityServer
+    const createErr = await executeGqlExpectingError(
+        granteeProvider,
+        `mutation UnauthorizedCreateVersion($input: CreateMJArtifactVersionInput!) {
+            CreateMJArtifactVersion(input: $input) { ID VersionNumber }
+        }`,
+        {
+            input: {
+                ArtifactID: fx.ParentDocID!,
+                VersionNumber: 2,
+                Name: 'Unauthorized Grantee Version 2',
+                UserID: fx.GranteeUserID!,
+                ContentMode: 'Text',
+                Content: '# Injected by Read-Only Grantee',
+            },
+        },
+    );
+    Assert(
+        createErr.toLowerCase().includes('edit permission') || createErr.toLowerCase().includes('permission'),
+        `Read-only grantee CreateMJArtifactVersion over GraphQL must be refused for lack of edit permission (got: ${createErr || 'no error'})`,
+    );
+
+    // 2. Raw GraphQL UpdateMJArtifactVersion mutation on version 1 as Read-Only grantee must be refused
+    const updateErr = await executeGqlExpectingError(
+        granteeProvider,
+        `mutation UnauthorizedUpdateVersion($input: UpdateMJArtifactVersionInput!) {
+            UpdateMJArtifactVersion(input: $input) { ID Content }
+        }`,
+        {
+            input: {
+                ID: fx.ParentVerID!,
+                ArtifactID: fx.ParentDocID!,
+                VersionNumber: 1,
+                UserID: ctx.User.ID,
+                ContentMode: 'Text',
+                Content: '# Overwritten by Read-Only Grantee',
+                OldValues___: [{ Key: 'Content', Value: fx.ParentVerContent! }],
+            },
+        },
+    );
+    Assert(
+        updateErr.toLowerCase().includes('edit permission') || updateErr.toLowerCase().includes('permission'),
+        `Read-only grantee UpdateMJArtifactVersion over GraphQL must be refused for lack of edit permission (got: ${updateErr || 'no error'})`,
+    );
+
+    // 3. Verify database still holds only version 1 with its original content untouched
+    const rv = RunView.FromMetadataProvider(fx.OwnerProvider!);
+    const verRows = await rv.RunView<{ ID: string; VersionNumber: number; Content: string | null }>(
+        {
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ArtifactID = '${fx.ParentDocID!}'`,
+            Fields: ['ID', 'VersionNumber', 'Content'],
+            ResultType: 'simple',
+            BypassCache: true,
+        },
+        ctx.User,
+    );
+    Assert(verRows.Success && verRows.Results.length === 1, 'Parent artifact must still have exactly 1 version after refused writes');
+    AssertEqual(verRows.Results[0].Content, fx.ParentVerContent!, 'Parent artifact version 1 Content must remain untouched');
+}
+
+async function checkDslc3TicketMintSocketUpgradeAndReadOnlyRejection(): Promise<void> {
+    const fx = requireDslClientFixture();
+    const granteeProvider = fx.GranteeProvider!;
+
+    const MINT_TICKET_MUTATION = `
+        mutation MintArtifactCollaborationTicket($artifactId: String!) {
+            MintArtifactCollaborationTicket(artifactId: $artifactId) {
+                Success
+                ErrorMessage
+                Ticket
+                WsPath
+                WsUrl
+                CanRead
+                CanEdit
+            }
+        }
+    `;
+
+    // 1. Unshared private artifact must refuse ticket minting
+    const privateTicketRes = (await granteeProvider.ExecuteGQL(MINT_TICKET_MUTATION, {
+        artifactId: fx.PrivateDocID!,
+    })) as {
+        MintArtifactCollaborationTicket?: {
+            Success: boolean;
+            ErrorMessage?: string | null;
+        };
+    } | null;
+    Assert(
+        privateTicketRes?.MintArtifactCollaborationTicket?.Success === false,
+        'MintArtifactCollaborationTicket must refuse unshared private artifact',
+    );
+
+    // 2. Shared Read-Only artifact mints a read-only ticket (CanRead=true, CanEdit=false)
+    const ticketRes = (await granteeProvider.ExecuteGQL(MINT_TICKET_MUTATION, {
+        artifactId: fx.ParentDocID!,
+    })) as {
+        MintArtifactCollaborationTicket?: {
+            Success: boolean;
+            ErrorMessage?: string | null;
+            Ticket?: string | null;
+            WsPath?: string | null;
+            WsUrl?: string | null;
+            CanRead: boolean;
+            CanEdit: boolean;
+        };
+    } | null;
+    const minted = ticketRes?.MintArtifactCollaborationTicket;
+    Assert(minted?.Success === true && Boolean(minted.Ticket), `MintArtifactCollaborationTicket failed: ${minted?.ErrorMessage ?? ''}`);
+    AssertEqual(minted!.CanRead, true, 'Read-only grantee ticket CanRead');
+    AssertEqual(minted!.CanEdit, false, 'Read-only grantee ticket CanEdit');
+
+    const clientCfg = LoadClientConfig();
+    const httpUrl = new URL(clientCfg.Url);
+    const wsScheme = httpUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+    const rawPath = minted!.WsPath && minted!.WsPath.startsWith('/') ? minted!.WsPath : '/collaboration/yjs';
+    const wsUrl = `${wsScheme}//${httpUrl.host}${rawPath}?ticket=${encodeURIComponent(minted!.Ticket!)}&artifactId=${encodeURIComponent(fx.ParentDocID!)}`;
+
+    // 3. Upgrade WebSocket to /collaboration/yjs with the minted ticket, send a Yjs sync update frame, and verify readonly-rejected
+    const wsOutcome = await new Promise<{
+        upgraded: boolean;
+        readonlyRejected: boolean;
+        rejectedMessage: string;
+    }>((resolve, reject) => {
+        const socket = new WebSocket(wsUrl);
+        socket.binaryType = 'arraybuffer';
+        let upgraded = false;
+        let writeSent = false;
+
+        const timer = setTimeout(() => {
+            try {
+                socket.close();
+            } catch {
+                // ignore
+            }
+            reject(new Error(`Timed out waiting for WebSocket upgrade / readonly-rejected from ${wsUrl}`));
+        }, 10_000);
+
+        socket.addEventListener('open', () => {
+            upgraded = true;
+            if (!writeSent) {
+                writeSent = true;
+                // Send Yjs sync update frame (MESSAGE_SYNC=0x00, SYNC_STEP_UPDATE=0x02, payload=[0x00])
+                socket.send(new Uint8Array([0x00, 0x02, 0x00]));
+            }
+        });
+
+        socket.addEventListener('message', (event: MessageEvent) => {
+            const textPayload =
+                typeof event.data === 'string'
+                    ? event.data
+                    : event.data instanceof ArrayBuffer
+                      ? new TextDecoder().decode(new Uint8Array(event.data))
+                      : '';
+            if (textPayload.includes('readonly-rejected')) {
+                clearTimeout(timer);
+                socket.close();
+                resolve({
+                    upgraded,
+                    readonlyRejected: true,
+                    rejectedMessage: textPayload,
+                });
+            }
+        });
+
+        socket.addEventListener('error', () => {
+            clearTimeout(timer);
+            reject(new Error(`WebSocket error connecting to ${wsUrl}`));
+        });
+    });
+
+    Assert(wsOutcome.upgraded, 'WebSocket upgrade to /collaboration/yjs with valid ticket must succeed');
+    Assert(wsOutcome.readonlyRejected, 'Read-only peer Yjs update frame must be rejected with readonly-rejected');
+
+    // 4. Reusing the same single-use ticket on a second WebSocket connection must be rejected
+    const replayClosedCode = await new Promise<number>((resolve) => {
+        const replaySocket = new WebSocket(wsUrl);
+        const timer = setTimeout(() => {
+            try {
+                replaySocket.close();
+            } catch {
+                // ignore
+            }
+            resolve(0);
+        }, 5_000);
+        replaySocket.addEventListener('close', (ev: CloseEvent) => {
+            clearTimeout(timer);
+            resolve(ev.code);
+        });
+        replaySocket.addEventListener('error', () => {
+            // close event follows error
+        });
+    });
+    Assert(
+        replayClosedCode === 1008 || replayClosedCode !== 1000,
+        `Replaying a consumed single-use collaboration ticket must close with policy violation (got code ${replayClosedCode})`,
+    );
+}
+
+async function checkDslc4LiveBlockDeniedWithoutReadAccess(): Promise<void> {
+    const fx = requireDslClientFixture();
+    const granteeProvider = fx.GranteeProvider!;
+
+    const EXECUTE_LIVE_BLOCK_QUERY = `
+        query ExecuteDocumentLiveBlock($specJson: String!, $hostArtifactId: String) {
+            ExecuteDocumentLiveBlock(specJson: $specJson, hostArtifactId: $hostArtifactId) {
+                Success
+                AccessDenied
+                ErrorMessage
+                ResultJSON
+            }
+        }
+    `;
+
+    // 1. Live block hosted in an unshared artifact (PrivateDocID) must be denied
+    const deniedHostBlock = (await granteeProvider.ExecuteGQL(EXECUTE_LIVE_BLOCK_QUERY, {
+        specJson: JSON.stringify({
+            BlockID: 'blk-it165-denied-host',
+            Kind: 'EntityView',
+            Mode: 'Live',
+            EntityName: 'MJ: Artifact Types',
+            Fields: ['ID', 'Name'],
+            MaxRows: 5,
+        }),
+        hostArtifactId: fx.PrivateDocID!,
+    })) as {
+        ExecuteDocumentLiveBlock?: {
+            Success: boolean;
+            AccessDenied: boolean;
+            ErrorMessage?: string | null;
+        };
+    } | null;
+    Assert(
+        deniedHostBlock?.ExecuteDocumentLiveBlock?.Success === false &&
+            deniedHostBlock?.ExecuteDocumentLiveBlock?.AccessDenied === true,
+        'ExecuteDocumentLiveBlock must fail closed with AccessDenied=true when the caller lacks CanRead on hostArtifactId',
+    );
+
+    // 2. EntityView block targeting 'MJ: AI Agent Runs' (which 'Integration Test: Conversation Authorship' has no CanRead on) must be denied even inside a readable host artifact
+    const deniedEntityBlock = (await granteeProvider.ExecuteGQL(EXECUTE_LIVE_BLOCK_QUERY, {
+        specJson: JSON.stringify({
+            BlockID: 'blk-it165-denied-entity',
+            Kind: 'EntityView',
+            Mode: 'Live',
+            EntityName: 'MJ: AI Agent Runs',
+            Fields: ['ID', 'Status'],
+            MaxRows: 5,
+        }),
+        hostArtifactId: fx.ParentDocID!,
+    })) as {
+        ExecuteDocumentLiveBlock?: {
+            Success: boolean;
+            AccessDenied: boolean;
+            ErrorMessage?: string | null;
+        };
+    } | null;
+    Assert(
+        deniedEntityBlock?.ExecuteDocumentLiveBlock?.Success === false &&
+            deniedEntityBlock?.ExecuteDocumentLiveBlock?.AccessDenied === true,
+        'ExecuteDocumentLiveBlock must fail closed with AccessDenied=true when the caller lacks CanRead on the target entity',
+    );
+    Assert(
+        (deniedEntityBlock?.ExecuteDocumentLiveBlock?.ErrorMessage ?? '').toLowerCase().includes('permission'),
+        `EntityView live block denial must cite missing read permission (got: ${deniedEntityBlock?.ExecuteDocumentLiveBlock?.ErrorMessage ?? ''})`,
+    );
+
+    // 3. Artifact block targeting unshared PrivateDocID inside readable ParentDocID must be denied
+    const deniedArtifactBlock = (await granteeProvider.ExecuteGQL(EXECUTE_LIVE_BLOCK_QUERY, {
+        specJson: JSON.stringify({
+            BlockID: 'blk-it165-denied-artifact',
+            Kind: 'Artifact',
+            Mode: 'Live',
+            ArtifactID: fx.PrivateDocID!,
+        }),
+        hostArtifactId: fx.ParentDocID!,
+    })) as {
+        ExecuteDocumentLiveBlock?: {
+            Success: boolean;
+            AccessDenied: boolean;
+            ErrorMessage?: string | null;
+        };
+    } | null;
+    Assert(
+        deniedArtifactBlock?.ExecuteDocumentLiveBlock?.Success === false &&
+            deniedArtifactBlock?.ExecuteDocumentLiveBlock?.AccessDenied === true,
+        'ExecuteDocumentLiveBlock must deny an Artifact block when the caller lacks CanRead on the referenced artifact',
+    );
+
+    // 4. Positive control: EntityView block on MJ: Artifact Types inside readable ParentDocID succeeds for Read-Only grantee
+    const allowedEntityBlock = (await granteeProvider.ExecuteGQL(EXECUTE_LIVE_BLOCK_QUERY, {
+        specJson: JSON.stringify({
+            BlockID: 'blk-it165-allowed-types',
+            Kind: 'EntityView',
+            Mode: 'Live',
+            EntityName: 'MJ: Artifact Types',
+            Fields: ['ID', 'Name'],
+            MaxRows: 5,
+        }),
+        hostArtifactId: fx.ParentDocID!,
+    })) as {
+        ExecuteDocumentLiveBlock?: {
+            Success: boolean;
+            AccessDenied: boolean;
+            ErrorMessage?: string | null;
+        };
+    } | null;
+    Assert(
+        allowedEntityBlock?.ExecuteDocumentLiveBlock?.Success === true &&
+            !allowedEntityBlock?.ExecuteDocumentLiveBlock?.AccessDenied,
+        `ExecuteDocumentLiveBlock positive control on readable entity + host artifact failed: ${allowedEntityBlock?.ExecuteDocumentLiveBlock?.ErrorMessage ?? ''}`,
+    );
+}
+
+export const DocsSlidesSheetsLibraryClientChecks: NamedCheck[] = [
+    {
+        Id: 'docs-slides-sheets-library-client.DSLC1',
+        Name: 'DSLC1: MJ: Artifact Working States is excluded from the GraphQL schema and unreachable via query or mutation',
+        Fn: checkDslc1WorkingStateUnreachableOverGraphQL,
+    },
+    {
+        Id: 'docs-slides-sheets-library-client.DSLC2',
+        Name: 'DSLC2: a restricted read-only user Save() on MJ: Artifact Versions is refused through the GraphQL API',
+        Fn: checkDslc2RestrictedUserVersionSaveRefusedOverApi,
+    },
+    {
+        Id: 'docs-slides-sheets-library-client.DSLC3',
+        Name: 'DSLC3: MintArtifactCollaborationTicket + WebSocket upgrade to /collaboration/yjs succeeds and rejects a read-only peer write',
+        Fn: checkDslc3TicketMintSocketUpgradeAndReadOnlyRejection,
+    },
+    {
+        Id: 'docs-slides-sheets-library-client.DSLC4',
+        Name: 'DSLC4: ExecuteDocumentLiveBlock denies EntityView and Artifact blocks when the caller lacks read access',
+        Fn: checkDslc4LiveBlockDeniedWithoutReadAccess,
+    },
+];
+
+for (const c of DocsSlidesSheetsLibraryClientChecks) {
     IntegrationCheckRegistry.Instance.Register(c);
 }

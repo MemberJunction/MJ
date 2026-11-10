@@ -971,6 +971,27 @@
   } @else {
     <ng-container *ngTemplateOutlet="itemTableTemplate; context: { $implicit: items }"></ng-container>
   }
+  @if (HasMoreArtifacts) {
+    <div class="library-load-more-row" data-testid="library-load-more-container">
+      <button
+        type="button"
+        mjButton
+        variant="secondary"
+        size="sm"
+        [disabled]="IsLoadingMore"
+        data-testid="library-load-more-btn"
+        (click)="LoadMoreArtifacts()"
+      >
+        @if (IsLoadingMore) {
+          <i class="fa-solid fa-spinner fa-spin"></i>
+          Loading more…
+        } @else {
+          <i class="fa-solid fa-angles-down"></i>
+          Load More (showing {{ LoadedArtifactCount }} of {{ TotalArtifactCount }})
+        }
+      </button>
+    </div>
+  }
 </ng-template>
 
 <!-- Rich Miniature Preview Item Cards Grid -->

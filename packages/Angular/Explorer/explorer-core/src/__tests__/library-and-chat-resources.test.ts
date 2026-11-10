@@ -57,8 +57,9 @@ vi.mock('@memberjunction/ng-conversations', () => ({
   MentionAutocompleteService: { Instance: {} },
   TasksFullViewComponent: class {},
   LibraryWorkspaceComponent: class {},
-  BuildConversationTasksFilter: vi.fn(
-    async () => "ParentID IS NULL AND (UserID = 'u-42' OR ConversationDetailID IN ('cd-1'))",
+  BuildAgentBackedTaskExtraFilter: vi.fn(
+    () =>
+      "ParentID IS NULL AND ([AgentRunID] IS NOT NULL OR [AgentID] IS NOT NULL OR [ConversationDetailID] IS NOT NULL OR [ID] IN (SELECT [TargetLogID] FROM [__mj].[vwAIAgentRunSteps] WHERE [StepType] = 'Sub-Agent' AND [TargetLogID] IS NOT NULL) OR [ParentID] IN (SELECT [ID] FROM [__mj].[vwTasks] WHERE [AgentRunID] IS NOT NULL) OR [ID] IN (SELECT [ParentID] FROM [__mj].[vwTasks] WHERE ([AgentRunID] IS NOT NULL OR [AgentID] IS NOT NULL OR [ConversationDetailID] IS NOT NULL) AND [ParentID] IS NOT NULL))",
   ),
 }));
 
@@ -177,7 +178,7 @@ describe('LibraryResource, ChatCollectionsResource & FileBrowserResource isolati
 });
 
 describe('ChatTasksResource (Agent Activity) filter & cold-mount URL handling', () => {
-  it('includes ParentID IS NULL and UserID in both AgentActivityBaseFilter and ResolveAgentActivityFilter', async () => {
+  it('uses the server-side SQL subquery filter without restricting to UserID or running IgnoreMaxRows client queries', async () => {
     const resource = Object.create(ChatTasksResource.prototype) as ChatTasksResource;
     Object.assign(resource as object, {
       CurrentUser: { ID: 'u-42' } as UserInfo,
@@ -194,11 +195,13 @@ describe('ChatTasksResource (Agent Activity) filter & cold-mount URL handling', 
     });
 
     expect(resource.AgentActivityBaseFilter).toContain('ParentID IS NULL');
-    expect(resource.AgentActivityBaseFilter).toContain("UserID = 'u-42'");
+    expect(resource.AgentActivityBaseFilter).not.toContain('UserID');
 
     const resolved = await resource.ResolveAgentActivityFilter();
-    expect(resolved).toContain("ParentID IS NULL AND (UserID = 'u-42'");
-    expect(resolved).toContain("AND (UserID = 'u-42' OR ConversationDetailID IS NOT NULL");
+    expect(resolved).toContain('ParentID IS NULL');
+    expect(resolved).toContain('[AgentRunID] IS NOT NULL');
+    expect(resolved).toContain('[__mj].[vwAIAgentRunSteps]');
+    expect(resolved).not.toContain('UserID');
   });
 
   it('does not rewrite query params on cold mount when taskId is absent or already in URL', () => {
@@ -291,7 +294,7 @@ describe('ChatConversationsResource — DriverClass-based routing across appMana
 });
 
 describe('ArtifactResource — viewer-scoped permission resolution', () => {
-  it('defaults CanEdit and CanShare to false and resolves permissions via ArtifactPermissionEngine', async () => {
+  it('consults server ResolveArtifactUserPermissions via ExecuteGQL first and falls back to ArtifactPermissionEngine', async () => {
     const resolveSpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({
       ArtifactID: 'art-readonly-1',
       CanRead: true,
@@ -302,6 +305,44 @@ describe('ArtifactResource — viewer-scoped permission resolution', () => {
       Reason: 'Granted via direct artifact permission',
     });
 
+    const executeGqlSpy = vi.fn(async () => ({
+      ResolveArtifactUserPermissions: {
+        ArtifactID: 'art-server-delegate-1',
+        CanRead: true,
+        CanEdit: true,
+        CanDelete: false,
+        CanShare: true,
+        Source: 'ServerDelegate',
+        Reason: 'Granted by server delegate',
+      },
+    }));
+
+    const gqlResource = new ArtifactResource();
+    Object.assign(gqlResource as object, {
+      Data: { ResourceRecordID: 'art-server-delegate-1', Configuration: {} },
+      NotifyLoadComplete: vi.fn(),
+    });
+    Object.defineProperty(gqlResource, 'ProviderToUse', {
+      configurable: true,
+      get: () =>
+        ({
+          CurrentUser: { ID: 'u-editor', Name: 'Editor' },
+          ExecuteGQL: executeGqlSpy,
+        }) as unknown as IMetadataProvider,
+    });
+
+    gqlResource.ngOnInit();
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(executeGqlSpy).toHaveBeenCalledWith(
+      expect.stringContaining('ResolveArtifactUserPermissions'),
+      { artifactId: 'art-server-delegate-1' },
+    );
+    expect(gqlResource.CanEdit).toBe(true);
+    expect(gqlResource.CanShare).toBe(true);
+    expect(resolveSpy).not.toHaveBeenCalled();
+
+    // Fallback when ExecuteGQL is not present on ProviderToUse
     const resource = new ArtifactResource();
     expect(resource.CanEdit).toBe(false);
     expect(resource.CanShare).toBe(false);

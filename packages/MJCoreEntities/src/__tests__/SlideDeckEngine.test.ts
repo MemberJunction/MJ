@@ -191,6 +191,8 @@ describe('SlideDeckEngine (Wave 2 Slides Schema, Layouts, Theme Seeds, Freeze & 
         expect(dupBlock?.BlockID).not.toBe(origBlock?.BlockID);
 
         // Clean placeholders check
+        expect(initial.Master.HeaderText).toBe('');
+        expect(initial.Master.FooterText).toBe('');
         const liveSlideRegions = engine.BuildRegionsForLayout('LiveDataSlide');
         const liveSpec = engine.ExtractRegionBlockSpec(liveSlideRegions[0]);
         expect(liveSpec?.ExtraFilter).toBeUndefined();
@@ -198,5 +200,16 @@ describe('SlideDeckEngine (Wave 2 Slides Schema, Layouts, Theme Seeds, Freeze & 
         expect(quoteRegions[0].MarkdownContent).not.toContain('VP of Enterprise Architecture');
         const bigNumRegions = engine.BuildRegionsForLayout('BigNumber');
         expect(bigNumRegions[0].MarkdownContent).not.toContain('99.98%');
+
+        // Print CSS sanitization check
+        const hostileDeck = engine.ApplyTheme(initial, {
+            PrimaryColor: '#ff0000; } body { background: url(https://evil.example/x) } /*',
+            HeadingFont: 'Inter; @import url(https://evil.example/font.css);'
+        });
+        const printHtml = engine.RenderPrintHtml(hostileDeck);
+        expect(printHtml).not.toContain('url(');
+        expect(printHtml).not.toContain('@import');
+        expect(hostileDeck.Theme.PrimaryColor).not.toContain(';');
+        expect(hostileDeck.Theme.PrimaryColor).not.toContain('{');
     });
 });

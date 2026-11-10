@@ -651,5 +651,15 @@ describe('SpreadsheetToolLibrary (Wave 3 — MJ Sheets § 3.6 & § 6)', () => {
     expect((await sheetLib.InvokeTool('add_sheet', { name: 'Wide', columnCount: 300 }, wbJson)).success).toBe(false);
     expect((await sheetLib.InvokeTool('insert_rows', { atRowNumber: 1, count: 1500 }, wbJson)).success).toBe(false);
     expect((await sheetLib.InvokeTool('read_range', { range: 'A1:Z500' }, wbJson)).success).toBe(false);
+
+    // ReDoS protection via safe-regex on search_cells and DocumentToolLibrary grep
+    const unsafeSheetRegex = await sheetLib.InvokeTool('search_cells', { query: '/(a+)+$/i' }, wbJson);
+    expect(unsafeSheetRegex.success).toBe(false);
+    expect(unsafeSheetRegex.errorMessage).toContain('Unsafe or overly complex regular expression rejected');
+
+    const docLib = new DocumentToolLibrary();
+    const unsafeDocGrep = await docLib.InvokeTool('grep', { pattern: '(a+)+$' }, '# Heading\n\nBody text');
+    expect(unsafeDocGrep.success).toBe(false);
+    expect(unsafeDocGrep.errorMessage).toContain('Unsafe or overly complex regular expression rejected');
   });
 });

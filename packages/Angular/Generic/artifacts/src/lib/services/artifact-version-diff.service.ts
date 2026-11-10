@@ -31,10 +31,10 @@ import {
   ComponentSpec,
 } from '@memberjunction/interactive-component-types';
 import {
-  ComputeBoundedSequenceDiff,
   DocumentCollaborationService,
   type DocumentWordDiffSpan,
 } from './document-collaboration.service';
+import { ComputeBoundedSequenceDiff } from '../utils/line-diff';
 import { BuildMultiTableSql } from '../snapshot-helpers';
 
 // ─── Shared Primitive & Structural JSON Diff Types ───────────────────────────

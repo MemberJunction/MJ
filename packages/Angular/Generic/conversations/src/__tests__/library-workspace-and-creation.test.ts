@@ -509,6 +509,116 @@ describe('LibraryCreationService', () => {
     expect(published.ByteLength).toBe(binaryPdf.byteLength);
     expect(uploadedPayloads[0]).toEqual(binaryPdf);
   });
+
+  it('compares filenames case-insensitively, consults SearchFiles when folder listing is truncated (>=100), and propagates ListObjects errors', async () => {
+    const { service } = buildCreationService();
+    const createUploadUrlSpy = vi.fn(async () => ({
+      success: true,
+      uploadUrl: 'https://drive.example.com/upload/deck',
+      providerKey: 'Legal/board_deck.pptx',
+    }));
+
+    // 1) Case-insensitive collision in ListObjects ('BOARD_DECK.PPTX' vs 'board_deck.pptx')
+    await expect(
+      service.PublishArtifactVersionToConnectedDrive({
+        ArtifactName: 'Board Deck',
+        VersionContent: service.BuildStarterContent('presentation', 'Board Deck'),
+        Format: 'pptx',
+        AccountID: 'acc-1',
+        TargetFolderPrefix: 'Legal',
+        TargetFileName: 'board_deck',
+        CurrentUser: TEST_USER,
+        StorageClientOverride: {
+          ListObjects: vi.fn(async () => ({
+            objects: [
+              {
+                name: 'BOARD_DECK.PPTX',
+                path: 'Legal/BOARD_DECK.PPTX',
+                fullPath: 'Legal/BOARD_DECK.PPTX',
+                size: 1024,
+                contentType: 'application/octet-stream',
+                lastModified: new Date(),
+                isDirectory: false,
+              },
+            ],
+            prefixes: [],
+          })),
+          CreatePreAuthUploadUrl: createUploadUrlSpy,
+        },
+      }),
+    ).rejects.toBeInstanceOf(RemoteDriveFileExistsError);
+
+    // 2) Truncated folder listing (100 objects) triggers SearchFiles fallback and catches case-insensitive match
+    const searchFilesSpy = vi.fn(async () => ({
+      accountResults: [
+        {
+          accountId: 'acc-1',
+          accountName: 'OneDrive',
+          success: true,
+          results: [
+            {
+              path: 'Legal/Board_Deck.PPTX',
+              name: 'Board_Deck.PPTX',
+              size: 2048,
+              contentType: 'application/octet-stream',
+              lastModified: new Date(),
+            },
+          ],
+          hasMore: false,
+        },
+      ],
+      totalResultsReturned: 1,
+      successfulAccounts: 1,
+      failedAccounts: 0,
+    }));
+    const hundredUnrelatedObjects = Array.from({ length: 100 }, (_, idx) => ({
+      name: `other-${idx}.pdf`,
+      path: `Legal/other-${idx}.pdf`,
+      fullPath: `Legal/other-${idx}.pdf`,
+      size: 100,
+      contentType: 'application/pdf',
+      lastModified: new Date(),
+      isDirectory: false,
+    }));
+
+    await expect(
+      service.PublishArtifactVersionToConnectedDrive({
+        ArtifactName: 'Board Deck',
+        VersionContent: service.BuildStarterContent('presentation', 'Board Deck'),
+        Format: 'pptx',
+        AccountID: 'acc-1',
+        TargetFolderPrefix: 'Legal',
+        TargetFileName: 'board_deck',
+        CurrentUser: TEST_USER,
+        StorageClientOverride: {
+          ListObjects: vi.fn(async () => ({ objects: hundredUnrelatedObjects, prefixes: [] })),
+          SearchFiles: searchFilesSpy,
+          CreatePreAuthUploadUrl: createUploadUrlSpy,
+        },
+      }),
+    ).rejects.toBeInstanceOf(RemoteDriveFileExistsError);
+    expect(searchFilesSpy).toHaveBeenCalledWith(['acc-1'], 'board_deck.pptx', { maxResultsPerAccount: 100 });
+
+    // 3) Network/auth failure in ListObjects propagates instead of silently assuming the file does not exist
+    await expect(
+      service.PublishArtifactVersionToConnectedDrive({
+        ArtifactName: 'Board Deck',
+        VersionContent: service.BuildStarterContent('presentation', 'Board Deck'),
+        Format: 'pptx',
+        AccountID: 'acc-1',
+        TargetFolderPrefix: 'Legal',
+        TargetFileName: 'board_deck',
+        CurrentUser: TEST_USER,
+        StorageClientOverride: {
+          ListObjects: vi.fn(async () => {
+            throw new Error('401 OAuth token expired');
+          }),
+          CreatePreAuthUploadUrl: createUploadUrlSpy,
+        },
+      }),
+    ).rejects.toThrow(/401 OAuth token expired/);
+    expect(createUploadUrlSpy).not.toHaveBeenCalled();
+  });
 });
 
 describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state transitions', () => {
@@ -835,6 +945,61 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
       }
     }
     expect(component.AllItems.map((i) => i.Id)).toEqual(['art-owned-1']);
+    expect(component.LoadedArtifactCount).toBe(1);
+    expect(component.TotalArtifactCount).toBe(1);
+    expect(component.HasMoreArtifacts).toBe(false);
+
+    // Verify LoadMoreArtifacts paging when TotalRowCount > LoadedArtifactCount
+    component.TotalArtifactCount = 2;
+    expect(component.HasMoreArtifacts).toBe(true);
+    mockRunViews.mockImplementationOnce(async () => [
+      {
+        Success: true,
+        TotalRowCount: 2,
+        Results: [
+          {
+            ID: 'art-owned-2',
+            Name: 'Page 2 Doc',
+            TypeID: ARTIFACT_TYPES[0].ID,
+            UserID: TEST_USER.ID,
+            __mj_UpdatedAt: new Date('2026-11-08T15:00:00Z'),
+          },
+        ],
+      },
+    ]);
+    mockRunViews.mockImplementationOnce(async () => [
+      {
+        Success: true,
+        Results: [
+          {
+            ID: 'ver-owned-2',
+            ArtifactID: 'art-owned-2',
+            VersionNumber: 1,
+            Name: 'Page 2 Doc',
+            Description: null,
+            ContentMode: 'Text',
+            MimeType: 'text/markdown',
+            FileName: null,
+            __mj_UpdatedAt: new Date('2026-11-08T15:00:00Z'),
+          },
+        ],
+      },
+      { Success: true, Results: [] },
+    ]);
+    await component.LoadMoreArtifacts();
+    expect(component.AllItems.map((i) => i.Id)).toEqual(['art-owned-1', 'art-owned-2']);
+    expect(component.LoadedArtifactCount).toBe(2);
+    expect(component.HasMoreArtifacts).toBe(false);
+
+    // Verify failed RunView sets LoadError instead of silently returning []
+    mockRunViews.mockImplementationOnce(async () => [
+      { Success: false, ErrorMessage: 'Database connection timeout', Results: [] },
+      { Success: true, Results: [] },
+      { Success: true, Results: [] },
+      { Success: true, Results: [] },
+    ]);
+    await component.ReloadWorkspaceData();
+    expect(component.LoadError).toBe('Database connection timeout');
 
     // Verify Delete() and Save() failure notifications
     (component as unknown as { collectionLinksByCollectionAndVersion: Map<string, string> }).collectionLinksByCollectionAndVersion.set(

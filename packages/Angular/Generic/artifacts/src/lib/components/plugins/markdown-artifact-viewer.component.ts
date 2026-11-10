@@ -5,6 +5,7 @@ import {
   ArtifactMetadataEngine,
   DocumentLiveBlockEngine,
   ArtifactPermissionEngine,
+  FilterReadableAnchoredConversations,
   UserInfoEngine,
   type DocumentBlockColumn,
   type DocumentBlockSpec,
@@ -1162,22 +1163,36 @@ export interface DocsPermissionEntry {
                           </div>
 
                           @if (seg.Descriptor.Mode === 'Frozen' && seg.Descriptor.FrozenSnapshot) {
-                            <div class="mj-docs-live-block__provenance" data-testid="frozen-provenance-banner">
-                              <i class="fas fa-shield-halved"></i>
-                              <span>
-                                Frozen snapshot captured at <strong>{{ seg.Descriptor.FrozenSnapshot.FrozenAt }}</strong>
-                                @if (
-                                  seg.Descriptor.FrozenSnapshot.FrozenByUserName ||
-                                  seg.Descriptor.FrozenSnapshot.FrozenByUserID
-                                ) {
-                                  by
-                                  <strong>{{
+                            @if (IsSnapshotVerified(seg.Descriptor)) {
+                              <div class="mj-docs-live-block__provenance" data-testid="frozen-provenance-banner">
+                                <i class="fas fa-shield-halved"></i>
+                                <span>
+                                  Frozen snapshot captured at <strong>{{ seg.Descriptor.FrozenSnapshot.FrozenAt }}</strong>
+                                  @if (
                                     seg.Descriptor.FrozenSnapshot.FrozenByUserName ||
-                                      seg.Descriptor.FrozenSnapshot.FrozenByUserID
-                                  }}</strong>
-                                }
-                              </span>
-                            </div>
+                                    seg.Descriptor.FrozenSnapshot.FrozenByUserID
+                                  ) {
+                                    by
+                                    <strong>{{
+                                      seg.Descriptor.FrozenSnapshot.FrozenByUserName ||
+                                        seg.Descriptor.FrozenSnapshot.FrozenByUserID
+                                    }}</strong>
+                                  }
+                                </span>
+                              </div>
+                            } @else {
+                              <div
+                                class="mj-docs-live-block__error"
+                                data-testid="unverified-snapshot-banner"
+                                [attr.data-block-id]="seg.Descriptor.BlockID"
+                              >
+                                <i class="fas fa-triangle-exclamation"></i>
+                                <span>
+                                  Unverified Snapshot — signature missing or invalid (captured at
+                                  {{ seg.Descriptor.FrozenSnapshot.FrozenAt }})
+                                </span>
+                              </div>
+                            }
                           }
 
                           @if (GetBlockExecutionResult(seg.Descriptor); as execResult) {
@@ -1483,7 +1498,7 @@ export interface DocsPermissionEntry {
               <textarea
                 rows="3"
                 class="mj-docs-comment-input"
-                placeholder="Add an anchored comment or @mention an agent (e.g. @DocsAgent tighten this section)…"
+                placeholder="Add a comment or @mention an AI assistant to collaborate..."
                 [(ngModel)]="NewCommentText"
                 data-testid="new-anchored-comment-input"
               ></textarea>
@@ -1493,6 +1508,7 @@ export interface DocsPermissionEntry {
                   <select [(ngModel)]="NewCommentAgentMode" data-testid="comment-agent-mode-select">
                     <option value="suggest">Suggest Card</option>
                     <option value="edit">Direct Edit</option>
+                    <option value="comment">Comment Reply</option>
                   </select>
                 </label>
                 <button
@@ -2010,6 +2026,14 @@ export interface DocsPermissionEntry {
                 <div class="mj-docs-perm-grant-box" data-testid="grant-permission-form">
                   <div class="mj-docs-field" style="flex: 1;">
                     <span>Grant Access to User</span>
+                    <input
+                      type="text"
+                      class="mj-docs-picker-combobox__input"
+                      placeholder="Search users by name or email…"
+                      [(ngModel)]="PermissionUserSearchQuery"
+                      (ngModelChange)="OnPermissionUserSearchChange($event)"
+                      data-testid="perm-user-search-input"
+                    />
                     <select [(ngModel)]="SelectedPermissionUserID" class="mj-docs-select" data-testid="perm-user-select">
                       <option value="">Select a user…</option>
                       @for (u of AvailableUsersForSharing; track u.ID) {
@@ -3922,6 +3946,8 @@ export class MarkdownArtifactViewerComponent
   private session: DocumentCollaborationSession | null = null;
   private sessionSubs: Subscription[] = [];
   private permissionUnsub: (() => void) | null = null;
+  private sessionInitGeneration = 0;
+  private isComponentDestroyed = false;
   public CollaborationStatus: CollaborationConnectionStatus = 'local';
   public Collaborators: CollaboratorPresence[] = [];
   public HasEditPermission = false;
@@ -3931,6 +3957,7 @@ export class MarkdownArtifactViewerComponent
   // Share & Permissions Modal State
   public ArtifactPermissionEntries: DocsPermissionEntry[] = [];
   public AvailableUsersForSharing: Array<{ ID: string; Name: string; Email: string }> = [];
+  public PermissionUserSearchQuery = '';
   public SelectedPermissionUserID = '';
   public SelectedPermissionLevel: 'Read' | 'Edit' | 'Share' = 'Edit';
   public IsSavingPermission = false;
@@ -3985,7 +4012,7 @@ export class MarkdownArtifactViewerComponent
   public SelectedAnchorLabel = 'Document Root';
   public SelectedAnchorQuote = '';
   public NewCommentText = '';
-  public NewCommentAgentMode: 'suggest' | 'edit' = 'suggest';
+  public NewCommentAgentMode: 'suggest' | 'edit' | 'comment' = 'suggest';
 
   // Version Diff State
   public DiffBaseLabel = 'initial';
@@ -4070,6 +4097,8 @@ export class MarkdownArtifactViewerComponent
   }
 
   public ngOnDestroy(): void {
+    this.isComponentDestroyed = true;
+    this.sessionInitGeneration++;
     this.destroyCollaborationSession();
   }
 
@@ -5583,6 +5612,7 @@ export class MarkdownArtifactViewerComponent
 
   public OpenPermissionsModal(): void {
     this.ShowPermissionsModal = true;
+    this.PermissionUserSearchQuery = '';
     void this.loadArtifactPermissionsForModal();
     this.cdr.markForCheck();
   }
@@ -5590,6 +5620,55 @@ export class MarkdownArtifactViewerComponent
   public ClosePermissionsModal(): void {
     this.ShowPermissionsModal = false;
     this.cdr.markForCheck();
+  }
+
+  public OnPermissionUserSearchChange(query: string): void {
+    this.PermissionUserSearchQuery = query;
+    void this.SearchUsersForSharing(query);
+  }
+
+  /**
+   * Queries `MJ: Users` on the server with `Name LIKE '%...%' OR Email LIKE '%...%'` so users beyond
+   * the initial 100 rows can be discovered and shared with (`Round 2 Review`).
+   */
+  public async SearchUsersForSharing(searchQuery = this.PermissionUserSearchQuery): Promise<void> {
+    const user = this.getSafeCurrentUser();
+    const provider = this.getSafeProvider();
+    if (!user || !provider) {
+      return;
+    }
+
+    try {
+      const trimmed = (searchQuery ?? '').trim();
+      const escaped = EscapeSQLString(trimmed);
+      const extraFilter = trimmed
+        ? `IsActive=1 AND (Name LIKE '%${escaped}%' OR Email LIKE '%${escaped}%')`
+        : 'IsActive=1';
+      const rv = RunView.FromMetadataProvider(provider);
+      const usersRes = await rv.RunView<{ ID: string; Name: string; Email: string }>(
+        {
+          EntityName: 'MJ: Users',
+          ExtraFilter: extraFilter,
+          OrderBy: 'Name ASC',
+          Fields: ['ID', 'Name', 'Email'],
+          MaxRows: 100,
+          ResultType: 'simple',
+        },
+        user,
+      );
+      if (this.isComponentDestroyed) {
+        return;
+      }
+      const allUsers = usersRes.Success && Array.isArray(usersRes.Results) ? usersRes.Results : [];
+      const ownerEntry = this.ArtifactPermissionEntries.find((e) => e.IsOwner);
+      const ownerUserId = ownerEntry?.UserID;
+      this.AvailableUsersForSharing = allUsers.filter(
+        (u) => !UUIDsEqual(u.ID, user.ID) && (!ownerUserId || !UUIDsEqual(u.ID, ownerUserId)),
+      );
+      this.cdr.markForCheck();
+    } catch (err) {
+      LogError(err);
+    }
   }
 
   private async loadArtifactPermissionsForModal(): Promise<void> {
@@ -5980,8 +6059,9 @@ export class MarkdownArtifactViewerComponent
   }
 
   /**
-   * Executes `DocumentLiveBlockEngine.Instance.FreezeBlock` once the user acknowledges the
-   * security warning modal (`O5`), embedding the viewer's current rows into the block only if execution succeeds.
+   * Freezes a live MJ block via the server `FreezeDocumentLiveBlock` mutation (with fallback to
+   * `DocumentLiveBlockEngine.Instance.FreezeBlock` in offline/test environments) once the user
+   * acknowledges the `O5` security warning modal (`Blocker 3`).
    */
   public async ConfirmFreezeBlock(): Promise<void> {
     if (!this.PendingFreezeBlock || !this.FreezeWarningAcknowledged) {
@@ -5990,7 +6070,10 @@ export class MarkdownArtifactViewerComponent
     const target = this.PendingFreezeBlock;
     this.PendingFreezeBlock = null;
     this.FreezeWarningAcknowledged = false;
+    await this.FreezeLiveBlock(target);
+  }
 
+  public async FreezeLiveBlock(block: DocumentBlockSpec): Promise<void> {
     const currentUser = this.getSafeCurrentUser();
     const provider = this.getSafeProvider();
     if (!currentUser || !provider) {
@@ -5999,12 +6082,15 @@ export class MarkdownArtifactViewerComponent
     }
 
     try {
-      const freezeRes = await DocumentLiveBlockEngine.Instance.FreezeBlock(
-        target,
-        currentUser,
+      const freezeRes = await this.collabService.FreezeLiveBlockOnServer(
+        block,
         true,
+        this.artifactVersion?.ArtifactID,
         provider,
       );
+      if (this.isComponentDestroyed) {
+        return;
+      }
       if (!freezeRes.Success || !freezeRes.UpdatedSpec) {
         this.notifyError(freezeRes.ErrorMessage || 'Failed to freeze live block.');
         return;
@@ -6023,6 +6109,16 @@ export class MarkdownArtifactViewerComponent
       LogError(err);
       this.notifyError(err instanceof Error ? err.message : 'Failed to freeze live block.');
     }
+  }
+
+  /**
+   * Returns true when a frozen block's `FrozenSnapshot` has a valid verified signature/hash (`Blocker 3`).
+   */
+  public IsSnapshotVerified(block: DocumentBlockSpec | null | undefined): boolean {
+    if (!block) {
+      return false;
+    }
+    return this.collabService.IsFrozenSnapshotVerified(block, this.blockResults.get(block.BlockID));
   }
 
   /**
@@ -6086,6 +6182,7 @@ export class MarkdownArtifactViewerComponent
    */
   public GetBlockExecutionResult(block: DocumentBlockSpec): DocumentBlockExecutionResult {
     if (block.Mode === 'Frozen' && block.FrozenSnapshot) {
+      const verified = this.IsSnapshotVerified(block);
       return {
         BlockID: block.BlockID,
         Kind: block.Kind,
@@ -6096,8 +6193,16 @@ export class MarkdownArtifactViewerComponent
         TotalRowCount: block.FrozenSnapshot.TotalRowCount,
         FrozenMetadata: {
           FrozenAt: block.FrozenSnapshot.FrozenAt,
-          FrozenByUserID: block.FrozenSnapshot.FrozenByUserID,
-          FrozenByUserName: block.FrozenSnapshot.FrozenByUserName,
+          FrozenByUserID: verified ? block.FrozenSnapshot.FrozenByUserID : '',
+          FrozenByUserName: verified ? block.FrozenSnapshot.FrozenByUserName : '',
+          SnapshotVerified: verified,
+        },
+        FrozenSnapshot: {
+          SnapshotVerified: verified,
+          FrozenAt: block.FrozenSnapshot.FrozenAt,
+          FrozenByUserID: verified ? block.FrozenSnapshot.FrozenByUserID : '',
+          FrozenByUserName: verified ? block.FrozenSnapshot.FrozenByUserName : '',
+          SnapshotContentHash: block.FrozenSnapshot.SnapshotContentHash,
         },
       };
     }
@@ -6526,6 +6631,97 @@ export class MarkdownArtifactViewerComponent
   public RejectSuggestion(sug: DocumentSuggestionItem): void {
     sug.Status = 'Rejected';
     this.StatusBannerMessage = `Rejected suggestion from ${sug.AuthorName}.`;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Creates a tracked suggestion card on `blockId` (`CreateOrUpdatePendingSuggestion` alias).
+   */
+  public CreateSuggestion(
+    blockId: string,
+    originalMarkdown: string,
+    proposedMarkdown: string,
+    rationale = 'Suggested refinement',
+    authorName = 'Current User',
+  ): DocumentSuggestionItem {
+    return this.CreateOrUpdatePendingSuggestion(
+      blockId,
+      originalMarkdown,
+      proposedMarkdown,
+      rationale,
+      authorName,
+    );
+  }
+
+  /**
+   * Applies an incoming AI assistant `@mention` response to an anchored comment thread according to
+   * `thread.AgentMode ?? this.NewCommentAgentMode` (`'comment' | 'suggest' | 'edit'`).
+   * - `'comment'`: appends the agent reply to `thread.Messages` without creating a suggestion or mutating the document.
+   * - `'suggest'`: creates a track-changes suggestion (`CreateSuggestion`) from `proposedMarkdown` and appends the reply.
+   * - `'edit'`: when `CanUserEdit` is true, applies `proposedMarkdown` directly to the anchored segment and posts a confirmation reply.
+   */
+  public dispatchAgentCommentMention(
+    thread: DocumentAnchoredThread,
+    agentHandle: string,
+    response: {
+      replyMessage: string;
+      proposedMarkdown?: string;
+      rationale?: string;
+    },
+  ): void {
+    const mode = thread.AgentMode ?? this.NewCommentAgentMode;
+    const nowIso = new Date().toISOString();
+    const normalizedAuthor = agentHandle.startsWith('@') ? agentHandle : `@${agentHandle}`;
+    const targetSeg =
+      this.DocumentSegments.find((s) => s.SegmentID === thread.AnchorKey) ?? this.DocumentSegments[0];
+
+    if (mode === 'comment' || !response.proposedMarkdown) {
+      thread.Messages.push({
+        DetailID: `msg-${Date.now()}-agent`,
+        UserName: normalizedAuthor,
+        Role: 'Agent',
+        Message: response.replyMessage,
+        CreatedAt: nowIso,
+        Mentions: [],
+      });
+      this.StatusBannerMessage = `${normalizedAuthor} replied in comment thread.`;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    if (mode === 'edit' && this.CanUserEdit && targetSeg) {
+      this.ReplaceSegmentMarkdown(targetSeg, response.proposedMarkdown);
+      thread.Messages.push({
+        DetailID: `msg-${Date.now()}-agent`,
+        UserName: normalizedAuthor,
+        Role: 'Agent',
+        Message: response.replyMessage || `Applied direct edit to ${thread.AnchorLabel}.`,
+        CreatedAt: nowIso,
+        Mentions: [],
+      });
+      this.StatusBannerMessage = `${normalizedAuthor} applied direct edit to ${thread.AnchorLabel}.`;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    if (targetSeg) {
+      this.CreateSuggestion(
+        targetSeg.SegmentID,
+        targetSeg.RawMarkdown,
+        response.proposedMarkdown,
+        response.rationale || response.replyMessage || `Suggestion from ${normalizedAuthor}`,
+        normalizedAuthor,
+      );
+    }
+    thread.Messages.push({
+      DetailID: `msg-${Date.now()}-agent`,
+      UserName: normalizedAuthor,
+      Role: 'Agent',
+      Message: response.replyMessage || `Proposed tracked suggestion for ${thread.AnchorLabel}.`,
+      CreatedAt: nowIso,
+      Mentions: [],
+    });
+    this.StatusBannerMessage = `${normalizedAuthor} proposed a tracked suggestion.`;
     this.cdr.markForCheck();
   }
 
@@ -6983,9 +7179,10 @@ export class MarkdownArtifactViewerComponent
         Timestamp: 'Initial',
       },
     ];
+    const gen = ++this.sessionInitGeneration;
     this.refreshParsedStructure();
     this.setupCollaborationSession();
-    void this.evaluatePermissionsAndLoadThreads();
+    void this.evaluatePermissionsAndLoadThreads(gen);
   }
 
   private refreshParsedStructure(): void {
@@ -7081,7 +7278,7 @@ export class MarkdownArtifactViewerComponent
     }
   }
 
-  private async evaluatePermissionsAndLoadThreads(): Promise<void> {
+  private async evaluatePermissionsAndLoadThreads(gen = this.sessionInitGeneration): Promise<void> {
     const artifactId = this.artifactVersion?.ArtifactID;
     if (!artifactId) {
       return;
@@ -7101,7 +7298,18 @@ export class MarkdownArtifactViewerComponent
     }
 
     try {
-      const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(provider, artifactId, user);
+      const perms = await this.collabService.ResolvePermissionsFromServer(artifactId, provider);
+      if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+        return;
+      }
+      if (!perms) {
+        this.HasEditPermission = false;
+        this.CanUserShareArtifact = false;
+        this.CurrentUserEffectiveRoleLabel = 'Viewer';
+        this.session?.SetCanEdit(false);
+        this.cdr.markForCheck();
+        return;
+      }
       this.HasEditPermission = perms.CanEdit;
       this.CanUserShareArtifact = perms.CanShare;
       this.CurrentUserEffectiveRoleLabel = perms.CanShare
@@ -7124,6 +7332,9 @@ export class MarkdownArtifactViewerComponent
       this.cdr.markForCheck();
     } catch (err) {
       LogError(err);
+      if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+        return;
+      }
       this.HasEditPermission = false;
       this.CanUserShareArtifact = false;
       this.CurrentUserEffectiveRoleLabel = 'Viewer';
@@ -7134,16 +7345,25 @@ export class MarkdownArtifactViewerComponent
       this.cdr.markForCheck();
     }
 
-    await this.hydrateAnchoredThreadsFromServer(artifactId, user, provider);
+    await this.hydrateAnchoredThreadsFromServer(artifactId, user, provider, gen);
+    if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+      return;
+    }
 
+    if (this.permissionUnsub) {
+      this.permissionUnsub();
+      this.permissionUnsub = null;
+    }
     this.permissionUnsub = ArtifactPermissionEngine.Instance.OnPermissionsChanged(async (evt) => {
+      if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+        return;
+      }
       if (evt.ArtifactID === artifactId && user) {
         try {
-          const updated = await ArtifactPermissionEngine.Instance.ResolvePermissions(
-            provider,
-            artifactId,
-            user,
-          );
+          const updated = await this.collabService.ResolvePermissionsFromServer(artifactId, provider);
+          if (this.isComponentDestroyed || gen !== this.sessionInitGeneration || !updated) {
+            return;
+          }
           this.HasEditPermission = updated.CanEdit;
           this.CanUserShareArtifact = updated.CanShare;
           this.CurrentUserEffectiveRoleLabel = updated.CanShare
@@ -7178,6 +7398,7 @@ export class MarkdownArtifactViewerComponent
     artifactId: string,
     user: NonNullable<ReturnType<MarkdownArtifactViewerComponent['getSafeCurrentUser']>>,
     provider: IMetadataProvider,
+    gen = this.sessionInitGeneration,
   ): Promise<void> {
     try {
       const artifactEntityId = this.resolveArtifactsEntityId(provider);
@@ -7189,6 +7410,9 @@ export class MarkdownArtifactViewerComponent
       const convRes = await rv.RunView<{
         ID: string;
         Name: string;
+        LinkedEntityID?: string | null;
+        LinkedRecordID?: string | null;
+        AnchorType?: MJConversationEntity['AnchorType'];
         AnchorKey?: string | null;
         AnchorMetadata?: string | null;
         __mj_CreatedAt?: string;
@@ -7202,22 +7426,44 @@ export class MarkdownArtifactViewerComponent
         },
         user,
       );
+      if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+        return;
+      }
 
-      const convRows = convRes.Success ? convRes.Results ?? [] : [];
-      if (convRows.length === 0) {
+      const rawRows = convRes.Success ? convRes.Results ?? [] : [];
+      if (rawRows.length === 0) {
+        return;
+      }
+
+      const normalizedRows = rawRows.map((c) => ({
+        ...c,
+        LinkedEntityID: c.LinkedEntityID ?? artifactEntityId,
+        LinkedRecordID: c.LinkedRecordID ?? artifactId,
+        AnchorType: c.AnchorType ?? ('DocBlock' as MJConversationEntity['AnchorType']),
+      }));
+      const convRows = await FilterReadableAnchoredConversations(provider, user, normalizedRows);
+      if (this.isComponentDestroyed || gen !== this.sessionInitGeneration || convRows.length === 0) {
         return;
       }
 
       const convIds = convRows.filter((c) => Boolean(c.ID)).map((c) => `'${EscapeSQLString(c.ID)}'`);
       const detailsByConv = new Map<
         string,
-        Array<{ ID: string; ConversationID: string; Role: string; Message: string; __mj_CreatedAt?: string }>
+        Array<{
+          ID: string;
+          ConversationID: string;
+          User?: string | null;
+          Role: string;
+          Message: string;
+          __mj_CreatedAt?: string;
+        }>
       >();
 
       if (convIds.length > 0) {
         const detailRes = await rv.RunView<{
           ID: string;
           ConversationID: string;
+          User?: string | null;
           Role: string;
           Message: string;
           __mj_CreatedAt?: string;
@@ -7231,6 +7477,9 @@ export class MarkdownArtifactViewerComponent
           },
           user,
         );
+        if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+          return;
+        }
         for (const d of detailRes.Results ?? []) {
           const list = detailsByConv.get(d.ConversationID) ?? [];
           list.push(d);
@@ -7243,13 +7492,13 @@ export class MarkdownArtifactViewerComponent
           ? (SafeJSONParse<{
               label?: string;
               quote?: string;
-              agentMode?: 'suggest' | 'edit';
+              agentMode?: 'suggest' | 'edit' | 'comment';
               status?: 'Open' | 'Resolved';
             }>(c.AnchorMetadata) ?? {})
           : {};
         const msgs = (detailsByConv.get(c.ID) ?? []).map((d) => ({
           DetailID: d.ID,
-          UserName: d.Role === 'AI' ? 'AI Assistant' : user.Name || 'Collaborator',
+          UserName: d.Role === 'AI' ? 'AI Assistant' : d.User || 'Unknown User',
           Role: (d.Role === 'AI' ? 'Agent' : 'User') as 'User' | 'Agent',
           Message: d.Message,
           CreatedAt: d.__mj_CreatedAt ?? new Date().toISOString(),
@@ -7262,7 +7511,7 @@ export class MarkdownArtifactViewerComponent
           AnchorLabel: meta.label || c.Name.replace(/^DocComment:\s*/i, '') || c.AnchorKey || 'Document Block',
           QuotedText: meta.quote || '',
           Status: meta.status === 'Resolved' ? 'Resolved' : 'Open',
-          AgentMode: meta.agentMode === 'edit' ? 'edit' : 'suggest',
+          AgentMode: meta.agentMode === 'edit' ? 'edit' : meta.agentMode === 'comment' ? 'comment' : 'suggest',
           CreatedAt: c.__mj_CreatedAt ?? new Date().toISOString(),
           Messages: msgs,
         };

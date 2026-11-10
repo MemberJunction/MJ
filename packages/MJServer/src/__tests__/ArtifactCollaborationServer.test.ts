@@ -1368,7 +1368,9 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
 
             await vi.waitFor(async () => {
                 const contentOnB = await nodeB.GetRoomContent(artifactId, secondEditorUser);
-                expect(contentOnB).toContain('Live uncompacted paragraph on Node A.');
+                expect(contentOnB).toBe(
+                    '# Initial Strategy Document\n\nBaseline paragraph.\n\nLive uncompacted paragraph on Node A.'
+                );
             });
         } finally {
             await nodeA.Shutdown();
@@ -1664,5 +1666,185 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             expect(childFrames[childFrames.length - 1]).toMatchObject({ canRead: true, canEdit: false });
         });
         childWs.close();
+    });
+
+    it('preserves CRDT item lineage across Save Version -> room disposal -> client reconnect with zero paragraph duplication (Blocker 1)', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+        server.SetIdleRoomTtlMs(25);
+
+        // 1. Client connects, receives initial state, and edits the document
+        const client1 = await connectYjsClient(editorUser.ID);
+        await client1.waitForText('# Initial Strategy Document');
+
+        client1.doc.transact(() => {
+            const yText = client1.doc.getText('content');
+            yText.insert(yText.length, '\n\nParagraph 2 added before version save.');
+        }, 'local-edit');
+
+        const expectedDocText =
+            '# Initial Strategy Document\n\nBaseline paragraph.\n\nParagraph 2 added before version save.';
+
+        await vi.waitFor(async () => {
+            const serverContent = await server.GetRoomContent(artifactId, editorUser);
+            expect(serverContent).toBe(expectedDocText);
+        });
+
+        // 2. Client saves a version via CompactRoomToArtifactVersion
+        const compactRes = await server.CompactRoomToArtifactVersion(artifactId, editorUser);
+        expect(compactRes.Saved).toBe(true);
+        expect(compactRes.VersionNumber).toBe(2);
+
+        // Working state must have been flushed AFTER the version row was saved
+        const wsRow = workingStates.get(artifactId);
+        const latestVer = versions[versions.length - 1];
+        expect(wsRow).toBeDefined();
+        expect(latestVer.VersionNumber).toBe(2);
+        expect(new Date(wsRow!.__mj_UpdatedAt!).getTime()).toBeGreaterThanOrEqual(
+            new Date(latestVer.__mj_CreatedAt!).getTime()
+        );
+
+        // 3. Client disconnects and room is disposed on idle timeout
+        client1.ws.close();
+        await vi.waitFor(
+            () => {
+                expect(server.HasActiveRoom(artifactId)).toBe(false);
+            },
+            { timeout: 1500 }
+        );
+
+        // 4. Client reconnects to the freshly re-hydrated server room while still holding its existing Y.Doc (`client1.doc`)
+        const reconnectedWs = new WsClient(
+            `ws://127.0.0.1:${wsPort}${ARTIFACT_COLLABORATION_WS_PATH}?artifactId=${artifactId}&testUserId=${editorUser.ID}`
+        );
+        await new Promise<void>((resolve, reject) => {
+            reconnectedWs.on('open', () => {
+                const enc = encoding.createEncoder();
+                encoding.writeVarUint(enc, YJS_MESSAGE_SYNC);
+                syncProtocol.writeSyncStep1(enc, client1.doc);
+                reconnectedWs.send(encoding.toUint8Array(enc));
+            });
+            reconnectedWs.on('message', (raw: Buffer) => {
+                const dec = decoding.createDecoder(new Uint8Array(raw));
+                const msgType = decoding.readVarUint(dec);
+                if (msgType === YJS_MESSAGE_SYNC) {
+                    const replyEnc = encoding.createEncoder();
+                    encoding.writeVarUint(replyEnc, YJS_MESSAGE_SYNC);
+                    syncProtocol.readSyncMessage(dec, replyEnc, client1.doc, 'server');
+                    if (encoding.length(replyEnc) > 1) {
+                        reconnectedWs.send(encoding.toUint8Array(replyEnc));
+                    }
+                    resolve();
+                }
+            });
+            reconnectedWs.once('error', (err) => reject(err));
+        });
+
+        // Wait a tick for any sync-step-2 messages to settle
+        await new Promise((r) => setTimeout(r, 40));
+
+        // Both client and server must have the exact document text ONCE — zero paragraph duplication!
+        expect(client1.doc.getText('content').toString()).toBe(expectedDocText);
+        expect(await server.GetRoomContent(artifactId, editorUser)).toBe(expectedDocText);
+
+        reconnectedWs.close();
+        client1.doc.destroy();
+    });
+
+    it('merges ApplyServerContentMutation as a minimal diff and preserves concurrent human additions in live rooms (Blocker 2)', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+        const baselineText = '# Initial Strategy Document\n\nSection 1 baseline.\n\nSection 2 original.';
+        versions[0].Content = baselineText;
+
+        const client = await connectYjsClient(editorUser.ID);
+        await client.waitForText('Section 2 original.');
+
+        // Human concurrently edits Section 1 in the live room
+        client.doc.transact(() => {
+            const yText = client.doc.getText('content');
+            const idx = yText.toString().indexOf('Section 1 baseline.');
+            yText.delete(idx, 'Section 1 baseline.'.length);
+            yText.insert(idx, 'Section 1 edited by human.');
+        }, 'human-local');
+
+        await vi.waitFor(async () => {
+            expect(await server.GetRoomContent(artifactId, editorUser)).toContain('Section 1 edited by human.');
+        });
+
+        // Agent mutates Section 2 starting from `baselineText`
+        const agentNewText = '# Initial Strategy Document\n\nSection 1 baseline.\n\nSection 2 updated by agent.';
+        const res = await server.ApplyServerContentMutation(
+            artifactId,
+            agentNewText,
+            editorUser,
+            false,
+            baselineText
+        );
+        expect(res.Success).toBe(true);
+
+        // Both the human's edit to Section 1 and the agent's edit to Section 2 must be preserved!
+        await vi.waitFor(async () => {
+            const merged = await server.GetRoomContent(artifactId, editorUser);
+            expect(merged).toBe(
+                '# Initial Strategy Document\n\nSection 1 edited by human.\n\nSection 2 updated by agent.'
+            );
+            expect(client.doc.getText('content').toString()).toBe(
+                '# Initial Strategy Document\n\nSection 1 edited by human.\n\nSection 2 updated by agent.'
+            );
+        });
+
+        client.ws.close();
+    });
+
+    it('disposes socketless rooms after idle TTL and caps failed compaction retries at 3 attempts', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+        server.SetIdleRoomTtlMs(20);
+
+        // 1. Socketless room created by ApplyServerContentMutation is automatically disposed after idle TTL
+        const mutated = await server.ApplyServerContentMutation(
+            artifactId,
+            '# Socketless Mutation Content',
+            editorUser,
+            false
+        );
+        expect(mutated.Success).toBe(true);
+        expect(server.HasActiveRoom(artifactId)).toBe(true);
+
+        await vi.waitFor(
+            () => {
+                expect(server.HasActiveRoom(artifactId)).toBe(false);
+            },
+            { timeout: 1500 }
+        );
+
+        // 2. Room whose working-state flush persistently fails retries at most 3 times and is then evicted
+        const failingArtifactId = 'ffffffff-1111-4222-8333-999999999999';
+        let flushFailures = 0;
+        const baseProvider = createMockProvider();
+        const failingFlushProvider: Partial<IMetadataProvider> = {
+            ...baseProvider,
+            GetEntityObject: (async (entityName: string, user?: UserInfo) => {
+                const obj = await baseProvider.GetEntityObject(entityName, user);
+                if (entityName === 'MJ: Artifact Working States') {
+                    obj.Save = async () => {
+                        flushFailures++;
+                        return false;
+                    };
+                }
+                return obj;
+            }) as IMetadataProvider['GetEntityObject']
+        };
+        server.SetMetadataProviderOverride(failingFlushProvider as IMetadataProvider);
+
+        const room = await server.GetOrCreateRoom(failingArtifactId, editorUser);
+        expect(room).not.toBeNull();
+        room!.DirtyWorkingState = true;
+
+        await vi.waitFor(
+            () => {
+                expect(server.HasActiveRoom(failingArtifactId)).toBe(false);
+            },
+            { timeout: 2500 }
+        );
+        expect(flushFailures).toBeLessThanOrEqual(4);
     });
 });

@@ -969,6 +969,7 @@ export interface ParsedDocumentSegment {
  */
 export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngine> {
     private _spreadsheetChartExtractor: SpreadsheetChartExtractorFn | null = null;
+    private _signingSecret: string | null = null;
 
     protected constructor() {
         super();
@@ -977,6 +978,21 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
     /** Returns the process-wide singleton instance of {@link DocumentLiveBlockEngine}. */
     public static get Instance(): DocumentLiveBlockEngine {
         return super.getInstance<DocumentLiveBlockEngine>();
+    }
+
+    /**
+     * Configures an explicit server HMAC signing secret for {@link FreezeBlock},
+     * {@link ComputeFrozenSnapshotHash}, and {@link ValidateFrozenBlockSnapshot} (`B7`).
+     */
+    public SetSigningSecret(secret: string | null): void {
+        this._signingSecret = secret && secret.trim().length > 0 ? secret.trim() : null;
+    }
+
+    /**
+     * Returns the explicitly configured server HMAC signing secret, if any (`B7`).
+     */
+    public GetSigningSecret(): string | null {
+        return this._signingSecret;
     }
 
     /**
@@ -1063,7 +1079,8 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
         spec: DocumentBlockSpec,
         user: UserInfo,
         acknowledgeSecurityWarning: boolean,
-        provider?: IMetadataProvider | null
+        provider?: IMetadataProvider | null,
+        signingSecret?: string
     ): Promise<{ Success: boolean; UpdatedSpec?: DocumentBlockSpec; ErrorMessage?: string }> {
         if (!acknowledgeSecurityWarning) {
             return {
@@ -1095,7 +1112,7 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
         };
         const snapshot: FrozenBlockSnapshot = {
             ...snapshotBase,
-            SnapshotContentHash: ComputeFrozenSnapshotHash(snapshotBase)
+            SnapshotContentHash: ComputeFrozenSnapshotHash(snapshotBase, signingSecret)
         };
 
         return {
@@ -1292,9 +1309,12 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
 }
 
 /**
- * Validates the structure and security acknowledgement of a {@link FrozenBlockSnapshot} (`B7`).
+ * Validates the structure, security acknowledgement, and HMAC-SHA256 signature of a {@link FrozenBlockSnapshot} (`B7`).
  */
-export function ValidateFrozenBlockSnapshot(snap: FrozenBlockSnapshot | null | undefined): {
+export function ValidateFrozenBlockSnapshot(
+    snap: FrozenBlockSnapshot | null | undefined,
+    signingSecret?: string
+): {
     Valid: boolean;
     SnapshotVerified: boolean;
     ErrorMessage?: string;
@@ -1340,8 +1360,18 @@ export function ValidateFrozenBlockSnapshot(snap: FrozenBlockSnapshot | null | u
         };
     }
 
-    const expectedHash = ComputeFrozenSnapshotHash(snap);
-    const snapshotVerified = Boolean(snap.SnapshotContentHash && snap.SnapshotContentHash === expectedHash);
+    if (
+        typeof snap.SnapshotContentHash !== 'string' ||
+        !snap.SnapshotContentHash.startsWith('hmac-sha256:')
+    ) {
+        return {
+            Valid: true,
+            SnapshotVerified: false
+        };
+    }
+
+    const expectedHash = ComputeFrozenSnapshotHash(snap, signingSecret);
+    const snapshotVerified = constantTimeStringEqual(snap.SnapshotContentHash, expectedHash);
     return {
         Valid: true,
         SnapshotVerified: snapshotVerified
@@ -1349,24 +1379,28 @@ export function ValidateFrozenBlockSnapshot(snap: FrozenBlockSnapshot | null | u
 }
 
 /**
- * Computes a deterministic SHA-256 content hash over a {@link FrozenBlockSnapshot} (`B7`).
+ * Computes an HMAC-SHA256 signature (`'hmac-sha256:<hex>'`) over the canonical payload of a
+ * {@link FrozenBlockSnapshot}, including `FrozenByUserName` (`B7`).
  */
 export function ComputeFrozenSnapshotHash(
     snap: Pick<
         FrozenBlockSnapshot,
         | 'FrozenAt'
         | 'FrozenByUserID'
+        | 'FrozenByUserName'
         | 'Columns'
         | 'Rows'
         | 'TotalRowCount'
         | 'ArtifactContentSnapshot'
         | 'ArtifactTypeSnapshot'
         | 'SecurityWarningAcknowledged'
-    >
+    >,
+    signingSecret?: string
 ): string {
     const payload = canonicalizeForHash({
         FrozenAt: snap.FrozenAt,
         FrozenByUserID: snap.FrozenByUserID,
+        FrozenByUserName: snap.FrozenByUserName ?? null,
         Columns: snap.Columns,
         Rows: snap.Rows,
         TotalRowCount: snap.TotalRowCount,
@@ -1374,7 +1408,42 @@ export function ComputeFrozenSnapshotHash(
         ArtifactTypeSnapshot: snap.ArtifactTypeSnapshot ?? null,
         SecurityWarningAcknowledged: snap.SecurityWarningAcknowledged === true
     });
-    return sha256HexUtf8(payload);
+    const secret = resolveFrozenSnapshotSigningSecret(signingSecret);
+    return `hmac-sha256:${hmacSha256HexUtf8(secret, payload)}`;
+}
+
+function resolveFrozenSnapshotSigningSecret(explicitSecret?: string): string {
+    if (explicitSecret && explicitSecret.trim().length > 0) {
+        return explicitSecret.trim();
+    }
+    const configured = DocumentLiveBlockEngine.Instance.GetSigningSecret();
+    if (configured && configured.trim().length > 0) {
+        return configured.trim();
+    }
+    const env =
+        typeof globalThis !== 'undefined' && 'process' in globalThis
+            ? (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
+            : undefined;
+    return (
+        env?.MJ_FROZEN_SNAPSHOT_SECRET ||
+        env?.JWT_SECRET ||
+        env?.GRAPHQL_SECRET ||
+        'mj-default-server-freeze-hmac-key-change-in-prod'
+    );
+}
+
+function constantTimeStringEqual(a: string, b: string): boolean {
+    const enc = new TextEncoder();
+    const aBytes = enc.encode(a);
+    const bBytes = enc.encode(b);
+    if (aBytes.length !== bBytes.length) {
+        return false;
+    }
+    let diff = 0;
+    for (let i = 0; i < aBytes.length; i++) {
+        diff |= aBytes[i] ^ bBytes[i];
+    }
+    return diff === 0;
 }
 
 function canonicalizeForHash(value: unknown): string {
@@ -1408,8 +1477,7 @@ const SHA256_K: ReadonlyArray<number> = [
     0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
 ];
 
-function sha256HexUtf8(text: string): string {
-    const bytes = new TextEncoder().encode(text);
+function sha256Bytes(bytes: Uint8Array): Uint8Array {
     const bitLenHi = Math.floor((bytes.length * 8) / 0x100000000);
     const bitLenLo = (bytes.length * 8) >>> 0;
     const paddedLen = ((bytes.length + 9 + 63) >>> 6) << 6;
@@ -1479,7 +1547,41 @@ function sha256HexUtf8(text: string): string {
         h7 = (h7 + h) >>> 0;
     }
 
-    return [h0, h1, h2, h3, h4, h5, h6, h7].map((v) => v.toString(16).padStart(8, '0')).join('');
+    const digest = new Uint8Array(32);
+    const outView = new DataView(digest.buffer);
+    outView.setUint32(0, h0, false);
+    outView.setUint32(4, h1, false);
+    outView.setUint32(8, h2, false);
+    outView.setUint32(12, h3, false);
+    outView.setUint32(16, h4, false);
+    outView.setUint32(20, h5, false);
+    outView.setUint32(24, h6, false);
+    outView.setUint32(28, h7, false);
+    return digest;
+}
+
+function hmacSha256HexUtf8(key: string, message: string): string {
+    const enc = new TextEncoder();
+    const rawKey = enc.encode(key);
+    const msgBytes = enc.encode(message);
+    const keyBlock = new Uint8Array(64);
+    if (rawKey.length > 64) {
+        keyBlock.set(sha256Bytes(rawKey), 0);
+    } else {
+        keyBlock.set(rawKey, 0);
+    }
+
+    const ipadMsg = new Uint8Array(64 + msgBytes.length);
+    const opadInner = new Uint8Array(64 + 32);
+    for (let i = 0; i < 64; i++) {
+        ipadMsg[i] = keyBlock[i] ^ 0x36;
+        opadInner[i] = keyBlock[i] ^ 0x5c;
+    }
+    ipadMsg.set(msgBytes, 64);
+    const innerDigest = sha256Bytes(ipadMsg);
+    opadInner.set(innerDigest, 64);
+    const finalDigest = sha256Bytes(opadInner);
+    return Array.from(finalDigest, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 function clampBlockMaxRows(rawMaxRows?: number): number {
@@ -1549,6 +1651,22 @@ function validateEntityViewExtraFilter(
     }
 
     const masked = extraFilter.replace(/'(?:''|[^'])*'/g, "'__STR__'");
+
+    // Reject schema/table-qualified identifiers (e.g. __mj.fnSecret(ID) or dbo.Users.ID) and SQL function calls (e.g. REPLICATE('a', 1e8))
+    if (/[A-Za-z_][A-Za-z0-9_]*\s*\.\s*[A-Za-z_]/.test(masked)) {
+        return {
+            Valid: false,
+            ErrorMessage: 'Schema- or table-qualified identifiers and user-defined functions are not permitted in ExtraFilter.'
+        };
+    }
+    const withoutInLists = masked.replace(/\b(?:NOT\s+)?IN\s*\(/gi, 'IN ');
+    if (/(?:\b[A-Za-z_][A-Za-z0-9_]*|\])\s*\(/.test(withoutInLists)) {
+        return {
+            Valid: false,
+            ErrorMessage: 'Scalar or user-defined SQL function calls are not permitted in ExtraFilter.'
+        };
+    }
+
     const allowedFieldNames = new Set(entityInfo.Fields.map((f) => f.Name.trim().toLowerCase()));
 
     // Ensure no FLS-denied field appears anywhere as an identifier token in ExtraFilter

@@ -2827,7 +2827,8 @@ export class BaseAgent {
                 this._artifactToolManager.Initialize(inputArtifacts, {
                     contextUser: params.contextUser,
                     provider: this.ProviderToUse,
-                    getAgentRun: () => this._agentRun
+                    getAgentRun: () => this._agentRun,
+                    agentName: params.agent?.Name ?? undefined,
                 });
                 this.logStatus(`[ArtifactTools] Initialized with ${inputArtifacts.length} artifact(s): ${inputArtifacts.map(a => `${a.typeName}:"${a.name}"`).join(', ')}`, true, params);
             } else {

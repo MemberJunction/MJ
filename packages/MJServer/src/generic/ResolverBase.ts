@@ -982,6 +982,9 @@ export class ResolverBase {
 
     // first check permissions, the logged in user must have read permissions on the entity to run the view
     if (entityInfo) {
+      if (entityInfo.IncludeInAPI === false) {
+        throw new Error(`API is disabled for ${entityInfo.Name}`);
+      }
       // Prefer the authenticated session's payload user WHEN it carries roles — that is the
       // authoritative per-session identity (and, for magic-link sessions, carries claims-based
       // synthesized roles that are deliberately NOT persisted to the shared UserCache). For

@@ -2302,6 +2302,9 @@ export class SpreadsheetArtifactViewerComponent
     return CreateJsonSnapshot(serialized, this.Workbook.Title || this.getDisplayTitle());
   }
 
+  private sessionInitGeneration = 0;
+  private isComponentDestroyed = false;
+
   public async ngOnInit(): Promise<void> {
     await this.initializeWorkbookSession();
   }
@@ -2322,6 +2325,8 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public ngOnDestroy(): void {
+    this.isComponentDestroyed = true;
+    this.sessionInitGeneration++;
     this.teardownSession();
   }
 
@@ -2359,6 +2364,7 @@ export class SpreadsheetArtifactViewerComponent
   // ---------------------------------------------------------------------------
 
   private async initializeWorkbookSession(): Promise<void> {
+    const gen = ++this.sessionInitGeneration;
     this.teardownSession();
     this.FallbackXlsxBytes = null;
     this.Permissions = null;
@@ -2379,12 +2385,21 @@ export class SpreadsheetArtifactViewerComponent
       let downloadedBuffer: ArrayBuffer | null = null;
       try {
         const downloadUrl = await this.artifactFileService.getDownloadUrl(this.artifactVersion.ID);
+        if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+          return;
+        }
         downloadedBuffer = await FetchArrayBuffer(downloadUrl);
+        if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+          return;
+        }
         this.Workbook = SpreadsheetEngine.Instance.ImportFromXlsxBytes(
           new Uint8Array(downloadedBuffer),
           configJson,
         );
       } catch (err) {
+        if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+          return;
+        }
         LogError(err);
         this.Workbook = SpreadsheetEngine.Instance.ParseWorkbook('', configJson);
         if (downloadedBuffer) {
@@ -2415,26 +2430,37 @@ export class SpreadsheetArtifactViewerComponent
     if (this.artifactVersion?.ArtifactID) {
       if (provider && currentUser) {
         try {
-          this.Permissions = await ArtifactPermissionEngine.Instance.ResolvePermissions(
-            provider,
+          this.Permissions = await this.collaborationService.ResolvePermissionsFromServer(
             this.artifactVersion.ArtifactID,
-            currentUser,
+            provider,
           );
-          if (!this.Permissions.CanRead) {
+          if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+            return;
+          }
+          if (!this.Permissions || !this.Permissions.CanRead) {
             this.ConnectionStatus = 'revoked';
           } else if (!this.Permissions.CanEdit) {
             this.ConnectionStatus = 'readonly';
           }
         } catch (err) {
+          if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+            return;
+          }
           LogError(err);
           this.Permissions = null;
           this.ConnectionStatus = 'readonly';
         }
 
+        if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+          return;
+        }
         this.permissionsUnsubscribe = ArtifactPermissionEngine.Instance.OnPermissionsChanged(
           async (evt) => {
+            if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+              return;
+            }
             if (UUIDsEqual(evt.ArtifactID, this.artifactVersion.ArtifactID)) {
-              await this.refreshPermissionsAndAnchoredThreads();
+              await this.refreshPermissionsAndAnchoredThreads(gen);
             }
           },
         );
@@ -2442,6 +2468,10 @@ export class SpreadsheetArtifactViewerComponent
         this.Permissions = null;
         this.ConnectionStatus = 'readonly';
       }
+    }
+
+    if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+      return;
     }
 
     const hasRemoteBackend = this.collaborationService.HasCollaborationBackend(
@@ -2467,6 +2497,7 @@ export class SpreadsheetArtifactViewerComponent
 
     this.subs.push(
       session.ContentChanged$.subscribe((nextContent: string) => {
+        if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
         if (!nextContent || !nextContent.trim().startsWith('{')) return;
         this.Workbook = SpreadsheetEngine.Instance.ParseWorkbook(nextContent);
         SpreadsheetEngine.Instance.EvaluateWorkbook(this.Workbook);
@@ -2478,14 +2509,17 @@ export class SpreadsheetArtifactViewerComponent
         this.cdr.markForCheck();
       }),
       session.StatusChanged$.subscribe((status: CollaborationConnectionStatus) => {
+        if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
         this.ConnectionStatus = status;
         this.cdr.markForCheck();
       }),
       session.CollaboratorsChanged$.subscribe((collabs: CollaboratorPresence[]) => {
+        if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
         this.Collaborators = collabs;
         this.cdr.markForCheck();
       }),
       session.VersionSaved$.subscribe((saved: { versionId: string; versionNumber: number }) => {
+        if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
         this.lastSavedComparableJson = this.getComparableWorkbookJson(this.Workbook);
         this.LastSavedVersionNumber = saved.versionNumber;
         this.IsSavingVersion = false;
@@ -2499,9 +2533,18 @@ export class SpreadsheetArtifactViewerComponent
     }
 
     await this.RefreshAllLiveData(false);
+    if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+      return;
+    }
     this.lastSavedComparableJson = this.getComparableWorkbookJson(this.Workbook);
     await this.hydrateEmbeddedArtifactVersions();
+    if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+      return;
+    }
     await this.loadPersistedSheetRangeComments();
+    if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+      return;
+    }
     this.cdr.markForCheck();
   }
 
@@ -2527,17 +2570,19 @@ export class SpreadsheetArtifactViewerComponent
     }
   }
 
-  private async refreshPermissionsAndAnchoredThreads(): Promise<void> {
+  private async refreshPermissionsAndAnchoredThreads(gen = this.sessionInitGeneration): Promise<void> {
     const provider = this.getSafeProvider();
     const user = this.resolveCurrentUser();
     if (!provider || !user || !this.artifactVersion?.ArtifactID) return;
     try {
-      this.Permissions = await ArtifactPermissionEngine.Instance.ResolvePermissions(
-        provider,
+      this.Permissions = await this.collaborationService.ResolvePermissionsFromServer(
         this.artifactVersion.ArtifactID,
-        user,
+        provider,
       );
-      if (!this.Permissions.CanRead) {
+      if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+        return;
+      }
+      if (!this.Permissions || !this.Permissions.CanRead) {
         this.ConnectionStatus = 'revoked';
         this.CollaborationSession?.SetCanEdit(false);
       } else if (!this.Permissions.CanEdit) {
@@ -2547,6 +2592,9 @@ export class SpreadsheetArtifactViewerComponent
         this.CollaborationSession?.SetCanEdit(this.CanEdit);
       }
       await this.loadPersistedSheetRangeComments();
+      if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+        return;
+      }
       this.cdr.markForCheck();
     } catch (err) {
       LogError(err);
@@ -3379,7 +3427,7 @@ export class SpreadsheetArtifactViewerComponent
         );
         const messages = (detailsRes.Results ?? []).map((d) => ({
           DetailID: d.ID,
-          UserName: d.User || (d.Role === 'AI' ? 'AI Assistant' : 'Collaborator'),
+          UserName: d.User || (d.Role === 'AI' ? 'AI Assistant' : 'Unknown User'),
           Role: (d.Role === 'AI' ? 'Agent' : 'User') as 'User' | 'Agent',
           Message: d.Message,
           CreatedAt: new Date().toISOString(),

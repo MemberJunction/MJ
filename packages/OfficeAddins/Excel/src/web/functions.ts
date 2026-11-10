@@ -9,25 +9,57 @@ import {
     EXCEL_CUSTOM_FUNCTION_AUTH_REQUIRED,
     ExcelAddinEvaluateCustomFunctionInput,
     ExcelAddinEvaluateCustomFunctionOutput,
+    ExcelCancelableInvocation,
     ExcelCustomFunctionCoordinator,
 } from '../custom-functions';
-import { LoadConnection, StoredConnection } from './connection-store';
+import {
+    FindFirstStoredConnection,
+    HydrateConnectionsFromOfficeStorage,
+    LoadConnection,
+    OnConnectionChanged,
+    StoredConnection,
+} from './connection-store';
 import { EvaluateCustomFunctionOnServer } from './mj-data-client';
-import { LoadPaneConfig, LoadSavedServerUrl, ResolveCustomPaneConfig, SameAddinUrl } from './pane-config';
+import {
+    HydrateServerUrlFromOfficeStorage,
+    LoadPaneConfig,
+    LoadSavedServerUrl,
+    ResolveCustomPaneConfig,
+    SameAddinUrl,
+} from './pane-config';
 
 interface OfficeCustomFunctionsApi {
     associate(id: string, callback: (...args: readonly unknown[]) => Promise<ExcelCellValue[][]>): void;
 }
 
 let cachedAddinUrlPromise: Promise<string> | null = null;
+let resolvedHostAddinUrl: string = '';
 let sharedCoordinator: ExcelCustomFunctionCoordinator | null = null;
 let functionsAssociated = false;
+let connectionListenerRegistered = false;
+
+function fingerprintToken(token: string): string {
+    let h1 = 0x811c9dc5;
+    let h2 = 0x01000193;
+    for (let i = 0; i < token.length; i++) {
+        const ch = token.charCodeAt(i);
+        h1 ^= ch;
+        h1 = Math.imul(h1, 0x01000193) >>> 0;
+        h2 ^= ch + i;
+        h2 = Math.imul(h2, 0x85ebca6b) >>> 0;
+    }
+    return `${h1.toString(16).padStart(8, '0')}${h2.toString(16).padStart(8, '0')}`;
+}
 
 async function resolveActiveAddinUrl(): Promise<string> {
+    await Promise.all([HydrateServerUrlFromOfficeStorage(), HydrateConnectionsFromOfficeStorage()]);
     const savedUrl = LoadSavedServerUrl();
     if (!cachedAddinUrlPromise) {
         cachedAddinUrlPromise = LoadPaneConfig()
-            .then(cfg => cfg.AddinUrl)
+            .then(cfg => {
+                resolvedHostAddinUrl = cfg.AddinUrl;
+                return cfg.AddinUrl;
+            })
             .catch(() => '');
     }
     const hostAddinUrl = await cachedAddinUrlPromise;
@@ -44,35 +76,53 @@ async function resolveActiveAddinUrl(): Promise<string> {
 
 async function resolveActiveConnection(): Promise<StoredConnection> {
     const addinUrl = await resolveActiveAddinUrl();
-    if (!addinUrl) {
-        throw new Error(EXCEL_CUSTOM_FUNCTION_AUTH_REQUIRED);
+    if (addinUrl) {
+        const connection = LoadConnection(addinUrl);
+        if (connection) {
+            return connection;
+        }
     }
-    const connection = LoadConnection(addinUrl);
-    if (!connection) {
-        throw new Error(EXCEL_CUSTOM_FUNCTION_AUTH_REQUIRED);
+    const fallbackConn = FindFirstStoredConnection();
+    if (fallbackConn) {
+        return fallbackConn;
     }
-    return connection;
+    throw new Error(EXCEL_CUSTOM_FUNCTION_AUTH_REQUIRED);
 }
 
 function readCurrentViewerScopeKey(): string {
-    const savedUrl = LoadSavedServerUrl();
-    if (savedUrl) {
-        const conn = LoadConnection(savedUrl);
-        if (conn) {
-            return `${conn.AddinUrl}::${conn.UserEmail || conn.UserName || conn.APIKey.slice(0, 12)}`;
-        }
+    const candidateUrl = LoadSavedServerUrl() || resolvedHostAddinUrl;
+    const conn = candidateUrl ? LoadConnection(candidateUrl) : FindFirstStoredConnection();
+    if (!conn || !conn.APIKey) {
+        return '';
     }
-    // Check default connection map via window.localStorage key inspection through LoadConnection if known,
-    // otherwise fall back to 'pending-config' so evaluateInput resolves connection cleanly inside executor.
-    return 'session-scope';
+    return `${conn.AddinUrl}::${conn.UserEmail || conn.UserName || 'user'}::${fingerprintToken(conn.APIKey)}`;
+}
+
+/** Clears the shared custom function result cache (called automatically on sign-in, account switch, or sign-out). */
+export function ClearCustomFunctionCache(): void {
+    sharedCoordinator?.ClearCache();
+}
+
+/** Lowercase alias for {@link ClearCustomFunctionCache}. */
+export function clearCustomFunctionCache(): void {
+    ClearCustomFunctionCache();
 }
 
 export function GetOrCreateCustomFunctionCoordinator(): ExcelCustomFunctionCoordinator {
+    if (!connectionListenerRegistered) {
+        OnConnectionChanged(() => {
+            ClearCustomFunctionCache();
+        });
+        connectionListenerRegistered = true;
+    }
     if (!sharedCoordinator) {
         sharedCoordinator = new ExcelCustomFunctionCoordinator(
-            async (input: ExcelAddinEvaluateCustomFunctionInput): Promise<ExcelAddinEvaluateCustomFunctionOutput> => {
+            async (
+                input: ExcelAddinEvaluateCustomFunctionInput,
+                options?: { signal?: AbortSignal },
+            ): Promise<ExcelAddinEvaluateCustomFunctionOutput> => {
                 const conn = await resolveActiveConnection();
-                return EvaluateCustomFunctionOnServer(conn, input);
+                return EvaluateCustomFunctionOnServer(conn, input, options);
             },
             {
                 ViewerScopeKey: readCurrentViewerScopeKey,
@@ -101,16 +151,27 @@ export function RegisterMjExcelCustomFunctions(customFunctionsOverride?: OfficeC
     );
     cf.associate(
         'VIEW',
-        (entityNameOrId: unknown, viewNameOrId?: unknown, filter?: unknown, includeHeaders?: unknown) =>
+        (
+            entityNameOrId: unknown,
+            viewNameOrId?: unknown,
+            filter?: unknown,
+            includeHeaders?: unknown,
+            invocation?: unknown,
+        ) =>
             coordinator.EvaluateView(
                 String(entityNameOrId ?? ''),
-                viewNameOrId !== undefined && viewNameOrId !== null ? String(viewNameOrId) : undefined,
+                viewNameOrId !== undefined && viewNameOrId !== null
+                    ? (viewNameOrId as string | ExcelCancelableInvocation)
+                    : undefined,
                 typeof filter === 'boolean'
                     ? filter
                     : filter !== undefined && filter !== null
-                      ? String(filter)
+                      ? (filter as string | ExcelCancelableInvocation)
                       : undefined,
-                typeof includeHeaders === 'boolean' ? includeHeaders : undefined,
+                typeof includeHeaders === 'boolean'
+                    ? includeHeaders
+                    : (includeHeaders as ExcelCancelableInvocation | undefined),
+                invocation as ExcelCancelableInvocation | undefined,
             ),
     );
     if (!customFunctionsOverride) {

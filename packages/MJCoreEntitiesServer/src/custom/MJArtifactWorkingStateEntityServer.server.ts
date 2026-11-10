@@ -1,9 +1,12 @@
 import {
     BaseEntity,
     BaseEntityResult,
+    CompositeKey,
     EntityDeleteOptions,
+    EntityPermissionType,
     EntitySaveOptions,
     GetDataHooks,
+    IEntityDataProvider,
     IMetadataProvider,
     Metadata,
     PostRunViewHook,
@@ -30,6 +33,12 @@ function isServerSystemUser(user: UserInfo | undefined | null): boolean {
         (systemUserId && UUIDsEqual(user.ID, systemUserId)) ||
             WellKnownUserSource.Instance.IsSystemUser(user)
     );
+}
+
+function isMetadataProvider(
+    provider: IEntityDataProvider | null | undefined
+): provider is IEntityDataProvider & IMetadataProvider {
+    return Boolean(provider && 'Entities' in provider);
 }
 
 function resolveTargetEntityName(params: RunViewParams): string {
@@ -67,10 +76,10 @@ function readWorkingStateArtifactId(row: unknown): string | null {
  * Server-side `PostRunView` data hook enforcing `ArtifactPermissionEngine` read authorization
  * on `MJ: Artifact Working States` (`B1`).
  *
- * Ordinary `UI` users already hold zero `EntityPermission` on `MJ: Artifact Working States`.
- * This hook adds defense-in-depth for elevated non-system callers (e.g., `Developer` / `Integration`
- * users) so no `RunView` or GraphQL view query can return `YjsState` rows for artifacts the caller
- * is not authorized to read via `ArtifactPermissionEngine`.
+ * `MJ: Artifact Working States` has `IncludeInAPI = 0` (`AllowCreateAPI = 0`, `AllowUpdateAPI = 0`,
+ * `AllowDeleteAPI = 0`) and is not exposed on the GraphQL schema. This hook adds defense-in-depth
+ * for in-process callers so no non-system `RunView` can return `YjsState` rows for artifacts the
+ * caller is not authorized to read via `ArtifactPermissionEngine`.
  */
 export const ArtifactWorkingStatePostRunViewHook: PostRunViewHook = async (
     params: RunViewParams,
@@ -161,42 +170,56 @@ export function EnsureArtifactWorkingStateReadHookRegistered(): void {
 EnsureArtifactWorkingStateReadHookRegistered();
 
 /**
- * Server-side entity subclass for `MJ: Artifact Working States` (`B1`).
+ * Server-side entity subclass for `MJ: Artifact Working States` (`B1` / Blocker 5).
  *
  * Enforces:
  * 1. **System-user-only writes/deletes**: `Save()` and `Delete()` reject any non-system-user caller
- *    so `MJ: Artifact Working States` checkpoints can only be written or compacted by
- *    `ArtifactCollaborationServer` under the server system user.
- * 2. **Artifact-permission-gated `Load()`**: Non-system-user callers attempting to `Load()` a
- *    working state row must hold `CanRead === true` on its parent `ArtifactID` via
+ *    so `MJ: Artifact Working States` checkpoints can only be written or deleted by
+ *    `ArtifactCollaborationServer` under the server system user, while permitting the server system
+ *    user to save/delete in-process even with `IncludeInAPI = 0` / `AllowCreateAPI = 0` /
+ *    `AllowUpdateAPI = 0` / `AllowDeleteAPI = 0`.
+ * 2. **Artifact-permission-gated `InnerLoad()` / `Load()`**: Non-system-user callers attempting to
+ *    load a working state row must hold `CanRead === true` on its parent `ArtifactID` via
  *    `ArtifactPermissionEngine`.
  */
 @RegisterClass(BaseEntity, 'MJ: Artifact Working States')
 export class MJArtifactWorkingStateEntityServer extends MJArtifactWorkingStateEntity {
+    public override CheckPermissions(type: EntityPermissionType, throwError: boolean): boolean {
+        if (isServerSystemUser(this.ContextCurrentUser)) {
+            return true;
+        }
+        if (
+            type === EntityPermissionType.Create ||
+            type === EntityPermissionType.Update ||
+            type === EntityPermissionType.Delete
+        ) {
+            if (throwError) {
+                throw new Error(
+                    `MJ: Artifact Working States is server-managed (${type} API disabled for non-system users).`
+                );
+            }
+            return false;
+        }
+        return super.CheckPermissions(type, throwError);
+    }
+
+    public override async InnerLoad(
+        compositeKey: CompositeKey,
+        EntityRelationshipsToLoad?: string[]
+    ): Promise<boolean> {
+        const loaded = await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        if (!loaded) {
+            return false;
+        }
+        return this.enforceArtifactReadPermission();
+    }
+
     public override async Load(ID: string, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
         const loaded = await super.Load(ID, EntityRelationshipsToLoad);
         if (!loaded) {
             return false;
         }
-        const actor = this.ContextCurrentUser;
-        if (isServerSystemUser(actor)) {
-            return true;
-        }
-        const provider = this.ProviderToUse as unknown as IMetadataProvider | undefined;
-        if (!actor || !provider || !this.ArtifactID) {
-            this.NewRecord();
-            return false;
-        }
-        const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
-            provider,
-            this.ArtifactID,
-            actor
-        );
-        if (!perms.CanRead) {
-            this.NewRecord();
-            return false;
-        }
-        return true;
+        return this.enforceArtifactReadPermission();
     }
 
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
@@ -229,5 +252,31 @@ export class MJArtifactWorkingStateEntityServer extends MJArtifactWorkingStateEn
             return false;
         }
         return super.Delete(options);
+    }
+
+    private async enforceArtifactReadPermission(): Promise<boolean> {
+        const actor = this.ContextCurrentUser;
+        if (isServerSystemUser(actor)) {
+            return true;
+        }
+        const provider = isMetadataProvider(this.ProviderToUse)
+            ? this.ProviderToUse
+            : actor
+              ? resolveProviderForUser(actor)
+              : null;
+        if (!actor || !provider || !this.ArtifactID) {
+            this.NewRecord();
+            return false;
+        }
+        const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+            provider,
+            this.ArtifactID,
+            actor
+        );
+        if (!perms.CanRead) {
+            this.NewRecord();
+            return false;
+        }
+        return true;
     }
 }

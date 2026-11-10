@@ -118,7 +118,7 @@ export interface PublishToConnectedDriveOptions {
   CurrentUser: UserInfo;
   Provider?: IMetadataProvider;
   StorageClientOverride?: Pick<GraphQLFileStorageClient, 'CreatePreAuthUploadUrl'> &
-    Partial<Pick<GraphQLFileStorageClient, 'ListObjects' | 'ObjectExists'>>;
+    Partial<Pick<GraphQLFileStorageClient, 'ListObjects' | 'ObjectExists' | 'SearchFiles'>>;
   UploadBytesOverride?: (uploadUrl: string, bytes: Uint8Array, mimeType: string) => Promise<void>;
   DownloadFileBytesOverride?: (params: {
     ArtifactVersionID?: string | null;
@@ -446,7 +446,7 @@ export class LibraryCreationService {
     }
 
     const storageClient =
-      options.StorageClientOverride ?? new GraphQLFileStorageClient(GraphQLDataProvider.Instance);
+      options.StorageClientOverride ?? this.createGraphQLFileStorageClient(md);
     const downloadUrl = await storageClient.CreatePreAuthDownloadUrl(options.AccountID, options.ObjectPath);
 
     const fetchBytes =
@@ -532,7 +532,7 @@ export class LibraryCreationService {
     const objectPath = cleanPrefix ? `${cleanPrefix}/${finalFileName}` : finalFileName;
 
     const storageClient =
-      options.StorageClientOverride ?? new GraphQLFileStorageClient(GraphQLDataProvider.Instance);
+      options.StorageClientOverride ?? this.createGraphQLFileStorageClient(options.Provider);
 
     if (!options.AllowOverwrite) {
       const alreadyExists = await this.remoteObjectExists(
@@ -905,26 +905,59 @@ export class LibraryCreationService {
     return new Uint8Array(await response.arrayBuffer());
   }
 
+  private createGraphQLFileStorageClient(provider?: IMetadataProvider): GraphQLFileStorageClient {
+    const targetProvider = (provider ?? Metadata.Provider ?? GraphQLDataProvider.Instance) as GraphQLDataProvider;
+    return new GraphQLFileStorageClient(targetProvider);
+  }
+
   private async remoteObjectExists(
     storageClient: Pick<GraphQLFileStorageClient, 'CreatePreAuthUploadUrl'> &
-      Partial<Pick<GraphQLFileStorageClient, 'ListObjects' | 'ObjectExists'>>,
+      Partial<Pick<GraphQLFileStorageClient, 'ListObjects' | 'ObjectExists' | 'SearchFiles'>>,
     accountId: string,
     cleanPrefix: string,
     fileName: string,
     objectPath: string,
   ): Promise<boolean> {
+    const lowerFileName = fileName.toLowerCase();
+    const lowerObjectPath = objectPath.toLowerCase();
+
+    if (typeof storageClient.ListObjects === 'function') {
+      const folderPrefix = cleanPrefix ? `${cleanPrefix}/` : '';
+      const listing = await storageClient.ListObjects(accountId, folderPrefix, '/');
+      const objects = listing.objects ?? [];
+      const foundInFolder = objects.some(
+        (obj) =>
+          !obj.isDirectory &&
+          (obj.name.toLowerCase() === lowerFileName || obj.fullPath.toLowerCase() === lowerObjectPath),
+      );
+      if (foundInFolder) {
+        return true;
+      }
+
+      // If the folder listing was truncated at provider page boundaries (>= 100 items),
+      // consult SearchFiles as well so case-insensitive collisions beyond page 1 are caught.
+      if (objects.length >= 100 && typeof storageClient.SearchFiles === 'function') {
+        const searchResponse = await storageClient.SearchFiles([accountId], fileName, {
+          maxResultsPerAccount: 100,
+        });
+        for (const accountResult of searchResponse?.accountResults ?? []) {
+          if (accountResult.success === false) {
+            throw new Error(accountResult.errorMessage || 'Failed to verify existing files in remote storage.');
+          }
+          for (const hit of accountResult.results ?? []) {
+            const hitName = (hit.name ?? '').toLowerCase();
+            const hitPath = (hit.path ?? '').replace(/^\/+/, '').toLowerCase();
+            if (hitName === lowerFileName && (!cleanPrefix || hitPath === lowerObjectPath || hitPath === lowerFileName)) {
+              return true;
+            }
+          }
+        }
+      }
+      return false;
+    }
+
     if (typeof storageClient.ObjectExists === 'function') {
       return storageClient.ObjectExists(accountId, objectPath);
-    }
-    if (typeof storageClient.ListObjects === 'function') {
-      const listing = await storageClient.ListObjects(
-        accountId,
-        cleanPrefix ? `${cleanPrefix}/` : '',
-        '/',
-      );
-      return (listing.objects ?? []).some(
-        (obj) => !obj.isDirectory && (obj.name === fileName || obj.fullPath === objectPath),
-      );
     }
     return false;
   }

@@ -19,9 +19,11 @@ describe('Excel Custom Functions (=MJ.QUERY & =MJ.VIEW, § 7.1/7.2 & O8)', () =>
         expect(meta.functions[1].result.dimensionality).toBe('matrix');
     });
 
-    it('parses key=value and positional arguments for =MJ.QUERY', () => {
+    it('parses key=value and positional arguments for =MJ.QUERY and preserves leading-zero strings', () => {
         const parsed = ParseExcelQueryFunctionArguments('Renewals by Month', [
             'Year=2026',
+            'Zip=01234',
+            'Zero=0',
             'Active=TRUE',
             [['Region=West', 500]],
         ]);
@@ -30,6 +32,8 @@ describe('Excel Custom Functions (=MJ.QUERY & =MJ.VIEW, § 7.1/7.2 & O8)', () =>
             Target: 'Renewals by Month',
             Parameters: {
                 Year: 2026,
+                Zip: '01234',
+                Zero: 0,
                 Active: true,
                 Region: 'West',
             },
@@ -37,7 +41,15 @@ describe('Excel Custom Functions (=MJ.QUERY & =MJ.VIEW, § 7.1/7.2 & O8)', () =>
         });
     });
 
-    it('formats scalar and multi-row spill matrices cleanly', () => {
+    it('formats scalar, empty, and multi-row spill matrices cleanly without coercing empty results to 0', () => {
+        const emptyNoHeaders = FormatRowsForExcelCustomFunction(
+            [{ Name: 'Total', Header: 'Total', DataType: 'Number' }],
+            [],
+            false,
+        );
+        expect(emptyNoHeaders.ScalarValue).toBe('');
+        expect(emptyNoHeaders.Matrix).toEqual([['']]);
+
         const scalar = FormatRowsForExcelCustomFunction(
             [{ Name: 'Total', Header: 'Total', DataType: 'Number' }],
             [{ Total: 42500 }],
@@ -156,6 +168,44 @@ describe('Excel Custom Functions (=MJ.QUERY & =MJ.VIEW, § 7.1/7.2 & O8)', () =>
             'filter',
             'includeHeaders',
         ]);
+
+        // 7. Rejects invalid or unsafe filter expressions in =MJ.VIEW with #VALUE! instead of silently ignoring them
+        const badFilterRes = await viewCoordinator.EvaluateView('Members', 'Active Members', "Status LIKE '%Active%'");
+        expect(String(badFilterRes[0][0])).toContain('#VALUE!');
+        const sqlInjFilterRes = await viewCoordinator.EvaluateView('Members', 'Active Members', "Status='Active'; DROP TABLE Users");
+        expect(String(sqlInjFilterRes[0][0])).toContain('#VALUE!');
+    });
+
+    it('enforces bounded cache size (MaxCacheEntries) and propagates invocation.onCanceled to AbortSignal', async () => {
+        let observedSignal: AbortSignal | undefined;
+        const coord = new ExcelCustomFunctionCoordinator(
+            async (inp, opts) => {
+                observedSignal = opts?.signal;
+                return {
+                    Columns: [{ Name: 'Val', Header: 'Val', DataType: 'Number' }],
+                    Matrix: [[Number(inp.Target.replace('Q', '')) || 1]],
+                    ScalarValue: 1,
+                    TotalRowCount: 1,
+                };
+            },
+            {
+                ViewerScopeKey: () => 'viewer-1',
+                MaxCacheEntries: 3,
+            },
+        );
+
+        await coord.EvaluateQuery('Q1');
+        await coord.EvaluateQuery('Q2');
+        await coord.EvaluateQuery('Q3');
+        await coord.EvaluateQuery('Q4');
+        expect(coord.CacheSize).toBe(3);
+
+        const invocation: { onCanceled?: () => void } = {};
+        await coord.EvaluateQuery('Q5', 'Year=2026', invocation);
+        expect(typeof invocation.onCanceled).toBe('function');
+        expect(observedSignal?.aborted).toBe(false);
+        invocation.onCanceled?.();
+        expect(observedSignal?.aborted).toBe(true);
     });
 
     it('associates QUERY and VIEW callbacks via RegisterMjExcelCustomFunctions (A5)', () => {

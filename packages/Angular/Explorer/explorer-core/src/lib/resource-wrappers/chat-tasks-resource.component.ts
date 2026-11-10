@@ -1,10 +1,10 @@
 import { Component, ViewEncapsulation, OnDestroy, ViewChild } from '@angular/core';
 import { CompositeKey, UserInfo } from '@memberjunction/core';
-import { EscapeSQLString, RegisterClass } from '@memberjunction/global';
+import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
-import { BuildConversationTasksFilter, TasksFullViewComponent } from '@memberjunction/ng-conversations';
+import { BuildAgentBackedTaskExtraFilter, TasksFullViewComponent } from '@memberjunction/ng-conversations';
 /**
  * Chat Agent Activity Resource (`ChatTasksResource`) — displays live multi-agent orchestrations,
  * step dependency DAGs, and background agent activity launched from conversations.
@@ -76,34 +76,24 @@ export class ChatTasksResource extends BaseResourceComponent implements OnDestro
   public activeTaskId?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   /**
-   * Default synchronous fallback filter scoping `MJ: Tasks` to top-level tasks owned by the user
-   * or originated from conversations / agents so human deliverables from other apps do not bleed in.
+   * Server-side SQL subquery `ExtraFilter` scoping `MJ: Tasks` to agent-backed and conversation-linked
+   * workflows without running client-side `IgnoreMaxRows` `RunView` round-trips on 4-second polling
+   * and without restricting to `UserID = '${currentUserId}'`, so managers and admins see all readable
+   * agent-backed tasks while non-agent human deliverables from other apps are excluded.
    */
   public get AgentActivityBaseFilter(): string {
-    const userClause = this.CurrentUser?.ID
-      ? `UserID = '${EscapeSQLString(this.CurrentUser.ID)}' OR `
-      : '';
-    return `ParentID IS NULL AND (${userClause}ConversationDetailID IS NOT NULL OR AgentID IS NOT NULL OR AgentRunID IS NOT NULL)`;
+    return BuildAgentBackedTaskExtraFilter(this.ProviderToUse);
   }
 
   /**
-   * Resolves the user-scoped conversation + agent activity filter for `TasksFullViewComponent`,
-   * preserving the user's own top-level tasks (`UserID`) and any task surfaced by Chat search.
+   * Resolves the server-side SQL subquery filter for `TasksFullViewComponent` without client-side
+   * `IgnoreMaxRows` round-trips.
    */
   public readonly AgentActivityFilterResolver: () => Promise<string> = () =>
     this.ResolveAgentActivityFilter();
 
   public async ResolveAgentActivityFilter(): Promise<string> {
-    if (!this.CurrentUser) {
-      return this.AgentActivityBaseFilter;
-    }
-    const safeUserId = EscapeSQLString(this.CurrentUser.ID);
-    const userConversationFilter = await BuildConversationTasksFilter(this.ProviderToUse, this.CurrentUser);
-    const tasksEntity = this.ProviderToUse.EntityByName('MJ: Tasks');
-    const childStepClause = tasksEntity
-      ? ` OR ID IN (SELECT [ParentID] FROM [${tasksEntity.SchemaName}].[${tasksEntity.BaseView}] WHERE [ParentID] IS NOT NULL AND ([UserID] = '${safeUserId}' OR [AgentID] IS NOT NULL OR [AgentRunID] IS NOT NULL OR [ConversationDetailID] IS NOT NULL))`
-      : '';
-    return `(${userConversationFilter}) AND (UserID = '${safeUserId}' OR ConversationDetailID IS NOT NULL OR AgentID IS NOT NULL OR AgentRunID IS NOT NULL${childStepClause})`;
+    return BuildAgentBackedTaskExtraFilter(this.ProviderToUse);
   }
 
   ngOnInit() {

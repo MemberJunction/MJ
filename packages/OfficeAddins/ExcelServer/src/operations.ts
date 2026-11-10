@@ -277,31 +277,45 @@ function buildSafeViewExtraFilter(entity: EntityInfo, user: UserInfo, rawFilter:
         throw new ExcelSourceError('Unsafe SQL filter expression refused in =MJ.VIEW.');
     }
 
-    const eqMatch = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:'((?:''|[^'])*)'|"([^"]*)"|([+-]?\d+(?:\.\d+)?)|(TRUE|FALSE))$/i.exec(trimmed);
-    if (!eqMatch) {
-        throw new ExcelSourceError('Only simple Field=\'Value\' equality filters are permitted in =MJ.VIEW.');
-    }
-
-    const fieldName = eqMatch[1];
-    const matchedField = entity.Fields.find(f => f.Name.toLowerCase() === fieldName.toLowerCase());
-    if (!matchedField) {
-        throw new ExcelSourceError(`The entity "${entity.DisplayNameOrName}" has no field "${fieldName}".`);
-    }
+    const clauses = trimmed.split(/\s+AND\s+/i);
     const denied = entity.GetDeniedReadFields ? entity.GetDeniedReadFields(user) : new Set<string>();
-    for (const d of denied) {
-        if (d.toLowerCase() === matchedField.Name.toLowerCase()) {
-            throw new ExcelSourceError(`You do not have permission to filter on field "${matchedField.Name}".`);
+    const safeClauses: string[] = [];
+
+    for (const rawClause of clauses) {
+        const clause = rawClause.trim();
+        const cmpMatch =
+            /^([A-Za-z_][A-Za-z0-9_]*)\s*(=|!=|<>|<=|>=|<|>)\s*(?:'((?:''|[^'])*)'|"([^"]*)"|([+-]?\d+(?:\.\d+)?)|(TRUE|FALSE))$/i.exec(
+                clause,
+            );
+        if (!cmpMatch) {
+            throw new ExcelSourceError(
+                'Only simple Field <op> Value comparison filters (joined by AND) are permitted in =MJ.VIEW.',
+            );
+        }
+
+        const fieldName = cmpMatch[1];
+        const op = cmpMatch[2] === '!=' ? '<>' : cmpMatch[2];
+        const matchedField = entity.Fields.find(f => f.Name.toLowerCase() === fieldName.toLowerCase());
+        if (!matchedField) {
+            throw new ExcelSourceError(`The entity "${entity.DisplayNameOrName}" has no field "${fieldName}".`);
+        }
+        for (const d of denied) {
+            if (d.toLowerCase() === matchedField.Name.toLowerCase()) {
+                throw new ExcelSourceError(`You do not have permission to filter on field "${matchedField.Name}".`);
+            }
+        }
+
+        if (cmpMatch[5] !== undefined) {
+            safeClauses.push(`${matchedField.Name} ${op} ${Number(cmpMatch[5])}`);
+        } else if (cmpMatch[6] !== undefined) {
+            safeClauses.push(`${matchedField.Name} ${op} ${cmpMatch[6].toUpperCase() === 'TRUE' ? 1 : 0}`);
+        } else {
+            const strVal = cmpMatch[3] !== undefined ? cmpMatch[3].replace(/''/g, "'") : (cmpMatch[4] ?? '');
+            safeClauses.push(`${matchedField.Name} ${op} '${EscapeSQLString(strVal)}'`);
         }
     }
 
-    if (eqMatch[4] !== undefined) {
-        return `${matchedField.Name} = ${Number(eqMatch[4])}`;
-    }
-    if (eqMatch[5] !== undefined) {
-        return `${matchedField.Name} = ${eqMatch[5].toUpperCase() === 'TRUE' ? 1 : 0}`;
-    }
-    const strVal = eqMatch[2] !== undefined ? eqMatch[2].replace(/''/g, "'") : (eqMatch[3] ?? '');
-    return `${matchedField.Name} = '${EscapeSQLString(strVal)}'`;
+    return safeClauses.join(' AND ');
 }
 
 /** A file name safe on every desktop platform, from the first source's name. */

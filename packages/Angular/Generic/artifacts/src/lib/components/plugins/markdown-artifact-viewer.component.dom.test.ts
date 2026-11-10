@@ -767,4 +767,71 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
     expect(roRoot.querySelector('[data-testid="mode-suggest-btn"]')).toBeNull();
     expect(roRoot.querySelector('[data-testid="save-doc-version-btn"]')).toBeNull();
   });
+
+  it('renders Unverified Snapshot warning without attribution when SnapshotContentHash is missing/tampered (Blocker 3) and wires dispatchAgentCommentMention modes', async () => {
+    const unverifiedFrozenDoc = [
+      '# Governance Report',
+      '',
+      ':::mj-block',
+      JSON.stringify({
+        BlockID: 'blk-tampered-1',
+        Kind: 'EntityView',
+        Mode: 'Frozen',
+        EntityName: 'MJ: Projects',
+        FrozenSnapshot: {
+          FrozenAt: '2026-11-10T12:00:00.000Z',
+          FrozenByUserID: 'u-spoofed',
+          FrozenByUserName: 'Spoofed CFO',
+          Columns: [{ Name: 'Name', DisplayName: 'Name' }],
+          Rows: [{ Name: 'Tampered Row' }],
+          TotalRowCount: 1,
+          SecurityWarningAcknowledged: true,
+        },
+      }),
+      ':::',
+    ].join('\n');
+
+    const mock = createDocsMockProvider();
+    const f = await renderDocsViewer(unverifiedFrozenDoc, false, mock.provider);
+    const root = f.nativeElement as HTMLElement;
+    const comp = f.componentInstance;
+
+    const warningBanner = root.querySelector('[data-testid="unverified-snapshot-banner"]');
+    expect(warningBanner).not.toBeNull();
+    expect(warningBanner?.textContent).toContain('Unverified Snapshot — signature missing or invalid');
+    expect(warningBanner?.textContent).not.toContain('Spoofed CFO');
+    expect(root.querySelector('[data-testid="frozen-provenance-banner"]')).toBeNull();
+
+    // Verify dispatchAgentCommentMention modes ('comment' | 'suggest' | 'edit')
+    const firstSeg = comp.DocumentSegments[0];
+    comp.OpenAnchorCommentForSegment(firstSeg);
+    comp.NewCommentAgentMode = 'comment';
+    comp.NewCommentText = 'What do you think @Assistant?';
+    await comp.PostAnchoredComment();
+    const thread = comp.AnchoredThreads[0];
+
+    comp.dispatchAgentCommentMention(thread, 'Assistant', {
+      replyMessage: 'Looks well structured.',
+      proposedMarkdown: '# Should Not Apply In Comment Mode',
+    });
+    expect(thread.Messages).toHaveLength(2);
+    expect(comp.PendingSuggestionsCount).toBe(0);
+    expect(comp.MarkdownContent).toContain('# Governance Report');
+
+    thread.AgentMode = 'suggest';
+    comp.dispatchAgentCommentMention(thread, 'Assistant', {
+      replyMessage: 'Here is a suggested title.',
+      proposedMarkdown: '# Governance Report — Q4',
+      rationale: 'Add quarter',
+    });
+    expect(comp.PendingSuggestionsCount).toBe(1);
+    expect(comp.MarkdownContent).toContain('# Governance Report');
+
+    thread.AgentMode = 'edit';
+    comp.dispatchAgentCommentMention(thread, 'Assistant', {
+      replyMessage: 'Applied title update.',
+      proposedMarkdown: '# Governance Report — Final',
+    });
+    expect(comp.MarkdownContent).toContain('# Governance Report — Final');
+  });
 });

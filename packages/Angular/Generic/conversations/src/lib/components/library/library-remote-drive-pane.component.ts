@@ -1071,6 +1071,7 @@ export class LibraryRemoteDrivePaneComponent extends BaseAngularComponent implem
   }
 
   private getStorageClient(): GraphQLFileStorageClient {
-    return this.StorageClientOverride ?? new GraphQLFileStorageClient(GraphQLDataProvider.Instance);
+    const targetProvider = (this.ProviderToUse ?? GraphQLDataProvider.Instance) as GraphQLDataProvider;
+    return this.StorageClientOverride ?? new GraphQLFileStorageClient(targetProvider);
   }
 }

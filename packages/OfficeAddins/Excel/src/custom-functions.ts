@@ -22,11 +22,19 @@ export const EXCEL_CUSTOM_FUNCTION_MAX_CONCURRENCY = 5;
 /** Default per-viewer TTL cache duration for custom function evaluations (60 seconds). */
 export const EXCEL_CUSTOM_FUNCTION_CACHE_TTL_MS = 60_000;
 
+/** Maximum number of entries retained in the custom function result cache. */
+export const EXCEL_CUSTOM_FUNCTION_MAX_CACHE_ENTRIES = 250;
+
 /** Canonical error string returned into a cell when the signed-in user lacks permission. */
 export const EXCEL_CUSTOM_FUNCTION_ACCESS_DENIED = '#MJ_ACCESS_DENIED!';
 
 /** Canonical error string returned when the workbook has not yet connected to MemberJunction. */
 export const EXCEL_CUSTOM_FUNCTION_AUTH_REQUIRED = '#MJ_SIGN_IN_REQUIRED!';
+
+/** Office.js `CustomFunctions.CancelableInvocation` shape passed as the final argument when `cancelable: true`. */
+export interface ExcelCancelableInvocation {
+    onCanceled?: () => void;
+}
 
 /** Input payload for the `ExcelAddin.EvaluateCustomFunction` Remote Operation. */
 export interface ExcelAddinEvaluateCustomFunctionInput {
@@ -247,8 +255,43 @@ function appendSingleQueryArg(
 function coercePrimitiveParameter(valStr: string): ExcelParameterValue {
     if (valStr.toUpperCase() === 'TRUE') return true;
     if (valStr.toUpperCase() === 'FALSE') return false;
+    // Preserve leading-zero strings such as postal codes or IDs ("01234", "-0123") as strings
+    if (/^[+-]?0\d+$/.test(valStr)) return valStr;
     if (valStr !== '' && !Number.isNaN(Number(valStr))) return Number(valStr);
     return valStr;
+}
+
+/**
+ * Validates that a non-empty `=MJ.VIEW` filter is a safe comparison expression (`Field <op> Value` joined by `AND`).
+ * Throws an error (`#VALUE!`) if the filter is malformed or contains SQL comments/statements.
+ */
+export function ValidateExcelViewFilter(rawFilter: string | undefined): string | undefined {
+    const trimmed = (rawFilter ?? '').trim();
+    if (!trimmed) {
+        return undefined;
+    }
+    if (
+        /;|--|\/\*|\*\/|\b(SELECT|UNION|DROP|DELETE|UPDATE|INSERT|EXEC|EXECUTE|ALTER|CREATE|TRUNCATE|MERGE|GRANT|REVOKE|WAITFOR|OPENROWSET)\b/i.test(
+            trimmed,
+        ) ||
+        /\bxp_[A-Za-z0-9_]*/i.test(trimmed)
+    ) {
+        throw new Error('#VALUE! Unsafe SQL filter expression refused in =MJ.VIEW.');
+    }
+    const clauses = trimmed.split(/\s+AND\s+/i);
+    for (const rawClause of clauses) {
+        const clause = rawClause.trim();
+        const cmpMatch =
+            /^([A-Za-z_][A-Za-z0-9_]*)\s*(=|!=|<>|<=|>=|<|>)\s*(?:'((?:''|[^'])*)'|"([^"]*)"|([+-]?\d+(?:\.\d+)?)|(TRUE|FALSE))$/i.exec(
+                clause,
+            );
+        if (!cmpMatch) {
+            throw new Error(
+                '#VALUE! Invalid filter syntax in =MJ.VIEW. Use Field=\'Value\' or Field > 100 (joined by AND).',
+            );
+        }
+    }
+    return trimmed;
 }
 
 /**
@@ -273,7 +316,7 @@ export function FormatRowsForExcelCustomFunction(
                 ScalarValue: null
             };
         }
-        return { Matrix: [[0]], ScalarValue: 0 };
+        return { Matrix: [['']], ScalarValue: '' };
     }
 
     // 1x1 scalar result when headers are not explicitly requested
@@ -304,13 +347,23 @@ function toExcelScalar(value: unknown): ExcelCellValue {
     return JSON.stringify(value);
 }
 
+function isCancelableInvocation(candidate: unknown): candidate is ExcelCancelableInvocation {
+    return (
+        candidate !== null &&
+        typeof candidate === 'object' &&
+        !Array.isArray(candidate) &&
+        !(candidate instanceof Date)
+    );
+}
+
 /**
  * Viewer-scoped batching and caching coordinator for Excel `=MJ.QUERY(...)` and `=MJ.VIEW(...)` calls.
  *
  * Enforces:
- * - Per-connection (viewer-scoped) 60-second TTL cache (`viewerCacheKey + requestJson`)
+ * - Per-connection (viewer-scoped) 60-second TTL cache (`viewerCacheKey + requestJson`) bounded to 250 entries
  * - Request deduplication when multiple cells evaluate the identical formula simultaneously
  * - Bounded concurrency (`maxConcurrency = 5`) so a sheet with 50 `=MJ.QUERY` cells never floods MJAPI
+ * - `invocation.onCanceled` -> `AbortController` propagation
  */
 export class ExcelCustomFunctionCoordinator {
     private cache = new Map<string, { ExpiresAt: number; Output: ExcelAddinEvaluateCustomFunctionOutput }>();
@@ -320,12 +373,14 @@ export class ExcelCustomFunctionCoordinator {
 
     public constructor(
         private readonly executor: (
-            input: ExcelAddinEvaluateCustomFunctionInput
+            input: ExcelAddinEvaluateCustomFunctionInput,
+            options?: { signal?: AbortSignal }
         ) => Promise<ExcelAddinEvaluateCustomFunctionOutput>,
         private readonly options: {
             ViewerScopeKey?: () => string;
             CacheTtlMs?: number;
             MaxConcurrency?: number;
+            MaxCacheEntries?: number;
         } = {}
     ) {}
 
@@ -334,55 +389,85 @@ export class ExcelCustomFunctionCoordinator {
         this.cache.clear();
     }
 
+    /** Current number of cached responses (exposed for diagnostics and testing). */
+    public get CacheSize(): number {
+        return this.cache.size;
+    }
+
     /** Evaluates `=MJ.QUERY(queryNameOrId, ...args)` and returns a 2D spill matrix. */
     public async EvaluateQuery(queryNameOrId: string, ...args: unknown[]): Promise<ExcelCellValue[][]> {
         try {
-            const input = ParseExcelQueryFunctionArguments(queryNameOrId, args);
-            const out = await this.evaluateInput(input);
+            let invocation: ExcelCancelableInvocation | undefined;
+            const cleanArgs = [...args];
+            if (cleanArgs.length > 0 && isCancelableInvocation(cleanArgs[cleanArgs.length - 1])) {
+                invocation = cleanArgs.pop() as ExcelCancelableInvocation;
+            }
+            const input = ParseExcelQueryFunctionArguments(queryNameOrId, cleanArgs);
+            const out = await this.evaluateInput(input, invocation);
             return out.Matrix;
         } catch (err) {
-            return [[this.mapErrorToCellCode(err)]];
+            return this.handleCustomFunctionError(err);
         }
     }
 
-    /** Evaluates `=MJ.VIEW(entityNameOrId, viewNameOrId?, filterOrIncludeHeaders?, includeHeaders?)` and returns a 2D spill matrix. */
+    /** Evaluates `=MJ.VIEW(entityNameOrId, viewNameOrId?, filterOrIncludeHeaders?, includeHeaders?, invocation?)` and returns a 2D spill matrix. */
     public async EvaluateView(
         entityNameOrId: string,
-        viewNameOrId?: string,
-        filterOrIncludeHeaders?: string | boolean,
-        includeHeaders?: boolean
+        viewNameOrId?: string | ExcelCancelableInvocation,
+        filterOrIncludeHeaders?: string | boolean | ExcelCancelableInvocation,
+        includeHeaders?: boolean | ExcelCancelableInvocation,
+        invocationArg?: ExcelCancelableInvocation
     ): Promise<ExcelCellValue[][]> {
         try {
+            let invocation = invocationArg;
+            let actualViewNameOrId = viewNameOrId;
+            let actualFilterOrInclude = filterOrIncludeHeaders;
+            let actualIncludeHeaders = includeHeaders;
+
+            if (isCancelableInvocation(actualIncludeHeaders)) {
+                invocation = actualIncludeHeaders;
+                actualIncludeHeaders = undefined;
+            }
+            if (isCancelableInvocation(actualFilterOrInclude)) {
+                invocation = actualFilterOrInclude;
+                actualFilterOrInclude = undefined;
+            }
+            if (isCancelableInvocation(actualViewNameOrId)) {
+                invocation = actualViewNameOrId;
+                actualViewNameOrId = undefined;
+            }
+
             const target = String(entityNameOrId ?? '').trim();
             if (!target) {
                 throw new Error('Specify an Entity name or ID in =MJ.VIEW.');
             }
             let filter: string | undefined;
             let resolvedIncludeHeaders: boolean;
-            if (typeof filterOrIncludeHeaders === 'boolean') {
+            if (typeof actualFilterOrInclude === 'boolean') {
                 filter = undefined;
-                resolvedIncludeHeaders = filterOrIncludeHeaders;
+                resolvedIncludeHeaders = actualFilterOrInclude;
             } else {
-                const rawFilter = typeof filterOrIncludeHeaders === 'string' ? filterOrIncludeHeaders.trim() : '';
-                filter = rawFilter.length > 0 ? rawFilter : undefined;
-                resolvedIncludeHeaders = includeHeaders ?? true;
+                const rawFilter = typeof actualFilterOrInclude === 'string' ? actualFilterOrInclude.trim() : '';
+                filter = ValidateExcelViewFilter(rawFilter);
+                resolvedIncludeHeaders = typeof actualIncludeHeaders === 'boolean' ? actualIncludeHeaders : true;
             }
             const input: ExcelAddinEvaluateCustomFunctionInput = {
                 Kind: 'View',
                 Target: target,
-                ViewNameOrId: viewNameOrId ? String(viewNameOrId).trim() : undefined,
+                ViewNameOrId: actualViewNameOrId ? String(actualViewNameOrId).trim() : undefined,
                 Filter: filter,
                 IncludeHeaders: Boolean(resolvedIncludeHeaders)
             };
-            const out = await this.evaluateInput(input);
+            const out = await this.evaluateInput(input, invocation);
             return out.Matrix;
         } catch (err) {
-            return [[this.mapErrorToCellCode(err)]];
+            return this.handleCustomFunctionError(err);
         }
     }
 
     private async evaluateInput(
-        input: ExcelAddinEvaluateCustomFunctionInput
+        input: ExcelAddinEvaluateCustomFunctionInput,
+        invocation?: ExcelCancelableInvocation
     ): Promise<ExcelAddinEvaluateCustomFunctionOutput> {
         const viewerScope = this.options.ViewerScopeKey ? this.options.ViewerScopeKey() : 'default';
         if (!viewerScope) {
@@ -396,14 +481,34 @@ export class ExcelCustomFunctionCoordinator {
         if (cached && cached.ExpiresAt > now) {
             return cached.Output;
         }
+        if (cached) {
+            this.cache.delete(cacheKey);
+        }
 
-        const existingPromise = this.inFlight.get(cacheKey);
+        const existingPromise = !invocation ? this.inFlight.get(cacheKey) : undefined;
         if (existingPromise) {
             return existingPromise;
         }
 
+        const abortController = new AbortController();
+        if (invocation) {
+            invocation.onCanceled = () => {
+                abortController.abort();
+            };
+        }
+
         const promise = this.runWithConcurrencyLimit(async () => {
-            const output = await this.executor(input);
+            if (abortController.signal.aborted) {
+                throw new Error('Request canceled by Excel.');
+            }
+            const output = await this.executor(input, { signal: abortController.signal });
+            const maxEntries = Math.max(1, this.options.MaxCacheEntries ?? EXCEL_CUSTOM_FUNCTION_MAX_CACHE_ENTRIES);
+            if (!this.cache.has(cacheKey) && this.cache.size >= maxEntries) {
+                const oldestKey = this.cache.keys().next().value;
+                if (oldestKey !== undefined) {
+                    this.cache.delete(oldestKey);
+                }
+            }
             this.cache.set(cacheKey, { ExpiresAt: Date.now() + ttl, Output: output });
             return output;
         }).finally(() => {
@@ -429,8 +534,30 @@ export class ExcelCustomFunctionCoordinator {
         }
     }
 
+    private handleCustomFunctionError(err: unknown): ExcelCellValue[][] {
+        const cellCode = this.mapErrorToCellCode(err);
+        const cfGlobal = (
+            globalThis as {
+                CustomFunctions?: {
+                    Error?: new (code: string, message?: string) => Error;
+                    ErrorCode?: { invalidValue?: string; notAvailable?: string };
+                };
+            }
+        ).CustomFunctions;
+        if (cfGlobal && typeof cfGlobal.Error === 'function') {
+            const code = cellCode.startsWith('#VALUE!')
+                ? (cfGlobal.ErrorCode?.invalidValue ?? '#VALUE!')
+                : (cfGlobal.ErrorCode?.notAvailable ?? '#N/A');
+            throw new cfGlobal.Error(code, cellCode);
+        }
+        return [[cellCode]];
+    }
+
     private mapErrorToCellCode(err: unknown): string {
         const msg = err instanceof Error ? err.message : String(err);
+        if (msg.startsWith('#VALUE!')) {
+            return msg.slice(0, 80);
+        }
         if (msg === EXCEL_CUSTOM_FUNCTION_AUTH_REQUIRED || /sign in|not authenticated|no connection/i.test(msg)) {
             return EXCEL_CUSTOM_FUNCTION_AUTH_REQUIRED;
         }

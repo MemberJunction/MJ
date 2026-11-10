@@ -9,9 +9,11 @@ import {
     DocumentBlockSpec,
     DocumentLiveBlockEngine,
     MJArtifactEntity,
-    MJArtifactVersionEntity
+    MJArtifactVersionEntity,
+    ValidateFrozenBlockSnapshot
 } from '@memberjunction/core-entities';
 import { ApiRoute } from '../apiRoot.js';
+import { configInfo } from '../config.js';
 import {
     ARTIFACT_COLLABORATION_WS_PATH,
     ArtifactCollaborationServer
@@ -31,6 +33,9 @@ export class CollaborationTicketResult {
     WsPath?: string;
 
     @Field({ nullable: true })
+    WsUrl?: string;
+
+    @Field({ nullable: true })
     ExpiresAt?: string;
 
     @Field()
@@ -38,6 +43,18 @@ export class CollaborationTicketResult {
 
     @Field()
     CanEdit: boolean;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string;
+}
+
+@ObjectType()
+export class VerifyFrozenBlockSnapshotOutput {
+    @Field()
+    Valid: boolean;
+
+    @Field()
+    SnapshotVerified: boolean;
 
     @Field({ nullable: true })
     ErrorMessage?: string;
@@ -199,14 +216,26 @@ export class DocumentCollaborationResolver extends ResolverBase {
             ApiKeyHash: context.userPayload.apiKeyHash
         });
 
+        const wsPath = ApiRoute(ARTIFACT_COLLABORATION_WS_PATH);
+        const wsUrl = ApiRoute(ARTIFACT_COLLABORATION_WS_PATH, { absolute: true }).replace(/^http/i, 'ws');
+
         return {
             Success: true,
             Ticket: issued.Ticket,
-            WsPath: ApiRoute(ARTIFACT_COLLABORATION_WS_PATH),
+            WsPath: wsPath,
+            WsUrl: wsUrl,
             ExpiresAt: issued.ExpiresAt,
             CanRead: true,
             CanEdit: effectiveCanEdit
         };
+    }
+
+    @Query(() => ArtifactPermissionsOutput)
+    async ResolveArtifactPermissions(
+        @Arg('artifactId') artifactId: string,
+        @Ctx() context: AppContext
+    ): Promise<ArtifactPermissionsOutput> {
+        return await this.ResolveArtifactUserPermissions(artifactId, context);
     }
 
     @Query(() => ArtifactPermissionsOutput)
@@ -231,6 +260,34 @@ export class DocumentCollaborationResolver extends ResolverBase {
 
         const provider = this.resolveProvider(context);
         return await ArtifactPermissionEngine.Instance.ResolvePermissions(provider, artifactId, user);
+    }
+
+    @Query(() => VerifyFrozenBlockSnapshotOutput)
+    async VerifyFrozenBlockSnapshot(
+        @Arg('specJson') specJson: string
+    ): Promise<VerifyFrozenBlockSnapshotOutput> {
+        try {
+            const spec = JSON.parse(specJson) as DocumentBlockSpec;
+            if (!spec || spec.Mode !== 'Frozen' || !spec.FrozenSnapshot) {
+                return {
+                    Valid: false,
+                    SnapshotVerified: false,
+                    ErrorMessage: 'Block is not a frozen snapshot.'
+                };
+            }
+            const validation = ValidateFrozenBlockSnapshot(spec.FrozenSnapshot);
+            return {
+                Valid: validation.Valid,
+                SnapshotVerified: validation.SnapshotVerified,
+                ErrorMessage: validation.ErrorMessage
+            };
+        } catch (err) {
+            return {
+                Valid: false,
+                SnapshotVerified: false,
+                ErrorMessage: err instanceof Error ? err.message : String(err)
+            };
+        }
     }
 
     @Query(() => DocumentLiveBlockResultOutput)
