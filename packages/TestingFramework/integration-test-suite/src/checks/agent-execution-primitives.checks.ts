@@ -39,11 +39,12 @@ import {
     BuildActionOutputObject,
     CompileFlowToTaskGraph,
     ConvertTaskGraphToAgentSpec,
+    TASK_GRAPH_RUNTIME_SECURITY_OPERATION,
     type FlowCompilerPath,
     type FlowCompilerStep,
     type TaskGraphSpec,
 } from '@memberjunction/ai-core-plus';
-import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { RunView, ServerOperationScopeManager, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import {
     MJAIAgentRunEntity,
     MJTaskDependencyEntity,
@@ -265,8 +266,12 @@ export async function DeleteTaskGraphsAndLogs(
                 { EntityName: 'MJ: Task Dependencies', ExtraFilter: `TaskID IN (${ids}) OR DependsOnTaskID IN (${ids})`, ResultType: 'entity_object', BypassCache: true },
                 ctx.User,
             );
+            // A workflow's edges are the task-graph service's (`MJTaskDependencyEntityServer`): removed as it would.
             for (const dep of depRes.Results ?? []) {
-                await dep.Delete().catch(() => false);
+                await ServerOperationScopeManager.Instance.RunWithAuthority(
+                    { operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION, source: 'ServerEngine', allowedEntities: ['MJ: Task Dependencies'], userId: ctx.User.ID },
+                    () => dep.Delete(),
+                ).catch(() => false);
             }
         }
         for (const child of children) {

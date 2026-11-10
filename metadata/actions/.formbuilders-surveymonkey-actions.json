@@ -2140,7 +2140,10 @@
       "DriverClass": "CreateSurveyMonkeyAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-plus-circle"
+      "IconClass": "fa-solid fa-plus-circle",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -2467,7 +2470,10 @@
       "DriverClass": "UpdateSurveyMonkeyAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-pen-to-square"
+      "IconClass": "fa-solid fa-pen-to-square",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [

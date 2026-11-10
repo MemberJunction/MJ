@@ -9909,6 +9909,23 @@ export const MJActionSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
         * * Description: Optional reference to the AI Agent that authored this action — populated when an agent (e.g. ActionSmith) dynamically generates a Runtime action. NULL for human-authored Custom/Generated actions. Provides an audit trail linking agent-generated capabilities back to their creator.`),
+    CompensationActionID: z.string().nullable().describe(`
+        * * Field Name: CompensationActionID
+        * * Display Name: Compensation Action ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)
+        * * Description: Action that undoes this action when a saga rolls back a failed task graph. A task-graph node's own compensation spec overrides it.`),
+    CompensationInputMapping: z.string().nullable().describe(`
+        * * Field Name: CompensationInputMapping
+        * * Display Name: Compensation Input Mapping
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object mapping each compensation action parameter name to a path in the forward run: input.<param>, output.<param>, actionLogId or recordChanges.`),
+    IsIdempotent: z.boolean().describe(`
+        * * Field Name: IsIdempotent
+        * * Display Name: Is Idempotent
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: True when running the action twice with the same input has the same effect as running it once, so a failed attempt may be retried and a compensation replayed automatically.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category Name
@@ -9929,6 +9946,10 @@ export const MJActionSchema = z.object({
         * * Field Name: CreatedByAgent
         * * Display Name: Created By Agent Name
         * * SQL Data Type: nvarchar(255)`),
+    CompensationAction: z.string().nullable().describe(`
+        * * Field Name: CompensationAction
+        * * Display Name: Compensation Action
+        * * SQL Data Type: nvarchar(425)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent
@@ -24150,6 +24171,22 @@ export const MJFeatureValueSchema = z.object({
         * * Display Name: Input As Of
         * * SQL Data Type: datetimeoffset
         * * Description: Instant of the input data the value was computed from (its provenance); never after EffectiveAsOf.`),
+    Role: z.union([z.literal('Challenger'), z.literal('Champion')]).describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Champion
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Challenger
+    *   * Champion
+        * * Description: Champion for the production value of the record process; Challenger for a shadow score from its challenger, kept for comparison only.`),
+    MLModelID: z.string().nullable().describe(`
+        * * Field Name: MLModelID
+        * * Display Name: ML Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+        * * Description: The MJ: ML Models record that scored this value, for values written by an ML Model record process (the champion's audit row or a shadow challenger's row). NULL for values from AI prompts, which record their model in AIModelID.`),
     RecordProcess: z.string().nullable().describe(`
         * * Field Name: RecordProcess
         * * Display Name: Record Process
@@ -33779,6 +33816,12 @@ export const MJRecordProcessSchema = z.object({
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration for the process's work, used by work types that need structured config beyond Input/Output mappings. For WorkType='FieldRules' this holds the serialized FieldRuleSet (the rules applied to each record). NULL for work types that do not use it.`),
+    ChallengerConfiguration: z.any().nullable().describe(`
+        * * Field Name: ChallengerConfiguration
+        * * Display Name: Challenger Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJRecordProcessEntity_IRecordProcessChallengerConfig
+        * * Description: JSON IRecordProcessChallengerConfig: a shadow challenger (model or prompt) run on a sample of live invocations against the same feature snapshot. Its scores are written as Challenger feature values and never change the business record. NULL means no challenger.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category Name
@@ -38489,6 +38532,17 @@ export const MJTaskSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJTaskEntity_ITaskStepConfiguration
         * * Description: Everything about this step that has no column of its own, as JSON: the loop definition for a ForEach or While step, an agent step's message and template parameters, the mappings that move data between this step and the workflow payload, and the execution policy (timeout, retries, what to do on failure). Typed by ITaskStepConfiguration.`),
+    SecurityEnvelope: z.string().nullable().describe(`
+        * * Field Name: SecurityEnvelope
+        * * Display Name: Security Envelope
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON TaskSecurityEnvelope (Version 1) holding the submitting run's security constraints: bound action parameters, audience reader user IDs, RunScope, CallerTenantContext and the taint bit. Written by the server when a task graph is submitted and never changed afterwards; the dispatcher enforces it on every node. NULL means the graph was submitted with no constraints.`),
+    CompensatesTaskID: z.string().nullable().describe(`
+        * * Field Name: CompensatesTaskID
+        * * Display Name: Compensates Task ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)
+        * * Description: For a saga compensation task, the forward task it undoes. Unique, so a forward task is compensated at most once.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -38528,6 +38582,10 @@ export const MJTaskSchema = z.object({
     Prompt: z.string().nullable().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
+        * * SQL Data Type: nvarchar(255)`),
+    CompensatesTask: z.string().nullable().describe(`
+        * * Field Name: CompensatesTask
+        * * Display Name: Compensates Task
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -43028,8 +43086,8 @@ export class MJAIAgentActionEntity extends BaseEntity<MJAIAgentActionEntityType>
     * * ResultExpirationTurns: This rule ensures that if the ResultExpirationTurns field has a value, it must be zero or greater (it cannot be negative). If ResultExpirationTurns is left empty, there is no restriction.
     * * Table-Level: This rule ensures that if the compact mode is set to 'First N Chars', a compact length must be specified. For any other compact mode, the compact length can be left empty.
     * * Table-Level: This rule ensures that if the result expiration mode is set to 'Compact', a compact mode value must also be provided. If the result expiration mode is not 'Compact', compact mode can be left empty.
+    * * Table-Level: This rule ensures that CompactMode, CompactLength, and CompactPromptID are only filled in when the result expiration mode is 'Compact'. For any other result expiration mode, all three must be empty.
     * * Table-Level: This rule ensures that if both minimum and maximum executions per run are specified, the minimum cannot be greater than the maximum. If either value is not specified, the rule is not enforced.
-    * * Table-Level: This rule ensures that if the result expiration mode is set to 'Compact', then CompactMode, CompactLength, and CompactPromptID must all be empty (null). If the expiration mode is not 'Compact', these fields may be filled in.
     * @public
     * @method
     * @override
@@ -43043,8 +43101,8 @@ export class MJAIAgentActionEntity extends BaseEntity<MJAIAgentActionEntityType>
         this.ValidateResultExpirationTurnsNonNegative(result);
         this.ValidateCompactLengthRequiredForFirstNCharsMode(result);
         this.ValidateCompactModeWhenResultExpirationModeIsCompact(result);
+        this.ValidateCompactSettingsOnlyWhenResultExpirationModeIsCompact(result);
         this.ValidateMinExecutionsPerRunIsLessThanOrEqualToMaxExecutionsPerRun(result);
-        this.ValidateResultExpirationModeRequiresCompactFieldsEmpty(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -43141,6 +43199,18 @@ export class MJAIAgentActionEntity extends BaseEntity<MJAIAgentActionEntityType>
     }
 
     /**
+    * This rule ensures that CompactMode, CompactLength, and CompactPromptID are only filled in when the result expiration mode is 'Compact'. For any other result expiration mode, all three must be empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactSettingsOnlyWhenResultExpirationModeIsCompact(result: ValidationResult) {
+    	if (this.ResultExpirationMode !== "Compact" && (this.CompactMode != null || this.CompactLength != null || this.CompactPromptID != null)) {
+    		result.Errors.push(new ValidationErrorInfo("ResultExpirationMode", "CompactMode, CompactLength, and CompactPromptID must be empty unless ResultExpirationMode is 'Compact'.", this.ResultExpirationMode, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * This rule ensures that if both minimum and maximum executions per run are specified, the minimum cannot be greater than the maximum. If either value is not specified, the rule is not enforced.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
@@ -43149,20 +43219,6 @@ export class MJAIAgentActionEntity extends BaseEntity<MJAIAgentActionEntityType>
     public ValidateMinExecutionsPerRunIsLessThanOrEqualToMaxExecutionsPerRun(result: ValidationResult) {
     	if (this.MinExecutionsPerRun != null && this.MaxExecutionsPerRun != null && this.MinExecutionsPerRun > this.MaxExecutionsPerRun) {
     		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "Minimum executions per run cannot be greater than maximum executions per run.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if the result expiration mode is set to 'Compact', then CompactMode, CompactLength, and CompactPromptID must all be empty (null). If the expiration mode is not 'Compact', these fields may be filled in.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateResultExpirationModeRequiresCompactFieldsEmpty(result: ValidationResult) {
-    	if (this.ResultExpirationMode === "Compact") {
-    		if (this.CompactMode != null || this.CompactLength != null || this.CompactPromptID != null) {
-    			result.Errors.push(new ValidationErrorInfo("ResultExpirationMode", "When ResultExpirationMode is set to 'Compact', the fields CompactMode, CompactLength, and CompactPromptID must be empty.", this.ResultExpirationMode, ValidationErrorType.Failure));
-    		}
     	}
     }
 
@@ -73118,14 +73174,15 @@ export class MJActionResultCodeEntity extends BaseEntity<MJActionResultCodeEntit
  * need neither a foreign key nor an index, so they live in one evolvable JSON bag instead of a
  * column each. New optional keys can be added without a schema migration.
  *
- * Two kinds of setting share it today:
+ * Three kinds of setting share it today:
  *
  *  - Integration routing, written by IntegrationActionGenerator for actions with
  *    DriverClass='IntegrationActionExecutor' and read by that executor to dispatch the call.
  *  - Output trust, read by the agent runtime (BaseAgent.resolveActionTrustLevel) to decide
  *    how far to trust what the action returns.
+ *  - The taint gate, read by the task-graph dispatcher to refuse egress from a tainted run.
  *
- * NULL for actions that need neither.
+ * NULL for actions that need none of them.
  */
 export interface MJActionEntity_IActionConfiguration {
     /** Integration routing: the MJ: Integrations record the generated action calls. */
@@ -73151,6 +73208,14 @@ export interface MJActionEntity_IActionConfiguration {
      *    AIDirectives are dropped, and the run is marked tainted so its memory writes land Pending.
      */
     outputTrustLevel?: 'Trusted' | 'SemiTrusted' | 'Untrusted';
+
+    /**
+     * True for an action that sends data out of MJ or makes a change that cannot be taken back
+     * (email, webhooks, payments, external writes). A durable task graph whose run is tainted (it
+     * ingested SemiTrusted or Untrusted content) refuses to run it unless a completed Human node
+     * upstream approved the work. Absent means false.
+     */
+    disallowWhenTainted?: boolean;
 }
 
 /**
@@ -73848,6 +73913,47 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
     }
 
     /**
+    * * Field Name: CompensationActionID
+    * * Display Name: Compensation Action ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)
+    * * Description: Action that undoes this action when a saga rolls back a failed task graph. A task-graph node's own compensation spec overrides it.
+    */
+    get CompensationActionID(): string | null {
+        return this.Get('CompensationActionID');
+    }
+    set CompensationActionID(value: string | null) {
+        this.Set('CompensationActionID', value);
+    }
+
+    /**
+    * * Field Name: CompensationInputMapping
+    * * Display Name: Compensation Input Mapping
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object mapping each compensation action parameter name to a path in the forward run: input.<param>, output.<param>, actionLogId or recordChanges.
+    */
+    get CompensationInputMapping(): string | null {
+        return this.Get('CompensationInputMapping');
+    }
+    set CompensationInputMapping(value: string | null) {
+        this.Set('CompensationInputMapping', value);
+    }
+
+    /**
+    * * Field Name: IsIdempotent
+    * * Display Name: Is Idempotent
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: True when running the action twice with the same input has the same effect as running it once, so a failed attempt may be retried and a compensation replayed automatically.
+    */
+    get IsIdempotent(): boolean {
+        return this.Get('IsIdempotent');
+    }
+    set IsIdempotent(value: boolean) {
+        this.Set('IsIdempotent', value);
+    }
+
+    /**
     * * Field Name: Category
     * * Display Name: Category Name
     * * SQL Data Type: nvarchar(255)
@@ -73890,6 +73996,15 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
     */
     get CreatedByAgent(): string | null {
         return this.Get('CreatedByAgent');
+    }
+
+    /**
+    * * Field Name: CompensationAction
+    * * Display Name: Compensation Action
+    * * SQL Data Type: nvarchar(425)
+    */
+    get CompensationAction(): string | null {
+        return this.Get('CompensationAction');
     }
 
     /**
@@ -112321,6 +112436,38 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     }
 
     /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Champion
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Challenger
+    *   * Champion
+    * * Description: Champion for the production value of the record process; Challenger for a shadow score from its challenger, kept for comparison only.
+    */
+    get Role(): 'Challenger' | 'Champion' {
+        return this.Get('Role');
+    }
+    set Role(value: 'Challenger' | 'Champion') {
+        this.Set('Role', value);
+    }
+
+    /**
+    * * Field Name: MLModelID
+    * * Display Name: ML Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+    * * Description: The MJ: ML Models record that scored this value, for values written by an ML Model record process (the champion's audit row or a shadow challenger's row). NULL for values from AI prompts, which record their model in AIModelID.
+    */
+    get MLModelID(): string | null {
+        return this.Get('MLModelID');
+    }
+    set MLModelID(value: string | null) {
+        this.Set('MLModelID', value);
+    }
+
+    /**
     * * Field Name: RecordProcess
     * * Display Name: Record Process
     * * SQL Data Type: nvarchar(255)
@@ -136623,6 +136770,34 @@ export class MJRecordProcessWatermarkEntity extends BaseEntity<MJRecordProcessWa
 
 
 /**
+ * Configuration stored on RecordProcess.ChallengerConfiguration: a shadow challenger that scores a
+ * sample of the record process's live invocations against the same frozen feature snapshot as the
+ * champion. Challenger scores are written as `Role = 'Challenger'` feature values for comparison and
+ * drift monitoring; they never change the business record and never delay or fail the champion.
+ *
+ * NULL when the record process has no challenger.
+ */
+export interface MJRecordProcessEntity_IRecordProcessChallengerConfig {
+    /** Turns the challenger on or off without deleting its settings. */
+    Enabled: boolean;
+
+    /** Fraction of live invocations (0.0 to 1.0) mirrored to the challenger. */
+    SampleRate: number;
+
+    /** The kind of challenger: 'ML Model' scores with ChallengerModelID; 'Infer' runs ChallengerPromptID. */
+    WorkType: 'ML Model' | 'Infer';
+
+    /** The MJ: ML Models record the challenger scores with, for WorkType 'ML Model'. */
+    ChallengerModelID?: string;
+
+    /** The MJ: AI Prompts record the challenger runs, for WorkType 'Infer'. */
+    ChallengerPromptID?: string;
+
+    /** Time budget for one challenger score, in milliseconds. A score that takes longer is recorded as timed out. */
+    MaxLatencyMs: number;
+}
+
+/**
  * MJ: Record Processes - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: RecordProcess
@@ -137080,6 +137255,35 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
     }
     set Configuration(value: string | null) {
         this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: ChallengerConfiguration
+    * * Display Name: Challenger Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJRecordProcessEntity_IRecordProcessChallengerConfig
+    * * Description: JSON IRecordProcessChallengerConfig: a shadow challenger (model or prompt) run on a sample of live invocations against the same feature snapshot. Its scores are written as Challenger feature values and never change the business record. NULL means no challenger.
+    */
+    get ChallengerConfiguration(): string | null {
+        return this.Get('ChallengerConfiguration');
+    }
+    set ChallengerConfiguration(value: string | null) {
+        this.Set('ChallengerConfiguration', value);
+    }
+
+    /**
+    * Typed accessor for ChallengerConfiguration — a live view of the parsed JSON as MJRecordProcessEntity_IRecordProcessChallengerConfig.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying ChallengerConfiguration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ChallengerConfigurationObject(): MJRecordProcessEntity_IRecordProcessChallengerConfig | null {
+        return this.GetJSONFieldObject<MJRecordProcessEntity_IRecordProcessChallengerConfig>('ChallengerConfiguration');
+    }
+    set ChallengerConfigurationObject(value: MJRecordProcessEntity_IRecordProcessChallengerConfig | null) {
+        this.SetJSONFieldObject<MJRecordProcessEntity_IRecordProcessChallengerConfig>('ChallengerConfiguration', value);
     }
 
     /**
@@ -150586,6 +150790,33 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     }
 
     /**
+    * * Field Name: SecurityEnvelope
+    * * Display Name: Security Envelope
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON TaskSecurityEnvelope (Version 1) holding the submitting run's security constraints: bound action parameters, audience reader user IDs, RunScope, CallerTenantContext and the taint bit. Written by the server when a task graph is submitted and never changed afterwards; the dispatcher enforces it on every node. NULL means the graph was submitted with no constraints.
+    */
+    get SecurityEnvelope(): string | null {
+        return this.Get('SecurityEnvelope');
+    }
+    set SecurityEnvelope(value: string | null) {
+        this.Set('SecurityEnvelope', value);
+    }
+
+    /**
+    * * Field Name: CompensatesTaskID
+    * * Display Name: Compensates Task ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)
+    * * Description: For a saga compensation task, the forward task it undoes. Unique, so a forward task is compensated at most once.
+    */
+    get CompensatesTaskID(): string | null {
+        return this.Get('CompensatesTaskID');
+    }
+    set CompensatesTaskID(value: string | null) {
+        this.Set('CompensatesTaskID', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
@@ -150673,6 +150904,15 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     */
     get Prompt(): string | null {
         return this.Get('Prompt');
+    }
+
+    /**
+    * * Field Name: CompensatesTask
+    * * Display Name: Compensates Task
+    * * SQL Data Type: nvarchar(255)
+    */
+    get CompensatesTask(): string | null {
+        return this.Get('CompensatesTask');
     }
 
     /**

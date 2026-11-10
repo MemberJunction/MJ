@@ -17,9 +17,10 @@
  *
  * @module @memberjunction/ai-core-plus
  */
-import { MJGlobal } from '@memberjunction/global';
+import { GetGlobalObjectStore, MJGlobal } from '@memberjunction/global';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import type { TaskGraphSpec } from './task-graph-spec';
+import type { TaskSecurityEnvelope } from './task-security-envelope';
 import { SanitizeForPersistence } from '../safe-persist';
 
 /** Everything a submitter needs beyond the graph itself. */
@@ -63,6 +64,12 @@ export type TaskGraphSubmitRequest = {
      * the hierarchy directly without walking ancestor runs in a loop.
      */
     ParentAgentHierarchy?: string[];
+    /**
+     * The submitting run's security envelope (bound action parameters, audience, run scope, caller
+     * tenant context and taint). Written to `MJ: Tasks.SecurityEnvelope` on the parent and every child
+     * row and enforced by the dispatcher on every node. Absent when the run carries no constraint.
+     */
+    SecurityEnvelope?: TaskSecurityEnvelope;
     /**
      * Seed `$.debug` on the parent row at insert. `paused: true` is start-paused — the dispatcher
      * must not claim until Resume/Step. Written with the row because Pause-after-submit races the
@@ -109,11 +116,49 @@ export type TaskGraphSubmitOutcome = {
  * makes a graph outlive the run that produced it (D2).
  */
 export abstract class TaskGraphSubmitter {
+    /**
+     * Whether this submitter persists {@link TaskSecurityEnvelope} on every row it writes and its
+     * dispatcher enforces it on every node (`DurableTaskGraphSubmitter` overrides to `true`). The only
+     * thing that lets a run with an audience, a scope, a tenant or bound parameters submit a graph:
+     * `BaseAgent` withholds graphs from such a run whenever this is false.
+     */
+    public readonly SupportsSecurityEnvelope: boolean = false;
+
     public abstract Submit(request: TaskGraphSubmitRequest): Promise<TaskGraphSubmitOutcome>;
 }
 
 /** ClassFactory key under which the durable implementation registers itself. */
 export const TASK_GRAPH_SUBMITTER_KEY = 'TaskGraphSubmitter';
+
+/**
+ * Where an explicitly registered submitter lives: the global object store, not a module variable, so a bundle
+ * that loads this module twice still sees one registration (as `BaseSingleton` guarantees for singletons).
+ */
+const EXPLICIT_SUBMITTER_KEY = '___TaskGraphSubmitter_Explicit';
+
+/**
+ * Registers or clears an explicit {@link TaskGraphSubmitter} instance for this process (tests, custom hosts).
+ * Pass `null` to reset to default `ClassFactory` resolution.
+ */
+export function RegisterTaskGraphSubmitter(submitter: TaskGraphSubmitter | null): void {
+    const store = GetGlobalObjectStore();
+    if (!store) return;
+    if (submitter) store[EXPLICIT_SUBMITTER_KEY] = submitter;
+    else delete store[EXPLICIT_SUBMITTER_KEY];
+}
+
+/**
+ * The explicitly registered submitter, if any. Checked by shape, not `instanceof`: a submitter registered
+ * through a second copy of this module is an instance of that copy's class.
+ */
+function explicitSubmitter(): TaskGraphSubmitter | undefined {
+    const registered: unknown = GetGlobalObjectStore()?.[EXPLICIT_SUBMITTER_KEY];
+    return isSubmitter(registered) ? registered : undefined;
+}
+
+function isSubmitter(value: unknown): value is TaskGraphSubmitter {
+    return typeof value === 'object' && value !== null && 'Submit' in value && typeof value.Submit === 'function';
+}
 
 /**
  * Resolves the registered submitter, or `null` when no durable-execution package is loaded.
@@ -131,15 +176,22 @@ export const TASK_GRAPH_SUBMITTER_KEY = 'TaskGraphSubmitter';
  * so the contract is enforced here rather than trusted.
  */
 export function GetTaskGraphSubmitter(): TaskGraphSubmitter | null {
-    if (submissionSuppressedBecause) return null;
+    if (TaskGraphSubmissionSuppressedBecause()) return null;
+    const explicit = explicitSubmitter();
+    if (explicit) {
+        return explicit;
+    }
     const submitter = MJGlobal.Instance.ClassFactory.CreateInstance<TaskGraphSubmitter>(
         TaskGraphSubmitter, TASK_GRAPH_SUBMITTER_KEY,
     );
     return typeof submitter?.Submit === 'function' ? submitter : null;
 }
 
-/** Set while this host has deliberately turned graph submission off. */
-let submissionSuppressedBecause: string | null = null;
+/**
+ * Where the reason this host turned graph submission off lives: the global object store, like the explicit
+ * submitter, so a bundle that loads this module twice cannot have one copy suppressed and the other not.
+ */
+const SUBMISSION_SUPPRESSED_KEY = '___TaskGraphSubmitter_SuppressedBecause';
 
 /**
  * Turns graph submission off for this process, so callers take the no-submitter path.
@@ -161,12 +213,16 @@ let submissionSuppressedBecause: string | null = null;
  * promising a follow-up that will never come.
  */
 export function SuppressTaskGraphSubmission(reason: string): void {
-    submissionSuppressedBecause = reason;
+    const store = GetGlobalObjectStore();
+    if (!store) return;
+    if (reason) store[SUBMISSION_SUPPRESSED_KEY] = reason;
+    else delete store[SUBMISSION_SUPPRESSED_KEY];
 }
 
 /** Why submission is suppressed here, or null when it is not. For diagnostics. */
 export function TaskGraphSubmissionSuppressedBecause(): string | null {
-    return submissionSuppressedBecause;
+    const reason: unknown = GetGlobalObjectStore()?.[SUBMISSION_SUPPRESSED_KEY];
+    return typeof reason === 'string' && reason ? reason : null;
 }
 
 /**
