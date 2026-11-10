@@ -912,15 +912,15 @@ SELECT
     MJEntity_DelegateEntityID.[Name] AS [DelegateEntity]
 FROM
     [${flyway:defaultSchema}].[Artifact] AS a
-INNER JOIN
+LEFT OUTER JOIN
     [${flyway:defaultSchema}].[Environment] AS MJEnvironment_EnvironmentID
   ON
     [a].[EnvironmentID] = MJEnvironment_EnvironmentID.[ID]
-INNER JOIN
+LEFT OUTER JOIN
     [${flyway:defaultSchema}].[ArtifactType] AS MJArtifactType_TypeID
   ON
     [a].[TypeID] = MJArtifactType_TypeID.[ID]
-INNER JOIN
+LEFT OUTER JOIN
     [${flyway:defaultSchema}].[User] AS MJUser_UserID
   ON
     [a].[UserID] = MJUser_UserID.[ID]
@@ -1573,7 +1573,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteArtifactWorkingState] TO [cd
             510,
             0,
             0,
-            0,
+            1,
             NULL,
             0,
             0,
