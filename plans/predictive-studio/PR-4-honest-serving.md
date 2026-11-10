@@ -1454,7 +1454,7 @@ Python assets as shipped. Exit counts are measured on the agent's database at ea
 | The promote gate's refusal of a missing/empty sign-off reason on a flagged model, and of Published without an artifact (#5295) | Kept as `LifecycleTransition` checks (the part of D-012 that D-029 did not supersede) | M3 exit test |
 | Scoring `Preflight()` refuses the whole run once instead of failing every record (#5295) | Kept and reused (the part of D-012 that D-029 did not supersede) | M5 exit test |
 | Unattended training **and publishing** by auto-train (`Configuration.autoTrain`, #5295) and by the agent (`autoPublish`) — MoreCheese's daily renewal process depends on it (D-030) | D-029: a supported path; this PR changes how it publishes, not whether. MoreCheese's shipped pipelines have no Prediction Unit, so §5.6 cannot retrain them before PR 6: their pre-change Published model keeps serving, `Unevaluated` and flagged (`ServingWhileUnevaluated`, D4-61), and its daily scoring continues | M4b exit tests (auto-train publishes a W1-signal model automatically with a publish record; G0.2/G0.3); M7's `pre-gate-model-migration.test.ts › a legacy Published model without evidence keeps serving, Unevaluated and flagged` |
-| IT51's RD9 (`realtime-deterministic.checks.ts:1264`): the promotion gate refuses deterministically — a non-UUID id, a leakage flag, a missing reason, an illegal jump — and no refusal changes the model | Four refusals, now asserted against `LifecycleGate`/`StatusWriteRules`; RD9 and the `ps-live-*` rigs (`ps-live-multimodel-lifecycle.ts:357`, `ps-live-renewal-lifecycle.ts:235`, `rigs/lib/ps-promote.ts`) are rewritten in M3.4 as caller maintenance (owner ruling 2026-11-10, D4-57, D4-69) and `ProductionModelPromotionGate` is deleted (D-042) | `Integration Tests — Deterministic` (IT51's rewritten RD9) → 0 failed; `lifecycle-gate.test.ts`'s `model-not-found`, `illegal-transition` and `reason-required` cases (M3.2). Three legs keep their meaning; the third, "sign-off without a reason", becomes "archive without a reason" at M3 (a sign-off is a `SignOffModel` record), and the sign-off refusal is pinned at M4 by `sign-off-service.test.ts › refuses overridesFlags without a reason` (M4 exit test) |
+| IT51's RD9 (`realtime-deterministic.checks.ts:1264`): the promotion gate refuses deterministically — a non-UUID id, a leakage flag, a missing reason, an illegal jump — and no refusal changes the model | Four refusals, now asserted against `LifecycleGate`/`StatusWriteRules`; RD9 and the `ps-live-*` rigs (`ps-live-multimodel-lifecycle.ts:357`, `ps-live-renewal-lifecycle.ts:235`, `rigs/lib/ps-promote.ts`) are rewritten in M3.4 as caller maintenance (owner ruling 2026-11-10, D4-57, D4-69) and `ProductionModelPromotionGate` is deleted (D-042) | `Integration Tests — Deterministic` (IT51's rewritten RD9) → 0 failed; `lifecycle-gate.test.ts`'s `model-not-found`, `illegal-transition` and `reason-required` cases (M3.2). Three legs keep their meaning; the third, "sign-off without a reason", becomes "archive without a reason" at M3 (a sign-off is a `SignOffModel` record), and the sign-off refusal is pinned at M4 by `sign-off-service.test.ts › refuses overridesFlags without a reason` (M4 exit test). The rigs' `PromoteToPublished` no longer gets a leakage-flagged model to `Published` (it sent `signOff: true`); a flagged model now stops the rig with the gate's refusal (D4-04, M3.4) |
 | PR 1's Feature Pipeline writes and reads: `Pipeline` and `Human` Feature Value rows keep their key, writer, history and visibility (the view-gate filter matches only `Source = 'Model'` rows) | D-058 adds a source to PR 1's store; it must not change PR 1's behaviour | PR 1's FeaturePipelines unit tests and its gates (`C1 → C2.1`, `C1 → C2.2`, `C1 → C2.3`, `C1 → C2.5`, `C1 → C3.3`) by name; an M5b test reads pipeline rows as a user without any prediction authorization and gets them all |
 | PR 1's human-value guard on column write-back (a person's value is kept unless the run is told to overwrite) | Reused by the binding's column copy (§5.8.3) | PR 1's writeBack tests + an M5 copy test |
 | Existing apps that read a model's score from an entity column (MoreCheese `MemberProfile.RenewalProbability`, PR 6) | The binding's `TargetColumn` copy keeps the column filled (D-058 decision 3) | M5 copy test; PR 6 re-applies it |
@@ -1961,9 +1961,10 @@ export class LifecycleGate {
   // Only a Registry Check job run may call it (ruling R9).
   public AdoptPublished(modelId: string, initiator: Actor, ctx: GateContext): Promise<AdoptOutcome>;
   // Publish is a short composer over JSDoc'd protected steps (standards §3), each overridable and unit-tested on its
-  // own: LockPipelineAndModel (the two stored lock Queries, pipeline first), LoadStoredPublishInputs (stored rows
-  // only; IDs compared with UUIDsEqual, §3.3), after the idempotency short-circuit CheckPersistedStatus and CheckLeakageFlags,
-  // CheckPublishable (PublishRules.ReverifyPublish, SemanticsCheck, ArtifactLoad, sign-off), SyncScoringAction after commit,
+  // own, in this order: LockPipelineAndModel (the two stored lock Queries, pipeline first), the idempotency short-circuit,
+  // CheckPersistedStatus, CheckLeakageFlags, LoadStoredPublishInputs (stored rows only; IDs compared with UUIDsEqual,
+  // §3.3), CheckPublishable (PublishRules.ReverifyPublish, SemanticsCheck, ArtifactLoad, sign-off), then after the commit
+  // SyncScoringAction (M3.4),
   // ApplyTransition (the authorised Save() on ctx.Provider plus the archive of `Replaces`), WritePublishRecord,
   // WriteRefusalRecord, CreateMonitoringJob.
 }
@@ -3874,7 +3875,8 @@ and `not-servable`; RD9's first and third cases become the kinds `model-not-foun
 retried publish of an applied run still returns `already-published`, R1), `CheckPersistedStatus` refuses a transition
 outside `StatusWriteRules.IsAuthorisedTransition(persisted, 'Published')` with `illegal-transition`, then
 `CheckLeakageFlags` reads the run's stored leakage flags (`unacknowledged-leakage-flags` unless an approving `sign-off`
-record's `OverridesFlags` covers them; M3's `SignOffLookup` finds none, M4 fills it), both before
+record's `OverridesFlags` covers them; M3's `SignOffLookup` finds none, M4.1 fills it and adds the override step and its
+test), both before
 `LoadStoredPublishInputs` (stored-row refusals before the stored inputs and the artifact); the per-model scoring Action
 is synced after the commit (`SyncScoringAction`, M3.4).
 
@@ -3954,7 +3956,7 @@ call at `:815` → `ModelVersions.AllocateUnderLock` inside the model-row transa
 **Interfaces:** `LifecycleGate.Evaluate(subject: EvaluateSubject, actor, ctx): Promise<EvaluateOutcome>` (§5.2), `Publish(request, ctx):
 Promise<PublishOutcome>`, `Archive(modelId, reason, actor, ctx): Promise<GateApplyResult>`, protected
 `LockPipelineAndModel`, `CheckPersistedStatus`, `CheckLeakageFlags`, `LoadStoredPublishInputs`, `CheckPublishable`,
-`ApplyTransition`, `SyncScoringAction`, `WritePublishRecord`,
+`ApplyTransition`, `WritePublishRecord`,
 `WriteRefusalRecord`, `CreateMonitoringJob` (§5.2, each JSDoc'd and unit-tested); every read and write on `ctx.Provider`
 
 - [ ] Step 1: Write the failing tests (`lifecycle-gate.test.ts` over the Engine's fakes, one `describe` per row of
@@ -4032,17 +4034,11 @@ Promise<PublishOutcome>`, `Archive(modelId, reason, actor, ctx): Promise<GateApp
     await gate.Publish(request, ctx);
     expect(await gate.Publish(request, ctx)).toMatchObject({ Kind: 'already-published' });
   });
-  it('a scoring-Action sync failure after the commit leaves the publish applied and is logged', async () => {
-    generator.FailNext = 'action save refused';
-    expect(await gate.Publish(request, ctx)).toMatchObject({ Kind: 'published' });
-    expect([store.Status(candidate.ID), logged.Errors()]).toEqual(['Published', [expect.stringContaining('action save refused')]]);
-  });
   ```
   (`store` is the test's `GateTestStore`, a fake provider over in-memory rows that records every save, built on the
   Engine's `__tests__/fakes`; `PinProtocol`, `FlagLeakage`, `Status`, `StatusReason`, `PublishRecords`, `PublishRecordsOfRun` (by `TrainingRunID`),
   `ScheduledJobs`, `ReadCount` (reads served so far) and `SaveCount` are its members; `NO_SUCH_MODEL_ID` is a
-  well-formed UUID with no row; `generator` is a recording `ModelScoringActionGenerator` fake whose `FailNext` makes its
-  next call throw; `logged` captures `LogError`.) `ml-model-publish-record.test.ts`:
+  well-formed UUID with no row.) `ml-model-publish-record.test.ts`:
   ```ts
   it('refuses an update of a saved publish record', async () => {
     const r = await SavedPublishRecord(provider);          // a loaded, saved row
@@ -4060,8 +4056,7 @@ Promise<PublishOutcome>`, `Archive(modelId, reason, actor, ctx): Promise<GateApp
   Actor, ctx: GateContext): Promise<GateApplyResult>` and the protected steps `LockPipelineAndModel(pipelineId: string,
   modelId: string, ctx: GateContext): Promise<LockResult>`, `CheckPersistedStatus(model: MJMLModelEntity, to:
   MJMLModelEntity['Status']): TransitionRefusal | null`, `CheckLeakageFlags(model: MJMLModelEntity, ctx: GateContext):
-  Promise<TransitionRefusal | null>`, `SyncScoringAction(model: MJMLModelEntity, to: MJMLModelEntity['Status'], ctx:
-  GateContext): Promise<void>`, `LoadStoredPublishInputs(modelId: string, ctx: GateContext):
+  Promise<TransitionRefusal | null>`, `LoadStoredPublishInputs(modelId: string, ctx: GateContext):
   Promise<StoredPublishInputs | TransitionRefusal>`, `CheckPublishable(inputs: StoredPublishInputs, request:
   PublishRequest, ctx: GateContext): Promise<PublishCheck>`, `ApplyTransition(model: MJMLModelEntity, to:
   MJMLModelEntity['Status'], replaces: string | null, ctx: GateContext): Promise<void>`, `WritePublishRecord(model: MJMLModelEntity,
@@ -4080,7 +4075,8 @@ Promise<PublishOutcome>`, `Archive(modelId, reason, actor, ctx): Promise<GateApp
   (`PublishRules.ReverifyPublish`, the `SemanticsCheck` seam, `ArtifactRegistry.Load` = `verified`, the sign-off seam only
   when the pinned protocol's `requiresHumanSignOff` is true) → `ApplyTransition`
   (`StatusWriteAuthorisations` set for the instance, `Save()` checked, the archive of `Replaces`) →
-  `WritePublishRecord` → `CreateMonitoringJob` → commit → `SyncScoringAction` (outside the transaction, M3.4); a refusal rolls back, then `WriteRefusalRecord` and the
+  `WritePublishRecord` → `CreateMonitoringJob` → commit (M3.4 adds `SyncScoringAction` after the commit, with its seam
+  and test); a refusal rolls back, then `WriteRefusalRecord` and the
   `StatusReason` save run in their own short transaction; `Evaluate` resolves a `{ trainingRunId }` subject to the run's
   `ResultingModelID` and picks the target from `ValidationResults.gate.decision.outcome` (`model` → Validated,
   `keep-simple-baseline` with a model row → KeepBaseline with the decision's reason); a run with no model row — `no-signal`,
@@ -4267,7 +4263,8 @@ ProductionModelPromotionGate`, `:239`, the `describe` at `:262` and the `req` he
 removed), `Engine/src/actions/promote-model.action.ts` (calls `LifecycleGate`, takes a `Transition` param; removed:
 `PromotableStatus` (`:33`), `PROMOTABLE_STATUSES` (`:36`), `PromoteModelRequest` (`:39`), `PromoteModelOutcome`
 (`:56`), `IModelPromotionGate` (`:76`), `parseTargetStatus` (`:198`) and `createGate` (`:210`)),
-`Engine/src/registry/lifecycle-gate.ts` (`SyncScoringAction`, run after the gate's transaction commits, calls
+`Engine/src/registry/lifecycle-gate.ts` (the constructor seam and `SyncScoringAction`, **Interfaces**; it runs after the
+gate's transaction commits and calls
 `ModelScoringActionGenerator.GenerateForModel` on a transition into `Published` and `DisableForModel` on one out of it,
 the shipped `syncScoringAction`'s rule; a failure is logged with `LogError` and leaves the transition applied, as the
 shipped gate did (`promote-model.gate.ts:301-306`, `:327-331`), and the registry job's step (d) `ResyncScoringActions`
@@ -4317,8 +4314,17 @@ unless `Output.applied`; `PromotableStatus` (`:11`), `signOff: true` (`:23`) and
 `:11` the same), `…/rigs/ps-live-modelaction-generation.ts` (`:320-326` call `PromoteModel(…, 'evaluate', …)` and
 `PromoteModel(…, 'publish', …)`; the header `:9`, `:16-17`, `:30-32` describe `LifecycleGate.ApplyTransition` →
 `ModelScoringActionGenerator.GenerateForModel` instead of the deleted class and alias) · Test
-`Engine/src/actions/__tests__/promote-model.action.test.ts` (its `MockGate implements IModelPromotionGate`, `:31`, becomes
-a recording `LifecycleGate` fake; `:98`'s `targetStatus` assertion becomes `transition`),
+`Engine/src/actions/__tests__/promote-model.action.test.ts`, every changed line on `25f11768a7`: the header `:19`
+(`TargetStatus` → `Transition`); `MockGate implements IModelPromotionGate` (`:31-40`) becomes the `RecordingGate`/
+`RefusingGate` `LifecycleGate` fakes; `TestablePromoteAction`'s `createGate` override (`:46-48`) becomes
+`CreateLifecycleGate`; the validation cases `:61-86` send `Transition` (`:65`, `:72-83`); the mapping cases: `:89-101`
+(SUCCESS; `:93-94` `TargetStatus`/`SignOff`, `:98` asserts `targetStatus`/`signOff`) become the Transition/Reason case,
+`:103-116` (`LEAKAGE_SIGNOFF_REQUIRED`, `:112`, `:114`) becomes `LEAKAGE_FLAGGED`, `:118-144` (the `SignOff` threading and
+coercion cases, `:123`, `:130`, `:139`) are deleted with the param, `:146-157` (`SIGNOFF_REASON_REQUIRED`, `:155`)
+becomes `REASON_REQUIRED`, `:160-177` keeps not-found and drops save-failed (`:175` `SAVE_FAILED`), `:179-192`
+(`CALIBRATION_HOLD`; `:183-184` `TargetStatus`/`SignOff` removed) and `:194-205` (`MODEL_NOT_SERVABLE`, `:198`) send
+`Transition`; new cases `ILLEGAL_TRANSITION`, `TRANSITION_REFUSED`; the gate half `:211-420` (`FakeModel` `:211`,
+`TestableGate` `:239`, `req` `:251`, the `describe` at `:262`) is deleted,
 `Engine/src/actions/__tests__/model-scoring-action-generator.test.ts`, `Engine/src/training/__tests__/model-holds.test.ts`
 (`:21` imports and `:80` extends the class to test the calibration-hold and not-servable refusals, `:93-94` build a
 `PromoteModelRequest`; rewritten over `LifecycleGate`'s `calibration-held`/`not-servable` refusals),
@@ -4326,13 +4332,16 @@ a recording `LifecycleGate` fake; `:98`'s `targetStatus` assertion becomes `tran
 `:170-184` a `RecordingGate` behind `CreatePromotionGate`, `:273`, `:289` assert `targetStatus`; rewritten over a
 recording `LifecycleGate` fake asserting `Evaluate({ trainingRunId })`), `Engine/src/scoring/__tests__/model-readiness.test.ts`
 (`:23` imports the same types, `:253-266` a `RecordingGate` passed to auto-train; rewritten the same way),
-`packages/Angular/Explorer/core-entity-forms/src/lib/custom/MLModels/ps-model-detail.component.dom.test.ts` · Modify
+`packages/Angular/Explorer/core-entity-forms/src/lib/custom/MLModels/ps-model-detail.component.dom.test.ts`,
+`Engine/src/registry/__tests__/lifecycle-gate.test.ts` (extended with the sync-failure case) · Modify
 `packages/TestingFramework/integration-test-suite/docs/platform-suite.md` (RD9's row, `:340`, renamed and its legs
 described on `LifecycleGate`; allowlisted by D4-70), `metadata/actions/predictive-studio/.predictive-studio-actions.json`
 ("Promote ML Model": the header lines `:727-728` and `Description` `:733` describe the `Transition` contract; the
 `TargetStatus` param (`:762`, key `D70D7ADE-5394-40B5-97B1-DADCFE9A173F`) and the `SignOff` param (`:780`, key
-`556E4BEE-7D99-429A-84F0-B29C61C96C94`) get `"deleteRecord": {"delete": true}` and a "Retired." description, as PR 3
-retired `MaxRows` in the same file (`:40-57`); new Input params `Transition` (required: `evaluate`, `publish`, `archive`,
+`556E4BEE-7D99-429A-84F0-B29C61C96C94`) get `"deleteRecord": {"delete": true}` and a "Retired." description that does
+not repeat the param's or code's name (so each retired name stays on exactly one line, its `Name`/`ResultCode`), as PR 3
+retired `MaxRows` in the same file (`:40-57`); `mj sync push` deletes the rows and writes `deletedAt` into the file, and
+that write-back is committed with the task, as PR 3's `MaxRows` record carries it (`:54-57`); new Input params `Transition` (required: `evaluate`, `publish`, `archive`,
 `rollback`) and `Reason` (optional; `promote-model.action.ts:104` reads it today without a declared param), each with a
 `uuidgen` key; the result codes `LEAKAGE_SIGNOFF_REQUIRED` (`:848`, `4F4E1851-A9A2-4D76-8668-71E3A5FA3A58`),
 `SIGNOFF_REASON_REQUIRED` (`:908`, `2210EFA6-996E-4B50-BBDD-2EDD89BB2B7B`) and `SAVE_FAILED` (`:878`,
@@ -4341,13 +4350,23 @@ description (`:835`) names `Transition`; `SUCCESS`, `MODEL_NOT_FOUND` (`model-no
 `CALIBRATION_HOLD` (`calibration-held`) and `MODEL_NOT_SERVABLE` (`not-servable`) kept; new codes, `uuidgen` keys:
 `LEAKAGE_FLAGGED` (`unacknowledged-leakage-flags`), `ILLEGAL_TRANSITION`, `REASON_REQUIRED` and `TRANSITION_REFUSED`
 (every other `TransitionRefusal` kind, the kind in the message), each mapped by `PredictiveStudioPromoteModelAction`),
-`metadata/prompts/templates/model-development-agent/model-development-agent.template.md` (`:83-84`: call **Promote ML
-Model** with `Transition` `evaluate`, then `publish`, and report the status reached or the refusal returned; `:106`: a
+`metadata/prompts/templates/model-development-agent/model-development-agent.template.md` (`:83-84`: on a yes, call
+**Promote ML Model** once with `Transition` `publish` — the build has already evaluated the model (`publishThroughGate` →
+`LifecycleGate.Evaluate`, this task), so it is `Validated` or `KeepBaseline`, and from M4b it may already be `Published`
+by the automatic publish, which the gate answers `already-published`; `evaluate` only for a model still in `Draft`, stated
+as such — and report the status reached or the refusal returned; `:106`: a
 leakage-flagged model is refused by the gate (`LEAKAGE_FLAGGED`) and is published only after a person records a
 sign-off in the model detail, which an agent cannot make, D4-04 — the agent no longer passes a `SignOff`; the agent is
 wired to that Action at `metadata/agents/.model-development-agent.json:87`, unchanged)
 
-**Interfaces:** the op and the Action take `transition` only (§5.3); an input without `transition` is refused before
+**Interfaces:** `export type ScoringActionSync = Pick<ModelScoringActionGenerator, 'GenerateForModel' |
+'DisableForModel'>` (`Engine/src/registry/gate-context.ts`); `LifecycleGate`'s constructor takes `scoringActions:
+ScoringActionSync = new ModelScoringActionGenerator()` (the seam the sync test injects; `new LifecycleGate()` keeps the
+production generator, as RD9 uses it); `protected SyncScoringAction(model: MJMLModelEntity, to:
+MJMLModelEntity['Status'], ctx: GateContext): Promise<void>` runs after the commit. The Action is
+`PredictiveStudioPromoteModelAction` with `protected CreateLifecycleGate(): LifecycleGate` (overridden by the Action
+test, replacing today's `createGate`, `promote-model.action.ts:210`), params `ModelID`, `Transition`, `Reason`, and the
+codes of **Files**. The op and the Action take `transition` only (§5.3); an input without `transition` is refused before
 any read; `publish`/`rollback` run `LifecycleGate.Publish` with the caller as initiator; a leakage flag is acknowledged
 only by a `SignOffModel` record (M4, D4-04). RD9 (`realtime-deterministic.RD9`, IT51; the block at
 `realtime-deterministic.checks.ts:1262-1340`) is renamed `RD9: the lifecycle gate refuses deterministically — non-UUID
@@ -4402,13 +4421,48 @@ that hits a flagged model stops with the refusal text, which its log records
     await generator.DisableForModel(model, user, provider);
     expect(actions.ByModelID(model.ID).Status).toBe('Disabled');
   });
+  // lifecycle-gate.test.ts (extended here, where the generator call lands)
+  it('a scoring-Action sync failure after the commit leaves the publish applied and is logged', async () => {
+    const generator = new RecordingScoringActions({ FailNext: 'action save refused' });
+    expect(await new LifecycleGate(generator).Publish(request, ctx)).toMatchObject({ Kind: 'published' });
+    expect([store.Status(candidate.ID), generator.Calls, logged.Errors()]).toEqual(['Published', ['GenerateForModel'], [expect.stringContaining('action save refused')]]);
+  });
+  // promote-model.action.test.ts — through InternalRunAction (TestablePromoteAction.run → Run), one case per code
+  it.each([
+    [{ kind: 'unacknowledged-leakage-flags', flags: ['single-feature-dominance'] }, 'LEAKAGE_FLAGGED'],
+    [{ kind: 'illegal-transition', from: 'draft', to: 'published' }, 'ILLEGAL_TRANSITION'],
+    [{ kind: 'reason-required' }, 'REASON_REQUIRED'],
+    [{ kind: 'does-not-beat-incumbent', incumbentModelId: OLD, comparison }, 'TRANSITION_REFUSED'],
+    [{ kind: 'model-not-found' }, 'MODEL_NOT_FOUND'],
+    [{ kind: 'calibration-held', slope: 1.6 }, 'CALIBRATION_HOLD'],
+    [{ kind: 'not-servable', message: 'forecast' }, 'MODEL_NOT_SERVABLE'],
+  ])('maps the refusal %o to %s', async (refusal, code) => {
+    const r = await new TestablePromoteAction(RefusingGate(refusal)).run(params([{ Name: 'ModelID', Type: 'Input', Value: M }, { Name: 'Transition', Type: 'Input', Value: 'publish' }]));
+    expect([r.Success, r.ResultCode]).toEqual([false, code]);
+  });
+  it('passes Transition and Reason to the gate and maps an applied outcome to SUCCESS with the Status output', async () => {
+    const gate = RecordingGate({ Kind: 'published', Status: 'Published' });
+    const p = params([{ Name: 'ModelID', Type: 'Input', Value: M }, { Name: 'Transition', Type: 'Input', Value: 'archive' }, { Name: 'Reason', Type: 'Input', Value: 'superseded' }]);
+    const r = await new TestablePromoteAction(gate).run(p);
+    expect([r.ResultCode, gate.Calls]).toEqual(['SUCCESS', [['Archive', M, 'superseded']]]);
+  });
+  it('refuses a missing or unknown Transition with VALIDATION_ERROR and never calls the gate', async () => {
+    for (const value of [undefined, 'Published']) {
+      const gate = RecordingGate();
+      const r = await new TestablePromoteAction(gate).run(params([{ Name: 'ModelID', Type: 'Input', Value: M }, ...(value ? [{ Name: 'Transition', Type: 'Input', Value: value }] : [])]));
+      expect([r.ResultCode, gate.Calls.length]).toEqual(['VALIDATION_ERROR', 0]);
+    }
+  });
   // ps-model-detail.component.dom.test.ts
   it('the publish button sends transition publish', async () => {
     fixture.querySelector<HTMLButtonElement>('[data-action="publish"]')?.click();
     expect(sentOperations[0]).toMatchObject({ modelId: model.ID, transition: 'publish' });
   });
   ```
-  (`sentOperations` records the component's calls to the generated `PredictiveStudioPromoteModelOperation`; the
+  (`RecordingScoringActions` is a `ScoringActionSync` fake recording its calls, `FailNext` making the next one throw;
+  `logged` captures `LogError`; `RefusingGate`/`RecordingGate` are `LifecycleGate` fakes returning the given outcome,
+  injected through `CreateLifecycleGate`; `M`, `OLD`, `comparison` the file's fixtures. `sentOperations` records the
+  component's calls to the generated `PredictiveStudioPromoteModelOperation`; the
   `as PredictiveStudioPromoteModelInput` cast is the one way a test can send the removed shape, which the compiler
   otherwise refuses.) Rewrite RD9 as **Interfaces** states; on the branch before Step 3 it fails to compile
   (`LifecycleGate` has no `model-not-found`/`reason-required` yet, M3.2's additions land first) — run
@@ -4472,6 +4526,9 @@ that hits a flagged model stops with the refusal text, which its log records
   - `git grep -n "LEAKAGE_SIGNOFF_REQUIRED\|SIGNOFF_REASON_REQUIRED" -- metadata packages` → exactly 2 hits, the two
     retired result-code records (on `origin/next`: 8 — `.predictive-studio-actions.json:848`, `:908`,
     `promote-model.action.ts:138`, `:140`, `promote-model.action.test.ts:103`, `:112`, `:146`, `:155`).
+  - `git grep -n "SAVE_FAILED" -- packages/AI/PredictiveStudio` → 0 hits (on `origin/next`: 2 —
+    `promote-model.action.ts:156`, `promote-model.action.test.ts:175`); `git grep -n "SAVE_FAILED" -- metadata/actions/predictive-studio`
+    → exactly 1, the retired record's `"ResultCode"` line (on `origin/next`: 1, `.predictive-studio-actions.json:878`).
   - `test -e packages/AI/PredictiveStudio/Engine/src/actions/promote-model.gate.ts; echo $?` → `1`.
   The release note (§10) names the deleted class, the removed types, input fields and output field, and the two removed
   aliases (D4-57, D4-69).
@@ -4612,7 +4669,9 @@ milestone; counts, cells and claims go to §11.
   → exactly one `Published` per pipeline, the loser `withheld` with `incumbent-not-current` and one `refusal` record;
   twelve distinct versions; the run-less candidate refused; the out-of-gate row does not count as the incumbent a new
   publish replaces silently (it is reported by the gate's refusal); counts measured at M3.
-- [ ] Step 3: The reviewer applies the Outline's M3 mutations one at a time — the hook's registration skipped; the
+- [ ] Step 3: The reviewer applies the Outline's M3 mutations one at a time — `CheckPersistedStatus` moved before the
+  idempotency short-circuit (`lifecycle-gate.test.ts › a retried Publish of an applied run is already-published, never
+  illegal-transition` goes red); the hook's registration skipped; the
   hook's `ReverifyPublish` re-derivation removed (D4-58: `status-guard.test.ts › re-derives on a gate-authorised
   Validated → Published save …` goes red); the pipeline lock Query removed; `PublishRules.ReverifyPublish` moved before the locks; the idempotency check removed;
   version allocation outside the lock; the agent guard-field refusal; Archive requiring a sign-off — and names the case
@@ -4736,7 +4795,11 @@ seam), `Engine/src/operations/get-model-evidence.operation.ts` (`PredictiveStudi
 `metadata/remote-operations/types/predictive-studio-sign-off-model.input.ts` and `.output.ts` (`SignOffInput`, camelCase
 wire names, §5.2) · Modify `metadata/remote-operations/.remote-operations.json` (two rows, `uuidgen` keys),
 `Engine/src/registry/lifecycle-gate.ts` (`CheckPublishable`'s sign-off step: required → an approving sign-off whose hash
-matches, else `no-sign-off`), `Engine/src/operations/index.ts`, `Engine/src/index.ts` (`export * from './governance'`),
+matches, else `no-sign-off`; and `CheckLeakageFlags`' override step: the `SignOffLookup` seam, filled here from
+`MJ: ML Model Publish Records`, returns the request's approving `sign-off` record when its `EvidenceSha256` matches the
+evidence rebuilt from stored rows, and the flags that record's `OverridesFlags` covers no longer refuse; any stored flag
+it does not cover still refuses `unacknowledged-leakage-flags` naming only the uncovered kinds; M3's lookup found none;
+its test is in `sign-off-service.test.ts`), `Engine/src/operations/index.ts`, `Engine/src/index.ts` (`export * from './governance'`),
 `packages/MJCoreEntities/src/generated/remote_operations.ts` (regenerated) · Test
 `Engine/src/governance/__tests__/sign-off-service.test.ts`
 
@@ -4760,6 +4823,15 @@ comparisons, decision), PR 3's stored leakage audit and the snapshot's data wind
     const r = await service.Record({ ...approve, overridesFlags: ['single-feature-dominance'], reason: '  ' }, human, ctx);
     expect(r).toEqual({ Ok: false, Refusal: 'overrides-without-reason' });
     expect(store.PublishRecords(model.ID)).toHaveLength(0);
+  });
+  it('a flagged model publishes after an approving sign-off whose OverridesFlags covers its flags; a partial cover is refused', async () => {
+    store.FlagLeakage(model.ID, ['single-feature-dominance', 'time-shifted-label']);
+    const partial = await service.Record({ ...approve, overridesFlags: ['single-feature-dominance'], reason: 'reviewed: set before the decision date' }, human, ctx);
+    expect(await gate.Publish({ ...request, initiator: human, signOffId: partial.Ok ? partial.SignOffRecordID : null }, ctx))
+      .toMatchObject({ Kind: 'withheld', Refusal: { kind: 'unacknowledged-leakage-flags', flags: ['time-shifted-label'] } });
+    const full = await service.Record({ ...approve, overridesFlags: ['single-feature-dominance', 'time-shifted-label'], reason: 'reviewed both' }, human, ctx);
+    expect(await gate.Publish({ ...request, initiator: human, signOffId: full.Ok ? full.SignOffRecordID : null }, ctx)).toMatchObject({ Kind: 'published' });
+    expect(store.PublishRecords(model.ID).filter((r) => r.Kind === 'publish')).toEqual([expect.objectContaining({ SignOffID: full.Ok ? full.SignOffRecordID : null })]);
   });
   it('refuses a sign-off for an archived model', async () => {
     store.SetStatus(model.ID, 'Archived');
@@ -5018,6 +5090,7 @@ selection score and the leakage result read from the run's stored rows), `Engine
 |---|---|---|
 | unauthorized user | a sign-off by an API-key caller, by the system user | `sign-off-service.test.ts › refuses a sign-off whose approver is not a person (API key, system user)` |
 | unauthorized user | a sign-off overriding flags without a reason | `sign-off-service.test.ts › refuses overridesFlags without a reason` |
+| model status | a leakage-flagged model with an approving sign-off whose `OverridesFlags` covers all its flags, and one covering only some | `sign-off-service.test.ts › a flagged model publishes after an approving sign-off whose OverridesFlags covers its flags; a partial cover is refused` |
 | model status | a sign-off for an `Archived` model | `sign-off-service.test.ts › refuses a sign-off for an archived model` |
 | model status | `requiresHumanSignOff` true: automatic attempt held at Validated, then the seeded user's sign-off publishes | `sign-off-service.test.ts › requiresHumanSignOff: an automatic attempt stays Validated, the seeded user then publishes as approver` |
 | artifact state | evidence of a `KeepBaseline` model names the shipped simple member's holdout and the `keep-simple-baseline` decision | `sign-off-service.test.ts › the evidence of a keep-baseline model is the simple member's` |
@@ -6110,9 +6183,13 @@ and `…/src/checks/ps-gate-w1-s7-5.checks.ts` (`:27`, `:36`) (each moves to `Wr
 read the union and keep the runtime's own `{ scoredCount, failedCount, skippedCount, predictions }` result, the shape
 `packages/InteractiveComponents/src/shared.ts:356` declares, unchanged) and its test
 `packages/React/runtime/src/__tests__/runtime-utilities-ml.test.ts` (`:150` mocks the op output with `wroteBack`; both
-allowlisted by D4-70), `metadata/actions/predictive-studio/.predictive-studio-actions.json` (the "Score Record Set"
-Action's output params `ScoredCount` `:344` and `WroteBack` `:362` follow the params the Action writes from the union,
-`score-record-set.action.ts:171-174` today),
+allowlisted by D4-70), `metadata/actions/predictive-studio/.predictive-studio-actions.json` ("Score Record Set",
+`:278`: the Input `WriteBack` (`:326`) and the Outputs `ScoredCount` (`:344`) and `WroteBack` (`:362`) are retired with
+`deleteRecord` and a "Retired." description that does not repeat the name, `deletedAt` written by `mj sync push` and
+committed with the task as in M3.4; new params, `uuidgen` keys: Inputs `BindingID` and `AsOfDate` (optional), Outputs
+`ScoringRunID`, `Status`, `Total`, `Written`, `Failed` (the union's fields); `Predictions` (`:380`) kept; the Action
+(`score-record-set.action.ts:171-174`) and the per-model Actions' params (`model-scoring-action-generator.ts:373`, `:380`,
+`:387`, `:394`) write the same names),
 `packages/MJCoreEntities/src/generated/remote_operations.ts`
 (regenerated) · Test `Engine/src/actions/__tests__/score-record-set.binding.test.ts` (new), the existing
 `score-record-set.*.test.ts`, `operations/__tests__/score-record-set.operation.test.ts`,
@@ -6203,8 +6280,12 @@ base's FORBIDDEN / SUCCESS / EXECUTION_ERROR shapes)
   `React/runtime/src/utilities/runtime-utilities.ts` 1, `rigs/ps-live-multimodel-lifecycle.ts` 3,
   `rigs/ps-live-renewal-lifecycle.ts` 1, `rigs/ps-live-writeback-demo.ts` 3, `ps-gate-w1-s7-3.checks.ts` 3,
   `ps-gate-w1-s7-5.checks.ts` 3 — every file in this task's Files. And
-  `git grep -n "out\.\(scored\|failed\|skipped\)" -- packages/React/runtime/src/utilities/runtime-utilities.ts` → 0 (on
-  `origin/next`: 3, `:324-326`). The `@deprecated` aliases of each modified PS file go (§2.5).
+  `git grep -n "out\.\(scored\|skipped\|wroteBack\)" -- packages/React/runtime/src/utilities/runtime-utilities.ts` → 0
+  (on `origin/next`: 2, `:324`, `:326`; `failed` is left out because the union's `failed` variant has a `failed` count,
+  §3.3 `ScoringResult`). And `git grep -n '"Name": "\(ScoredCount\|WroteBack\|WriteBack\)"' -- metadata/actions/predictive-studio`
+  → exactly 3, the retired records (on `origin/next`: 3, `:326`, `:344`, `:362`); `git grep -n "'ScoredCount'\|'WroteBack'\|'SkippedCount'" -- packages/AI/PredictiveStudio/Engine/src/actions/score-record-set.action.ts packages/AI/PredictiveStudio/Engine/src/actions/model-scoring-action-generator.ts packages/AI/PredictiveStudio/Engine/src/actions/__tests__/score-record-set.action.test.ts packages/AI/PredictiveStudio/Engine/src/actions/__tests__/model-scoring-action-generator.test.ts`
+  → 0 (on `origin/next`: 11 — `score-record-set.action.ts:171`, `:173`, `:174`, `model-scoring-action-generator.ts:373`,
+  `:387`, `:394`, `score-record-set.action.test.ts:123`, `:124`, `:206`, `:207`, `model-scoring-action-generator.test.ts:239`). The `@deprecated` aliases of each modified PS file go (§2.5).
 - [ ] Step 4: Step 2's command → passes; Engine and TruthSuite `pnpm test` → 0 failed; dashboards `pnpm test` → 0 failed.
 - [ ] Step 5: Runtime on MJAPI :4041 (`"$PLANS/tools/ps-env.sh" bash -c 'cd packages/MJAPI && pnpm run start'`): 20
   Score Record Set calls with a `BindingID` on the R1 model →
@@ -9325,7 +9406,8 @@ are removed, and a leakage flag is acknowledged only by a `SignOffModel` record;
 `PromoteModelOutcome` and `PromotableStatus` (callers use `LifecycleGate`); the "Promote ML Model" Action takes
 `Transition` (and an optional `Reason`) instead of `TargetStatus`/`SignOff`, and its `LEAKAGE_SIGNOFF_REQUIRED`,
 `SIGNOFF_REASON_REQUIRED` and `SAVE_FAILED` result codes are retired for `LEAKAGE_FLAGGED`, `ILLEGAL_TRANSITION`,
-`REASON_REQUIRED` and `TRANSITION_REFUSED`; Score Record Set no longer returns
+`REASON_REQUIRED` and `TRANSITION_REFUSED`, and the Model Development Agent publishes with `Transition` `publish` (its
+build has already evaluated the model); Score Record Set no longer returns
 `scored`/`failed`/`skipped`/`wroteBack` (read the `ScoringResult` union) and returns `Success = false` for refusals and
 failed runs; direct status writes are refused; `MJ: ML Model Scoring Bindings` loses `MLModelID`,
 `MaterializedResultID` and the `'Materialized'` mode (a binding names `MLTrainingPipelineID`), and `ModeBadgeClass`
@@ -9556,6 +9638,33 @@ plus the keep-list, runtime verification against MJAPI and the database (§7 of 
 - **Next step (exact):** M1 starts with M1.1 on `MJ_PS_PR4_claude`.
 - **Gotchas / decisions:** D4-70. `git grep -E` on this macOS build has no `\b`; M5.6's grep uses `-P`.
 
+### 2026-11-10 — Claude (Fable 5.1) — kickoff amendment fix round 2
+
+- **Branch / HEAD:** `ps/pr-4-honest-serving` @ `b048dbee1e` before this commit (pushed: no). MJ read at `origin/next`
+  @ `25f11768a7`.
+- **Database / ports:** none (plan only).
+- **Done this session:** the re-review's N1–N4 and minors. N1: the sync-failure test moved from M3.2 to M3.4, with the
+  `ScoringActionSync` constructor seam and `SyncScoringAction` declared in M3.4's Interfaces; M3.2's lists and composer no
+  longer name it. N2: M4.1 adds `CheckLeakageFlags`' override step (the `SignOffLookup` seam reading the request's
+  approving sign-off; uncovered flags still refuse) with a test publishing a flagged model after a covering sign-off and
+  refusing a partial cover, and an M4 coverage row. N3: M3.4 gains Action-level tests through `InternalRunAction` (one per
+  code, `Transition`/`Reason` threading, `VALIDATION_ERROR`), every changed line of `promote-model.action.test.ts`, and
+  `SAVE_FAILED` greps (packages 2 → 0; metadata 1 → 1, the retired record). N4: the prompt sends `publish` only
+  (`evaluate` only for a Draft); §10 says so. Minors: §5.2's comment order; §4.2's `PromoteToPublished` line; M3.6's
+  `CheckPersistedStatus` mutation; M5.6's Score Record Set params (`WriteBack`, `ScoredCount`, `WroteBack` retired; new
+  `BindingID`, `AsOfDate`, `ScoringRunID`, `Status`, `Total`, `Written`, `Failed`) with greps (3 → 3 retired names; 11 → 0
+  in code); the runtime grep leaves out `failed` (2 → 0); `deleteRecord`'s `deletedAt` committed after `mj sync push`, and
+  "Retired." descriptions do not repeat the name.
+- **Tests:** plan checks (`ParseAllowlist`, `PathsOutsideAllowlist`, `CoverageTableCheck`, anchors, pre-push dry run) as in
+  the amendment report's "Fix round 2".
+- **Runtime verification:** read-only `git grep`/`git show` at `origin/next` for every new line and baseline.
+- **State left behind:** none.
+- **Next step (exact):** M1 starts with M1.1 on `MJ_PS_PR4_claude`.
+- **Gotchas / decisions:** PR 3's `LeakageFlag['kind']` (`Core/src/trainer-contract.ts:137-141`) is `single-feature-auc`,
+  `time-shifted-label`, `drop-column`, `high-cardinality-id`; the plan's tests use `single-feature-dominance` as a flag
+  kind (M3.2, M3.4, M4.1, M4b, M7), which that union does not have — to be settled at M3.2 (add the kind with the
+  dominance re-run, or use a PR 3 kind).
+
 ## 12. Refresh log (append-only)
 
 ### 2026-10-12 — refresh (written; equivalent to trigger d baseline) — Claude (Opus 5.5)
@@ -9700,3 +9809,5 @@ plus the keep-list, runtime verification against MJAPI and the database (§7 of 
 - **Kickoff amendment fix round 1 2026-11-10 (D4-70):** three caller paths allowlisted (React runtime pair, RD9's doc row);
   the Promote ML Model Action and the agent prompt move to `Transition`; M5.6's readers and grep; `Publish`'s status and
   leakage checks after idempotency; anchors re-run at `origin/next` @ `25f11768a7`.
+- **Kickoff amendment fix round 2 2026-11-10:** sync-failure seam in M3.4; `CheckLeakageFlags` override in M4.1; Action
+  tests and `SAVE_FAILED` greps; prompt publish-only; anchors re-run at `origin/next` @ `25f11768a7`.
