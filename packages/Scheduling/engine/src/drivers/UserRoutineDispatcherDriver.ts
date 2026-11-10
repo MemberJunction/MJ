@@ -481,7 +481,12 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
                         verifyKind = 'permanent';
                     }
                 }
-            } catch {
+            } catch (probeErr) {
+                LogError(
+                    `UserRoutineDispatcherDriver: MJ: Users probe failed for routine "${routine.Name}" (${ownerUserId}): ${
+                        probeErr instanceof Error ? probeErr.message : String(probeErr)
+                    }`
+                );
                 verifyKind = 'transient';
             }
             throw new RoutineOwnerResolutionError(
