@@ -2449,6 +2449,14 @@ export type AgentChatMessageMetadata = {
     /** Un-prefixed `ConversationDetail.Message` text when speaker attribution formatted `content` */
     rawContent?: string;
     /**
+     * Alpha-sequence artifact IDs (e.g. `['A']`, `['A', 'B']`) registered in `ArtifactToolManager`
+     * for this action/tool result message's large or expirable outputs. Preserved across message
+     * compaction and removal so the compacted or stubbed message can remind the model which
+     * artifact handle(s) hold the full queryable data (`get_rows`, `search_rows`, `filter`,
+     * `aggregate`, `grep`, `get_lines`, `json_path`, `json_iterate`, `get_full`).
+     */
+    artifactIds?: string[];
+    /**
      * True on the framework-authored trailing message that carries the loop agent's volatile
      * per-iteration state (date/time, Scratchpad, Payload, and a relocated specialization) as the
      * final message of each request. It is appended to a COPY of the history for a

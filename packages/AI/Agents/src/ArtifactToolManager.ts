@@ -4,6 +4,7 @@ import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult, Na
 import { DataSnapshotToolLibrary } from './artifact-tools/DataSnapshotToolLibrary';
 import { JSONToolLibrary } from './artifact-tools/JSONToolLibrary';
 import { TextToolLibrary } from './artifact-tools/TextToolLibrary';
+import { CSVToolLibrary } from './artifact-tools/CSVToolLibrary';
 
 // Re-export so existing consumers that import { InputArtifact } from
 // './ArtifactToolManager' continue to compile. The canonical declaration
@@ -167,6 +168,9 @@ export class ArtifactToolManager {
       mimeType: artifact.mimeType,
       content: artifact.content,
       library: this.resolveLibrary(artifact.typeName, artifact.toolLibraryClass),
+      annotation: artifact.annotation,
+      deliveryMode: artifact.deliveryMode,
+      forceToolsOnly: artifact.forceToolsOnly,
     });
     return alphaId;
   }
@@ -758,6 +762,9 @@ export class ArtifactToolManager {
     }
     if (lower.includes('json')) {
       return new JSONToolLibrary();
+    }
+    if (lower.includes('csv')) {
+      return new CSVToolLibrary();
     }
     // File-based types: try ClassFactory for dynamically registered libraries
     // (PDFToolLibrary, ExcelToolLibrary, DocxToolLibrary are registered by CoreActions)

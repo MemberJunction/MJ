@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentEntity, MJAIAgentTypeEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentConfigurationEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, MJAIPromptRunEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
+import { MJAIAgentEntity, MJAIAgentTypeEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentConfigurationEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, MJAIPromptRunEntity, ConversationEngine, type ConversationBranchRow, type MJActionEntity_IActionConfiguration } from '@memberjunction/core-entities';
 import { BuildActionToolSet, CoerceActionArguments, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
 import { DescribeValueSchemaInline, GetStoredValueSchema } from './native-tools/action-param-schema';
 import { ApplyBoundActionParams, BindingsForAction, BoundParamsApplication, IsBoundParamName, UnboundParams } from './bound-action-params';
@@ -353,6 +353,26 @@ export interface ActionResultSummary {
     trustLevel?: ActionOutputTrustLevel;
     /** Structured recovery hints returned on action failure. */
     errorRecovery?: ActionErrorRecovery;
+    /**
+     * Alpha-sequence artifact handle(s) (e.g. `['A']`) registered in `ArtifactToolManager`
+     * for this action's large or expirable output. Enables the agent to query, iterate, seek,
+     * or grep the full historical action result even after the inline conversation message
+     * is compacted or removed.
+     */
+    artifactIds?: string[];
+}
+
+/**
+ * Resolved result-expiration and compaction configuration for an action execution,
+ * unified across run overrides (`ExecuteAgentParams.messageExpirationOverride`),
+ * per-agent `MJAIAgentActionEntity` rows, and action-level defaults (`Action.Config`).
+ */
+export interface ResolvedActionExpirationConfig {
+    expirationTurns: number;
+    expirationMode: 'None' | 'Remove' | 'Compact';
+    compactMode?: 'First N Chars' | 'AI Summary';
+    compactLength?: number;
+    compactPromptId?: string;
 }
 
 /**
@@ -1433,18 +1453,323 @@ export class BaseAgent {
         }
 
         // 3. Action metadata catalog setting (Action.Config_Object?.outputTrustLevel)
-        const metadataLevel = entity?.Config_Object?.outputTrustLevel;
-        if (isLevel(metadataLevel)) {
-            return metadataLevel;
-        }
-        if (typeof entity?.Config_ === 'string' && entity.Config_.trim().length > 0) {
-            const parsed = CleanAndParseJSON<Record<string, unknown>>(entity.Config_, false);
-            if (parsed && isLevel(parsed.outputTrustLevel)) {
-                return parsed.outputTrustLevel;
-            }
+        const actionConfig = this.getActionConfigObject(entity);
+        if (actionConfig && isLevel(actionConfig.outputTrustLevel)) {
+            return actionConfig.outputTrustLevel;
         }
 
         return 'Trusted';
+    }
+
+    /**
+     * Reads the parsed `IActionConfiguration` JSON object from an `MJActionEntityExtended` instance.
+     * Supports hydrated `Config_Object`, raw `Config_` JSON strings, and plain mock objects (`Config`).
+     * @protected
+     */
+    protected getActionConfigObject(actionEntity?: MJActionEntityExtended): MJActionEntity_IActionConfiguration | undefined {
+        if (!actionEntity) {
+            return undefined;
+        }
+        try {
+            if (actionEntity.Config_Object && typeof actionEntity.Config_Object === 'object') {
+                return actionEntity.Config_Object;
+            }
+        } catch {
+            // Mock objects in unit tests may not implement GetJSONFieldObject; fall through to raw field inspection.
+        }
+        const rawConfig = actionEntity.Config_ ?? (actionEntity as unknown as { Config?: unknown })?.Config;
+        if (rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig)) {
+            return rawConfig as MJActionEntity_IActionConfiguration;
+        }
+        if (typeof rawConfig === 'string' && rawConfig.trim().length > 0) {
+            const parsed = CleanAndParseJSON<MJActionEntity_IActionConfiguration>(rawConfig, false);
+            if (parsed && typeof parsed === 'object') {
+                return parsed;
+            }
+        }
+        return undefined;
+    }
+
+    /**
+     * Resolves result-expiration and compaction settings for an action across a single unified
+     * hierarchy so that directly-attached actions (`AIAgentAction`) and skill-bundled actions
+     * (`AISkillAction`) behave identically.
+     *
+     * Precedence:
+     * 1. Run-level override (`params.messageExpirationOverride`) when `expirationTurns != null && expirationMode !== 'None'`
+     * 2. Active per-agent `MJAIAgentActionEntity` row for `(agentId, actionEntity.ID)` when `ResultExpirationTurns != null`
+     * 3. Action metadata defaults (`actionEntity.Config_Object` — `resultExpirationTurns`, `resultExpirationMode`,
+     *    `compactMode`, `compactLength`, `compactPromptId`, with fallback to `actionEntity.DefaultCompactPromptID`)
+     * @protected
+     */
+    protected resolveActionExpirationConfig(
+        actionEntity: MJActionEntityExtended | undefined,
+        agentId: string,
+        params?: ExecuteAgentParams
+    ): ResolvedActionExpirationConfig | undefined {
+        // 1. Run-level override
+        const override = params?.messageExpirationOverride;
+        if (override && override.expirationTurns != null && override.expirationMode !== 'None') {
+            const mode = override.expirationMode || 'Remove';
+            return {
+                expirationTurns: override.expirationTurns,
+                expirationMode: mode,
+                compactMode: override.compactMode ?? (mode === 'Compact' ? 'First N Chars' : undefined),
+                compactLength: override.compactLength,
+                compactPromptId: override.compactPromptId,
+            };
+        }
+
+        if (!actionEntity) {
+            return undefined;
+        }
+
+        const actionConfig = this.getActionConfigObject(actionEntity);
+        const defaultPromptId = actionConfig?.compactPromptId ?? actionEntity.DefaultCompactPromptID ?? undefined;
+
+        // 2. Per-agent AIAgentAction row (when ResultExpirationTurns is explicitly configured on the row)
+        const agentActions = AIEngine.Instance?.AgentActions ?? [];
+        const agentAction = agentActions.find(
+            aa =>
+                UUIDsEqual(aa.AgentID, agentId) &&
+                UUIDsEqual(aa.ActionID, actionEntity.ID) &&
+                (!aa.Status || aa.Status === 'Active')
+        );
+        if (agentAction && agentAction.ResultExpirationTurns != null) {
+            const mode = (agentAction.ResultExpirationMode as 'None' | 'Remove' | 'Compact') || 'None';
+            return {
+                expirationTurns: agentAction.ResultExpirationTurns,
+                expirationMode: mode,
+                compactMode:
+                    (agentAction.CompactMode as 'First N Chars' | 'AI Summary' | undefined) ??
+                    actionConfig?.compactMode ??
+                    (mode === 'Compact' ? 'First N Chars' : undefined),
+                compactLength: agentAction.CompactLength ?? actionConfig?.compactLength ?? undefined,
+                compactPromptId: agentAction.CompactPromptID ?? defaultPromptId,
+            };
+        }
+
+        // 3. Action-level metadata default (Action.Config_Object), shared by skill-bundled and direct actions
+        if (actionConfig && actionConfig.resultExpirationTurns != null) {
+            const mode = actionConfig.resultExpirationMode ?? 'None';
+            if (mode !== 'None') {
+                return {
+                    expirationTurns: actionConfig.resultExpirationTurns,
+                    expirationMode: mode,
+                    compactMode: actionConfig.compactMode ?? (mode === 'Compact' ? 'First N Chars' : undefined),
+                    compactLength: actionConfig.compactLength,
+                    compactPromptId: defaultPromptId,
+                };
+            }
+        }
+
+        return undefined;
+    }
+
+    /**
+     * Resolves the maximum executions per run for an action across per-agent `AIAgentAction` rows,
+     * dynamic `actionChanges` limits, and the action's metadata default (`Action.Config_Object?.maxExecutionsPerRun`).
+     * @protected
+     */
+    protected resolveActionMaxExecutionsPerRun(
+        actionEntity: MJActionEntityExtended,
+        agentId: string
+    ): number | null {
+        const dbAgentAction = (AIEngine.Instance?.AgentActions ?? []).find(
+            aa =>
+                UUIDsEqual(aa.AgentID, agentId) &&
+                UUIDsEqual(aa.ActionID, actionEntity.ID) &&
+                (!aa.Status || aa.Status === 'Active')
+        );
+        if (dbAgentAction?.MaxExecutionsPerRun != null) {
+            return dbAgentAction.MaxExecutionsPerRun;
+        }
+        if (this._dynamicActionLimits[actionEntity.ID] != null) {
+            return this._dynamicActionLimits[actionEntity.ID];
+        }
+        const actionConfig = this.getActionConfigObject(actionEntity);
+        if (typeof actionConfig?.maxExecutionsPerRun === 'number' && actionConfig.maxExecutionsPerRun > 0) {
+            return actionConfig.maxExecutionsPerRun;
+        }
+        return null;
+    }
+
+    /**
+     * Registers large or expirable action outputs into `this._artifactToolManager` so that the agent
+     * retains full query, iteration, seek, and grep access (`get_rows`, `search_rows`, `filter`,
+     * `aggregate`, `grep`, `get_lines`, `json_path`, `json_iterate`, `get_full`) across turns even
+     * after the inline action-result message is compacted or removed.
+     *
+     * Runs on the single unified `executeActionsStep` pathway so direct actions and skill-bundled
+     * actions receive identical history-tool support.
+     * @protected
+     */
+    protected registerActionOutputArtifacts(
+        actionName: string,
+        actionEntity: MJActionEntityExtended | undefined,
+        outputParams: ActionParam[],
+        message: string | undefined,
+        stepNumber: number,
+        expirationConfig?: ResolvedActionExpirationConfig
+    ): string[] {
+        const registeredIds: string[] = [];
+        const willExpire = expirationConfig != null && expirationConfig.expirationMode !== 'None';
+        const charThreshold = willExpire
+            ? (expirationConfig.expirationMode === 'Compact'
+                ? Math.min(expirationConfig.compactLength ?? 2000, 1000)
+                : 500)
+            : 4000;
+        const rowThreshold = willExpire ? 2 : 20;
+
+        // Extract optional Columns metadata parameter if the action returned one (e.g., Run Ad-hoc Query)
+        const columnsParam = outputParams.find(p => p.Name?.trim().toLowerCase() === 'columns' && Array.isArray(p.Value));
+        const rawColumns = Array.isArray(columnsParam?.Value)
+            ? (columnsParam!.Value as Array<Record<string, unknown>>)
+            : undefined;
+
+        let registeredTabularRows = false;
+
+        // 1. Check for tabular row-array output parameters (e.g., Results, Rows, Data, Records, Items)
+        for (const param of outputParams) {
+            if (param.Name?.trim().toLowerCase() === 'columns') {
+                continue;
+            }
+            const val = param.Value;
+            if (
+                Array.isArray(val) &&
+                val.length > 0 &&
+                val.every(r => r !== null && typeof r === 'object' && !Array.isArray(r))
+            ) {
+                const rows = val as Array<Record<string, unknown>>;
+                const serializedRows = JSON.stringify(rows);
+                if (rows.length >= rowThreshold || serializedRows.length >= charThreshold) {
+                    const firstRow = rows[0];
+                    const columns = rawColumns && rawColumns.length > 0
+                        ? rawColumns.map(c => ({
+                            field: String(c.ColumnName ?? c.field ?? c.Name ?? ''),
+                            sqlBaseType: String(c.DataType ?? c.sqlBaseType ?? 'nvarchar'),
+                        })).filter(c => c.field.length > 0)
+                        : Object.keys(firstRow).map(field => ({
+                            field,
+                            sqlBaseType:
+                                typeof firstRow[field] === 'number'
+                                    ? 'float'
+                                    : typeof firstRow[field] === 'boolean'
+                                        ? 'bit'
+                                        : 'nvarchar',
+                        }));
+                    const tableName = param.Name || 'Results';
+                    const snapshotJson = JSON.stringify({
+                        tables: [
+                            {
+                                name: tableName,
+                                columns,
+                                rows,
+                                metadata: { rowCount: rows.length },
+                            },
+                        ],
+                    });
+                    const alphaId = this._artifactToolManager.RegisterArtifact({
+                        name: `${actionName} — ${tableName} (Step ${stepNumber})`,
+                        typeName: 'Data Snapshot',
+                        toolLibraryClass: 'DataSnapshotToolLibrary',
+                        mimeType: 'application/json',
+                        content: snapshotJson,
+                        description: `${rows.length} row(s) returned by action "${actionName}" (${tableName}). Queryable via get_tables, get_schema, get_rows, search_rows, filter, aggregate, group_aggregate, compute, or get_full.`,
+                        deliveryMode: 'ToolsOnly',
+                        forceToolsOnly: true,
+                    });
+                    registeredIds.push(alphaId);
+                    registeredTabularRows = true;
+                }
+            }
+        }
+
+        // 2. Check remaining large output parameters (skipping duplicate FormattedResults when tabular rows were already registered)
+        for (const param of outputParams) {
+            const lowerName = (param.Name || '').trim().toLowerCase();
+            if (lowerName === 'columns') {
+                continue;
+            }
+            if (registeredTabularRows && (lowerName === 'formattedresults' || lowerName === 'results')) {
+                continue;
+            }
+            const val = param.Value;
+            if (val == null) {
+                continue;
+            }
+            if (typeof val === 'object') {
+                if (
+                    Array.isArray(val) &&
+                    val.length > 0 &&
+                    val.every(r => r !== null && typeof r === 'object' && !Array.isArray(r))
+                ) {
+                    continue; // Handled in pass 1
+                }
+                const serialized = JSON.stringify(val, null, 2);
+                if (serialized.length >= charThreshold) {
+                    const alphaId = this._artifactToolManager.RegisterArtifact({
+                        name: `${actionName} — ${param.Name} (Step ${stepNumber})`,
+                        typeName: 'JSON',
+                        toolLibraryClass: 'JSONToolLibrary',
+                        mimeType: 'application/json',
+                        content: serialized,
+                        description: `Structured JSON output from action "${actionName}" (${param.Name}). Queryable via json_path, json_keys, json_search, json_iterate, or get_full.`,
+                        deliveryMode: 'ToolsOnly',
+                        forceToolsOnly: true,
+                    });
+                    registeredIds.push(alphaId);
+                }
+            } else if (typeof val === 'string' && val.length >= charThreshold) {
+                // Skip media/file placeholders created by interceptLargeBinaryContent
+                if (val.startsWith('[Media output') || val.startsWith('[File output')) {
+                    continue;
+                }
+                const trimmed = val.trim();
+                const isJsonString =
+                    (trimmed.startsWith('{') || trimmed.startsWith('[')) &&
+                    CleanAndParseJSON<unknown>(trimmed, false) != null;
+                const isCsv = lowerName.includes('csv') || (lowerName === 'formattedresults' && trimmed.includes(',') && trimmed.includes('\n'));
+                const typeName = isJsonString ? 'JSON' : isCsv ? 'CSV' : 'Text';
+                const toolLibraryClass = isJsonString
+                    ? 'JSONToolLibrary'
+                    : isCsv
+                        ? 'CSVToolLibrary'
+                        : 'TextToolLibrary';
+                const alphaId = this._artifactToolManager.RegisterArtifact({
+                    name: `${actionName} — ${param.Name} (Step ${stepNumber})`,
+                    typeName,
+                    toolLibraryClass,
+                    mimeType: isJsonString ? 'application/json' : isCsv ? 'text/csv' : 'text/plain',
+                    content: val,
+                    description: `Output from action "${actionName}" (${param.Name}, ${val.length} chars).`,
+                    deliveryMode: 'ToolsOnly',
+                    forceToolsOnly: true,
+                });
+                registeredIds.push(alphaId);
+            }
+        }
+
+        // 3. Fallback: if no output param was registered, check if the action's Message itself is large/expirable
+        if (registeredIds.length === 0 && typeof message === 'string' && message.length >= charThreshold) {
+            const trimmed = message.trim();
+            const isJsonString =
+                (trimmed.startsWith('{') || trimmed.startsWith('[')) &&
+                CleanAndParseJSON<unknown>(trimmed, false) != null;
+            const alphaId = this._artifactToolManager.RegisterArtifact({
+                name: `${actionName} — Output (Step ${stepNumber})`,
+                typeName: isJsonString ? 'JSON' : 'Text',
+                toolLibraryClass: isJsonString ? 'JSONToolLibrary' : 'TextToolLibrary',
+                mimeType: isJsonString ? 'application/json' : 'text/plain',
+                content: message,
+                description: `Full message output from action "${actionName}" (${message.length} chars). Queryable via grep, get_lines, or get_full.`,
+                deliveryMode: 'ToolsOnly',
+                forceToolsOnly: true,
+            });
+            registeredIds.push(alphaId);
+        }
+
+        return registeredIds;
     }
 
     /**
@@ -7774,11 +8099,6 @@ export class BaseAgent {
         // Falls back to database-configured actions only when the list was never computed for this run
         const effectiveActions = this.getEffectiveActionsForValidation(params.agent.ID);
 
-        // Also get the database-configured agent actions for MaxExecutionsPerRun lookup
-        const dbAgentActions = AIEngine.Instance.AgentActions.filter(
-            aa => UUIDsEqual(aa.AgentID, params.agent.ID) && aa.Status === 'Active'
-        );
-
         const resolvedByAction = new Map<AgentAction, MJActionEntityExtended>();
         const missingActions = nextStep.actions?.filter(action => {
             const matched = this.resolveActionEntityForAgent(action.name, effectiveActions, params, true);
@@ -7819,17 +8139,8 @@ export class BaseAgent {
 
                 if (!actionEntity) continue;
 
-                // Check for limit from database-configured agent action
-                const dbAgentAction = dbAgentActions.find(aa => UUIDsEqual(aa.ActionID, actionEntity.ID));
-                let maxExecutions: number | null = null;
-
-                if (dbAgentAction?.MaxExecutionsPerRun != null) {
-                    // Database-configured action with limit
-                    maxExecutions = dbAgentAction.MaxExecutionsPerRun;
-                } else if (this._dynamicActionLimits[actionEntity.ID] != null) {
-                    // Dynamically added action with limit from actionChanges
-                    maxExecutions = this._dynamicActionLimits[actionEntity.ID];
-                }
+                // Check for limit across per-agent AIAgentAction rows, dynamic actionChanges, and Action.Config
+                const maxExecutions = this.resolveActionMaxExecutionsPerRun(actionEntity, params.agent.ID);
 
                 if (maxExecutions != null) {
                     const executionCount = await this.getActionExecutionCount(agentRun.ID, actionEntity.ID);
@@ -14944,6 +15255,12 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
 
+            if (a.artifactIds && a.artifactIds.length > 0) {
+                lines.push(
+                    `**Artifact Handle(s):** ${a.artifactIds.map(id => `\`${id}\``).join(', ')} — full output is retained in memory for the run and remains queryable via artifact tools (e.g. \`get_rows\`, \`search_rows\`, \`filter\`, \`aggregate\`, \`grep\`, \`get_lines\`, \`json_path\`, \`json_iterate\`, \`get_full\`) even after this message is compacted or expires.`
+                );
+            }
+
             const formatted = lines.join('\n');
             if (a.trustLevel === 'Untrusted' || a.trustLevel === 'SemiTrusted') {
                 return WrapUntrustedExternalData(formatted, `action:${a.actionName}`, a.trustLevel);
@@ -19517,9 +19834,6 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
 
-            // Get the AIAgentAction metadata records for this agent (used for expiration settings)
-            const agentActions = AIEngine.Instance.AgentActions.filter(aa => UUIDsEqual(aa.AgentID, params.agent.ID));
-
             // Use _effectiveActions which includes runtime action changes applied in gatherPromptTemplateData
             // getEffectiveActionsForValidation falls back to the configured actions only when none were computed;
             // an empty computed list (a host's actionChanges removed every action) is authoritative
@@ -19643,14 +19957,30 @@ The context is now within limits. Please retry your request with the recovered c
                 const fileOutputs = this.detectFileOutputs(outputParams);
                 this._fileOutputs.push(...fileOutputs);
 
+                const stepNum = result.stepEntity?.StepNumber ?? (stepCount + 1);
                 const trustLevel = this.resolveActionTrustLevel(result.action.name, result.actionEntity, params);
                 if (trustLevel === 'Untrusted' || trustLevel === 'SemiTrusted') {
                     this.recordTaintedSource(
-                        result.stepEntity?.StepNumber ?? (stepCount + 1),
+                        stepNum,
                         `action:${result.action.name}`,
                         trustLevel
                     );
                 }
+
+                // Resolve expiration/compaction settings uniformly across direct (AIAgentAction)
+                // and skill-bundled (AISkillAction / Action.Config) invocations, and register
+                // large or expirable outputs into ArtifactToolManager so history tools work identically.
+                const expirationConfig = this.resolveActionExpirationConfig(result.actionEntity, params.agent.ID, params);
+                const artifactIds = isActionSuccess
+                    ? this.registerActionOutputArtifacts(
+                        result.action.name,
+                        result.actionEntity,
+                        sanitizedParams,
+                        actionResult?.Message,
+                        stepNum,
+                        expirationConfig
+                    )
+                    : [];
 
                 return {
                     actionName: result.action.name,
@@ -19667,6 +19997,7 @@ The context is now within limits. Please retry your request with the recovered c
                     breakerReason: actionResult instanceof CircuitBreakerActionResult ? actionResult.Reason : undefined,
                     trustLevel,
                     errorRecovery: actionResult?.ErrorRecovery,
+                    ...(artifactIds.length > 0 ? { artifactIds } : {}),
                 };
             });
             
@@ -19676,14 +20007,15 @@ The context is now within limits. Please retry your request with the recovered c
             // Add user message with the results — compact markdown instead of JSON
             const resultsMessage = this.buildActionResultsMessage(actionSummaries);
 
-            // Build metadata from AI Agent Actions configuration
-            // If multiple actions, use the most restrictive (shortest) expiration settings
+            // Build metadata from unified action expiration configuration (run override -> AIAgentAction -> Action.Config).
+            // If multiple actions ran in parallel, use the most restrictive (shortest) expiration settings.
             let metadata: AgentChatMessageMetadata | undefined;
-            const agentActionConfigs = actionResults
-                .map(r => agentActions.find(aa => UUIDsEqual(aa.ActionID, r.actionEntity.ID)))
-                .filter(aa => aa != null);
+            const resolvedExpirationConfigs = actionResults
+                .map(r => this.resolveActionExpirationConfig(r.actionEntity, params.agent.ID, params))
+                .filter((cfg): cfg is ResolvedActionExpirationConfig => cfg != null);
+            const allArtifactIds = actionSummaries.flatMap(s => s.artifactIds ?? []);
 
-            if (agentActionConfigs.length > 0) {
+            if (resolvedExpirationConfigs.length > 0) {
                 // Find the most restrictive expiration settings
                 let minExpirationTurns: number | null = null;
                 let expirationMode: 'None' | 'Remove' | 'Compact' = 'None';
@@ -19691,15 +20023,15 @@ The context is now within limits. Please retry your request with the recovered c
                 let compactLength: number | undefined;
                 let compactPromptId: string | undefined;
 
-                for (const agentAction of agentActionConfigs) {
+                for (const cfg of resolvedExpirationConfigs) {
                     // Track shortest expiration (most restrictive)
-                    if (agentAction.ResultExpirationTurns != null) {
-                        if (minExpirationTurns === null || agentAction.ResultExpirationTurns < minExpirationTurns) {
-                            minExpirationTurns = agentAction.ResultExpirationTurns;
-                            expirationMode = agentAction.ResultExpirationMode as 'None' | 'Remove' | 'Compact' || 'None';
-                            compactMode = agentAction.CompactMode as 'First N Chars' | 'AI Summary' | undefined;
-                            compactLength = agentAction.CompactLength;
-                            compactPromptId = agentAction.CompactPromptID;
+                    if (cfg.expirationTurns != null) {
+                        if (minExpirationTurns === null || cfg.expirationTurns < minExpirationTurns) {
+                            minExpirationTurns = cfg.expirationTurns;
+                            expirationMode = cfg.expirationMode || 'None';
+                            compactMode = cfg.compactMode;
+                            compactLength = cfg.compactLength;
+                            compactPromptId = cfg.compactPromptId;
                         }
                     }
                 }
@@ -19713,7 +20045,8 @@ The context is now within limits. Please retry your request with the recovered c
                         expirationMode: expirationMode,
                         compactMode: compactMode,
                         compactLength: compactLength,
-                        compactPromptId: compactPromptId
+                        compactPromptId: compactPromptId,
+                        ...(allArtifactIds.length > 0 ? { artifactIds: allArtifactIds } : {}),
                     };
                 }
             }
@@ -19722,7 +20055,11 @@ The context is now within limits. Please retry your request with the recovered c
             // and IsVolatileResultMessage recognize it: context recovery and post-run compaction can then
             // compact it, and `pruneAndCompactExpiredMessages` still leaves it alone (no expirationTurns).
             if (!metadata) {
-                metadata = { turnAdded: this._promptTurnCount, messageType: 'action-result' };
+                metadata = {
+                    turnAdded: this._promptTurnCount,
+                    messageType: 'action-result',
+                    ...(allArtifactIds.length > 0 ? { artifactIds: allArtifactIds } : {}),
+                };
             }
 
             if (addConversationMessage) {
@@ -22149,26 +22486,24 @@ The context is now within limits. Please retry your request with the recovered c
             }
         }
 
-        // Look up the loop's action config for expiration settings
+        // Look up the loop's action config for expiration settings (unified across AIAgentAction and Action.Config)
         if (actionName) {
-            const agentActions = AIEngine.Instance.AgentActions.filter(
-                aa => UUIDsEqual(aa.AgentID, params.agent.ID)
-            );
             const effectiveActions = this.getEffectiveActionsForValidation(params.agent.ID);
             const matchedAction =
                 effectiveActions.find(a => a.Name.trim().toLowerCase() === actionName.trim().toLowerCase())
-                ?? this.matchNamedBySanitizedToolName(actionName, effectiveActions).match;
+                ?? this.matchNamedBySanitizedToolName(actionName, effectiveActions).match
+                ?? ActionEngineBase.Instance?.Actions?.find(a => a.Name?.trim().toLowerCase() === actionName.trim().toLowerCase());
 
             if (matchedAction) {
-                const agentAction = agentActions.find(aa => UUIDsEqual(aa.ActionID, matchedAction.ID));
-                if (agentAction?.ResultExpirationTurns != null && agentAction.ResultExpirationMode !== 'None') {
+                const resolved = this.resolveActionExpirationConfig(matchedAction, params.agent.ID, params);
+                if (resolved && resolved.expirationMode !== 'None') {
                     return {
                         ...baseMetadata,
-                        expirationTurns: agentAction.ResultExpirationTurns,
-                        expirationMode: agentAction.ResultExpirationMode as 'Remove' | 'Compact',
-                        compactMode: agentAction.CompactMode as 'First N Chars' | 'AI Summary' | undefined,
-                        compactLength: agentAction.CompactLength ?? undefined,
-                        compactPromptId: agentAction.CompactPromptID ?? undefined
+                        expirationTurns: resolved.expirationTurns,
+                        expirationMode: resolved.expirationMode,
+                        compactMode: resolved.compactMode,
+                        compactLength: resolved.compactLength,
+                        compactPromptId: resolved.compactPromptId
                     };
                 }
             }
@@ -23080,7 +23415,10 @@ The context is now within limits. Please retry your request with the recovered c
 
                 if (msg.metadata.expirationMode === 'Remove' && msg.role === 'tool') {
                     // a tool turn cannot be removed (it answers an assistant call); stub its blocks.
-                    params.conversationMessages[i] = this.stubToolTurn(msg, `[result expired after ${turnsAlive} turns]`);
+                    const artifactNote = msg.metadata?.artifactIds?.length
+                        ? `; full output remains queryable via artifact tools on Artifact ${msg.metadata.artifactIds.join(', ')}`
+                        : '';
+                    params.conversationMessages[i] = this.stubToolTurn(msg, `[result expired after ${turnsAlive} turns${artifactNote}]`);
                     this.emitMessageLifecycleEvent({
                         type: 'message-expired',
                         turn: currentTurn,
@@ -23101,12 +23439,13 @@ The context is now within limits. Please retry your request with the recovered c
                 } else if (msg.metadata.expirationMode === 'Compact') {
                     // Compacted once is compacted: compacting again would summarize the summary, and
                     // change the message again on every turn. Expansion clears the flag.
-                    if (msg.metadata.compactMode && !msg.metadata.wasCompacted) {
+                    const effectiveCompactMode = msg.metadata.compactMode || 'First N Chars';
+                    if (!msg.metadata.wasCompacted) {
                         messagesToCompact.push({
                             index: i,
                             message: msg,
                             metadata: {
-                                compactMode: msg.metadata.compactMode,
+                                compactMode: effectiveCompactMode,
                                 compactLength: msg.metadata.compactLength || 500,
                                 compactPromptId: msg.metadata.compactPromptId || '',
                                 originalLength: typeof msg.content === 'string'
@@ -23845,7 +24184,10 @@ The context is now within limits. Please retry your request with the recovered c
                 const truncated = originalContent.substring(0, length);
                 // A native-only agent has no message expansion, so its tool results do not offer it.
                 const expandable = !(message.role === 'tool' && this.GetNativeControlConfig(params).NativeOnly);
-                return `${truncated}...\n\n[Compacted: showing first ${length} of ${originalContent.length} characters.${expandable ? ' Agent can request expansion if needed.' : ''}]`;
+                const artifactHint = message.metadata?.artifactIds?.length
+                    ? ` Full output remains queryable via artifact tools on Artifact ${message.metadata.artifactIds.join(', ')}.`
+                    : '';
+                return `${truncated}...\n\n[Compacted: showing first ${length} of ${originalContent.length} characters.${expandable ? ' Agent can request expansion if needed.' : ''}${artifactHint}]`;
             }
 
             case 'AI Summary': {
@@ -23907,7 +24249,10 @@ The context is now within limits. Please retry your request with the recovered c
                         );
                     }
 
-                    return `[AI Summary of ${metadata.originalLength} chars. Agent can request full expansion if needed.]\n\n${result.result.summary}`;
+                    const artifactHint = message.metadata?.artifactIds?.length
+                        ? ` Full output remains queryable via artifact tools on Artifact ${message.metadata.artifactIds.join(', ')}.`
+                        : '';
+                    return `[AI Summary of ${metadata.originalLength} chars. Agent can request full expansion if needed.${artifactHint}]\n\n${result.result.summary}`;
 
                 } catch (error) {
                     console.error('Error during AI summary:', error);

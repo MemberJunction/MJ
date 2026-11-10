@@ -953,7 +953,17 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
     // -----------------------------------------------------------------------
 
     private findTable(payload: SnapshotPayload, tableName: string): SnapshotTable | undefined {
-        return payload.tables.find(t => t.name === tableName);
+        const exact = payload.tables.find(t => t.name === tableName);
+        if (exact) return exact;
+        if (typeof tableName === 'string' && tableName.trim().length > 0) {
+            const lower = tableName.trim().toLowerCase();
+            return payload.tables.find(t => t.name.toLowerCase() === lower);
+        }
+        // When a snapshot contains only a single table and `table` is omitted, default to that table.
+        if (payload.tables.length === 1 && (!tableName || String(tableName).trim().length === 0)) {
+            return payload.tables[0];
+        }
+        return undefined;
     }
 
     private tableNotFoundError(tableName: string): ArtifactToolResult {
