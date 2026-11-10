@@ -3985,8 +3985,8 @@ Promise<PublishOutcome>`, `Archive(modelId, reason, actor, ctx): Promise<GateApp
     expect(store.PublishRecords(candidate.ID)).toEqual([expect.objectContaining({ Kind: 'refusal' })]);
   });
   it('a flagged model is refused unacknowledged-leakage-flags, not transient', async () => {
-    store.FlagLeakage(candidate.ID, ['single-feature-dominance']);
-    expect(await gate.Publish(request, ctx)).toMatchObject({ Kind: 'withheld', Refusal: { kind: 'unacknowledged-leakage-flags', flags: ['single-feature-dominance'] }, Transient: false });
+    store.FlagLeakage(candidate.ID, [{ kind: 'single-feature-auc', sourceColumn: 'cancelled_flag', heldOutAuc: 0.97 }]);
+    expect(await gate.Publish(request, ctx)).toMatchObject({ Kind: 'withheld', Refusal: { kind: 'unacknowledged-leakage-flags', flags: ['single-feature-auc'] }, Transient: false });
   });
   it('storage unreachable inside the transaction is artifact-unverifiable, transient, status unchanged', async () => {
     storage.PutError = 'connection reset';  // MemoryStorageAccount's switch (storage-fakes.ts:26)
@@ -4011,7 +4011,7 @@ Promise<PublishOutcome>`, `Archive(modelId, reason, actor, ctx): Promise<GateApp
     expect(store.Status(incumbent.ID)).toBe('Published');
   });
   it('Archive needs a reason and no sign-off, flagged or not', async () => {
-    store.FlagLeakage(candidate.ID, ['single-feature-dominance']);
+    store.FlagLeakage(candidate.ID, [{ kind: 'single-feature-auc', sourceColumn: 'cancelled_flag', heldOutAuc: 0.97 }]);
     expect(await gate.Archive(candidate.ID, '', human, ctx)).toMatchObject({ Ok: false, Refusal: { kind: 'reason-required' } });
     expect(await gate.Archive(candidate.ID, 'superseded', human, ctx)).toMatchObject({ Ok: true, From: 'Validated', To: 'Archived' });
   });
@@ -4036,7 +4036,8 @@ Promise<PublishOutcome>`, `Archive(modelId, reason, actor, ctx): Promise<GateApp
   });
   ```
   (`store` is the test's `GateTestStore`, a fake provider over in-memory rows that records every save, built on the
-  Engine's `__tests__/fakes`; `PinProtocol`, `FlagLeakage`, `Status`, `StatusReason`, `PublishRecords`, `PublishRecordsOfRun` (by `TrainingRunID`),
+  Engine's `__tests__/fakes`; `PinProtocol`, `FlagLeakage` (takes PR 3's `LeakageFlag[]`, `Core/src/trainer-contract.ts:138-142`,
+  stored as the run's leakage audit), `Status`, `StatusReason`, `PublishRecords`, `PublishRecordsOfRun` (by `TrainingRunID`),
   `ScheduledJobs`, `ReadCount` (reads served so far) and `SaveCount` are its members; `NO_SUCH_MODEL_ID` is a
   well-formed UUID with no row.) `ml-model-publish-record.test.ts`:
   ```ts
@@ -4314,17 +4315,22 @@ unless `Output.applied`; `PromotableStatus` (`:11`), `signOff: true` (`:23`) and
 `:11` the same), `…/rigs/ps-live-modelaction-generation.ts` (`:320-326` call `PromoteModel(…, 'evaluate', …)` and
 `PromoteModel(…, 'publish', …)`; the header `:9`, `:16-17`, `:30-32` describe `LifecycleGate.ApplyTransition` →
 `ModelScoringActionGenerator.GenerateForModel` instead of the deleted class and alias) · Test
-`Engine/src/actions/__tests__/promote-model.action.test.ts`, every changed line on `25f11768a7`: the header `:19`
-(`TargetStatus` → `Transition`); `MockGate implements IModelPromotionGate` (`:31-40`) becomes the `RecordingGate`/
-`RefusingGate` `LifecycleGate` fakes; `TestablePromoteAction`'s `createGate` override (`:46-48`) becomes
-`CreateLifecycleGate`; the validation cases `:61-86` send `Transition` (`:65`, `:72-83`); the mapping cases: `:89-101`
+`Engine/src/actions/__tests__/promote-model.action.test.ts` (422 lines), every changed line on `25f11768a7`: the imports
+`:3-4` (used only by the gate half) and `:7-12` (`IModelPromotionGate`, `PromoteModelRequest`, `PromoteModelOutcome`,
+`ProductionModelPromotionGate`) become the `LifecycleGate` and `TransitionRefusal` imports; the header `:16-24` (the two
+layers, `TargetStatus`, the gate half) describes the Action over `LifecycleGate`; `MockGate implements
+IModelPromotionGate` (`:31-40`) becomes the `RecordingGate`/`RefusingGate`/`ThrowingGate` `LifecycleGate` fakes;
+`TestablePromoteAction`'s constructor `:42-43` takes a `LifecycleGate` and its `createGate` override (`:46-48`) becomes
+`CreateLifecycleGate`; the validation cases `:61-86` build the new fakes (`:63`, `:73`) and send `Transition` (`:65`,
+`:72-83`); the mapping cases: `:89-101`
 (SUCCESS; `:93-94` `TargetStatus`/`SignOff`, `:98` asserts `targetStatus`/`signOff`) become the Transition/Reason case,
 `:103-116` (`LEAKAGE_SIGNOFF_REQUIRED`, `:112`, `:114`) becomes `LEAKAGE_FLAGGED`, `:118-144` (the `SignOff` threading and
 coercion cases, `:123`, `:130`, `:139`) are deleted with the param, `:146-157` (`SIGNOFF_REASON_REQUIRED`, `:155`)
 becomes `REASON_REQUIRED`, `:160-177` keeps not-found and drops save-failed (`:175` `SAVE_FAILED`), `:179-192`
 (`CALIBRATION_HOLD`; `:183-184` `TargetStatus`/`SignOff` removed) and `:194-205` (`MODEL_NOT_SERVABLE`, `:198`) send
-`Transition`; new cases `ILLEGAL_TRANSITION`, `TRANSITION_REFUSED`; the gate half `:211-420` (`FakeModel` `:211`,
-`TestableGate` `:239`, `req` `:251`, the `describe` at `:262`) is deleted,
+`Transition`; new cases `ILLEGAL_TRANSITION`, `TRANSITION_REFUSED`, `PROMOTION_FAILED`; the "Layer 2" banner `:205-209`
+and the gate half `:211-422` (`FakeModel` `:211`, `TestableGate` `:239`, `req` `:251`, the `describe` at `:262`, ending at
+`:422`) are deleted,
 `Engine/src/actions/__tests__/model-scoring-action-generator.test.ts`, `Engine/src/training/__tests__/model-holds.test.ts`
 (`:21` imports and `:80` extends the class to test the calibration-hold and not-servable refusals, `:93-94` build a
 `PromoteModelRequest`; rewritten over `LifecycleGate`'s `calibration-held`/`not-servable` refusals),
@@ -4376,12 +4382,13 @@ on `ctx.Provider` and `ctx.User` and the actor `{ kind: 'human', userId: ctx.Use
 `Refusal.kind === 'model-not-found'`, before any read; the fixture — RD9's pipeline as today (`:1290-1300`), a finished
 `MJ: ML Training Runs` row whose `ValidationResults.gate` is a `StoredGateRecord` constant (typed, `Core/src/run-evaluation.ts:33`)
 with decision `model` and intervals under which `GateRules.DecideGuardedGate` re-derives `model` (asserted first, the
-anti-vacuity precondition, as `:1287` asserts the dominance shape today) and a stored `single-feature-dominance` leakage
-flag, and a `Draft` model naming that run with the dominance-flagged `FeatureImportance` (precondition
+anti-vacuity precondition, as `:1287` asserts the dominance shape today) and a stored PR 3 leakage flag
+`{ kind: 'single-feature-auc', sourceColumn: 'leaky_feature', heldOutAuc: 0.97 }` (the dominant column of the fixture's
+importance; `LeakageFlag`, `Core/src/trainer-contract.ts:138-142`), and a `Draft` model naming that run with the dominance-flagged `FeatureImportance` (precondition
 `DetectSingleFeatureDominance(importance, 0.6).Dominant`); (2) illegal jump: `StatusWriteRules.IsAuthorisedTransition('Draft',
 'Published')` → `false` and `Publish` of the `Draft` model → `withheld`, `illegal-transition`, the model still `Draft`;
 (3) leakage: `Evaluate({ modelId })` → `evaluated`, `To: 'Validated'` (the gate's own authorised write), then `Publish`
-→ `withheld`, `unacknowledged-leakage-flags` with `flags: ['single-feature-dominance']`, `Transient: false`, the model
+→ `withheld`, `unacknowledged-leakage-flags` with `flags: ['single-feature-auc']`, `Transient: false`, the model
 still `Validated`; (4) missing reason: `Archive(model.ID, '', actor, gateCtx)` → `Ok: false`, `reason-required`, the model
 still `Validated`; then a `BypassCache` re-read → `Validated` and 0 `publish` rows in `MJ: ML Model Publish Records` for
 the model. The `finally` deletes, each `Delete()` checked (not `.catch(() => undefined)` as `:1332`, `:1335` today), the
@@ -4429,7 +4436,7 @@ that hits a flagged model stops with the refusal text, which its log records
   });
   // promote-model.action.test.ts — through InternalRunAction (TestablePromoteAction.run → Run), one case per code
   it.each([
-    [{ kind: 'unacknowledged-leakage-flags', flags: ['single-feature-dominance'] }, 'LEAKAGE_FLAGGED'],
+    [{ kind: 'unacknowledged-leakage-flags', flags: ['single-feature-auc'] }, 'LEAKAGE_FLAGGED'],
     [{ kind: 'illegal-transition', from: 'draft', to: 'published' }, 'ILLEGAL_TRANSITION'],
     [{ kind: 'reason-required' }, 'REASON_REQUIRED'],
     [{ kind: 'does-not-beat-incumbent', incumbentModelId: OLD, comparison }, 'TRANSITION_REFUSED'],
@@ -4439,6 +4446,10 @@ that hits a flagged model stops with the refusal text, which its log records
   ])('maps the refusal %o to %s', async (refusal, code) => {
     const r = await new TestablePromoteAction(RefusingGate(refusal)).run(params([{ Name: 'ModelID', Type: 'Input', Value: M }, { Name: 'Transition', Type: 'Input', Value: 'publish' }]));
     expect([r.Success, r.ResultCode]).toEqual([false, code]);
+  });
+  it('maps a gate that throws to PROMOTION_FAILED with the error text', async () => {
+    const r = await new TestablePromoteAction(ThrowingGate('lock timeout')).run(params([{ Name: 'ModelID', Type: 'Input', Value: M }, { Name: 'Transition', Type: 'Input', Value: 'publish' }]));
+    expect([r.Success, r.ResultCode, r.Message]).toEqual([false, 'PROMOTION_FAILED', expect.stringContaining('lock timeout')]);
   });
   it('passes Transition and Reason to the gate and maps an applied outcome to SUCCESS with the Status output', async () => {
     const gate = RecordingGate({ Kind: 'published', Status: 'Published' });
@@ -4460,7 +4471,8 @@ that hits a flagged model stops with the refusal text, which its log records
   });
   ```
   (`RecordingScoringActions` is a `ScoringActionSync` fake recording its calls, `FailNext` making the next one throw;
-  `logged` captures `LogError`; `RefusingGate`/`RecordingGate` are `LifecycleGate` fakes returning the given outcome,
+  `logged` captures `LogError`; `RefusingGate`/`RecordingGate` are `LifecycleGate` fakes returning the given outcome and
+`ThrowingGate` one whose `Publish` throws (the catch at `promote-model.action.ts:117-120`),
   injected through `CreateLifecycleGate`; `M`, `OLD`, `comparison` the file's fixtures. `sentOperations` records the
   component's calls to the generated `PredictiveStudioPromoteModelOperation`; the
   `as PredictiveStudioPromoteModelInput` cast is the one way a test can send the removed shape, which the compiler
@@ -4820,16 +4832,16 @@ comparisons, decision), PR 3's stored leakage audit and the snapshot's data wind
     expect(await op.ExecuteServer(input, { ...context, apiKeyHash: 'k' })).toMatchObject({ Success: false, ResultCode: 'NOT_HUMAN' });
   });
   it('refuses overridesFlags without a reason', async () => {
-    const r = await service.Record({ ...approve, overridesFlags: ['single-feature-dominance'], reason: '  ' }, human, ctx);
+    const r = await service.Record({ ...approve, overridesFlags: ['single-feature-auc'], reason: '  ' }, human, ctx);
     expect(r).toEqual({ Ok: false, Refusal: 'overrides-without-reason' });
     expect(store.PublishRecords(model.ID)).toHaveLength(0);
   });
   it('a flagged model publishes after an approving sign-off whose OverridesFlags covers its flags; a partial cover is refused', async () => {
-    store.FlagLeakage(model.ID, ['single-feature-dominance', 'time-shifted-label']);
-    const partial = await service.Record({ ...approve, overridesFlags: ['single-feature-dominance'], reason: 'reviewed: set before the decision date' }, human, ctx);
+    store.FlagLeakage(model.ID, [{ kind: 'single-feature-auc', sourceColumn: 'cancelled_flag', heldOutAuc: 0.97 }, { kind: 'time-shifted-label', scoreWithShiftedLabel: 0.91 }]);
+    const partial = await service.Record({ ...approve, overridesFlags: ['single-feature-auc'], reason: 'reviewed: set before the decision date' }, human, ctx);
     expect(await gate.Publish({ ...request, initiator: human, signOffId: partial.Ok ? partial.SignOffRecordID : null }, ctx))
       .toMatchObject({ Kind: 'withheld', Refusal: { kind: 'unacknowledged-leakage-flags', flags: ['time-shifted-label'] } });
-    const full = await service.Record({ ...approve, overridesFlags: ['single-feature-dominance', 'time-shifted-label'], reason: 'reviewed both' }, human, ctx);
+    const full = await service.Record({ ...approve, overridesFlags: ['single-feature-auc', 'time-shifted-label'], reason: 'reviewed both' }, human, ctx);
     expect(await gate.Publish({ ...request, initiator: human, signOffId: full.Ok ? full.SignOffRecordID : null }, ctx)).toMatchObject({ Kind: 'published' });
     expect(store.PublishRecords(model.ID).filter((r) => r.Kind === 'publish')).toEqual([expect.objectContaining({ SignOffID: full.Ok ? full.SignOffRecordID : null })]);
   });
@@ -5391,10 +5403,10 @@ and PR 3's leakage audit decide; `heldReason` = the recorded refusal in plain wo
 - [ ] Step 1: Write the failing tests:
   ```ts
   it('a flagged winner is refused by the gate and heldReason names the flags', async () => {
-    trainer.NextRun({ outcome: 'model', leakageFlags: ['single-feature-dominance'] });
+    trainer.NextRun({ outcome: 'model', leakageFlags: [{ kind: 'single-feature-auc', sourceColumn: 'cancelled_flag', heldOutAuc: 0.97 }] });
     const r = await builder.Build({ spec, provider, user, autoPublish: true });
     expect(r).toMatchObject({ published: false });
-    expect(r.heldReason).toContain('single-feature-dominance');
+    expect(r.heldReason).toContain('single-feature-auc');
     expect(store.PublishRecords(r.modelId ?? '')).toEqual([expect.objectContaining({ Kind: 'refusal' })]);
   });
   it('a no-signal run reports the stored reason, has no model and leaves one run-level refusal', async () => {
@@ -6188,8 +6200,9 @@ allowlisted by D4-70), `metadata/actions/predictive-studio/.predictive-studio-ac
 `deleteRecord` and a "Retired." description that does not repeat the name, `deletedAt` written by `mj sync push` and
 committed with the task as in M3.4; new params, `uuidgen` keys: Inputs `BindingID` and `AsOfDate` (optional), Outputs
 `ScoringRunID`, `Status`, `Total`, `Written`, `Failed` (the union's fields); `Predictions` (`:380`) kept; the Action
-(`score-record-set.action.ts:171-174`) and the per-model Actions' params (`model-scoring-action-generator.ts:373`, `:380`,
-`:387`, `:394`) write the same names),
+(`score-record-set.action.ts:171-174`, and its `WriteBack` input reads at `:215`, `:219`) and the per-model Actions'
+params (`model-scoring-action-generator.ts:363` the `WriteBack` input, `:373`, `:380`, `:387`, `:394`) write the same
+names),
 `packages/MJCoreEntities/src/generated/remote_operations.ts`
 (regenerated) · Test `Engine/src/actions/__tests__/score-record-set.binding.test.ts` (new), the existing
 `score-record-set.*.test.ts`, `operations/__tests__/score-record-set.operation.test.ts`,
@@ -6283,9 +6296,10 @@ base's FORBIDDEN / SUCCESS / EXECUTION_ERROR shapes)
   `git grep -n "out\.\(scored\|skipped\|wroteBack\)" -- packages/React/runtime/src/utilities/runtime-utilities.ts` → 0
   (on `origin/next`: 2, `:324`, `:326`; `failed` is left out because the union's `failed` variant has a `failed` count,
   §3.3 `ScoringResult`). And `git grep -n '"Name": "\(ScoredCount\|WroteBack\|WriteBack\)"' -- metadata/actions/predictive-studio`
-  → exactly 3, the retired records (on `origin/next`: 3, `:326`, `:344`, `:362`); `git grep -n "'ScoredCount'\|'WroteBack'\|'SkippedCount'" -- packages/AI/PredictiveStudio/Engine/src/actions/score-record-set.action.ts packages/AI/PredictiveStudio/Engine/src/actions/model-scoring-action-generator.ts packages/AI/PredictiveStudio/Engine/src/actions/__tests__/score-record-set.action.test.ts packages/AI/PredictiveStudio/Engine/src/actions/__tests__/model-scoring-action-generator.test.ts`
-  → 0 (on `origin/next`: 11 — `score-record-set.action.ts:171`, `:173`, `:174`, `model-scoring-action-generator.ts:373`,
-  `:387`, `:394`, `score-record-set.action.test.ts:123`, `:124`, `:206`, `:207`, `model-scoring-action-generator.test.ts:239`). The `@deprecated` aliases of each modified PS file go (§2.5).
+  → exactly 3, the retired records (on `origin/next`: 3, `:326`, `:344`, `:362`); `git grep -n "'ScoredCount'\|'WroteBack'\|'SkippedCount'\|'FailedCount'\|'WriteBack'" -- packages/AI/PredictiveStudio/Engine/src/actions/score-record-set.action.ts packages/AI/PredictiveStudio/Engine/src/actions/model-scoring-action-generator.ts packages/AI/PredictiveStudio/Engine/src/actions/__tests__/score-record-set.action.test.ts packages/AI/PredictiveStudio/Engine/src/actions/__tests__/model-scoring-action-generator.test.ts`
+  → 0 (on `origin/next`: 18 — `score-record-set.action.ts:171`, `:172`, `:173`, `:174`, `:215`, `:219`,
+  `model-scoring-action-generator.ts:363`, `:373`, `:380`, `:387`, `:394`, `score-record-set.action.test.ts:123`, `:124`,
+  `:199`, `:206`, `:207`, `:217`, `model-scoring-action-generator.test.ts:239`). The `@deprecated` aliases of each modified PS file go (§2.5).
 - [ ] Step 4: Step 2's command → passes; Engine and TruthSuite `pnpm test` → 0 failed; dashboards `pnpm test` → 0 failed.
 - [ ] Step 5: Runtime on MJAPI :4041 (`"$PLANS/tools/ps-env.sh" bash -c 'cd packages/MJAPI && pnpm run start'`): 20
   Score Record Set calls with a `BindingID` on the R1 model →
@@ -7905,8 +7919,8 @@ evidence JSON
     expect(Button(f, 'ps-sign-off-publish').disabled).toBe(true);
   });
   it('an override without a reason cannot be approved', async () => {
-    const f = await RenderSignOff({ model: flagged, flags: ['single-feature-dominance'] });
-    Check(f, 'ps-override-single-feature-dominance');
+    const f = await RenderSignOff({ model: flagged, flags: ['single-feature-auc'] });
+    Check(f, 'ps-override-single-feature-auc');
     expect(Button(f, 'ps-sign-off-approve').disabled).toBe(true);
   });
   it('every refusal kind has plain words', () => {
@@ -7924,7 +7938,9 @@ evidence JSON
     expect(published.Emitted()).toHaveLength(0);
   });
   ```
-  (`RenderSignOff` stubs `PredictiveStudio.PromoteModel` to return `promoteResult`; the refusal is M4b's
+  (`RenderSignOff`'s `flags` is `LeakageFlag['kind'][]`: the helper builds each kind into one stored PR 3
+  `LeakageFlag` of the evidence with fixture values, and the panel renders one override checkbox per kind, test id
+  `ps-override-<kind>`; `RenderSignOff` stubs `PredictiveStudio.PromoteModel` to return `promoteResult`; the refusal is M4b's
   `LifecycleGate.CheckInitiator` result for a user without `CanUpdate` on `MJ: ML Models`; `published` records the
   panel's `Published` emissions.) And the Core case:
   ```ts
@@ -9665,6 +9681,27 @@ plus the keep-list, runtime verification against MJAPI and the database (§7 of 
   kind (M3.2, M3.4, M4.1, M4b, M7), which that union does not have — to be settled at M3.2 (add the kind with the
   dominance re-run, or use a PR 3 kind).
 
+### 2026-11-10 — Claude (Fable 5.1) — kickoff amendment fix round 3
+
+- **Branch / HEAD:** `ps/pr-4-honest-serving` @ `023c3cc3ac` before this commit (pushed: no). MJ read at `origin/next`
+  @ `25f11768a7`.
+- **Database / ports:** none (plan only).
+- **Done this session:** resolved the fix round 2 gotcha by the controller's ruling: no kind is added to PR 3's
+  `LeakageFlag` (`packages/AI/PredictiveStudio/Core/src/trainer-contract.ts:138-142`: `single-feature-auc{sourceColumn,
+  heldOutAuc}`, `time-shifted-label{scoreWithShiftedLabel}`, `drop-column{sourceColumn, scoreDrop}`,
+  `high-cardinality-id{sourceColumn, distinctRatio}`); every test use of the dominance kind PR 3 does not have became
+  `single-feature-auc` — the object form where the value is a `LeakageFlag[]` (`FlagLeakage`, RD9's stored flag,
+  `trainer.NextRun({ leakageFlags })`) and the bare kind where it is a `LeakageFlag['kind'][]` (`flags`, `overridesFlags`,
+  M7.3's test id `ps-override-single-feature-auc`; M7.3 states `RenderSignOff`'s `flags` is kinds). §5.1's legacy
+  dominance re-run sentence is unchanged. M3.4: a `PROMOTION_FAILED` case (the catch at `promote-model.action.ts:117-120`)
+  and the full changed-line list of `promote-model.action.test.ts` (422 lines). M5.6: the code grep gains `'FailedCount'`
+  and `'WriteBack'` (18 hits on `origin/next`, 0 expected) and its Files name `model-scoring-action-generator.ts:363`.
+- **Tests:** plan checks as in the amendment report's "Fix round 3".
+- **Runtime verification:** read-only `git show` at `origin/next` for the cited lines.
+- **State left behind:** none.
+- **Next step (exact):** M1 starts with M1.1 on `MJ_PS_PR4_claude`.
+- **Gotchas / decisions:** the fix round 2 entry's gotcha is resolved here (its `:137-141` citation reads `:138-142`).
+
 ## 12. Refresh log (append-only)
 
 ### 2026-10-12 — refresh (written; equivalent to trigger d baseline) — Claude (Opus 5.5)
@@ -9811,3 +9848,5 @@ plus the keep-list, runtime verification against MJAPI and the database (§7 of 
   leakage checks after idempotency; anchors re-run at `origin/next` @ `25f11768a7`.
 - **Kickoff amendment fix round 2 2026-11-10:** sync-failure seam in M3.4; `CheckLeakageFlags` override in M4.1; Action
   tests and `SAVE_FAILED` greps; prompt publish-only; anchors re-run at `origin/next` @ `25f11768a7`.
+- **Kickoff amendment fix round 3 2026-11-10:** leakage-flag kinds are PR 3's (`single-feature-auc`); `PROMOTION_FAILED`
+  Action case; M5.6's code grep widened; anchors re-run at `origin/next` @ `25f11768a7`.
