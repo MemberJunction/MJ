@@ -18,8 +18,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
 
 vi.mock('@memberjunction/core-entities', async () => {
     // The real helper, so the guard reads AdditionalData exactly as the client does.
-    const { IsInheritingFolderAccess, IsInheritingFolderAccessInSQL, CanonicalizeConversationAdditionalData } =
-        await vi.importActual<typeof import('@memberjunction/core-entities')>('@memberjunction/core-entities');
+    const actual = await vi.importActual<typeof import('@memberjunction/core-entities')>('@memberjunction/core-entities');
     /** Minimal stand-in for the generated MJConversationEntity. */
     class StubConversationEntity {
         public IsSaved = true;
@@ -36,10 +35,8 @@ vi.mock('@memberjunction/core-entities', async () => {
         }
     }
     return {
+        ...actual,
         MJConversationEntity: StubConversationEntity,
-        IsInheritingFolderAccess,
-        IsInheritingFolderAccessInSQL,
-        CanonicalizeConversationAdditionalData,
     };
 });
 

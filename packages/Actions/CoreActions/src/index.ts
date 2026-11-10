@@ -130,6 +130,10 @@ export * from './custom/ai/find-candidate-actions.action';
 // tree-shaking — and a shaken-out registration silently resolves to BaseAction.
 export * from './custom/ai/find-best-action.action';
 export * from './custom/ai/find-best-agent.action';
+export * from './custom/ai/base-find-skills.action';
+export * from './custom/ai/find-candidate-skills.action';
+export * from './custom/ai/find-best-skill.action';
+export * from './custom/ai/get-skill-details.action';
 export * from './custom/ai/load-agent-spec.action';
 export * from './custom/ai/generate-image.action';
 export * from './custom/ai/generate-video.action';
@@ -138,6 +142,7 @@ export * from './custom/ai/actionsmith-agent';
 export * from './custom/ai/schedule-next-agent-wake.action';
 export * from './custom/ai/configure-agent-user-policy.action';
 export * from './custom/ai/send-inter-agent-request.action';
+export * from './custom/ai/trigger-agent-wake.action';
 export * from './custom/ai/prepare-outbound-call-brief.action';
 export * from './custom/ai/user-scoped-communication.action';
 export * from './custom/ai/communication-oauth-service';
@@ -170,7 +175,11 @@ export * from './custom/visualization/shared/mermaid-types';
 // MCP Actions
 export * from './custom/mcp';
 
+// GitHub Actions & Core Client
+export * from './custom/github';
+
 export * from './custom/search/search.action';
 export * from './custom/search/scoped-search.action';
+
 
 
