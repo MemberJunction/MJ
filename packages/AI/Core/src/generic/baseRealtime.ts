@@ -88,12 +88,12 @@ export function ExtractRealtimeTimingConfig(
  *
  * Rules:
  * - `ConnectionMaxSeconds`: metadata (`configured.ConnectionMaxSeconds`) narrows the driver's provider
- *   ceiling (`driverDefaultConnectionSeconds`) and any state-dependent `runtimeCapSeconds` via
+ *   ceiling (`DriverDefaultConnectionSeconds`) and any state-dependent `RuntimeCapSeconds` via
  *   {@link ClampSessionSecondsValue}, never widening past a hard provider ceiling.
  * - `SessionMaxSeconds`: credential / session token lifetime in seconds, never conflated with
  *   `ConnectionMaxSeconds`.
  * - `TrustNativeResumption`: forced `false` when `ZeroDataRetention` is `true`; otherwise explicit
- *   `configured.TrustNativeResumption` overrides `defaultTrustNativeResumption`.
+ *   `configured.TrustNativeResumption` overrides `DefaultTrustNativeResumption`.
  */
 export function ResolveRealtimeTiming(options: {
     Config?: Record<string, unknown> | null;
@@ -311,6 +311,13 @@ export function ClampSessionSecondsValue(...candidates: ReadonlyArray<number | n
     return smallest;
 }
 
+/** A tool result sent while a reconnect was moving the session; see `BaseRealtimeSession.holdToolResultDuringReconnect`. */
+interface HeldRealtimeToolResult {
+    readonly CallID: string;
+    readonly Output: string;
+    readonly TaskRevision?: number;
+}
+
 /**
  * Shared base class for server-hosted `IRealtimeSession` instances returned by `BaseRealtimeModel.StartSession`.
  *
@@ -331,6 +338,8 @@ export abstract class BaseRealtimeSession implements IRealtimeSession {
     protected callsFromBeforeReseed = new Set<string>();
     protected closedByConsumer = false;
     protected readonly reconnectController: RealtimeReconnectController;
+    /** Tool results held while a reconnect moved the session, oldest first; see {@link holdToolResultDuringReconnect}. */
+    private heldToolResults: HeldRealtimeToolResult[] = [];
 
     constructor(
         protected readonly model?: BaseRealtimeModel,
@@ -338,7 +347,10 @@ export abstract class BaseRealtimeSession implements IRealtimeSession {
     ) {
         this.reconnectController = new RealtimeReconnectController({
             Reconnect: (context) => this.Reconnect(context),
-            OnReconnectFailed: (error, code) => this.onReconnectFailed(error, code),
+            OnReconnectFailed: (error, code) => {
+                this.dropHeldToolResults('the reconnect failed');
+                this.onReconnectFailed(error, code);
+            },
             OnReconnecting: (reason) => this.onReconnecting(reason),
             OnReconnected: (usedNativeResumption) => {
                 if (!usedNativeResumption && this.pendingToolCallNames.size > 0) {
@@ -347,6 +359,9 @@ export abstract class BaseRealtimeSession implements IRealtimeSession {
                 this.turnOpen = false;
                 this.ArmConnectionDurationTimer();
                 this.onReconnected(usedNativeResumption);
+                // Last: after callsFromBeforeReseed is rebuilt (a reseeded connection gets a held result as a
+                // late-result note) and after the driver's hook, which may reset the turn state the result sets.
+                this.replayHeldToolResults();
             },
             BuildSeed: () => this.buildSeedOrNull(),
             IsIdle: () => !this.turnOpen && this.pendingToolCallNames.size === 0,
@@ -495,6 +510,52 @@ export abstract class BaseRealtimeSession implements IRealtimeSession {
     }
 
     /**
+     * Holds a tool result that arrives while a reconnect is moving the session, and returns `true` when it did. Sent
+     * then, the result would reach the connection being replaced after the attempt's seed was built, so the new
+     * connection would have the call and never its result. A driver calls this first in `SendToolResult` and returns
+     * when it is `true`. Once the move lands the result goes through `SendToolResult` again, after
+     * {@link callsFromBeforeReseed} is rebuilt, so a reseeded connection gets it as a late-result note; a failed
+     * reconnect or a close drops it with a warning. Outside a reconnect it returns `false` and changes nothing.
+     */
+    protected holdToolResultDuringReconnect(callID: string, output: string, taskRevision?: number): boolean {
+        if (!this.IsReconnecting || this.closedByConsumer) {
+            return false;
+        }
+        this.heldToolResults.push({ CallID: callID, Output: output, TaskRevision: taskRevision });
+        RealtimeDiagLog(`[${this.constructor.name}] holding the tool result for ${callID} until the reconnect lands`);
+        return true;
+    }
+
+    /** Sends the held tool results, oldest first, now that the session is on its new connection. */
+    private replayHeldToolResults(): void {
+        const held = this.heldToolResults;
+        this.heldToolResults = [];
+        for (const result of held) {
+            // Each send starts synchronously, so the order holds; none can throw into the reconnect cycle that called this.
+            void this.replayHeldToolResult(result);
+        }
+    }
+
+    /** Sends one held result; a failure is reported as a warning, never thrown. */
+    private async replayHeldToolResult(result: HeldRealtimeToolResult): Promise<void> {
+        try {
+            await this.SendToolResult(result.CallID, result.Output, result.TaskRevision);
+        } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error);
+            console.warn(`[${this.constructor.name}] A tool result held during a reconnect could not be sent on the new connection: ${reason}`);
+        }
+    }
+
+    /** Drops the held tool results: the session will reach no new connection to send them on. */
+    private dropHeldToolResults(reason: string): void {
+        if (this.heldToolResults.length === 0) {
+            return;
+        }
+        console.warn(`[${this.constructor.name}] Dropped ${this.heldToolResults.length} tool result(s) held during a reconnect: ${reason}.`);
+        this.heldToolResults = [];
+    }
+
+    /**
      * Handles a provider-initiated connection-ending advisory (`goAway` / `session.going_away`).
      * Reconnects immediately if idle and ready, or waits for the turn/handle boundary up to the scaled deadline.
      */
@@ -565,9 +626,13 @@ export abstract class BaseRealtimeSession implements IRealtimeSession {
     /** Emits a session error to the consumer's registered `OnError` handler(s). */
     protected abstract emitSessionError(error: RealtimeSessionError): void;
 
-    /** Cancels all reconnect and duration timers and abandons any in-flight attempt when closed by the consumer. */
+    /**
+     * Cancels all reconnect and duration timers and abandons any in-flight attempt when closed by the consumer. Tool
+     * results held for the attempt are dropped: no new connection will carry them.
+     */
     protected DisposeReconnectTimers(): void {
         this.closedByConsumer = true;
+        this.dropHeldToolResults('the session closed');
         this.reconnectController.Dispose();
     }
 

@@ -1,5 +1,5 @@
 import { IMetadataProvider, UserInfo, LogError, LogStatus, RunView } from '@memberjunction/core';
-import { MJLruCache } from '@memberjunction/global';
+import { MJLruCache, NormalizeUUID } from '@memberjunction/global';
 import {
     MJAIAgentSessionEntity,
     MJAIAgentSessionChannelEntity,
@@ -89,7 +89,7 @@ export class SessionAuthorizationError extends Error {
 const HEARTBEAT_MIN_WRITE_INTERVAL_MS = 3_000;
 
 /**
- * Lowercased session ID → the close running for it in this process. Two closes of one session can overlap: the
+ * Normalized session ID → the close running for it in this process. Two closes of one session can overlap: the
  * page-close beacon lands while the End mutation's close is still in flight, a host closes the session on `pagehide`
  * as well, or the janitor sweeps a session its user is closing. Both would load the row as `Active` before either
  * saves, so both would finalize the observability runs, notify the channel plugins and write the returning-visitor
@@ -225,7 +225,7 @@ export class SessionManager {
         closeReason: SessionCloseReason = 'Explicit',
         preloadedChannels?: MJAIAgentSessionChannelEntity[],
     ): Promise<boolean> {
-        const key = agentSessionID.toLowerCase();
+        const key = NormalizeUUID(agentSessionID);
         const inFlight = inFlightSessionCloses.get(key);
         if (inFlight) {
             return inFlight;

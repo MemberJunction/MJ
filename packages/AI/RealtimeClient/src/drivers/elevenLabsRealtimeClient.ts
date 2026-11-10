@@ -437,7 +437,7 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
         this.activeResponseKind = 'normal';
         if (context.ConversationSeed && context.ConversationSeed.Entries.length > 0) {
             const note = RenderRealtimeMemorySeedAsContextNote(context.ConversationSeed);
-            if (note.length > 0) {
+            if (note) {
                 this.sendFrame({ type: 'contextual_update', text: note });
             }
         }

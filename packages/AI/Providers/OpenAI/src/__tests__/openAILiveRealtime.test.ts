@@ -1220,5 +1220,31 @@ describe('OpenAILiveRealtime turn detection', () => {
         expect(thinkingFrame).toBeDefined();
         expect(thinkingFrame.content).toContain('Remember this detail');
     });
+
+    it('sends a tool result that arrives while the new socket opens to that socket, once, as a late-result note', async () => {
+        const driver = new TestableOpenAILiveRealtime('test-key');
+        const sessionPromise = driver.StartSession({ Model: 'gpt-live-1', SystemPrompt: 'Live base prompt.' });
+        const socket1 = driver.lastMockSocket!;
+        socket1.triggerOpen();
+        socket1.triggerMessage(JSON.stringify({ type: 'session.started', session_id: 'live-1' }));
+        const session = (await sessionPromise) as OpenAILiveSession;
+        socket1.triggerMessage(JSON.stringify({ type: 'session.delegation.created', delegation_id: 'delegation-abc' }));
+
+        const reconnectPromise = session.TriggerReconnect('connection-lost');
+        await new Promise((r) => setTimeout(r, 0));
+        const socket2 = driver.lastMockSocket!;
+        socket1.sentFrames = [];
+        await session.SendToolResult('delegation-abc', '{"status":"shipped"}');
+        socket2.triggerOpen();
+        socket2.triggerMessage(JSON.stringify({ type: 'session.started', session_id: 'live-2' }));
+        expect(await reconnectPromise).toBe(true);
+
+        expect(socket1.sentFrames.filter((f) => f.includes('shipped'))).toEqual([]);
+        const carrying = socket2.sentFrames.map((f) => JSON.parse(f)).filter((f) => JSON.stringify(f).includes('shipped'));
+        expect(carrying).toHaveLength(1);
+        expect(carrying[0].type).toBe('session.commentary.append');
+        expect(carrying[0].delegation_id).toBeNull();
+        await session.Close();
+    });
 });
 

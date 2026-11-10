@@ -324,6 +324,13 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
 
     /** Whether the transport can currently deliver client events (channel/socket open). */
     protected abstract canSendEvents(): boolean;
+    /**
+     * Whether the transport can carry the call, which a failed move's return to it needs: by default, whether it can
+     * deliver events ({@link canSendEvents}). A transport whose open state can outlast its network path overrides it.
+     */
+    protected isTransportUsable(): boolean {
+        return this.canSendEvents();
+    }
     /** Delivers one protocol client event over the transport (only called when {@link canSendEvents}). */
     protected abstract sendProtocolEvent(event: OpenAIProtocolClientEvent): void;
     /**
@@ -523,12 +530,13 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
     }
 
     /**
-     * A planned move's attempt failed and the old transport is still open: the call goes on there until the next
-     * attempt. The state the move replaced is reported again, and the text and tool results held for the move go out
-     * on it now instead of waiting for (or being dropped with) the cycle. `false` when the old transport is gone too.
+     * A planned move's attempt failed and the old transport can still carry the call ({@link isTransportUsable}): the
+     * call goes on there until the next attempt. The state the move replaced is reported again, and the text and tool
+     * results held for the move go out on it now instead of waiting for (or being dropped with) the cycle. `false` when
+     * the old transport is gone too.
      */
     protected override ResumeOnOldConnection(): boolean {
-        if (!this.canSendEvents() || this.currentState === 'error' || this.currentState === 'closed') {
+        if (!this.isTransportUsable() || this.currentState === 'error' || this.currentState === 'closed') {
             return false;
         }
         const restore = this.StateToRestoreOnOldConnection;
@@ -632,6 +640,10 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
      * answers (a user turn or a tool result), not counting the context notes after it. Neither a seeded nor a resumed
      * session replies by itself, so without this the question sits unanswered in every later seed. An answer that
      * completed is in memory as an assistant turn and is not asked for again.
+     *
+     * A seeded connection knows the conversation as the seed sent it. A resumed one knows it as the provider kept it,
+     * which includes what the old connection heard while the attempt was opening, after `context.Seed` was built: so
+     * then the memory as it is now decides.
      */
     protected seedConversationAfterMove(
         context: RealtimeClientReconnectContext,
@@ -641,7 +653,8 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
         if (sendsSeed) {
             this.seedConversationHistory(context.ConversationSeed);
         }
-        this.answerOwedAfterMove = answerWasInFlight && OpenAIProtocolRealtimeClient.endsAwaitingAnswer(context.Seed);
+        const conversation = sendsSeed ? context.Seed : this.ConversationMemory.Seed();
+        this.answerOwedAfterMove = answerWasInFlight && OpenAIProtocolRealtimeClient.endsAwaitingAnswer(conversation);
     }
 
     /** Whether the conversation's last entry other than a context note is a user turn or a tool result. */
@@ -1291,13 +1304,19 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
      * shared reconnect controller, which retries within its recovery window and reports `reconnect-failed` when the
      * window closes. Returns `false` when there is no live call to save, so the caller keeps its terminal handling: the
      * connect has not finished (Connect reports that failure itself), the call already ended, or the driver opts out.
-     * A loss while a reconnect is running returns `true`: the in-flight cycle owns it.
+     *
+     * A loss while a reconnect cycle runs is the loss of the transport the cycle may go back to after a failed attempt
+     * (the callers' identity checks drop events of a transport the cycle opened or already let go of). It goes to the
+     * cycle, even on a driver that opts out of starting one, and returns `true`: the cycle then never returns the call
+     * to a dead transport, and goes on as a lost connection's.
      *
      * Live means the call went live and has not ended ({@link callWentLive}), not a speech state: during a tool run the
      * state is `'connected'` (see {@link onToolCallFrame}), and a loss then is as recoverable as one mid-sentence.
      */
     protected recoverLostTransport(detail: string): boolean {
-        if (this.IsReconnecting) {
+        if (this.IsReconnectCycleActive) {
+            RealtimeDiagLog(`[${this.providerDebugLabel}] transport lost during a reconnect (${detail}); the reconnect takes it`);
+            void this.TriggerReconnect('connection-lost');
             return true;
         }
         if (!this.callWentLive || !this.RecoversLostTransport) {
@@ -1649,10 +1668,12 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
                 /* ignore non-JSON during handshake */
             }
         };
+        // Each handler fails this attempt while it is in flight. Once the swap adopts the socket it is the call's, so a
+        // later loss goes through the same handling as the first connection's, a later reconnect's attempt included.
         nextSocket.onerror = (message) => {
             nextSocketOpen = false;
             failReconnect?.(new Error(message));
-            if (this.socket === nextSocket && !this.IsReconnecting) {
+            if (this.socket === nextSocket) {
                 this.socketOpen = false;
                 this.handleSocketError(message);
             }
@@ -1660,7 +1681,7 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
         nextSocket.onclose = () => {
             nextSocketOpen = false;
             failReconnect?.(new Error(`${this.providerDebugLabel} socket closed during reconnect`));
-            if (this.socket === nextSocket && !this.IsReconnecting) {
+            if (this.socket === nextSocket) {
                 this.socketOpen = false;
                 this.handleSocketClose();
             }
@@ -1808,15 +1829,15 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
     }
 
     /**
-     * A socket error. During a live call it starts the `connection-lost` reconnect (a websocket
-     * error is always followed by its close, which the running reconnect then ignores); before
-     * that it is fatal and marks the session unusable (obligation #6).
+     * A socket error. During a live call it starts the `connection-lost` reconnect, and during a running reconnect it
+     * tells that reconnect the socket is gone; before the call is live it is fatal and marks the session unusable
+     * (obligation #6).
      */
     protected handleSocketError(message: string): void {
-        if (this.IsReconnecting || this.currentState === 'error' || this.currentState === 'closed') {
+        if (this.currentState === 'error' || this.currentState === 'closed') {
             return;
         }
-        // The socket's close follows; the reconnect started here owns it (see the close guard).
+        // The socket's close follows and reaches the reconnect started here, which takes it as the same loss.
         if (this.recoverLostTransport(`socket error: ${message}`)) {
             return;
         }
@@ -1827,13 +1848,13 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
     /**
      * A socket close the CONSUMER didn't ask for. During a live call it is a lost connection
      * (a network cut, a dropped proxy hop), so it goes to the shared `connection-lost`
-     * reconnect; a session the provider really ended surfaces as `reconnect-failed` once the
-     * recovery window closes. Before the call is live it is FATAL — that is how a rejected
-     * credential or session reaches the host (obligation #6). Providers with benign close
-     * semantics (a self-hosted proxy hop) override.
+     * reconnect, or to the reconnect already running; a session the provider really ended
+     * surfaces as `reconnect-failed` once the recovery window closes. Before the call is live
+     * it is FATAL — that is how a rejected credential or session reaches the host (obligation
+     * #6). Providers with benign close semantics (a self-hosted proxy hop) override.
      */
     protected handleSocketClose(): void {
-        if (this.closedByConsumer || this.IsReconnecting || this.currentState === 'error' || this.currentState === 'closed') {
+        if (this.closedByConsumer || this.currentState === 'error' || this.currentState === 'closed') {
             return;
         }
         if (this.recoverLostTransport('socket closed')) {

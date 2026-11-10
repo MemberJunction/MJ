@@ -1462,12 +1462,16 @@ export class ElevenLabsRealtimeSession extends BaseRealtimeSession implements IR
     /**
      * @inheritdoc
      *
-     * Sends `client_tool_result` correlated by `tool_call_id`. Sent IMMEDIATELY (never queued):
-     * the platform requested the result (`expects_response: true` blocks the conversation on
-     * it) and handles its own continuation, so deferring it could only delay the spoken reply.
+     * Sends `client_tool_result` correlated by `tool_call_id`. Sent IMMEDIATELY (never queued behind
+     * a reply): the platform requested the result (`expects_response: true` blocks the conversation on
+     * it) and handles its own continuation, so deferring it could only delay the spoken reply. The one
+     * wait is a reconnect: the result is held and sent on the new socket (`holdToolResultDuringReconnect`).
      * The result string rides as given, never parsed.
      */
     public async SendToolResult(callID: string, output: string): Promise<void> {
+        if (this.holdToolResultDuringReconnect(callID, output)) {
+            return;
+        }
         const name = this.pendingToolCallNames.get(callID) ?? callID;
         this.conversationMemory.Record({
             Kind: 'toolResult',

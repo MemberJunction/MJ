@@ -129,6 +129,12 @@ class LossTestOpenAIClient extends OpenAIRealtimeClient {
     public IsHoldingMove(): boolean {
         return this.isTurnActiveForReconnect();
     }
+    /** How many times a cycle asked to go back to the old connection after a failed attempt. */
+    public ReturnsAsked = 0;
+    protected override ResumeOnOldConnection(): boolean {
+        this.ReturnsAsked++;
+        return super.ResumeOnOldConnection();
+    }
 }
 
 function freshCredential(token: string): { EphemeralToken: string; ExpiresAt: string; SessionConfig: { instructions: string } } {
@@ -196,11 +202,16 @@ class FakePlayback implements IRealtimePcmPlayback {
 class LossTestXAIClient extends xAIRealtimeClient {
     public Sockets: FakeSocket[] = [];
     public SocketsOpen = true;
+    /** When true, a new socket neither opens nor fails until the test fires its handler (an attempt kept in flight). */
+    public HoldSockets = false;
 
     protected override createSocket(url: string, _subprotocol: string): IOpenAIProtocolClientSocket {
         const socket = new FakeSocket();
         socket.Url = url;
         this.Sockets.push(socket);
+        if (this.HoldSockets) {
+            return socket;
+        }
         if (this.SocketsOpen) {
             queueMicrotask(() => socket.onopen?.());
         } else {
@@ -221,6 +232,16 @@ class LossTestXAIClient extends xAIRealtimeClient {
     }
     public get Socket(): FakeSocket {
         return this.Sockets[this.Sockets.length - 1];
+    }
+    /** Whether the client would send an event on its current socket now. */
+    public CanSend(): boolean {
+        return this.canSendEvents();
+    }
+    /** How many times a cycle asked to go back to the old connection after a failed attempt. */
+    public ReturnsAsked = 0;
+    protected override ResumeOnOldConnection(): boolean {
+        this.ReturnsAsked++;
+        return super.ResumeOnOldConnection();
     }
 }
 
@@ -768,5 +789,280 @@ describe('OpenAI-protocol reconnect state (#6462 review round 6)', () => {
             expect(types.lastIndexOf('response.create')).toBeGreaterThan(textAt);
             await client.Disconnect();
         });
+    });
+});
+
+// ── Review wave 2: a loss of the old transport during a planned move ────────────
+
+/** How many frames in `sent` carry `text` as a typed user turn. */
+function typedTurns(sent: string[], text: string): number {
+    return frames(sent).filter(
+        (f) => f.type === 'conversation.item.create' && f.item?.role === 'user' && (f.item?.content ?? []).some((c) => c.text === text)
+    ).length;
+}
+
+/** Holds the next OpenAI SDP answer until the returned function fails it (the attempt is in flight until then). */
+function holdNextAnswer(client: LossTestOpenAIClient): (error: Error) => void {
+    let fail: (error: Error) => void = () => undefined;
+    client.SdpGate = new Promise<void>((_resolve, reject) => {
+        fail = reject;
+    });
+    return (error: Error) => {
+        client.SdpGate = null;
+        fail(error);
+    };
+}
+
+/** The real HuggingFace client over fake sockets; with `HoldSockets` a new socket waits for the test to open or fail it. */
+class HoldTestHFClient extends HuggingFaceRealtimeClient {
+    public Sockets: FakeSocket[] = [];
+    public HoldSockets = false;
+
+    protected override createSocket(_url: string): IOpenAIProtocolClientSocket {
+        const socket = new FakeSocket();
+        this.Sockets.push(socket);
+        if (!this.HoldSockets) {
+            queueMicrotask(() => openHFSocket(socket));
+        }
+        return socket;
+    }
+    protected override async createMicCapture(): Promise<IPcmMicCapture> {
+        return new FakeMicCapture();
+    }
+    protected override createPlayback(): IRealtimePcmPlayback {
+        return new FakePlayback();
+    }
+}
+
+/** The endpoint opens the socket and confirms the session, as HuggingFace does before it takes the session config. */
+function openHFSocket(socket: FakeSocket): void {
+    socket.onopen?.();
+    socket.onmessage?.(JSON.stringify({ type: 'session.created' }));
+}
+
+async function connectHF(): Promise<HoldTestHFClient> {
+    const client = new HoldTestHFClient();
+    const connecting = client.Connect(
+        {
+            Provider: 'huggingface',
+            Model: 'hf',
+            EphemeralToken: 'wss://proxy/x',
+            ExpiresAt: new Date(Date.now() + 600_000).toISOString(),
+            ConnectionMaxSeconds: 600,
+            SessionConfig: { session: { instructions: 'HF prompt' } },
+        },
+        new FakeMediaStream([new FakeTrack()])
+    );
+    await vi.advanceTimersByTimeAsync(1);
+    await connecting;
+    return client;
+}
+
+describe('a loss of the old transport while a planned move runs (#6462 review wave 2)', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    describe('the failed attempt does not go back to a dead transport', () => {
+        it('OpenAI WebRTC: a peer connection that fails during the attempt is not gone back to; the cycle goes on', async () => {
+            const client = await connectOpenAI();
+            const old = client.Pc;
+            const { states, errors } = collect(client);
+            const failAnswer = holdNextAnswer(client);
+
+            void client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(10);
+            client.SendText('Are you still there?');
+            old.SetConnectionState('failed'); // its data channel still reads open
+            failAnswer(new Error('SDP exchange failed'));
+            await vi.advanceTimersByTimeAsync(0);
+
+            expect(old.Channel.readyState).toBe('open');
+            // The cycle knew the old connection was lost, so it did not even ask to go back to it.
+            expect(client.ReturnsAsked).toBe(0);
+            expect(states).toEqual(['connecting']);
+            expect(typedTurns(old.Channel.Sent, 'Are you still there?')).toBe(0);
+
+            await vi.advanceTimersByTimeAsync(1_100); // the next attempt, after its 1 s retry delay
+            expect(client.PeerConnections).toHaveLength(3);
+            expect(typedTurns(client.Pc.Channel.Sent, 'Are you still there?')).toBe(1);
+            expect(states).toContain('listening');
+            expect(errors).toEqual([]);
+            await client.Disconnect();
+        });
+
+        it('OpenAI WebRTC: a data channel that closes during the attempt is not gone back to', async () => {
+            const client = await connectOpenAI();
+            const old = client.Pc;
+            const { states, errors } = collect(client);
+            const failAnswer = holdNextAnswer(client);
+
+            void client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(10);
+            old.Channel.Drop();
+            failAnswer(new Error('SDP exchange failed'));
+            await vi.advanceTimersByTimeAsync(0);
+
+            expect(client.ReturnsAsked).toBe(0);
+            expect(states).toEqual(['connecting']);
+            await vi.advanceTimersByTimeAsync(1_100);
+            expect(client.PeerConnections).toHaveLength(3);
+            expect(states.at(-1)).toBe('listening');
+            expect(errors).toEqual([]);
+            await client.Disconnect();
+        });
+
+        it('OpenAI WebRTC: a peer connection that lost its path is refused, though no loss was reported yet', async () => {
+            const client = await connectOpenAI();
+            const old = client.Pc;
+            const { states } = collect(client);
+            const failAnswer = holdNextAnswer(client);
+
+            void client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(10);
+            client.SendText('Are you still there?');
+            old.SetConnectionState('disconnected'); // inside its grace period: no loss reported
+            failAnswer(new Error('SDP exchange failed'));
+            await vi.advanceTimersByTimeAsync(0);
+
+            expect(old.Channel.readyState).toBe('open');
+            expect(client.ReturnsAsked).toBe(1); // asked, and refused
+            expect(states).toEqual(['connecting']);
+            expect(typedTurns(old.Channel.Sent, 'Are you still there?')).toBe(0);
+
+            await vi.advanceTimersByTimeAsync(1_100);
+            expect(client.PeerConnections).toHaveLength(3);
+            expect(typedTurns(client.Pc.Channel.Sent, 'Are you still there?')).toBe(1);
+            await client.Disconnect();
+        });
+
+        it('xAI: a socket adopted by an earlier reconnect that closes during the attempt is not gone back to', async () => {
+            const client = await connectXAI();
+            const firstMove = client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(10);
+            expect(await firstMove).toBe(true);
+            const adopted = client.Socket;
+            const { states, errors } = collect(client);
+
+            client.HoldSockets = true;
+            void client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(10);
+            expect(client.Sockets).toHaveLength(3);
+            client.SendText('Are you still there?');
+            adopted.onclose?.();
+            expect(client.CanSend()).toBe(false);
+            client.HoldSockets = false;
+            client.Socket.onclose?.(); // the attempt's handshake fails
+            await vi.advanceTimersByTimeAsync(0);
+
+            expect(client.ReturnsAsked).toBe(0);
+            expect(states).toEqual(['connecting']);
+            expect(typedTurns(adopted.Sent, 'Are you still there?')).toBe(0);
+
+            await vi.advanceTimersByTimeAsync(1_100);
+            expect(client.Sockets).toHaveLength(4);
+            expect(typedTurns(client.Socket.Sent, 'Are you still there?')).toBe(1);
+            expect(states).toContain('listening');
+            expect(errors).toEqual([]);
+            await client.Disconnect();
+        });
+    });
+
+    describe('input sent right after the old transport is lost while the call is live on it', () => {
+        it('OpenAI WebRTC: a tool result and a typed turn are held, delivered once on the new connection, and the call settles', async () => {
+            const client = await connectOpenAI();
+            toolCallInFlight((e) => client.Pc.Channel.EmitServer(e));
+            const old = client.Pc;
+            const failAnswer = holdNextAnswer(client);
+            void client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(10);
+            failAnswer(new Error('SDP exchange failed'));
+            await vi.advanceTimersByTimeAsync(0);
+            const { states } = collect(client);
+
+            old.SetConnectionState('failed'); // during the retry delay, with the call live on it again
+            client.SendToolResult('call_sage', '{"answer":"Sage says 42"}');
+            client.SendText('Did you find it?');
+
+            expect(states).toEqual(['connecting']);
+            expect(frames(old.Channel.Sent).some((f) => carriesOutput(f, 'Sage says 42'))).toBe(false);
+            expect(typedTurns(old.Channel.Sent, 'Did you find it?')).toBe(0);
+
+            await vi.advanceTimersByTimeAsync(1_100);
+            expect(client.PeerConnections).toHaveLength(3);
+            const sent = frames(client.Pc.Channel.Sent);
+            expect(sent.filter((f) => carriesOutput(f, 'Sage says 42'))).toHaveLength(1);
+            expect(typedTurns(client.Pc.Channel.Sent, 'Did you find it?')).toBe(1);
+            expect(client.ConversationMemory.Seed().Entries.filter((e) => e.Kind === 'toolResult')).toHaveLength(1);
+            expect(client['inFlightToolCallIds'].has('call_sage')).toBe(false);
+            await client.Disconnect();
+        });
+    });
+
+    describe('HuggingFace (it never starts a recovery, but a running move takes the loss)', () => {
+        it('the old socket closing while the move is in flight does not end the call', async () => {
+            const client = await connectHF();
+            const { states, errors } = collect(client);
+            client.HoldSockets = true;
+
+            const moving = client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(10);
+            expect(client.Sockets).toHaveLength(2);
+            client.Sockets[0].onclose?.();
+            expect(states).not.toContain('closed');
+
+            openHFSocket(client.Sockets[1]);
+            await vi.advanceTimersByTimeAsync(10);
+            expect(await moving).toBe(true);
+            expect(states).toEqual(['connecting', 'listening']);
+            expect(errors).toEqual([]);
+            await client.Disconnect();
+        });
+
+        it('the old socket closing while the call is live on it after a failed attempt goes to the next attempt', async () => {
+            const client = await connectHF();
+            const { states, errors } = collect(client);
+            client.HoldSockets = true;
+
+            void client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(10);
+            client.HoldSockets = false;
+            client.Sockets[1].onclose?.(); // the attempt's handshake fails
+            await vi.advanceTimersByTimeAsync(0);
+            expect(states).toEqual(['connecting', 'listening']);
+
+            client.Sockets[0].onclose?.();
+            expect(states.at(-1)).toBe('connecting');
+            await vi.advanceTimersByTimeAsync(1_100);
+
+            expect(client.Sockets).toHaveLength(3);
+            expect(states.at(-1)).toBe('listening');
+            expect(states).not.toContain('closed');
+            expect(errors).toEqual([]);
+            await client.Disconnect();
+        });
+    });
+
+    it('xAI native resumption: a question the old socket heard while the attempt opened is answered on the resumed connection', async () => {
+        const client = await connectXAI();
+        const old = client.Socket;
+        client.HoldSockets = true;
+
+        const moving = client.TriggerReconnect('duration-expiry');
+        await vi.advanceTimersByTimeAsync(10);
+        answerInFlight((e) => old.onmessage?.(JSON.stringify(e)));
+        client.Socket.onopen?.();
+        await vi.advanceTimersByTimeAsync(10);
+        expect(await moving).toBe(true);
+
+        expect(client.Socket.Url).toContain('conversation_id=conv_42');
+        const types = client.Socket.SentTypes();
+        expect(types).not.toContain('conversation.item.create');
+        expect(types.filter((t) => t === 'response.create')).toHaveLength(1);
+        await client.Disconnect();
     });
 });

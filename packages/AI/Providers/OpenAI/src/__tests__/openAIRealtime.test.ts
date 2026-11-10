@@ -49,6 +49,7 @@ import { OpenAIRealtime, OpenAIRealtimeSession, IOpenAIRealtimeConnection, MapEf
 import type { OpenAIRealtimeError } from 'openai/realtime/index';
 import type { RealtimeServerEvent, RealtimeClientEvent } from 'openai/resources/realtime/realtime';
 import type { ClientSecretCreateParams, ClientSecretCreateResponse } from 'openai/resources/realtime/client-secrets';
+import { REALTIME_CONNECTION_SETUP_TIMEOUT_MS, type IRealtimeSession, type RealtimeSessionParams } from '@memberjunction/ai';
 
 /**
  * In-memory fake connection: records every outbound `send`, lets tests fire server events to all
@@ -776,13 +777,18 @@ describe('OpenAIRealtime', () => {
     });
 
     describe('lifecycle', () => {
-        it('Close removes the event + error listeners and closes the connection', async () => {
+        it('Close removes the session\'s event + error listeners, leaves a no-op error guard, and closes the connection', async () => {
             const session = await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' });
+            const onError = vi.fn();
+            session.OnError(onError);
             expect(driver.Fake.ListenerCount).toBe(1);
             expect(driver.Fake.ErrorListenerCount).toBe(1);
             await session.Close();
             expect(driver.Fake.ListenerCount).toBe(0);
-            expect(driver.Fake.ErrorListenerCount).toBe(0);
+            // The guard keeps the SDK from turning a late socket error into an unhandled rejection; it reaches no one.
+            expect(driver.Fake.ErrorListenerCount).toBe(1);
+            driver.Fake.FireError(makeSdkError('closed before the connection was established'));
+            expect(onError).not.toHaveBeenCalled();
             expect(driver.Fake.Closed).toBe(true);
         });
 
@@ -1793,3 +1799,170 @@ describe('OpenAIRealtimeSession — long-call duration reconnect and history see
     });
 });
 
+describe('OpenAIRealtimeSession — user turns keep their conversation place and their item', () => {
+    let driver: TestableOpenAIRealtime;
+    let session: OpenAIRealtimeSession;
+    const fire = (event: RealtimeServerEvent): void => driver.Fake.Fire(event);
+    const committed = (itemId: string): void => fire({ type: 'input_audio_buffer.committed', event_id: 'e', item_id: itemId, previous_item_id: null } as RealtimeServerEvent);
+    const speechStarted = (itemId: string): void => fire({ type: 'input_audio_buffer.speech_started', event_id: 'e', item_id: itemId, audio_start_ms: 0 } as RealtimeServerEvent);
+    const completed = (itemId: string, transcript: string): void =>
+        fire({ type: 'conversation.item.input_audio_transcription.completed', event_id: 'e', item_id: itemId, content_index: 0, transcript } as RealtimeServerEvent);
+    const toolCall = (callId: string): void =>
+        fire({ type: 'response.function_call_arguments.done', event_id: 'e', call_id: callId, name: 'BookTable', arguments: '{"party":2}', item_id: 'fc', output_index: 0, response_id: 'r' } as RealtimeServerEvent);
+
+    const start = async (config?: RealtimeSessionParams['Config']): Promise<void> => {
+        driver = new TestableOpenAIRealtime('k');
+        session = (await driver.StartSession({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys', Config: config })) as OpenAIRealtimeSession;
+    };
+
+    it('keeps the transcripts of two interleaved items as two turns', async () => {
+        await start();
+        const transcripts: Array<{ Text: string; ReplacesPrevious?: boolean }> = [];
+        session.OnTranscript((t) => transcripts.push({ Text: t.Text, ReplacesPrevious: t.ReplacesPrevious }));
+        speechStarted('item_1');
+        committed('item_1');
+        fire({ type: 'response.created', event_id: 'e', response: {} } as RealtimeServerEvent);
+        speechStarted('item_2');
+        completed('item_1', 'What is the weather in Paris?');
+        completed('item_2', 'Actually, make it Rome.');
+
+        expect(transcripts).toEqual([
+            { Text: 'What is the weather in Paris?', ReplacesPrevious: false },
+            { Text: 'Actually, make it Rome.', ReplacesPrevious: false },
+        ]);
+        expect(session.ConversationMemory.Seed().Entries).toEqual([
+            { Kind: 'user', Text: 'What is the weather in Paris?' },
+            { Kind: 'user', Text: 'Actually, make it Rome.' },
+        ]);
+    });
+
+    it('puts a request committed before its tool call ahead of that call in the seed', async () => {
+        await start();
+        committed('item_1');
+        fire({ type: 'response.created', event_id: 'e', response: {} } as RealtimeServerEvent);
+        toolCall('call_1');
+        completed('item_1', 'Book a table for two.');
+
+        expect(session.ConversationMemory.Seed().Entries.map((e) => e.Kind)).toEqual(['user', 'toolCall']);
+    });
+
+    it('still grows one item\'s streamed transcripts in place (Grok)', async () => {
+        await start();
+        const replaces: Array<boolean | undefined> = [];
+        session.OnTranscript((t) => replaces.push(t.ReplacesPrevious));
+        committed('item_1');
+        completed('item_1', 'set');
+        completed('item_1', 'set a');
+        completed('item_1', 'set a timer');
+
+        expect(replaces).toEqual([false, true, true]);
+        expect(session.ConversationMemory.Seed().Entries).toEqual([{ Kind: 'user', Text: 'set a timer' }]);
+    });
+
+    it('reserves no place when the session turned input transcription off', async () => {
+        await start({ audio: { input: { transcription: null } } });
+        committed('item_1');
+        toolCall('call_1');
+        completed('item_1', 'Book a table for two.');
+
+        expect(session.ConversationMemory.Seed().Entries.map((e) => e.Kind)).toEqual(['toolCall', 'user']);
+    });
+});
+
+/**
+ * A fake that reports what the SDK reports when a socket still connecting is closed. The SDK raises that error through
+ * its emitter, and with no `error` listener it calls `Promise.reject` instead: an unhandled rejection. The fake records
+ * those in {@link Unhandled} rather than producing one.
+ */
+class ConnectingFakeConnection extends FakeConnection {
+    public readonly Unhandled: string[] = [];
+    public override close(): void {
+        super.close();
+        const error = makeSdkError('WebSocket was closed before the connection was established');
+        if (this.ErrorListenerCount === 0) {
+            this.Unhandled.push(error.message);
+            return;
+        }
+        this.FireError(error);
+    }
+}
+
+/** Driver whose every connection is a fresh fake: the first answers `session.created` at start, later ones when a test fires it. */
+class ReconnectingOpenAIRealtime extends OpenAIRealtime {
+    public readonly Connections: ConnectingFakeConnection[] = [];
+    protected override createConnection(): IOpenAIRealtimeConnection {
+        const conn = new ConnectingFakeConnection();
+        this.Connections.push(conn);
+        return conn;
+    }
+    public override async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
+        const session = await super.StartSession(params);
+        this.Connections[0].Fire({ type: 'session.created' } as RealtimeServerEvent);
+        return session;
+    }
+}
+
+describe('OpenAIRealtimeSession — reconnect hand-over', () => {
+    let driver: ReconnectingOpenAIRealtime;
+    let session: OpenAIRealtimeSession;
+
+    beforeEach(async () => {
+        vi.useFakeTimers();
+        driver = new ReconnectingOpenAIRealtime('k');
+        session = (await driver.StartSession({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
+    });
+
+    afterEach(async () => {
+        await session.Close();
+        vi.useRealTimers();
+    });
+
+    it('sends a tool result that arrives while the new connection opens to that connection, exactly once', async () => {
+        const [first] = driver.Connections;
+        first.Fire({ type: 'response.function_call_arguments.done', event_id: 'e', call_id: 'call_1', name: 'LookupOrder', arguments: '{"id":42}', item_id: 'fc', output_index: 0, response_id: 'r' } as RealtimeServerEvent);
+        const reconnect = session.TriggerReconnect('connection-lost');
+        const second = driver.Connections[1];
+
+        await session.SendToolResult('call_1', '{"status":"shipped"}');
+        second.Fire({ type: 'session.created' } as RealtimeServerEvent);
+        expect(await reconnect).toBe(true);
+
+        const carryingResult = (conn: FakeConnection): RealtimeClientEvent[] => conn.Sent.filter((e) => JSON.stringify(e).includes('shipped'));
+        expect(carryingResult(first)).toEqual([]);
+        expect(carryingResult(second)).toHaveLength(1);
+        // The new connection was reseeded and holds no call to answer, so the result goes as a late-result note.
+        const [note] = carryingResult(second);
+        expect(note.type === 'conversation.item.create' && note.item.type === 'message' && note.item.role).toBe('user');
+        expect(second.Sent.at(-1)?.type).toBe('response.create');
+    });
+
+    it('closes the connection it leaves with an error guard on it', async () => {
+        const reconnect = session.TriggerReconnect('connection-lost');
+        driver.Connections[1].Fire({ type: 'session.created' } as RealtimeServerEvent);
+        expect(await reconnect).toBe(true);
+
+        expect(driver.Connections[0].Closed).toBe(true);
+        expect(driver.Connections[0].Unhandled).toEqual([]);
+    });
+
+    it('closes a new connection that never answers session.created with an error guard on it', async () => {
+        void session.TriggerReconnect('connection-lost');
+        await vi.advanceTimersByTimeAsync(REALTIME_CONNECTION_SETUP_TIMEOUT_MS);
+
+        expect(driver.Connections[1].Closed).toBe(true);
+        expect(driver.Connections[1].Unhandled).toEqual([]);
+    });
+
+    it('closes the new connection of an attempt the session closed during, with an error guard on it', async () => {
+        const reconnect = session.TriggerReconnect('connection-lost');
+        const second = driver.Connections[1];
+        await session.Close();
+        second.Fire({ type: 'session.created' } as RealtimeServerEvent);
+        await vi.advanceTimersByTimeAsync(5_000); // the cycle notices the close after its retry delay
+        expect(await reconnect).toBe(false);
+
+        expect(second.Closed).toBe(true);
+        expect(second.Unhandled).toEqual([]);
+        expect(driver.Connections[0].Unhandled).toEqual([]);
+    });
+});

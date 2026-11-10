@@ -41,7 +41,6 @@ import {
     ChatMessage,
     ClientRealtimeCredentialRefreshResult,
     ClientRealtimeSessionConfig,
-    ExtractRealtimeTimingConfig,
     GetAIAPIKey,
     AIAPIKey,
     AIAPIKeyResolver,
@@ -50,6 +49,7 @@ import {
     IRealtimeSession,
     IsZeroDataRetention,
     JSONObject,
+    REALTIME_RELAY_MAX_CONNECTIONS,
     REALTIME_RELAY_PATH,
     REALTIME_RELAY_SESSION_LIFETIME_SECONDS,
     RealtimeAvatarStatus,
@@ -455,9 +455,10 @@ export interface RealtimeClientSessionPrepResult {
      */
     AvatarStatus?: RealtimeAvatarStatus;
     /**
-     * Server-authoritative mint snapshot for cross-instance credential refresh (`RefreshRealtimeClientSessionToken`).
+     * The mint snapshot to persist for a credential refresh on another instance (`RefreshRealtimeClientSessionToken`).
      * The transport layer persists this under the server-protected `realtimeMintSnapshot` key on
-     * `MJ: AI Agent Sessions.Config_` inside `RunWithTrustedSessionConfigWrites`.
+     * `MJ: AI Agent Sessions.Config_` inside `RunWithTrustedSessionConfigWrites`. The session owner can read that row,
+     * so this is the owner-safe copy ({@link PersistedRealtimeMintSnapshot}), not the full one this instance keeps.
      */
     MintSnapshot?: PersistedRealtimeMintSnapshot;
 }
@@ -474,28 +475,37 @@ export interface CoAgentSystemPromptResolution {
 }
 
 /**
- * Server-authoritative mint snapshot persisted under the server-protected `realtimeMintSnapshot` key
- * in `MJ: AI Agent Sessions.Config_` (guarded by `RunWithTrustedSessionConfigWrites`) for cross-instance
- * credential refresh (`RefreshRealtimeClientSessionToken`). Deliberately excludes `relayTicketId`
- * (which is a live credential in `RealtimeProxyRegistry`).
+ * The mint snapshot as persisted under the server-protected `realtimeMintSnapshot` key in
+ * `MJ: AI Agent Sessions.Config_` (written inside `RunWithTrustedSessionConfigWrites`), for a credential refresh that
+ * lands on another instance (`RefreshRealtimeClientSessionToken`). The session owner cannot write that key but can READ
+ * the row (`UI` and `Widget Guest` hold `CanRead` on their own sessions, `Config` included), and every save of the row
+ * is copied into Record Changes. So it holds only what such a refresh needs and the browser was already given (see
+ * {@link toPersistedMintSnapshot}), and never `relayTicketId`, a live credential in `RealtimeProxyRegistry`.
  */
 export interface PersistedRealtimeMintSnapshot {
     coAgentID?: string;
+    /** The agent the session was minted to voice. A refresh re-checks `CanRun` on it, never on the owner-editable `targetAgentID`. */
+    targetAgentID?: string;
     modelID: string;
     vendorID?: string;
     modelVendorID?: string;
     driverClass: string;
     credentialScope: AICredentialScope;
     connectionMaxSeconds?: number;
-    sessionParams: RealtimeSessionParams;
+    /** `'relay'` for a relay session: its session params stay on the instance that minted it. */
+    transport?: 'relay';
+    /** The params a re-mint needs. Absent from a relay session's persisted copy. */
+    sessionParams?: RealtimeSessionParams;
+    /** The minted provider config. Persisted only for a driver whose refresh reads it. */
     existingSessionConfig?: JSONObject;
 }
 
 /**
- * In-memory mint snapshot stored in {@link RealtimeMintSnapshotRegistry}, including `relayTicketId`
- * for same-instance in-place relay lifetime extension.
+ * The full mint snapshot, stored in {@link RealtimeMintSnapshotRegistry} on the instance that minted the session (or
+ * re-minted it from the persisted copy), including `relayTicketId` for in-place relay lifetime extension.
  */
 export interface InMemoryRealtimeMintSnapshot extends PersistedRealtimeMintSnapshot {
+    sessionParams: RealtimeSessionParams;
     relayTicketId?: string;
     relayUrl?: string;
 }
@@ -581,6 +591,44 @@ export class RealtimeMintSnapshotRegistry extends BaseSingleton<RealtimeMintSnap
     public Clear(): void {
         this._snapshots.Clear();
     }
+}
+
+/**
+ * The copy of a mint snapshot the transport layer persists on the owner-readable session row
+ * ({@link PersistedRealtimeMintSnapshot}):
+ * - A relay session keeps its session params on this instance only. Its browser is deliberately given no system
+ *   prompt, tools or upstream configuration, so the owner must not read them from the row either. Its relay lives in
+ *   this process: another instance could only open a new relay and re-seed the call, from exactly those params, so a
+ *   refresh there fails and says why.
+ * - A direct session keeps its params: its browser was handed the prompt and tools in the provider config it applies,
+ *   and another instance needs them to mint an equivalent credential. The minted provider config is kept only when the
+ *   driver's refresh reads it (ElevenLabs reuses its managed agent); the base refresh ignores it.
+ */
+function toPersistedMintSnapshot(snapshot: InMemoryRealtimeMintSnapshot, model: BaseRealtimeModel): PersistedRealtimeMintSnapshot {
+    const routing: PersistedRealtimeMintSnapshot = {
+        coAgentID: snapshot.coAgentID,
+        targetAgentID: snapshot.targetAgentID,
+        modelID: snapshot.modelID,
+        vendorID: snapshot.vendorID,
+        modelVendorID: snapshot.modelVendorID,
+        driverClass: snapshot.driverClass,
+        credentialScope: snapshot.credentialScope,
+        connectionMaxSeconds: snapshot.connectionMaxSeconds,
+    };
+    if (snapshot.transport === 'relay') {
+        return { ...routing, transport: 'relay' };
+    }
+    const refreshReadsSessionConfig = model.RefreshClientSessionCredential !== BaseRealtimeModel.prototype.RefreshClientSessionCredential;
+    return {
+        ...routing,
+        sessionParams: snapshot.sessionParams,
+        ...(refreshReadsSessionConfig && snapshot.existingSessionConfig ? { existingSessionConfig: snapshot.existingSessionConfig } : {}),
+    };
+}
+
+/** Whether a persisted mint snapshot is a relay session's, whose session params only its minting instance holds. */
+function isRelayMintSnapshot(candidate: unknown): boolean {
+    return typeof candidate === 'object' && candidate !== null && (candidate as Partial<PersistedRealtimeMintSnapshot>).transport === 'relay';
 }
 
 function extractRelayTicketId(relayUrl: string | undefined): string | undefined {
@@ -1125,28 +1173,9 @@ export class RealtimeClientSessionService {
         this.stampClientConfigTiming(clientConfig, sessionParams, resolution.Model);
         const avatarStatus = this.resolveMintedAvatarStatus(prep, clientConfig);
 
-        const persistedSnapshot: PersistedRealtimeMintSnapshot = {
-            coAgentID: coAgent.ID,
-            modelID: resolution.ModelID,
-            vendorID: resolution.VendorID,
-            modelVendorID: resolution.ModelVendorID,
-            driverClass: resolution.DriverClass ?? resolution.Model.constructor.name,
-            credentialScope: input.CredentialScope ?? 'Any',
-            ...(clientConfig.ConnectionMaxSeconds !== undefined
-                ? { connectionMaxSeconds: clientConfig.ConnectionMaxSeconds }
-                : {}),
-            sessionParams: sessionParams,
-            ...(clientConfig.SessionConfig && typeof clientConfig.SessionConfig === 'object' && !Array.isArray(clientConfig.SessionConfig)
-                ? { existingSessionConfig: { ...clientConfig.SessionConfig } }
-                : {}),
-        };
-        const relayTicketId = extractRelayTicketId(clientConfig.RelayUrl);
+        const mintSnapshot = this.buildMintSnapshot(input, coAgent.ID, resolution, sessionParams, clientConfig);
         if (input.AgentSessionID?.trim()) {
-            RealtimeMintSnapshotRegistry.Instance.Set(input.AgentSessionID, {
-                ...persistedSnapshot,
-                ...(relayTicketId ? { relayTicketId } : {}),
-                ...(clientConfig.RelayUrl ? { relayUrl: clientConfig.RelayUrl } : {}),
-            });
+            RealtimeMintSnapshotRegistry.Instance.Set(input.AgentSessionID, mintSnapshot);
         }
 
         // Best-effort observability: create a server-side co-agent run (+ prompt run) so the voice
@@ -1175,7 +1204,36 @@ export class RealtimeClientSessionService {
             ClientPolicy: clientPolicy,
             NarrationPaceMs: GetNarrationPaceMs(effectiveConfig) ?? undefined,
             ...(avatarStatus ? { AvatarStatus: avatarStatus } : {}),
-            MintSnapshot: persistedSnapshot,
+            MintSnapshot: toPersistedMintSnapshot(mintSnapshot, resolution.Model),
+        };
+    }
+
+    /** The full mint snapshot this instance keeps for a session: what a refresh needs to re-mint it or extend its relay. */
+    private buildMintSnapshot(
+        input: PrepareClientSessionInput,
+        coAgentID: string,
+        resolution: RealtimeModelResolution,
+        sessionParams: RealtimeSessionParams,
+        clientConfig: ClientRealtimeSessionConfig,
+    ): InMemoryRealtimeMintSnapshot {
+        const sessionConfig = clientConfig.SessionConfig;
+        const relayTicketId = extractRelayTicketId(clientConfig.RelayUrl);
+        return {
+            coAgentID,
+            targetAgentID: input.TargetAgentID,
+            modelID: resolution.ModelID,
+            vendorID: resolution.VendorID,
+            modelVendorID: resolution.ModelVendorID,
+            driverClass: resolution.DriverClass ?? resolution.Model.constructor.name,
+            credentialScope: input.CredentialScope ?? 'Any',
+            ...(clientConfig.ConnectionMaxSeconds !== undefined ? { connectionMaxSeconds: clientConfig.ConnectionMaxSeconds } : {}),
+            ...(clientConfig.Transport === 'relay' ? { transport: 'relay' as const } : {}),
+            sessionParams,
+            ...(sessionConfig && typeof sessionConfig === 'object' && !Array.isArray(sessionConfig)
+                ? { existingSessionConfig: { ...sessionConfig } }
+                : {}),
+            ...(relayTicketId ? { relayTicketId } : {}),
+            ...(clientConfig.RelayUrl ? { relayUrl: clientConfig.RelayUrl } : {}),
         };
     }
 
@@ -1226,7 +1284,7 @@ export class RealtimeClientSessionService {
      *   handles remain valid, and returns `Kind: 'relay'`.
      * - Otherwise re-mints via `Model.RefreshClientSessionCredential(clampedParams, snapshot.existingSessionConfig)`
      *   using the mint snapshot from `RealtimeMintSnapshotRegistry` (falling back to the server-protected
-     *   `realtimeMintSnapshot` on `MJ: AI Agent Sessions.Config_` for cross-instance failover).
+     *   `realtimeMintSnapshot` on `MJ: AI Agent Sessions.Config_` for cross-instance failover of a direct session).
      */
     public async RefreshClientSessionCredential(
         input: RefreshClientSessionCredentialInput,
@@ -1239,27 +1297,11 @@ export class RealtimeClientSessionService {
             return { Success: false, ErrorMessage: 'AgentSessionID is required to refresh a client realtime session credential.' };
         }
 
-        let snapshot = RealtimeMintSnapshotRegistry.Instance.Get(sessionID);
-        if (!snapshot && input.PersistedMintSnapshot) {
-            const validated = this.validatePersistedMintSnapshot(input.PersistedMintSnapshot, input.CoAgentID);
-            if (validated) {
-                snapshot = validated;
-                RealtimeMintSnapshotRegistry.Instance.Set(sessionID, snapshot);
-            }
+        const found = await this.findMintSnapshot(sessionID, input, contextUser, provider);
+        if (!found.Snapshot) {
+            return { Success: false, ErrorMessage: found.ErrorMessage };
         }
-        if (!snapshot) {
-            const loaded = await this.loadPersistedMintSnapshot(sessionID, input.CoAgentID, contextUser, provider);
-            if (loaded) {
-                snapshot = loaded;
-                RealtimeMintSnapshotRegistry.Instance.Set(sessionID, snapshot);
-            }
-        }
-        if (!snapshot) {
-            return {
-                Success: false,
-                ErrorMessage: `No valid mint snapshot found for realtime session '${sessionID}'.`,
-            };
-        }
+        const snapshot = found.Snapshot;
 
         const clampedParams: RealtimeSessionParams = {
             ...snapshot.sessionParams,
@@ -1278,10 +1320,12 @@ export class RealtimeClientSessionService {
             const extended = RealtimeProxyRegistry.Instance.ExtendRelaySession(
                 snapshot.relayTicketId,
                 additionalSeconds,
-                10,
+                REALTIME_RELAY_MAX_CONNECTIONS,
                 { AllowFreshReopen: input.AllowFreshReopen === true },
             );
             if (extended) {
+                // Stored again so the registry's TTL counts from this refresh: a relay session lives only here.
+                RealtimeMintSnapshotRegistry.Instance.Set(sessionID, snapshot);
                 const baseWs = ResolveRealtimeProxyBaseWsUrl(clampedParams);
                 const relayUrl = snapshot.relayUrl ?? BuildRealtimeRelayUrl(baseWs, snapshot.relayTicketId);
                 return {
@@ -1329,8 +1373,8 @@ export class RealtimeClientSessionService {
             if (newRelayTicketId) {
                 snapshot.relayTicketId = newRelayTicketId;
                 snapshot.relayUrl = clientConfig.RelayUrl;
-                RealtimeMintSnapshotRegistry.Instance.Set(sessionID, snapshot);
             }
+            RealtimeMintSnapshotRegistry.Instance.Set(sessionID, snapshot);
             const isRelay = clientConfig.Transport === 'relay' || Boolean(clientConfig.RelayUrl && !clientConfig.EphemeralToken);
             const credential: ClientRealtimeCredentialRefreshResult = isRelay
                 ? {
@@ -1472,6 +1516,7 @@ export class RealtimeClientSessionService {
         }
         return {
             coAgentID: typeof parsed.coAgentID === 'string' ? parsed.coAgentID : expectedCoAgentID,
+            ...(typeof parsed.targetAgentID === 'string' ? { targetAgentID: parsed.targetAgentID } : {}),
             modelID: parsed.modelID,
             vendorID: typeof parsed.vendorID === 'string' ? parsed.vendorID : undefined,
             modelVendorID: typeof parsed.modelVendorID === 'string' ? parsed.modelVendorID : undefined,
@@ -1485,22 +1530,52 @@ export class RealtimeClientSessionService {
         };
     }
 
-    private async loadPersistedMintSnapshot(
-        agentSessionID: string,
-        expectedCoAgentID: string | undefined,
+    /**
+     * The session's mint snapshot: this instance's copy, else the persisted copy (the one the caller passed, else the one
+     * read from the session row), validated and then kept here. A relay session's persisted copy holds no session params,
+     * so on any instance but the one that minted it the lookup fails with a reason the caller can show.
+     */
+    private async findMintSnapshot(
+        sessionID: string,
+        input: RefreshClientSessionCredentialInput,
         contextUser: UserInfo,
         provider: IMetadataProvider,
-    ): Promise<InMemoryRealtimeMintSnapshot | null> {
+    ): Promise<{ Snapshot?: InMemoryRealtimeMintSnapshot; ErrorMessage?: string }> {
+        const cached = RealtimeMintSnapshotRegistry.Instance.Get(sessionID);
+        if (cached) {
+            return { Snapshot: cached };
+        }
+        let snapshot = this.validatePersistedMintSnapshot(input.PersistedMintSnapshot, input.CoAgentID);
+        let relayCopy = isRelayMintSnapshot(input.PersistedMintSnapshot);
+        if (!snapshot && !relayCopy) {
+            const stored = await this.loadPersistedMintSnapshot(sessionID, contextUser, provider);
+            relayCopy = isRelayMintSnapshot(stored?.Snapshot);
+            snapshot = stored ? this.validatePersistedMintSnapshot(stored.Snapshot, input.CoAgentID ?? stored.AgentID) : null;
+        }
+        if (!snapshot) {
+            return {
+                ErrorMessage: relayCopy
+                    ? `Realtime session '${sessionID}' is a relay session: only the MJAPI instance that minted it can refresh its credential.`
+                    : `No valid mint snapshot found for realtime session '${sessionID}'.`,
+            };
+        }
+        RealtimeMintSnapshotRegistry.Instance.Set(sessionID, snapshot);
+        return { Snapshot: snapshot };
+    }
+
+    /** The `realtimeMintSnapshot` stored on the session row, not yet validated, with the row's co-agent; null when absent. */
+    private async loadPersistedMintSnapshot(
+        agentSessionID: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<{ Snapshot: unknown; AgentID: string } | null> {
         try {
             const session = await provider.GetEntityObject<MJAIAgentSessionEntity>('MJ: AI Agent Sessions', contextUser);
             if (!(await session.Load(agentSessionID)) || !session.Config_) {
                 return null;
             }
             const configObj = JSON.parse(session.Config_) as Record<string, unknown>;
-            return this.validatePersistedMintSnapshot(
-                configObj['realtimeMintSnapshot'],
-                expectedCoAgentID ?? session.AgentID,
-            );
+            return { Snapshot: configObj['realtimeMintSnapshot'], AgentID: session.AgentID };
         } catch (error) {
             LogError(`RealtimeClientSessionService.loadPersistedMintSnapshot failed: ${error instanceof Error ? error.message : String(error)}`);
             return null;

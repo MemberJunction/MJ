@@ -673,6 +673,20 @@ describe('SessionManager.CloseSession', () => {
             expect(hostSessionClosedMock).toHaveBeenCalledWith('session-overlap', 'Janitor');
         });
 
+        it('shares one close across spellings of the session ID that differ in case or padding', async () => {
+            mockSessionRunRecords([CO_RUN_ID], PROMPT_RUN_ID);
+            const { provider, handedOut } = makeProvider(() => makeVoiceSession());
+
+            const results = await Promise.all([
+                new SessionManager().CloseSession('session-overlap', makeUser(), provider, 'Janitor'),
+                new SessionManager().CloseSession('  SESSION-OVERLAP ', makeUser(), provider, 'Explicit'),
+            ]);
+
+            expect(results).toEqual([true, true]);
+            expect(handedOut.filter((e) => (e.Save as ReturnType<typeof vi.fn>).mock.calls.length > 0)).toHaveLength(1);
+            expect(finalizeCoAgentRunMock).toHaveBeenCalledTimes(1);
+        });
+
         it('a joined caller sees the shared close fail, and a later close runs afresh', async () => {
             const failing = makeSessionEntity({ ID: 'session-overlap', Status: 'Active', Save: vi.fn(async () => false) });
             const { provider: failingProvider } = makeProvider(() => failing);

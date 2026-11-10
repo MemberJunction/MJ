@@ -24,6 +24,8 @@
  * - **Session `Config`**: the owner can edit it through the generic entity API, so nothing in it is
  *   trusted. Execute re-checks `CanRun` on its target, direct actions never come from it, and its
  *   run ids are used only when {@link SessionRunIDVerifier} finds them to be records of the session.
+ *   A credential refresh re-checks `CanRun` on the target recorded in the server-protected mint
+ *   snapshot instead, because it re-mints what was built for that agent.
  * - **Scope-limited callers** (anonymous and resource-scoped magic-link sessions, including public
  *   web-widget guests): no direct actions. Their scope exists only as row-level filters, which an
  *   action can read around, and a scoped anonymous caller's relay runs as the system user. They
@@ -250,8 +252,9 @@ interface RealtimeSessionConfig {
     channels?: string[];
     /**
      * Server-authoritative mint snapshot persisted at session start for cross-instance credential
-     * refresh (`RefreshRealtimeClientSessionToken`). Protected from owner writes by
-     * `MJAIAgentSessionEntityServer` (`PROTECTED_SESSION_CONFIG_KEYS`).
+     * refresh (`RefreshRealtimeClientSessionToken`), and the target agent a refresh re-authorizes.
+     * Protected from owner writes by `MJAIAgentSessionEntityServer` (`PROTECTED_SESSION_CONFIG_KEYS`),
+     * but readable by the owner, so it is the owner-safe copy (see `PersistedRealtimeMintSnapshot`).
      */
     realtimeMintSnapshot?: PersistedRealtimeMintSnapshot;
 }
@@ -787,7 +790,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         let minted = false;
         let refreshed: Awaited<ReturnType<RealtimeClientSessionService['RefreshClientSessionCredential']>>;
         try {
-            await this.assertCanRunTarget(config.targetAgentID, contextUser, provider);
+            await this.assertCanRunTarget(this.mintedTargetAgentID(session.ID, config), contextUser, provider);
 
             const runUser = ResolveScopedAnonymousRunUser(contextUser);
             const remainingSeconds = RemainingSessionSeconds(session.Config_);
@@ -826,6 +829,21 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             ...(refreshed.TrustNativeResumption !== undefined ? { TrustNativeResumption: refreshed.TrustNativeResumption } : {}),
             ...(refreshed.ErrorMessage !== undefined ? { ErrorMessage: refreshed.ErrorMessage } : {}),
         };
+    }
+
+    /**
+     * The agent the session was minted to voice, from the server-written mint snapshot: this instance's copy, else the
+     * protected `realtimeMintSnapshot` on the session row. Never `Config.targetAgentID`: the owner can rewrite it, and a
+     * refresh re-mints the snapshot built for the original agent, so pointing it at another agent the owner can run would
+     * keep the call minting after the owner lost `CanRun` on the original. Throws when neither copy names one, so the
+     * refresh is refused.
+     */
+    private mintedTargetAgentID(sessionID: string, config: RealtimeSessionConfig): string {
+        const target = RealtimeMintSnapshotRegistry.Instance.Get(sessionID)?.targetAgentID ?? config.realtimeMintSnapshot?.targetAgentID;
+        if (typeof target !== 'string' || target.length === 0) {
+            throw new Error(`Realtime session ${sessionID} has no server-recorded target agent, so its credential cannot be refreshed`);
+        }
+        return target;
     }
 
     /**

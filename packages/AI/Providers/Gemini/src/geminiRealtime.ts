@@ -32,7 +32,6 @@ import {
     ResolveRealtimeTiming,
     RenderRealtimeMemorySeed,
     RenderLateToolResultNote,
-    ScrubRealtimeSharedConfigKeys,
     type RealtimeClientTransport,
     type RealtimeReconnectContext,
     type RealtimeReconnectFailureCode,

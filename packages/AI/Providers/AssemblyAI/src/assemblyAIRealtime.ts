@@ -756,14 +756,18 @@ export class AssemblyAIRealtimeSession extends BaseRealtimeSession implements IR
     /**
      * @inheritdoc
      *
-     * Sends `tool.result` correlated by `call_id`. Sent IMMEDIATELY (never queued): the
-     * provider's own guidance is "send it the moment your tool returns — no buffering, no
+     * Sends `tool.result` correlated by `call_id`. Sent IMMEDIATELY (never queued behind a reply):
+     * the provider's own guidance is "send it the moment your tool returns — no buffering, no
      * waiting on reply.done"; it owns the continuation and speaks the result as soon as the
-     * floor allows. The wire `result` slot expects a JSON-STRING (not an object), which is
-     * exactly the contract's `output` shape — it passes through verbatim. The reply flag is
-     * set eagerly so a queued narration can't slip in before the spoken result.
+     * floor allows. The one wait is a reconnect: the result is held and sent on the new socket
+     * (`holdToolResultDuringReconnect`). The wire `result` slot expects a JSON-STRING (not an
+     * object), which is exactly the contract's `output` shape — it passes through verbatim. The
+     * reply flag is set eagerly so a queued narration can't slip in before the spoken result.
      */
     public async SendToolResult(callID: string, output: string): Promise<void> {
+        if (this.holdToolResultDuringReconnect(callID, output)) {
+            return;
+        }
         const name = this.pendingToolCallNames.get(callID) ?? callID;
         this.conversationMemory.Record({
             Kind: 'toolResult',

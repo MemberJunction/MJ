@@ -769,6 +769,27 @@ describe('AssemblyAIRealtimeSession guard rails', () => {
         expect(noteUpdate?.session?.system_prompt).toContain('Hello agent');
         expect(noteUpdate?.session?.system_prompt).toContain('Order 99 shipped');
     });
+
+    it('sends a tool result that arrives while the new socket opens to that socket, once, as a late-result note', async () => {
+        const driver = new TestAssemblyAIRealtime('fake-api-key');
+        const session = (await startSession(driver, { SystemPrompt: 'Base prompt.' })) as AssemblyAIRealtimeSession;
+        const socket1 = driver.Socket;
+        driver.Emit({ type: 'tool.call', call_id: 'c_1', name: 'get_weather', arguments: { city: 'NYC' } });
+
+        const socket2 = new FakeSocket();
+        driver.Socket = socket2;
+        const reconnectPromise = session.TriggerReconnect('duration-expiry');
+        await flushAsync();
+        await session.SendToolResult('c_1', '{"status":"shipped"}');
+        driver.Emit(readyEvent());
+        expect(await reconnectPromise).toBe(true);
+
+        const carrying = (socket: FakeSocket) => socket.SentFrames().filter((f) => JSON.stringify(f).includes('shipped'));
+        expect(carrying(socket1)).toEqual([]);
+        expect(carrying(socket2)).toHaveLength(1);
+        expect(carrying(socket2)[0].type).toBe('session.update'); // the late-result note rides the system prompt
+        await session.Close();
+    });
 });
 
 

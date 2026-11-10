@@ -920,6 +920,10 @@ export class OpenAILiveSession extends BaseRealtimeSession implements IRealtimeS
             );
             return;
         }
+        // During a reconnect the result waits for the new socket; it comes back here (revision checked again) then.
+        if (this.holdToolResultDuringReconnect(callID, output, taskRevision)) {
+            return;
+        }
 
         const name = this.pendingToolCallNames.get(callID) ?? callID;
         this.conversationMemory.Record({

@@ -5,6 +5,7 @@ import {
     RealtimeClientError,
     RealtimeClientReconnectContext,
     RealtimeClientState,
+    RefreshedRealtimeClientCredential,
 } from '../generic/baseRealtimeClient';
 import { IRealtimeAudioSink, IRealtimePeerConnection, OpenAIRealtimeClient } from '../drivers/openAIRealtimeClient';
 import { FakeAudioSink, FakeDataChannel, FakeMediaStream, FakePeerConnection, FakeTrack } from './helpers/realtime-fakes';
@@ -18,6 +19,9 @@ class CycleStubClient extends BaseRealtimeClient {
     public ReconnectImpl: (ctx: RealtimeClientReconnectContext) => Promise<void> = async () => undefined;
     public SingleUseToken = true;
     public TokenBound = false;
+    /** Whether a planned move's failed attempt goes back to the old connection, as the OpenAI and Gemini drivers do. */
+    public ReturnsToOldConnection = false;
+    public Returns = 0;
 
     public async Connect(_config: ClientRealtimeSessionConfig, _micStream: MediaStream): Promise<void> {
         /* not used */
@@ -41,6 +45,25 @@ class CycleStubClient extends BaseRealtimeClient {
     }
     public EmitState(s: RealtimeClientState): void {
         this.emitStateChange(s);
+    }
+    /** Opens or ends the turn with no state report, as an OpenAI driver's `response.created` and `response.done` can. */
+    public SetTurnOpenSilently(open: boolean): void {
+        if (open) {
+            this.reconnectController.TurnStarted();
+        } else {
+            this.reconnectController.TurnEnded();
+        }
+    }
+    protected override ResumeOnOldConnection(): boolean {
+        if (!this.ReturnsToOldConnection) {
+            return false;
+        }
+        this.Returns++;
+        const restore = this.StateToRestoreOnOldConnection;
+        if (restore) {
+            this.emitStateChange(restore);
+        }
+        return true;
     }
     protected override get RequiresFreshTokenPerReconnect(): boolean {
         return this.SingleUseToken;
@@ -194,6 +217,212 @@ describe('BaseRealtimeClient reconnect cycle', () => {
             expect(client['connectionsOnCredential']).toBe(1);
             await client.Disconnect();
         });
+
+        // A retry's refresh runs in the background and can land after its attempt connected on the old token. Nothing
+        // re-armed the timers then, and the next proactive refresh was scheduled from the new token's expiry, so Google
+        // closed the connection when the old token expired: a drop instead of a planned move.
+        it('arms the move before the old token expires when the refresh lands after the attempt connected on it', async () => {
+            vi.useFakeTimers();
+            const startedAt = Date.now();
+            const tokenLifetimeMs = 300_000;
+            const client = new CycleStubClient();
+            client.SingleUseToken = false;
+            client.TokenBound = true;
+            client.ApplySessionConfigTiming({
+                Provider: 'test',
+                Model: 'test-model',
+                EphemeralToken: 'tok-initial',
+                ExpiresAt: new Date(startedAt + tokenLifetimeMs).toISOString(),
+                SessionConfig: { connectionMaxSeconds: 600, reconnectBufferSeconds: 10 },
+            });
+            client.SetTokenRefreshCallback(
+                () =>
+                    new Promise<RefreshedRealtimeClientCredential>((resolve) =>
+                        setTimeout(() => resolve({ ...minted(1), SessionConfig: {} }), 800)
+                    )
+            );
+            let attempts = 0;
+            client.ReconnectImpl = async () => {
+                attempts++;
+                if (attempts === 1) {
+                    throw new Error('websocket failed');
+                }
+                await new Promise((resolve) => setTimeout(resolve, 500));
+            };
+            client.ArmConnectionDurationTimer();
+            const result = client.TriggerReconnect('connection-lost');
+            await vi.advanceTimersByTimeAsync(5_000);
+            expect(await result).toBe(true);
+            // Attempt 2 connected at 1.5 s on the old token; the refresh it started landed at 1.8 s.
+            expect(client.ReconnectContexts[1].Credential.EphemeralToken).toBe('tok-initial');
+            expect(client['currentCredential'].EphemeralToken).toBe('tok-refresh-1');
+
+            await vi.advanceTimersByTimeAsync(startedAt + tokenLifetimeMs - 1 - Date.now());
+            expect(client.ReconnectContexts).toHaveLength(3);
+            expect(client.ReconnectContexts[2].Reason).toBe('duration-expiry');
+            expect(client.ReconnectContexts[2].Credential.EphemeralToken).toBe('tok-refresh-1');
+            await client.Disconnect();
+        });
+    });
+
+    // Each return of a planned move to its old connection fired OnReconnecting again, which reset the cycle's refresh:
+    // a provider refusing new connections for about 40 s cost 9 mints, and the server's per-session limit refused the
+    // 10th and ended the call.
+    describe('one credential refresh per reconnect cycle', () => {
+        /** A client whose planned move goes back to the old connection while the provider refuses connections. */
+        function plannedMoveRefusedFor(
+            refusedMs: number,
+            refresh: (count: number) => Promise<{ EphemeralToken: string; ExpiresAt: string }>,
+            singleUseToken = false
+        ): { client: CycleStubClient; errors: RealtimeClientError[]; refreshes: () => number } {
+            const made = clientWith(refresh, singleUseToken);
+            made.client.ReturnsToOldConnection = true;
+            const refusedUntil = Date.now() + refusedMs;
+            made.client.ReconnectImpl = async () => {
+                if (Date.now() < refusedUntil) {
+                    throw new Error('the provider refused the connection');
+                }
+            };
+            made.client.ArmConnectionDurationTimer();
+            return made;
+        }
+
+        it.each([
+            ['a reusable token', false],
+            ['a single-use token', true],
+        ])('mints once with %s for a planned move that goes back to its old connection many times', async (_label, singleUse) => {
+            vi.useFakeTimers();
+            const { client, errors, refreshes } = plannedMoveRefusedFor(40_000, async (count) => minted(count), singleUse);
+            const result = client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(60_000);
+
+            expect(await result).toBe(true);
+            expect(errors).toEqual([]);
+            expect(client.Returns).toBeGreaterThan(5);
+            expect(refreshes()).toBe(1);
+            expect(client.ReconnectContexts.at(-1)?.Credential.EphemeralToken).toBe('tok-refresh-1');
+            await client.Disconnect();
+        });
+
+        it('re-mints a credential that has aged to near expiry while the call was back on its old connection', async () => {
+            vi.useFakeTimers();
+            // The cycle's refresh mints a token that lives 100 s; the cycle goes on for more than 40 s of that.
+            const { client, refreshes } = plannedMoveRefusedFor(50_000, async (count) => ({
+                EphemeralToken: `tok-refresh-${count}`,
+                ExpiresAt: new Date(Date.now() + (count === 1 ? 100_000 : 1800_000)).toISOString(),
+            }));
+            const result = client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(70_000);
+
+            expect(await result).toBe(true);
+            expect(refreshes()).toBe(2);
+            expect(client.ReconnectContexts.at(-1)?.Credential.EphemeralToken).toBe('tok-refresh-2');
+            await client.Disconnect();
+        });
+
+        it('does not count a refresh that landed after its cycle ended toward the next cycle', async () => {
+            vi.useFakeTimers();
+            const { client, refreshes } = clientWith(
+                (count) => new Promise((resolve) => setTimeout(() => resolve(minted(count)), 800)),
+                false
+            );
+            let failNext = 1;
+            client.ReconnectImpl = async () => {
+                if (failNext > 0) {
+                    failNext--;
+                    throw new Error('websocket failed');
+                }
+                await new Promise((resolve) => setTimeout(resolve, 500));
+            };
+            // The retry's refresh runs in the background and lands after the retry connected.
+            const first = client.TriggerReconnect('connection-lost');
+            await vi.advanceTimersByTimeAsync(5_000);
+            expect(await first).toBe(true);
+            expect(refreshes()).toBe(1);
+
+            failNext = 1;
+            const second = client.TriggerReconnect('connection-lost');
+            await vi.advanceTimersByTimeAsync(5_000);
+            expect(await second).toBe(true);
+            expect(refreshes()).toBe(2);
+            await client.Disconnect();
+        });
+    });
+
+    // OpenAI-protocol drivers leave 'speaking' silently when a tool call arrives, and its response.done ends the turn.
+    // A failed move then restored 'speaking': the host was told the agent spoke during the tool run, and the report
+    // opened a turn that held the next attempt until the last call.
+    describe('the state a failed planned move reports again on its old connection', () => {
+        function returningClient(): { client: CycleStubClient; states: RealtimeClientState[] } {
+            const { client } = clientWith(async (count) => minted(count), false);
+            client.ReturnsToOldConnection = true;
+            const states: RealtimeClientState[] = [];
+            client.OnStateChange((s) => states.push(s));
+            client.ArmConnectionDurationTimer();
+            return { client, states };
+        }
+        function failFirstAttempt(client: CycleStubClient, during?: () => void): void {
+            let attempts = 0;
+            client.ReconnectImpl = async () => {
+                attempts++;
+                if (attempts === 1) {
+                    during?.();
+                    throw new Error('the provider refused the connection');
+                }
+            };
+        }
+        function restored(states: RealtimeClientState[]): RealtimeClientState[] {
+            return states.slice(states.lastIndexOf('connecting') + 1);
+        }
+
+        it('reports listening, not speaking, when the answer ended with no state report (a tool call)', async () => {
+            vi.useFakeTimers();
+            const { client, states } = returningClient();
+            failFirstAttempt(client);
+            client.EmitState('speaking');
+            client.SetTurnOpenSilently(false);
+            const result = client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(0);
+            expect(restored(states)).toEqual(['listening']);
+            expect(client['reconnectController'].IsTurnOpen).toBe(false);
+
+            // No turn holds the next attempt: it goes after the retry delay, not at the last call.
+            await vi.advanceTimersByTimeAsync(1_000);
+            expect(client.ReconnectContexts).toHaveLength(2);
+            expect(await result).toBe(true);
+            await client.Disconnect();
+        });
+
+        it('reports speaking while the answer still goes on, and for one the old connection started meanwhile', async () => {
+            vi.useFakeTimers();
+            const answering = returningClient();
+            failFirstAttempt(answering.client);
+            answering.client.EmitState('speaking');
+            void answering.client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(0);
+            expect(restored(answering.states)).toEqual(['speaking']);
+            await answering.client.Disconnect();
+
+            const started = returningClient();
+            failFirstAttempt(started.client, () => started.client.SetTurnOpenSilently(true));
+            started.client.EmitState('listening');
+            void started.client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(0);
+            expect(restored(started.states)).toEqual(['speaking']);
+            expect(started.client['reconnectController'].IsTurnOpen).toBe(true);
+            await started.client.Disconnect();
+        });
+
+        it('reports listening, never connected, which the runtime would leave showing "Resuming"', async () => {
+            vi.useFakeTimers();
+            const { client, states } = returningClient();
+            failFirstAttempt(client);
+            client.EmitState('connected');
+            void client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(0);
+            expect(restored(states)).toEqual(['listening']);
+            await client.Disconnect();
+        });
     });
 
     // #34: typed text was held for the whole cycle after a failed planned attempt, and dropped if the cycle failed.
@@ -251,7 +480,6 @@ describe('BaseRealtimeClient reconnect cycle', () => {
             await connected;
             const oldChannel = client.PeerConnections[0].Channel;
 
-            const stateBeforeMove = states.at(-1);
             const reconnected = client.TriggerReconnect('duration-expiry');
             await vi.advanceTimersByTimeAsync(1);
             expect(states.at(-1)).toBe('connecting');
@@ -260,8 +488,9 @@ describe('BaseRealtimeClient reconnect cycle', () => {
 
             client.FailHandshake();
             await vi.advanceTimersByTimeAsync(0);
-            // Live again in the state the move replaced, then the text's reply takes the floor at once.
-            expect(states.slice(states.lastIndexOf('connecting') + 1)).toEqual([stateBeforeMove, 'speaking']);
+            // Live again (reported as listening, never as the 'connected' the move replaced, which a host would leave
+            // showing the move), then the text's reply takes the floor at once.
+            expect(states.slice(states.lastIndexOf('connecting') + 1)).toEqual(['listening', 'speaking']);
             expect(userTexts(oldChannel).join()).toContain('banana');
             expect(oldChannel.readyState).toBe('open');
 

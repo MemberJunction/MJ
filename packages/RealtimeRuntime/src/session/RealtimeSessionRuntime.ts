@@ -2985,10 +2985,11 @@ export class RealtimeSessionRuntime {
   public ClosesSessionOnPageHide = true;
 
   /**
-   * The session whose `CloseAgentSession` from this runtime has completed ({@link closeServerSession}). End's
+   * The session this runtime's `CloseAgentSession` closed (the server returned true; {@link closeServerSession}). End's
    * teardown closes the session, then keeps its id while it waits on the recording terminal's ack, so a
    * `pagehide` in that window would otherwise send a second close of a closed session. While the close is
-   * still in flight this stays unset and the beacon is still sent: unload can cancel the ordinary close.
+   * still in flight this stays unset and the beacon is still sent: unload can cancel the ordinary close. It
+   * also stays unset when the server did not close the session, so the beacon tries again.
    */
   private completedServerCloseSessionId: string | null = null;
 
@@ -5926,8 +5927,13 @@ export class RealtimeSessionRuntime {
           CloseAgentSession(agentSessionId: $agentSessionId, closeReason: $closeReason)
         }
       `;
-      await this.gql().ExecuteGQL(mutation, { agentSessionId, closeReason });
-      this.completedServerCloseSessionId = agentSessionId;
+      const result = await this.gql().ExecuteGQL(mutation, { agentSessionId, closeReason });
+      // Only a close the server reports done stops the page-close beacon; `false` means the session did not close.
+      if (result?.CloseAgentSession === true) {
+        this.completedServerCloseSessionId = agentSessionId;
+      } else {
+        console.warn(`[RealtimeSession] The server did not close session ${agentSessionId} (closeReason ${closeReason}).`);
+      }
     } catch (error) {
       console.error(`[RealtimeSession] Failed to close server session ${agentSessionId} (closeReason ${closeReason}):`, error);
     }

@@ -172,6 +172,14 @@ interface GeminiParsedSessionConfig {
     avatar: GeminiAvatarGrant | null;
 }
 
+/** A microphone chunk held while the session moves to a new connection. */
+interface GeminiHeldMicChunk {
+    /** The base64 PCM16 audio. */
+    readonly Pcm: string;
+    /** Whether the mic meter heard the user when the chunk was captured (as a live chunk is judged when sent). */
+    readonly Speech: boolean;
+}
+
 /** A connection {@link GeminiRealtimeClient} opened, with the number that marks it as current. */
 interface GeminiOpenedConnection {
     Session: GeminiLiveClientSession;
@@ -396,7 +404,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      */
     private connectionReady = false;
     /** Microphone audio captured during a move, sent on the new connection once it is ready. */
-    private heldMicAudio: string[] = [];
+    private heldMicAudio: GeminiHeldMicChunk[] = [];
     /** Base64 characters in {@link heldMicAudio}, kept under {@link MAX_HELD_MIC_AUDIO_BASE64_CHARS}. */
     private heldMicAudioChars = 0;
     /** See {@link IsTurnOpen}. */
@@ -1275,33 +1283,41 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
 
     /** Holds a mic chunk during a move, keeping the latest {@link HELD_MIC_AUDIO_SECONDS} seconds; older audio goes first. */
     private holdMicChunk(base64Pcm16: string): void {
-        this.heldMicAudio.push(base64Pcm16);
+        // The meter is read now, as for a live chunk: it hears the user only at the instant it is read.
+        this.heldMicAudio.push({ Pcm: base64Pcm16, Speech: this.isUserSpeaking() });
         this.heldMicAudioChars += base64Pcm16.length;
         while (this.heldMicAudioChars > MAX_HELD_MIC_AUDIO_BASE64_CHARS && this.heldMicAudio.length > 1) {
-            this.heldMicAudioChars -= this.heldMicAudio.shift()?.length ?? 0;
-        }
-    }
-
-    /** Sends the mic audio held during a move on the connection now in use, oldest first. */
-    private sendHeldMicAudio(): void {
-        const held = this.heldMicAudio;
-        this.heldMicAudio = [];
-        this.heldMicAudioChars = 0;
-        if (!this.session) {
-            return;
-        }
-        for (const chunk of held) {
-            this.sendAudio(this.session, chunk);
+            this.heldMicAudioChars -= this.heldMicAudio.shift()?.Pcm.length ?? 0;
         }
     }
 
     /**
+     * Sends the mic audio held during a move on the connection now in use, oldest first.
+     *
+     * @returns Whether the audio sent carried the user's voice.
+     */
+    private sendHeldMicAudio(): boolean {
+        const held = this.heldMicAudio;
+        this.heldMicAudio = [];
+        this.heldMicAudioChars = 0;
+        if (!this.session) {
+            return false;
+        }
+        for (const chunk of held) {
+            this.sendAudio(this.session, chunk.Pcm);
+        }
+        return held.some((chunk) => chunk.Speech);
+    }
+
+    /**
      * Whether an unexpected close or `goAway` can be recovered via `TriggerReconnect` / `NotifyConnectionEnding`:
-     * either native resumption has a recorded handle, or history seeding is active (`TrustsNativeResumption === false`
-     * or `hasResumedOnce === true`).
+     * a reconnect cycle is running, native resumption has a recorded handle, or history seeding is active
+     * (`TrustsNativeResumption === false` or `hasResumedOnce === true`). A running cycle takes the loss of the
+     * connection it may go back to whatever handle is left: after a failed native attempt it has dropped the handle
+     * and seeds, though this session has never resumed.
      */
     private canRecoverConnection(allowEmptySeed = false): boolean {
-        if (this.ResumptionHandle !== null) {
+        if (this.IsReconnectCycleActive || this.ResumptionHandle !== null) {
             return true;
         }
         if (this.TrustsNativeResumption && !this.hasResumedOnce) {
@@ -1412,8 +1428,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     /**
      * A planned move's attempt failed and the old connection is still the one in use: the call goes on there until the
      * next attempt. Input flows again (the mic audio held during the attempt goes out first, then queued sends), and
-     * the state the move replaced is reported again. `false` when the attempt tore the old connection down (a relay
-     * session closes its tunnel before a seeded reopen) or the session has ended.
+     * the state the move replaced is reported again. Held audio that carried the user's voice holds the next attempt
+     * as live speech does ({@link noteUnansweredSpeech}): the old connection has not answered those words yet. `false`
+     * when the attempt tore the old connection down (a relay session closes its tunnel before a seeded reopen) or the
+     * session has ended.
      */
     protected override ResumeOnOldConnection(): boolean {
         if (!this.session || this.currentConnection === 0 || this.currentState === 'closed' || this.currentState === 'error') {
@@ -1424,7 +1442,9 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         if (restore) {
             this.setState(restore);
         }
-        this.sendHeldMicAudio();
+        if (this.sendHeldMicAudio()) {
+            this.noteUnansweredSpeech();
+        }
         this.flushQueuedSends();
         return true;
     }

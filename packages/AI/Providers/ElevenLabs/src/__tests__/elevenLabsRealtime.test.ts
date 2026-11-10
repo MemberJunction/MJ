@@ -1685,3 +1685,43 @@ describe('ElevenLabsRealtimeSession — long-call duration reconnect and history
     });
 });
 
+describe('ElevenLabsRealtimeSession — tool result during a reconnect', () => {
+    /** The first socket answers its initiation at once; the second only when the test sends its metadata. */
+    class ManualSecondSocketElevenLabsRealtime extends TestElevenLabsRealtime {
+        public readonly Sockets: FakeSocket[] = [];
+        public SecondArgs: ElevenLabsConnectArgs | null = null;
+        protected override async connectConversation(args: ElevenLabsConnectArgs): Promise<ElevenLabsRealtimeSocket> {
+            const socket = new FakeSocket();
+            this.Sockets.push(socket);
+            if (this.Sockets.length === 1) {
+                this.LastConnectArgs = args;
+                queueMicrotask(() => args.OnMessage(metadataEvent()));
+            } else {
+                this.SecondArgs = args;
+            }
+            return socket;
+        }
+    }
+
+    it('sends a result that arrives while the new socket opens to that socket, once, as a late-result note', async () => {
+        const driver = new ManualSecondSocketElevenLabsRealtime('fake-api-key');
+        const session = await driver.StartSession(makeParams());
+        driver.Emit({
+            type: 'client_tool_call',
+            client_tool_call: { tool_name: 'get_weather', tool_call_id: 'call-1', parameters: { city: 'NYC' } },
+        });
+
+        const reconnect = session.TriggerReconnect('duration-expiry');
+        await flushAsync();
+        expect(driver.Sockets).toHaveLength(2);
+        await session.SendToolResult('call-1', '{"status":"shipped"}');
+        driver.SecondArgs?.OnMessage(metadataEvent());
+        expect(await reconnect).toBe(true);
+
+        const carrying = (socket: FakeSocket) => socket.SentFrames().filter((f) => JSON.stringify(f).includes('shipped'));
+        expect(carrying(driver.Sockets[0])).toEqual([]);
+        expect(carrying(driver.Sockets[1])).toHaveLength(1);
+        expect(carrying(driver.Sockets[1])[0].type).toBe('contextual_update');
+        await session.Close();
+    });
+});

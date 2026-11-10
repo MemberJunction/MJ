@@ -19,18 +19,25 @@ export const REALTIME_RELAY_PATH = '/realtime/relay';
 /** How long after the mint a relay session accepts its one fresh connection, in seconds. */
 export const REALTIME_RELAY_OPEN_WINDOW_SECONDS = 300;
 
-/** The longest a relay session lives, in seconds; a shorter `MaxSessionSeconds` ends it sooner. */
+/**
+ * How long one lease of a relay session lasts, in seconds: from the mint (a shorter `MaxSessionSeconds` ends it sooner)
+ * and, by default, from each {@link RealtimeProxyRegistry.ExtendRelaySession}.
+ */
 export const REALTIME_RELAY_SESSION_LIFETIME_SECONDS = 1800;
 
 /**
- * The close code the relay sends the browser when a relay session reaches its lifetime
- * ({@link REALTIME_RELAY_SESSION_LIFETIME_SECONDS}, or a shorter `MaxSessionSeconds`). A private-use code (RFC 6455
+ * The close code the relay sends the browser when a relay session reaches the end of its lease
+ * ({@link REALTIME_RELAY_SESSION_LIFETIME_SECONDS}, or a shorter `MaxSessionSeconds`, unless
+ * {@link RealtimeProxyRegistry.ExtendRelaySession} moved it). A private-use code (RFC 6455
  * §7.4.2), so a client tells the time limit from a dropped connection: it ends the call with its own message instead of
  * trying to resume on a session that is gone.
  */
 export const REALTIME_RELAY_TIME_LIMIT_CLOSE_CODE = 4000;
 
-/** The most connections one relay session accepts: the fresh one plus resumes. */
+/**
+ * The most connections one lease of a relay session accepts: the fresh one plus resumes. By default
+ * {@link RealtimeProxyRegistry.ExtendRelaySession} allows this many more.
+ */
 export const REALTIME_RELAY_MAX_CONNECTIONS = 10;
 
 /**
@@ -170,14 +177,14 @@ export interface RealtimeRelayIssueParams {
     DriverClass?: string;
     /** Seconds after the mint during which the one fresh connection may open ({@link REALTIME_RELAY_OPEN_WINDOW_SECONDS}). */
     OpenWithinSeconds?: number;
-    /** The relay's own ceiling on the session's life, in seconds ({@link REALTIME_RELAY_SESSION_LIFETIME_SECONDS}). */
+    /** The relay's own limit on the session's first lease, in seconds ({@link REALTIME_RELAY_SESSION_LIFETIME_SECONDS}). */
     LifetimeSeconds?: number;
     /**
-     * The MJ session cap ({@link RealtimeSessionParams.MaxSessionSeconds}) when one applies: the session ends at
+     * The MJ session cap ({@link RealtimeSessionParams.MaxSessionSeconds}) when one applies: the first lease ends at
      * whichever of this and `LifetimeSeconds` comes first.
      */
     MaxSessionSeconds?: number;
-    /** The most connections the session accepts ({@link REALTIME_RELAY_MAX_CONNECTIONS}). */
+    /** The most connections the session's first lease accepts ({@link REALTIME_RELAY_MAX_CONNECTIONS}). */
     MaxConnections?: number;
 }
 
@@ -449,7 +456,8 @@ export class RealtimeProxyRegistry extends BaseSingleton<RealtimeProxyRegistry> 
      * Issues a relay session and returns its ticket id (for {@link BuildRealtimeRelayUrl}) and the moment it ends. The
      * session opens one fresh connection within `OpenWithinSeconds`, then only resumes that present a handle the relay
      * forwarded to it; it ends at `LifetimeSeconds` or `MaxSessionSeconds`, whichever comes first, and accepts at most
-     * `MaxConnections` connections. Nothing is called on the policy here: headers are fetched per upstream open.
+     * `MaxConnections` connections, until {@link ExtendRelaySession} extends the lease. Nothing is called on the policy
+     * here: headers are fetched per upstream open.
      */
     public IssueRelaySession(params: RealtimeRelayIssueParams): RealtimeProxyTicket {
         const now = Date.now();

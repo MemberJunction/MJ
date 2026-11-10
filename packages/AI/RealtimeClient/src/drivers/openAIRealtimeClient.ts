@@ -331,6 +331,17 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
         return this.dataChannel !== null && this.dataChannel.readyState === 'open';
     }
 
+    /**
+     * @inheritdoc
+     *
+     * Also a peer connection that has not lost its network path: the data channel can read `'open'` long after the
+     * path is gone (SCTP keeps waiting), so input sent into it then is lost.
+     */
+    protected override isTransportUsable(): boolean {
+        const state = this.peerConnection?.connectionState;
+        return super.isTransportUsable() && state !== 'disconnected' && state !== 'failed' && state !== 'closed';
+    }
+
     /** @inheritdoc */
     protected sendProtocolEvent(event: OpenAIProtocolClientEvent): void {
         this.dataChannel?.send(JSON.stringify(event));
@@ -460,10 +471,11 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
 
     /**
      * A data-channel error. Ignored for a channel that is no longer current (the user's End or a swap already let go
-     * of it). During a live call it starts the `connection-lost` reconnect; otherwise it is fatal.
+     * of it). During a live call it starts the `connection-lost` reconnect, or goes to the reconnect already running;
+     * otherwise it is fatal.
      */
     private handleChannelError(channel: IRealtimeDataChannel, e: Event): void {
-        if (this.dataChannel !== channel || this.IsReconnecting) {
+        if (this.dataChannel !== channel) {
             return;
         }
         if (this.recoverLostTransport(`data channel error: ${String(e)}`)) {
@@ -475,11 +487,11 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
 
     /**
      * A data-channel close the consumer did not ask for (Disconnect and the swap drop the channel before closing it,
-     * so the identity check filters both). During a live call it starts the `connection-lost` reconnect; a channel
-     * that closes before the call went live ends the session as `'closed'`.
+     * so the identity check filters both). During a live call it starts the `connection-lost` reconnect, or goes to the
+     * reconnect already running; a channel that closes before the call went live ends the session as `'closed'`.
      */
     private handleChannelClose(channel: IRealtimeDataChannel): void {
-        if (this.dataChannel !== channel || this.IsReconnecting || this.currentState === 'error') {
+        if (this.dataChannel !== channel || this.currentState === 'error') {
             return;
         }
         if (this.recoverLostTransport('data channel closed')) {

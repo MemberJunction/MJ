@@ -351,7 +351,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
 
         if (context.ConversationSeed && context.ConversationSeed.Entries.length > 0) {
             const note = RenderRealtimeMemorySeedAsContextNote(context.ConversationSeed);
-            if (note.length > 0) {
+            if (note) {
                 this.sendDataChannelFrame({
                     type: 'session.thinking.append',
                     content: note,
@@ -360,7 +360,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
             }
         }
         this.flushOutboundQueue();
-        this.setState('listening');
+        this.reportListeningAfterMove();
     }
 
     /**
@@ -614,6 +614,16 @@ export class OpenAILiveClient extends BaseRealtimeClient {
             this.currentState = state;
             this.emitStateChange(state);
         }
+    }
+
+    /**
+     * Reports the call live on the new connection. The host was told `'connecting'` when the move started, but this
+     * driver's own state was left as it was (an `error` frame during the move must not read the call as inactive), so
+     * {@link setState} would skip `'listening'` when the move started from it.
+     */
+    private reportListeningAfterMove(): void {
+        this.currentState = 'listening';
+        this.emitStateChange('listening');
     }
 
     private attachMicrophone(pc: IRealtimePeerConnection, micStream: MediaStream): void {

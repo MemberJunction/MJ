@@ -40,13 +40,23 @@ class Harness {
     public TrustsNative = true;
     public RequiresPostTurn = true;
     public Idle = true;
+    /** The next attempts stay in flight until the test ends them with `SettleAttempt`. */
+    public HoldNext = 0;
     public Resumption: RealtimeReconnectController;
+    private settleHeldAttempt: ((error?: Error) => void) | null = null;
 
     constructor(retryDelaysMs?: readonly number[], extra: Partial<RealtimeReconnectControllerOptions> = {}) {
         this.Resumption = new RealtimeReconnectController({
             Reconnect: async (context) => {
                 this.Reconnects.push(context.ResumptionHandle);
                 this.AttemptTimes.push(Date.now());
+                if (this.HoldNext > 0) {
+                    this.HoldNext--;
+                    await new Promise<void>((resolve, reject) => {
+                        this.settleHeldAttempt = (error) => (error ? reject(error) : resolve());
+                    });
+                    return;
+                }
                 if (this.FailNext > 0) {
                     this.FailNext--;
                     throw new Error(`connect failed for ${context.ResumptionHandle ?? 'seed'}`);
@@ -68,6 +78,13 @@ class Harness {
             RetryDelaysMs: retryDelaysMs,
             ...extra,
         });
+    }
+
+    /** Ends the attempt held in flight: it fails with `error`, or connects when there is none. */
+    public SettleAttempt(error?: Error): void {
+        const settle = this.settleHeldAttempt;
+        this.settleHeldAttempt = null;
+        settle?.(error);
     }
 }
 
@@ -876,6 +893,91 @@ describe('RealtimeReconnectController', () => {
             expect(h.Reconnects).toHaveLength(2);
         });
 
+        // Before, a loss during the retry delay left IsReconnecting false until the delay ended: the driver kept
+        // sending into a dead transport for up to 5 s.
+        it('a loss of the old connection during the retry delay holds input at once and tells the driver once', async () => {
+            const h = await failedAtSoftWindow();
+            expect(h.Resumption.IsReconnectCycleActive).toBe(true);
+            await vi.advanceTimersByTimeAsync(200); // inside the 1 s retry delay
+            void h.Resumption.TriggerReconnect('connection-lost');
+            expect(h.Resumption.IsReconnecting).toBe(true);
+            expect(h.Reconnecting).toEqual(['duration-expiry', 'connection-lost']);
+
+            await vi.advanceTimersByTimeAsync(799);
+            expect(h.Reconnects).toHaveLength(1); // the retry delay still runs
+            await vi.advanceTimersByTimeAsync(1);
+            expect(h.Reconnects).toHaveLength(2);
+            expect(h.Reconnecting).toEqual(['duration-expiry', 'connection-lost']);
+            expect(h.Resumption.IsReconnectCycleActive).toBe(false);
+        });
+
+        it('a boundary timer that fires a moment early is armed again, so the wait still ends at the last call', async () => {
+            const h = await failedAtSoftWindow();
+            h.Resumption.TurnStarted(); // the answer holds the next attempt until the last call
+            await advanceTo(SOFT_MS + 1_000); // the retry delay is over; the boundary wait has armed its timers
+            vi.setSystemTime(Date.now() - 5); // the clock now reads 5 ms behind the timers: each fires 5 ms early
+            await advanceTo(LAST_CALL_MS);
+            expect(h.Reconnects).toHaveLength(2);
+            expect(h.AttemptTimes[1] - t0).toBe(LAST_CALL_MS);
+        });
+
+        it('a connection limit that shrinks while the call waits on the old connection moves the wait up to its new last call', async () => {
+            const h = await failedAtSoftWindow();
+            h.Resumption.TurnStarted(); // the answer holds the next attempt until the last call
+            await advanceTo(SOFT_MS + 2_000); // the boundary wait has armed its timers for the 600 s limit
+            h.Resumption.ArmDurationTimers(580, 10); // a driver re-arms for a shorter connection (a video cap)
+            const shrunkLastCallMs = 580_000 - 3_333;
+            await advanceTo(shrunkLastCallMs - 1);
+            expect(h.Reconnects).toHaveLength(1);
+            await advanceTo(shrunkLastCallMs);
+            expect(h.Reconnects).toHaveLength(2);
+            expect(h.AttemptTimes[1] - t0).toBe(shrunkLastCallMs);
+        });
+
+        it('a goAway during an attempt in flight moves up the last call the call goes back to the old connection with', async () => {
+            const h = new Harness(undefined, { ReturnToOldConnection: () => ++returns > 0 });
+            h.TrustsNative = false;
+            h.RequiresPostTurn = false;
+            h.HoldNext = 1;
+            h.Resumption.ArmDurationTimers(600, 10);
+            await advanceTo(SOFT_MS);
+            expect(h.Reconnects).toHaveLength(1);
+            await advanceTo(SOFT_MS + 1_000);
+            h.Resumption.ConnectionEnding(6_000); // ends at 567 s; the margin is 2 s, so the last call is at 565 s
+            await advanceTo(SOFT_MS + 2_000);
+            h.SettleAttempt(new Error('connect failed'));
+            await vi.advanceTimersByTimeAsync(0);
+            expect(returns).toBe(1);
+            h.Resumption.TurnStarted(); // an answer on the old connection holds the next attempt until the last call
+            await advanceTo(SOFT_MS + 4_999);
+            expect(h.Reconnects).toHaveLength(1);
+            await advanceTo(SOFT_MS + 5_000);
+            expect(h.Reconnects).toHaveLength(2);
+        });
+
+        it('a driver that throws on the way back counts as not gone back, and is told the move goes on', async () => {
+            const h = new Harness(undefined, {
+                ReturnToOldConnection: () => {
+                    returns++;
+                    throw new Error('the host state handler failed');
+                },
+            });
+            h.TrustsNative = false;
+            h.RequiresPostTurn = false;
+            h.FailNext = 1;
+            h.Resumption.ArmDurationTimers(600, 10);
+            const result = h.Resumption.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(0);
+            expect(returns).toBe(1);
+            // The driver may have let input go part way back: it holds it again, and the next attempt keeps the schedule.
+            expect(h.Resumption.IsReconnecting).toBe(true);
+            expect(h.Reconnecting).toEqual(['duration-expiry', 'duration-expiry']);
+            h.Resumption.TurnStarted(); // would hold a boundary wait; the retry schedule does not wait for it
+            await vi.advanceTimersByTimeAsync(1_000);
+            expect(await result).toBe(true);
+            expect(h.Reconnects).toHaveLength(2);
+        });
+
         it('does not go back after a failed attempt on a lost connection', async () => {
             const h = new Harness([0, 1000], { ReturnToOldConnection: () => ++returns > 0 });
             h.TrustsNative = false;
@@ -884,6 +986,30 @@ describe('RealtimeReconnectController', () => {
             await vi.advanceTimersByTimeAsync(1000);
             expect(await result).toBe(true);
             expect(returns).toBe(0);
+        });
+    });
+
+    describe('a loss of the old connection while an attempt is in flight', () => {
+        // Before, the switch to a lost connection's window waited for the next attempt, so a failed attempt near the
+        // planned deadline ended the call although the cycle had just become a lost connection's.
+        it('continues as a lost connection with its own window instead of stopping at the planned one', async () => {
+            const h = new Harness(undefined, { RecoveryWindowMs: 10_000 });
+            h.TrustsNative = false;
+            h.RequiresPostTurn = false;
+            h.FailNext = 3;
+            h.Resumption.ConnectionEnding(3_000); // idle: moves at once; the planned window closes at 3 s + 10 s
+            await vi.advanceTimersByTimeAsync(4_000); // attempts at 0, 1 and 4 s fail
+            expect(h.Reconnects).toHaveLength(3);
+            h.HoldNext = 1;
+            await vi.advanceTimersByTimeAsync(6_000); // attempt 4, at 9 s, is in flight
+            expect(h.Reconnects).toHaveLength(4);
+            void h.Resumption.TriggerReconnect('connection-lost'); // the old connection closes at 10 s
+            await vi.advanceTimersByTimeAsync(500);
+            h.SettleAttempt(new Error('connect failed')); // at 10.5 s: a next attempt at 15.5 s is past 13 s
+            await vi.advanceTimersByTimeAsync(5_000);
+            expect(h.FailureCodes).toEqual([]);
+            expect(h.Reconnects).toHaveLength(5);
+            expect(h.Reconnected).toBe(1);
         });
     });
 

@@ -44,10 +44,15 @@ class GqlProvider {
     public readonly sessionId = 'transport-session-1';
     /** When set, a `CloseAgentSession` mutation waits on it (a close still in flight). */
     public HeldClose: Promise<void> | null = null;
+    /** What the server's `CloseAgentSession` returns: true when it closed the session. */
+    public CloseResult = true;
     public async ExecuteGQL(query: string): Promise<unknown> {
         this.Mutations.push(query);
-        if (this.HeldClose && /mutation CloseAgentSession/.test(query)) {
-            await this.HeldClose;
+        if (/mutation CloseAgentSession/.test(query)) {
+            if (this.HeldClose) {
+                await this.HeldClose;
+            }
+            return { CloseAgentSession: this.CloseResult };
         }
         return {};
     }
@@ -731,6 +736,24 @@ describe('RealtimeSessionRuntime.SendPageHideSignals — closing the tab closes 
         runtime.SendPageHideSignals({ Persisted: false });
 
         expect(beacon.Closes).toEqual([]);
+        transport.ReleaseTerminal(true);
+        await ended;
+    });
+
+    it('still sends the close when the server reported that its own close did not close the session', async () => {
+        const { runtime, transport, provider, recorder } = await startRecorded();
+        const beacon = new FakeSessionCloseBeacon();
+        runtime.CloseBeacon = beacon;
+        provider.CloseResult = false;
+        recorder.Capture(7);
+        transport.HoldTerminal();
+        const ended = runtime.EndRealtimeSession();
+        await vi.advanceTimersByTimeAsync(RECORDER_STOP_TIMEOUT_MS);
+        expect(provider.MutationNames).toContain('CloseAgentSession');
+
+        runtime.SendPageHideSignals({ Persisted: false });
+
+        expect(beacon.Closes).toEqual([{ AgentSessionId: 'session-1', CloseReason: 'Explicit' }]);
         transport.ReleaseTerminal(true);
         await ended;
     });

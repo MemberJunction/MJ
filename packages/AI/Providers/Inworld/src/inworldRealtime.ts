@@ -637,14 +637,19 @@ export class InworldRealtimeSession extends BaseRealtimeSession implements IReal
      * @inheritdoc
      *
      * Completes the tool-call loop: sends a tool-result frame correlated by `call_id`. Sent
-     * IMMEDIATELY (never queued) — the provider asked for it and owns the spoken continuation. The
-     * busy flag is set eagerly so a queued narration can't slip in before the spoken result (driver
-     * obligation #5 — the result must EVENTUALLY be voiced and never be dropped).
+     * IMMEDIATELY (never queued behind a response) — the provider asked for it and owns the spoken
+     * continuation. The one wait is a reconnect: the result is held and sent on the new socket
+     * (`holdToolResultDuringReconnect`). The busy flag is set eagerly so a queued narration can't slip
+     * in before the spoken result (driver obligation #5 — the result must EVENTUALLY be voiced and
+     * never be dropped).
      *
      * @param callID The `CallID` from the originating {@link RealtimeToolCall}.
      * @param output The tool's result as a JSON-stringified string.
      */
     public async SendToolResult(callID: string, output: string): Promise<void> {
+        if (this.holdToolResultDuringReconnect(callID, output)) {
+            return;
+        }
         const name = this.pendingToolCallNames.get(callID) ?? callID;
         this.conversationMemory.Record({
             Kind: 'toolResult',

@@ -201,7 +201,7 @@ export class xAIRealtimeClient extends OpenAIProtocolWebSocketRealtimeClient {  
         // provider re-emits the whole thing with more words). The second case rescues a mid-sentence
         // pause — the VAD fires speech_started and clears the flag even though the user never
         // stopped, which would otherwise split one spoken thought into several growing bubbles. The
-        // item check exists only here; the server session (packages/AI/Providers/xAI) does not have it.
+        // server session (packages/AI/Providers/OpenAI, which xAI's server session extends) makes the same item check.
         const sameItem = itemId === undefined || this.userTurnItemId === undefined || itemId === this.userTurnItemId;
         const replacesPrevious = (this.userTurnTranscribed && sameItem) || IsTranscriptContinuation(this.lastUserTranscript, transcript);
         this.emitTranscript({

@@ -835,6 +835,26 @@ describe('InworldRealtime', () => {
             expect(updateFrame?.session?.instructions).toContain('Caller turn 1');
             expect(updateFrame?.session?.instructions).toContain('Agent turn 1');
         });
+
+        it('sends a tool result that arrives while the new socket opens to that socket, once, as a late-result note', async () => {
+            const session = await startReadySession(driver, { SystemPrompt: 'Inworld base prompt.' });
+            const socket1 = driver.Fake;
+            driver.Fire({ type: 'tool.call', call_id: 'call_1', name: 'GetWeather', arguments: '{"city":"NYC"}' });
+
+            const socket2 = new FakeSocket();
+            driver.Fake = socket2;
+            const reconnectPromise = session.TriggerReconnect('duration-expiry');
+            await new Promise((r) => setTimeout(r, 0));
+            await session.SendToolResult('call_1', '{"status":"shipped"}');
+            driver.Fire({ type: 'session.created' });
+            expect(await reconnectPromise).toBe(true);
+
+            const carrying = (socket: FakeSocket) => socket.SentRaw.filter((raw) => raw.includes('shipped'));
+            expect(carrying(socket1)).toEqual([]);
+            expect(carrying(socket2)).toHaveLength(1);
+            expect(JSON.parse(carrying(socket2)[0]).type).toBe('session.update'); // the late-result note rides the instructions
+            await session.Close();
+        });
     });
 });
 

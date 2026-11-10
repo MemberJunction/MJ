@@ -800,13 +800,18 @@ describe('xAIRealtime', () => {
     });
 
     describe('lifecycle', () => {
-        it('Close removes the event + error listeners and closes the connection', async () => {
+        it('Close removes the session\'s event + error listeners, leaves a no-op error guard, and closes the connection', async () => {
             const session = await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' });
+            const onError = vi.fn();
+            session.OnError(onError);
             expect(driver.Fake.ListenerCount).toBe(1);
             expect(driver.Fake.ErrorListenerCount).toBe(1);
             await session.Close();
             expect(driver.Fake.ListenerCount).toBe(0);
-            expect(driver.Fake.ErrorListenerCount).toBe(0);
+            // The guard keeps the SDK from turning a late socket error into an unhandled rejection; it reaches no one.
+            expect(driver.Fake.ErrorListenerCount).toBe(1);
+            driver.Fake.FireError(makeSdkError('closed before the connection was established'));
+            expect(onError).not.toHaveBeenCalled();
             expect(driver.Fake.Closed).toBe(true);
         });
 
@@ -1079,5 +1084,44 @@ describe('xAIRealtime edge coverage (shared-driver surface)', () => {
         await cd.CreateClientSession({ Model: 'grok-voice', SystemPrompt: 'sys' });
         const mintSession = cd.LastSecretParams?.session as Record<string, unknown> | undefined;
         expect(mintSession?.['resumption']).toBeUndefined();
+    });
+});
+
+/** Driver whose every connection is a fresh fake: the first opens on its own, later ones answer only what a test fires. */
+class ReconnectingxAIRealtime extends xAIRealtime {
+    public readonly Connections: FakeConnection[] = [];
+    protected override createConnection(): IxAIRealtimeConnection {
+        const conn = new FakeConnection();
+        conn.AutoSessionCreated = this.Connections.length === 0;
+        this.Connections.push(conn);
+        return conn;
+    }
+}
+
+describe('xAIRealtime reconnect keeps the frames that come with session.created', () => {
+    const conversationCreated = (id: string): RealtimeServerEvent =>
+        ({ type: 'conversation.created', event_id: 'e', conversation: { id, object: 'realtime.conversation' } }) as RealtimeServerEvent;
+
+    it.each([
+        ['a native resumption', true],
+        ['a reseed', false],
+    ])('records the conversation.created that arrives with the new connection\'s session.created, after %s', async (_move, firstConversationKnown) => {
+        const driver = new ReconnectingxAIRealtime('xai-key');
+        const session = (await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' })) as xAIRealtimeSession;
+        await session.WaitForConfigApplied();
+        if (firstConversationKnown) {
+            driver.Connections[0].Fire(conversationCreated('conv_1'));
+            expect(session.ResumptionHandle).toBe('conv_1');
+        }
+
+        const reconnect = session.TriggerReconnect('connection-lost');
+        const second = driver.Connections[1];
+        // One burst, as xAI sends them: both frames arrive before the reconnect's wait for session.created resumes.
+        second.Fire({ type: 'session.created', event_id: 'e2' } as RealtimeServerEvent);
+        second.Fire(conversationCreated('conv_2'));
+        expect(await reconnect).toBe(true);
+
+        expect(session.ResumptionHandle).toBe('conv_2');
+        await session.Close();
     });
 });

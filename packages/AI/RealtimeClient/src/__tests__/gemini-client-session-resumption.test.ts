@@ -645,6 +645,122 @@ describe('GeminiRealtimeClient session resumption', () => {
             await vi.advanceTimersByTimeAsync(0);
             expect(client.Connections).toHaveLength(3);
         });
+
+        it('speech held during the failed attempt holds the next attempt until the old connection answers it', async () => {
+            client.MeterMic();
+            client.EmitOn(0, RESUMABLE('h1'));
+            client.AutoConfirmSetup = false;
+            client.EmitOn(0, GO_AWAY('60s'));
+            await vi.advanceTimersByTimeAsync(0);
+            client.MicLevel = 0.3;
+            client.OnPcmChunk?.('SPOKEN'); // the user talks while the attempt opens
+            client.MicLevel = 0;
+            client.CloseOn(1, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(client.Connections[0].Session.RealtimeInputs.map((input) => input.audio?.data)).toEqual(['SPOKEN']);
+
+            // Past the retry delay: an idle-looking call would move again now, before the words are answered.
+            await vi.advanceTimersByTimeAsync(2_000);
+            expect(client.Connections).toHaveLength(2);
+
+            client.EmitOn(0, HEARD('What time is it?'));
+            client.EmitOn(0, SAID('It is noon.'));
+            client.EmitOn(0, TURN_COMPLETE);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(client.Connections).toHaveLength(3);
+        });
+    });
+
+    // After a failed native attempt the controller drops the handle and seeds the next one, but a session that trusts
+    // native resumption and has never resumed read "no handle" as "cannot recover": a loss of the old connection, or a
+    // goAway on it, then ended the call or was ignored instead of going to the running cycle (#6462 review wave 2).
+    describe('the old connection after a failed native attempt (#6462 review wave 2)', () => {
+        /** A goAway move whose native attempt fails: the handle is dropped and the call is live on the old connection. */
+        async function failNativeMoveAttempt(): Promise<void> {
+            client.EmitOn(0, RESUMABLE('h1'));
+            client.AutoConfirmSetup = false;
+            client.EmitOn(0, GO_AWAY('60s'));
+            await vi.advanceTimersByTimeAsync(0);
+            client.CloseOn(1, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(client.ResumptionHandle).toBeNull();
+            expect(emitted.states.at(-1)).toBe('listening');
+        }
+
+        it('a close while live on it goes to the cycle, whose seeded attempt completes the move', async () => {
+            await failNativeMoveAttempt();
+            client.CloseOn(0, 1006);
+            expect(emitted.errors).toEqual([]);
+            expect(emitted.states.at(-1)).toBe('connecting');
+
+            await vi.advanceTimersByTimeAsync(1_000);
+            expect(client.Connections).toHaveLength(3);
+            expect(client.Connections[2].Args.Config.sessionResumption).toEqual({});
+            client.ConfirmSetupOn(2);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(emitted.states.at(-1)).toBe('listening');
+            expect(emitted.errors).toEqual([]);
+        });
+
+        it('a close while the seeded attempt is in flight leaves that attempt to complete the move', async () => {
+            await failNativeMoveAttempt();
+            await vi.advanceTimersByTimeAsync(1_000); // the idle call moves again after the retry delay
+            expect(client.Connections).toHaveLength(3);
+
+            client.CloseOn(0, 1006);
+            expect(emitted.errors).toEqual([]);
+            client.ConfirmSetupOn(2);
+            await vi.advanceTimersByTimeAsync(0);
+
+            expect(emitted.states.at(-1)).toBe('listening');
+            client.OnPcmChunk?.('AFTER');
+            expect(client.Connections[2].Session.RealtimeInputs.map((input) => input.audio?.data)).toEqual(['AFTER']);
+            expect(emitted.errors).toEqual([]);
+        });
+
+        it('a transport error while live on it is not fatal: the close that follows goes to the cycle', async () => {
+            await failNativeMoveAttempt();
+            client.ErrorOn(0);
+            expect(emitted.errors).toEqual([]);
+            expect(emitted.states.at(-1)).toBe('listening');
+
+            client.CloseOn(0, 1006);
+            await vi.advanceTimersByTimeAsync(1_000);
+            expect(client.Connections).toHaveLength(3);
+            expect(emitted.errors).toEqual([]);
+        });
+
+        it('a goAway on it brings the next attempt forward to its own last call, though a turn is open', async () => {
+            await failNativeMoveAttempt();
+            client.EmitOn(0, HEARD('one more question'));
+            client.EmitOn(0, SAID('Let me think'));
+            await vi.advanceTimersByTimeAsync(2_000);
+            expect(client.Connections).toHaveLength(2);
+
+            // 10 s left: the last call is 10 s less its third (6.667 s) from now, not the first goAway's 50 s.
+            client.EmitOn(0, GO_AWAY('10s'));
+            await vi.advanceTimersByTimeAsync(6_000);
+            expect(client.Connections).toHaveLength(2);
+            await vi.advanceTimersByTimeAsync(1_000);
+            expect(client.Connections).toHaveLength(3);
+        });
+
+        it('mic audio and typed text sent right after a close while live on it wait for the next connection', async () => {
+            await failNativeMoveAttempt();
+            client.CloseOn(0, 1006);
+            client.OnPcmChunk?.('GAP');
+            client.SendText('hello?');
+            expect(client.Connections[0].Session.RealtimeInputs).toEqual([]);
+
+            await vi.advanceTimersByTimeAsync(1_000);
+            client.ConfirmSetupOn(2);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(client.Connections[2].Session.RealtimeInputs).toEqual([
+                { audio: { data: 'GAP', mimeType: 'audio/pcm;rate=16000' } },
+                { text: 'hello?' },
+            ]);
+            expect(client.Connections[0].Session.RealtimeInputs).toEqual([]);
+        });
     });
 
     describe('long-call reconnects, 600s/120s ceiling, token refresh, and history seeding (#6460)', () => {

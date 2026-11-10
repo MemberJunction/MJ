@@ -18,6 +18,13 @@
  * - `channels` — the session's resolved channel scope (which interactive channels the server put IN
  *   the session). A client who could delete or widen it could unscope the session and save state or
  *   artifacts for channels its agent/app configuration excluded.
+ * - `realtimeMintSnapshot` — what a realtime credential refresh re-mints from (model, driver, key
+ *   scope, session params) and the target agent it re-authorizes. A client who could write it could
+ *   point a refresh at another model, key scope, prompt or target.
+ *
+ * The protection is against WRITES only: the owner still READS the whole blob through the same API, so
+ * a protected key must hold nothing the owner may not see: `identityVerification` keeps its codes only
+ * as keyed hashes, and `realtimeMintSnapshot` keeps no prompt or tools of a relay session.
  *
  * `MJAIAgentSessionEntityServer` calls {@link FindProtectedSessionConfigChanges} from `Validate()` and
  * refuses any save that changes one of these keys — **unless** the save runs inside

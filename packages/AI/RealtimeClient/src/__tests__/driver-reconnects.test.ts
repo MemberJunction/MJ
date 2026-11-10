@@ -1040,6 +1040,24 @@ describe('Slice 5 — Client driver long-call reconnects and history seeding', (
             expect(states).toEqual(['error']);
             await client.Disconnect();
         });
+
+        it('reports listening to the host again after a move that started while the call was listening', async () => {
+            const { client, states, fatalErrors } = await connectLive();
+            client.PeerConnections[0].Channel.EmitServer({ type: 'session.started', session: { id: 'live_sess_1' } });
+            expect(client.State).toBe('listening');
+            states.length = 0;
+
+            const moving = client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(0);
+            client.ReleaseAnswer?.();
+            await vi.advanceTimersByTimeAsync(1);
+            expect(await moving).toBe(true);
+
+            // The host saw 'connecting' when the move started, so it must see the call live again.
+            expect(states).toEqual(['connecting', 'listening']);
+            expect(fatalErrors).toEqual([]);
+            await client.Disconnect();
+        });
     });
 
     describe('typed text during an OpenAI reconnect (F12)', () => {

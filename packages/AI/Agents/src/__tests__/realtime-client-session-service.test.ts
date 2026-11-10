@@ -12,8 +12,10 @@ import type { RealtimeAvatarResolution } from '../realtime/realtime-avatar-resol
 import {
     BaseRealtimeModel,
     ClientRealtimeSessionConfig,
+    IRealtimeRelayPolicy,
     IRealtimeSession,
     JSONObject,
+    RealtimeProxyRegistry,
     RealtimeSessionParams,
     RealtimeToolCall,
     RealtimeToolDefinition
@@ -29,6 +31,7 @@ import { MJAIAgentEntityExtended, MJAIModelEntityExtended, AppContextSnapshot } 
 
 import {
     RealtimeClientSessionService,
+    RealtimeMintSnapshotRegistry,
     ToolArgumentsError,
     SanitizeWireToolName,
     PrepareClientSessionInput,
@@ -3750,6 +3753,208 @@ describe('RealtimeClientSessionService.RefreshClientSessionCredential', () => {
             invalidProvider,
         );
         expect(rejected.Success).toBe(false);
+    });
+});
+
+// The persisted snapshot sits in `MJ: AI Agent Sessions.Config_`, which the session OWNER can read (UI and Widget Guest
+// hold CanRead on their own sessions) and which Record Changes copies on every save.
+describe('RealtimeClientSessionService — the mint snapshot persisted on the owner-readable session row', () => {
+    const RELAY_POLICY: IRealtimeRelayPolicy = {
+        UpstreamHeaders: async () => ({}),
+        ReadOpenIntent: () => ({ ResumeHandle: null, AudioOnly: false }),
+        OpeningFrames: () => [],
+        FilterClientFrame: (frame) => ({ Forward: frame }),
+        ObserveServerFrame: () => null,
+    };
+    /** Server-only provider config (an upstream endpoint) next to a setting the browser is also given. */
+    const SERVER_CONFIG: JSONObject = { endpoint: 'ws://internal-host:8000/v1/realtime', voice: 'alloy' };
+    const SERVER_ONLY_TEXT = ['CO-AGENT PROMPT BODY', 'Hello there', 'whiteboard_draw', INVOKE_TARGET_AGENT_TOOL_NAME, 'internal-host'];
+
+    /** A relay driver like Gemini Enterprise: the browser gets a relay URL and a minimal config, no prompt or tools. */
+    class RelayModel extends MockRealtimeModel {
+        public MintCount = 0;
+        public override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
+            this.LastParams = params;
+            this.MintCount++;
+            const grant = RealtimeProxyRegistry.Instance.IssueRelaySession({ UpstreamUrl: 'wss://upstream.test/live', Policy: RELAY_POLICY, UserID: params.UserID });
+            // The browser's first connection, so the relay is not dropped as never opened.
+            RealtimeProxyRegistry.Instance.OpenRelaySession(grant.ID, { ResumeHandle: null, AudioOnly: false });
+            return {
+                Provider: 'relay-mock',
+                Model: params.Model,
+                EphemeralToken: '',
+                ExpiresAt: grant.ExpiresAt,
+                Transport: 'relay',
+                RelayUrl: `wss://mjapi.example.test/realtime/relay/${grant.ID}`,
+                SessionConfig: { model: params.Model, config: { responseModalities: ['AUDIO'] } },
+            };
+        }
+    }
+
+    /** A driver whose refresh reads the minted provider config, as ElevenLabs reuses its managed agent. */
+    class ConfigReadingModel extends MockRealtimeModel {
+        public override async RefreshClientSessionCredential(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
+            return this.CreateClientSession(params);
+        }
+    }
+
+    function serviceWith(model: MockRealtimeModel): TestableService {
+        const svc = new TestableService();
+        svc.Model = model;
+        svc.ResolveModelResult = { Model: model, ModelID: 'm1', VendorID: 'v1', APIName: 'mock-realtime' };
+        return svc;
+    }
+
+    function prepInput(sessionID: string): PrepareClientSessionInput {
+        return makePrepInput({
+            AgentSessionID: sessionID,
+            Config: SERVER_CONFIG,
+            ExtraTools: [{ Name: 'whiteboard_draw', Description: 'Draws on the board', ParametersSchema: { type: 'object' } }],
+        });
+    }
+
+    /** What the session row stores: the snapshot as JSON. */
+    function asStored(value: unknown): unknown {
+        return JSON.parse(JSON.stringify(value));
+    }
+
+    /** A provider whose session row holds `config`, as another instance reads it. */
+    function providerWithSessionRow(sessionID: string, config: object): IMetadataProvider {
+        const row = { ID: sessionID, AgentID: 'co-1', Config_: JSON.stringify(config), Load: vi.fn(async () => true) };
+        return { GetEntityObject: vi.fn(async () => row) } as unknown as IMetadataProvider;
+    }
+
+    afterEach(() => {
+        vi.useRealTimers();
+        RealtimeMintSnapshotRegistry.Instance.Clear();
+    });
+
+    it('persists only routing for a relay session: no system prompt, tools, initial context or provider config', async () => {
+        const sessionID = 'a0a0a0a0-0000-4000-8000-000000000001';
+        const prep = await serviceWith(new RelayModel()).PrepareClientSession(prepInput(sessionID), contextUser, provider);
+
+        expect(prep.Success).toBe(true);
+        expect(asStored(prep.MintSnapshot)).toEqual({
+            coAgentID: 'co-1',
+            targetAgentID: 'target-1',
+            modelID: 'm1',
+            vendorID: 'v1',
+            driverClass: 'RelayModel',
+            credentialScope: 'Any',
+            transport: 'relay',
+        });
+        const stored = JSON.stringify(prep.MintSnapshot);
+        for (const text of SERVER_ONLY_TEXT) {
+            expect(stored).not.toContain(text);
+        }
+        // The minting instance keeps the full snapshot for its own refreshes.
+        expect(RealtimeMintSnapshotRegistry.Instance.Get(sessionID)?.sessionParams.SystemPrompt).toContain('CO-AGENT PROMPT BODY');
+    });
+
+    it('persists the session params of a direct session, which its browser was handed, without the provider config a base refresh ignores', async () => {
+        const sessionID = 'a0a0a0a0-0000-4000-8000-000000000002';
+        const prep = await serviceWith(new MockRealtimeModel()).PrepareClientSession(prepInput(sessionID), contextUser, provider);
+
+        expect(prep.Success).toBe(true);
+        expect(asStored(prep.MintSnapshot)).toEqual({
+            coAgentID: 'co-1',
+            targetAgentID: 'target-1',
+            modelID: 'm1',
+            vendorID: 'v1',
+            driverClass: 'MockRealtimeModel',
+            credentialScope: 'Any',
+            sessionParams: asStored(prep.SessionParams),
+        });
+        // The browser already holds the prompt: the mock driver hands it over as `instructions`, as OpenAI does.
+        expect(prep.ClientConfig?.SessionConfig?.['instructions']).toBe(prep.SessionParams?.SystemPrompt);
+    });
+
+    it('keeps the minted provider config for a driver whose refresh reads it', async () => {
+        const prep = await serviceWith(new ConfigReadingModel()).PrepareClientSession(
+            prepInput('a0a0a0a0-0000-4000-8000-000000000003'),
+            contextUser,
+            provider,
+        );
+
+        expect(prep.MintSnapshot?.existingSessionConfig).toEqual(prep.ClientConfig?.SessionConfig);
+    });
+
+    it('re-mints a direct session on an instance that does not hold its snapshot, from the persisted copy', async () => {
+        const sessionID = 'a0a0a0a0-0000-4000-8000-000000000004';
+        const model = new MockRealtimeModel();
+        const svc = serviceWith(model);
+        const prep = await svc.PrepareClientSession(prepInput(sessionID), contextUser, provider);
+        const minted = model.LastParams;
+        RealtimeMintSnapshotRegistry.Instance.Clear();
+
+        const refreshed = await svc.RefreshClientSessionCredential(
+            { AgentSessionID: sessionID, CoAgentID: 'co-1', PersistedMintSnapshot: prep.MintSnapshot },
+            contextUser,
+            provider,
+        );
+
+        expect(refreshed.Success).toBe(true);
+        expect(refreshed.EphemeralToken).toBe('ephemeral-123');
+        expect(model.LastParams).toEqual(minted);
+        // The hydrated copy keeps the target the session was minted for.
+        expect(RealtimeMintSnapshotRegistry.Instance.Get(sessionID)?.targetAgentID).toBe('target-1');
+    });
+
+    it('refreshes a relay session from this instance\'s snapshot, extending its relay in place', async () => {
+        const sessionID = 'a0a0a0a0-0000-4000-8000-000000000005';
+        const model = new RelayModel();
+        const svc = serviceWith(model);
+        const prep = await svc.PrepareClientSession(prepInput(sessionID), contextUser, provider);
+
+        const refreshed = await svc.RefreshClientSessionCredential(
+            { AgentSessionID: sessionID, CoAgentID: 'co-1', PersistedMintSnapshot: prep.MintSnapshot },
+            contextUser,
+            provider,
+        );
+
+        expect(refreshed).toMatchObject({ Success: true, Kind: 'relay', RelayUrl: prep.ClientConfig?.RelayUrl });
+        expect(model.MintCount).toBe(1);
+    });
+
+    it('refuses to refresh a relay session on an instance that does not hold its snapshot, and mints nothing', async () => {
+        const sessionID = 'a0a0a0a0-0000-4000-8000-000000000006';
+        const model = new RelayModel();
+        const svc = serviceWith(model);
+        const prep = await svc.PrepareClientSession(prepInput(sessionID), contextUser, provider);
+        RealtimeMintSnapshotRegistry.Instance.Clear();
+
+        const passed = await svc.RefreshClientSessionCredential(
+            { AgentSessionID: sessionID, CoAgentID: 'co-1', PersistedMintSnapshot: prep.MintSnapshot },
+            contextUser,
+            provider,
+        );
+        const readFromRow = await svc.RefreshClientSessionCredential(
+            { AgentSessionID: sessionID, CoAgentID: 'co-1' },
+            contextUser,
+            providerWithSessionRow(sessionID, { targetAgentID: 'target-1', realtimeMintSnapshot: prep.MintSnapshot }),
+        );
+
+        for (const result of [passed, readFromRow]) {
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('is a relay session: only the MJAPI instance that minted it can refresh its credential');
+        }
+        expect(model.MintCount).toBe(1);
+    });
+
+    it('keeps a relay session refreshable past the registry TTL while the call keeps refreshing', async () => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        const sessionID = 'a0a0a0a0-0000-4000-8000-000000000007';
+        const model = new RelayModel();
+        const svc = serviceWith(model);
+        const prep = await svc.PrepareClientSession(prepInput(sessionID), contextUser, provider);
+
+        // Eleven refreshes 25 minutes apart: 275 minutes, past the registry's 4-hour TTL.
+        for (let i = 0; i < 11; i++) {
+            vi.setSystemTime(Date.now() + 25 * 60 * 1000);
+            const refreshed = await svc.RefreshClientSessionCredential({ AgentSessionID: sessionID, CoAgentID: 'co-1' }, contextUser, provider);
+            expect(refreshed).toMatchObject({ Success: true, Kind: 'relay', RelayUrl: prep.ClientConfig?.RelayUrl });
+        }
+        expect(model.MintCount).toBe(1);
     });
 });
 
