@@ -8,7 +8,10 @@
       "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
       "CodeApprovalStatus": "Approved",
       "Status": "Active",
-      "IconClass": "fa-solid fa-clock-rotate-left"
+      "IconClass": "fa-solid fa-clock-rotate-left",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -389,7 +392,10 @@
       "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
       "CodeApprovalStatus": "Approved",
       "Status": "Active",
-      "IconClass": "fa-solid fa-user-shield"
+      "IconClass": "fa-solid fa-user-shield",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -627,7 +633,10 @@
       "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
       "CodeApprovalStatus": "Approved",
       "Status": "Active",
-      "IconClass": "fa-solid fa-handshake"
+      "IconClass": "fa-solid fa-handshake",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -1329,7 +1338,10 @@
       "CategoryID": "@lookup:MJ: Action Categories.Name=Communication",
       "CodeApprovalStatus": "Approved",
       "Status": "Active",
-      "IconClass": "fa-solid fa-calendar-plus"
+      "IconClass": "fa-solid fa-calendar-plus",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -1542,7 +1554,8 @@
     "fields": {
       "Name": "Manage My Email Inbox and Drafts",
       "Config": {
-        "outputTrustLevel": "Untrusted"
+        "outputTrustLevel": "Untrusted",
+        "disallowWhenTainted": true
       },
       "Description": "Lists messages, searches threads, reads single messages, creates email drafts, or replies/forwards in the calling user's personal mailbox or dedicated agent utility mailbox. Hard-pinned to ContextUser.Email or the user's AIBridgeAgentIdentity and gated by EmailChannelMode.",
       "DriverClass": "__ManageMyEmailInbox",

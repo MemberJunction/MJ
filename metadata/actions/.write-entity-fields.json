@@ -6,7 +6,10 @@
       "DriverClass": "WriteEntityFieldsAction",
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
-      "Status": "Active"
+      "Status": "Active",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [

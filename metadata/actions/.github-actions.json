@@ -7,7 +7,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=GitHub",
       "Status": "Active",
-      "IconClass": "fa-brands fa-github"
+      "IconClass": "fa-brands fa-github",
+      "Config": {
+        "outputTrustLevel": "Untrusted"
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -214,7 +217,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=GitHub",
       "Status": "Active",
-      "IconClass": "fa-solid fa-file-code"
+      "IconClass": "fa-solid fa-file-code",
+      "Config": {
+        "outputTrustLevel": "Untrusted"
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -511,7 +517,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=GitHub",
       "Status": "Active",
-      "IconClass": "fa-solid fa-folder-tree"
+      "IconClass": "fa-solid fa-folder-tree",
+      "Config": {
+        "outputTrustLevel": "Untrusted"
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -772,7 +781,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=GitHub",
       "Status": "Active",
-      "IconClass": "fa-solid fa-magnifying-glass-code"
+      "IconClass": "fa-solid fa-magnifying-glass-code",
+      "Config": {
+        "outputTrustLevel": "Untrusted"
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -997,7 +1009,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=GitHub",
       "Status": "Active",
-      "IconClass": "fa-solid fa-code-pull-request"
+      "IconClass": "fa-solid fa-code-pull-request",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -1399,7 +1414,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=GitHub",
       "Status": "Active",
-      "IconClass": "fa-solid fa-code-commit"
+      "IconClass": "fa-solid fa-code-commit",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -1693,7 +1711,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=GitHub",
       "Status": "Active",
-      "IconClass": "fa-solid fa-code-branch"
+      "IconClass": "fa-solid fa-code-branch",
+      "Config": {
+        "outputTrustLevel": "Untrusted"
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -1918,7 +1939,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=GitHub",
       "Status": "Active",
-      "IconClass": "fa-solid fa-code-pull-request"
+      "IconClass": "fa-solid fa-code-pull-request",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -2215,7 +2239,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=GitHub",
       "Status": "Active",
-      "IconClass": "fa-solid fa-magnifying-glass-plus"
+      "IconClass": "fa-solid fa-magnifying-glass-plus",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -2476,7 +2503,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=GitHub",
       "Status": "Active",
-      "IconClass": "fa-solid fa-code-merge"
+      "IconClass": "fa-solid fa-code-merge",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -2734,7 +2764,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=GitHub",
       "Status": "Active",
-      "IconClass": "fa-solid fa-list-check"
+      "IconClass": "fa-solid fa-list-check",
+      "Config": {
+        "outputTrustLevel": "Untrusted"
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -2941,7 +2974,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=GitHub",
       "Status": "Active",
-      "IconClass": "fa-solid fa-circle-exclamation"
+      "IconClass": "fa-solid fa-circle-exclamation",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -3220,7 +3256,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=GitHub",
       "Status": "Active",
-      "IconClass": "fa-solid fa-comment-dots"
+      "IconClass": "fa-solid fa-comment-dots",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -3445,7 +3484,11 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=GitHub",
       "Status": "Active",
-      "IconClass": "fa-solid fa-gears"
+      "IconClass": "fa-solid fa-gears",
+      "Config": {
+        "outputTrustLevel": "Untrusted",
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [

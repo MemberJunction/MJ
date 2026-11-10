@@ -1,0 +1,12 @@
+[
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Graph: Approve Edges",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "6574E030-E028-4356-81F7-AC8526289C23"
+    }
+  }
+]
