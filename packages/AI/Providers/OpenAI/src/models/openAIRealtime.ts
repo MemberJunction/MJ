@@ -18,6 +18,7 @@ import {
     RealtimeTurnDetectionMode,
     RealtimeTurnDetectionSettings,
     RealtimeDroppedInputReporter,
+    type JSONValue,
     RealtimeDriverFactsOf,
     type RealtimeDriverFacts,
     type RealtimeInputFrame,
@@ -38,6 +39,7 @@ import type {
     RealtimeSessionCreateRequest,
     RealtimeAudioInputTurnDetection,
     RealtimeToolsConfigUnion,
+    AudioTranscription,
 } from 'openai/resources/realtime/realtime';
 import type {
     ClientSecretCreateParams,
@@ -110,10 +112,37 @@ interface RealtimeSessionGAFields {
     reasoning?: { effort: string };
     /** Whether the model may call multiple tools in one turn (GA default: true). */
     parallel_tool_calls?: boolean;
+    /** The output voice on endpoints that keep it at the session top level (xAI Grok Voice). */
+    voice?: string;
+    /** Turn detection on endpoints that keep it at the session top level (xAI Grok Voice). */
+    turn_detection?: RealtimeAudioInputTurnDetection;
+    /**
+     * Function, MCP and provider-hosted tools. The SDK's union models only the first two, so the list
+     * is widened here; {@link toWireSession} hands the request back to the SDK's send/mint calls.
+     */
+    tools?: RealtimeSessionTool[];
 }
 
-/** The SDK session-create request widened with the GA fields the SDK typings don't declare yet. */
-type GARealtimeSessionCreateRequest = RealtimeSessionCreateRequest & RealtimeSessionGAFields;
+/** One entry of a session's `tools` list: a function or MCP tool (SDK union) or a provider-hosted tool. */
+type RealtimeSessionTool = RealtimeToolsConfigUnion | RealtimeProviderToolDeclaration;
+
+/** The SDK session-create request widened with the fields the SDK typings don't declare yet. */
+type GARealtimeSessionCreateRequest = Omit<RealtimeSessionCreateRequest, 'tools'> & RealtimeSessionGAFields;
+
+/**
+ * Input-transcription settings widened with the xAI Grok Voice fields the SDK typings don't declare:
+ * `language_hint` (BCP-47) and `keyterms` (recognition-bias terms).
+ */
+type RealtimeInputTranscription = AudioTranscription & { language_hint?: string; keyterms?: string[] };
+
+/**
+ * Hands a session request to the SDK's `session.update` / client-secret calls. The SDK request type
+ * is assignable to ours, so this only re-narrows a list that may carry provider-hosted tools — which
+ * the endpoint accepts but the SDK union does not model.
+ */
+function toWireSession(session: GARealtimeSessionCreateRequest): RealtimeSessionCreateRequest {
+    return session as RealtimeSessionCreateRequest;
+}
 
 /** The GA `response.done` usage payload fields this driver reads (totals + per-modality detail). */
 interface GARealtimeResponseUsage {
@@ -158,8 +187,36 @@ export interface OpenAIRealtimeProfile {
     supportsParallelToolCalls: boolean;
     /** Whether the provider accepts remote MCP server tools (`type: "mcp"`) in `session.tools`. */
     supportsMcpTools: boolean;
-    /** Whether the provider accepts an output voice at `audio.output.voice`. */
+    /** Whether the provider accepts an output voice (where it goes is {@link audioControlsPlacement}). */
     supportsVoiceOutput: boolean;
+    /**
+     * Where `voice` and `turn_detection` sit in the session object. `'audioBlock'` is OpenAI's GA
+     * shape (`audio.output.voice`, `audio.input.turn_detection`); `'sessionTopLevel'` is xAI Grok
+     * Voice's (`session.voice`, `session.turn_detection`), which keeps the pre-GA placement for
+     * those two fields while nesting everything else under `audio` as GA does.
+     */
+    audioControlsPlacement: 'audioBlock' | 'sessionTopLevel';
+    /**
+     * Whether server VAD accepts `idle_timeout_ms` — the provider takes a turn on its own after the
+     * user has been silent that long, and reports `input_audio_buffer.timeout_triggered`.
+     */
+    supportsIdleTimeout: boolean;
+    /** The accepted `audio.output.speed` range, or `null` when the provider has no speed control. */
+    voiceSpeedRange: { min: number; max: number } | null;
+    /** Whether input transcription accepts a BCP-47 `language_hint` (filled from `transcriptionLanguages`). */
+    supportsTranscriptionLanguageHint: boolean;
+    /**
+     * The limits on input-transcription `keyterms` (recognition bias terms), or `null` when the
+     * provider has no keyterm channel. Terms beyond either limit are dropped with a diag log.
+     */
+    transcriptionKeyterms: { maxCount: number; maxLength: number } | null;
+    /**
+     * Provider-hosted tool types this provider accepts in `session.tools` from the `providerTools`
+     * bag key, each mapped to the function names that tool answers to once enabled. A declared MJ
+     * function tool with one of those names makes the provider fail the turn, so the driver drops
+     * the colliding hosted tool rather than the MJ tool. Empty = no hosted tools.
+     */
+    providerToolReservedNames: Readonly<Record<string, readonly string[]>>;
     /**
      * Whether the provider supports LIVE turn-mode reconfiguration via a partial `session.update`
      * (drives both the session's `Capabilities.CanReconfigureTurnMode` and whether `Reconfigure`
@@ -215,18 +272,22 @@ export interface OpenAIRealtimeProfile {
  * - `'native'` → no family-wide mapping YET (reserved for full-duplex modes providers document);
  *   profiles that gain one override {@link OpenAIRealtimeProfile.buildTurnDetection} to map it.
  *
- * Returns `undefined` when the request is absent, mode `'default'`, or the mode is unsupported by
- * this profile (diag-logged) — the caller then applies its own default. Meeting-mode composition
- * (`create_response: !disableAutoResponse`, `interrupt_response: true`) is applied here so every
- * mapped mode honors the bridge's floor control.
+ * `IdleTimeoutMs` rides on `server_vad` as `idle_timeout_ms` when the profile supports it. A request
+ * that carries it with no mode (or `'default'`) is read as a server-VAD request, because the idle
+ * timer only exists under server VAD — otherwise the setting would silently do nothing.
+ *
+ * Returns `undefined` when the request is absent, mode `'default'` (with no idle timeout), or the
+ * mode is unsupported by this profile (diag-logged) — the caller then applies its own default.
+ * Meeting-mode composition (`create_response: !disableAutoResponse`, `interrupt_response: true`) is
+ * applied here so every mapped mode honors the bridge's floor control.
  */
 export function MapNormalizedTurnDetection(
-    profile: Pick<OpenAIRealtimeProfile, 'providerKey' | 'supportedTurnModes'>,
+    profile: Pick<OpenAIRealtimeProfile, 'providerKey' | 'supportedTurnModes' | 'supportsIdleTimeout'>,
     disableAutoResponse: boolean,
     requested: RealtimeTurnDetectionSettings | undefined,
 ): RealtimeAudioInputTurnDetection | undefined {
-    const mode = requested?.Mode;
-    if (!mode || mode === 'default') {
+    const mode = resolveRequestedTurnMode(profile, requested);
+    if (!mode) {
         return undefined;
     }
     if (!profile.supportedTurnModes.includes(mode)) {
@@ -245,16 +306,37 @@ export function MapNormalizedTurnDetection(
         } as RealtimeAudioInputTurnDetection;
     }
     if (mode === 'serverVad') {
+        const idleTimeoutMs = profile.supportsIdleTimeout ? requested?.IdleTimeoutMs : undefined;
         return {
             type: 'server_vad',
             ...(typeof requested?.Threshold === 'number' ? { threshold: requested.Threshold } : {}),
             ...(typeof requested?.SilenceDurationMs === 'number' ? { silence_duration_ms: requested.SilenceDurationMs } : {}),
+            ...(typeof idleTimeoutMs === 'number' ? { idle_timeout_ms: idleTimeoutMs } : {}),
             ...floor,
         } as RealtimeAudioInputTurnDetection;
     }
     // 'native' reached only when a profile declares it supported but did not override the mapping.
     RealtimeDiagLog(`[${profile.providerKey}Realtime][diag] Turn-detection mode 'native' has no wire mapping on this profile — falling back to the profile default`);
     return undefined;
+}
+
+/**
+ * The turn mode a normalized request actually asks for: its explicit `Mode`, or `'serverVad'` when it
+ * sets only an idle timeout the profile can honor (the timer exists only under server VAD). `undefined`
+ * means "no request — use the profile default".
+ */
+function resolveRequestedTurnMode(
+    profile: Pick<OpenAIRealtimeProfile, 'supportedTurnModes' | 'supportsIdleTimeout'>,
+    requested: RealtimeTurnDetectionSettings | undefined,
+): Exclude<RealtimeTurnDetectionMode, 'default'> | undefined {
+    const mode = requested?.Mode;
+    if (mode && mode !== 'default') {
+        return mode;
+    }
+    const wantsIdleTimeout = typeof requested?.IdleTimeoutMs === 'number';
+    return wantsIdleTimeout && profile.supportsIdleTimeout && profile.supportedTurnModes.includes('serverVad')
+        ? 'serverVad'
+        : undefined;
 }
 
 /**
@@ -277,6 +359,14 @@ export const OPENAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     supportsParallelToolCalls: true,
     supportsMcpTools: true,
     supportsVoiceOutput: true,
+    audioControlsPlacement: 'audioBlock',
+    supportsIdleTimeout: true,
+    // GA `audio.output.speed`: 0.25–1.5, applied between turns.
+    voiceSpeedRange: { min: 0.25, max: 1.5 },
+    // GA transcription takes `language`/`prompt`, not `language_hint`/`keyterms`.
+    supportsTranscriptionLanguageHint: false,
+    transcriptionKeyterms: null,
+    providerToolReservedNames: {},
     supportsLiveReconfigure: true,
     supportsDynamicToolSet: true,
     unexpectedCloseMessage: 'OpenAI realtime connection closed unexpectedly',
@@ -289,6 +379,15 @@ export const OPENAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
         ?? (disableAutoResponse ? { type: 'server_vad', create_response: false, interrupt_response: true } : undefined),
     mapEffortLevel: MapEffortLevelToOpenAIRealtime,
 };
+
+/**
+ * A provider-hosted tool in the provider's own wire shape (e.g. xAI's `{ type: 'web_search' }`). The
+ * provider runs it itself, so it never reaches MJ as a tool call; the profile decides which `type`s
+ * are accepted (see {@link OpenAIRealtimeProfile.providerToolReservedNames}).
+ */
+export interface RealtimeProviderToolDeclaration extends JSONObject {
+    type: string;
+}
 
 /**
  * The realtime feature values extracted (and removed) from the open {@link RealtimeSessionParams.Config}
@@ -318,6 +417,14 @@ interface ExtractedRealtimeFeatures {
     turnDetection?: RealtimeTurnDetectionSettings;
     /** Per-session input-transcription model override (`inputTranscriptionModel` bag key). */
     inputTranscriptionModel?: string;
+    /** Expected spoken languages as BCP-47 codes (`transcriptionLanguages` bag key); the first is the ASR hint. */
+    transcriptionLanguages?: string[];
+    /** Recognition-bias terms for user ASR (`transcriptionKeyterms` bag key). */
+    transcriptionKeyterms?: string[];
+    /** Output playback-speed multiplier (`voiceSpeed` bag key), before the profile's range clamp. */
+    voiceSpeed?: number;
+    /** Provider-hosted tool declarations (`providerTools` bag key), before the profile's type filter. */
+    providerTools?: RealtimeProviderToolDeclaration[];
     /**
      * MJ-side transport settings (`endpoint`, `sampleRate`, `proxyBaseUrl`, `brokerBaseUrl` bag keys) consumed by
      * self-hosted/proxied drivers and OpenAI Live — ALWAYS scrubbed so they never leak into a provider payload.
@@ -343,7 +450,8 @@ interface ExtractedRealtimeFeatures {
  *
  * Recognized bag keys: `effortLevel` (MJ-normalized: numeric 1–100 or named), `reasoningEffort`
  * (provider-native literal — wins over `effortLevel` when both are present), `parallelToolCalls`,
- * `mcpTools`, `voice`, `disableAutoResponse`. Everything else passes through in `rest`
+ * `mcpTools`, `voice`, `voiceSpeed`, `providerTools`, `transcriptionLanguages`,
+ * `transcriptionKeyterms`, `disableAutoResponse`. Everything else passes through in `rest`
  * (provider-native keys like `tool_choice` or `output_modalities` can be set directly by config
  * authors).
  *
@@ -427,15 +535,23 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
     // Per-session transcription-model override + MJ-side transport settings. All scrubbed
     // unconditionally — none of these are wire fields on ANY provider in the family.
     const bag = rest as JSONObject & {
-        inputTranscriptionModel?: unknown; transcriptionLanguages?: unknown; endpoint?: unknown; sampleRate?: unknown; proxyBaseUrl?: unknown;
-        brokerBaseUrl?: unknown;
+        inputTranscriptionModel?: unknown; transcriptionLanguages?: JSONValue; transcriptionKeyterms?: JSONValue; voiceSpeed?: JSONValue;
+        providerTools?: JSONValue; endpoint?: unknown; sampleRate?: unknown; proxyBaseUrl?: unknown; brokerBaseUrl?: unknown;
     };
     const rawItm = bag.inputTranscriptionModel;
     delete bag.inputTranscriptionModel;
     const inputTranscriptionModel = typeof rawItm === 'string' && rawItm.trim().length > 0 ? rawItm.trim() : undefined;
-    // The caption-language hint is not mapped for this family yet (the model's own text is the
-    // agent caption, so only user ASR could use it, and the compat endpoints' support is unverified).
+    // Only user ASR can use a language hint (the model's own text is the agent caption); the profile
+    // decides whether its endpoint takes one. Keyterms, speed and hosted tools are profile-gated the same way.
+    const transcriptionLanguages = readNonBlankStrings(bag.transcriptionLanguages);
     delete bag.transcriptionLanguages;
+    const transcriptionKeyterms = readNonBlankStrings(bag.transcriptionKeyterms);
+    delete bag.transcriptionKeyterms;
+    const rawSpeed = bag.voiceSpeed;
+    delete bag.voiceSpeed;
+    const voiceSpeed = typeof rawSpeed === 'number' && Number.isFinite(rawSpeed) && rawSpeed > 0 ? rawSpeed : undefined;
+    const providerTools = readProviderToolDeclarations(bag.providerTools);
+    delete bag.providerTools;
     const rawEndpoint = bag.endpoint;
     delete bag.endpoint;
     const endpoint = typeof rawEndpoint === 'string' && rawEndpoint.trim().length > 0 ? rawEndpoint.trim() : undefined;
@@ -449,7 +565,30 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
     delete bag.brokerBaseUrl;
     const brokerBaseUrl = typeof rawBroker === 'string' && rawBroker.trim().length > 0 ? rawBroker.trim() : undefined;
 
-    return { effortLevel, parallelToolCalls, mcpTools, voice, disableAutoResponse, turnDetection, inputTranscriptionModel, endpoint, sampleRate, proxyBaseUrl, brokerBaseUrl, rest };
+    return {
+        effortLevel, parallelToolCalls, mcpTools, voice, disableAutoResponse, turnDetection, inputTranscriptionModel,
+        transcriptionLanguages, transcriptionKeyterms, voiceSpeed, providerTools, endpoint, sampleRate, proxyBaseUrl, brokerBaseUrl, rest,
+    };
+}
+
+/** The non-blank strings of a bag array, trimmed — or `undefined` when none remain (a lone string is not a list). */
+function readNonBlankStrings(value: JSONValue | undefined): string[] | undefined {
+    if (!Array.isArray(value)) {
+        return undefined;
+    }
+    const strings = value.filter((v): v is string => typeof v === 'string' && v.trim().length > 0).map((v) => v.trim());
+    return strings.length > 0 ? strings : undefined;
+}
+
+/** The well-formed entries of a `providerTools` bag array (plain objects with a non-blank string `type`). */
+function readProviderToolDeclarations(value: JSONValue | undefined): RealtimeProviderToolDeclaration[] | undefined {
+    if (!Array.isArray(value)) {
+        return undefined;
+    }
+    const declarations = value.filter((entry): entry is RealtimeProviderToolDeclaration =>
+        entry !== null && typeof entry === 'object' && !Array.isArray(entry)
+        && typeof entry['type'] === 'string' && entry['type'].trim().length > 0);
+    return declarations.length > 0 ? declarations : undefined;
 }
 
 /**
@@ -458,7 +597,10 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
  * rather than sent and rejected. Effort levels run through the profile's `mapEffortLevel` seam so
  * each provider translates MJ's normalized vocabulary to its own literals.
  *
- * @param session The session payload under construction.
+ * Hosted tools (MCP servers, provider-hosted tools) are appended after the function tools; the
+ * caller keeps the inputs so a later tool-set replacement can append them again.
+ *
+ * @param session The session payload under construction (its `tools` hold only function tools here).
  * @param features The features extracted from the Config bag.
  * @param profile The provider profile gating each feature.
  */
@@ -479,43 +621,167 @@ function applyGAFeatures(
     if (profile.supportsParallelToolCalls && features.parallelToolCalls !== undefined) {
         session.parallel_tool_calls = features.parallelToolCalls;
     }
-    if (profile.supportsMcpTools && features.mcpTools && features.mcpTools.length > 0) {
-        // MCP server tools ride ALONGSIDE the function tools — the GA tools array is a union of both.
-        // NOTE: the driver has no MCP approval UX yet, so config authors should declare servers with
-        // `require_approval: 'never'`; an mcp_approval_request arriving mid-session is surfaced as a
-        // recoverable session error (see OpenAIRealtimeSession.dispatch) rather than silently stalling.
-        session.tools = [...(session.tools ?? []), ...features.mcpTools];
+    const hosted = BuildHostedTools(profile, features, session.tools ?? []);
+    if (hosted.length > 0) {
+        session.tools = [...(session.tools ?? []), ...hosted];
     }
 }
 
 /**
- * Assembles the session `audio` block from the profile + extracted features, or `undefined` when
- * every part is empty (compat endpoints reject/ignore hollow blocks). The transcription model is
- * the per-session bag override when present, else the profile's default (which may be undefined
- * for natively-transcribing providers).
+ * The tools the PROVIDER runs itself, to ride alongside the session's function tools: MCP servers
+ * (when the profile accepts them) and the provider-hosted tools from the `providerTools` bag key.
+ *
+ * MCP note: the driver has no MCP approval UX yet, so config authors should declare servers with
+ * `require_approval: 'never'`; an mcp_approval_request arriving mid-session is auto-denied and
+ * surfaced as a recoverable session error (see OpenAIRealtimeSession.dispatch).
+ *
+ * @param profile The provider profile.
+ * @param features The extracted Config-bag features.
+ * @param functionTools The session's function tools, whose names a hosted tool must not shadow.
+ * @returns The hosted tools to append (possibly empty).
+ */
+function BuildHostedTools(
+    profile: OpenAIRealtimeProfile,
+    features: ExtractedRealtimeFeatures,
+    functionTools: readonly RealtimeSessionTool[],
+): RealtimeSessionTool[] {
+    const hosted: RealtimeSessionTool[] = [];
+    if (profile.supportsMcpTools && features.mcpTools && features.mcpTools.length > 0) {
+        hosted.push(...features.mcpTools);
+    }
+    hosted.push(...filterProviderTools(profile, features.providerTools, functionToolNames(functionTools)));
+    return hosted;
+}
+
+/** The names of the function tools in a session tool list. */
+function functionToolNames(tools: readonly RealtimeSessionTool[]): Set<string> {
+    const names = new Set<string>();
+    for (const tool of tools) {
+        if (tool.type === 'function' && typeof tool.name === 'string') {
+            names.add(tool.name);
+        }
+    }
+    return names;
+}
+
+/**
+ * Keeps the provider-hosted tools this profile accepts. A type the provider does not document is
+ * dropped, and so is one whose own function names an MJ function tool already uses: the provider
+ * fails the turn on that collision (observed on xAI as `server_error` on the first `response.create`),
+ * and the MJ tool is the one the agent was configured around.
+ */
+function filterProviderTools(
+    profile: OpenAIRealtimeProfile,
+    declarations: RealtimeProviderToolDeclaration[] | undefined,
+    functionNames: ReadonlySet<string>,
+): RealtimeProviderToolDeclaration[] {
+    const accepted: RealtimeProviderToolDeclaration[] = [];
+    for (const declaration of declarations ?? []) {
+        const label = `[${profile.providerKey}Realtime][diag] Provider tool '${declaration.type}'`;
+        if (!Object.hasOwn(profile.providerToolReservedNames, declaration.type)) {
+            RealtimeDiagLog(`${label} is not one this provider hosts — dropped`);
+            continue;
+        }
+        const clashes = profile.providerToolReservedNames[declaration.type].filter((name) => functionNames.has(name));
+        if (clashes.length > 0) {
+            RealtimeDiagLog(`${label} dropped: function tool(s) ${clashes.join(', ')} already use the name(s) it answers to`);
+            continue;
+        }
+        accepted.push(declaration);
+    }
+    return accepted;
+}
+
+/**
+ * The input-transcription block: the per-session model override when present, else the profile's
+ * default, plus the language hint and keyterms the profile accepts. `undefined` when no model applies
+ * (natively-transcribing providers), since the hint and terms belong to that opt-in pass.
+ */
+function BuildInputTranscription(
+    profile: OpenAIRealtimeProfile,
+    features: ExtractedRealtimeFeatures,
+): RealtimeInputTranscription | undefined {
+    const model = features.inputTranscriptionModel ?? profile.inputTranscriptionModel;
+    if (!model) {
+        return undefined;
+    }
+    const transcription: RealtimeInputTranscription = { model };
+    const languageHint = profile.supportsTranscriptionLanguageHint ? features.transcriptionLanguages?.[0] : undefined;
+    if (languageHint) {
+        transcription.language_hint = languageHint;
+    }
+    const keyterms = limitKeyterms(profile, features.transcriptionKeyterms);
+    if (keyterms) {
+        transcription.keyterms = keyterms;
+    }
+    return transcription;
+}
+
+/** The keyterms within the profile's count and length limits (the rest dropped with a diag log). */
+function limitKeyterms(profile: OpenAIRealtimeProfile, requested: string[] | undefined): string[] | undefined {
+    const limits = profile.transcriptionKeyterms;
+    if (!limits || !requested) {
+        return undefined;
+    }
+    const kept = requested.filter((term) => term.length <= limits.maxLength).slice(0, limits.maxCount);
+    if (kept.length < requested.length) {
+        RealtimeDiagLog(
+            `[${profile.providerKey}Realtime][diag] Dropped ${requested.length - kept.length} transcription keyterm(s) ` +
+            `beyond the provider's limits (at most ${limits.maxCount}, each at most ${limits.maxLength} characters)`,
+        );
+    }
+    return kept.length > 0 ? kept : undefined;
+}
+
+/** The requested playback speed clamped to the profile's range, or `undefined` when none applies. */
+function resolveVoiceSpeed(profile: OpenAIRealtimeProfile, requested: number | undefined): number | undefined {
+    const range = profile.voiceSpeedRange;
+    if (!range || requested === undefined) {
+        return undefined;
+    }
+    const clamped = Math.min(range.max, Math.max(range.min, requested));
+    if (clamped !== requested) {
+        RealtimeDiagLog(`[${profile.providerKey}Realtime][diag] Voice speed ${requested} is outside ${range.min}–${range.max}; using ${clamped}`);
+    }
+    return clamped;
+}
+
+/**
+ * Builds the session's `audio` block in OpenAI's GA shape: input transcription (model, language
+ * hint, keyterms), turn detection, output voice and speed. A `'sessionTopLevel'` profile has
+ * `voice` and `turn_detection` lifted out after the bag merge (see {@link liftAudioControls}), so
+ * the merge and meeting floor work the same on every profile. `undefined` when nothing applies
+ * (compat endpoints reject or ignore hollow blocks).
  *
  * @param profile The provider profile.
  * @param features The extracted Config-bag features.
  * @param turnDetection The already-built turn-detection block, if any.
- * @returns The audio block, or `undefined` to omit it.
+ * @returns The audio block, or `undefined`.
  */
 function BuildAudioBlock(
     profile: OpenAIRealtimeProfile,
-    features: ReturnType<typeof ExtractRealtimeFeatures>,
+    features: ExtractedRealtimeFeatures,
     turnDetection: RealtimeAudioInputTurnDetection | undefined,
 ): RealtimeSessionCreateRequest['audio'] | undefined {
-    const transcriptionModel = features.inputTranscriptionModel ?? profile.inputTranscriptionModel;
+    const transcription = BuildInputTranscription(profile, features);
+    const voice = profile.supportsVoiceOutput ? features.voice : undefined;
+    const speed = resolveVoiceSpeed(profile, features.voiceSpeed);
     const input = {
-        ...(transcriptionModel ? { transcription: { model: transcriptionModel } } : {}),
+        ...(transcription ? { transcription } : {}),
         ...(turnDetection ? { turn_detection: turnDetection } : {}),
     };
-    const output = profile.supportsVoiceOutput && features.voice ? { voice: features.voice } : undefined;
-    if (Object.keys(input).length === 0 && !output) {
+    const output = {
+        ...(voice ? { voice } : {}),
+        ...(speed !== undefined ? { speed } : {}),
+    };
+    const hasInput = Object.keys(input).length > 0;
+    const hasOutput = Object.keys(output).length > 0;
+    if (!hasInput && !hasOutput) {
         return undefined;
     }
     return {
-        ...(Object.keys(input).length > 0 ? { input } : {}),
-        ...(output ? { output } : {}),
+        ...(hasInput ? { input } : {}),
+        ...(hasOutput ? { output } : {}),
     };
 }
 
@@ -673,6 +939,40 @@ function withoutOutputVoice(
 }
 
 /**
+ * Moves `audio.output.voice` and `audio.input.turn_detection` to the session top level, for a
+ * `'sessionTopLevel'` profile (xAI Grok Voice). An explicit `turn_detection: null` moves too (VAD
+ * off). An `input` or `output` left empty is dropped. Copies; the argument is not mutated.
+ */
+function liftAudioControls(
+    audio: RealtimeSessionCreateRequest['audio'] | undefined,
+): Pick<GARealtimeSessionCreateRequest, 'audio' | 'voice' | 'turn_detection'> {
+    if (!audio) {
+        return {};
+    }
+    const result: Pick<GARealtimeSessionCreateRequest, 'audio' | 'voice' | 'turn_detection'> = {};
+    const copy: Record<string, unknown> = { ...audio };
+    if (isPlainObject(copy.input) && 'turn_detection' in copy.input) {
+        const { turn_detection: turnDetection, ...input } = copy.input;
+        result.turn_detection = turnDetection as RealtimeAudioInputTurnDetection;
+        copy.input = input;
+    }
+    if (isPlainObject(copy.output) && typeof copy.output.voice === 'string') {
+        const { voice, ...output } = copy.output;
+        result.voice = voice as string;
+        copy.output = output;
+    }
+    for (const key of ['input', 'output']) {
+        if (isPlainObject(copy[key]) && Object.keys(copy[key] as object).length === 0) {
+            delete copy[key];
+        }
+    }
+    if (Object.keys(copy).length > 0) {
+        result.audio = copy as RealtimeSessionCreateRequest['audio'];
+    }
+    return result;
+}
+
+/**
  * Builds the provider session payload (minus `model`, `tools` and the GA features, which the caller
  * adds). Both topologies call this — the client-direct mint and the server-bridged `session.update` —
  * so the payload is built once and a raw `audio` override in the Config bag merges into the built
@@ -695,11 +995,14 @@ export function BuildSessionPayload(
     const { audio: audioOverride, ...rest } = features.rest;
     const merged = MergeAudioOverride(BuildAudioBlock(profile, features, turnDetection), audioOverride, features.disableAutoResponse, profile.defaultTurnDetectionType);
     const voiced = profile.supportsVoiceOutput ? merged : withoutOutputVoice(merged);
-    const audio = voiced && Object.keys(voiced).length > 0 ? voiced : undefined;
+    const placed = profile.audioControlsPlacement === 'sessionTopLevel' ? liftAudioControls(voiced) : { audio: voiced };
+    const audio = placed.audio && Object.keys(placed.audio).length > 0 ? placed.audio : undefined;
     return {
         type: 'realtime',
         ...(instructions !== undefined ? { instructions } : {}),
         ...(audio ? { audio } : {}),
+        ...(placed.voice !== undefined ? { voice: placed.voice } : {}),
+        ...(placed.turn_detection !== undefined ? { turn_detection: placed.turn_detection } : {}),
         ...rest,
     };
 }
@@ -930,7 +1233,7 @@ export class OpenAIRealtime extends BaseRealtimeModel {
             session.tools = mapRealtimeTools(params.Tools);
         }
         applyGAFeatures(session, features, profile);
-        const response = await this.mintClientSecret({ session });
+        const response = await this.mintClientSecret({ session: toWireSession(session) });
         return {
             Provider: profile.providerKey,
             Model: params.Model,
@@ -1207,10 +1510,12 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
 
     /** @inheritdoc */
     public async RegisterTools(tools: RealtimeToolDefinition[]): Promise<void> {
-        this.connection.send({
-            type: 'session.update',
-            session: { type: 'realtime', tools: this.mapTools(tools) },
-        });
+        // `tools` REPLACES the session's whole list, so the hosted tools (MCP servers, provider-hosted
+        // tools) the session config declared are appended again — re-checked against the new names.
+        const functionTools = this.mapTools(tools);
+        const hosted = this.lastFeatures ? BuildHostedTools(this.profile, this.lastFeatures, functionTools) : [];
+        const session: GARealtimeSessionCreateRequest = { type: 'realtime', tools: [...functionTools, ...hosted] };
+        this.connection.send({ type: 'session.update', session: toWireSession(session) });
     }
 
     /**
@@ -1353,13 +1658,19 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         };
         const built = BuildAudioBlock(this.profile, features, turnDetection);
         const merged = MergeAudioOverride(built, features.rest.audio, disable);
-        this.connection.send({
-            type: 'session.update',
-            session: {
-                type: 'realtime',
-                audio: { input: this.buildReconfigureInput(merged, turnDetection, disable) },
-            },
-        });
+        const input = this.buildReconfigureInput(merged, turnDetection, disable);
+        this.connection.send({ type: 'session.update', session: toWireSession(this.buildReconfigureSession(input)) });
+    }
+
+    /**
+     * The {@link Reconfigure} session frame. A `'sessionTopLevel'` profile (xAI) takes `turn_detection`
+     * at the session top level, so it moves out of `audio.input`; the rest of the input stays there.
+     */
+    private buildReconfigureSession(input: NonNullable<RealtimeSessionCreateRequest['audio']>['input']): GARealtimeSessionCreateRequest {
+        if (this.profile.audioControlsPlacement !== 'sessionTopLevel') {
+            return { type: 'realtime', audio: { input } };
+        }
+        return { type: 'realtime', ...liftAudioControls({ input }) };
     }
 
     /**
@@ -1471,21 +1782,8 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
                 return this.emitTranscript('assistant', event.transcript, true);
             case 'conversation.item.input_audio_transcription.delta':
                 return this.emitTranscript('user', event.delta ?? '', false);
-            case 'conversation.item.input_audio_transcription.completed': {
-                // Streamed transcription (Grok): the 2nd+ completed of a turn REPLACES the turn's row
-                // in place rather than appending a duplicate. Two ways a completed can be a replacement:
-                //   1. another completed already landed in THIS turn (userTurnTranscribed); or
-                //   2. it CONTINUES the previous utterance — the provider re-emitted the whole thing
-                //      with more words on the end. This second case is what rescues a mid-sentence
-                //      pause: the VAD fires speech_started (clearing the flag) even though the user
-                //      never stopped talking, and without the continuation test that one spoken thought
-                //      persists as several rows, each a longer copy of the last.
-                const text = event.transcript;
-                const replacesPrevious = this.userTurnTranscribed || IsTranscriptContinuation(this.lastUserTranscript, text);
-                this.userTurnTranscribed = true;
-                this.lastUserTranscript = text;
-                return this.emitTranscript('user', text, true, replacesPrevious);
-            }
+            case 'conversation.item.input_audio_transcription.completed':
+                return this.handleUserTranscription(event.transcript);
             case 'response.function_call_arguments.done':
                 return this.handleFunctionCall(event.call_id, event.name, event.arguments);
             case 'input_audio_buffer.speech_started':
@@ -1507,9 +1805,39 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
                 // Emitted for every terminal status (completed, cancelled, failed) — always clears.
                 this.responseActive = false;
                 return this.handleResponseDone(ResolveResponseDoneUsage(event));
+            case 'input_audio_buffer.timeout_triggered':
+                // The idle timeout (turn detection `IdleTimeoutMs`) fired: the provider commits the
+                // silence as a user turn and answers it itself, so the usual response frames follow.
+                RealtimeDiagLog(`[${this.profile.providerKey}Realtime][diag] Idle timeout reached — the provider is re-engaging the user`);
+                return;
             default:
                 return this.dispatchMcpEvent(event);
         }
+    }
+
+    /**
+     * Emits one user transcription that carries the turn's FULL text so far — every OpenAI
+     * `input_audio_transcription.completed`, and each of the cumulative captions a streaming provider
+     * re-sends for one utterance (Grok repeats `.completed`, and sends `.updated` snapshots too).
+     *
+     * The 2nd+ caption of a turn REPLACES the turn's row in place rather than appending a duplicate.
+     * Two ways a caption can be a replacement:
+     *   1. another caption already landed in THIS turn (userTurnTranscribed); or
+     *   2. it CONTINUES the previous utterance — the provider re-emitted the whole thing with more
+     *      words on the end. This second case is what rescues a mid-sentence pause: the VAD fires
+     *      speech_started (clearing the flag) even though the user never stopped talking, and without
+     *      the continuation test that one spoken thought persists as several rows, each a longer copy
+     *      of the last.
+     *
+     * Protected so compat-endpoint sessions can route their own cumulative caption frames here.
+     *
+     * @param text The full transcription of the user's turn so far.
+     */
+    protected handleUserTranscription(text: string): void {
+        const replacesPrevious = this.userTurnTranscribed || IsTranscriptContinuation(this.lastUserTranscript, text);
+        this.userTurnTranscribed = true;
+        this.lastUserTranscript = text;
+        this.emitTranscript('user', text, true, replacesPrevious);
     }
 
     /**
@@ -1695,7 +2023,7 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
             session.tools = this.mapTools(tools);
         }
         applyGAFeatures(session, features, this.profile);
-        this.connection.send({ type: 'session.update', session });
+        this.connection.send({ type: 'session.update', session: toWireSession(session) });
     }
 
     /** Seeds the conversation with initial context as a user text message. */

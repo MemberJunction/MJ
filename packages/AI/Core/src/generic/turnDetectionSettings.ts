@@ -45,6 +45,9 @@ export function NormalizeTurnDetectionSettings(raw: unknown): RealtimeTurnDetect
     if (threshold !== undefined) result.Threshold = threshold;
     const silenceDurationMs = pickFiniteNumber(source['SilenceDurationMs']);
     if (silenceDurationMs !== undefined) result.SilenceDurationMs = silenceDurationMs;
+    // A whole, positive number of ms — 0 or a fraction is a typo, not a timeout.
+    const idleTimeoutMs = source['IdleTimeoutMs'];
+    if (typeof idleTimeoutMs === 'number' && Number.isInteger(idleTimeoutMs) && idleTimeoutMs > 0) result.IdleTimeoutMs = idleTimeoutMs;
     const coverage = source['Coverage'];
     if (isKeyOf(TURN_COVERAGES, coverage)) result.Coverage = coverage;
     return Object.keys(result).length > 0 ? result : undefined;

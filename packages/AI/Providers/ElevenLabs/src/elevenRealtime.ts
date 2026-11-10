@@ -123,6 +123,15 @@ export const ELEVEN_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     supportsParallelToolCalls: false,
     supportsMcpTools: true,
     supportsVoiceOutput: true,
+    audioControlsPlacement: 'audioBlock',
+    // None of these appear in the published session schema, so they stay off until confirmed: no
+    // idle timer, speed control, `language_hint`/`keyterms` (transcription takes only `language`)
+    // or provider-hosted tool.
+    supportsIdleTimeout: false,
+    voiceSpeedRange: null,
+    supportsTranscriptionLanguageHint: false,
+    transcriptionKeyterms: null,
+    providerToolReservedNames: {},
     supportsLiveReconfigure: true,
     supportsDynamicToolSet: true,
     unexpectedCloseMessage: 'Eleven Realtime connection closed unexpectedly',

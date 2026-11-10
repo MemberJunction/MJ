@@ -59343,6 +59343,11 @@ export interface MJAIModelTypeEntity_RealtimeTurnDetectionSettings {
      */
     SilenceDurationMs?: number;
     /**
+     * After the assistant finishes speaking, how long (ms) the user may stay silent before the provider
+     * re-engages on its own; re-arms after every response. Server-VAD only; ignored without a mapping.
+     */
+    IdleTimeoutMs?: number;
+    /**
      * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
      * and consuming context) a decision rather than an inherited cost. Ignored without a mapping.
      */
@@ -60056,6 +60061,11 @@ export interface MJAIModelVendorEntity_RealtimeTurnDetectionSettings {
      * eagerness knob (xAI).
      */
     SilenceDurationMs?: number;
+    /**
+     * After the assistant finishes speaking, how long (ms) the user may stay silent before the provider
+     * re-engages on its own; re-arms after every response. Server-VAD only; ignored without a mapping.
+     */
+    IdleTimeoutMs?: number;
     /**
      * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
      * and consuming context) a decision rather than an inherited cost. Ignored without a mapping.
@@ -60962,6 +60972,11 @@ export interface MJAIModelEntity_RealtimeTurnDetectionSettings {
      * eagerness knob (xAI).
      */
     SilenceDurationMs?: number;
+    /**
+     * After the assistant finishes speaking, how long (ms) the user may stay silent before the provider
+     * re-engages on its own; re-arms after every response. Server-VAD only; ignored without a mapping.
+     */
+    IdleTimeoutMs?: number;
     /**
      * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
      * and consuming context) a decision rather than an inherited cost. Ignored without a mapping.
@@ -62591,6 +62606,11 @@ export interface MJAIPromptModelEntity_RealtimeTurnDetectionSettings {
      * eagerness knob (xAI).
      */
     SilenceDurationMs?: number;
+    /**
+     * After the assistant finishes speaking, how long (ms) the user may stay silent before the provider
+     * re-engages on its own; re-arms after every response. Server-VAD only; ignored without a mapping.
+     */
+    IdleTimeoutMs?: number;
     /**
      * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
      * and consuming context) a decision rather than an inherited cost. Ignored without a mapping.
@@ -65443,6 +65463,11 @@ export interface MJAIPromptEntity_RealtimeTurnDetectionSettings {
      * eagerness knob (xAI).
      */
     SilenceDurationMs?: number;
+    /**
+     * After the assistant finishes speaking, how long (ms) the user may stay silent before the provider
+     * re-engages on its own; re-arms after every response. Server-VAD only; ignored without a mapping.
+     */
+    IdleTimeoutMs?: number;
     /**
      * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
      * and consuming context) a decision rather than an inherited cost. Ignored without a mapping.
@@ -68879,6 +68904,11 @@ export interface MJAIVendorEntity_RealtimeTurnDetectionSettings {
      * eagerness knob (xAI).
      */
     SilenceDurationMs?: number;
+    /**
+     * After the assistant finishes speaking, how long (ms) the user may stay silent before the provider
+     * re-engages on its own; re-arms after every response. Server-VAD only; ignored without a mapping.
+     */
+    IdleTimeoutMs?: number;
     /**
      * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
      * and consuming context) a decision rather than an inherited cost. Ignored without a mapping.
