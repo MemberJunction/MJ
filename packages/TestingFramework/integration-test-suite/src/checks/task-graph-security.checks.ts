@@ -19,8 +19,10 @@
  *   `TaskGraphActionRunner`, which refuses the step before the action runs (see {@link checkRealRunnerRefusesTaintedEgress}).
  * - TGS6: a person's review clears taint in a real graph, where every Human step is assigned to the submitter
  *   the graph runs as, and server code completing the same kind of step clears nothing (see {@link checkPersonsReviewClearsTaint}).
- * - TGS7: the same through the step's request: the submitter's own answer clears taint, and an `Approved` request
- *   server code creates for the step settles it but clears nothing (see {@link checkServerAnsweredRequestClearsNothing}).
+ * - TGS7: the same through the step's request: only the dispatcher raises one, the submitter's own answer clears
+ *   taint, and server code's answer settles the step but clears nothing (see {@link checkServerAnsweredRequestClearsNothing}).
+ * - TGS8: a Human step server code completes before the fetch feeding it has finished still leaves its next step
+ *   tainted (see {@link checkEarlySettleClearsNothing}).
  *
  * Fixtures: one start-paused Human-only graph (so no dispatcher picks it up) and the rows the checks
  * create, all removed in teardown, rows that reference another first.
@@ -29,7 +31,7 @@
  */
 import { randomUUID } from 'crypto';
 import { RunView, ServerOperationScopeManager, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { MJAIAgentRequestEntity, MJEnvironmentEntityExtended, MJTaskDependencyEntity, MJTaskEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRequestEntity, MJAIAgentRunEntity, MJEnvironmentEntityExtended, MJTaskDependencyEntity, MJTaskEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
 import {
     ParseTaskSecurityEnvelope,
     TAINTED_EGRESS_BLOCKED,
@@ -672,14 +674,17 @@ interface ReviewGraphRun {
  * who is also the user its agents and actions run as, so who completed a step cannot tell a person from code; where
  * the completion came from must. A tainted fetch fans out to two Human steps, both assigned to the submitter
  * (`ctx.User`, also this dispatcher's user), each feeding an action step whose stub runner records the envelope it
- * was handed. Once the fetch completes, `complete` settles {@link REVIEW.ByPerson} the way a person does and
- * {@link REVIEW.ByServer} the way server code would; the run then waits for the graph to settle and returns what it
- * left behind, removing the graph (and any request rows on its steps) before it returns.
+ * was handed. `complete` settles {@link REVIEW.ByPerson} the way a person does and {@link REVIEW.ByServer} the way
+ * server code would: once the fetch completes, or, with `Early`, while the fetch is still running (it is held until
+ * both later steps have run). With `AgentRunID` the graph has a submitting run, so the dispatcher raises a request for
+ * each Human step. The run then waits for the graph to settle and returns what it left behind, removing the graph
+ * (and any request rows on its steps) before it returns.
  */
 async function runReviewGraph(
     ctx: IntegrationCheckContext,
     check: string,
     complete: (byPerson: MJTaskEntity, byServer: MJTaskEntity) => Promise<void>,
+    options: { Early?: boolean; AgentRunID?: string } = {},
 ): Promise<ReviewGraphRun> {
     const actionsResult = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ Name: string }>(
         { EntityName: 'MJ: Actions', Fields: ['Name'], MaxRows: 1, ResultType: 'simple' },
@@ -709,12 +714,15 @@ async function runReviewGraph(
             Provider: ctx.Provider,
             ContextUser: ctx.User,
             SecurityEnvelope: { Version: TASK_SECURITY_ENVELOPE_VERSION, IsRunTainted: false },
+            AgentRunID: options.AgentRunID ?? null,
             Debug: { paused: false },
         },
     );
     Assert(submitted.Success && !!submitted.ParentTaskID, `${check}: failed to submit graph: ${submitted.ErrorMessage ?? ''}`);
     const parentID = submitted.ParentTaskID!;
 
+    let releaseFetch: () => void = () => undefined;
+    const fetchHeld = options.Early ? new Promise<void>((resolve) => { releaseFetch = resolve; }) : Promise.resolve();
     const ranTainted = new Map<string, boolean>();
     const actionRunner: TaskActionRunner = {
         EnforcesSecurityEnvelope: true,
@@ -722,6 +730,7 @@ async function runReviewGraph(
             const task = await params.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', params.ContextUser);
             await task.Load(params.TaskID);
             if (task.Name === REVIEW.Fetch) {
+                await fetchHeld;
                 return { Success: true, Output: { page: 'untrusted-data' }, IsOutputTainted: true };
             }
             ranTainted.set(task.Name, params.SecurityEnvelope?.IsRunTainted === true);
@@ -756,12 +765,14 @@ async function runReviewGraph(
     let cleanupFailures: string[] = [];
     try {
         await dispatcher.Start();
-        let fetchDone = false;
-        for (const deadline = Date.now() + 30_000; Date.now() < deadline && !fetchDone;) {
+        const fetchStatus = async (): Promise<string | undefined> => (await stepsByName()).get(REVIEW.Fetch)?.Status;
+        let fetchReady = false;
+        for (const deadline = Date.now() + 30_000; Date.now() < deadline && !fetchReady;) {
             await settle(200);
-            fetchDone = (await stepsByName()).get(REVIEW.Fetch)?.Status === 'Complete';
+            // Early: the fetch has been claimed and is running (held); otherwise it has completed.
+            fetchReady = options.Early ? (await fetchStatus()) === 'In Progress' : (await fetchStatus()) === 'Complete';
         }
-        Assert(fetchDone, `${check}: the fetch step of graph ${parentID} did not complete within 30s`);
+        Assert(fetchReady, `${check}: the fetch step of graph ${parentID} did not ${options.Early ? 'start' : 'complete'} within 30s`);
 
         const steps = await stepsByName();
         const byPerson = steps.get(REVIEW.ByPerson);
@@ -769,6 +780,14 @@ async function runReviewGraph(
         Assert(byPerson != null && byServer != null, `${check}: the Human step rows were not found`);
         Assert(UUIDsEqual(byPerson!.UserID, ctx.User.ID) && UUIDsEqual(byServer!.UserID, ctx.User.ID), `${check}: the Human steps are not assigned to the submitter`);
         await complete(byPerson!, byServer!);
+        if (options.Early) {
+            for (const deadline = Date.now() + 30_000; Date.now() < deadline && ranTainted.size < 2;) {
+                await settle(200);
+            }
+            Assert(ranTainted.size === 2, `${check}: the steps after the Human steps did not run while the fetch was held`);
+            AssertEqual(await fetchStatus(), 'In Progress', `${check}: the fetch finished before the steps after the Human steps ran`);
+            releaseFetch();
+        }
 
         let parentStatus: string | undefined;
         for (const deadline = Date.now() + 30_000; Date.now() < deadline && !parentStatus;) {
@@ -781,6 +800,7 @@ async function runReviewGraph(
         Assert(parentStatus != null, `${check}: graph ${parentID} did not settle within 30s`);
         run = { ParentStatus: parentStatus!, Steps: await stepsByName(), RanTainted: ranTainted };
     } finally {
+        releaseFetch();
         await dispatcher.Stop();
         cleanupFailures = await DeleteTaskGraph(ctx.Provider, ctx.User, parentID).catch((e: unknown) => [String(e)]);
     }
@@ -801,6 +821,15 @@ function assertReviewOutcome(run: ReviewGraphRun, ctx: IntegrationCheckContext, 
     AssertEqual(run.RanTainted.get(REVIEW.AfterServer), true, `${check}: the step after the server-code completion ran clean`);
 }
 
+/** The TGS6 way: the person saves the step Complete through a client CRUD boundary, server code saves it plainly. */
+async function completeTheSteps(check: string, byPerson: MJTaskEntity, byServer: MJTaskEntity): Promise<void> {
+    byPerson.Status = 'Complete';
+    const savedByPerson = await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() => byPerson.Save());
+    Assert(savedByPerson, `${check}: the person's completion was refused: ${byPerson.LatestResult?.CompleteMessage ?? ''}`);
+    byServer.Status = 'Complete';
+    Assert(await byServer.Save(), `${check}: the server-code completion was refused: ${byServer.LatestResult?.CompleteMessage ?? ''}`);
+}
+
 /**
  * TGS6 — completing the Human step itself: the person's way is a save of the step inside a client CRUD boundary (as
  * `ResolverBase` wraps the Tasks UI's save), server code's way a plain server-side save as the same user, as an agent
@@ -812,22 +841,17 @@ async function checkPersonsReviewClearsTaint(ctx: IntegrationCheckContext): Prom
         SkipCheck(MUTATION_TIER_OFF_REASON);
         return;
     }
-    const run = await runReviewGraph(ctx, 'TGS6', async (byPerson, byServer) => {
-        byPerson.Status = 'Complete';
-        const savedByPerson = await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() => byPerson.Save());
-        Assert(savedByPerson, `TGS6: the person's completion was refused: ${byPerson.LatestResult?.CompleteMessage ?? ''}`);
-        byServer.Status = 'Complete';
-        Assert(await byServer.Save(), `TGS6: the server-code completion was refused: ${byServer.LatestResult?.CompleteMessage ?? ''}`);
-    });
+    const run = await runReviewGraph(ctx, 'TGS6', (byPerson, byServer) => completeTheSteps('TGS6', byPerson, byServer));
     assertReviewOutcome(run, ctx, 'TGS6');
 }
 
 /**
- * TGS7 — answering the step's request instead: the dispatcher settles a Human step from any answered
- * `MJ: AI Agent Requests` row naming it. Each step gets one created already `Approved`, as the submitter: the
- * person's through a client CRUD boundary, as the dashboard's save is; server code's as a plain server-side create,
- * as an ordinary agent run calling Create Record would make (the review's reproduction). Server code's answer still
- * settles its step, but records no responder, so it clears nothing.
+ * TGS7 — answering the step's request instead. The graph has a submitting run, so the dispatcher raises a request
+ * for each Human step, and only the dispatcher may: server code acting as the submitter cannot create a request for
+ * a step already `Approved` (the review's reproduction), nor point an answer the person gave elsewhere at the step.
+ * The person answers their step's raised request through a client CRUD boundary (as the dashboard's save is);
+ * server code answers the other's with a plain server-side save, as an agent run calling Update Record would. Server
+ * code's answer still settles its step, but records no responder, so the step clears nothing.
  */
 async function checkServerAnsweredRequestClearsNothing(ctx: IntegrationCheckContext): Promise<void> {
     if (!MutationTierOn(ctx)) {
@@ -840,32 +864,83 @@ async function checkServerAnsweredRequestClearsNothing(ctx: IntegrationCheckCont
     );
     Assert(agents.Success && (agents.Results?.length ?? 0) === 1, 'TGS7: failed to query an agent from MJ: AI Agents');
     const agentID = agents.Results![0].ID;
-    const approve = async (step: MJTaskEntity): Promise<MJAIAgentRequestEntity> => {
+    const submittingRun = await ctx.Provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', ctx.User);
+    submittingRun.NewRecord();
+    submittingRun.AgentID = agentID;
+    submittingRun.Status = 'Paused';
+    submittingRun.StartedAt = new Date();
+    Assert(await submittingRun.Save(), `TGS7: could not create the submitting run: ${submittingRun.LatestResult?.CompleteMessage ?? ''}`);
+
+    const newRequest = async (fields: Partial<MJAIAgentRequestEntity>): Promise<MJAIAgentRequestEntity> => {
         const request = await ctx.Provider.GetEntityObject<MJAIAgentRequestEntity>('MJ: AI Agent Requests', ctx.User);
         request.NewRecord();
         request.AgentID = agentID;
-        request.OriginatingTaskID = step.ID;
         request.RequestForUserID = ctx.User.ID;
-        request.Request = 'it165 TGS7 fixture approval';
+        request.Request = 'it165 TGS7 fixture request';
         request.RequestedAt = new Date();
-        request.RespondedAt = new Date();
-        request.Status = 'Approved';
+        request.SetMany(fields);
         return request;
+    };
+    const raisedRequestFor = async (step: MJTaskEntity): Promise<MJAIAgentRequestEntity | undefined> => {
+        for (const deadline = Date.now() + 30_000; Date.now() < deadline;) {
+            const open = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJAIAgentRequestEntity>(
+                { EntityName: 'MJ: AI Agent Requests', ExtraFilter: `OriginatingTaskID='${step.ID}' AND Status='Requested'`, ResultType: 'entity_object', BypassCache: true },
+                ctx.User,
+            );
+            if (open.Results?.length) return open.Results[0];
+            await settle(200);
+        }
+        return undefined;
     };
 
     const responders: Record<string, string | null> = {};
-    const run = await runReviewGraph(ctx, 'TGS7', async (byPerson, byServer) => {
-        const personal = await approve(byPerson);
-        const savedPersonal = await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() => personal.Save());
-        Assert(savedPersonal, `TGS7: the person's answer was refused: ${personal.LatestResult?.CompleteMessage ?? ''}`);
-        const forged = await approve(byServer);
-        Assert(await forged.Save(), `TGS7: the server-code answer was refused: ${forged.LatestResult?.CompleteMessage ?? ''}`);
-        responders.person = personal.ResponseByUserID;
-        responders.server = forged.ResponseByUserID;
-    });
-    Assert(UUIDsEqual(responders.person ?? undefined, ctx.User.ID), "TGS7: the person's answer did not record them as the responder");
-    AssertEqual(responders.server, null, 'TGS7: a responder was recorded for the server-code answer');
-    assertReviewOutcome(run, ctx, 'TGS7');
+    let elsewhere: MJAIAgentRequestEntity | undefined;
+    try {
+        const run = await runReviewGraph(ctx, 'TGS7', async (byPerson, byServer) => {
+            // The review's reproduction: created already Approved, naming the step. Refused outright now.
+            const forged = await newRequest({ OriginatingTaskID: byServer.ID, Status: 'Approved' });
+            Assert(!(await forged.Save()), 'TGS7: server code created an Approved request for a workflow step');
+
+            // An answer the person gave to something else, pointed at the step afterwards. Refused.
+            // Created answered in one save, so it wakes no agent; the person's own request, so it records them.
+            elsewhere = await newRequest({ Status: 'Approved' });
+            Assert(await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() => elsewhere!.Save()), `TGS7: could not create the person's unrelated answer: ${elsewhere.LatestResult?.CompleteMessage ?? ''}`);
+            Assert(UUIDsEqual(elsewhere.ResponseByUserID ?? undefined, ctx.User.ID), "TGS7: the person's unrelated answer did not record them");
+            elsewhere.OriginatingTaskID = byServer.ID;
+            Assert(!(await elsewhere.Save()), "TGS7: server code pointed the person's other answer at a workflow step");
+
+            const personal = await raisedRequestFor(byPerson);
+            const serverSide = await raisedRequestFor(byServer);
+            Assert(personal != null && serverSide != null, 'TGS7: the dispatcher did not raise a request for each Human step within 30s');
+            personal!.Status = 'Approved';
+            Assert(await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() => personal!.Save()), `TGS7: the person's answer was refused: ${personal!.LatestResult?.CompleteMessage ?? ''}`);
+            serverSide!.Status = 'Approved';
+            Assert(await serverSide!.Save(), `TGS7: the server-code answer was refused: ${serverSide!.LatestResult?.CompleteMessage ?? ''}`);
+            responders.person = personal!.ResponseByUserID;
+            responders.server = serverSide!.ResponseByUserID;
+        }, { AgentRunID: submittingRun.ID });
+        Assert(UUIDsEqual(responders.person ?? undefined, ctx.User.ID), "TGS7: the person's answer did not record them as the responder");
+        AssertEqual(responders.server, null, 'TGS7: a responder was recorded for the server-code answer');
+        assertReviewOutcome(run, ctx, 'TGS7');
+    } finally {
+        if (elsewhere?.IsSaved) await elsewhere.Delete().catch(() => false);
+        await submittingRun.Delete().catch(() => false);
+    }
+}
+
+/**
+ * TGS8 — settling the Human steps before what feeds them has finished. The fetch is held running while the person
+ * and server code complete their steps (the TGS6 way); the steps after them run before the fetch records anything.
+ * Server code's completion must still leave its next step tainted: a step `Complete` with nothing recorded is nobody's
+ * vouched-for result, whatever ran before it, so the walk does not reach the unfinished fetch and read it as clean.
+ */
+async function checkEarlySettleClearsNothing(ctx: IntegrationCheckContext): Promise<void> {
+    if (!MutationTierOn(ctx)) {
+        SkipCheck(MUTATION_TIER_OFF_REASON);
+        return;
+    }
+    const run = await runReviewGraph(ctx, 'TGS8', (byPerson, byServer) => completeTheSteps('TGS8', byPerson, byServer), { Early: true });
+    assertReviewOutcome(run, ctx, 'TGS8');
 }
 
 export const TaskGraphSecurityChecks: NamedCheck[] = [
@@ -875,7 +950,8 @@ export const TaskGraphSecurityChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.TGS4`, Name: 'TGS4: a tainted graph through the real dispatcher is gated on taint at a Decision-downstream action, failing the graph and triggering saga compensation', Fn: checkDispatcherTaintGateAndCompensation, RequiresMutation: true },
     { Id: `${BUNDLE}.TGS5`, Name: "TGS5: MJServer's real TaskGraphActionRunner refuses a disallowWhenTainted action on a tainted graph before it runs", Fn: checkRealRunnerRefusesTaintedEgress, RequiresMutation: true },
     { Id: `${BUNDLE}.TGS6`, Name: "TGS6: the submitter's own review of a Human step clears taint, and server code completing one clears nothing", Fn: checkPersonsReviewClearsTaint, RequiresMutation: true },
-    { Id: `${BUNDLE}.TGS7`, Name: "TGS7: the submitter's own answer to a Human step's request clears taint, and a request server code creates already Approved clears nothing", Fn: checkServerAnsweredRequestClearsNothing, RequiresMutation: true },
+    { Id: `${BUNDLE}.TGS7`, Name: "TGS7: only the dispatcher raises a workflow step's request; the submitter's own answer clears taint, and server code's answer settles the step but clears nothing", Fn: checkServerAnsweredRequestClearsNothing, RequiresMutation: true },
+    { Id: `${BUNDLE}.TGS8`, Name: "TGS8: a Human step server code completes before what feeds it has finished still leaves its next step tainted", Fn: checkEarlySettleClearsNothing, RequiresMutation: true },
 ];
 
 for (const check of TaskGraphSecurityChecks) {

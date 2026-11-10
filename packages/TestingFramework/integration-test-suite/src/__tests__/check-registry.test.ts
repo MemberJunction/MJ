@@ -282,7 +282,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['ciphertext-cache', CiphertextCacheChecks, 5], // CT0-CT4 ciphertext at rest in the RunViewCache, plaintext to the caller (IT161)
         ['semantic-graph', SemanticGraphChecks, 7], // SG1-SG7 Semantic Graph substrate, Content Pipeline GraphStage overlay, and Executable Canon DAG similarity & telemetry (IT162)
         ['graph-runtime', GraphRuntimeChecks, 6], // GR1-GR6 MJ Canon traversal, per-caller query visibility, the edge approval gate on a real Save, Get Graph Context, JoinEntity and QueryEdgeProvider fixtures (IT164)
-        ['task-graph-security', TaskGraphSecurityChecks, 7], // TGS1-TGS7 envelope on every row and immutable, one compensation per step, A2A store row boundary, dispatcher taint gate & compensation, the real action runner's taint gate, a person's review clears taint, a server-answered request clears nothing (IT165)
+        ['task-graph-security', TaskGraphSecurityChecks, 8], // TGS1-TGS8 envelope on every row and immutable, one compensation per step, A2A store row boundary, dispatcher taint gate & compensation, the real action runner's taint gate, a person's review clears taint, a server-answered request clears nothing, an early settle clears nothing (IT165)
         ['runview-features', RunViewFeatureChecks, 12], // RVF1-RVF12 RunView cross-feature edges and RunViewParams.Parameters wire binding (IT32)
     ];
 
@@ -549,7 +549,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'systemone-kev': 10,
         'task-graph-execution': 27,
         'task-graph-orchestration': 18,
-        'task-graph-security': 7,
+        'task-graph-security': 8,
         'templates': 8,
         'trailing-runtime-state': 6,
         'transaction-groups': 6,
@@ -1049,6 +1049,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'task-graph-security.TGS5',
         'task-graph-security.TGS6',
         'task-graph-security.TGS7',
+        'task-graph-security.TGS8',
         'transaction-groups-batched.TGB1',
         'transaction-groups-batched.TGB2',
         'transaction-groups-batched.TGB3',
