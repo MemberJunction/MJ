@@ -231,6 +231,15 @@ describe('MJTaskEntityServer: who completed a Human step, and the dispatcher sco
         expect(await rejected(REVIEWER).Save()).toBe(false);
     });
 
+    it('lets the assignee settle the step only while it waits on them (Pending)', async () => {
+        for (const storedStatus of ['Skipped', 'Cancelled', 'Blocked', 'Failed']) {
+            expect(await asClient(() => human(REVIEWER, { storedStatus }).Save())).toBe(false);
+            const rejected = human(REVIEWER, { storedStatus });
+            rejected.Status = 'Failed';
+            if (storedStatus !== 'Failed') expect(await asClient(() => rejected.Save())).toBe(false);
+        }
+    });
+
     it('refuses completing the step for anyone but its assignee, in their own client request', async () => {
         // Someone else, as their own client request.
         expect(await asClient(() => human(OTHER).Save())).toBe(false);

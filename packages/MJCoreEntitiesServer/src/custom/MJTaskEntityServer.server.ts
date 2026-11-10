@@ -416,13 +416,13 @@ export class MJTaskEntityServer extends MJTaskEntity {
 
     /**
      * Whether this save is the assignee settling their own Human step, as their own client request: completing it
-     * (approving) or failing it (rejecting), from a status that is neither.
+     * (approving) or failing it (rejecting) while it waits on them. A Human step waits in `Pending`; settling one that
+     * is Skipped, Cancelled or Blocked would undo the owner's choice or release steps past a failed prerequisite.
      */
     private personSettlesOwnHumanStep(): boolean {
         const assignee = this.stored('UserID');
-        const storedStatus = this.stored('Status');
         const settles = this.StepType === 'Human' && (this.Status === 'Complete' || this.Status === 'Failed') &&
-            storedStatus !== 'Complete' && storedStatus !== 'Failed';
+            this.stored('Status') === 'Pending';
         return settles &&
             ServerOperationScopeManager.Instance.IsInDirectClientCrud() &&
             typeof assignee === 'string' && this.ContextCurrentUser != null && UUIDsEqual(assignee, this.ContextCurrentUser.ID);
