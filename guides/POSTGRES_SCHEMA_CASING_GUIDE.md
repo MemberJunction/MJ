@@ -31,6 +31,11 @@ prefixes the base table with a programmatic form of the schema name:
 GetProgrammaticName( GetClassNameSchemaPrefix(e.SchemaName) + e.BaseTable + ISNULL(e.NameSuffix,'') ) AS ClassName
 ```
 
+> Since v6.3 the same formula is stored rather than computed on read: `Entity.CodeName`,
+> `ClassName` and `BaseTableCodeName` (and `EntityField.FieldCodeName`) are columns kept current by
+> triggers, which call `GetEntityProgrammaticNames()`. Everything below about the prefix's casing
+> applies unchanged.
+
 `GetClassNameSchemaPrefix` preserves the **input case verbatim** (special-cases only `__mj` → `MJ`,
 and a literal `MJ` → `MJCustom`). So the prefix is only as well-cased as `e.SchemaName`:
 

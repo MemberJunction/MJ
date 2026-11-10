@@ -108,7 +108,7 @@
     "6.1": {
       "status": "certified",
       "certifiedBuild": "6.1.4",
-      "newest": "6.1.6",
+      "newest": "6.1.7",
       "candidateDate": "2026-09-11",
       "certifiedDate": "2026-09-28",
       "supportEnds": "2027-01-28",
@@ -133,6 +133,9 @@
           "dbImpact": "schema"
         },
         "6.1.6": {
+          "dbImpact": "none"
+        },
+        "6.1.7": {
           "dbImpact": "none"
         }
       },
