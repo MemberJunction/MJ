@@ -969,5 +969,37 @@ describe('finalizePromptParams — a relocated specialization follows the native
 
         expect(prepared.conversationMessages![prepared.conversationMessages!.length - 1]).toBe(before);
     });
+
+    it('a re-rendered message kept in the history does not count as a changed message on the next turn', async () => {
+        templates.byId.set('tmpl-sage', '# Sage\n\nToday is {{ _CURRENT_DATE_AND_TIME }}.');
+        catalog.reset();
+        catalog.models.set('m-binding', { ID: 'm-binding', Name: 'Claude' });
+        catalog.vendors.set('v-binding', { ID: 'v-binding', Name: 'Anthropic' });
+        catalog.modelVendors.set('m-binding', [{ ID: 'm-binding:inference', VendorID: 'v-binding', TypeID: 'inference', DriverClass: 'ITBindingTestLLM' } as CatalogModelVendor]);
+        const a = flagAwareAgent() as Internals & { _nativeToolBindings?: Map<string, unknown> };
+        a._lastModelSelectionInfo = { ModelSelected: catalog.models.get('m-binding'), vendorSelected: catalog.vendors.get('v-binding') };
+        a._nativeToolBindings = new Map();
+        const { params, promptParams } = makeInputs(TRAILING);
+
+        // Turn 1: the fragment is kept in the history (append-only) and re-rendered with the native flags.
+        const turn1 = await a.finalizePromptParams(promptParams, { childPrompt: CHILD, agentType: AGENT_TYPE }, {}, params);
+        turn1.data = { ...turn1.data, _NATIVE_TOOL_CALLING: true, _NATIVE_CONTROL_FLOW: 'implicit' };
+        await turn1.OnTemplateDataFinalized!(turn1);
+        expect(lastContent(turn1)).toContain('Call the tools.');
+
+        // The model's reply with its reasoning, and the result of its call.
+        const reply: ChatMessage = {
+            role: 'assistant', content: '',
+            toolCalls: [{ id: 'call-1', name: 'search', arguments: {} }],
+            reasoning: [{ provider: 'anthropic', kind: 'thinking', text: 'Search first.', signature: 'sig' }],
+        };
+        params.conversationMessages.push(reply, { role: 'user', content: '[Tool result] found' });
+
+        const turn2 = await a.finalizePromptParams({ ...makeInputs(TRAILING).promptParams, conversationMessages: params.conversationMessages }, { childPrompt: CHILD, agentType: AGENT_TYPE }, {}, params);
+
+        expect(turn2.conversationMessages!.find((m) => m.toolCalls?.[0]?.id === 'call-1')?.reasoning).toHaveLength(1);
+        expect(params.conversationMessages.find((m) => m.toolCalls?.[0]?.id === 'call-1')?.reasoning).toHaveLength(1);
+        expect(a.logStatus).not.toHaveBeenCalledWith(expect.stringContaining('Dropped replayed reasoning'), expect.anything(), expect.anything());
+    });
 });
 
