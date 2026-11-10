@@ -21,12 +21,14 @@
  * as the system user only when its assignee came from metadata (agent type, category, request
  * type); an assignee the caller chose is held to this rule.
  *
- * Responder: `ResponseByUserID` is the server's record of who answered. A save that answers the
- * request (moves it into a responded status, a create included) sets it to the user the save runs
- * as, and no other save may change it.
+ * Responder: `ResponseByUserID` is the server's record of the person who answered. A save that answers
+ * the request (moves it into a responded status, a create included) sets it to the user the save runs
+ * as when the save is that user's own client request (`ServerOperationScopeManager.IsInDirectClientCrud`),
+ * and to nobody when server code answers, such as an agent run calling Create Record or Update Record
+ * as that user. No other save may change it.
  */
 
-import { BaseEntity, EntitySaveOptions, LogError, LogStatus, Metadata, IMetadataProvider, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
+import { BaseEntity, EntitySaveOptions, LogError, LogStatus, Metadata, IMetadataProvider, ServerOperationScopeManager, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentRequestEntity, MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { AgentResponseForm, ConversationUtility, MJAIAgentEntityExtended, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
@@ -98,10 +100,13 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
         const wasRequested = statusField?.OldValue === 'Requested' || (!this.IsSaved && statusField?.Value === 'Requested');
         const isNowResponded = RESPONDED_STATUSES.includes(this.Status);
         if (this.answersRequest()) {
-            // The responder is the user this save runs as, whatever the caller wrote. A task-graph Human
-            // step clears taint only when its assignee answered (`HumanReviewClearsTaint` in
-            // @memberjunction/task-graph), so a caller must not be able to name someone else.
-            this.ResponseByUserID = this.ContextCurrentUser?.ID ?? null;
+            // The responder is the person whose own request this save is, whatever the caller wrote, and
+            // nobody when server code answers. A task-graph Human step clears taint only when its assignee
+            // answered (`HumanReviewClearsTaint` in @memberjunction/task-graph); the assignee is the graph's
+            // submitter, and that user's agent runs answer as the same user, so only where the save came
+            // from tells a person from code.
+            const person = ServerOperationScopeManager.Instance.IsInDirectClientCrud();
+            this.ResponseByUserID = person ? (this.ContextCurrentUser?.ID ?? null) : null;
         }
 
         const saved = await super.Save(options);

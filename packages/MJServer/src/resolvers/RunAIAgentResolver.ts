@@ -1,6 +1,6 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID, Int } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
-import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider, ServerOperationScopeManager } from '@memberjunction/core';
 import { MJConversationDetailEntity, MJConversationDetailEntityExtended, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { RouteArtifact } from './artifact-routing.js';
 import { AgentRunner, ArtifactToolManager, CanAgentOwnSubAgentConsults, LoadOpenSubAgentConsults, HostAllowedAgentIDs } from '@memberjunction/ai-agents';
@@ -1055,7 +1055,9 @@ export class RunAIAgentResolver extends ResolverBase {
                 request.Response = userMessage;
             }
 
-            const saved = await request.Save();
+            // The user's own reply, made through this request: saved as their client request, so the server
+            // records them as the responder (`MJAIAgentRequestEntityServer`), as it does for a CRUD save.
+            const saved = await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() => request.Save());
             if (saved) {
                 LogStatus(`📋 Synced feedback request ${request.ID} → Responded (via conversation)`);
             } else {
@@ -1506,7 +1508,9 @@ export class RunAIAgentResolver extends ResolverBase {
             request.RespondedAt = new Date();
             request.ResponseByUserID = currentUser.ID;
 
-            const saved = await request.Save();
+            // The caller's own answer, made through this mutation: saved as their client request, so the
+            // server records them as the responder (`MJAIAgentRequestEntityServer`), as it does for a CRUD save.
+            const saved = await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() => request.Save());
             if (!saved) {
                 throw new Error(`Failed to save response for request ${requestId}`);
             }

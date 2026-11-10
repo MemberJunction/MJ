@@ -9,6 +9,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { ValidationResult } from '@memberjunction/global';
+import { ServerOperationScopeManager } from '@memberjunction/core';
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/global')>();
@@ -135,16 +136,34 @@ describe('MJAIAgentRequestEntityServer — who answered', () => {
         return r;
     }
 
-    it('records the user who answers as the responder, whatever the caller wrote', async () => {
+    const asClient = <T>(fn: () => T): T => ServerOperationScopeManager.Instance.RunInClientCrudBoundary(fn);
+
+    it("records the user whose own request answers it as the responder, whatever the caller wrote", async () => {
         const r = answered({ saved: true, user: { ID: ME, Type: 'User' } });
-        expect(await r.Save()).toBe(true);
+        expect(await asClient(() => r.Save())).toBe(true);
         expect(r.ResponseByUserID).toBe(ME);
     });
 
-    it('records the creator as the responder of a request created already answered', async () => {
+    it("records the creator as the responder of a request their own request created already answered", async () => {
         const r = answered({ saved: false, user: { ID: ME, Type: 'User' } });
-        expect(await r.Save()).toBe(true);
+        expect(await asClient(() => r.Save())).toBe(true);
         expect(r.ResponseByUserID).toBe(ME);
+    });
+
+    it('records nobody when server code answers, even as the user the request is for', async () => {
+        // An agent run calling Update Record, or Create Record with the request already Approved, as ME.
+        const updated = answered({ saved: true, user: { ID: ME, Type: 'User' } });
+        expect(await updated.Save()).toBe(true);
+        expect(updated.ResponseByUserID).toBeNull();
+
+        const created = answered({ saved: false, user: { ID: ME, Type: 'User' } });
+        expect(await created.Save()).toBe(true);
+        expect(created.ResponseByUserID).toBeNull();
+
+        // Server work started inside a client's request (a resumed agent run) is server code too.
+        const fromServerWork = answered({ saved: true, user: { ID: ME, Type: 'User' } });
+        expect(await asClient(() => ServerOperationScopeManager.Instance.RunAsServerWork(() => fromServerWork.Save()))).toBe(true);
+        expect(fromServerWork.ResponseByUserID).toBeNull();
     });
 
     it("refuses changing an answered request's responder, an Owner-type user's change included", () => {

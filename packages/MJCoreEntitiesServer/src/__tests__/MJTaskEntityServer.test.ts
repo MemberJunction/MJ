@@ -194,6 +194,11 @@ describe('MJTaskEntityServer: who completed a Human step, and the dispatcher sco
         const otherOperation = { operationKey: 'some-server-operation', source: 'ServerEngine' as const, allowedEntities: ['MJ: Tasks'] };
         expect(await asClient(() => ServerOperationScopeManager.Instance.RunWithAuthority(otherOperation, () => insideAuthority.Save()))).toBe(true);
         expect(completedBy(insideAuthority)).toBeUndefined();
+
+        // So is server work a client request started (an agent run, a dispatcher pass).
+        const insideServerWork = human(REVIEWER);
+        expect(await asClient(() => ServerOperationScopeManager.Instance.RunAsServerWork(() => insideServerWork.Save()))).toBe(true);
+        expect(completedBy(insideServerWork)).toBeUndefined();
     });
 
     it('refuses editing the recorded completer of a step already complete, by a client or by server code', async () => {
