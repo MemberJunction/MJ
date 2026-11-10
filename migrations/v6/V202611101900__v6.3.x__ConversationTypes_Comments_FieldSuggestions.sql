@@ -2852,6 +2852,12 @@ GO
          )
       END;
 
+/* SQL text to sync entity unique keys (4 added, 0 updated, 0 removed) */
+INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('cfe2932d-0a14-4496-9cb0-bf685e814657', '2D604C9D-A6DD-4D61-AE2A-058F4E3D7CFE', 'UQ_CommentType_Code', 'Code', NULL);
+INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('60da78c9-dcbc-4e1e-980e-0143cbaa02ec', '2D604C9D-A6DD-4D61-AE2A-058F4E3D7CFE', 'UQ_CommentType_Name', 'Name', NULL);
+INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('72b04128-57fc-4c44-b92e-f0265bd48a89', 'C2483D63-B4B3-4297-9282-4F5EC7D085AF', 'UQ_ConversationType_Code', 'Code', NULL);
+INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('647fc749-c735-465c-8dea-92b35cb2aab0', 'C2483D63-B4B3-4297-9282-4F5EC7D085AF', 'UQ_ConversationType_Name', 'Name', NULL);
+
 /* SQL text to insert entity field value with ID ce6bb8b6-2c7f-4276-9159-ab9d74bf4f18 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [Source], [__mj_CreatedAt], [__mj_UpdatedAt])
