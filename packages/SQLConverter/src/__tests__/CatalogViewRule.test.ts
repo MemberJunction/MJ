@@ -79,6 +79,21 @@ describe('CatalogViewRule', () => {
       expect(result).not.toContain('sys.');
     });
 
+    it('lists only key columns of vwTableUniqueKeys, with the index, key position, key count and filter (#4536)', () => {
+      const sql = `CREATE OR ALTER VIEW [__mj].[vwTableUniqueKeys] AS SELECT s.name AS SchemaName FROM sys.tables t`;
+      const result = convert(sql);
+      expect(result).toContain('CREATE OR REPLACE VIEW __mj."vwTableUniqueKeys"');
+      // INCLUDE columns follow the key columns in indkey; indnkeyatts is how many are keys
+      expect(result).toContain('WITH ORDINALITY AS cols(col_num, ord)');
+      expect(result).toContain('cols.ord <= i.indnkeyatts');
+      for (const column of ['"IndexName"', '"KeyOrdinal"', '"KeyColumnCount"', '"IsFiltered"', '"FilterDefinition"']) {
+        expect(result).toContain(column);
+      }
+      // CREATE OR REPLACE VIEW can only append columns, so the original three stay first
+      const positions = ['"SchemaName"', '"TableName"', '"ColumnName"', '"IndexName"'].map((c) => result.indexOf(c));
+      expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+    });
+
     it('should recognize and convert vwSQLSchemas', () => {
       const sql = `CREATE VIEW [__mj].[vwSQLSchemas] AS SELECT s.schema_id AS SchemaID FROM sys.schemas s`;
       const result = convert(sql);
