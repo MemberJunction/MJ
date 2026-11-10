@@ -325,7 +325,7 @@ GO
 
 
 -- ── 4. spDeleteEntityWithCoreDependencies ───────────────────────────────────────────────────
--- Starts from V202611030816 (the newest definition). Changed: EntityUniqueKey.EntityID is handled (deleted).
+-- Starts from V202611080314 (the newest definition, which adds training snapshots). Changed: EntityUniqueKey.EntityID is handled (deleted).
 -- Every statement below maps to one entry of entity-delete-fk-policy.json; the coverage test
 -- matches them by table and column, so keep the "DELETE FROM [schema].[Table] WHERE [Column]"
 -- and "UPDATE [schema].[Table] SET [Column] = NULL" shapes when editing.
@@ -629,6 +629,9 @@ BEGIN TRY
     DELETE FROM [${flyway:defaultSchema}].[MLModelScoringBinding] WHERE [MLModelID] IN (SELECT ID FROM @MLModelIDs);
     DELETE FROM [${flyway:defaultSchema}].[MLTrainingRun] WHERE [PipelineID] IN (SELECT ID FROM @PipelineIDs);
     DELETE FROM [${flyway:defaultSchema}].[MLModel] WHERE [PipelineID] IN (SELECT ID FROM @PipelineIDs);
+    -- the pipelines' training snapshots; a run of another pipeline that names one loses only the link
+    UPDATE [${flyway:defaultSchema}].[MLTrainingRun] SET [TrainingSnapshotID] = NULL WHERE [TrainingSnapshotID] IN (SELECT ID FROM [${flyway:defaultSchema}].[MLTrainingSnapshot] WHERE [PipelineID] IN (SELECT ID FROM @PipelineIDs));
+    DELETE FROM [${flyway:defaultSchema}].[MLTrainingSnapshot] WHERE [PipelineID] IN (SELECT ID FROM @PipelineIDs);
     DELETE FROM [${flyway:defaultSchema}].[MLTrainingPipeline] WHERE [TargetEntityID] = @EntityID;
 
     -- Record processes and feature values
