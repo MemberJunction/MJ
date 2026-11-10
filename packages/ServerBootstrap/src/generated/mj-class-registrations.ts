@@ -1305,10 +1305,14 @@ import {
     DefaultRuntimeActionBridgeBuilder,
 } from '@memberjunction/action-runtime-host';
 
-// @memberjunction/ai-agent-harness (8 classes)
+// @memberjunction/ai-agent-harness (12 classes)
 import {
+    AntigravityCliAdapter,
+    AntigravityCloudAdapter,
     ClaudeCodeCliAdapter,
+    ClaudeCodeCloudAdapter,
     CodexAdapter,
+    CodexCloudAdapter,
     GeminiCliAdapter,
     HarnessAgentBase,
     HarnessAgentType,
@@ -2750,8 +2754,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     TextToolLibrary,
     WhiteboardChannelServer,
     DefaultRuntimeActionBridgeBuilder,
+    AntigravityCliAdapter,
+    AntigravityCloudAdapter,
     ClaudeCodeCliAdapter,
+    ClaudeCodeCloudAdapter,
     CodexAdapter,
+    CodexCloudAdapter,
     GeminiCliAdapter,
     HarnessAgentBase,
     HarnessAgentType,
@@ -2868,14 +2876,14 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJActionEntityServer,
     MJApplicationEntityServer,
     MJArtifactVersionEntityServer,
-    MJBrandKitEntityServer,
-    MJCommentEntityServer,
-    MJCompanyIntegrationEntityServer,
-    MJComponentEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJBrandKitEntityServer,
+    MJCommentEntityServer,
+    MJCompanyIntegrationEntityServer,
+    MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
     MJConversationEntityServer,
@@ -3072,14 +3080,14 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GraphQLQueryAction,
     HTTPRequestAction,
     IPGeolocationAction,
-    IntegrationActionExecutor,
-    InviteToListAction,
-    JSONTransformAction,
-    ListMCPToolsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    IntegrationActionExecutor,
+    InviteToListAction,
+    JSONTransformAction,
+    ListMCPToolsAction,
     ListObjectsAction,
     ListStorageAccountsAction,
     LoadAgentSpecAction,
@@ -3209,7 +3217,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1312;
+export const CLASS_REGISTRATIONS_COUNT = 1316;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

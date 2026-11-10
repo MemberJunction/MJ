@@ -1092,10 +1092,14 @@ import {
     WhiteboardChannelServer,
 } from '@memberjunction/ai-agents';
 
-// @memberjunction/ai-agent-harness (8 classes)
+// @memberjunction/ai-agent-harness (12 classes)
 import {
+    AntigravityCliAdapter,
+    AntigravityCloudAdapter,
     ClaudeCodeCliAdapter,
+    ClaudeCodeCloudAdapter,
     CodexAdapter,
+    CodexCloudAdapter,
     GeminiCliAdapter,
     HarnessAgentBase,
     HarnessAgentType,
@@ -2348,8 +2352,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     SearchResultSetToolLibrary,
     TextToolLibrary,
     WhiteboardChannelServer,
+    AntigravityCliAdapter,
+    AntigravityCloudAdapter,
     ClaudeCodeCliAdapter,
+    ClaudeCodeCloudAdapter,
     CodexAdapter,
+    CodexCloudAdapter,
     GeminiCliAdapter,
     HarnessAgentBase,
     HarnessAgentType,
@@ -2539,14 +2547,14 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ExecuteAIPromptAction,
     ExecuteAgentAction,
     ExecuteCodeAction,
-    ExecuteMCPToolAction,
-    ExploreDatabaseSchemaAction,
-    ExternalChangeDetectionAction,
-    FileCompressAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ExecuteMCPToolAction,
+    ExploreDatabaseSchemaAction,
+    ExternalChangeDetectionAction,
+    FileCompressAction,
     FinalizeDocumentAction,
     FindBestActionAction,
     FindBestAgentAction,
@@ -2734,7 +2742,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1171;
+export const CLASS_REGISTRATIONS_COUNT = 1175;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
