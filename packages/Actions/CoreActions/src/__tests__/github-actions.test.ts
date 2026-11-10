@@ -1,8 +1,10 @@
 import * as crypto from 'node:crypto';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { GetGlobalObjectStore } from '@memberjunction/global';
 import {
     BuildGitHubAppJwt,
     ClearGitHubInstallationTokenCache,
+    INSTALLATION_TOKEN_CACHE_GLOBAL_KEY,
     IsRepositoryAllowed,
     MintGitHubInstallationToken,
     ParseAllowedRepositories,
@@ -107,6 +109,61 @@ describe('GitHub App Auth & Repository Policy Helpers', () => {
         expect(first).toBe('ghs_minted_installation_token');
         expect(second).toBe('ghs_minted_installation_token');
         expect(callCount).toBe(1);
+
+        const globalCache = GetGlobalObjectStore()?.[INSTALLATION_TOKEN_CACHE_GLOBAL_KEY] as Map<string, unknown> | undefined;
+        expect(globalCache).toBeInstanceOf(Map);
+        expect(globalCache?.size).toBe(1);
+    });
+
+    it('normalizes ApiBaseUrl in the global installation token cache while isolating distinct GitHub hosts', async () => {
+        const urlsCalled: string[] = [];
+        const mockFetch = (async (url: string | URL | Request) => {
+            const urlStr = String(url);
+            urlsCalled.push(urlStr);
+            const hostTag = urlStr.toLowerCase().includes('ghe.example.com') ? 'ghe' : 'dotcom';
+            return new Response(
+                JSON.stringify({
+                    token: `ghs_${hostTag}_${urlsCalled.length}`,
+                    expires_at: new Date(Date.now() + 3600_000).toISOString(),
+                }),
+                { status: 201 }
+            );
+        }) as typeof fetch;
+
+        const gheToken1 = await MintGitHubInstallationToken(
+            {
+                AppId: '12345',
+                InstallationId: '445566',
+                PrivateKey: TEST_KEY_PAIR.privateKey,
+                ApiBaseUrl: 'https://GHE.Example.com/api/v3///',
+            },
+            { FetchImpl: mockFetch }
+        );
+        const gheToken2 = await MintGitHubInstallationToken(
+            {
+                AppId: '12345',
+                InstallationId: '445566',
+                PrivateKey: TEST_KEY_PAIR.privateKey,
+                ApiBaseUrl: 'https://ghe.example.com/api/v3',
+            },
+            { FetchImpl: mockFetch }
+        );
+        const dotcomToken = await MintGitHubInstallationToken(
+            {
+                AppId: '12345',
+                InstallationId: '445566',
+                PrivateKey: TEST_KEY_PAIR.privateKey,
+            },
+            { FetchImpl: mockFetch }
+        );
+
+        expect(gheToken1).toBe('ghs_ghe_1');
+        expect(gheToken2).toBe('ghs_ghe_1');
+        expect(dotcomToken).toBe('ghs_dotcom_2');
+        expect(urlsCalled).toEqual([
+            'https://GHE.Example.com/api/v3/app/installations/445566/access_tokens',
+            'https://api.github.com/app/installations/445566/access_tokens',
+        ]);
     });
 
     it('parses GitHub repository coordinates from owner/repo, URLs, and defaultOwner', () => {

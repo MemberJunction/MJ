@@ -13,6 +13,7 @@ import { createSign } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
+import { GetGlobalObjectStore } from '@memberjunction/global';
 import type { GitHubInstallationPermissions, GitHubRepoCoordinate } from './github-types.js';
 
 /**
@@ -177,13 +178,37 @@ interface CachedInstallationToken {
  * 50-minute cache TTL for installation tokens (GitHub installation tokens are valid for 60 minutes).
  */
 const TOKEN_CACHE_TTL_MS = 50 * 60 * 1000;
-const installationTokenCache = new Map<string, CachedInstallationToken>();
+
+/**
+ * Global Object Store key backing the GitHub App installation token cache so duplicate
+ * module evaluations across code-split bundles share one process-wide token cache.
+ */
+export const INSTALLATION_TOKEN_CACHE_GLOBAL_KEY = '___SINGLETON__GitHubInstallationTokenCache';
+
+function getInstallationTokenCache(): Map<string, CachedInstallationToken> {
+    const store = GetGlobalObjectStore();
+    if (!store) {
+        return new Map<string, CachedInstallationToken>();
+    }
+    let existing = store[INSTALLATION_TOKEN_CACHE_GLOBAL_KEY] as Map<string, CachedInstallationToken> | undefined;
+    if (!existing) {
+        existing = new Map<string, CachedInstallationToken>();
+        store[INSTALLATION_TOKEN_CACHE_GLOBAL_KEY] = existing;
+    }
+    return existing;
+}
+
+function normalizeGitHubApiBaseUrl(rawUrl: string | undefined): string {
+    const trimmed = (rawUrl ?? '').trim();
+    return TrimTrailingSlashes(trimmed || 'https://api.github.com');
+}
 
 function buildTokenCacheKey(
     config: GitHubAppAuthConfig,
     repos: string[] | undefined,
     permissions: GitHubInstallationPermissions | undefined,
 ): string {
+    const baseUrlPart = normalizeGitHubApiBaseUrl(config.ApiBaseUrl).toLowerCase();
     const repoPart = repos && repos.length > 0 ? [...repos].sort().join(',') : '*';
     const permPart = permissions
         ? Object.entries(permissions)
@@ -192,14 +217,14 @@ function buildTokenCacheKey(
               .map(([k, v]) => `${k}:${v}`)
               .join(',')
         : '*';
-    return `${config.ApiBaseUrl ?? 'https://api.github.com'}|${config.AppId}|${config.InstallationId}|${repoPart}|${permPart}`;
+    return `${baseUrlPart}|${config.AppId}|${config.InstallationId}|${repoPart}|${permPart}`;
 }
 
 /**
  * Clears the in-memory installation token cache (used in tests and credential rotation).
  */
 export function ClearGitHubInstallationTokenCache(): void {
-    installationTokenCache.clear();
+    getInstallationTokenCache().clear();
 }
 
 /**
@@ -210,18 +235,19 @@ export async function MintGitHubInstallationToken(
     config: GitHubAppAuthConfig,
     options?: MintInstallationTokenOptions,
 ): Promise<string> {
+    const tokenCache = getInstallationTokenCache();
     const cacheKey = buildTokenCacheKey(config, options?.Repositories, options?.Permissions);
     const nowMs = options?.NowSeconds !== undefined ? options.NowSeconds * 1000 : Date.now();
 
     if (!options?.SkipCache) {
-        const cached = installationTokenCache.get(cacheKey);
+        const cached = tokenCache.get(cacheKey);
         if (cached && cached.expiresAtMs > nowMs) {
             return cached.token;
         }
     }
 
     const jwt = BuildGitHubAppJwt(config.AppId, config.PrivateKey, options?.NowSeconds);
-    const baseUrl = TrimTrailingSlashes(config.ApiBaseUrl ?? 'https://api.github.com');
+    const baseUrl = normalizeGitHubApiBaseUrl(config.ApiBaseUrl);
     const url = `${baseUrl}/app/installations/${encodeURIComponent(config.InstallationId)}/access_tokens`;
 
     const bodyPayload: Record<string, unknown> = {};
@@ -267,7 +293,7 @@ export async function MintGitHubInstallationToken(
         );
     }
 
-    installationTokenCache.set(cacheKey, {
+    tokenCache.set(cacheKey, {
         token: data.token,
         expiresAtMs: nowMs + TOKEN_CACHE_TTL_MS,
     });

@@ -217,7 +217,7 @@ async function MintSandboxGitHubAppToken(
     const payload = Buffer.from(
         JSON.stringify({
             iat: nowSeconds - 60,
-            exp: nowSeconds + 600,
+            exp: nowSeconds + 540,
             iss: config.appId,
         })
     ).toString('base64url');

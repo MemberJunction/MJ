@@ -1849,7 +1849,7 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
         const payload = Buffer.from(
             JSON.stringify({
                 iat: nowSeconds - 60,
-                exp: nowSeconds + 600,
+                exp: nowSeconds + 540,
                 iss: appId.trim(),
             })
         ).toString('base64url');

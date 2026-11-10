@@ -32,10 +32,13 @@ describe('HarnessCredentialResolver', () => {
 
     it('mints a short-lived installation token for GitHub App credentials without exposing the PEM key', async () => {
         let capturedUrl = '';
+        let capturedAuthHeader = '';
         let capturedBody: Record<string, unknown> = {};
 
         const mockFetch = (async (input: string | URL | Request, init?: RequestInit) => {
             capturedUrl = String(input);
+            const headers = init?.headers as Record<string, string> | undefined;
+            capturedAuthHeader = headers?.Authorization ?? '';
             capturedBody = JSON.parse(String(init?.body ?? '{}'));
             return new Response(
                 JSON.stringify({
@@ -46,6 +49,7 @@ describe('HarnessCredentialResolver', () => {
             );
         }) as typeof fetch;
 
+        const beforeSec = Math.floor(Date.now() / 1000);
         const githubAppValues = JSON.stringify({
             appId: '112233',
             installationId: '998877',
@@ -57,6 +61,7 @@ describe('HarnessCredentialResolver', () => {
             EnvVariableName: 'GH_TOKEN',
             FetchImpl: mockFetch,
         });
+        const afterSec = Math.floor(Date.now() / 1000);
 
         expect(token).toBe('ghs_short_lived_sandbox_token_777');
         expect(token).not.toContain('BEGIN PRIVATE KEY');
@@ -64,6 +69,20 @@ describe('HarnessCredentialResolver', () => {
         expect(capturedBody).toEqual({
             repositories: ['MJ', 'Integrations'],
         });
+
+        // Verify JWT exp stays 1 minute inside GitHub's 10-minute maximum to absorb host clock skew
+        const jwt = capturedAuthHeader.replace(/^Bearer\s+/, '');
+        const jwtParts = jwt.split('.');
+        expect(jwtParts).toHaveLength(3);
+        const payload = JSON.parse(Buffer.from(jwtParts[1], 'base64url').toString('utf8')) as {
+            iat: number;
+            exp: number;
+            iss: string;
+        };
+        expect(payload.iss).toBe('112233');
+        expect(payload.exp - payload.iat).toBe(600);
+        expect(payload.exp).toBeGreaterThanOrEqual(beforeSec + 540);
+        expect(payload.exp).toBeLessThanOrEqual(afterSec + 540);
     });
 
     it('mirrors GH_TOKEN <-> GITHUB_TOKEN and sets non-interactive git/gh identity env vars', () => {
