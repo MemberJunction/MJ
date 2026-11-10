@@ -185,6 +185,20 @@ interface GlobalUserCacheLookup {
 }
 
 /**
+ * Minimal async-local store contract (satisfied by Node's `AsyncLocalStorage<string>`) so
+ * `@memberjunction/ai-core-plus` remains browser-safe without importing `node:async_hooks`
+ * while isolating concurrent agent turns and human saves on the server.
+ */
+export interface ExecutingAgentContextStore {
+    getStore(): string | undefined;
+    run<T>(store: string, callback: () => Promise<T>): Promise<T>;
+}
+
+interface NodeProcessWithBuiltinModule {
+    getBuiltinModule?: (id: string) => { AsyncLocalStorage?: new () => ExecutingAgentContextStore } | undefined;
+}
+
+/**
  * Singleton engine that loads and evaluates `MJ: AI Agent User Policies` records.
  */
 export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> {
@@ -193,12 +207,35 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
 
     private readonly expressionEvaluator = new SafeExpressionEvaluator();
     private readonly policyCache = new Map<string, MJAIAgentUserPolicyEntity | null>();
-    private readonly executingAgentStack: string[] = [];
+    private executingAgentStore: ExecutingAgentContextStore | null = null;
     private entityEventSubscription: Subscription | null = null;
 
     public constructor() {
         super();
+        this.initDefaultExecutingAgentStore();
         this.subscribeToPolicyEntityEvents();
+    }
+
+    private initDefaultExecutingAgentStore(): void {
+        try {
+            const proc = (globalThis as { process?: NodeProcessWithBuiltinModule }).process;
+            const asyncHooks = proc?.getBuiltinModule?.('node:async_hooks');
+            if (asyncHooks?.AsyncLocalStorage) {
+                this.executingAgentStore = new asyncHooks.AsyncLocalStorage();
+            }
+        } catch {
+            // Browser or non-Node runtime; server packages can also register via RegisterExecutingAgentContextStore
+        }
+    }
+
+    /**
+     * Registers an async-local store (e.g. `new AsyncLocalStorage<string>()` from `node:async_hooks`)
+     * used to track the active executing agent ID across async call trees without process-global bleed.
+     */
+    public RegisterExecutingAgentContextStore(store: ExecutingAgentContextStore): void {
+        if (!this.executingAgentStore) {
+            this.executingAgentStore = store;
+        }
     }
 
     /**
@@ -242,6 +279,7 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
             return;
         }
         if (entityEvent.type === 'save') {
+            this.ClearCache(policy.AgentID, policy.UserID);
             this.SetCachedPolicy(policy);
         } else if (entityEvent.type === 'delete') {
             this.ClearCache(policy.AgentID, policy.UserID);
@@ -253,30 +291,25 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
     }
 
     /**
-     * Returns the ID of the agent currently executing an action in this call stack, if any.
+     * Returns the ID of the agent currently executing an action in this async call tree, if any.
+     * Backed by `AsyncLocalStorage` on the server so concurrent agent turns and concurrent human
+     * saves never bleed across async execution contexts.
      */
     public GetActiveExecutingAgentID(): string | null {
-        return this.executingAgentStack.length > 0
-            ? this.executingAgentStack[this.executingAgentStack.length - 1]
-            : null;
+        return this.executingAgentStore?.getStore() ?? null;
     }
 
     /**
-     * Executes `fn` with `agentId` pushed onto the active executing-agent stack so entity subclasses
+     * Executes `fn` inside an async-local executing-agent context so entity subclasses
      * (such as `MJAIAgentUserPolicyEntityServer`) can enforce self-only and non-widening rules
-     * regardless of which action or code path saves the entity.
+     * without interfering with concurrent human saves or sibling agent runs.
      */
     public async RunWithExecutingAgentContext<T>(agentId: string, fn: () => Promise<T>): Promise<T> {
         const trimmed = agentId.trim();
-        if (!trimmed) {
+        if (!trimmed || !this.executingAgentStore) {
             return fn();
         }
-        this.executingAgentStack.push(trimmed);
-        try {
-            return await fn();
-        } finally {
-            this.executingAgentStack.pop();
-        }
+        return this.executingAgentStore.run(trimmed, fn);
     }
 
     private getProviderScopePrefix(provider?: object | null): string {
@@ -310,6 +343,8 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
             this.policyCache.set(this.buildCacheKey(policy.AgentID, policy.UserID, provider), policy);
             return;
         }
+        // Evict any stale copies cached under other providers for this (agentId, userId) pair first.
+        this.ClearCache(policy.AgentID, policy.UserID);
         this.policyCache.set(this.buildCacheKey(policy.AgentID, policy.UserID, null), policy);
         if (entityProvider) {
             this.policyCache.set(this.buildCacheKey(policy.AgentID, policy.UserID, entityProvider), policy);
@@ -360,8 +395,12 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
             if (sysUser?.ID) {
                 return sysUser;
             }
-        } catch {
-            // Fall back to contextUser when global store / UserCache is unavailable
+        } catch (err) {
+            LogError(
+                `AgentUserPolicyEngine.resolvePolicyLookupUser failed to read system user: ${
+                    err instanceof Error ? err.message : String(err)
+                }`
+            );
         }
         return contextUser;
     }
@@ -389,9 +428,7 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
             }
             if (options?.provider && this.policyCache.has(defaultKey)) {
                 const defaultCached = this.policyCache.get(defaultKey) ?? null;
-                if (defaultCached) {
-                    return { status: 'found', policy: defaultCached };
-                }
+                return defaultCached ? { status: 'found', policy: defaultCached } : { status: 'none', policy: null };
             }
         }
 
@@ -422,6 +459,7 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
                 this.policyCache.set(scopedKey, policy);
                 return { status: 'found', policy };
             }
+            this.policyCache.set(scopedKey, null);
             return { status: 'none', policy: null };
         } catch (error) {
             const errMessage = error instanceof Error ? error.message : String(error);

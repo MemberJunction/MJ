@@ -14050,35 +14050,27 @@ The context is now within limits. Please retry your request with the recovered c
             params.provider
         );
         if (!policy) {
-            const providerWithRunView = params.provider as { RunView?: unknown } | undefined;
-            const hasRunViewBacking =
-                typeof providerWithRunView?.RunView === 'function' ||
-                Boolean(RunView.Provider) ||
-                AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser !==
-                    AgentUserPolicyEngine.prototype.ResolvePolicyForAgentAndUser;
-            if (hasRunViewBacking) {
-                const lookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
-                    params.agent.ID,
-                    contextUser.ID,
-                    contextUser,
-                    { provider: params.provider }
-                );
-                if (lookup.status === 'error') {
-                    return {
-                        Success: false,
-                        ResultCode: POLICY_DENIED_RESULT_CODE,
-                        Message: `Action "${actionEntity.Name || action.name}" blocked (fail-closed): user policy lookup failed (${lookup.errorMessage}).`,
-                        Params: [],
-                        RunParams: {
-                            Action: actionEntity,
-                            Params: this.toActionParams({ Params: action.params ?? {}, Bound: [] }, actionEntity),
-                            ContextUser: contextUser,
-                            Filters: [],
-                        },
-                    };
-                }
-                policy = lookup.policy;
+            const lookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
+                params.agent.ID,
+                contextUser.ID,
+                contextUser,
+                { provider: params.provider }
+            );
+            if (lookup.status === 'error') {
+                return {
+                    Success: false,
+                    ResultCode: POLICY_DENIED_RESULT_CODE,
+                    Message: `Action "${actionEntity.Name || action.name}" blocked (fail-closed): user policy lookup failed (${lookup.errorMessage}).`,
+                    Params: [],
+                    RunParams: {
+                        Action: actionEntity,
+                        Params: this.toActionParams({ Params: action.params ?? {}, Bound: [] }, actionEntity),
+                        ContextUser: contextUser,
+                        Filters: [],
+                    },
+                };
             }
+            policy = lookup.policy;
         }
         if (!policy) {
             return null;

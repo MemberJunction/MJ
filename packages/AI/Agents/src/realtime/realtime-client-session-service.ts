@@ -53,6 +53,7 @@ import {
     RealtimeToolDefinition
 } from '@memberjunction/ai';
 import {
+    AgentUserPolicyEngine,
     MJAIAgentEntityExtended,
     MJAIModelEntityExtended,
     MJAIAgentRunEntityExtended,
@@ -4135,6 +4136,7 @@ export class RealtimeClientSessionService {
             runParams.ContextUser = executingUser;
             runParams.Params = actionParams;
             runParams.Filters = [];
+            runParams.Context = { AgentID: target.ID };
 
             let timerHandle: ReturnType<typeof setTimeout> | undefined;
             const timeoutPromise = new Promise<never>((_, reject) => {
@@ -4147,7 +4149,9 @@ export class RealtimeClientSessionService {
             });
 
             const result = await Promise.race([
-                ActionEngineServer.Instance.RunAction(runParams),
+                AgentUserPolicyEngine.Instance.RunWithExecutingAgentContext(target.ID, () =>
+                    ActionEngineServer.Instance.RunAction(runParams)
+                ),
                 timeoutPromise
             ]).finally(() => {
                 if (timerHandle) {

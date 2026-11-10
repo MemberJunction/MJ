@@ -805,7 +805,10 @@ export class ClientClauseScreen {
                     case 'Star':
                     case 'QualifiedStar': {
                         const starOffset = sql.lastIndexOf('*', construct.Span.End - 1);
-                        if (starOffset < construct.Span.Start || !projectionStars.has(starOffset)) {
+                        const isExistsSelectStar =
+                            construct.Kind === 'Star' &&
+                            /\bEXISTS\s*\(\s*SELECT\s*$/i.test(sql.slice(0, construct.Span.Start));
+                        if (!isExistsSelectStar && (starOffset < construct.Span.Start || !projectionStars.has(starOffset))) {
                             throw new Error(
                                 `Invalid ${label}: non-projection wildcard (${construct.Detail}) is not permitted when field-level masking is active`,
                             );
@@ -830,10 +833,12 @@ export class ClientClauseScreen {
         dialect: SQLParserDialect,
     ): void {
         if (!clause?.trim()) return;
+        const quotedSchema = dialect.QuoteIdentifier('__mj');
+        const quotedView = dialect.QuoteIdentifier('vw_clause_check');
         const wrappedSql =
             label === 'OrderBy'
-                ? `SELECT 1 FROM [__mj].[vw_clause_check] ORDER BY ${clause}`
-                : `SELECT 1 FROM [__mj].[vw_clause_check] WHERE ${clause}`;
+                ? `SELECT 1 FROM ${quotedSchema}.${quotedView} ORDER BY ${clause}`
+                : `SELECT 1 FROM ${quotedSchema}.${quotedView} WHERE ${clause}`;
         ClientClauseScreen.AssertNoPositionalColumnRenames(wrappedSql, dialect, label);
     }
 

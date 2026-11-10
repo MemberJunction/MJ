@@ -475,7 +475,8 @@ describe('ClientClauseScreen agent policy & masking screens', () => {
             ).toBe(false);
             consoleSpy.mockRestore();
 
-            // Virtual fields (view columns) are projected into the synthetic row for policy whereClause evaluation
+            // Non-IS-A virtual fields (view-joined columns like DepartmentName) are REFUSED on write-side
+            // whereClause checks — including when a foreign key (DepartmentID) is updated and dirtyOnlyOptimization is true
             const entityWithVirtual = new EntityInfo({
                 ID: contacts.ID,
                 Name: contacts.Name,
@@ -508,6 +509,24 @@ describe('ClientClauseScreen agent policy & masking screens', () => {
                         EntityFieldPermissions: [],
                     })),
                     {
+                        ID: 'f-fk-dept-id',
+                        EntityID: contacts.ID,
+                        Name: 'DepartmentID',
+                        CodeName: 'DepartmentID',
+                        DisplayName: 'Department ID',
+                        Type: 'uniqueidentifier',
+                        Length: 36,
+                        IsPrimaryKey: false,
+                        AllowsNull: true,
+                        IsVirtual: false,
+                        AllowUpdateAPI: true,
+                        Sequence: 4,
+                        Status: 'Active' as const,
+                        Entity: contacts.Name,
+                        EntityFieldValues: [],
+                        EntityFieldPermissions: [],
+                    },
+                    {
                         ID: 'f-virtual-dept',
                         EntityID: contacts.ID,
                         Name: 'DepartmentName',
@@ -519,7 +538,7 @@ describe('ClientClauseScreen agent policy & masking screens', () => {
                         AllowsNull: true,
                         IsVirtual: true,
                         AllowUpdateAPI: false,
-                        Sequence: 4,
+                        Sequence: 5,
                         Status: 'Active' as const,
                         Entity: contacts.Name,
                         EntityFieldValues: [],
@@ -535,20 +554,50 @@ describe('ClientClauseScreen agent policy & masking screens', () => {
                 ID: '11111111-1111-4111-8111-111111111111',
                 Status: 'Active',
                 Amount: 42,
-                DepartmentName: 'Engineering',
+                DepartmentID: '22222222-2222-4222-8222-222222222222',
+                DepartmentName: 'Sales',
             });
+            // Agent mutates the foreign key DepartmentID (moving row out of Sales), while virtual DepartmentName stays 'Sales'
+            const deptIdField = recWithVirtual.Fields.find((f) => f.Name === 'DepartmentID')!;
+            deptIdField.Value = '33333333-3333-4333-8333-333333333333';
+
+            const virtualConsoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
             provider.ThrowOnExecute = false;
             provider.SimulatedRows = [{ pass: 1 }];
             provider.ExecutedSQL = [];
             expect(
                 await provider.EvaluateSyntheticRowWhereClause(
                     recWithVirtual,
-                    `[DepartmentName] = 'Engineering'`,
+                    `[DepartmentName] = 'Sales'`,
+                    user,
+                    true,
+                ),
+            ).toBe(false);
+            expect(
+                await provider.EvaluateSyntheticRowWhereClause(
+                    recWithVirtual,
+                    `[DepartmentName] = 'Sales'`,
                     user,
                     false,
                 ),
-            ).toBe(true);
-            expect(provider.ExecutedSQL[0]).toContain(`'Engineering' AS [DepartmentName]`);
+            ).toBe(false);
+            expect(provider.ExecutedSQL).toHaveLength(0);
+            virtualConsoleSpy.mockRestore();
+
+            // PostgreSQL dialect AssertNoWholeRowOrOrdinalInClause accepts valid PG filters and EXISTS (SELECT * ...)
+            expect(() =>
+                ClientClauseScreen.AssertNoWholeRowOrOrdinalInClause(
+                    `"Status" = 'Active' AND EXISTS (SELECT * FROM "crm"."vwContacts" c2 WHERE c2."ID" = "ID")`,
+                    'Filter',
+                    PG,
+                ),
+            ).not.toThrow();
+            expect(() =>
+                ClientClauseScreen.AssertNoWholeRowOrOrdinalInClause(`"Amount" DESC`, 'OrderBy', PG),
+            ).not.toThrow();
+            expect(() =>
+                ClientClauseScreen.AssertNoWholeRowOrOrdinalInClause(`2 DESC`, 'OrderBy', PG),
+            ).toThrow(/ordinal/i);
         });
     });
 });

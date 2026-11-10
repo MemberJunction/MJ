@@ -179,7 +179,7 @@ describe('UserRoutineDispatcherDriver.RunRoutineNow', () => {
         expect(driver.logError).toHaveBeenCalledTimes(1);
     });
 
-    it('disables a routine after MAX_OWNER_RESOLVE_RETRIES consecutive owner-resolution failures so it does not retry forever', async () => {
+    it('backs off on transient owner lookup failures without disabling, and disables only after MAX_OWNER_RESOLVE_RETRIES permanent missing/inactive owner failures', async () => {
         UserRoutineDispatcherDriver.ClearOwnerResolveFailures();
         const pastDue = new Date(Date.now() - 60_000);
         const { routine } = makeOneShot({
@@ -187,11 +187,6 @@ describe('UserRoutineDispatcherDriver.RunRoutineNow', () => {
             UserID: 'PERMANENTLY-DELETED-USER',
             NextRunAt: pastDue,
         });
-
-        globalRef.___SINGLETON__UserCache = {
-            Users: [],
-            FindUser: async () => undefined,
-        };
 
         const sweepDriver = driver as UserRoutineDispatcherDriver & {
             loadCandidateRoutines?: (u: UserInfo, now: Date) => Promise<MJUserRoutineEntity[]>;
@@ -202,6 +197,25 @@ describe('UserRoutineDispatcherDriver.RunRoutineNow', () => {
         const context: ScheduledJobExecutionContext = {
             Schedule: scheduleStub,
             ContextUser: SYSTEM as Partial<UserInfo> as UserInfo,
+        };
+
+        // 1. Transient lookup errors (FindUser throwing or empty UserCache) NEVER disable the routine even across 4 sweeps
+        globalRef.___SINGLETON__UserCache = {
+            Users: [SYSTEM as Partial<UserInfo> as UserInfo],
+            FindUser: async () => {
+                throw new Error('DB connection timeout');
+            },
+        };
+        for (let i = 0; i < 4; i++) {
+            await driver.Execute(context);
+        }
+        expect(routine.Status).toBe('Active');
+        expect(driver.claimRoutine).not.toHaveBeenCalled();
+
+        // 2. Populated UserCache where owner is permanently missing disables after MAX_OWNER_RESOLVE_RETRIES (3) sweeps
+        globalRef.___SINGLETON__UserCache = {
+            Users: [SYSTEM as Partial<UserInfo> as UserInfo],
+            FindUser: async () => undefined,
         };
 
         // Sweep 1 and 2 preserve NextRunAt for retry

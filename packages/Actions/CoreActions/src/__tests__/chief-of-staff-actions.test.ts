@@ -837,6 +837,34 @@ describe('Chief of Staff Actions Suite', () => {
             expect(widenRes.Message).toMatch(/Cannot widen|Cannot increase/);
             expect(existingPausedStub.Save).not.toHaveBeenCalled();
 
+            // 2b. When ResolvePolicyForAgentAndUser returns a system-user-loaded policy, Configure reloads and saves as ContextUser (and enforces CanUpdate)
+            const sysLoadedExisting = {
+                ...existingPausedStub,
+                ID: 'policy-sys-loaded',
+                ContextCurrentUser: { ID: 'sys-user-id', Name: 'System' },
+                Save: vi.fn().mockResolvedValue(true),
+            };
+            const userScopedStub = {
+                ...existingPausedStub,
+                ID: 'policy-sys-loaded',
+                ContextCurrentUser: { ID: 'dev-1', Name: 'Dev One' },
+                InnerLoad: vi.fn().mockResolvedValue(true),
+                Save: vi.fn().mockResolvedValue(true),
+            };
+            getPolicyMock.mockResolvedValueOnce(sysLoadedExisting);
+            getEntityObjectMock.mockResolvedValueOnce(userScopedStub);
+
+            const humanRes = await invokeAction(new ConfigureAgentUserPolicyAction(), {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('dev-1', 'Dev One'),
+                Filters: [],
+                Params: [{ Name: 'Status', Type: 'Input', Value: 'Active' }],
+            });
+            expect(humanRes.Success).toBe(true);
+            expect(sysLoadedExisting.Save).not.toHaveBeenCalled();
+            expect(userScopedStub.InnerLoad).toHaveBeenCalledTimes(1);
+            expect(userScopedStub.Save).toHaveBeenCalledTimes(1);
+
             // 3. Policy lookup error fails closed
             getPolicyMock.mockResolvedValueOnce({
                 status: 'error',

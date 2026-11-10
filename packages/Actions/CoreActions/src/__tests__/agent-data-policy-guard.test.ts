@@ -123,6 +123,8 @@ function makeEntityInfo(
         Fields: fields,
         PrimaryKeys: fields.filter((f) => f.IsPrimaryKey),
         GetUserPermisions: () => ({ CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true }),
+        GetEffectiveRowFilterWhereClause: () => '',
+        GetDeniedReadFields: () => new Set<string>(),
     } as unknown as EntityInfo;
 }
 
@@ -971,5 +973,36 @@ describe('AgentDataPolicyGuard — Runtime Data-Access Narrowing across CRUD & Q
         });
         expect(jsonbFilterRes.Success).toBe(false);
         expect(jsonbFilterRes.ResultCode).toBe('PERMISSION_DENIED');
+
+        // PostgreSQL provider GetRecords with denied field Salary allows valid PG filter and EXISTS (SELECT * ...)
+        (rig.provider as { PlatformKey?: string }).PlatformKey = 'postgresql';
+        runViewMock.mockResolvedValueOnce({
+            Success: true,
+            Results: [{ ID: 'emp-1', Name: 'Jane', Department: 'Engineering', Salary: 185000 }],
+            RowCount: 1,
+        });
+        const pgGetRecordsParams: RunActionParams = {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: user,
+            Context: { AgentID: AGENT_ID },
+            Provider: rig.provider,
+            Filters: [],
+            Params: [
+                { Name: 'EntityName', Type: 'Input', Value: 'Employees' },
+                {
+                    Name: 'Filter',
+                    Type: 'Input',
+                    Value: `"Department" = 'Engineering' AND EXISTS (SELECT * FROM "__mj"."vwEmployees" e2 WHERE e2."ID" = "ID")`,
+                },
+                { Name: 'OrderBy', Type: 'Input', Value: `"Name" ASC` },
+            ],
+        };
+        const pgRes = await invokeAction(new GetRecordsAction(), pgGetRecordsParams);
+        expect(pgRes.Success).toBe(true);
+        const pgRecords = pgRes.Params?.find((p: ActionParam) => p.Name === 'Records')?.Value as Array<
+            Record<string, unknown>
+        >;
+        expect(pgRecords).toHaveLength(1);
+        expect(pgRecords[0]['Salary']).toBeUndefined();
     });
 });

@@ -329,8 +329,12 @@ export class SendInterAgentRequestAction extends BaseAction {
             if (systemUser) {
                 return systemUser;
             }
-        } catch {
-            // Fall through to contextUser when UserCache is not populated
+        } catch (err) {
+            LogError(
+                `SendInterAgentRequestAction.resolveRequestSaveUser failed to read UserCache system user: ${
+                    err instanceof Error ? err.message : String(err)
+                }`
+            );
         }
         return contextUser;
     }

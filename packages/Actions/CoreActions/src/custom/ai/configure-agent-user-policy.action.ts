@@ -1,7 +1,7 @@
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
-import { LogError, Metadata } from '@memberjunction/core';
+import { CompositeKey, LogError, Metadata } from '@memberjunction/core';
 import {
     MJAIAgentUserPolicyEntity,
     MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule,
@@ -115,9 +115,53 @@ export class ConfigureAgentUserPolicyAction extends BaseAction {
                 contextAgentId && existing ? AgentUserPolicyEngine.Instance.SnapshotPolicy(existing) : null;
 
             const md = params.Provider ?? new Metadata();
-            const policy =
-                existing ??
-                (await md.GetEntityObject<MJAIAgentUserPolicyEntity>('MJ: AI Agent User Policies', contextUser));
+            const policyEntityInfo = md.EntityByName?.('MJ: AI Agent User Policies');
+            if (policyEntityInfo && typeof policyEntityInfo.GetUserPermisions === 'function') {
+                const perms = policyEntityInfo.GetUserPermisions(contextUser);
+                const allowed = existing ? perms?.CanUpdate !== false : perms?.CanCreate !== false;
+                if (!allowed) {
+                    return {
+                        Success: false,
+                        ResultCode: 'PERMISSION_DENIED',
+                        Message: `User "${contextUser.Name || contextUser.ID}" does not have ${existing ? 'Update' : 'Create'} permission on MJ: AI Agent User Policies.`,
+                        Params: params.Params,
+                    };
+                }
+            }
+
+            let policy: MJAIAgentUserPolicyEntity | null = null;
+            if (existing) {
+                const existingContextUser = (existing as { ContextCurrentUser?: { ID?: string } | null }).ContextCurrentUser;
+                if (existingContextUser?.ID && !UUIDsEqual(existingContextUser.ID, contextUser.ID)) {
+                    const userScopedPolicy = await md.GetEntityObject<MJAIAgentUserPolicyEntity>(
+                        'MJ: AI Agent User Policies',
+                        contextUser
+                    );
+                    if (userScopedPolicy && typeof userScopedPolicy.InnerLoad === 'function' && existing.ID) {
+                        const loaded = await userScopedPolicy.InnerLoad(
+                            new CompositeKey([{ FieldName: 'ID', Value: existing.ID }])
+                        );
+                        if (!loaded) {
+                            return {
+                                Success: false,
+                                ResultCode: 'POLICY_LOOKUP_FAILED',
+                                Message: `Failed to load existing agent user policy "${existing.ID}" under caller context.`,
+                                Params: params.Params,
+                            };
+                        }
+                        policy = userScopedPolicy;
+                    } else if (userScopedPolicy) {
+                        policy = userScopedPolicy;
+                    }
+                } else {
+                    policy = existing;
+                }
+            } else {
+                policy = await md.GetEntityObject<MJAIAgentUserPolicyEntity>(
+                    'MJ: AI Agent User Policies',
+                    contextUser
+                );
+            }
             if (!policy) {
                 return {
                     Success: false,

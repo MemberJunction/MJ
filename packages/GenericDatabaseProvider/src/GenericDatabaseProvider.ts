@@ -8231,6 +8231,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         if (trimmed.length === 0) {
             return true;
         }
+        const parentFieldNames = entity.EntityInfo?.ParentEntityFieldNames;
+        const nonIsaVirtualNames = new Set(
+            (entity.EntityInfo?.Fields ?? [])
+                .filter(f => f.IsVirtual && !parentFieldNames?.has(f.Name))
+                .map(f => f.Name.trim().toLowerCase())
+        );
+        if (nonIsaVirtualNames.size > 0) {
+            const matchedVirtual = ClientClauseScreen.ExtractStatementIdentifierTokens(trimmed, this.Dialect).filter(
+                tok => nonIsaVirtualNames.has(tok.trim().toLowerCase())
+            );
+            if (matchedVirtual.length > 0) {
+                LogError(
+                    `EvaluateSyntheticRowWhereClause refused for entity '${entity.EntityInfo?.Name}': write-side whereClause references non-IS-A virtual view column(s) [${matchedVirtual.join(', ')}]`
+                );
+                return false;
+            }
+        }
         if (dirtyOnlyOptimization) {
             const referencedColumns = this.TryExtractSimpleFilterColumns(trimmed);
             if (referencedColumns) {
@@ -8301,17 +8318,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     protected BuildRLSSyntheticRowProjections(
         entity: BaseEntity,
         entityInfo: EntityInfo,
-        includeVirtualFields: boolean = false
+        includeISAParentFields: boolean = false
     ): string {
         const parts: string[] = [];
+        const parentFieldNames = includeISAParentFields ? entityInfo.ParentEntityFieldNames : undefined;
         for (const field of entityInfo.Fields) {
-            if (field.IsVirtual && !includeVirtualFields) continue;
+            if (field.IsVirtual && !parentFieldNames?.has(field.Name)) continue;
             const val = entity.Get(field.Name);
-            if (field.IsVirtual && val == null && (!field.Type || field.Type.trim().length === 0)) {
-                const fallbackType = this.getDialect()?.MapDataTypeToString('nvarchar', 4000, 0, 0) ?? 'NVARCHAR(4000)';
-                parts.push(`CAST(NULL AS ${fallbackType}) AS ${this.QuoteIdentifier(field.Name)}`);
-                continue;
-            }
             parts.push(`${this.renderRLSProjectionValue(field, val)} AS ${this.QuoteIdentifier(field.Name)}`);
         }
         return parts.join(', ');

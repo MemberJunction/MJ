@@ -493,14 +493,26 @@ describe('AgentUserPolicyEngine — ResolvePolicyForAgentAndUser & DetectAgentPo
 
         const noneRes = await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser, { provider });
         expect(noneRes).toEqual({ status: 'none', policy: null });
+        expect(runViewFn).toHaveBeenCalledTimes(1);
 
-        const errRes = await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser, { provider });
+        // Cached 'none' result avoids a second RunView query until forceRefresh is requested
+        const cachedNoneRes = await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser, { provider });
+        expect(cachedNoneRes).toEqual({ status: 'none', policy: null });
+        expect(runViewFn).toHaveBeenCalledTimes(1);
+
+        const errRes = await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser, {
+            provider,
+            forceRefresh: true,
+        });
         expect(errRes.status).toBe('error');
         if (errRes.status === 'error') {
             expect(errRes.errorMessage).toContain('DB connection lost');
         }
 
-        const foundRes = await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser, { provider });
+        const foundRes = await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser, {
+            provider,
+            forceRefresh: true,
+        });
         expect(foundRes).toEqual({ status: 'found', policy });
     });
 
@@ -670,5 +682,10 @@ describe('AgentUserPolicyEngine — ResolvePolicyForAgentAndUser & DetectAgentPo
         engine.ClearCache('agent-cos', 'user-alice-1', providerA);
         expect(engine.GetCachedPolicy('agent-cos', 'user-alice-1', providerA)).toBeNull();
         expect(engine.GetCachedPolicy('agent-cos', 'user-alice-1', providerB)?.ID).toBe('pol-provider-b');
+
+        // Saving a policy evicts stale provider-scoped entries across all providers
+        const savedPolicy = buildPolicy({ ID: 'pol-saved-fresh', EmailChannelMode: 'Disabled' });
+        engine.SetCachedPolicy(savedPolicy);
+        expect(engine.GetCachedPolicy('agent-cos', 'user-alice-1', providerB)?.ID).toBe('pol-saved-fresh');
     });
 });

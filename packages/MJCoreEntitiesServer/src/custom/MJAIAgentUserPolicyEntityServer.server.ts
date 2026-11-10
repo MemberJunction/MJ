@@ -1,7 +1,10 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { BaseEntity, EntitySaveOptions, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentUserPolicyEntity } from '@memberjunction/core-entities';
 import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
+
+AgentUserPolicyEngine.Instance.RegisterExecutingAgentContextStore(new AsyncLocalStorage<string>());
 
 /**
  * Server-side `MJ: AI Agent User Policies` entity: a user's agent policy is private to that user.

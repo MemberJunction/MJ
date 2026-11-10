@@ -66,6 +66,7 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
     return { ...actual, MJAIAgentUserPolicyEntity: MockMJAIAgentUserPolicyEntity };
 });
 
+import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { MJAIAgentUserPolicyEntityServer } from '../custom/MJAIAgentUserPolicyEntityServer.server';
 
 interface MockHooks {
@@ -181,5 +182,61 @@ describe('MJAIAgentUserPolicyEntityServer.Validate — agent context non-widenin
         e.SetFieldState('RequireApprovalForExternalComms', { Dirty: true, OldValue: false });
         const r = e.Validate();
         expect(r.Success).toBe(true);
+    });
+
+    it('isolates RunWithExecutingAgentContext across concurrent agent runs and allows concurrent human saves without bleed', async () => {
+        const engine = AgentUserPolicyEngine.Instance;
+        let releaseAgentA!: () => void;
+        const agentABarrier = new Promise<void>((resolve) => {
+            releaseAgentA = resolve;
+        });
+
+        // Start Agent A in flight and suspend at an await point
+        const agentARun = engine.RunWithExecutingAgentContext(AGENT_A, async () => {
+            expect(engine.GetActiveExecutingAgentID()).toBe(AGENT_A);
+            await agentABarrier;
+            expect(engine.GetActiveExecutingAgentID()).toBe(AGENT_A);
+
+            // Agent A trying to widen its own policy via RunWithExecutingAgentContext (without ExecutingAgentID set) is refused
+            const agentAPolicy = makeEntity();
+            agentAPolicy.IsSaved = true;
+            agentAPolicy.UserID = OWNER;
+            agentAPolicy.AgentID = AGENT_A;
+            agentAPolicy.ContextCurrentUser = { ID: OWNER, Type: 'User' };
+            agentAPolicy.RequireApprovalForExternalComms = false;
+            agentAPolicy.SetFieldState('RequireApprovalForExternalComms', { Dirty: true, OldValue: true });
+            return agentAPolicy.Validate();
+        });
+
+        // Concurrently run Agent B while Agent A is suspended
+        const agentBRun = engine.RunWithExecutingAgentContext(AGENT_B, async () => {
+            expect(engine.GetActiveExecutingAgentID()).toBe(AGENT_B);
+            const agentBPolicy = makeEntity();
+            agentBPolicy.IsSaved = true;
+            agentBPolicy.UserID = OWNER;
+            agentBPolicy.AgentID = AGENT_B;
+            agentBPolicy.ContextCurrentUser = { ID: OWNER, Type: 'User' };
+            agentBPolicy.RequireApprovalForExternalComms = true;
+            agentBPolicy.SetFieldState('RequireApprovalForExternalComms', { Dirty: true, OldValue: false });
+            return agentBPolicy.Validate();
+        });
+
+        // Concurrently perform a human Governance save (outside RunWithExecutingAgentContext) while Agent A is still in flight
+        expect(engine.GetActiveExecutingAgentID()).toBeNull();
+        const humanPolicy = makeEntity();
+        humanPolicy.IsSaved = true;
+        humanPolicy.UserID = OWNER;
+        humanPolicy.AgentID = AGENT_B;
+        humanPolicy.ContextCurrentUser = { ID: OWNER, Type: 'User' };
+        humanPolicy.RequireApprovalForExternalComms = false;
+        humanPolicy.SetFieldState('RequireApprovalForExternalComms', { Dirty: true, OldValue: true });
+        const humanValidation = humanPolicy.Validate();
+        expect(humanValidation.Success).toBe(true);
+
+        releaseAgentA();
+        const [resA, resB] = await Promise.all([agentARun, agentBRun]);
+        expect(resA.Success).toBe(false);
+        expect(resA.Errors.some((err) => /cannot widen privileges/i.test(err.Message))).toBe(true);
+        expect(resB.Success).toBe(true);
     });
 });

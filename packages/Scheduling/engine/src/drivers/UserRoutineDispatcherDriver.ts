@@ -54,6 +54,15 @@ interface GlobalUserCacheLookup {
     FindUser(criteria: { ID?: string; Email?: string }): Promise<UserInfo | undefined>;
 }
 
+export class RoutineOwnerResolutionError extends Error {
+    public readonly Kind: 'permanent' | 'transient';
+    public constructor(message: string, kind: 'permanent' | 'transient') {
+        super(message);
+        this.name = 'RoutineOwnerResolutionError';
+        this.Kind = kind;
+    }
+}
+
 /**
  * Optional configuration (stored in ScheduledJob.Configuration). All fields optional —
  * the dispatcher runs with sensible defaults when Configuration is empty.
@@ -213,12 +222,21 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
                 ownerUser = await this.resolveRoutineOwnerUser(routine, context.ContextUser);
                 UserRoutineDispatcherDriver._ownerResolveFailures.delete(routineKey);
             } catch (error) {
+                const isPermanent =
+                    error instanceof RoutineOwnerResolutionError && error.Kind === 'permanent';
+                if (!isPermanent) {
+                    this.logError(
+                        `Skipping claim for routine "${routine.Name}" (${routine.ID}) due to transient owner lookup failure — backing off and preserving NextRunAt for retry`,
+                        error
+                    );
+                    continue;
+                }
                 const failures = (UserRoutineDispatcherDriver._ownerResolveFailures.get(routineKey) ?? 0) + 1;
                 UserRoutineDispatcherDriver._ownerResolveFailures.set(routineKey, failures);
                 if (failures >= UserRoutineDispatcherDriver.MAX_OWNER_RESOLVE_RETRIES) {
                     UserRoutineDispatcherDriver._ownerResolveFailures.delete(routineKey);
                     this.logError(
-                        `Disabling routine "${routine.Name}" (${routine.ID}) because owner user could not be resolved after ${failures} consecutive attempts`,
+                        `Disabling routine "${routine.Name}" (${routine.ID}) because owner user is missing or inactive after ${failures} consecutive attempts`,
                         error
                     );
                     routine.Status = 'Disabled';
@@ -403,26 +421,48 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
     ): Promise<UserInfo> {
         const ownerUserId = routine.UserID?.trim();
         if (!ownerUserId) {
-            throw new Error(`Routine "${routine.Name}" has no UserID — refusing to execute without a resolved owner.`);
+            throw new RoutineOwnerResolutionError(
+                `Routine "${routine.Name}" has no UserID — refusing to execute without a resolved owner.`,
+                'permanent'
+            );
         }
         if (fallbackContextUser?.ID && UUIDsEqual(ownerUserId, fallbackContextUser.ID)) {
             if (fallbackContextUser.IsActive === false) {
-                throw new Error(`Routine "${routine.Name}" owner (${ownerUserId}) is inactive — refusing to execute.`);
+                throw new RoutineOwnerResolutionError(
+                    `Routine "${routine.Name}" owner (${ownerUserId}) is inactive — refusing to execute.`,
+                    'permanent'
+                );
             }
             return fallbackContextUser;
         }
         const userCache = (globalThis as { ___SINGLETON__UserCache?: GlobalUserCacheLookup }).___SINGLETON__UserCache;
         if (!userCache || typeof userCache.FindUser !== 'function') {
-            throw new Error(
-                `Routine "${routine.Name}" owner (${ownerUserId}) cannot be resolved because UserCache is unavailable — refusing to execute.`
+            throw new RoutineOwnerResolutionError(
+                `Routine "${routine.Name}" owner (${ownerUserId}) cannot be resolved because UserCache is unavailable — refusing to execute.`,
+                'transient'
             );
         }
-        const found = await userCache.FindUser({ ID: ownerUserId });
+        let found: UserInfo | undefined;
+        try {
+            found = await userCache.FindUser({ ID: ownerUserId });
+        } catch (err) {
+            throw new RoutineOwnerResolutionError(
+                `Routine "${routine.Name}" owner (${ownerUserId}) lookup failed transiently: ${err instanceof Error ? err.message : String(err)}`,
+                'transient'
+            );
+        }
         if (!found) {
-            throw new Error(`Routine "${routine.Name}" owner (${ownerUserId}) not found in UserCache — refusing to execute.`);
+            const cachePopulated = Array.isArray(userCache.Users) && userCache.Users.length > 0;
+            throw new RoutineOwnerResolutionError(
+                `Routine "${routine.Name}" owner (${ownerUserId}) not found in UserCache — refusing to execute.`,
+                cachePopulated ? 'permanent' : 'transient'
+            );
         }
         if (found.IsActive === false) {
-            throw new Error(`Routine "${routine.Name}" owner (${ownerUserId}) is inactive — refusing to execute.`);
+            throw new RoutineOwnerResolutionError(
+                `Routine "${routine.Name}" owner (${ownerUserId}) is inactive — refusing to execute.`,
+                'permanent'
+            );
         }
         return found;
     }
