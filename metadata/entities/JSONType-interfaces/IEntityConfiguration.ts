@@ -108,6 +108,15 @@ export interface IEntityCommentsConfiguration {
      * {@link RequiredPermission} may comment.
      */
     AllowedRoles?: string[];
+
+    /**
+     * Optional list of comment type codes or names (`MJ: Comment Types.Code` or `Name`,
+     * case-insensitive, or `'*'` for all registered comment types) allowed on this entity.
+     *
+     * When omitted, plain discussion comments (`'COMMENT'`) are allowed and specialized
+     * comment types (such as `'FIELD_SUGGESTION'`) require explicit opt-in.
+     */
+    AllowedCommentTypes?: string[];
 }
 
 /**

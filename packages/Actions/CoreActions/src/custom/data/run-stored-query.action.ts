@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { RunQuery, RunQueryParams, RunQueryResult } from "@memberjunction/core";
+import { AgentDataPolicyGuard } from "../crud/agent-data-policy-guard";
 
 /**
  * Action that executes a stored query by ID or name using the full query pipeline.
@@ -35,8 +36,18 @@ export class RunStoredQueryAction extends BaseAction {
                 } as ActionResultSimple;
             }
 
-            // Parse parameters JSON if provided
+            // Parse parameters JSON if provided before policy evaluation so template SQL renders accurately
             const queryParameters = this.parseParameters(parametersRaw);
+
+            const policyGuard = await AgentDataPolicyGuard.EvaluateStoredQuery(
+                params,
+                queryId,
+                queryName,
+                queryParameters
+            );
+            if ('Blocked' in policyGuard) {
+                return policyGuard.Blocked;
+            }
 
             // Build RunQueryParams
             const runParams: RunQueryParams = {
@@ -74,7 +85,8 @@ export class RunStoredQueryAction extends BaseAction {
                 } as ActionResultSimple;
             }
 
-            const results = result.Results || [];
+            const rawResults = (result.Results || []) as Record<string, unknown>[];
+            const results = AgentDataPolicyGuard.MaskRows(rawResults, policyGuard.Allowed.DeniedFieldPatterns);
             const executionTimeMs = result.ExecutionTime || 0;
 
             // Format output

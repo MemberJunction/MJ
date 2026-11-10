@@ -243,5 +243,6 @@ export * from './checks/diagnostics.checks';
 export * from './checks/semantic-graph.checks';
 export * from './checks/graph-runtime.checks';
 export * from './checks/task-graph-security.checks';
+export * from './checks/work-bus-core.checks';
 // The skip allowlist registers on the same registry; a skip of any check not listed fails the run.
 export * from './skip-allowlist';

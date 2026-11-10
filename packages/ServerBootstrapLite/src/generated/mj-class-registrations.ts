@@ -223,21 +223,17 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (487 classes)
+// @memberjunction/core-entities (485 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
     AccessControlRuleProvider,
-    AlternateBaseViewEdgeProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
     DashboardPermissionProvider,
-    EntityMetadataEdgeProvider,
     EntityPermissionProvider,
-    ForeignKeyEdgeProvider,
-    JoinEntityEdgeProvider,
     MJAIActionEntity,
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
@@ -364,6 +360,8 @@ import {
     MJCollectionEntity,
     MJCollectionPermissionEntity,
     MJCollectionPermissionEntityExtended,
+    MJCommentEntity,
+    MJCommentTypeEntity,
     MJCommunicationBaseMessageTypeEntity,
     MJCommunicationLogEntity,
     MJCommunicationProviderEntity,
@@ -414,6 +412,7 @@ import {
     MJConversationDetailRatingEntity,
     MJConversationEntity,
     MJConversationSkillEntity,
+    MJConversationTypeEntity,
     MJConversationWidgetInstanceEntity,
     MJCountryEntity,
     MJCredentialCategoryEntity,
@@ -476,6 +475,7 @@ import {
     MJEntityRelationshipDisplayComponentEntity,
     MJEntityRelationshipEntity,
     MJEntitySettingEntity,
+    MJEntityUniqueKeyEntity,
     MJEnvironmentEntity,
     MJEnvironmentEntityExtended,
     MJErrorLogEntity,
@@ -489,6 +489,7 @@ import {
     MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
+    MJFieldSuggestionEntity,
     MJFileCategoryEntity,
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
@@ -707,10 +708,7 @@ import {
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
-    QueryEdgeProvider,
-    QueryMetadataEdgeProvider,
     QueryPermissionProvider,
-    RecordLinkEdgeProvider,
     ResourcePermissionProvider,
 } from '@memberjunction/core-entities';
 
@@ -1046,7 +1044,7 @@ import {
     SubmitHumanRubricAction,
 } from '@memberjunction/rubrics';
 
-// @memberjunction/search-engine (16 classes)
+// @memberjunction/search-engine (15 classes)
 import {
     AzureAISearchProvider,
     BGEReRanker,
@@ -1054,7 +1052,6 @@ import {
     ElasticsearchSearchProvider,
     EntitySearchProvider,
     FullTextSearchProvider,
-    GraphSearchProvider,
     NoopReRanker,
     OpenAIReRanker,
     OpenSearchSearchProvider,
@@ -1131,9 +1128,8 @@ import {
     RecordProcessRunNowServerOperation,
 } from '@memberjunction/record-set-processor';
 
-// @memberjunction/predictive-studio (18 classes)
+// @memberjunction/predictive-studio (17 classes)
 import {
-    EvaluateFeatureAndPredictionDriftAction,
     MLModelInferenceProcessor,
     MLModelScoreEnricher,
     PredictiveStudioControlExperimentSessionServerOperation,
@@ -1188,8 +1184,9 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (78 classes)
+// @memberjunction/core-entities-server (76 classes)
 import {
+    FieldSuggestionCommentDriver,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
@@ -1213,6 +1210,7 @@ import {
     MJApplicationEntityServer,
     MJArtifactVersionEntityServer,
     MJBrandKitEntityServer,
+    MJCommentEntityServer,
     MJCompanyIntegrationEntityServer,
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
@@ -1227,10 +1225,8 @@ import {
     MJEntityFieldPermissionEntityServer,
     MJEntityFormContributionEntityServer,
     MJEntityFormOverrideEntityServer,
+    MJFieldSuggestionEntityServer,
     MJFileEntityServer,
-    MJGraphEdgeEntityServer,
-    MJGraphEdgeProviderEntityServer,
-    MJGraphEdgeTypeEntityServer,
     MJInteractionEventEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
@@ -1258,8 +1254,6 @@ import {
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
-    MJTaskDependencyEntityServer,
-    MJTaskEntityServer,
     MJTemplateContentEntityServer,
     MJUserEntityServer,
     MJUserRoleEntityServer,
@@ -1347,7 +1341,6 @@ import {
     GetFileContentAction,
     GetFormCompositionForEntityAction,
     GetFormContributionsForEntityAction,
-    GetGraphContextAction,
     GetListRecordsAction,
     GetMetadataAction,
     GetMyCalendarAndAvailabilityAction,
@@ -1426,6 +1419,7 @@ import {
     TestMCPConnectionAction,
     TestRuntimeActionAction,
     TextAnalyzerAction,
+    TriggerAgentWakeAction,
     URLLinkValidatorAction,
     URLMetadataExtractorAction,
     UnitConverterAction,
@@ -1583,16 +1577,12 @@ const CLASS_REGISTRATIONS_0: any[] = [
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
     AccessControlRuleProvider,
-    AlternateBaseViewEdgeProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
     DashboardPermissionProvider,
-    EntityMetadataEdgeProvider,
     EntityPermissionProvider,
-    ForeignKeyEdgeProvider,
-    JoinEntityEdgeProvider,
     MJAIActionEntity,
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
@@ -1716,13 +1706,15 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
+    MJCollectionEntity,
+    MJCollectionPermissionEntity,
+    MJCollectionPermissionEntityExtended,
+    MJCommentEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
-    MJCollectionEntity,
-    MJCollectionPermissionEntity,
-    MJCollectionPermissionEntityExtended,
+    MJCommentTypeEntity,
     MJCommunicationBaseMessageTypeEntity,
     MJCommunicationLogEntity,
     MJCommunicationProviderEntity,
@@ -1773,6 +1765,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJConversationDetailRatingEntity,
     MJConversationEntity,
     MJConversationSkillEntity,
+    MJConversationTypeEntity,
     MJConversationWidgetInstanceEntity,
     MJCountryEntity,
     MJCredentialCategoryEntity,
@@ -1835,6 +1828,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEntityRelationshipDisplayComponentEntity,
     MJEntityRelationshipEntity,
     MJEntitySettingEntity,
+    MJEntityUniqueKeyEntity,
     MJEnvironmentEntity,
     MJEnvironmentEntityExtended,
     MJErrorLogEntity,
@@ -1848,6 +1842,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
+    MJFieldSuggestionEntity,
     MJFileCategoryEntity,
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
@@ -1919,11 +1914,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
-    MJOAuthTokenEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJOAuthTokenEntity,
     MJOpenAppDependencyEntity,
     MJOpenAppEntity,
     MJOpenAppInstallHistoryEntity,
@@ -2070,10 +2065,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
-    QueryEdgeProvider,
-    QueryMetadataEdgeProvider,
     QueryPermissionProvider,
-    RecordLinkEdgeProvider,
     ResourcePermissionProvider,
     MJActionEntityExtended,
     MJEntityActionEntityExtended,
@@ -2124,12 +2116,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetDimensionsAction,
     GetGLEntriesAction,
     GetQuickBooksAccountBalancesAction,
+    GetQuickBooksDimensionsAction,
+    GetQuickBooksGLCodesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
-    GetQuickBooksDimensionsAction,
-    GetQuickBooksGLCodesAction,
     GetQuickBooksTransactionsAction,
     GetSalesInvoicesAction,
     AssociateContactToCompanyAction,
@@ -2301,7 +2293,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ElasticsearchSearchProvider,
     EntitySearchProvider,
     FullTextSearchProvider,
-    GraphSearchProvider,
     NoopReRanker,
     OpenAIReRanker,
     OpenSearchSearchProvider,
@@ -2328,13 +2319,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     LoopAgentType,
     MJAIAgentRequestEntityServer,
     MediaChannelServer,
+    MeetingControlsChannelServer,
+    MemoryManagerAgent,
+    PDFToolLibrary,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
-    MeetingControlsChannelServer,
-    MemoryManagerAgent,
-    PDFToolLibrary,
     QueryBuilderAgent,
     RealtimeAgentType,
     SearchResultSetToolLibrary,
@@ -2360,7 +2351,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     RecordProcessPauseRunServerOperation,
     RecordProcessResumeRunServerOperation,
     RecordProcessRunNowServerOperation,
-    EvaluateFeatureAndPredictionDriftAction,
     MLModelInferenceProcessor,
     MLModelScoreEnricher,
     PredictiveStudioControlExperimentSessionServerOperation,
@@ -2405,6 +2395,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     RecordProcessScheduledJobDriver,
     RunUserRoutineNowAction,
     UserRoutineDispatcherDriver,
+    FieldSuggestionCommentDriver,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
@@ -2428,6 +2419,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJApplicationEntityServer,
     MJArtifactVersionEntityServer,
     MJBrandKitEntityServer,
+    MJCommentEntityServer,
     MJCompanyIntegrationEntityServer,
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
@@ -2442,10 +2434,8 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJEntityFieldPermissionEntityServer,
     MJEntityFormContributionEntityServer,
     MJEntityFormOverrideEntityServer,
+    MJFieldSuggestionEntityServer,
     MJFileEntityServer,
-    MJGraphEdgeEntityServer,
-    MJGraphEdgeProviderEntityServer,
-    MJGraphEdgeTypeEntityServer,
     MJInteractionEventEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
@@ -2473,8 +2463,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
-    MJTaskDependencyEntityServer,
-    MJTaskEntityServer,
     MJTemplateContentEntityServer,
     MJUserEntityServer,
     MJUserRoleEntityServer,
@@ -2532,16 +2520,16 @@ const CLASS_REGISTRATIONS_4: any[] = [
     DownloadSignedDocumentAction,
     ExcelReaderAction,
     ExecuteAIPromptAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     ExecuteAgentAction,
     ExecuteCodeAction,
     ExecuteMCPToolAction,
     ExploreDatabaseSchemaAction,
     ExternalChangeDetectionAction,
     FileCompressAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     FinalizeDocumentAction,
     FindBestActionAction,
     FindBestAgentAction,
@@ -2562,7 +2550,6 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GetFileContentAction,
     GetFormCompositionForEntityAction,
     GetFormContributionsForEntityAction,
-    GetGraphContextAction,
     GetListRecordsAction,
     GetMetadataAction,
     GetMyCalendarAndAvailabilityAction,
@@ -2641,6 +2628,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     TestMCPConnectionAction,
     TestRuntimeActionAction,
     TextAnalyzerAction,
+    TriggerAgentWakeAction,
     URLLinkValidatorAction,
     URLMetadataExtractorAction,
     UnitConverterAction,
@@ -2712,7 +2700,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1160;
+export const CLASS_REGISTRATIONS_COUNT = 1154;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

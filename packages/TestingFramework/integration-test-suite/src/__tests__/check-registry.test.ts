@@ -116,6 +116,7 @@ import { SemanticGraphChecks } from '../checks/semantic-graph.checks';
 import { GraphRuntimeChecks } from '../checks/graph-runtime.checks';
 import { TaskGraphSecurityChecks } from '../checks/task-graph-security.checks';
 import { RunViewFeatureChecks } from '../checks/runview-features.checks';
+import { WorkBusCoreChecks } from '../checks/work-bus-core.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -281,9 +282,10 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['encrypted-read-client', EncryptedReadClientChecks, 4], // ER1-ER4 encrypted field plaintext over GraphQL, miss and hit (IT160)
         ['ciphertext-cache', CiphertextCacheChecks, 5], // CT0-CT4 ciphertext at rest in the RunViewCache, plaintext to the caller (IT161)
         ['semantic-graph', SemanticGraphChecks, 7], // SG1-SG7 Semantic Graph substrate, Content Pipeline GraphStage overlay, and Executable Canon DAG similarity & telemetry (IT162)
-        ['graph-runtime', GraphRuntimeChecks, 6], // GR1-GR6 MJ Canon traversal, per-caller query visibility, the edge approval gate on a real Save, Get Graph Context, JoinEntity and QueryEdgeProvider fixtures (IT164)
+        ['graph-runtime', GraphRuntimeChecks, 6], // GR1-GR6 MJ Canon traversal, per-caller query visibility, the edge approval gate on a real Save, Get Graph Context, JoinEntity and QueryEdgeProvider fixtures (IT167)
         ['task-graph-security', TaskGraphSecurityChecks, 10], // TGS1-TGS10 envelope on every row and immutable, one compensation per step, A2A store row boundary, dispatcher taint gate & compensation, the real action runner's taint gate, a person's review clears taint, a server-answered request clears nothing, an early settle clears nothing, only the service makes workflows, REST edits ordinary tasks (IT165)
         ['runview-features', RunViewFeatureChecks, 12], // RVF1-RVF12 RunView cross-feature edges and RunViewParams.Parameters wire binding (IT32)
+        ['work-bus-core', WorkBusCoreChecks, 10], // WBC1-WBC10 Conversation Types, Comments IS-A Conversation, Comment Types, Field Suggestions IS-A Comment, SubtypeSelector AutoEnsureOnSave/Refuse, PostSaveHook superseding, and Workstream wakes (IT164)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -564,6 +566,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'view-execution': 12,
         'view-properties-client': 5,
         'view-security': 4,
+        'work-bus-core': 10,
         'work-queue-runtime': 19,
         'workflow-demo-agents': 5,
     };
@@ -589,7 +592,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(235);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(236);
     });
 });
 

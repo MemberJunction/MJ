@@ -1,5 +1,5 @@
 /**
- * @fileoverview Integration check bundle `'graph-runtime'` (IT164) — the semantic graph RUNTIME against a
+ * @fileoverview Integration check bundle `'graph-runtime'` (IT167) — the semantic graph RUNTIME against a
  * live database: the seeded "MJ Canon" graph, per-caller visibility, the edge approval gate, the
  * `Get Graph Context` action, and the data-scale edge providers. (IT162 covers the graph tables and the
  * content-pipeline overlay.) Server transport.
@@ -115,7 +115,7 @@ async function createProviderGraph(
 
     const graph = await ctx.Provider.GetEntityObject<MJGraphEntity>('MJ: Graphs', ctx.User);
     graph.NewRecord();
-    graph.Name = `__IT164 ${label} ${suffix}`;
+    graph.Name = `__IT167 ${label} ${suffix}`;
     graph.GraphTypeID = graphType!.ID;
     graph.LoadMode = 'OnDemand';
     graph.Status = 'Active';
@@ -124,7 +124,7 @@ async function createProviderGraph(
     const provider = await ctx.Provider.GetEntityObject<MJGraphEdgeProviderEntity>('MJ: Graph Edge Providers', ctx.User);
     provider.NewRecord();
     provider.GraphID = graph.ID;
-    provider.Name = `__IT164 ${label} provider ${suffix}`;
+    provider.Name = `__IT167 ${label} provider ${suffix}`;
     provider.DriverClass = driverClass;
     provider.Configuration = JSON.stringify(configuration);
     provider.Sequence = 1;
@@ -368,13 +368,13 @@ export const GraphRuntimeChecks: NamedCheck[] = [
             try {
                 category = await ctx.Provider.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories', ctx.User);
                 category.NewRecord();
-                category.Name = `__IT164 Graph Queries ${suffix}`;
+                category.Name = `__IT167 Graph Queries ${suffix}`;
                 category.UserID = ctx.User.ID;
                 Assert(await category.Save(), `fixture category save failed: ${category.LatestResult?.CompleteMessage}`);
 
                 query = await ctx.Provider.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
                 query.NewRecord();
-                query.Name = `__IT164 Role Edges ${suffix}`;
+                query.Name = `__IT167 Role Edges ${suffix}`;
                 query.CategoryID = category.ID;
                 query.SQL = ForPlatform(
                     `SELECT 'MJ: Users' AS [SourceEntity], ur.[UserID] AS [SourceRecordID], 'MJ: Roles' AS [TargetEntity], ur.[RoleID] AS [TargetRecordID] ` +

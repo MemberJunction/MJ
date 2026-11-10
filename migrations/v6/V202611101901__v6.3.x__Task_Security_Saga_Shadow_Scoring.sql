@@ -119,7 +119,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
     @level2type = N'COLUMN', @level2name = N'MLModelID';
 GO
 
--- Update spDeleteEntityWithCoreDependencies to clear FeatureValue.MLModelID before deleting MLModel rows
+-- Rebuild spDeleteEntityWithCoreDependencies on V202611101200's version, clearing FeatureValue.MLModelID before deleting MLModel rows
 CREATE OR ALTER PROC [${flyway:defaultSchema}].[spDeleteEntityWithCoreDependencies]
   @EntityID uniqueidentifier
 AS
@@ -162,7 +162,8 @@ BEGIN TRY
       (N'EntityFormOverride.EntityID'), (N'EntityOrganicKey.EntityID'),
       (N'EntityOrganicKeyRelatedEntity.RelatedEntityID'), (N'EntityPermission.EntityID'),
       (N'EntityRecordDocument.EntityID'), (N'EntityRelationship.EntityID'),
-      (N'EntityRelationship.RelatedEntityID'), (N'EntitySetting.EntityID'), (N'FeatureValue.EntityID'),
+      (N'EntityRelationship.RelatedEntityID'), (N'EntitySetting.EntityID'),
+      (N'EntityUniqueKey.EntityID'), (N'FeatureValue.EntityID'),
       (N'FileEntityRecordLink.EntityID'), (N'FormChromeRule.EntityID'),
       (N'FormChromeRule.RelatedEntityID'), (N'GeneratedCode.LinkedEntityID'),
       (N'GraphEdge.SourceEntityID'), (N'GraphEdge.TargetEntityID'), (N'GraphEdgeTypeEndpoint.EntityID'),
@@ -484,6 +485,7 @@ BEGIN TRY
     DELETE FROM [${flyway:defaultSchema}].[EntityPermission] WHERE [EntityID] = @EntityID;
     DELETE FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [EntityID] = @EntityID OR [RelatedEntityID] = @EntityID;
     DELETE FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = @EntityID;
+    DELETE FROM [${flyway:defaultSchema}].[EntityUniqueKey] WHERE [EntityID] = @EntityID;
     DELETE FROM [${flyway:defaultSchema}].[FileEntityRecordLink] WHERE [EntityID] = @EntityID;
     DELETE FROM [${flyway:defaultSchema}].[FormChromeRule] WHERE [EntityID] = @EntityID OR [RelatedEntityID] = @EntityID;
     DELETE FROM [${flyway:defaultSchema}].[GraphEdge] WHERE [SourceEntityID] = @EntityID OR [TargetEntityID] = @EntityID;

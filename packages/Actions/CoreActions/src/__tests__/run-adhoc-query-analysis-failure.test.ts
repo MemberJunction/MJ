@@ -13,10 +13,14 @@ const h = vi.hoisted(() => ({
 type Param = { Name: string; Type: 'Input'; Value: unknown };
 type ParamBag = { Params: Param[] };
 
-vi.mock('@memberjunction/global', () => ({
-    RegisterClass: () => (target: unknown) => target,
-    SQLExpressionValidator: { Instance: { validateFullQuery: () => ({ valid: true }) } },
-}));
+vi.mock('@memberjunction/global', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/global')>();
+    return {
+        ...actual,
+        RegisterClass: () => (target: unknown) => target,
+        SQLExpressionValidator: { Instance: { validateFullQuery: () => ({ valid: true }) } },
+    };
+});
 vi.mock('@memberjunction/actions', () => ({
     BaseAction: class BaseAction {},
     // The read-only provider the action runs its SQL on, answering with the rows under test, and a
@@ -31,8 +35,20 @@ vi.mock('@memberjunction/actions', () => ({
     },
 }));
 vi.mock('@memberjunction/actions-base', () => ({ RunActionParams: class RunActionParams {} }));
-vi.mock('@memberjunction/core', () => ({ LogError: vi.fn() }));
-vi.mock('@memberjunction/ai-core-plus', () => ({ AIPromptParams: class AIPromptParams {} }));
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    return {
+        ...actual,
+        LogError: vi.fn(),
+    };
+});
+vi.mock('@memberjunction/ai-core-plus', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/ai-core-plus')>();
+    return {
+        ...actual,
+        AIPromptParams: class AIPromptParams {},
+    };
+});
 vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: { Instance: { Config: vi.fn().mockResolvedValue(undefined), Prompts: [{ Name: 'Analyze Query Data', Category: 'MJ: System' }] } },
 }));
