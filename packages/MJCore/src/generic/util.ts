@@ -34,6 +34,17 @@ export function CanonicalPrimaryKeyValue(value: string, isUuid: boolean): string
     return isUuid ? NormalizeUUID(text) : text;
 }
 
+function instantiateEntityForHydration<T extends BaseEntity>(
+    md: IMetadataProvider,
+    entityName: string,
+    contextUser?: UserInfo
+): Promise<T> {
+    if (md.SupportsGetEntityObjectOptions) {
+        return md.GetEntityObject<T>(entityName, { SkipNewRecord: true }, contextUser);
+    }
+    return md.GetEntityObject<T>(entityName, contextUser);
+}
+
 /**
  * Whether a SQL type is the date-only `date` type: a calendar day with no time and no zone, as
  * opposed to any of the timestamp types, which name an instant. The distinction decides which
@@ -566,7 +577,7 @@ export async function TransformSimpleObjectToEntityObject<T extends BaseEntity>(
             // own constructor, skipping the per-row Config / InitializeParentEntity
             // awaits (both no-ops for non-IS-A entities).
             if (!prototype) {
-                prototype = await md.GetEntityObject<T>(entityName, contextUser);
+                prototype = await instantiateEntityForHydration<T>(md, entityName, contextUser);
                 if (!prototype) {
                     // GetEntityObject returned null (its outer catch swallows instantiation
                     // failures to null). Fail with a clear, actionable message rather than
@@ -616,7 +627,7 @@ export async function TransformSimpleObjectToEntityObject<T extends BaseEntity>(
                 results[i] = item as T;
                 continue;
             }
-            const entity = await md.GetEntityObject<T>(entityName, contextUser);
+            const entity = await instantiateEntityForHydration<T>(md, entityName, contextUser);
             if (!entity) {
                 throw new Error(`TransformSimpleObjectToEntityObject: could not instantiate an entity object for '${entityName}' — GetEntityObject returned null.`);
             }
@@ -641,7 +652,7 @@ export async function TransformSimpleObjectToEntityObject<T extends BaseEntity>(
         if (typeof (item as { Save?: unknown }).Save === 'function') {
             return item as unknown as T;
         }
-        const entity = await md.GetEntityObject<T>(entityName, contextUser);
+        const entity = await instantiateEntityForHydration<T>(md, entityName, contextUser);
         await entity.LoadFromData(item);
         return entity;
     });

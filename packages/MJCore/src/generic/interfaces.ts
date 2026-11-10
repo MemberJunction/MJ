@@ -915,6 +915,23 @@ export interface IFileSystemProvider {
 }
 
 /**
+ * Options controlling how {@link IMetadataProvider.GetEntityObject} initializes a newly
+ * instantiated entity when no `loadKey` is supplied.
+ */
+export interface GetEntityObjectOptions {
+    /**
+     * When `true`, skips calling `NewRecord()` after constructing and configuring the entity.
+     *
+     * Use this only when the caller immediately hydrates the entity via `LoadFromData(...)` or
+     * `LoadFromDataBatchAsISAParent(...)`. Skipping `NewRecord()` avoids minting a throwaway
+     * UUID primary key, hydrating all `EntityField` instances for defaults that `LoadFromData`
+     * immediately discards, and broadcasting a synthetic `'new_record'` event — keeping
+     * `BaseEntity`'s lazy `_raw` row fast path intact.
+     */
+    SkipNewRecord?: boolean;
+}
+
+/**
  * Core interface for metadata providers in MemberJunction.
  * Provides access to all system metadata including entities, applications, security, and queries.
  * This is the primary interface for accessing MemberJunction's metadata layer.
@@ -1008,6 +1025,13 @@ export interface IMetadataProvider {
     LocalMetadataObsolete(type?: string): boolean
 
     /**
+     * True when this provider implements the `(entityName, options: GetEntityObjectOptions, contextUser)`
+     * overload of {@link GetEntityObject}. Lightweight unit-test stubs that mock only the 2-argument
+     * `(entityName, contextUser)` signature omit this flag so callers can fall back cleanly.
+     */
+    readonly SupportsGetEntityObjectOptions?: boolean
+
+    /**
      * Creates a new instance of a BaseEntity subclass for the specified entity and calls NewRecord() to initialize it.
      * The UUID will be automatically generated for non-auto-increment uniqueidentifier primary keys.
      * @param entityName - The name of the entity to create (e.g., "Users", "Customers")
@@ -1015,6 +1039,15 @@ export interface IMetadataProvider {
      * @returns Promise resolving to the newly created entity instance with NewRecord() already called
      */
     GetEntityObject<T extends BaseEntity>(entityName: string, contextUser?: UserInfo): Promise<T>
+
+    /**
+     * Creates a new instance of a BaseEntity subclass for the specified entity using explicit
+     * initialization options (for example `{ skipNewRecord: true }` prior to `LoadFromData`).
+     * @param entityName - The name of the entity to create (e.g., "Users", "Customers")
+     * @param options - Initialization options controlling whether `NewRecord()` runs
+     * @param contextUser - Optional context user for permissions (mainly used server-side)
+     */
+    GetEntityObject<T extends BaseEntity>(entityName: string, options: GetEntityObjectOptions, contextUser?: UserInfo): Promise<T>
     
     /**
      * Creates a new instance of a BaseEntity subclass and loads an existing record using the provided key.

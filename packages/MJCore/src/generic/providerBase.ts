@@ -2,7 +2,7 @@ import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { IsTransportError } from './transportError';
 import { EntityDependency, EntityDocumentTypeInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, FieldSecurityDenialMessage, FieldSecurityError, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
 import { GetEffectiveAlternateBaseViewName, IsExplicitBaseViewOverride } from "./alternateBaseViews";
-import { IEntityDataProvider, IMetadataProvider, MetadataSweepResult, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, GetRecordDependenciesOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem, SearchEntityParams, SearchEntitiesOptions, EntitySearchResult, IRemoteOperationProvider, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
+import { IEntityDataProvider, IMetadataProvider, MetadataSweepResult, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, GetEntityObjectOptions, GetRecordDependenciesOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem, SearchEntityParams, SearchEntitiesOptions, EntitySearchResult, IRemoteOperationProvider, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
 import { RecordChangeFieldSecurityProjector } from "./recordChangeFieldSecurity";
 import { ComputeRRF, ScoredCandidate } from "./scoring/ReciprocalRankFusion";
 import { RunQueryParams } from "./runQuery";
@@ -452,6 +452,25 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     public static CoalesceWindowMs: number = 10;
 
     /**
+     * Controls whether `RunViews` coalescing drains via microtasks (`queueMicrotask`) instead
+     * of a wall-clock `setTimeout(..., CoalesceWindowMs)` timer when `CoalesceWindowMs > 0`.
+     *
+     * When `true` (default), concurrent calls in the same synchronous turn or immediate
+     * `Promise` / `BaseEngine.Load` microtask hops coalesce into one mega-batch and flush as
+     * soon as the microtask queue stabilizes (bounded at 8 hops), eliminating the 10–16ms timer
+     * floor (and ~1,000ms background-tab timer throttling) on isolated queries. Set to `false`
+     * to use the fixed `setTimeout(..., CoalesceWindowMs)` timer window.
+     */
+    public static CoalesceUseMicrotask: boolean = true;
+
+    /**
+     * Signals to hydration helpers (`TransformSimpleObjectToEntityObject`, `BaseEngine`) that
+     * this provider supports the `(entityName, options: GetEntityObjectOptions, contextUser)`
+     * overload of {@link GetEntityObject}.
+     */
+    public readonly SupportsGetEntityObjectOptions: boolean = true;
+
+    /**
      * Pending coalesced requests waiting to be flushed.
      * Each entry tracks the original params, contextUser, and a resolver
      * so the caller's promise resolves with only their slice of results.
@@ -463,8 +482,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         reject: (err: unknown) => void;
     }> = [];
 
-    /** Timer handle for the coalesce flush */
+    /** Timer handle for the coalesce flush (when `CoalesceUseMicrotask === false`) */
     private _coalesceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    /** True while a microtask-drain coalesce flush is scheduled */
+    private _coalesceMicrotaskScheduled: boolean = false;
 
     // ── Request Deduplication + Linger Window ──────────────────────────
     /**
@@ -1948,10 +1970,37 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 reject
             });
 
-            // Start the coalesce timer if not already running
-            if (!this._coalesceTimer) {
+            if (ProviderBase.CoalesceUseMicrotask) {
+                if (!this._coalesceMicrotaskScheduled && !this._coalesceTimer) {
+                    this._coalesceMicrotaskScheduled = true;
+                    this.scheduleMicrotaskCoalesceDrain(this._coalesceQueue.length, 0);
+                }
+            } else if (!this._coalesceTimer && !this._coalesceMicrotaskScheduled) {
+                // Start the coalesce timer if not already running
                 this._coalesceTimer = setTimeout(() => this.flushCoalesceQueue(), ProviderBase.CoalesceWindowMs);
             }
+        });
+    }
+
+    /**
+     * Drains the coalesce queue via `queueMicrotask`. Yields a minimum of 6 microtask hops
+     * (~4µs) so sibling `StartupManager` engines finishing their initial `ResolveContextUser`
+     * and `PreRunViews` awaits reach the queue, and continues yielding (bounded at 16 hops)
+     * while queue length is still growing; flushes immediately once queue growth settles.
+     */
+    private scheduleMicrotaskCoalesceDrain(seenLength: number, hop: number): void {
+        queueMicrotask(() => {
+            const currentLength = this._coalesceQueue.length;
+            if (currentLength === 0) {
+                this._coalesceMicrotaskScheduled = false;
+                return;
+            }
+            if (hop < 6 || (currentLength > seenLength && hop < 16)) {
+                this.scheduleMicrotaskCoalesceDrain(currentLength, hop + 1);
+                return;
+            }
+            this._coalesceMicrotaskScheduled = false;
+            void this.flushCoalesceQueue();
         });
     }
 
@@ -1961,6 +2010,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     private async flushCoalesceQueue(): Promise<void> {
         this._coalesceTimer = null;
+        this._coalesceMicrotaskScheduled = false;
 
         // Grab and clear the queue atomically
         const queue = this._coalesceQueue.splice(0);
@@ -2288,7 +2338,24 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * widens and caches.
      */
     protected shouldWidenAndPopulateCache(param: RunViewParams): boolean {
-        return this.runViewCacheEligible(param);
+        if (!this.runViewCacheEligible(param)) {
+            return false;
+        }
+        // On the server, when the caller requested a narrow `Fields` projection without
+        // explicitly asking for `CacheLocal: true`, do not widen to `SELECT *` when:
+        // 1. `UserSearchString` is populated (ad-hoc search-as-you-type queries would otherwise
+        //    pull every wide NVARCHAR(MAX) column and allocate per-keystroke cache slots), or
+        // 2. `LocalCacheManager` is currently batching writes for this provider (`SetRunViewResult`
+        //    drops cache writes while a write batch is open, so widening would be pure waste).
+        if (this.TrustLocalCacheCompletely && param.CacheLocal !== true && this.hasNarrowFieldsOverride(param)) {
+            if ((param.UserSearchString ?? '').trim().length > 0) {
+                return false;
+            }
+            if (LocalCacheManager.Instance.IsInitialized && LocalCacheManager.Instance.IsBatchingEntityEvents(this)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -5359,6 +5426,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // bypass in runViewCacheEligible; this covers the query-materialization Live-read path.)
         if (entity.VirtualEntity && entity.BaseView && entity.BaseView.toLowerCase().startsWith('materialized_vw')) return false;
 
+        // External data-source entities (federated REST/SQL connectors) are never event-invalidated
+        // and `LocalCacheManager.SetRunViewResult` skips them unless an explicit `ttlMs` is passed
+        // (`PostRunView` never passes `ttlMs`), so treating them as server-cacheable only forces
+        // wasted `Fields` widening and futile cache lookups.
+        if (entity.ExternalDataSourceID) return false;
+
         return entity.TrustServerCacheCompletely !== false;
     }
 
@@ -7449,6 +7522,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
 
+    private static isGetEntityObjectOptions(
+        value: CompositeKey | GetEntityObjectOptions | UserInfo | undefined
+    ): value is GetEntityObjectOptions {
+        return (
+            typeof value === 'object' &&
+            value !== null &&
+            !(value instanceof CompositeKey) &&
+            !(value instanceof UserInfo) &&
+            'SkipNewRecord' in value
+        );
+    }
+
     /**
      * Creates a new instance of a BaseEntity subclass for the specified entity and automatically calls NewRecord() to initialize it.
      * This method serves as the core implementation for entity instantiation in the MemberJunction framework.
@@ -7470,29 +7555,35 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns Promise resolving to the entity instance with the specified record loaded
      * @throws Error if entity name is not found, instantiation fails, or record cannot be loaded
      */
+    public async GetEntityObject<T extends BaseEntity>(entityName: string, options: GetEntityObjectOptions, contextUser?: UserInfo): Promise<T>;
     public async GetEntityObject<T extends BaseEntity>(entityName: string, loadKey: CompositeKey, contextUser?: UserInfo): Promise<T>;
     
     public async GetEntityObject<T extends BaseEntity>(
         entityName: string, 
-        loadKeyOrContextUser?: CompositeKey | UserInfo,
+        loadKeyOrOptionsOrContextUser?: CompositeKey | GetEntityObjectOptions | UserInfo,
         contextUser?: UserInfo
     ): Promise<T> {
         try {
             // Determine which overload was called
             let actualLoadKey: CompositeKey | undefined;
+            let actualOptions: GetEntityObjectOptions | undefined;
             let actualContextUser: UserInfo | undefined;
             
-            if (loadKeyOrContextUser instanceof CompositeKey) {
-                // Second overload: entityName, loadKey, contextUser
-                actualLoadKey = loadKeyOrContextUser;
+            if (loadKeyOrOptionsOrContextUser instanceof CompositeKey) {
+                // Overload: entityName, loadKey, contextUser
+                actualLoadKey = loadKeyOrOptionsOrContextUser;
+                actualContextUser = contextUser;
+            } else if (ProviderBase.isGetEntityObjectOptions(loadKeyOrOptionsOrContextUser)) {
+                // Overload: entityName, options, contextUser
+                actualOptions = loadKeyOrOptionsOrContextUser;
                 actualContextUser = contextUser;
             } else if (contextUser !== undefined) {
-                // Second overload with null/undefined loadKey: entityName, null/undefined, contextUser
+                // Overload with null/undefined loadKey: entityName, null/undefined, contextUser
                 actualLoadKey = undefined;
                 actualContextUser = contextUser;
             } else {
                 // First overload: entityName, contextUser
-                actualContextUser = loadKeyOrContextUser as UserInfo;
+                actualContextUser = loadKeyOrOptionsOrContextUser;
             }
 
             const entity: EntityInfo = this.EntityByName(entityName);
@@ -7541,7 +7632,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                         if (!loadResult) {
                             throw new Error(`Failed to load ${entityName} with key: ${actualLoadKey.ToString()}`);
                         }
-                    } else {
+                    } else if (!actualOptions?.SkipNewRecord) {
                         // whenever we create a new object we want it to start
                         // out as a new record, so we call NewRecord() on it
                         newObject.NewRecord();

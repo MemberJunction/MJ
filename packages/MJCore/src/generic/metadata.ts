@@ -1,4 +1,4 @@
-import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, EntityMergeOptions, GetRecordDependenciesOptions, ILocalStorageProvider, IMetadataProvider, IRunViewProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType, FullTextSearchParams, FullTextSearchResult, SearchEntityParams, EntitySearchResult } from "./interfaces";
+import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, EntityMergeOptions, GetEntityObjectOptions, GetRecordDependenciesOptions, ILocalStorageProvider, IMetadataProvider, IRunViewProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType, FullTextSearchParams, FullTextSearchResult, SearchEntityParams, EntitySearchResult } from "./interfaces";
 import { EntityDependency, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo"
 import { ApplicationInfo } from "./applicationInfo"
 import { BaseEntity } from "./baseEntity"
@@ -388,6 +388,18 @@ export class Metadata {
             throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);
     }
 
+    private static isGetEntityObjectOptions(
+        value: CompositeKey | GetEntityObjectOptions | UserInfo | undefined
+    ): value is GetEntityObjectOptions {
+        return (
+            typeof value === 'object' &&
+            value !== null &&
+            !(value instanceof CompositeKey) &&
+            !(value instanceof UserInfo) &&
+            'SkipNewRecord' in value
+        );
+    }
+
     /**
      * Creates a new instance of a BaseEntity subclass for the specified entity and automatically calls NewRecord() to initialize it.
      * This method uses the MJGlobal ClassFactory to instantiate the correct subclass based on registered entity types.
@@ -442,10 +454,11 @@ export class Metadata {
      *   ])
      * );
      */
+    public async GetEntityObject<T extends BaseEntity>(entityName: string, options: GetEntityObjectOptions, contextUser?: UserInfo): Promise<T>;
     public async GetEntityObject<T extends BaseEntity>(entityName: string, loadKey: CompositeKey, contextUser?: UserInfo): Promise<T>;
     public async GetEntityObject<T extends BaseEntity>(
         entityName: string, 
-        loadKeyOrContextUser?: CompositeKey | UserInfo,
+        loadKeyOrOptionsOrContextUser?: CompositeKey | GetEntityObjectOptions | UserInfo,
         contextUser?: UserInfo
     ): Promise<T> {
         // validate that entityName is not null, undefined and IS a string > 0 length
@@ -455,19 +468,24 @@ export class Metadata {
 
         // Determine which overload was called
         let actualLoadKey: CompositeKey | undefined;
+        let actualOptions: GetEntityObjectOptions | undefined;
         let actualContextUser: UserInfo | undefined;
         
-        if (loadKeyOrContextUser instanceof CompositeKey) {
-            // Second overload: entityName, loadKey, contextUser
-            actualLoadKey = loadKeyOrContextUser;
+        if (loadKeyOrOptionsOrContextUser instanceof CompositeKey) {
+            // Overload: entityName, loadKey, contextUser
+            actualLoadKey = loadKeyOrOptionsOrContextUser;
+            actualContextUser = contextUser;
+        } else if (Metadata.isGetEntityObjectOptions(loadKeyOrOptionsOrContextUser)) {
+            // Overload: entityName, options, contextUser
+            actualOptions = loadKeyOrOptionsOrContextUser;
             actualContextUser = contextUser;
         } else if (contextUser !== undefined) {
-            // Second overload with null/undefined loadKey: entityName, null/undefined, contextUser
+            // Overload with null/undefined loadKey: entityName, null/undefined, contextUser
             actualLoadKey = undefined;
             actualContextUser = contextUser;
         } else {
             // First overload: entityName, contextUser
-            actualContextUser = loadKeyOrContextUser as UserInfo;
+            actualContextUser = loadKeyOrOptionsOrContextUser;
         }
 
         // validate that contextUser is either null/undefined or a UserInfo object
@@ -487,6 +505,13 @@ export class Metadata {
             }
         }
         
+        if (actualOptions !== undefined) {
+            if (Metadata.Provider.SupportsGetEntityObjectOptions) {  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
+                return await Metadata.Provider.GetEntityObject<T>(entityName, actualOptions, actualContextUser);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
+            }
+            return await Metadata.Provider.GetEntityObject<T>(entityName, actualContextUser);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
+        }
+
         return await Metadata.Provider.GetEntityObject(entityName, actualLoadKey, actualContextUser);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
