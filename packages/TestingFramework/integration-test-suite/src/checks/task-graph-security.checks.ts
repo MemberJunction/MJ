@@ -161,7 +161,8 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
             { EntityName: 'MJ: Task Dependencies', ExtraFilter: `TaskID IN (${f.ChildIDs.map((id) => `'${id}'`).join(',')})`, ResultType: 'entity_object' },
             ctx.User,
         );
-        for (const dep of deps.Results ?? []) await dep.Delete().catch(() => false);
+        // A workflow's edges are the task-graph service's (`MJTaskDependencyEntityServer`): removed as it would.
+        for (const dep of deps.Results ?? []) await AsTaskGraphService(ctx.User, 'MJ: Task Dependencies', () => dep.Delete()).catch(() => false);
         for (const id of f.ChildIDs) await remove(id);
         await remove(f.ParentID);
         if (f.CreatedA2ATypeID) {

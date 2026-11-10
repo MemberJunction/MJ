@@ -2188,6 +2188,11 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('task-graph-execution', {
                         () => dep.Delete(),
                     );
                 }
+                // The requests raised for (or staged on) a Human step reference it, so they go before it.
+                const requestRes = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJAIAgentRequestEntity>(
+                    { EntityName: 'MJ: AI Agent Requests', ExtraFilter: `OriginatingTaskID IN (${ids})`, ResultType: 'entity_object', BypassCache: true }, ctx.User,
+                );
+                for (const request of requestRes.Results ?? []) await request.Delete();
             }
             for (const c of children) await c.Delete();
 
