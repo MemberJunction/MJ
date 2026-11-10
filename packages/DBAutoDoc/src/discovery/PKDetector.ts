@@ -214,18 +214,18 @@ export class PKDetector {
       );
 
       cachedStats = BuildCachedColumnStats({
-        schemaName,
-        tableName,
-        columnName: column.name,
-        dataType: column.dataType,
-        totalRows: stats.totalRows,
-        nullCount: stats.nullCount,
-        distinctCount: stats.distinctCount,
-        sampleValues: stats.sampleValues,
-        minValue: stats.minValue,
-        maxValue: stats.maxValue,
-        avgLength: stats.avgLength,
-        queryTimeMs: Date.now() - startTime
+        SchemaName: schemaName,
+        TableName: tableName,
+        ColumnName: column.name,
+        DataType: column.dataType,
+        TotalRows: stats.totalRows,
+        NullCount: stats.nullCount,
+        DistinctCount: stats.distinctCount,
+        SampleValues: stats.sampleValues,
+        MinValue: stats.minValue,
+        MaxValue: stats.maxValue,
+        AvgLength: stats.avgLength,
+        QueryTimeMs: Date.now() - startTime
       });
 
       this.statsCache.setColumnStats(cachedStats);

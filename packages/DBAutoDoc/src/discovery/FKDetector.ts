@@ -40,17 +40,17 @@ export class FKDetector {
       this.config.sampling.maxRowsPerTable
     );
     this.statsCache?.setColumnStats(BuildCachedColumnStats({
-      schemaName,
-      tableName,
-      columnName,
-      dataType,
-      totalRows: stats.totalRows,
-      nullCount: stats.nullCount,
-      distinctCount: stats.distinctCount,
-      sampleValues: stats.sampleValues,
-      minValue: stats.minValue,
-      maxValue: stats.maxValue,
-      avgLength: stats.avgLength
+      SchemaName: schemaName,
+      TableName: tableName,
+      ColumnName: columnName,
+      DataType: dataType,
+      TotalRows: stats.totalRows,
+      NullCount: stats.nullCount,
+      DistinctCount: stats.distinctCount,
+      SampleValues: stats.sampleValues,
+      MinValue: stats.minValue,
+      MaxValue: stats.maxValue,
+      AvgLength: stats.avgLength
     }));
     return stats;
   }

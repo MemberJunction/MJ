@@ -102,32 +102,32 @@ const CUSTOMER: ColSpec[] = [
 describe('BuildCachedColumnStats', () => {
   const build = (over: Partial<Parameters<typeof BuildCachedColumnStats>[0]>) =>
     BuildCachedColumnStats({
-      schemaName: 'dbo',
-      tableName: 'T',
-      columnName: 'C',
-      dataType: 'int',
-      totalRows: 10,
-      nullCount: 0,
-      distinctCount: 10,
-      sampleValues: [1, 2, 3],
+      SchemaName: 'dbo',
+      TableName: 'T',
+      ColumnName: 'C',
+      DataType: 'int',
+      TotalRows: 10,
+      NullCount: 0,
+      DistinctCount: 10,
+      SampleValues: [1, 2, 3],
       ...over,
     });
 
   it('uniqueness is distinct over all rows, and PK eligibility needs rows, no nulls, no blanks and 100% unique', () => {
     expect(build({})).toMatchObject({ uniqueness: 1, pkEligible: true, fkEligible: true });
-    expect(build({ distinctCount: 5 })).toMatchObject({ uniqueness: 0.5, pkEligible: false });
-    expect(build({ nullCount: 1, distinctCount: 9 })).toMatchObject({ pkEligible: false });
-    expect(build({ totalRows: 0, distinctCount: 0 })).toMatchObject({ uniqueness: 0, pkEligible: false });
-    expect(build({ sampleValues: [0, 1, 2] }).pkEligible).toBe(false);
-    expect(build({ sampleValues: ['a', ' ', 'b'] }).pkEligible).toBe(false);
+    expect(build({ DistinctCount: 5 })).toMatchObject({ uniqueness: 0.5, pkEligible: false });
+    expect(build({ NullCount: 1, DistinctCount: 9 })).toMatchObject({ pkEligible: false });
+    expect(build({ TotalRows: 0, DistinctCount: 0 })).toMatchObject({ uniqueness: 0, pkEligible: false });
+    expect(build({ SampleValues: [0, 1, 2] }).pkEligible).toBe(false);
+    expect(build({ SampleValues: ['a', ' ', 'b'] }).pkEligible).toBe(false);
   });
 
   it('reports the null share as a fraction, whatever unit the source used', () => {
-    expect(build({ nullCount: 2, distinctCount: 8 }).nullPercentage).toBe(0.2);
+    expect(build({ NullCount: 2, DistinctCount: 8 }).nullPercentage).toBe(0.2);
   });
 
   it('keeps the value distribution sampling collected, so the enum gate still sees it after discovery', () => {
-    expect(build({ valueDistribution: [{ value: 'A', frequency: 4 }] }).valueDistribution).toEqual([{ value: 'A', frequency: 4 }]);
+    expect(build({ ValueDistribution: [{ value: 'A', frequency: 4 }] }).valueDistribution).toEqual([{ value: 'A', frequency: 4 }]);
   });
 
   it('classifies values by type and sample', () => {
@@ -163,14 +163,14 @@ describe('ColumnStatsCache.SeedFromSchemas', () => {
     const cache = new ColumnStatsCache();
     cache.setColumnStats(
       BuildCachedColumnStats({
-        schemaName: 'dbo',
-        tableName: 'Customer',
-        columnName: 'CustomerID',
-        dataType: 'int',
-        totalRows: 10,
-        nullCount: 0,
-        distinctCount: 5,
-        sampleValues: [],
+        SchemaName: 'dbo',
+        TableName: 'Customer',
+        ColumnName: 'CustomerID',
+        DataType: 'int',
+        TotalRows: 10,
+        NullCount: 0,
+        DistinctCount: 5,
+        SampleValues: [],
       }),
     );
     expect(cache.SeedFromSchemas([schema([table('Customer', CUSTOMER)])])).toBe(2);
@@ -197,14 +197,14 @@ describe('ColumnStatsCache.MergeIntoSchemas', () => {
     const cache = new ColumnStatsCache();
     cache.setColumnStats(
       BuildCachedColumnStats({
-        schemaName: 'dbo',
-        tableName: 'Customer',
-        columnName: 'CustomerID',
-        dataType: 'int',
-        totalRows: 4,
-        nullCount: 0,
-        distinctCount: 4,
-        sampleValues: [1, 2, 3, 4],
+        SchemaName: 'dbo',
+        TableName: 'Customer',
+        ColumnName: 'CustomerID',
+        DataType: 'int',
+        TotalRows: 4,
+        NullCount: 0,
+        DistinctCount: 4,
+        SampleValues: [1, 2, 3, 4],
       }),
     );
     cache.MergeIntoSchemas([s]);

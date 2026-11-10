@@ -368,19 +368,19 @@ export class ColumnStatsCache {
             continue;
           }
           this.setColumnStats(BuildCachedColumnStats({
-            schemaName: schema.name,
-            tableName: table.name,
-            columnName: column.name,
-            dataType: column.dataType,
-            totalRows: s.totalRows,
-            nullCount: s.nullCount,
-            distinctCount: s.distinctCount,
-            sampleValues: s.sampleValues ?? [],
-            minValue: s.minValue ?? s.min,
-            maxValue: s.maxValue ?? s.max,
-            avgLength: s.avgLength,
-            valueDistribution: s.valueDistribution,
-            queryTimeMs: s.queryTimeMs ?? 0
+            SchemaName: schema.name,
+            TableName: table.name,
+            ColumnName: column.name,
+            DataType: column.dataType,
+            TotalRows: s.totalRows,
+            NullCount: s.nullCount,
+            DistinctCount: s.distinctCount,
+            SampleValues: s.sampleValues ?? [],
+            MinValue: s.minValue ?? s.min,
+            MaxValue: s.maxValue ?? s.max,
+            AvgLength: s.avgLength,
+            ValueDistribution: s.valueDistribution,
+            QueryTimeMs: s.queryTimeMs ?? 0
           }));
           seeded++;
         }

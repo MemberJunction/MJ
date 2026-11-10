@@ -11,19 +11,19 @@ export type ColumnDataPattern = CachedColumnStats['dataPattern'];
 
 /** The numbers a cached entry is built from; the same whether they came from sampling or a query. */
 export interface ColumnStatsInput {
-  schemaName: string;
-  tableName: string;
-  columnName: string;
-  dataType: string;
-  totalRows: number;
-  nullCount: number;
-  distinctCount: number;
-  sampleValues: Array<string | number | null>;
-  minValue?: string | number;
-  maxValue?: string | number;
-  avgLength?: number;
-  valueDistribution?: Array<{ value: string | number; frequency: number }>;
-  queryTimeMs?: number;
+  SchemaName: string;
+  TableName: string;
+  ColumnName: string;
+  DataType: string;
+  TotalRows: number;
+  NullCount: number;
+  DistinctCount: number;
+  SampleValues: Array<string | number | null>;
+  MinValue?: string | number;
+  MaxValue?: string | number;
+  AvgLength?: number;
+  ValueDistribution?: Array<{ value: string | number; frequency: number }>;
+  QueryTimeMs?: number;
 }
 
 /** True when the sample holds an empty string, whitespace, or a zero: values a primary key never has. */
@@ -70,29 +70,29 @@ export function DetectDataPattern(sampleValues: Array<string | number | null> | 
  * FK eligibility starts true; FKDetector refines it by data type and value checks.
  */
 export function BuildCachedColumnStats(input: ColumnStatsInput): CachedColumnStats {
-  const { totalRows, nullCount, distinctCount } = input;
+  const { TotalRows: totalRows, NullCount: nullCount, DistinctCount: distinctCount } = input;
   const nullPercentage = totalRows > 0 ? nullCount / totalRows : 0;
   const uniqueness = totalRows > 0 ? distinctCount / totalRows : 0;
 
   return {
-    schemaName: input.schemaName,
-    tableName: input.tableName,
-    columnName: input.columnName,
-    dataType: input.dataType,
+    schemaName: input.SchemaName,
+    tableName: input.TableName,
+    columnName: input.ColumnName,
+    dataType: input.DataType,
     totalRows,
     nullCount,
     nullPercentage,
     distinctCount,
     uniqueness,
-    minValue: input.minValue,
-    maxValue: input.maxValue,
-    avgLength: input.avgLength,
-    dataPattern: DetectDataPattern(input.sampleValues, input.dataType),
-    sampleValues: input.sampleValues,
-    valueDistribution: input.valueDistribution,
-    pkEligible: totalRows > 0 && nullCount === 0 && uniqueness === 1.0 && !HasBlankOrZero(input.sampleValues),
+    minValue: input.MinValue,
+    maxValue: input.MaxValue,
+    avgLength: input.AvgLength,
+    dataPattern: DetectDataPattern(input.SampleValues, input.DataType),
+    sampleValues: input.SampleValues,
+    valueDistribution: input.ValueDistribution,
+    pkEligible: totalRows > 0 && nullCount === 0 && uniqueness === 1.0 && !HasBlankOrZero(input.SampleValues),
     fkEligible: true,
     computedAt: new Date().toISOString(),
-    queryTimeMs: input.queryTimeMs ?? 0,
+    queryTimeMs: input.QueryTimeMs ?? 0,
   };
 }
