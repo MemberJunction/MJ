@@ -135,6 +135,16 @@ const SCOPE: ConversationScope = {
 interface VersionRow { ID: string; ArtifactID: string; VersionNumber: number; Name: string | null; Content: string; __mj_CreatedAt: Date }
 interface LinkRow { ID: string; ConversationDetailID: string; ArtifactVersionID: string; Direction: 'Input' | 'Output' }
 type LoadSeam = { loadArtifact: (targetVersionNumber?: number) => Promise<void> };
+type ReloadSeam = { loadCollectionAssociations: () => Promise<void>; loadLinksData: () => Promise<void> };
+
+interface ProviderOptions {
+  /** Every version of the artifact, when the scoped list holds fewer. Defaults to the listed rows. */
+  EveryVersion?: VersionRow[];
+  /** Fails a whole batch, as the API's clause screen does, when one filter in it reads the Artifact Versions base view. */
+  ScreenBaseViewReads?: boolean;
+  /** Rejects the batch that carries the collection and link queries. */
+  ThrowOnChildBatch?: boolean;
+}
 
 function versionRows(numbers: number[]): VersionRow[] {
   return [...numbers]
@@ -143,25 +153,47 @@ function versionRows(numbers: number[]): VersionRow[] {
 }
 
 /**
- * A provider whose RunViews returns `rows` for MJ: Artifact Versions, `links` for MJ: Conversation
- * Detail Artifacts and nothing else, and records every batch. GetEntityObject hands back load-only
- * stubs for the artifact and its versions; any other record fails to load.
+ * A provider whose RunViews returns `rows` for the MJ: Artifact Versions list (and `EveryVersion`
+ * for its ID-only read), `links` for MJ: Conversation Detail Artifacts and nothing else, and records
+ * every batch and every single RunView. GetEntityObject hands back load-only stubs for the artifact
+ * and its versions; any other record fails to load.
  */
-function versionsProvider(rows: VersionRow[], links: LinkRow[] = []): { Provider: IMetadataProvider; Batches: RunViewParams[][] } {
+function versionsProvider(
+  rows: VersionRow[],
+  links: LinkRow[] = [],
+  options: ProviderOptions = {}
+): { Provider: IMetadataProvider; Batches: RunViewParams[][]; Singles: RunViewParams[] } {
   const batches: RunViewParams[][] = [];
+  const singles: RunViewParams[] = [];
   const toResult = (results: unknown[]): RunViewResult =>
     ({ Success: true, Results: results, RowCount: results.length, TotalRowCount: results.length }) as unknown as RunViewResult;
+  const refused = (): RunViewResult =>
+    ({ Success: false, Results: [], RowCount: 0, TotalRowCount: 0, ErrorMessage: "Invalid ExtraFilter: entity 'MJ: Artifact Versions' is row-level-security filtered for you" }) as unknown as RunViewResult;
+  const readsVersionsBaseView = (p: RunViewParams) => /vwArtifactVersions/i.test(String(p.ExtraFilter ?? ''));
+  const isIdOnlyRead = (p: RunViewParams) => p.Fields?.length === 1 && p.Fields[0] === 'ID';
   const fake = {
     CurrentUser: { ID: 'test-user-id' },
     Entities: [],
     Roles: [],
     EntityByName: () => undefined,
-    RunView: async () => toResult([]),
+    RunView: async (p: RunViewParams) => {
+      singles.push(p);
+      return options.ScreenBaseViewReads && readsVersionsBaseView(p) ? refused() : toResult([]);
+    },
     RunViews: async (list: RunViewParams[]) => {
       batches.push(list);
-      return list.map((p) => toResult(
-        p.EntityName === 'MJ: Artifact Versions' ? rows : p.EntityName === 'MJ: Conversation Detail Artifacts' ? links : []
-      ));
+      if (options.ScreenBaseViewReads && list.some(readsVersionsBaseView)) {
+        return list.map(refused);
+      }
+      if (options.ThrowOnChildBatch && list.some((p) => p.EntityName === 'MJ: Collection Artifacts')) {
+        throw new Error('network down');
+      }
+      return list.map((p) => {
+        if (p.EntityName === 'MJ: Artifact Versions') {
+          return toResult(isIdOnlyRead(p) ? options.EveryVersion ?? rows : rows);
+        }
+        return toResult(p.EntityName === 'MJ: Conversation Detail Artifacts' ? links : []);
+      });
     },
     GetEntityObject: async (entityName: string) => {
       if (entityName === 'MJ: Artifacts') {
@@ -177,12 +209,12 @@ function versionsProvider(rows: VersionRow[], links: LinkRow[] = []): { Provider
       return version;
     },
   };
-  return { Provider: fake as unknown as IMetadataProvider, Batches: batches };
+  return { Provider: fake as unknown as IMetadataProvider, Batches: batches, Singles: singles };
 }
 
-async function renderLoaded(numbers: number[], inputs: Record<string, unknown>, targetVersionNumber?: number, links: LinkRow[] = []) {
+async function renderLoaded(numbers: number[], inputs: Record<string, unknown>, targetVersionNumber?: number, links: LinkRow[] = [], options: ProviderOptions = {}) {
   vi.spyOn(ArtifactViewerPanelComponent.prototype as unknown as OnInitProto, 'ngOnInit').mockResolvedValue(undefined);
-  const { Provider, Batches } = versionsProvider(versionRows(numbers), links);
+  const { Provider, Batches, Singles } = versionsProvider(versionRows(numbers), links, options);
   const f = renderComponentFixture(ArtifactViewerPanelComponent, {
     imports: CHILDREN,
     declarations: [ArtifactViewerPanelComponent],
@@ -195,7 +227,7 @@ async function renderLoaded(numbers: number[], inputs: Record<string, unknown>, 
   });
   await (f.componentInstance as unknown as LoadSeam).loadArtifact(targetVersionNumber);
   f.detectChanges();
-  return { f, Batches };
+  return { f, Batches, Singles };
 }
 
 function dropdownLabels(f: ReturnType<typeof renderComponentFixture<ArtifactViewerPanelComponent>>): string[] {
@@ -217,11 +249,14 @@ describe('ArtifactViewerPanelComponent — versions in a conversation scope', ()
     expect(Batches[0][0].ExtraFilter).toBe("ArtifactID='a1'");
   });
 
-  it('keeps the collection and link queries of the batch unchanged with a scope', async () => {
-    const { Batches } = await renderLoaded([1, 2, 4], { Scope: SCOPE, viewContext: 'conversation' });
-    expect(Batches[0].map((p) => p.EntityName)).toEqual(['MJ: Artifact Versions', 'MJ: Collection Artifacts', 'MJ: Conversation Detail Artifacts']);
-    expect(Batches[0][1].ExtraFilter).toContain("WHERE ArtifactID='a1'");
-    expect(Batches[0][2].ExtraFilter).toContain("WHERE ArtifactID='a1'");
+  it('reads the collection and link rows of every version of the artifact, not only those on the path', async () => {
+    const { Batches } = await renderLoaded([1, 2, 4], { Scope: SCOPE, viewContext: 'conversation' }, undefined, [], { EveryVersion: versionRows([1, 2, 3, 4]) });
+    expect(Batches[0].map((p) => p.EntityName)).toEqual(['MJ: Artifact Versions', 'MJ: Artifact Versions']);
+    expect(Batches[0][1].ExtraFilter).toBe("ArtifactID='a1'");
+    expect(Batches[0][1].Fields).toEqual(['ID']);
+    expect(Batches[1].map((p) => p.EntityName)).toEqual(['MJ: Collection Artifacts', 'MJ: Conversation Detail Artifacts']);
+    expect(Batches[1][0].ExtraFilter).toBe("ArtifactVersionID IN ('ver-4','ver-3','ver-2','ver-1')");
+    expect(Batches[1][1].ExtraFilter).toBe("ArtifactVersionID IN ('ver-4','ver-3','ver-2','ver-1')");
   });
 
   it('labels a version that follows a gap with the visible version before it', async () => {
@@ -298,6 +333,48 @@ describe('ArtifactViewerPanelComponent — versions in a conversation scope', ()
   it('hands no version numbers to the viewer plugin without a scope', async () => {
     const { f } = await renderLoaded([1, 2, 4], { viewContext: 'conversation' });
     expect(f.componentInstance.PluginVisibleVersionNumbers).toBeNull();
+  });
+});
+
+describe('ArtifactViewerPanelComponent — collection and link rows by version ID', () => {
+  const ID_LIST = "ArtifactVersionID IN ('ver-3','ver-2','ver-1')";
+  /** The single reads keyed by version ID; the load also reads the selected version's attributes on its own. */
+  const childReads = (singles: RunViewParams[]) =>
+    singles.filter((p) => p.EntityName === 'MJ: Collection Artifacts' || p.EntityName === 'MJ: Conversation Detail Artifacts');
+
+  it('reads the version list alone, then the collection and link rows by the IDs it returned', async () => {
+    const { Batches } = await renderLoaded([1, 2, 3], { viewContext: 'collection' });
+    expect(Batches[0].map((p) => p.EntityName)).toEqual(['MJ: Artifact Versions']);
+    expect(Batches[1].map((p) => p.EntityName)).toEqual(['MJ: Collection Artifacts', 'MJ: Conversation Detail Artifacts']);
+    expect(Batches[1].map((p) => p.ExtraFilter)).toEqual([ID_LIST, ID_LIST]);
+    expect(Batches.length).toBe(2);
+  });
+
+  it('opens the artifact for a user whose read of Artifact Versions is row-filtered', async () => {
+    // The API refuses a client filter that reads the base view of a row-filtered entity, and the refusal fails the whole batch.
+    const { f, Batches, Singles } = await renderLoaded([1, 2, 3], { viewContext: 'collection' }, undefined, [], { ScreenBaseViewReads: true });
+    expect(f.componentInstance.error).toBeNull();
+    expect(f.componentInstance.artifactVersion?.ID).toBe('ver-3');
+    expect([...Batches.flat(), ...Singles].map((p) => String(p.ExtraFilter)).filter((filter) => /\bSELECT\b/i.test(filter))).toEqual([]);
+  });
+
+  it('reloads the collection and link rows by version ID', async () => {
+    const { f, Singles } = await renderLoaded([1, 2, 3], { viewContext: 'collection' });
+    const reload = f.componentInstance as unknown as ReloadSeam;
+    expect(childReads(Singles)).toEqual([]);
+    await reload.loadCollectionAssociations();
+    await reload.loadLinksData();
+    expect(childReads(Singles).map((p) => p.EntityName)).toEqual(['MJ: Collection Artifacts', 'MJ: Collection Artifacts', 'MJ: Conversation Detail Artifacts']);
+    expect(childReads(Singles).map((p) => p.ExtraFilter)).toEqual([ID_LIST, ID_LIST, ID_LIST]);
+  });
+
+  it('still opens the artifact when the collection and link batch fails, and reads those rows one entity at a time', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { f, Singles } = await renderLoaded([1, 2, 3], { viewContext: 'collection' }, undefined, [], { ThrowOnChildBatch: true });
+    expect(f.componentInstance.error).toBeNull();
+    expect(f.componentInstance.artifactVersion?.ID).toBe('ver-3');
+    expect(childReads(Singles).map((p) => p.EntityName).sort()).toEqual(['MJ: Collection Artifacts', 'MJ: Collection Artifacts', 'MJ: Conversation Detail Artifacts']);
+    expect(childReads(Singles).map((p) => p.ExtraFilter)).toEqual([ID_LIST, ID_LIST, ID_LIST]);
   });
 });
 

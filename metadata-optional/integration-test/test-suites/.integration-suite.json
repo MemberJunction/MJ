@@ -1572,6 +1572,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT165 - Integration and Runtime Schema Typing and Auto-Indexing Pipeline",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6C49D2E1-8B37-4A52-9E14-7F08A3C5D9B2"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT166 - Collaborative Docs, Slides, Sheets, Working States, and Library Workspace",
             "Sequence": 49,
             "Status": "Active"
