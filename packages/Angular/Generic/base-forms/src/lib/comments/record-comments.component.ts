@@ -552,10 +552,14 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
                 ? `mj-popover-reply-${conversationId}`
                 : `mj-reply-${conversationId}`;
         setTimeout(() => {
-            const hostEl = this.hostRef?.nativeElement ?? null;
-            const safeAttr = inputId.replace(/"/g, '\\"');
+            const hostEl: HTMLElement | null = this.hostRef?.nativeElement ?? null;
+            const scopedMatch = hostEl
+                ? Array.from(hostEl.querySelectorAll('textarea')).find(
+                      (node: HTMLTextAreaElement) => node.id === inputId
+                  )
+                : undefined;
             const el =
-                (hostEl?.querySelector(`[id="${safeAttr}"]`) as HTMLTextAreaElement | null) ??
+                scopedMatch ??
                 (typeof document !== 'undefined'
                     ? (document.getElementById(inputId) as HTMLTextAreaElement | null)
                     : null);
