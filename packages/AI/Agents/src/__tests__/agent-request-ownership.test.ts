@@ -244,6 +244,15 @@ describe('MJAIAgentRequestEntityServer — workflow requests', () => {
         expect(refusedFields(workflowRequest({ saved: true, stored: 'Requested', next: 'Canceled' }))).toEqual([]);
     });
 
+    it("lets only a person's own request hand a workflow step's request to someone else", () => {
+        // Mine, handed to THEM.
+        const reassigned = workflowRequest({ saved: true });
+        reassigned.RequestForUserID = THEM;
+        reassigned.SetFieldState('RequestForUserID', { Dirty: true, OldValue: ME });
+        expect(refusedFields(reassigned)).toEqual(['RequestForUserID']);
+        expect(asClient(() => refusedFields(reassigned))).toEqual([]);
+    });
+
     it('takes an answer only from the save that gives it, so nothing can fill one in for the person to approve', () => {
         const prefilled = workflowRequest({ saved: true });
         prefilled.SetFieldState('ResponseData', { Dirty: true, OldValue: null });

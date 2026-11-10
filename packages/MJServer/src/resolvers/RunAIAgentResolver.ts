@@ -1587,7 +1587,9 @@ export class RunAIAgentResolver extends ResolverBase {
                     : reassignEntry;
             }
 
-            const saved = await request.Save();
+            // The caller's own reassignment, made through this mutation: saved as their client request, which a
+            // workflow step's request requires (`MJAIAgentRequestEntityServer`), as a CRUD save is.
+            const saved = await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() => request.Save());
             if (!saved) {
                 throw new Error(`Failed to save reassignment for request ${requestId}`);
             }

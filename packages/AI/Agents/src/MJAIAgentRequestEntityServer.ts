@@ -30,8 +30,8 @@
  * Workflow requests: a request naming a task-graph step (`OriginatingTaskID`) is how a person releases
  * that step, and the dispatcher settles the step from it. So only the dispatcher raises one (inside its
  * runtime-security scope), no request's `OriginatingTaskID` ever changes, a workflow request's question
- * (`Request`, `ResponseSchema`) is the dispatcher's, its answer is written only by the save that gives it,
- * and it cannot change once given. Server
+ * (`Request`, `ResponseSchema`) is the dispatcher's, only a person's own request reassigns it, its answer
+ * is written only by the save that gives it, and it cannot change once given. Server
  * code acting as the step's assignee could otherwise point an answer the person gave elsewhere at the
  * step, pre-create the request the dispatcher then adopts, or rewrite the question the person answers.
  */
@@ -111,6 +111,10 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
             if (this.GetFieldByName(field)?.Dirty) {
                 refuse(field, `${field} of a workflow step's request is the dispatcher's question and cannot be changed.`);
             }
+        }
+        // Who answers: a person may hand it to someone else (Reassign), but code acting as them cannot.
+        if (this.GetFieldByName('RequestForUserID')?.Dirty && !ServerOperationScopeManager.Instance.IsInDirectClientCrud()) {
+            refuse('RequestForUserID', "A workflow step's request is reassigned only by a person's own request.");
         }
         const storedStatus = this.GetFieldByName('Status')?.OldValue as string | null | undefined;
         if (storedStatus && RESPONDED_STATUSES.includes(storedStatus)) {
