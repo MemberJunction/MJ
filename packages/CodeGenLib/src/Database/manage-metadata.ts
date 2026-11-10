@@ -6320,17 +6320,18 @@ export class ManageMetadataBase {
       let skipped = 0;
 
       // Look up entity ID
-      const entityLookupSQL = `SELECT ID FROM ${this.qs(schema, 'Entity')} WHERE SchemaName = '${schemaName}' AND BaseTable = '${tableName}'`;
+      const entityLookupSQL = `SELECT ID, ${this.qi('Name')} FROM ${this.qs(schema, 'Entity')} WHERE SchemaName = '${schemaName}' AND BaseTable = '${tableName}'`;
       const entityResult = await this.runQuery(pool, entityLookupSQL);
       if (entityResult.recordset.length === 0) {
          logStatus(`         ⚠️  Entity not found for ${schemaName}.${tableName} — skipping soft value-lists`);
          return { applied, skipped };
       }
       const entityId = entityResult.recordset[0].ID;
+      const entityName: string = entityResult.recordset[0].Name;
 
       for (const fieldCfg of fields) {
          const fieldResult = await this.applyValueListForField(
-            pool, schema, entityId, schemaName, tableName, fieldCfg, allEntityFieldValues
+            pool, schema, entityId, entityName, schemaName, tableName, fieldCfg, allEntityFieldValues
          );
          if (fieldResult === 'applied') applied++;
          else skipped++;
@@ -6346,6 +6347,7 @@ export class ManageMetadataBase {
       pool: CodeGenConnection,
       schema: string,
       entityId: string,
+      entityName: string,
       schemaName: string,
       tableName: string,
       fieldCfg: SoftFieldValueListConfig,
@@ -6379,13 +6381,18 @@ export class ManageMetadataBase {
       // Apply: sync values (stamping them as Config) and set ValueListType. syncEntityFieldValues
       // matches rows on the field ID exactly as the list was loaded, so pass that value through.
       const loadedFieldID = existing.length > 0 ? existing[0].EntityFieldID : entityFieldID;
-      await this.syncEntityFieldValues(pool, loadedFieldID, sortedValues, allEntityFieldValues, 'Config');
+      let listChanged = await this.syncEntityFieldValues(pool, loadedFieldID, sortedValues, allEntityFieldValues, 'Config');
 
       // Update ValueListType
       const newType = fieldCfg.ValueListType;
       if (currentValueListType !== newType.toLowerCase()) {
          const updateSQL = `UPDATE ${this.qs(schema, 'EntityField')} SET ValueListType='${newType}' WHERE ID='${entityFieldID}'`;
          await this.logSQLAndExecute(pool, updateSQL, `Set soft ValueListType='${newType}' for ${schemaName}.${tableName}.${fieldCfg.FieldName}`);
+         listChanged = true;
+      }
+      if (listChanged) {
+         // the generated union / Zod enum for this field changed, so its schema must be re-emitted
+         ManageMetadataBase.AddNewEntitiesToModifiedList([entityName]);
       }
 
       logStatus(`         ✓ Applied soft value-list for ${tableName}.${fieldCfg.FieldName} (${sortedValues.length} values, type=${newType})`);
@@ -6861,46 +6868,40 @@ export class ManageMetadataBase {
          const newEntityFieldsResult = await this.runQuery(pool, sSQL);
          const newEntityFields = newEntityFieldsResult.recordset;
          if (newEntityFields.length > 0) {
-            const transaction = await pool.beginTransaction();
-            try {
-               // wrap in a transaction so we get all of it or none of it.
-               // [Large Schema Series] Batch the per-field INSERTs. Previously this
-               // issued one LogSQLAndExecute — a DB round-trip AND a synchronous
-               // migration-log append — PER field, i.e. ~40k on a 2,000-table
-               // install (~37s). Collect each row's INSERT SQL (unchanged, conflict
-               // guards intact) and flush in chunks through LogSQLBatchAndExecute,
-               // which terminates + joins the statements and sends each chunk as a
-               // single round-trip + single log append while preserving the exact
-               // per-row SQL and the replayable migration-file output. Both dialects.
-               // Batch size is configurable via `metadataInsertBatchSize` (default 250).
-               const CHUNK_SIZE = configInfo.metadataInsertBatchSize ?? 250;
-               const inserts: string[] = [];
-               for (let i = 0; i < newEntityFields.length; ++i) {
-                  const n = newEntityFields[i];
-                  if (n.EntityID !== null && n.EntityID !== undefined && n.EntityID.length > 0) {
-                     // need to check for null entity id = that is because the above query can return candidate Entity Fields but the entities may not have been created if the entities
-                     // that would have been created violate rules - such as not having an ID column, etc.
-                     const newEntityFieldUUID = this.createNewUUID();
-                     inserts.push(this.getPendingEntityFieldINSERTSQL(newEntityFieldUUID, n));
-                     ManageMetadataBase.registerNewField(n.EntityID, n.FieldName);
-                  }
+            // Not atomic: each chunk below commits on its own. A failed chunk leaves the earlier ones
+            // in place, and a re-run repairs that, since the pending-field SELECT above only returns
+            // columns that have no EntityField row yet.
+            // [Large Schema Series] Batch the per-field INSERTs. Previously this
+            // issued one LogSQLAndExecute — a DB round-trip AND a synchronous
+            // migration-log append — PER field, i.e. ~40k on a 2,000-table
+            // install (~37s). Collect each row's INSERT SQL (unchanged, conflict
+            // guards intact) and flush in chunks through LogSQLBatchAndExecute,
+            // which terminates + joins the statements and sends each chunk as a
+            // single round-trip + single log append while preserving the exact
+            // per-row SQL and the replayable migration-file output. Both dialects.
+            // Batch size is configurable via `metadataInsertBatchSize` (default 250).
+            const CHUNK_SIZE = configInfo.metadataInsertBatchSize ?? 250;
+            const inserts: string[] = [];
+            for (let i = 0; i < newEntityFields.length; ++i) {
+               const n = newEntityFields[i];
+               if (n.EntityID !== null && n.EntityID !== undefined && n.EntityID.length > 0) {
+                  // need to check for null entity id = that is because the above query can return candidate Entity Fields but the entities may not have been created if the entities
+                  // that would have been created violate rules - such as not having an ID column, etc.
+                  const newEntityFieldUUID = this.createNewUUID();
+                  inserts.push(this.getPendingEntityFieldINSERTSQL(newEntityFieldUUID, n));
+                  ManageMetadataBase.registerNewField(n.EntityID, n.FieldName);
                }
-               for (let i = 0; i < inserts.length; i += CHUNK_SIZE) {
-                  const chunk = inserts.slice(i, i + CHUNK_SIZE);
-                  try {
-                     await this.logSQLBatchAndExecute(pool, chunk, `SQL text to insert ${chunk.length} new entity field(s)`);
-                     // an error blows up the transaction (all-or-nothing), which is what we want
-                  }
-                  catch (e) {
-                     // catch for debug context, then let the transaction die
-                     logError(`Error inserting new entity field batch (rows ${i}..${i + chunk.length}).`);
-                     throw e;
-                  }
+            }
+            for (let i = 0; i < inserts.length; i += CHUNK_SIZE) {
+               const chunk = inserts.slice(i, i + CHUNK_SIZE);
+               try {
+                  await this.logSQLBatchAndExecute(pool, chunk, `SQL text to insert ${chunk.length} new entity field(s)`);
                }
-               await transaction.commit();
-            } catch (e) {
-               await transaction.rollback();
-               throw e;
+               catch (e) {
+                  // catch for debug context, then stop: the remaining chunks are left for a re-run
+                  logError(`Error inserting new entity field batch (rows ${i}..${i + chunk.length}).`);
+                  throw e;
+               }
             }
 
             // if we get here now send a distinct list of the entities that had new fields to the modified entity list
@@ -7408,7 +7409,7 @@ export class ManageMetadataBase {
                      ManageMetadataBase.sortCheckConstraintValues(parsedValues);
 
                      // we have parsed values from the check constraint, so sync them with the entity field values
-                     await this.syncEntityFieldValues(pool, r.EntityFieldID, parsedValues, allEntityFieldValues, 'Check');
+                     let listChanged = await this.syncEntityFieldValues(pool, r.EntityFieldID, parsedValues, allEntityFieldValues, 'Check');
 
                      // finally, make sure the ValueListType column within the EntityField table is set to "List" because for check constraints we only allow the values specified in the list.
                      // check to see if the ValueListType is already set to "List", if not, update it
@@ -7418,6 +7419,12 @@ export class ManageMetadataBase {
                      if (checkResult && checkResult.length > 0 && checkResult[0].ValueListType.trim().toLowerCase() !== 'list') {
                         const sSQL: string = `UPDATE ${this.qs(MjCoreSchema(), 'EntityField')} SET ValueListType='List' WHERE ID='${r.EntityFieldID}'`
                         await this.logSQLAndExecute(pool, sSQL, `SQL text to update ValueListType for entity field ID ${r.EntityFieldID}`);
+                        listChanged = true;
+                     }
+                     if (listChanged && r.EntityName) {
+                        // a migration that only changes a CHECK value list changes the generated union and
+                        // Zod enum, so the entity's schema must be re-emitted even with dirtySchemaOnly (#6207)
+                        ManageMetadataBase.AddNewEntitiesToModifiedList([r.EntityName]);
                      }
                   }
                   else {
@@ -7647,79 +7654,80 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
     * inserts the missing ones, and fixes the Sequence of the rest. Every row it leaves behind carries
     * `source`, so a row of another origin that holds a listed value is claimed by the writer (#4535).
     * Callers decide beforehand whether they own the list (see {@link DecideConfigValueListAction}).
+    *
+    * The statements for the field are sent as one batch that the database applies atomically (see
+    * {@link AtomicBatchSQL}), so a failure leaves the field's rows as they were.
+    *
+    * @returns true when any row was added, removed, re-sequenced or re-stamped, so the caller can mark
+    * the entity modified: a changed list changes the generated union and Zod enum (#6207). False when
+    * nothing changed or the batch failed (and was rolled back).
     */
    protected async syncEntityFieldValues(ds: CodeGenConnection, entityFieldID: string | number, possibleValues: string[], allEntityFieldValues: ExistingEntityFieldValueRow[], source: EntityFieldValueSource): Promise<boolean> {
       try {
-         // first, get a list of all of the existing entity field values for the field already in the database
-         const existingValues = allEntityFieldValues.filter(efv => efv.EntityFieldID === entityFieldID);
-         // now, loop through the possible values and add any that are not already in the database
-
-         // Step 1: for any existing value that is NOT in the list of possible Values, delete it
-         let numRemoved: number = 0;
-         const transaction = await ds.beginTransaction();
-         try {
-            for (const ev of existingValues) {
-               if (!possibleValues.find(v => v === ev.Value)) {
-                  // delete the value from the database
-                  const sSQLDelete = `DELETE FROM ${this.qs(MjCoreSchema(), 'EntityFieldValue')} WHERE ID='${ev.ID}'`;
-                  await this.logSQLAndExecute(ds, sSQLDelete, `SQL text to delete entity field value ID ${ev.ID}`);
-                  numRemoved++;
-               }
-            }
-
-            // Step 2: for any possible value that is NOT in the list of existing values, add it
-            let numAdded = 0;
-            for (const v of possibleValues) {
-               if (!existingValues.find((ev: { Value: string; }) => ev.Value === v)) {
-                  // Generate a UUID for this new EntityFieldValue record
-                  const newId = uuidv4();
-
-                  // add the value to the database with explicit ID. Code is NULL ("same as Value") when
-                  // the value is longer than the Code column; copying it overflowed that column (#2577).
-                  const code = ManageMetadataBase.EntityFieldValueCode(v);
-                  const sSQLInsert = `INSERT INTO ${this.qs(MjCoreSchema(), 'EntityFieldValue')}
-                                       (${this.qi('ID')}, ${this.qi('EntityFieldID')}, ${this.qi('Sequence')}, ${this.qi('Value')}, ${this.qi('Code')}, ${this.qi('Source')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')})
-                                    VALUES
-                                       ('${newId}', '${entityFieldID}', ${1 + possibleValues.indexOf(v)}, '${EscapeSQLString(v)}', ${code === null ? 'NULL' : `'${EscapeSQLString(code)}'`}, '${source}', ${this.utcNow()}, ${this.utcNow()})`;
-                  await this.logSQLAndExecute(ds, sSQLInsert, `SQL text to insert entity field value with ID ${newId}`);
-                  numAdded++;
-               }
-            }
-
-            // Step 3: finally, for the existing values that are in the list of possible values, update the sequence to match
-            // the order in the possible values list, and claim the row for this writer if another origin is recorded on it
-            let numUpdated = 0;
-            for (const v of possibleValues) {
-               const ev = existingValues.find(ev => ev.Value === v);
-               if (!ev) {
-                  continue;
-               }
-               const sets: string[] = [];
-               // NOTE: Number() rather than a strict comparison in case the DB returns a string for Sequence.
-               if (Number(ev.Sequence) !== 1 + possibleValues.indexOf(v)) {
-                  sets.push(`Sequence=${1 + possibleValues.indexOf(v)}`);
-               }
-               if (ev.Source !== source) {
-                  sets.push(`${this.qi('Source')}='${source}'`);
-               }
-               if (sets.length > 0) {
-                  const sSQLUpdate = `UPDATE ${this.qs(MjCoreSchema(), 'EntityFieldValue')} SET ${sets.join(', ')} WHERE ID='${ev.ID}'`;
-                  await this.logSQLAndExecute(ds, sSQLUpdate, `SQL text to update entity field value sequence and source`);
-                  numUpdated++;
-               }
-            }
-            await transaction.commit();
-         } catch (e) {
-            await transaction.rollback();
-            throw e;
+         const statements = this.entityFieldValueSyncStatements(entityFieldID, possibleValues, allEntityFieldValues, source);
+         if (statements.length === 0) {
+            return false;
          }
-
+         await this.logSQLBatchAndExecuteAtomically(ds, statements, `SQL text to sync ${statements.length} entity field value row(s) for entity field ID ${entityFieldID}`);
          return true;
       }
       catch (e) {
          logError(e as string);
          return false;
       }
+   }
+
+   /**
+    * The DELETE, INSERT and UPDATE statements that make a field's EntityFieldValue rows match
+    * `possibleValues` (see {@link syncEntityFieldValues}); empty when the rows already match.
+    */
+   protected entityFieldValueSyncStatements(entityFieldID: string | number, possibleValues: string[], allEntityFieldValues: ExistingEntityFieldValueRow[], source: EntityFieldValueSource): string[] {
+      const statements: string[] = [];
+      const existingValues = allEntityFieldValues.filter(efv => efv.EntityFieldID === entityFieldID);
+
+      // Step 1: for any existing value that is NOT in the list of possible Values, delete it
+      for (const ev of existingValues) {
+         if (!possibleValues.find(v => v === ev.Value)) {
+            statements.push(`DELETE FROM ${this.qs(MjCoreSchema(), 'EntityFieldValue')} WHERE ID='${ev.ID}'`);
+         }
+      }
+
+      // Step 2: for any possible value that is NOT in the list of existing values, add it
+      for (const v of possibleValues) {
+         if (!existingValues.find((ev: { Value: string; }) => ev.Value === v)) {
+            // Generate a UUID for this new EntityFieldValue record
+            const newId = uuidv4();
+
+            // add the value to the database with explicit ID. Code is NULL ("same as Value") when
+            // the value is longer than the Code column; copying it overflowed that column (#2577).
+            const code = ManageMetadataBase.EntityFieldValueCode(v);
+            statements.push(`INSERT INTO ${this.qs(MjCoreSchema(), 'EntityFieldValue')}
+                                       (${this.qi('ID')}, ${this.qi('EntityFieldID')}, ${this.qi('Sequence')}, ${this.qi('Value')}, ${this.qi('Code')}, ${this.qi('Source')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')})
+                                    VALUES
+                                       ('${newId}', '${entityFieldID}', ${1 + possibleValues.indexOf(v)}, '${EscapeSQLString(v)}', ${code === null ? 'NULL' : `'${EscapeSQLString(code)}'`}, '${source}', ${this.utcNow()}, ${this.utcNow()})`);
+         }
+      }
+
+      // Step 3: finally, for the existing values that are in the list of possible values, update the sequence to match
+      // the order in the possible values list, and claim the row for this writer if another origin is recorded on it
+      for (const v of possibleValues) {
+         const ev = existingValues.find(ev => ev.Value === v);
+         if (!ev) {
+            continue;
+         }
+         const sets: string[] = [];
+         // NOTE: Number() rather than a strict comparison in case the DB returns a string for Sequence.
+         if (Number(ev.Sequence) !== 1 + possibleValues.indexOf(v)) {
+            sets.push(`Sequence=${1 + possibleValues.indexOf(v)}`);
+         }
+         if (ev.Source !== source) {
+            sets.push(`${this.qi('Source')}='${source}'`);
+         }
+         if (sets.length > 0) {
+            statements.push(`UPDATE ${this.qs(MjCoreSchema(), 'EntityFieldValue')} SET ${sets.join(', ')} WHERE ID='${ev.ID}'`);
+         }
+      }
+      return statements;
    }
 
    /**
@@ -8130,20 +8138,19 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
 
          if (newEntities && newEntities.length > 0 ) {
             const md = new Metadata() // global-provider-ok: codegen runs offline against a single provider
-            const transaction = await pool.beginTransaction();
-            // The in-run list of new entity names is process-static. Names pushed by a batch that is then
-            // rolled back must not survive into the next run of the same process (in-process CodeGen runs
+            // Not atomic: each entity's writes commit as they run, so a failure part-way leaves the
+            // entities before it in place. A re-run repairs that: the SELECT above only returns tables
+            // that have no entity yet.
+            // The in-run list of new entity names is process-static. Names pushed by a batch that then
+            // fails must not survive into the next run of the same process (in-process CodeGen runs
             // many times per process), or every one of them reads as "taken" and gets a schema suffix.
             const newEntityNamesBefore = ManageMetadataBase.newEntityList.length;
             try {
-               // wrap in a transaction so we get all of it or none of it
                for ( let i = 0; i < newEntities.length; ++i) {
                   // process each of the new entities
                   await this.createNewEntity(pool, newEntities[i], md, currentUser);
                }
-               await transaction.commit();
             } catch (e) {
-               await transaction.rollback();
                ManageMetadataBase.newEntityList.length = newEntityNamesBefore;
                throw e;
             }
@@ -11404,13 +11411,52 @@ WHERE
       includeBatchSeparator: boolean = false,
       batchSeparator: string = 'GO'
    ): Promise<any> {
+      const terminated = ManageMetadataBase.TerminateStatements(statements);
+      if (terminated.length === 0) return undefined;
+      return await this.logSQLAndExecute(pool, terminated.join('\n'), description, isRecurringScript, includeBatchSeparator, batchSeparator);
+   }
+
+   /**
+    * Like {@link logSQLBatchAndExecute}, but the database applies the batch all or nothing (see
+    * {@link AtomicBatchSQL}). The migration log gets the plain statements, as before: a migration
+    * already runs as one unit, and a transaction wrapper there would have to survive the
+    * PostgreSQL conversion.
+    */
+   private async logSQLBatchAndExecuteAtomically(pool: CodeGenConnection, statements: string[], description?: string): Promise<void> {
+      const terminated = ManageMetadataBase.TerminateStatements(statements);
+      if (terminated.length === 0) return;
+      const logged = this.qsql(terminated.join('\n'));
+      await SQLLogging.LogSQLAndExecute(pool, logged, description, false, false, undefined, false, ManageMetadataBase.AtomicBatchSQL(logged, DbPlatform()));
+   }
+
+   /** Each statement trimmed of trailing terminators and re-terminated with one `;`; empty ones dropped. */
+   public static TerminateStatements(statements: readonly string[]): string[] {
       const terminated: string[] = [];
       for (const s of statements) {
          const trimmed = TrimTrailingStatementTerminators(s ?? '');
          if (trimmed.length === 0) continue;
          terminated.push(`${trimmed};`);
       }
-      if (terminated.length === 0) return undefined;
-      return await this.logSQLAndExecute(pool, terminated.join('\n'), description, isRecurringScript, includeBatchSeparator, batchSeparator);
+      return terminated;
+   }
+
+   /**
+    * The text that makes a batch of terminated statements apply all or nothing.
+    *
+    * - SQL Server: `SET XACT_ABORT ON`, then an explicit transaction inside TRY/CATCH. The CATCH rolls
+    *   back and re-throws, so the caller sees the original error. A client-side timeout is an
+    *   attention signal that skips the CATCH; `XACT_ABORT` makes the server roll the transaction back
+    *   then, so the pooled connection is not handed to later writes with the transaction still open
+    *   (those writes would be undone when the connection closes). The option lasts only for this
+    *   call: `query()` runs the text through `sp_executesql`, and a SET there ends with it.
+    * - PostgreSQL: the batch unchanged. Several statements sent in one simple query already run as
+    *   one implicit transaction that rolls back on any error; an explicit `BEGIN … COMMIT` there would
+    *   instead leave the pooled connection in an aborted transaction after a failure.
+    */
+   public static AtomicBatchSQL(batch: string, platform: string): string {
+      if (platform === 'postgresql') {
+         return batch;
+      }
+      return `SET XACT_ABORT ON;\nBEGIN TRY\nBEGIN TRANSACTION;\n${batch}\nCOMMIT TRANSACTION;\nEND TRY\nBEGIN CATCH\nIF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;\nTHROW;\nEND CATCH`;
    }
 }
