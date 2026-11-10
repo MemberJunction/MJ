@@ -1,6 +1,6 @@
 /**
- * @fileoverview Integration check bundle `'docs-slides-sheets-library'` (IT166) and client companion
- * `'docs-slides-sheets-library-client'` (IT167) — verifies the
+ * @fileoverview Integration check bundle `'docs-slides-sheets-library'` (IT169) and client companion
+ * `'docs-slides-sheets-library-client'` (IT170) — verifies the
  * collaborative MJ Docs, Slides, Sheets, Yjs Working States, Delegated OLE Permissions, and
  * Library / Chat application substrate against the live database and metadata provider.
  *
@@ -619,7 +619,7 @@ async function checkDsl3LiveWorkingStateAndDelegatedPerms(ctx: IntegrationCheckC
                 const deleted = await entity.Delete();
                 if (!deleted) {
                     console.warn(
-                        `[IT166 DSL3 teardown] Delete() returned false for ${label}: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                        `[IT169 DSL3 teardown] Delete() returned false for ${label}: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`,
                     );
                 }
             }
@@ -1049,7 +1049,7 @@ for (const c of DocsSlidesSheetsLibraryChecks) {
     IntegrationCheckRegistry.Instance.Register(c);
 }
 
-// ─── IT167: Client-transport wire checks (DSLC1–DSLC4) ───────────────────────
+// ─── IT170: Client-transport wire checks (DSLC1–DSLC4) ───────────────────────
 
 const CLIENT_BUNDLE = 'docs-slides-sheets-library-client';
 const GRANTEE_EMAIL = 'it-artifact-viewer@integration.test';
@@ -1141,7 +1141,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(CLIENT_BUNDLE, {
                 ctx,
                 dslClientFixture,
                 granteeId,
-                'IT167 DSL client grantee (mj-integration-test)',
+                'IT170 DSL client grantee (mj-integration-test)',
             );
             const builtProvider = await BuildUserKeyProviderWithRetry(rawKey);
             dslClientFixture.GranteeProvider = builtProvider as GraphQLDataProvider;
@@ -1164,7 +1164,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(CLIENT_BUNDLE, {
             // 1. Shared Read-Only artifact + version 1
             const parentDoc = await ownerProvider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', ctx.User);
             parentDoc.NewRecord();
-            parentDoc.Name = `__IT167_SharedDoc_${suffix} (mj-integration-test — safe to delete)`;
+            parentDoc.Name = `__IT170_SharedDoc_${suffix} (mj-integration-test — safe to delete)`;
             parentDoc.TypeID = docTypeId;
             parentDoc.UserID = ctx.User.ID;
             parentDoc.Visibility = 'Always';
@@ -1173,7 +1173,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(CLIENT_BUNDLE, {
             }
             dslClientFixture.ParentDocID = parentDoc.ID;
 
-            const initialContent = `# IT167 Shared Strategy Document ${suffix}\n\nOwner baseline content.`;
+            const initialContent = `# IT170 Shared Strategy Document ${suffix}\n\nOwner baseline content.`;
             const parentVer = await ownerProvider.GetEntityObject<MJArtifactVersionEntity>(
                 'MJ: Artifact Versions',
                 ctx.User,
@@ -1211,7 +1211,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(CLIENT_BUNDLE, {
             // 2. Private unshared artifact + version 1
             const privateDoc = await ownerProvider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', ctx.User);
             privateDoc.NewRecord();
-            privateDoc.Name = `__IT167_PrivateDoc_${suffix} (mj-integration-test — safe to delete)`;
+            privateDoc.Name = `__IT170_PrivateDoc_${suffix} (mj-integration-test — safe to delete)`;
             privateDoc.TypeID = docTypeId;
             privateDoc.UserID = ctx.User.ID;
             privateDoc.Visibility = 'Always';
@@ -1230,7 +1230,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(CLIENT_BUNDLE, {
             privateVer.Name = privateDoc.Name;
             privateVer.UserID = ctx.User.ID;
             privateVer.ContentMode = 'Text';
-            privateVer.Content = `# IT167 Private Document ${suffix}\n\nConfidential owner content.`;
+            privateVer.Content = `# IT170 Private Document ${suffix}\n\nConfidential owner content.`;
             if (!(await privateVer.Save())) {
                 throw new Error(`Failed to create privateVer: ${privateVer.LatestResult?.CompleteMessage ?? ''}`);
             }

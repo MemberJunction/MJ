@@ -2,7 +2,7 @@
   {
     "fields": {
       "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-      "Name": "IT166 - Collaborative Docs, Slides, Sheets, Working States, and Library Workspace",
+      "Name": "IT169 - Collaborative Docs, Slides, Sheets, Working States, and Library Workspace",
       "Description": "Verifies the collaborative MJ Docs, Slides, Sheets, Yjs Artifact Working States, Delegated OLE Permissions (O4), DocumentLiveBlockEngine viewer RLS/FLS & freeze gates (O5), SlideDeckEngine (O6), SpreadsheetEngine stable-ID formulas / =MJ.VIEW / .xlsx round-trip, all 4 Artifact Tool Libraries, and Library + Chat Agent Activity application wiring.",
       "Status": "Active",
       "Configuration": {

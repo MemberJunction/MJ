@@ -2,8 +2,8 @@
   {
     "fields": {
       "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-      "Name": "IT167 - Collaborative Docs, Slides, Sheets and Working States over GraphQL and WebSocket",
-      "Description": "Client-transport companion to IT166. Proves over the GraphQL and WebSocket wire against a live MJAPI: (DSLC1) MJ: Artifact Working States is unreachable over GraphQL; (DSLC2) a restricted read-only user's MJ: Artifact Versions Save() is refused by MJArtifactVersionEntityServer over the API; (DSLC3) MintArtifactCollaborationTicket + WebSocket upgrade to /collaboration/yjs succeeds and a read-only peer's write frame is rejected with readonly-rejected; (DSLC4) ExecuteDocumentLiveBlock denies EntityView and Artifact blocks when the caller lacks read access.",
+      "Name": "IT170 - Collaborative Docs, Slides, Sheets and Working States over GraphQL and WebSocket",
+      "Description": "Client-transport companion to IT169. Proves over the GraphQL and WebSocket wire against a live MJAPI: (DSLC1) MJ: Artifact Working States is unreachable over GraphQL; (DSLC2) a restricted read-only user's MJ: Artifact Versions Save() is refused by MJArtifactVersionEntityServer over the API; (DSLC3) MintArtifactCollaborationTicket + WebSocket upgrade to /collaboration/yjs succeeds and a read-only peer's write frame is rejected with readonly-rejected; (DSLC4) ExecuteDocumentLiveBlock denies EntityView and Artifact blocks when the caller lacks read access.",
       "Status": "Active",
       "Configuration": {
         "tier": "deterministic",

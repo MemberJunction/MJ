@@ -1583,7 +1583,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT166 - Collaborative Docs, Slides, Sheets, Working States, and Library Workspace",
+            "TestID": "@lookup:MJ: Tests.Name=IT169 - Collaborative Docs, Slides, Sheets, Working States, and Library Workspace",
             "Sequence": 49,
             "Status": "Active"
           },
@@ -1594,7 +1594,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT167 - Collaborative Docs, Slides, Sheets and Working States over GraphQL and WebSocket",
+            "TestID": "@lookup:MJ: Tests.Name=IT170 - Collaborative Docs, Slides, Sheets and Working States over GraphQL and WebSocket",
             "Sequence": 83,
             "Status": "Active"
           },
