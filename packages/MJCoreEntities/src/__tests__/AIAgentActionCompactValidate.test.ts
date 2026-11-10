@@ -75,4 +75,10 @@ describe('MJAIAgentActionEntity.Validate: result expiration', () => {
         r.CompactLength = 2000;
         expect(r.Validate().Errors.map(e => e.Source)).toEqual(['ResultExpirationMode']);
     });
+
+    it('fails a None row that sets only CompactPromptID, naming ResultExpirationMode', () => {
+        const r = row('None');
+        r.CompactPromptID = 'prompt-1';
+        expect(r.Validate().Errors.map(e => e.Source)).toEqual(['ResultExpirationMode']);
+    });
 });
