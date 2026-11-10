@@ -168,7 +168,8 @@ let workflowTaskTypeIDCache: string | undefined;
 export async function ResolveWorkflowTaskTypeID(provider: IRunViewProvider, user: UserInfo | undefined): Promise<string | null> {
     if (workflowTaskTypeIDCache) return workflowTaskTypeIDCache;
     const result = await new RunView(provider).RunView<{ ID: string }>(
-        { EntityName: 'MJ: Task Types', ExtraFilter: `Name='${TASK_GRAPH_WORKFLOW_TYPE_NAME}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 },
+        // Ordered as the dispatcher orders it (oldest first), so both bind the same row should a second share the name.
+        { EntityName: 'MJ: Task Types', ExtraFilter: `Name='${TASK_GRAPH_WORKFLOW_TYPE_NAME}'`, Fields: ['ID'], OrderBy: '__mj_CreatedAt ASC, ID ASC', ResultType: 'simple', MaxRows: 1 },
         UserCache.Instance.GetSystemUser() ?? user,
     );
     const id = result.Success ? result.Results?.[0]?.ID : undefined;
