@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { DDLGenerator, ValidateIdentifier } from '../DDLGenerator.js';
+import { SchemaEvolution } from '../SchemaEvolution.js';
 import type { TableDefinition } from '../interfaces.js';
 
 const makeTable = (overrides: Partial<TableDefinition> = {}): TableDefinition => ({
@@ -243,6 +244,82 @@ describe('DDLGenerator', () => {
 
     it('rejects SQL injection attempts', () => {
       expect(() => ValidateIdentifier("'; DROP TABLE", 'table')).toThrow();
+    });
+  });
+
+  // ─── Soft PK, Soft FK, and Organic Key Auto-Indexing ────────────────
+
+  describe('Soft PK, Soft FK, and Organic Key Auto-Indexing', () => {
+    it('emits non-unique indexes for SoftPrimaryKeys, Soft ForeignKeys, and OrganicKeys and caps oversized string columns on SQL Server', () => {
+      const table = makeTable({
+        SoftPrimaryKeys: ['ExternalId'],
+        Columns: [
+          { Name: 'ExternalId', Type: 'string', RawSqlType: 'NVARCHAR(MAX)', IsNullable: false },
+          { Name: 'AccountId', Type: 'string', RawSqlType: 'NVARCHAR(800)', IsNullable: true },
+          { Name: 'Email', Type: 'string', RawSqlType: 'NVARCHAR(MAX)', IsNullable: true },
+        ],
+        ForeignKeys: [
+          {
+            ColumnName: 'AccountId',
+            ReferencedSchema: 'custom',
+            ReferencedTable: 'Account',
+            ReferencedColumn: 'ExternalId',
+            IsSoft: true,
+          },
+        ],
+        OrganicKeys: [['Email']],
+      });
+
+      const sql = gen.GenerateCreateTable(table, 'sqlserver', { IfNotExists: true });
+      expect(sql).toContain('[ExternalId] NVARCHAR(450) NOT NULL');
+      expect(sql).toContain('[AccountId] NVARCHAR(450) NULL');
+      expect(sql).toContain('[Email] NVARCHAR(450) NULL');
+      expect(sql).toContain('CREATE INDEX [IX_custom_TestTable_PK] ON [custom].[TestTable]([ExternalId])');
+      expect(sql).toContain('CREATE INDEX [IX_custom_TestTable_FK_AccountId] ON [custom].[TestTable]([AccountId])');
+      expect(sql).toContain('CREATE INDEX [IX_custom_TestTable_OK_Email] ON [custom].[TestTable]([Email])');
+      expect(sql).toContain('sys.index_columns');
+    });
+
+    it('emits AddedIndexes and idempotent CREATE INDEX statements in SchemaEvolution', () => {
+      const evo = new SchemaEvolution();
+      const desired = makeTable({
+        SoftPrimaryKeys: ['ExternalId'],
+        Columns: [
+          { Name: 'ExternalId', Type: 'string', RawSqlType: 'NVARCHAR(100)', IsNullable: false },
+          { Name: 'AccountId', Type: 'string', RawSqlType: 'NVARCHAR(800)', IsNullable: true },
+          { Name: 'Email', Type: 'string', RawSqlType: 'NVARCHAR(255)', IsNullable: true },
+        ],
+        ForeignKeys: [
+          {
+            ColumnName: 'AccountId',
+            ReferencedSchema: 'custom',
+            ReferencedTable: 'Account',
+            ReferencedColumn: 'ExternalId',
+            IsSoft: true,
+          },
+        ],
+        OrganicKeys: [['Email']],
+      });
+      const existing = {
+        SchemaName: 'custom',
+        TableName: 'TestTable',
+        Columns: [
+          { Name: 'ExternalId', SqlType: 'NVARCHAR(100)', IsNullable: false, MaxLength: 100, Precision: null, Scale: null },
+        ],
+      };
+
+      const diff = evo.DiffSchema(desired, existing);
+      expect(diff.AddedIndexes).toEqual([
+        { IndexName: 'IX_custom_TestTable_PK', Columns: ['ExternalId'], Unique: false },
+        { IndexName: 'IX_custom_TestTable_FK_AccountId', Columns: ['AccountId'], Unique: false },
+        { IndexName: 'IX_custom_TestTable_OK_Email', Columns: ['Email'], Unique: false },
+      ]);
+
+      const sql = evo.GenerateEvolutionMigration(diff, 'custom', 'TestTable', 'sqlserver');
+      expect(sql).toContain('ADD [AccountId] NVARCHAR(450) NULL');
+      expect(sql).toContain('CREATE INDEX [IX_custom_TestTable_PK] ON [custom].[TestTable]([ExternalId])');
+      expect(sql).toContain('CREATE INDEX [IX_custom_TestTable_FK_AccountId] ON [custom].[TestTable]([AccountId])');
+      expect(sql).toContain('CREATE INDEX [IX_custom_TestTable_OK_Email] ON [custom].[TestTable]([Email])');
     });
   });
 });

@@ -1264,7 +1264,7 @@ import {
     QueryRefreshExtractionServerOperation,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (169 classes)
+// @memberjunction/core-actions (186 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1324,8 +1324,10 @@ import {
     FinalizeDocumentAction,
     FindBestActionAction,
     FindBestAgentAction,
+    FindBestSkillAction,
     FindCandidateActionsAction,
     FindCandidateAgentsAction,
+    FindCandidateSkillsAction,
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
@@ -1349,10 +1351,25 @@ import {
     GetRecordListMembershipAction,
     GetRecordsAction,
     GetSignatureStatusAction,
+    GetSkillDetailsAction,
     GetStockPriceAction,
     GetUploadUrlAction,
     GetWeatherAction,
     Get_AI_Model_Cost_Action,
+    GitHubAddCommentAction,
+    GitHubCommitFilesAndCreatePRAction,
+    GitHubCommitFilesToBranchAction,
+    GitHubCreateOrUpdateIssueAction,
+    GitHubCreatePullRequestAction,
+    GitHubGetPullRequestContextAction,
+    GitHubGetRepositoryContextAction,
+    GitHubGetWorkflowRunAndLogsAction,
+    GitHubListRepositoryTreeAction,
+    GitHubMergePullRequestAction,
+    GitHubReadRepositoryFileAction,
+    GitHubSearchCodeAction,
+    GitHubSearchIssuesAndPRsAction,
+    GitHubSubmitPullRequestReviewAction,
     GoogleCustomSearchAction,
     GraphQLQueryAction,
     HTTPRequestAction,
@@ -2533,8 +2550,10 @@ const CLASS_REGISTRATIONS_5: any[] = [
     FinalizeDocumentAction,
     FindBestActionAction,
     FindBestAgentAction,
+    FindBestSkillAction,
     FindCandidateActionsAction,
     FindCandidateAgentsAction,
+    FindCandidateSkillsAction,
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
@@ -2558,10 +2577,25 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GetRecordListMembershipAction,
     GetRecordsAction,
     GetSignatureStatusAction,
+    GetSkillDetailsAction,
     GetStockPriceAction,
     GetUploadUrlAction,
     GetWeatherAction,
     Get_AI_Model_Cost_Action,
+    GitHubAddCommentAction,
+    GitHubCommitFilesAndCreatePRAction,
+    GitHubCommitFilesToBranchAction,
+    GitHubCreateOrUpdateIssueAction,
+    GitHubCreatePullRequestAction,
+    GitHubGetPullRequestContextAction,
+    GitHubGetRepositoryContextAction,
+    GitHubGetWorkflowRunAndLogsAction,
+    GitHubListRepositoryTreeAction,
+    GitHubMergePullRequestAction,
+    GitHubReadRepositoryFileAction,
+    GitHubSearchCodeAction,
+    GitHubSearchIssuesAndPRsAction,
+    GitHubSubmitPullRequestReviewAction,
     GoogleCustomSearchAction,
     GraphQLQueryAction,
     HTTPRequestAction,
@@ -2700,7 +2734,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1154;
+export const CLASS_REGISTRATIONS_COUNT = 1171;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
