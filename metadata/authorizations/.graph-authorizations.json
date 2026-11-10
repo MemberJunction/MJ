@@ -1,0 +1,14 @@
+[
+  {
+    "fields": {
+      "Name": "Graph: Approve Edges",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants permission to approve proposed semantic graph edges, and to create edges that start out approved (Origin Declared). Without it, an edge can only be saved as Proposed."
+    },
+    "primaryKey": {
+      "ID": "8FF45F4A-9E93-4B22-B714-D9AF9C93B89D"
+    }
+  }
+]

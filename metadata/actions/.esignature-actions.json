@@ -7,7 +7,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=eSignature",
       "Status": "Active",
-      "IconClass": "fa-solid fa-file-signature"
+      "IconClass": "fa-solid fa-file-signature",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -604,7 +607,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=eSignature",
       "Status": "Active",
-      "IconClass": "fa-solid fa-ban"
+      "IconClass": "fa-solid fa-ban",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [

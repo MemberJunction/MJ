@@ -1498,6 +1498,12 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.2.0
         version: link:../../../MJCoreEntities
+      '@memberjunction/feature-pipelines':
+        specifier: 6.2.0
+        version: link:../../Knowledge/FeaturePipelines
+      '@memberjunction/generic-database-provider':
+        specifier: 6.2.0
+        version: link:../../../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.2.0
         version: link:../../../MJGlobal
@@ -16913,6 +16919,9 @@ importers:
 
   packages/TestingFramework/integration-test-suite:
     dependencies:
+      '@memberjunction/a2aserver':
+        specifier: 6.2.0
+        version: link:../../AI/A2AServer
       '@memberjunction/actions':
         specifier: 6.2.0
         version: link:../../Actions/Engine
@@ -17114,6 +17123,9 @@ importers:
       '@memberjunction/search-engine':
         specifier: 6.2.0
         version: link:../../SearchEngine
+      '@memberjunction/server':
+        specifier: 6.2.0
+        version: link:../../MJServer
       '@memberjunction/server-bootstrap-lite':
         specifier: 6.2.0
         version: link:../../ServerBootstrapLite

@@ -130,10 +130,91 @@ function isFunctionSignatureLine(lineCode: string): boolean {
   }
   // Function/method declaration: a parameter list immediately precedes the brace
   // (optionally a return-type annotation). Excludes object-literal openers (no `)...{`).
-  if (!/\)\s*(:[^={]+)?\{$/.test(trimmed)) {
+  const sigMatch = matchParamsBeforeOpeningBrace(trimmed);
+  if (!sigMatch.hasClosingParams) {
     return false;
   }
-  return /\bfunction\b/.test(trimmed) || /[\w$]\s*\([^)]*\)\s*(:[^={]+)?\{$/.test(trimmed);
+  return /\bfunction\b/.test(trimmed) || sigMatch.hasNamedParams;
+}
+
+/**
+ * Linear O(n) check replacing `/\)\s*(:[^={]+)?\{$/` and `/[\w$]\s*\([^)]*\)\s*(:[^={]+)?\{$/`
+ * without polynomial regex backtracking.
+ */
+function matchParamsBeforeOpeningBrace(trimmedEndingWithBrace: string): {
+  hasClosingParams: boolean;
+  hasNamedParams: boolean;
+} {
+  const beforeBrace = trimmedEndingWithBrace.slice(0, -1);
+  // Any valid return-type annotation `:[^={]+` after `)` cannot contain `=` or `{`,
+  // so a candidate closing `)` must appear after the last `=` or `{` on the line.
+  const lastDisallowed = Math.max(beforeBrace.lastIndexOf('='), beforeBrace.lastIndexOf('{'));
+  const minCloseIdx = lastDisallowed + 1;
+
+  let hasClosingParams = false;
+  let hasNamedParams = false;
+
+  for (let p = beforeBrace.indexOf(')', minCloseIdx); p !== -1; p = beforeBrace.indexOf(')', p + 1)) {
+    const afterClose = beforeBrace.slice(p + 1);
+    const trimmedAfterClose = afterClose.trimStart();
+    // Matches `\s*(:[^={]+)?` before `{`: either only whitespace, or `:` followed by >=1 char
+    const validSuffix =
+      trimmedAfterClose.length === 0 ||
+      (trimmedAfterClose.startsWith(':') && afterClose.indexOf(':') < afterClose.length - 1);
+    if (!validSuffix) {
+      continue;
+    }
+    hasClosingParams = true;
+
+    // Check if this `)` closes a `[\w$]\s*\([^)]*\)` group
+    const openParen = beforeBrace.lastIndexOf('(', p - 1);
+    if (openParen !== -1 && beforeBrace.indexOf(')', openParen + 1) === p) {
+      let k = openParen - 1;
+      while (k >= 0 && (beforeBrace[k] === ' ' || beforeBrace[k] === '\t')) {
+        k--;
+      }
+      if (k >= 0 && /[\w$]/.test(beforeBrace[k])) {
+        hasNamedParams = true;
+        break;
+      }
+    }
+  }
+
+  return { hasClosingParams, hasNamedParams };
+}
+
+/**
+ * Linear O(n) normalization replacing `.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n')`
+ * without polynomial regex backtracking on long whitespace runs.
+ */
+function normalizeTrailingSpacesAndBlankLines(text: string): string {
+  const lines = text.split('\n');
+  for (let i = 0; i < lines.length - 1; i++) {
+    const line = lines[i];
+    let end = line.length;
+    while (end > 0 && (line[end - 1] === ' ' || line[end - 1] === '\t')) {
+      end--;
+    }
+    if (end < line.length) {
+      lines[i] = line.slice(0, end);
+    }
+  }
+  const joined = lines.join('\n');
+  let out = '';
+  let newlineRun = 0;
+  for (let i = 0; i < joined.length; i++) {
+    const ch = joined[i];
+    if (ch === '\n') {
+      newlineRun++;
+      if (newlineRun <= 2) {
+        out += ch;
+      }
+    } else {
+      newlineRun = 0;
+      out += ch;
+    }
+  }
+  return out;
 }
 
 interface LineSpan {
@@ -249,7 +330,7 @@ function stripComments(source: string, mask: ScanMask, dropDocstrings: boolean):
     out += source[i];
   }
   // Collapse runs of blank lines left behind.
-  return out.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n');
+  return normalizeTrailingSpacesAndBlankLines(out);
 }
 
 /** Conservative SQL reduction: optional comment strip + whitespace + long value-list collapse. */
@@ -264,7 +345,12 @@ function crushSql(source: string, options: ResolvedCodeOptions, legend: CrushLeg
   // Collapse long parenthesized value lists: VALUES (..),(..),(..)… and IN (a,b,c,…).
   let collapsedLists = 0;
   text = text.replace(/\b(VALUES)\b\s*((?:\([^()]*\)\s*,\s*){3,}\([^()]*\))/gi, (_m, kw: string, body: string) => {
-    const tuples = body.split(/\)\s*,\s*\(/).length;
+    let tuples = 0;
+    for (let i = 0; i < body.length; i++) {
+      if (body[i] === '(') {
+        tuples++;
+      }
+    }
     collapsedLists++;
     const first = body.slice(0, body.indexOf(')') + 1);
     return `${kw} ${first} /* … ${tuples} value tuples elided */`;
@@ -274,7 +360,7 @@ function crushSql(source: string, options: ResolvedCodeOptions, legend: CrushLeg
   }
 
   // Normalize trailing whitespace and excessive blank lines.
-  return text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n');
+  return normalizeTrailingSpacesAndBlankLines(text);
 }
 
 /**
