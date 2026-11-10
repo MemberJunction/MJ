@@ -45819,6 +45819,19 @@ export interface MJAIAgentHarnessEntity_IHarnessCapabilitySettings {
      * own configuration selects and MJ's model preference is advisory only.
      */
     ModelSelection?: boolean;
+
+    // ── Cloud execution & async wake ────────────────────────────────────────────
+    /**
+     * The adapter executes remotely over HTTP against a cloud agent platform (Google Antigravity
+     * Cloud, Claude Code Cloud, OpenAI Codex Cloud) rather than spawning a local or container CLI
+     * process.
+     */
+    SupportsCloudExecution?: boolean;
+    /**
+     * The adapter can detach cleanly from an in-flight background cloud run when `turnWaitBudgetMs`
+     * elapses under `adaptive-wake` mode while preserving `ExternalSessionID` for the next `AgentWake`.
+     */
+    SupportsAsyncWakeHandoff?: boolean;
 }
 
 /**

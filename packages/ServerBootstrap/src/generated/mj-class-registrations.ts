@@ -1313,10 +1313,14 @@ import {
     DefaultRuntimeActionBridgeBuilder,
 } from '@memberjunction/action-runtime-host';
 
-// @memberjunction/ai-agent-harness (8 classes)
+// @memberjunction/ai-agent-harness (12 classes)
 import {
+    AntigravityCliAdapter,
+    AntigravityCloudAdapter,
     ClaudeCodeCliAdapter,
+    ClaudeCodeCloudAdapter,
     CodexAdapter,
+    CodexCloudAdapter,
     GeminiCliAdapter,
     HarnessAgentBase,
     HarnessAgentType,
@@ -2773,8 +2777,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     TextToolLibrary,
     WhiteboardChannelServer,
     DefaultRuntimeActionBridgeBuilder,
+    AntigravityCliAdapter,
+    AntigravityCloudAdapter,
     ClaudeCodeCliAdapter,
+    ClaudeCodeCloudAdapter,
     CodexAdapter,
+    CodexCloudAdapter,
     GeminiCliAdapter,
     HarnessAgentBase,
     HarnessAgentType,
@@ -2883,14 +2891,14 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJAIBridgeProviderChannelEntityServer,
     MJAIBridgeProviderEntityServer,
     MJAIPromptEntityServer,
-    MJAIPromptRunEntityServer,
-    MJAIRemoteBrowserProviderEntityServer,
-    MJAISkillEntityServer,
-    MJAISkillPermissionEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJAIPromptRunEntityServer,
+    MJAIRemoteBrowserProviderEntityServer,
+    MJAISkillEntityServer,
+    MJAISkillPermissionEntityServer,
     MJAPIApplicationScopeEntityServer,
     MJAPIKeyScopeEntityServer,
     MJActionEntityServer,
@@ -3087,14 +3095,14 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GitHubAddCommentAction,
     GitHubCommitFilesAndCreatePRAction,
     GitHubCommitFilesToBranchAction,
-    GitHubCreateOrUpdateIssueAction,
-    GitHubCreatePullRequestAction,
-    GitHubGetPullRequestContextAction,
-    GitHubGetRepositoryContextAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    GitHubCreateOrUpdateIssueAction,
+    GitHubCreatePullRequestAction,
+    GitHubGetPullRequestContextAction,
+    GitHubGetRepositoryContextAction,
     GitHubGetWorkflowRunAndLogsAction,
     GitHubListRepositoryTreeAction,
     GitHubMergePullRequestAction,
@@ -3239,7 +3247,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1327;
+export const CLASS_REGISTRATIONS_COUNT = 1331;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
