@@ -30,7 +30,8 @@
  * Workflow requests: a request naming a task-graph step (`OriginatingTaskID`) is how a person releases
  * that step, and the dispatcher settles the step from it. So only the dispatcher raises one (inside its
  * runtime-security scope), no request's `OriginatingTaskID` ever changes, a workflow request's question
- * (`Request`, `ResponseSchema`) is the dispatcher's, and its answer cannot change once given. Server
+ * (`Request`, `ResponseSchema`) is the dispatcher's, its answer is written only by the save that gives it,
+ * and it cannot change once given. Server
  * code acting as the step's assignee could otherwise point an answer the person gave elsewhere at the
  * step, pre-create the request the dispatcher then adopts, or rewrite the question the person answers.
  */
@@ -49,6 +50,8 @@ const RESPONDED_STATUSES = ['Approved', 'Rejected', 'Responded'];
 const WORKFLOW_QUESTION_FIELDS = ['Request', 'ResponseSchema'];
 /** A request's answer: fixed for a workflow request once it is given. */
 const ANSWER_FIELDS = ['Status', 'Response', 'ResponseData'];
+/** What an answer says: written to an open workflow request only by the save that answers it. */
+const ANSWER_DATA_FIELDS = ['Response', 'ResponseData'];
 
 @RegisterClass(BaseEntity, 'MJ: AI Agent Requests')
 export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
@@ -116,13 +119,22 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
                     refuse(field, `A workflow step's request cannot change ${field} once it has been answered.`);
                 }
             }
+        } else if (!this.answersRequest()) {
+            // Open: the answer is written by the save that gives it. Filled in beforehand, it would ride on the
+            // person's approval (an approve button leaves it as it is) into the step's output as reviewed data.
+            for (const field of ANSWER_DATA_FIELDS) {
+                if (this.GetFieldByName(field)?.Dirty) {
+                    refuse(field, `A workflow step's request takes ${field} only from the save that answers it.`);
+                }
+            }
         }
     }
 
     /** Whether this save runs inside the task-graph dispatcher's runtime-security scope, bound to its user. */
     private inDispatcherScope(): boolean {
-        return ServerOperationScopeManager.Instance.IsOperationActive(
-            [TASK_GRAPH_RUNTIME_SECURITY_OPERATION], 'MJ: AI Agent Requests', this.ContextCurrentUser ?? undefined,
+        // No user, no scope: without one, IsOperationActive would match a frame bound to anybody.
+        return this.ContextCurrentUser != null && ServerOperationScopeManager.Instance.IsOperationActive(
+            [TASK_GRAPH_RUNTIME_SECURITY_OPERATION], 'MJ: AI Agent Requests', this.ContextCurrentUser,
         );
     }
 

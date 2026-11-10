@@ -243,4 +243,16 @@ describe('MJAIAgentRequestEntityServer — workflow requests', () => {
         expect(refusedFields(workflowRequest({ saved: true, stored: 'Requested', next: 'Approved' }))).toEqual([]);
         expect(refusedFields(workflowRequest({ saved: true, stored: 'Requested', next: 'Canceled' }))).toEqual([]);
     });
+
+    it('takes an answer only from the save that gives it, so nothing can fill one in for the person to approve', () => {
+        const prefilled = workflowRequest({ saved: true });
+        prefilled.SetFieldState('ResponseData', { Dirty: true, OldValue: null });
+        prefilled.SetFieldState('Response', { Dirty: true, OldValue: null });
+        expect(refusedFields(prefilled)).toEqual(['Response', 'ResponseData']);
+        expect(asClient(() => refusedFields(prefilled))).toEqual(['Response', 'ResponseData']);
+
+        const answering = workflowRequest({ saved: true, stored: 'Requested', next: 'Approved' });
+        answering.SetFieldState('ResponseData', { Dirty: true, OldValue: null });
+        expect(refusedFields(answering)).toEqual([]);
+    });
 });
