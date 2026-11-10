@@ -1025,13 +1025,6 @@ export interface IMetadataProvider {
     LocalMetadataObsolete(type?: string): boolean
 
     /**
-     * True when this provider implements the `(entityName, options: GetEntityObjectOptions, contextUser)`
-     * overload of {@link GetEntityObject}. Lightweight unit-test stubs that mock only the 2-argument
-     * `(entityName, contextUser)` signature omit this flag so callers can fall back cleanly.
-     */
-    readonly SupportsGetEntityObjectOptions?: boolean
-
-    /**
      * Creates a new instance of a BaseEntity subclass for the specified entity and calls NewRecord() to initialize it.
      * The UUID will be automatically generated for non-auto-increment uniqueidentifier primary keys.
      * @param entityName - The name of the entity to create (e.g., "Users", "Customers")
@@ -1039,15 +1032,6 @@ export interface IMetadataProvider {
      * @returns Promise resolving to the newly created entity instance with NewRecord() already called
      */
     GetEntityObject<T extends BaseEntity>(entityName: string, contextUser?: UserInfo): Promise<T>
-
-    /**
-     * Creates a new instance of a BaseEntity subclass for the specified entity using explicit
-     * initialization options (for example `{ skipNewRecord: true }` prior to `LoadFromData`).
-     * @param entityName - The name of the entity to create (e.g., "Users", "Customers")
-     * @param options - Initialization options controlling whether `NewRecord()` runs
-     * @param contextUser - Optional context user for permissions (mainly used server-side)
-     */
-    GetEntityObject<T extends BaseEntity>(entityName: string, options: GetEntityObjectOptions, contextUser?: UserInfo): Promise<T>
     
     /**
      * Creates a new instance of a BaseEntity subclass and loads an existing record using the provided key.
@@ -1058,6 +1042,14 @@ export interface IMetadataProvider {
      * @throws Error if the record cannot be found or loaded
      */
     GetEntityObject<T extends BaseEntity>(entityName: string, loadKey: CompositeKey, contextUser?: UserInfo): Promise<T>
+
+    /**
+     * Optional fast-path entity instantiation method accepting {@link GetEntityObjectOptions}
+     * (for example `{ SkipNewRecord: true }` prior to `LoadFromData`).
+     * Keeping this separate and optional on `IMetadataProvider` preserves exact backwards
+     * compatibility for lightweight test stubs and custom `IMetadataProvider` implementations.
+     */
+    GetEntityObjectWithOptions?<T extends BaseEntity>(entityName: string, options: GetEntityObjectOptions, contextUser?: UserInfo): Promise<T>
     /**
      * Returns a list of dependencies - records that are linked to the specified Entity/RecordID combination. A dependency is as defined by the relationships in the database. The MemberJunction metadata that is used
      * for this simply reflects the foreign key relationships that exist in the database. The CodeGen tool is what detects all of the relationships and generates the metadata that is used by MemberJunction. The metadata in question

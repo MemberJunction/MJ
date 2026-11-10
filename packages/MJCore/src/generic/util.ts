@@ -39,8 +39,8 @@ function instantiateEntityForHydration<T extends BaseEntity>(
     entityName: string,
     contextUser?: UserInfo
 ): Promise<T> {
-    if (md.SupportsGetEntityObjectOptions) {
-        return md.GetEntityObject<T>(entityName, { SkipNewRecord: true }, contextUser);
+    if (md.GetEntityObjectWithOptions) {
+        return md.GetEntityObjectWithOptions<T>(entityName, { SkipNewRecord: true }, contextUser);
     }
     return md.GetEntityObject<T>(entityName, contextUser);
 }

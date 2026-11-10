@@ -464,13 +464,6 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     public static CoalesceUseMicrotask: boolean = true;
 
     /**
-     * Signals to hydration helpers (`TransformSimpleObjectToEntityObject`, `BaseEngine`) that
-     * this provider supports the `(entityName, options: GetEntityObjectOptions, contextUser)`
-     * overload of {@link GetEntityObject}.
-     */
-    public readonly SupportsGetEntityObjectOptions: boolean = true;
-
-    /**
      * Pending coalesced requests waiting to be flushed.
      * Each entry tracks the original params, contextUser, and a resolver
      * so the caller's promise resolves with only their slice of results.
@@ -7651,6 +7644,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             LogError(ex);
             return null;
           }
+    }
+
+    /**
+     * Instantiates a `BaseEntity` subclass using explicit {@link GetEntityObjectOptions}
+     * (for example `{ SkipNewRecord: true }` prior to `LoadFromData`).
+     */
+    public GetEntityObjectWithOptions<T extends BaseEntity>(
+        entityName: string,
+        options: GetEntityObjectOptions,
+        contextUser?: UserInfo
+    ): Promise<T> {
+        return this.GetEntityObject<T>(entityName, options, contextUser);
     }
 
     /**

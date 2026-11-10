@@ -506,8 +506,8 @@ export class Metadata {
         }
         
         if (actualOptions !== undefined) {
-            if (Metadata.Provider.SupportsGetEntityObjectOptions) {  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
-                return await Metadata.Provider.GetEntityObject<T>(entityName, actualOptions, actualContextUser);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
+            if (Metadata.Provider.GetEntityObjectWithOptions) {  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
+                return await Metadata.Provider.GetEntityObjectWithOptions<T>(entityName, actualOptions, actualContextUser);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
             }
             return await Metadata.Provider.GetEntityObject<T>(entityName, actualContextUser);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
         }

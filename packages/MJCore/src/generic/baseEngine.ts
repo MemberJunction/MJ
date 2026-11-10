@@ -2347,8 +2347,8 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         entityName: string,
         contextUser?: UserInfo
     ): Promise<BaseEntity> {
-        if (provider.SupportsGetEntityObjectOptions) {
-            return provider.GetEntityObject<BaseEntity>(entityName, { SkipNewRecord: true }, contextUser);
+        if (provider.GetEntityObjectWithOptions) {
+            return provider.GetEntityObjectWithOptions<BaseEntity>(entityName, { SkipNewRecord: true }, contextUser);
         }
         return provider.GetEntityObject<BaseEntity>(entityName, contextUser);
     }
