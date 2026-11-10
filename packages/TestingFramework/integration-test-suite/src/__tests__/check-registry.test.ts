@@ -22,6 +22,7 @@ import { AiSkillsChecks } from '../checks/ai-skills.checks';
 import { ApiKeysChecks } from '../checks/api-keys.checks';
 import { DiagnosticsChecks } from '../checks/diagnostics.checks';
 import { PredictiveStudioChecks } from '../checks/predictive-studio.checks';
+import { PredictiveShadowDriftChecks } from '../checks/predictive-shadow-drift.checks';
 import { RemoteOpWireProgressChecks } from '../checks/remote-op-wire-progress.checks';
 import { PromptRunnerChecks } from '../checks/prompt-runner.checks';
 import { AiVendorEffortChecks } from '../checks/ai-vendor-effort.checks';
@@ -112,6 +113,8 @@ import { VideoStudioHandoffChecks } from '../checks/video-studio-handoff.checks'
 import { VideoStudioProductionChecks } from '../checks/video-studio-production.checks';
 import { VideoStudioLiveSmokeChecks } from '../checks/video-studio-live-smoke.checks';
 import { SemanticGraphChecks } from '../checks/semantic-graph.checks';
+import { GraphRuntimeChecks } from '../checks/graph-runtime.checks';
+import { TaskGraphSecurityChecks } from '../checks/task-graph-security.checks';
 import { RunViewFeatureChecks } from '../checks/runview-features.checks';
 import { WorkBusCoreChecks } from '../checks/work-bus-core.checks';
 import { IntegrationSchemaPipelineChecks } from '../checks/integration-schema-pipeline.checks';
@@ -181,6 +184,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['api-keys', ApiKeysChecks, 3],
         ['diagnostics', DiagnosticsChecks, 4], // DIAG1-DIAG4 session capture, bundle assembly, encrypted intake (IT163)
         ['predictive-studio', PredictiveStudioChecks, 5],
+        ['predictive-shadow-drift', PredictiveShadowDriftChecks, 2], // PSD1-PSD2 shadow scoring Role=Challenger isolation and PredictiveStudioEvaluateDriftAction over MJ: Feature Values (IT166)
         ['remote-op-wire-progress', RemoteOpWireProgressChecks, 1],
         ['prompt-runner', PromptRunnerChecks, 1],
         ['ai-vendor-effort', AiVendorEffortChecks, 2],
@@ -279,6 +283,8 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['encrypted-read-client', EncryptedReadClientChecks, 4], // ER1-ER4 encrypted field plaintext over GraphQL, miss and hit (IT160)
         ['ciphertext-cache', CiphertextCacheChecks, 7], // CT0-CT4 ciphertext at rest in the RunViewCache, plaintext to the caller; CT5-CT6 a peer's cache event leaves CredentialEngine plaintext (IT161)
         ['semantic-graph', SemanticGraphChecks, 7], // SG1-SG7 Semantic Graph substrate, Content Pipeline GraphStage overlay, and Executable Canon DAG similarity & telemetry (IT162)
+        ['graph-runtime', GraphRuntimeChecks, 6], // GR1-GR6 MJ Canon traversal, per-caller query visibility, the edge approval gate on a real Save, Get Graph Context, JoinEntity and QueryEdgeProvider fixtures (IT167)
+        ['task-graph-security', TaskGraphSecurityChecks, 10], // TGS1-TGS10 envelope on every row and immutable, one compensation per step, A2A store row boundary, dispatcher taint gate & compensation, the real action runner's taint gate, a person's review clears taint, a server-answered request clears nothing, an early settle clears nothing, only the service makes workflows, REST edits ordinary tasks (IT168)
         ['runview-features', RunViewFeatureChecks, 12], // RVF1-RVF12 RunView cross-feature edges and RunViewParams.Parameters wire binding (IT32)
         ['work-bus-core', WorkBusCoreChecks, 10], // WBC1-WBC10 Conversation Types, Comments IS-A Conversation, Comment Types, Field Suggestions IS-A Comment, SubtypeSelector AutoEnsureOnSave/Refuse, PostSaveHook superseding, and Workstream wakes (IT164)
         ['integration-schema-pipeline', IntegrationSchemaPipelineChecks, 4], // ISP1-ISP4 live SQL native typing, key capping, and Soft PK/FK/Organic Key auto-indexing (IT165)
@@ -407,6 +413,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'fp-gate-c2-3': 3,
         'fp-gate-c2-5': 3,
         'fp-live-jobtitle': 1,
+        'graph-runtime': 6,
         'integration-schema-pipeline': 4,
         'jsontype-live-sync': 9,
         'jsontype-live-sync-client': 9,
@@ -427,6 +434,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'performance-benchmark': 14,
         'permission-engine': 15,
         'perplexity-decider': 5,
+        'predictive-shadow-drift': 2,
         'predictive-studio': 5,
         'prompt-eval-harness': 7,
         'prompt-runner': 1,
@@ -546,6 +554,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'systemone-kev': 10,
         'task-graph-execution': 27,
         'task-graph-orchestration': 18,
+        'task-graph-security': 10,
         'templates': 8,
         'trailing-runtime-state': 6,
         'transaction-groups': 6,
@@ -586,7 +595,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(234);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(237);
     });
 });
 
@@ -789,6 +798,8 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'fp-gate-c2-5.G1',
         'fp-gate-c2-5.G2',
         'fp-gate-c2-5.G3',
+        'graph-runtime.GR5',
+        'graph-runtime.GR6',
         'jsontype-live-sync-client.JL1',
         'jsontype-live-sync-client.JL2',
         'jsontype-live-sync-client.JL3',
@@ -1039,6 +1050,16 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'task-graph-orchestration.TG15',
         'task-graph-orchestration.TG16',
         'task-graph-orchestration.TG18',
+        'task-graph-security.TGS1',
+        'task-graph-security.TGS10',
+        'task-graph-security.TGS2',
+        'task-graph-security.TGS3',
+        'task-graph-security.TGS4',
+        'task-graph-security.TGS5',
+        'task-graph-security.TGS6',
+        'task-graph-security.TGS7',
+        'task-graph-security.TGS8',
+        'task-graph-security.TGS9',
         'transaction-groups-batched.TGB1',
         'transaction-groups-batched.TGB2',
         'transaction-groups-batched.TGB3',

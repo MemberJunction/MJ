@@ -138,7 +138,10 @@
       "ForceCodeGeneration": false,
       "Status": "Active",
       "DriverClass": "AssignUserRolesAction",
-      "ParentID": "2504E288-ADF7-4913-A627-AA14276BAA55"
+      "ParentID": "2504E288-ADF7-4913-A627-AA14276BAA55",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -366,7 +369,10 @@
       "ForceCodeGeneration": false,
       "Status": "Active",
       "DriverClass": "CreateUserAction",
-      "ParentID": "2504E288-ADF7-4913-A627-AA14276BAA55"
+      "ParentID": "2504E288-ADF7-4913-A627-AA14276BAA55",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -617,7 +623,10 @@
       "ForceCodeGeneration": false,
       "Status": "Active",
       "DriverClass": "CreateEmployeeAction",
-      "ParentID": "2504E288-ADF7-4913-A627-AA14276BAA55"
+      "ParentID": "2504E288-ADF7-4913-A627-AA14276BAA55",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [

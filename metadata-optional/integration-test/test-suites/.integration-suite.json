@@ -1561,6 +1561,39 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT167 - Graph Runtime Permissions",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "703E84E3-C790-46D7-A694-728E7DA35618"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT168 - Task Graph Security and Saga",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "2B6D709B-FD12-41C3-BDB2-3737A9E16195"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT166 - Predictive Shadow Scoring and Drift",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B37FAE4E-A419-489E-9669-916DF3776436"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT164 - Work Bus Core Layers",
             "Sequence": 49,
             "Status": "Active"

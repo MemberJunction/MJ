@@ -7,7 +7,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-list-check",
-      "CategoryID": "@lookup:MJ: Action Categories.Name=Data"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [

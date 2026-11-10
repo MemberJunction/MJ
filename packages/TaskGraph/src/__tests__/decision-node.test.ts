@@ -186,8 +186,11 @@ class FakeRunStep {
     public async Save(): Promise<boolean> { this.saved.push(this); return true; }
 }
 
-/** The graph's parent row as the fake provider hands it out: who submitted the graph. */
-type FakeParentTask = { InputPayload: string | null; AgentRunID: string | null; Load: () => Promise<boolean> };
+/** The graph's parent row as the fake provider hands it out: who submitted the graph, filed as a workflow. */
+type FakeParentTask = { InputPayload: string | null; AgentRunID: string | null; TypeID?: string; ParentID?: string | null; Load: () => Promise<boolean> };
+
+/** The workflow task type's ID in these tests. */
+const WORKFLOW_TYPE_ID = '11111111-1111-4111-8111-111111111111';
 
 /** The provider calls a Decision step makes: the graph's parent, a new run step, and the run's highest step. */
 type FakeProvider = {
@@ -303,6 +306,8 @@ function dispatcherWith(runner: TaskDecisionRunner, promptRunner?: TaskPromptRun
         runStepLogs: new Map<string, Promise<void>>(),
         emittedGateVerdicts: new Map<string, Map<string, string>>(),
         ownerByParentID: new Map<string, string | null>(),
+        // Only a workflow's steps run: the fake parents below are filed under this type, with no parent of their own.
+        cachedWorkflowTaskTypeID: WORKFLOW_TYPE_ID,
     };
     Object.setPrototypeOf(instance, TaskGraphDispatcher.prototype);
     if (!drivesDispatcher(instance)) throw new Error('TaskGraphDispatcher no longer has the methods these tests drive.');
@@ -1026,7 +1031,7 @@ function supportGraph(fork: 'exclusive' | 'conditional') {
         graphEdge('e-ca', 'task-a', 'task-c', null),
     ];
     const provider: GraphProvider = {
-        GetEntityObject: async () => ({ InputPayload: null, AgentRunID: null, Load: async () => true }),
+        GetEntityObject: async () => ({ InputPayload: null, AgentRunID: null, TypeID: WORKFLOW_TYPE_ID, ParentID: null, Load: async () => true }),
         RunView: async (params: RunViewParams) => ({
             Success: true,
             Results: params.EntityName === 'MJ: Task Dependencies' ? edges : [...rows.values()],
@@ -1175,7 +1180,7 @@ describe('retrying a held Decision in a compiled flow re-decides nothing', () =>
             DependencyType: d.dependencyType ?? 'Prerequisite',
         })));
         const provider: GraphProvider = {
-            GetEntityObject: async () => ({ InputPayload: null, AgentRunID: null, Load: async () => true }),
+            GetEntityObject: async () => ({ InputPayload: null, AgentRunID: null, TypeID: WORKFLOW_TYPE_ID, ParentID: null, Load: async () => true }),
             RunView: async (params: RunViewParams) => ({
                 Success: true,
                 Results: params.EntityName === 'MJ: Task Dependencies' ? edges : [...rows.values()],
@@ -1278,7 +1283,7 @@ describe('multi-prerequisite conditional task gate evaluation', () => {
             graphEdge('e-3-6', 'step-6', 'step-3', null),
         ];
         const provider: GraphProvider = {
-            GetEntityObject: async () => ({ InputPayload: null, AgentRunID: null, Load: async () => true }),
+            GetEntityObject: async () => ({ InputPayload: null, AgentRunID: null, TypeID: WORKFLOW_TYPE_ID, ParentID: null, Load: async () => true }),
             RunView: async (params: RunViewParams) => ({
                 Success: true,
                 Results: params.EntityName === 'MJ: Task Dependencies' ? edges : [...rows.values()],
@@ -1307,7 +1312,7 @@ describe('multi-prerequisite conditional task gate evaluation', () => {
             graphEdge('e-3-6', 'step-6', 'step-3', null),
         ];
         const provider: GraphProvider = {
-            GetEntityObject: async () => ({ InputPayload: null, AgentRunID: null, Load: async () => true }),
+            GetEntityObject: async () => ({ InputPayload: null, AgentRunID: null, TypeID: WORKFLOW_TYPE_ID, ParentID: null, Load: async () => true }),
             RunView: async (params: RunViewParams) => ({
                 Success: true,
                 Results: params.EntityName === 'MJ: Task Dependencies' ? edges : [...rows.values()],
@@ -1323,3 +1328,23 @@ describe('multi-prerequisite conditional task gate evaluation', () => {
     });
 });
 
+
+describe('only a workflow runs as a graph', () => {
+    it('loads no steps under a parent that is not a parentless task of the workflow type', async () => {
+        const dispatcher = dispatcherWith(answeringRunner([]));
+        for (const parent of [
+            { TypeID: '22222222-2222-4222-8222-222222222222', ParentID: null },
+            { TypeID: WORKFLOW_TYPE_ID, ParentID: '33333333-3333-4333-8333-333333333333' },
+        ]) {
+            const graph = supportGraph('exclusive');
+            const provider: GraphProvider = {
+                ...graph.provider,
+                GetEntityObject: async () => ({ InputPayload: null, AgentRunID: null, ...parent, Load: async () => true }),
+            };
+            const state = await dispatcher.loadGraphState(provider, 'graph-1');
+            expect(state.nodes).toHaveLength(0);
+        }
+        // The same steps under a workflow load.
+        expect((await dispatcher.loadGraphState(supportGraph('exclusive').provider, 'graph-1')).nodes.length).toBeGreaterThan(0);
+    });
+});

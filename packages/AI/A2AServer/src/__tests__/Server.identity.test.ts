@@ -32,6 +32,11 @@ describe('A2A Server task access', () => {
         expect(source).not.toMatch(/tasks\.(get|Get)\(/);
         expect(source).toMatch(/tasks\.GetForUser\(/);
     });
+
+    it('never echoes a caller-supplied task ID in an error (CodeQL #755)', () => {
+        expect(source).not.toMatch(/Task with ID \$\{/);
+        expect(source).toMatch(/TASK_NOT_FOUND_MESSAGE/);
+    });
 });
 
 describe('A2A agent card identity', () => {

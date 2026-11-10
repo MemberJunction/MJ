@@ -23835,6 +23835,16 @@ export class MJAction_ {
     @MaxLength(36)
     CreatedByAgentID?: string;
         
+    @Field({nullable: true, description: "Action that undoes this action when a saga rolls back a failed task graph. A task-graph node's own compensation spec overrides it."}) 
+    @MaxLength(36)
+    CompensationActionID?: string;
+        
+    @Field({nullable: true, description: "JSON object mapping each compensation action parameter name to a path in the forward run: input.<param>, output.<param>, actionLogId or recordChanges."}) 
+    CompensationInputMapping?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: "True when running the action twice with the same input has the same effect as running it once, so a failed attempt may be retried and a compensation replayed automatically."}) 
+    IsIdempotent?: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Category?: string;
@@ -23854,6 +23864,10 @@ export class MJAction_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     CreatedByAgent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(425)
+    CompensationAction?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -23956,6 +23970,15 @@ export class CreateMJActionInput {
     @Field({ nullable: true })
     CreatedByAgentID: string | null;
 
+    @Field({ nullable: true })
+    CompensationActionID: string | null;
+
+    @Field({ nullable: true })
+    CompensationInputMapping: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsIdempotent?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -24040,6 +24063,15 @@ export class UpdateMJActionInput {
 
     @Field({ nullable: true })
     CreatedByAgentID?: string | null;
+
+    @Field({ nullable: true })
+    CompensationActionID?: string | null;
+
+    @Field({ nullable: true })
+    CompensationInputMapping?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsIdempotent?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -60188,6 +60220,14 @@ export class MJFeatureValue_ {
     @Field({nullable: true, description: "Instant of the input data the value was computed from (its provenance); never after EffectiveAsOf."}) 
     InputAsOf?: Date;
         
+    @Field({nullable: true, description: "Champion for the production value of the record process; Challenger for a shadow score from its challenger, kept for comparison only."}) 
+    @MaxLength(20)
+    Role?: string;
+        
+    @Field({nullable: true, description: "The MJ: ML Models record that scored this value, for values written by an ML Model record process (the champion's audit row or a shadow challenger's row). NULL for values from AI prompts, which record their model in AIModelID."}) 
+    @MaxLength(36)
+    MLModelID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     RecordProcess?: string;
@@ -60306,6 +60346,12 @@ export class CreateMJFeatureValueInput {
     @Field({ nullable: true })
     InputAsOf: Date | null;
 
+    @Field({ nullable: true })
+    Role?: string;
+
+    @Field({ nullable: true })
+    MLModelID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -60399,6 +60445,12 @@ export class UpdateMJFeatureValueInput {
 
     @Field({ nullable: true })
     InputAsOf?: Date | null;
+
+    @Field({ nullable: true })
+    Role?: string;
+
+    @Field({ nullable: true })
+    MLModelID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -85878,6 +85930,9 @@ export class MJRecordProcess_ {
     @Field({nullable: true, description: "JSON configuration for the process's work, used by work types that need structured config beyond Input/Output mappings. For WorkType='FieldRules' this holds the serialized FieldRuleSet (the rules applied to each record). NULL for work types that do not use it."}) 
     Configuration?: string;
         
+    @Field({nullable: true, description: "JSON IRecordProcessChallengerConfig: a shadow challenger (model or prompt) run on a sample of live invocations against the same feature snapshot. Its scores are written as Challenger feature values and never change the business record. NULL means no challenger."}) 
+    ChallengerConfiguration?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Category?: string;
@@ -86000,6 +86055,9 @@ export class CreateMJRecordProcessInput {
     @Field({ nullable: true })
     Configuration: string | null;
 
+    @Field({ nullable: true })
+    ChallengerConfiguration: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -86093,6 +86151,9 @@ export class UpdateMJRecordProcessInput {
 
     @Field({ nullable: true })
     Configuration?: string | null;
+
+    @Field({ nullable: true })
+    ChallengerConfiguration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -98123,6 +98184,13 @@ export class MJTask_ {
     @Field({nullable: true, description: "Everything about this step that has no column of its own, as JSON: the loop definition for a ForEach or While step, an agent step's message and template parameters, the mappings that move data between this step and the workflow payload, and the execution policy (timeout, retries, what to do on failure). Typed by ITaskStepConfiguration."}) 
     Configuration?: string;
         
+    @Field({nullable: true, description: "JSON TaskSecurityEnvelope (Version 1) holding the submitting run's security constraints: bound action parameters, audience reader user IDs, RunScope, CallerTenantContext and the taint bit. Written by the server when a task graph is submitted and never changed afterwards; the dispatcher enforces it on every node. NULL means the graph was submitted with no constraints."}) 
+    SecurityEnvelope?: string;
+        
+    @Field({nullable: true, description: "For a saga compensation task, the forward task it undoes. Unique, so a forward task is compensated at most once."}) 
+    @MaxLength(36)
+    CompensatesTaskID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -98162,6 +98230,10 @@ export class MJTask_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     Prompt?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    CompensatesTask?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -98264,6 +98336,12 @@ export class CreateMJTaskInput {
     @Field({ nullable: true })
     Configuration: string | null;
 
+    @Field({ nullable: true })
+    SecurityEnvelope: string | null;
+
+    @Field({ nullable: true })
+    CompensatesTaskID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -98348,6 +98426,12 @@ export class UpdateMJTaskInput {
 
     @Field({ nullable: true })
     Configuration?: string | null;
+
+    @Field({ nullable: true })
+    SecurityEnvelope?: string | null;
+
+    @Field({ nullable: true })
+    CompensatesTaskID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
