@@ -1,5 +1,5 @@
 ---
-"@memberjunction/ai-agents": patch
+"@memberjunction/ai-agents": minor
 ---
 
 Payload change requests can now address nested values by path, and `allowedPaths` (`PayloadSelfWritePaths`) can now permit writes inside array elements.

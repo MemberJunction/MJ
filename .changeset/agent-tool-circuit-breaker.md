@@ -1,5 +1,5 @@
 ---
-"@memberjunction/ai-agents": patch
+"@memberjunction/ai-agents": minor
 ---
 
 Agent-local tools (`BaseAgent.GetAgentTools`) now have a run-scoped circuit breaker, like Actions. Before, the action breaker covered only the action dispatch path, so a driver tool that kept failing (an `edit_file` whose old text never matches) ran again on every turn until the run hit its iteration limit.

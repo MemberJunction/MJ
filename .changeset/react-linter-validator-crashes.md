@@ -1,5 +1,5 @@
 ---
-"@memberjunction/react-linter": patch
+"@memberjunction/react-linter": minor
 ---
 
 Library lint validators and runtime rules no longer crash or flood the log:
