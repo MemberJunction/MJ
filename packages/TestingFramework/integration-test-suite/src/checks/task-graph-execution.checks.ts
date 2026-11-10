@@ -2181,8 +2181,12 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('task-graph-execution', {
                 const depRes = await RunView.FromMetadataProvider(ctx.Provider).RunView(
                     { EntityName: 'MJ: Task Dependencies', ExtraFilter: `TaskID IN (${ids})`, ResultType: 'entity_object' }, ctx.User,
                 );
+                // A workflow's edges are the task-graph service's (`MJTaskDependencyEntityServer`): removed as it would.
                 for (const dep of (depRes.Results ?? []) as Array<{ Delete: () => Promise<boolean> }>) {
-                    await dep.Delete();
+                    await ServerOperationScopeManager.Instance.RunWithAuthority(
+                        { operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION, source: 'ServerEngine', allowedEntities: ['MJ: Task Dependencies'], userId: ctx.User.ID },
+                        () => dep.Delete(),
+                    );
                 }
             }
             for (const c of children) await c.Delete();

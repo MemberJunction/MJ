@@ -24,6 +24,8 @@
  *   taint, and server code's answer settles the step but clears nothing (see {@link checkServerAnsweredRequestClearsNothing}).
  * - TGS8: a step completed outside the dispatcher before the fetch feeding it has finished leaves its next step
  *   tainted (see {@link checkEarlySettleClearsNothing}).
+ * - TGS9: only the task-graph service creates a workflow, adds a step to one, or changes its edges; ordinary tasks are
+ *   unaffected (see {@link checkOnlyTheServiceMakesWorkflows}).
  *
  * Fixtures: one start-paused Human-only graph (so no dispatcher picks it up) and the rows the checks
  * create, all removed in teardown, rows that reference another first.
@@ -36,6 +38,8 @@ import { MJAIAgentRequestEntity, MJAIAgentRunEntity, MJEnvironmentEntityExtended
 import {
     ParseTaskSecurityEnvelope,
     TAINTED_EGRESS_BLOCKED,
+    TASK_GRAPH_RUNTIME_SECURITY_OPERATION,
+    TASK_GRAPH_WORKFLOW_TYPE_NAME,
     TASK_SECURITY_ENVELOPE_VERSION,
     type TaskGraphSpec,
     type TaskSecurityEnvelope,
@@ -209,7 +213,8 @@ async function checkOneCompensationPerForwardStep(ctx: IntegrationCheckContext):
         return row;
     };
     const rows = [await compensation(), await compensation()];
-    const saved = await Promise.all(rows.map((r) => r.Save()));
+    // Staged as the dispatcher's saga stages them: only the task-graph service and dispatcher add a step to a workflow.
+    const saved = await Promise.all(rows.map((r) => AsTaskGraphService(ctx.User, 'MJ: Tasks', () => r.Save())));
     rows.forEach((r, i) => { if (saved[i]) f.ExtraTaskIDs.push(r.ID); });
     AssertEqual(saved.filter(Boolean).length, 1, 'TGS2: saves that landed');
 
@@ -268,6 +273,17 @@ function providerFactory(ctx: IntegrationCheckContext): ProviderFactory {
  * (`CompensatesTaskID`) is deleted after the row undoing it — an escalation before its compensation, a
  * compensation before its forward step — because the foreign key refuses the other order.
  */
+/**
+ * Runs `write` in the task-graph runtime-security scope for `entityName`, bound to `user`: how a fixture stages or
+ * removes what only the task-graph service and dispatcher write (a workflow's steps and edges).
+ */
+export function AsTaskGraphService<T>(user: UserInfo, entityName: 'MJ: Tasks' | 'MJ: Task Dependencies', write: () => Promise<T>): Promise<T> {
+    return ServerOperationScopeManager.Instance.RunWithAuthority(
+        { operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION, source: 'ServerEngine', allowedEntities: [entityName], userId: user.ID },
+        write,
+    );
+}
+
 export async function DeleteTaskGraph(provider: IMetadataProvider, user: UserInfo, parentID: string): Promise<string[]> {
     const rv = RunView.FromMetadataProvider(provider);
     const deleted = (row: { Delete(): Promise<boolean> }): Promise<boolean> => row.Delete().catch(() => false);
@@ -285,7 +301,8 @@ export async function DeleteTaskGraph(provider: IMetadataProvider, user: UserInf
         );
         if (!deps.Success) failures.push(`could not list the workflow's dependencies: ${deps.ErrorMessage ?? ''}`);
         for (const dep of deps.Results ?? []) {
-            if (!(await deleted(dep))) failures.push(`dependency ${dep.ID}: ${dep.LatestResult?.CompleteMessage ?? 'not deleted'}`);
+            // A workflow's edges are the task-graph service's: removed as it would remove them.
+            if (!(await AsTaskGraphService(user, 'MJ: Task Dependencies', () => deleted(dep)))) failures.push(`dependency ${dep.ID}: ${dep.LatestResult?.CompleteMessage ?? 'not deleted'}`);
         }
         // Requests raised for (or answering) a step reference it, so they go before it.
         const requests = await rv.RunView<MJAIAgentRequestEntity>(
@@ -1049,6 +1066,101 @@ async function checkEarlySettleClearsNothing(ctx: IntegrationCheckContext): Prom
     Assert(cleanupFailures.length === 0, `TGS8: cleanup left rows behind: ${cleanupFailures.join('; ')}`);
 }
 
+/**
+ * TGS9 — only the task-graph service creates a workflow, adds a step to one, or changes its edges. A workflow's steps
+ * run as the user its metadata names, so an ordinary save as the submitter (an agent run calling Create Record or
+ * Update Record) must not be able to make one: not a new workflow, not a step under a real one (with a `StepType` or
+ * without), not an ordinary task retyped into a workflow, and not an edge added to or removed from a real one. Ordinary
+ * tasks, and subtasks under them, still save as before.
+ */
+async function checkOnlyTheServiceMakesWorkflows(ctx: IntegrationCheckContext): Promise<void> {
+    if (!MutationTierOn(ctx)) {
+        SkipCheck(MUTATION_TIER_OFF_REASON);
+        return;
+    }
+    const rv = RunView.FromMetadataProvider(ctx.Provider);
+    const actions = await rv.RunView<{ ID: string; Name: string }>({ EntityName: 'MJ: Actions', Fields: ['ID', 'Name'], MaxRows: 1, ResultType: 'simple' }, ctx.User);
+    Assert(actions.Success && (actions.Results?.length ?? 0) === 1, 'TGS9: failed to query an action from MJ: Actions');
+    const action = actions.Results![0];
+    const types = await rv.RunView<{ ID: string; Name: string }>({ EntityName: 'MJ: Task Types', Fields: ['ID', 'Name'], ResultType: 'simple' }, ctx.User);
+    const workflowType = types.Results?.find((t) => t.Name === TASK_GRAPH_WORKFLOW_TYPE_NAME);
+    const otherType = types.Results?.find((t) => t.Name !== TASK_GRAPH_WORKFLOW_TYPE_NAME);
+    Assert(workflowType != null && otherType != null, 'TGS9: needs the workflow task type and one other');
+
+    const submitted = await new TaskGraphService().Submit(
+        {
+            workflowName: `it165-TGS9-${Date.now()} (mj-integration-test — safe to delete)`,
+            continuation: 'none',
+            tasks: [
+                { tempId: 'fetch', name: 'it165 TGS9 fetch', description: 'fixture', kind: 'Action', configuration: { actionName: action.Name }, dependsOn: [] },
+                { tempId: 'send', name: 'it165 TGS9 send', description: 'fixture', kind: 'Action', configuration: { actionName: action.Name }, dependsOn: ['fetch'] },
+            ],
+        } as TaskGraphSpec,
+        {
+            EnvironmentID: MJEnvironmentEntityExtended.DefaultEnvironmentID,
+            Provider: ctx.Provider,
+            ContextUser: ctx.User,
+            SecurityEnvelope: { Version: TASK_SECURITY_ENVELOPE_VERSION, IsRunTainted: false },
+            Debug: { paused: true },
+        },
+    );
+    Assert(submitted.Success && !!submitted.ParentTaskID, `TGS9: the service could not submit a graph: ${submitted.ErrorMessage ?? ''}`);
+    const parentID = submitted.ParentTaskID!;
+
+    const newTask = async (fields: Partial<MJTaskEntity>): Promise<MJTaskEntity> => {
+        const task = await ctx.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', ctx.User);
+        task.NewRecord();
+        task.Name = 'it165 TGS9 fixture';
+        task.EnvironmentID = MJEnvironmentEntityExtended.DefaultEnvironmentID;
+        task.Status = 'Pending';
+        task.SetMany(fields);
+        return task;
+    };
+    const ordinaryRows: MJTaskEntity[] = [];
+    const creates = 'Only the task-graph service creates a workflow';
+    let cleanupFailures: string[] = [];
+    try {
+        const forgedWorkflow = await newTask({
+            TypeID: workflowType!.ID, Status: 'In Progress',
+            InputPayload: JSON.stringify({ continuation: 'none', reinvokeDepth: 0, failureSemantics: 'block', submittedByUserID: ctx.User.ID, submittedByAgentRunID: null }),
+        });
+        await assertRefused(forgedWorkflow, creates, 'TGS9: a workflow created by an ordinary save');
+        await assertRefused(await newTask({ TypeID: workflowType!.ID, ParentID: parentID, StepType: 'Action', ActionID: action.ID }), creates, 'TGS9: a step added to a real workflow by an ordinary save');
+        await assertRefused(await newTask({ TypeID: workflowType!.ID, ParentID: parentID }), creates, 'TGS9: a task without a StepType added under a real workflow');
+
+        const ordinary = await newTask({ TypeID: otherType!.ID });
+        Assert(await ordinary.Save(), `TGS9: an ordinary task was refused: ${ordinary.LatestResult?.CompleteMessage ?? ''}`);
+        ordinaryRows.push(ordinary);
+        const subtask = await newTask({ TypeID: otherType!.ID, ParentID: ordinary.ID });
+        Assert(await subtask.Save(), `TGS9: an ordinary subtask was refused: ${subtask.LatestResult?.CompleteMessage ?? ''}`);
+        ordinaryRows.unshift(subtask);
+        ordinary.TypeID = workflowType!.ID;
+        ordinary.Status = 'In Progress';
+        await assertRefused(ordinary, creates, 'TGS9: an ordinary task retyped into a workflow');
+
+        const children = await rv.RunView<{ ID: string; Name: string }>({ EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${parentID}'`, Fields: ['ID', 'Name'], ResultType: 'simple', BypassCache: true }, ctx.User);
+        const fetchID = children.Results?.find((c) => c.Name === 'it165 TGS9 fetch')?.ID;
+        const sendID = children.Results?.find((c) => c.Name === 'it165 TGS9 send')?.ID;
+        Assert(fetchID != null && sendID != null, 'TGS9: the submitted steps were not found');
+        const edges = await rv.RunView<MJTaskDependencyEntity>({ EntityName: 'MJ: Task Dependencies', ExtraFilter: `TaskID='${sendID}'`, ResultType: 'entity_object', BypassCache: true }, ctx.User);
+        const edge = edges.Results?.[0];
+        Assert(edge != null, "TGS9: the send step's edge was not found");
+        const edges_ = "dependencies are written only by the task-graph service";
+        Assert(!(await edge!.Delete()), "TGS9: an ordinary delete removed the edge into the send step");
+        Assert((edge!.LatestResult?.CompleteMessage ?? '').includes(edges_), `TGS9: the edge delete was refused for another reason: ${edge!.LatestResult?.CompleteMessage ?? ''}`);
+        const added = await ctx.Provider.GetEntityObject<MJTaskDependencyEntity>('MJ: Task Dependencies', ctx.User);
+        added.NewRecord();
+        added.TaskID = fetchID!;
+        added.DependsOnTaskID = sendID!;
+        added.DependencyType = 'Prerequisite';
+        await assertRefused(added, edges_, 'TGS9: an edge added to a workflow by an ordinary save');
+    } finally {
+        for (const row of ordinaryRows) await row.Delete().catch(() => false);
+        cleanupFailures = await DeleteTaskGraph(ctx.Provider, ctx.User, parentID).catch((e: unknown) => [String(e)]);
+    }
+    Assert(cleanupFailures.length === 0, `TGS9: cleanup left rows behind: ${cleanupFailures.join('; ')}`);
+}
+
 export const TaskGraphSecurityChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.TGS1`, Name: 'TGS1: every row of a submitted graph carries its envelope, and the envelope cannot be edited', Fn: checkEnvelopeOnEveryRowAndImmutable, RequiresMutation: true },
     { Id: `${BUNDLE}.TGS2`, Name: 'TGS2: of two concurrent compensation rows for one forward step, exactly one lands', Fn: checkOneCompensationPerForwardStep, RequiresMutation: true },
@@ -1058,6 +1170,7 @@ export const TaskGraphSecurityChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.TGS6`, Name: "TGS6: the submitter's own review of a Human step clears taint, and server code can neither complete one nor rewrite what the graph trusts", Fn: checkPersonsReviewClearsTaint, RequiresMutation: true },
     { Id: `${BUNDLE}.TGS7`, Name: "TGS7: only the dispatcher raises a workflow step's request; the submitter's own answer clears taint, and server code's answer settles the step but clears nothing", Fn: checkServerAnsweredRequestClearsNothing, RequiresMutation: true },
     { Id: `${BUNDLE}.TGS8`, Name: "TGS8: a step completed outside the dispatcher before what feeds it has finished leaves its next step tainted", Fn: checkEarlySettleClearsNothing, RequiresMutation: true },
+    { Id: `${BUNDLE}.TGS9`, Name: 'TGS9: only the task-graph service creates a workflow, adds a step to one, or changes its edges', Fn: checkOnlyTheServiceMakesWorkflows, RequiresMutation: true },
 ];
 
 for (const check of TaskGraphSecurityChecks) {
