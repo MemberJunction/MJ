@@ -152,21 +152,23 @@ describe('MJAIAgentRequestEntityServer — who answered', () => {
         expect(r.ResponseByUserID).toBe(ME);
     });
 
-    it('records nobody when server code answers, even as the user the request is for', async () => {
-        // An agent run calling Update Record, or Create Record with the request already Approved, as ME.
+    it("records nobody when server code answers a workflow step's request, even as the user it is for", async () => {
+        // An agent run calling Update Record as ME. (Creating one already answered is refused outright: below.)
         const updated = answered({ saved: true, user: { ID: ME, Type: 'User' } });
         expect(await updated.Save()).toBe(true);
         expect(updated.ResponseByUserID).toBeNull();
-
-        const created = answered({ saved: false, user: { ID: ME, Type: 'User' } });
-        expect(await created.Save()).toBe(true);
-        expect(created.ResponseByUserID).toBeNull();
-        // Created for a workflow step, as the review's reproduction did, it is refused outright (below).
 
         // Server work started inside a client's request (a resumed agent run) is server code too.
         const fromServerWork = answered({ saved: true, user: { ID: ME, Type: 'User' } });
         expect(await asClient(() => ServerOperationScopeManager.Instance.RunAsServerWork(() => fromServerWork.Save()))).toBe(true);
         expect(fromServerWork.ResponseByUserID).toBeNull();
+    });
+
+    it('records the user when server code answers any other request, such as an agent answering an inter-agent request', async () => {
+        const created = answered({ saved: false, user: { ID: ME, Type: 'User' } });
+        expect(created.OriginatingTaskID).toBeNull();
+        expect(await created.Save()).toBe(true);
+        expect(created.ResponseByUserID).toBe(ME);
     });
 
     it("refuses changing an answered request's responder, an Owner-type user's change included", () => {

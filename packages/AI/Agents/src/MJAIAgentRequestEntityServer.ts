@@ -21,11 +21,11 @@
  * as the system user only when its assignee came from metadata (agent type, category, request
  * type); an assignee the caller chose is held to this rule.
  *
- * Responder: `ResponseByUserID` is the server's record of the person who answered. A save that answers
- * the request (moves it into a responded status, a create included) sets it to the user the save runs
- * as when the save is that user's own client request (`ServerOperationScopeManager.IsInDirectClientCrud`),
- * and to nobody when server code answers, such as an agent run calling Create Record or Update Record
- * as that user. No other save may change it.
+ * Responder: `ResponseByUserID` is the server's record of who answered. A save that answers the request
+ * (moves it into a responded status, a create included) sets it to the user the save runs as. On a workflow
+ * step's request it does so only when the save is that user's own client request
+ * (`ServerOperationScopeManager.IsInDirectClientCrud`), and sets nobody when server code answers, such as
+ * an agent run calling Update Record as that user. No other save may change it.
  *
  * Workflow requests: a request naming a task-graph step (`OriginatingTaskID`) is how a person releases
  * that step, and the dispatcher settles the step from it. So only the dispatcher raises one (inside its
@@ -170,13 +170,14 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
         const wasRequested = statusField?.OldValue === 'Requested' || (!this.IsSaved && statusField?.Value === 'Requested');
         const isNowResponded = RESPONDED_STATUSES.includes(this.Status);
         if (this.answersRequest()) {
-            // The responder is the person whose own request this save is, whatever the caller wrote, and
-            // nobody when server code answers. A task-graph Human step clears taint only when its assignee
-            // answered (`HumanReviewClearsTaint` in @memberjunction/task-graph); the assignee is the graph's
-            // submitter, and that user's agent runs answer as the same user, so only where the save came
-            // from tells a person from code.
+            // The responder is the user this save runs as, whatever the caller wrote. On a workflow step's request it
+            // is recorded only when the save is that user's own client request, and nobody when server code answers:
+            // a task-graph Human step clears taint only when its assignee answered (`HumanReviewClearsTaint` in
+            // @memberjunction/task-graph), the assignee is the graph's submitter, and that user's agent runs answer as
+            // the same user, so only where the save came from tells a person from code. Any other request (an agent
+            // answering an inter-agent request, say) keeps its responder: its OriginatingTaskID can never be set later.
             const person = ServerOperationScopeManager.Instance.IsInDirectClientCrud();
-            this.ResponseByUserID = person ? (this.ContextCurrentUser?.ID ?? null) : null;
+            this.ResponseByUserID = person || this.OriginatingTaskID == null ? (this.ContextCurrentUser?.ID ?? null) : null;
         }
 
         const saved = await super.Save(options);
