@@ -74,7 +74,7 @@ export async function BacktestStep(o: BacktestOptions): Promise<BacktestResult> 
     const selected = selectedPRs(LoadCorpus(o.CorpusPath), o);
     const ledger = file.Exists() ? await resumeLedger(file.Read(), selected, o, deps) : await createLedger(selected, o, deps);
     await recoverOrphans(ledger, deps);
-    if (o.RetryFailed) retryFailed(ledger, o.Only);
+    if (o.RetryFailed) retryFailed(ledger, o.Only, new Set(selected.map((p) => p.PR)));
     reportSkipped(ledger, o.Only);
     file.Write(ledger);
     return { Ledger: ledger, Stopped: await runPending(ledger, file, o, deps) };
@@ -188,10 +188,10 @@ async function recoverOrphans(ledger: BacktestLedger, deps: BacktestDeps): Promi
     }
 }
 
-/** Sets the Failed entries (within `only`) back to Pending with no run, error, match or times; the recorded cost stays. */
-function retryFailed(ledger: BacktestLedger, only: number[] | undefined): void {
+/** Sets the Failed entries that are still selected (and within `only`) back to Pending with no run, error, match or times; the recorded cost stays. */
+function retryFailed(ledger: BacktestLedger, only: number[] | undefined, selected: Set<number>): void {
     for (const e of ledger.Entries) {
-        if (e.Status !== 'Failed' || (only && !only.includes(e.PR))) continue;
+        if (e.Status !== 'Failed' || !selected.has(e.PR) || (only && !only.includes(e.PR))) continue;
         Object.assign(e, { Status: 'Pending', RunID: null, Error: null, Match: null, StartedAt: null, EndedAt: null });
     }
 }

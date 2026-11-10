@@ -24,7 +24,7 @@ export const SettingsSchema = z.object({
     }),
     Prices: z.record(z.string(), z.object({ Input: z.number(), Output: z.number(), CachedInput: z.number() })),
     /** `PnpmVersion` is the pnpm the image installs; the host fetch runs the same version so the store layout matches. */
-    Sandbox: z.object({ Image: z.string(), MemoryGB: z.number().positive(), Cpus: z.number().positive(), PidsLimit: z.number().int().positive(), PnpmVersion: z.string().regex(/^\d+\.\d+\.\d+$/) }),
+    Sandbox: z.object({ Image: z.string(), MemoryGB: z.number().positive(), Cpus: z.number().positive(), PidsLimit: z.number().int().positive(), PnpmVersion: z.string().regex(/^\d+\.\d+\.\d+$/), BuildExclude: z.array(z.string()) }),
     RiskPaths: z.array(z.string()),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
@@ -44,7 +44,9 @@ export const DEFAULT_SETTINGS: Settings = {
         'claude-haiku-5-5': { Input: 0.1, Output: 0.5, CachedInput: 0.01 }, 'gemini-4-argon': { Input: 2, Output: 10, CachedInput: 0.1 },
         'gpt-4.1-mini': { Input: 0.4, Output: 1.6, CachedInput: 0.1 }, 'gpt-5.1': { Input: 1.25, Output: 10, CachedInput: 0.125 },
     },
-    Sandbox: { Image: 'jit-sandbox:local', MemoryGB: 6, Cpus: 3, PidsLimit: 1024, PnpmVersion: '10.33.0' },
+    // BuildExclude: packages left out of the sandbox build closure. The CLI's build copies a folder with a recursive
+    // fs.cpSync, which fails with EACCES on a Docker Desktop bind mount; a Linux host can set this to [].
+    Sandbox: { Image: 'jit-sandbox:local', MemoryGB: 6, Cpus: 3, PidsLimit: 1024, PnpmVersion: '10.33.0', BuildExclude: ['@memberjunction/cli'] },
     RiskPaths: [
         'packages/MJCore/src/generic/securityInfo.ts', 'packages/MJCore/src/generic/fieldSecuritySQLGate.ts', 'packages/GenericDatabaseProvider/', 'packages/MJServer/',
         'packages/SQLServerDataProvider/', 'packages/PostgreSQLDataProvider/', 'packages/GraphQLDataProvider/', 'packages/RedisProvider/', 'packages/CodeGenLib/', 'packages/OpenApp/',

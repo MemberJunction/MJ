@@ -200,6 +200,17 @@ describe('BacktestStep', () => {
     expect(l.Entries[0]).toEqual(expect.objectContaining({ Status: 'Assessed', RunID: 'run-1', Error: null, CostUSD: 3.5 }));
   });
 
+  it('leaves a Failed entry that is no longer in the corpus as recorded under RetryFailed', async () => {
+    const { root, corpus } = setup([9]);
+    const first = await backtest(options(root, corpus, failing([9]), { Set: 'Clean' }));
+    expect(first.Entries.find((e) => e.PR === 9)?.Status).toBe('Failed');
+    writeCorpus(corpus);
+    const d = fakes();
+    const l = await backtest(options(root, corpus, d, { Set: 'Clean', RetryFailed: true }));
+    expect(d.calls.map((c) => c.PR)).toEqual([]);
+    expect(l.Entries.find((e) => e.PR === 9)?.Status).toBe('Failed');
+  });
+
   it('refuses to resume a ledger made for another model and leaves the file unchanged', async () => {
     const { root, corpus } = setup();
     await backtest(options(root, corpus, fakes(), { Model: 'gen.model', Only: [1] }));

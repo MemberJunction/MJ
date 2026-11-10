@@ -107,10 +107,10 @@ export class VitestCatchTarget extends BaseCatchTarget {
         if (actual !== pinned) throw new InfrastructureError(`host pnpm is ${actual} with the pin, but the sandbox image uses ${pinned}`);
     }
 
-    /** `turbo run build --filter=<pkg>...` for the packages under test, inside the sandbox with the local cache only. */
+    /** `turbo run build --filter=<pkg>...` for the packages under test, minus `Sandbox.BuildExclude`, inside the sandbox with the local cache only. */
     public async BuildPackages(revision: PreparedRevision, packages: string[]): Promise<void> {
         if (packages.length === 0) return;
-        const filters = packages.map((p) => `--filter=${p}...`).join(' ');
+        const filters = [...packages.map((p) => `--filter=${p}...`), ...this.o.Settings.Sandbox.BuildExclude.map((p) => `--filter=!${p}`)].join(' ');
         const cmd = `npx turbo run build ${filters} --cache=local:rw,remote:r --log-order=stream --summarize`;
         const r = await this.inSandbox(revision, 'rw', ['sh', '-c', cmd], 45 * 60_000, { TURBO_CACHE_DIR: `${CONTAINER_ROOT}/.turbo/cache`, TURBO_TELEMETRY_DISABLED: '1' });
         this.keepTurboSummaries(revision);
