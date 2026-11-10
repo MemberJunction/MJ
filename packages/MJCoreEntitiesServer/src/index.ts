@@ -98,3 +98,6 @@ export * from './custom/MJMLPredictionUnitEntityServer.server';
 export * from './custom/MJMLEvaluationProtocolEntityServer.server';
 export * from './custom/MJMLTrainingSnapshotEntityServer.server';
 export * from './custom/MJBrandKitEntityServer.server';
+export * from './custom/MJGraphEdgeEntityServer.server';
+export * from './custom/MJGraphEdgeTypeEntityServer.server';
+export * from './custom/MJGraphEdgeProviderEntityServer.server';

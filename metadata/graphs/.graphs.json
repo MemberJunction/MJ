@@ -1,0 +1,60 @@
+[
+  {
+    "fields": {
+      "Name": "MJ Canon",
+      "Description": "Governed institutional semantic graph connecting business concepts, canonical Alternate Base Views, approved Queries, and entity schema relationships.",
+      "GraphTypeID": "@lookup:MJ: Graph Types.Name=Canon",
+      "LoadMode": "Preload",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: Graph Edge Providers": [
+        {
+          "fields": {
+            "GraphID": "@parent:ID",
+            "Name": "Canon Alternate Base View Edges",
+            "Description": "Projects MJ: Entity Alternate Base Views into Subsets edges pointing to their owning MJ: Entities and parent views.",
+            "DriverClass": "AlternateBaseViewEdgeProvider",
+            "Configuration": "{}",
+            "Sequence": 10,
+            "IsActive": true
+          },
+          "primaryKey": {
+            "ID": "8C9D0295-AF5B-436D-9C0D-C409BCF3619A"
+          }
+        },
+        {
+          "fields": {
+            "GraphID": "@parent:ID",
+            "Name": "Canon Query Metadata Edges",
+            "Description": "Projects MJ: Query Entities (including AlternateBaseViewID) into Reads edges and MJ: Query Dependencies into Composes edges.",
+            "DriverClass": "QueryMetadataEdgeProvider",
+            "Configuration": "{\"Include\":[\"Reads\",\"Composes\"]}",
+            "Sequence": 20,
+            "IsActive": true
+          },
+          "primaryKey": {
+            "ID": "DAD3EF19-63D6-4737-9970-F289BA50EDB8"
+          }
+        },
+        {
+          "fields": {
+            "GraphID": "@parent:ID",
+            "Name": "Canon Entity Metadata Edges",
+            "Description": "Projects MJ: Entities foreign keys into References edges, ParentID inheritance into Is A edges, and participating MJ: Entity Fields into Field Of edges.",
+            "DriverClass": "EntityMetadataEdgeProvider",
+            "Configuration": "{\"Include\":[\"References\",\"IsA\",\"FieldOf\"]}",
+            "Sequence": 30,
+            "IsActive": true
+          },
+          "primaryKey": {
+            "ID": "6325FD7E-2B2F-42E4-8E50-77258F3EC975"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "201B3BC8-2F16-45EF-9FCE-7490D755EF88"
+    }
+  }
+]

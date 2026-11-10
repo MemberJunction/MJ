@@ -56,6 +56,10 @@ export * from './engines/ResourceTypeEngine';
 export * from './engines/IdentityClaimEngine';
 export * from './engines/BrandKitEngine';
 export * from './engines/VideoStudioEngine';
+export * from './engines/GraphEngine';
+export * from './engines/CanonGraphEngine';
+
+export * from './graph';
 
 export * from './custom/PermissionProviders';
 export * from './custom/Permissions';
@@ -73,6 +77,8 @@ export * from './artifact-extraction/artifact-extractor';
 import { LoadPermissionProviders } from './custom/PermissionProviders';
 import { LoadPermissionEntityExtensions } from './custom/Permissions';
 import { LoadAuthorizationCheckOperation } from './custom/operations/AuthorizationCheckOperation';
+import { LoadGraphEdgeProviders } from './graph';
 LoadPermissionProviders();
 LoadPermissionEntityExtensions();
 LoadAuthorizationCheckOperation();
+LoadGraphEdgeProviders();
