@@ -23,7 +23,7 @@ import { WarnIfUnnamed } from '../a11y/unnamed-control-guard';
 /**
  * mj-combobox — Editable dropdown with filtering and optional custom values.
  *
- * Replaces `<kendo-combobox>`. Unlike mj-dropdown, the trigger is a text input
+ * Unlike mj-dropdown, the trigger is a text input
  * that filters the list as you type. When AllowCustom is true, typed text that
  * doesn't match any item is emitted as the value.
  *

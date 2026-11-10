@@ -9,7 +9,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { MJMLModelEntity, MJMLModelScoringBindingEntity, MJProcessRunDetailEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
-import { PSProcessRunRow, PrimaryAuc, PrimaryModelScore, FormatMetricValue } from '../predictive-studio.view-models';
+import { PSProcessRunRow, PrimaryModelScore, FormatMetricValue } from '../predictive-studio.view-models';
 import { humanizeCron, StatusVariant } from '../production-distribution';
 import { PSOperateDialogComponent } from './ps-operate-dialog.component';
 import { PSPredictionsGridComponent } from './ps-predictions-grid.component';
@@ -125,7 +125,7 @@ interface RunDetailVM {
                   </div>
                   <div class="ps-card-body" style="padding:8px">
                     @for (m of models; track m.modelId) {
-                      <div class="mrow" data-testid="ps-production-row" [class.sel]="m.modelId === selectedModelId" (click)="select(m.modelId)">
+                      <div class="mrow" data-testid="ps-production-row" [class.sel]="IsSelected(m.modelId)" (click)="select(m.modelId)">
                         <div class="ico" [class]="'st-' + m.deployState"><i [class]="deployIcon(m.deployState)"></i></div>
                         <div style="flex:1;min-width:0">
                           <div class="nm">{{ m.label }}</div>
@@ -661,7 +661,8 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
     );
     const lastRowCount = bindings.find((b) => b.LastRowCount != null)?.LastRowCount ?? null;
     const score = PrimaryModelScore(m);
-    const holdoutMetric = score != null ? FormatMetricValue(score.key, score.value) : '—';
+    // named with its metric: a lower-is-better loss and a higher-is-better AUC must not read as the same kind of number
+    const holdoutMetric = score != null ? `${score.label} ${FormatMetricValue(score.key, score.value)}` : '—';
     return {
       modelId: m.ID,
       label: this.engine.ModelDisplayName(m),
@@ -758,6 +759,11 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
   /** @deprecated Use {@link OnOperateClose}. */
   public onOperateClose(result: { changed: boolean }): void {
     return this.OnOperateClose(result);
+  }
+
+  /** True for the selected row (IDs compared case-insensitively: SQL Server and PostgreSQL spell a UUID in different cases). */
+  public IsSelected(id: string): boolean {
+    return UUIDsEqual(id, this.SelectedModelId);
   }
 
   public Select(id: string): void {

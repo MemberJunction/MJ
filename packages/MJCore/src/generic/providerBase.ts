@@ -29,6 +29,7 @@ import { TransformSimpleObjectToEntityObject } from "./util";
 import { LoadRelatedRecordsBatched } from "./relatedRecordBatchLoader";
 import { ContextToken, GetLocalTimeZone } from "./contextTokens";
 import { FindQueryContextTokens, QueryContextCacheValues } from "./queryTemplateContext";
+import { CompositeFilterSQLCompiler } from "./filters/compositeFilterSQL";
 
 
 
@@ -3562,6 +3563,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const entity = this.ResolveRunViewEntitySync(params);
         if (!entity) {
             return;
+        }
+        if (params.Filter) {
+            CompositeFilterSQLCompiler.AssertFieldsAllowed(params.Filter, entity, contextUser);
         }
         const view = params.ViewEntity as SavedViewSortSource | undefined;
         const parameterNames = ExtractRunViewParameterNames(params.Parameters);
