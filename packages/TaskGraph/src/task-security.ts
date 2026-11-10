@@ -62,10 +62,10 @@ export function ResolveStoredNodeSecurity(
  * through it, which is the only thing that clears taint inside a graph ({@link HumanReviewClearsTaint}).
  * Any other node carries what it recorded when it ran (`Configuration.runtime.isOutputTainted`, which
  * every node the dispatcher runs writes as its input taint OR its own). A node `Complete` with nothing
- * recorded is tainted: it was completed outside the dispatcher (forced, or saved by code) or is a Human
- * step no assignee reviewed in person, so its output is nobody's vouched-for result, and what ran
- * before it may not have run yet. Any other node that recorded nothing (skipped, failed before
- * recording) is never read as clean: it is tainted when the graph is, or when anything it depends on
+ * recorded and no person recorded as completing it is tainted: it was completed outside the dispatcher
+ * (forced, or saved or answered by code), so its output is nobody's vouched-for result, and what ran
+ * before it may not have run yet. Any other node that recorded nothing (a Human step a person other than
+ * its assignee completed, skipped, failed before recording) is never read as clean: it is tainted when the graph is, or when anything it depends on
  * could be (followed through `upstreamOf`, transitively), and tainted outright when what it depends on
  * is not known. So a Decision, a skipped branch or a failed step between an untrusted fetch and an
  * egress action cannot launder the fetch's taint.
@@ -110,6 +110,15 @@ export function HumanReviewClearsTaint(node: Pick<UpstreamTaskTaintFields, 'Step
     return typeof completedBy === 'string' && UUIDsEqual(completedBy, node.UserID);
 }
 
+/**
+ * Whether the server recorded a person as completing this Human step. `completedByUserID` is written only for
+ * a person: the user whose own client request completed the step, or the responder of the request a person
+ * answered (`MJTaskEntityServer`, `MJAIAgentRequestEntityServer`).
+ */
+function completedByAPerson(node: Pick<UpstreamTaskTaintFields, 'StepType' | 'Configuration'>): boolean {
+    return node.StepType === 'Human' && typeof runtimeOf(node.Configuration)?.completedByUserID === 'string';
+}
+
 function carriesTaint(node: UpstreamTaskTaintFields, walk: TaintWalk): boolean {
     if (HumanReviewClearsTaint(node)) {
         return false;
@@ -118,11 +127,12 @@ function carriesTaint(node: UpstreamTaskTaintFields, walk: TaintWalk): boolean {
     if (recorded !== undefined) {
         return recorded;
     }
-    if (node.Status === 'Complete') {
-        // Complete with nothing recorded: it did not finish through the dispatcher, which records every
-        // run's taint, and is not a Human step its assignee reviewed. Its output (forced from the debugger,
-        // saved by code, or an answer nobody vouched for) is untrusted whatever ran before it, which may not
-        // have run yet.
+    if (node.Status === 'Complete' && !completedByAPerson(node)) {
+        // Complete with nothing recorded and no person recorded as completing it: it did not finish through the
+        // dispatcher, which records every run's taint. Its output (forced from the debugger, saved by code, or an
+        // answer server code gave) is untrusted whatever ran before it, which may not have run yet. A Human step
+        // a person other than its assignee completed (a delegated approval) cleared nothing, but its answer is
+        // that person's own, so it passes on what fed it, below.
         return true;
     }
     if (walk.GraphTainted) {

@@ -128,6 +128,13 @@ describe('UpstreamCarriesTaint', () => {
         expect(UpstreamCarriesTaint(reviewedEarly, false, lookup({ approve: [fetchNotRunYet], fetch: [] }))).toBe(false);
     });
 
+    it('passes what fed it through a Human step a person other than its assignee completed (a delegated approval)', () => {
+        const delegated = upstream({ ID: 'approve', StepType: 'Human', UserID: REVIEWER, Configuration: completedBy(RUN_USER) });
+        expect(UpstreamCarriesTaint(delegated, false, lookup({ approve: [upstream({ ID: 'fetch', Configuration: ranClean })] }))).toBe(false);
+        expect(UpstreamCarriesTaint(delegated, false, lookup({ approve: [upstream({ ID: 'fetch', Configuration: ranTainted })] }))).toBe(true);
+        expect(UpstreamCarriesTaint(delegated, true, lookup({ approve: [] }))).toBe(true);
+    });
+
     it("stops at an assignee's review on the way back, not at anyone else's, and fails closed on a cycle", () => {
         const fetch = upstream({ ID: 'fetch', Configuration: ranTainted });
         const decision = upstream({ ID: 'decision', StepType: 'Decision', Status: 'Skipped' });
