@@ -142,4 +142,78 @@ describe('LocalCacheManager in-place update freezes only the changed rows', () =
         expectDeepFrozen(await cachedRows(mgr));
         storage.clearAll();
     });
+
+    test('ApplyDifferentialUpdate freezes the same number of objects whatever the slot size', async () => {
+        const [small, large] = await freezesAtTwoSlotSizes(mgr =>
+            mgr.ApplyDifferentialUpdate(
+                FINGERPRINT,
+                PARAMS,
+                [makeRow('row-3'), makeRow('added-diff')],
+                [keyOf('row-1').ToConcatenatedString()],
+                'ID',
+                '2026-02-01T00:00:00.000Z'
+            )
+        );
+        expect(large).toBe(small);
+    });
+
+    test('sharing a saved row across multiple cached fingerprints deep-freezes the row subtree only once', async () => {
+        const storage = new MockCacheStorageProvider();
+        const mgr = await initCache(storage);
+        const fpA = 'Test Entity||OrderByA|||||';
+        const fpB = 'Test Entity||OrderByB|||||';
+        await mgr.SetRunViewResult(fpA, { EntityName: 'Test Entity', OrderBy: 'Name ASC' }, makeRows(SMALL_SLOT_ROWS), MAX_UPDATED);
+        await mgr.SetRunViewResult(fpB, { EntityName: 'Test Entity', OrderBy: 'Name DESC' }, makeRows(SMALL_SLOT_ROWS), MAX_UPDATED);
+
+        const sharedSavedRow = makeRow('shared-row');
+        const firstSlotFreezes = await countFreezes(() =>
+            mgr.UpsertSingleEntity(fpA, sharedSavedRow, keyOf('shared-row'), MAX_UPDATED)
+        );
+        const secondSlotFreezes = await countFreezes(() =>
+            mgr.UpsertSingleEntity(fpB, sharedSavedRow, keyOf('shared-row'), MAX_UPDATED)
+        );
+
+        // First slot freezes [results, envelope, sharedSavedRow, sharedSavedRow.Settings] (4 objects);
+        // second slot skips the already deeply-frozen row subtree and freezes only [results, envelope] (2 objects).
+        expect(firstSlotFreezes).toBe(4);
+        expect(secondSlotFreezes).toBe(2);
+        storage.clearAll();
+    });
+
+    test('deep-freeze walks do not allocate intermediate Object.values arrays', async () => {
+        const storage = new MockCacheStorageProvider();
+        const mgr = await initCache(storage);
+        const valuesSpy = vi.spyOn(Object, 'values');
+        try {
+            await mgr.SetRunViewResult(FINGERPRINT, PARAMS, makeRows(SMALL_SLOT_ROWS), MAX_UPDATED);
+            await mgr.UpsertSingleEntity(FINGERPRINT, makeRow('extra'), keyOf('extra'), MAX_UPDATED);
+            expect(valuesSpy).not.toHaveBeenCalled();
+        } finally {
+            valuesSpy.mockRestore();
+            storage.clearAll();
+        }
+    });
+
+    test('a failed partial walk does not mark unfinished subtrees as deeply frozen', async () => {
+        const storage = new MockCacheStorageProvider();
+        const mgr = await initCache(storage);
+
+        const sharedChild: { Theme: string; Extra?: { Nested: boolean } } = { Theme: 'dark' };
+        const hostile = new Proxy({}, {
+            preventExtensions() { throw new Error('hostile value refuses to freeze'); },
+        });
+        // `hostile` throws before `Extra` is added or visited on a later reuse if `sharedChild` were
+        // prematurely committed to deeplyFrozenCacheObjects on a failed walk.
+        const badRow = { ID: 'bad', Bad: hostile, Child: sharedChild, __mj_UpdatedAt: MAX_UPDATED };
+        await mgr.SetRunViewResult(FINGERPRINT, PARAMS, [badRow], MAX_UPDATED);
+
+        expect(Object.isFrozen(sharedChild)).toBe(false);
+        sharedChild.Extra = { Nested: true };
+
+        const goodFp = 'Test Entity||Good|||||';
+        await mgr.SetRunViewResult(goodFp, PARAMS, [{ ID: 'good', Child: sharedChild, __mj_UpdatedAt: MAX_UPDATED }], MAX_UPDATED);
+        expect(Object.isFrozen(sharedChild)).toBe(true);
+        expect(Object.isFrozen(sharedChild.Extra)).toBe(true);
+        storage.clearAll();
+    });
 });

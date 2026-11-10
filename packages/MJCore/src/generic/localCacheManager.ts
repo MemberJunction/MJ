@@ -30,8 +30,12 @@ function LogStatusVerbose(message: string): void {
  * cache array silently reorders or grows the cached slot for every later reader.
  *
  * Freezes BEFORE recursing and records each object in `visited`, which terminates cycles.
- * A call without `visited` starts a new set, so it visits every object it reaches, frozen or
- * not. In-place slot maintenance skips carried rows by way of {@link fullyFrozenResultArrays}.
+ * Objects whose full reachable subgraph finishes freezing without throwing are recorded in
+ * {@link deeplyFrozenCacheObjects} so subsequent cache writes (`ApplyDifferentialUpdate`,
+ * multi-fingerprint saves, `SetDataset`, or derived `SetRunViewResult` slots) skip already
+ * deeply-frozen subtrees in O(1) without allocating `Object.values()` arrays, while still
+ * descending into objects that an external caller only froze shallowly via `Object.freeze(row)`.
+ * In-place slot maintenance also skips carried rows as a whole via {@link fullyFrozenResultArrays}.
  *
  * Two value kinds are skipped, not frozen — accepted residuals:
  * - Binary payloads (`Buffer`/TypedArray/`ArrayBuffer`, e.g. `varbinary` columns): the spec
@@ -40,23 +44,68 @@ function LogStatusVerbose(message: string): void {
  * - `Date` internal slots: `Object.freeze` cannot protect them — `setHours` and friends
  *   still work.
  */
-function deepFreezeCacheValue<T>(value: T, visited: WeakSet<object> = new WeakSet<object>()): T {
-    if (value === null || typeof value !== 'object'
-        || ArrayBuffer.isView(value) || value instanceof ArrayBuffer) {
+const deeplyFrozenCacheObjects = new WeakSet<object>();
+
+function deepFreezeCacheSubtree(
+    target: object,
+    visited: WeakSet<object>,
+    newlyFrozen: object[]
+): void {
+    if (
+        ArrayBuffer.isView(target) ||
+        target instanceof ArrayBuffer ||
+        deeplyFrozenCacheObjects.has(target) ||
+        visited.has(target)
+    ) {
+        return;
+    }
+    // Cycle termination and re-entry short-circuit key off `visited` and `deeplyFrozenCacheObjects`
+    // rather than `Object.isFrozen`. Those are not the same test: an object frozen SHALLOWLY by
+    // someone else (a caller that ran `Object.freeze(row)` before handing it over) reports frozen
+    // while its nested values are still writable, so keying off `isFrozen` would skip the subtree
+    // and leave shared state mutable. Only objects whose full subtree completed this walk enter
+    // `deeplyFrozenCacheObjects`.
+    visited.add(target);
+    Object.freeze(target);
+    newlyFrozen.push(target);
+
+    if (Array.isArray(target)) {
+        const items = target as ReadonlyArray<CacheRowValue>;
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (item !== null && typeof item === 'object') {
+                deepFreezeCacheSubtree(item, visited, newlyFrozen);
+            }
+        }
+        return;
+    }
+
+    const record = target as Record<string, CacheRowValue>;
+    for (const key in record) {
+        if (Object.prototype.hasOwnProperty.call(record, key)) {
+            const nested = record[key];
+            if (nested !== null && typeof nested === 'object') {
+                deepFreezeCacheSubtree(nested, visited, newlyFrozen);
+            }
+        }
+    }
+}
+
+function deepFreezeCacheValue<T>(value: T): T {
+    if (
+        value === null ||
+        typeof value !== 'object' ||
+        ArrayBuffer.isView(value) ||
+        value instanceof ArrayBuffer ||
+        deeplyFrozenCacheObjects.has(value)
+    ) {
         return value;
     }
-    // Cycle termination and re-entry short-circuit key off an explicit visited set rather than
-    // `Object.isFrozen`. Those are not the same test: an object frozen SHALLOWLY by someone else
-    // (a caller that ran `Object.freeze(row)` before handing it over) reports frozen while its
-    // nested values are still writable, so keying off isFrozen would skip the whole subtree and
-    // leave shared state mutable. Unvisited children are the thing that must not be skipped.
-    if (visited.has(value as object)) {
-        return value;
-    }
-    visited.add(value as object);
-    Object.freeze(value);
-    for (const nested of Object.values(value)) {
-        deepFreezeCacheValue(nested, visited);
+    const visited = new WeakSet<object>();
+    const newlyFrozen: object[] = [];
+    deepFreezeCacheSubtree(value, visited, newlyFrozen);
+    for (let i = 0; i < newlyFrozen.length; i++) {
+        deeplyFrozenCacheObjects.add(newlyFrozen[i]);
     }
     return value;
 }
@@ -4114,12 +4163,12 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             return false;
         }
         try {
-            const visited = new WeakSet<object>([data.results]);
-            Object.freeze(data.results);
             for (const row of hint.changedRows) {
-                deepFreezeCacheValue(row, visited);
+                deepFreezeCacheValue(row);
             }
-            deepFreezeCacheValue(data, visited);
+            Object.freeze(data.results);
+            deeplyFrozenCacheObjects.add(data.results);
+            deepFreezeCacheValue(data);
         } catch {
             return false;
         }

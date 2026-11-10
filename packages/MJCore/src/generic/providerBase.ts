@@ -834,7 +834,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /** The items {@link GetAllMetadata} folds into entities (PostProcessEntityMetadata) and applications. */
     private static readonly _metadataFoldedItemCodes: ReadonlyArray<string> = [
         'EntityFields', 'EntityFieldValues', 'EntityPermissions', 'EntityRelationships', 'EntitySettings', 'EntityOrganicKeys',
-        'EntityOrganicKeyRelatedEntities', 'EntityFieldPermissions', 'EntityAlternateBaseViews', 'ApplicationEntities', 'ApplicationSettings',
+        'EntityOrganicKeyRelatedEntities', 'EntityFieldPermissions', 'EntityAlternateBaseViews', 'EntityUniqueKeys',
+        'ApplicationEntities', 'ApplicationSettings',
     ];
     private static readonly _metadataBuildItemCodes: ReadonlySet<string> =
         new Set([...AllMetadataArrays.map(m => m.key.substring(3)), ...ProviderBase._metadataFoldedItemCodes]);
