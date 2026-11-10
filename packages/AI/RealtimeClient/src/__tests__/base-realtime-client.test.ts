@@ -506,7 +506,8 @@ describe('BaseRealtimeClient', () => {
             await vi.advanceTimersByTimeAsync(200_000);
 
             expect(await promise).toBe(false);
-            expect(refreshCount()).toBe(1);
+            // Attempts 1 and 2 share the first refresh; attempt 3 (34 s) finds it too old to join and sends another (#31).
+            expect(refreshCount()).toBe(2);
             expect(client.ReconnectContexts).toHaveLength(0);
             await client.Disconnect();
         });

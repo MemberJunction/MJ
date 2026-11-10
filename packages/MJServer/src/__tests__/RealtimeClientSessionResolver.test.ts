@@ -4795,6 +4795,18 @@ describe('RealtimeClientSessionResolver.RefreshRealtimeClientSessionToken', () =
             expect(refreshClientSessionCredentialMock).toHaveBeenCalledTimes(firstRefusal);
         });
 
+        it('caps the mint limit for a very short catalog connection: a 1 s connection does not allow ~1200 mints in 10 minutes', async () => {
+            const sessionId = '33333333-0000-4000-8000-0000000f1307';
+            currentProvider = makeProvider(() => sessionWithConnection(sessionId, 1));
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: true, EphemeralToken: 'ek', ExpiresAt: '2026-12-01T00:00:00Z' });
+
+            const results = await refreshTimes(sessionId, 100);
+
+            // The cap is the limit of a 30 s connection: 40 planned moves plus the 8 drop allowance.
+            expect(results.indexOf(false)).toBe(48);
+            expect(refreshClientSessionCredentialMock).toHaveBeenCalledTimes(48);
+        });
+
         it('still refuses a runaway client whose refreshes keep failing, before it reaches the provider without bound', async () => {
             const sessionId = '33333333-0000-4000-8000-0000000f1306';
             currentProvider = makeProvider(() => sessionWithConnection(sessionId, 7200));
@@ -4812,6 +4824,17 @@ describe('RealtimeClientSessionResolver.RefreshRealtimeClientSessionToken', () =
             expect(refusedAt).toBeGreaterThan(17);
             expect(refusedAt).toBeLessThan(100);
             expect(refreshClientSessionCredentialMock).toHaveBeenCalledTimes(refusedAt);
+        });
+
+        it('bounds failed refreshes by the server-owned allowance: the mint limit (9 for a 2 h connection) plus 40 calls', async () => {
+            const sessionId = '33333333-0000-4000-8000-0000000f1308';
+            currentProvider = makeProvider(() => sessionWithConnection(sessionId, 7200));
+            refreshClientSessionCredentialMock.mockResolvedValue({ Success: false, ErrorMessage: 'provider mint failed (400)' });
+
+            const results = await refreshTimes(sessionId, 60);
+
+            expect(results.every((ok) => !ok)).toBe(true);
+            expect(refreshClientSessionCredentialMock).toHaveBeenCalledTimes(49);
         });
     });
 

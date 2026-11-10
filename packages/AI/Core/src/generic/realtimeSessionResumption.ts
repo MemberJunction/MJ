@@ -26,6 +26,13 @@ export const REALTIME_RESUMPTION_MAX_RETRY_DELAY_MS = 5000;
  * move, whose old connection keeps the call going until then. 45 s outlasts the outages a call should survive (Wi-Fi
  * roaming, a VPN reconnect, a short tunnel: the #6462 smoke's 10 s cut ended the call under the old 4 s schedule), yet
  * is short enough that the user is not left on "Resuming" for an outage that is not ending.
+ *
+ * The window only stops new attempts: one already running finishes on its own timeouts (up to
+ * {@link REALTIME_RESUMPTION_PREPARE_TIMEOUT_MS} plus {@link REALTIME_RESUMPTION_ATTEMPT_TIMEOUT_MS}, 30 s by default),
+ * and the listed schedule ({@link REALTIME_RESUMPTION_RETRY_DELAYS_MS}) always runs in full. So with the defaults a lost
+ * connection can stay on "Resuming" for up to about 94 s (three attempts that each time out after 30 s, plus the 1 s and
+ * 3 s waits), and a planned move's cycle can run until about 75 s after its old connection ends. A close the provider
+ * meant (not a network loss) is retried the same way: closes are not classified.
  */
 export const REALTIME_RESUMPTION_RECOVERY_WINDOW_MS = 45_000;
 
@@ -159,6 +166,17 @@ export interface RealtimeReconnectControllerOptions {
     OnReconnecting?: (reason: RealtimeReconnectReason) => void;
     /** Invoked when an attempt succeeds and the replacement connection is active. */
     OnReconnected?: (usedNativeResumption: boolean) => void;
+    /**
+     * A planned move's attempt failed while its old connection still carries the call (before the last call before
+     * its end). The driver goes back to live on that connection (its state, its input) and returns `true`, or returns
+     * `false` when it cannot (the old connection is gone too, or the driver tore it down for the attempt). After `true`,
+     * {@link RealtimeReconnectController.IsReconnecting} is `false` until the next attempt, which waits for the retry
+     * delay and then for the next idle boundary, the hard point (unless a turn or `HoldsHardMove` holds it), or the last
+     * call; `OnReconnecting` fires again when it starts. A loss of the old connection (`TriggerReconnect('connection-lost')`)
+     * ends the wait, and the cycle goes on as a lost connection. Omitted or `false`: the next attempt follows the
+     * retry schedule, with the client still reconnecting.
+     */
+    ReturnToOldConnection?: () => boolean;
     /** Builds the conversation memory seed when reconnecting without native resumption. */
     BuildSeed: () => RealtimeMemorySeed | null;
     /** Returns true when no turn is open and no tool calls are in flight. */
@@ -209,6 +227,8 @@ export interface RealtimeReconnectControllerOptions {
 
 interface ActiveAttemptState {
     Abandoned: boolean;
+    /** Set once the attempt's preparation is done and its transport work (`Reconnect`) has started. */
+    TransportStarted: boolean;
     readonly Controller: AbortController;
 }
 
@@ -237,6 +257,13 @@ export class RealtimeReconnectController {
     private _endingAnnounced = false;
     private _inSoftWindow = false;
     private _reconnecting = false;
+    /** A cycle is running, but between attempts the call is live again on its old connection (see `ReturnToOldConnection`). */
+    private _liveOnOldConnection = false;
+    /** The running cycle's old connection was lost (`TriggerReconnect('connection-lost')` during the cycle). */
+    private _oldConnectionLost = false;
+    /** Ends the wait for the next planned attempt's boundary (see {@link waitForMoveBoundary}). */
+    private _wakeBoundaryWait: (() => void) | null = null;
+    private _boundaryTimers: Array<ReturnType<typeof setTimeout>> = [];
     private _exhausted = false;
     private _disposed = false;
     private _connectionOpenedAtMs: number | null = null;
@@ -244,6 +271,10 @@ export class RealtimeReconnectController {
     private _connectionLimitAtMs: number | null = null;
     /** When a `goAway` said the current connection ends, or `null` when none came or it gave no time. */
     private _announcedEndAtMs: number | null = null;
+    /** The last call before the end a `goAway` announced (the time its deadline timer moves at), or `null`. */
+    private _announcedLastCallAtMs: number | null = null;
+    /** The current connection's hard reconnect point (from `ArmDurationTimers`), or `null` when unknown. */
+    private _hardPointAtMs: number | null = null;
     private _softTimer: ReturnType<typeof setTimeout> | null = null;
     private _hardTimer: ReturnType<typeof setTimeout> | null = null;
     /** The last-call move armed when the hard point came during an answer; see {@link deferHardMoveToTurnEnd}. */
@@ -266,9 +297,12 @@ export class RealtimeReconnectController {
         return this._handle;
     }
 
-    /** True while an in-place reconnect cycle is running. */
+    /**
+     * True while an in-place reconnect cycle is running, except while a planned move waits between attempts with the
+     * call live again on its old connection (see {@link RealtimeReconnectControllerOptions.ReturnToOldConnection}).
+     */
     public get IsReconnecting(): boolean {
-        return this._reconnecting;
+        return this._reconnecting && !this._liveOnOldConnection;
     }
 
     /** True once `Dispose()` has been called. */
@@ -363,6 +397,10 @@ export class RealtimeReconnectController {
      * a turn or tool batch has finished.
      */
     public NotifyIdleStateChanged(): void {
+        if (this._liveOnOldConnection) {
+            this.checkMoveBoundary();
+            return;
+        }
         if (
             this._disposed ||
             this._exhausted ||
@@ -394,12 +432,19 @@ export class RealtimeReconnectController {
      * `timeLeftMs - margin` (where `margin = clamp(round(timeLeftMs / 3), 1500, 10000)`).
      */
     public ConnectionEnding(timeLeftMs?: number): void {
-        if (this._disposed || this._exhausted || this._reconnecting) {
+        if (this._disposed || this._exhausted || (this._reconnecting && !this._liveOnOldConnection)) {
             return;
         }
         this._endingAnnounced = true;
         if (timeLeftMs !== undefined) {
             this._announcedEndAtMs = Date.now() + timeLeftMs;
+        }
+        this._announcedLastCallAtMs = Date.now() + this.deadlineDelayFor(timeLeftMs);
+        if (this._liveOnOldConnection) {
+            // A failed move's cycle is waiting on this connection: its next attempt now has this earlier last call.
+            this.armBoundaryTimers();
+            this.checkMoveBoundary();
+            return;
         }
         if (this.isIdle() && !this._awaitingPostToolTurn && !this.shouldWaitForPostTurnHandle()) {
             void this.TriggerReconnect('connection-ending');
@@ -434,6 +479,7 @@ export class RealtimeReconnectController {
         }
         this._inSoftWindow = false;
         this._connectionLimitAtMs = null;
+        this._hardPointAtMs = null;
 
         const durationSeconds = this.effectiveDurationSeconds(connectionLimitSeconds, connectionDeadlineAtMs, this._connectionOpenedAtMs);
         if (durationSeconds === undefined) {
@@ -454,6 +500,7 @@ export class RealtimeReconnectController {
         );
         const totalSoftMs = Math.max(50, (durationSeconds - softWindowSec) * 1000);
         const remainingHardMs = Math.max(0, totalHardMs - elapsedMs);
+        this._hardPointAtMs = this._connectionOpenedAtMs + totalHardMs;
         this._hardMoveMarginMs = this.deadlineMarginFor(Math.max(0, durationSeconds * 1000 - totalHardMs));
         const remainingSoftMs = Math.max(0, totalSoftMs - elapsedMs);
 
@@ -585,6 +632,10 @@ export class RealtimeReconnectController {
             return Promise.resolve(false);
         }
         if (this._reconnectPromise) {
+            if (reason === 'connection-lost') {
+                this._oldConnectionLost = true;
+            }
+            this.checkMoveBoundary();
             return this._reconnectPromise;
         }
 
@@ -603,6 +654,7 @@ export class RealtimeReconnectController {
         this._rapidReconnectTimestamps.push(now);
 
         this._reconnecting = true;
+        this._oldConnectionLost = false;
         this.clearDurationTimers();
         this.clearDeadline();
         this.options.Log?.(`[RealtimeReconnectController] reconnecting (${reason})`);
@@ -634,6 +686,7 @@ export class RealtimeReconnectController {
         this.clearDurationTimers();
         this.clearDeadline();
         this.wakeRetry();
+        this.wakeBoundaryWait();
         this.ClearCredentialRefresh();
         if (this._currentAttempt) {
             this.abandonAttempt(this._currentAttempt);
@@ -646,6 +699,8 @@ export class RealtimeReconnectController {
         this._disposed = false;
         this._exhausted = false;
         this._reconnecting = false;
+        this._liveOnOldConnection = false;
+        this._oldConnectionLost = false;
         this._endingAnnounced = false;
         this._inSoftWindow = false;
         this._turnOpen = false;
@@ -655,7 +710,9 @@ export class RealtimeReconnectController {
         this._handle = null;
         this._connectionOpenedAtMs = null;
         this._connectionLimitAtMs = null;
+        this._hardPointAtMs = null;
         this._announcedEndAtMs = null;
+        this._announcedLastCallAtMs = null;
         this._rapidReconnectTimestamps = [];
     }
 
@@ -693,21 +750,47 @@ export class RealtimeReconnectController {
     /**
      * Makes attempts until one succeeds, the cycle's recovery deadline passes ({@link recoveryDeadlineFor}), or it has
      * made {@link MAX_REALTIME_RESUMPTION_ATTEMPTS}; either limit ends it with `reconnect-failed`. No attempt starts
-     * after the deadline, but one already running is allowed to finish (its own timeouts bound it).
+     * after the deadline, but one already running is allowed to finish (its own timeouts bound it), so the cycle can
+     * outlast the deadline by one attempt's preparation and transport timeouts; see
+     * {@link REALTIME_RESUMPTION_RECOVERY_WINDOW_MS} for the worst-case numbers.
+     *
+     * After a failed attempt of a planned move whose old connection still carries the call, the call goes back to live
+     * on it ({@link returnToOldConnection}) and the next attempt waits for a move boundary as well as its retry delay;
+     * a lost connection's attempts follow the retry schedule alone.
      */
-    private async runReconnectLoop(reason: RealtimeReconnectReason, elapsedSeconds: number): Promise<boolean> {
-        const deadlineMs = this.recoveryDeadlineFor(reason);
+    private async runReconnectLoop(startReason: RealtimeReconnectReason, elapsedSeconds: number): Promise<boolean> {
+        let reason = startReason;
+        let deadlineMs = this.recoveryDeadlineFor(reason);
         let lastError: Error = new Error('Realtime session reconnect failed');
         let forceSeedFallback = false;
+        let liveOnOldConnection = false;
 
         for (let attempt = 1; attempt <= MAX_REALTIME_RESUMPTION_ATTEMPTS; attempt++) {
             const delayMs = this.retryDelayBefore(attempt);
             if (delayMs > 0) {
                 await this.waitBeforeRetry(delayMs);
             }
+            const leavesOldConnectionAgain = liveOnOldConnection;
+            if (liveOnOldConnection) {
+                await this.waitForMoveBoundary();
+                liveOnOldConnection = false;
+                this._liveOnOldConnection = false;
+                // Timers armed while the call was live on the old connection belong to it; the attempt starts now.
+                this.clearDurationTimers();
+                this.clearDeadline();
+            }
             if (this._disposed) {
                 this._reconnecting = false;
                 return false;
+            }
+            if (this._oldConnectionLost && reason !== 'connection-lost') {
+                // The old connection is gone after all: from here the cycle is a lost connection's, with its window.
+                reason = 'connection-lost';
+                deadlineMs = Math.max(deadlineMs, this.recoveryDeadlineFor(reason));
+            }
+            if (leavesOldConnectionAgain) {
+                this.options.Log?.(`[RealtimeReconnectController] leaving the old connection again for attempt ${attempt} (${reason})`);
+                this.options.OnReconnecting?.(reason);
             }
 
             const canUseNative = !forceSeedFallback && this.trustsNativeResumption() && this._handle !== null;
@@ -715,6 +798,7 @@ export class RealtimeReconnectController {
             const seed = !canUseNative ? this.options.BuildSeed() : null;
             const attemptState: ActiveAttemptState = {
                 Abandoned: false,
+                TransportStarted: false,
                 Controller: new AbortController(),
             };
             this._currentAttempt = attemptState;
@@ -750,6 +834,9 @@ export class RealtimeReconnectController {
                 this._toolResultSentDuringOpenTurn = false;
                 this._connectionOpenedAtMs = Date.now();
                 this._connectionLimitAtMs = null;
+                this._hardPointAtMs = null;
+                this._announcedLastCallAtMs = null;
+                this._oldConnectionLost = false;
                 this.options.OnReconnected?.(canUseNative);
                 return true;
             } catch (err) {
@@ -758,7 +845,9 @@ export class RealtimeReconnectController {
                 this.options.Log?.(
                     `[RealtimeReconnectController] attempt ${attempt} failed (${reason}): ${lastError.message}`
                 );
-                if (canUseNative) {
+                // Only a failed transport attempt says anything about the handle: one that failed in its preparation
+                // (a credential refresh) never offered it to the provider.
+                if (canUseNative && attemptState.TransportStarted) {
                     forceSeedFallback = true;
                     this.InvalidateHandle();
                 }
@@ -773,6 +862,7 @@ export class RealtimeReconnectController {
                 this.options.Log?.(`[RealtimeReconnectController] giving up (${reason}): ${stop}`);
                 break;
             }
+            liveOnOldConnection = this.returnToOldConnection(reason);
         }
 
         this._reconnecting = false;
@@ -781,6 +871,109 @@ export class RealtimeReconnectController {
             this.options.OnReconnectFailed(lastError, 'reconnect-failed');
         }
         return false;
+    }
+
+    /**
+     * After a failed attempt of a planned move, hands the call back to its old connection while that connection still
+     * carries it (see {@link RealtimeReconnectControllerOptions.ReturnToOldConnection}). `true` when the call is live on
+     * it again, so the next attempt waits for a move boundary ({@link waitForMoveBoundary}).
+     */
+    private returnToOldConnection(reason: RealtimeReconnectReason): boolean {
+        const lastCallAtMs = this.oldConnectionLastCallAtMs();
+        if (
+            reason === 'connection-lost' ||
+            this._oldConnectionLost ||
+            this._disposed ||
+            !this.options.ReturnToOldConnection ||
+            lastCallAtMs === null ||
+            Date.now() >= lastCallAtMs
+        ) {
+            return false;
+        }
+        // Set first: the driver resumes sending on the old connection, which it does only when not reconnecting.
+        this._liveOnOldConnection = true;
+        if (!this.options.ReturnToOldConnection()) {
+            this._liveOnOldConnection = false;
+            return false;
+        }
+        this.options.Log?.(
+            `[RealtimeReconnectController] the move's attempt failed; the call is live on the old connection until the next boundary (last call in ${lastCallAtMs - Date.now()} ms)`
+        );
+        return true;
+    }
+
+    /**
+     * The last moment a move off the current connection can start: the provider limit less the hard move's margin, or
+     * the time a `goAway`'s deadline timer moves at, whichever comes first. `null` when neither is known.
+     */
+    private oldConnectionLastCallAtMs(): number | null {
+        const fromLimit = this._connectionLimitAtMs === null ? null : this._connectionLimitAtMs - this._hardMoveMarginMs;
+        const announced = this._announcedLastCallAtMs;
+        if (fromLimit === null) {
+            return announced;
+        }
+        return announced === null ? fromLimit : Math.min(fromLimit, announced);
+    }
+
+    /**
+     * Waits, with the call live on the old connection, for the moment the next attempt of a planned move may start:
+     * the next idle boundary (as a soft-window move waits for), the hard point when no turn or driver hold is open, the
+     * last call before the old connection ends, a loss of the old connection, or `Dispose`. The last call bounds it.
+     */
+    private waitForMoveBoundary(): Promise<void> {
+        return new Promise<void>((resolve) => {
+            this._wakeBoundaryWait = resolve;
+            this.armBoundaryTimers();
+            this.checkMoveBoundary();
+        });
+    }
+
+    /** Arms the timed ends of the boundary wait: the hard point and the last call (re-armed when a `goAway` comes). */
+    private armBoundaryTimers(): void {
+        this.clearBoundaryTimers();
+        const now = Date.now();
+        for (const atMs of [this._hardPointAtMs, this.oldConnectionLastCallAtMs()]) {
+            if (atMs !== null && atMs > now) {
+                this._boundaryTimers.push(setTimeout(() => this.checkMoveBoundary(), atMs - now));
+            }
+        }
+    }
+
+    /** Ends the boundary wait when its moment has come; does nothing when no wait is running. */
+    private checkMoveBoundary(): void {
+        if (this._wakeBoundaryWait && this.isMoveBoundaryReached()) {
+            this.wakeBoundaryWait();
+        }
+    }
+
+    private isMoveBoundaryReached(): boolean {
+        if (this._disposed || this._oldConnectionLost) {
+            return true;
+        }
+        const now = Date.now();
+        const lastCallAtMs = this.oldConnectionLastCallAtMs();
+        if (lastCallAtMs === null || now >= lastCallAtMs) {
+            return true;
+        }
+        const turnHolds = this._turnOpen || this.options.HoldsHardMove?.() === true;
+        if (this._hardPointAtMs !== null && now >= this._hardPointAtMs && !turnHolds) {
+            return true;
+        }
+        return !this._turnOpen && !this._awaitingPostToolTurn && this.isIdle() && !this.shouldWaitForPostTurnHandle();
+    }
+
+    private wakeBoundaryWait(): void {
+        const wake = this._wakeBoundaryWait;
+        this._wakeBoundaryWait = null;
+        this.clearBoundaryTimers();
+        wake?.();
+    }
+
+    private clearBoundaryTimers(): void {
+        for (const timer of this._boundaryTimers) {
+            clearTimeout(timer);
+        }
+        this._boundaryTimers = [];
     }
 
     /**
@@ -849,6 +1042,7 @@ export class RealtimeReconnectController {
             }
         }
         const timeoutMs = this.options.AttemptTimeoutMs ?? REALTIME_RESUMPTION_ATTEMPT_TIMEOUT_MS;
+        attemptState.TransportStarted = true;
         await this.withTimeout(this.options.Reconnect(context), attemptState, timeoutMs, 'attempt');
     }
 
@@ -884,16 +1078,18 @@ export class RealtimeReconnectController {
 
     private armDeadline(timeLeftMs: number | undefined): void {
         this.clearDeadline();
-        const delay =
-            timeLeftMs === undefined
-                ? UNKNOWN_TIME_LEFT_DELAY_MS
-                : Math.max(0, timeLeftMs - this.deadlineMarginFor(timeLeftMs));
+        const delay = this.deadlineDelayFor(timeLeftMs);
         this._deadlineTimer = setTimeout(() => {
             this._deadlineTimer = null;
             if (!this._disposed && !this._exhausted && !this._reconnecting) {
                 void this.TriggerReconnect('connection-ending');
             }
         }, delay);
+    }
+
+    /** How long after a `goAway` its deadline timer moves the session: the notice less its margin. */
+    private deadlineDelayFor(timeLeftMs: number | undefined): number {
+        return timeLeftMs === undefined ? UNKNOWN_TIME_LEFT_DELAY_MS : Math.max(0, timeLeftMs - this.deadlineMarginFor(timeLeftMs));
     }
 
     private deadlineMarginFor(timeLeftMs: number): number {

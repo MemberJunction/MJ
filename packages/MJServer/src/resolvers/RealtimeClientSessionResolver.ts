@@ -84,7 +84,6 @@ import {
 import {
     ChatMessage,
     ExtractRealtimeTimingConfig,
-    MAX_REALTIME_RESUMPTION_ATTEMPTS,
     REALTIME_MAX_SOFT_WINDOW_DURATION_SHARE,
     RealtimeToolDefinition,
 } from '@memberjunction/ai';
@@ -535,10 +534,19 @@ const REFRESH_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
  */
 const REFRESH_RATE_LIMIT_DROP_ALLOWANCE = 8;
 /**
- * Refresh calls per window allowed beyond the mint limit, so failed refreshes stay bounded too. One full reconnect
- * cycle can retry a failing refresh on every attempt, so the allowance is the client's per-cycle attempt cap.
+ * The shortest connection the mint limit is sized for. The limit grows as the connection shortens (a planned move per
+ * soft window), so without a floor a mis-entered catalog length (1 s) would allow over a thousand mints per window. The
+ * floor caps the limit at 40 planned moves plus {@link REFRESH_RATE_LIMIT_DROP_ALLOWANCE}; the shortest real provider
+ * connection is minutes long, and the 45 s test override stays above the floor.
  */
-const REFRESH_RATE_LIMIT_FAILED_CALL_ALLOWANCE = MAX_REALTIME_RESUMPTION_ATTEMPTS;
+const REFRESH_RATE_LIMIT_MIN_CONNECTION_SECONDS = 30;
+/**
+ * Refresh calls per window allowed beyond the mint limit, so failed refreshes stay bounded too. A reconnect cycle can
+ * retry a failing refresh on every attempt: a planned move's recovery (about 85 s at one attempt per 5 s) makes about
+ * 17. This covers two such cycles plus slack. It is the server's own budget, kept apart from the client's per-cycle
+ * attempt cap so a client-side tuning change cannot widen what the server lets through.
+ */
+const REFRESH_RATE_LIMIT_FAILED_CALL_ALLOWANCE = 40;
 
 /** The refresh history of one session within the rate-limit window. */
 interface RefreshRateLimitBucket {
@@ -825,7 +833,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * it ends: at the earliest, once its soft window opens, which the client never lets start before
      * `REALTIME_MAX_SOFT_WINDOW_DURATION_SHARE` of the connection has passed. So the planned moves per window are sized
      * from that shortest cadence (a 45 s connection moves about every 29 s, not every 45 s), and
-     * {@link REFRESH_RATE_LIMIT_DROP_ALLOWANCE} is added for drops and proactive refreshes.
+     * {@link REFRESH_RATE_LIMIT_DROP_ALLOWANCE} is added for drops and proactive refreshes. A length below
+     * {@link REFRESH_RATE_LIMIT_MIN_CONNECTION_SECONDS} is sized as that floor, which caps the limit.
      */
     private resolveRefreshRateLimit(sessionID: string, config: RealtimeSessionConfig): number {
         const snapshot = RealtimeMintSnapshotRegistry.Instance.Get(sessionID) ?? config.realtimeMintSnapshot;
@@ -835,7 +844,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         if (!connectionMaxSeconds || connectionMaxSeconds <= 0) {
             return REFRESH_RATE_LIMIT_DROP_ALLOWANCE;
         }
-        const shortestMoveSeconds = connectionMaxSeconds * (1 - REALTIME_MAX_SOFT_WINDOW_DURATION_SHARE);
+        const sizedConnectionSeconds = Math.max(connectionMaxSeconds, REFRESH_RATE_LIMIT_MIN_CONNECTION_SECONDS);
+        const shortestMoveSeconds = sizedConnectionSeconds * (1 - REALTIME_MAX_SOFT_WINDOW_DURATION_SHARE);
         const plannedMoves = Math.ceil(REFRESH_RATE_LIMIT_WINDOW_MS / 1000 / shortestMoveSeconds);
         return plannedMoves + REFRESH_RATE_LIMIT_DROP_ALLOWANCE;
     }

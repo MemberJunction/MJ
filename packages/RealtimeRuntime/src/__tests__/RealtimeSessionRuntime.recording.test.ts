@@ -42,8 +42,13 @@ class GqlProvider {
     public CurrentUser: { ID: string } | null = { ID: 'user-a' };
     public Mutations: string[] = [];
     public readonly sessionId = 'transport-session-1';
+    /** When set, a `CloseAgentSession` mutation waits on it (a close still in flight). */
+    public HeldClose: Promise<void> | null = null;
     public async ExecuteGQL(query: string): Promise<unknown> {
         this.Mutations.push(query);
+        if (this.HeldClose && /mutation CloseAgentSession/.test(query)) {
+            await this.HeldClose;
+        }
         return {};
     }
     public PushStatusUpdates(): { subscribe(): { unsubscribe(): void } } {
@@ -709,6 +714,44 @@ describe('RealtimeSessionRuntime.SendPageHideSignals — closing the tab closes 
         runtime.SendPageHideSignals({ Persisted: false });
 
         expect(beacon.Closes).toEqual([]);
+    });
+
+    // #6462 review #37: End's teardown keeps the session id until the recording terminal's ack wait settles, after its
+    // own CloseAgentSession. A pagehide in that window must not send a second close of the same session.
+    it('sends no close once this runtime\'s own close has completed, while End still waits on the recording terminal', async () => {
+        const { runtime, transport, provider, recorder } = await startRecorded();
+        const beacon = new FakeSessionCloseBeacon();
+        runtime.CloseBeacon = beacon;
+        recorder.Capture(7);
+        transport.HoldTerminal();
+        const ended = runtime.EndRealtimeSession();
+        await vi.advanceTimersByTimeAsync(RECORDER_STOP_TIMEOUT_MS);
+        expect(provider.MutationNames).toContain('CloseAgentSession');
+
+        runtime.SendPageHideSignals({ Persisted: false });
+
+        expect(beacon.Closes).toEqual([]);
+        transport.ReleaseTerminal(true);
+        await ended;
+    });
+
+    it('still sends the close while this runtime\'s own close is in flight: unload can cancel it', async () => {
+        const { runtime, provider } = await startRecorded();
+        const beacon = new FakeSessionCloseBeacon();
+        runtime.CloseBeacon = beacon;
+        let releaseClose: () => void = () => undefined;
+        provider.HeldClose = new Promise<void>((resolve) => {
+            releaseClose = resolve;
+        });
+        const ended = runtime.EndRealtimeSession();
+        await vi.advanceTimersByTimeAsync(RECORDER_STOP_TIMEOUT_MS);
+        expect(provider.MutationNames).toContain('CloseAgentSession');
+
+        runtime.SendPageHideSignals({ Persisted: false });
+
+        expect(beacon.Closes).toEqual([{ AgentSessionId: 'session-1', CloseReason: 'Explicit' }]);
+        releaseClose();
+        await ended;
     });
 
     it('logs, and does not throw, when the provider has no endpoint to close on', async () => {

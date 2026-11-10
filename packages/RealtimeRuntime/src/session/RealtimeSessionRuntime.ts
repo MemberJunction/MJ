@@ -2978,10 +2978,19 @@ export class RealtimeSessionRuntime {
 
   /**
    * Whether {@link SendPageHideSignals} closes the live session. True by default. A host that closes the
-   * session from `pagehide` itself (the `<mj-realtime-widget>` element) turns it off: two concurrent
-   * `CloseAgentSession` calls for one session both run the server's close work.
+   * session from `pagehide` itself (the `<mj-realtime-widget>` element) turns it off: its close and the
+   * beacon would be two `CloseAgentSession` calls for one session, and the server shares overlapping closes
+   * only within one host instance.
    */
   public ClosesSessionOnPageHide = true;
+
+  /**
+   * The session whose `CloseAgentSession` from this runtime has completed ({@link closeServerSession}). End's
+   * teardown closes the session, then keeps its id while it waits on the recording terminal's ack, so a
+   * `pagehide` in that window would otherwise send a second close of a closed session. While the close is
+   * still in flight this stays unset and the beacon is still sent: unload can cancel the ordinary close.
+   */
+  private completedServerCloseSessionId: string | null = null;
 
   /**
    * The page-lifecycle `pagehide` handler: the page is being hidden for navigation or unload. Sends the
@@ -3003,6 +3012,9 @@ export class RealtimeSessionRuntime {
     this.SendRecordingTerminal({ Final: true });
     const agentSessionId = this.agentSessionId;
     if (options.Persisted || !agentSessionId || !this.ClosesSessionOnPageHide) {
+      return;
+    }
+    if (this.completedServerCloseSessionId && UUIDsEqual(this.completedServerCloseSessionId, agentSessionId)) {
       return;
     }
     try {
@@ -5915,6 +5927,7 @@ export class RealtimeSessionRuntime {
         }
       `;
       await this.gql().ExecuteGQL(mutation, { agentSessionId, closeReason });
+      this.completedServerCloseSessionId = agentSessionId;
     } catch (error) {
       console.error(`[RealtimeSession] Failed to close server session ${agentSessionId} (closeReason ${closeReason}):`, error);
     }

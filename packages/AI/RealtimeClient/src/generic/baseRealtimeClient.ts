@@ -15,6 +15,8 @@ import {
     RealtimeReconnectController,
     RealtimeReconnectFailureCode,
     RealtimeReconnectReason,
+    REALTIME_RESUMPTION_MAX_RETRY_DELAY_MS,
+    REALTIME_RESUMPTION_PREPARE_TIMEOUT_MS,
     RealtimeTrack,
     RealtimeTrackDescriptor,
     RealtimeTrackDirection,
@@ -41,6 +43,13 @@ export const REALTIME_SHARED_SESSION_CONFIG_KEYS = REALTIME_SHARED_CONFIG_KEYS;
 
 /** Minimum microphone RMS level treated as active user speech when holding soft-window reconnects. */
 export const DEFAULT_USER_SPEECH_ACTIVE_LEVEL_THRESHOLD = 0.02;
+
+/**
+ * How old a reconnect's credential refresh may be for a later attempt to join it instead of sending a new one: the
+ * preparation limit of the attempt that started it, plus the longest wait before the next attempt. See
+ * `joinOrStartReconnectRefresh`.
+ */
+const SHARED_REFRESH_MAX_JOIN_AGE_MS = REALTIME_RESUMPTION_PREPARE_TIMEOUT_MS + REALTIME_RESUMPTION_MAX_RETRY_DELAY_MS;
 
 /** Options passed to `RealtimeClientTokenRefreshCallback`. */
 export interface RealtimeClientTokenRefreshOptions {
@@ -1001,10 +1010,11 @@ export abstract class BaseRealtimeClient {
     };
     private refreshedInActiveCycle = false;
     /**
-     * The pre-reconnect credential refresh still in flight, if any. A later attempt joins it instead of minting a
-     * second credential: the refresh outlives the attempt that started it when that attempt's preparation timed out.
+     * The pre-reconnect credential refresh still in flight, if any, and when it started. A later attempt joins it
+     * instead of minting a second credential (the refresh outlives the attempt that started it when that attempt's
+     * preparation timed out), but only while it is younger than {@link SHARED_REFRESH_MAX_JOIN_AGE_MS}.
      */
-    private reconnectCredentialRefresh: Promise<void> | null = null;
+    private reconnectCredentialRefresh: { readonly Promise: Promise<void>; readonly StartedAtMs: number } | null = null;
     /** Connections opened on {@link currentCredential}, counted against {@link CredentialConnectionLimit}. */
     private connectionsOnCredential = 0;
     /**
@@ -1030,6 +1040,7 @@ export abstract class BaseRealtimeClient {
             this.stopWatchingNetworkOnline();
             this.onReconnected(usedNativeResumption);
         },
+        ReturnToOldConnection: () => this.ResumeOnOldConnection(),
         BuildSeed: () => {
             const seed = this.conversationMemory.Seed();
             return seed.Entries.length > 0 ? seed : null;
@@ -1397,6 +1408,10 @@ export abstract class BaseRealtimeClient {
 
     private wasSpeaking = false;
     private toolResultSentWhileSpeaking = false;
+    /** The last state emitted to the host; see {@link StateToRestoreOnOldConnection}. */
+    private lastEmittedState: RealtimeClientState | null = null;
+    /** {@link lastEmittedState} when the current move started. */
+    private stateBeforeMove: RealtimeClientState | null = null;
 
     /**
      * Initiates an in-place reconnect that retries through its recovery window (`REALTIME_RESUMPTION_RECOVERY_WINDOW_MS`,
@@ -1413,11 +1428,13 @@ export abstract class BaseRealtimeClient {
      * refreshes only when the token is single-use, near expiry or spent; a retry always refreshes once. A spent
      * credential is re-minted even after this cycle's refresh: a cycle can retry through an outage for tens of seconds,
      * and its failed attempts spend uses too.
+     *
+     * The attempt waits for the refresh only when it cannot connect without one ({@link reconnectWaitsForCredential}).
+     * A retry's refresh on a still-valid, reusable credential runs in the background and serves the attempts after it:
+     * a refresh request that never returns (sent into a dead HTTP/2 connection during the outage) must not hold every
+     * attempt of the cycle at its preparation timeout while the credential in hand still works.
      */
     private prepareClientReconnectAttempt(attempt: number): Promise<void> {
-        if (this.reconnectCredentialRefresh) {
-            return this.reconnectCredentialRefresh;
-        }
         if (!this.tokenRefreshCallback) {
             return Promise.resolve();
         }
@@ -1425,13 +1442,54 @@ export abstract class BaseRealtimeClient {
         if (alreadyRefreshed || !this.reconnectNeedsCredentialRefresh(attempt)) {
             return Promise.resolve();
         }
-        const refresh = this.refreshCredentialBeforeReconnect().finally(() => {
-            if (this.reconnectCredentialRefresh === refresh) {
-                this.reconnectCredentialRefresh = null;
-            }
+        const refresh = this.joinOrStartReconnectRefresh();
+        if (this.reconnectWaitsForCredential()) {
+            return refresh;
+        }
+        refresh.catch((err: unknown) => {
+            RealtimeDiagLog(
+                `[${this.constructor.name}] background credential refresh for attempt ${attempt} failed: ${
+                    err instanceof Error ? err.message : String(err)
+                }`
+            );
         });
-        this.reconnectCredentialRefresh = refresh;
-        return refresh;
+        return Promise.resolve();
+    }
+
+    /**
+     * The refresh in flight when it is young enough to join, else a new one. The attempt that started a refresh times
+     * out at its preparation limit, and the next attempt starts within a retry delay of that, so it still joins: a slow
+     * server gets about two preparation limits to answer, and is not asked twice (F5). Any later attempt sends a new
+     * request, so one that never returns costs the cycle two attempts, not all of them.
+     */
+    private joinOrStartReconnectRefresh(): Promise<void> {
+        const inFlight = this.reconnectCredentialRefresh;
+        if (inFlight && Date.now() - inFlight.StartedAtMs < SHARED_REFRESH_MAX_JOIN_AGE_MS) {
+            return inFlight.Promise;
+        }
+        if (inFlight) {
+            RealtimeDiagLog(
+                `[${this.constructor.name}] the credential refresh in flight for ${Date.now() - inFlight.StartedAtMs} ms has not returned; sending a new one`
+            );
+        }
+        const entry = {
+            Promise: this.refreshCredentialBeforeReconnect().finally(() => {
+                if (this.reconnectCredentialRefresh === entry) {
+                    this.reconnectCredentialRefresh = null;
+                }
+            }),
+            StartedAtMs: Date.now(),
+        };
+        this.reconnectCredentialRefresh = entry;
+        return entry.Promise;
+    }
+
+    /**
+     * Whether an attempt cannot connect without a fresh credential: the token is single-use, spent, or within a minute
+     * of expiry. Otherwise the credential in hand still opens a connection, and a refresh is only an improvement.
+     */
+    private reconnectWaitsForCredential(): boolean {
+        return this.RequiresFreshTokenPerReconnect || this.isCredentialNearExpiry() || this.isCredentialSpent();
     }
 
     private reconnectNeedsCredentialRefresh(attempt: number): boolean {
@@ -1462,6 +1520,8 @@ export abstract class BaseRealtimeClient {
 
     private async executeClientReconnectAttempt(context: RealtimeReconnectContext): Promise<void> {
         const seed = context.ConversationSeed ?? this.conversationMemory.Seed();
+        /** The credential this attempt opens on: the current one, or the one the driver re-mints inside `Reconnect`. */
+        let openedOn = this.currentCredential;
         const clientContext: RealtimeClientReconnectContext = {
             Reason: context.Reason,
             Attempt: context.Attempt,
@@ -1475,25 +1535,55 @@ export abstract class BaseRealtimeClient {
             },
             Signal: context.Signal,
             Seed: seed,
-            RefreshCredential: (options?: RealtimeClientTokenRefreshOptions) =>
-                this.refreshCredentialForReconnect(options),
-            Credential: this.currentCredential,
+            RefreshCredential: async (options?: RealtimeClientTokenRefreshOptions) => {
+                openedOn = await this.refreshCredentialForReconnect(options);
+                return openedOn;
+            },
+            Credential: openedOn,
         };
 
         try {
             await this.Reconnect(clientContext);
-            // The new connection opened on the credential current now (a driver may have re-minted inside Reconnect).
-            this.connectionCredential = this.currentCredential;
+            // Not `currentCredential`: a scheduled refresh can land while the connection opens on the old token. The
+            // connection then dies with the old token (F14), so it must be tracked against it.
+            this.connectionCredential = openedOn;
         } finally {
-            // Counted after the attempt, so it lands on the credential the attempt opened with (a driver may re-mint
-            // inside Reconnect). A failed attempt counts too: the provider may have spent the use before it failed.
-            this.connectionsOnCredential++;
+            // A failed attempt counts too: the provider may have spent the use before it failed. Only a use of the
+            // current credential counts against it; one of a credential a refresh has since replaced does not.
+            if (openedOn === this.currentCredential) {
+                this.connectionsOnCredential++;
+            }
         }
     }
 
     protected onReconnecting(_reason: RealtimeReconnectReason): void {
         this.refreshedInActiveCycle = false;
+        this.stateBeforeMove = this.lastEmittedState;
         this.emitStateChange('connecting');
+    }
+
+    /**
+     * A planned move's attempt failed while the old connection still carries the call: go back to live on it (state,
+     * held input) until the next attempt, which waits for the next idle boundary or the hard point, and return `true`.
+     * Return `false` when the old connection cannot carry the call any more; the cycle then retries on its schedule.
+     * `IsReconnecting` is already `false` when this runs, so sends go to the old connection. `false` here: a driver
+     * opts in by overriding it. See `RealtimeReconnectControllerOptions.ReturnToOldConnection`.
+     */
+    protected ResumeOnOldConnection(): boolean {
+        return false;
+    }
+
+    /**
+     * The state to report again when {@link ResumeOnOldConnection} goes back to the old connection: the live state the
+     * client was in when the move started, or `null` when the old connection has reported a state of its own since
+     * (it keeps delivering events during the attempt), which is current.
+     */
+    protected get StateToRestoreOnOldConnection(): RealtimeClientState | null {
+        if (this.lastEmittedState !== 'connecting') {
+            return null;
+        }
+        const before = this.stateBeforeMove;
+        return before === 'speaking' || before === 'connected' ? before : 'listening';
     }
 
     protected onReconnected(usedNativeResumption: boolean): void {
@@ -1610,6 +1700,7 @@ export abstract class BaseRealtimeClient {
 
     /** Emits a state change to the registered handler (if any) and flushes any deferred turn-boundary reconnect. */
     protected emitStateChange(state: RealtimeClientState): void {
+        this.lastEmittedState = state;
         if (state === 'closed' || state === 'error') {
             this.wasSpeaking = false;
             this.toolResultSentWhileSpeaking = false;

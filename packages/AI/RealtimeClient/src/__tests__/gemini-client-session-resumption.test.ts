@@ -585,6 +585,68 @@ describe('GeminiRealtimeClient session resumption', () => {
         });
     });
 
+    // #34: after a failed planned attempt the client stayed 'connecting' with the mic held (only the last 2 s kept) for
+    // the rest of the cycle, though the old connection was healthy.
+    describe('a failed planned attempt goes back to the old connection (#34)', () => {
+        /** A goAway move whose first new connection closes before its setup is confirmed. */
+        async function failFirstMoveAttempt(): Promise<void> {
+            client.EmitOn(0, RESUMABLE('h1'));
+            client.AutoConfirmSetup = false;
+            client.EmitOn(0, GO_AWAY('60s'));
+            await vi.advanceTimersByTimeAsync(0);
+            expect(client.Connections).toHaveLength(2);
+            client.CloseOn(1, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+        }
+
+        it('reports listening again and sends the held and new mic audio on the old connection', async () => {
+            client.EmitOn(0, RESUMABLE('h1'));
+            client.AutoConfirmSetup = false;
+            client.EmitOn(0, GO_AWAY('60s'));
+            await vi.advanceTimersByTimeAsync(0);
+            client.OnPcmChunk?.('HELD');
+            client.CloseOn(1, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+
+            expect(emitted.states.at(-1)).toBe('listening');
+            client.OnPcmChunk?.('LIVE');
+            expect(client.Connections[0].Session.RealtimeInputs.map((input) => input.audio?.data)).toEqual(['HELD', 'LIVE']);
+            expect(client.Connections[0].Session.Closed).toBe(false);
+            expect(emitted.errors).toEqual([]);
+        });
+
+        it('waits for the turn the user starts on the old connection before the next attempt', async () => {
+            await failFirstMoveAttempt();
+            client.EmitOn(0, HEARD('one more question'));
+            await vi.advanceTimersByTimeAsync(10_000);
+            expect(client.Connections).toHaveLength(2);
+
+            client.EmitOn(0, SAID('Sure.'));
+            client.EmitOn(0, TURN_COMPLETE);
+            client.EmitOn(0, RESUMABLE('h2'));
+            await vi.advanceTimersByTimeAsync(0);
+            expect(client.Connections).toHaveLength(3);
+            expect(emitted.states.at(-1)).toBe('connecting');
+
+            client.ConfirmSetupOn(2);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(emitted.states.at(-1)).toBe('listening');
+            expect(client.Connections[0].Session.Closed).toBe(true);
+            expect(emitted.errors).toEqual([]);
+        });
+
+        it('a loss of the old connection while live on it retries at once', async () => {
+            await failFirstMoveAttempt();
+            client.EmitOn(0, HEARD('still there?'));
+            client.EmitOn(0, RESUMABLE('h2'));
+            await vi.advanceTimersByTimeAsync(2_000);
+            expect(client.Connections).toHaveLength(2);
+            client.CloseOn(0, 1006);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(client.Connections).toHaveLength(3);
+        });
+    });
+
     describe('long-call reconnects, 600s/120s ceiling, token refresh, and history seeding (#6460)', () => {
         it('proactively reconnects before the 600s ceiling, refreshes the single-use token, omits handle, and seeds conversation memory', async () => {
             const devClient = new MultiConnectionClient();

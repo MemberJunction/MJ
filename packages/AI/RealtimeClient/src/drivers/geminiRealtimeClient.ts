@@ -1410,6 +1410,26 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     }
 
     /**
+     * A planned move's attempt failed and the old connection is still the one in use: the call goes on there until the
+     * next attempt. Input flows again (the mic audio held during the attempt goes out first, then queued sends), and
+     * the state the move replaced is reported again. `false` when the attempt tore the old connection down (a relay
+     * session closes its tunnel before a seeded reopen) or the session has ended.
+     */
+    protected override ResumeOnOldConnection(): boolean {
+        if (!this.session || this.currentConnection === 0 || this.currentState === 'closed' || this.currentState === 'error') {
+            return false;
+        }
+        this.connectionReady = true;
+        const restore = this.StateToRestoreOnOldConnection;
+        if (restore) {
+            this.setState(restore);
+        }
+        this.sendHeldMicAudio();
+        this.flushQueuedSends();
+        return true;
+    }
+
+    /**
      * Re-establishes the underlying Gemini Live WebSocket mid-call via `BaseRealtimeClient.reconnectController`
      * (proactive connection-duration timer, `goAway`, unexpected close, or Attempt 2 seed fallback).
      *
@@ -1427,11 +1447,6 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         }
         this.connectionReady = false;
         const handle = context.UseNativeResumption && context.ResumptionHandle ? context.ResumptionHandle : undefined;
-        if (!handle) {
-            for (const callID of this.pendingToolCallNames.keys()) {
-                this.callsFromBeforeReseed.add(callID);
-            }
-        }
 
         let refreshedRelayUrl = context.Credential.RelayUrl || target.RelayUrl;
         if (!handle && target.Transport === 'relay') {
@@ -1498,6 +1513,13 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.connectTarget = reconnectTarget;
         if (previous) {
             GeminiRealtimeClient.closeQuietly(previous);
+        }
+        if (!handle) {
+            // Marked only once the seeded connection is in use: after a failed attempt the call can go back to the old
+            // connection (ResumeOnOldConnection), where these calls still take a normal function response.
+            for (const callID of this.pendingToolCallNames.keys()) {
+                this.callsFromBeforeReseed.add(callID);
+            }
         }
         if (!handle && context.ConversationSeed && context.ConversationSeed.Entries.length > 0) {
             if (target.Transport === 'relay') {

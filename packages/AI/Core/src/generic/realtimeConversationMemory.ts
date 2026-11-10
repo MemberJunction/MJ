@@ -173,15 +173,20 @@ export class RealtimeConversationMemory {
             if (slot.Entry === null) this.slots.splice(index, 1);
             return true;
         }
+        const text = this.truncate(entry.Text, 'user');
         if (slot.Entry === null && entry.ReplacesPrevious) {
             // The new item continues the previous user utterance (a streamed transcript the provider split in two):
-            // its text holds the earlier words too, so the earlier turn goes.
+            // its text holds the earlier words too. The merged text goes in the EARLIER turn's place, because the
+            // utterance began there: a tool call or answer recorded between the two places came after the request.
+            // The slot takes the new item's id so later frames for that item keep growing it in place.
             const previous = this.findLastFilled('user', index);
             if (previous >= 0) {
-                this.slots.splice(previous, 1);
+                this.slots[previous] = { Entry: { Kind: 'user', Text: text }, ItemId: itemId };
+                this.slots.splice(index, 1);
+                return true;
             }
         }
-        slot.Entry = { Kind: 'user', Text: this.truncate(entry.Text, 'user') };
+        slot.Entry = { Kind: 'user', Text: text };
         return true;
     }
 

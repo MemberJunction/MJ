@@ -313,16 +313,14 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
             this.attachOutputAudioMeter(RealtimeAudioMeter.ForStream(pendingRemoteStream));
             pendingRemoteStream = null;
         }
-        const answerWasInFlight = this.responseActive;
-        this.responseActive = false;
-        this.confirmedResponseActive = false;
+        const answerWasInFlight = this.resetResponseStateForNewConnection();
         this.audioPlaying = false;
 
         try { prevDc?.close(); } catch { /* already closing */ }
         try { prevPc?.close(); } catch { /* already closing */ }
 
         this.applySessionConfig(nextDc);
-        this.seedConversationAfterMove(context.ConversationSeed, answerWasInFlight);
+        this.seedConversationAfterMove(context, answerWasInFlight, true);
         this.setState('listening');
     }
 

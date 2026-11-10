@@ -937,6 +937,111 @@ describe('Slice 5 — Client driver long-call reconnects and history seeding', (
         await client.Disconnect();
     });
 
+    describe("OpenAI Live first connection's data channel during a move (#36)", () => {
+        /** The second connection's SDP answer is held until the test releases it, so the move stays in flight. */
+        class HeldMoveOpenAILiveClient extends OpenAILiveClient {
+            public PeerConnections: Array<FakePeerConnection & IRealtimeLivePeerConnection> = [];
+            public ReleaseAnswer: (() => void) | null = null;
+            protected override createPeerConnection(): IRealtimeLivePeerConnection {
+                const pc: FakePeerConnection & IRealtimeLivePeerConnection = Object.assign(
+                    new FakePeerConnection(),
+                    { iceGatheringState: 'complete' as RTCIceGatheringState }
+                );
+                this.PeerConnections.push(pc);
+                return pc;
+            }
+            protected override createAudioSink(): IRealtimeAudioSink {
+                return { srcObject: null, remove: () => {} };
+            }
+            protected override async postSdpOffer(): Promise<string> {
+                const latest = this.PeerConnections[this.PeerConnections.length - 1];
+                if (this.PeerConnections.length > 1) {
+                    await new Promise<void>((resolve) => {
+                        this.ReleaseAnswer = resolve;
+                    });
+                }
+                queueMicrotask(() => latest.Channel.Open());
+                return 'v=0\r\n';
+            }
+        }
+
+        async function connectLive(): Promise<{ client: HeldMoveOpenAILiveClient; states: string[]; fatalErrors: string[] }> {
+            const client = new HeldMoveOpenAILiveClient();
+            const states: string[] = [];
+            const fatalErrors: string[] = [];
+            client.OnStateChange((s) => states.push(s));
+            client.OnError((e) => {
+                if (e.Fatal) {
+                    fatalErrors.push(e.Message);
+                }
+            });
+            const mic = new FakeMediaStream([new FakeTrack()]) as unknown as MediaStream;
+            const connectPromise = client.Connect(
+                {
+                    Provider: 'openai-live',
+                    Model: 'gpt-live-1',
+                    EphemeralToken: 'live-tok-36',
+                    ExpiresAt: new Date(Date.now() + 600_000).toISOString(),
+                    SessionConfig: { instructions: 'Live prompt' },
+                },
+                mic
+            );
+            await vi.advanceTimersByTimeAsync(1);
+            await connectPromise;
+            states.length = 0;
+            return { client, states, fatalErrors };
+        }
+
+        it('ignores a close of the first channel while the move is in flight', async () => {
+            const { client, states, fatalErrors } = await connectLive();
+            const moving = client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(0);
+            expect(client.PeerConnections).toHaveLength(2);
+
+            client.PeerConnections[0].Channel.onclose?.(new Event('close'));
+            expect(states).not.toContain('closed');
+            expect(client.State).not.toBe('closed');
+
+            client.ReleaseAnswer?.();
+            await vi.advanceTimersByTimeAsync(1);
+            expect(await moving).toBe(true);
+            expect(client.State).toBe('listening');
+            expect(fatalErrors).toEqual([]);
+            await client.Disconnect();
+        });
+
+        it('ignores an error on the first channel while the move is in flight', async () => {
+            const { client, states, fatalErrors } = await connectLive();
+            const moving = client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(0);
+
+            client.PeerConnections[0].Channel.onerror?.(new Event('error'));
+            expect(fatalErrors).toEqual([]);
+            expect(states).not.toContain('error');
+
+            client.ReleaseAnswer?.();
+            await vi.advanceTimersByTimeAsync(1);
+            expect(await moving).toBe(true);
+            expect(client.State).toBe('listening');
+            await client.Disconnect();
+        });
+
+        it('still ends the call when the first channel closes with no move in flight', async () => {
+            const { client, states } = await connectLive();
+            client.PeerConnections[0].Channel.onclose?.(new Event('close'));
+            expect(states).toEqual(['closed']);
+            await client.Disconnect();
+        });
+
+        it('still reports a fatal error when the first channel errors with no move in flight', async () => {
+            const { client, states, fatalErrors } = await connectLive();
+            client.PeerConnections[0].Channel.onerror?.(new Event('error'));
+            expect(fatalErrors).toHaveLength(1);
+            expect(states).toEqual(['error']);
+            await client.Disconnect();
+        });
+    });
+
     describe('typed text during an OpenAI reconnect (F12)', () => {
         /** An OpenAI client whose reconnect handshakes wait until the test releases them. */
         class HeldHandshakeOpenAIClient extends OpenAIRealtimeClient {

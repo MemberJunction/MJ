@@ -404,6 +404,23 @@ describe('RealtimeConversationMemory reserved user turns (late transcription)', 
         expect(lines(m)).toEqual(['user:what is the time']);
     });
 
+    it('keeps the merged text in the earlier turn place when a new item continues it, so the request stays before its tool call', () => {
+        // xAI: item_1 is committed and the model starts a tool call before item_1's transcript lands; then the user
+        // keeps talking (item_2) and Grok re-emits the whole utterance, flagged as a continuation.
+        const m = new RealtimeConversationMemory();
+        m.ReserveUserTurn('item_1');
+        m.Record({ Kind: 'toolCall', Name: 'lookup_order_status', ArgumentsJson: '{"order_number":"4417"}' });
+        m.Record({ Kind: 'user', Text: 'look up order', ItemId: 'item_1' });
+        m.ReserveUserTurn('item_2');
+        m.Record({ Kind: 'user', Text: 'look up order 4417', ItemId: 'item_2', ReplacesPrevious: true });
+        expect(lines(m)).toEqual(['user:look up order 4417', 'toolCall:lookup_order_status']);
+
+        // Later streamed frames for item_2 keep growing that same turn in place.
+        m.Record({ Kind: 'assistant', Text: 'checking' });
+        m.Record({ Kind: 'user', Text: 'look up order 4417 please', ItemId: 'item_2', ReplacesPrevious: true });
+        expect(lines(m)).toEqual(['user:look up order 4417 please', 'toolCall:lookup_order_status', 'assistant:checking']);
+    });
+
     it('truncates a filled transcript like any other entry', () => {
         const m = new RealtimeConversationMemory({ MaxEntryChars: 4 });
         m.ReserveUserTurn('item_1');

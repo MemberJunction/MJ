@@ -112,12 +112,22 @@ class LossTestOpenAIClient extends OpenAIRealtimeClient {
     protected override createAudioSink(): IRealtimeAudioSink {
         return new FakeAudioSink();
     }
+    /** When set, the next SDP answer waits for it, so a move stays in flight until the test resolves it. */
+    public SdpGate: Promise<void> | null = null;
+
     protected override async postSdpOffer(_offerSdp: string, ephemeralToken: string): Promise<string> {
         this.SdpTokens.push(ephemeralToken);
+        if (this.SdpGate) {
+            await this.SdpGate;
+        }
         return 'FAKE_ANSWER_SDP';
     }
     public get Pc(): FakePeerConnection {
         return this.PeerConnections[this.PeerConnections.length - 1];
+    }
+    /** Whether something (an open turn, a tool call in flight, ...) would hold a soft-window move now. */
+    public IsHoldingMove(): boolean {
+        return this.isTurnActiveForReconnect();
     }
 }
 
@@ -510,6 +520,253 @@ describe('transport loss during a live call (#6462 F6)', () => {
             expect(errors).toHaveLength(1);
             expect(errors[0].Fatal).toBe(true);
             expect(states).toEqual(['error']);
+        });
+    });
+});
+
+// ── Review round 6 (#32, #33, #35, #40) ─────────────────────────────────────────
+
+interface SentFrame {
+    type: string;
+    item?: { type?: string; role?: string; call_id?: string; output?: string; content?: Array<{ text?: string }> };
+}
+
+function frames(sent: string[]): SentFrame[] {
+    return sent.map((s) => JSON.parse(s) as SentFrame);
+}
+
+/** Whether a frame carries the tool output text, as a `function_call_output` item or a late-result note. */
+function carriesOutput(frame: SentFrame, text: string): boolean {
+    if (frame.type !== 'conversation.item.create') {
+        return false;
+    }
+    if ((frame.item?.output ?? '').includes(text)) {
+        return true;
+    }
+    return (frame.item?.content ?? []).some((c) => (c.text ?? '').includes(text));
+}
+
+/** The model is answering the user (a VAD response) and has said part of it. */
+function answerInFlight(emit: (event: object) => void): void {
+    emit({ type: 'input_audio_buffer.committed', item_id: 'u_q' });
+    emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'u_q', transcript: 'What is the capital of Peru?' });
+    emit({ type: 'response.created' });
+    emit({ type: 'response.output_audio_transcript.delta', delta: 'The capital of ' });
+}
+
+/** The model started a tool call and is waiting for its result (its state is 'connected'). */
+function toolCallInFlight(emit: (event: object) => void): void {
+    emit({ type: 'response.created' });
+    emit({ type: 'response.output_audio_transcript.delta', delta: 'One moment while I check.' });
+    emit({ type: 'response.function_call_arguments.done', call_id: 'call_sage', name: 'AskSage', arguments: '{}' });
+    emit({ type: 'response.done' });
+}
+
+describe('OpenAI-protocol reconnect state (#6462 review round 6)', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    describe('#32: a connection loss during a tool call', () => {
+        it('OpenAI WebRTC: a data channel close during the tool run reconnects instead of ending the call', async () => {
+            const client = await connectOpenAI();
+            toolCallInFlight((e) => client.Pc.Channel.EmitServer(e));
+            const { states, errors } = collect(client);
+
+            client.Pc.Channel.Drop();
+            await vi.advanceTimersByTimeAsync(10);
+
+            expect(errors).toEqual([]);
+            expect(states).not.toContain('closed');
+            expect(client.PeerConnections).toHaveLength(2);
+            await client.Disconnect();
+        });
+
+        it('OpenAI WebRTC: a failed peer connection during the tool run reconnects instead of a fatal error', async () => {
+            const client = await connectOpenAI();
+            toolCallInFlight((e) => client.Pc.Channel.EmitServer(e));
+            const { errors } = collect(client);
+
+            client.Pc.SetConnectionState('failed');
+            await vi.advanceTimersByTimeAsync(10);
+
+            expect(errors).toEqual([]);
+            expect(client.PeerConnections).toHaveLength(2);
+            await client.Disconnect();
+        });
+
+        it('xAI: a socket close during the tool run reconnects instead of a fatal error', async () => {
+            const client = await connectXAI();
+            toolCallInFlight((e) => client.Socket.onmessage?.(JSON.stringify(e)));
+            const { errors } = collect(client);
+
+            client.Socket.onclose?.();
+            await vi.advanceTimersByTimeAsync(10);
+
+            expect(errors).toEqual([]);
+            expect(client.Sockets).toHaveLength(2);
+            await client.Disconnect();
+        });
+    });
+
+    describe('#33: a tool result sent while the call moves', () => {
+        it('a result sent while a lost connection is replaced reaches the new connection and memory, once', async () => {
+            const client = await connectOpenAI();
+            toolCallInFlight((e) => client.Pc.Channel.EmitServer(e));
+
+            client.ChannelsOpen = false;
+            client.Pc.Channel.Drop();
+            await vi.advanceTimersByTimeAsync(10);
+            client.SendToolResult('call_sage', '{"answer":"Sage says 42"}');
+            client.ChannelsOpen = true;
+            await vi.advanceTimersByTimeAsync(REALTIME_RESUMPTION_RECOVERY_WINDOW_MS);
+
+            const sent = frames(client.Pc.Channel.Sent);
+            expect(sent.filter((f) => carriesOutput(f, 'Sage says 42'))).toHaveLength(1);
+            expect(sent.at(-1)?.type).toBe('response.create');
+            expect(client.ConversationMemory.Seed().Entries.filter((e) => e.Kind === 'toolResult')).toHaveLength(1);
+            client.Pc.Channel.EmitServer({ type: 'response.created' });
+            client.Pc.Channel.EmitServer({ type: 'response.done' });
+            // The call is answered, so it no longer holds every later move.
+            expect(client.IsBusy).toBe(false);
+            expect(client.IsHoldingMove()).toBe(false);
+            await client.Disconnect();
+        });
+
+        it('a result sent during a planned move goes to the new connection, not the closing one', async () => {
+            const client = await connectOpenAI();
+            toolCallInFlight((e) => client.Pc.Channel.EmitServer(e));
+            const old = client.Pc;
+            let releaseSdp: () => void = () => undefined;
+            client.SdpGate = new Promise<void>((resolve) => {
+                releaseSdp = resolve;
+            });
+
+            const swap = client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(10);
+            expect(client.PeerConnections).toHaveLength(2);
+            client.SendToolResult('call_sage', '{"answer":"Sage says 42"}');
+            client.SdpGate = null;
+            releaseSdp();
+            await vi.advanceTimersByTimeAsync(10);
+            expect(await swap).toBe(true);
+
+            expect(frames(old.Channel.Sent).some((f) => carriesOutput(f, 'Sage says 42'))).toBe(false);
+            const sent = frames(client.Pc.Channel.Sent);
+            expect(sent.filter((f) => carriesOutput(f, 'Sage says 42'))).toHaveLength(1);
+            expect(sent.at(-1)?.type).toBe('response.create');
+            expect(client.ConversationMemory.Seed().Entries.filter((e) => e.Kind === 'toolResult')).toHaveLength(1);
+            await client.Disconnect();
+        });
+
+        it('a result held for a planned move whose attempt fails goes out on the old connection, once', async () => {
+            const client = await connectOpenAI();
+            toolCallInFlight((e) => client.Pc.Channel.EmitServer(e));
+            const old = client.Pc;
+            let failSdp: (error: Error) => void = () => undefined;
+            client.SdpGate = new Promise<void>((_resolve, reject) => {
+                failSdp = reject;
+            });
+
+            void client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(10);
+            client.SendToolResult('call_sage', '{"answer":"Sage says 42"}');
+            expect(frames(old.Channel.Sent).some((f) => carriesOutput(f, 'Sage says 42'))).toBe(false);
+            client.SdpGate = null;
+            failSdp(new Error('SDP exchange failed'));
+            await vi.advanceTimersByTimeAsync(0);
+
+            const sent = frames(old.Channel.Sent);
+            expect(sent.filter((f) => carriesOutput(f, 'Sage says 42'))).toHaveLength(1);
+            expect(sent.find((f) => carriesOutput(f, 'Sage says 42'))?.item?.type).toBe('function_call_output');
+            expect(sent.at(-1)?.type).toBe('response.create');
+            expect(client.ConversationMemory.Seed().Entries.filter((e) => e.Kind === 'toolResult')).toHaveLength(1);
+            await client.Disconnect();
+        });
+    });
+
+    describe('#35: the swap resets the local response bookkeeping', () => {
+        it('a response.create the old connection never confirmed does not leave IsBusy stuck after the re-request', async () => {
+            const client = await connectOpenAI();
+            client.Pc.Channel.EmitServer({ type: 'response.function_call_arguments.done', call_id: 'call_1', name: 'Lookup', arguments: '{}' });
+            // The result's response.create goes out on the old connection, which dies before confirming it.
+            client.SendToolResult('call_1', '{"status":"paid"}');
+            expect(client.IsBusy).toBe(true);
+
+            const swap = client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(10);
+            expect(await swap).toBe(true);
+            // The cut-off answer is asked for again on the new connection.
+            expect(frames(client.Pc.Channel.Sent).at(-1)?.type).toBe('response.create');
+
+            client.Pc.Channel.EmitServer({ type: 'response.created' });
+            client.Pc.Channel.EmitServer({ type: 'response.output_audio_transcript.done', transcript: 'It is paid.' });
+            client.Pc.Channel.EmitServer({ type: 'response.done' });
+
+            expect(client.IsBusy).toBe(false);
+            await client.Disconnect();
+        });
+    });
+
+    describe('#40: re-requesting an answer the move cut off', () => {
+        it('re-requests when context notes follow the question in the seed', async () => {
+            const client = await connectOpenAI();
+            answerInFlight((e) => client.Pc.Channel.EmitServer(e));
+            client.SendContextNote('The user switched to the web channel.');
+
+            const swap = client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(10);
+            expect(await swap).toBe(true);
+
+            const types = frames(client.Pc.Channel.Sent).map((f) => f.type);
+            expect(types.filter((t) => t === 'response.create')).toHaveLength(1);
+            expect(types.at(-1)).toBe('response.create');
+            await client.Disconnect();
+        });
+
+        it('xAI native resumption: re-requests a cut-off answer on the resumed connection', async () => {
+            const client = await connectXAI();
+            answerInFlight((e) => client.Socket.onmessage?.(JSON.stringify(e)));
+
+            const swap = client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(10);
+            expect(await swap).toBe(true);
+
+            expect(client.Socket.Url).toContain('conversation_id=conv_42');
+            const types = client.Socket.SentTypes();
+            expect(types).not.toContain('conversation.item.create');
+            expect(types.filter((t) => t === 'response.create')).toHaveLength(1);
+            await client.Disconnect();
+        });
+
+        it('text held during the move is answered together with the cut-off answer, without cancelling it', async () => {
+            const client = await connectOpenAI();
+            answerInFlight((e) => client.Pc.Channel.EmitServer(e));
+            let releaseSdp: () => void = () => undefined;
+            client.SdpGate = new Promise<void>((resolve) => {
+                releaseSdp = resolve;
+            });
+
+            const swap = client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(10);
+            client.SendText('And of Chile?');
+            client.SdpGate = null;
+            releaseSdp();
+            await vi.advanceTimersByTimeAsync(10);
+            expect(await swap).toBe(true);
+
+            const sent = frames(client.Pc.Channel.Sent);
+            const types = sent.map((f) => f.type);
+            expect(types).not.toContain('response.cancel');
+            expect(types.filter((t) => t === 'response.create')).toHaveLength(1);
+            const textAt = sent.findIndex((f) => (f.item?.content ?? []).some((c) => c.text === 'And of Chile?'));
+            expect(textAt).toBeGreaterThan(-1);
+            expect(types.lastIndexOf('response.create')).toBeGreaterThan(textAt);
+            await client.Disconnect();
         });
     });
 });

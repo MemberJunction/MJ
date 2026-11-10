@@ -248,6 +248,20 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
     protected pendingAssistantText = '';
     /** Typed user turns sent while the call moves to a new connection; see {@link SendText}. */
     private textHeldDuringReconnect: string[] = [];
+    /** Tool results sent while the call moves to a new connection; see {@link SendToolResult}. */
+    private toolResultsHeldDuringReconnect: Array<{ CallID: string; OutputJson: string }> = [];
+    /**
+     * True while {@link deliverHeldInput} sends the held items, so each item's reply request is collected into one
+     * `response.create` sent after the last item (see {@link responseOwedByHeldInput}).
+     */
+    private deliveringHeldInput = false;
+    /** Set by {@link requestResultResponse} while {@link deliveringHeldInput}: a held item asked for a reply. */
+    private responseOwedByHeldInput = false;
+    /**
+     * Whether the current call went live (`'listening'`) and has not ended since. A lost transport is recovered only
+     * then; see {@link recoverLostTransport}.
+     */
+    private callWentLive = false;
     /**
      * Set by {@link seedConversationAfterMove} when the move cut off an answer the seed still owes the user, so
      * {@link onReconnected} asks the new connection for it. One move asks once; the next move decides afresh.
@@ -420,6 +434,23 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
     }
 
     /**
+     * @inheritdoc
+     *
+     * During a move a result is held, like typed text, and goes out once the call is live again: on the new connection
+     * after the swap ({@link onReconnected}), or on the old one when a planned move goes back to it
+     * ({@link ResumeOnOldConnection}). Sent on now, it would be lost: a lost transport cannot carry it, and a closing
+     * one takes it along after the seed for the new connection was built. It is recorded into memory when it goes out,
+     * so it reaches the model and the seed of a later move exactly once.
+     */
+    public override SendToolResult(callID: string, outputJson: string): void {
+        if (this.IsReconnecting) {
+            this.toolResultsHeldDuringReconnect.push({ CallID: callID, OutputJson: outputJson });
+            return;
+        }
+        super.SendToolResult(callID, outputJson);
+    }
+
+    /**
      * Sends one typed user turn and records it in conversation memory. The provider sends no input transcription for a
      * text item (only for audio), so without the record a later reseed would drop the turn. It is recorded when sent,
      * not when held, so a held turn is not also in the seed of the move it waited for.
@@ -448,38 +479,84 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
     }
 
     /**
-     * Asks the new connection for an answer the move cut off (see {@link seedConversationAfterMove}), then sends the
-     * text held during the move, oldest first, after the seed. A held text's reply queues behind that answer.
+     * Sends the input held during the move to the new connection, after the seed, and asks for one answer covering it
+     * and an answer the move cut off (see {@link seedConversationAfterMove}). After `super`, so a result for a call
+     * from before a reseed goes out as a late-result note.
      */
     protected override onReconnected(usedNativeResumption: boolean): void {
         super.onReconnected(usedNativeResumption);
-        if (this.answerOwedAfterMove) {
-            this.answerOwedAfterMove = false;
+        const answerOwed = this.answerOwedAfterMove;
+        this.answerOwedAfterMove = false;
+        if (answerOwed) {
             RealtimeDiagLog(`[${this.providerDebugLabel}] the move cut off an answer; asking the new connection for it`);
-            this.requestResultResponse();
         }
-        const held = this.textHeldDuringReconnect;
+        this.deliverHeldInput(answerOwed);
+    }
+
+    /**
+     * Sends the tool results, then the typed text, held during a move, oldest first, and then ONE `response.create`
+     * when any of them (or `answerOwed`) asks for a reply. One request answers every item, and it comes after the
+     * last one: a reply requested per item would be cancelled by the next typed turn (text implies barge-in).
+     */
+    private deliverHeldInput(answerOwed: boolean): void {
+        const results = this.toolResultsHeldDuringReconnect;
+        const texts = this.textHeldDuringReconnect;
+        this.toolResultsHeldDuringReconnect = [];
         this.textHeldDuringReconnect = [];
-        for (const text of held) {
-            this.deliverUserText(text);
+        this.deliveringHeldInput = true;
+        this.responseOwedByHeldInput = false;
+        try {
+            for (const result of results) {
+                super.SendToolResult(result.CallID, result.OutputJson);
+            }
+            for (const text of texts) {
+                this.deliverUserText(text);
+            }
+        } finally {
+            this.deliveringHeldInput = false;
+        }
+        const owed = answerOwed || this.responseOwedByHeldInput;
+        this.responseOwedByHeldInput = false;
+        if (owed) {
+            this.requestResultResponse();
         }
     }
 
-    /** The move failed and the call is over, so the held text has no connection to go to. */
+    /**
+     * A planned move's attempt failed and the old transport is still open: the call goes on there until the next
+     * attempt. The state the move replaced is reported again, and the text and tool results held for the move go out
+     * on it now instead of waiting for (or being dropped with) the cycle. `false` when the old transport is gone too.
+     */
+    protected override ResumeOnOldConnection(): boolean {
+        if (!this.canSendEvents() || this.currentState === 'error' || this.currentState === 'closed') {
+            return false;
+        }
+        const restore = this.StateToRestoreOnOldConnection;
+        if (restore) {
+            this.setState(restore);
+        }
+        this.deliverHeldInput(false);
+        return true;
+    }
+
+    /** The move failed and the call is over, so the held input has no connection to go to. */
     protected override onReconnectFailed(error: Error, code: RealtimeReconnectFailureCode): void {
-        this.dropTextHeldDuringReconnect('the reconnect failed');
+        this.dropInputHeldDuringReconnect('the reconnect failed');
         super.onReconnectFailed(error, code);
     }
 
-    /** Drops text held for a move that will not complete, logging how many turns were dropped and why. */
-    protected dropTextHeldDuringReconnect(why: string): void {
-        if (this.textHeldDuringReconnect.length === 0) {
+    /** Drops the text and tool results held for a move that will not complete, logging how many and why. */
+    protected dropInputHeldDuringReconnect(why: string): void {
+        const texts = this.textHeldDuringReconnect.length;
+        const results = this.toolResultsHeldDuringReconnect.length;
+        this.textHeldDuringReconnect = [];
+        this.toolResultsHeldDuringReconnect = [];
+        if (texts === 0 && results === 0) {
             return;
         }
         RealtimeDiagLog(
-            `[${this.providerDebugLabel}] dropping ${this.textHeldDuringReconnect.length} typed turn(s) held during a reconnect: ${why}`
+            `[${this.providerDebugLabel}] dropping ${texts} typed turn(s) and ${results} tool result(s) held during a reconnect: ${why}`
         );
-        this.textHeldDuringReconnect = [];
     }
 
     /**
@@ -531,16 +608,51 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
     }
 
     /**
-     * Seeds the new connection after a move and notes whether the move cut off an answer the user is still owed: one
-     * was in flight on the old connection (`answerWasInFlight`, read before the swap reset it) and the seed ends with
-     * what it answers (a user turn or a tool result). A seeded session does not reply to seeded items by itself, so
-     * without this the question sits unanswered in every later seed. An answer that completed is in the seed as an
-     * assistant turn and is not asked for again.
+     * Resets the response bookkeeping for a connection that has just replaced the old one, and returns whether an
+     * answer was in flight (or queued) on the old one. Every count and flag here describes the old connection: a
+     * `response.create` it never confirmed would otherwise make the new connection's real `response.done` look stale
+     * and leave {@link IsBusy} stuck.
      */
-    protected seedConversationAfterMove(seed: RealtimeMemorySeed | null, answerWasInFlight: boolean): void {
-        this.seedConversationHistory(seed);
-        const last = seed?.Entries[seed.Entries.length - 1];
-        this.answerOwedAfterMove = answerWasInFlight && (last?.Kind === 'user' || last?.Kind === 'toolResult');
+    protected resetResponseStateForNewConnection(): boolean {
+        const answerWasInFlight = this.responseActive || this.pendingResultResponse;
+        this.responseActive = false;
+        this.confirmedResponseActive = false;
+        this.pendingResultResponse = false;
+        this.pendingLocalResponseCreates = 0;
+        this.pendingNarrationKind = false;
+        this.activeResponseKind = 'normal';
+        this.pendingAssistantText = '';
+        return answerWasInFlight;
+    }
+
+    /**
+     * Seeds the new connection after a move (when `sendsSeed`; a natively resumed one already has the history) and
+     * notes whether the move cut off an answer the user is still owed: one was in flight on the old connection
+     * (`answerWasInFlight`, from {@link resetResponseStateForNewConnection}) and the conversation ends with what it
+     * answers (a user turn or a tool result), not counting the context notes after it. Neither a seeded nor a resumed
+     * session replies by itself, so without this the question sits unanswered in every later seed. An answer that
+     * completed is in memory as an assistant turn and is not asked for again.
+     */
+    protected seedConversationAfterMove(
+        context: RealtimeClientReconnectContext,
+        answerWasInFlight: boolean,
+        sendsSeed: boolean
+    ): void {
+        if (sendsSeed) {
+            this.seedConversationHistory(context.ConversationSeed);
+        }
+        this.answerOwedAfterMove = answerWasInFlight && OpenAIProtocolRealtimeClient.endsAwaitingAnswer(context.Seed);
+    }
+
+    /** Whether the conversation's last entry other than a context note is a user turn or a tool result. */
+    private static endsAwaitingAnswer(seed: RealtimeMemorySeed): boolean {
+        for (let i = seed.Entries.length - 1; i >= 0; i--) {
+            const kind = seed.Entries[i].Kind;
+            if (kind !== 'note') {
+                return kind === 'user' || kind === 'toolResult';
+            }
+        }
+        return false;
     }
 
     /**
@@ -1110,6 +1222,10 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
         if (!this.canSendEvents()) {
             return;
         }
+        if (this.deliveringHeldInput) {
+            this.responseOwedByHeldInput = true;
+            return;
+        }
         if (this.responseActive) {
             this.pendingResultResponse = true;
             return;
@@ -1135,7 +1251,7 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
 
     /** Resets the per-session response state machine (used on Disconnect). */
     protected resetResponseState(): void {
-        this.dropTextHeldDuringReconnect('the call ended');
+        this.dropInputHeldDuringReconnect('the call ended');
         this.forgetUserUtterances();
         this.answerOwedAfterMove = false;
         this.pendingAssistantText = '';
@@ -1151,6 +1267,12 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
 
     /** Updates the client's own state view and emits the change to the host. */
     protected setState(state: RealtimeClientState): void {
+        if (state === 'listening' || state === 'speaking') {
+            this.callWentLive = true;
+        } else if (state === 'connecting' || state === 'closed' || state === 'error') {
+            // 'connecting' here is a new Connect: a move reports it through emitStateChange, not this method.
+            this.callWentLive = false;
+        }
         this.currentState = state;
         this.emitStateChange(state);
     }
@@ -1170,13 +1292,15 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
      * window closes. Returns `false` when there is no live call to save, so the caller keeps its terminal handling: the
      * connect has not finished (Connect reports that failure itself), the call already ended, or the driver opts out.
      * A loss while a reconnect is running returns `true`: the in-flight cycle owns it.
+     *
+     * Live means the call went live and has not ended ({@link callWentLive}), not a speech state: during a tool run the
+     * state is `'connected'` (see {@link onToolCallFrame}), and a loss then is as recoverable as one mid-sentence.
      */
     protected recoverLostTransport(detail: string): boolean {
         if (this.IsReconnecting) {
             return true;
         }
-        const live = this.currentState === 'listening' || this.currentState === 'speaking';
-        if (!live || !this.RecoversLostTransport) {
+        if (!this.callWentLive || !this.RecoversLostTransport) {
             return false;
         }
         RealtimeDiagLog(`[${this.providerDebugLabel}] transport lost during a live call (${detail}); reconnecting`);
@@ -1581,13 +1705,10 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
             /* already closing */
         }
 
-        const answerWasInFlight = this.responseActive;
-        this.responseActive = false;
-        this.confirmedResponseActive = false;
+        const answerWasInFlight = this.resetResponseStateForNewConnection();
         this.applySessionConfig();
-        if (!context.UseNativeResumption || !context.ResumptionHandle) {
-            this.seedConversationAfterMove(context.ConversationSeed, answerWasInFlight);
-        }
+        const resumedNatively = context.UseNativeResumption && Boolean(context.ResumptionHandle);
+        this.seedConversationAfterMove(context, answerWasInFlight, !resumedNatively);
         this.setState('listening');
     }
 

@@ -289,16 +289,11 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         };
         nextDc.onerror = (e: Event) => {
             failDc?.(new Error(`OpenAI Live data channel error: ${String(e)}`));
-            if (this.dataChannel === nextDc && !this.IsReconnecting) {
-                this.emitError({ Message: `OpenAI Live data channel error: ${String(e)}`, Fatal: true });
-                this.setState('error');
-            }
+            this.handleChannelError(nextDc, e);
         };
         nextDc.onclose = () => {
             failDc?.(new Error('OpenAI Live data channel closed during reconnect'));
-            if (this.dataChannel === nextDc && !this.IsReconnecting && this.currentState !== 'error') {
-                this.setState('closed');
-            }
+            this.handleChannelClose(nextDc);
         };
 
         try {
@@ -668,16 +663,34 @@ export class OpenAILiveClient extends BaseRealtimeClient {
             this.handleDataChannelMessage(String(e.data));
         };
 
-        channel.onerror = (e: Event) => {
-            this.emitError({ Message: `Data channel error: ${String(e)}`, Fatal: true });
-            this.setState('error');
-        };
+        channel.onerror = (e: Event) => this.handleChannelError(channel, e);
+        channel.onclose = () => this.handleChannelClose(channel);
+    }
 
-        channel.onclose = () => {
-            if (this.currentState !== 'error') {
-                this.setState('closed');
-            }
-        };
+    /**
+     * A data-channel error, shared by the first connection's channel and each reconnect's. Ignored for a channel that
+     * is no longer current, and while a move is in flight: the move owns the outcome then (it either swaps to the new
+     * channel or fails through the base reconnect path), so the old channel dying must not end the call. Otherwise
+     * it is fatal.
+     */
+    private handleChannelError(channel: IRealtimeDataChannel, e: Event): void {
+        if (this.dataChannel !== channel || this.IsReconnecting) {
+            return;
+        }
+        this.emitError({ Message: `OpenAI Live data channel error: ${String(e)}`, Fatal: true });
+        this.setState('error');
+    }
+
+    /**
+     * A data-channel close the consumer did not ask for. Disconnect and the swap drop the channel before closing it,
+     * so the identity check filters both; a close during a move is the move's to handle (see
+     * {@link handleChannelError}). Otherwise the session ends as `'closed'`.
+     */
+    private handleChannelClose(channel: IRealtimeDataChannel): void {
+        if (this.dataChannel !== channel || this.IsReconnecting || this.currentState === 'error') {
+            return;
+        }
+        this.setState('closed');
     }
 
     private finalizeAssistantTranscript(): void {
