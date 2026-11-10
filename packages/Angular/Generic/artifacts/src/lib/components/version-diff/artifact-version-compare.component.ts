@@ -114,7 +114,7 @@ export type UniversalCompareMode = 'visual' | 'json-tree' | 'unified' | 'split';
                 <i class="fas fa-wand-sparkles"></i> Visual Diff
               </button>
             }
-            @if (JsonDiff?.IsValidJson) {
+            @if (HasJsonTreeTab) {
               <button
                 type="button"
                 role="tab"
@@ -902,6 +902,20 @@ export class ArtifactVersionCompareComponent implements OnChanges {
   public JsonSearchQuery = '';
 
   private hasInitializedDefaultMode = false;
+  private readonly diffCache = new Map<
+    string,
+    { jsonDiff?: StructuralJsonDiffResult; textDiff?: GitTextDiffResult }
+  >();
+
+  public get HasJsonTreeTab(): boolean {
+    if (!this.BaseVersion || !this.TargetVersion) {
+      return false;
+    }
+    if (this.JsonDiff) {
+      return this.JsonDiff.IsValidJson;
+    }
+    return this.isContentPairJsonShaped();
+  }
 
   public get LatestVersionNumber(): number {
     return this.Versions.reduce((max, v) => Math.max(max, v.VersionNumber || 0), 1);
@@ -952,6 +966,7 @@ export class ArtifactVersionCompareComponent implements OnChanges {
 
   public SetMode(mode: UniversalCompareMode): void {
     this.ActiveMode = mode;
+    this.ensureDiffForActiveMode();
     this.cdr.markForCheck();
   }
 
@@ -1030,31 +1045,90 @@ export class ArtifactVersionCompareComponent implements OnChanges {
       return;
     }
 
-    this.JsonDiff = this.diffService.ComputeStructuralJsonDiff(
-      this.BaseVersion.Content,
-      this.TargetVersion.Content,
-    );
-    this.TextDiff = this.diffService.ComputeGitTextDiff(
-      this.BaseVersion.Content,
-      this.TargetVersion.Content,
-      true,
-    );
-
     if (!this.hasInitializedDefaultMode) {
       if (this.VisualDiffComponentType) {
         this.ActiveMode = 'visual';
-      } else if (this.JsonDiff.IsValidJson) {
+      } else if (this.isContentPairJsonShaped()) {
         this.ActiveMode = 'json-tree';
       } else {
         this.ActiveMode = 'unified';
       }
       this.hasInitializedDefaultMode = true;
     } else if (this.ActiveMode === 'visual' && !this.VisualDiffComponentType) {
-      this.ActiveMode = this.JsonDiff.IsValidJson ? 'json-tree' : 'unified';
-    } else if (this.ActiveMode === 'json-tree' && !this.JsonDiff.IsValidJson) {
-      this.ActiveMode = 'unified';
+      this.ActiveMode = this.isContentPairJsonShaped() ? 'json-tree' : 'unified';
     }
 
+    this.ensureDiffForActiveMode();
     this.cdr.markForCheck();
+  }
+
+  private ensureDiffForActiveMode(): void {
+    if (!this.BaseVersion || !this.TargetVersion || this.BaseVersion.ID === this.TargetVersion.ID) {
+      this.JsonDiff = null;
+      this.TextDiff = null;
+      return;
+    }
+
+    const pairKey = this.buildPairCacheKey(this.BaseVersion, this.TargetVersion);
+    let entry = this.diffCache.get(pairKey);
+    if (!entry) {
+      entry = {};
+      this.diffCache.set(pairKey, entry);
+    }
+
+    if (this.ActiveMode === 'visual') {
+      this.JsonDiff = entry.jsonDiff ?? null;
+      this.TextDiff = entry.textDiff ?? null;
+      return;
+    }
+
+    if (this.ActiveMode === 'json-tree') {
+      if (!entry.jsonDiff) {
+        entry.jsonDiff = this.diffService.ComputeStructuralJsonDiff(
+          this.BaseVersion.Content,
+          this.TargetVersion.Content,
+        );
+      }
+      this.JsonDiff = entry.jsonDiff;
+      this.TextDiff = entry.textDiff ?? null;
+      if (!entry.jsonDiff.IsValidJson) {
+        this.ActiveMode = 'unified';
+        if (!entry.textDiff) {
+          entry.textDiff = this.diffService.ComputeGitTextDiff(
+            this.BaseVersion.Content,
+            this.TargetVersion.Content,
+            true,
+          );
+        }
+        this.TextDiff = entry.textDiff;
+      }
+      return;
+    }
+
+    // ActiveMode === 'unified' || ActiveMode === 'split'
+    if (!entry.textDiff) {
+      entry.textDiff = this.diffService.ComputeGitTextDiff(
+        this.BaseVersion.Content,
+        this.TargetVersion.Content,
+        true,
+      );
+    }
+    this.TextDiff = entry.textDiff;
+    this.JsonDiff = entry.jsonDiff ?? null;
+  }
+
+  private buildPairCacheKey(baseVer: MJArtifactVersionEntity, targetVer: MJArtifactVersionEntity): string {
+    const baseKey = baseVer.ID || `v${baseVer.VersionNumber}:${baseVer.ContentHash || baseVer.Content?.length || 0}`;
+    const targetKey =
+      targetVer.ID || `v${targetVer.VersionNumber}:${targetVer.ContentHash || targetVer.Content?.length || 0}`;
+    return `${baseKey}::${targetKey}`;
+  }
+
+  private isContentPairJsonShaped(): boolean {
+    const b = (this.BaseVersion?.Content ?? '').trim();
+    const t = (this.TargetVersion?.Content ?? '').trim();
+    const looksJson = (s: string): boolean =>
+      (s.startsWith('{') && s.endsWith('}')) || (s.startsWith('[') && s.endsWith(']'));
+    return looksJson(b) && looksJson(t);
   }
 }

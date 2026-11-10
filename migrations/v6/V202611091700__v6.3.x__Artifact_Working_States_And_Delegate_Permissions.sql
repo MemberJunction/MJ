@@ -38,7 +38,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Artifact]
 ADD [DelegateEntityID] UNIQUEIDENTIFIER NULL
         CONSTRAINT [FK_Artifact_DelegateEntity]
         FOREIGN KEY REFERENCES [${flyway:defaultSchema}].[Entity]([ID]),
-    [DelegateRecordID] NVARCHAR(700) NULL,
+    [DelegateRecordID] NVARCHAR(700) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     CONSTRAINT [CK_Artifact_DelegateBinding]
         CHECK (([DelegateEntityID] IS NULL AND [DelegateRecordID] IS NULL)
             OR ([DelegateEntityID] IS NOT NULL AND [DelegateRecordID] IS NOT NULL));
@@ -205,9 +205,9 @@ GO
          , 0
          , 0
          , 0
-         , 0
-         , 0
-         , 0
+         , 1
+         , 1
+         , 1
          , 1000
          , GETUTCDATE()
          , GETUTCDATE()

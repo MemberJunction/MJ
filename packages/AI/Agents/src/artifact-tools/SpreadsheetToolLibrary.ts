@@ -3,6 +3,7 @@ import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } f
 import {
     FormatCellAddress,
     ParseCellAddress,
+    ParseRangeAddress,
     SpreadsheetCalculatedColumnSpec,
     SpreadsheetCellFormatType,
     SpreadsheetCellSpec,
@@ -15,6 +16,15 @@ import {
     WorkbookSpec,
     WorksheetSpec
 } from '@memberjunction/core-entities';
+
+const MAX_SHEET_ROW_COUNT = 10_000;
+const MAX_SHEET_COLUMN_COUNT = 256;
+const MAX_INSERT_COUNT = 1_000;
+const MAX_READ_RANGE_CELLS = 10_000;
+const SEARCH_MATCH_LIMIT = 100;
+
+type AggregateOperation = 'sum' | 'avg' | 'count' | 'min' | 'max';
+const VALID_AGGREGATE_OPS: ReadonlySet<string> = new Set<AggregateOperation>(['sum', 'avg', 'count', 'min', 'max']);
 
 /**
  * Server-side and agent tool library for `Excel Spreadsheet` artifacts (`MJ Sheets`, § 3.6 & § 6).
@@ -260,6 +270,61 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                         expectedRevisionHash: { type: 'string', description: 'Optional concurrency revision hash.' }
                     }
                 }
+            },
+            {
+                name: 'get_sheets',
+                description: 'Returns sheet names, row counts, and column counts for every sheet in the workbook.',
+                inputSchema: { type: 'object', properties: {}, required: [] }
+            },
+            {
+                name: 'get_sheet_data',
+                description:
+                    'Returns rows from a sheet as key-value objects using the header row as keys. Defaults to first 50 data rows (capped at 10,000).',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        sheet: { type: 'string', description: 'Sheet name or SheetID' },
+                        startRow: { type: 'number', description: '1-based data row to start from (after header). Default: 1' },
+                        rowCount: { type: 'number', description: 'Number of data rows to return (max 10,000). Default: 50' }
+                    },
+                    required: ['sheet']
+                }
+            },
+            {
+                name: 'search_cells',
+                description: 'Regex search across all cells. Optionally scope to a single sheet. Returns up to 100 matches.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        query: { type: 'string', description: 'Regex pattern to search for' },
+                        sheet: { type: 'string', description: 'Optional sheet name or SheetID to limit search scope' }
+                    },
+                    required: ['query']
+                }
+            },
+            {
+                name: 'aggregate_column',
+                description: 'Computes an aggregate (sum, avg, count, min, max) on a column identified by its header name.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        sheet: { type: 'string', description: 'Sheet name or SheetID' },
+                        column: { type: 'string', description: 'Column header name' },
+                        operation: { type: 'string', description: 'Aggregate operation: sum, avg, count, min, max' }
+                    },
+                    required: ['sheet', 'column', 'operation']
+                }
+            },
+            {
+                name: 'get_formulas',
+                description: 'Returns all cells containing formulas in a given sheet.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        sheet: { type: 'string', description: 'Sheet name or SheetID' }
+                    },
+                    required: ['sheet']
+                }
             }
         ];
     }
@@ -270,7 +335,12 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         artifactContent: string | Buffer
     ): Promise<ArtifactToolResult> {
         const engine = SpreadsheetEngine.Instance;
-        const workbook = this.loadWorkbookFromContent(artifactContent);
+        let workbook: WorkbookSpec;
+        try {
+            workbook = this.loadWorkbookFromContent(artifactContent);
+        } catch (err) {
+            return this.errorResult(`Failed to parse spreadsheet content: ${err instanceof Error ? err.message : String(err)}`);
+        }
         const currentHash = engine.ComputeRevisionHash(workbook);
 
         const expectedHash =
@@ -285,6 +355,16 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             case 'get_workbook_outline':
             case 'read_workbook':
                 return this.handleGetWorkbookOutline(workbook, currentHash);
+            case 'get_sheets':
+                return this.handleGetSheets(workbook);
+            case 'get_sheet_data':
+                return this.handleGetSheetData(workbook, input);
+            case 'search_cells':
+                return this.handleSearchCells(workbook, input);
+            case 'aggregate_column':
+                return this.handleAggregateColumn(workbook, input);
+            case 'get_formulas':
+                return this.handleGetFormulas(workbook, input);
             case 'read_range':
                 return this.handleReadRange(workbook, input, currentHash);
             case 'write_cells':
@@ -395,13 +475,29 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
     ): ArtifactToolResult {
         const engine = SpreadsheetEngine.Instance;
         engine.EvaluateWorkbook(workbook);
-        const sheet = this.resolveSheet(workbook, input.sheet);
+        const sheet = this.resolveSheet(workbook, input.sheet ?? input.sheetName);
         if (!sheet) {
-            return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
+            return this.errorResult(`Worksheet '${String(input.sheet ?? input.sheetName ?? '')}' not found.`);
         }
         const range = typeof input.range === 'string' ? input.range.trim() : '';
         if (!range) {
             return this.errorResult('Parameter "range" is required (e.g. "B4" or "A1:D10").');
+        }
+        const bounds = ParseRangeAddress(range);
+        if (!bounds) {
+            return this.errorResult(`Invalid A1 range '${range}'.`);
+        }
+        const requestedCellCount =
+            (bounds.endRow - bounds.startRow + 1) * (bounds.endCol - bounds.startCol + 1);
+        if (requestedCellCount > MAX_READ_RANGE_CELLS) {
+            return this.errorResult(
+                `Requested range '${range}' spans ${requestedCellCount} cells, exceeding the maximum read_range limit of ${MAX_READ_RANGE_CELLS} cells.`
+            );
+        }
+        if (bounds.endRow > MAX_SHEET_ROW_COUNT || bounds.endCol > MAX_SHEET_COLUMN_COUNT) {
+            return this.errorResult(
+                `Requested range '${range}' exceeds worksheet bounds (max ${MAX_SHEET_ROW_COUNT} rows x ${MAX_SHEET_COLUMN_COUNT} columns).`
+            );
         }
         try {
             const grid = engine.ReadRange(workbook, sheet.SheetID, range);
@@ -452,8 +548,14 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             if (!item || typeof item !== 'object') continue;
             const rec = item as Record<string, unknown>;
             const addr = typeof rec.address === 'string' ? rec.address.trim() : '';
-            if (!addr || !ParseCellAddress(addr)) {
+            const parsedAddr = addr ? ParseCellAddress(addr) : null;
+            if (!addr || !parsedAddr) {
                 return this.errorResult(`Invalid cell address '${addr}'.`);
+            }
+            if (parsedAddr.row > MAX_SHEET_ROW_COUNT || parsedAddr.col > MAX_SHEET_COLUMN_COUNT) {
+                return this.errorResult(
+                    `Cell address '${addr}' exceeds maximum worksheet bounds (${MAX_SHEET_ROW_COUNT} rows x ${MAX_SHEET_COLUMN_COUNT} columns).`
+                );
             }
             const val =
                 rec.value === null ||
@@ -525,9 +627,15 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
         }
-        const atRow = Number(input.atRowNumber) || 1;
-        const count = Math.max(1, Number(input.count) || 1);
-        const inserted = SpreadsheetEngine.Instance.InsertRows(workbook, sheet.SheetID, atRow, count);
+        const atRow = Math.max(1, Math.trunc(Number(input.atRowNumber) || 1));
+        const rawCount = input.count !== undefined ? Math.trunc(Number(input.count)) : 1;
+        if (Number.isNaN(rawCount) || rawCount < 1 || rawCount > MAX_INSERT_COUNT) {
+            return this.errorResult(`Insert row count must be between 1 and ${MAX_INSERT_COUNT}.`);
+        }
+        if (sheet.Rows.length + rawCount > MAX_SHEET_ROW_COUNT) {
+            return this.errorResult(`Cannot exceed maximum worksheet row count (${MAX_SHEET_ROW_COUNT}).`);
+        }
+        const inserted = SpreadsheetEngine.Instance.InsertRows(workbook, sheet.SheetID, atRow, rawCount);
         return this.buildMutationSuccess(workbook, {
             sheetId: sheet.SheetID,
             insertedRowIds: inserted.map((r) => r.RowID),
@@ -543,9 +651,15 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
         }
-        const atCol = Number(input.atColumnNumber) || 1;
-        const count = Math.max(1, Number(input.count) || 1);
-        const inserted = SpreadsheetEngine.Instance.InsertColumns(workbook, sheet.SheetID, atCol, count);
+        const atCol = Math.max(1, Math.trunc(Number(input.atColumnNumber) || 1));
+        const rawCount = input.count !== undefined ? Math.trunc(Number(input.count)) : 1;
+        if (Number.isNaN(rawCount) || rawCount < 1 || rawCount > MAX_INSERT_COUNT) {
+            return this.errorResult(`Insert column count must be between 1 and ${MAX_INSERT_COUNT}.`);
+        }
+        if (sheet.Columns.length + rawCount > MAX_SHEET_COLUMN_COUNT) {
+            return this.errorResult(`Cannot exceed maximum worksheet column count (${MAX_SHEET_COLUMN_COUNT}).`);
+        }
+        const inserted = SpreadsheetEngine.Instance.InsertColumns(workbook, sheet.SheetID, atCol, rawCount);
         return this.buildMutationSuccess(workbook, {
             sheetId: sheet.SheetID,
             insertedColumnIds: inserted.map((c) => c.ColumnID),
@@ -561,9 +675,15 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         if (!name) {
             return this.errorResult('Parameter "name" is required.');
         }
-        const rowCount = Number(input.rowCount) || 25;
-        const colCount = Number(input.columnCount) || 12;
-        const ws = SpreadsheetEngine.Instance.AddWorksheet(workbook, name, rowCount, colCount);
+        const rawRows = input.rowCount !== undefined ? Math.trunc(Number(input.rowCount)) : 25;
+        const rawCols = input.columnCount !== undefined ? Math.trunc(Number(input.columnCount)) : 12;
+        if (Number.isNaN(rawRows) || rawRows < 1 || rawRows > MAX_SHEET_ROW_COUNT) {
+            return this.errorResult(`Parameter "rowCount" must be between 1 and ${MAX_SHEET_ROW_COUNT}.`);
+        }
+        if (Number.isNaN(rawCols) || rawCols < 1 || rawCols > MAX_SHEET_COLUMN_COUNT) {
+            return this.errorResult(`Parameter "columnCount" must be between 1 and ${MAX_SHEET_COLUMN_COUNT}.`);
+        }
+        const ws = SpreadsheetEngine.Instance.AddWorksheet(workbook, name, rawRows, rawCols);
         return this.buildMutationSuccess(workbook, {
             sheetId: ws.SheetID,
             name: ws.Name
@@ -789,6 +909,258 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             filterSpecs: sheet.FilterSpecs,
             visibleRowCount: sheet.Rows.filter((r) => !r.Hidden).length
         });
+    }
+
+    // -----------------------------------------------------------------------
+    // ExcelToolLibrary Parity Inspection Tools (E6)
+    // -----------------------------------------------------------------------
+
+    private handleGetSheets(workbook: WorkbookSpec): ArtifactToolResult {
+        SpreadsheetEngine.Instance.EvaluateWorkbook(workbook);
+        const sheets = workbook.Worksheets.map((ws) => {
+            const bounds = this.getPopulatedBounds(ws);
+            return {
+                sheetId: ws.SheetID,
+                name: ws.Name,
+                rowCount: bounds.maxRow > 0 ? bounds.maxRow : ws.Rows.length,
+                columnCount: bounds.maxCol > 0 ? bounds.maxCol : ws.Columns.length
+            };
+        });
+        return this.successResult({ sheets });
+    }
+
+    private handleGetSheetData(
+        workbook: WorkbookSpec,
+        input: Record<string, unknown>
+    ): ArtifactToolResult {
+        SpreadsheetEngine.Instance.EvaluateWorkbook(workbook);
+        const sheetArg = input.sheet ?? input.sheetName;
+        const ws = this.resolveSheet(workbook, sheetArg);
+        if (!ws) {
+            return this.errorResult(`Sheet "${String(sheetArg ?? '')}" not found.`);
+        }
+
+        const startRow = Math.max(1, Math.trunc(Number(input.startRow ?? 1) || 1));
+        const requestedRowCount = Math.trunc(Number(input.rowCount ?? 50) || 50);
+        if (requestedRowCount < 1) {
+            return this.errorResult('Parameter "rowCount" must be >= 1.');
+        }
+        const rowCount = Math.min(MAX_SHEET_ROW_COUNT, requestedRowCount);
+
+        const headerMap = this.buildWorksheetHeaderMap(ws);
+        if (headerMap.size === 0) {
+            return this.successResult({ rows: [] });
+        }
+
+        const bounds = this.getPopulatedBounds(ws);
+        const firstDataRow = 1 + startRow;
+        const lastDataRow = Math.min(1 + startRow + rowCount - 1, bounds.maxRow);
+        const rows: Array<Record<string, unknown>> = [];
+
+        for (let r = firstDataRow; r <= lastDataRow; r++) {
+            let hasAnyCellInRow = false;
+            const record: Record<string, unknown> = {};
+            for (const [colIdx, colName] of headerMap.entries()) {
+                const addr = FormatCellAddress(r, colIdx);
+                const cell = ws.Cells[addr];
+                const val = cell ? (cell.ComputedValue ?? cell.RawValue ?? null) : null;
+                if (val !== null && val !== undefined && val !== '') {
+                    hasAnyCellInRow = true;
+                }
+                record[colName] = val;
+            }
+            if (hasAnyCellInRow) {
+                rows.push(record);
+            }
+        }
+
+        return this.successResult({ rows });
+    }
+
+    private handleSearchCells(
+        workbook: WorkbookSpec,
+        input: Record<string, unknown>
+    ): ArtifactToolResult {
+        const engine = SpreadsheetEngine.Instance;
+        engine.EvaluateWorkbook(workbook);
+        const query = typeof input.query === 'string' ? input.query : '';
+        if (!query) {
+            return this.errorResult('Parameter "query" is required.');
+        }
+        let regex: RegExp;
+        try {
+            regex = new RegExp(query, 'i');
+        } catch {
+            return this.errorResult(`Invalid regex pattern: "${query}".`);
+        }
+
+        const sheetScope = input.sheet ?? input.sheetName;
+        let targetSheets: WorksheetSpec[];
+        if (typeof sheetScope === 'string' && sheetScope.trim().length > 0) {
+            const found = engine.GetWorksheet(workbook, sheetScope.trim());
+            if (!found) {
+                return this.errorResult(`Sheet "${sheetScope}" not found.`);
+            }
+            targetSheets = [found];
+        } else {
+            targetSheets = workbook.Worksheets;
+        }
+
+        const matches: Array<{ sheet: string; cell: string; value: string }> = [];
+        for (const ws of targetSheets) {
+            if (matches.length >= SEARCH_MATCH_LIMIT) break;
+            const sortedCells = Object.values(ws.Cells).sort((a, b) => {
+                const pa = ParseCellAddress(a.Address);
+                const pb = ParseCellAddress(b.Address);
+                if (!pa || !pb) return 0;
+                return pa.row !== pb.row ? pa.row - pb.row : pa.col - pb.col;
+            });
+            for (const cell of sortedCells) {
+                if (matches.length >= SEARCH_MATCH_LIMIT) break;
+                const val = cell.ComputedValue ?? cell.RawValue;
+                if (val === null || val === undefined || val === '') continue;
+                const text = cell.DisplayValue || String(val);
+                if (regex.test(text) || regex.test(String(val))) {
+                    matches.push({
+                        sheet: ws.Name,
+                        cell: cell.Address,
+                        value: text
+                    });
+                }
+            }
+        }
+
+        return this.successResult({ matches });
+    }
+
+    private handleAggregateColumn(
+        workbook: WorkbookSpec,
+        input: Record<string, unknown>
+    ): ArtifactToolResult {
+        SpreadsheetEngine.Instance.EvaluateWorkbook(workbook);
+        const sheetArg = input.sheet ?? input.sheetName;
+        const columnName = typeof input.column === 'string' ? input.column.trim() : '';
+        const operation = typeof input.operation === 'string' ? input.operation.trim().toLowerCase() : '';
+
+        const ws = this.resolveSheet(workbook, sheetArg);
+        if (!ws) {
+            return this.errorResult(`Sheet "${String(sheetArg ?? '')}" not found.`);
+        }
+        if (!VALID_AGGREGATE_OPS.has(operation)) {
+            return this.errorResult(
+                `Unsupported aggregate operation: "${operation}". Valid operations: ${[...VALID_AGGREGATE_OPS].join(', ')}.`
+            );
+        }
+
+        const headerMap = this.buildWorksheetHeaderMap(ws);
+        let targetCol = -1;
+        for (const [colIdx, name] of headerMap.entries()) {
+            if (name === columnName || name.toLowerCase() === columnName.toLowerCase()) {
+                targetCol = colIdx;
+                break;
+            }
+        }
+        if (targetCol === -1) {
+            return this.errorResult(
+                `Column "${columnName}" not found in sheet "${ws.Name}". Available columns: ${[...headerMap.values()].join(', ')}.`
+            );
+        }
+
+        const bounds = this.getPopulatedBounds(ws);
+        const numericValues: number[] = [];
+        for (let r = 2; r <= bounds.maxRow; r++) {
+            const addr = FormatCellAddress(r, targetCol);
+            const cell = ws.Cells[addr];
+            const raw = cell ? (cell.ComputedValue ?? cell.RawValue) : null;
+            if (raw === null || raw === undefined || raw === '') continue;
+            const num = typeof raw === 'number' ? raw : Number(raw);
+            if (!Number.isNaN(num)) {
+                numericValues.push(num);
+            }
+        }
+
+        if (operation === 'count') {
+            return this.successResult({ operation, column: columnName, value: numericValues.length });
+        }
+        if (numericValues.length === 0) {
+            return this.errorResult(`No numeric values found in column "${columnName}".`);
+        }
+
+        let value: number;
+        switch (operation as AggregateOperation) {
+            case 'sum':
+                value = numericValues.reduce((acc, v) => acc + v, 0);
+                break;
+            case 'avg':
+                value = numericValues.reduce((acc, v) => acc + v, 0) / numericValues.length;
+                break;
+            case 'min':
+                value = Math.min(...numericValues);
+                break;
+            case 'max':
+                value = Math.max(...numericValues);
+                break;
+            default:
+                value = numericValues.length;
+        }
+        return this.successResult({ operation, column: columnName, value: Number(value.toPrecision(15)) });
+    }
+
+    private handleGetFormulas(
+        workbook: WorkbookSpec,
+        input: Record<string, unknown>
+    ): ArtifactToolResult {
+        SpreadsheetEngine.Instance.EvaluateWorkbook(workbook);
+        const sheetArg = input.sheet ?? input.sheetName;
+        const ws = this.resolveSheet(workbook, sheetArg);
+        if (!ws) {
+            return this.errorResult(`Sheet "${String(sheetArg ?? '')}" not found.`);
+        }
+
+        const formulas = Object.values(ws.Cells)
+            .filter((c): c is SpreadsheetCellSpec & { Formula: string } => Boolean(c.Formula))
+            .sort((a, b) => {
+                const pa = ParseCellAddress(a.Address);
+                const pb = ParseCellAddress(b.Address);
+                if (!pa || !pb) return 0;
+                return pa.row !== pb.row ? pa.row - pb.row : pa.col - pb.col;
+            })
+            .map((c) => ({
+                cell: c.Address,
+                formula: c.Formula,
+                computedValue: c.ComputedValue ?? null
+            }));
+
+        return this.successResult({ formulas });
+    }
+
+    private buildWorksheetHeaderMap(ws: WorksheetSpec): Map<number, string> {
+        const headerMap = new Map<number, string>();
+        const bounds = this.getPopulatedBounds(ws);
+        for (let c = 1; c <= bounds.maxCol; c++) {
+            const addr = FormatCellAddress(1, c);
+            const cell = ws.Cells[addr];
+            const val = cell ? (cell.ComputedValue ?? cell.RawValue) : null;
+            if (val !== null && val !== undefined && String(val).trim() !== '') {
+                headerMap.set(c, String(val).trim());
+            }
+        }
+        return headerMap;
+    }
+
+    private getPopulatedBounds(ws: WorksheetSpec): { maxRow: number; maxCol: number } {
+        let maxRow = 0;
+        let maxCol = 0;
+        for (const cell of Object.values(ws.Cells)) {
+            const pos = ParseCellAddress(cell.Address);
+            if (!pos) continue;
+            const val = cell.ComputedValue ?? cell.RawValue ?? cell.Formula;
+            if (val !== null && val !== undefined && val !== '') {
+                if (pos.row > maxRow) maxRow = pos.row;
+                if (pos.col > maxCol) maxCol = pos.col;
+            }
+        }
+        return { maxRow, maxCol };
     }
 
     private successResult(data: unknown): ArtifactToolResult {

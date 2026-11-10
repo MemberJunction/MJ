@@ -13,10 +13,15 @@ import {
   SlideDeckSpec,
   WorkbookSpec,
 } from '@memberjunction/core-entities';
-import { LibraryCreationService } from '../lib/services/library-creation.service';
+import { LibraryCreationService, RemoteDriveFileExistsError } from '../lib/services/library-creation.service';
 import { GraphQLAttachmentBlobStore, UploadBlobInput, UploadBlobResult } from '../lib/services/graphql-attachment-blob-store';
 import { LibraryWorkspaceComponent } from '../lib/components/library/library-workspace.component';
+import { LibraryRemoteDrivePaneComponent } from '../lib/components/library/library-remote-drive-pane.component';
+import { LibraryExportDriveDialogComponent } from '../lib/components/library/library-create-dialog.component';
+import { TasksFullViewComponent } from '../lib/components/task/tasks-full-view.component';
 import { LibraryCollectionNode, LibraryDriveSummary, LibraryItemSummary, LibraryWorkspaceState } from '../lib/components/library/library.models';
+import { RunView } from '@memberjunction/core';
+import { StorageObjectMetadata } from '@memberjunction/graphql-dataprovider';
 
 interface RecordedEntitySave {
   entityName: string;
@@ -420,6 +425,86 @@ describe('LibraryCreationService', () => {
     expect(published.ByteLength).toBeGreaterThan(0);
     expect(uploadSpy).not.toHaveBeenCalled();
   });
+
+  it('downloads binary bytes for ContentMode=File artifacts and guards against overwriting existing remote files until confirmed', async () => {
+    const { service } = buildCreationService();
+    const binaryPdf = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37]);
+    const listObjectsSpy = vi.fn(async () => ({
+      objects: [
+        {
+          name: 'Signed_MSA.pdf',
+          path: 'Legal/Signed_MSA.pdf',
+          fullPath: 'Legal/Signed_MSA.pdf',
+          size: 8192,
+          contentType: 'application/pdf',
+          lastModified: new Date('2026-11-01T00:00:00Z'),
+          isDirectory: false,
+        },
+      ],
+      prefixes: [],
+    }));
+    const createUploadUrlSpy = vi.fn(async () => ({
+      success: true,
+      uploadUrl: 'https://drive.example.com/upload/msa',
+      providerKey: 'Legal/Signed_MSA.pdf',
+    }));
+    const uploadedPayloads: Uint8Array[] = [];
+    const putBytesSpy = vi.fn(async (_url: string, bytes: Uint8Array) => {
+      uploadedPayloads.push(bytes);
+    });
+
+    // First attempt without AllowOverwrite must throw RemoteDriveFileExistsError BEFORE CreatePreAuthUploadUrl
+    await expect(
+      service.PublishArtifactVersionToConnectedDrive({
+        ArtifactName: 'Signed MSA',
+        VersionContent: '',
+        VersionContentMode: 'File',
+        ArtifactVersionID: 'ver-pdf-2',
+        VersionFileID: 'file-pdf-2',
+        VersionMimeType: 'application/pdf',
+        VersionFileName: 'Signed_MSA.pdf',
+        Format: 'original',
+        AccountID: 'dddd0001-0000-4000-8000-000000000001',
+        TargetFolderPrefix: 'Legal',
+        TargetFileName: 'Signed_MSA',
+        CurrentUser: TEST_USER,
+        StorageClientOverride: {
+          ListObjects: listObjectsSpy,
+          CreatePreAuthUploadUrl: createUploadUrlSpy,
+        },
+        UploadBytesOverride: putBytesSpy,
+        DownloadFileBytesOverride: async () => binaryPdf,
+      }),
+    ).rejects.toBeInstanceOf(RemoteDriveFileExistsError);
+    expect(createUploadUrlSpy).not.toHaveBeenCalled();
+
+    // Confirmed overwrite proceeds and uploads the exact binary PDF bytes (not 0-byte empty text)
+    const published = await service.PublishArtifactVersionToConnectedDrive({
+      ArtifactName: 'Signed MSA',
+      VersionContent: '',
+      VersionContentMode: 'File',
+      ArtifactVersionID: 'ver-pdf-2',
+      VersionFileID: 'file-pdf-2',
+      VersionMimeType: 'application/pdf',
+      VersionFileName: 'Signed_MSA.pdf',
+      Format: 'original',
+      AccountID: 'dddd0001-0000-4000-8000-000000000001',
+      TargetFolderPrefix: 'Legal',
+      TargetFileName: 'Signed_MSA',
+      AllowOverwrite: true,
+      CurrentUser: TEST_USER,
+      StorageClientOverride: {
+        ListObjects: listObjectsSpy,
+        CreatePreAuthUploadUrl: createUploadUrlSpy,
+      },
+      UploadBytesOverride: putBytesSpy,
+      DownloadFileBytesOverride: async () => binaryPdf,
+    });
+
+    expect(published.ObjectPath).toBe('Legal/Signed_MSA.pdf');
+    expect(published.ByteLength).toBe(binaryPdf.byteLength);
+    expect(uploadedPayloads[0]).toEqual(binaryPdf);
+  });
 });
 
 describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state transitions', () => {
@@ -611,6 +696,345 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     expect(component.NavigatorSection).toBe('drive');
     expect(component.SelectedDrive?.AccountName).toBe('Marketing SharePoint');
     expect(component.DriveFolderPrefix).toBe('Campaigns/Q4/');
+
+    // Browser Back (popstate) with omitted/null params resets all sub-state cleanly
+    component.OpenArtifactStudio('item-doc-1', { versionNumber: 2, fullCanvas: true });
+    expect(component.ActiveArtifactId).toBe('item-doc-1');
+    expect(component.ActiveVersionNumber).toBe(2);
+    expect(component.IsFullCanvasOpen).toBe(true);
+
+    component.ApplyExternalRouteState({
+      mode: null,
+      tab: null,
+      section: null,
+      collectionId: null,
+      driveId: null,
+      folder: null,
+      artifactId: null,
+      version: null,
+      canvas: null,
+      q: '',
+    });
+    expect(component.SurfaceMode).toBe('hub');
+    expect(component.HubTab).toBe('overview');
+    expect(component.NavigatorSection).toBe('all');
+    expect(component.SelectedCollectionId).toBeNull();
+    expect(component.SelectedDriveId).toBeNull();
+    expect(component.DriveFolderPrefix).toBe('');
+    expect(component.ActiveArtifactId).toBeNull();
+    expect(component.ActiveVersionNumber).toBeUndefined();
+    expect(component.IsFullCanvasOpen).toBe(false);
+    expect(component.SearchQuery).toBe('');
+  });
+
+  it('emits StateChange on drive PrefixChange and BackRequested and passes ActiveVersionNumber when exporting from Studio', () => {
+    const { component, emittedStates } = buildWorkspaceComponent();
+    component.OpenConnectedDrive('drive-1', '');
+    emittedStates.length = 0;
+
+    component.OnDrivePrefixChange('Decks/2026/');
+    expect(component.DriveFolderPrefix).toBe('Decks/2026/');
+    expect(emittedStates.at(-1)?.DriveFolderPrefix).toBe('Decks/2026/');
+
+    component.OnDriveBackRequested();
+    expect(component.SelectedDriveId).toBeNull();
+    expect(component.DriveFolderPrefix).toBe('');
+    expect(emittedStates.at(-1)?.DriveId).toBeNull();
+
+    // Open v2 (not LatestVersionNumber=3) in Studio and trigger Export to Drive
+    component.OpenArtifactStudio('item-doc-1', { versionNumber: 2, fullCanvas: true });
+    component.OpenExportToDriveModal(component.ActiveItem, undefined, component.ActiveVersionNumber);
+    expect(component.ExportingVersionNumber).toBe(2);
+  });
+
+  it('uses server-side scoped RunViews batches (excluding heavy Content) and notifies on Delete/Save failures', async () => {
+    const { component } = buildWorkspaceComponent();
+    const runViewsCalls: Array<Array<{ EntityName: string; ExtraFilter?: string; Fields?: string[] }>> = [];
+
+    const mockRunViews = vi.fn(async (queries: Array<{ EntityName: string; ExtraFilter?: string; Fields?: string[] }>) => {
+      runViewsCalls.push(queries);
+      return queries.map((q) => {
+        if (q.EntityName === 'MJ: Artifacts' && q.ExtraFilter?.includes('UserID=')) {
+          return {
+            Success: true,
+            Results: [
+              {
+                ID: 'art-owned-1',
+                Name: 'Owned Doc',
+                TypeID: ARTIFACT_TYPES[0].ID,
+                UserID: TEST_USER.ID,
+                __mj_UpdatedAt: new Date('2026-11-09T15:00:00Z'),
+              },
+            ],
+          };
+        }
+        if (q.EntityName === 'MJ: Artifact Versions') {
+          return {
+            Success: true,
+            Results: [
+              {
+                ID: 'ver-owned-1',
+                ArtifactID: 'art-owned-1',
+                VersionNumber: 1,
+                Name: 'Owned Doc',
+                Description: null,
+                ContentMode: 'Text',
+                MimeType: 'text/markdown',
+                FileName: null,
+                __mj_UpdatedAt: new Date('2026-11-09T15:00:00Z'),
+              },
+            ],
+          };
+        }
+        return { Success: true, Results: [] };
+      });
+    });
+
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+      RunViews: mockRunViews,
+    } as unknown as RunView);
+    vi.spyOn(ArtifactMetadataEngine.Instance, 'Config').mockResolvedValue(undefined);
+    vi.spyOn(ArtifactMetadataEngine.Instance, 'ArtifactTypes', 'get').mockReturnValue(ARTIFACT_TYPES);
+
+    const notifySpy = vi.fn();
+    Object.assign(component as object, {
+      iconService: { GetArtifactIcon: () => 'fa-solid fa-file-lines' },
+      notifications: { CreateSimpleNotification: notifySpy },
+      collectionPermByColId: new Map(),
+      collectionLinksByCollectionAndVersion: new Map([['col-1:ver-1', 'link-1']]),
+    });
+    Object.defineProperty(component, 'ProviderToUse', {
+      configurable: true,
+      get: () =>
+        ({
+          CurrentUser: TEST_USER,
+          GetEntityObject: vi.fn(async () => ({
+            Load: vi.fn(async () => true),
+            Delete: vi.fn(async () => false),
+            Save: vi.fn(async () => false),
+            LatestResult: { Message: 'Permission denied' },
+          })),
+        }) as unknown as IMetadataProvider,
+    });
+
+    await component.ReloadWorkspaceData();
+
+    expect(runViewsCalls.length).toBeGreaterThanOrEqual(2);
+    // Batch 1 scopes MJ: Artifacts and MJ: Collections by UserID/OwnerID with zero raw __mj schema references
+    for (const batch of runViewsCalls) {
+      for (const q of batch) {
+        expect(q.ExtraFilter ?? '').not.toContain('__mj.');
+        if (q.EntityName === 'MJ: Artifact Versions') {
+          expect(q.Fields).toBeDefined();
+          expect(q.Fields).not.toContain('Content');
+        }
+      }
+    }
+    expect(component.AllItems.map((i) => i.Id)).toEqual(['art-owned-1']);
+
+    // Verify Delete() and Save() failure notifications
+    (component as unknown as { collectionLinksByCollectionAndVersion: Map<string, string> }).collectionLinksByCollectionAndVersion.set(
+      'col-1:ver-1',
+      'link-1',
+    );
+    component.SelectedCollectionId = 'col-1';
+    await component.RemoveItemFromCurrentCollection({
+      ...component.AllItems[0],
+      Id: 'item-doc-1',
+      LatestVersionId: 'ver-1',
+      CollectionIds: [],
+    });
+    expect(notifySpy).toHaveBeenCalledWith(expect.stringContaining('Permission denied'), 'error', 4000);
+
+    notifySpy.mockClear();
+    component.AllItems = [
+      {
+        ...component.AllItems[0],
+        Id: 'item-doc-1',
+        LatestVersionId: 'ver-1',
+        CollectionIds: [],
+      },
+    ];
+    await component.OnCollectionDrop(
+      { Id: 'col-2', Name: 'Target', CanEdit: true } as LibraryCollectionNode,
+      { preventDefault: vi.fn(), dataTransfer: { getData: () => 'item-doc-1' } } as unknown as DragEvent,
+    );
+    expect(notifySpy).toHaveBeenCalledWith(expect.stringContaining('Permission denied'), 'error', 4000);
+  });
+
+  it('bounds remote text previews to 100 KB via AbortController + stream reader and short-circuits >5 MB files', async () => {
+    const pane = Object.create(LibraryRemoteDrivePaneComponent.prototype) as LibraryRemoteDrivePaneComponent;
+    Object.assign(pane as object, {
+      Account: {
+        account: { ID: 'acc-1', Name: 'Cloud Logs' },
+        provider: { ID: 'prov-1', Name: 'S3' },
+      },
+      StorageClientOverride: {
+        CreatePreAuthDownloadUrl: vi.fn(async (_acc: string, path: string) => `https://s3.example.com/${path}`),
+      },
+      previewRequestSeq: 0,
+      activePreviewAbort: null,
+      cdr: { detectChanges: vi.fn() },
+    });
+
+    // 1) > 5 MB file metadata short-circuits without calling fetch()
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    await pane.SelectRemoteFile({
+      name: 'huge-server.log',
+      path: 'logs/huge-server.log',
+      fullPath: 'logs/huge-server.log',
+      size: 500 * 1024 * 1024,
+      contentType: 'text/plain',
+      lastModified: new Date(),
+      isDirectory: false,
+    } as StorageObjectMetadata);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(pane.PreviewTextContent).toContain('File is large');
+
+    // 2) Streamed text file aborts the underlying stream the instant 102,400 bytes have been read
+    let chunksPulled = 0;
+    let streamCancelled = false;
+    let abortSignalFired = false;
+    const sixtyFourKbChunk = new Uint8Array(65_536).fill(65); // 'A'
+
+    fetchSpy.mockImplementationOnce(async (_input, init) => {
+      init?.signal?.addEventListener('abort', () => {
+        abortSignalFired = true;
+      });
+      const stream = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          chunksPulled++;
+          controller.enqueue(sixtyFourKbChunk);
+        },
+        cancel() {
+          streamCancelled = true;
+        },
+      });
+      return new Response(stream, { status: 200 });
+    });
+
+    await pane.SelectRemoteFile({
+      name: 'unbounded-stream.log',
+      path: 'logs/unbounded-stream.log',
+      fullPath: 'logs/unbounded-stream.log',
+      size: 0, // unknown size metadata from provider
+      contentType: 'text/plain',
+      lastModified: new Date(),
+      isDirectory: false,
+    } as StorageObjectMetadata);
+
+    expect(abortSignalFired || streamCancelled).toBe(true);
+    expect(chunksPulled).toBeLessThanOrEqual(3);
+    expect(pane.PreviewTextContent).toContain('[Preview truncated at 100 KB]');
+    // 102,400 'A' chars + truncation notice
+    expect(pane.PreviewTextContent.startsWith('A'.repeat(102_400))).toBe(true);
+    fetchSpy.mockRestore();
+  });
+
+  it('loads the specific historical Studio VersionNumber in LibraryExportDriveDialogComponent and prompts before overwrite', async () => {
+    const dialog = Object.create(LibraryExportDriveDialogComponent.prototype) as LibraryExportDriveDialogComponent;
+    const publishSpy = vi
+      .fn()
+      .mockRejectedValueOnce(new RemoteDriveFileExistsError('Exports/Roadmap.md', 'Roadmap.md'))
+      .mockResolvedValueOnce({ ObjectPath: 'Exports/Roadmap.md', ByteLength: 24, MimeType: 'text/markdown' });
+
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+      RunView: vi.fn(async () => ({
+        Success: true,
+        Results: [
+          {
+            ID: 'ver-2-id',
+            ArtifactID: 'item-doc-1',
+            VersionNumber: 2,
+            ContentMode: 'Text',
+            Content: '# Version 2 Snapshot',
+            Configuration: null,
+          },
+        ],
+      })),
+    } as unknown as RunView);
+
+    Object.assign(dialog as object, {
+      IsOpen: true,
+      Item: {
+        Id: 'item-doc-1',
+        Name: 'Roadmap',
+        DriverClass: 'MarkdownArtifactViewerPlugin',
+        TypeName: 'Markdown Document',
+        ContentMode: 'Text',
+        LatestVersionId: 'ver-3-id',
+        LatestVersionNumber: 3,
+      } as LibraryItemSummary,
+      VersionNumber: 2,
+      SelectedAccountId: 'drive-1',
+      FolderPrefix: 'Exports',
+      SelectedFormat: 'md',
+      FileName: 'Roadmap',
+      IsExporting: false,
+      ErrorMessage: '',
+      PendingOverwritePath: null,
+      CurrentUser: TEST_USER,
+      StorageClientOverride: null,
+      Published: { emit: vi.fn() },
+      Cancelled: { emit: vi.fn() },
+      creationService: { PublishArtifactVersionToConnectedDrive: publishSpy },
+      notifications: { CreateSimpleNotification: vi.fn() },
+      cdr: { detectChanges: vi.fn() },
+    });
+    Object.defineProperty(dialog, 'ProviderToUse', {
+      configurable: true,
+      get: () => ({ CurrentUser: TEST_USER }) as unknown as IMetadataProvider,
+    });
+
+    // First export attempt hits collision -> surfaces PendingOverwritePath instead of generic error
+    await dialog.ExportNow(false);
+    expect(publishSpy).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        VersionContent: '# Version 2 Snapshot',
+        AllowOverwrite: false,
+      }),
+    );
+    expect(dialog.PendingOverwritePath).toBe('Exports/Roadmap.md');
+
+    // Second export attempt with confirmOverwrite = true completes upload
+    await dialog.ExportNow(true);
+    expect(publishSpy).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        VersionContent: '# Version 2 Snapshot',
+        AllowOverwrite: true,
+      }),
+    );
+    expect(dialog.PendingOverwritePath).toBeNull();
+  });
+
+  it('closes the TasksFullViewComponent inspector drawer on Browser Back when ActiveTaskId becomes undefined', () => {
+    const view = Object.create(TasksFullViewComponent.prototype) as TasksFullViewComponent;
+    const emittedSelections: Array<string | null> = [];
+    Object.assign(view as object, {
+      ActiveTaskId: undefined,
+      InspectedGroup: { RootTaskId: 'task-1' },
+      InspectedStep: { StepNumber: 1 },
+      SelectedTask: { ID: 'task-1' },
+      SubTasks: [{ ID: 'task-1' }],
+      SubTasksWithParent: [{ ID: 'task-1' }],
+      ShowDetailAnimation: true,
+      TaskSelected: { emit: (id: string | null) => emittedSelections.push(id) },
+    });
+
+    view.ngOnChanges({
+      activeTaskId: {
+        previousValue: 'task-1',
+        currentValue: undefined,
+        firstChange: false,
+        isFirstChange: () => false,
+      },
+    });
+
+    expect(view.InspectedGroup).toBeNull();
+    expect(view.SelectedTask).toBeNull();
+    expect(emittedSelections).toHaveLength(0);
   });
 
   it('uses 100% --mj-* semantic CSS design tokens with zero hardcoded hex or rgb colors', () => {

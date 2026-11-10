@@ -1,14 +1,18 @@
 import {
   Component,
+  Input,
   OnInit,
+  OnChanges,
   OnDestroy,
+  SimpleChanges,
   ChangeDetectorRef,
   Type,
   inject,
 } from '@angular/core';
 import { Subscription } from 'rxjs';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { Metadata, RunView, UserInfo, type DataSnapshot } from '@memberjunction/core';
+import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { LogError, RunView, UserInfo, type DataSnapshot, type IMetadataProvider } from '@memberjunction/core';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CreateJsonSnapshot } from '../../snapshot-helpers';
 import {
   MJArtifactEntity,
@@ -453,6 +457,11 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
         <!-- Main Body: Grid + Worksheet Objects + Optional Right Comments Drawer -->
         <div class="mj-sheets-workspace-body">
           <div class="mj-sheets-main-pane">
+            @if (FallbackXlsxBytes) {
+              <div class="mj-sheets-grid-scroll" data-testid="sheets-xlsx-readonly-fallback">
+                <mj-xlsx-preview [ArrayBuffer]="FallbackXlsxBytes"></mj-xlsx-preview>
+              </div>
+            } @else {
             <!-- Interactive A1 Grid -->
             <div class="mj-sheets-grid-scroll" data-testid="sheets-grid-container">
               <table class="mj-sheets-grid-table" role="grid" [attr.aria-label]="ActiveSheet.Name">
@@ -803,6 +812,7 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
                           <div class="mj-sheets-ole-host" [attr.data-testid]="'sheet-ole-host-' + emb.EmbedID">
                             @if (childVer) {
                               <mj-artifact-type-plugin-viewer
+                                [Provider]="Provider"
                                 [artifactVersion]="childVer"
                                 [ArtifactTypeName]="emb.ArtifactTypeName"
                                 [readonly]="!CanEdit"
@@ -811,7 +821,7 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
                             } @else {
                               <div class="mj-sheets-ole-fallback">
                                 <i class="fa-solid fa-diagram-project"></i>
-                                <span>Interactive {{ emb.ArtifactTypeName }} Canvas ({{ emb.Title }})</span>
+                                <span>Loading {{ emb.ArtifactTypeName }} ({{ emb.Title }})…</span>
                               </div>
                             }
                           </div>
@@ -861,16 +871,17 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
                 }
               </div>
 
-              <div class="mj-sheets-tab-stats" data-testid="sheets-tab-stats">
-                <span>Cells: {{ PopulatedCellCount }}</span>
-                <span>Formulas: {{ FormulaCellCount }}</span>
-                <span>Live Tables: {{ ActiveSheet.LiveTables.length }}</span>
-                <span>Charts: {{ ActiveSheet.Charts.length }}</span>
+                <div class="mj-sheets-tab-stats" data-testid="sheets-tab-stats">
+                  <span>Cells: {{ PopulatedCellCount }}</span>
+                  <span>Formulas: {{ FormulaCellCount }}</span>
+                  <span>Live Tables: {{ ActiveSheet.LiveTables.length }}</span>
+                  <span>Charts: {{ ActiveSheet.Charts.length }}</span>
+                </div>
               </div>
-            </div>
+            }
           </div>
 
-          <!-- Right Anchored SheetRange Comments & @SheetsAgent Drawer -->
+          <!-- Right Anchored SheetRange Comments Drawer -->
           @if (ShowCommentsDrawer) {
             <aside class="mj-sheets-comments-drawer" data-testid="sheets-comments-drawer">
               <div class="mj-sheets-drawer-header">
@@ -895,7 +906,7 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
                     rows="3"
                     class="mj-sheets-comment-textarea"
                     [(ngModel)]="NewCommentText"
-                    placeholder="Comment on {{ SelectedRange }} or invoke @SheetsAgent (e.g. '@SheetsAgent add 15% margin formula in C2:C5')"
+                    placeholder="Add an anchored comment on {{ SelectedRange }}..."
                     data-testid="sheet-comment-input"
                   ></textarea>
                   <div class="mj-sheets-comment-actions">
@@ -2108,14 +2119,22 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
 @RegisterClass(BaseArtifactViewerPluginComponent, 'SpreadsheetArtifactViewerPlugin')
 export class SpreadsheetArtifactViewerComponent
   extends BaseArtifactViewerPluginComponent
-  implements OnInit, OnDestroy
+  implements OnInit, OnChanges, OnDestroy
 {
+  /**
+   * Optional WebSocket URL (or base URL) override for `/collaboration/yjs` real-time Yjs room sync (§ 3.2).
+   * When omitted, `DocumentCollaborationService` mints a single-use ticket via `GraphQLDataProvider`.
+   */
+  @Input() public CollaborationWsUrl: string | null = null;
+
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly collaborationService = inject(DocumentCollaborationService);
   private readonly artifactFileService = inject(ArtifactFileService, { optional: true });
+  private readonly notificationService = inject(MJNotificationService, { optional: true });
 
   public Workbook: WorkbookSpec = SpreadsheetEngine.Instance.CreateEmptyWorkbook('Workbook');
   public WorkspaceMode: SpreadsheetWorkspaceMode = 'grid';
+  public FallbackXlsxBytes: ArrayBuffer | null = null;
 
   public ActiveRowIndex = 1;
   public ActiveColumnIndex = 1;
@@ -2224,22 +2243,26 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public get CanEdit(): boolean {
-    if (this.readonly) return false;
+    if (this.readonly || this.FallbackXlsxBytes !== null) {
+      return false;
+    }
     if (this.ConnectionStatus === 'readonly' || this.ConnectionStatus === 'revoked') {
       return false;
     }
-    if (this.Permissions) {
-      return this.Permissions.CanEdit;
+    if (this.artifactVersion?.ArtifactID) {
+      return this.Permissions?.CanEdit === true;
     }
     return true;
   }
 
   public get CanComment(): boolean {
-    if (this.ConnectionStatus === 'revoked') return false;
-    if (this.Permissions) {
-      return this.Permissions.CanRead || this.Permissions.CanEdit;
+    if (this.ConnectionStatus === 'revoked') {
+      return false;
     }
-    return true;
+    if (this.artifactVersion?.ArtifactID) {
+      return Boolean(this.Permissions && (this.Permissions.CanRead || this.Permissions.CanEdit));
+    }
+    return !this.readonly;
   }
 
   public get OpenThreadCount(): number {
@@ -2283,7 +2306,26 @@ export class SpreadsheetArtifactViewerComponent
     await this.initializeWorkbookSession();
   }
 
+  public ngOnChanges(changes: SimpleChanges): void {
+    if (changes['artifactVersion'] && !changes['artifactVersion'].firstChange) {
+      void this.initializeWorkbookSession();
+      return;
+    }
+    if (changes['CollaborationWsUrl'] && !changes['CollaborationWsUrl'].firstChange) {
+      void this.initializeWorkbookSession();
+      return;
+    }
+    if (changes['readonly']) {
+      this.CollaborationSession?.SetCanEdit(this.CanEdit);
+      this.cdr.markForCheck();
+    }
+  }
+
   public ngOnDestroy(): void {
+    this.teardownSession();
+  }
+
+  private teardownSession(): void {
     for (const s of this.subs) {
       s.unsubscribe();
     }
@@ -2298,11 +2340,32 @@ export class SpreadsheetArtifactViewerComponent
     }
   }
 
+  private notifyError(message: string): void {
+    this.StatusBannerMessage = message;
+    this.notificationService?.CreateSimpleNotification?.(message, 'error', 4000);
+    this.cdr.markForCheck();
+  }
+
+  private getSafeProvider(): IMetadataProvider | null {
+    try {
+      return this.ProviderToUse ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Session & Initialization
   // ---------------------------------------------------------------------------
 
   private async initializeWorkbookSession(): Promise<void> {
+    this.teardownSession();
+    this.FallbackXlsxBytes = null;
+    this.Permissions = null;
+    this.ConnectionStatus = 'local';
+    this.AnchoredThreads = [];
+    this.EmbeddedArtifactVersions = {};
+
     const rawContent = this.artifactVersion?.Content ?? '';
     const configJson = this.artifactVersion?.Configuration ?? null;
     const title = this.artifactVersion?.Name || 'Workbook';
@@ -2313,15 +2376,23 @@ export class SpreadsheetArtifactViewerComponent
       this.artifactFileService &&
       this.artifactVersion?.ID
     ) {
+      let downloadedBuffer: ArrayBuffer | null = null;
       try {
         const downloadUrl = await this.artifactFileService.getDownloadUrl(this.artifactVersion.ID);
-        const buffer = await FetchArrayBuffer(downloadUrl);
+        downloadedBuffer = await FetchArrayBuffer(downloadUrl);
         this.Workbook = SpreadsheetEngine.Instance.ImportFromXlsxBytes(
-          new Uint8Array(buffer),
+          new Uint8Array(downloadedBuffer),
           configJson,
         );
-      } catch {
+      } catch (err) {
+        LogError(err);
         this.Workbook = SpreadsheetEngine.Instance.ParseWorkbook('', configJson);
+        if (downloadedBuffer) {
+          this.FallbackXlsxBytes = downloadedBuffer;
+        }
+        this.notifyError(
+          `Workbook could not be imported for editing (${err instanceof Error ? err.message : String(err)}). Showing read-only preview.`,
+        );
       }
     } else {
       this.Workbook = SpreadsheetEngine.Instance.ParseWorkbook(rawContent, configJson);
@@ -2338,31 +2409,44 @@ export class SpreadsheetArtifactViewerComponent
     this.syncFormulaBarFromActiveCell();
 
     const artifactId = this.artifactVersion?.ArtifactID || this.Workbook.WorkbookID;
+    const provider = this.getSafeProvider();
     const currentUser = this.resolveCurrentUser();
 
-    if (this.artifactVersion?.ArtifactID && currentUser) {
-      try {
-        this.Permissions = await ArtifactPermissionEngine.Instance.ResolvePermissions(
-          this.ProviderToUse,
-          this.artifactVersion.ArtifactID,
-          currentUser,
-        );
-      } catch {
-        // Fallback to default permissions in standalone/unit test environments
-      }
-
-      this.permissionsUnsubscribe = ArtifactPermissionEngine.Instance.OnPermissionsChanged(
-        async (evt) => {
-          if (UUIDsEqual(evt.ArtifactID, this.artifactVersion.ArtifactID)) {
-            await this.refreshPermissionsAndAnchoredThreads();
+    if (this.artifactVersion?.ArtifactID) {
+      if (provider && currentUser) {
+        try {
+          this.Permissions = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+            provider,
+            this.artifactVersion.ArtifactID,
+            currentUser,
+          );
+          if (!this.Permissions.CanRead) {
+            this.ConnectionStatus = 'revoked';
+          } else if (!this.Permissions.CanEdit) {
+            this.ConnectionStatus = 'readonly';
           }
-        },
-      );
+        } catch (err) {
+          LogError(err);
+          this.Permissions = null;
+          this.ConnectionStatus = 'readonly';
+        }
+
+        this.permissionsUnsubscribe = ArtifactPermissionEngine.Instance.OnPermissionsChanged(
+          async (evt) => {
+            if (UUIDsEqual(evt.ArtifactID, this.artifactVersion.ArtifactID)) {
+              await this.refreshPermissionsAndAnchoredThreads();
+            }
+          },
+        );
+      } else {
+        this.Permissions = null;
+        this.ConnectionStatus = 'readonly';
+      }
     }
 
-    const wsUrl = this.collaborationService.ResolveCollaborationWebSocketUrl(
-      artifactId,
-      this.readGlobalWsBaseOverride(),
+    const hasRemoteBackend = this.collaborationService.HasCollaborationBackend(
+      provider,
+      this.CollaborationWsUrl,
     );
     const session = this.collaborationService.CreateSession(
       artifactId,
@@ -2373,10 +2457,12 @@ export class SpreadsheetArtifactViewerComponent
         email: currentUser?.Email,
       },
       this.CanEdit,
-      Boolean(wsUrl),
+      hasRemoteBackend,
     );
     this.CollaborationSession = session;
-    this.ConnectionStatus = session.Status;
+    if (this.ConnectionStatus !== 'revoked' && this.ConnectionStatus !== 'readonly') {
+      this.ConnectionStatus = session.Status;
+    }
     this.Collaborators = session.GetCollaborators();
 
     this.subs.push(
@@ -2408,8 +2494,8 @@ export class SpreadsheetArtifactViewerComponent
       }),
     );
 
-    if (wsUrl) {
-      session.Connect(wsUrl);
+    if (hasRemoteBackend) {
+      void session.Connect(this.CollaborationWsUrl, provider);
     }
 
     await this.RefreshAllLiveData(false);
@@ -2433,42 +2519,37 @@ export class SpreadsheetArtifactViewerComponent
     return false;
   }
 
-  private readGlobalWsBaseOverride(): string | undefined {
-    if (typeof window !== 'undefined') {
-      const win = window as unknown as { __MJ_COLLAB_WS_URL__?: string };
-      if (typeof win.__MJ_COLLAB_WS_URL__ === 'string' && win.__MJ_COLLAB_WS_URL__.trim()) {
-        return win.__MJ_COLLAB_WS_URL__.trim();
-      }
-    }
-    return undefined;
-  }
-
   private resolveCurrentUser(): UserInfo | undefined {
     try {
-      return this.ProviderToUse?.CurrentUser ?? undefined;
+      return this.getSafeProvider()?.CurrentUser ?? undefined;
     } catch {
       return undefined;
     }
   }
 
   private async refreshPermissionsAndAnchoredThreads(): Promise<void> {
+    const provider = this.getSafeProvider();
     const user = this.resolveCurrentUser();
-    if (!user || !this.artifactVersion?.ArtifactID) return;
+    if (!provider || !user || !this.artifactVersion?.ArtifactID) return;
     try {
       this.Permissions = await ArtifactPermissionEngine.Instance.ResolvePermissions(
-        this.ProviderToUse,
+        provider,
         this.artifactVersion.ArtifactID,
         user,
       );
       if (!this.Permissions.CanRead) {
         this.ConnectionStatus = 'revoked';
+        this.CollaborationSession?.SetCanEdit(false);
       } else if (!this.Permissions.CanEdit) {
         this.ConnectionStatus = 'readonly';
+        this.CollaborationSession?.SetCanEdit(false);
+      } else {
+        this.CollaborationSession?.SetCanEdit(this.CanEdit);
       }
       await this.loadPersistedSheetRangeComments();
       this.cdr.markForCheck();
-    } catch {
-      // Ignore permission refresh errors
+    } catch (err) {
+      LogError(err);
     }
   }
 
@@ -2995,117 +3076,194 @@ export class SpreadsheetArtifactViewerComponent
   // Embedded Inline OLE Whiteboard (§ 3.4.1)
   // ---------------------------------------------------------------------------
 
+  private resolveArtifactsEntityId(provider: IMetadataProvider): string | undefined {
+    if (typeof provider.EntityByName === 'function') {
+      const byName = provider.EntityByName('MJ: Artifacts');
+      if (byName?.ID) {
+        return byName.ID;
+      }
+    }
+    return provider.Entities?.find((e) => e.Name === 'MJ: Artifacts')?.ID;
+  }
+
+  private async resolveArtifactTypeId(
+    provider: IMetadataProvider,
+    typeName: string,
+    user: UserInfo,
+  ): Promise<string | undefined> {
+    const cachedType =
+      ArtifactMetadataEngine.Instance.FindArtifactType(typeName) ??
+      ArtifactMetadataEngine.Instance.ArtifactTypes?.find(
+        (t) => t.Name.trim().toLowerCase() === typeName.trim().toLowerCase(),
+      );
+    if (cachedType?.ID) {
+      return cachedType.ID;
+    }
+    const rv = RunView.FromMetadataProvider(provider);
+    const typeRes = await rv.RunView<{ ID: string }>(
+      {
+        EntityName: 'MJ: Artifact Types',
+        ExtraFilter: `Name='${EscapeSQLString(typeName)}'`,
+        Fields: ['ID'],
+        MaxRows: 1,
+        ResultType: 'simple',
+      },
+      user,
+    );
+    return typeRes.Success ? typeRes.Results?.[0]?.ID : undefined;
+  }
+
   public async AddEmbeddedWhiteboardOnSheet(): Promise<void> {
     if (!this.CanEdit) return;
+    const hostArtifactId = this.artifactVersion?.ArtifactID;
+    const md = this.getSafeProvider();
+    const user = this.resolveCurrentUser();
+    if (!hostArtifactId || !md || !user) {
+      this.notifyError('Cannot create embedded Whiteboard: host workbook must be saved with an active provider.');
+      return;
+    }
+
     const wbTitle = `${this.ActiveSheet.Name} Architecture Board`;
-    let childArtifactId = `wb-ole-${Date.now()}`;
-    let childVersionId: string | null = null;
-    const defaultBoardJson = JSON.stringify({
+    const emptyWhiteboardJson = JSON.stringify({
       version: 1,
-      elements: [
-        {
-          id: 'wb-sticky-1',
-          type: 'sticky',
-          x: 40,
-          y: 40,
-          width: 180,
-          height: 100,
-          text: `${this.ActiveSheet.Name} Annotations`,
-        },
-      ],
+      activePageId: 'page-1',
+      pages: [{ id: 'page-1', name: 'Page 1', items: [] }],
     });
 
     try {
-      const md = this.ProviderToUse;
-      const user = md.CurrentUser;
-      const wbType = ArtifactMetadataEngine.Instance.FindArtifactType('Whiteboard');
-      const artifactsEntityInfo = md.Entities.find((e) => e.Name === 'MJ: Artifacts');
-
-      if (wbType && artifactsEntityInfo) {
-        const childArt = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', user);
-        childArt.Name = wbTitle;
-        childArt.Description = `Inline Whiteboard embedded in worksheet ${this.ActiveSheet.Name}`;
-        childArt.TypeID = wbType.ID;
-        childArt.UserID = user?.ID || this.artifactVersion?.UserID || '';
-        childArt.EnvironmentID = 'F51358F3-9447-4176-B313-BF8025FD8D09';
-        if (this.artifactVersion?.ArtifactID) {
-          childArt.DelegateEntityID = artifactsEntityInfo.ID;
-          childArt.DelegateRecordID = this.artifactVersion.ArtifactID;
-        }
-        const savedArt = await childArt.Save();
-        if (savedArt) {
-          childArtifactId = childArt.ID;
-          const childVer = await md.GetEntityObject<MJArtifactVersionEntity>(
-            'MJ: Artifact Versions',
-            user,
-          );
-          childVer.ArtifactID = childArt.ID;
-          childVer.VersionNumber = 1;
-          childVer.Name = wbTitle;
-          childVer.UserID = childArt.UserID;
-          childVer.Content = defaultBoardJson;
-          const savedVer = await childVer.Save();
-          if (savedVer) {
-            childVersionId = childVer.ID;
-            this.EmbeddedArtifactVersions[childArtifactId] = childVer;
-          }
-        }
+      const artifactsEntityId = this.resolveArtifactsEntityId(md);
+      if (!artifactsEntityId) {
+        this.notifyError('Cannot create embedded Whiteboard: MJ: Artifacts entity metadata unavailable.');
+        return;
       }
-    } catch {
-      // Fallback in offline/mock test mode
-    }
 
-    const embedSpec: SpreadsheetEmbeddedArtifactSpec = {
-      EmbedID: `emb-${(this.ActiveSheet.EmbeddedArtifacts?.length ?? 0) + 1}`,
-      ArtifactID: childArtifactId,
-      ArtifactVersionID: childVersionId,
-      ArtifactTypeName: 'Whiteboard',
-      DriverClass: 'WhiteboardArtifactViewerPlugin',
-      Title: wbTitle,
-      AnchorCell: this.ActiveCellAddress,
-      WidthPx: 420,
-      HeightPx: 220,
-      AllowInlineEdit: true,
-      InlineContentJSON: defaultBoardJson,
-    };
+      const rv = RunView.FromMetadataProvider(md);
+      const [hostArtRes, wbTypeId] = await Promise.all([
+        rv.RunView<{ ID: string; EnvironmentID?: string }>(
+          {
+            EntityName: 'MJ: Artifacts',
+            ExtraFilter: `ID='${EscapeSQLString(hostArtifactId)}'`,
+            Fields: ['ID', 'EnvironmentID'],
+            MaxRows: 1,
+            ResultType: 'simple',
+          },
+          user,
+        ),
+        this.resolveArtifactTypeId(md, 'Whiteboard', user),
+      ]);
 
-    if (!this.ActiveSheet.EmbeddedArtifacts) {
-      this.ActiveSheet.EmbeddedArtifacts = [];
+      if (!wbTypeId) {
+        this.notifyError('Artifact type "Whiteboard" could not be resolved.');
+        return;
+      }
+
+      const hostEnvId = hostArtRes.Success ? hostArtRes.Results?.[0]?.EnvironmentID : undefined;
+      const childArt = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', user);
+      childArt.NewRecord();
+      childArt.Name = wbTitle;
+      childArt.Description = `Inline Whiteboard embedded in worksheet ${this.ActiveSheet.Name}`;
+      childArt.TypeID = wbTypeId;
+      childArt.UserID = user.ID;
+      if (hostEnvId) {
+        childArt.EnvironmentID = hostEnvId;
+      }
+      childArt.DelegateEntityID = artifactsEntityId;
+      childArt.DelegateRecordID = hostArtifactId;
+
+      const savedArt = await childArt.Save();
+      if (!savedArt || !childArt.ID) {
+        const msg = childArt.LatestResult?.Message || 'Failed to save embedded Whiteboard artifact.';
+        LogError(msg);
+        this.notifyError(msg);
+        return;
+      }
+
+      const childVer = await md.GetEntityObject<MJArtifactVersionEntity>(
+        'MJ: Artifact Versions',
+        user,
+      );
+      childVer.NewRecord();
+      childVer.ArtifactID = childArt.ID;
+      childVer.VersionNumber = 1;
+      childVer.Name = wbTitle;
+      childVer.UserID = user.ID;
+      childVer.Content = emptyWhiteboardJson;
+
+      const savedVer = await childVer.Save();
+      if (!savedVer || !childVer.ID) {
+        const msg = childVer.LatestResult?.Message || 'Failed to save initial Whiteboard version.';
+        LogError(msg);
+        this.notifyError(msg);
+        return;
+      }
+
+      this.EmbeddedArtifactVersions[childArt.ID] = childVer;
+
+      const embedSpec: SpreadsheetEmbeddedArtifactSpec = {
+        EmbedID: `emb-${(this.ActiveSheet.EmbeddedArtifacts?.length ?? 0) + 1}`,
+        ArtifactID: childArt.ID,
+        ArtifactVersionID: childVer.ID,
+        ArtifactTypeName: 'Whiteboard',
+        DriverClass: 'WhiteboardArtifactViewerPlugin',
+        Title: wbTitle,
+        AnchorCell: this.ActiveCellAddress,
+        WidthPx: 420,
+        HeightPx: 220,
+        AllowInlineEdit: true,
+        InlineContentJSON: emptyWhiteboardJson,
+      };
+
+      if (!this.ActiveSheet.EmbeddedArtifacts) {
+        this.ActiveSheet.EmbeddedArtifacts = [];
+      }
+      this.ActiveSheet.EmbeddedArtifacts.push(embedSpec);
+      this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+      this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+      this.cdr.markForCheck();
+    } catch (err) {
+      LogError(err);
+      this.notifyError(err instanceof Error ? err.message : 'Failed to create embedded Whiteboard.');
     }
-    this.ActiveSheet.EmbeddedArtifacts.push(embedSpec);
-    this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
-    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
-    this.cdr.markForCheck();
   }
 
   private async hydrateEmbeddedArtifactVersions(): Promise<void> {
-    const ids = new Set<string>();
+    const embeds: SpreadsheetEmbeddedArtifactSpec[] = [];
     for (const ws of this.Workbook.Worksheets) {
       for (const emb of ws.EmbeddedArtifacts ?? []) {
         if (emb.ArtifactID && !this.EmbeddedArtifactVersions[emb.ArtifactID]) {
-          ids.add(emb.ArtifactID);
+          embeds.push(emb);
         }
       }
     }
-    if (ids.size === 0) return;
+    if (embeds.length === 0) return;
+
+    const provider = this.getSafeProvider();
+    const user = this.resolveCurrentUser();
+    if (!provider || !user) return;
 
     try {
-      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      for (const artId of ids) {
-        const safeId = artId.replace(/'/g, () => "''");
-        const res = await rv.RunView<MJArtifactVersionEntity>({
-          EntityName: 'MJ: Artifact Versions',
-          ExtraFilter: `ArtifactID = '${safeId}'`,
-          OrderBy: 'VersionNumber DESC',
-          MaxRows: 1,
-          ResultType: 'entity_object',
-        });
-        if (res.Success && res.Results.length > 0) {
-          this.EmbeddedArtifactVersions[artId] = res.Results[0];
+      const rv = RunView.FromMetadataProvider(provider);
+      for (const emb of embeds) {
+        const filter = emb.ArtifactVersionID
+          ? `ID = '${EscapeSQLString(emb.ArtifactVersionID)}' AND ArtifactID = '${EscapeSQLString(emb.ArtifactID)}'`
+          : `ArtifactID = '${EscapeSQLString(emb.ArtifactID)}'`;
+        const res = await rv.RunView<MJArtifactVersionEntity>(
+          {
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: filter,
+            OrderBy: 'VersionNumber DESC',
+            MaxRows: 1,
+            ResultType: 'entity_object',
+          },
+          user,
+        );
+        if (res.Success && res.Results && res.Results.length > 0) {
+          this.EmbeddedArtifactVersions[emb.ArtifactID] = res.Results[0];
         }
       }
-    } catch {
-      // Ignore in unit tests without DB provider
+      this.cdr.markForCheck();
+    } catch (err) {
+      LogError(err);
     }
   }
 
@@ -3113,31 +3271,63 @@ export class SpreadsheetArtifactViewerComponent
     embed: SpreadsheetEmbeddedArtifactSpec,
     nextContent: string,
   ): Promise<void> {
-    embed.InlineContentJSON = nextContent;
-    const existingVer = this.EmbeddedArtifactVersions[embed.ArtifactID];
-    if (!existingVer) return;
+    if (!this.CanEdit) return;
+    const md = this.getSafeProvider();
+    const user = this.resolveCurrentUser();
+    if (!embed.ArtifactID || !md || !user) {
+      this.notifyError('Cannot commit embedded artifact edits: metadata provider or user context unavailable.');
+      return;
+    }
+
     try {
-      const md = this.ProviderToUse;
-      const nextVer = await md.GetEntityObject<MJArtifactVersionEntity>(
-        'MJ: Artifact Versions',
-        md.CurrentUser,
+      const rv = RunView.FromMetadataProvider(md);
+      const maxRes = await rv.RunView<{ ID: string; VersionNumber: number }>(
+        {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ArtifactID = '${EscapeSQLString(embed.ArtifactID)}'`,
+          OrderBy: 'VersionNumber DESC',
+          Fields: ['ID', 'VersionNumber'],
+          MaxRows: 1,
+          ResultType: 'simple',
+        },
+        user,
       );
+      const currentMax =
+        maxRes.Success && maxRes.Results?.[0]?.VersionNumber ? maxRes.Results[0].VersionNumber : 0;
+      const nextVersionNumber = currentMax + 1;
+
+      const nextVer = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', user);
+      nextVer.NewRecord();
       nextVer.ArtifactID = embed.ArtifactID;
-      nextVer.VersionNumber = (existingVer.VersionNumber || 1) + 1;
+      nextVer.VersionNumber = nextVersionNumber;
       nextVer.Name = embed.Title;
-      nextVer.UserID = md.CurrentUser?.ID || existingVer.UserID;
+      nextVer.UserID = user.ID;
       nextVer.Content = nextContent;
-      if (await nextVer.Save()) {
-        this.EmbeddedArtifactVersions[embed.ArtifactID] = nextVer;
+
+      const saved = await nextVer.Save();
+      if (!saved || !nextVer.ID) {
+        const msg = nextVer.LatestResult?.Message || 'Failed to save embedded artifact version.';
+        LogError(msg);
+        this.notifyError(msg);
+        return;
+      }
+
+      embed.InlineContentJSON = nextContent;
+      this.EmbeddedArtifactVersions[embed.ArtifactID] = nextVer;
+      if (embed.ArtifactVersionID) {
         embed.ArtifactVersionID = nextVer.ID;
       }
-    } catch {
-      // Ignore save error in offline mode
+      this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+      this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+      this.cdr.markForCheck();
+    } catch (err) {
+      LogError(err);
+      this.notifyError(err instanceof Error ? err.message : 'Failed to save embedded artifact version.');
     }
   }
 
   // ---------------------------------------------------------------------------
-  // Anchored SheetRange Comments & @SheetsAgent (§ 3.5 / #6281, Accept #3)
+  // Anchored SheetRange Comments (§ 3.5 / #6281)
   // ---------------------------------------------------------------------------
 
   public ToggleCommentsDrawer(): void {
@@ -3147,33 +3337,30 @@ export class SpreadsheetArtifactViewerComponent
 
   private async loadPersistedSheetRangeComments(): Promise<void> {
     if (!this.artifactVersion?.ArtifactID) return;
+    const md = this.getSafeProvider();
     const user = this.resolveCurrentUser();
+    if (!md || !user) return;
+
     try {
-      const md = this.ProviderToUse;
-      const artifactsEntity = md.Entities.find((e) => e.Name === 'MJ: Artifacts');
-      if (!artifactsEntity) return;
+      const artifactsEntityId = this.resolveArtifactsEntityId(md);
+      if (!artifactsEntityId) return;
 
       const rv = RunView.FromMetadataProvider(md);
-      const safeArtId = this.artifactVersion.ArtifactID.replace(/'/g, () => "''");
-      const convResult = await rv.RunView<MJConversationEntity>({
-        EntityName: 'MJ: Conversations',
-        ExtraFilter: `LinkedEntityID = '${artifactsEntity.ID}' AND LinkedRecordID = '${safeArtId}' AND AnchorType = 'SheetRange'`,
-        OrderBy: '__mj_CreatedAt DESC',
-        ResultType: 'entity_object',
-      });
+      const convResult = await rv.RunView<MJConversationEntity>(
+        {
+          EntityName: 'MJ: Conversations',
+          ExtraFilter: `LinkedEntityID = '${EscapeSQLString(artifactsEntityId)}' AND LinkedRecordID = '${EscapeSQLString(this.artifactVersion.ArtifactID)}' AND AnchorType = 'SheetRange'`,
+          OrderBy: '__mj_CreatedAt DESC',
+          ResultType: 'entity_object',
+        },
+        user,
+      );
       if (!convResult.Success) return;
 
       const allConvs = convResult.Results ?? [];
-      let readableConvs = allConvs;
-      if (user) {
-        const filteredCandidates = await FilterReadableAnchoredConversations(
-          this.ProviderToUse,
-          user,
-          allConvs,
-        );
-        const allowedIds = new Set(filteredCandidates.map((c) => c.ID).filter(Boolean));
-        readableConvs = allConvs.filter((c) => allowedIds.has(c.ID));
-      }
+      const filteredCandidates = await FilterReadableAnchoredConversations(md, user, allConvs);
+      const allowedIds = new Set(filteredCandidates.map((c) => c.ID).filter(Boolean));
+      const readableConvs = allConvs.filter((c) => allowedIds.has(c.ID));
 
       const threads: DocumentAnchoredThread[] = [];
       this.persistedThreadConversations.clear();
@@ -3181,19 +3368,22 @@ export class SpreadsheetArtifactViewerComponent
       for (const conv of readableConvs) {
         if (!conv.ID) continue;
         this.persistedThreadConversations.set(conv.ID, conv);
-        const detailsRes = await rv.RunView<MJConversationDetailEntity>({
-          EntityName: 'MJ: Conversation Details',
-          ExtraFilter: `ConversationID = '${conv.ID}'`,
-          OrderBy: '__mj_CreatedAt ASC',
-          ResultType: 'entity_object',
-        });
+        const detailsRes = await rv.RunView<MJConversationDetailEntity>(
+          {
+            EntityName: 'MJ: Conversation Details',
+            ExtraFilter: `ConversationID = '${EscapeSQLString(conv.ID)}'`,
+            OrderBy: '__mj_CreatedAt ASC',
+            ResultType: 'entity_object',
+          },
+          user,
+        );
         const messages = (detailsRes.Results ?? []).map((d) => ({
           DetailID: d.ID,
-          UserName: d.User || (d.Role === 'AI' ? 'SheetsAgent' : 'Collaborator'),
+          UserName: d.User || (d.Role === 'AI' ? 'AI Assistant' : 'Collaborator'),
           Role: (d.Role === 'AI' ? 'Agent' : 'User') as 'User' | 'Agent',
           Message: d.Message,
           CreatedAt: new Date().toISOString(),
-          Mentions: [],
+          Mentions: Array.from((d.Message ?? '').matchAll(/@([A-Za-z0-9_-]+)/g)).map((m) => m[1]),
         }));
 
         threads.push({
@@ -3210,33 +3400,43 @@ export class SpreadsheetArtifactViewerComponent
 
       this.AnchoredThreads = threads;
       this.cdr.markForCheck();
-    } catch {
-      // Ignore in environments without DB
+    } catch (err) {
+      LogError(err);
     }
   }
 
   public async CreateAnchoredSheetRangeComment(): Promise<void> {
     const body = this.NewCommentText.trim();
     if (!body || !this.CanComment) return;
-    this.NewCommentText = '';
 
     const anchorKey = `${this.ActiveSheet.SheetID}:${this.SelectedRange}`;
     const anchorLabel = `${this.ActiveSheet.Name}!${this.SelectedRange}`;
     const user = this.resolveCurrentUser();
+    const mentions = Array.from(body.matchAll(/@([A-Za-z0-9_-]+)/g)).map((m) => m[1]);
 
     let convId = `sheet-conv-${Date.now()}`;
-    let persistedConv: MJConversationEntity | null = null;
+    let detailId = `msg-${Date.now()}`;
 
-    try {
-      const md = this.ProviderToUse;
-      const artifactsEntity = md.Entities.find((e) => e.Name === 'MJ: Artifacts');
-      if (artifactsEntity && this.artifactVersion?.ArtifactID && user) {
+    if (this.artifactVersion?.ArtifactID) {
+      const md = this.getSafeProvider();
+      if (!md || !user) {
+        this.notifyError('Cannot save anchored comment: metadata provider or user context unavailable.');
+        return;
+      }
+      const artifactsEntityId = this.resolveArtifactsEntityId(md);
+      if (!artifactsEntityId) {
+        this.notifyError('Cannot save anchored comment: MJ: Artifacts entity metadata unavailable.');
+        return;
+      }
+
+      try {
         const conv = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', user);
+        conv.NewRecord();
         conv.Name = anchorLabel;
         conv.UserID = user.ID;
         conv.Type = 'chat';
         conv.Status = 'Available';
-        conv.LinkedEntityID = artifactsEntity.ID;
+        conv.LinkedEntityID = artifactsEntityId;
         conv.LinkedRecordID = this.artifactVersion.ArtifactID;
         conv.AnchorType = 'SheetRange';
         conv.AnchorKey = anchorKey;
@@ -3246,26 +3446,44 @@ export class SpreadsheetArtifactViewerComponent
           sheetName: this.ActiveSheet.Name,
           range: this.SelectedRange,
         });
-        if (await conv.Save()) {
-          convId = conv.ID;
-          persistedConv = conv;
-          this.persistedThreadConversations.set(conv.ID, conv);
 
-          const detail = await md.GetEntityObject<MJConversationDetailEntity>(
-            'MJ: Conversation Details',
-            user,
-          );
-          detail.ConversationID = conv.ID;
-          detail.UserID = user.ID;
-          detail.Role = 'User';
-          detail.Message = body;
-          await detail.Save();
+        const convSaved = await conv.Save();
+        if (!convSaved || !conv.ID) {
+          const msg = conv.LatestResult?.Message || 'Failed to save anchored comment conversation.';
+          LogError(msg);
+          this.notifyError(msg);
+          return;
         }
+        convId = conv.ID;
+        this.persistedThreadConversations.set(conv.ID, conv);
+
+        const detail = await md.GetEntityObject<MJConversationDetailEntity>(
+          'MJ: Conversation Details',
+          user,
+        );
+        detail.NewRecord();
+        detail.ConversationID = conv.ID;
+        detail.UserID = user.ID;
+        detail.Role = 'User';
+        detail.Message = body;
+        const detailSaved = await detail.Save();
+        if (!detailSaved) {
+          const errMsg = detail.LatestResult?.Message || 'Failed to save anchored comment detail.';
+          LogError(errMsg);
+          this.notifyError(errMsg);
+          return;
+        }
+        if (detail.ID) {
+          detailId = detail.ID;
+        }
+      } catch (err) {
+        LogError(err);
+        this.notifyError(err instanceof Error ? err.message : 'Failed to save anchored comment.');
+        return;
       }
-    } catch {
-      // Fallback to in-memory thread
     }
 
+    const nowIso = new Date().toISOString();
     const thread: DocumentAnchoredThread = {
       ConversationID: convId,
       AnchorKey: anchorKey,
@@ -3273,153 +3491,44 @@ export class SpreadsheetArtifactViewerComponent
       QuotedText: this.SelectedRange,
       Status: 'Open',
       AgentMode: 'edit',
-      CreatedAt: new Date().toISOString(),
+      CreatedAt: nowIso,
       Messages: [
         {
-          DetailID: `msg-${Date.now()}`,
+          DetailID: detailId,
           UserName: user?.Name || 'Collaborator',
           Role: 'User',
           Message: body,
-          CreatedAt: new Date().toISOString(),
-          Mentions: [],
+          CreatedAt: nowIso,
+          Mentions: mentions,
         },
       ],
     };
 
-    if (/@(SheetsAgent|Agent)\b/i.test(body)) {
-      const agentReply = this.executeSheetsAgentInstruction(body, this.SelectedRange);
-      thread.Messages.push({
-        DetailID: `msg-agent-${Date.now()}`,
-        UserName: 'SheetsAgent',
-        Role: 'Agent',
-        Message: agentReply,
-        CreatedAt: new Date().toISOString(),
-        Mentions: [],
-      });
-
-      if (persistedConv && user) {
-        try {
-          const md = this.ProviderToUse;
-          const agentDetail = await md.GetEntityObject<MJConversationDetailEntity>(
-            'MJ: Conversation Details',
-            user,
-          );
-          agentDetail.ConversationID = persistedConv.ID;
-          agentDetail.UserID = user.ID;
-          agentDetail.Role = 'AI';
-          agentDetail.Message = agentReply;
-          await agentDetail.Save();
-        } catch {
-          // Ignore persistence error
-        }
-      }
-    }
-
+    this.NewCommentText = '';
     this.AnchoredThreads = [thread, ...this.AnchoredThreads];
     this.cdr.markForCheck();
   }
 
-  private extractExplicitFormulaFromText(text: string): string | null {
-    const startMatch = /=[A-Za-z0-9_$(]/.exec(text);
-    if (!startMatch || startMatch.index === undefined) {
-      return null;
-    }
-    let idx = startMatch.index;
-    let parenDepth = 0;
-    let inQuotes = false;
-    let quoteChar = '';
-    while (idx < text.length) {
-      const ch = text[idx];
-      if (inQuotes) {
-        if (ch === quoteChar) {
-          inQuotes = false;
-        }
-        idx++;
-        continue;
-      }
-      if (ch === '"' || ch === "'") {
-        inQuotes = true;
-        quoteChar = ch;
-        idx++;
-        continue;
-      }
-      if (ch === '(') {
-        parenDepth++;
-        idx++;
-        continue;
-      }
-      if (ch === ')') {
-        parenDepth = Math.max(0, parenDepth - 1);
-        idx++;
-        continue;
-      }
-      if (parenDepth === 0 && /\s/.test(ch)) {
-        break;
-      }
-      idx++;
-    }
-    const candidate = text.slice(startMatch.index, idx).replace(/[.,;!?]+$/, () => '');
-    return candidate.length > 1 ? candidate : null;
-  }
-
-  /**
-   * Executes an `@SheetsAgent` instruction against the active worksheet, evaluating formulas
-   * headlessly via {@link SpreadsheetEngine} and broadcasting surgical Yjs updates (`Accept #3`).
-   */
-  private executeSheetsAgentInstruction(instruction: string, targetRange: string): string {
-    const sheet = this.ActiveSheet;
-    const explicitFormula = this.extractExplicitFormulaFromText(instruction);
-
-    if (explicitFormula) {
-      const formula = explicitFormula;
-      const targetAddr = targetRange.split(':')[0] || this.ActiveCellAddress;
-      const updated = SpreadsheetEngine.Instance.SetCell(this.Workbook, sheet.SheetID, targetAddr, {
-        Formula: formula,
-      });
-      if (updated) {
-        this.CollaborationSession?.UpdateSpreadsheetCell(sheet.SheetID, updated, this.Workbook);
-      }
-      this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
-      this.syncFormulaBarFromActiveCell();
-      return `Wrote formula \`${formula}\` to ${sheet.Name}!${targetAddr}. Headless evaluated value: **${updated?.DisplayValue || updated?.ComputedValue}**`;
-    }
-
-    // Default intelligent summary + formula writeback for the selected range
-    const rangeExpr = targetRange.includes(':') ? targetRange : 'B2:B5';
-    const sumFormula = `=SUM(${rangeExpr})`;
-    const sumVal = SpreadsheetEngine.Instance.EvaluateFormulaExpression(
-      this.Workbook,
-      sheet.SheetID,
-      sumFormula,
-    );
-    const avgVal = SpreadsheetEngine.Instance.EvaluateFormulaExpression(
-      this.Workbook,
-      sheet.SheetID,
-      `=AVERAGE(${rangeExpr})`,
-    );
-
-    const targetAddr = targetRange.includes(':') ? this.ActiveCellAddress : targetRange;
-    const updated = SpreadsheetEngine.Instance.SetCell(this.Workbook, sheet.SheetID, targetAddr, {
-      Formula: sumFormula,
-      Style: { FormatType: 'currency', Bold: true },
-    });
-    if (updated) {
-      this.CollaborationSession?.UpdateSpreadsheetCell(sheet.SheetID, updated, this.Workbook);
-    }
-    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
-    this.syncFormulaBarFromActiveCell();
-    return `Evaluated ${sheet.Name}!${rangeExpr} headlessly: SUM = **${sumVal}**, AVERAGE = **${avgVal}**. Wrote \`${sumFormula}\` (${updated?.DisplayValue}) to ${targetAddr}.`;
-  }
-
   public async ResolveAnchoredThread(thread: DocumentAnchoredThread): Promise<void> {
+    const previousStatus = thread.Status;
     thread.Status = 'Resolved';
     const conv = this.persistedThreadConversations.get(thread.ConversationID);
     if (conv) {
       try {
         conv.IsResolved = true;
-        await conv.Save();
-      } catch {
-        // Ignore
+        const ok = await conv.Save();
+        if (!ok) {
+          thread.Status = previousStatus;
+          conv.IsResolved = previousStatus === 'Resolved';
+          const msg = conv.LatestResult?.Message || 'Failed to resolve anchored thread.';
+          LogError(msg);
+          this.notifyError(msg);
+        }
+      } catch (err) {
+        thread.Status = previousStatus;
+        conv.IsResolved = previousStatus === 'Resolved';
+        LogError(err);
+        this.notifyError(err instanceof Error ? err.message : 'Failed to resolve anchored thread.');
       }
     }
     this.cdr.markForCheck();
@@ -3453,26 +3562,43 @@ export class SpreadsheetArtifactViewerComponent
     const file = input.files?.[0];
     if (!file || !this.CanEdit) return;
 
-    const buffer = await file.arrayBuffer();
-    if (file.name.toLowerCase().endsWith('.csv')) {
-      const text = new TextDecoder('utf-8').decode(buffer);
-      const cleanName = file.name.replace(/\.csv$/i, () => '');
-      this.Workbook = SpreadsheetEngine.Instance.ImportFromCsv(text, cleanName, cleanName);
-    } else {
-      const cleanName = file.name.replace(/\.xlsx$/i, () => '');
-      this.Workbook = SpreadsheetEngine.Instance.ImportFromXlsxBytes(new Uint8Array(buffer));
-      if (cleanName && (!this.Workbook.Title || this.Workbook.Title === 'Imported Workbook')) {
-        this.Workbook.Title = cleanName;
+    try {
+      const buffer = await file.arrayBuffer();
+      if (file.name.toLowerCase().endsWith('.csv')) {
+        const text = new TextDecoder('utf-8').decode(buffer);
+        const cleanName = file.name.replace(/\.csv$/i, () => '');
+        this.Workbook = SpreadsheetEngine.Instance.ImportFromCsv(text, cleanName, cleanName);
+        this.FallbackXlsxBytes = null;
+      } else {
+        const cleanName = file.name.replace(/\.xlsx$/i, () => '');
+        try {
+          this.Workbook = SpreadsheetEngine.Instance.ImportFromXlsxBytes(new Uint8Array(buffer));
+          if (cleanName && (!this.Workbook.Title || this.Workbook.Title === 'Imported Workbook')) {
+            this.Workbook.Title = cleanName;
+          }
+          this.FallbackXlsxBytes = null;
+        } catch (err) {
+          LogError(err);
+          this.FallbackXlsxBytes = buffer;
+          this.notifyError(
+            `Could not import "${file.name}" for collaborative editing (${err instanceof Error ? err.message : String(err)}). Showing read-only Excel preview.`,
+          );
+          return;
+        }
       }
-    }
 
-    SpreadsheetEngine.Instance.EvaluateWorkbook(this.Workbook);
-    this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
-    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
-    this.syncFormulaBarFromActiveCell();
-    this.StatusBannerMessage = `Imported "${file.name}" (${this.Workbook.Worksheets.length} sheet(s), ${this.FormulaCellCount} formula(s)).`;
-    input.value = '';
-    this.cdr.markForCheck();
+      SpreadsheetEngine.Instance.EvaluateWorkbook(this.Workbook);
+      this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
+      this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+      this.syncFormulaBarFromActiveCell();
+      this.StatusBannerMessage = `Imported "${file.name}" (${this.Workbook.Worksheets.length} sheet(s), ${this.FormulaCellCount} formula(s)).`;
+      this.cdr.markForCheck();
+    } catch (err) {
+      LogError(err);
+      this.notifyError(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      input.value = '';
+    }
   }
 
   public ExportWorkbookAsXlsx(): Uint8Array {
@@ -3512,49 +3638,89 @@ export class SpreadsheetArtifactViewerComponent
       a.download = fileName;
       a.click();
       URL.revokeObjectURL(url);
-    } catch {
-      // Ignore in headless test environments
+    } catch (err) {
+      LogError(err);
     }
   }
 
   public async SaveNewArtifactVersion(): Promise<void> {
     if (!this.CanEdit || this.IsSavingVersion || !this.HasUnsavedChanges) return;
     this.IsSavingVersion = true;
-    const serialized = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
-    this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
-
-    const sentViaWs = this.CollaborationSession?.RequestSaveVersion() ?? false;
-    if (!sentViaWs) {
-      try {
-        if (this.artifactVersion?.ArtifactID) {
-          const md = this.ProviderToUse;
-          const nextVerNum =
-            (this.LastSavedVersionNumber ?? this.artifactVersion.VersionNumber ?? 1) + 1;
-          const ver = await md.GetEntityObject<MJArtifactVersionEntity>(
-            'MJ: Artifact Versions',
-            md.CurrentUser,
-          );
-          ver.ArtifactID = this.artifactVersion.ArtifactID;
-          ver.VersionNumber = nextVerNum;
-          ver.Name = this.Workbook.Title;
-          ver.UserID = md.CurrentUser?.ID || this.artifactVersion.UserID;
-          ver.Content = serialized;
-          if (await ver.Save()) {
-            this.lastSavedComparableJson = this.getComparableWorkbookJson(this.Workbook);
-            this.LastSavedVersionNumber = nextVerNum;
-            this.StatusBannerMessage = `Saved Artifact Version v${nextVerNum}`;
-            this.ContentCommitted.emit(serialized);
-          }
-        } else {
-          this.lastSavedComparableJson = this.getComparableWorkbookJson(this.Workbook);
-        }
-      } catch {
-        // Fallback when offline
-      } finally {
-        this.IsSavingVersion = false;
-      }
-    }
     this.cdr.markForCheck();
+
+    try {
+      const serialized = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+      this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
+
+      const sentViaWs = this.CollaborationSession?.RequestSaveVersion() ?? false;
+      if (sentViaWs) {
+        this.StatusBannerMessage = 'Saving collaborative workbook version…';
+        return;
+      }
+
+      const artifactId = this.artifactVersion?.ArtifactID;
+      if (!artifactId) {
+        this.lastSavedComparableJson = this.getComparableWorkbookJson(this.Workbook);
+        this.LastSavedVersionNumber = (this.LastSavedVersionNumber ?? this.artifactVersion?.VersionNumber ?? 1) + 1;
+        this.StatusBannerMessage = `Saved Workbook Version v${this.LastSavedVersionNumber}`;
+        this.ContentCommitted.emit(serialized);
+        return;
+      }
+
+      const md = this.getSafeProvider();
+      const user = this.resolveCurrentUser();
+      if (!md || !user) {
+        this.notifyError('Cannot save workbook version: metadata provider or user context unavailable.');
+        return;
+      }
+
+      const rv = RunView.FromMetadataProvider(md);
+      const maxRes = await rv.RunView<{ ID: string; VersionNumber: number }>(
+        {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ArtifactID = '${EscapeSQLString(artifactId)}'`,
+          OrderBy: 'VersionNumber DESC',
+          Fields: ['ID', 'VersionNumber'],
+          MaxRows: 1,
+          ResultType: 'simple',
+        },
+        user,
+      );
+      const dbMax = maxRes.Success && maxRes.Results?.[0]?.VersionNumber ? maxRes.Results[0].VersionNumber : 0;
+      const nextVerNum =
+        Math.max(
+          dbMax,
+          this.LastSavedVersionNumber ?? 0,
+          this.artifactVersion.VersionNumber ?? 0,
+        ) + 1;
+
+      const ver = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', user);
+      ver.NewRecord();
+      ver.ArtifactID = artifactId;
+      ver.VersionNumber = nextVerNum;
+      ver.Name = this.Workbook.Title || this.artifactVersion.Name || 'Workbook';
+      ver.UserID = user.ID;
+      ver.Content = serialized;
+
+      const saved = await ver.Save();
+      if (!saved) {
+        const msg = ver.LatestResult?.Message || 'Failed to save workbook version.';
+        LogError(msg);
+        this.notifyError(msg);
+        return;
+      }
+
+      this.lastSavedComparableJson = this.getComparableWorkbookJson(this.Workbook);
+      this.LastSavedVersionNumber = nextVerNum;
+      this.StatusBannerMessage = `Saved Artifact Version v${nextVerNum}`;
+      this.ContentCommitted.emit(serialized);
+    } catch (err) {
+      LogError(err);
+      this.notifyError(err instanceof Error ? err.message : 'Failed to save workbook version.');
+    } finally {
+      this.IsSavingVersion = false;
+      this.cdr.markForCheck();
+    }
   }
 
   // ---------------------------------------------------------------------------

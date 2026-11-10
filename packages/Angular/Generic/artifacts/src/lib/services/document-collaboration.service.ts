@@ -5,6 +5,9 @@ import * as syncProtocol from 'y-protocols/sync';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
+import { LogError, Metadata, type IMetadataProvider } from '@memberjunction/core';
+import { SafeJSONParse } from '@memberjunction/global';
+import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import {
   DocumentLiveBlockEngine,
   SlideDeckEngine,
@@ -23,6 +26,440 @@ const MSG_SYNC = 0;
 const MSG_AWARENESS = 1;
 const MSG_CONTROL = 2;
 const MSG_PERMISSION_STATE = 3;
+
+const MINT_COLLABORATION_TICKET_MUTATION = `
+  mutation MintArtifactCollaborationTicket($artifactId: String!) {
+    MintArtifactCollaborationTicket(artifactId: $artifactId) {
+      Success
+      Ticket
+      WsPath
+      ExpiresAt
+      CanRead
+      CanEdit
+      ErrorMessage
+    }
+  }
+`;
+
+const RECONNECT_BACKOFF_MS = [1000, 2000, 4000, 8000, 15000] as const;
+const MAX_RECONNECT_ATTEMPTS = 8;
+
+export interface CollaborationTicketPayload {
+  Success: boolean;
+  Ticket?: string | null;
+  WsPath?: string | null;
+  ExpiresAt?: string | null;
+  CanRead?: boolean | null;
+  CanEdit?: boolean | null;
+  ErrorMessage?: string | null;
+}
+
+export interface CollaborationGraphQLProviderLike {
+  ExecuteGQL: (
+    query: string,
+    variables?: Record<string, string>,
+  ) => Promise<{ MintArtifactCollaborationTicket?: CollaborationTicketPayload | null } | null | undefined>;
+  ConfigData?: {
+    URL?: string;
+    WSURL?: string;
+    MJAPIURL?: string;
+  };
+}
+
+export interface ResolvedCollaborationEndpoint {
+  Mode: 'connect' | 'local' | 'revoked';
+  WsUrl: string;
+  CanEdit?: boolean;
+}
+
+export interface SequenceDiffOp {
+  Kind: 'equal' | 'delete' | 'insert';
+  OldIndex: number;
+  NewIndex: number;
+}
+
+function isGraphQLCollaborationProvider(
+  provider: IMetadataProvider | CollaborationGraphQLProviderLike | null | undefined,
+): provider is CollaborationGraphQLProviderLike {
+  if (!provider || typeof provider !== 'object') {
+    return false;
+  }
+  if (provider instanceof GraphQLDataProvider) {
+    return true;
+  }
+  return 'ExecuteGQL' in provider && typeof provider.ExecuteGQL === 'function';
+}
+
+function resolveDefaultMetadataProvider(explicitProvider?: IMetadataProvider | null): IMetadataProvider | null {
+  if (explicitProvider) {
+    return explicitProvider;
+  }
+  return Metadata.Provider ?? null;
+}
+
+/**
+ * Bounded Myers O((M+N)D) sequence diff with common prefix/suffix trimming and
+ * linear Patience-style unique-hash-anchor fallback when (m + n) > maxSequenceSum
+ * or edit distance D exceeds maxEditDistance.
+ */
+export function ComputeBoundedSequenceDiff<T>(
+  oldItems: readonly T[],
+  newItems: readonly T[],
+  equals: (a: T, b: T) => boolean,
+  keyFn: (item: T) => string,
+  maxEditDistance = 2000,
+  maxSequenceSum = 10000,
+): SequenceDiffOp[] {
+  const m = oldItems.length;
+  const n = newItems.length;
+
+  let prefixLen = 0;
+  const minLen = Math.min(m, n);
+  while (prefixLen < minLen && equals(oldItems[prefixLen], newItems[prefixLen])) {
+    prefixLen++;
+  }
+
+  let oldEnd = m;
+  let newEnd = n;
+  while (
+    oldEnd > prefixLen &&
+    newEnd > prefixLen &&
+    equals(oldItems[oldEnd - 1], newItems[newEnd - 1])
+  ) {
+    oldEnd--;
+    newEnd--;
+  }
+
+  const ops: SequenceDiffOp[] = [];
+  for (let i = 0; i < prefixLen; i++) {
+    ops.push({ Kind: 'equal', OldIndex: i, NewIndex: i });
+  }
+
+  const midM = oldEnd - prefixLen;
+  const midN = newEnd - prefixLen;
+
+  if (midM === 0 && midN > 0) {
+    for (let j = prefixLen; j < newEnd; j++) {
+      ops.push({ Kind: 'insert', OldIndex: -1, NewIndex: j });
+    }
+  } else if (midN === 0 && midM > 0) {
+    for (let i = prefixLen; i < oldEnd; i++) {
+      ops.push({ Kind: 'delete', OldIndex: i, NewIndex: -1 });
+    }
+  } else if (midM > 0 && midN > 0) {
+    let midOps: SequenceDiffOp[] | null = null;
+    if (midM + midN <= maxSequenceSum) {
+      midOps = runBoundedMyersSlice(
+        oldItems,
+        prefixLen,
+        midM,
+        newItems,
+        prefixLen,
+        midN,
+        equals,
+        maxEditDistance,
+      );
+    }
+    if (midOps) {
+      for (const op of midOps) {
+        ops.push(op);
+      }
+    } else {
+      appendLinearHashAnchorOps(ops, oldItems, prefixLen, oldEnd, newItems, prefixLen, newEnd, equals, keyFn);
+    }
+  }
+
+  const suffixCount = m - oldEnd;
+  for (let s = 0; s < suffixCount; s++) {
+    ops.push({ Kind: 'equal', OldIndex: oldEnd + s, NewIndex: newEnd + s });
+  }
+
+  return ops;
+}
+
+function runBoundedMyersSlice<T>(
+  oldItems: readonly T[],
+  oldOffset: number,
+  M: number,
+  newItems: readonly T[],
+  newOffset: number,
+  N: number,
+  equals: (a: T, b: T) => boolean,
+  maxEditDistance: number,
+): SequenceDiffOp[] | null {
+  const maxD = Math.min(M + N, maxEditDistance);
+  const offset = maxD + 1;
+  const v = new Int32Array(2 * maxD + 3);
+  v.fill(-1);
+  v[offset + 1] = 0;
+
+  // M <= maxSequenceSum <= 32767 so Int16Array safely stores -1..M with minimal heap footprint
+  const traces: Int16Array[] = [];
+
+  for (let d = 0; d <= maxD; d++) {
+    const snap = new Int16Array(d + 1);
+    snap.fill(-1);
+
+    for (let k = -d; k <= d; k += 2) {
+      const canMoveDown =
+        k !== d &&
+        v[offset + k + 1] >= 0 &&
+        v[offset + k + 1] <= M &&
+        v[offset + k + 1] - k <= N;
+      const canMoveRight =
+        k !== -d &&
+        v[offset + k - 1] >= 0 &&
+        v[offset + k - 1] + 1 <= M &&
+        v[offset + k - 1] + 1 - k <= N;
+
+      if (!canMoveDown && !canMoveRight) {
+        v[offset + k] = -1;
+        snap[(k + d) >> 1] = -1;
+        continue;
+      }
+
+      let x: number;
+      if (canMoveDown && (!canMoveRight || v[offset + k - 1] < v[offset + k + 1])) {
+        x = v[offset + k + 1];
+      } else {
+        x = v[offset + k - 1] + 1;
+      }
+
+      let y = x - k;
+      while (x < M && y < N && equals(oldItems[oldOffset + x], newItems[newOffset + y])) {
+        x++;
+        y++;
+      }
+
+      v[offset + k] = x;
+      snap[(k + d) >> 1] = x;
+
+      if (x === M && y === N) {
+        return backtrackMyersSlice(traces, d, M, N, oldOffset, newOffset);
+      }
+    }
+
+    traces.push(snap);
+  }
+
+  return null;
+}
+
+function backtrackMyersSlice(
+  traces: readonly Int16Array[],
+  finalD: number,
+  M: number,
+  N: number,
+  oldOffset: number,
+  newOffset: number,
+): SequenceDiffOp[] {
+  const revOps: SequenceDiffOp[] = [];
+  let x = M;
+  let y = N;
+
+  for (let d = finalD; d > 0; d--) {
+    const k = x - y;
+    const prevSnap = traces[d - 1];
+    const vPrevMinus = k !== -d ? prevSnap[(k + d - 2) >> 1] : -1;
+    const vPrevPlus = k !== d ? prevSnap[(k + d) >> 1] : -1;
+
+    const canFromDown =
+      vPrevPlus >= 0 && vPrevPlus <= M && vPrevPlus - k <= N;
+    const canFromRight =
+      vPrevMinus >= 0 && vPrevMinus + 1 <= M && vPrevMinus + 1 - k <= N;
+
+    let prevK: number;
+    let xStart: number;
+    if (canFromDown && (!canFromRight || vPrevMinus < vPrevPlus)) {
+      prevK = k + 1;
+      xStart = vPrevPlus;
+    } else {
+      prevK = k - 1;
+      xStart = vPrevMinus + 1;
+    }
+
+    const yStart = xStart - k;
+    while (x > xStart && y > yStart) {
+      x--;
+      y--;
+      revOps.push({ Kind: 'equal', OldIndex: oldOffset + x, NewIndex: newOffset + y });
+    }
+
+    if (prevK === k + 1) {
+      y = yStart - 1;
+      x = xStart;
+      revOps.push({ Kind: 'insert', OldIndex: -1, NewIndex: newOffset + y });
+    } else {
+      x = xStart - 1;
+      y = yStart;
+      revOps.push({ Kind: 'delete', OldIndex: oldOffset + x, NewIndex: -1 });
+    }
+  }
+
+  while (x > 0 && y > 0) {
+    x--;
+    y--;
+    revOps.push({ Kind: 'equal', OldIndex: oldOffset + x, NewIndex: newOffset + y });
+  }
+
+  revOps.reverse();
+  return revOps;
+}
+
+function appendLinearHashAnchorOps<T>(
+  out: SequenceDiffOp[],
+  oldItems: readonly T[],
+  oldStart: number,
+  oldEnd: number,
+  newItems: readonly T[],
+  newStart: number,
+  newEnd: number,
+  equals: (a: T, b: T) => boolean,
+  keyFn: (item: T) => string,
+): void {
+  const oldUnique = new Map<string, number>();
+  for (let i = oldStart; i < oldEnd; i++) {
+    const key = keyFn(oldItems[i]);
+    oldUnique.set(key, oldUnique.has(key) ? -1 : i);
+  }
+
+  const newUnique = new Map<string, number>();
+  for (let j = newStart; j < newEnd; j++) {
+    const key = keyFn(newItems[j]);
+    newUnique.set(key, newUnique.has(key) ? -1 : j);
+  }
+
+  const candidates: Array<{ oldIdx: number; newIdx: number }> = [];
+  for (let j = newStart; j < newEnd; j++) {
+    const key = keyFn(newItems[j]);
+    if (newUnique.get(key) === j) {
+      const oi = oldUnique.get(key);
+      if (oi !== undefined && oi >= 0 && equals(oldItems[oi], newItems[j])) {
+        candidates.push({ oldIdx: oi, newIdx: j });
+      }
+    }
+  }
+
+  const anchors = extractMonotonicAnchors(candidates);
+
+  let curOld = oldStart;
+  let curNew = newStart;
+
+  for (let a = 0; a <= anchors.length; a++) {
+    const targetOld = a < anchors.length ? anchors[a].oldIdx : oldEnd;
+    const targetNew = a < anchors.length ? anchors[a].newIdx : newEnd;
+
+    let gOldStart = curOld;
+    let gNewStart = curNew;
+    while (
+      gOldStart < targetOld &&
+      gNewStart < targetNew &&
+      equals(oldItems[gOldStart], newItems[gNewStart])
+    ) {
+      out.push({ Kind: 'equal', OldIndex: gOldStart, NewIndex: gNewStart });
+      gOldStart++;
+      gNewStart++;
+    }
+
+    let gOldEnd = targetOld;
+    let gNewEnd = targetNew;
+    while (
+      gOldEnd > gOldStart &&
+      gNewEnd > gNewStart &&
+      equals(oldItems[gOldEnd - 1], newItems[gNewEnd - 1])
+    ) {
+      gOldEnd--;
+      gNewEnd--;
+    }
+
+    const gapM = gOldEnd - gOldStart;
+    const gapN = gNewEnd - gNewStart;
+    if (gapM > 0 && gapN > 0 && gapM + gapN <= 256) {
+      const localOps = runBoundedMyersSlice(
+        oldItems,
+        gOldStart,
+        gapM,
+        newItems,
+        gNewStart,
+        gapN,
+        equals,
+        128,
+      );
+      if (localOps) {
+        for (const op of localOps) {
+          out.push(op);
+        }
+      } else {
+        for (let i = gOldStart; i < gOldEnd; i++) {
+          out.push({ Kind: 'delete', OldIndex: i, NewIndex: -1 });
+        }
+        for (let j = gNewStart; j < gNewEnd; j++) {
+          out.push({ Kind: 'insert', OldIndex: -1, NewIndex: j });
+        }
+      }
+    } else {
+      for (let i = gOldStart; i < gOldEnd; i++) {
+        out.push({ Kind: 'delete', OldIndex: i, NewIndex: -1 });
+      }
+      for (let j = gNewStart; j < gNewEnd; j++) {
+        out.push({ Kind: 'insert', OldIndex: -1, NewIndex: j });
+      }
+    }
+
+    const gapSuffixLen = targetOld - gOldEnd;
+    for (let s = 0; s < gapSuffixLen; s++) {
+      out.push({ Kind: 'equal', OldIndex: gOldEnd + s, NewIndex: gNewEnd + s });
+    }
+
+    if (a < anchors.length) {
+      out.push({ Kind: 'equal', OldIndex: targetOld, NewIndex: targetNew });
+      curOld = targetOld + 1;
+      curNew = targetNew + 1;
+    }
+  }
+}
+
+function extractMonotonicAnchors(
+  candidates: ReadonlyArray<{ oldIdx: number; newIdx: number }>,
+): Array<{ oldIdx: number; newIdx: number }> {
+  const count = candidates.length;
+  if (count === 0) {
+    return [];
+  }
+  const tailIndices = new Int32Array(count);
+  const prevIndices = new Int32Array(count);
+  prevIndices.fill(-1);
+
+  let length = 0;
+  for (let i = 0; i < count; i++) {
+    const val = candidates[i].oldIdx;
+    let lo = 0;
+    let hi = length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (candidates[tailIndices[mid]].oldIdx < val) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    if (lo > 0) {
+      prevIndices[i] = tailIndices[lo - 1];
+    }
+    tailIndices[lo] = i;
+    if (lo === length) {
+      length++;
+    }
+  }
+
+  const chosen: Array<{ oldIdx: number; newIdx: number }> = new Array(length);
+  let k = tailIndices[length - 1];
+  for (let pos = length - 1; pos >= 0; pos--) {
+    chosen[pos] = candidates[k];
+    k = prevIndices[k];
+  }
+  return chosen;
+}
 
 /**
  * Connection status for a collaborative document editing session.
@@ -188,6 +625,18 @@ export class DocumentCollaborationSession {
   private applyingRemote = false;
   private readonly initialSeedContent: string;
   private seededInDoc = false;
+  private destroyed = false;
+  private reconnectAttempts = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private connectGeneration = 0;
+  private hasConnectedBefore = false;
+  private configuredWsUrlOverride: string | null = null;
+  private configuredProvider: IMetadataProvider | null = null;
+  private readonly endpointResolver?: (
+    artifactId: string,
+    wsUrlOverride?: string | null,
+    provider?: IMetadataProvider | null,
+  ) => Promise<ResolvedCollaborationEndpoint>;
 
   private readonly contentChanged$ = new Subject<string>();
   private readonly statusChanged$ = new Subject<CollaborationConnectionStatus>();
@@ -216,6 +665,39 @@ export class DocumentCollaborationSession {
 
   public get CanEdit(): boolean {
     return this.canEdit;
+  }
+
+  public get IsDestroyed(): boolean {
+    return this.destroyed;
+  }
+
+  /**
+   * Updates the session's client-side edit capability after async permission resolution or `[readonly]` changes.
+   */
+  public SetCanEdit(canEdit: boolean): void {
+    if (this.destroyed || this.status === 'revoked') {
+      return;
+    }
+    this.canEdit = canEdit;
+    const currentState = this.Awareness.getLocalState() ?? {};
+    const userState =
+      (currentState['user'] as {
+        userId?: string | number;
+        name?: string;
+        email?: string;
+        color?: string;
+        activeBlockId?: string;
+        canEdit?: boolean;
+      } | undefined) ?? {};
+    this.Awareness.setLocalStateField('user', {
+      ...userState,
+      canEdit,
+    });
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      this.setStatus(canEdit ? 'connected' : 'readonly');
+    } else if (this.status !== 'connecting') {
+      this.setStatus(canEdit ? 'local' : 'readonly');
+    }
   }
 
   /**
@@ -250,10 +732,16 @@ export class DocumentCollaborationSession {
     user: { id: string; name: string; email?: string; color?: string },
     canEdit = true,
     deferInitialSeedForRemoteSync = false,
+    endpointResolver?: (
+      artifactId: string,
+      wsUrlOverride?: string | null,
+      provider?: IMetadataProvider | null,
+    ) => Promise<ResolvedCollaborationEndpoint>,
   ) {
     this.ArtifactID = artifactId;
     this.canEdit = canEdit;
     this.initialSeedContent = initialContent ?? '';
+    this.endpointResolver = endpointResolver;
     this.Doc = new Y.Doc();
     this.ContentText = this.Doc.getText('content');
     if (initialContent && !deferInitialSeedForRemoteSync) {
@@ -274,7 +762,7 @@ export class DocumentCollaborationSession {
       canEdit,
     });
 
-    this.Doc.on('update', (update: Uint8Array, origin: unknown) => {
+    this.Doc.on('update', (update: Uint8Array, origin: string | number | symbol | object | null | undefined) => {
       if (origin !== 'remote') {
         this.sendYjsUpdate(update);
       }
@@ -287,26 +775,88 @@ export class DocumentCollaborationSession {
   }
 
   /**
-   * Connects to the MJServer `/collaboration/yjs` WebSocket endpoint when available.
+   * Acquires a single-use collaboration ticket (when `GraphQLDataProvider` is configured)
+   * and connects to the MJServer `/collaboration/yjs` WebSocket endpoint with automatic
+   * exponential-backoff reconnection on transient disconnects.
    */
-  public Connect(wsUrl: string): void {
-    if (typeof WebSocket === 'undefined' || !wsUrl) {
+  public async Connect(wsUrl?: string | null, provider?: IMetadataProvider | null): Promise<void> {
+    if (this.destroyed || typeof WebSocket === 'undefined') {
+      this.ensureLocalSeedIfUnseeded();
+      if (!this.destroyed) {
+        this.setStatus(this.canEdit ? 'local' : 'readonly');
+      }
+      return;
+    }
+
+    this.configuredWsUrlOverride = wsUrl ?? null;
+    this.configuredProvider = provider ?? null;
+    const generation = ++this.connectGeneration;
+
+    let targetWsUrl = wsUrl ?? '';
+    if (this.endpointResolver) {
+      const resolved = await this.endpointResolver(this.ArtifactID, wsUrl, provider);
+      if (this.destroyed || generation !== this.connectGeneration) {
+        return;
+      }
+      if (resolved.Mode === 'revoked') {
+        this.canEdit = false;
+        this.clearReconnectTimer();
+        this.setStatus('revoked');
+        return;
+      }
+      if (resolved.CanEdit === false) {
+        this.canEdit = false;
+      }
+      if (resolved.Mode === 'local' || !resolved.WsUrl) {
+        this.ensureLocalSeedIfUnseeded();
+        this.setStatus(this.canEdit ? 'local' : 'readonly');
+        return;
+      }
+      targetWsUrl = resolved.WsUrl;
+    } else if (!targetWsUrl) {
+      this.ensureLocalSeedIfUnseeded();
       this.setStatus(this.canEdit ? 'local' : 'readonly');
       return;
     }
 
+    if (this.destroyed || generation !== this.connectGeneration) {
+      return;
+    }
+
+    this.closeActiveSocketWithoutReconnect();
+
     try {
       this.setStatus('connecting');
-      const ws = new WebSocket(wsUrl);
+      const ws = new WebSocket(targetWsUrl);
       ws.binaryType = 'arraybuffer';
       this.socket = ws;
 
       ws.onopen = () => {
+        if (this.destroyed || this.socket !== ws) {
+          ws.close();
+          return;
+        }
+        const isReconnect = this.hasConnectedBefore;
+        this.hasConnectedBefore = true;
+        this.reconnectAttempts = 0;
+        this.clearReconnectTimer();
         this.setStatus(this.canEdit ? 'connected' : 'readonly');
+
         const encoder = encoding.createEncoder();
         encoding.writeVarUint(encoder, MSG_SYNC);
         syncProtocol.writeSyncStep1(encoder, this.Doc);
         ws.send(encoding.toUint8Array(encoder));
+
+        // Flush any offline local Y.Doc mutations accumulated while disconnected
+        if (isReconnect && this.canEdit && this.seededInDoc) {
+          const fullStateUpdate = Y.encodeStateAsUpdate(this.Doc);
+          if (fullStateUpdate.byteLength > 2) {
+            const updateEncoder = encoding.createEncoder();
+            encoding.writeVarUint(updateEncoder, MSG_SYNC);
+            syncProtocol.writeUpdate(updateEncoder, fullStateUpdate);
+            ws.send(encoding.toUint8Array(updateEncoder));
+          }
+        }
 
         const awarenessEncoder = encoding.createEncoder();
         encoding.writeVarUint(awarenessEncoder, MSG_AWARENESS);
@@ -318,26 +868,44 @@ export class DocumentCollaborationSession {
       };
 
       ws.onmessage = (event: MessageEvent) => {
-        if (!(event.data instanceof ArrayBuffer)) {
+        if (this.destroyed || !(event.data instanceof ArrayBuffer)) {
           return;
         }
         this.ApplyBinaryFrame(new Uint8Array(event.data));
       };
 
       ws.onclose = (event: CloseEvent) => {
-        this.socket = null;
+        if (this.socket === ws) {
+          this.socket = null;
+        }
+        if (this.destroyed) {
+          return;
+        }
         if (event.code === 4403) {
           this.canEdit = false;
+          this.clearReconnectTimer();
           this.setStatus('revoked');
-        } else {
-          this.setStatus(this.canEdit ? 'local' : 'readonly');
+          return;
         }
+        if (event.code === 4401) {
+          this.clearReconnectTimer();
+          this.ensureLocalSeedIfUnseeded();
+          this.setStatus(this.canEdit ? 'local' : 'readonly');
+          return;
+        }
+        this.ensureLocalSeedIfUnseeded();
+        this.setStatus(this.canEdit ? 'local' : 'readonly');
+        this.scheduleReconnect();
       };
 
       ws.onerror = () => {
-        this.setStatus(this.canEdit ? 'local' : 'readonly');
+        if (!this.destroyed && this.status === 'connecting') {
+          this.setStatus(this.canEdit ? 'local' : 'readonly');
+        }
       };
-    } catch {
+    } catch (err) {
+      LogError(err);
+      this.ensureLocalSeedIfUnseeded();
       this.setStatus(this.canEdit ? 'local' : 'readonly');
     }
   }
@@ -623,7 +1191,15 @@ export class DocumentCollaborationSession {
    */
   public SetActiveBlock(blockId: string | undefined): void {
     const currentState = this.Awareness.getLocalState() ?? {};
-    const userState = (currentState['user'] as Record<string, unknown> | undefined) ?? {};
+    const userState =
+      (currentState['user'] as {
+        userId?: string | number;
+        name?: string;
+        email?: string;
+        color?: string;
+        activeBlockId?: string;
+        canEdit?: boolean;
+      } | undefined) ?? {};
     this.Awareness.setLocalStateField('user', {
       ...userState,
       activeBlockId: blockId,
@@ -635,35 +1211,45 @@ export class DocumentCollaborationSession {
    */
   public GetCollaborators(): CollaboratorPresence[] {
     const result: CollaboratorPresence[] = [];
-    this.Awareness.getStates().forEach((state: Record<string, unknown>, clientId: number) => {
-      const u = state['user'] as Record<string, unknown> | undefined;
-      if (u && typeof u['name'] === 'string') {
-        result.push({
-          ClientID: clientId,
-          UserID: String(u['userId'] ?? clientId),
-          Name: u['name'],
-          Email: typeof u['email'] === 'string' ? u['email'] : undefined,
-          Color: typeof u['color'] === 'string' ? u['color'] : 'var(--mj-brand-primary)',
-          ActiveBlockID: typeof u['activeBlockId'] === 'string' ? u['activeBlockId'] : undefined,
-          CanEdit: u['canEdit'] !== false,
-        });
-      }
-    });
+    this.Awareness.getStates().forEach(
+      (
+        state: {
+          user?: {
+            userId?: string | number;
+            name?: string;
+            email?: string;
+            color?: string;
+            activeBlockId?: string;
+            canEdit?: boolean;
+          };
+        },
+        clientId: number,
+      ) => {
+        const u = state.user;
+        if (u && typeof u.name === 'string') {
+          result.push({
+            ClientID: clientId,
+            UserID: String(u.userId ?? clientId),
+            Name: u.name,
+            Email: typeof u.email === 'string' ? u.email : undefined,
+            Color: typeof u.color === 'string' ? u.color : 'var(--mj-brand-primary)',
+            ActiveBlockID: typeof u.activeBlockId === 'string' ? u.activeBlockId : undefined,
+            CanEdit: u.canEdit !== false,
+          });
+        }
+      },
+    );
     return result;
   }
 
   /**
-   * Cleanly closes the WebSocket and destroys the Yjs document.
+   * Cleanly cancels any pending reconnect timer, closes the WebSocket, and destroys the Yjs document.
    */
   public Destroy(): void {
-    if (this.socket) {
-      try {
-        this.socket.close();
-      } catch {
-        // Ignore close error
-      }
-      this.socket = null;
-    }
+    this.destroyed = true;
+    this.connectGeneration++;
+    this.clearReconnectTimer();
+    this.closeActiveSocketWithoutReconnect();
     this.contentChanged$.complete();
     this.statusChanged$.complete();
     this.collaboratorsChanged$.complete();
@@ -716,37 +1302,89 @@ export class DocumentCollaborationSession {
       awarenessProtocol.applyAwarenessUpdate(this.Awareness, update, 'remote');
     } else if (msgType === MSG_CONTROL || msgType === MSG_PERMISSION_STATE) {
       const jsonStr = decoding.readVarString(decoder);
-      try {
-        const parsed = JSON.parse(jsonStr) as {
-          action?: string;
-          canEdit?: boolean;
-          canRead?: boolean;
-          versionId?: string;
-          versionNumber?: number;
-        };
-        if (parsed.action === 'version-saved' && typeof parsed.versionNumber === 'number') {
-          this.versionSaved$.next({
-            versionId: parsed.versionId ?? '',
-            versionNumber: parsed.versionNumber,
-          });
-          return;
-        }
-        if (parsed.action === 'readonly-rejected') {
-          this.canEdit = false;
-          this.setStatus('readonly');
-        } else if (parsed.canRead === false) {
-          this.canEdit = false;
-          this.setStatus('revoked');
-        } else if (parsed.canEdit === false) {
-          this.canEdit = false;
-          this.setStatus('readonly');
-        } else if (parsed.canEdit === true) {
-          this.canEdit = true;
-          this.setStatus('connected');
-        }
-      } catch {
-        // Ignore malformed frame
+      const parsed = SafeJSONParse<{
+        action?: string;
+        canEdit?: boolean;
+        canRead?: boolean;
+        versionId?: string;
+        versionNumber?: number;
+      }>(jsonStr);
+      if (!parsed) {
+        return;
       }
+      if (parsed.action === 'version-saved' && typeof parsed.versionNumber === 'number') {
+        this.versionSaved$.next({
+          versionId: parsed.versionId ?? '',
+          versionNumber: parsed.versionNumber,
+        });
+        return;
+      }
+      if (parsed.action === 'readonly-rejected') {
+        this.canEdit = false;
+        this.setStatus('readonly');
+      } else if (parsed.canRead === false) {
+        this.canEdit = false;
+        this.clearReconnectTimer();
+        this.setStatus('revoked');
+      } else if (parsed.canEdit === false) {
+        this.canEdit = false;
+        this.setStatus('readonly');
+      } else if (parsed.canEdit === true) {
+        this.canEdit = true;
+        this.setStatus('connected');
+      }
+    }
+  }
+
+  private scheduleReconnect(): void {
+    if (this.destroyed || this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      return;
+    }
+    this.clearReconnectTimer();
+    const baseDelay =
+      RECONNECT_BACKOFF_MS[Math.min(this.reconnectAttempts, RECONNECT_BACKOFF_MS.length - 1)];
+    const jitter = Math.floor(Math.random() * 250);
+    this.reconnectAttempts++;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (!this.destroyed) {
+        void this.Connect(this.configuredWsUrlOverride, this.configuredProvider);
+      }
+    }, baseDelay + jitter);
+  }
+
+  private clearReconnectTimer(): void {
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+  }
+
+  private closeActiveSocketWithoutReconnect(): void {
+    if (!this.socket) {
+      return;
+    }
+    const ws = this.socket;
+    this.socket = null;
+    ws.onopen = null;
+    ws.onmessage = null;
+    ws.onclose = null;
+    ws.onerror = null;
+    try {
+      ws.close();
+    } catch (err) {
+      LogError(err);
+    }
+  }
+
+  private ensureLocalSeedIfUnseeded(): void {
+    if (!this.seededInDoc && this.ContentText.length === 0 && this.initialSeedContent.length > 0) {
+      this.seededInDoc = true;
+      this.Doc.transact(() => {
+        this.ContentText.insert(0, this.initialSeedContent);
+        this.populateSlideDeckCrdtIfPresentation(this.initialSeedContent);
+        this.populateSpreadsheetCrdtIfWorkbook(this.initialSeedContent);
+      }, 'init');
     }
   }
 
@@ -755,43 +1393,39 @@ export class DocumentCollaborationSession {
     if (!trimmed.startsWith('{') || !trimmed.includes('"Slides"')) {
       return;
     }
-    try {
-      const parsed = JSON.parse(trimmed) as Partial<SlideDeckSpec>;
-      if (!parsed || !Array.isArray(parsed.Slides) || parsed.Slides.length === 0) {
-        return;
-      }
-      const deckMeta = this.Doc.getMap<string>('deckMeta');
-      const slidesById = this.Doc.getMap<string>('slidesById');
-      const slideOrder = this.Doc.getArray<string>('slideOrder');
+    const parsed = SafeJSONParse<Partial<SlideDeckSpec>>(trimmed);
+    if (!parsed || !Array.isArray(parsed.Slides) || parsed.Slides.length === 0) {
+      return;
+    }
+    const deckMeta = this.Doc.getMap<string>('deckMeta');
+    const slidesById = this.Doc.getMap<string>('slidesById');
+    const slideOrder = this.Doc.getArray<string>('slideOrder');
 
-      deckMeta.set('DeckID', parsed.DeckID || 'deck-1');
-      deckMeta.set('Title', parsed.Title || 'Presentation');
-      deckMeta.set('Subtitle', parsed.Subtitle || '');
-      deckMeta.set('AspectRatio', parsed.AspectRatio === '4:3' ? '4:3' : '16:9');
-      if (parsed.Theme) {
-        deckMeta.set('Theme', JSON.stringify(parsed.Theme));
-      }
-      if (parsed.Master) {
-        deckMeta.set('Master', JSON.stringify(parsed.Master));
-      }
+    deckMeta.set('DeckID', parsed.DeckID || 'deck-1');
+    deckMeta.set('Title', parsed.Title || 'Presentation');
+    deckMeta.set('Subtitle', parsed.Subtitle || '');
+    deckMeta.set('AspectRatio', parsed.AspectRatio === '4:3' ? '4:3' : '16:9');
+    if (parsed.Theme) {
+      deckMeta.set('Theme', JSON.stringify(parsed.Theme));
+    }
+    if (parsed.Master) {
+      deckMeta.set('Master', JSON.stringify(parsed.Master));
+    }
 
-      const nextIds: string[] = [];
-      for (const slide of parsed.Slides) {
-        if (slide && typeof slide.SlideID === 'string' && slide.SlideID.trim()) {
-          slidesById.set(slide.SlideID, JSON.stringify(slide));
-          nextIds.push(slide.SlideID);
-        }
+    const nextIds: string[] = [];
+    for (const slide of parsed.Slides) {
+      if (slide && typeof slide.SlideID === 'string' && slide.SlideID.trim()) {
+        slidesById.set(slide.SlideID, JSON.stringify(slide));
+        nextIds.push(slide.SlideID);
       }
-      const currentOrder = slideOrder.toArray();
-      const sameOrder =
-        currentOrder.length === nextIds.length &&
-        currentOrder.every((id, idx) => id === nextIds[idx]);
-      if (!sameOrder) {
-        slideOrder.delete(0, slideOrder.length);
-        slideOrder.insert(0, nextIds);
-      }
-    } catch {
-      // Ignore non-deck content
+    }
+    const currentOrder = slideOrder.toArray();
+    const sameOrder =
+      currentOrder.length === nextIds.length &&
+      currentOrder.every((id, idx) => id === nextIds[idx]);
+    if (!sameOrder) {
+      slideOrder.delete(0, slideOrder.length);
+      slideOrder.insert(0, nextIds);
     }
   }
 
@@ -810,30 +1444,26 @@ export class DocumentCollaborationSession {
     for (const id of orderedIds) {
       const rawSlide = slidesById.get(id);
       if (rawSlide && !placedIds.has(id)) {
-        try {
-          const parsedSlide = JSON.parse(rawSlide) as SlideSpec;
+        const parsedSlide = SafeJSONParse<SlideSpec>(rawSlide);
+        if (parsedSlide) {
           slides.push({
             ...parsedSlide,
             SlideNumber: slides.length + 1,
           });
           placedIds.add(id);
-        } catch {
-          // Ignore malformed slide entry
         }
       }
     }
 
     slidesById.forEach((rawSlide, id) => {
       if (!placedIds.has(id)) {
-        try {
-          const parsedSlide = JSON.parse(rawSlide) as SlideSpec;
+        const parsedSlide = SafeJSONParse<SlideSpec>(rawSlide);
+        if (parsedSlide) {
           slides.push({
             ...parsedSlide,
             SlideNumber: slides.length + 1,
           });
           placedIds.add(id);
-        } catch {
-          // Ignore malformed slide entry
         }
       }
     });
@@ -845,31 +1475,19 @@ export class DocumentCollaborationSession {
     let baseDeck: Partial<SlideDeckSpec> = {};
     const currentText = this.ContentText.toString().trim();
     if (currentText.startsWith('{')) {
-      try {
-        baseDeck = JSON.parse(currentText) as Partial<SlideDeckSpec>;
-      } catch {
-        baseDeck = {};
-      }
+      baseDeck = SafeJSONParse<Partial<SlideDeckSpec>>(currentText) ?? {};
     }
 
     let theme = baseDeck.Theme;
     const rawTheme = deckMeta.get('Theme');
     if (rawTheme) {
-      try {
-        theme = JSON.parse(rawTheme) as SlideDeckSpec['Theme'];
-      } catch {
-        // Keep baseDeck.Theme
-      }
+      theme = SafeJSONParse<SlideDeckSpec['Theme']>(rawTheme) ?? theme;
     }
 
     let master = baseDeck.Master;
     const rawMaster = deckMeta.get('Master');
     if (rawMaster) {
-      try {
-        master = JSON.parse(rawMaster) as SlideDeckSpec['Master'];
-      } catch {
-        // Keep baseDeck.Master
-      }
+      master = SafeJSONParse<SlideDeckSpec['Master']>(rawMaster) ?? master;
     }
 
     const merged: Partial<SlideDeckSpec> = {
@@ -907,74 +1525,70 @@ export class DocumentCollaborationSession {
     if (!trimmed.startsWith('{') || !trimmed.includes('"Worksheets"')) {
       return;
     }
-    try {
-      const parsed = JSON.parse(trimmed) as Partial<WorkbookSpec>;
-      if (!parsed || !Array.isArray(parsed.Worksheets) || parsed.Worksheets.length === 0) {
-        return;
+    const parsed = SafeJSONParse<Partial<WorkbookSpec>>(trimmed);
+    if (!parsed || !Array.isArray(parsed.Worksheets) || parsed.Worksheets.length === 0) {
+      return;
+    }
+    const workbookMeta = this.Doc.getMap<string>('workbookMeta');
+    const sheetOrder = this.Doc.getArray<string>('sheetOrder');
+    const worksheetsById = this.Doc.getMap<string>('worksheetsById');
+    const sheetCellsByCoord = this.Doc.getMap<string>('sheetCellsByCoord');
+
+    workbookMeta.set('WorkbookID', parsed.WorkbookID || 'wb-1');
+    workbookMeta.set('Title', parsed.Title || 'Workbook');
+    workbookMeta.set('ActiveSheetID', parsed.ActiveSheetID || parsed.Worksheets[0].SheetID);
+    workbookMeta.set('NamedRanges', JSON.stringify(parsed.NamedRanges ?? []));
+
+    const nextSheetIds: string[] = [];
+    const activeCellKeys = new Set<string>();
+
+    for (const ws of parsed.Worksheets) {
+      if (!ws || typeof ws.SheetID !== 'string' || !ws.SheetID.trim()) {
+        continue;
       }
-      const workbookMeta = this.Doc.getMap<string>('workbookMeta');
-      const sheetOrder = this.Doc.getArray<string>('sheetOrder');
-      const worksheetsById = this.Doc.getMap<string>('worksheetsById');
-      const sheetCellsByCoord = this.Doc.getMap<string>('sheetCellsByCoord');
+      nextSheetIds.push(ws.SheetID);
+      const wsWithoutCells: WorksheetSpec = {
+        ...ws,
+        Cells: {},
+      };
+      worksheetsById.set(ws.SheetID, JSON.stringify(wsWithoutCells));
 
-      workbookMeta.set('WorkbookID', parsed.WorkbookID || 'wb-1');
-      workbookMeta.set('Title', parsed.Title || 'Workbook');
-      workbookMeta.set('ActiveSheetID', parsed.ActiveSheetID || parsed.Worksheets[0].SheetID);
-      workbookMeta.set('NamedRanges', JSON.stringify(parsed.NamedRanges ?? []));
-
-      const nextSheetIds: string[] = [];
-      const activeCellKeys = new Set<string>();
-
-      for (const ws of parsed.Worksheets) {
-        if (!ws || typeof ws.SheetID !== 'string' || !ws.SheetID.trim()) {
-          continue;
-        }
-        nextSheetIds.push(ws.SheetID);
-        const wsWithoutCells: WorksheetSpec = {
-          ...ws,
-          Cells: {},
-        };
-        worksheetsById.set(ws.SheetID, JSON.stringify(wsWithoutCells));
-
-        for (const cell of Object.values(ws.Cells ?? {})) {
-          if (cell && cell.RowID && cell.ColumnID) {
-            const coordKey = `${ws.SheetID}::${cell.RowID}::${cell.ColumnID}`;
-            activeCellKeys.add(coordKey);
-            sheetCellsByCoord.set(coordKey, JSON.stringify(cell));
-          }
+      for (const cell of Object.values(ws.Cells ?? {})) {
+        if (cell && cell.RowID && cell.ColumnID) {
+          const coordKey = `${ws.SheetID}::${cell.RowID}::${cell.ColumnID}`;
+          activeCellKeys.add(coordKey);
+          sheetCellsByCoord.set(coordKey, JSON.stringify(cell));
         }
       }
+    }
 
-      const staleCellKeys: string[] = [];
-      sheetCellsByCoord.forEach((_val, key) => {
-        if (!activeCellKeys.has(key)) {
-          staleCellKeys.push(key);
-        }
-      });
-      for (const k of staleCellKeys) {
-        sheetCellsByCoord.delete(k);
+    const staleCellKeys: string[] = [];
+    sheetCellsByCoord.forEach((_val, key) => {
+      if (!activeCellKeys.has(key)) {
+        staleCellKeys.push(key);
       }
+    });
+    for (const k of staleCellKeys) {
+      sheetCellsByCoord.delete(k);
+    }
 
-      const staleSheetIds: string[] = [];
-      worksheetsById.forEach((_val, id) => {
-        if (!nextSheetIds.includes(id)) {
-          staleSheetIds.push(id);
-        }
-      });
-      for (const id of staleSheetIds) {
-        worksheetsById.delete(id);
+    const staleSheetIds: string[] = [];
+    worksheetsById.forEach((_val, id) => {
+      if (!nextSheetIds.includes(id)) {
+        staleSheetIds.push(id);
       }
+    });
+    for (const id of staleSheetIds) {
+      worksheetsById.delete(id);
+    }
 
-      const currentOrder = sheetOrder.toArray();
-      const sameOrder =
-        currentOrder.length === nextSheetIds.length &&
-        currentOrder.every((id, idx) => id === nextSheetIds[idx]);
-      if (!sameOrder) {
-        sheetOrder.delete(0, sheetOrder.length);
-        sheetOrder.insert(0, nextSheetIds);
-      }
-    } catch {
-      // Ignore non-workbook content
+    const currentOrder = sheetOrder.toArray();
+    const sameOrder =
+      currentOrder.length === nextSheetIds.length &&
+      currentOrder.every((id, idx) => id === nextSheetIds[idx]);
+    if (!sameOrder) {
+      sheetOrder.delete(0, sheetOrder.length);
+      sheetOrder.insert(0, nextSheetIds);
     }
   }
 
@@ -992,13 +1606,12 @@ export class DocumentCollaborationSession {
     const worksheets: WorksheetSpec[] = [];
 
     const hydrateSheet = (rawSheet: string): WorksheetSpec | null => {
-      try {
-        const ws = JSON.parse(rawSheet) as WorksheetSpec;
-        ws.Cells = ws.Cells ?? {};
-        return ws;
-      } catch {
+      const ws = SafeJSONParse<WorksheetSpec>(rawSheet);
+      if (!ws) {
         return null;
       }
+      ws.Cells = ws.Cells ?? {};
+      return ws;
     };
 
     for (const id of orderedIds) {
@@ -1036,29 +1649,24 @@ export class DocumentCollaborationSession {
       const sheetId = coordKey.slice(0, sep1);
       const ws = sheetMap.get(sheetId);
       if (!ws) return;
-      try {
-        const cell = JSON.parse(rawCell) as SpreadsheetCellSpec;
-        const row = ws.Rows.find((r) => r.RowID === cell.RowID);
-        const col = ws.Columns.find((c) => c.ColumnID === cell.ColumnID);
-        if (!row || !col) {
-          return;
-        }
-        const addr = `${col.Letter}${row.Index}`;
-        cell.Address = addr;
-        ws.Cells[addr] = cell;
-      } catch {
-        // Ignore malformed cell entry
+      const cell = SafeJSONParse<SpreadsheetCellSpec>(rawCell);
+      if (!cell) {
+        return;
       }
+      const row = ws.Rows.find((r) => r.RowID === cell.RowID);
+      const col = ws.Columns.find((c) => c.ColumnID === cell.ColumnID);
+      if (!row || !col) {
+        return;
+      }
+      const addr = `${col.Letter}${row.Index}`;
+      cell.Address = addr;
+      ws.Cells[addr] = cell;
     });
 
     let namedRanges: SpreadsheetNamedRangeSpec[] = [];
     const rawNamedRanges = workbookMeta.get('NamedRanges');
     if (rawNamedRanges) {
-      try {
-        namedRanges = JSON.parse(rawNamedRanges) as SpreadsheetNamedRangeSpec[];
-      } catch {
-        namedRanges = [];
-      }
+      namedRanges = SafeJSONParse<SpreadsheetNamedRangeSpec[]>(rawNamedRanges) ?? [];
     }
 
     const nowIso = new Date().toISOString();
@@ -1225,6 +1833,21 @@ export class DocumentCollaborationService {
   ];
 
   /**
+   * Returns true when either an explicit WebSocket override URL or a `GraphQLDataProvider`
+   * capable of minting single-use collaboration tickets is available.
+   */
+  public HasCollaborationBackend(
+    providerOverride?: IMetadataProvider | null,
+    baseUrlOverride?: string | null,
+  ): boolean {
+    if (baseUrlOverride && baseUrlOverride.trim().length > 0) {
+      return true;
+    }
+    const provider = resolveDefaultMetadataProvider(providerOverride);
+    return isGraphQLCollaborationProvider(provider);
+  }
+
+  /**
    * Creates a new Yjs collaboration session for the given artifact.
    */
   public CreateSession(
@@ -1240,35 +1863,163 @@ export class DocumentCollaborationService {
       user,
       canEdit,
       deferInitialSeedForRemoteSync,
+      (artId, wsOverride, provOverride) =>
+        this.ResolveCollaborationEndpoint(artId, wsOverride, provOverride),
     );
   }
 
   /**
-   * Resolves the WebSocket URL for `/collaboration/yjs?artifactId=<id>` from the current browser origin or API URL.
+   * Acquires a single-use collaboration ticket via `GraphQLDataProvider.ExecuteGQL` (unless an
+   * explicit test `wsUrl` with query parameters is supplied directly) and resolves the
+   * authenticated WebSocket URL.
    */
-  public ResolveCollaborationWebSocketUrl(artifactId: string, baseUrlOverride?: string): string {
-    if (baseUrlOverride) {
-      const wsBase = baseUrlOverride.replace(/^http/i, 'ws').replace(/\/graphql\/?$/i, '');
+  public async ResolveCollaborationEndpoint(
+    artifactId: string,
+    baseUrlOverride?: string | null,
+    providerOverride?: IMetadataProvider | null,
+  ): Promise<ResolvedCollaborationEndpoint> {
+    if (!artifactId || !artifactId.trim()) {
+      return { Mode: 'local', WsUrl: '' };
+    }
+
+    const trimmedOverride = baseUrlOverride?.trim() || '';
+    if (trimmedOverride && trimmedOverride.includes('?')) {
+      const directUrl = this.ResolveCollaborationWebSocketUrl(
+        artifactId,
+        trimmedOverride,
+        null,
+        null,
+        providerOverride,
+      );
+      return directUrl ? { Mode: 'connect', WsUrl: directUrl } : { Mode: 'local', WsUrl: '' };
+    }
+
+    const provider = resolveDefaultMetadataProvider(providerOverride);
+    if (isGraphQLCollaborationProvider(provider)) {
       try {
-        const parsed = new URL(wsBase);
+        const gqlRes = await provider.ExecuteGQL(MINT_COLLABORATION_TICKET_MUTATION, {
+          artifactId,
+        });
+        const ticketData = gqlRes?.MintArtifactCollaborationTicket;
+        if (!ticketData) {
+          return { Mode: 'local', WsUrl: '' };
+        }
+        if (ticketData.CanRead === false) {
+          return { Mode: 'revoked', WsUrl: '', CanEdit: false };
+        }
+        if (!ticketData.Success || !ticketData.Ticket) {
+          return {
+            Mode: 'local',
+            WsUrl: '',
+            CanEdit: typeof ticketData.CanEdit === 'boolean' ? ticketData.CanEdit : undefined,
+          };
+        }
+        const wsUrl = this.ResolveCollaborationWebSocketUrl(
+          artifactId,
+          trimmedOverride || null,
+          ticketData.Ticket,
+          ticketData.WsPath ?? '/collaboration/yjs',
+          providerOverride,
+        );
+        if (!wsUrl) {
+          return {
+            Mode: 'local',
+            WsUrl: '',
+            CanEdit: typeof ticketData.CanEdit === 'boolean' ? ticketData.CanEdit : undefined,
+          };
+        }
+        return {
+          Mode: 'connect',
+          WsUrl: wsUrl,
+          CanEdit: typeof ticketData.CanEdit === 'boolean' ? ticketData.CanEdit : undefined,
+        };
+      } catch (err) {
+        LogError(err);
+        return { Mode: 'local', WsUrl: '' };
+      }
+    }
+
+    if (trimmedOverride) {
+      const fallbackOverrideUrl = this.ResolveCollaborationWebSocketUrl(
+        artifactId,
+        trimmedOverride,
+        null,
+        null,
+        providerOverride,
+      );
+      return fallbackOverrideUrl
+        ? { Mode: 'connect', WsUrl: fallbackOverrideUrl }
+        : { Mode: 'local', WsUrl: '' };
+    }
+
+    return { Mode: 'local', WsUrl: '' };
+  }
+
+  /**
+   * Resolves the WebSocket URL for `/collaboration/yjs` from `GraphQLDataProvider`'s configured
+   * GraphQL endpoint origin (`new URL(gqlUrl, window.location.origin).origin.replace(/^http/, 'ws')`)
+   * plus `WsPath` (`'/collaboration/yjs'`) and encoded `artifactId` + `ticket` query parameters.
+   */
+  public ResolveCollaborationWebSocketUrl(
+    artifactId: string,
+    baseUrlOverride?: string | null,
+    ticket?: string | null,
+    wsPath?: string | null,
+    providerOverride?: IMetadataProvider | null,
+  ): string {
+    const fallbackRelativeBase =
+      typeof window !== 'undefined' && window.location?.origin
+        ? window.location.origin
+        : 'http://localhost';
+
+    const trimmedOverride = baseUrlOverride?.trim() || '';
+    if (trimmedOverride && trimmedOverride.includes('?') && !ticket) {
+      try {
+        const parsed = new URL(trimmedOverride, fallbackRelativeBase);
+        const wsProto = parsed.protocol.replace(/^http/i, 'ws');
+        parsed.protocol = wsProto;
         if (!parsed.pathname || parsed.pathname === '/') {
-          parsed.pathname = '/collaboration/yjs';
+          parsed.pathname = wsPath?.trim() || '/collaboration/yjs';
         }
         if (!parsed.searchParams.has('artifactId')) {
           parsed.searchParams.set('artifactId', artifactId);
         }
         return parsed.toString();
-      } catch {
-        const sep = wsBase.includes('?') ? '&' : '?';
-        const path = wsBase.includes('/collaboration/yjs') ? wsBase : `${wsBase.replace(/\/$/, '')}/collaboration/yjs`;
-        return `${path}${sep}artifactId=${encodeURIComponent(artifactId)}`;
+      } catch (err) {
+        LogError(err);
+        return '';
       }
     }
-    if (typeof window !== 'undefined' && window.location) {
-      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      return `${proto}//${window.location.host}/collaboration/yjs?artifactId=${encodeURIComponent(artifactId)}`;
+
+    let endpointUrl = trimmedOverride;
+    if (!endpointUrl) {
+      const provider = resolveDefaultMetadataProvider(providerOverride);
+      if (isGraphQLCollaborationProvider(provider) && provider.ConfigData) {
+        endpointUrl =
+          provider.ConfigData.URL ||
+          provider.ConfigData.MJAPIURL ||
+          provider.ConfigData.WSURL ||
+          '';
+      }
     }
-    return '';
+
+    if (!endpointUrl) {
+      return '';
+    }
+
+    try {
+      const parsedEndpoint = new URL(endpointUrl, fallbackRelativeBase);
+      const wsOrigin = parsedEndpoint.origin.replace(/^http/i, 'ws');
+      const rawPath = wsPath && wsPath.trim() ? wsPath.trim() : '/collaboration/yjs';
+      const normalizedPath = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+      const query = ticket
+        ? `?artifactId=${encodeURIComponent(artifactId)}&ticket=${encodeURIComponent(ticket)}`
+        : `?artifactId=${encodeURIComponent(artifactId)}`;
+      return `${wsOrigin}${normalizedPath}${query}`;
+    } catch (err) {
+      LogError(err);
+      return '';
+    }
   }
 
   /**
@@ -1385,85 +2136,51 @@ export class DocumentCollaborationService {
   }
 
   /**
-   * Computes a deterministic line-by-line LCS diff between two document versions.
+   * Computes a deterministic line-by-line diff between two document versions using
+   * common prefix/suffix trimming, bounded Myers O((M+N)D), and linear unique-anchor fallback.
    */
   public ComputeLineDiff(oldContent: string, newContent: string): DocumentDiffResult {
     const oldLines = (oldContent ?? '').replace(/\r\n/g, '\n').split('\n');
     const newLines = (newContent ?? '').replace(/\r\n/g, '\n').split('\n');
 
-    const m = oldLines.length;
-    const n = newLines.length;
-    const dp: number[][] = Array.from({ length: m + 1 }, () => Array<number>(n + 1).fill(0));
-
-    for (let i = m - 1; i >= 0; i--) {
-      for (let j = n - 1; j >= 0; j--) {
-        if (oldLines[i] === newLines[j]) {
-          dp[i][j] = 1 + dp[i + 1][j + 1];
-        } else {
-          dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
-        }
-      }
-    }
+    const ops = ComputeBoundedSequenceDiff(
+      oldLines,
+      newLines,
+      (a, b) => a === b,
+      (line) => line,
+    );
 
     const diffLines: DocumentDiffLine[] = [];
     let added = 0;
     let removed = 0;
     let unchanged = 0;
 
-    let i = 0;
-    let j = 0;
-    while (i < m && j < n) {
-      if (oldLines[i] === newLines[j]) {
+    for (const op of ops) {
+      if (op.Kind === 'equal') {
         diffLines.push({
           Type: 'same',
-          OldLineNumber: i + 1,
-          NewLineNumber: j + 1,
-          Content: oldLines[i],
+          OldLineNumber: op.OldIndex + 1,
+          NewLineNumber: op.NewIndex + 1,
+          Content: oldLines[op.OldIndex],
         });
         unchanged++;
-        i++;
-        j++;
-      } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      } else if (op.Kind === 'delete') {
         diffLines.push({
           Type: 'removed',
-          OldLineNumber: i + 1,
+          OldLineNumber: op.OldIndex + 1,
           NewLineNumber: null,
-          Content: oldLines[i],
+          Content: oldLines[op.OldIndex],
         });
         removed++;
-        i++;
       } else {
         diffLines.push({
           Type: 'added',
           OldLineNumber: null,
-          NewLineNumber: j + 1,
-          Content: newLines[j],
+          NewLineNumber: op.NewIndex + 1,
+          Content: newLines[op.NewIndex],
         });
         added++;
-        j++;
       }
-    }
-
-    while (i < m) {
-      diffLines.push({
-        Type: 'removed',
-        OldLineNumber: i + 1,
-        NewLineNumber: null,
-        Content: oldLines[i],
-      });
-      removed++;
-      i++;
-    }
-
-    while (j < n) {
-      diffLines.push({
-        Type: 'added',
-        OldLineNumber: null,
-        NewLineNumber: j + 1,
-        Content: newLines[j],
-      });
-      added++;
-      j++;
     }
 
     return {
@@ -1476,8 +2193,7 @@ export class DocumentCollaborationService {
 
   /**
    * Computes a Word / Google-Docs-style token-level redline diff and granular word/phrase change hunks
-   * between an original block and a proposed block so single-word or phrase edits are highlighted
-   * inline rather than marking the entire paragraph as replaced.
+   * between an original block and a proposed block using bounded Myers + prefix/suffix trimming.
    */
   public ComputeWordLevelDiff(oldContent: string, newContent: string): DocumentWordDiffResult {
     const tokenize = (text: string): string[] =>
@@ -1485,42 +2201,23 @@ export class DocumentCollaborationService {
 
     const oldTokens = tokenize(oldContent);
     const newTokens = tokenize(newContent);
-    const m = oldTokens.length;
-    const n = newTokens.length;
 
-    const dp: number[][] = Array.from({ length: m + 1 }, () => Array<number>(n + 1).fill(0));
-    for (let i = m - 1; i >= 0; i--) {
-      for (let j = n - 1; j >= 0; j--) {
-        if (oldTokens[i] === newTokens[j]) {
-          dp[i][j] = 1 + dp[i + 1][j + 1];
-        } else {
-          dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
-        }
-      }
-    }
+    const seqOps = ComputeBoundedSequenceDiff(
+      oldTokens,
+      newTokens,
+      (a, b) => a === b,
+      (tok) => tok,
+    );
 
-    const rawOps: Array<{ Type: 'equal' | 'delete' | 'insert'; Text: string }> = [];
-    let i = 0;
-    let j = 0;
-    while (i < m && j < n) {
-      if (oldTokens[i] === newTokens[j]) {
-        rawOps.push({ Type: 'equal', Text: oldTokens[i] });
-        i++;
-        j++;
-      } else if (dp[i + 1][j] >= dp[i][j + 1]) {
-        rawOps.push({ Type: 'delete', Text: oldTokens[i] });
-        i++;
-      } else {
-        rawOps.push({ Type: 'insert', Text: newTokens[j] });
-        j++;
+    const rawOps: Array<{ Type: 'equal' | 'delete' | 'insert'; Text: string }> = seqOps.map((op) => {
+      if (op.Kind === 'equal') {
+        return { Type: 'equal', Text: oldTokens[op.OldIndex] };
       }
-    }
-    while (i < m) {
-      rawOps.push({ Type: 'delete', Text: oldTokens[i++] });
-    }
-    while (j < n) {
-      rawOps.push({ Type: 'insert', Text: newTokens[j++] });
-    }
+      if (op.Kind === 'delete') {
+        return { Type: 'delete', Text: oldTokens[op.OldIndex] };
+      }
+      return { Type: 'insert', Text: newTokens[op.NewIndex] };
+    });
 
     // Coalesce consecutive operations of the same type
     const coalesced: DocumentWordDiffSpan[] = [];

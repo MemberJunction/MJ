@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import * as encoding from 'lib0/encoding';
+import * as syncProtocol from 'y-protocols/sync';
 import * as Y from 'yjs';
+import type { IMetadataProvider } from '@memberjunction/core';
 import { SpreadsheetEngine } from '@memberjunction/core-entities';
 import { DocumentCollaborationService } from '../services/document-collaboration.service';
 import { DocumentImportExportService } from '../services/document-import-export.service';
@@ -240,6 +242,183 @@ describe('DocumentCollaborationSession — Wave 3 Spreadsheet Per-Cell / Per-Wor
 
     sessionA.Destroy();
     sessionB.Destroy();
+  });
+});
+
+describe('DocumentCollaborationService — ticket-authenticated URL resolution, reconnect backoff & bounded diff (A3, E4, CodeQL)', () => {
+  const service = new DocumentCollaborationService();
+  const importExport = new DocumentImportExportService();
+
+  it('acquires a single-use ticket via MintArtifactCollaborationTicket and derives cross-port WS origin from ConfigData.URL (A3)', async () => {
+    const executeGqlCalls: Array<{ query: string; variables?: Record<string, string> }> = [];
+    const mockGraphQlProvider = {
+      ConfigData: {
+        URL: 'https://mjapi.corp.example:4443/graphql',
+      },
+      ExecuteGQL: async (query: string, variables?: Record<string, string>) => {
+        executeGqlCalls.push({ query, variables });
+        return {
+          MintArtifactCollaborationTicket: {
+            Success: true,
+            Ticket: 'tok_single_use_987',
+            WsPath: '/collaboration/yjs',
+            ExpiresAt: '2026-11-09T23:59:59Z',
+            CanRead: true,
+            CanEdit: true,
+          },
+        };
+      },
+    } as unknown as IMetadataProvider;
+
+    const resolved = await service.ResolveCollaborationEndpoint('art-uuid-42', null, mockGraphQlProvider);
+    expect(executeGqlCalls).toHaveLength(1);
+    expect(executeGqlCalls[0].query).toContain('MintArtifactCollaborationTicket');
+    expect(executeGqlCalls[0].variables).toEqual({ artifactId: 'art-uuid-42' });
+    expect(resolved.Mode).toBe('connect');
+    expect(resolved.WsUrl).toBe(
+      'wss://mjapi.corp.example:4443/collaboration/yjs?artifactId=art-uuid-42&ticket=tok_single_use_987',
+    );
+    expect(resolved.CanEdit).toBe(true);
+  });
+
+  it('stays cleanly in local mode when no GraphQLDataProvider or wsUrl override is configured (A3)', async () => {
+    const plainProvider = { Entities: [] } as unknown as IMetadataProvider;
+    const resolved = await service.ResolveCollaborationEndpoint('art-local-1', null, plainProvider);
+    expect(resolved.Mode).toBe('local');
+    expect(resolved.WsUrl).toBe('');
+  });
+
+  it('reconnects with fresh single-use tickets after transient close, resyncs offline Y.Doc edits, and stops cleanly on Destroy() (A3)', async () => {
+    vi.useFakeTimers();
+    const originalWebSocket = globalThis.WebSocket;
+
+    interface MockSocketInstance {
+      url: string;
+      readyState: number;
+      binaryType: string;
+      sentFrames: Uint8Array[];
+      onopen: (() => void) | null;
+      onmessage: ((evt: MessageEvent) => void) | null;
+      onclose: ((evt: CloseEvent) => void) | null;
+      onerror: (() => void) | null;
+      close: () => void;
+    }
+
+    const createdSockets: MockSocketInstance[] = [];
+    class FakeWebSocket {
+      public static readonly CONNECTING = 0;
+      public static readonly OPEN = 1;
+      public static readonly CLOSING = 2;
+      public static readonly CLOSED = 3;
+
+      public url: string;
+      public readyState = FakeWebSocket.CONNECTING;
+      public binaryType = 'blob';
+      public sentFrames: Uint8Array[] = [];
+      public onopen: (() => void) | null = null;
+      public onmessage: ((evt: MessageEvent) => void) | null = null;
+      public onclose: ((evt: CloseEvent) => void) | null = null;
+      public onerror: (() => void) | null = null;
+
+      constructor(url: string) {
+        this.url = url;
+        createdSockets.push(this);
+      }
+
+      public send(data: Uint8Array): void {
+        this.sentFrames.push(data);
+      }
+
+      public close(): void {
+        this.readyState = FakeWebSocket.CLOSED;
+      }
+    }
+
+    (globalThis as unknown as { WebSocket: typeof FakeWebSocket }).WebSocket = FakeWebSocket;
+    let ticketCounter = 0;
+    const mockGraphQlProvider = {
+      ConfigData: { URL: 'http://localhost:4000/graphql' },
+      ExecuteGQL: async () => ({
+        MintArtifactCollaborationTicket: {
+          Success: true,
+          Ticket: `ticket-${++ticketCounter}`,
+          WsPath: '/collaboration/yjs',
+          CanRead: true,
+          CanEdit: true,
+        },
+      }),
+    } as unknown as IMetadataProvider;
+
+    try {
+      const session = service.CreateSession('art-reconnect-1', '# Initial', { id: 'u1', name: 'Alice' }, true, true);
+      await session.Connect(null, mockGraphQlProvider);
+
+      expect(createdSockets).toHaveLength(1);
+      expect(createdSockets[0].url).toContain('ticket=ticket-1');
+      createdSockets[0].readyState = FakeWebSocket.OPEN;
+      createdSockets[0].onopen?.();
+      expect(session.Status).toBe('connected');
+
+      // Server sends empty SyncStep2 -> session seeds initial content
+      const serverDoc = new Y.Doc();
+      const step2Encoder = encoding.createEncoder();
+      encoding.writeVarUint(step2Encoder, 0);
+      syncProtocol.writeSyncStep2(step2Encoder, serverDoc);
+      createdSockets[0].onmessage?.({ data: encoding.toUint8Array(step2Encoder).buffer } as MessageEvent);
+
+      // Transient network drop (code 1006)
+      createdSockets[0].readyState = FakeWebSocket.CLOSED;
+      createdSockets[0].onclose?.({ code: 1006 } as CloseEvent);
+      expect(session.Status).toBe('local');
+
+      // User makes an offline edit while disconnected
+      session.SetContent('# Initial\n\nOffline paragraph added.');
+
+      // Advance timer past 1000ms + jitter (< 1500ms) -> mints fresh ticket-2 and reconnects
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(createdSockets).toHaveLength(2);
+      expect(createdSockets[1].url).toContain('ticket=ticket-2');
+
+      createdSockets[1].readyState = FakeWebSocket.OPEN;
+      createdSockets[1].onopen?.();
+      expect(session.Status).toBe('connected');
+      // Sent syncStep1 + offline Y.Doc state update + awareness
+      expect(createdSockets[1].sentFrames.length).toBeGreaterThanOrEqual(3);
+
+      // Destroy stops future reconnect timers and closes socket cleanly
+      session.Destroy();
+      expect(session.IsDestroyed).toBe(true);
+      await vi.advanceTimersByTimeAsync(20000);
+      expect(createdSockets).toHaveLength(2);
+    } finally {
+      (globalThis as unknown as { WebSocket: typeof WebSocket }).WebSocket = originalWebSocket;
+      vi.useRealTimers();
+    }
+  });
+
+  it('ComputeLineDiff handles two 20,000-line documents in < 100ms via prefix/suffix + bounded Myers/anchor diff (E4)', () => {
+    const linesA: string[] = [];
+    const linesB: string[] = [];
+    for (let i = 0; i < 20000; i++) {
+      linesA.push(`Section ${i}: Shared specification line ${i}`);
+      linesB.push(i === 10000 ? `Section ${i}: Modified specification line ${i}` : `Section ${i}: Shared specification line ${i}`);
+    }
+    const t0 = performance.now();
+    const diff = service.ComputeLineDiff(linesA.join('\n'), linesB.join('\n'));
+    const elapsed = performance.now() - t0;
+
+    expect(elapsed).toBeLessThan(100);
+    expect(diff.AddedLines).toBe(1);
+    expect(diff.RemovedLines).toBe(1);
+    expect(diff.UnchangedLines).toBe(19999);
+  });
+
+  it('ConvertHtmlToMarkdown escapes both backslashes and pipe characters in GFM table cells (CodeQL)', async () => {
+    const md = await importExport.ConvertHtmlToMarkdown(
+      '<table><tr><th>Path</th><th>Expr</th></tr><tr><td>C:\\\\Users\\\\Docs</td><td>A | B</td></tr></table>',
+    );
+    expect(md).toContain('C:\\\\\\\\Users\\\\\\\\Docs');
+    expect(md).toContain('A \\| B');
   });
 });
 

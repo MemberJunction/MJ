@@ -15,6 +15,7 @@
 
 import { RunView, UserInfo } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import {
     ArtifactPermissionEngine,
     BaseArtifactPermissionDelegate,
@@ -84,11 +85,18 @@ function extractToolData<T extends object>(res: ArtifactToolResult, contextLabel
 // ─── DSL1: Metadata coherence, Artifact Types, and Library / Chat wiring ──────
 
 async function checkDsl1MetadataAndAppWiring(ctx: IntegrationCheckContext): Promise<void> {
-    // 1. MJ: Artifact Working States entity & FK metadata
+    // 1. MJ: Artifact Working States entity & FK metadata (locked down: IncludeInAPI=false, TrackRecordChanges=false)
     const workingStatesEnt = ctx.Provider.Entities.find((e) => e.Name === 'MJ: Artifact Working States');
     Assert(workingStatesEnt !== undefined, 'Entity "MJ: Artifact Working States" must exist in Provider.Entities');
     AssertEqual(workingStatesEnt!.BaseTable, 'ArtifactWorkingState', 'MJ: Artifact Working States BaseTable');
     AssertEqual(workingStatesEnt!.BaseView, 'vwArtifactWorkingStates', 'MJ: Artifact Working States BaseView');
+    AssertEqual(workingStatesEnt!.IncludeInAPI, false, 'MJ: Artifact Working States must have IncludeInAPI=false (B1)');
+    AssertEqual(workingStatesEnt!.TrackRecordChanges, false, 'MJ: Artifact Working States must have TrackRecordChanges=false (B1)');
+    AssertEqual(workingStatesEnt!.AllowCreateAPI, true, 'MJ: Artifact Working States must allow server-side BaseEntity Create');
+    AssertEqual(workingStatesEnt!.AllowUpdateAPI, true, 'MJ: Artifact Working States must allow server-side BaseEntity Update');
+    AssertEqual(workingStatesEnt!.AllowDeleteAPI, true, 'MJ: Artifact Working States must allow server-side BaseEntity Delete');
+    const uiRolePerm = workingStatesEnt!.Permissions.find((p) => p.Role === 'UI');
+    Assert(uiRolePerm === undefined, 'MJ: Artifact Working States must NOT grant permissions to UI role (B1)');
 
     const wsFields = new Set(workingStatesEnt!.Fields.map((f) => f.Name));
     for (const reqField of ['ID', 'ArtifactID', 'YjsState', 'LastModifiedByUserID', 'Artifact', 'LastModifiedByUser']) {
@@ -158,20 +166,21 @@ async function checkDsl1MetadataAndAppWiring(ctx: IntegrationCheckContext): Prom
         Assert(Boolean(row!.IsEnabled), `${expected.Name} must be enabled`);
     }
 
-    // 4. Library & Chat application wiring
+    // 4. Library, File Browser, & Chat application wiring
     const appsRes = await rv.RunView<MJApplicationEntityType>(
         {
             EntityName: 'MJ: Applications',
-            ExtraFilter: "ID IN ('EB07016C-AE35-4EF9-804B-91563529A08A', '7A873E1A-692E-43FA-97F8-57D8161A985C')",
+            ExtraFilter: "ID IN ('DB6B9D62-CB8E-417D-8A04-4CBC5F65CD9A', 'EB07016C-AE35-4EF9-804B-91563529A08A', '7A873E1A-692E-43FA-97F8-57D8161A985C')",
             ResultType: 'simple',
         },
         ctx.User,
     );
     Assert(appsRes.Success, `RunView on MJ: Applications failed: ${appsRes.ErrorMessage}`);
 
-    const libraryApp = appsRes.Results.find((a) => UUIDsEqual(a.ID, 'EB07016C-AE35-4EF9-804B-91563529A08A'));
-    Assert(libraryApp !== undefined, 'Library application (EB07016C-AE35-4EF9-804B-91563529A08A) must exist');
+    const libraryApp = appsRes.Results.find((a) => UUIDsEqual(a.ID, 'DB6B9D62-CB8E-417D-8A04-4CBC5F65CD9A'));
+    Assert(libraryApp !== undefined, 'Dedicated Library application (DB6B9D62-CB8E-417D-8A04-4CBC5F65CD9A) must exist');
     AssertEqual(libraryApp!.Name, 'Library', 'Library application Name');
+    AssertEqual(libraryApp!.DefaultForNewUser, true, 'Library DefaultForNewUser');
     AssertEqual(libraryApp!.NavigationStyle, 'Both', 'Library NavigationStyle');
     AssertEqual(libraryApp!.TopNavLocation, 'Left of User Menu', 'Library TopNavLocation');
     const libraryNav = parseNavItems(libraryApp!.DefaultNavItems);
@@ -180,9 +189,22 @@ async function checkDsl1MetadataAndAppWiring(ctx: IntegrationCheckContext): Prom
         'Library DefaultNavItems must register LibraryResource',
     );
 
+    const fileBrowserApp = appsRes.Results.find((a) => UUIDsEqual(a.ID, 'EB07016C-AE35-4EF9-804B-91563529A08A'));
+    Assert(fileBrowserApp !== undefined, 'File Browser application (EB07016C-AE35-4EF9-804B-91563529A08A) must remain intact');
+    AssertEqual(fileBrowserApp!.Name, 'File Browser', 'File Browser application Name preserved');
+    const fbNav = parseNavItems(fileBrowserApp!.DefaultNavItems);
+    Assert(
+        fbNav.some((item) => item.DriverClass === 'FileBrowserResource'),
+        'File Browser DefaultNavItems must retain FileBrowserResource for T118 compatibility',
+    );
+
     const chatApp = appsRes.Results.find((a) => UUIDsEqual(a.ID, '7A873E1A-692E-43FA-97F8-57D8161A985C'));
     Assert(chatApp !== undefined, 'Chat application (7A873E1A-692E-43FA-97F8-57D8161A985C) must exist');
     const chatNav = parseNavItems(chatApp!.DefaultNavItems);
+    Assert(
+        chatNav.some((item) => item.Label === 'Collections' && item.DriverClass === 'ChatCollectionsResource'),
+        'Chat DefaultNavItems must include "Collections" backed by ChatCollectionsResource',
+    );
     Assert(
         chatNav.some((item) => item.Label === 'Agent Activity' && item.DriverClass === 'ChatTasksResource'),
         'Chat DefaultNavItems must include "Agent Activity" backed by ChatTasksResource',
@@ -205,13 +227,14 @@ async function checkDsl2PhysicalConstraintsAndViews(ctx: IntegrationCheckContext
         'CK_Artifact_DelegateBinding',
     ];
 
+    const schemaName = ctx.Schema || '__mj';
     let foundLower: Set<string> | null = null;
     if (ctx.Pool) {
         const result = await ctx.Pool.request().query<{ name: string }>(`
             SELECT o.name
               FROM sys.objects o
               JOIN sys.schemas s ON o.schema_id = s.schema_id
-             WHERE s.name = '${ctx.Schema}'
+             WHERE s.name = '${schemaName}'
                AND o.name IN (${expectedConstraints.map((c) => `'${c}'`).join(', ')})
         `);
         foundLower = new Set(result.recordset.map((r) => r.name.toLowerCase()));
@@ -224,7 +247,7 @@ async function checkDsl2PhysicalConstraintsAndViews(ctx: IntegrationCheckContext
                 `SELECT con.conname AS "name"
                    FROM pg_constraint con
                    JOIN pg_namespace nsp ON nsp.oid = con.connamespace
-                  WHERE nsp.nspname = '${ctx.Schema}'
+                  WHERE nsp.nspname = '${schemaName}'
                     AND con.conname IN (${expectedConstraints.map((c) => `'${c.toLowerCase()}'`).join(', ')})`,
             );
             foundLower = new Set(rows.map((r) => String(r.name).toLowerCase()));
@@ -236,11 +259,12 @@ async function checkDsl2PhysicalConstraintsAndViews(ctx: IntegrationCheckContext
     for (const name of expectedConstraints) {
         Assert(
             foundLower!.has(name.toLowerCase()),
-            `Constraint "${name}" must exist in schema ${ctx.Schema}`,
+            `Constraint "${name}" must exist in schema ${schemaName}`,
         );
     }
 
     const rv = RunView.FromMetadataProvider(ctx.Provider);
+    const systemUser = UserCache.Instance.GetSystemUser() ?? ctx.User;
     for (const entityName of [
         'MJ: Artifact Working States',
         'MJ: Artifacts',
@@ -248,14 +272,15 @@ async function checkDsl2PhysicalConstraintsAndViews(ctx: IntegrationCheckContext
         'MJ: Artifact Permissions',
         'MJ: Collections',
     ]) {
+        const actor = entityName === 'MJ: Artifact Working States' ? systemUser : ctx.User;
         const [simpleRes, countRes] = await Promise.all([
             rv.RunView<{ ID: string }>(
                 { EntityName: entityName, MaxRows: 3, ResultType: 'simple' },
-                ctx.User,
+                actor,
             ),
             rv.RunView<{ ID: string }>(
                 { EntityName: entityName, ResultType: 'count_only' },
-                ctx.User,
+                actor,
             ),
         ]);
         Assert(simpleRes.Success, `RunView (simple) failed on '${entityName}': ${simpleRes.ErrorMessage}`);
@@ -332,13 +357,14 @@ async function checkDsl3LiveWorkingStateAndDelegatedPerms(ctx: IntegrationCheckC
             `Failed to save MJArtifactVersionEntity: ${parentVer.LatestResult?.CompleteMessage ?? ''}`,
         );
 
-        // 3. Create MJArtifactWorkingStateEntity with binary Yjs state (base64) and verify 1:1 UQ constraint
+        // 3. Create MJArtifactWorkingStateEntity with binary Yjs state (base64) as systemUser and verify full multi-byte VARBINARY(MAX) round-trip + 1:1 UQ constraint
+        const systemUser = UserCache.Instance.GetSystemUser() ?? ctx.User;
         const sampleYjsBytes = Buffer.from([0x01, 0x03, 0x79, 0x6a, 0x73, 0x2d, 0x63, 0x72, 0x64, 0x74]);
         const expectedBase64 = sampleYjsBytes.toString('base64');
 
         workingState = await ctx.Provider.GetEntityObject<MJArtifactWorkingStateEntity>(
             'MJ: Artifact Working States',
-            ctx.User,
+            systemUser,
         );
         workingState.NewRecord();
         workingState.ArtifactID = parentDoc.ID;
@@ -349,33 +375,83 @@ async function checkDsl3LiveWorkingStateAndDelegatedPerms(ctx: IntegrationCheckC
             `Failed to save MJArtifactWorkingStateEntity: ${workingState.LatestResult?.CompleteMessage ?? ''}`,
         );
 
-        // Reload via RunView to verify VARBINARY round-trip and virtual view columns
-        const reloadedWsRes = await rv.RunView<{
+        // Verify IncludeInAPI=false rejects direct BaseEntity.Load() while server-side RunView + LoadFromData + Save() round-trips full multi-byte VARBINARY(MAX)
+        const reloadedEntity = await ctx.Provider.GetEntityObject<MJArtifactWorkingStateEntity>(
+            'MJ: Artifact Working States',
+            systemUser,
+        );
+        let directLoadBlocked = false;
+        try {
+            await reloadedEntity.Load(workingState.ID);
+        } catch (loadErr) {
+            directLoadBlocked = String(loadErr).includes('API is disabled');
+        }
+        Assert(directLoadBlocked, 'Direct BaseEntity.Load() must reject IncludeInAPI=false MJ: Artifact Working States (B1)');
+
+        const reloadedWsRes = await rv.RunView<Record<string, unknown> & {
             ID: string;
             ArtifactID: string;
             YjsState: string | Buffer | null;
-            Artifact: string;
+            Artifact: string | null;
         }>(
             {
                 EntityName: 'MJ: Artifact Working States',
                 ExtraFilter: `ID = '${workingState.ID}'`,
+                IncludeBinaryFields: true,
                 ResultType: 'simple',
             },
-            ctx.User,
+            systemUser,
         );
         Assert(reloadedWsRes.Success && reloadedWsRes.Results.length === 1, 'Working state row must reload via RunView');
         AssertEqual(reloadedWsRes.Results[0].Artifact, parentDoc.Name, 'Virtual Artifact column on vwArtifactWorkingStates');
 
+        const rawWsRow = reloadedWsRes.Results[0];
+        const normalizedWsRow: Record<string, unknown> =
+            rawWsRow.YjsState instanceof Uint8Array
+                ? {
+                      ...rawWsRow,
+                      YjsState: Buffer.from(
+                          rawWsRow.YjsState.buffer,
+                          rawWsRow.YjsState.byteOffset,
+                          rawWsRow.YjsState.byteLength,
+                      ).toString('base64'),
+                  }
+                : rawWsRow;
+
+        Assert(
+            await reloadedEntity.LoadFromData(normalizedWsRow),
+            'Working state must hydrate via server-side LoadFromData()',
+        );
+        AssertEqual(
+            reloadedEntity.YjsState,
+            expectedBase64,
+            'YjsState must preserve full multi-byte VARBINARY(MAX) payload without 1-byte truncation',
+        );
+
+        const updatedYjsBase64 = Buffer.from([0x01, 0x05, 0x79, 0x6a, 0x73, 0x2d, 0x76, 0x32]).toString('base64');
+        reloadedEntity.YjsState = updatedYjsBase64;
+        Assert(
+            await reloadedEntity.Save(),
+            `Server-side working state update via LoadFromData()+Save() failed: ${reloadedEntity.LatestResult?.CompleteMessage ?? ''}`,
+        );
+
         // Duplicate working state for the same ArtifactID must fail UQ_ArtifactWorkingState_ArtifactID
         const duplicateWs = await ctx.Provider.GetEntityObject<MJArtifactWorkingStateEntity>(
             'MJ: Artifact Working States',
-            ctx.User,
+            systemUser,
         );
         duplicateWs.NewRecord();
         duplicateWs.ArtifactID = parentDoc.ID;
         duplicateWs.YjsState = expectedBase64;
         const dupSaved = await duplicateWs.Save();
         Assert(!dupSaved, 'UQ_ArtifactWorkingState_ArtifactID must reject a second working state for the same ArtifactID');
+
+        // Verify MJArtifactEntityServer blocks self-delegation (B2)
+        parentDoc.DelegateEntityID = artifactsEnt!.ID;
+        parentDoc.DelegateRecordID = parentDoc.ID;
+        const selfDelegatedSaved = await parentDoc.Save();
+        Assert(!selfDelegatedSaved, 'MJArtifactEntityServer must reject self-delegation (B2)');
+        await parentDoc.Load(parentDoc.ID);
 
         // 4. Create inline OLE child Whiteboard delegated to parentDoc (O4)
         const registeredDelegate = MJGlobal.Instance.ClassFactory.CreateInstance<BaseArtifactPermissionDelegate>(

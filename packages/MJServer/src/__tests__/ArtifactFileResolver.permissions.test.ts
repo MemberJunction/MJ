@@ -151,8 +151,25 @@ function createFakeProvider(): {
                     ErrorMessage: '',
                     UserViewRunID: '',
                 };
+            case 'MJ: Artifact Versions': {
+                const matchingVersions = Object.values(VERSIONS)
+                    .filter((v) => filter.includes(v.ArtifactID.toLowerCase()))
+                    .map((v) => ({ ID: v.ID }));
+                return {
+                    Success: true,
+                    Results: matchingVersions,
+                    RowCount: matchingVersions.length,
+                    TotalRowCount: matchingVersions.length,
+                    ExecutionTime: 1,
+                    ErrorMessage: '',
+                    UserViewRunID: '',
+                };
+            }
             case 'MJ: Collection Artifacts': {
-                if (filter.includes(ARTIFACT_COLLECTION_SHARED.toLowerCase())) {
+                if (
+                    filter.includes(VERSION_SHARED.toLowerCase()) ||
+                    filter.includes(ARTIFACT_COLLECTION_SHARED.toLowerCase())
+                ) {
                     return {
                         Success: true,
                         Results: [{ CollectionID: COLLECTION_TEAM }],

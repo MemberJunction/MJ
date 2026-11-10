@@ -21,7 +21,7 @@ export type LibraryHubTab = 'overview' | 'collections' | 'all' | 'shared' | 'dri
 /**
  * Active navigation view inside `Navigator` mode.
  */
-export type LibraryNavigatorSection = 'all' | 'shared' | 'starred' | 'collection' | 'drive';
+export type LibraryNavigatorSection = 'all' | 'collections' | 'shared' | 'starred' | 'collection' | 'drive';
 
 /**
  * Item layout style in item grids/tables.

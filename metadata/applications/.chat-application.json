@@ -1,7 +1,7 @@
 {
   "fields": {
     "Name": "Chat",
-    "Description": "Agent conversations and background agent activity",
+    "Description": "Agent conversations, artifact collections, and background agent activity",
     "Icon": "fa-solid fa-comments",
     "DefaultForNewUser": true,
     "Color": "#9c27b0",
@@ -17,6 +17,13 @@
         "ResourceType": "Custom",
         "DriverClass": "ChatConversationsResource",
         "isDefault": true
+      },
+      {
+        "Label": "Collections",
+        "Icon": "fa-solid fa-folder-open",
+        "ResourceType": "Custom",
+        "DriverClass": "ChatCollectionsResource",
+        "isDefault": false
       },
       {
         "Label": "Agent Activity",

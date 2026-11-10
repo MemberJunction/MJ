@@ -13,7 +13,7 @@ import {
 } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { GraphQLDataProvider, GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
-import { DocumentImportExportService, SlideDeckExportService } from '@memberjunction/ng-artifacts';
+import { ArtifactFileService, DocumentImportExportService, SlideDeckExportService } from '@memberjunction/ng-artifacts';
 import { CollectionPermissionService } from './collection-permission.service';
 import { GraphQLAttachmentBlobStore } from './graphql-attachment-blob-store';
 
@@ -25,7 +25,30 @@ export type LibraryStarterKind = 'document' | 'spreadsheet' | 'presentation' | '
 /**
  * Export formats supported when publishing a native Library artifact version directly to an external Connected Drive.
  */
-export type LibraryDriveExportFormat = 'docx' | 'md' | 'xlsx' | 'csv' | 'pptx' | 'json' | 'sql' | 'txt';
+export type LibraryDriveExportFormat =
+  | 'original'
+  | 'docx'
+  | 'md'
+  | 'xlsx'
+  | 'csv'
+  | 'pptx'
+  | 'json'
+  | 'sql'
+  | 'txt';
+
+/**
+ * Thrown by {@link LibraryCreationService.PublishArtifactVersionToConnectedDrive} when a file with the
+ * target name already exists in the remote folder and `AllowOverwrite` has not been confirmed.
+ */
+export class RemoteDriveFileExistsError extends Error {
+  public readonly ObjectPath: string;
+
+  public constructor(objectPath: string, fileName: string) {
+    super(`A file named "${fileName}" already exists at "${objectPath}".`);
+    this.name = 'RemoteDriveFileExistsError';
+    this.ObjectPath = objectPath;
+  }
+}
 
 export interface CreateBlankArtifactOptions {
   Kind: LibraryStarterKind;
@@ -82,13 +105,25 @@ export interface PublishToConnectedDriveOptions {
   ArtifactName: string;
   VersionContent: string;
   VersionConfiguration?: string | null;
+  VersionContentMode?: MJArtifactVersionEntity['ContentMode'];
+  ArtifactVersionID?: string | null;
+  VersionFileID?: string | null;
+  VersionMimeType?: string | null;
+  VersionFileName?: string | null;
   Format: LibraryDriveExportFormat;
   AccountID: string;
   TargetFolderPrefix?: string;
   TargetFileName?: string;
+  AllowOverwrite?: boolean;
   CurrentUser: UserInfo;
-  StorageClientOverride?: Pick<GraphQLFileStorageClient, 'CreatePreAuthUploadUrl'>;
+  Provider?: IMetadataProvider;
+  StorageClientOverride?: Pick<GraphQLFileStorageClient, 'CreatePreAuthUploadUrl'> &
+    Partial<Pick<GraphQLFileStorageClient, 'ListObjects' | 'ObjectExists'>>;
   UploadBytesOverride?: (uploadUrl: string, bytes: Uint8Array, mimeType: string) => Promise<void>;
+  DownloadFileBytesOverride?: (params: {
+    ArtifactVersionID?: string | null;
+    FileID?: string | null;
+  }) => Promise<Uint8Array>;
 }
 
 export interface CreatedLibraryArtifactResult {
@@ -117,6 +152,7 @@ export class LibraryCreationService {
   private readonly docImportExport = inject(DocumentImportExportService);
   private readonly slideExport = inject(SlideDeckExportService);
   private readonly collectionPermissions = inject(CollectionPermissionService);
+  private readonly artifactFileService = inject(ArtifactFileService, { optional: true });
 
   private blobStoreOverride: GraphQLAttachmentBlobStore | null = null;
 
@@ -446,32 +482,71 @@ export class LibraryCreationService {
   }
 
   /**
-   * Exports a native MJ Artifact version into `.docx`, `.md`, `.xlsx`, `.csv`, `.pptx`, `.json`, `.sql`, or `.txt`
-   * bytes in memory and uploads it directly to an external Connected Drive path via `CreatePreAuthUploadUrl`.
+   * Exports a native MJ Artifact version into `.docx`, `.md`, `.xlsx`, `.csv`, `.pptx`, `.json`, `.sql`, `.txt`,
+   * or its original binary file bytes (`ContentMode === 'File'`), checks for target path collisions,
+   * and uploads directly to an external Connected Drive path via `CreatePreAuthUploadUrl`.
    *
    * **Zero `MJ: Files` database records are created.**
    */
   public async PublishArtifactVersionToConnectedDrive(
     options: PublishToConnectedDriveOptions,
   ): Promise<{ ObjectPath: string; ByteLength: number; MimeType: string }> {
-    const { bytes, mimeType, extension } = await this.serializeExportPayload(
-      options.ArtifactName,
-      options.VersionContent,
-      options.VersionConfiguration ?? null,
-      options.Format,
-      options.CurrentUser,
-    );
+    const isFileMode =
+      options.VersionContentMode === 'File' &&
+      Boolean(options.VersionFileID || options.ArtifactVersionID);
 
-    const baseFileName = (options.TargetFileName?.trim() || this.sanitizeFileName(options.ArtifactName)).replace(
-      new RegExp(`\\.${extension}$`, 'i'),
-      '',
-    );
-    const finalFileName = `${baseFileName}.${extension}`;
+    let bytes: Uint8Array;
+    let mimeType: string;
+    let extension: string;
+
+    if (isFileMode) {
+      bytes = await this.downloadFileVersionBytes(options);
+      extension =
+        this.extractExtension(options.VersionFileName ?? '') ||
+        this.extractExtension(options.TargetFileName ?? '') ||
+        this.extensionFromMime(options.VersionMimeType) ||
+        (options.Format !== 'original' ? options.Format : 'bin');
+      mimeType = options.VersionMimeType || this.inferMimeFromExtension(extension);
+    } else {
+      const serialized = await this.serializeExportPayload(
+        options.ArtifactName,
+        options.VersionContent,
+        options.VersionConfiguration ?? null,
+        options.Format,
+        options.CurrentUser,
+      );
+      bytes = serialized.bytes;
+      mimeType = serialized.mimeType;
+      extension = serialized.extension;
+    }
+
+    const rawBaseName =
+      options.TargetFileName?.trim() ||
+      (isFileMode && options.VersionFileName ? this.stripExtension(options.VersionFileName) : '') ||
+      this.sanitizeFileName(options.ArtifactName);
+    const baseFileName = extension
+      ? rawBaseName.replace(new RegExp(`\\.${extension}$`, 'i'), '')
+      : rawBaseName;
+    const finalFileName = extension ? `${baseFileName}.${extension}` : baseFileName;
     const cleanPrefix = (options.TargetFolderPrefix ?? '').replace(/^\/+|\/+$/g, '');
     const objectPath = cleanPrefix ? `${cleanPrefix}/${finalFileName}` : finalFileName;
 
     const storageClient =
       options.StorageClientOverride ?? new GraphQLFileStorageClient(GraphQLDataProvider.Instance);
+
+    if (!options.AllowOverwrite) {
+      const alreadyExists = await this.remoteObjectExists(
+        storageClient,
+        options.AccountID,
+        cleanPrefix,
+        finalFileName,
+        objectPath,
+      );
+      if (alreadyExists) {
+        throw new RemoteDriveFileExistsError(objectPath, finalFileName);
+      }
+    }
+
     const uploadTarget = await storageClient.CreatePreAuthUploadUrl(options.AccountID, objectPath, mimeType);
     if (!uploadTarget.success || !uploadTarget.uploadUrl) {
       throw new Error('Storage provider did not return a pre-authenticated upload URL for this Connected Drive.');
@@ -503,12 +578,24 @@ export class LibraryCreationService {
   }
 
   /**
-   * Returns recommended Connected Drive export formats for a given `DriverClass` or `ArtifactType` name.
+   * Returns recommended Connected Drive export formats for a given `DriverClass`, `ArtifactType` name,
+   * or binary `ContentMode = 'File'` artifact.
    */
   public GetSupportedDriveExportFormats(
     driverClass?: string | null,
     typeName?: string | null,
+    contentMode?: MJArtifactVersionEntity['ContentMode'] | null,
+    fileName?: string | null,
   ): Array<{ Format: LibraryDriveExportFormat; Label: string }> {
+    if (contentMode === 'File') {
+      const ext = this.extractExtension(fileName ?? '');
+      return [
+        {
+          Format: 'original',
+          Label: ext ? `Original File (.${ext})` : 'Original Binary File',
+        },
+      ];
+    }
     const dc = (driverClass ?? '').trim();
     const tn = (typeName ?? '').trim().toLowerCase();
     if (dc === 'MarkdownArtifactViewerPlugin' || tn.includes('markdown')) {
@@ -767,6 +854,7 @@ export class LibraryCreationService {
           mimeType: 'application/sql',
           extension: 'sql',
         };
+      case 'original':
       case 'txt':
         return {
           bytes: encoder.encode(content),
@@ -778,6 +866,88 @@ export class LibraryCreationService {
         return exhaustiveCheck;
       }
     }
+  }
+
+  private async downloadFileVersionBytes(options: PublishToConnectedDriveOptions): Promise<Uint8Array> {
+    if (options.DownloadFileBytesOverride) {
+      return options.DownloadFileBytesOverride({
+        ArtifactVersionID: options.ArtifactVersionID,
+        FileID: options.VersionFileID,
+      });
+    }
+
+    let downloadUrl: string | null = null;
+    if (options.ArtifactVersionID && this.artifactFileService) {
+      try {
+        downloadUrl = await this.artifactFileService.GetDownloadUrl(options.ArtifactVersionID);
+      } catch {
+        downloadUrl = null;
+      }
+    }
+
+    if (!downloadUrl && options.VersionFileID) {
+      const store = this.blobStoreOverride ?? new GraphQLAttachmentBlobStore();
+      downloadUrl = await store.GetDownloadUrl(
+        options.VersionFileID,
+        options.CurrentUser,
+        options.Provider,
+      );
+    }
+
+    if (!downloadUrl) {
+      throw new Error('Could not obtain a pre-authenticated download URL for this file artifact.');
+    }
+
+    const response = await fetch(downloadUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to download file artifact bytes (${response.status} ${response.statusText}).`);
+    }
+    return new Uint8Array(await response.arrayBuffer());
+  }
+
+  private async remoteObjectExists(
+    storageClient: Pick<GraphQLFileStorageClient, 'CreatePreAuthUploadUrl'> &
+      Partial<Pick<GraphQLFileStorageClient, 'ListObjects' | 'ObjectExists'>>,
+    accountId: string,
+    cleanPrefix: string,
+    fileName: string,
+    objectPath: string,
+  ): Promise<boolean> {
+    if (typeof storageClient.ObjectExists === 'function') {
+      return storageClient.ObjectExists(accountId, objectPath);
+    }
+    if (typeof storageClient.ListObjects === 'function') {
+      const listing = await storageClient.ListObjects(
+        accountId,
+        cleanPrefix ? `${cleanPrefix}/` : '',
+        '/',
+      );
+      return (listing.objects ?? []).some(
+        (obj) => !obj.isDirectory && (obj.name === fileName || obj.fullPath === objectPath),
+      );
+    }
+    return false;
+  }
+
+  private extensionFromMime(mimeType?: string | null): string {
+    const lower = (mimeType ?? '').trim().toLowerCase();
+    if (lower === 'application/pdf') return 'pdf';
+    if (lower === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'docx';
+    if (lower === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') return 'xlsx';
+    if (lower === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') return 'pptx';
+    if (lower === 'image/png') return 'png';
+    if (lower === 'image/jpeg') return 'jpg';
+    if (lower === 'image/gif') return 'gif';
+    if (lower === 'image/webp') return 'webp';
+    if (lower === 'image/svg+xml') return 'svg';
+    if (lower === 'video/mp4') return 'mp4';
+    if (lower === 'audio/mpeg') return 'mp3';
+    if (lower === 'text/csv') return 'csv';
+    if (lower === 'text/markdown') return 'md';
+    if (lower === 'application/json') return 'json';
+    if (lower === 'application/sql') return 'sql';
+    if (lower === 'text/plain') return 'txt';
+    return '';
   }
 
   private resolveBinaryArtifactType(

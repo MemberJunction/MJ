@@ -16,12 +16,14 @@ import { ArtifactVersionCompareComponent } from './version-diff/artifact-version
  * error state, the header (title, version, close → closed), and the showHeader gate.
  */
 
-@Component({ standalone: true, selector: 'mj-artifact-type-plugin-viewer', template: '' })
+@Component({ standalone: true, selector: 'mj-artifact-type-plugin-viewer', template: '<div data-testid="plugin-viewer-stub" [attr.data-readonly]="readonly"></div>' })
 class PluginViewerStub {
+  @Input() Provider: IMetadataProvider | null = null;
   @Input() artifactTypeName = ''; @Input() artifactVersion: unknown; @Input() contentType = ''; @Input() readonly = false;
   @Input() VisibleVersionNumbers: ReadonlyArray<number> | null = null;
   @Output() applyFormRequested = new EventEmitter<unknown>(); @Output() navigationRequest = new EventEmitter<unknown>();
   @Output() openEntityRecord = new EventEmitter<unknown>(); @Output() pluginLoaded = new EventEmitter<unknown>(); @Output() tabsChanged = new EventEmitter<unknown>();
+  @Output() ContentCommitted = new EventEmitter<string>();
 }
 @Component({ standalone: true, selector: 'mj-code-editor', template: '' })
 class CodeEditorStub { @Input() language = ''; @Input() lineWrapping = false; @Input() readonly = false; @Input() value = ''; }
@@ -382,5 +384,119 @@ describe('ArtifactViewerPanelComponent (DOM) — Version Compare entry in versio
     f.detectChanges();
     expect(f.componentInstance.IsCompareMode).toBe(false);
     expect(text(f, '.version-label')).toBe('v3');
+  });
+});
+
+describe('ArtifactViewerPanelComponent (DOM) — default read-only security (B3) & MAX(VersionNumber) commit (B5)', () => {
+  it('defaults canEdit to false, passes readonly=true to plugin viewer, and blocks OnPluginContentCommitted when canEdit is omitted', async () => {
+    const markdownArtifact = { Name: 'Q3 Report', Description: 'Quarterly numbers', Type: 'Markdown' } as unknown as MJArtifactEntity;
+    const f = render({
+      isLoading: false,
+      artifact: markdownArtifact,
+      allVersions: [VERSION],
+      selectedVersionNumber: 2,
+      artifactVersion: VERSION,
+      activeTab: 'display',
+      driverClass: 'MarkdownArtifactViewerPlugin',
+    });
+
+    expect(f.componentInstance.canEdit).toBe(false);
+    const stubEl = query(f, '[data-testid="plugin-viewer-stub"]');
+    expect(stubEl?.getAttribute('data-readonly')).toBe('true');
+
+    const saveSpy = vi.fn();
+    f.componentInstance.CurrentUser = { ID: 'u-1' } as NonNullable<ArtifactViewerPanelComponent['CurrentUser']>;
+    f.componentInstance.Provider = {
+      GetEntityObject: saveSpy,
+    } as unknown as IMetadataProvider;
+
+    await f.componentInstance.OnPluginContentCommitted('# Blocked edit');
+    expect(saveSpy).not.toHaveBeenCalled();
+  });
+
+  it('queries unscoped MAX(VersionNumber) and honors Save() return value in OnPluginContentCommitted when canEdit=true', async () => {
+    const savedRecords: Array<{ VersionNumber: number; Name: string; Content: string }> = [];
+    let shouldSaveSucceed = false;
+
+    const mockProvider = {
+      CurrentUser: { ID: 'u-1' },
+      Entities: [],
+      Roles: [],
+      EntityByName: () => undefined,
+      RunView: async (params: RunViewParams) => {
+        if (params.EntityName === 'MJ: Artifact Versions' && params.MaxRows === 1) {
+          return {
+            Success: true,
+            Results: [{ ID: 'ver-unscoped-5', VersionNumber: 5 }],
+            RowCount: 1,
+            TotalRowCount: 1,
+          } as unknown as RunViewResult;
+        }
+        return {
+          Success: true,
+          Results: [{ ID: 'v1', VersionNumber: 2 }],
+          RowCount: 1,
+          TotalRowCount: 1,
+        } as unknown as RunViewResult;
+      },
+      GetEntityObject: async () => {
+        const rec = {
+          ID: 'ver-new-6',
+          ArtifactID: '',
+          UserID: '',
+          VersionNumber: 0,
+          Name: '',
+          Content: '',
+          LatestResult: { Message: 'Database rejected write' },
+          NewRecord: () => undefined,
+          Save: async () => {
+            if (!shouldSaveSucceed) {
+              return false;
+            }
+            savedRecords.push({
+              VersionNumber: rec.VersionNumber,
+              Name: rec.Name,
+              Content: rec.Content,
+            });
+            return true;
+          },
+        };
+        return rec;
+      },
+    } as unknown as IMetadataProvider;
+
+    const notification = { CreateSimpleNotification: vi.fn() };
+    vi.spyOn(ArtifactViewerPanelComponent.prototype as unknown as OnInitProto, 'ngOnInit').mockResolvedValue(undefined);
+    const f = renderComponentFixture(ArtifactViewerPanelComponent, {
+      imports: CHILDREN,
+      declarations: [ArtifactViewerPanelComponent],
+      providers: [
+        { provide: MJNotificationService, useValue: notification },
+        { provide: ArtifactFileService, useValue: fileServiceStub },
+      ],
+      inputs: { artifactId: 'a1', canEdit: true, Provider: mockProvider },
+      setup: (c) => {
+        c.isLoading = false;
+        c.error = null;
+        c.artifact = { ID: 'a1', Name: 'Q3 Report' } as unknown as MJArtifactEntity;
+        c.allVersions = [VERSION];
+        c.selectedVersionNumber = 2;
+        c.artifactVersion = { ID: 'v1', VersionNumber: 2, Name: 'Q3 Report' } as unknown as MJArtifactVersionEntity;
+        c.CurrentUser = { ID: 'u-1' } as NonNullable<ArtifactViewerPanelComponent['CurrentUser']>;
+      },
+    });
+
+    // 1. Save() === false -> does NOT advance SelectedVersionNumber and notifies error
+    await f.componentInstance.OnPluginContentCommitted('# Failed save');
+    expect(f.componentInstance.SelectedVersionNumber).toBe(2);
+    expect(savedRecords).toHaveLength(0);
+    expect(notification.CreateSimpleNotification).toHaveBeenCalled();
+
+    // 2. Save() === true -> uses dbMax (5) + 1 = v6 instead of local 2 + 1 = v3
+    shouldSaveSucceed = true;
+    await f.componentInstance.OnPluginContentCommitted('# Succeeded save');
+    expect(savedRecords).toHaveLength(1);
+    expect(savedRecords[0].VersionNumber).toBe(6);
+    expect(f.componentInstance.SelectedVersionNumber).toBe(6);
   });
 });

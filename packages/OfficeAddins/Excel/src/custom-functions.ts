@@ -36,6 +36,8 @@ export interface ExcelAddinEvaluateCustomFunctionInput {
     Target: string;
     /** Optional saved User View name or ID when `Kind === 'View'` (`'(Default)'` or omitted uses default entity columns). */
     ViewNameOrId?: string;
+    /** Optional structured `Field='Value'` equality filter when `Kind === 'View'` (`A5`). */
+    Filter?: string;
     /** Caller-settable query parameters (`IsServerSet` parameters are refused by the server). */
     Parameters?: Record<string, ExcelParameterValue>;
     /** Positional arguments when the caller passed unnamed values to `=MJ.QUERY("Renewals", 2026)`. */
@@ -141,6 +143,13 @@ export function BuildExcelCustomFunctionsMetadata(): ExcelCustomFunctionsJsonMan
                     {
                         name: 'viewNameOrId',
                         description: 'Optional Saved User View name or UUID. Omit or pass "(Default)" for default columns.',
+                        type: 'string',
+                        dimensionality: 'scalar',
+                        optional: true
+                    },
+                    {
+                        name: 'filter',
+                        description: 'Optional structured equality filter (e.g. "Status=\'Active\'"). Raw SQL is rejected.',
                         type: 'string',
                         dimensionality: 'scalar',
                         optional: true
@@ -336,22 +345,34 @@ export class ExcelCustomFunctionCoordinator {
         }
     }
 
-    /** Evaluates `=MJ.VIEW(entityNameOrId, viewNameOrId?, includeHeaders?)` and returns a 2D spill matrix. */
+    /** Evaluates `=MJ.VIEW(entityNameOrId, viewNameOrId?, filterOrIncludeHeaders?, includeHeaders?)` and returns a 2D spill matrix. */
     public async EvaluateView(
         entityNameOrId: string,
         viewNameOrId?: string,
-        includeHeaders = true
+        filterOrIncludeHeaders?: string | boolean,
+        includeHeaders?: boolean
     ): Promise<ExcelCellValue[][]> {
         try {
             const target = String(entityNameOrId ?? '').trim();
             if (!target) {
                 throw new Error('Specify an Entity name or ID in =MJ.VIEW.');
             }
+            let filter: string | undefined;
+            let resolvedIncludeHeaders: boolean;
+            if (typeof filterOrIncludeHeaders === 'boolean') {
+                filter = undefined;
+                resolvedIncludeHeaders = filterOrIncludeHeaders;
+            } else {
+                const rawFilter = typeof filterOrIncludeHeaders === 'string' ? filterOrIncludeHeaders.trim() : '';
+                filter = rawFilter.length > 0 ? rawFilter : undefined;
+                resolvedIncludeHeaders = includeHeaders ?? true;
+            }
             const input: ExcelAddinEvaluateCustomFunctionInput = {
                 Kind: 'View',
                 Target: target,
                 ViewNameOrId: viewNameOrId ? String(viewNameOrId).trim() : undefined,
-                IncludeHeaders: Boolean(includeHeaders)
+                Filter: filter,
+                IncludeHeaders: Boolean(resolvedIncludeHeaders)
             };
             const out = await this.evaluateInput(input);
             return out.Matrix;

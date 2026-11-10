@@ -1,9 +1,11 @@
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
+    ComputeFrozenSnapshotHash,
     DocumentBlockExecutionResult,
     DocumentBlockSpec,
-    DocumentLiveBlockEngine
+    DocumentLiveBlockEngine,
+    FrozenBlockSnapshot
 } from './DocumentLiveBlockEngine.js';
 
 /**
@@ -123,7 +125,7 @@ export interface SlideRegionSpec {
      * Explicit {@link DocumentBlockSpec} when `Kind === 'mj-block'` (kept in sync with `MarkdownContent`).
      */
     BlockSpec?: DocumentBlockSpec;
-    /** Headline metric value when `Kind === 'big-number'` (e.g., `'$14.8M'` or `'99.98%'`). */
+    /** Headline metric value when `Kind === 'big-number'` (e.g., `'$14.8M'` or `'1,250'`). */
     BigNumberValue?: string;
     /** Metric label when `Kind === 'big-number'`. */
     BigNumberLabel?: string;
@@ -504,7 +506,6 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                     Mode: 'Live',
                     Title: 'Live Portfolio Initiatives (Viewer RLS/FLS)',
                     EntityName: 'MJ: Artifacts',
-                    ExtraFilter: 'IsActive = 1',
                     DisplayMode: 'table'
                 };
                 const blockDirective = DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(defaultBlock);
@@ -536,11 +537,11 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                         RegionID: 'kpi',
                         Label: 'Headline KPI Metric',
                         Kind: 'big-number',
-                        BigNumberValue: firstExisting?.BigNumberValue || '99.98%',
-                        BigNumberLabel: firstExisting?.BigNumberLabel || 'Platform SLA Uptime & Sync Reliability',
-                        BigNumberDelta: firstExisting?.BigNumberDelta || '+14.2% YoY Improvement',
+                        BigNumberValue: firstExisting?.BigNumberValue || '—',
+                        BigNumberLabel: firstExisting?.BigNumberLabel || 'Key Performance Indicator',
+                        BigNumberDelta: firstExisting?.BigNumberDelta || 'Target comparison',
                         MarkdownContent:
-                            firstExisting?.MarkdownContent || '99.98% — Platform SLA Uptime & Sync Reliability (+14.2% YoY)'
+                            firstExisting?.MarkdownContent || 'Key Performance Indicator — Replace with target metric details.'
                     }),
                     this.mergeOrCreateRegion(secondExisting, {
                         RegionID: 'context',
@@ -548,7 +549,7 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                         Kind: 'rich-text',
                         MarkdownContent:
                             secondExisting?.MarkdownContent ||
-                            '- Zero data-loss Yjs CRDT binary checkpoints in `MJ: Artifact Working States`\n- Sub-25ms cross-instance Redis room relay\n- Strict viewer-scoped permission enforcement'
+                            '- Zero data-loss Yjs CRDT binary checkpoints in `MJ: Artifact Working States`\n- Cross-instance room relay support\n- Strict viewer-scoped permission enforcement'
                     })
                 ];
 
@@ -559,10 +560,10 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                         Label: 'Featured Quote',
                         Kind: 'quote',
                         QuoteAttribution:
-                            firstExisting?.QuoteAttribution || 'VP of Enterprise Architecture, MemberJunction',
+                            firstExisting?.QuoteAttribution || 'Speaker Name, Title',
                         MarkdownContent:
                             firstExisting?.MarkdownContent ||
-                            '"Embedding live governed Entity Views and interactive OLE Whiteboards directly inside our executive slides eliminated our entire weekly deck-prep cycle."'
+                            '"Add a key takeaway or stakeholder quote for this section."'
                     })
                 ];
 
@@ -875,11 +876,16 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
         } = {}
     ): { Deck: SlideDeckSpec; AddedSlide: SlideSpec } {
         const layout: SlideLayoutKind = options.Layout ?? 'TitleAndBody';
-        const slideId = options.SlideID || `slide-${Date.now()}-${deck.Slides.length + 1}`;
+        const slideId = this.mintUniqueSlideId(deck.Slides, options.SlideID);
+        const existingBlockIds = this.collectDeckBlockIds(deck.Slides);
         const regions =
             options.Regions && options.Regions.length > 0
                 ? options.Regions.map((r) => ({ ...r }))
-                : this.BuildRegionsForLayout(layout);
+                : this.BuildRegionsForLayout(layout).map((r) =>
+                      r.BlockSpec && existingBlockIds.has(r.BlockSpec.BlockID.toLowerCase())
+                          ? this.cloneRegionWithFreshBlockIds(r, existingBlockIds)
+                          : r
+                  );
 
         const newSlide: SlideSpec = {
             SlideID: slideId,
@@ -915,7 +921,8 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
     }
 
     /**
-     * Duplicates an existing slide right after its current position.
+     * Duplicates an existing slide right after its current position, minting a unique `SlideID`
+     * and fresh `BlockID`s for any embedded MJ blocks on the duplicated regions (`D6`).
      */
     public DuplicateSlide(deck: SlideDeckSpec, slideId: string): { Deck: SlideDeckSpec; DuplicatedSlide: SlideSpec | null } {
         const index = deck.Slides.findIndex((s) => s.SlideID === slideId || UUIDsEqual(s.SlideID, slideId));
@@ -923,11 +930,14 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
             return { Deck: deck, DuplicatedSlide: null };
         }
         const source = deck.Slides[index];
-        const copyId = `slide-${Date.now()}-copy`;
+        const copyId = this.mintUniqueSlideId(deck.Slides);
+        const usedBlockIds = this.collectDeckBlockIds(deck.Slides);
+        const clonedSource = this.cloneSlide(source);
         const copy: SlideSpec = {
-            ...this.cloneSlide(source),
+            ...clonedSource,
             SlideID: copyId,
-            Title: `${source.Title} (Copy)`
+            Title: `${source.Title} (Copy)`,
+            Regions: clonedSource.Regions.map((region) => this.cloneRegionWithFreshBlockIds(region, usedBlockIds))
         };
         const nextSlides = [...deck.Slides.map((s) => this.cloneSlide(s))];
         nextSlides.splice(index + 1, 0, copy);
@@ -1205,17 +1215,21 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                 if (!result || !result.Success) {
                     return { ...region };
                 }
+                const snapshotBase: FrozenBlockSnapshot = {
+                    FrozenAt: frozenAt,
+                    FrozenByUserID: frozenByUserId,
+                    FrozenByUserName: frozenByUserName,
+                    Columns: result.Columns,
+                    Rows: result.Rows,
+                    TotalRowCount: result.TotalRowCount,
+                    SecurityWarningAcknowledged: true
+                };
                 const frozenBlock: DocumentBlockSpec = {
                     ...block,
                     Mode: 'Frozen',
                     FrozenSnapshot: {
-                        FrozenAt: frozenAt,
-                        FrozenByUserID: frozenByUserId,
-                        FrozenByUserName: frozenByUserName,
-                        Columns: result.Columns,
-                        Rows: result.Rows,
-                        TotalRowCount: result.TotalRowCount,
-                        SecurityWarningAcknowledged: true
+                        ...snapshotBase,
+                        SnapshotContentHash: ComputeFrozenSnapshotHash(snapshotBase)
                     }
                 };
                 return {
@@ -1343,6 +1357,84 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
         };
     }
 
+    private mintUniqueSlideId(existingSlides: ReadonlyArray<SlideSpec>, requestedId?: string): string {
+        const existingLower = new Set(existingSlides.map((s) => s.SlideID.toLowerCase()));
+        if (requestedId && requestedId.trim().length > 0 && !existingLower.has(requestedId.trim().toLowerCase())) {
+            return requestedId.trim();
+        }
+        let candidate = `slide-${generateRandomUuid()}`;
+        while (existingLower.has(candidate.toLowerCase())) {
+            candidate = `slide-${generateRandomUuid()}`;
+        }
+        return candidate;
+    }
+
+    private collectDeckBlockIds(slides: ReadonlyArray<SlideSpec>): Set<string> {
+        const used = new Set<string>();
+        for (const slide of slides) {
+            for (const region of slide.Regions) {
+                if (region.BlockSpec?.BlockID) {
+                    used.add(region.BlockSpec.BlockID.toLowerCase());
+                }
+                const segments = DocumentLiveBlockEngine.Instance.ParseMarkdownDirectives(region.MarkdownContent ?? '');
+                for (const seg of segments) {
+                    if (seg.Type === 'mj-block' && seg.BlockSpec?.BlockID) {
+                        used.add(seg.BlockSpec.BlockID.toLowerCase());
+                    }
+                }
+            }
+        }
+        return used;
+    }
+
+    private cloneRegionWithFreshBlockIds(region: SlideRegionSpec, usedBlockIds: Set<string>): SlideRegionSpec {
+        const mintBlockId = (): string => {
+            let next = `blk-${generateRandomUuid()}`;
+            while (usedBlockIds.has(next.toLowerCase())) {
+                next = `blk-${generateRandomUuid()}`;
+            }
+            usedBlockIds.add(next.toLowerCase());
+            return next;
+        };
+
+        let nextMarkdown = region.MarkdownContent ?? '';
+        let nextBlockSpec = region.BlockSpec ? { ...region.BlockSpec } : undefined;
+        const blockIdMap = new Map<string, string>();
+
+        if (nextBlockSpec?.BlockID) {
+            const freshId = mintBlockId();
+            blockIdMap.set(nextBlockSpec.BlockID, freshId);
+            nextBlockSpec = { ...nextBlockSpec, BlockID: freshId };
+        }
+
+        if (nextMarkdown.includes(':::mj-block')) {
+            const segments = DocumentLiveBlockEngine.Instance.ParseMarkdownDirectives(nextMarkdown);
+            const parts: string[] = [];
+            for (const seg of segments) {
+                if (seg.Type === 'mj-block' && seg.BlockSpec) {
+                    const freshId = blockIdMap.get(seg.BlockSpec.BlockID) ?? mintBlockId();
+                    blockIdMap.set(seg.BlockSpec.BlockID, freshId);
+                    const clonedSpec: DocumentBlockSpec = { ...seg.BlockSpec, BlockID: freshId };
+                    if (!nextBlockSpec) {
+                        nextBlockSpec = clonedSpec;
+                    }
+                    parts.push(DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(clonedSpec));
+                } else {
+                    parts.push(seg.RawText);
+                }
+            }
+            nextMarkdown = parts.join('\n');
+        } else if (nextBlockSpec) {
+            nextMarkdown = DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(nextBlockSpec);
+        }
+
+        return {
+            ...region,
+            MarkdownContent: nextMarkdown,
+            BlockSpec: nextBlockSpec
+        };
+    }
+
     private renumberSlides(slides: SlideSpec[]): SlideSpec[] {
         return slides.map((s, idx) => ({
             ...s,
@@ -1434,4 +1526,22 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
 
 function normalizedSlidesRegions(regions: SlideRegionSpec[]): SlideRegionSpec[] {
     return regions.map((r) => ({ ...r }));
+}
+
+function generateRandomUuid(): string {
+    if (typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.randomUUID === 'function') {
+        return globalThis.crypto.randomUUID();
+    }
+    const bytes = new Uint8Array(16);
+    if (typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.getRandomValues === 'function') {
+        globalThis.crypto.getRandomValues(bytes);
+    } else {
+        for (let i = 0; i < 16; i++) {
+            bytes[i] = Math.floor(Math.random() * 256);
+        }
+    }
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }

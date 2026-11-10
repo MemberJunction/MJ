@@ -101,7 +101,7 @@ Search, vector sync, export, diff and every existing reader of an artifact use t
 
 **D8. Word and Google Docs: import, export and link. No two-way sync.**
 
-**D9. Sheets' formula engine is not ours to write.** Phase 3 starts with a spike between Univer's open-source core and IronCalc (§ 6.1). HyperFormula only with a commercial license: MJ is BUSL-1.1, so its GPLv3 option is out.
+**D9. Sheets' formula engine is a BUSL-compatible isomorphic TypeScript engine (`SpreadsheetEngine`).** Evaluating HyperFormula (GPLv3 incompatible with MJ's BUSL-1.1 / MIT packages without a commercial license), Univer OSS (heavy DOM/DI bundle footprint on headless Node server and agent tool paths, with collaborative editing and `.xlsx` gated behind its commercial Pro tier), and IronCalc (early-stage WASM binary distribution friction across browser + Node) led to a focused, zero-dependency isomorphic TypeScript lexical tokenizer + cached AST compiler + iterative topological DAG evaluator in `@memberjunction/core-entities` (`SpreadsheetEngine`, § 6.1). It runs identically in browser editors, headless `MJServer` collaboration rooms, and `SpreadsheetToolLibrary` agent runs, with incremental dirty-subgraph recalculation and explicit Excel parity for the core association spreadsheet function set.
 
 **D10. One data API for every consumer.** Blocks, sheet ranges, the add-ins and generated files all fetch rows the same way: a query (with parameters) or a view, run as the caller, through the field-level output projection, with server-set parameters taken only from the server. Phase 1 builds it, because blocks need it.
 
@@ -270,23 +270,32 @@ Built in Phase 1 with the docs editor; slides and sheets reuse all of it.
 
 ## 6. Phase 3: Sheets
 
-### 6.1 The engine spike
+### 6.1 The engine decision (`SpreadsheetEngine`)
 
-Before anything else in Phase 3, and able to run during Phase 1 because it depends on nothing here:
+Evaluating the external engine candidates settled the architecture for `@memberjunction/core-entities`:
 
-| Candidate | License | Gives | Catch |
+| Candidate | License | Evaluation finding | Outcome |
 |---|---|---|---|
-| [Univer](https://github.com/dream-num/univer) open-source core | Apache-2.0 | Engine and canvas grid | Co-editing and `.xlsx` import and export are its paid Pro tier; we'd use Yjs and `exceljs` instead |
-| [IronCalc](https://github.com/ironcalc/IronCalc) | MIT or Apache-2.0 | Engine in Rust, with WASM and Node bindings | Young (0.7 to 0.8); no grid, so we build one |
-| [HyperFormula](https://hyperformula.handsontable.com/docs/guide/licensing.md) | GPLv3 or commercial | The most mature JavaScript engine | GPLv3 is out under BUSL-1.1; a commercial license only |
+| [HyperFormula](https://hyperformula.handsontable.com/docs/guide/licensing.md) | GPLv3 or commercial | Mature JS engine, but GPLv3 is incompatible with MJ's BUSL-1.1 / MIT packages without a paid OEM license | Rejected (license incompatibility) |
+| [Univer](https://github.com/dream-num/univer) open-source core | Apache-2.0 | Heavy RxJS/DI/DOM-oriented bundle bloat on headless Node server and agent paths (`@memberjunction/ai-agents`), while collaborative editing and `.xlsx` import/export sit in its commercial Pro tier | Rejected (bundle bloat & split tier) |
+| [IronCalc](https://github.com/ironcalc/IronCalc) | MIT / Apache-2.0 | Rust + WASM engine; requires shipping and initializing `.wasm` binaries across browser bundlers, Node ESM/CJS hosts, and Vitest workers, and still provides no grid or Yjs/stable-ID binding | Rejected (WASM packaging friction) |
+| **`SpreadsheetEngine` (`@memberjunction/core-entities`)** | **MJ Core (MIT)** | **Zero-dependency isomorphic TypeScript lexical tokenizer + cached AST compiler + iterative topological DAG evaluator with incremental dirty-subgraph recalculation** | **Selected** |
 
-**The test:** each candidate must run headless on the server (agents recalculate there), map cleanly onto Yjs, cover the functions associations use, and stay responsive at roughly 100,000 cells. The result settles O7.
+**Supported architecture & Excel function scope:**
+- **Isomorphic & bounded:** Runs identically in the browser, in `MJServer`, and inside `SpreadsheetToolLibrary` with zero DOM or Node native dependencies, bounded `.xlsx` ZIP/DEFLATE limits (15 MB compressed, 32 MB total uncompressed, 16 MB per entry), and iterative topological evaluation (zero call-stack recursion even on multi-thousand-row running-total chains, `#CYCLE!` cycle detection, and sub-millisecond dirty-subgraph recalculation on single-cell edits).
+- **Excel function scope:**
+  - *Math & aggregation:* `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`, `COUNTA`, `COUNTBLANK`, `PRODUCT`, `SUMPRODUCT`, `ROUND` (decimal-scaled half-away-from-zero), `ROUNDUP`, `ROUNDDOWN`, `INT`, `FLOOR`, `CEILING`, `ABS`, `MOD` (floored divisor sign), `POWER`, `SQRT`, scientific notation (`1e-11`), and postfix `%`.
+  - *Conditional aggregates (with `*` / `?` wildcards and Excel blank-cell semantics):* `SUMIF`, `SUMIFS`, `COUNTIF`, `COUNTIFS`, `AVERAGEIF`, `AVERAGEIFS`.
+  - *Lookup & reference:* `VLOOKUP` (exact & sorted approximate), `HLOOKUP`, `XLOOKUP` (with `if_not_found` and `match_mode`), `INDEX` (2D & 1D horizontal/vertical), `MATCH` (`1`, `0`, `-1`), `ROW`, `COLUMN`, `ROWS`, `COLUMNS`, cross-sheet quoted references (`'FY24 Q1'!$B$2`), and named ranges.
+  - *Logical, information & text:* `IF`, `IFS`, `AND`, `OR`, `NOT`, `IFERROR`, `IFNA` (catches `#N/A` distinctly), `ISBLANK`, `ISNUMBER`, `ISTEXT`, `ISERROR`, `ISNA`, `CONCAT`, `CONCATENATE`, `LEFT`, `RIGHT`, `MID`, `LEN`, `LOWER`, `UPPER`, `PROPER`, `TRIM`, `SUBSTITUTE`, `FIND`, `SEARCH`, `VALUE`, `TEXT`.
+  - *1900 serial dates:* `TODAY`, `NOW`, `DATE`, `YEAR`, `MONTH`, `DAY`, `DAYS`, `EDATE`, `EOMONTH` (native numeric serial arithmetic such as `=TODAY()+7` and OOXML date `numFmtId` formatting).
+  - *Viewer-scoped MJ functions:* `=MJ.QUERY(queryName, ...)` and `=MJ.VIEW(entityName, viewName?, filter?)`, stripped of viewer-scoped values on serialization so persisted versions never leak another user's rows.
 
 ### 6.2 Model
 
-- **A workbook** is a set of tabs; each tab's cells are a Yjs map.
-- **Rows and columns have stable ids.** Formulas are stored against those ids and shown as A1 references, so one person inserting a row while another writes `=SUM(B2:B9)` leaves the formula right.
-- **Artifact type (D4):** "Excel Spreadsheet" is upgraded in place. Saved versions stay `.xlsx`, written by `exceljs`, so `ExcelToolLibrary`, `DocumentParsing` and downloads keep working. MJ-only features (bound ranges, MJ functions) go in the version's `Configuration`.
+- **A workbook** is a set of tabs; each tab's cells synchronize over Yjs and serialize cleanly to JSON and `.xlsx`.
+- **Rows and columns have monotonic stable ids.** Formulas compile to `@CELL` / `@RANGE` / `@SHEET_CELL` / `@SHEET_RANGE` stable references and decompile back to A1 references (shrinking surviving endpoints on row/column deletion and shifting named ranges, charts, live tables, validations, conditional formats, sort specs, and filters), so one person inserting or deleting rows while another writes `=SUM(B2:B9)` leaves every reference intact.
+- **Artifact type (D4):** "Excel Spreadsheet" is upgraded in place (`SpreadsheetArtifactViewerPlugin` + `SpreadsheetToolLibrary`). `.xlsx` import/export supports shared formulas (`<f t="shared"/>`), date serial `numFmtId`s, and a hidden `_mj_sheets_meta` round-trip sheet stripped of live/spilled viewer-scoped cells.
 
 ### 6.3 v1
 
@@ -398,7 +407,7 @@ Remaining work proceeds in **three sequential waves**, where each wave must reac
 2. **Wave 2 — Slides (§ 5):**
    - Structured JSON deck schema (`Presentation` artifact type), theme token inheritance, 7 canonical slide layouts, master fields, speaker notes, presenter view (current/next slide, notes, timer), keyboard-driven presentation mode, live MJ blocks + embedded OLE `Artifact` / Whiteboard regions in slide regions, anchored `SlideRegion` comments, `SlideDeckToolLibrary` (`BaseArtifactToolLibrary`), and `.pptx` (`pptxgenjs` + live block rendering) / `.pdf` export.
 3. **Wave 3 — Sheets (§ 6) + Track A Custom Functions (§ 7.2):**
-   - Sheets engine integration (Univer OSS core vs. IronCalc evaluation & integration), multi-sheet tabs, sorting/filtering, number formatting, cell validation, named ranges, charts, `=MJ.QUERY(name, params...)` and `=MJ.VIEW(entity, view, filter)` custom functions (viewer-scoped, batched), Range Sources bound to Entities/Views/Queries with refresh & freeze, anchored `SheetRange` comments, `SpreadsheetToolLibrary` (`BaseArtifactToolLibrary`) with headless server-side recalculation, `.xlsx` (`exceljs`) / `.csv` import & export, and Excel `=MJ.QUERY(...)` / `=MJ.VIEW(...)` custom functions in `packages/OfficeAddins/Excel`.
+   - BUSL-compatible isomorphic TypeScript `SpreadsheetEngine` (lexical tokenizer + cached AST compiler + iterative topological DAG evaluator with incremental dirty-subgraph recalculation), multi-sheet tabs, sorting/filtering, number & 1900 serial date formatting, cell validation, conditional formatting, named ranges, charts, `=MJ.QUERY(name, params...)` and `=MJ.VIEW(entity, view, filter)` custom functions (viewer-scoped, stripped on serialization), Range Sources bound to Entities/Views/Queries with refresh & cryptographic freeze verification, anchored `SheetRange` comments, `SpreadsheetToolLibrary` (`BaseArtifactToolLibrary`) with headless server-side recalculation, `.xlsx` / `.csv` import & export, and Excel `=MJ.QUERY(...)` / `=MJ.VIEW(...)` custom functions in `packages/OfficeAddins/Excel` & `packages/OfficeAddins/ExcelServer`.
 
 ## 10. Settled defaults for O1–O10
 
@@ -408,7 +417,7 @@ Remaining work proceeds in **three sequential waves**, where each wave must reac
 - **O4 (Delegate permissions):** **Settled — Nullable `DelegateEntityID` + `DelegateRecordID` on `MJ: Artifacts` (or server permission hook registry).** When an artifact is owned by a domain record (e.g., a Collaboration Space Item), the server permission check resolves read/edit through a registered `IArtifactPermissionDelegate` for that entity (`BaseSingleton` registry) and falls back to `MJ: Artifact Permissions` when `DelegateEntityID` is null.
 - **O5 (Frozen block visibility):** **Settled — Visible to everyone who can read the document, with an explicit confirmation & audit banner.** Freezing is a deliberate act of publishing; the freeze confirmation modal explicitly warns the author that current rendered values will be saved into the document version for all document readers, and the block records `FrozenAt`, `FrozenByUserID`, and `FrozenByUserName`.
 - **O6 (Live blocks in Slides):** **Settled — Refresh on deck open, freeze when presentation mode starts, with a one-click refresh button in presenter toolbar.** Prevents mid-presentation layout shifts or loading spinners while keeping numbers current when opening or starting a talk.
-- **O7 (Sheets engine):** **Settled — Univer OSS core primary (MIT, virtualized canvas, custom functions, headless Node formula engine), with IronCalc as fallback if bundle/license check fails.** Must pass headless server-side recalculation in Node and 100k-cell scroll responsiveness.
+- **O7 (Sheets engine):** **Settled — Isomorphic TypeScript `SpreadsheetEngine` in `@memberjunction/core-entities` (lexical AST + iterative topological DAG evaluator with incremental dirty-subgraph recalculation).** Avoids HyperFormula's GPLv3 license conflict with MJ's BUSL-1.1 / MIT packages, Univer OSS's heavy DOM/DI bundle bloat on headless Node server and agent paths, and IronCalc's WASM packaging friction while delivering Excel-parity semantics across core math, text, logical, lookup (`VLOOKUP`/`XLOOKUP`/`INDEX`/`MATCH`), conditional aggregate (`SUMIFS`/`COUNTIFS`/`AVERAGEIFS`), 1900 serial date, and viewer-scoped `=MJ.QUERY`/`=MJ.VIEW` functions (§ 6.1).
 - **O8 (Real Excel / Google verification matrix):** Mac `WEF` sideloading and `_mj_excel` hydration verified in [#6214](https://github.com/MemberJunction/MJ/pull/6214); Automated Playwright tests cover `<mj-office-connect-panel>`, workbook generation (`ExcelAddin.GenerateWorkbook`), and custom function evaluation endpoints.
 - **O9 (Product names in Explorer):** **Settled — Docs, Slides, Sheets.**
 - **O10 (Office connection key minting):** **Settled — `ExcelAddin.CreateConnection` mints the narrowly scoped (`view:run`, `query:run`) connection key on behalf of any authenticated user who has permission to run views/queries,** while enforcing user-level ownership (`UserID = contextUser.ID`) so users can always view and revoke their own connected Office keys without requiring broad table-level `Create` permission on `MJ: API Keys`.
@@ -418,8 +427,8 @@ Remaining work proceeds in **three sequential waves**, where each wave must reac
 - Two-way sync with Word or Google Docs.
 - Offline editing.
 - Free-form slide layouts as the slide deck's own canvas model (slide layouts stay structured; when a slide needs a free-form board or diagram, embed a Whiteboard `Artifact` block in a slide region per § 3.4.1).
-- Pivot tables, macros or conditional formatting in v1.
-- A formula engine of our own.
+- Pivot tables or VBA/macros.
+- Exotic statistical, financial, or engineering Excel function libraries beyond the documented association spreadsheet scope in § 6.1 (workbooks using specialized desktop-only Excel functions round-trip cleanly via `.xlsx` import/export).
 - Replacing Word, PowerPoint, Excel or Google's tools. MJ links to them and exports to them.
 
 ## 12. Side finding (resolved)

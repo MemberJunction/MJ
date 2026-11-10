@@ -10,7 +10,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { CompositeKey, RunView, UserInfo } from '@memberjunction/core';
+import { CompositeKey, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
 import {
   ArtifactMetadataEngine,
   FileStorageEngineBase,
@@ -78,6 +78,18 @@ const SETTING_SURFACE_MODE = 'Library.SurfaceMode';
 const SETTING_LIST_STYLE = 'Library.ListStyle';
 const SETTING_STARRED_IDS = 'Library.StarredArtifactIDs';
 
+const VERSION_SUMMARY_FIELDS: string[] = [
+  'ID',
+  'ArtifactID',
+  'VersionNumber',
+  'Name',
+  'Description',
+  'ContentMode',
+  'MimeType',
+  'FileName',
+  '__mj_UpdatedAt',
+];
+
 export interface LibraryExternalRouteParams {
   mode?: string | null;
   tab?: string | null;
@@ -102,6 +114,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   @Input() EnvironmentId: string = MJEnvironmentEntityExtended.DefaultEnvironmentID;
   @Input() InitialMode: LibrarySurfaceMode | null = null;
   @Input() InitialHubTab: LibraryHubTab | null = null;
+  @Input() InitialSection: LibraryNavigatorSection | null = null;
   @Input() InitialDriveMode = false;
   @Input() StorageClientOverride: GraphQLFileStorageClient | null = null;
 
@@ -155,6 +168,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
 
   public IsExportDriveDialogOpen = false;
   public ExportingItem: LibraryItemSummary | null = null;
+  public ExportingVersionNumber: number | null = null;
 
   public IsCollectionFormOpen = false;
   public EditingCollectionEntity: MJCollectionEntity | undefined = undefined;
@@ -216,6 +230,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   private collectionPermByColId = new Map<string, CollectionPermission>();
   private collectionLinksByCollectionAndVersion = new Map<string, string>();
   private pendingExternalParams: LibraryExternalRouteParams | null = null;
+  private preferredSurfaceMode: LibrarySurfaceMode = 'hub';
   private isDestroyed = false;
 
   private readonly cdr = inject(ChangeDetectorRef);
@@ -230,6 +245,9 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     }
     if (this.InitialHubTab) {
       this.HubTab = this.InitialHubTab;
+    }
+    if (this.InitialSection) {
+      this.NavigatorSection = this.InitialSection;
     }
     if (this.InitialDriveMode) {
       this.SurfaceMode = 'hub';
@@ -404,6 +422,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     if (this.NavigatorSection === 'drive' && this.SelectedDrive) {
       return this.SelectedDrive.AccountName;
     }
+    if (this.NavigatorSection === 'collections') return 'Collections';
     if (this.NavigatorSection === 'shared') return 'Shared with Me';
     if (this.NavigatorSection === 'starred') return 'Starred Items';
     return 'All Library Items';
@@ -415,6 +434,9 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     }
     if (this.NavigatorSection === 'drive' && this.SelectedDrive) {
       return `${this.SelectedDrive.ProviderName} · Dynamic remote browsing`;
+    }
+    if (this.NavigatorSection === 'collections') {
+      return 'Organize and share documents, spreadsheets, presentations, and artifacts in folders';
     }
     if (this.NavigatorSection === 'shared') {
       return 'Documents, spreadsheets, slides, and collections shared with you';
@@ -436,6 +458,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       return;
     }
     this.applyRouteParamsInternal(params);
+    this.emitWorkspaceState();
     this.cdr.detectChanges();
   }
 
@@ -443,6 +466,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     this.IsFullCanvasOpen = false;
     this.SurfaceMode = mode;
     if (persistPreference) {
+      this.preferredSurfaceMode = mode;
       this.saveSettingSafe(SETTING_SURFACE_MODE, mode);
     }
     if (mode === 'navigator' && this.NavigatorSection === 'drive' && !this.SelectedDriveId && this.ConnectedDrives.length > 0) {
@@ -465,7 +489,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     this.cdr.detectChanges();
   }
 
-  public SelectNavigatorView(section: 'all' | 'shared' | 'starred'): void {
+  public SelectNavigatorView(section: 'all' | 'collections' | 'shared' | 'starred'): void {
     this.SurfaceMode = 'navigator';
     this.NavigatorSection = section;
     this.SelectedCollectionId = null;
@@ -498,6 +522,19 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     } else {
       this.NavigatorSection = 'drive';
     }
+    this.emitWorkspaceState();
+    this.cdr.detectChanges();
+  }
+
+  public OnDrivePrefixChange(prefix: string): void {
+    this.DriveFolderPrefix = prefix;
+    this.emitWorkspaceState();
+    this.cdr.detectChanges();
+  }
+
+  public OnDriveBackRequested(): void {
+    this.SelectedDriveId = null;
+    this.DriveFolderPrefix = '';
     this.emitWorkspaceState();
     this.cdr.detectChanges();
   }
@@ -774,10 +811,19 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     this.cdr.detectChanges();
   }
 
-  public OpenExportToDriveModal(item: LibraryItemSummary | null, event?: MouseEvent): void {
+  public OpenExportToDriveModal(
+    item: LibraryItemSummary | null,
+    event?: MouseEvent,
+    versionNumber?: number,
+  ): void {
     event?.stopPropagation();
     if (!item) return;
     this.ExportingItem = item;
+    this.ExportingVersionNumber =
+      versionNumber ??
+      (UUIDsEqual(this.ActiveArtifactId, item.Id) && this.ActiveVersionNumber != null
+        ? this.ActiveVersionNumber
+        : item.LatestVersionNumber);
     this.IsExportDriveDialogOpen = true;
     this.cdr.detectChanges();
   }
@@ -795,14 +841,29 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
         this.EffectiveUser,
       );
       const loaded = await entity.Load(linkId);
-      if (loaded && (await entity.Delete())) {
+      if (!loaded) {
         this.notifications.CreateSimpleNotification(
-          `Removed "${item.Name}" from collection`,
-          'info',
-          2500,
+          entity.LatestResult?.Message || `Could not locate "${item.Name}" link in collection.`,
+          'error',
+          4000,
         );
-        await this.ReloadWorkspaceData();
+        return;
       }
+      const deleted = await entity.Delete();
+      if (!deleted) {
+        this.notifications.CreateSimpleNotification(
+          entity.LatestResult?.Message || `Failed to remove "${item.Name}" from collection.`,
+          'error',
+          4000,
+        );
+        return;
+      }
+      this.notifications.CreateSimpleNotification(
+        `Removed "${item.Name}" from collection`,
+        'info',
+        2500,
+      );
+      await this.ReloadWorkspaceData();
     } catch (err) {
       this.notifications.CreateSimpleNotification(
         err instanceof Error ? err.message : 'Failed to remove item from collection.',
@@ -850,10 +911,17 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       );
       link.CollectionID = node.Id;
       link.ArtifactVersionID = item.LatestVersionId;
-      if (await link.Save()) {
-        this.notifications.CreateSimpleNotification(`Added "${item.Name}" to "${node.Name}"`, 'success', 2500);
-        await this.ReloadWorkspaceData();
+      const saved = await link.Save();
+      if (!saved) {
+        this.notifications.CreateSimpleNotification(
+          link.LatestResult?.Message || `Could not add "${item.Name}" to "${node.Name}".`,
+          'error',
+          4000,
+        );
+        return;
       }
+      this.notifications.CreateSimpleNotification(`Added "${item.Name}" to "${node.Name}"`, 'success', 2500);
+      await this.ReloadWorkspaceData();
     } catch (err) {
       this.notifications.CreateSimpleNotification(
         err instanceof Error ? err.message : 'Could not add item to collection.',
@@ -912,100 +980,31 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     this.LoadError = null;
     try {
       const md = this.ProviderToUse;
-      const envFilter = `EnvironmentID='${EscapeSQLString(this.EffectiveEnvironmentId)}'`;
-      const userFilter = `UserID='${EscapeSQLString(user.ID)}'`;
 
       await ArtifactMetadataEngine.Instance.Config(false, user, md);
       const artifactTypes = ArtifactMetadataEngine.Instance.ArtifactTypes;
 
       const rv = RunView.FromMetadataProvider(md);
-      const [
-        artifactsRes,
-        versionsRes,
-        collectionsRes,
-        collectionLinksRes,
-        artifactPermsRes,
-        collectionPermsRes,
-      ] = await Promise.all([
-        rv.RunView<MJArtifactEntity>(
-          {
-            EntityName: 'MJ: Artifacts',
-            ExtraFilter: envFilter,
-            OrderBy: '__mj_UpdatedAt DESC',
-            MaxRows: 500,
-            ResultType: 'entity_object',
-          },
-          user,
-        ),
-        rv.RunView<VersionSummaryRow>(
-          {
-            EntityName: 'MJ: Artifact Versions',
-            Fields: [
-              'ID',
-              'ArtifactID',
-              'VersionNumber',
-              'Name',
-              'Description',
-              'ContentMode',
-              'MimeType',
-              'FileName',
-              '__mj_UpdatedAt',
-            ],
-            OrderBy: 'VersionNumber DESC',
-            MaxRows: 2500,
-            ResultType: 'simple',
-          },
-          user,
-        ),
-        rv.RunView<MJCollectionEntity>(
-          {
-            EntityName: 'MJ: Collections',
-            ExtraFilter: envFilter,
-            OrderBy: 'Name ASC',
-            MaxRows: 500,
-            ResultType: 'entity_object',
-          },
-          user,
-        ),
-        rv.RunView<CollectionArtifactLinkRow>(
-          {
-            EntityName: 'MJ: Collection Artifacts',
-            Fields: ['ID', 'CollectionID', 'ArtifactVersionID', 'Sequence'],
-            MaxRows: 5000,
-            ResultType: 'simple',
-          },
-          user,
-        ),
-        rv.RunView<MJArtifactPermissionEntity>(
-          {
-            EntityName: 'MJ: Artifact Permissions',
-            ExtraFilter: userFilter,
-            ResultType: 'entity_object',
-          },
-          user,
-        ),
-        rv.RunView<MJCollectionPermissionEntity>(
-          {
-            EntityName: 'MJ: Collection Permissions',
-            ExtraFilter: userFilter,
-            ResultType: 'entity_object',
-          },
-          user,
-        ),
-      ]);
+      const scoped = await this.loadScopedWorkspaceRecords(rv, user);
 
       await this.loadConnectedDrives();
 
       this.hydrateWorkspaceViewModels({
         user,
         artifactTypes,
-        artifacts: artifactsRes.Success && artifactsRes.Results ? artifactsRes.Results : [],
-        versions: versionsRes.Success && versionsRes.Results ? versionsRes.Results : [],
-        collections: collectionsRes.Success && collectionsRes.Results ? collectionsRes.Results : [],
-        collectionLinks: collectionLinksRes.Success && collectionLinksRes.Results ? collectionLinksRes.Results : [],
-        artifactPerms: artifactPermsRes.Success && artifactPermsRes.Results ? artifactPermsRes.Results : [],
-        collectionPerms: collectionPermsRes.Success && collectionPermsRes.Results ? collectionPermsRes.Results : [],
+        artifacts: scoped.artifacts,
+        versions: scoped.versions,
+        collections: scoped.collections,
+        collectionLinks: scoped.collectionLinks,
+        artifactPerms: scoped.artifactPerms,
+        collectionPerms: scoped.collectionPerms,
       });
+
+      if (this.pendingExternalParams) {
+        const pending = this.pendingExternalParams;
+        this.pendingExternalParams = null;
+        this.applyRouteParamsInternal(pending);
+      }
     } catch (err) {
       this.LoadError = err instanceof Error ? err.message : 'Failed to load Library items.';
     } finally {
@@ -1016,6 +1015,292 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
         this.cdr.detectChanges();
       }
     }
+  }
+
+  /**
+   * Loads user-accessible `MJ: Artifacts`, `MJ: Artifact Versions` (excluding heavy `Content`),
+   * `MJ: Collections`, `MJ: Collection Artifacts`, and permission rows via 2-phase server-side
+   * scoped `rv.RunViews` batches — zero unscoped table reads and zero raw `__mj` schema names
+   * (100% SQL Server + PostgreSQL portable).
+   */
+  private async loadScopedWorkspaceRecords(
+    rv: RunView,
+    user: UserInfo,
+  ): Promise<{
+    artifacts: MJArtifactEntity[];
+    versions: VersionSummaryRow[];
+    collections: MJCollectionEntity[];
+    collectionLinks: CollectionArtifactLinkRow[];
+    artifactPerms: MJArtifactPermissionEntity[];
+    collectionPerms: MJCollectionPermissionEntity[];
+  }> {
+    const safeEnvId = EscapeSQLString(this.EffectiveEnvironmentId);
+    const safeUserId = EscapeSQLString(user.ID);
+    const envFilter = `EnvironmentID='${safeEnvId}'`;
+    const visibleFilter = `(Visibility IS NULL OR Visibility <> 'System Only')`;
+
+    // Batch 1: Owned artifacts, user artifact grants, owned collections, user collection grants
+    const [ownedArtRes, artPermRes, ownedColRes, colPermRes] = await rv.RunViews(
+      [
+        {
+          EntityName: 'MJ: Artifacts',
+          ExtraFilter: `${envFilter} AND ${visibleFilter} AND UserID='${safeUserId}'`,
+          OrderBy: '__mj_UpdatedAt DESC',
+          MaxRows: 500,
+          ResultType: 'entity_object',
+        },
+        {
+          EntityName: 'MJ: Artifact Permissions',
+          ExtraFilter: `UserID='${safeUserId}' AND CanRead=1`,
+          MaxRows: 500,
+          ResultType: 'entity_object',
+        },
+        {
+          EntityName: 'MJ: Collections',
+          ExtraFilter: `${envFilter} AND OwnerID='${safeUserId}'`,
+          OrderBy: 'Name ASC',
+          MaxRows: 500,
+          ResultType: 'entity_object',
+        },
+        {
+          EntityName: 'MJ: Collection Permissions',
+          ExtraFilter: `UserID='${safeUserId}' AND CanRead=1`,
+          MaxRows: 500,
+          ResultType: 'entity_object',
+        },
+      ],
+      user,
+    );
+
+    const ownedArtifacts = ownedArtRes?.Success && ownedArtRes.Results ? (ownedArtRes.Results as MJArtifactEntity[]) : [];
+    const artifactPerms =
+      artPermRes?.Success && artPermRes.Results ? (artPermRes.Results as MJArtifactPermissionEntity[]) : [];
+    const ownedCollections =
+      ownedColRes?.Success && ownedColRes.Results ? (ownedColRes.Results as MJCollectionEntity[]) : [];
+    const collectionPerms =
+      colPermRes?.Success && colPermRes.Results ? (colPermRes.Results as MJCollectionPermissionEntity[]) : [];
+
+    const ownedArtNormIds = new Set(ownedArtifacts.map((a) => NormalizeUUID(a.ID)));
+    const ownedColNormIds = new Set(ownedCollections.map((c) => NormalizeUUID(c.ID)));
+
+    const directSharedArtIds = this.uniqueIds(
+      artifactPerms
+        .filter((ap) => ap.CanRead && !ownedArtNormIds.has(NormalizeUUID(ap.ArtifactID)))
+        .map((ap) => ap.ArtifactID),
+    );
+    const sharedColIds = this.uniqueIds(
+      collectionPerms
+        .filter((cp) => cp.CanRead && !ownedColNormIds.has(NormalizeUUID(cp.CollectionID)))
+        .map((cp) => cp.CollectionID),
+    );
+    const accessibleColIds = this.uniqueIds([
+      ...ownedCollections.map((c) => c.ID),
+      ...sharedColIds,
+    ]);
+
+    // Batch 2: Shared collections, collection-artifact links, and directly shared artifacts
+    const batch2Queries: RunViewParams[] = [];
+    let sharedColIndex = -1;
+    let colLinksIndex = -1;
+    let directSharedArtIndex = -1;
+    let immediateVersionsIndex = -1;
+
+    if (sharedColIds.length > 0) {
+      sharedColIndex = batch2Queries.length;
+      batch2Queries.push({
+        EntityName: 'MJ: Collections',
+        ExtraFilter: `${envFilter} AND ID IN (${this.sqlUuidInList(sharedColIds)})`,
+        OrderBy: 'Name ASC',
+        MaxRows: 500,
+        ResultType: 'entity_object',
+      });
+    }
+
+    if (accessibleColIds.length > 0) {
+      colLinksIndex = batch2Queries.length;
+      batch2Queries.push({
+        EntityName: 'MJ: Collection Artifacts',
+        ExtraFilter: `CollectionID IN (${this.sqlUuidInList(accessibleColIds)})`,
+        Fields: ['ID', 'CollectionID', 'ArtifactVersionID', 'Sequence'],
+        MaxRows: 5000,
+        ResultType: 'simple',
+      });
+    }
+
+    if (directSharedArtIds.length > 0) {
+      directSharedArtIndex = batch2Queries.length;
+      batch2Queries.push({
+        EntityName: 'MJ: Artifacts',
+        ExtraFilter: `${envFilter} AND ${visibleFilter} AND ID IN (${this.sqlUuidInList(directSharedArtIds)})`,
+        OrderBy: '__mj_UpdatedAt DESC',
+        MaxRows: 500,
+        ResultType: 'entity_object',
+      });
+    }
+
+    const initialArtIds = this.uniqueIds([
+      ...ownedArtifacts.map((a) => a.ID),
+      ...directSharedArtIds,
+    ]);
+
+    // Fast path when user has zero collections: include Artifact Versions right inside Batch 2
+    if (accessibleColIds.length === 0 && initialArtIds.length > 0) {
+      immediateVersionsIndex = batch2Queries.length;
+      batch2Queries.push({
+        EntityName: 'MJ: Artifact Versions',
+        ExtraFilter: `ArtifactID IN (${this.sqlUuidInList(initialArtIds)})`,
+        Fields: VERSION_SUMMARY_FIELDS,
+        OrderBy: 'VersionNumber DESC',
+        MaxRows: 2500,
+        ResultType: 'simple',
+      });
+    }
+
+    const batch2Results = batch2Queries.length > 0 ? await rv.RunViews(batch2Queries, user) : [];
+
+    const sharedCollections =
+      sharedColIndex >= 0 && batch2Results[sharedColIndex]?.Success && batch2Results[sharedColIndex].Results
+        ? (batch2Results[sharedColIndex].Results as MJCollectionEntity[])
+        : [];
+    const rawCollectionLinks =
+      colLinksIndex >= 0 && batch2Results[colLinksIndex]?.Success && batch2Results[colLinksIndex].Results
+        ? (batch2Results[colLinksIndex].Results as CollectionArtifactLinkRow[])
+        : [];
+    const directSharedArtifacts =
+      directSharedArtIndex >= 0 &&
+      batch2Results[directSharedArtIndex]?.Success &&
+      batch2Results[directSharedArtIndex].Results
+        ? (batch2Results[directSharedArtIndex].Results as MJArtifactEntity[])
+        : [];
+
+    const allCollections = this.dedupeEntitiesById([...ownedCollections, ...sharedCollections]);
+    const envColNormIds = new Set(allCollections.map((c) => NormalizeUUID(c.ID)));
+    const collectionLinks = rawCollectionLinks.filter((l) => envColNormIds.has(NormalizeUUID(l.CollectionID)));
+
+    let allArtifacts = this.dedupeEntitiesById([...ownedArtifacts, ...directSharedArtifacts]);
+    let allVersions: VersionSummaryRow[] =
+      immediateVersionsIndex >= 0 &&
+      batch2Results[immediateVersionsIndex]?.Success &&
+      batch2Results[immediateVersionsIndex].Results
+        ? (batch2Results[immediateVersionsIndex].Results as VersionSummaryRow[])
+        : [];
+
+    if (accessibleColIds.length > 0) {
+      const knownArtIds = allArtifacts.map((a) => a.ID);
+      const knownArtNormSet = new Set(knownArtIds.map((id) => NormalizeUUID(id)));
+      const linkedVersionIds = this.uniqueIds(collectionLinks.map((l) => l.ArtifactVersionID));
+
+      const versionClauses: string[] = [];
+      if (knownArtIds.length > 0) {
+        versionClauses.push(`ArtifactID IN (${this.sqlUuidInList(knownArtIds)})`);
+      }
+      if (linkedVersionIds.length > 0) {
+        versionClauses.push(`ID IN (${this.sqlUuidInList(linkedVersionIds)})`);
+      }
+
+      if (versionClauses.length > 0) {
+        const [verRes] = await rv.RunViews(
+          [
+            {
+              EntityName: 'MJ: Artifact Versions',
+              ExtraFilter: versionClauses.join(' OR '),
+              Fields: VERSION_SUMMARY_FIELDS,
+              OrderBy: 'VersionNumber DESC',
+              MaxRows: 2500,
+              ResultType: 'simple',
+            },
+          ],
+          user,
+        );
+        allVersions = verRes?.Success && verRes.Results ? (verRes.Results as VersionSummaryRow[]) : [];
+
+        // Fetch any artifacts granted solely via a shared Collection (not yet in knownArtNormSet)
+        const collectionOnlyArtIds = this.uniqueIds(
+          allVersions
+            .map((v) => v.ArtifactID)
+            .filter((artId) => Boolean(artId) && !knownArtNormSet.has(NormalizeUUID(artId))),
+        );
+
+        if (collectionOnlyArtIds.length > 0) {
+          const [colArtRes, colArtVerRes] = await rv.RunViews(
+            [
+              {
+                EntityName: 'MJ: Artifacts',
+                ExtraFilter: `${envFilter} AND ${visibleFilter} AND ID IN (${this.sqlUuidInList(collectionOnlyArtIds)})`,
+                OrderBy: '__mj_UpdatedAt DESC',
+                MaxRows: 500,
+                ResultType: 'entity_object',
+              },
+              {
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: `ArtifactID IN (${this.sqlUuidInList(collectionOnlyArtIds)})`,
+                Fields: VERSION_SUMMARY_FIELDS,
+                OrderBy: 'VersionNumber DESC',
+                MaxRows: 1000,
+                ResultType: 'simple',
+              },
+            ],
+            user,
+          );
+          const colSharedArts =
+            colArtRes?.Success && colArtRes.Results ? (colArtRes.Results as MJArtifactEntity[]) : [];
+          const colSharedVers =
+            colArtVerRes?.Success && colArtVerRes.Results ? (colArtVerRes.Results as VersionSummaryRow[]) : [];
+
+          allArtifacts = this.dedupeEntitiesById([...allArtifacts, ...colSharedArts]);
+          allVersions = this.dedupeEntitiesById([...allVersions, ...colSharedVers]);
+        }
+      }
+    }
+
+    // Sort artifacts newest first across owned + shared
+    allArtifacts.sort((a, b) => {
+      const aTime = a.__mj_UpdatedAt ? new Date(a.__mj_UpdatedAt).getTime() : 0;
+      const bTime = b.__mj_UpdatedAt ? new Date(b.__mj_UpdatedAt).getTime() : 0;
+      return bTime - aTime;
+    });
+
+    return {
+      artifacts: allArtifacts,
+      versions: allVersions,
+      collections: allCollections,
+      collectionLinks,
+      artifactPerms,
+      collectionPerms,
+    };
+  }
+
+  private uniqueIds(ids: ReadonlyArray<string | null | undefined>): string[] {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const raw of ids) {
+      const trimmed = raw?.trim();
+      if (!trimmed) continue;
+      const norm = NormalizeUUID(trimmed);
+      if (!seen.has(norm)) {
+        seen.add(norm);
+        out.push(trimmed);
+      }
+    }
+    return out.slice(0, 500);
+  }
+
+  private dedupeEntitiesById<T extends { ID: string }>(rows: ReadonlyArray<T>): T[] {
+    const seen = new Set<string>();
+    const out: T[] = [];
+    for (const row of rows) {
+      if (!row?.ID) continue;
+      const norm = NormalizeUUID(row.ID);
+      if (!seen.has(norm)) {
+        seen.add(norm);
+        out.push(row);
+      }
+    }
+    return out;
+  }
+
+  private sqlUuidInList(ids: ReadonlyArray<string>): string {
+    return ids.map((id) => `'${EscapeSQLString(id)}'`).join(',');
   }
 
   public FormatRelativeTime(date: Date): string {
@@ -1337,20 +1622,44 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   }
 
   private applyRouteParamsInternal(params: LibraryExternalRouteParams): void {
+    const fallbackMode: LibrarySurfaceMode = this.InitialDriveMode
+      ? 'hub'
+      : (this.InitialMode ?? this.preferredSurfaceMode ?? 'hub');
+    const fallbackHubTab: LibraryHubTab = this.InitialDriveMode
+      ? 'drives'
+      : (this.InitialHubTab ?? 'overview');
+    const fallbackSection: LibraryNavigatorSection = this.InitialSection ?? 'all';
+
     if (params.mode === 'hub' || params.mode === 'navigator') {
       this.SurfaceMode = params.mode;
+    } else {
+      this.SurfaceMode = fallbackMode;
     }
+
     if (params.tab && ['overview', 'collections', 'all', 'shared', 'drives'].includes(params.tab)) {
       this.HubTab = params.tab as LibraryHubTab;
+    } else {
+      this.HubTab = fallbackHubTab;
     }
-    if (params.section && ['all', 'shared', 'starred', 'collection', 'drive'].includes(params.section)) {
+
+    if (
+      params.section &&
+      ['all', 'collections', 'shared', 'starred', 'collection', 'drive'].includes(params.section)
+    ) {
       this.NavigatorSection = params.section as LibraryNavigatorSection;
+    } else {
+      this.NavigatorSection = fallbackSection;
     }
+
     if (params.collectionId) {
       this.SelectedCollectionId = params.collectionId;
       this.SurfaceMode = 'navigator';
       this.NavigatorSection = 'collection';
+      this.expandAncestorsOf(params.collectionId);
+    } else {
+      this.SelectedCollectionId = null;
     }
+
     if (params.driveId) {
       this.SelectedDriveId = params.driveId;
       this.DriveFolderPrefix = params.folder ?? '';
@@ -1359,16 +1668,23 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       } else {
         this.NavigatorSection = 'drive';
       }
+    } else {
+      this.SelectedDriveId = null;
+      this.DriveFolderPrefix = '';
     }
-    if (params.q !== undefined && params.q !== null) {
-      this.SearchQuery = params.q;
-    }
+
+    this.SearchQuery = params.q ?? '';
+
     if (params.artifactId) {
       this.ActiveArtifactId = params.artifactId;
       const parsedVer = params.version ? Number(params.version) : undefined;
       this.ActiveVersionNumber = parsedVer && Number.isFinite(parsedVer) ? parsedVer : undefined;
       this.IsFullCanvasOpen =
         params.canvas === '1' || params.canvas === 'true' || params.canvas === true || this.SurfaceMode === 'hub';
+    } else {
+      this.ActiveArtifactId = null;
+      this.ActiveVersionNumber = undefined;
+      this.IsFullCanvasOpen = false;
     }
   }
 
@@ -1377,6 +1693,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       const mode = UserInfoEngine.Instance.GetSetting(SETTING_SURFACE_MODE);
       if (mode === 'hub' || mode === 'navigator') {
         this.SurfaceMode = mode;
+        this.preferredSurfaceMode = mode;
       }
       const listStyle = UserInfoEngine.Instance.GetSetting(SETTING_LIST_STYLE);
       if (listStyle === 'cards' || listStyle === 'list') {

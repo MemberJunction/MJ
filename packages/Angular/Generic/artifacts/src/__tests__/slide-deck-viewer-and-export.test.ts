@@ -1,9 +1,11 @@
 /**
  * @vitest-environment jsdom
  */
+import '@angular/compiler';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Injector, runInInjectionContext, ChangeDetectorRef } from '@angular/core';
 import * as Y from 'yjs';
+import type { IMetadataProvider } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import {
   SlideDeckEngine,
@@ -180,7 +182,7 @@ describe('Wave 2 Slides: SlideDeckExportService, Per-Slide Yjs Session Sync & Sl
     sessionB.Destroy();
   });
 
-  it('SlideDeckArtifactViewerComponent supports slide authoring, O6 Presentation freeze & refresh, brand seed theming (Accept #4), OLE Whiteboard embedding, and @SlidesAgent single-slide updates (Accept #3)', async () => {
+  it('SlideDeckArtifactViewerComponent fails closed when permissions are unresolved (B3), shows 0 initial seed comments (A1), embeds real child Whiteboards (A6), and persists only real User comments (A1)', async () => {
     const injector = Injector.create({
       providers: [
         { provide: ChangeDetectorRef, useValue: { markForCheck: () => {}, detectChanges: () => {} } },
@@ -189,8 +191,79 @@ describe('Wave 2 Slides: SlideDeckExportService, Per-Slide Yjs Session Sync & Sl
       ],
     });
 
-    const component = runInInjectionContext(injector, () => new SlideDeckArtifactViewerComponent());
+    // Verify fail-closed IsEditable = false when ArtifactID is set without a provider / resolved permissions
+    const unpermissionedComp = runInInjectionContext(injector, () => new SlideDeckArtifactViewerComponent());
     const seededDeck = SlideDeckEngine.Instance.CreateDefaultDeck('Enterprise Cloud Deck', 'art-slides-1');
+    unpermissionedComp.artifactVersion = {
+      ID: 'ver-slides-1',
+      ArtifactID: 'art-slides-1',
+      VersionNumber: 1,
+      Name: 'Enterprise Cloud Deck',
+      Content: SlideDeckEngine.Instance.SerializeDeckSpec(seededDeck),
+    } as unknown as MJArtifactVersionEntity;
+    unpermissionedComp.readonly = false;
+    unpermissionedComp.ngOnInit();
+    expect(unpermissionedComp.IsEditable).toBe(false);
+    expect(unpermissionedComp.AnchoredThreads).toHaveLength(0);
+    unpermissionedComp.ngOnDestroy();
+
+    // Now wire a mock provider resolving owner permissions for 'art-slides-1'
+    const ownerUser = {
+      ID: '11111111-1111-4111-8111-111111111111',
+      Name: 'Alice Owner',
+      Email: 'alice@memberjunction.org',
+      IsActive: true,
+    };
+    let entitySeq = 0;
+    const savedSlideEntities: Array<{ entityName: string; record: Record<string, unknown> }> = [];
+    const ownerProvider = {
+      CurrentUser: ownerUser,
+      Entities: [
+        {
+          ID: 'ent-artifacts-1',
+          Name: 'MJ: Artifacts',
+          DisplayNameOrName: 'MJ: Artifacts',
+          FieldLevelSecurityApplies: false,
+          GetUserPermisions: () => ({ CanRead: true }),
+          Fields: [{ Name: 'ID', IsPrimaryKey: true, DefaultInView: true, IsBinaryFieldType: false, TSType: 'string' }],
+        },
+      ],
+      EntityByName: (name: string) =>
+        name === 'MJ: Artifacts' ? { ID: 'ent-artifacts-1', Name: 'MJ: Artifacts' } : undefined,
+      RunView: async (params: { EntityName: string }) => {
+        if (params.EntityName === 'MJ: Artifacts') {
+          return {
+            Success: true,
+            Results: [{ ID: 'art-slides-1', UserID: ownerUser.ID, EnvironmentID: 'env-slides-1' }],
+            TotalRowCount: 1,
+          };
+        }
+        if (params.EntityName === 'MJ: Artifact Types') {
+          return {
+            Success: true,
+            Results: [{ ID: 'type-whiteboard-1', Name: 'Whiteboard' }],
+            TotalRowCount: 1,
+          };
+        }
+        return { Success: true, Results: [], TotalRowCount: 0 };
+      },
+      GetEntityObject: async (entityName: string) => {
+        const id = `88888888-0000-4000-8000-${String(++entitySeq).padStart(12, '0')}`;
+        const rec: Record<string, unknown> = {
+          ID: id,
+          NewRecord: () => undefined,
+          Load: async () => true,
+          Save: async () => {
+            savedSlideEntities.push({ entityName, record: { ...rec } });
+            return true;
+          },
+        };
+        return rec;
+      },
+    } as unknown as IMetadataProvider;
+
+    const component = runInInjectionContext(injector, () => new SlideDeckArtifactViewerComponent());
+    component.Provider = ownerProvider;
     component.artifactVersion = {
       ID: 'ver-slides-1',
       ArtifactID: 'art-slides-1',
@@ -201,7 +274,11 @@ describe('Wave 2 Slides: SlideDeckExportService, Per-Slide Yjs Session Sync & Sl
     component.readonly = false;
 
     component.ngOnInit();
+    await new Promise((r) => setTimeout(r, 25));
+
+    expect(component.IsEditable).toBe(true);
     expect(component.Deck.Slides).toHaveLength(3);
+    expect(component.AnchoredThreads).toHaveLength(0);
     expect(component.HasDisplayContent).toBe(true);
     expect(component.SupportsInlineEdit).toBe(true);
     expect(component.GetCurrentStateSnapshot()?.title).toContain('Enterprise Cloud Deck');
@@ -239,30 +316,25 @@ describe('Wave 2 Slides: SlideDeckExportService, Per-Slide Yjs Session Sync & Sl
     component.ExitPresentationMode();
     expect(component.WorkspaceMode).toBe('edit');
 
-    // 4. Embed an inline OLE Whiteboard in slide-2
+    // 4. Embed an inline OLE Whiteboard in slide-2 -> saves real child Artifact + Version BEFORE inserting spec
     component.SelectSlide('slide-2');
     await component.EmbedInlineWhiteboardInRegion(component.ActiveSlide.Regions[0]);
     const wbBlock = component.GetRegionBlockSpec(component.ActiveSlide.Regions[0]);
     expect(wbBlock?.Kind).toBe('Artifact');
     expect(wbBlock?.ArtifactType).toBe('Whiteboard');
+    expect(wbBlock?.ArtifactID).toMatch(/^88888888-0000-4000-8000-/);
+    expect(wbBlock?.VersionID).toMatch(/^88888888-0000-4000-8000-/);
 
-    // 5. Post an anchored SlideRegion comment with @SlidesAgent -> updates ONLY slide-2 (Accept #3)
-    const slide1SnapshotBeforeAgent = JSON.stringify(
-      component.Deck.Slides.find((s) => s.SlideID === 'slide-1'),
-    );
+    // 5. Post an anchored SlideRegion comment containing @SlidesAgent -> persists ONLY User comment with ZERO fake agent mutation
+    const slide2TitleBefore = component.Deck.Slides.find((s) => s.SlideID === 'slide-2')!.Title;
     component.OpenCommentForSlideRegion('slide-2', 'right', 'Right Column');
-    component.NewCommentDraft =
-      '@SlidesAgent Title: AI-Governed Architecture Pillars\nRefine executive summary bullets';
+    component.NewCommentDraft = '@SlidesAgent Please review this column';
     await component.SubmitSlideRegionComment();
 
-    const slide1SnapshotAfterAgent = JSON.stringify(
-      component.Deck.Slides.find((s) => s.SlideID === 'slide-1'),
-    );
-    expect(slide1SnapshotAfterAgent).toBe(slide1SnapshotBeforeAgent);
-    const updatedSlide2 = component.Deck.Slides.find((s) => s.SlideID === 'slide-2')!;
-    expect(updatedSlide2.Title).toBe('AI-Governed Architecture Pillars');
-    expect(component.AnchoredThreads[0].Messages).toHaveLength(2);
-    expect(component.AnchoredThreads[0].Messages[1].Role).toBe('Agent');
+    expect(component.Deck.Slides.find((s) => s.SlideID === 'slide-2')!.Title).toBe(slide2TitleBefore);
+    expect(component.AnchoredThreads).toHaveLength(1);
+    expect(component.AnchoredThreads[0].Messages).toHaveLength(1);
+    expect(component.AnchoredThreads[0].Messages[0].Role).toBe('User');
 
     // 6. Export .pptx package from component
     const exportedPkg = component.OnExportPptx();
@@ -325,6 +397,13 @@ describe('Wave 2 Slides: SlideDeckExportService, Per-Slide Yjs Session Sync & Sl
                 EnvironmentID: 'env-1',
               },
             ],
+            TotalRowCount: 1,
+          };
+        }
+        if (params.EntityName === 'MJ: Artifact Types') {
+          return {
+            Success: true,
+            Results: [{ ID: 'type-wb-1', Name: 'Whiteboard' }],
             TotalRowCount: 1,
           };
         }

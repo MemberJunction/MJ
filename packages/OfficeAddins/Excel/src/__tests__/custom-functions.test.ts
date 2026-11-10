@@ -9,6 +9,7 @@ import {
     FormatRowsForExcelCustomFunction,
     ParseExcelQueryFunctionArguments,
 } from '../custom-functions';
+import { RegisterMjExcelCustomFunctions } from '../web/functions';
 
 describe('Excel Custom Functions (=MJ.QUERY & =MJ.VIEW, § 7.1/7.2 & O8)', () => {
     it('builds Office functions.json metadata for QUERY and VIEW', () => {
@@ -127,5 +128,45 @@ describe('Excel Custom Functions (=MJ.QUERY & =MJ.VIEW, § 7.1/7.2 & O8)', () =>
         currentViewer = '';
         const unauthRes = await coordinator.EvaluateView('Members');
         expect(unauthRes).toEqual([[EXCEL_CUSTOM_FUNCTION_AUTH_REQUIRED]]);
+
+        // 6. Optional 3rd filter argument in =MJ.VIEW forwards Filter and IncludeHeaders cleanly (A5)
+        currentViewer = 'user-alice';
+        let capturedViewInput: ExcelAddinEvaluateCustomFunctionInput | null = null;
+        const viewCoordinator = new ExcelCustomFunctionCoordinator(async (inp) => {
+            capturedViewInput = inp;
+            return {
+                Columns: [{ Name: 'Name', Header: 'Name', DataType: 'Text' }],
+                Matrix: [['Name'], ['Alice']],
+                ScalarValue: null,
+                TotalRowCount: 1,
+            };
+        });
+        const viewMatrix = await viewCoordinator.EvaluateView('Members', 'Active Members', "Status='Active'", false);
+        expect(viewMatrix).toEqual([['Name'], ['Alice']]);
+        expect(capturedViewInput).toEqual({
+            Kind: 'View',
+            Target: 'Members',
+            ViewNameOrId: 'Active Members',
+            Filter: "Status='Active'",
+            IncludeHeaders: false,
+        });
+        expect(BuildExcelCustomFunctionsMetadata().functions[1].parameters.map(p => p.name)).toEqual([
+            'entityNameOrId',
+            'viewNameOrId',
+            'filter',
+            'includeHeaders',
+        ]);
+    });
+
+    it('associates QUERY and VIEW callbacks via RegisterMjExcelCustomFunctions (A5)', () => {
+        const associated = new Map<string, (...args: readonly unknown[]) => Promise<unknown>>();
+        const ok = RegisterMjExcelCustomFunctions({
+            associate: (id, cb) => {
+                associated.set(id, cb);
+            },
+        });
+        expect(ok).toBe(true);
+        expect([...associated.keys()]).toEqual(['QUERY', 'VIEW']);
+        expect(RegisterMjExcelCustomFunctions(undefined)).toBe(false);
     });
 });

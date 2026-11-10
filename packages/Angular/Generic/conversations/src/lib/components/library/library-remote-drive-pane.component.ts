@@ -4,6 +4,7 @@ import {
   EventEmitter,
   Input,
   OnChanges,
+  OnDestroy,
   OnInit,
   Output,
   SimpleChanges,
@@ -29,6 +30,9 @@ interface FolderEntry {
   Name: string;
   FullPrefix: string;
 }
+
+const MAX_TEXT_PREVIEW_METADATA_BYTES = 5 * 1024 * 1024;
+const MAX_TEXT_PREVIEW_READ_BYTES = 102_400;
 
 /**
  * Stateless Connected Drive browser & inline remote preview pane.
@@ -631,7 +635,7 @@ interface FolderEntry {
     `,
   ],
 })
-export class LibraryRemoteDrivePaneComponent extends BaseAngularComponent implements OnInit, OnChanges {
+export class LibraryRemoteDrivePaneComponent extends BaseAngularComponent implements OnInit, OnChanges, OnDestroy {
   @Input() Account!: StorageAccountWithProvider;
   @Input() CurrentPrefix = '';
   @Input() CurrentUser!: UserInfo;
@@ -661,6 +665,9 @@ export class LibraryRemoteDrivePaneComponent extends BaseAngularComponent implem
   public PreviewTextContent = '';
   public IsConvertingCopy = false;
 
+  private previewRequestSeq = 0;
+  private activePreviewAbort: AbortController | null = null;
+
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly creationService = inject(LibraryCreationService);
@@ -668,6 +675,10 @@ export class LibraryRemoteDrivePaneComponent extends BaseAngularComponent implem
 
   public ngOnInit(): void {
     void this.ReloadListing();
+  }
+
+  public ngOnDestroy(): void {
+    this.abortActivePreviewStream();
   }
 
   public ngOnChanges(changes: SimpleChanges): void {
@@ -823,6 +834,9 @@ export class LibraryRemoteDrivePaneComponent extends BaseAngularComponent implem
   }
 
   public async SelectRemoteFile(file: StorageObjectMetadata): Promise<void> {
+    this.abortActivePreviewStream();
+    const requestId = ++this.previewRequestSeq;
+
     this.SelectedObject = file;
     this.IsLoadingPreview = true;
     this.PreviewError = null;
@@ -835,32 +849,128 @@ export class LibraryRemoteDrivePaneComponent extends BaseAngularComponent implem
     try {
       const client = this.getStorageClient();
       const signedUrl = await client.CreatePreAuthDownloadUrl(this.Account.account.ID, file.fullPath);
+      if (requestId !== this.previewRequestSeq) {
+        return;
+      }
       this.PreviewUrl = signedUrl;
+
       if (this.PreviewKind === 'pdf') {
         this.SafePreviewUrl = this.sanitizer.bypassSecurityTrustResourceUrl(signedUrl);
       } else if (this.PreviewKind === 'text') {
-        const resp = await fetch(signedUrl);
-        if (!resp.ok) {
-          throw new Error(`Could not stream text preview (${resp.status}).`);
+        if (Number.isFinite(file.size) && file.size > MAX_TEXT_PREVIEW_METADATA_BYTES) {
+          this.PreviewTextContent = `File is large (${this.FormatBytes(file.size)}) — click Download to view.`;
+        } else {
+          const controller = new AbortController();
+          this.activePreviewAbort = controller;
+          const previewText = await this.readBoundedTextPreview(
+            signedUrl,
+            controller,
+            MAX_TEXT_PREVIEW_READ_BYTES,
+          );
+          if (requestId !== this.previewRequestSeq) {
+            return;
+          }
+          this.PreviewTextContent = previewText;
         }
-        const raw = await resp.text();
-        this.PreviewTextContent = raw.length > 100_000 ? `${raw.slice(0, 100_000)}\n\n… [Preview truncated at 100 KB]` : raw;
       }
     } catch (err) {
+      if (requestId !== this.previewRequestSeq) {
+        return;
+      }
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return;
+      }
       this.PreviewError = err instanceof Error ? err.message : 'Failed to open remote preview stream.';
     } finally {
-      this.IsLoadingPreview = false;
-      this.cdr.detectChanges();
+      if (requestId === this.previewRequestSeq) {
+        this.IsLoadingPreview = false;
+        this.cdr.detectChanges();
+      }
     }
   }
 
   public ClosePreview(): void {
+    this.abortActivePreviewStream();
+    this.previewRequestSeq++;
     this.SelectedObject = null;
     this.PreviewUrl = null;
     this.SafePreviewUrl = null;
     this.PreviewError = null;
     this.PreviewTextContent = '';
     this.PreviewKind = 'none';
+    this.IsLoadingPreview = false;
+  }
+
+  private abortActivePreviewStream(): void {
+    if (this.activePreviewAbort) {
+      this.activePreviewAbort.abort();
+      this.activePreviewAbort = null;
+    }
+  }
+
+  private async readBoundedTextPreview(
+    signedUrl: string,
+    controller: AbortController,
+    maxBytes: number,
+  ): Promise<string> {
+    const resp = await fetch(signedUrl, {
+      signal: controller.signal,
+      headers: { Range: `bytes=0-${maxBytes}` },
+    });
+    if (!resp.ok) {
+      throw new Error(`Could not stream text preview (${resp.status}).`);
+    }
+
+    const reader = resp.body?.getReader();
+    if (!reader) {
+      const fallback = await resp.text();
+      return fallback.length > maxBytes
+        ? `${fallback.slice(0, maxBytes)}\n\n… [Preview truncated at 100 KB]`
+        : fallback;
+    }
+
+    const chunks: Uint8Array[] = [];
+    let totalBytes = 0;
+    let truncated = false;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done || !value) {
+          break;
+        }
+        const remaining = maxBytes - totalBytes;
+        if (value.byteLength >= remaining) {
+          chunks.push(value.subarray(0, remaining));
+          totalBytes += remaining;
+          truncated = true;
+          controller.abort();
+          void reader.cancel().catch(() => undefined);
+          break;
+        }
+        chunks.push(value);
+        totalBytes += value.byteLength;
+      }
+    } catch (readErr) {
+      // Aborting the stream once we have collected maxBytes is intentional, not an error
+      if (totalBytes < maxBytes) {
+        throw readErr;
+      }
+    } finally {
+      if (this.activePreviewAbort === controller) {
+        this.activePreviewAbort = null;
+      }
+    }
+
+    const merged = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      merged.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+
+    const decoded = new TextDecoder('utf-8').decode(merged);
+    return truncated ? `${decoded}\n\n… [Preview truncated at 100 KB]` : decoded;
   }
 
   public DownloadSelectedObject(): void {

@@ -9,18 +9,21 @@ import {
   inject,
 } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { UserInfo } from '@memberjunction/core';
+import { RunView, UserInfo } from '@memberjunction/core';
 import {
   ArtifactMetadataEngine,
   MJArtifactTypeEntity,
   MJArtifactVersionEntity,
 } from '@memberjunction/core-entities';
+import { EscapeSQLString } from '@memberjunction/global';
+import { GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import {
   CreatedLibraryArtifactResult,
   LibraryCreationService,
   LibraryDriveExportFormat,
   LibraryStarterKind,
+  RemoteDriveFileExistsError,
 } from '../../services/library-creation.service';
 import {
   LibraryCollectionNode,
@@ -790,7 +793,7 @@ export class LibraryCreateDialogComponent extends BaseAngularComponent implement
   template: `
     @if (IsOpen && Item) {
       <mj-dialog
-        [Title]="'Export to Connected Drive: ' + Item.Name"
+        [Title]="'Export to Connected Drive: ' + Item.Name + ' (v' + EffectiveVersionNumber + ')'"
         [Visible]="true"
         [Width]="540"
         [MinWidth]="380"
@@ -799,7 +802,12 @@ export class LibraryCreateDialogComponent extends BaseAngularComponent implement
         <div class="export-dialog-body" data-testid="library-export-drive-dialog">
           <div class="field-group">
             <label class="field-label" for="lib-export-drive">Destination Connected Drive</label>
-            <select id="lib-export-drive" class="field-select" [(ngModel)]="SelectedAccountId">
+            <select
+              id="lib-export-drive"
+              class="field-select"
+              [(ngModel)]="SelectedAccountId"
+              (ngModelChange)="ClearOverwritePrompt()"
+            >
               @for (drive of Drives; track drive.AccountId) {
                 <option [value]="drive.AccountId">
                   {{ drive.AccountName }} ({{ drive.ProviderName }})
@@ -815,6 +823,7 @@ export class LibraryCreateDialogComponent extends BaseAngularComponent implement
               type="text"
               class="field-input"
               [(ngModel)]="FolderPrefix"
+              (ngModelChange)="ClearOverwritePrompt()"
               placeholder="e.g. Exports/2026"
             />
           </div>
@@ -822,7 +831,12 @@ export class LibraryCreateDialogComponent extends BaseAngularComponent implement
           <div class="field-row">
             <div class="field-group flex-1">
               <label class="field-label" for="lib-export-format">Export Format</label>
-              <select id="lib-export-format" class="field-select" [(ngModel)]="SelectedFormat">
+              <select
+                id="lib-export-format"
+                class="field-select"
+                [(ngModel)]="SelectedFormat"
+                (ngModelChange)="ClearOverwritePrompt()"
+              >
                 @for (fmt of FormatOptions; track fmt.Format) {
                   <option [value]="fmt.Format">{{ fmt.Label }}</option>
                 }
@@ -835,6 +849,7 @@ export class LibraryCreateDialogComponent extends BaseAngularComponent implement
                 type="text"
                 class="field-input"
                 [(ngModel)]="FileName"
+                (ngModelChange)="ClearOverwritePrompt()"
               />
             </div>
           </div>
@@ -842,9 +857,16 @@ export class LibraryCreateDialogComponent extends BaseAngularComponent implement
           <div class="stateless-note">
             <i class="fa-solid fa-cloud-arrow-up"></i>
             <span>
-              Writes the exported snapshot directly to the selected external drive without creating duplicate MJ: Files database records.
+              Writes version v{{ EffectiveVersionNumber }} directly to the selected external drive without creating duplicate MJ: Files database records.
             </span>
           </div>
+
+          @if (PendingOverwritePath) {
+            <mj-alert Variant="warning" data-testid="library-export-overwrite-alert">
+              A file already exists at <strong>{{ PendingOverwritePath }}</strong>. Click
+              <strong>Overwrite Existing File</strong> to replace it, or change the file name above.
+            </mj-alert>
+          }
 
           @if (ErrorMessage) {
             <mj-alert Variant="error">{{ ErrorMessage }}</mj-alert>
@@ -857,11 +879,15 @@ export class LibraryCreateDialogComponent extends BaseAngularComponent implement
             mjButton
             variant="primary"
             [disabled]="!SelectedAccountId || IsExporting"
-            (click)="ExportNow()"
+            (click)="ExportNow(!!PendingOverwritePath)"
+            data-testid="library-export-confirm-btn"
           >
             @if (IsExporting) {
               <i class="fa-solid fa-spinner fa-spin"></i>
               Publishing…
+            } @else if (PendingOverwritePath) {
+              <i class="fa-solid fa-triangle-exclamation"></i>
+              Overwrite Existing File
             } @else {
               <i class="fa-solid fa-cloud-arrow-up"></i>
               Publish to Drive
@@ -939,8 +965,10 @@ export class LibraryCreateDialogComponent extends BaseAngularComponent implement
 export class LibraryExportDriveDialogComponent extends BaseAngularComponent implements OnChanges {
   @Input() IsOpen = false;
   @Input() Item: LibraryItemSummary | null = null;
+  @Input() VersionNumber: number | null = null;
   @Input() Drives: LibraryDriveSummary[] = [];
   @Input() CurrentUser!: UserInfo;
+  @Input() StorageClientOverride: GraphQLFileStorageClient | null = null;
 
   @Output() Published = new EventEmitter<{ AccountId: string; ObjectPath: string }>();
   @Output() Cancelled = new EventEmitter<void>();
@@ -952,39 +980,45 @@ export class LibraryExportDriveDialogComponent extends BaseAngularComponent impl
   public FileName = '';
   public IsExporting = false;
   public ErrorMessage = '';
+  public PendingOverwritePath: string | null = null;
 
   private readonly creationService = inject(LibraryCreationService);
   private readonly notifications = inject(MJNotificationService);
   private readonly cdr = inject(ChangeDetectorRef);
+
+  public get EffectiveVersionNumber(): number {
+    return this.VersionNumber ?? this.Item?.LatestVersionNumber ?? 1;
+  }
 
   public ngOnChanges(changes: SimpleChanges): void {
     if (changes['IsOpen'] && this.IsOpen && this.Item) {
       this.FormatOptions = this.creationService.GetSupportedDriveExportFormats(
         this.Item.DriverClass,
         this.Item.TypeName,
+        this.Item.ContentMode,
+        this.Item.FileName,
       );
       this.SelectedFormat = this.FormatOptions[0]?.Format ?? 'txt';
       this.SelectedAccountId = this.Drives[0]?.AccountId ?? '';
       this.FileName = this.Item.Name;
       this.ErrorMessage = '';
+      this.PendingOverwritePath = null;
     }
   }
 
-  public async ExportNow(): Promise<void> {
+  public ClearOverwritePrompt(): void {
+    this.PendingOverwritePath = null;
+    this.ErrorMessage = '';
+  }
+
+  public async ExportNow(confirmOverwrite = false): Promise<void> {
     if (!this.Item || !this.SelectedAccountId || this.IsExporting) return;
     this.IsExporting = true;
     this.ErrorMessage = '';
     this.cdr.detectChanges();
 
     try {
-      let versionEntity: MJArtifactVersionEntity | undefined;
-      if (this.Item.LatestVersionId) {
-        versionEntity = await ArtifactMetadataEngine.Instance.GetVersionContent(
-          this.Item.LatestVersionId,
-          this.CurrentUser,
-          this.ProviderToUse,
-        );
-      }
+      const versionEntity = await this.resolveTargetVersionEntity(this.Item);
       const content = versionEntity?.Content ?? '';
       const configuration = versionEntity?.Configuration ?? null;
 
@@ -992,13 +1026,22 @@ export class LibraryExportDriveDialogComponent extends BaseAngularComponent impl
         ArtifactName: this.Item.Name,
         VersionContent: content,
         VersionConfiguration: configuration,
+        VersionContentMode: versionEntity?.ContentMode ?? this.Item.ContentMode,
+        ArtifactVersionID: versionEntity?.ID ?? this.Item.LatestVersionId,
+        VersionFileID: versionEntity?.FileID ?? null,
+        VersionMimeType: versionEntity?.MimeType ?? this.Item.MimeType,
+        VersionFileName: versionEntity?.FileName ?? this.Item.FileName,
         Format: this.SelectedFormat,
         AccountID: this.SelectedAccountId,
         TargetFolderPrefix: this.FolderPrefix,
         TargetFileName: this.FileName,
+        AllowOverwrite: confirmOverwrite,
         CurrentUser: this.CurrentUser,
+        Provider: this.ProviderToUse,
+        StorageClientOverride: this.StorageClientOverride ?? undefined,
       });
 
+      this.PendingOverwritePath = null;
       this.notifications.CreateSimpleNotification(
         `Published "${published.ObjectPath}" to Connected Drive`,
         'success',
@@ -1009,10 +1052,44 @@ export class LibraryExportDriveDialogComponent extends BaseAngularComponent impl
         ObjectPath: published.ObjectPath,
       });
     } catch (err) {
-      this.ErrorMessage = err instanceof Error ? err.message : 'Export to Connected Drive failed.';
+      if (err instanceof RemoteDriveFileExistsError) {
+        this.PendingOverwritePath = err.ObjectPath;
+        this.ErrorMessage = '';
+      } else {
+        this.ErrorMessage = err instanceof Error ? err.message : 'Export to Connected Drive failed.';
+      }
     } finally {
       this.IsExporting = false;
       this.cdr.detectChanges();
     }
+  }
+
+  private async resolveTargetVersionEntity(
+    item: LibraryItemSummary,
+  ): Promise<MJArtifactVersionEntity | undefined> {
+    const targetVersion = this.VersionNumber ?? item.LatestVersionNumber;
+    if (this.VersionNumber != null && this.VersionNumber !== item.LatestVersionNumber) {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const res = await rv.RunView<MJArtifactVersionEntity>(
+        {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ArtifactID='${EscapeSQLString(item.Id)}' AND VersionNumber=${Number(targetVersion)}`,
+          MaxRows: 1,
+          ResultType: 'entity_object',
+        },
+        this.CurrentUser,
+      );
+      if (res.Success && res.Results && res.Results.length > 0) {
+        return res.Results[0];
+      }
+    }
+    if (item.LatestVersionId) {
+      return ArtifactMetadataEngine.Instance.GetVersionContent(
+        item.LatestVersionId,
+        this.CurrentUser,
+        this.ProviderToUse,
+      );
+    }
+    return undefined;
   }
 }

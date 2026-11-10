@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, S
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { UserInfo, Metadata, RunView, RunViewParams, LogError, CompositeKey, DataSnapshot } from '@memberjunction/core';
-import { ParseJSONRecursive, ParseJSONOptions , UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, ParseJSONRecursive, ParseJSONOptions, UUIDsEqual } from '@memberjunction/global';
 import { MJArtifactEntity, MJArtifactVersionEntity, MJArtifactVersionAttributeEntity, MJArtifactTypeEntity, MJCollectionEntity, MJCollectionArtifactEntity, ArtifactMetadataEngine, MJConversationEntity, MJConversationDetailArtifactEntity, MJConversationDetailEntity, MJArtifactUseEntity, ConversationEngine, type ConversationScope } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import type { PdfOrientation } from '@memberjunction/ng-react';
@@ -171,7 +171,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     return this.ContextCollectionId;
   } // If viewing in collection, which collection
   @Input() canShare?: boolean; // Whether user can share this artifact
-  @Input() canEdit?: boolean; // Whether user can edit this artifact
+  @Input() canEdit = false; // Default read-only unless explicitly granted edit permission
   @Input() IsMaximized: boolean = false;
 
   /** @deprecated Use {@link IsMaximized}. */
@@ -1367,7 +1367,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    * inline-editable viewer plugin emits `ContentCommitted`.
    */
   public async OnPluginContentCommitted(serializedContent: string): Promise<void> {
-    if (!this.Artifact || !this.CurrentUser || this.canEdit === false) {
+    if (!this.Artifact || !this.CurrentUser || !this.canEdit) {
       return;
     }
     try {
@@ -1375,16 +1375,37 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       const currentMaxVersion = this.AllVersions.reduce((max, v) => Math.max(max, v.VersionNumber || 0), 0);
 
       // Check whether the plugin itself already saved the new version row in the database
-      const latestCheck = await rv.RunView<MJArtifactVersionEntity>(
-        this.buildVersionListQuery(this.Artifact.ID, this.activeScope),
-        this.CurrentUser
+      const [latestCheck, unscopedMaxCheck] = await Promise.all([
+        rv.RunView<MJArtifactVersionEntity>(
+          this.buildVersionListQuery(this.Artifact.ID, this.activeScope),
+          this.CurrentUser,
+        ),
+        rv.RunView<{ ID: string; VersionNumber: number }>(
+          {
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ArtifactID='${EscapeSQLString(this.Artifact.ID)}'`,
+            OrderBy: 'VersionNumber DESC',
+            Fields: ['ID', 'VersionNumber'],
+            MaxRows: 1,
+            ResultType: 'simple',
+          },
+          this.CurrentUser,
+        ),
+      ]);
+
+      const dbMaxVersion = Math.max(
+        currentMaxVersion,
+        unscopedMaxCheck.Success && unscopedMaxCheck.Results?.[0]?.VersionNumber
+          ? unscopedMaxCheck.Results[0].VersionNumber
+          : 0,
       );
+
       if (latestCheck.Success && latestCheck.Results && latestCheck.Results.length > 0) {
         const newestInDb = latestCheck.Results[0];
         if ((newestInDb.VersionNumber || 0) > currentMaxVersion) {
           this.AllVersions = latestCheck.Results;
           this.applyVersionScope(this.activeScope);
-          this.SelectedVersionNumber = newestInDb.VersionNumber || currentMaxVersion + 1;
+          this.SelectedVersionNumber = newestInDb.VersionNumber || dbMaxVersion;
           this.JsonContent = this.formatJSON(serializedContent);
           this.cdr.detectChanges();
           return;
@@ -1392,7 +1413,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       }
 
       const md = this.ProviderToUse;
-      const nextVersionNum = currentMaxVersion + 1;
+      const nextVersionNum = dbMaxVersion + 1;
       const newVer = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', this.CurrentUser);
       newVer.NewRecord();
       newVer.ArtifactID = this.Artifact.ID;
@@ -1410,6 +1431,13 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
         this.AllVersions = [newVer, ...this.AllVersions];
         this.JsonContent = this.formatJSON(serializedContent);
         this.cdr.detectChanges();
+      } else {
+        LogError(newVer.LatestResult?.Message || 'Failed to save new artifact version.');
+        this.notificationService?.CreateSimpleNotification?.(
+          'Failed to save new artifact version.',
+          'error',
+          4000,
+        );
       }
     } catch (err) {
       LogError(err);
@@ -1805,7 +1833,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    * checkpoint (`v(N+1)`) with `Description = "Restored from vK"`.
    */
   public async OnRestoreComparedVersion(versionNumber: number): Promise<void> {
-    if (!this.Artifact || !this.CurrentUser || this.canEdit === false || this.IsRestoringVersion) {
+    if (!this.Artifact || !this.CurrentUser || !this.canEdit || this.IsRestoringVersion) {
       return;
     }
     this.IsRestoringVersion = true;
@@ -1823,7 +1851,22 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       }
 
       const md = this.ProviderToUse;
-      const currentMaxVersion = this.AllVersions.reduce((max, v) => Math.max(max, v.VersionNumber || 0), 0);
+      const rv = RunView.FromMetadataProvider(md);
+      const maxRes = await rv.RunView<{ VersionNumber: number }>(
+        {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ArtifactID='${EscapeSQLString(this.Artifact.ID)}'`,
+          OrderBy: 'VersionNumber DESC',
+          Fields: ['VersionNumber'],
+          MaxRows: 1,
+          ResultType: 'simple',
+        },
+        this.CurrentUser,
+      );
+      const currentMaxVersion = Math.max(
+        this.AllVersions.reduce((max, v) => Math.max(max, v.VersionNumber || 0), 0),
+        maxRes.Success && maxRes.Results?.[0]?.VersionNumber ? maxRes.Results[0].VersionNumber : 0,
+      );
       const nextVersionNum = currentMaxVersion + 1;
 
       const restoredVer = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', this.CurrentUser);

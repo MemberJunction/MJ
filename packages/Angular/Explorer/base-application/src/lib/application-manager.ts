@@ -33,6 +33,7 @@ export class ApplicationManager {
   private activeApp$ = new BehaviorSubject<BaseApplication | null>(null);
   private loading$ = new BehaviorSubject<boolean>(false);
   private initialized = false;
+  private provisionedHeaderAppIds = new Set<string>();
 
   /** Resolves when loadApplications() has completed successfully */
   private _readyResolve!: () => void;
@@ -192,18 +193,15 @@ export class ApplicationManager {
     if (engine.IsPermissionConstrained) return; // No data available — nothing to sync
     const userApps = engine.UserApplications;
 
-    // Build a map for quick lookup
-    const appMap = new Map<string, BaseApplication>();
-    for (const app of allApps) {
-      appMap.set(app.ID, app);
-    }
+    // Build a map for quick lookup (UUID case-insensitive)
+    const appMap = IndexByUUID(allApps);
 
     // Build user's filtered and ordered app list
     const userAppConfigs: UserAppConfig[] = [];
     const activeApps: BaseApplication[] = [];
 
     for (const userApp of userApps) {
-      const app = appMap.get(userApp.ApplicationID);
+      const app = appMap.Get(userApp.ApplicationID);
       if (app && userApp.IsActive && engine.UserHasApplicationAccess(userApp.ApplicationID)) {
         userAppConfigs.push({
           app,
@@ -353,11 +351,8 @@ export class ApplicationManager {
     const md = this.Provider;
     const allApps = this.allApplications$.value;
 
-    // Build a map for quick lookup
-    const appMap = new Map<string, BaseApplication>();
-    for (const app of allApps) {
-      appMap.set(app.ID, app);
-    }
+    // Build a map for quick lookup (UUID case-insensitive)
+    const appMap = IndexByUUID(allApps);
 
     // Load user's UserApplication records using UserInfoEngine for caching
     const engine = UserInfoEngine.Instance;
@@ -378,6 +373,8 @@ export class ApplicationManager {
     if (userApps.length === 0) {
       LogStatus(`User ${md.CurrentUser.Name} has no UserApplication records, creating from DefaultForNewUser apps`);
       userApps = await this.createDefaultUserApplications();
+    } else {
+      userApps = await this.provisionMissingHeaderDefaultApps(userApps);
     }
 
     // Build user's filtered and ordered app list
@@ -385,7 +382,7 @@ export class ApplicationManager {
     const activeApps: BaseApplication[] = [];
 
     for (const userApp of userApps) {
-      const app = appMap.get(userApp.ApplicationID);
+      const app = appMap.Get(userApp.ApplicationID);
       if (app && userApp.IsActive && engine.UserHasApplicationAccess(userApp.ApplicationID)) {
         userAppConfigs.push({
           app,
@@ -454,6 +451,93 @@ export class ApplicationManager {
   private async createDefaultUserApplications(): Promise<MJUserApplicationEntity[]> {
     const engine = UserInfoEngine.Instance;
     return await engine.CreateDefaultApplications();
+  }
+
+  /**
+   * Provisions newly-shipped core header-pinned default applications (`DefaultForNewUser === true`,
+   * `TopNavLocation === 'Left of User Menu'`, `NavigationStyle` in `'Both' | 'Nav Bar' | 'Top Bar'`)
+   * for existing users who have NO `MJ: User Applications` row at all for that application.
+   *
+   * If a user explicitly disabled an app, a row STILL exists in `userApps` with `IsActive === false`,
+   * so checking `!userApps.some(ua => UUIDsEqual(ua.ApplicationID, appInfo.ID))` strictly respects
+   * user-disabled apps while automatically provisioning newly-shipped header apps like `Library`.
+   */
+  private async provisionMissingHeaderDefaultApps(
+    userApps: MJUserApplicationEntity[],
+  ): Promise<MJUserApplicationEntity[]> {
+    const md = this.Provider;
+    const userId = md.CurrentUser?.ID;
+    if (!userId) {
+      return userApps;
+    }
+
+    const engine = UserInfoEngine.Instance;
+    const missingHeaderApps = md.Applications.filter((appInfo) => {
+      const navStyle: string = appInfo.NavigationStyle;
+      return (
+        appInfo.Status === 'Active' &&
+        appInfo.DefaultForNewUser === true &&
+        appInfo.TopNavLocation === 'Left of User Menu' &&
+        (navStyle === 'Both' || navStyle === 'Nav Bar' || navStyle === 'Top Bar') &&
+        engine.UserHasApplicationAccess(appInfo.ID) &&
+        !this.provisionedHeaderAppIds.has(appInfo.ID.toLowerCase()) &&
+        !userApps.some((ua) => UUIDsEqual(ua.ApplicationID, appInfo.ID))
+      );
+    }).sort((a, b) => (a.DefaultSequence ?? 100) - (b.DefaultSequence ?? 100));
+
+    if (missingHeaderApps.length === 0) {
+      return userApps;
+    }
+
+    const combined = [...userApps];
+    let createdCount = 0;
+
+    for (const appInfo of missingHeaderApps) {
+      this.provisionedHeaderAppIds.add(appInfo.ID.toLowerCase());
+      try {
+        const newUserApp = await md.GetEntityObject<MJUserApplicationEntity>(
+          'MJ: User Applications',
+          md.CurrentUser,
+        );
+        newUserApp.NewRecord();
+        newUserApp.UserID = userId;
+        newUserApp.ApplicationID = appInfo.ID;
+        newUserApp.Sequence = appInfo.DefaultSequence ?? combined.length;
+        newUserApp.IsActive = true;
+
+        const saved = await newUserApp.Save();
+        if (saved) {
+          combined.push(newUserApp);
+          if (
+            Array.isArray(engine.UserApplications) &&
+            !engine.UserApplications.some((ua) => UUIDsEqual(ua.ApplicationID, appInfo.ID))
+          ) {
+            engine.UserApplications.push(newUserApp);
+          }
+          createdCount++;
+          LogStatus(
+            `ApplicationManager: Provisioned newly-shipped header application "${appInfo.Name}" for user ${md.CurrentUser.Name}`,
+          );
+        } else {
+          this.provisionedHeaderAppIds.delete(appInfo.ID.toLowerCase());
+          LogError(
+            `ApplicationManager: Failed to provision header application "${appInfo.Name}": ${newUserApp.LatestResult?.Message ?? 'Save returned false'}`,
+          );
+        }
+      } catch (err) {
+        this.provisionedHeaderAppIds.delete(appInfo.ID.toLowerCase());
+        LogError(
+          `ApplicationManager: Error provisioning header application "${appInfo.Name}":`,
+          undefined,
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    }
+
+    if (createdCount > 0) {
+      combined.sort((a, b) => (a.Sequence ?? 0) - (b.Sequence ?? 0));
+    }
+    return combined;
   }
 
   /**

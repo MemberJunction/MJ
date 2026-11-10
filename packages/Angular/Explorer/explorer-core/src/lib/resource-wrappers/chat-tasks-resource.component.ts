@@ -1,6 +1,6 @@
 import { Component, ViewEncapsulation, OnDestroy, ViewChild } from '@angular/core';
 import { CompositeKey, UserInfo } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
@@ -76,15 +76,19 @@ export class ChatTasksResource extends BaseResourceComponent implements OnDestro
   public activeTaskId?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   /**
-   * Default synchronous fallback filter scoping `MJ: Tasks` to agent- or conversation-originated
-   * roots so human deliverables from `bizapps-tasks` do not bleed into Chat's Agent Activity monitor.
+   * Default synchronous fallback filter scoping `MJ: Tasks` to top-level tasks owned by the user
+   * or originated from conversations / agents so human deliverables from other apps do not bleed in.
    */
   public get AgentActivityBaseFilter(): string {
-    return '(ConversationDetailID IS NOT NULL OR AgentID IS NOT NULL OR AgentRunID IS NOT NULL)';
+    const userClause = this.CurrentUser?.ID
+      ? `UserID = '${EscapeSQLString(this.CurrentUser.ID)}' OR `
+      : '';
+    return `ParentID IS NULL AND (${userClause}ConversationDetailID IS NOT NULL OR AgentID IS NOT NULL OR AgentRunID IS NOT NULL)`;
   }
 
   /**
-   * Resolves the user-scoped conversation + agent activity filter for `TasksFullViewComponent`.
+   * Resolves the user-scoped conversation + agent activity filter for `TasksFullViewComponent`,
+   * preserving the user's own top-level tasks (`UserID`) and any task surfaced by Chat search.
    */
   public readonly AgentActivityFilterResolver: () => Promise<string> = () =>
     this.ResolveAgentActivityFilter();
@@ -93,12 +97,13 @@ export class ChatTasksResource extends BaseResourceComponent implements OnDestro
     if (!this.CurrentUser) {
       return this.AgentActivityBaseFilter;
     }
+    const safeUserId = EscapeSQLString(this.CurrentUser.ID);
     const userConversationFilter = await BuildConversationTasksFilter(this.ProviderToUse, this.CurrentUser);
     const tasksEntity = this.ProviderToUse.EntityByName('MJ: Tasks');
     const childStepClause = tasksEntity
-      ? ` OR ID IN (SELECT [ParentID] FROM [${tasksEntity.SchemaName}].[${tasksEntity.BaseView}] WHERE [ParentID] IS NOT NULL AND ([AgentID] IS NOT NULL OR [AgentRunID] IS NOT NULL OR [ConversationDetailID] IS NOT NULL))`
+      ? ` OR ID IN (SELECT [ParentID] FROM [${tasksEntity.SchemaName}].[${tasksEntity.BaseView}] WHERE [ParentID] IS NOT NULL AND ([UserID] = '${safeUserId}' OR [AgentID] IS NOT NULL OR [AgentRunID] IS NOT NULL OR [ConversationDetailID] IS NOT NULL))`
       : '';
-    return `(${userConversationFilter}) AND (ConversationDetailID IS NOT NULL OR AgentID IS NOT NULL OR AgentRunID IS NOT NULL${childStepClause})`;
+    return `(${userConversationFilter}) AND (UserID = '${safeUserId}' OR ConversationDetailID IS NOT NULL OR AgentID IS NOT NULL OR AgentRunID IS NOT NULL${childStepClause})`;
   }
 
   ngOnInit() {
@@ -106,16 +111,17 @@ export class ChatTasksResource extends BaseResourceComponent implements OnDestro
     const md = this.ProviderToUse;
     this.CurrentUser = md.CurrentUser;
 
-    // Apply initial state from query params or tab config
+    // Apply initial state from query params or tab config without clobbering URL on cold mount
     const params = this.GetQueryParams();
     const config = this.Data?.Configuration;
-    const taskId = params['taskId'] || (config?.taskId as string);
+    const configTaskId = typeof config?.['taskId'] === 'string' ? config['taskId'] : undefined;
+    const taskId = params['taskId'] || configTaskId;
     if (taskId) {
       this.activeTaskId = taskId;
+      if (!params['taskId']) {
+        this.UpdateQueryParams({ taskId });
+      }
     }
-
-    // Push initial state to URL
-    this.UpdateQueryParams({ taskId: this.activeTaskId ?? null });
 
     // Notify load complete after user is set
     setTimeout(() => {

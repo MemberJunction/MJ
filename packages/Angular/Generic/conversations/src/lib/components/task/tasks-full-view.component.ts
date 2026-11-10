@@ -2323,8 +2323,16 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
       this.LoadTasks();
     }
 
-    if ((changes['activeTaskId'] || changes['ActiveTaskId']) && this.ActiveTaskId) {
-      this.selectTaskById(this.ActiveTaskId);
+    const activeTaskChange = changes['activeTaskId'] || changes['ActiveTaskId'];
+    if (activeTaskChange) {
+      if (this.ActiveTaskId) {
+        this.selectTaskById(this.ActiveTaskId, false);
+      } else if (
+        !activeTaskChange.firstChange &&
+        (activeTaskChange.previousValue || this.InspectedGroup || this.SelectedTask)
+      ) {
+        this.BackToTaskList(false);
+      }
     }
   }
 
@@ -2889,14 +2897,16 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
     return this.OnTaskClick(task);
   }
 
-  public BackToTaskList(): void {
+  public BackToTaskList(emitEvent: boolean = true): void {
     this.InspectedGroup = null;
     this.InspectedStep = null;
     this.SelectedTask = null;
     this.SubTasks = [];
     this.SubTasksWithParent = [];
     this.ShowDetailAnimation = false;
-    this.TaskSelected.emit(null);
+    if (emitEvent) {
+      this.TaskSelected.emit(null);
+    }
   }
 
   /** @deprecated Use {@link BackToTaskList}. */

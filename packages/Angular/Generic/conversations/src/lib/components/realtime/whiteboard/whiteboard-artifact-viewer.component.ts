@@ -51,10 +51,11 @@ import {
             <button
               type="button"
               class="wb-tool-btn wb-tool-btn--primary"
-              title="Commit whiteboard changes to artifact version"
+              [disabled]="!IsDirty"
+              title="Save and commit whiteboard changes to artifact version"
               (click)="OnCommitInlineChanges()"
             >
-              <i class="fa-solid fa-check" aria-hidden="true"></i> Commit Changes
+              <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Save / Commit Changes
             </button>
           }
           <button type="button" class="wb-tool-btn" title="Download as HTML" [disabled]="!HasBoard && readonly" (click)="OnDownloadHtml()">
@@ -178,7 +179,6 @@ export class WhiteboardArtifactViewerComponent extends BaseArtifactViewerPluginC
   private parsedState: WhiteboardState | null = null;
   private editableState: WhiteboardState | null = null;
   private stateChangeSub: Subscription | null = null;
-  private commitDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private hasUncommittedChanges = false;
   private suppressStateChangeTracking = false;
 
@@ -229,27 +229,24 @@ export class WhiteboardArtifactViewerComponent extends BaseArtifactViewerPluginC
   }
 
   public ngOnDestroy(): void {
-    if (this.hasUncommittedChanges && !this.readonly) {
-      this.CommitCurrentState();
-    }
     this.teardownStateSub();
   }
 
   /**
-   * Immediately flushes and emits the current serialized `WhiteboardState.ToJSON()` payload on `ContentCommitted`
+   * Emits the current serialized `WhiteboardState.ToJSON()` payload on `ContentCommitted`
    * so the host (OLE block host or artifact viewer panel) persists a new `MJ: Artifact Versions` record.
+   * Keeps `parsedForJson` synchronized with the committed JSON so the host's updated version input
+   * does not recreate `editableState` mid-session.
    */
   public CommitCurrentState(): void {
-    if (this.commitDebounceTimer !== null) {
-      clearTimeout(this.commitDebounceTimer);
-      this.commitDebounceTimer = null;
-    }
     const state = this.editableState ?? this.BoardState;
     if (!state) {
       return;
     }
     this.hasUncommittedChanges = false;
     const serialized = state.ToJSON();
+    this.parsedForJson = serialized;
+    this.parsedState = state;
     this.ContentCommitted.emit(serialized);
   }
 
@@ -325,28 +322,11 @@ export class WhiteboardArtifactViewerComponent extends BaseArtifactViewerPluginC
         return;
       }
       this.hasUncommittedChanges = true;
-      this.scheduleAutoCommit();
     });
     this.suppressStateChangeTracking = false;
   }
 
-  private scheduleAutoCommit(): void {
-    if (this.commitDebounceTimer !== null) {
-      clearTimeout(this.commitDebounceTimer);
-    }
-    this.commitDebounceTimer = setTimeout(() => {
-      this.commitDebounceTimer = null;
-      if (this.hasUncommittedChanges && !this.readonly) {
-        this.CommitCurrentState();
-      }
-    }, 600);
-  }
-
   private teardownStateSub(): void {
-    if (this.commitDebounceTimer !== null) {
-      clearTimeout(this.commitDebounceTimer);
-      this.commitDebounceTimer = null;
-    }
     if (this.stateChangeSub) {
       this.stateChangeSub.unsubscribe();
       this.stateChangeSub = null;

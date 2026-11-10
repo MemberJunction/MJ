@@ -1,19 +1,71 @@
 import { Injectable } from '@angular/core';
-import {
-  Document as DocxDocument,
-  Packer,
-  Paragraph,
-  HeadingLevel,
-  TextRun,
-  Table as DocxTable,
-  TableRow as DocxTableRow,
-  TableCell as DocxTableCell,
-  WidthType,
-  BorderStyle,
-} from 'docx';
-import TurndownService from 'turndown';
-import { DocumentLiveBlockEngine } from '@memberjunction/core-entities';
-import { ConvertDocxToHtml, EscapeHtml, type MammothModuleShim } from '../components/previews/office-preview.logic';
+import type * as DocxModule from 'docx';
+import type TurndownService from 'turndown';
+import { DocumentLiveBlockEngine, type DocumentBlockSpec } from '@memberjunction/core-entities';
+import { ConvertDocxToHtml, type MammothModuleShim } from '../components/previews/office-preview.logic';
+
+// dynamic-import: docx (~250KB OOXML archive builder) is deferred until .docx export is invoked to avoid eager bundle cost (Rule 8 #3)
+let docxModulePromise: Promise<typeof DocxModule> | null = null;
+function loadDocxModule(): Promise<typeof DocxModule> {
+  if (!docxModulePromise) {
+    docxModulePromise = import('docx');
+  }
+  return docxModulePromise;
+}
+
+type TurndownServiceConstructor = typeof TurndownService;
+
+// dynamic-import: turndown (HTML-to-Markdown parser) is deferred until .docx/HTML import is invoked to avoid eager bundle cost (Rule 8 #3)
+let turndownServicePromise: Promise<TurndownServiceConstructor> | null = null;
+function loadTurndownService(): Promise<TurndownServiceConstructor> {
+  if (!turndownServicePromise) {
+    turndownServicePromise = import('turndown').then((mod) =>
+      typeof mod === 'function' ? mod : mod.default,
+    );
+  }
+  return turndownServicePromise;
+}
+
+// dynamic-import: mammoth is a heavy Office parser deferred until DOCX import/preview is invoked (Rule 8 #3)
+let mammothModulePromise: Promise<MammothModuleShim> | null = null;
+function loadMammothModule(): Promise<MammothModuleShim> {
+  if (!mammothModulePromise) {
+    mammothModulePromise = import('mammoth').then((mod) => ({
+      convertToHtml: (input) => mod.convertToHtml(input),
+    }));
+  }
+  return mammothModulePromise;
+}
+
+const BLOCKED_PRINT_TAGS = 'script, iframe, object, embed, link';
+const DANGEROUS_URI_PATTERN = /^(?:javascript:|vbscript:|data:text\/html)/i;
+
+/**
+ * Sanitizes a parsed HTML fragment for printable PDF export by removing active content tags,
+ * `on*` inline event attributes, and `javascript:` / `data:text/html` URL attributes.
+ */
+function sanitizePrintBodyFragment(rawHtml: string): Document {
+  const parser = new DOMParser();
+  const parsed = parser.parseFromString(rawHtml ?? '', 'text/html');
+
+  parsed.querySelectorAll(BLOCKED_PRINT_TAGS).forEach((el) => el.remove());
+
+  parsed.querySelectorAll('*').forEach((el) => {
+    for (const attr of Array.from(el.attributes)) {
+      const lowerName = attr.name.toLowerCase();
+      if (lowerName.startsWith('on')) {
+        el.removeAttribute(attr.name);
+        continue;
+      }
+      const normalizedVal = attr.value.replace(/[\u0000-\u0020]+/g, '');
+      if (DANGEROUS_URI_PATTERN.test(normalizedVal)) {
+        el.removeAttribute(attr.name);
+      }
+    }
+  });
+
+  return parsed;
+}
 
 /**
  * Service handling bidirectional document import and export for MJ Docs (§ 4.4):
@@ -48,8 +100,7 @@ export class DocumentImportExportService {
     arrayBuffer: ArrayBuffer,
     mammothOverride?: MammothModuleShim,
   ): Promise<string> {
-    // dynamic-import: mammoth is a heavy Office parser deferred until DOCX import/preview is invoked (Rule 8 #3)
-    const mammothModule = mammothOverride ?? ((await import('mammoth')) as unknown as MammothModuleShim);
+    const mammothModule = mammothOverride ?? (await loadMammothModule());
     const html = await ConvertDocxToHtml(arrayBuffer, mammothModule);
     return this.ConvertHtmlToMarkdown(html);
   }
@@ -61,8 +112,9 @@ export class DocumentImportExportService {
    * @param html HTML string to convert
    * @returns Markdown string
    */
-  public ConvertHtmlToMarkdown(html: string): string {
-    const turndown = new TurndownService({
+  public async ConvertHtmlToMarkdown(html: string): Promise<string> {
+    const TurndownCtor = await loadTurndownService();
+    const turndown = new TurndownCtor({
       headingStyle: 'atx',
       codeBlockStyle: 'fenced',
       bulletListMarker: '-',
@@ -80,7 +132,7 @@ export class DocumentImportExportService {
         }
         const matrix: string[][] = rows.map((tr) =>
           Array.from(tr.querySelectorAll('th, td')).map((cell) =>
-            (cell.textContent ?? '').replace(/\s+/g, ' ').trim().replace(/\|/g, '\\|'),
+            (cell.textContent ?? '').replace(/\s+/g, ' ').trim().replace(/\\/g, '\\\\').replace(/\|/g, '\\|'),
           ),
         );
         const colCount = Math.max(...matrix.map((r) => r.length), 1);
@@ -121,7 +173,9 @@ export class DocumentImportExportService {
    * @returns `Uint8Array` containing the `.docx` archive bytes
    */
   public async ConvertMarkdownToDocxBytes(markdown: string, title = 'Document'): Promise<Uint8Array> {
-    const children: Array<Paragraph | DocxTable> = [];
+    const docx = await loadDocxModule();
+    const { Document: DocxDocument, Packer, Paragraph, TextRun } = docx;
+    const children: Array<DocxModule.Paragraph | DocxModule.Table> = [];
     const lines = markdown.replace(/\r\n/g, '\n').split('\n');
     const parsedSegments = DocumentLiveBlockEngine.Instance.ParseMarkdownDirectives(markdown);
     const blockByStartLine = new Map(
@@ -151,7 +205,7 @@ export class DocumentImportExportService {
         );
         if (block.FrozenSnapshot && block.FrozenSnapshot.Columns.length > 0) {
           const colNames = block.FrozenSnapshot.Columns.map((c) => c.Name);
-          children.push(this.buildDocxTable(colNames, block.FrozenSnapshot.Rows));
+          children.push(this.buildDocxTable(docx, colNames, block.FrozenSnapshot.Rows));
         }
         lineIdx = blockSeg.EndLine;
         continue;
@@ -173,7 +227,7 @@ export class DocumentImportExportService {
         children.push(
           new Paragraph({
             text,
-            heading: this.mapHeadingLevel(level),
+            heading: this.mapHeadingLevel(docx, level),
             spacing: { before: 200, after: 100 },
           }),
         );
@@ -190,7 +244,7 @@ export class DocumentImportExportService {
         }
         const parsedTable = this.parseMarkdownTableLines(tableLines);
         if (parsedTable.headers.length > 0) {
-          children.push(this.buildDocxTableFromCells(parsedTable.headers, parsedTable.rows));
+          children.push(this.buildDocxTableFromCells(docx, parsedTable.headers, parsedTable.rows));
         }
         continue;
       }
@@ -227,7 +281,7 @@ export class DocumentImportExportService {
         const checkbox = bulletMatch[1] !== undefined ? (bulletMatch[1].toLowerCase() === 'x' ? '☑ ' : '☐ ') : '';
         children.push(
           new Paragraph({
-            children: this.parseInlineTextRuns(`${checkbox}${bulletMatch[2]}`),
+            children: this.parseInlineTextRuns(docx, `${checkbox}${bulletMatch[2]}`),
             bullet: { level: 0 },
           }),
         );
@@ -252,7 +306,7 @@ export class DocumentImportExportService {
       // Standard paragraph
       children.push(
         new Paragraph({
-          children: this.parseInlineTextRuns(trimmed),
+          children: this.parseInlineTextRuns(docx, trimmed),
           spacing: { after: 120 },
         }),
       );
@@ -296,48 +350,63 @@ export class DocumentImportExportService {
   }
 
   /**
-   * Opens a styled print / PDF export window for the document.
+   * Opens a styled print / PDF export window for the document using sanitized DOM construction.
    */
   public ExportPrintablePdf(
     renderedHtml: string,
     title: string,
     orientation: 'portrait' | 'landscape' = 'portrait',
   ): void {
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || typeof DOMParser === 'undefined') {
       return;
     }
     const printWin = window.open('', '_blank', 'width=960,height=720');
-    if (!printWin) {
+    if (!printWin || !printWin.document) {
       return;
     }
-    const safeTitle = EscapeHtml(title || 'Document');
-    printWin.document.write(`<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>${safeTitle}</title>
-  <style>
-    @page { size: A4 ${orientation}; margin: 18mm; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.65; font-size: 13px; }
-    h1, h2, h3, h4 { margin-top: 1.4em; margin-bottom: 0.45em; font-weight: 700; }
-    table { border-collapse: collapse; width: 100%; margin: 12px 0; }
-    th, td { border: 1px solid rgba(0, 0, 0, 0.25); padding: 6px 10px; text-align: left; }
-    th { background: rgba(0, 0, 0, 0.05); font-weight: 600; }
-    pre, code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: rgba(0, 0, 0, 0.05); border-radius: 4px; }
-    pre { padding: 10px 12px; overflow-x: auto; }
-    blockquote { border-left: 3px solid rgba(0, 0, 0, 0.4); margin: 10px 0; padding: 6px 12px; background: rgba(0, 0, 0, 0.03); }
-  </style>
-</head>
-<body>
-  ${renderedHtml}
-</body>
-</html>`);
-    printWin.document.close();
+    const safeOrientation: 'landscape' | 'portrait' = orientation === 'landscape' ? 'landscape' : 'portrait';
+    const sanitizedDoc = sanitizePrintBodyFragment(renderedHtml);
+
+    const printDoc = printWin.document;
+    printDoc.title = title || 'Document';
+
+    const metaEl = printDoc.createElement('meta');
+    metaEl.setAttribute('charset', 'utf-8');
+
+    const titleEl = printDoc.createElement('title');
+    titleEl.textContent = title || 'Document';
+
+    const styleEl = printDoc.createElement('style');
+    styleEl.textContent = [
+      `@page { size: A4 ${safeOrientation}; margin: 18mm; }`,
+      'body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.65; font-size: 13px; }',
+      'h1, h2, h3, h4 { margin-top: 1.4em; margin-bottom: 0.45em; font-weight: 700; }',
+      'table { border-collapse: collapse; width: 100%; margin: 12px 0; }',
+      'th, td { border: 1px solid rgba(0, 0, 0, 0.25); padding: 6px 10px; text-align: left; }',
+      'th { background: rgba(0, 0, 0, 0.05); font-weight: 600; }',
+      'pre, code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: rgba(0, 0, 0, 0.05); border-radius: 4px; }',
+      'pre { padding: 10px 12px; overflow-x: auto; }',
+      'blockquote { border-left: 3px solid rgba(0, 0, 0, 0.4); margin: 10px 0; padding: 6px 12px; background: rgba(0, 0, 0, 0.03); }',
+    ].join('\n');
+
+    if (printDoc.head) {
+      printDoc.head.replaceChildren(metaEl, titleEl, styleEl);
+    }
+
+    if (printDoc.body) {
+      const adoptedNodes = Array.from(sanitizedDoc.body.childNodes).map((node) => printDoc.importNode(node, true));
+      printDoc.body.replaceChildren(...adoptedNodes);
+    }
+
     printWin.focus();
     printWin.print();
   }
 
-  private mapHeadingLevel(level: number): (typeof HeadingLevel)[keyof typeof HeadingLevel] {
+  private mapHeadingLevel(
+    docx: typeof DocxModule,
+    level: number,
+  ): (typeof DocxModule.HeadingLevel)[keyof typeof DocxModule.HeadingLevel] {
+    const { HeadingLevel } = docx;
     switch (level) {
       case 1:
         return HeadingLevel.HEADING_1;
@@ -354,8 +423,9 @@ export class DocumentImportExportService {
     }
   }
 
-  private parseInlineTextRuns(text: string): TextRun[] {
-    const runs: TextRun[] = [];
+  private parseInlineTextRuns(docx: typeof DocxModule, text: string): DocxModule.TextRun[] {
+    const { TextRun } = docx;
+    const runs: DocxModule.TextRun[] = [];
     const tokenRegex = /(\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`)/g;
     let lastIndex = 0;
     let match: RegExpExecArray | null;
@@ -395,12 +465,30 @@ export class DocumentImportExportService {
     return { headers, rows };
   }
 
-  private buildDocxTable(columns: string[], rows: Array<Record<string, unknown>>): DocxTable {
+  private buildDocxTable(
+    docx: typeof DocxModule,
+    columns: string[],
+    rows: NonNullable<DocumentBlockSpec['FrozenSnapshot']>['Rows'],
+  ): DocxModule.Table {
     const cellMatrix = rows.map((r) => columns.map((col) => (r[col] == null ? '' : String(r[col]))));
-    return this.buildDocxTableFromCells(columns, cellMatrix);
+    return this.buildDocxTableFromCells(docx, columns, cellMatrix);
   }
 
-  private buildDocxTableFromCells(headers: string[], rows: string[][]): DocxTable {
+  private buildDocxTableFromCells(
+    docx: typeof DocxModule,
+    headers: string[],
+    rows: string[][],
+  ): DocxModule.Table {
+    const {
+      Table: DocxTable,
+      TableRow: DocxTableRow,
+      TableCell: DocxTableCell,
+      Paragraph,
+      TextRun,
+      WidthType,
+      BorderStyle,
+    } = docx;
+
     const headerRow = new DocxTableRow({
       children: headers.map(
         (h) =>

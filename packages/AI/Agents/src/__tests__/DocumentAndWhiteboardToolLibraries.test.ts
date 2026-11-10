@@ -208,9 +208,55 @@ describe('DocumentToolLibrary (@RegisterClass BaseArtifactToolLibrary)', () => {
       docWithOle,
     );
     expect(suggestRes.success).toBe(true);
-    const proposal = (suggestRes.data as { suggestion: { status: string; authorName: string } }).suggestion;
+    const proposal = (suggestRes.data as { suggestion: { status: string; authorName: string; proposedText: string } }).suggestion;
     expect(proposal.status).toBe('pending');
     expect(proposal.authorName).toBe('@DocsAgent');
+    expect(proposal.proposedText).toBe('# Executive Summary (Final)');
+  });
+
+  it('D6 & CodeQL: preserves <!-- mj-block-id: ... --> comments across edits, mints stable IDs on inserted blocks, and escapes backslashes before pipes in upsert_table', async () => {
+    const docWithAnchor = [
+      '<!-- mj-block-id: custom-hero-anchor -->',
+      '# Anchored Executive Heading',
+      '',
+      '<!-- mj-block-id: custom-body-anchor -->',
+      'Original anchored paragraph.',
+    ].join('\n');
+
+    const replaceRes = await lib.InvokeTool(
+      'replace_block',
+      { blockId: 'custom-body-anchor', markdown: 'Updated anchored paragraph.' },
+      docWithAnchor,
+    );
+    expect(replaceRes.success).toBe(true);
+    const afterReplace = (replaceRes.data as { updatedContent: string }).updatedContent;
+    expect(afterReplace).toContain('<!-- mj-block-id: custom-hero-anchor -->');
+    expect(afterReplace).toContain('<!-- mj-block-id: custom-body-anchor -->');
+
+    const insertRes = await lib.InvokeTool(
+      'insert_block_after',
+      { afterBlockId: 'custom-hero-anchor', markdown: 'Newly inserted middle paragraph.' },
+      afterReplace,
+    );
+    expect(insertRes.success).toBe(true);
+    const insertData = insertRes.data as { blockId: string; updatedContent: string };
+    expect(insertData.blockId).toMatch(/^blk-/);
+    expect(insertData.updatedContent).toContain(`<!-- mj-block-id: ${insertData.blockId} -->`);
+    expect(insertData.updatedContent).toContain('<!-- mj-block-id: custom-body-anchor -->');
+
+    const tableRes = await lib.InvokeTool(
+      'upsert_table',
+      {
+        headers: ['Col\\|Header', 'Value'],
+        rows: [['Path\\to\\item | Pipe', 'Line1\nLine2']],
+      },
+      insertData.updatedContent,
+    );
+    expect(tableRes.success).toBe(true);
+    const withTable = (tableRes.data as { updatedContent: string }).updatedContent;
+    expect(withTable).toContain('Col\\\\\\|Header');
+    expect(withTable).toContain('Path\\\\to\\\\item \\| Pipe');
+    expect(withTable).toContain('Line1 Line2');
   });
 });
 
@@ -550,5 +596,60 @@ describe('SpreadsheetToolLibrary (Wave 3 — MJ Sheets § 3.6 & § 6)', () => {
     expect(reloadedSheet!.getCell('B3').value).toBe(10500);
     expect(reloadedSheet!.getCell('B4').formula).toBe('SUM(B2:B3)');
     expect(reloadedSheet!.getCell('B4').result).toBe(25500);
+  });
+
+  it('E6 & D6: supports ExcelToolLibrary parity tools (get_sheets, get_sheet_data, search_cells, aggregate_column, get_formulas) and enforces size caps', async () => {
+    const setupRes = await sheetLib.InvokeTool(
+      'write_cells',
+      {
+        cells: [
+          { address: 'A1', value: 'Region' },
+          { address: 'B1', value: 'Revenue' },
+          { address: 'A2', value: 'North America' },
+          { address: 'B2', value: 1200 },
+          { address: 'A3', value: 'EMEA' },
+          { address: 'B3', value: 800 },
+          { address: 'A4', value: 'Total' },
+          { address: 'B4', formula: '=SUM(B2:B3)' },
+        ],
+      },
+      '',
+    );
+    const wbJson = (setupRes.data as { updatedContent: string }).updatedContent;
+
+    const sheetsRes = await sheetLib.InvokeTool('get_sheets', {}, wbJson);
+    expect(sheetsRes.success).toBe(true);
+    expect((sheetsRes.data as { sheets: Array<{ name: string }> }).sheets[0].name).toBe('Sheet 1');
+
+    const dataRes = await sheetLib.InvokeTool('get_sheet_data', { sheet: 'Sheet 1', startRow: 1, rowCount: 2 }, wbJson);
+    expect(dataRes.success).toBe(true);
+    expect((dataRes.data as { rows: Array<Record<string, unknown>> }).rows).toEqual([
+      { Region: 'North America', Revenue: 1200 },
+      { Region: 'EMEA', Revenue: 800 },
+    ]);
+
+    const searchRes = await sheetLib.InvokeTool('search_cells', { query: 'EMEA' }, wbJson);
+    expect(searchRes.success).toBe(true);
+    expect((searchRes.data as { matches: Array<{ cell: string }> }).matches[0].cell).toBe('A3');
+
+    const aggRes = await sheetLib.InvokeTool(
+      'aggregate_column',
+      { sheet: 'Sheet 1', column: 'Revenue', operation: 'sum' },
+      wbJson,
+    );
+    expect(aggRes.success).toBe(true);
+    expect((aggRes.data as { value: number }).value).toBe(4000); // 1200 + 800 + 2000 (Total row)
+
+    const formulasRes = await sheetLib.InvokeTool('get_formulas', { sheet: 'Sheet 1' }, wbJson);
+    expect(formulasRes.success).toBe(true);
+    expect((formulasRes.data as { formulas: Array<{ cell: string; formula: string }> }).formulas).toEqual([
+      { cell: 'B4', formula: '=SUM(B2:B3)', computedValue: 2000 },
+    ]);
+
+    // D6 caps enforcement
+    expect((await sheetLib.InvokeTool('add_sheet', { name: 'Huge', rowCount: 20000 }, wbJson)).success).toBe(false);
+    expect((await sheetLib.InvokeTool('add_sheet', { name: 'Wide', columnCount: 300 }, wbJson)).success).toBe(false);
+    expect((await sheetLib.InvokeTool('insert_rows', { atRowNumber: 1, count: 1500 }, wbJson)).success).toBe(false);
+    expect((await sheetLib.InvokeTool('read_range', { range: 'A1:Z500' }, wbJson)).success).toBe(false);
   });
 });

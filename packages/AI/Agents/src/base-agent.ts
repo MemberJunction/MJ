@@ -2824,7 +2824,11 @@ export class BaseAgent {
             // the manifest (injected via _ARTIFACT_MANIFEST below) reaches the LLM.
             const inputArtifacts: InputArtifact[] | undefined = wrappedParams.inputArtifacts;
             if (inputArtifacts?.length) {
-                this._artifactToolManager.Initialize(inputArtifacts);
+                this._artifactToolManager.Initialize(inputArtifacts, {
+                    contextUser: params.contextUser,
+                    provider: this.ProviderToUse,
+                    getAgentRun: () => this._agentRun
+                });
                 this.logStatus(`[ArtifactTools] Initialized with ${inputArtifacts.length} artifact(s): ${inputArtifacts.map(a => `${a.typeName}:"${a.name}"`).join(', ')}`, true, params);
             } else {
                 this.logStatus(`[ArtifactTools] No input artifacts found for this run`, true, params);

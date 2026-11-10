@@ -7,8 +7,12 @@ import * as syncProtocol from 'y-protocols/sync';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
+import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
+import { UserCache } from '@memberjunction/generic-database-provider';
+import { BytesToBase64 } from '@memberjunction/global';
 import {
+    ArtifactMetadataEngine,
     ArtifactPermissionEngine,
     DocumentLiveBlockEngine,
     SpreadsheetEngine,
@@ -17,6 +21,13 @@ import {
     type WorksheetSpec
 } from '@memberjunction/core-entities';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
+
+vi.mock('../config.js', () => ({
+    configInfo: {
+        apiBasePath: '/',
+        cors: { allowedOrigins: ['*'] }
+    }
+}));
 
 vi.mock('../context.js', () => ({
     getUserPayload: vi.fn(async () => null)
@@ -76,13 +87,15 @@ import {
     YjsRelayMessage
 } from '../collaboration/YjsRoomRelay.js';
 import { DocumentCollaborationResolver } from '../resolvers/DocumentCollaborationResolver.js';
-import type { AppContext } from '../types.js';
+import { getUserPayload } from '../context.js';
+import type { AppContext, DataSourceInfo } from '../types.js';
 
 interface MockStoredWorkingState {
     ID: string;
     ArtifactID: string;
     YjsState: string;
     LastModifiedByUserID: string;
+    __mj_UpdatedAt?: string;
 }
 
 interface MockStoredVersion {
@@ -92,6 +105,8 @@ interface MockStoredVersion {
     Content: string;
     ContentHash: string;
     UserID: string;
+    __mj_CreatedAt?: string;
+    __mj_UpdatedAt?: string;
 }
 
 interface MockPermissionMapEntry {
@@ -253,6 +268,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
                     const record: MockStoredWorkingState & {
                         NewRecord: () => void;
                         Load: (id: string) => Promise<boolean>;
+                        LoadFromData: (data: Partial<MockStoredWorkingState>) => Promise<boolean>;
                         Save: () => Promise<boolean>;
                     } = {
                         ID: 'ws-row-1',
@@ -272,12 +288,22 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
                             }
                             return true;
                         },
+                        async LoadFromData(data: Partial<MockStoredWorkingState>) {
+                            if (data.ID) this.ID = data.ID;
+                            if (data.ArtifactID) this.ArtifactID = data.ArtifactID;
+                            if (data.YjsState !== undefined) this.YjsState = data.YjsState;
+                            if (data.LastModifiedByUserID !== undefined) {
+                                this.LastModifiedByUserID = data.LastModifiedByUserID;
+                            }
+                            return true;
+                        },
                         async Save() {
                             workingStates.set(this.ArtifactID, {
                                 ID: this.ID,
                                 ArtifactID: this.ArtifactID,
                                 YjsState: this.YjsState,
-                                LastModifiedByUserID: this.LastModifiedByUserID
+                                LastModifiedByUserID: this.LastModifiedByUserID,
+                                __mj_UpdatedAt: new Date().toISOString()
                             });
                             return true;
                         }
@@ -299,13 +325,16 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
                             this.ID = `ver-${versions.length + 1}`;
                         },
                         async Save() {
+                            const now = new Date().toISOString();
                             versions.push({
                                 ID: this.ID,
                                 ArtifactID: this.ArtifactID,
                                 VersionNumber: this.VersionNumber,
                                 Content: this.Content,
                                 ContentHash: this.ContentHash,
-                                UserID: this.UserID
+                                UserID: this.UserID,
+                                __mj_CreatedAt: now,
+                                __mj_UpdatedAt: now
                             });
                             return true;
                         }
@@ -665,14 +694,23 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         expect(perms.CanRead).toBe(true);
         expect(perms.CanEdit).toBe(true);
 
-        // 2. FreezeDocumentLiveBlock requires acknowledgeSecurityWarning=true
+        // 2. FreezeDocumentLiveBlock & ExecuteDocumentLiveBlock require non-empty hostArtifactId
         const specJson = JSON.stringify({
             BlockID: 'blk-live-1',
             Kind: 'EntityView',
             Mode: 'Live',
             EntityName: 'MJ: Users'
         });
-        const unackedFreeze = await resolver.FreezeDocumentLiveBlock(specJson, false, editorCtx);
+        const missingHostExec = await resolver.ExecuteDocumentLiveBlock(specJson, editorCtx);
+        expect(missingHostExec.Success).toBe(false);
+        expect(missingHostExec.AccessDenied).toBe(true);
+        expect(missingHostExec.ErrorMessage).toContain('hostArtifactId');
+
+        const missingHostFreeze = await resolver.FreezeDocumentLiveBlock(specJson, true, editorCtx);
+        expect(missingHostFreeze.Success).toBe(false);
+        expect(missingHostFreeze.ErrorMessage).toContain('hostArtifactId');
+
+        const unackedFreeze = await resolver.FreezeDocumentLiveBlock(specJson, false, editorCtx, artifactId);
         expect(unackedFreeze.Success).toBe(false);
         expect(unackedFreeze.ErrorMessage).toContain('acknowledgeSecurityWarning');
 
@@ -688,7 +726,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             ExecutedAt: '2026-11-08T10:00:00.000Z'
         });
 
-        const ackedFreeze = await resolver.FreezeDocumentLiveBlock(specJson, true, editorCtx);
+        const ackedFreeze = await resolver.FreezeDocumentLiveBlock(specJson, true, editorCtx, artifactId);
         expect(ackedFreeze.Success).toBe(true);
         expect(ackedFreeze.UpdatedSpecJSON).toContain('"Mode":"Frozen"');
         execSpy.mockRestore();
@@ -1032,5 +1070,599 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
 
         clientA.ws.close();
         clientB.ws.close();
+    });
+
+    it('mints single-use collaboration tickets via MintArtifactCollaborationTicket and rejects ticket replay with 401 (A3)', async () => {
+        // Use real ticket/header auth rather than the test override
+        ArtifactCollaborationServer.Instance.SetAuthResolverOverride(null);
+
+        const resolver = new DocumentCollaborationResolver();
+        const mockProvider = createMockProvider();
+        const editorCtx: AppContext = {
+            dataSource: {} as AppContext['dataSource'],
+            dataSources: [],
+            providers: [{ provider: mockProvider, type: 'Read-Write' }],
+            userPayload: {
+                userRecord: editorUser,
+                email: editorUser.Email,
+                sessionId: 'sess-ticket-1'
+            }
+        };
+
+        const minted = await resolver.MintArtifactCollaborationTicket(artifactId, editorCtx);
+        expect(minted.Success).toBe(true);
+        expect(minted.Ticket).toBeDefined();
+        expect(minted.Ticket!.length).toBeGreaterThanOrEqual(32);
+        expect(minted.CanRead).toBe(true);
+        expect(minted.CanEdit).toBe(true);
+        expect(minted.WsPath).toBe(ARTIFACT_COLLABORATION_WS_PATH);
+
+        // 1. First WebSocket connection with the minted single-use ticket succeeds
+        const firstWs = new WsClient(
+            `ws://127.0.0.1:${wsPort}${minted.WsPath}?artifactId=${artifactId}&ticket=${encodeURIComponent(minted.Ticket!)}`
+        );
+        await new Promise<void>((resolve, reject) => {
+            firstWs.once('open', () => resolve());
+            firstWs.once('error', (err) => reject(err));
+        });
+        firstWs.close();
+
+        // 2. Second WebSocket connection reusing the exact same ticket is rejected with HTTP 401!
+        const replayStatus = await new Promise<number>((resolve) => {
+            const replayWs = new WsClient(
+                `ws://127.0.0.1:${wsPort}${minted.WsPath}?artifactId=${artifactId}&ticket=${encodeURIComponent(minted.Ticket!)}`
+            );
+            replayWs.once('unexpected-response', (_req, res) => {
+                resolve(res.statusCode ?? 0);
+                replayWs.terminate();
+            });
+            replayWs.once('error', () => {
+                // handled by unexpected-response
+            });
+        });
+        expect(replayStatus).toBe(401);
+
+        // 3. A ticket minted for artifactId cannot be consumed on a different artifactId
+        const crossArtifactTicket = ArtifactCollaborationServer.Instance.IssueTicket({
+            ArtifactID: artifactId,
+            User: editorUser
+        });
+        const wrongArtifactStatus = await new Promise<number>((resolve) => {
+            const wrongWs = new WsClient(
+                `ws://127.0.0.1:${wsPort}${ARTIFACT_COLLABORATION_WS_PATH}?artifactId=99999999-9999-4999-8999-999999999999&ticket=${encodeURIComponent(crossArtifactTicket.Ticket)}`
+            );
+            wrongWs.once('unexpected-response', (_req, res) => {
+                resolve(res.statusCode ?? 0);
+                wrongWs.terminate();
+            });
+            wrongWs.once('error', () => {});
+        });
+        expect(wrongArtifactStatus).toBe(401);
+    });
+
+    it('rejects ?token= and ?apiKey= query-string secrets with 401 and enforces Origin allowlist with 403 (A3, C6)', async () => {
+        // Even with auth override active, ?token= and ?apiKey= in query string must be rejected unconditionally
+        const queryTokenStatus = await new Promise<number>((resolve) => {
+            const ws = new WsClient(
+                `ws://127.0.0.1:${wsPort}${ARTIFACT_COLLABORATION_WS_PATH}?artifactId=${artifactId}&token=secret-jwt&testUserId=${editorUser.ID}`
+            );
+            ws.once('unexpected-response', (_req, res) => {
+                resolve(res.statusCode ?? 0);
+                ws.terminate();
+            });
+            ws.once('error', () => {});
+        });
+        expect(queryTokenStatus).toBe(401);
+
+        const queryApiKeyStatus = await new Promise<number>((resolve) => {
+            const ws = new WsClient(
+                `ws://127.0.0.1:${wsPort}${ARTIFACT_COLLABORATION_WS_PATH}?artifactId=${artifactId}&apiKey=mj_sk_secret`
+            );
+            ws.once('unexpected-response', (_req, res) => {
+                resolve(res.statusCode ?? 0);
+                ws.terminate();
+            });
+            ws.once('error', () => {});
+        });
+        expect(queryApiKeyStatus).toBe(401);
+
+        // Enforce MJ_COLLABORATION_ALLOWED_ORIGINS when Origin header is present
+        process.env.MJ_COLLABORATION_ALLOWED_ORIGINS = 'https://app.memberjunction.com';
+        try {
+            const foreignOriginStatus = await new Promise<number>((resolve) => {
+                const ws = new WsClient(
+                    `ws://127.0.0.1:${wsPort}${ARTIFACT_COLLABORATION_WS_PATH}?artifactId=${artifactId}&testUserId=${editorUser.ID}`,
+                    { headers: { Origin: 'https://evil.example.org' } }
+                );
+                ws.once('unexpected-response', (_req, res) => {
+                    resolve(res.statusCode ?? 0);
+                    ws.terminate();
+                });
+                ws.once('error', () => {});
+            });
+            expect(foreignOriginStatus).toBe(403);
+        } finally {
+            delete process.env.MJ_COLLABORATION_ALLOWED_ORIGINS;
+        }
+    });
+
+    it('disposes idle rooms after the last client disconnects and dirty state has been compacted (C1)', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+        server.SetIdleRoomTtlMs(40);
+        try {
+            const clientA = await connectYjsClient(editorUser.ID);
+            await clientA.waitForText('# Initial Strategy Document');
+            expect(server.HasActiveRoom(artifactId)).toBe(true);
+
+            clientA.doc.transact(() => {
+                const yText = clientA.doc.getText('content');
+                yText.insert(yText.length, '\n\nEdited before last disconnect.');
+            });
+
+            await vi.waitFor(async () => {
+                const content = await server.GetRoomContent(artifactId, editorUser);
+                expect(content).toContain('Edited before last disconnect.');
+            });
+
+            // Close last client -> triggers compaction + idle disposal timer
+            clientA.ws.close();
+
+            await vi.waitFor(
+                () => {
+                    expect(server.HasActiveRoom(artifactId)).toBe(false);
+                },
+                { timeout: 2000 }
+            );
+
+            // Verify edits were compacted into MJ: Artifact Versions before room disposal
+            expect(versions[versions.length - 1].Content).toContain('Edited before last disconnect.');
+        } finally {
+            server.SetIdleRoomTtlMs(30_000);
+        }
+    });
+
+    it('enforces authenticated awareness ownership: stamps server user identity and blocks spoofing or cross-client deletion (C3)', async () => {
+        const clientA = await connectYjsClient(editorUser.ID);
+        const clientB = await connectYjsClient(secondEditorUser.ID);
+        await clientA.waitForText('# Initial Strategy Document');
+        await clientB.waitForText('# Initial Strategy Document');
+
+        // 1. Client A attempts to spoof its own user metadata as 'CEO Spoof' with fake userId
+        clientA.awareness.setLocalStateField('user', {
+            userId: 'fake-ceo-id',
+            userName: 'CEO Spoof',
+            name: 'CEO Spoof',
+            color: '#EF4444'
+        });
+        const spoofedUpdate = awarenessProtocol.encodeAwarenessUpdate(clientA.awareness, [
+            clientA.doc.clientID
+        ]);
+        const frameA = encoding.createEncoder();
+        encoding.writeVarUint(frameA, YJS_MESSAGE_AWARENESS);
+        encoding.writeVarUint8Array(frameA, spoofedUpdate);
+        clientA.ws.send(encoding.toUint8Array(frameA));
+
+        // Client B receives Client A's awareness state stamped with server-authenticated identity!
+        await vi.waitFor(() => {
+            const stateOnB = clientB.awareness.getStates().get(clientA.doc.clientID) as
+                | { user?: Record<string, unknown> }
+                | undefined;
+            expect(stateOnB).toBeDefined();
+            expect(stateOnB?.user?.['userId']).toBe(editorUser.ID);
+            expect(stateOnB?.user?.['userName']).toBe(editorUser.Name);
+            expect(stateOnB?.user?.['name']).toBe(editorUser.Name);
+        });
+
+        // 2. Client B maliciously crafts a raw awareness frame attempting to delete (null) Client A's clientID!
+        const hijackPayload = encoding.createEncoder();
+        encoding.writeVarUint(hijackPayload, 1); // 1 entry
+        encoding.writeVarUint(hijackPayload, clientA.doc.clientID); // Victim clientID owned by Client A
+        encoding.writeVarUint(hijackPayload, 999); // Higher clock
+        encoding.writeVarString(hijackPayload, 'null'); // Attempted removal
+
+        const hijackFrame = encoding.createEncoder();
+        encoding.writeVarUint(hijackFrame, YJS_MESSAGE_AWARENESS);
+        encoding.writeVarUint8Array(hijackFrame, encoding.toUint8Array(hijackPayload));
+        clientB.ws.send(encoding.toUint8Array(hijackFrame));
+
+        // Also send a legitimate update for Client B's own clientID so we know the server processed B's message queue
+        clientB.awareness.setLocalStateField('user', { name: 'Bob', color: '#10B981' });
+        const bUpdate = awarenessProtocol.encodeAwarenessUpdate(clientB.awareness, [clientB.doc.clientID]);
+        const frameB = encoding.createEncoder();
+        encoding.writeVarUint(frameB, YJS_MESSAGE_AWARENESS);
+        encoding.writeVarUint8Array(frameB, bUpdate);
+        clientB.ws.send(encoding.toUint8Array(frameB));
+
+        await vi.waitFor(() => {
+            expect(clientA.awareness.getStates().has(clientB.doc.clientID)).toBe(true);
+        });
+
+        // Client A's presence must STILL exist on the server and on Client B!
+        const stateStillOnB = clientB.awareness.getStates().get(clientA.doc.clientID) as
+            | { user?: Record<string, unknown> }
+            | undefined;
+        expect(stateStillOnB?.user?.['userId']).toBe(editorUser.ID);
+
+        clientA.ws.close();
+        clientB.ws.close();
+    });
+
+    it('hydrates from newer MJ: Artifact Versions when working state is stale, and evicts failed hydrations without caching empty rooms (C5)', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+
+        // Seed an OLD working state (t = 10:00) and a NEWER version 2 (t = 11:00)
+        const staleDoc = new Y.Doc();
+        staleDoc.getText('content').insert(0, '# STALE WORKING STATE CONTENT');
+        workingStates.set(artifactId, {
+            ID: 'ws-stale-1',
+            ArtifactID: artifactId,
+            YjsState: BytesToBase64(Y.encodeStateAsUpdate(staleDoc)),
+            LastModifiedByUserID: editorUser.ID,
+            __mj_UpdatedAt: '2026-11-09T10:00:00.000Z'
+        });
+        staleDoc.destroy();
+
+        versions.push({
+            ID: 'ver-2-newer',
+            ArtifactID: artifactId,
+            VersionNumber: 2,
+            Content: '# FRESH VERSION 2 WRITTEN AT 11:00',
+            ContentHash: 'fresh-v2-hash',
+            UserID: editorUser.ID,
+            __mj_CreatedAt: '2026-11-09T11:00:00.000Z',
+            __mj_UpdatedAt: '2026-11-09T11:00:00.000Z'
+        });
+
+        const hydratedContent = await server.GetRoomContent(artifactId, editorUser);
+        expect(hydratedContent).toBe('# FRESH VERSION 2 WRITTEN AT 11:00');
+        expect(hydratedContent).not.toContain('STALE WORKING STATE');
+
+        // Verify failed hydration evicts the room and rethrows rather than caching an empty Y.Doc
+        const brokenArtifactId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+        permissionTable.set(editorUser.ID, { CanRead: true, CanEdit: true });
+        const brokenProvider: Partial<IMetadataProvider> = {
+            RunViews: (async () => {
+                throw new Error('Simulated DB connection outage');
+            }) as IMetadataProvider['RunViews']
+        };
+        server.SetMetadataProviderOverride(brokenProvider as IMetadataProvider);
+
+        await expect(server.GetOrCreateRoom(brokenArtifactId, editorUser)).rejects.toThrow(
+            /Simulated DB connection outage/
+        );
+        expect(server.HasActiveRoom(brokenArtifactId)).toBe(false);
+    });
+
+    it('converges state across two peer ArtifactCollaborationServer instances via sync-request / sync-state over InMemoryYjsRelayBus (C5)', async () => {
+        class PeerCollaborationServerNodeA extends ArtifactCollaborationServer {
+            public constructor() {
+                super();
+            }
+        }
+        class PeerCollaborationServerNodeB extends ArtifactCollaborationServer {
+            public constructor() {
+                super();
+            }
+        }
+
+        const sharedBus = new InMemoryYjsRelayBus();
+        const nodeA = new PeerCollaborationServerNodeA();
+        const nodeB = new PeerCollaborationServerNodeB();
+
+        nodeA.SetRoomRelay(new InMemoryYjsRoomRelay(sharedBus, 'peer-node-a'));
+        nodeB.SetRoomRelay(new InMemoryYjsRoomRelay(sharedBus, 'peer-node-b'));
+        nodeA.SetMetadataProviderOverride(createMockProvider());
+        nodeB.SetMetadataProviderOverride(createMockProvider());
+
+        try {
+            // Node A opens the room first and receives live in-memory CRDT edits NOT yet compacted to MJ: Artifact Versions
+            const roomA = await nodeA.GetOrCreateRoom(artifactId, editorUser);
+            expect(roomA).not.toBeNull();
+            roomA!.Doc.transact(() => {
+                const yText = roomA!.Doc.getText('content');
+                yText.insert(yText.length, '\n\nLive uncompacted paragraph on Node A.');
+            }, 'local-node-a');
+
+            // Node B joins later: hydrates baseline from DB, broadcasts 'sync-request', receives 'sync-state' from Node A!
+            await nodeB.GetOrCreateRoom(artifactId, secondEditorUser);
+
+            await vi.waitFor(async () => {
+                const contentOnB = await nodeB.GetRoomContent(artifactId, secondEditorUser);
+                expect(contentOnB).toContain('Live uncompacted paragraph on Node A.');
+            });
+        } finally {
+            await nodeA.Shutdown();
+            await nodeB.Shutdown();
+        }
+    });
+
+    it('downgrades/disconnects local clients even when relay.PublishToRoom throws, and rolls back child artifact when version Save fails (C2, C7)', async () => {
+        // 1. Fault-tolerant permission downgrade when relay throws
+        const throwingRelay: InMemoryYjsRoomRelay = new InMemoryYjsRoomRelay();
+        vi.spyOn(throwingRelay, 'PublishToRoom').mockRejectedValue(new Error('Simulated Redis outage'));
+        ArtifactCollaborationServer.Instance.SetRoomRelay(throwingRelay);
+
+        const clientA = await connectYjsClient(editorUser.ID);
+        await clientA.waitForText('# Initial Strategy Document');
+        expect(clientA.permissionFrames[0]).toMatchObject({ canRead: true, canEdit: true });
+
+        permissionTable.set(editorUser.ID, { CanRead: true, CanEdit: false });
+        await ArtifactCollaborationServer.Instance.ReevaluateRoomPermissions(
+            artifactId,
+            editorUser.ID,
+            true
+        );
+
+        await vi.waitFor(() => {
+            const latest = clientA.permissionFrames[clientA.permissionFrames.length - 1];
+            expect(latest).toMatchObject({ canRead: true, canEdit: false });
+        });
+        clientA.ws.close();
+
+        // 2. Compensating rollback in CreateInlineDelegatedArtifact when version.Save() returns false
+        let childDeleted = false;
+        const rollbackProvider: Partial<IMetadataProvider> = {
+            Entities: [{ ID: 'ent-artifacts-id', Name: 'MJ: Artifacts' }] as IMetadataProvider['Entities'],
+            RunView: (async () => ({
+                Success: true,
+                Results: [{ ID: artifactId, EnvironmentID: 'env-prod-1' }],
+                TotalRowCount: 1
+            })) as IMetadataProvider['RunView'],
+            GetEntityObject: (async (entityName: string) => {
+                if (entityName === 'MJ: Artifacts') {
+                    return {
+                        ID: 'child-art-orphan-test',
+                        Name: '',
+                        TypeID: '',
+                        UserID: '',
+                        EnvironmentID: '',
+                        DelegateEntityID: null as string | null,
+                        DelegateRecordID: null as string | null,
+                        NewRecord() {},
+                        async Save() {
+                            return true;
+                        },
+                        async Delete() {
+                            childDeleted = true;
+                            return true;
+                        }
+                    };
+                }
+                if (entityName === 'MJ: Artifact Versions') {
+                    return {
+                        ID: 'ver-fail-1',
+                        ArtifactID: '',
+                        VersionNumber: 1,
+                        UserID: '',
+                        Content: '',
+                        ContentHash: '',
+                        LatestResult: { CompleteMessage: 'Simulated version constraint failure' },
+                        NewRecord() {},
+                        async Save() {
+                            return false;
+                        }
+                    };
+                }
+                throw new Error(`Unexpected entity ${entityName}`);
+            }) as IMetadataProvider['GetEntityObject']
+        };
+
+        permissionTable.set(editorUser.ID, { CanRead: true, CanEdit: true });
+        const configSpy = vi.spyOn(ArtifactMetadataEngine.Instance, 'Config').mockResolvedValue();
+        const findTypeSpy = vi
+            .spyOn(ArtifactMetadataEngine.Instance, 'FindArtifactType')
+            .mockReturnValue({ ID: 'type-whiteboard-1', Name: 'Whiteboard' } as ReturnType<
+                typeof ArtifactMetadataEngine.Instance.FindArtifactType
+            >);
+
+        try {
+            const resolver = new DocumentCollaborationResolver();
+            const ctx: AppContext = {
+                dataSource: {} as AppContext['dataSource'],
+                dataSources: [],
+                providers: [{ provider: rollbackProvider as IMetadataProvider, type: 'Read-Write' }],
+                userPayload: {
+                    userRecord: editorUser,
+                    email: editorUser.Email,
+                    sessionId: 'sess-rollback'
+                }
+            };
+            const res = await resolver.CreateInlineDelegatedArtifact(
+                artifactId,
+                'Embedded Diagram',
+                'Whiteboard',
+                '{}',
+                ctx
+            );
+            expect(res.Success).toBe(false);
+            expect(res.ErrorMessage).toContain('Simulated version constraint failure');
+            expect(childDeleted).toBe(true);
+        } finally {
+            configSpy.mockRestore();
+            findTypeSpy.mockRestore();
+        }
+    });
+
+    it('authenticates HTTP-header WebSocket upgrades with distinct system/user API keys, passes dataSources, and enforces artifact:read / artifact:edit scopes (A3, C4)', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+        server.SetAuthResolverOverride(null);
+        const fakeDataSources = [{ type: 'Read-Write' }] as unknown as DataSourceInfo[];
+        server.SetDataSources(fakeDataSources);
+
+        const sysUser = createTestUser('sys-user-1', 'System', 'system@example.com');
+        const getSysSpy = vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(sysUser);
+
+        const authorizeMock = vi.fn(
+            async (_hash: string, _app: string, scopePath: string) => ({
+                Allowed: scopePath === 'artifact:read', // read-only API key (lacks full_access and artifact:edit)
+                Reason: scopePath === 'artifact:read' ? 'Granted read' : 'Missing artifact:edit'
+            })
+        );
+        const engineSpy = vi.spyOn({ GetAPIKeyEngine }, 'GetAPIKeyEngine');
+        void engineSpy;
+        const realEngine = GetAPIKeyEngine();
+        const authEngineSpy = vi
+            .spyOn(realEngine, 'Authorize')
+            .mockImplementation(authorizeMock as unknown as typeof realEngine.Authorize);
+
+        const mockedGetUserPayload = vi.mocked(getUserPayload);
+        mockedGetUserPayload.mockResolvedValueOnce({
+            userRecord: editorUser,
+            email: editorUser.Email,
+            sessionId: 'sess-apikey-ws',
+            apiKeyId: 'key-id-1',
+            apiKeyHash: 'sha256-readonly-key'
+        });
+
+        try {
+            // Editor user has CanEdit=true in ArtifactPermissionEngine, BUT their API key only has 'artifact:read'!
+            const permissionFrames: CollaborationPermissionStatusFrame[] = [];
+            const ws = new WsClient(
+                `ws://127.0.0.1:${wsPort}${ARTIFACT_COLLABORATION_WS_PATH}?artifactId=${artifactId}`,
+                {
+                    headers: {
+                        'x-mj-user-api-key': 'mj_sk_user_key_123'
+                    }
+                }
+            );
+
+            await new Promise<void>((resolve, reject) => {
+                ws.on('message', (raw: Buffer) => {
+                    const decoder = decoding.createDecoder(new Uint8Array(raw));
+                    const msgType = decoding.readVarUint(decoder);
+                    if (msgType === YJS_MESSAGE_PERMISSION_STATUS) {
+                        permissionFrames.push(
+                            JSON.parse(decoding.readVarString(decoder)) as CollaborationPermissionStatusFrame
+                        );
+                        resolve();
+                    }
+                });
+                ws.once('error', (err) => reject(err));
+            });
+
+            // Verify getUserPayload received fakeDataSources (arg 3), undefined systemApiKey (arg 5), and userApiKey (arg 6)
+            expect(mockedGetUserPayload).toHaveBeenCalledWith(
+                '',
+                'default',
+                fakeDataSources,
+                undefined,
+                undefined,
+                'mj_sk_user_key_123',
+                expect.objectContaining({ endpoint: ARTIFACT_COLLABORATION_WS_PATH }),
+                expect.anything()
+            );
+
+            // Session must be capped to canEdit=false because API key lacked 'artifact:edit'!
+            expect(permissionFrames[0]).toMatchObject({ canRead: true, canEdit: false });
+            ws.close();
+        } finally {
+            authEngineSpy.mockRestore();
+            getSysSpy.mockRestore();
+            server.SetDataSources([]);
+        }
+    });
+
+    it('retries CompactRoomToArtifactVersion on concurrent VersionNumber save conflict and cascades permission revocation to delegated child rooms (C2, C5)', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+
+        // 1. Test retry on VersionNumber conflict
+        let saveAttempts = 0;
+        const baseProvider = createMockProvider();
+        const flakyVersionProvider: Partial<IMetadataProvider> = {
+            ...baseProvider,
+            GetEntityObject: (async (entityName: string, user?: UserInfo) => {
+                if (entityName === 'MJ: Artifact Versions') {
+                    const baseObj = await baseProvider.GetEntityObject(entityName, user);
+                    const origSave = baseObj.Save.bind(baseObj);
+                    baseObj.Save = async () => {
+                        saveAttempts++;
+                        if (saveAttempts === 1) {
+                            // Simulate concurrent peer saving Version 2 first!
+                            versions.push({
+                                ID: 'ver-concurrent-2',
+                                ArtifactID: artifactId,
+                                VersionNumber: 2,
+                                Content: '# Concurrent Peer Edit',
+                                ContentHash: 'peer-hash-v2',
+                                UserID: secondEditorUser.ID
+                            });
+                            return false;
+                        }
+                        return await origSave();
+                    };
+                    return baseObj;
+                }
+                return await baseProvider.GetEntityObject(entityName, user);
+            }) as IMetadataProvider['GetEntityObject']
+        };
+        server.SetMetadataProviderOverride(flakyVersionProvider as IMetadataProvider);
+
+        const mutated = await server.ApplyServerContentMutation(
+            artifactId,
+            '# Retry Conflict Document\n\nSaved cleanly on attempt 2 as Version 3.',
+            editorUser,
+            true
+        );
+        expect(mutated.Success).toBe(true);
+        expect(saveAttempts).toBe(2);
+        expect(mutated.VersionNumber).toBe(3);
+
+        // 2. Test delegated child room cascade when parent artifact permissions change
+        const childArtifactId = 'cccccccc-1111-4222-8333-444444444444';
+        const childAwareProvider: Partial<IMetadataProvider> = {
+            ...baseProvider,
+            RunViews: (async (paramsArray: RunViewParams[]) => {
+                return paramsArray.map((p) => {
+                    if (p.EntityName === 'MJ: Artifacts' && p.ExtraFilter?.includes(childArtifactId)) {
+                        return {
+                            Success: true,
+                            Results: [
+                                {
+                                    ID: childArtifactId,
+                                    DelegateEntityID: 'ent-artifacts-id',
+                                    DelegateRecordID: artifactId
+                                }
+                            ],
+                            TotalRowCount: 1
+                        };
+                    }
+                    if (p.EntityName === 'MJ: Artifact Versions') {
+                        return {
+                            Success: true,
+                            Results: [versions[0]],
+                            TotalRowCount: 1
+                        };
+                    }
+                    return { Success: true, Results: [], TotalRowCount: 0 };
+                });
+            }) as IMetadataProvider['RunViews']
+        };
+        server.SetMetadataProviderOverride(childAwareProvider as IMetadataProvider);
+
+        // Connect editorUser directly to the delegated child artifact room
+        const childFrames: CollaborationPermissionStatusFrame[] = [];
+        const childWs = new WsClient(
+            `ws://127.0.0.1:${wsPort}${ARTIFACT_COLLABORATION_WS_PATH}?artifactId=${childArtifactId}&testUserId=${editorUser.ID}`
+        );
+        await new Promise<void>((resolve, reject) => {
+            childWs.on('message', (raw: Buffer) => {
+                const dec = decoding.createDecoder(new Uint8Array(raw));
+                if (decoding.readVarUint(dec) === YJS_MESSAGE_PERMISSION_STATUS) {
+                    childFrames.push(JSON.parse(decoding.readVarString(dec)) as CollaborationPermissionStatusFrame);
+                    if (childFrames.length === 1) resolve();
+                }
+            });
+            childWs.once('error', (err) => reject(err));
+        });
+        expect(childFrames[0]).toMatchObject({ canRead: true, canEdit: true });
+
+        // Downgrade editorUser on the PARENT host artifact and fire ReevaluateRoomPermissions(parentArtifactId)
+        permissionTable.set(editorUser.ID, { CanRead: true, CanEdit: false });
+        await server.ReevaluateRoomPermissions(artifactId, editorUser.ID, false);
+
+        await vi.waitFor(() => {
+            expect(childFrames[childFrames.length - 1]).toMatchObject({ canRead: true, canEdit: false });
+        });
+        childWs.close();
     });
 });

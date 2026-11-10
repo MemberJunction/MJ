@@ -84,9 +84,10 @@ flowchart TD
 
 1. **`MJ: Artifact Working States` (`__mj.ArtifactWorkingState`)**:
    - Stores active compacted binary Yjs CRDT state vectors (`YjsState VARBINARY(MAX)`, exposed as base64 on `MJArtifactWorkingStateEntity`) in a strict 1:1 relationship (`UQ_ArtifactWorkingState_ArtifactID` with `ON DELETE CASCADE` to `MJ: Artifacts`).
+   - Locked down as a server-internal entity (`IncludeInAPI = 0`, `TrackRecordChanges = 0`, no `UI` role permissions); persisted strictly via `ArtifactCollaborationServer` under the server system user (`LastModifiedByUserID` recording the editing user).
    - Separates high-frequency real-time keystroke/cell/slide synchronization from clean, human-meaningful `MJ: Artifact Versions` checkpoints.
 2. **Delegated Host Entity Permissions (`MJ: Artifacts.DelegateEntityID` + `DelegateRecordID`, `O4`)**:
-   - Enforced physically by `CK_Artifact_DelegateBinding` (both columns `NULL` or both `NOT NULL`) and decorated with `EntityField.EntityIDFieldName = "DelegateEntityID"` in `metadata/entities/.polymorphic-fk-entity-fields.json`.
+   - Enforced physically by `CK_Artifact_DelegateBinding` (both columns `NULL` or both `NOT NULL`), guarded server-side by `MJArtifactEntityServer` (owner-only updates, self-delegation prevention, and mandatory `CanEdit` verification on the target delegate record), and decorated with `EntityField.EntityIDFieldName = "DelegateEntityID"` in `metadata/entities/.polymorphic-fk-entity-fields.json`.
    - Evaluated via `ArtifactPermissionEngine.Instance.ResolvePermissions(provider, artifactId, user)` and `IArtifactPermissionDelegate` (`@RegisterClass(BaseArtifactPermissionDelegate, '<EntityName>')`), with cycle detection and `MAX_DELEGATE_DEPTH = 8`.
    - Built-in `ParentArtifactPermissionDelegate` (`@RegisterClass(BaseArtifactPermissionDelegate, 'MJ: Artifacts')`) cascades read/edit/delete/share decisions from a host Document, Slide Deck, or Spreadsheet to inline OLE child artifacts (such as an embedded Whiteboard created via `/whiteboard`) without duplicating permission rows.
 3. **Artifact Type Metadata (`metadata/artifact-types/.artifact-types.json`, `O1`)**:
@@ -107,8 +108,8 @@ Located in `packages/MJServer/src/collaboration/`:
 - **Why Yjs Is Built Into `@memberjunction/server`**:
   - GraphQL request/response mutations cannot merge concurrent character, cell, or slide edits without lock contention or last-writer-wins overwrites. Yjs provides mathematically deterministic CRDT convergence (the same foundation used by **JupyterLab**, **Affine**, **Nextcloud Text**, **BlockSuite**, and **Hocuspocus/TipTap**) over a lightweight binary WebSocket endpoint mounted directly on MJServer's HTTP upgrade pipeline.
 - **`ArtifactCollaborationServer.ts`**:
-  - Handles WebSocket upgrades on `/collaboration/yjs?artifactId=<uuid>`.
-  - Authenticates the connecting user via `getUserPayload` and verifies `CanRead` / `CanEdit` via `ArtifactPermissionEngine`.
+  - Handles WebSocket upgrades on `ApiRoute('/collaboration/yjs')` (`?artifactId=<uuid>&ticket=<nonce>`).
+  - Authenticates browser connections via single-use short-lived tickets minted by `DocumentCollaborationResolver.MintArtifactCollaborationTicket` (with `Origin` validation, `APIKeyEngine` `artifact:read`/`artifact:edit` scope checks, and exponential-backoff client reconnection in `DocumentCollaborationService`).
   - Hydrates room state from `MJ: Artifact Working States.YjsState` (or seeds `Y.Text('content')` and structured maps from the latest `MJ: Artifact Versions.Content`).
   - **Binary Frame Read-Only Enforcement**: Any `syncStep2` or `update` write frame sent by a client with `CanEdit === false` is dropped before mutating `room.Doc`, returning a `YJS_MESSAGE_CONTROL` (`readonly-rejected`) frame while still allowing live cursor/selection awareness.
   - **Mid-Session Permission Revocation**: Subscribes to `ArtifactPermissionEngine.Instance.OnPermissionsChanged` to immediately downgrade active editors (`YJS_MESSAGE_PERMISSION_STATUS` with `canEdit: false`) or close sockets (`4403`) when `CanRead` is revoked.
@@ -219,8 +220,8 @@ Located in `packages/Angular/Generic/artifacts/src/lib/components/version-diff/`
 
 ### 11.1 Top-Bar Pinned `Library` Application (`LibraryResource` & `<mj-library-workspace>`)
 
-- **Application Metadata (`metadata/applications/.file-browser-application.json`)**:
-  - Promoted from the legacy `Files` app to **`Library`** (`ID: EB07016C-AE35-4EF9-804B-91563529A08A`, `Icon: fa-solid fa-book-open`, `NavigationStyle: Both`, `TopNavLocation: Left of User Menu`, `DefaultSequence: 2` directly beside `Chat`).
+- **Application Metadata (`metadata/applications/.library-application.json`)**:
+  - Dedicated top-level **`Library`** application (`ID: DB6B9D62-CB8E-417D-8A04-4CBC5F65CD9A`, `Icon: fa-solid fa-book-open`, `DefaultForNewUser: true`, `NavigationStyle: Both`, `TopNavLocation: Left of User Menu`, `DefaultSequence: 2` directly beside `Chat`), while preserving `File Browser` (`EB07016C-AE35-4EF9-804B-91563529A08A`) intact. `ApplicationManager` automatically provisions newly introduced header-pinned default apps for existing users who have no prior `MJ: User Applications` row for that app.
 - **3 Progressive Workspace Modes (`LibraryWorkspaceComponent`)**:
   1. **Hub Mode** (default landing): *Create New* quick-launch strip (`Blank Document`, `Blank Spreadsheet`, `Blank Presentation`, `New Collection`, `Upload File` via `LibraryCreationService`), *Continue Working* recent items, curated *Collections*, and *Connected Cloud Drives* overview cards.
   2. **Power Navigator Mode**: Split-pane hierarchy with nested `MJ: Collections` + Connected Cloud Drive folders on the left, `MJFilterPanelComponent` faceted search & list/grid toggle in the center, and a contextual preview/metadata drawer on the right. User preferences (`Library.SurfaceMode`, `Library.ListStyle`, `Library.StarredArtifactIDs`) persist server-side via `UserInfoEngine.Instance`.
@@ -241,9 +242,9 @@ Located in `packages/Angular/Generic/artifacts/src/lib/components/version-diff/`
 
 For binary-backed artifacts (`ContentMode = 'File'`), `packages/MJServer/src/resolvers/ArtifactFileResolver.ts` evaluates `ArtifactPermissionEngine.Instance.ResolvePermissions(provider, artifactId, user)` **ahead of** `FileStorageEngine.Instance.ResolveFileObject`. This guarantees that owner access, direct `MJ: Artifact Permissions` shares, `MJ: Collection Permissions` shares, and `O4` delegated permissions (`ParentArtifactPermissionDelegate`) govern binary file downloads identically to text artifacts and Yjs rooms.
 
-### 11.4 Chat `Agent Activity` Renaming & Human-Task Isolation
+### 11.4 Chat `Collections` & `Agent Activity` Navigation
 
-- In `metadata/applications/.chat-application.json` (`7A873E1A-692E-43FA-97F8-57D8161A985C`), the secondary navigation item is named **`Agent Activity`** (`Icon: fa-solid fa-diagram-project`) rather than `Tasks` so users never confuse background AI agent workflows with human project deliverables in `bizapps-tasks`.
+- In `metadata/applications/.chat-application.json` (`7A873E1A-692E-43FA-97F8-57D8161A985C`), `Chat` exposes **`Conversations`**, **`Collections`** (`ChatCollectionsResource`, opening `<mj-library-workspace>` directly on Collections), and **`Agent Activity`** (`Icon: fa-solid fa-diagram-project`, `ChatTasksResource`), with `MOVED_NAV_ITEMS` retargeting legacy `Chat -> Tasks` links/pins to `Agent Activity`.
 - `ChatTasksResource` (`BuildConversationTasksFilter`) scopes `MJ: Tasks` queries strictly to `(ConversationDetailID IS NOT NULL OR AgentID IS NOT NULL OR AgentRunID IS NOT NULL)`, guaranteeing human-only tasks never bleed into the Chat `Agent Activity` view.
 
 ---

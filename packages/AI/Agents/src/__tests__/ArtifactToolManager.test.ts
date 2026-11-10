@@ -1,6 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ArtifactToolManager, InputArtifact } from '../ArtifactToolManager';
+import {
+    ArtifactLiveMutationEvent,
+    ArtifactToolManager,
+    GetArtifactLiveMutationHook,
+    InputArtifact,
+    SetArtifactLiveMutationHook,
+} from '../ArtifactToolManager';
 import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
+import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -10,6 +17,9 @@ import { RegisterClass } from '@memberjunction/global';
 import '../artifact-tools/JSONToolLibrary';
 import '../artifact-tools/DataSnapshotToolLibrary';
 import '../artifact-tools/SearchResultSetToolLibrary';
+import '../artifact-tools/DocumentToolLibrary';
+import '../artifact-tools/SpreadsheetToolLibrary';
+import '../artifact-tools/ExcelToolLibrary';
 
 function makeArtifact(name: string, typeName: string, content: string): InputArtifact {
     return { name, typeName, content };
@@ -422,6 +432,170 @@ describe('ArtifactToolManager', () => {
             });
             expect(stored.tool).toBe('get_tables');
             expect(stored.result.success).toBe(true);
+        });
+    });
+
+    describe('Live Artifact Mutations, Version Persistence & Collaboration Hook (A4)', () => {
+        afterEach(() => {
+            SetArtifactLiveMutationHook(null);
+        });
+
+        it('updates entry.content across sequential mutations, persists MJ: Artifact Versions with collision retry, fires SetArtifactLiveMutationHook, and sanitizes StoredToolResult', async () => {
+            const savedVersions: Array<{
+                ID: string;
+                ArtifactID: string;
+                VersionNumber: number;
+                Content: string | null;
+                ContentMode: 'File' | 'Text';
+            }> = [];
+            let simulateFirstSaveCollision = true;
+
+            const mockUser = { ID: 'user-agent-1', Name: 'Docs Agent User' } as unknown as UserInfo;
+            const mockProvider = {
+                RunView: async () => ({
+                    Success: true,
+                    Results: savedVersions.length > 0
+                        ? [{ ID: savedVersions[savedVersions.length - 1].ID, VersionNumber: savedVersions[savedVersions.length - 1].VersionNumber }]
+                        : [{ ID: 'ver-initial', VersionNumber: 1 }],
+                }),
+                GetEntityObject: async () => {
+                    const draft = {
+                        ID: '',
+                        ArtifactID: '',
+                        VersionNumber: 0,
+                        UserID: '',
+                        Name: '' as string | null,
+                        Comments: '' as string | null,
+                        ContentHash: '' as string | null,
+                        ContentMode: 'Text' as 'File' | 'Text',
+                        FileID: null as string | null,
+                        MimeType: null as string | null,
+                        FileName: null as string | null,
+                        ContentSizeBytes: null as number | null,
+                        Content: null as string | null,
+                        Configuration: null as string | null,
+                        NewRecord: () => undefined,
+                        Save: async () => {
+                            if (simulateFirstSaveCollision) {
+                                simulateFirstSaveCollision = false;
+                                // Simulate concurrent writer saving VersionNumber 2 right before us
+                                savedVersions.push({
+                                    ID: 'ver-concurrent-2',
+                                    ArtifactID: draft.ArtifactID,
+                                    VersionNumber: 2,
+                                    Content: '# Concurrent Edit',
+                                    ContentMode: 'Text',
+                                });
+                                return false;
+                            }
+                            draft.ID = `ver-saved-${draft.VersionNumber}`;
+                            savedVersions.push({
+                                ID: draft.ID,
+                                ArtifactID: draft.ArtifactID,
+                                VersionNumber: draft.VersionNumber,
+                                Content: draft.Content,
+                                ContentMode: draft.ContentMode,
+                            });
+                            return true;
+                        },
+                    };
+                    return draft;
+                },
+            } as unknown as IMetadataProvider;
+
+            const hookEvents: ArtifactLiveMutationEvent[] = [];
+            SetArtifactLiveMutationHook((evt) => {
+                hookEvents.push(evt);
+            });
+            expect(GetArtifactLiveMutationHook()).toBeTypeOf('function');
+
+            const initialDoc = ['# Original Title', '', 'Initial body paragraph.'].join('\n');
+            manager.Initialize(
+                [
+                    {
+                        name: 'Board Strategy.md',
+                        typeName: 'Markdown Document',
+                        toolLibraryClass: 'DocumentToolLibrary',
+                        artifactId: 'aaaa1111-2222-4333-8444-555555555555',
+                        versionId: 'ver-initial',
+                        versionNumber: 1,
+                        content: initialDoc,
+                    },
+                ],
+                {
+                    contextUser: mockUser,
+                    provider: mockProvider,
+                    getAgentRun: () => ({ ID: 'run-xyz-999' }),
+                },
+            );
+
+            // 1. Read blocks to obtain initial revisionHash and block IDs
+            const blocksCall = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'get_blocks',
+                input: {},
+            });
+            expect(blocksCall.result.success).toBe(true);
+            const initialBlocksData = blocksCall.result.data as {
+                revisionHash: string;
+                blocks: Array<{ blockId: string }>;
+            };
+
+            // 2. Mutation #1: replace_block on block 0 with initial revisionHash (also exercises save collision retry -> Version 3!)
+            const mut1 = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'replace_block',
+                input: {
+                    blockId: initialBlocksData.blocks[0].blockId,
+                    markdown: '# Updated Title Step 1',
+                    expectedRevisionHash: initialBlocksData.revisionHash,
+                },
+            });
+            expect(mut1.result.success).toBe(true);
+            const mut1Data = mut1.result.data as {
+                revisionHash: string;
+                persisted: boolean;
+                versionNumber: number;
+                updatedContent?: string;
+            };
+            expect(mut1Data.persisted).toBe(true);
+            expect(mut1Data.versionNumber).toBe(3); // Retried past concurrent v2!
+            expect(mut1Data.updatedContent).toBeUndefined(); // Sanitized from StoredToolResult
+
+            // 3. Mutation #2: replace_block on block 1 using the NEW revisionHash from Mutation #1!
+            const mut2 = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'replace_block',
+                input: {
+                    blockId: initialBlocksData.blocks[1].blockId,
+                    markdown: 'Updated body paragraph in Step 2.',
+                    expectedRevisionHash: mut1Data.revisionHash,
+                },
+            });
+            expect(mut2.result.success).toBe(true);
+            const mut2Data = mut2.result.data as { persisted: boolean; versionNumber: number };
+            expect(mut2Data.persisted).toBe(true);
+            expect(mut2Data.versionNumber).toBe(4);
+
+            // Verify both mutations accumulated in persisted Content and fired live collaboration hook
+            const latestSaved = savedVersions[savedVersions.length - 1];
+            expect(latestSaved.Content).toContain('# Updated Title Step 1');
+            expect(latestSaved.Content).toContain('Updated body paragraph in Step 2.');
+            expect(hookEvents).toHaveLength(2);
+            expect(hookEvents[1]).toMatchObject({
+                artifactId: 'aaaa1111-2222-4333-8444-555555555555',
+                alphaId: 'A',
+                versionNumber: 4,
+                tool: 'replace_block',
+                agentRunId: 'run-xyz-999',
+            });
+        });
+
+        it('resolves SpreadsheetToolLibrary ahead of ExcelToolLibrary in fallback heuristics', async () => {
+            manager.Initialize([makeArtifact('Financials.xlsx', 'Excel Spreadsheet', '')]);
+            const toolNames = manager.GetAvailableToolNames();
+            expect(toolNames).toContain('write_cells');
+            expect(toolNames).toContain('get_sheets');
         });
     });
 });

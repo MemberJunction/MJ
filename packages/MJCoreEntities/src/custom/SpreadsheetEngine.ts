@@ -12,12 +12,14 @@ import {
 } from '@memberjunction/core';
 import { BaseSingleton, EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import {
+    ComputeFrozenSnapshotHash,
     DocumentBlockColumn,
     DocumentBlockExecutionResult,
     DocumentBlockMode,
     DocumentBlockSpec,
     DocumentLiveBlockEngine,
-    FrozenBlockSnapshot
+    FrozenBlockSnapshot,
+    ValidateFrozenBlockSnapshot
 } from './DocumentLiveBlockEngine';
 
 /**
@@ -95,6 +97,8 @@ export interface SpreadsheetCellSpec {
     ErrorMessage?: string | null;
     /** Anchor cell coordinate (`'B2'`) when this cell was populated by a multi-cell `=MJ.*` spill. */
     SpilledFrom?: string | null;
+    /** Bound `SpreadsheetLiveTableSpec.TableID` when this cell was populated by a live table (`B4`). */
+    LiveTableID?: string | null;
     /** Optional plain-text cell note. */
     Note?: string | null;
 }
@@ -443,6 +447,16 @@ const DEFAULT_MAX_CONCURRENCY = 5;
 const HIDDEN_META_SHEET_NAME = '_mj_sheets_meta';
 const META_CHUNK_SIZE = 28_000;
 
+/** Maximum compressed `.xlsx` archive size accepted by `ImportFromXlsxBytes` (15 MiB, `B6`). */
+export const MAX_XLSX_COMPRESSED_BYTES = 15 * 1024 * 1024;
+/** Maximum cumulative uncompressed size across all ZIP entries in `.xlsx` import (32 MiB, `B6`). */
+export const MAX_XLSX_UNCOMPRESSED_TOTAL_BYTES = 32 * 1024 * 1024;
+/** Maximum uncompressed size of any single ZIP entry in `.xlsx` import (16 MiB, `B6`). */
+export const MAX_XLSX_ENTRY_BYTES = 16 * 1024 * 1024;
+/** Excel 1900 date serial epoch offset from Unix epoch (`1970-01-01` = serial `25569`). */
+const EXCEL_UNIX_EPOCH_SERIAL_OFFSET = 25569;
+const MS_PER_DAY = 86_400_000;
+
 // ---------------------------------------------------------------------------
 // A1 Coordinate & Column Letter Helpers
 // ---------------------------------------------------------------------------
@@ -564,6 +578,9 @@ export function ParseRangeAddress(range: string): {
  */
 export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     private viewerCache = new Map<string, ViewerFunctionCacheEntry>();
+    private sheetToWorkbook = new WeakMap<WorksheetSpec, WorkbookSpec>();
+    private workbookDagCache = new WeakMap<WorkbookSpec, WorkbookDependencyGraph>();
+    private monotonicIdCounter = 0;
 
     protected constructor() {
         super();
@@ -602,7 +619,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         const worksheets = names.map((name, idx) =>
             this.CreateEmptyWorksheet(`sheet-${idx + 1}`, name, rowCount, colCount)
         );
-        return {
+        const wb: WorkbookSpec = {
             WorkbookID: `wb-${Date.now().toString(36)}`,
             Title: title,
             ActiveSheetID: worksheets[0].SheetID,
@@ -611,6 +628,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             CreatedAt: now,
             UpdatedAt: now
         };
+        this.bindSheetsToWorkbook(wb);
+        return wb;
     }
 
     /**
@@ -700,11 +719,111 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     }
 
     /**
-     * Serializes a {@link WorkbookSpec} to canonical formatted JSON after ensuring formulas are evaluated.
+     * Serializes a {@link WorkbookSpec} to canonical formatted JSON, stripping viewer-scoped
+     * `=MJ.*` spill cells, `Mode === 'Live'` table cells, and `=MJ.QUERY`/`=MJ.VIEW` computed values
+     * so viewer-scoped data is never persisted (`B4`).
      */
     public SerializeWorkbook(workbook: WorkbookSpec): string {
         workbook.UpdatedAt = new Date().toISOString();
-        return JSON.stringify(workbook, null, 2);
+        const sanitized = this.cloneWorkbookWithoutViewerScopedData(workbook);
+        return JSON.stringify(sanitized, null, 2);
+    }
+
+    private cloneWorkbookWithoutViewerScopedData(workbook: WorkbookSpec): WorkbookSpec {
+        const cloned: WorkbookSpec = {
+            ...workbook,
+            NamedRanges: workbook.NamedRanges.map((nr) => ({ ...nr })),
+            Worksheets: workbook.Worksheets.map((ws) => {
+                const liveModeTableIds = new Set(
+                    ws.LiveTables.filter((t) => t.Mode !== 'Frozen').map((t) => t.TableID)
+                );
+                const cleanedCells: Record<string, SpreadsheetCellSpec> = {};
+                for (const [addr, cell] of Object.entries(ws.Cells)) {
+                    if (!cell) continue;
+                    if (cell.SpilledFrom) continue;
+                    if (cell.LiveTableID && liveModeTableIds.has(cell.LiveTableID)) continue;
+                    if (cell.Formula && this.ParseMjCustomFunctionFormula(cell.Formula)) {
+                        cleanedCells[addr] = {
+                            ...cell,
+                            RawValue: null,
+                            ComputedValue: null,
+                            DisplayValue: '',
+                            AccessDenied: false,
+                            ErrorMessage: null,
+                            SpilledFrom: null
+                        };
+                    } else {
+                        cleanedCells[addr] = {
+                            ...cell,
+                            Style: cell.Style ? { ...cell.Style } : undefined
+                        };
+                    }
+                }
+                return {
+                    ...ws,
+                    Rows: ws.Rows.map((r) => ({ ...r })),
+                    Columns: ws.Columns.map((c) => ({ ...c })),
+                    Cells: cleanedCells,
+                    FilterSpecs: ws.FilterSpecs.map((f) => ({ ...f })),
+                    ValidationRules: ws.ValidationRules.map((v) => ({ ...v })),
+                    ConditionalFormats: ws.ConditionalFormats.map((cf) => ({ ...cf })),
+                    LiveTables: ws.LiveTables.map((t) => ({ ...t })),
+                    Charts: ws.Charts.map((c) => ({ ...c })),
+                    EmbeddedArtifacts: ws.EmbeddedArtifacts.map((e) => ({ ...e }))
+                };
+            })
+        };
+
+        this.bindSheetsToWorkbook(cloned);
+        this.EvaluateWorkbook(cloned);
+
+        // Ensure =MJ.QUERY and =MJ.VIEW cells always persist ComputedValue: null and DisplayValue: ''
+        for (const ws of cloned.Worksheets) {
+            for (const cell of Object.values(ws.Cells)) {
+                if (cell.Formula && this.ParseMjCustomFunctionFormula(cell.Formula)) {
+                    cell.ComputedValue = null;
+                    cell.DisplayValue = '';
+                }
+            }
+        }
+        return cloned;
+    }
+
+    private bindSheetsToWorkbook(workbook: WorkbookSpec): void {
+        for (const ws of workbook.Worksheets) {
+            this.sheetToWorkbook.set(ws, workbook);
+        }
+    }
+
+    private mintUniqueRowId(sheetId: string, existingIds: Set<string>, preferredNumber: number): string {
+        const direct = `${sheetId}-row-${preferredNumber}`;
+        if (!existingIds.has(direct)) {
+            existingIds.add(direct);
+            return direct;
+        }
+        let n = preferredNumber + 1;
+        while (existingIds.has(`${sheetId}-row-${n}`)) {
+            n++;
+        }
+        const candidate = `${sheetId}-row-${n}`;
+        existingIds.add(candidate);
+        return candidate;
+    }
+
+    private mintUniqueColumnId(sheetId: string, existingIds: Set<string>, preferredIndex: number): string {
+        const direct = `${sheetId}-col-${ColumnIndexToLetter(preferredIndex)}`;
+        if (!existingIds.has(direct)) {
+            existingIds.add(direct);
+            return direct;
+        }
+        while (true) {
+            this.monotonicIdCounter++;
+            const candidate = `${sheetId}-col-${ColumnIndexToLetter(preferredIndex)}-u${this.monotonicIdCounter}`;
+            if (!existingIds.has(candidate)) {
+                existingIds.add(candidate);
+                return candidate;
+            }
+        }
     }
 
     /**
@@ -756,7 +875,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             ? (raw.ActiveSheetID as string)
             : worksheets[0].SheetID;
 
-        return {
+        const wb: WorkbookSpec = {
             WorkbookID: raw.WorkbookID || `wb-${Date.now().toString(36)}`,
             Title: raw.Title || 'Untitled Workbook',
             ActiveSheetID: activeId,
@@ -765,11 +884,25 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             CreatedAt: raw.CreatedAt || now,
             UpdatedAt: raw.UpdatedAt || now
         };
+        this.bindSheetsToWorkbook(wb);
+
+        // Second pass now that all sheets in `wb` are bound: compile/resolve any cross-sheet `@SHEET_*` references
+        for (const ws of wb.Worksheets) {
+            for (const cell of Object.values(ws.Cells)) {
+                if (cell.FormulaStable && (cell.FormulaStable.includes('@SHEET_CELL(') || cell.FormulaStable.includes('@SHEET_RANGE('))) {
+                    cell.Formula = this.ResolveFormulaFromStableIds(ws, cell.FormulaStable, wb);
+                } else if (cell.Formula && cell.Formula.includes('!')) {
+                    cell.FormulaStable = this.CompileFormulaToStableIds(ws, cell.Formula, wb);
+                }
+            }
+        }
+        return wb;
     }
 
     /**
-     * Normalizes a single worksheet, ensuring `Rows` and `Columns` cover all populated cell coordinates
-     * and every formula has both `Formula` and `FormulaStable`.
+     * Normalizes a single worksheet, ensuring `Rows` and `Columns` cover all populated cell coordinates,
+     * guaranteeing monotonic unique `RowID`s and `ColumnID`s, and ensuring every formula has both
+     * `Formula` and `FormulaStable`.
      */
     public NormalizeWorksheet(
         raw: Partial<WorksheetSpec>,
@@ -790,11 +923,16 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         }
 
         const existingRows = Array.isArray(raw.Rows) ? raw.Rows : [];
+        const usedRowIds = new Set<string>();
         const rows: SpreadsheetRowSpec[] = [];
         for (let r = 1; r <= maxRow; r++) {
             const existing = existingRows[r - 1];
+            const candidateId =
+                existing?.RowID && !usedRowIds.has(existing.RowID)
+                    ? (usedRowIds.add(existing.RowID), existing.RowID)
+                    : this.mintUniqueRowId(sheetId, usedRowIds, r);
             rows.push({
-                RowID: existing?.RowID || `${sheetId}-row-${r}`,
+                RowID: candidateId,
                 Index: r,
                 Height: existing?.Height ?? DEFAULT_ROW_HEIGHT,
                 Hidden: existing?.Hidden ?? false
@@ -802,12 +940,17 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         }
 
         const existingCols = Array.isArray(raw.Columns) ? raw.Columns : [];
+        const usedColIds = new Set<string>();
         const columns: SpreadsheetColumnSpec[] = [];
         for (let c = 1; c <= maxCol; c++) {
             const existing = existingCols[c - 1];
             const letter = ColumnIndexToLetter(c);
+            const candidateId =
+                existing?.ColumnID && !usedColIds.has(existing.ColumnID)
+                    ? (usedColIds.add(existing.ColumnID), existing.ColumnID)
+                    : this.mintUniqueColumnId(sheetId, usedColIds, c);
             columns.push({
-                ColumnID: existing?.ColumnID || `${sheetId}-col-${letter}`,
+                ColumnID: candidateId,
                 Index: c,
                 Letter: letter,
                 Header: existing?.Header,
@@ -882,24 +1025,86 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
 
     /**
      * Translates an A1 formula (e.g. `'=SUM(B2:B9) + $C$2'`) into a stable-ID formula
-     * (`'=SUM(@RANGE(sheet-1-row-2,sheet-1-col-B,sheet-1-row-9,sheet-1-col-B)) + @CELL($sheet-1-row-2,$sheet-1-col-C)'`)
-     * so concurrent row/column insertions preserve exact logical references (`§ 6.2`, `Accept #1`).
+     * (`'=SUM(@RANGE(sheet-1-row-2,sheet-1-col-B,sheet-1-row-9,sheet-1-col-B)) + @CELL($sheet-1-row-2,$sheet-1-col-C)'`
+     * and cross-sheet `'@SHEET_CELL(sheetId,r,c)'` / `'@SHEET_RANGE(sheetId,r1,c1,r2,c2)'`)
+     * so concurrent row/column insertions and deletions preserve exact logical references (`§ 6.2`, `Accept #1`, `D3`).
      */
-    public CompileFormulaToStableIds(sheet: WorksheetSpec, formula: string): string {
+    public CompileFormulaToStableIds(sheet: WorksheetSpec, formula: string, workbook?: WorkbookSpec): string {
         if (!formula || !formula.trim().startsWith('=')) {
             return formula;
         }
-        // Protect string literals first so we never rewrite A1 tokens inside quotes
+        const activeWorkbook = workbook ?? this.sheetToWorkbook.get(sheet);
+
+        // 1. Protect Excel double-quoted string literals (handling doubled "" inside strings)
         const literals: string[] = [];
-        const masked = formula.replace(/"([^"\\]|\\.)*"/g, (match) => {
+        let masked = formula.replace(/"(?:""|[^"])*"/g, (match) => {
             literals.push(match);
             return `__STR_LIT_${literals.length - 1}__`;
         });
 
-        // Replace A1 ranges (not preceded by '!' cross-sheet prefix)
+        // 2. Translate or mask cross-sheet references (handling single-quoted names with doubled '' like 'FY24 Q1'!B2)
+        const sheetQuotes: string[] = [];
+        masked = masked.replace(
+            /(?:'((?:''|[^'])*)'|([A-Za-z_][A-Za-z0-9_.]*))!(\$?)([A-Za-z]{1,3})(\$?)([1-9][0-9]*)(?::(\$?)([A-Za-z]{1,3})(\$?)([1-9][0-9]*))?/g,
+            (
+                full,
+                quotedSheet: string | undefined,
+                plainSheet: string | undefined,
+                absC1: string,
+                col1: string,
+                absR1: string,
+                row1: string,
+                absC2: string | undefined,
+                col2: string | undefined,
+                absR2: string | undefined,
+                row2: string | undefined
+            ) => {
+                const rawSheetName = quotedSheet !== undefined ? quotedSheet.replace(/''/g, "'") : (plainSheet ?? '');
+                const targetSheet = activeWorkbook ? this.GetWorksheet(activeWorkbook, rawSheetName) : undefined;
+                if (!targetSheet) {
+                    // Mask unknown/unattached cross-sheet token so local regexes never corrupt 'FY24 Q1'!B2
+                    sheetQuotes.push(full);
+                    return `__XSHEET_LIT_${sheetQuotes.length - 1}__`;
+                }
+                const r1 = parseInt(row1, 10);
+                const c1 = ColumnLetterToIndex(col1);
+                if (col2 && row2) {
+                    const r2 = parseInt(row2, 10);
+                    const c2 = ColumnLetterToIndex(col2);
+                    this.ensureSheetCapacity(targetSheet, Math.max(r1, r2), Math.max(c1, c2));
+                    const rId1 = `${absR1 ? '$' : ''}${targetSheet.Rows[r1 - 1].RowID}`;
+                    const cId1 = `${absC1 ? '$' : ''}${targetSheet.Columns[c1 - 1].ColumnID}`;
+                    const rId2 = `${absR2 ? '$' : ''}${targetSheet.Rows[r2 - 1].RowID}`;
+                    const cId2 = `${absC2 ? '$' : ''}${targetSheet.Columns[c2 - 1].ColumnID}`;
+                    return `@SHEET_RANGE(${targetSheet.SheetID},${rId1},${cId1},${rId2},${cId2})`;
+                }
+                this.ensureSheetCapacity(targetSheet, r1, c1);
+                const rId = `${absR1 ? '$' : ''}${targetSheet.Rows[r1 - 1].RowID}`;
+                const cId = `${absC1 ? '$' : ''}${targetSheet.Columns[c1 - 1].ColumnID}`;
+                return `@SHEET_CELL(${targetSheet.SheetID},${rId},${cId})`;
+            }
+        );
+
+        // Also mask any remaining single-quoted segments so tokens like Q1 inside 'FY24 Q1' are never touched
+        masked = masked.replace(/'(?:''|[^'])*'/g, (match) => {
+            sheetQuotes.push(match);
+            return `__XSHEET_LIT_${sheetQuotes.length - 1}__`;
+        });
+
+        // 3. Replace local A1 ranges (not preceded by '!' or '@')
         const withRanges = masked.replace(
-            /(?<![!A-Za-z0-9_])(\$?)([A-Za-z]{1,3})(\$?)([1-9][0-9]*):(\$?)([A-Za-z]{1,3})(\$?)([1-9][0-9]*)/g,
-            (_full, absC1: string, col1: string, absR1: string, row1: string, absC2: string, col2: string, absR2: string, row2: string) => {
+            /(?<![!@A-Za-z0-9_])(\$?)([A-Za-z]{1,3})(\$?)([1-9][0-9]*):(\$?)([A-Za-z]{1,3})(\$?)([1-9][0-9]*)/g,
+            (
+                _full,
+                absC1: string,
+                col1: string,
+                absR1: string,
+                row1: string,
+                absC2: string,
+                col2: string,
+                absR2: string,
+                row2: string
+            ) => {
                 const r1 = parseInt(row1, 10);
                 const c1 = ColumnLetterToIndex(col1);
                 const r2 = parseInt(row2, 10);
@@ -913,9 +1118,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         );
 
-        // Replace standalone A1 cell references (not followed by '(' function call or preceded by '!' or '@')
+        // 4. Replace standalone local A1 cell references (not followed by '(' function call or preceded by '!' or '@' or '.')
         const withCells = withRanges.replace(
-            /(?<![!@A-Za-z0-9_])(\$?)([A-Za-z]{1,3})(\$?)([1-9][0-9]*)(?![A-Za-z0-9_(\[])/g,
+            /(?<![!@.A-Za-z0-9_])(\$?)([A-Za-z]{1,3})(\$?)([1-9][0-9]*)(?![A-Za-z0-9_.(\[])/g,
             (_full, absC: string, col: string, absR: string, row: string) => {
                 const r = parseInt(row, 10);
                 const c = ColumnLetterToIndex(col);
@@ -926,44 +1131,114 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         );
 
-        return withCells.replace(/__STR_LIT_(\d+)__/g, (_m, idxStr: string) => literals[parseInt(idxStr, 10)] ?? '');
+        const unmaskedSheets = withCells.replace(
+            /__XSHEET_LIT_(\d+)__/g,
+            (_m, idxStr: string) => sheetQuotes[parseInt(idxStr, 10)] ?? ''
+        );
+        return unmaskedSheets.replace(
+            /__STR_LIT_(\d+)__/g,
+            (_m, idxStr: string) => literals[parseInt(idxStr, 10)] ?? ''
+        );
     }
 
     /**
      * Resolves a `FormulaStable` string back to human-readable A1 notation using the current
-     * positions of each `RowID` and `ColumnID` in `sheet.Rows` and `sheet.Columns` (`§ 6.2`, `Accept #1`).
+     * positions of each `RowID` and `ColumnID` in `sheet.Rows` / `sheet.Columns` (and cross-sheet
+     * `@SHEET_CELL` / `@SHEET_RANGE` targets when `workbook` is available) (`§ 6.2`, `Accept #1`, `D3`).
      */
-    public ResolveFormulaFromStableIds(sheet: WorksheetSpec, formulaStable: string): string {
-        if (!formulaStable || (!formulaStable.includes('@CELL(') && !formulaStable.includes('@RANGE('))) {
+    public ResolveFormulaFromStableIds(sheet: WorksheetSpec, formulaStable: string, workbook?: WorkbookSpec): string {
+        if (
+            !formulaStable ||
+            (!formulaStable.includes('@CELL(') &&
+                !formulaStable.includes('@RANGE(') &&
+                !formulaStable.includes('@SHEET_CELL(') &&
+                !formulaStable.includes('@SHEET_RANGE('))
+        ) {
             return formulaStable;
         }
-        const rowIndexById = new Map<string, number>();
-        for (let i = 0; i < sheet.Rows.length; i++) {
-            rowIndexById.set(sheet.Rows[i].RowID, i + 1);
-        }
-        const colIndexById = new Map<string, number>();
-        for (let i = 0; i < sheet.Columns.length; i++) {
-            colIndexById.set(sheet.Columns[i].ColumnID, i + 1);
-        }
+        const activeWorkbook = workbook ?? this.sheetToWorkbook.get(sheet);
 
-        const resolveToken = (rawRowId: string, rawColId: string): string => {
+        const buildSheetLookup = (
+            ws: WorksheetSpec
+        ): { rowIndexById: Map<string, number>; colIndexById: Map<string, number> } => {
+            const rowIndexById = new Map<string, number>();
+            for (let i = 0; i < ws.Rows.length; i++) {
+                rowIndexById.set(ws.Rows[i].RowID, i + 1);
+            }
+            const colIndexById = new Map<string, number>();
+            for (let i = 0; i < ws.Columns.length; i++) {
+                colIndexById.set(ws.Columns[i].ColumnID, i + 1);
+            }
+            return { rowIndexById, colIndexById };
+        };
+
+        const localLookup = buildSheetLookup(sheet);
+        const crossLookupCache = new Map<string, { ws: WorksheetSpec; rowIndexById: Map<string, number>; colIndexById: Map<string, number> }>();
+
+        const getCrossLookup = (targetSheetId: string) => {
+            const existing = crossLookupCache.get(targetSheetId);
+            if (existing) return existing;
+            const ws = activeWorkbook?.Worksheets.find((w) => w.SheetID === targetSheetId);
+            if (!ws) return null;
+            const built = { ws, ...buildSheetLookup(ws) };
+            crossLookupCache.set(targetSheetId, built);
+            return built;
+        };
+
+        const resolveTokenAgainst = (
+            lookup: { rowIndexById: Map<string, number>; colIndexById: Map<string, number> },
+            rawRowId: string,
+            rawColId: string
+        ): string => {
             const absR = rawRowId.startsWith('$');
             const absC = rawColId.startsWith('$');
             const rId = absR ? rawRowId.slice(1) : rawRowId;
             const cId = absC ? rawColId.slice(1) : rawColId;
-            const rIdx = rowIndexById.get(rId);
-            const cIdx = colIndexById.get(cId);
+            const rIdx = lookup.rowIndexById.get(rId);
+            const cIdx = lookup.colIndexById.get(cId);
             if (!rIdx || !cIdx) {
                 return '#REF!';
             }
             return FormatCellAddress(rIdx, cIdx, absR, absC);
         };
 
-        const withRanges = formulaStable.replace(
+        const formatSheetRefPrefix = (sheetName: string): string => {
+            if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(sheetName) && !ParseCellAddress(sheetName)) {
+                return `${sheetName}!`;
+            }
+            return `'${sheetName.replace(/'/g, "''")}'!`;
+        };
+
+        let resolved = formulaStable.replace(
+            /@SHEET_RANGE\(([^,]+),([^,]+),([^,]+),([^,]+),([^)]+)\)/g,
+            (_full, sId: string, r1: string, c1: string, r2: string, c2: string) => {
+                const cross = getCrossLookup(sId.trim());
+                if (!cross) return '#REF!';
+                const start = resolveTokenAgainst(cross, r1.trim(), c1.trim());
+                const end = resolveTokenAgainst(cross, r2.trim(), c2.trim());
+                if (start === '#REF!' || end === '#REF!') {
+                    return '#REF!';
+                }
+                return `${formatSheetRefPrefix(cross.ws.Name)}${start}:${end}`;
+            }
+        );
+
+        resolved = resolved.replace(
+            /@SHEET_CELL\(([^,]+),([^,]+),([^)]+)\)/g,
+            (_full, sId: string, r: string, c: string) => {
+                const cross = getCrossLookup(sId.trim());
+                if (!cross) return '#REF!';
+                const addr = resolveTokenAgainst(cross, r.trim(), c.trim());
+                if (addr === '#REF!') return '#REF!';
+                return `${formatSheetRefPrefix(cross.ws.Name)}${addr}`;
+            }
+        );
+
+        resolved = resolved.replace(
             /@RANGE\(([^,]+),([^,]+),([^,]+),([^)]+)\)/g,
             (_full, r1: string, c1: string, r2: string, c2: string) => {
-                const start = resolveToken(r1.trim(), c1.trim());
-                const end = resolveToken(r2.trim(), c2.trim());
+                const start = resolveTokenAgainst(localLookup, r1.trim(), c1.trim());
+                const end = resolveTokenAgainst(localLookup, r2.trim(), c2.trim());
                 if (start === '#REF!' || end === '#REF!') {
                     return '#REF!';
                 }
@@ -971,15 +1246,15 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         );
 
-        return withRanges.replace(
+        return resolved.replace(
             /@CELL\(([^,]+),([^)]+)\)/g,
-            (_full, r: string, c: string) => resolveToken(r.trim(), c.trim())
+            (_full, r: string, c: string) => resolveTokenAgainst(localLookup, r.trim(), c.trim())
         );
     }
 
     /**
-     * Inserts `count` new rows at 1-based `atRowNumber` in `sheetId`, assigning fresh stable `RowID`s,
-     * shifting affected cells down, and resolving all `FormulaStable` references (`§ 6.2`, `Accept #1`).
+     * Inserts `count` new rows at 1-based `atRowNumber` in `sheetId`, assigning fresh monotonic `RowID`s,
+     * shifting affected cells and non-cell range metadata down, and resolving all `FormulaStable` references (`§ 6.2`, `Accept #1`, `D3`).
      */
     public InsertRows(
         workbook: WorkbookSpec,
@@ -991,46 +1266,64 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         if (!sheet) {
             throw new Error(`Worksheet '${sheetId}' not found.`);
         }
+        this.bindSheetsToWorkbook(workbook);
         const insertIdx = Math.max(0, Math.min(sheet.Rows.length, Math.floor(atRowNumber) - 1));
+        const startRow1Based = insertIdx + 1;
         const numToInsert = Math.max(1, Math.floor(count));
+        const existingIds = new Set(sheet.Rows.map((r) => r.RowID));
         const inserted: SpreadsheetRowSpec[] = [];
-        const uniqueSeed = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
         for (let i = 0; i < numToInsert; i++) {
+            this.monotonicIdCounter++;
+            let candidate = `${sheet.SheetID}-row-ins-${this.monotonicIdCounter}`;
+            while (existingIds.has(candidate)) {
+                this.monotonicIdCounter++;
+                candidate = `${sheet.SheetID}-row-ins-${this.monotonicIdCounter}`;
+            }
+            existingIds.add(candidate);
             inserted.push({
-                RowID: `${sheet.SheetID}-row-ins-${uniqueSeed}-${i + 1}`,
+                RowID: candidate,
                 Index: insertIdx + i + 1,
                 Height: DEFAULT_ROW_HEIGHT,
                 Hidden: false
             });
         }
         sheet.Rows.splice(insertIdx, 0, ...inserted);
-        this.reindexSheetStructureAndFormulas(sheet);
+        this.shiftNonCellMetadataForRowEdit(workbook, sheet, 'insert', startRow1Based, numToInsert);
+        this.reindexWorkbookAfterStructuralEdit(workbook, sheet);
         this.EvaluateWorkbook(workbook);
         return inserted;
     }
 
     /**
-     * Deletes `count` rows starting at 1-based `atRowNumber` in `sheetId`, updating all cells and formulas.
+     * Deletes `count` rows starting at 1-based `atRowNumber` in `sheetId`, shrinking `@RANGE` endpoints
+     * to surviving rows (or `#REF!` if the entire range was deleted) and updating non-cell range metadata (`D3`).
      */
     public DeleteRows(workbook: WorkbookSpec, sheetId: string, atRowNumber: number, count = 1): void {
         const sheet = this.GetWorksheet(workbook, sheetId);
         if (!sheet || sheet.Rows.length <= 1) return;
+        this.bindSheetsToWorkbook(workbook);
         const startIdx = Math.max(0, Math.min(sheet.Rows.length - 1, Math.floor(atRowNumber) - 1));
-        const maxDeletable = Math.min(Math.max(1, count), sheet.Rows.length - 1);
-        const removedRows = sheet.Rows.splice(startIdx, maxDeletable);
-        const removedRowIds = new Set(removedRows.map((r) => r.RowID));
+        const startRow1Based = startIdx + 1;
+        const maxDeletable = Math.min(Math.max(1, Math.floor(count)), sheet.Rows.length - 1);
+        const removedRowSet = new Set(sheet.Rows.slice(startIdx, startIdx + maxDeletable).map((r) => r.RowID));
+
+        // Shrink @RANGE and @SHEET_RANGE endpoints BEFORE removing the rows so surviving endpoints are preserved
+        this.shrinkFormulaStableRowEndpointsBeforeDelete(workbook, sheet, removedRowSet);
+
+        sheet.Rows.splice(startIdx, maxDeletable);
         for (const [addr, cell] of Object.entries(sheet.Cells)) {
-            if (removedRowIds.has(cell.RowID)) {
+            if (removedRowSet.has(cell.RowID)) {
                 delete sheet.Cells[addr];
             }
         }
-        this.reindexSheetStructureAndFormulas(sheet);
+        this.shiftNonCellMetadataForRowEdit(workbook, sheet, 'delete', startRow1Based, maxDeletable);
+        this.reindexWorkbookAfterStructuralEdit(workbook, sheet);
         this.EvaluateWorkbook(workbook);
     }
 
     /**
-     * Inserts `count` new columns at 1-based `atColumnNumber` in `sheetId`, assigning fresh stable `ColumnID`s,
-     * shifting affected cells right, and resolving all `FormulaStable` references (`§ 6.2`, `Accept #1`).
+     * Inserts `count` new columns at 1-based `atColumnNumber` in `sheetId`, assigning fresh monotonic `ColumnID`s,
+     * shifting affected cells and non-cell range metadata right, and resolving all `FormulaStable` references (`§ 6.2`, `Accept #1`, `D3`).
      */
     public InsertColumns(
         workbook: WorkbookSpec,
@@ -1042,13 +1335,22 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         if (!sheet) {
             throw new Error(`Worksheet '${sheetId}' not found.`);
         }
+        this.bindSheetsToWorkbook(workbook);
         const insertIdx = Math.max(0, Math.min(sheet.Columns.length, Math.floor(atColumnNumber) - 1));
+        const startCol1Based = insertIdx + 1;
         const numToInsert = Math.max(1, Math.floor(count));
+        const existingIds = new Set(sheet.Columns.map((c) => c.ColumnID));
         const inserted: SpreadsheetColumnSpec[] = [];
-        const uniqueSeed = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
         for (let i = 0; i < numToInsert; i++) {
+            this.monotonicIdCounter++;
+            let candidate = `${sheet.SheetID}-col-ins-${this.monotonicIdCounter}`;
+            while (existingIds.has(candidate)) {
+                this.monotonicIdCounter++;
+                candidate = `${sheet.SheetID}-col-ins-${this.monotonicIdCounter}`;
+            }
+            existingIds.add(candidate);
             inserted.push({
-                ColumnID: `${sheet.SheetID}-col-ins-${uniqueSeed}-${i + 1}`,
+                ColumnID: candidate,
                 Index: insertIdx + i + 1,
                 Letter: ColumnIndexToLetter(insertIdx + i + 1),
                 Width: DEFAULT_COLUMN_WIDTH,
@@ -1056,27 +1358,36 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             });
         }
         sheet.Columns.splice(insertIdx, 0, ...inserted);
-        this.reindexSheetStructureAndFormulas(sheet);
+        this.shiftNonCellMetadataForColEdit(workbook, sheet, 'insert', startCol1Based, numToInsert);
+        this.reindexWorkbookAfterStructuralEdit(workbook, sheet);
         this.EvaluateWorkbook(workbook);
         return inserted;
     }
 
     /**
-     * Deletes `count` columns starting at 1-based `atColumnNumber` in `sheetId`.
+     * Deletes `count` columns starting at 1-based `atColumnNumber` in `sheetId`, shrinking `@RANGE` endpoints
+     * to surviving columns (or `#REF!` if the entire range was deleted) and updating non-cell range metadata (`D3`).
      */
     public DeleteColumns(workbook: WorkbookSpec, sheetId: string, atColumnNumber: number, count = 1): void {
         const sheet = this.GetWorksheet(workbook, sheetId);
         if (!sheet || sheet.Columns.length <= 1) return;
+        this.bindSheetsToWorkbook(workbook);
         const startIdx = Math.max(0, Math.min(sheet.Columns.length - 1, Math.floor(atColumnNumber) - 1));
-        const maxDeletable = Math.min(Math.max(1, count), sheet.Columns.length - 1);
-        const removedCols = sheet.Columns.splice(startIdx, maxDeletable);
-        const removedColIds = new Set(removedCols.map((c) => c.ColumnID));
+        const startCol1Based = startIdx + 1;
+        const maxDeletable = Math.min(Math.max(1, Math.floor(count)), sheet.Columns.length - 1);
+        const removedColSet = new Set(sheet.Columns.slice(startIdx, startIdx + maxDeletable).map((c) => c.ColumnID));
+
+        // Shrink @RANGE and @SHEET_RANGE endpoints BEFORE removing the columns so surviving endpoints are preserved
+        this.shrinkFormulaStableColEndpointsBeforeDelete(workbook, sheet, removedColSet);
+
+        sheet.Columns.splice(startIdx, maxDeletable);
         for (const [addr, cell] of Object.entries(sheet.Cells)) {
-            if (removedColIds.has(cell.ColumnID)) {
+            if (removedColSet.has(cell.ColumnID)) {
                 delete sheet.Cells[addr];
             }
         }
-        this.reindexSheetStructureAndFormulas(sheet);
+        this.shiftNonCellMetadataForColEdit(workbook, sheet, 'delete', startCol1Based, maxDeletable);
+        this.reindexWorkbookAfterStructuralEdit(workbook, sheet);
         this.EvaluateWorkbook(workbook);
     }
 
@@ -1088,7 +1399,21 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         this.reindexSheetStructureAndFormulas(sheet);
     }
 
-    private reindexSheetStructureAndFormulas(sheet: WorksheetSpec): void {
+    private reindexWorkbookAfterStructuralEdit(workbook: WorkbookSpec, editedSheet: WorksheetSpec): void {
+        this.workbookDagCache.delete(workbook);
+        this.reindexSheetStructureAndFormulas(editedSheet, workbook);
+        for (const ws of workbook.Worksheets) {
+            if (ws.SheetID === editedSheet.SheetID) continue;
+            for (const cell of Object.values(ws.Cells)) {
+                if (cell.FormulaStable) {
+                    cell.Formula = this.ResolveFormulaFromStableIds(ws, cell.FormulaStable, workbook);
+                }
+            }
+        }
+    }
+
+    private reindexSheetStructureAndFormulas(sheet: WorksheetSpec, workbook?: WorkbookSpec): void {
+        const activeWorkbook = workbook ?? this.sheetToWorkbook.get(sheet);
         const rowIndexById = new Map<string, number>();
         for (let i = 0; i < sheet.Rows.length; i++) {
             sheet.Rows[i].Index = i + 1;
@@ -1108,7 +1433,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             if (!rIdx || !cIdx) continue;
             const nextAddr = FormatCellAddress(rIdx, cIdx);
             const resolvedFormula = cell.FormulaStable
-                ? this.ResolveFormulaFromStableIds(sheet, cell.FormulaStable)
+                ? this.ResolveFormulaFromStableIds(sheet, cell.FormulaStable, activeWorkbook)
                 : cell.Formula ?? null;
             nextCells[nextAddr] = {
                 ...cell,
@@ -1117,6 +1442,232 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             };
         }
         sheet.Cells = nextCells;
+    }
+
+    private shrinkFormulaStableRowEndpointsBeforeDelete(
+        workbook: WorkbookSpec,
+        targetSheet: WorksheetSpec,
+        removedRowIds: ReadonlySet<string>
+    ): void {
+        const preRowIndexById = new Map<string, number>();
+        targetSheet.Rows.forEach((r, idx) => preRowIndexById.set(r.RowID, idx));
+
+        const shrinkRowPair = (rawR1: string, rawR2: string): { nextR1: string; nextR2: string } | null => {
+            const absR1 = rawR1.trim().startsWith('$');
+            const absR2 = rawR2.trim().startsWith('$');
+            const id1 = absR1 ? rawR1.trim().slice(1) : rawR1.trim();
+            const id2 = absR2 ? rawR2.trim().slice(1) : rawR2.trim();
+            const idx1 = preRowIndexById.get(id1);
+            const idx2 = preRowIndexById.get(id2);
+            if (idx1 === undefined || idx2 === undefined) return null;
+            if (!removedRowIds.has(id1) && !removedRowIds.has(id2)) {
+                return { nextR1: rawR1.trim(), nextR2: rawR2.trim() };
+            }
+            const minIdx = Math.min(idx1, idx2);
+            const maxIdx = Math.max(idx1, idx2);
+            const surviving = targetSheet.Rows.slice(minIdx, maxIdx + 1).filter((r) => !removedRowIds.has(r.RowID));
+            if (surviving.length === 0) {
+                return null;
+            }
+            return {
+                nextR1: `${absR1 ? '$' : ''}${surviving[0].RowID}`,
+                nextR2: `${absR2 ? '$' : ''}${surviving[surviving.length - 1].RowID}`
+            };
+        };
+
+        for (const ws of workbook.Worksheets) {
+            for (const cell of Object.values(ws.Cells)) {
+                if (!cell.FormulaStable) continue;
+                let updated = cell.FormulaStable;
+                if (ws.SheetID === targetSheet.SheetID && updated.includes('@RANGE(')) {
+                    updated = updated.replace(
+                        /@RANGE\(([^,]+),([^,]+),([^,]+),([^)]+)\)/g,
+                        (_full, r1: string, c1: string, r2: string, c2: string) => {
+                            const shrunk = shrinkRowPair(r1, r2);
+                            if (!shrunk) return '#REF!';
+                            return `@RANGE(${shrunk.nextR1},${c1.trim()},${shrunk.nextR2},${c2.trim()})`;
+                        }
+                    );
+                }
+                if (updated.includes('@SHEET_RANGE(')) {
+                    updated = updated.replace(
+                        /@SHEET_RANGE\(([^,]+),([^,]+),([^,]+),([^,]+),([^)]+)\)/g,
+                        (full, sId: string, r1: string, c1: string, r2: string, c2: string) => {
+                            if (sId.trim() !== targetSheet.SheetID) return full;
+                            const shrunk = shrinkRowPair(r1, r2);
+                            if (!shrunk) return '#REF!';
+                            return `@SHEET_RANGE(${sId.trim()},${shrunk.nextR1},${c1.trim()},${shrunk.nextR2},${c2.trim()})`;
+                        }
+                    );
+                }
+                cell.FormulaStable = updated;
+            }
+        }
+    }
+
+    private shrinkFormulaStableColEndpointsBeforeDelete(
+        workbook: WorkbookSpec,
+        targetSheet: WorksheetSpec,
+        removedColIds: ReadonlySet<string>
+    ): void {
+        const preColIndexById = new Map<string, number>();
+        targetSheet.Columns.forEach((c, idx) => preColIndexById.set(c.ColumnID, idx));
+
+        const shrinkColPair = (rawC1: string, rawC2: string): { nextC1: string; nextC2: string } | null => {
+            const absC1 = rawC1.trim().startsWith('$');
+            const absC2 = rawC2.trim().startsWith('$');
+            const id1 = absC1 ? rawC1.trim().slice(1) : rawC1.trim();
+            const id2 = absC2 ? rawC2.trim().slice(1) : rawC2.trim();
+            const idx1 = preColIndexById.get(id1);
+            const idx2 = preColIndexById.get(id2);
+            if (idx1 === undefined || idx2 === undefined) return null;
+            if (!removedColIds.has(id1) && !removedColIds.has(id2)) {
+                return { nextC1: rawC1.trim(), nextC2: rawC2.trim() };
+            }
+            const minIdx = Math.min(idx1, idx2);
+            const maxIdx = Math.max(idx1, idx2);
+            const surviving = targetSheet.Columns.slice(minIdx, maxIdx + 1).filter((c) => !removedColIds.has(c.ColumnID));
+            if (surviving.length === 0) {
+                return null;
+            }
+            return {
+                nextC1: `${absC1 ? '$' : ''}${surviving[0].ColumnID}`,
+                nextC2: `${absC2 ? '$' : ''}${surviving[surviving.length - 1].ColumnID}`
+            };
+        };
+
+        for (const ws of workbook.Worksheets) {
+            for (const cell of Object.values(ws.Cells)) {
+                if (!cell.FormulaStable) continue;
+                let updated = cell.FormulaStable;
+                if (ws.SheetID === targetSheet.SheetID && updated.includes('@RANGE(')) {
+                    updated = updated.replace(
+                        /@RANGE\(([^,]+),([^,]+),([^,]+),([^)]+)\)/g,
+                        (_full, r1: string, c1: string, r2: string, c2: string) => {
+                            const shrunk = shrinkColPair(c1, c2);
+                            if (!shrunk) return '#REF!';
+                            return `@RANGE(${r1.trim()},${shrunk.nextC1},${r2.trim()},${shrunk.nextC2})`;
+                        }
+                    );
+                }
+                if (updated.includes('@SHEET_RANGE(')) {
+                    updated = updated.replace(
+                        /@SHEET_RANGE\(([^,]+),([^,]+),([^,]+),([^,]+),([^)]+)\)/g,
+                        (full, sId: string, r1: string, c1: string, r2: string, c2: string) => {
+                            if (sId.trim() !== targetSheet.SheetID) return full;
+                            const shrunk = shrinkColPair(c1, c2);
+                            if (!shrunk) return '#REF!';
+                            return `@SHEET_RANGE(${sId.trim()},${r1.trim()},${shrunk.nextC1},${r2.trim()},${shrunk.nextC2})`;
+                        }
+                    );
+                }
+                cell.FormulaStable = updated;
+            }
+        }
+    }
+
+    private shiftNonCellMetadataForRowEdit(
+        workbook: WorkbookSpec,
+        sheet: WorksheetSpec,
+        op: 'insert' | 'delete',
+        startRow1Based: number,
+        count: number
+    ): void {
+        const maxSurvivingRow = Math.max(1, sheet.Rows.length);
+        for (const nr of workbook.NamedRanges) {
+            if (nr.SheetID !== sheet.SheetID || nr.Range === '#REF!') continue;
+            const shifted = shiftA1RangeRows(nr.Range, op, startRow1Based, count, false, maxSurvivingRow);
+            nr.Range = shifted ?? '#REF!';
+        }
+        sheet.ValidationRules = sheet.ValidationRules
+            .map((vr) => {
+                const shifted = shiftA1RangeRows(vr.Range, op, startRow1Based, count, false, maxSurvivingRow);
+                return shifted ? { ...vr, Range: shifted } : null;
+            })
+            .filter((vr): vr is SpreadsheetValidationRuleSpec => vr !== null);
+        sheet.ConditionalFormats = sheet.ConditionalFormats
+            .map((cf) => {
+                const shifted = shiftA1RangeRows(cf.Range, op, startRow1Based, count, false, maxSurvivingRow);
+                return shifted ? { ...cf, Range: shifted } : null;
+            })
+            .filter((cf): cf is SpreadsheetConditionalFormatRuleSpec => cf !== null);
+        for (const ws of workbook.Worksheets) {
+            for (const chart of ws.Charts) {
+                if (chart.SheetID === sheet.SheetID && chart.SourceRange !== '#REF!') {
+                    const shiftedSource = shiftA1RangeRows(chart.SourceRange, op, startRow1Based, count, false, maxSurvivingRow);
+                    chart.SourceRange = shiftedSource ?? '#REF!';
+                }
+            }
+        }
+        for (const chart of sheet.Charts) {
+            const shiftedPos = shiftA1RangeRows(chart.PositionCell, op, startRow1Based, count, true, maxSurvivingRow);
+            if (shiftedPos) chart.PositionCell = shiftedPos;
+        }
+        for (const lt of sheet.LiveTables) {
+            const shiftedAnchor = shiftA1RangeRows(lt.AnchorCell, op, startRow1Based, count, true, maxSurvivingRow);
+            if (shiftedAnchor) lt.AnchorCell = shiftedAnchor;
+        }
+        for (const ea of sheet.EmbeddedArtifacts) {
+            const shiftedAnchor = shiftA1RangeRows(ea.AnchorCell, op, startRow1Based, count, true, maxSurvivingRow);
+            if (shiftedAnchor) ea.AnchorCell = shiftedAnchor;
+        }
+    }
+
+    private shiftNonCellMetadataForColEdit(
+        workbook: WorkbookSpec,
+        sheet: WorksheetSpec,
+        op: 'insert' | 'delete',
+        startCol1Based: number,
+        count: number
+    ): void {
+        const maxSurvivingCol = Math.max(1, sheet.Columns.length);
+        for (const nr of workbook.NamedRanges) {
+            if (nr.SheetID !== sheet.SheetID || nr.Range === '#REF!') continue;
+            const shifted = shiftA1RangeCols(nr.Range, op, startCol1Based, count, false, maxSurvivingCol);
+            nr.Range = shifted ?? '#REF!';
+        }
+        sheet.ValidationRules = sheet.ValidationRules
+            .map((vr) => {
+                const shifted = shiftA1RangeCols(vr.Range, op, startCol1Based, count, false, maxSurvivingCol);
+                return shifted ? { ...vr, Range: shifted } : null;
+            })
+            .filter((vr): vr is SpreadsheetValidationRuleSpec => vr !== null);
+        sheet.ConditionalFormats = sheet.ConditionalFormats
+            .map((cf) => {
+                const shifted = shiftA1RangeCols(cf.Range, op, startCol1Based, count, false, maxSurvivingCol);
+                return shifted ? { ...cf, Range: shifted } : null;
+            })
+            .filter((cf): cf is SpreadsheetConditionalFormatRuleSpec => cf !== null);
+        for (const ws of workbook.Worksheets) {
+            for (const chart of ws.Charts) {
+                if (chart.SheetID === sheet.SheetID && chart.SourceRange !== '#REF!') {
+                    const shiftedSource = shiftA1RangeCols(chart.SourceRange, op, startCol1Based, count, false, maxSurvivingCol);
+                    chart.SourceRange = shiftedSource ?? '#REF!';
+                }
+            }
+        }
+        for (const chart of sheet.Charts) {
+            const shiftedPos = shiftA1RangeCols(chart.PositionCell, op, startCol1Based, count, true, maxSurvivingCol);
+            if (shiftedPos) chart.PositionCell = shiftedPos;
+        }
+        for (const lt of sheet.LiveTables) {
+            const shiftedAnchor = shiftA1RangeCols(lt.AnchorCell, op, startCol1Based, count, true, maxSurvivingCol);
+            if (shiftedAnchor) lt.AnchorCell = shiftedAnchor;
+        }
+        for (const ea of sheet.EmbeddedArtifacts) {
+            const shiftedAnchor = shiftA1RangeCols(ea.AnchorCell, op, startCol1Based, count, true, maxSurvivingCol);
+            if (shiftedAnchor) ea.AnchorCell = shiftedAnchor;
+        }
+        if (sheet.SortSpec) {
+            const shiftedSortCol = shiftColumnLetter(sheet.SortSpec.ColumnLetter, op, startCol1Based, count);
+            sheet.SortSpec = shiftedSortCol ? { ...sheet.SortSpec, ColumnLetter: shiftedSortCol } : null;
+        }
+        sheet.FilterSpecs = sheet.FilterSpecs
+            .map((fs) => {
+                const shiftedCol = shiftColumnLetter(fs.ColumnLetter, op, startCol1Based, count);
+                return shiftedCol ? { ...fs, ColumnLetter: shiftedCol } : null;
+            })
+            .filter((fs): fs is SpreadsheetFilterSpec => fs !== null);
     }
 
     // -----------------------------------------------------------------------
@@ -1136,7 +1687,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
 
     /**
      * Writes a value or formula into a single cell (addressed by A1 coordinate or `{ rowId, columnId }`)
-     * and recalculates the workbook (`Accept #3`).
+     * and recalculates affected dependents (`Accept #3`, `D2`).
      */
     public SetCell(
         workbook: WorkbookSpec,
@@ -1155,6 +1706,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         if (!sheet) {
             throw new Error(`Worksheet '${sheetIdOrName}' not found.`);
         }
+        this.bindSheetsToWorkbook(workbook);
         const parsed = ParseCellAddress(address);
         if (!parsed) {
             throw new Error(`Invalid cell address '${address}'.`);
@@ -1179,10 +1731,10 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         let formulaStable: string | null = null;
         if (input.FormulaStable) {
             formulaStable = input.FormulaStable;
-            formula = this.ResolveFormulaFromStableIds(sheet, formulaStable);
+            formula = this.ResolveFormulaFromStableIds(sheet, formulaStable, workbook);
         } else if (formula && formula.trim().startsWith('=')) {
             formula = formula.trim();
-            formulaStable = this.CompileFormulaToStableIds(sheet, formula);
+            formulaStable = this.CompileFormulaToStableIds(sheet, formula, workbook);
         }
 
         const mergedStyle: SpreadsheetCellStyleSpec | undefined =
@@ -1203,16 +1755,18 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             Note: input.Note !== undefined ? input.Note : existing?.Note ?? null,
             AccessDenied: false,
             ErrorMessage: null,
-            SpilledFrom: null
+            SpilledFrom: null,
+            LiveTableID: null
         };
 
         sheet.Cells[canonicalAddr] = cell;
-        this.validateCellAgainstSheetRules(sheet, cell);
 
         if (recalculate) {
-            this.EvaluateWorkbook(workbook);
+            this.recalculateAfterCellEdit(workbook, sheet, canonicalAddr);
         } else {
-            cell.DisplayValue = this.FormatCellValue(cell.ComputedValue ?? cell.RawValue, cell.Style);
+            this.workbookDagCache.delete(workbook);
+            this.validateCellAgainstSheetRules(sheet, cell);
+            cell.DisplayValue = this.formatCellForDisplay(cell);
         }
         workbook.UpdatedAt = new Date().toISOString();
         return sheet.Cells[canonicalAddr];
@@ -1265,10 +1819,13 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         colCount = DEFAULT_COLUMN_COUNT
     ): WorksheetSpec {
         const nextNum = workbook.Worksheets.length + 1;
-        const sheetId = `sheet-${Date.now().toString(36)}-${nextNum}`;
+        this.monotonicIdCounter++;
+        const sheetId = `sheet-${Date.now().toString(36)}-${nextNum}-${this.monotonicIdCounter}`;
         const uniqueName = this.makeUniqueWorksheetName(workbook, name || `Sheet ${nextNum}`);
         const ws = this.CreateEmptyWorksheet(sheetId, uniqueName, rowCount, colCount);
         workbook.Worksheets.push(ws);
+        this.sheetToWorkbook.set(ws, workbook);
+        this.workbookDagCache.delete(workbook);
         workbook.UpdatedAt = new Date().toISOString();
         return ws;
     }
@@ -1286,59 +1843,104 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     }
 
     private ensureSheetCapacity(sheet: WorksheetSpec, minRow: number, minCol: number): void {
-        while (sheet.Rows.length < minRow) {
-            const nextIdx = sheet.Rows.length + 1;
-            sheet.Rows.push({
-                RowID: `${sheet.SheetID}-row-${nextIdx}`,
-                Index: nextIdx,
-                Height: DEFAULT_ROW_HEIGHT,
-                Hidden: false
-            });
+        if (sheet.Rows.length < minRow) {
+            const existingRowIds = new Set(sheet.Rows.map((r) => r.RowID));
+            while (sheet.Rows.length < minRow) {
+                const nextIdx = sheet.Rows.length + 1;
+                sheet.Rows.push({
+                    RowID: this.mintUniqueRowId(sheet.SheetID, existingRowIds, nextIdx),
+                    Index: nextIdx,
+                    Height: DEFAULT_ROW_HEIGHT,
+                    Hidden: false
+                });
+            }
         }
-        while (sheet.Columns.length < minCol) {
-            const nextIdx = sheet.Columns.length + 1;
-            const letter = ColumnIndexToLetter(nextIdx);
-            sheet.Columns.push({
-                ColumnID: `${sheet.SheetID}-col-${letter}`,
-                Index: nextIdx,
-                Letter: letter,
-                Width: DEFAULT_COLUMN_WIDTH,
-                Hidden: false
-            });
+        if (sheet.Columns.length < minCol) {
+            const existingColIds = new Set(sheet.Columns.map((c) => c.ColumnID));
+            while (sheet.Columns.length < minCol) {
+                const nextIdx = sheet.Columns.length + 1;
+                const letter = ColumnIndexToLetter(nextIdx);
+                sheet.Columns.push({
+                    ColumnID: this.mintUniqueColumnId(sheet.SheetID, existingColIds, nextIdx),
+                    Index: nextIdx,
+                    Letter: letter,
+                    Width: DEFAULT_COLUMN_WIDTH,
+                    Hidden: false
+                });
+            }
         }
     }
 
     // -----------------------------------------------------------------------
-    // Headless Formula Evaluator (§ 6.1, O7, Accept #3)
+    // Headless Lexical AST + Iterative Topological DAG Formula Evaluator (§ 6.1, O7, D2, D4)
     // -----------------------------------------------------------------------
 
     /**
-     * Synchronously evaluates all standard formulas across all worksheets in `workbook`.
+     * Synchronously evaluates all standard formulas across all worksheets in `workbook`
+     * using an iterative topological DAG traversal (zero JS call-stack recursion across cells).
      *
      * Note: Cells containing `=MJ.QUERY(...)` or `=MJ.VIEW(...)` retain their last viewer-evaluated
      * `ComputedValue` (or `'#MJ_PENDING!'` until `EvaluateMjCustomFunctions` runs with a `UserInfo`).
      */
     public EvaluateWorkbook(workbook: WorkbookSpec): void {
-        const memo = new Map<string, SpreadsheetCellValue>();
-        const visiting = new Set<string>();
+        this.bindSheetsToWorkbook(workbook);
 
         for (const sheet of workbook.Worksheets) {
-            // Ensure all stable-ID formulas are resolved to current A1 coordinates first
             for (const cell of Object.values(sheet.Cells)) {
                 if (cell.FormulaStable) {
-                    cell.Formula = this.ResolveFormulaFromStableIds(sheet, cell.FormulaStable);
+                    cell.Formula = this.ResolveFormulaFromStableIds(sheet, cell.FormulaStable, workbook);
                 }
             }
         }
 
+        const dag = this.buildWorkbookDependencyGraph(workbook);
+        this.workbookDagCache.set(workbook, dag);
+
+        const allKeys: string[] = [];
         for (const sheet of workbook.Worksheets) {
-            for (const [addr, cell] of Object.entries(sheet.Cells)) {
-                const value = this.evaluateCellInternal(workbook, sheet, addr, memo, visiting);
-                cell.ComputedValue = value;
-                cell.DisplayValue = this.FormatCellValue(value, cell.Style);
-                this.validateCellAgainstSheetRules(sheet, cell);
+            for (const addr of Object.keys(sheet.Cells)) {
+                const parsed = ParseCellAddress(addr);
+                if (!parsed) continue;
+                const canonical = FormatCellAddress(parsed.row, parsed.col);
+                allKeys.push(`${sheet.SheetID}::${canonical}`);
             }
         }
+
+        this.evaluateCellKeysIteratively(workbook, dag, allKeys, null);
+    }
+
+    /**
+     * Incrementally recalculates `canonicalAddr` on `sheet` and ONLY its transitive dependent formula cells
+     * in iterative topological order (`D2`).
+     */
+    private recalculateAfterCellEdit(workbook: WorkbookSpec, sheet: WorksheetSpec, canonicalAddr: string): void {
+        const namedSig = JSON.stringify(workbook.NamedRanges);
+        const existingDag = this.workbookDagCache.get(workbook);
+        if (!existingDag || existingDag.namedRangesSignature !== namedSig) {
+            this.EvaluateWorkbook(workbook);
+            return;
+        }
+
+        const editedKey = `${sheet.SheetID}::${canonicalAddr}`;
+        this.updateSingleCellInDag(workbook, sheet, canonicalAddr, existingDag);
+
+        // Collect transitive dependents via iterative BFS
+        const dirtySet = new Set<string>([editedKey]);
+        const queue: string[] = [editedKey];
+        let head = 0;
+        while (head < queue.length) {
+            const current = queue[head++];
+            const dependents = existingDag.reverseCellDeps.get(current);
+            if (!dependents) continue;
+            for (const depKey of dependents) {
+                if (!dirtySet.has(depKey)) {
+                    dirtySet.add(depKey);
+                    queue.push(depKey);
+                }
+            }
+        }
+
+        this.evaluateCellKeysIteratively(workbook, existingDag, Array.from(dirtySet), dirtySet);
     }
 
     /**
@@ -1351,608 +1953,1179 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     ): SpreadsheetCellValue {
         const sheet = this.GetWorksheet(workbook, sheetIdOrName) ?? workbook.Worksheets[0];
         if (!sheet) return '#REF!';
-        const memo = new Map<string, SpreadsheetCellValue>();
-        const visiting = new Set<string>();
-        const clean = formula.trim().startsWith('=') ? formula.trim().slice(1).trim() : formula.trim();
-        return this.evalExpression(clean, workbook, sheet, memo, visiting);
+        const trimmed = formula.trim();
+        const body = trimmed.startsWith('=') ? trimmed.slice(1).trim() : trimmed;
+        if (!body) return null;
+
+        // Ensure workbook cells are up-to-date if not yet evaluated
+        if (!this.workbookDagCache.has(workbook)) {
+            this.EvaluateWorkbook(workbook);
+        }
+        const ast = compileFormulaAstCached(body);
+        return this.evalAstNode(ast, workbook, sheet, null);
     }
 
-    private evaluateCellInternal(
-        workbook: WorkbookSpec,
-        sheet: WorksheetSpec,
-        address: string,
-        memo: Map<string, SpreadsheetCellValue>,
-        visiting: Set<string>
-    ): SpreadsheetCellValue {
-        const parsed = ParseCellAddress(address);
-        if (!parsed) return '#REF!';
-        const canonical = FormatCellAddress(parsed.row, parsed.col);
-        const cacheKey = `${sheet.SheetID}::${canonical}`;
-        if (memo.has(cacheKey)) {
-            return memo.get(cacheKey) ?? null;
+    private buildWorkbookDependencyGraph(workbook: WorkbookSpec): WorkbookDependencyGraph {
+        const dag: WorkbookDependencyGraph = {
+            namedRangesSignature: JSON.stringify(workbook.NamedRanges),
+            astByCellKey: new Map<string, FormulaAstNode | null>(),
+            directCellDeps: new Map<string, string[]>(),
+            reverseCellDeps: new Map<string, Set<string>>(),
+            sheetById: new Map<string, WorksheetSpec>()
+        };
+        for (const ws of workbook.Worksheets) {
+            dag.sheetById.set(ws.SheetID, ws);
         }
-        const cell = sheet.Cells[canonical];
-        if (!cell) {
-            memo.set(cacheKey, null);
-            return null;
+        for (const ws of workbook.Worksheets) {
+            for (const addr of Object.keys(ws.Cells)) {
+                const parsed = ParseCellAddress(addr);
+                if (!parsed) continue;
+                const canonical = FormatCellAddress(parsed.row, parsed.col);
+                this.updateSingleCellInDag(workbook, ws, canonical, dag);
+            }
         }
-        if (!cell.Formula || !cell.Formula.trim().startsWith('=')) {
-            memo.set(cacheKey, cell.RawValue ?? null);
-            return cell.RawValue ?? null;
-        }
-        if (visiting.has(cacheKey)) {
-            return '#CYCLE!';
-        }
-
-        const expr = cell.Formula.trim().slice(1).trim();
-        if (expr.includes('#REF!')) {
-            memo.set(cacheKey, '#REF!');
-            return '#REF!';
-        }
-
-        // Preserve viewer-scoped MJ.QUERY / MJ.VIEW result if already evaluated
-        const mjParsed = this.ParseMjCustomFunctionFormula(cell.Formula);
-        if (mjParsed) {
-            const existingVal = cell.AccessDenied
-                ? '#MJ_ACCESS_DENIED!'
-                : cell.ComputedValue !== undefined && cell.ComputedValue !== null
-                  ? cell.ComputedValue
-                  : '#MJ_PENDING!';
-            memo.set(cacheKey, existingVal);
-            return existingVal;
-        }
-
-        visiting.add(cacheKey);
-        let computed: SpreadsheetCellValue;
-        try {
-            computed = this.evalExpression(expr, workbook, sheet, memo, visiting);
-        } catch {
-            computed = '#VALUE!';
-        } finally {
-            visiting.delete(cacheKey);
-        }
-        memo.set(cacheKey, computed);
-        return computed;
+        return dag;
     }
 
-    private evalExpression(
-        rawExpr: string,
+    private updateSingleCellInDag(
         workbook: WorkbookSpec,
         sheet: WorksheetSpec,
-        memo: Map<string, SpreadsheetCellValue>,
-        visiting: Set<string>
-    ): SpreadsheetCellValue {
-        const expr = this.stripOuterParens(rawExpr.trim());
-        if (!expr) return null;
+        canonicalAddr: string,
+        dag: WorkbookDependencyGraph
+    ): void {
+        dag.sheetById.set(sheet.SheetID, sheet);
+        const cellKey = `${sheet.SheetID}::${canonicalAddr}`;
 
-        // Error literal passthrough
-        if (/^#(REF!|DIV\/0!|VALUE!|NAME\?|CYCLE!|N\/A|MJ_ACCESS_DENIED!|MJ_PENDING!|SPILL!)$/.test(expr)) {
-            return expr;
-        }
-
-        // String literal
-        if (expr.startsWith('"') && expr.endsWith('"') && expr.length >= 2) {
-            const inner = expr.slice(1, -1);
-            if (!inner.includes('"') || inner.replace(/""/g, '').indexOf('"') === -1) {
-                return inner.replace(/""/g, '"');
-            }
-        }
-
-        // Boolean literal
-        if (expr.toUpperCase() === 'TRUE') return true;
-        if (expr.toUpperCase() === 'FALSE') return false;
-
-        // Numeric literal (including trailing %)
-        if (/^[+-]?(\d+\.?\d*|\.\d+)%$/.test(expr)) {
-            return parseFloat(expr.slice(0, -1)) / 100;
-        }
-        if (/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(expr)) {
-            return parseFloat(expr);
-        }
-
-        // Binary operators in precedence order (lowest to highest):
-        // 1. Comparison: <>, <=, >=, =, <, >
-        const cmpSplit = this.findTopLevelOperator(expr, ['<>', '<=', '>=', '=', '<', '>']);
-        if (cmpSplit) {
-            const left = this.evalExpression(cmpSplit.left, workbook, sheet, memo, visiting);
-            const right = this.evalExpression(cmpSplit.right, workbook, sheet, memo, visiting);
-            if (this.isErrorValue(left)) return left;
-            if (this.isErrorValue(right)) return right;
-            return this.compareValues(left, right, cmpSplit.op);
-        }
-
-        // 2. String concatenation: &
-        const concatSplit = this.findTopLevelOperator(expr, ['&']);
-        if (concatSplit) {
-            const left = this.evalExpression(concatSplit.left, workbook, sheet, memo, visiting);
-            const right = this.evalExpression(concatSplit.right, workbook, sheet, memo, visiting);
-            if (this.isErrorValue(left)) return left;
-            if (this.isErrorValue(right)) return right;
-            return `${left ?? ''}${right ?? ''}`;
-        }
-
-        // 3. Addition / Subtraction: +, - (right-to-left scan for left-associativity, ignoring unary sign)
-        const addSubSplit = this.findTopLevelAddSub(expr);
-        if (addSubSplit) {
-            const left = this.evalExpression(addSubSplit.left, workbook, sheet, memo, visiting);
-            const right = this.evalExpression(addSubSplit.right, workbook, sheet, memo, visiting);
-            if (this.isErrorValue(left)) return left;
-            if (this.isErrorValue(right)) return right;
-            const nLeft = this.toNumberOrError(left);
-            const nRight = this.toNumberOrError(right);
-            if (typeof nLeft === 'string') return nLeft;
-            if (typeof nRight === 'string') return nRight;
-            return addSubSplit.op === '+' ? nLeft + nRight : nLeft - nRight;
-        }
-
-        // 4. Multiplication / Division: *, /
-        const mulDivSplit = this.findTopLevelOperatorRightToLeft(expr, ['*', '/']);
-        if (mulDivSplit) {
-            const left = this.evalExpression(mulDivSplit.left, workbook, sheet, memo, visiting);
-            const right = this.evalExpression(mulDivSplit.right, workbook, sheet, memo, visiting);
-            if (this.isErrorValue(left)) return left;
-            if (this.isErrorValue(right)) return right;
-            const nLeft = this.toNumberOrError(left);
-            const nRight = this.toNumberOrError(right);
-            if (typeof nLeft === 'string') return nLeft;
-            if (typeof nRight === 'string') return nRight;
-            if (mulDivSplit.op === '/') {
-                if (nRight === 0) return '#DIV/0!';
-                return nLeft / nRight;
-            }
-            return nLeft * nRight;
-        }
-
-        // 5. Exponentiation: ^
-        const powSplit = this.findTopLevelOperatorRightToLeft(expr, ['^']);
-        if (powSplit) {
-            const left = this.evalExpression(powSplit.left, workbook, sheet, memo, visiting);
-            const right = this.evalExpression(powSplit.right, workbook, sheet, memo, visiting);
-            if (this.isErrorValue(left)) return left;
-            if (this.isErrorValue(right)) return right;
-            const nLeft = this.toNumberOrError(left);
-            const nRight = this.toNumberOrError(right);
-            if (typeof nLeft === 'string') return nLeft;
-            if (typeof nRight === 'string') return nRight;
-            return Math.pow(nLeft, nRight);
-        }
-
-        // 6. Unary + / -
-        if (expr.startsWith('-') || expr.startsWith('+')) {
-            const inner = this.evalExpression(expr.slice(1), workbook, sheet, memo, visiting);
-            if (this.isErrorValue(inner)) return inner;
-            const num = this.toNumberOrError(inner);
-            if (typeof num === 'string') return num;
-            return expr.startsWith('-') ? -num : num;
-        }
-
-        // 7. Function call: FUNC(arg1, arg2, ...)
-        const fnMatch = /^([A-Za-z_][A-Za-z0-9_.]*)\(([\s\S]*)\)$/.exec(expr);
-        if (fnMatch && this.hasBalancedParentheses(fnMatch[2])) {
-            const fnName = fnMatch[1].toUpperCase();
-            const rawArgs = this.splitTopLevelArgs(fnMatch[2]);
-            return this.evalFunctionCall(fnName, rawArgs, workbook, sheet, memo, visiting);
-        }
-
-        // 8. Cross-sheet cell reference: 'Sheet 2'!B2 or Sheet2!B2
-        const crossCell = /^(?:'([^']+)'|([A-Za-z0-9_]+))!(\$?[A-Za-z]{1,3}\$?[1-9][0-9]*)$/.exec(expr);
-        if (crossCell) {
-            const targetSheetName = crossCell[1] || crossCell[2];
-            const targetSheet = this.GetWorksheet(workbook, targetSheetName);
-            if (!targetSheet) return '#REF!';
-            return this.evaluateCellInternal(workbook, targetSheet, crossCell[3], memo, visiting);
-        }
-
-        // 9. Local cell reference: B2, $B$2
-        if (ParseCellAddress(expr)) {
-            return this.evaluateCellInternal(workbook, sheet, expr, memo, visiting);
-        }
-
-        // 10. Workbook Named Range reference
-        const named = workbook.NamedRanges.find((nr) => nr.Name.toLowerCase() === expr.toLowerCase());
-        if (named) {
-            const targetSheet = this.GetWorksheet(workbook, named.SheetID) ?? sheet;
-            if (ParseCellAddress(named.Range)) {
-                return this.evaluateCellInternal(workbook, targetSheet, named.Range, memo, visiting);
-            }
-            const values = this.resolveRangeValues(named.Range, workbook, targetSheet, memo, visiting);
-            return values[0] ?? null;
-        }
-
-        return '#NAME?';
-    }
-
-    private evalFunctionCall(
-        fnName: string,
-        rawArgs: string[],
-        workbook: WorkbookSpec,
-        sheet: WorksheetSpec,
-        memo: Map<string, SpreadsheetCellValue>,
-        visiting: Set<string>
-    ): SpreadsheetCellValue {
-        const evalArgScalar = (arg: string): SpreadsheetCellValue =>
-            this.evalExpression(arg, workbook, sheet, memo, visiting);
-
-        const evalArgsFlattened = (): SpreadsheetCellValue[] => {
-            const out: SpreadsheetCellValue[] = [];
-            for (const raw of rawArgs) {
-                const trimmed = raw.trim();
-                if (!trimmed) continue;
-                if (this.isRangeExpression(trimmed, workbook)) {
-                    out.push(...this.resolveRangeValues(trimmed, workbook, sheet, memo, visiting));
-                } else {
-                    out.push(evalArgScalar(trimmed));
+        // Remove previous dependency edges
+        const oldDeps = dag.directCellDeps.get(cellKey);
+        if (oldDeps) {
+            for (const dep of oldDeps) {
+                const rev = dag.reverseCellDeps.get(dep);
+                if (rev) {
+                    rev.delete(cellKey);
+                    if (rev.size === 0) {
+                        dag.reverseCellDeps.delete(dep);
+                    }
                 }
             }
-            return out;
+        }
+
+        const cell = sheet.Cells[canonicalAddr];
+        if (!cell || !cell.Formula || !cell.Formula.trim().startsWith('=')) {
+            dag.astByCellKey.set(cellKey, null);
+            dag.directCellDeps.delete(cellKey);
+            return;
+        }
+
+        if (this.ParseMjCustomFunctionFormula(cell.Formula)) {
+            dag.astByCellKey.set(cellKey, null);
+            dag.directCellDeps.delete(cellKey);
+            return;
+        }
+
+        const exprBody = cell.Formula.trim().slice(1).trim();
+        const ast = compileFormulaAstCached(exprBody);
+        dag.astByCellKey.set(cellKey, ast);
+
+        const deps = this.extractAstCellDependencies(ast, workbook, sheet);
+        dag.directCellDeps.set(cellKey, deps);
+        for (const dep of deps) {
+            let rev = dag.reverseCellDeps.get(dep);
+            if (!rev) {
+                rev = new Set<string>();
+                dag.reverseCellDeps.set(dep, rev);
+            }
+            rev.add(cellKey);
+        }
+    }
+
+    private extractAstCellDependencies(
+        root: FormulaAstNode,
+        workbook: WorkbookSpec,
+        currentSheet: WorksheetSpec
+    ): string[] {
+        const deps = new Set<string>();
+        const stack: FormulaAstNode[] = [root];
+
+        const addRangeDeps = (targetSheet: WorksheetSpec, rangeStr: string): void => {
+            const bounds = ParseRangeAddress(rangeStr);
+            if (!bounds) return;
+            for (let r = bounds.startRow; r <= bounds.endRow; r++) {
+                for (let c = bounds.startCol; c <= bounds.endCol; c++) {
+                    deps.add(`${targetSheet.SheetID}::${FormatCellAddress(r, c)}`);
+                }
+            }
+        };
+
+        while (stack.length > 0) {
+            const node = stack.pop()!;
+            switch (node.kind) {
+                case 'CellRef': {
+                    const ws = node.sheetName ? this.GetWorksheet(workbook, node.sheetName) : currentSheet;
+                    const pos = ParseCellAddress(node.address);
+                    if (ws && pos) {
+                        deps.add(`${ws.SheetID}::${FormatCellAddress(pos.row, pos.col)}`);
+                    }
+                    break;
+                }
+                case 'RangeRef': {
+                    const ws = node.sheetName ? this.GetWorksheet(workbook, node.sheetName) : currentSheet;
+                    if (ws) {
+                        addRangeDeps(ws, `${node.startAddress}:${node.endAddress}`);
+                    }
+                    break;
+                }
+                case 'Identifier': {
+                    const named = workbook.NamedRanges.find(
+                        (nr) => nr.Name.toLowerCase() === node.name.toLowerCase()
+                    );
+                    if (named && named.Range !== '#REF!') {
+                        const ws = this.GetWorksheet(workbook, named.SheetID) ?? currentSheet;
+                        addRangeDeps(ws, named.Range);
+                    }
+                    break;
+                }
+                case 'UnaryOp':
+                case 'PostfixPercent':
+                    stack.push(node.operand);
+                    break;
+                case 'BinaryOp':
+                    stack.push(node.right, node.left);
+                    break;
+                case 'FunctionCall':
+                    for (let i = node.args.length - 1; i >= 0; i--) {
+                        stack.push(node.args[i]);
+                    }
+                    break;
+            }
+        }
+        return Array.from(deps);
+    }
+
+    /**
+     * Evaluates `targetKeys` in iterative post-order topological order with explicit cycle detection
+     * (`#CYCLE!`), zero JS call-stack recursion across cells, and $O(1)$ lookup for clean cells when
+     * `dirtyScope` is non-null.
+     */
+    private evaluateCellKeysIteratively(
+        workbook: WorkbookSpec,
+        dag: WorkbookDependencyGraph,
+        targetKeys: string[],
+        dirtyScope: ReadonlySet<string> | null
+    ): void {
+        // state: 1 = currently on active DFS path (visiting), 2 = evaluated
+        const state = new Map<string, 1 | 2>();
+        const memo = new Map<string, SpreadsheetCellValue>();
+        const inCycle = new Set<string>();
+
+        interface WorkFrame {
+            key: string;
+            depsScheduled: boolean;
+        }
+        const workStack: WorkFrame[] = [];
+
+        const readCleanOrEmptyCell = (key: string): SpreadsheetCellValue => {
+            const sep = key.indexOf('::');
+            const sheetId = key.slice(0, sep);
+            const addr = key.slice(sep + 2);
+            const ws = dag.sheetById.get(sheetId);
+            const cell = ws?.Cells[addr];
+            if (!cell) return null;
+            if (!cell.Formula || !cell.Formula.trim().startsWith('=')) {
+                return cell.RawValue ?? null;
+            }
+            return cell.ComputedValue !== undefined ? cell.ComputedValue : null;
+        };
+
+        const writeEvaluatedValue = (key: string, val: SpreadsheetCellValue): void => {
+            memo.set(key, val);
+            state.set(key, 2);
+            const sep = key.indexOf('::');
+            const sheetId = key.slice(0, sep);
+            const addr = key.slice(sep + 2);
+            const ws = dag.sheetById.get(sheetId);
+            const cell = ws?.Cells[addr];
+            if (cell && ws) {
+                cell.ComputedValue = val;
+                cell.DisplayValue = this.formatCellForDisplay(cell);
+                this.validateCellAgainstSheetRules(ws, cell);
+            }
+        };
+
+        for (const rootKey of targetKeys) {
+            if (state.get(rootKey) === 2) continue;
+            workStack.push({ key: rootKey, depsScheduled: false });
+
+            while (workStack.length > 0) {
+                const top = workStack[workStack.length - 1];
+                const curState = state.get(top.key);
+                if (curState === 2) {
+                    workStack.pop();
+                    continue;
+                }
+
+                const sep = top.key.indexOf('::');
+                const sheetId = top.key.slice(0, sep);
+                const addr = top.key.slice(sep + 2);
+                const ws = dag.sheetById.get(sheetId);
+                const cell = ws?.Cells[addr];
+
+                if (!cell || !ws) {
+                    memo.set(top.key, null);
+                    state.set(top.key, 2);
+                    workStack.pop();
+                    continue;
+                }
+
+                // Non-formula scalar cell
+                if (!cell.Formula || !cell.Formula.trim().startsWith('=')) {
+                    writeEvaluatedValue(top.key, cell.RawValue ?? null);
+                    workStack.pop();
+                    continue;
+                }
+
+                // Viewer-scoped =MJ.QUERY / =MJ.VIEW custom function cell
+                if (this.ParseMjCustomFunctionFormula(cell.Formula)) {
+                    const mjVal: SpreadsheetCellValue = cell.AccessDenied
+                        ? '#MJ_ACCESS_DENIED!'
+                        : cell.ComputedValue !== undefined && cell.ComputedValue !== null
+                          ? cell.ComputedValue
+                          : '#MJ_PENDING!';
+                    writeEvaluatedValue(top.key, mjVal);
+                    workStack.pop();
+                    continue;
+                }
+
+                if (!top.depsScheduled) {
+                    state.set(top.key, 1);
+                    top.depsScheduled = true;
+
+                    const deps = dag.directCellDeps.get(top.key) ?? [];
+                    let foundCycleHere = false;
+                    for (let i = deps.length - 1; i >= 0; i--) {
+                        const depKey = deps[i];
+                        const depState = state.get(depKey);
+                        if (depState === 1) {
+                            foundCycleHere = true;
+                            inCycle.add(depKey);
+                            for (let s = workStack.length - 1; s >= 0; s--) {
+                                inCycle.add(workStack[s].key);
+                                if (workStack[s].key === depKey) break;
+                            }
+                        } else if (depState !== 2) {
+                            if (dirtyScope && !dirtyScope.has(depKey)) {
+                                memo.set(depKey, readCleanOrEmptyCell(depKey));
+                                state.set(depKey, 2);
+                            } else {
+                                workStack.push({ key: depKey, depsScheduled: false });
+                            }
+                        }
+                    }
+
+                    if (foundCycleHere && inCycle.has(top.key)) {
+                        // Still allow remaining stack unwinding to mark every cycle member as #CYCLE!
+                    }
+                    continue;
+                }
+
+                // All precedents are now evaluated!
+                workStack.pop();
+                if (inCycle.has(top.key)) {
+                    writeEvaluatedValue(top.key, '#CYCLE!');
+                    continue;
+                }
+
+                const ast = dag.astByCellKey.get(top.key) ?? compileFormulaAstCached(cell.Formula.trim().slice(1).trim());
+                let computed: SpreadsheetCellValue;
+                try {
+                    computed = this.evalAstNode(ast, workbook, ws, (lookupSheet, lookupAddr) => {
+                        const p = ParseCellAddress(lookupAddr);
+                        if (!p) return '#REF!';
+                        const k = `${lookupSheet.SheetID}::${FormatCellAddress(p.row, p.col)}`;
+                        if (memo.has(k)) return memo.get(k) ?? null;
+                        return readCleanOrEmptyCell(k);
+                    });
+                } catch {
+                    computed = '#VALUE!';
+                }
+                writeEvaluatedValue(top.key, computed);
+            }
+        }
+    }
+
+    private evalAstNode(
+        node: FormulaAstNode,
+        workbook: WorkbookSpec,
+        sheet: WorksheetSpec,
+        cellLookup: ((targetSheet: WorksheetSpec, addr: string) => SpreadsheetCellValue) | null
+    ): SpreadsheetCellValue {
+        const getCellVal = (targetSheet: WorksheetSpec, addr: string): SpreadsheetCellValue => {
+            if (cellLookup) {
+                return cellLookup(targetSheet, addr);
+            }
+            const parsed = ParseCellAddress(addr);
+            if (!parsed) return '#REF!';
+            const canonical = FormatCellAddress(parsed.row, parsed.col);
+            const c = targetSheet.Cells[canonical];
+            if (!c) return null;
+            if (c.Formula && c.Formula.trim().startsWith('=')) {
+                return c.ComputedValue !== undefined ? c.ComputedValue : null;
+            }
+            return c.RawValue ?? null;
+        };
+
+        switch (node.kind) {
+            case 'EmptyArg':
+                return null;
+            case 'NumberLiteral':
+                return node.value;
+            case 'StringLiteral':
+                return node.value;
+            case 'BooleanLiteral':
+                return node.value;
+            case 'ErrorLiteral':
+                return node.error;
+            case 'CellRef': {
+                const targetSheet = node.sheetName ? this.GetWorksheet(workbook, node.sheetName) : sheet;
+                if (!targetSheet) return '#REF!';
+                return getCellVal(targetSheet, node.address);
+            }
+            case 'RangeRef': {
+                const matrix = this.resolveAstRangeMatrix(node, workbook, sheet, getCellVal);
+                return matrix[0]?.[0] ?? null;
+            }
+            case 'Identifier': {
+                const upper = node.name.toUpperCase();
+                if (upper === 'TRUE') return true;
+                if (upper === 'FALSE') return false;
+                const named = workbook.NamedRanges.find((nr) => nr.Name.toLowerCase() === node.name.toLowerCase());
+                if (named) {
+                    if (named.Range === '#REF!') return '#REF!';
+                    const targetSheet = this.GetWorksheet(workbook, named.SheetID) ?? sheet;
+                    if (ParseCellAddress(named.Range)) {
+                        return getCellVal(targetSheet, named.Range);
+                    }
+                    const bounds = ParseRangeAddress(named.Range);
+                    if (!bounds) return '#REF!';
+                    return getCellVal(targetSheet, FormatCellAddress(bounds.startRow, bounds.startCol));
+                }
+                return '#NAME?';
+            }
+            case 'PostfixPercent': {
+                const v = this.evalAstNode(node.operand, workbook, sheet, cellLookup);
+                if (this.isErrorValue(v)) return v;
+                const n = this.toNumberOrError(v);
+                if (typeof n === 'string') return n;
+                return cleanExcelFloat(n / 100);
+            }
+            case 'UnaryOp': {
+                const v = this.evalAstNode(node.operand, workbook, sheet, cellLookup);
+                if (this.isErrorValue(v)) return v;
+                const n = this.toNumberOrError(v);
+                if (typeof n === 'string') return n;
+                return node.op === '-' ? (n === 0 ? 0 : -n) : n;
+            }
+            case 'BinaryOp': {
+                const left = this.evalAstNode(node.left, workbook, sheet, cellLookup);
+                if (this.isErrorValue(left)) return left;
+                const right = this.evalAstNode(node.right, workbook, sheet, cellLookup);
+                if (this.isErrorValue(right)) return right;
+
+                switch (node.op) {
+                    case '=':
+                    case '<>':
+                    case '<':
+                    case '<=':
+                    case '>':
+                    case '>=':
+                        return this.compareValues(left, right, node.op);
+                    case '&':
+                        return `${left ?? ''}${right ?? ''}`;
+                    case '+':
+                    case '-':
+                    case '*':
+                    case '/':
+                    case '^': {
+                        const nl = this.toNumberOrError(left);
+                        if (typeof nl === 'string') return nl;
+                        const nr = this.toNumberOrError(right);
+                        if (typeof nr === 'string') return nr;
+                        if (node.op === '+') return cleanExcelFloat(nl + nr);
+                        if (node.op === '-') return cleanExcelFloat(nl - nr);
+                        if (node.op === '*') return cleanExcelFloat(nl * nr);
+                        if (node.op === '/') {
+                            if (nr === 0) return '#DIV/0!';
+                            return cleanExcelFloat(nl / nr);
+                        }
+                        const res = Math.pow(nl, nr);
+                        return Number.isFinite(res) ? cleanExcelFloat(res) : '#NUM!';
+                    }
+                }
+                return '#VALUE!';
+            }
+            case 'FunctionCall':
+                return this.evalAstFunctionCall(node.name, node.args, workbook, sheet, cellLookup, getCellVal);
+        }
+    }
+
+    private resolveAstRangeMatrix(
+        argNode: FormulaAstNode,
+        workbook: WorkbookSpec,
+        sheet: WorksheetSpec,
+        getCellVal: (targetSheet: WorksheetSpec, addr: string) => SpreadsheetCellValue,
+        cellLookup?: ((targetSheet: WorksheetSpec, addr: string) => SpreadsheetCellValue) | null
+    ): SpreadsheetCellValue[][] {
+        if (argNode.kind === 'RangeRef') {
+            const targetSheet = argNode.sheetName ? this.GetWorksheet(workbook, argNode.sheetName) : sheet;
+            if (!targetSheet) return [['#REF!']];
+            const bounds = ParseRangeAddress(`${argNode.startAddress}:${argNode.endAddress}`);
+            if (!bounds) return [['#REF!']];
+            const matrix: SpreadsheetCellValue[][] = [];
+            for (let r = bounds.startRow; r <= bounds.endRow; r++) {
+                const rowVals: SpreadsheetCellValue[] = [];
+                for (let c = bounds.startCol; c <= bounds.endCol; c++) {
+                    rowVals.push(getCellVal(targetSheet, FormatCellAddress(r, c)));
+                }
+                matrix.push(rowVals);
+            }
+            return matrix;
+        }
+        if (argNode.kind === 'CellRef') {
+            const targetSheet = argNode.sheetName ? this.GetWorksheet(workbook, argNode.sheetName) : sheet;
+            if (!targetSheet) return [['#REF!']];
+            return [[getCellVal(targetSheet, argNode.address)]];
+        }
+        if (argNode.kind === 'Identifier') {
+            const named = workbook.NamedRanges.find((nr) => nr.Name.toLowerCase() === argNode.name.toLowerCase());
+            if (named) {
+                if (named.Range === '#REF!') return [['#REF!']];
+                const targetSheet = this.GetWorksheet(workbook, named.SheetID) ?? sheet;
+                const bounds = ParseRangeAddress(named.Range);
+                if (!bounds) return [['#REF!']];
+                const matrix: SpreadsheetCellValue[][] = [];
+                for (let r = bounds.startRow; r <= bounds.endRow; r++) {
+                    const rowVals: SpreadsheetCellValue[] = [];
+                    for (let c = bounds.startCol; c <= bounds.endCol; c++) {
+                        rowVals.push(getCellVal(targetSheet, FormatCellAddress(r, c)));
+                    }
+                    matrix.push(rowVals);
+                }
+                return matrix;
+            }
+        }
+        return [[this.evalAstNode(argNode, workbook, sheet, cellLookup ?? null)]];
+    }
+
+    private evalAstFunctionCall(
+        rawFnName: string,
+        args: FormulaAstNode[],
+        workbook: WorkbookSpec,
+        sheet: WorksheetSpec,
+        cellLookup: ((targetSheet: WorksheetSpec, addr: string) => SpreadsheetCellValue) | null,
+        getCellVal: (targetSheet: WorksheetSpec, addr: string) => SpreadsheetCellValue
+    ): SpreadsheetCellValue {
+        const fnName = rawFnName.toUpperCase();
+        const evalScalar = (arg?: FormulaAstNode): SpreadsheetCellValue =>
+            arg ? this.evalAstNode(arg, workbook, sheet, cellLookup) : null;
+        const isArgProvided = (idx: number): boolean => idx < args.length && args[idx].kind !== 'EmptyArg';
+        const isDirectRangeOrRef = (arg: FormulaAstNode): boolean =>
+            arg.kind === 'RangeRef' ||
+            arg.kind === 'CellRef' ||
+            (arg.kind === 'Identifier' &&
+                workbook.NamedRanges.some((nr) => nr.Name.toLowerCase() === arg.name.toLowerCase()));
+
+        const resolveFlattenedRange = (arg?: FormulaAstNode): SpreadsheetCellValue[] => {
+            if (!arg) return [];
+            const matrix = this.resolveAstRangeMatrix(arg, workbook, sheet, getCellVal, cellLookup);
+            const flat: SpreadsheetCellValue[] = [];
+            for (const r of matrix) flat.push(...r);
+            return flat;
+        };
+
+        // Collect values distinguishing range cells (where text/booleans are ignored in SUM/AVERAGE) from direct scalar args
+        const collectAggregateNumbers = (coerceDirectScalars: boolean): number[] | string => {
+            const nums: number[] = [];
+            for (const arg of args) {
+                if (arg.kind === 'EmptyArg') {
+                    if (coerceDirectScalars) nums.push(0);
+                    continue;
+                }
+                if (isDirectRangeOrRef(arg)) {
+                    const flat = resolveFlattenedRange(arg);
+                    for (const v of flat) {
+                        if (this.isErrorValue(v)) return v as string;
+                        if (typeof v === 'number' && !Number.isNaN(v)) {
+                            nums.push(v);
+                        }
+                    }
+                } else {
+                    const v = evalScalar(arg);
+                    if (this.isErrorValue(v)) return v as string;
+                    if (coerceDirectScalars) {
+                        const n = this.toNumberOrError(v);
+                        if (typeof n === 'string') return n;
+                        nums.push(n);
+                    } else if (typeof v === 'number' && !Number.isNaN(v)) {
+                        nums.push(v);
+                    }
+                }
+            }
+            return nums;
         };
 
         switch (fnName) {
             case 'SUM': {
-                const vals = evalArgsFlattened();
+                const nums = collectAggregateNumbers(true);
+                if (typeof nums === 'string') return nums;
                 let sum = 0;
-                for (const v of vals) {
-                    if (this.isErrorValue(v)) return v;
-                    if (typeof v === 'number') sum += v;
-                    else if (typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v))) {
-                        sum += Number(v);
-                    }
-                }
-                return Number(sum.toFixed(10));
+                for (const n of nums) sum += n;
+                return cleanExcelFloat(sum);
             }
             case 'AVERAGE':
             case 'AVG': {
-                const vals = evalArgsFlattened();
+                const nums = collectAggregateNumbers(true);
+                if (typeof nums === 'string') return nums;
+                if (nums.length === 0) return '#DIV/0!';
                 let sum = 0;
-                let count = 0;
-                for (const v of vals) {
-                    if (this.isErrorValue(v)) return v;
-                    if (typeof v === 'number') {
-                        sum += v;
-                        count++;
-                    }
-                }
-                if (count === 0) return '#DIV/0!';
-                return Number((sum / count).toFixed(10));
+                for (const n of nums) sum += n;
+                return cleanExcelFloat(sum / nums.length);
             }
             case 'COUNT': {
-                const vals = evalArgsFlattened();
                 let count = 0;
-                for (const v of vals) {
-                    if (typeof v === 'number') count++;
+                for (const arg of args) {
+                    if (arg.kind === 'EmptyArg') continue;
+                    if (isDirectRangeOrRef(arg)) {
+                        for (const v of resolveFlattenedRange(arg)) {
+                            if (typeof v === 'number' && !Number.isNaN(v)) count++;
+                        }
+                    } else {
+                        const v = evalScalar(arg);
+                        if (typeof v === 'number' && !Number.isNaN(v)) count++;
+                        else if (typeof v === 'string' && v.trim() !== '' && !this.isErrorValue(v) && !Number.isNaN(Number(v))) {
+                            count++;
+                        }
+                    }
                 }
                 return count;
             }
             case 'COUNTA': {
-                const vals = evalArgsFlattened();
-                return vals.filter((v) => v !== null && v !== undefined && v !== '').length;
+                let count = 0;
+                for (const arg of args) {
+                    if (arg.kind === 'EmptyArg') continue;
+                    if (isDirectRangeOrRef(arg)) {
+                        for (const v of resolveFlattenedRange(arg)) {
+                            if (v !== null && v !== undefined && v !== '') count++;
+                        }
+                    } else {
+                        const v = evalScalar(arg);
+                        if (v !== null && v !== undefined && v !== '') count++;
+                    }
+                }
+                return count;
             }
             case 'MIN': {
-                const vals = evalArgsFlattened();
-                const nums: number[] = [];
-                for (const v of vals) {
-                    if (this.isErrorValue(v)) return v;
-                    if (typeof v === 'number') nums.push(v);
-                }
+                const nums = collectAggregateNumbers(true);
+                if (typeof nums === 'string') return nums;
                 return nums.length > 0 ? Math.min(...nums) : 0;
             }
             case 'MAX': {
-                const vals = evalArgsFlattened();
-                const nums: number[] = [];
-                for (const v of vals) {
-                    if (this.isErrorValue(v)) return v;
-                    if (typeof v === 'number') nums.push(v);
-                }
+                const nums = collectAggregateNumbers(true);
+                if (typeof nums === 'string') return nums;
                 return nums.length > 0 ? Math.max(...nums) : 0;
             }
             case 'MEDIAN': {
-                const vals = evalArgsFlattened();
-                const nums: number[] = [];
-                for (const v of vals) {
-                    if (this.isErrorValue(v)) return v;
-                    if (typeof v === 'number') nums.push(v);
-                }
-                if (nums.length === 0) return '#VALUE!';
+                const nums = collectAggregateNumbers(true);
+                if (typeof nums === 'string') return nums;
+                if (nums.length === 0) return '#NUM!';
                 nums.sort((a, b) => a - b);
                 const mid = Math.floor(nums.length / 2);
-                return nums.length % 2 === 0 ? (nums[mid - 1] + nums[mid]) / 2 : nums[mid];
+                return nums.length % 2 === 0 ? cleanExcelFloat((nums[mid - 1] + nums[mid]) / 2) : nums[mid];
+            }
+            case 'SUMPRODUCT': {
+                if (args.length === 0) return '#VALUE!';
+                const matrices = args.map((a) => this.resolveAstRangeMatrix(a, workbook, sheet, getCellVal, cellLookup));
+                const rCount = matrices[0].length;
+                const cCount = matrices[0][0]?.length ?? 0;
+                for (const m of matrices) {
+                    if (m.length !== rCount || (m[0]?.length ?? 0) !== cCount) {
+                        return '#VALUE!';
+                    }
+                }
+                let total = 0;
+                for (let r = 0; r < rCount; r++) {
+                    for (let c = 0; c < cCount; c++) {
+                        let rowProd = 1;
+                        for (let mIdx = 0; mIdx < matrices.length; mIdx++) {
+                            const cellVal = matrices[mIdx][r][c];
+                            if (this.isErrorValue(cellVal)) return cellVal;
+                            const num = typeof cellVal === 'number' && !Number.isNaN(cellVal) ? cellVal : 0;
+                            rowProd *= num;
+                        }
+                        total += rowProd;
+                    }
+                }
+                return cleanExcelFloat(total);
             }
             case 'ROUND':
             case 'ROUNDUP':
             case 'ROUNDDOWN': {
-                const numVal = this.toNumberOrError(evalArgScalar(rawArgs[0] ?? '0'));
+                const numVal = this.toNumberOrError(evalScalar(args[0]));
                 if (typeof numVal === 'string') return numVal;
-                const digitsVal = this.toNumberOrError(evalArgScalar(rawArgs[1] ?? '0'));
+                const digitsVal = isArgProvided(1) ? this.toNumberOrError(evalScalar(args[1])) : 0;
                 if (typeof digitsVal === 'string') return digitsVal;
-                const factor = Math.pow(10, Math.floor(digitsVal));
+                const digits = Math.trunc(digitsVal);
+                if (numVal === 0) return 0;
+                const sign = numVal < 0 ? -1 : 1;
+                const absClean = cleanExcelFloat(Math.abs(numVal));
+                const shifted = decimalShift(absClean, digits);
+                let roundedInt: number;
                 if (fnName === 'ROUNDUP') {
-                    return (numVal >= 0 ? Math.ceil(numVal * factor) : Math.floor(numVal * factor)) / factor;
+                    roundedInt = Math.ceil(cleanExcelFloat(shifted));
+                } else if (fnName === 'ROUNDDOWN') {
+                    roundedInt = Math.floor(cleanExcelFloat(shifted));
+                } else {
+                    // Excel half-away-from-zero rounding (ROUND(-2.5, 0) -> -3; ROUND(1.005, 2) -> 1.01)
+                    roundedInt = Math.floor(cleanExcelFloat(shifted) + 0.5);
                 }
-                if (fnName === 'ROUNDDOWN') {
-                    return (numVal >= 0 ? Math.floor(numVal * factor) : Math.ceil(numVal * factor)) / factor;
-                }
-                return Math.round(numVal * factor) / factor;
+                const result = sign * decimalShift(roundedInt, -digits);
+                return result === 0 ? 0 : cleanExcelFloat(result);
+            }
+            case 'INT': {
+                const v = this.toNumberOrError(evalScalar(args[0]));
+                return typeof v === 'string' ? v : Math.floor(v);
             }
             case 'ABS': {
-                const v = this.toNumberOrError(evalArgScalar(rawArgs[0] ?? '0'));
+                const v = this.toNumberOrError(evalScalar(args[0]));
                 return typeof v === 'string' ? v : Math.abs(v);
             }
             case 'SQRT': {
-                const v = this.toNumberOrError(evalArgScalar(rawArgs[0] ?? '0'));
+                const v = this.toNumberOrError(evalScalar(args[0]));
                 if (typeof v === 'string') return v;
-                return v < 0 ? '#VALUE!' : Math.sqrt(v);
+                return v < 0 ? '#NUM!' : cleanExcelFloat(Math.sqrt(v));
             }
             case 'POWER': {
-                const base = this.toNumberOrError(evalArgScalar(rawArgs[0] ?? '0'));
-                const exp = this.toNumberOrError(evalArgScalar(rawArgs[1] ?? '1'));
+                const base = this.toNumberOrError(evalScalar(args[0]));
                 if (typeof base === 'string') return base;
+                const exp = this.toNumberOrError(isArgProvided(1) ? evalScalar(args[1]) : 1);
                 if (typeof exp === 'string') return exp;
-                return Math.pow(base, exp);
+                const res = Math.pow(base, exp);
+                return Number.isFinite(res) ? cleanExcelFloat(res) : '#NUM!';
             }
             case 'MOD': {
-                const n = this.toNumberOrError(evalArgScalar(rawArgs[0] ?? '0'));
-                const d = this.toNumberOrError(evalArgScalar(rawArgs[1] ?? '1'));
+                const n = this.toNumberOrError(evalScalar(args[0]));
                 if (typeof n === 'string') return n;
+                const d = this.toNumberOrError(isArgProvided(1) ? evalScalar(args[1]) : 1);
                 if (typeof d === 'string') return d;
                 if (d === 0) return '#DIV/0!';
-                return n % d;
+                // Excel MOD uses floored division: MOD(-1, 3) -> 2
+                const modVal = n - d * Math.floor(n / d);
+                return modVal === 0 ? 0 : cleanExcelFloat(modVal);
             }
             case 'IF': {
-                const cond = evalArgScalar(rawArgs[0] ?? 'FALSE');
+                const cond = evalScalar(args[0]);
                 if (this.isErrorValue(cond)) return cond;
-                const truthy = Boolean(cond) && cond !== 0 && cond !== 'FALSE';
+                const truthy = this.toBooleanOrError(cond);
+                if (typeof truthy === 'string') return truthy;
                 if (truthy) {
-                    return rawArgs[1] !== undefined ? evalArgScalar(rawArgs[1]) : true;
+                    return isArgProvided(1) ? (evalScalar(args[1]) ?? 0) : (args.length >= 2 ? 0 : true);
                 }
-                return rawArgs[2] !== undefined ? evalArgScalar(rawArgs[2]) : false;
+                return isArgProvided(2) ? (evalScalar(args[2]) ?? 0) : (args.length >= 3 ? 0 : false);
             }
             case 'IFS': {
-                for (let i = 0; i + 1 < rawArgs.length; i += 2) {
-                    const cond = evalArgScalar(rawArgs[i]);
+                for (let i = 0; i + 1 < args.length; i += 2) {
+                    const cond = evalScalar(args[i]);
                     if (this.isErrorValue(cond)) return cond;
-                    if (Boolean(cond) && cond !== 0) {
-                        return evalArgScalar(rawArgs[i + 1]);
+                    const truthy = this.toBooleanOrError(cond);
+                    if (typeof truthy === 'string') return truthy;
+                    if (truthy) {
+                        return evalScalar(args[i + 1]);
                     }
                 }
                 return '#N/A';
             }
-            case 'IFERROR':
-            case 'IFNA': {
-                const primary = evalArgScalar(rawArgs[0] ?? '');
+            case 'IFERROR': {
+                const primary = evalScalar(args[0]);
                 if (this.isErrorValue(primary)) {
-                    return evalArgScalar(rawArgs[1] ?? '');
+                    return evalScalar(args[1]) ?? '';
+                }
+                return primary;
+            }
+            case 'IFNA': {
+                // Catches #N/A ONLY (distinct from IFERROR!)
+                const primary = evalScalar(args[0]);
+                if (primary === '#N/A') {
+                    return evalScalar(args[1]) ?? '';
                 }
                 return primary;
             }
             case 'AND': {
-                const vals = evalArgsFlattened();
-                for (const v of vals) {
-                    if (this.isErrorValue(v)) return v;
-                    if (!v || v === 0) return false;
+                let sawBoolean = false;
+                for (const arg of args) {
+                    if (arg.kind === 'EmptyArg') continue;
+                    const vals = isDirectRangeOrRef(arg) ? resolveFlattenedRange(arg) : [evalScalar(arg)];
+                    for (const v of vals) {
+                        if (this.isErrorValue(v)) return v;
+                        if (v === null || v === undefined || (typeof v === 'string' && isDirectRangeOrRef(arg))) continue;
+                        const b = this.toBooleanOrError(v);
+                        if (typeof b === 'string') return b;
+                        sawBoolean = true;
+                        if (!b) return false;
+                    }
                 }
-                return true;
+                return sawBoolean ? true : '#VALUE!';
             }
             case 'OR': {
-                const vals = evalArgsFlattened();
-                for (const v of vals) {
-                    if (this.isErrorValue(v)) return v;
-                    if (Boolean(v) && v !== 0) return true;
+                let sawBoolean = false;
+                for (const arg of args) {
+                    if (arg.kind === 'EmptyArg') continue;
+                    const vals = isDirectRangeOrRef(arg) ? resolveFlattenedRange(arg) : [evalScalar(arg)];
+                    for (const v of vals) {
+                        if (this.isErrorValue(v)) return v;
+                        if (v === null || v === undefined || (typeof v === 'string' && isDirectRangeOrRef(arg))) continue;
+                        const b = this.toBooleanOrError(v);
+                        if (typeof b === 'string') return b;
+                        sawBoolean = true;
+                        if (b) return true;
+                    }
                 }
-                return false;
+                return sawBoolean ? false : '#VALUE!';
             }
             case 'NOT': {
-                const v = evalArgScalar(rawArgs[0] ?? 'FALSE');
+                const v = evalScalar(args[0]);
                 if (this.isErrorValue(v)) return v;
-                return !(Boolean(v) && v !== 0);
+                const b = this.toBooleanOrError(v);
+                return typeof b === 'string' ? b : !b;
+            }
+            case 'ISBLANK': {
+                const v = evalScalar(args[0]);
+                return v === null || v === undefined;
+            }
+            case 'ISNUMBER': {
+                const v = evalScalar(args[0]);
+                return typeof v === 'number' && !Number.isNaN(v);
+            }
+            case 'ISTEXT': {
+                const v = evalScalar(args[0]);
+                return typeof v === 'string' && !this.isErrorValue(v);
+            }
+            case 'ISERROR': {
+                const v = evalScalar(args[0]);
+                return this.isErrorValue(v);
+            }
+            case 'ISNA': {
+                const v = evalScalar(args[0]);
+                return v === '#N/A';
             }
             case 'CONCAT':
             case 'CONCATENATE': {
-                const vals = evalArgsFlattened();
-                for (const v of vals) {
-                    if (this.isErrorValue(v)) return v;
-                }
-                return vals.map((v) => (v === null || v === undefined ? '' : String(v))).join('');
-            }
-            case 'UPPER': {
-                const v = evalArgScalar(rawArgs[0] ?? '');
-                return this.isErrorValue(v) ? v : String(v ?? '').toUpperCase();
-            }
-            case 'LOWER': {
-                const v = evalArgScalar(rawArgs[0] ?? '');
-                return this.isErrorValue(v) ? v : String(v ?? '').toLowerCase();
-            }
-            case 'TRIM': {
-                const v = evalArgScalar(rawArgs[0] ?? '');
-                return this.isErrorValue(v) ? v : String(v ?? '').trim().replace(/\s+/g, ' ');
-            }
-            case 'LEN': {
-                const v = evalArgScalar(rawArgs[0] ?? '');
-                return this.isErrorValue(v) ? v : String(v ?? '').length;
-            }
-            case 'LEFT': {
-                const text = String(evalArgScalar(rawArgs[0] ?? '') ?? '');
-                const len = rawArgs[1] ? Number(evalArgScalar(rawArgs[1])) || 1 : 1;
-                return text.slice(0, Math.max(0, len));
-            }
-            case 'RIGHT': {
-                const text = String(evalArgScalar(rawArgs[0] ?? '') ?? '');
-                const len = rawArgs[1] ? Number(evalArgScalar(rawArgs[1])) || 1 : 1;
-                return len <= 0 ? '' : text.slice(-len);
-            }
-            case 'MID': {
-                const text = String(evalArgScalar(rawArgs[0] ?? '') ?? '');
-                const start = Math.max(1, Number(evalArgScalar(rawArgs[1] ?? '1')) || 1);
-                const len = Math.max(0, Number(evalArgScalar(rawArgs[2] ?? '0')) || 0);
-                return text.slice(start - 1, start - 1 + len);
-            }
-            case 'SUMIF':
-            case 'COUNTIF':
-            case 'AVERAGEIF': {
-                const criteriaRange = this.resolveRangeValues(rawArgs[0] ?? '', workbook, sheet, memo, visiting);
-                const criteria = evalArgScalar(rawArgs[1] ?? '');
-                const sumRange = rawArgs[2]
-                    ? this.resolveRangeValues(rawArgs[2], workbook, sheet, memo, visiting)
-                    : criteriaRange;
-                let sum = 0;
-                let matches = 0;
-                for (let i = 0; i < criteriaRange.length; i++) {
-                    if (this.matchesCriteria(criteriaRange[i], criteria)) {
-                        matches++;
-                        const targetVal = sumRange[i];
-                        if (typeof targetVal === 'number') {
-                            sum += targetVal;
-                        } else if (typeof targetVal === 'string' && targetVal.trim() !== '' && !Number.isNaN(Number(targetVal))) {
-                            sum += Number(targetVal);
+                const parts: string[] = [];
+                for (const arg of args) {
+                    const vals = isDirectRangeOrRef(arg) ? resolveFlattenedRange(arg) : [evalScalar(arg)];
+                    for (const v of vals) {
+                        if (this.isErrorValue(v)) return v;
+                        if (v !== null && v !== undefined) {
+                            parts.push(typeof v === 'boolean' ? (v ? 'TRUE' : 'FALSE') : String(v));
                         }
                     }
                 }
-                if (fnName === 'COUNTIF') return matches;
-                if (fnName === 'AVERAGEIF') return matches === 0 ? '#DIV/0!' : Number((sum / matches).toFixed(10));
-                return Number(sum.toFixed(10));
+                return parts.join('');
+            }
+            case 'UPPER': {
+                const v = evalScalar(args[0]);
+                return this.isErrorValue(v) ? v : String(v ?? '').toUpperCase();
+            }
+            case 'LOWER': {
+                const v = evalScalar(args[0]);
+                return this.isErrorValue(v) ? v : String(v ?? '').toLowerCase();
+            }
+            case 'TRIM': {
+                const v = evalScalar(args[0]);
+                return this.isErrorValue(v) ? v : String(v ?? '').trim().replace(/\s+/g, ' ');
+            }
+            case 'LEN': {
+                const v = evalScalar(args[0]);
+                return this.isErrorValue(v) ? v : String(v ?? '').length;
+            }
+            case 'LEFT': {
+                const rawText = evalScalar(args[0]);
+                if (this.isErrorValue(rawText)) return rawText;
+                const text = String(rawText ?? '');
+                let len = 1;
+                if (isArgProvided(1)) {
+                    const lenNum = this.toNumberOrError(evalScalar(args[1]));
+                    if (typeof lenNum === 'string') return lenNum;
+                    if (lenNum < 0) return '#VALUE!';
+                    len = Math.trunc(lenNum);
+                }
+                return text.slice(0, len);
+            }
+            case 'RIGHT': {
+                const rawText = evalScalar(args[0]);
+                if (this.isErrorValue(rawText)) return rawText;
+                const text = String(rawText ?? '');
+                let len = 1;
+                if (isArgProvided(1)) {
+                    const lenNum = this.toNumberOrError(evalScalar(args[1]));
+                    if (typeof lenNum === 'string') return lenNum;
+                    if (lenNum < 0) return '#VALUE!';
+                    len = Math.trunc(lenNum);
+                }
+                return len === 0 ? '' : text.slice(-len);
+            }
+            case 'MID': {
+                const rawText = evalScalar(args[0]);
+                if (this.isErrorValue(rawText)) return rawText;
+                const startNum = this.toNumberOrError(evalScalar(args[1]));
+                if (typeof startNum === 'string') return startNum;
+                const lenNum = this.toNumberOrError(evalScalar(args[2]));
+                if (typeof lenNum === 'string') return lenNum;
+                const start = Math.trunc(startNum);
+                const len = Math.trunc(lenNum);
+                if (start < 1 || len < 0) return '#VALUE!';
+                return String(rawText ?? '').slice(start - 1, start - 1 + len);
+            }
+            case 'TEXT': {
+                const val = evalScalar(args[0]);
+                if (this.isErrorValue(val)) return val;
+                const fmtVal = evalScalar(args[1]);
+                if (this.isErrorValue(fmtVal)) return fmtVal;
+                return this.formatValueWithCustomPattern(val, String(fmtVal ?? ''));
+            }
+            case 'COUNTIF':
+            case 'SUMIF':
+            case 'AVERAGEIF': {
+                const criteriaRange = resolveFlattenedRange(args[0]);
+                const criteria = evalScalar(args[1]);
+                if (this.isErrorValue(criteria) && fnName !== 'COUNTIF') {
+                    // Allow matching error literals if criteria is a string like "#N/A"
+                }
+                const targetRange = isArgProvided(2) ? resolveFlattenedRange(args[2]) : criteriaRange;
+                let sum = 0;
+                let matchCount = 0;
+                let numericCount = 0;
+                for (let i = 0; i < criteriaRange.length; i++) {
+                    if (this.matchesCriteria(criteriaRange[i], criteria)) {
+                        matchCount++;
+                        const tv = targetRange[i];
+                        if (this.isErrorValue(tv) && fnName !== 'COUNTIF') return tv;
+                        if (typeof tv === 'number' && !Number.isNaN(tv)) {
+                            sum += tv;
+                            numericCount++;
+                        }
+                    }
+                }
+                if (fnName === 'COUNTIF') return matchCount;
+                if (fnName === 'AVERAGEIF') {
+                    return numericCount === 0 ? '#DIV/0!' : cleanExcelFloat(sum / numericCount);
+                }
+                return cleanExcelFloat(sum);
+            }
+            case 'COUNTIFS': {
+                if (args.length < 2 || args.length % 2 !== 0) return '#VALUE!';
+                const pairs: Array<{ range: SpreadsheetCellValue[]; crit: SpreadsheetCellValue }> = [];
+                for (let i = 0; i < args.length; i += 2) {
+                    const r = resolveFlattenedRange(args[i]);
+                    const c = evalScalar(args[i + 1]);
+                    if (pairs.length > 0 && r.length !== pairs[0].range.length) return '#VALUE!';
+                    pairs.push({ range: r, crit: c });
+                }
+                const len = pairs[0].range.length;
+                let matches = 0;
+                for (let idx = 0; idx < len; idx++) {
+                    let ok = true;
+                    for (const p of pairs) {
+                        if (!this.matchesCriteria(p.range[idx], p.crit)) {
+                            ok = false;
+                            break;
+                        }
+                    }
+                    if (ok) matches++;
+                }
+                return matches;
+            }
+            case 'SUMIFS':
+            case 'AVERAGEIFS': {
+                if (args.length < 3 || (args.length - 1) % 2 !== 0) return '#VALUE!';
+                const targetRange = resolveFlattenedRange(args[0]);
+                const pairs: Array<{ range: SpreadsheetCellValue[]; crit: SpreadsheetCellValue }> = [];
+                for (let i = 1; i < args.length; i += 2) {
+                    const r = resolveFlattenedRange(args[i]);
+                    if (r.length !== targetRange.length) return '#VALUE!';
+                    const c = evalScalar(args[i + 1]);
+                    pairs.push({ range: r, crit: c });
+                }
+                let sum = 0;
+                let numericCount = 0;
+                for (let idx = 0; idx < targetRange.length; idx++) {
+                    let ok = true;
+                    for (const p of pairs) {
+                        if (!this.matchesCriteria(p.range[idx], p.crit)) {
+                            ok = false;
+                            break;
+                        }
+                    }
+                    if (ok) {
+                        const tv = targetRange[idx];
+                        if (this.isErrorValue(tv)) return tv;
+                        if (typeof tv === 'number' && !Number.isNaN(tv)) {
+                            sum += tv;
+                            numericCount++;
+                        }
+                    }
+                }
+                if (fnName === 'AVERAGEIFS') {
+                    return numericCount === 0 ? '#DIV/0!' : cleanExcelFloat(sum / numericCount);
+                }
+                return cleanExcelFloat(sum);
             }
             case 'VLOOKUP': {
-                const lookupVal = evalArgScalar(rawArgs[0] ?? '');
-                const matrix = this.resolveRangeMatrix(rawArgs[1] ?? '', workbook, sheet, memo, visiting);
-                const colIndex = Math.max(1, Math.floor(Number(evalArgScalar(rawArgs[2] ?? '1')) || 1));
-                for (const row of matrix) {
-                    if (this.valuesEqualCaseInsensitive(row[0] ?? null, lookupVal)) {
-                        return colIndex <= row.length ? (row[colIndex - 1] ?? null) : '#REF!';
+                const lookupVal = evalScalar(args[0]);
+                if (this.isErrorValue(lookupVal)) return lookupVal;
+                const matrix = this.resolveAstRangeMatrix(args[1], workbook, sheet, getCellVal, cellLookup);
+                const colNum = this.toNumberOrError(evalScalar(args[2]));
+                if (typeof colNum === 'string') return colNum;
+                const colIdx = Math.trunc(colNum);
+                if (colIdx < 1) return '#VALUE!';
+                const maxCols = matrix[0]?.length ?? 0;
+                if (colIdx > maxCols) return '#REF!';
+
+                let isApprox = true;
+                if (isArgProvided(3)) {
+                    const approxRaw = evalScalar(args[3]);
+                    if (this.isErrorValue(approxRaw)) return approxRaw;
+                    const approxBool = this.toBooleanOrError(approxRaw);
+                    if (typeof approxBool === 'string') return approxBool;
+                    isApprox = approxBool;
+                }
+
+                if (!isApprox) {
+                    for (const row of matrix) {
+                        const candidate = row[0] ?? null;
+                        if (candidate === null || this.isErrorValue(candidate)) continue;
+                        if (typeof lookupVal === 'string' && hasExcelWildcard(lookupVal)) {
+                            if (buildExcelWildcardRegex(lookupVal).test(String(candidate))) {
+                                return row[colIdx - 1] ?? null;
+                            }
+                        } else if (this.strictLookupEqual(candidate, lookupVal)) {
+                            return row[colIdx - 1] ?? null;
+                        }
+                    }
+                    return '#N/A';
+                }
+
+                // Approximate match (TRUE / omitted): largest value <= lookupVal of matching type
+                let bestRowIdx = -1;
+                let bestVal: SpreadsheetCellValue = null;
+                for (let r = 0; r < matrix.length; r++) {
+                    const candidate = matrix[r][0] ?? null;
+                    if (candidate === null || this.isErrorValue(candidate)) continue;
+                    const cmp = this.compareSameTypeForLookup(candidate, lookupVal);
+                    if (cmp !== null && cmp <= 0) {
+                        if (bestRowIdx === -1) {
+                            bestRowIdx = r;
+                            bestVal = candidate;
+                        } else {
+                            const vsBest = this.compareSameTypeForLookup(candidate, bestVal);
+                            if (vsBest !== null && vsBest >= 0) {
+                                bestRowIdx = r;
+                                bestVal = candidate;
+                            }
+                        }
                     }
                 }
-                return '#N/A';
+                return bestRowIdx >= 0 ? (matrix[bestRowIdx][colIdx - 1] ?? null) : '#N/A';
+            }
+            case 'XLOOKUP': {
+                const lookupVal = evalScalar(args[0]);
+                if (this.isErrorValue(lookupVal)) return lookupVal;
+                const lookupArr = resolveFlattenedRange(args[1]);
+                const returnArr = resolveFlattenedRange(args[2]);
+                if (lookupArr.length === 0 || lookupArr.length !== returnArr.length) return '#VALUE!';
+
+                let matchMode = 0;
+                if (isArgProvided(4)) {
+                    const mm = this.toNumberOrError(evalScalar(args[4]));
+                    if (typeof mm === 'string') return mm;
+                    matchMode = Math.trunc(mm);
+                }
+                let searchMode = 1;
+                if (isArgProvided(5)) {
+                    const sm = this.toNumberOrError(evalScalar(args[5]));
+                    if (typeof sm === 'string') return sm;
+                    searchMode = Math.trunc(sm);
+                }
+
+                const indices: number[] = [];
+                if (searchMode === -1) {
+                    for (let i = lookupArr.length - 1; i >= 0; i--) indices.push(i);
+                } else {
+                    for (let i = 0; i < lookupArr.length; i++) indices.push(i);
+                }
+
+                // Exact or wildcard pass first
+                for (const i of indices) {
+                    const cand = lookupArr[i];
+                    if (cand === null || this.isErrorValue(cand)) continue;
+                    if (matchMode === 2 && typeof lookupVal === 'string') {
+                        if (buildExcelWildcardRegex(lookupVal).test(String(cand))) return returnArr[i] ?? null;
+                    } else if (this.strictLookupEqual(cand, lookupVal)) {
+                        return returnArr[i] ?? null;
+                    }
+                }
+
+                if (matchMode === -1 || matchMode === 1) {
+                    let bestIdx = -1;
+                    let bestVal: SpreadsheetCellValue = null;
+                    for (const i of indices) {
+                        const cand = lookupArr[i];
+                        if (cand === null || this.isErrorValue(cand)) continue;
+                        const cmp = this.compareSameTypeForLookup(cand, lookupVal);
+                        if (cmp === null) continue;
+                        if (matchMode === -1 && cmp < 0) {
+                            if (bestIdx === -1 || (this.compareSameTypeForLookup(cand, bestVal) ?? -1) > 0) {
+                                bestIdx = i;
+                                bestVal = cand;
+                            }
+                        } else if (matchMode === 1 && cmp > 0) {
+                            if (bestIdx === -1 || (this.compareSameTypeForLookup(cand, bestVal) ?? 1) < 0) {
+                                bestIdx = i;
+                                bestVal = cand;
+                            }
+                        }
+                    }
+                    if (bestIdx >= 0) return returnArr[bestIdx] ?? null;
+                }
+
+                return isArgProvided(3) ? evalScalar(args[3]) : '#N/A';
             }
             case 'INDEX': {
-                const matrix = this.resolveRangeMatrix(rawArgs[0] ?? '', workbook, sheet, memo, visiting);
-                const r = Math.max(1, Math.floor(Number(evalArgScalar(rawArgs[1] ?? '1')) || 1));
-                const c = Math.max(1, Math.floor(Number(evalArgScalar(rawArgs[2] ?? '1')) || 1));
-                if (r > matrix.length || c > (matrix[0]?.length ?? 0)) return '#REF!';
-                return matrix[r - 1][c - 1] ?? null;
+                const matrix = this.resolveAstRangeMatrix(args[0], workbook, sheet, getCellVal, cellLookup);
+                const rows = matrix.length;
+                const cols = matrix[0]?.length ?? 0;
+                if (rows === 0 || cols === 0) return '#REF!';
+                if (rows === 1 && cols === 1 && matrix[0][0] === '#REF!') return '#REF!';
+
+                const firstNum = this.toNumberOrError(evalScalar(args[1]));
+                if (typeof firstNum === 'string') return firstNum;
+                const idx1 = Math.trunc(firstNum);
+
+                if (!isArgProvided(2)) {
+                    // 1D horizontal range (e.g. INDEX(B1:D1, 2)) indexes across columns when 3rd arg is omitted!
+                    if (rows === 1 && cols > 1) {
+                        if (idx1 < 1 || idx1 > cols) return '#REF!';
+                        return matrix[0][idx1 - 1] ?? null;
+                    }
+                    if (idx1 < 1 || idx1 > rows) return '#REF!';
+                    return matrix[idx1 - 1][0] ?? null;
+                }
+
+                const secondNum = this.toNumberOrError(evalScalar(args[2]));
+                if (typeof secondNum === 'string') return secondNum;
+                const idx2 = Math.trunc(secondNum);
+                if (idx1 < 1 || idx2 < 1 || idx1 > rows || idx2 > cols) return '#REF!';
+                return matrix[idx1 - 1][idx2 - 1] ?? null;
             }
             case 'MATCH': {
-                const lookupVal = evalArgScalar(rawArgs[0] ?? '');
-                const vals = this.resolveRangeValues(rawArgs[1] ?? '', workbook, sheet, memo, visiting);
+                const lookupVal = evalScalar(args[0]);
+                if (this.isErrorValue(lookupVal)) return lookupVal;
+                const vals = resolveFlattenedRange(args[1]);
+                let matchType = 1;
+                if (isArgProvided(2)) {
+                    const mt = this.toNumberOrError(evalScalar(args[2]));
+                    if (typeof mt === 'string') return mt;
+                    matchType = Math.trunc(mt);
+                }
+
+                if (matchType === 0) {
+                    for (let i = 0; i < vals.length; i++) {
+                        const cand = vals[i];
+                        if (cand === null || this.isErrorValue(cand)) continue;
+                        if (typeof lookupVal === 'string' && hasExcelWildcard(lookupVal)) {
+                            if (buildExcelWildcardRegex(lookupVal).test(String(cand))) return i + 1;
+                        } else if (this.strictLookupEqual(cand, lookupVal)) {
+                            return i + 1;
+                        }
+                    }
+                    return '#N/A';
+                }
+
+                let bestIdx = -1;
+                let bestVal: SpreadsheetCellValue = null;
                 for (let i = 0; i < vals.length; i++) {
-                    if (this.valuesEqualCaseInsensitive(vals[i], lookupVal)) {
-                        return i + 1;
+                    const cand = vals[i];
+                    if (cand === null || this.isErrorValue(cand)) continue;
+                    const cmp = this.compareSameTypeForLookup(cand, lookupVal);
+                    if (cmp === null) continue;
+                    if (matchType > 0 && cmp <= 0) {
+                        if (bestIdx === -1 || (this.compareSameTypeForLookup(cand, bestVal) ?? -1) >= 0) {
+                            bestIdx = i;
+                            bestVal = cand;
+                        }
+                    } else if (matchType < 0 && cmp >= 0) {
+                        if (bestIdx === -1 || (this.compareSameTypeForLookup(cand, bestVal) ?? 1) <= 0) {
+                            bestIdx = i;
+                            bestVal = cand;
+                        }
                     }
                 }
-                return '#N/A';
+                return bestIdx >= 0 ? bestIdx + 1 : '#N/A';
             }
-            case 'TODAY':
-                return new Date().toISOString().slice(0, 10);
-            case 'NOW':
-                return new Date().toISOString();
+            case 'TODAY': {
+                const now = new Date();
+                return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) / 86_400_000 + EXCEL_EPOCH_OFFSET_DAYS;
+            }
+            case 'NOW': {
+                return cleanExcelFloat(Date.now() / 86_400_000 + EXCEL_EPOCH_OFFSET_DAYS);
+            }
+            case 'DATE': {
+                const y = this.toNumberOrError(evalScalar(args[0]));
+                if (typeof y === 'string') return y;
+                const m = this.toNumberOrError(evalScalar(args[1]));
+                if (typeof m === 'string') return m;
+                const d = this.toNumberOrError(evalScalar(args[2]));
+                if (typeof d === 'string') return d;
+                const yi = Math.trunc(y);
+                const fullYear = yi >= 0 && yi < 1900 ? 1900 + yi : yi;
+                if (fullYear < 1900 || fullYear > 9999) return '#NUM!';
+                const utcMs = Date.UTC(fullYear, Math.trunc(m) - 1, Math.trunc(d));
+                return Math.round(utcMs / 86_400_000) + EXCEL_EPOCH_OFFSET_DAYS;
+            }
             case 'YEAR':
             case 'MONTH':
             case 'DAY': {
-                const v = String(evalArgScalar(rawArgs[0] ?? '') ?? '');
-                const d = new Date(v);
-                if (Number.isNaN(d.getTime())) return '#VALUE!';
-                if (fnName === 'YEAR') return d.getUTCFullYear();
-                if (fnName === 'MONTH') return d.getUTCMonth() + 1;
-                return d.getUTCDate();
+                const serial = this.toExcelDateSerialOrError(evalScalar(args[0]));
+                if (typeof serial === 'string') return serial;
+                const dt = excelSerialToUtcDate(serial);
+                if (fnName === 'YEAR') return dt.getUTCFullYear();
+                if (fnName === 'MONTH') return dt.getUTCMonth() + 1;
+                return dt.getUTCDate();
+            }
+            case 'DAYS': {
+                const endSerial = this.toExcelDateSerialOrError(evalScalar(args[0]));
+                if (typeof endSerial === 'string') return endSerial;
+                const startSerial = this.toExcelDateSerialOrError(evalScalar(args[1]));
+                if (typeof startSerial === 'string') return startSerial;
+                return Math.trunc(endSerial) - Math.trunc(startSerial);
+            }
+            case 'EDATE':
+            case 'EOMONTH': {
+                const startSerial = this.toExcelDateSerialOrError(evalScalar(args[0]));
+                if (typeof startSerial === 'string') return startSerial;
+                const monthsNum = this.toNumberOrError(evalScalar(args[1]));
+                if (typeof monthsNum === 'string') return monthsNum;
+                const dt = excelSerialToUtcDate(startSerial);
+                const y = dt.getUTCFullYear();
+                const m0 = dt.getUTCMonth() + Math.trunc(monthsNum);
+                if (fnName === 'EOMONTH') {
+                    return Math.round(Date.UTC(y, m0 + 1, 0) / 86_400_000) + EXCEL_EPOCH_OFFSET_DAYS;
+                }
+                const lastDayOfTarget = new Date(Date.UTC(y, m0 + 1, 0)).getUTCDate();
+                const day = Math.min(dt.getUTCDate(), lastDayOfTarget);
+                return Math.round(Date.UTC(y, m0, day) / 86_400_000) + EXCEL_EPOCH_OFFSET_DAYS;
             }
             default:
                 return '#NAME?';
         }
-    }
-
-    private isRangeExpression(token: string, workbook: WorkbookSpec): boolean {
-        const clean = token.trim();
-        if (clean.includes(':')) return true;
-        return workbook.NamedRanges.some((nr) => nr.Name.toLowerCase() === clean.toLowerCase() && nr.Range.includes(':'));
-    }
-
-    private resolveRangeValues(
-        rangeToken: string,
-        workbook: WorkbookSpec,
-        sheet: WorksheetSpec,
-        memo: Map<string, SpreadsheetCellValue>,
-        visiting: Set<string>
-    ): SpreadsheetCellValue[] {
-        const matrix = this.resolveRangeMatrix(rangeToken, workbook, sheet, memo, visiting);
-        const flat: SpreadsheetCellValue[] = [];
-        for (const r of matrix) {
-            flat.push(...r);
-        }
-        return flat;
-    }
-
-    private resolveRangeMatrix(
-        rangeToken: string,
-        workbook: WorkbookSpec,
-        sheet: WorksheetSpec,
-        memo: Map<string, SpreadsheetCellValue>,
-        visiting: Set<string>
-    ): SpreadsheetCellValue[][] {
-        let targetSheet = sheet;
-        let rangeExpr = rangeToken.trim();
-
-        // Check named range first
-        const named = workbook.NamedRanges.find((nr) => nr.Name.toLowerCase() === rangeExpr.toLowerCase());
-        if (named) {
-            targetSheet = this.GetWorksheet(workbook, named.SheetID) ?? sheet;
-            rangeExpr = named.Range;
-        } else {
-            const crossMatch = /^(?:'([^']+)'|([A-Za-z0-9_]+))!(.+)$/.exec(rangeExpr);
-            if (crossMatch) {
-                const sName = crossMatch[1] || crossMatch[2];
-                const resolved = this.GetWorksheet(workbook, sName);
-                if (!resolved) return [['#REF!']];
-                targetSheet = resolved;
-                rangeExpr = crossMatch[3];
-            }
-        }
-
-        const bounds = ParseRangeAddress(rangeExpr);
-        if (!bounds) {
-            return [[this.evalExpression(rangeExpr, workbook, targetSheet, memo, visiting)]];
-        }
-        const matrix: SpreadsheetCellValue[][] = [];
-        for (let r = bounds.startRow; r <= bounds.endRow; r++) {
-            const rowVals: SpreadsheetCellValue[] = [];
-            for (let c = bounds.startCol; c <= bounds.endCol; c++) {
-                const addr = FormatCellAddress(r, c);
-                rowVals.push(this.evaluateCellInternal(workbook, targetSheet, addr, memo, visiting));
-            }
-            matrix.push(rowVals);
-        }
-        return matrix;
-    }
-
-    // -----------------------------------------------------------------------
-    // Expression Parsing Helpers
-    // -----------------------------------------------------------------------
-
-    private stripOuterParens(expr: string): string {
-        let cur = expr.trim();
-        while (cur.startsWith('(') && cur.endsWith(')')) {
-            const inner = cur.slice(1, -1);
-            if (this.hasBalancedParentheses(inner)) {
-                cur = inner.trim();
-            } else {
-                break;
-            }
-        }
-        return cur;
-    }
-
-    private hasBalancedParentheses(s: string): boolean {
-        let depth = 0;
-        let inQuotes = false;
-        for (let i = 0; i < s.length; i++) {
-            const ch = s[i];
-            if (ch === '"') {
-                inQuotes = !inQuotes;
-            } else if (!inQuotes) {
-                if (ch === '(') depth++;
-                else if (ch === ')') {
-                    depth--;
-                    if (depth < 0) return false;
-                }
-            }
-        }
-        return depth === 0 && !inQuotes;
     }
 
     private splitTopLevelArgs(argsStr: string): string[] {
@@ -1965,6 +3138,10 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         for (let i = 0; i < argsStr.length; i++) {
             const ch = argsStr[i];
             if (ch === '"') {
+                if (inQuotes && argsStr[i + 1] === '"') {
+                    i++;
+                    continue;
+                }
                 inQuotes = !inQuotes;
             } else if (!inQuotes) {
                 if (ch === '(') depth++;
@@ -1979,171 +3156,129 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         return parts;
     }
 
-    private findTopLevelOperator(
-        expr: string,
-        ops: string[]
-    ): { left: string; op: string; right: string } | null {
-        let depth = 0;
-        let inQuotes = false;
-        for (let i = 0; i < expr.length; i++) {
-            const ch = expr[i];
-            if (ch === '"') {
-                inQuotes = !inQuotes;
-                continue;
-            }
-            if (inQuotes) continue;
-            if (ch === '(') {
-                depth++;
-                continue;
-            }
-            if (ch === ')') {
-                depth--;
-                continue;
-            }
-            if (depth === 0) {
-                for (const op of ops) {
-                    if (expr.startsWith(op, i)) {
-                        const left = expr.slice(0, i).trim();
-                        const right = expr.slice(i + op.length).trim();
-                        if (left && right) {
-                            return { left, op, right };
-                        }
-                    }
-                }
-            }
-        }
-        return null;
-    }
-
-    private findTopLevelOperatorRightToLeft(
-        expr: string,
-        ops: string[]
-    ): { left: string; op: string; right: string } | null {
-        let depth = 0;
-        let inQuotes = false;
-        for (let i = expr.length - 1; i >= 0; i--) {
-            const ch = expr[i];
-            if (ch === '"') {
-                inQuotes = !inQuotes;
-                continue;
-            }
-            if (inQuotes) continue;
-            if (ch === ')') {
-                depth++;
-                continue;
-            }
-            if (ch === '(') {
-                depth--;
-                continue;
-            }
-            if (depth === 0) {
-                for (const op of ops) {
-                    if (expr.startsWith(op, i)) {
-                        const left = expr.slice(0, i).trim();
-                        const right = expr.slice(i + op.length).trim();
-                        if (left && right) {
-                            return { left, op, right };
-                        }
-                    }
-                }
-            }
-        }
-        return null;
-    }
-
-    private findTopLevelAddSub(expr: string): { left: string; op: '+' | '-'; right: string } | null {
-        let depth = 0;
-        let inQuotes = false;
-        for (let i = expr.length - 1; i > 0; i--) {
-            const ch = expr[i];
-            if (ch === '"') {
-                inQuotes = !inQuotes;
-                continue;
-            }
-            if (inQuotes) continue;
-            if (ch === ')') {
-                depth++;
-                continue;
-            }
-            if (ch === '(') {
-                depth--;
-                continue;
-            }
-            if (depth === 0 && (ch === '+' || ch === '-')) {
-                // Ensure this is binary, not unary after another operator or scientific notation
-                const prev = expr.slice(0, i).trim();
-                if (!prev) continue;
-                const prevChar = prev[prev.length - 1];
-                if ('+-*/^=<>(&,'.includes(prevChar)) continue;
-                if ((prevChar === 'e' || prevChar === 'E') && prev.length >= 2 && /\d/.test(prev[prev.length - 2])) {
-                    continue;
-                }
-                const right = expr.slice(i + 1).trim();
-                if (right) {
-                    return { left: prev, op: ch, right };
-                }
-            }
-        }
-        return null;
-    }
-
-    private isErrorValue(v: SpreadsheetCellValue): boolean {
+    private isErrorValue(v: SpreadsheetCellValue): v is `#${string}` {
         return typeof v === 'string' && v.startsWith('#') && (v.endsWith('!') || v.endsWith('?') || v === '#N/A');
     }
 
     private toNumberOrError(v: SpreadsheetCellValue): number | string {
-        if (this.isErrorValue(v)) return v as string;
-        if (v === null || v === undefined || v === '') return 0;
-        if (typeof v === 'number') return v;
+        if (this.isErrorValue(v)) return v;
+        if (v === null || v === undefined) return 0;
+        if (typeof v === 'number') return Number.isNaN(v) ? '#NUM!' : v;
         if (typeof v === 'boolean') return v ? 1 : 0;
-        const n = Number(v);
+        const trimmed = v.trim();
+        if (trimmed === '') return '#VALUE!';
+        const n = Number(trimmed);
         return Number.isNaN(n) ? '#VALUE!' : n;
     }
 
-    private compareValues(left: SpreadsheetCellValue, right: SpreadsheetCellValue, op: string): boolean {
-        const lNum = typeof left === 'number' ? left : Number(left);
-        const rNum = typeof right === 'number' ? right : Number(right);
-        const bothNumeric =
-            left !== null &&
-            right !== null &&
-            left !== '' &&
-            right !== '' &&
-            !Number.isNaN(lNum) &&
-            !Number.isNaN(rNum);
-        if (bothNumeric) {
-            switch (op) {
-                case '=':
-                    return lNum === rNum;
-                case '<>':
-                    return lNum !== rNum;
-                case '<':
-                    return lNum < rNum;
-                case '<=':
-                    return lNum <= rNum;
-                case '>':
-                    return lNum > rNum;
-                case '>=':
-                    return lNum >= rNum;
+    private toBooleanOrError(v: SpreadsheetCellValue): boolean | string {
+        if (this.isErrorValue(v)) return v;
+        if (v === null || v === undefined) return false;
+        if (typeof v === 'boolean') return v;
+        if (typeof v === 'number') return v !== 0;
+        const upper = v.trim().toUpperCase();
+        if (upper === 'TRUE') return true;
+        if (upper === 'FALSE') return false;
+        return '#VALUE!';
+    }
+
+    private toExcelDateSerialOrError(v: SpreadsheetCellValue): number | string {
+        if (this.isErrorValue(v)) return v;
+        if (typeof v === 'number') {
+            return Number.isFinite(v) ? v : '#NUM!';
+        }
+        if (typeof v === 'string') {
+            const trimmed = v.trim();
+            if (!trimmed) return '#VALUE!';
+            if (/^[+-]?\d+(\.\d+)?$/.test(trimmed)) {
+                return Number(trimmed);
+            }
+            const isoDateMatch = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(trimmed);
+            if (isoDateMatch) {
+                const y = parseInt(isoDateMatch[1], 10);
+                const m = parseInt(isoDateMatch[2], 10);
+                const d = parseInt(isoDateMatch[3], 10);
+                return Math.round(Date.UTC(y, m - 1, d) / 86_400_000) + EXCEL_EPOCH_OFFSET_DAYS;
+            }
+            const parsedMs = Date.parse(trimmed);
+            if (!Number.isNaN(parsedMs)) {
+                return parsedMs / 86_400_000 + EXCEL_EPOCH_OFFSET_DAYS;
             }
         }
-        const lStr = String(left ?? '').toLowerCase();
-        const rStr = String(right ?? '').toLowerCase();
+        return '#VALUE!';
+    }
+
+    private compareValues(left: SpreadsheetCellValue, right: SpreadsheetCellValue, op: string): boolean {
+        // Excel blank (`null`) coerces to 0 against numbers, "" against strings, and FALSE against booleans
+        let l = left === undefined ? null : left;
+        let r = right === undefined ? null : right;
+
+        if (l === null && r === null) {
+            return op === '=' || op === '<=' || op === '>=';
+        }
+        if (l === null) {
+            l = typeof r === 'number' ? 0 : typeof r === 'boolean' ? false : '';
+        } else if (r === null) {
+            r = typeof l === 'number' ? 0 : typeof l === 'boolean' ? false : '';
+        }
+
+        let cmp: number;
+        if (typeof l === 'number' && typeof r === 'number') {
+            cmp = l === r ? 0 : l < r ? -1 : 1;
+        } else if (typeof l === 'string' && typeof r === 'string') {
+            const ls = l.toLowerCase();
+            const rs = r.toLowerCase();
+            cmp = ls === rs ? 0 : ls < rs ? -1 : 1;
+        } else if (typeof l === 'boolean' && typeof r === 'boolean') {
+            cmp = l === r ? 0 : l ? 1 : -1;
+        } else {
+            // Excel cross-type ordering: number (1) < text (2) < boolean (3)
+            const rank = (x: SpreadsheetCellValue): number =>
+                typeof x === 'number' ? 1 : typeof x === 'string' ? 2 : 3;
+            cmp = rank(l) - rank(r);
+        }
+
         switch (op) {
             case '=':
-                return lStr === rStr;
+                return cmp === 0;
             case '<>':
-                return lStr !== rStr;
+                return cmp !== 0;
             case '<':
-                return lStr < rStr;
+                return cmp < 0;
             case '<=':
-                return lStr <= rStr;
+                return cmp <= 0;
             case '>':
-                return lStr > rStr;
+                return cmp > 0;
             case '>=':
-                return lStr >= rStr;
+                return cmp >= 0;
             default:
                 return false;
         }
+    }
+
+    private strictLookupEqual(a: SpreadsheetCellValue, b: SpreadsheetCellValue): boolean {
+        if (a === null || b === null) return false;
+        if (typeof a === 'number' && typeof b === 'number') return a === b;
+        if (typeof a === 'boolean' && typeof b === 'boolean') return a === b;
+        if (typeof a === 'string' && typeof b === 'string') {
+            return a.toLowerCase() === b.toLowerCase();
+        }
+        return false;
+    }
+
+    private compareSameTypeForLookup(a: SpreadsheetCellValue, b: SpreadsheetCellValue): number | null {
+        if (typeof a === 'number' && typeof b === 'number') {
+            return a === b ? 0 : a < b ? -1 : 1;
+        }
+        if (typeof a === 'string' && typeof b === 'string') {
+            const la = a.toLowerCase();
+            const lb = b.toLowerCase();
+            return la === lb ? 0 : la < lb ? -1 : 1;
+        }
+        if (typeof a === 'boolean' && typeof b === 'boolean') {
+            return a === b ? 0 : a ? 1 : -1;
+        }
+        return null;
     }
 
     private valuesEqualCaseInsensitive(a: SpreadsheetCellValue, b: SpreadsheetCellValue): boolean {
@@ -2155,22 +3290,124 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     }
 
     private matchesCriteria(cellVal: SpreadsheetCellValue, criteria: SpreadsheetCellValue): boolean {
-        if (criteria === null || criteria === undefined) return cellVal === null;
-        const critStr = String(criteria).trim();
+        const val = cellVal === undefined ? null : cellVal;
+        if (criteria === null || criteria === undefined || criteria === '') {
+            return val === null || val === '';
+        }
+        if (typeof criteria === 'number') {
+            if (val === null || typeof val === 'boolean') return false;
+            if (typeof val === 'number') return val === criteria;
+            const parsed = val.trim() !== '' ? Number(val) : NaN;
+            return !Number.isNaN(parsed) && parsed === criteria;
+        }
+        if (typeof criteria === 'boolean') {
+            return val === criteria;
+        }
+
+        const critStr = String(criteria);
         const opMatch = /^(<>|<=|>=|=|<|>)(.*)$/.exec(critStr);
         if (opMatch) {
             const op = opMatch[1];
             const rhsRaw = opMatch[2].trim();
-            const rhsVal: SpreadsheetCellValue =
-                rhsRaw !== '' && !Number.isNaN(Number(rhsRaw)) ? Number(rhsRaw) : rhsRaw;
-            return this.compareValues(cellVal, rhsVal, op);
+
+            if (rhsRaw === '') {
+                if (op === '=') return val === null || val === '';
+                if (op === '<>') return val !== null && val !== '';
+                return false;
+            }
+
+            if (this.isErrorValue(val)) {
+                if (op === '=') return val.toUpperCase() === rhsRaw.toUpperCase();
+                if (op === '<>') return val.toUpperCase() !== rhsRaw.toUpperCase();
+                return false;
+            }
+
+            const rhsNum = Number(rhsRaw);
+            const rhsIsNumeric = !Number.isNaN(rhsNum);
+
+            if (rhsIsNumeric) {
+                if (op === '<>') {
+                    if (val === null || typeof val !== 'number') return true;
+                    return val !== rhsNum;
+                }
+                // For =, <, <=, >, >= with numeric RHS, skip blank/null/boolean/non-numeric cells (Excel COUNTIF parity!)
+                if (val === null || typeof val !== 'number') {
+                    if (op === '=' && typeof val === 'string' && val.trim() !== '' && Number(val) === rhsNum) {
+                        return true;
+                    }
+                    return false;
+                }
+                switch (op) {
+                    case '=':
+                        return val === rhsNum;
+                    case '<':
+                        return val < rhsNum;
+                    case '<=':
+                        return val <= rhsNum;
+                    case '>':
+                        return val > rhsNum;
+                    case '>=':
+                        return val >= rhsNum;
+                }
+            }
+
+            // Text operator comparison
+            if (op === '=' || op === '<>') {
+                if (val === null) return op === '<>';
+                const matchesText = hasExcelWildcard(rhsRaw)
+                    ? buildExcelWildcardRegex(rhsRaw).test(String(val))
+                    : String(val).toLowerCase() === rhsRaw.toLowerCase();
+                return op === '=' ? matchesText : !matchesText;
+            }
+            if (typeof val !== 'string') return false;
+            const lv = val.toLowerCase();
+            const rv = rhsRaw.toLowerCase();
+            if (op === '<') return lv < rv;
+            if (op === '<=') return lv <= rv;
+            if (op === '>') return lv > rv;
+            if (op === '>=') return lv >= rv;
+            return false;
         }
-        return this.valuesEqualCaseInsensitive(cellVal, criteria);
+
+        if (this.isErrorValue(val)) {
+            return val.toUpperCase() === critStr.trim().toUpperCase();
+        }
+        if (val === null) return false;
+
+        const trimmedCrit = critStr.trim();
+        if (trimmedCrit !== '' && !Number.isNaN(Number(trimmedCrit))) {
+            const targetNum = Number(trimmedCrit);
+            if (typeof val === 'number') return val === targetNum;
+            if (typeof val === 'string' && val.trim() !== '' && !Number.isNaN(Number(val))) {
+                return Number(val) === targetNum;
+            }
+            return false;
+        }
+
+        if (hasExcelWildcard(critStr)) {
+            return buildExcelWildcardRegex(critStr).test(String(val));
+        }
+        return String(val).toLowerCase() === critStr.toLowerCase();
     }
 
     // -----------------------------------------------------------------------
     // Cell Formatting & Validation
     // -----------------------------------------------------------------------
+
+    private formatCellForDisplay(cell: SpreadsheetCellSpec): string {
+        const val = cell.ComputedValue !== undefined ? cell.ComputedValue : cell.RawValue;
+        if (
+            typeof val === 'number' &&
+            !cell.Style?.FormatType &&
+            !cell.Style?.NumberFormatPattern &&
+            cell.Formula &&
+            isAutoDateFormattedFormula(cell.Formula)
+        ) {
+            const inferredType: SpreadsheetCellFormatType = /\bNOW\s*\(/i.test(cell.Formula) ? 'datetime' : 'date';
+            return this.FormatCellValue(val, { FormatType: inferredType });
+        }
+        return this.FormatCellValue(val, cell.Style);
+    }
 
     /**
      * Formats a raw or computed scalar value according to its {@link SpreadsheetCellStyleSpec}.
@@ -2199,9 +3436,70 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2
                     }).format(value);
+                case 'date':
+                    return formatExcelSerialDate(value, false);
+                case 'datetime':
+                    return formatExcelSerialDate(value, true);
                 default:
-                    return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(6)));
+                    if (Number.isInteger(value)) return String(value);
+                    if (Math.abs(value) > 0 && Math.abs(value) < 1e-6) return String(cleanExcelFloat(value));
+                    return String(Number(value.toFixed(6)));
             }
+        }
+        return String(value);
+    }
+
+    private formatValueWithCustomPattern(value: SpreadsheetCellValue, pattern: string): string {
+        if (value === null || value === undefined) return '';
+        const p = pattern.trim();
+        if (!p) return String(value);
+
+        const num = typeof value === 'number' ? value : Number(value);
+        if (!Number.isNaN(num) && value !== '' && typeof value !== 'boolean') {
+            if (/yyyy|yy|mm|dd|hh/i.test(p) && !p.includes('#') && !p.includes('0')) {
+                const dt = excelSerialToUtcDate(num);
+                const yyyy = String(dt.getUTCFullYear()).padStart(4, '0');
+                const yy = yyyy.slice(-2);
+                const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+                const dd = String(dt.getUTCDate()).padStart(2, '0');
+                const hh = String(dt.getUTCHours()).padStart(2, '0');
+                const min = String(dt.getUTCMinutes()).padStart(2, '0');
+                const ss = String(dt.getUTCSeconds()).padStart(2, '0');
+                const monthNamesShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const monthNamesFull = [
+                    'January', 'February', 'March', 'April', 'May', 'June',
+                    'July', 'August', 'September', 'October', 'November', 'December'
+                ];
+                let formatted = p;
+                formatted = formatted.replace(/yyyy/gi, yyyy).replace(/yy/gi, yy);
+                formatted = formatted
+                    .replace(/mmmm/gi, monthNamesFull[dt.getUTCMonth()])
+                    .replace(/mmm/gi, monthNamesShort[dt.getUTCMonth()]);
+                // Replace hh:mm(:ss) minutes before date mm
+                formatted = formatted.replace(/hh:mm:ss/gi, `${hh}:${min}:${ss}`).replace(/hh:mm/gi, `${hh}:${min}`);
+                formatted = formatted.replace(/mm/gi, mm).replace(/\bm\b/gi, String(dt.getUTCMonth() + 1));
+                formatted = formatted.replace(/dd/gi, dd).replace(/\bd\b/gi, String(dt.getUTCDate()));
+                return formatted;
+            }
+            if (p.endsWith('%')) {
+                const decMatch = /\.([0#]+)%$/.exec(p);
+                const decimals = decMatch ? decMatch[1].length : 0;
+                return `${(num * 100).toFixed(decimals)}%`;
+            }
+            const hasCurrency = p.includes('$');
+            const decMatch = /\.([0#]+)/.exec(p);
+            const decimals = decMatch ? decMatch[1].length : 0;
+            const useGrouping = p.includes(',');
+            if (!hasCurrency && !useGrouping && /^0+$/.test(p)) {
+                const sign = num < 0 ? '-' : '';
+                return `${sign}${String(Math.round(Math.abs(num))).padStart(p.length, '0')}`;
+            }
+            const numText = new Intl.NumberFormat('en-US', {
+                useGrouping,
+                minimumFractionDigits: decimals,
+                maximumFractionDigits: decimals
+            }).format(num);
+            return hasCurrency ? (num < 0 ? `-$${numText.replace(/^-/, '')}` : `$${numText}`) : numText;
         }
         return String(value);
     }
@@ -2211,10 +3509,16 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
      */
     public InferFormatTypeFromPattern(pattern?: string | null): SpreadsheetCellFormatType {
         if (!pattern) return 'general';
-        const p = pattern.trim();
+        // Strip Excel color/locale tokens like [Red] or [$-409] and trailing ;@ sections
+        const primarySection = pattern.split(';')[0] ?? pattern;
+        const p = primarySection.replace(/\[[^\]]*\]/g, '').trim();
+        if (!p || p.toLowerCase() === 'general') return 'general';
+        if (p === '@') return 'text';
         if (p.includes('$') || p.includes('¤')) return 'currency';
         if (p.includes('%')) return 'percent';
-        if (/yyyy|mm|dd/i.test(p)) return p.includes('h') ? 'datetime' : 'date';
+        if (/(?:yyyy|yy|mmmm|mmm|mm|dd|m\/d|d-m|y-m|hh:mm|h:mm)/i.test(p) && !p.includes('#')) {
+            return /h/i.test(p) ? 'datetime' : 'date';
+        }
         if (p === '#,##0' || p === '0') return 'integer';
         if (p.includes('0.0')) return 'number';
         return 'general';
@@ -2393,19 +3697,25 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         const positionalArgs: SpreadsheetCellValue[] = [];
         const remaining = evaluatedArgs.slice(paramStartIndex);
 
-        for (let i = 0; i < remaining.length; i++) {
-            const val = remaining[i];
-            if (typeof val === 'string' && val.includes('=')) {
-                const eqIdx = val.indexOf('=');
-                const k = val.slice(0, eqIdx).trim();
-                const vRaw = val.slice(eqIdx + 1).trim();
-                if (k) {
-                    namedParameters[k] =
-                        vRaw !== '' && !Number.isNaN(Number(vRaw)) ? Number(vRaw) : vRaw;
-                    continue;
+        if (kind === 'VIEW') {
+            // A5: For =MJ.VIEW(entity, view, filter), NEVER split remaining[0] (the filter expression,
+            // e.g. "Status='Active'") into NamedParameters — keep positional Arguments intact!
+            positionalArgs.push(...remaining);
+        } else {
+            for (let i = 0; i < remaining.length; i++) {
+                const val = remaining[i];
+                if (typeof val === 'string' && val.includes('=')) {
+                    const eqIdx = val.indexOf('=');
+                    const k = val.slice(0, eqIdx).trim();
+                    const vRaw = val.slice(eqIdx + 1).trim();
+                    if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(k) && !vRaw.includes("'") && !vRaw.includes('"')) {
+                        namedParameters[k] =
+                            vRaw !== '' && !Number.isNaN(Number(vRaw)) ? Number(vRaw) : vRaw;
+                        continue;
+                    }
                 }
+                positionalArgs.push(val);
             }
-            positionalArgs.push(val);
         }
 
         return {
@@ -2711,22 +4021,57 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         for (const sheet of workbook.Worksheets) {
             for (const table of sheet.LiveTables) {
                 if (options?.TableID && table.TableID !== options.TableID) continue;
-                if (table.Mode === 'Frozen' && table.FrozenSnapshot && !options?.ForceRefreshFrozen) {
+                if (table.Mode === 'Frozen' && !options?.ForceRefreshFrozen) {
+                    const validation = ValidateFrozenBlockSnapshot(table.FrozenSnapshot);
+                    if (!validation.Valid || !table.FrozenSnapshot || table.FrozenSnapshot.SecurityWarningAcknowledged !== true) {
+                        const errMsg =
+                            validation.ErrorMessage ||
+                            'Invalid FrozenSnapshot: Mode is Frozen but snapshot is missing or SecurityWarningAcknowledged is not true.';
+                        const failedFrozenRes: DocumentBlockExecutionResult = {
+                            BlockID: table.TableID,
+                            Kind: table.SourceType,
+                            Mode: 'Frozen',
+                            Success: false,
+                            ErrorMessage: errMsg,
+                            Columns: [],
+                            Rows: [],
+                            TotalRowCount: 0
+                        };
+                        resultsByTableId[table.TableID] = failedFrozenRes;
+                        table.LastError = errMsg;
+                        table.LastRowCount = 0;
+                        this.clearLiveTableCellsOnAccessDenied(sheet, table);
+                        continue;
+                    }
+
+                    const snap = table.FrozenSnapshot;
+                    const frozenByName = snap.FrozenByUserName || snap.FrozenByUserID;
                     const frozenRes: DocumentBlockExecutionResult = {
                         BlockID: table.TableID,
                         Kind: table.SourceType,
                         Mode: 'Frozen',
                         Success: true,
-                        Columns: table.FrozenSnapshot.Columns,
-                        Rows: table.FrozenSnapshot.Rows,
-                        TotalRowCount: table.FrozenSnapshot.TotalRowCount,
+                        Columns: snap.Columns,
+                        Rows: snap.Rows,
+                        TotalRowCount: snap.TotalRowCount ?? snap.Rows.length,
                         FrozenMetadata: {
-                            FrozenAt: table.FrozenSnapshot.FrozenAt,
-                            FrozenByUserID: table.FrozenSnapshot.FrozenByUserID,
-                            FrozenByUserName: table.FrozenSnapshot.FrozenByUserName
+                            FrozenAt: snap.FrozenAt,
+                            FrozenByUserID: snap.FrozenByUserID,
+                            FrozenByUserName: frozenByName,
+                            SnapshotVerified: validation.SnapshotVerified
+                        },
+                        FrozenSnapshot: {
+                            SnapshotVerified: validation.SnapshotVerified,
+                            FrozenAt: snap.FrozenAt,
+                            FrozenByUserID: snap.FrozenByUserID,
+                            FrozenByUserName: frozenByName,
+                            SnapshotContentHash: snap.SnapshotContentHash
                         }
                     };
                     resultsByTableId[table.TableID] = frozenRes;
+                    table.AccessDenied = false;
+                    table.LastError = null;
+                    table.LastRowCount = snap.Rows.length;
                     this.populateSheetCellsFromLiveTable(sheet, table, frozenRes);
                     continue;
                 }
@@ -2775,7 +4120,16 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         return resultsByTableId;
     }
 
+    private clearPreviousLiveTableCells(sheet: WorksheetSpec, tableId: string): void {
+        for (const [addr, cell] of Object.entries(sheet.Cells)) {
+            if (cell?.LiveTableID === tableId) {
+                delete sheet.Cells[addr];
+            }
+        }
+    }
+
     private clearLiveTableCellsOnAccessDenied(sheet: WorksheetSpec, table: SpreadsheetLiveTableSpec): void {
+        this.clearPreviousLiveTableCells(sheet, table.TableID);
         const anchor = ParseCellAddress(table.AnchorCell || 'A1');
         if (!anchor) return;
         const addr = FormatCellAddress(anchor.row, anchor.col);
@@ -2788,7 +4142,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             ComputedValue: '#MJ_ACCESS_DENIED!',
             DisplayValue: '#MJ_ACCESS_DENIED!',
             AccessDenied: true,
-            ErrorMessage: table.LastError ?? 'Access denied.'
+            ErrorMessage: table.LastError ?? 'Access denied.',
+            LiveTableID: table.Mode !== 'Frozen' ? table.TableID : null
         };
     }
 
@@ -2797,6 +4152,10 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         table: SpreadsheetLiveTableSpec,
         result: DocumentBlockExecutionResult
     ): void {
+        // Delete any previously populated cells for this live table so shrinking results never leave stale rows (B4)
+        this.clearPreviousLiveTableCells(sheet, table.TableID);
+
+        const liveTableStamp = table.Mode !== 'Frozen' ? table.TableID : null;
         const anchor = ParseCellAddress(table.AnchorCell || 'A1') ?? { row: 1, col: 1 };
         const includeHeaders = table.IncludeHeaders !== false;
         const columns: DocumentBlockColumn[] =
@@ -2823,7 +4182,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     RawValue: headerText,
                     ComputedValue: headerText,
                     DisplayValue: headerText,
-                    Style: { Bold: true }
+                    Style: { Bold: true },
+                    LiveTableID: liveTableStamp
                 };
             }
             for (let cc = 0; cc < calcCols.length; cc++) {
@@ -2837,7 +4197,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     RawValue: headerText,
                     ComputedValue: headerText,
                     DisplayValue: headerText,
-                    Style: { Bold: true }
+                    Style: { Bold: true },
+                    LiveTableID: liveTableStamp
                 };
             }
             currentRow++;
@@ -2856,7 +4217,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     Address: addr,
                     RawValue: fieldVal,
                     ComputedValue: fieldVal,
-                    DisplayValue: this.FormatCellValue(fieldVal)
+                    DisplayValue: this.FormatCellValue(fieldVal),
+                    LiveTableID: liveTableStamp
                 };
             }
 
@@ -2869,7 +4231,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 const normalizedFormula = expandedFormula.trim().startsWith('=')
                     ? expandedFormula.trim()
                     : `=${expandedFormula.trim()}`;
-                const formulaStable = this.CompileFormulaToStableIds(sheet, normalizedFormula);
+                const formulaStable = this.CompileFormulaToStableIds(sheet, normalizedFormula, workbookFromSheet(this.sheetToWorkbook, sheet));
                 sheet.Cells[addr] = {
                     RowID: sheet.Rows[sheetRowNum - 1].RowID,
                     ColumnID: sheet.Columns[colIdx - 1].ColumnID,
@@ -2881,14 +4243,15 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         FormatType: calcCol.FormatType,
                         NumberFormatPattern:
                             calcCol.NumberFormatPattern ?? this.DefaultPatternForFormatType(calcCol.FormatType)
-                    }
+                    },
+                    LiveTableID: liveTableStamp
                 };
             }
         }
     }
 
     /**
-     * Explicitly freezes a live table into a static snapshot (`O5`), requiring
+     * Explicitly freezes a live table into a static snapshot (`O5`, `B7`), requiring
      * `acknowledgeSecurityWarning === true` because frozen rows become visible to all readers.
      */
     public FreezeLiveTable(
@@ -2912,9 +4275,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         if (!table) {
             throw new Error(`Live table '${tableId}' not found on worksheet '${sheet.Name}'.`);
         }
-        table.Mode = 'Frozen';
-        table.FrozenSnapshot = {
-            FrozenAt: new Date().toISOString(),
+        const frozenAt = new Date().toISOString();
+        const baseSnapshot = {
+            FrozenAt: frozenAt,
             FrozenByUserID: freezingUser.ID,
             FrozenByUserName: freezingUser.Name || freezingUser.ID,
             Columns: executionResult.Columns,
@@ -2922,6 +4285,13 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             TotalRowCount: executionResult.TotalRowCount,
             SecurityWarningAcknowledged: true
         };
+        table.Mode = 'Frozen';
+        table.FrozenSnapshot = {
+            ...baseSnapshot,
+            SnapshotContentHash: ComputeFrozenSnapshotHash(baseSnapshot)
+        };
+        this.populateSheetCellsFromLiveTable(sheet, table, executionResult);
+        this.EvaluateWorkbook(workbook);
         workbook.UpdatedAt = new Date().toISOString();
         return table;
     }
@@ -3695,7 +5065,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     }
 
     private buildHiddenMetadataSheetXml(workbook: WorkbookSpec): string {
-        const json = JSON.stringify(workbook);
+        // B4: Strip viewer-scoped live table cells, spill cells, and =MJ.* computed values before persisting metadata
+        const sanitized = this.cloneWorkbookWithoutViewerScopedData(workbook);
+        const json = JSON.stringify(sanitized);
         const chunks: string[] = [];
         for (let i = 0; i < json.length; i += META_CHUNK_SIZE) {
             chunks.push(json.slice(i, i + META_CHUNK_SIZE));
@@ -3772,6 +5144,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         }
 
+        // Track OOXML shared formula masters (<f t="shared" si="0">...</f>) for follower expansion (E6)
+        const sharedFormulaMasters = new Map<string, { masterRow: number; masterCol: number; formulaBody: string }>();
+
         // Parse cells
         const cellRegex = /<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;
         let cellMatch: RegExpExecArray | null;
@@ -3789,7 +5164,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             const styleIdx = sAttr ? parseInt(sAttr, 10) : 0;
             const styleInfo = styleLookup[styleIdx];
 
-            const fMatch = /<f(?:\s+[^>]*)?>([\s\S]*?)<\/f>/.exec(inner);
+            const fTagMatch = /<f\b([^>]*?)(?:\/>|>([\s\S]*?)<\/f>)/.exec(inner);
             const vMatch = /<v>([\s\S]*?)<\/v>/.exec(inner);
             const isTMatch = /<is>[\s\S]*?<t(?:\s+[^>]*)?>([\s\S]*?)<\/t>[\s\S]*?<\/is>/.exec(inner);
 
@@ -3813,10 +5188,39 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
 
             let formula: string | null = null;
             let formulaStable: string | null = null;
-            if (fMatch && fMatch[1].trim().length > 0) {
-                const fBody = this.unescapeXml(fMatch[1].trim());
-                formula = fBody.startsWith('=') ? fBody : `=${fBody}`;
-                formulaStable = this.CompileFormulaToStableIds(ws, formula);
+            if (fTagMatch) {
+                const fAttrs = fTagMatch[1] ?? '';
+                const fBodyRaw = this.unescapeXml((fTagMatch[2] ?? '').trim());
+                const fType = (this.extractXmlAttr(fAttrs, 't') ?? '').toLowerCase();
+                const sharedIdx = this.extractXmlAttr(fAttrs, 'si');
+
+                if (fType === 'shared' && sharedIdx !== null) {
+                    if (fBodyRaw.length > 0) {
+                        const cleanMasterBody = fBodyRaw.startsWith('=') ? fBodyRaw.slice(1) : fBodyRaw;
+                        sharedFormulaMasters.set(sharedIdx, {
+                            masterRow: parsedPos.row,
+                            masterCol: parsedPos.col,
+                            formulaBody: cleanMasterBody
+                        });
+                        formula = `=${cleanMasterBody}`;
+                    } else {
+                        const master = sharedFormulaMasters.get(sharedIdx);
+                        if (master) {
+                            const shiftedBody = shiftSharedFormulaRelativeRefs(
+                                master.formulaBody,
+                                parsedPos.row - master.masterRow,
+                                parsedPos.col - master.masterCol
+                            );
+                            formula = `=${shiftedBody}`;
+                        }
+                    }
+                } else if (fBodyRaw.length > 0) {
+                    formula = fBodyRaw.startsWith('=') ? fBodyRaw : `=${fBodyRaw}`;
+                }
+
+                if (formula) {
+                    formulaStable = this.CompileFormulaToStableIds(ws, formula);
+                }
             }
 
             let cellStyle: SpreadsheetCellStyleSpec | undefined;
@@ -3848,17 +5252,41 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     private parseStylesXml(stylesXml: string): Array<{ FormatPattern?: string; Bold?: boolean }> {
         if (!stylesXml) return [{ FormatPattern: undefined, Bold: false }];
 
+        // Map all standard OOXML built-in number, currency, percent, date, and datetime numFmtIds (E6)
         const builtinFormats: Record<number, string> = {
             1: '0',
             2: '0.00',
             3: '#,##0',
             4: '#,##0.00',
             5: '$#,##0_);($#,##0)',
+            6: '$#,##0_);[Red]($#,##0)',
             7: '$#,##0.00_);($#,##0.00)',
+            8: '$#,##0.00_);[Red]($#,##0.00)',
             9: '0%',
             10: '0.00%',
             14: 'yyyy-mm-dd',
-            22: 'yyyy-mm-dd hh:mm'
+            15: 'd-mmm-yy',
+            16: 'd-mmm',
+            17: 'mmm-yy',
+            18: 'h:mm AM/PM',
+            19: 'h:mm:ss AM/PM',
+            20: 'h:mm',
+            21: 'h:mm:ss',
+            22: 'yyyy-mm-dd hh:mm',
+            27: 'yyyy-mm-dd',
+            28: 'yyyy-mm-dd',
+            29: 'yyyy-mm-dd',
+            30: 'yyyy-mm-dd',
+            31: 'yyyy-mm-dd',
+            32: 'hh:mm:ss',
+            33: 'hh:mm:ss',
+            34: 'hh:mm:ss',
+            35: 'hh:mm:ss',
+            36: 'yyyy-mm-dd',
+            45: 'mm:ss',
+            46: '[h]:mm:ss',
+            47: 'mm:ss.0',
+            49: '@'
         };
         const formatById = new Map<number, string>(Object.entries(builtinFormats).map(([k, v]) => [Number(k), v]));
 
@@ -4053,7 +5481,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     }
 
     // -----------------------------------------------------------------------
-    // Isomorphic ZIP Archive Builder & Reader (Stored + RFC 1951 Deflate)
+    // Isomorphic Bounded ZIP Archive Builder & Reader (Stored + Safe RFC 1951 Deflate, B6)
     // -----------------------------------------------------------------------
 
     private buildZipArchive(entries: Array<{ Name: string; Data: Uint8Array }>): Uint8Array {
@@ -4135,6 +5563,15 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     }
 
     private extractZipArchive(zipBytes: Uint8Array): Map<string, Uint8Array> {
+        if (zipBytes.byteLength > MAX_XLSX_COMPRESSED_BYTES) {
+            throw new Error(
+                `XLSX archive size (${zipBytes.byteLength} bytes) exceeds maximum allowed compressed size (${MAX_XLSX_COMPRESSED_BYTES} bytes).`
+            );
+        }
+        if (zipBytes.byteLength < 22) {
+            throw new Error('Invalid or truncated ZIP archive.');
+        }
+
         const files = new Map<string, Uint8Array>();
         const view = new DataView(zipBytes.buffer, zipBytes.byteOffset, zipBytes.byteLength);
 
@@ -4146,51 +5583,120 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 break;
             }
         }
+        if (eocdOffset < 0) {
+            throw new Error('Invalid ZIP archive: End of Central Directory signature not found.');
+        }
 
-        if (eocdOffset >= 0) {
-            const totalEntries = view.getUint16(eocdOffset + 10, true);
-            let cdOffset = view.getUint32(eocdOffset + 16, true);
-            for (let e = 0; e < totalEntries && cdOffset + 46 <= zipBytes.length; e++) {
-                if (view.getUint32(cdOffset, true) !== 0x02014b50) break;
-                const method = view.getUint16(cdOffset + 10, true);
-                const compSize = view.getUint32(cdOffset + 20, true);
-                const uncompSize = view.getUint32(cdOffset + 24, true);
-                const nameLen = view.getUint16(cdOffset + 28, true);
-                const extraLen = view.getUint16(cdOffset + 30, true);
-                const commentLen = view.getUint16(cdOffset + 32, true);
-                const localHeaderOffset = view.getUint32(cdOffset + 42, true);
-                const fileName = this.decodeUtf8(zipBytes.subarray(cdOffset + 46, cdOffset + 46 + nameLen));
+        let totalUncompressedBytes = 0;
+        const totalEntries = view.getUint16(eocdOffset + 10, true);
+        let cdOffset = view.getUint32(eocdOffset + 16, true);
 
-                if (localHeaderOffset + 30 <= zipBytes.length) {
-                    const localNameLen = view.getUint16(localHeaderOffset + 26, true);
-                    const localExtraLen = view.getUint16(localHeaderOffset + 28, true);
-                    const dataStart = localHeaderOffset + 30 + localNameLen + localExtraLen;
-                    const rawSlice = zipBytes.subarray(dataStart, dataStart + compSize);
-                    if (method === 0) {
-                        files.set(fileName, rawSlice);
-                    } else if (method === 8) {
-                        files.set(fileName, this.inflateRawDeflate(rawSlice, uncompSize));
-                    }
-                }
-                cdOffset += 46 + nameLen + extraLen + commentLen;
+        for (let e = 0; e < totalEntries; e++) {
+            if (cdOffset + 46 > zipBytes.length) {
+                throw new Error('Truncated ZIP Central Directory entry.');
             }
+            if (view.getUint32(cdOffset, true) !== 0x02014b50) {
+                throw new Error('Corrupt ZIP Central Directory signature.');
+            }
+            const method = view.getUint16(cdOffset + 10, true);
+            const compSize = view.getUint32(cdOffset + 20, true);
+            const uncompSize = view.getUint32(cdOffset + 24, true);
+            const nameLen = view.getUint16(cdOffset + 28, true);
+            const extraLen = view.getUint16(cdOffset + 30, true);
+            const commentLen = view.getUint16(cdOffset + 32, true);
+            const localHeaderOffset = view.getUint32(cdOffset + 42, true);
+
+            if (cdOffset + 46 + nameLen > zipBytes.length) {
+                throw new Error('Truncated ZIP entry filename.');
+            }
+            if (uncompSize > MAX_XLSX_ENTRY_BYTES) {
+                throw new Error(
+                    `ZIP entry declared size (${uncompSize} bytes) exceeds maximum entry limit (${MAX_XLSX_ENTRY_BYTES} bytes).`
+                );
+            }
+
+            const fileName = this.decodeUtf8(zipBytes.subarray(cdOffset + 46, cdOffset + 46 + nameLen));
+            if (localHeaderOffset + 30 > zipBytes.length || view.getUint32(localHeaderOffset, true) !== 0x04034b50) {
+                throw new Error(`Invalid or truncated local ZIP header for '${fileName}'.`);
+            }
+
+            const localNameLen = view.getUint16(localHeaderOffset + 26, true);
+            const localExtraLen = view.getUint16(localHeaderOffset + 28, true);
+            const dataStart = localHeaderOffset + 30 + localNameLen + localExtraLen;
+            if (dataStart + compSize > zipBytes.length) {
+                throw new Error(`Truncated compressed payload for ZIP entry '${fileName}'.`);
+            }
+
+            const rawSlice = zipBytes.subarray(dataStart, dataStart + compSize);
+            const remainingBudget = MAX_XLSX_UNCOMPRESSED_TOTAL_BYTES - totalUncompressedBytes;
+            const entryCap = Math.min(MAX_XLSX_ENTRY_BYTES, remainingBudget);
+
+            if (method === 0) {
+                if (rawSlice.byteLength > entryCap) {
+                    throw new Error(
+                        `Uncompressed ZIP size exceeds maximum allowed limit (${MAX_XLSX_UNCOMPRESSED_TOTAL_BYTES} bytes).`
+                    );
+                }
+                totalUncompressedBytes += rawSlice.byteLength;
+                files.set(fileName, rawSlice);
+            } else if (method === 8) {
+                const inflated = this.inflateRawDeflate(rawSlice, entryCap);
+                totalUncompressedBytes += inflated.byteLength;
+                if (totalUncompressedBytes > MAX_XLSX_UNCOMPRESSED_TOTAL_BYTES) {
+                    throw new Error(
+                        `Total uncompressed XLSX size exceeds maximum allowed limit (${MAX_XLSX_UNCOMPRESSED_TOTAL_BYTES} bytes).`
+                    );
+                }
+                files.set(fileName, inflated);
+            } else {
+                throw new Error(`Unsupported ZIP compression method ${method} for '${fileName}'.`);
+            }
+
+            cdOffset += 46 + nameLen + extraLen + commentLen;
         }
         return files;
     }
 
     /**
-     * Pure-TypeScript RFC 1951 raw DEFLATE decompressor so `.xlsx` files written by `exceljs`,
-     * Microsoft Excel, or SheetJS decompress synchronously in both Node and browser.
+     * Bounded, browser-clean pure-TypeScript RFC 1951 raw DEFLATE decompressor (`B6`).
+     * Throws immediately on truncated bitstreams, oversubscribed/invalid Huffman codes,
+     * invalid lookback distances, or decompression bombs exceeding `maxEntryBytes`.
      */
-    private inflateRawDeflate(data: Uint8Array, expectedSize?: number): Uint8Array {
-        const out: number[] = [];
+    private inflateRawDeflate(data: Uint8Array, maxEntryBytes = MAX_XLSX_ENTRY_BYTES): Uint8Array {
+        if (maxEntryBytes <= 0) {
+            throw new Error('DEFLATE stream exceeds maximum allowed uncompressed size.');
+        }
+        const totalBitsAvailable = data.length * 8;
         let bitPos = 0;
 
+        let buf = new Uint8Array(Math.min(Math.max(256, data.length * 2), maxEntryBytes));
+        let outLen = 0;
+
+        const ensureOutputCapacity = (additional: number): void => {
+            const needed = outLen + additional;
+            if (needed > maxEntryBytes) {
+                throw new Error(`DEFLATE stream exceeds maximum allowed entry size (${maxEntryBytes} bytes).`);
+            }
+            if (needed <= buf.length) return;
+            let nextCap = Math.max(256, buf.length);
+            while (nextCap < needed) {
+                nextCap = Math.min(maxEntryBytes, nextCap * 2);
+                if (nextCap === maxEntryBytes && nextCap < needed) {
+                    throw new Error(`DEFLATE stream exceeds maximum allowed entry size (${maxEntryBytes} bytes).`);
+                }
+            }
+            const next = new Uint8Array(nextCap);
+            next.set(buf.subarray(0, outLen), 0);
+            buf = next;
+        };
+
         const readBits = (n: number): number => {
+            if (bitPos + n > totalBitsAvailable) {
+                throw new Error('Truncated DEFLATE stream');
+            }
             let val = 0;
             for (let i = 0; i < n; i++) {
                 const byteIdx = bitPos >>> 3;
-                if (byteIdx >= data.length) return val;
                 const bit = (data[byteIdx] >>> (bitPos & 7)) & 1;
                 val |= bit << i;
                 bitPos++;
@@ -4198,27 +5704,51 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             return val;
         };
 
-        const buildHuffman = (lengths: number[]): { counts: number[]; symbols: number[] } => {
+        interface HuffmanTree {
+            counts: number[];
+            symbols: number[];
+            totalSymbols: number;
+        }
+
+        const buildHuffman = (lengths: number[]): HuffmanTree => {
             const maxBits = 15;
             const counts = new Array<number>(maxBits + 1).fill(0);
+            let totalSymbols = 0;
             for (const len of lengths) {
-                if (len > 0) counts[len]++;
+                if (len < 0 || len > maxBits) {
+                    throw new Error('Invalid Huffman code length in DEFLATE stream');
+                }
+                if (len > 0) {
+                    counts[len]++;
+                    totalSymbols++;
+                }
+            }
+            // Verify tree is not oversubscribed
+            let left = 1;
+            for (let bits = 1; bits <= maxBits; bits++) {
+                left = (left << 1) - counts[bits];
+                if (left < 0) {
+                    throw new Error('Invalid oversubscribed Huffman tree in DEFLATE stream');
+                }
             }
             const offsets = new Array<number>(maxBits + 1).fill(0);
             for (let bits = 1; bits < maxBits; bits++) {
                 offsets[bits + 1] = offsets[bits] + counts[bits];
             }
-            const symbols = new Array<number>(lengths.length).fill(0);
+            const symbols = new Array<number>(totalSymbols).fill(0);
             for (let sym = 0; sym < lengths.length; sym++) {
                 const len = lengths[sym];
                 if (len > 0) {
                     symbols[offsets[len]++] = sym;
                 }
             }
-            return { counts, symbols };
+            return { counts, symbols, totalSymbols };
         };
 
-        const decodeSymbol = (tree: { counts: number[]; symbols: number[] }): number => {
+        const decodeSymbol = (tree: HuffmanTree): number => {
+            if (tree.totalSymbols === 0) {
+                throw new Error('Invalid empty Huffman tree in DEFLATE stream');
+            }
             let code = 0;
             let first = 0;
             let index = 0;
@@ -4233,7 +5763,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 first <<= 1;
                 code <<= 1;
             }
-            return 0;
+            throw new Error('Invalid Huffman code in DEFLATE stream');
         };
 
         const lengthBase = [
@@ -4259,22 +5789,28 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         const fixedDistLengths = new Array<number>(30).fill(5);
 
         let isFinal = 0;
-        while (!isFinal && (bitPos >>> 3) < data.length) {
+        while (!isFinal) {
             isFinal = readBits(1);
             const bType = readBits(2);
             if (bType === 0) {
                 // Stored block
                 bitPos = (bitPos + 7) & ~7;
                 const len = readBits(16);
-                readBits(16); // nlen
-                const byteStart = bitPos >>> 3;
-                for (let i = 0; i < len && byteStart + i < data.length; i++) {
-                    out.push(data[byteStart + i]);
+                const nlen = readBits(16);
+                if ((len ^ 0xffff) !== nlen) {
+                    throw new Error('Corrupt stored DEFLATE block length complement');
                 }
+                const byteStart = bitPos >>> 3;
+                if (byteStart + len > data.length) {
+                    throw new Error('Truncated DEFLATE stream');
+                }
+                ensureOutputCapacity(len);
+                buf.set(data.subarray(byteStart, byteStart + len), outLen);
+                outLen += len;
                 bitPos += len * 8;
             } else if (bType === 1 || bType === 2) {
-                let litTree: { counts: number[]; symbols: number[] };
-                let distTree: { counts: number[]; symbols: number[] };
+                let litTree: HuffmanTree;
+                let distTree: HuffmanTree;
                 if (bType === 1) {
                     litTree = buildHuffman(fixedLitLengths);
                     distTree = buildHuffman(fixedDistLengths);
@@ -4282,6 +5818,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     const hlit = readBits(5) + 257;
                     const hdist = readBits(5) + 1;
                     const hclen = readBits(4) + 4;
+                    if (hlit > 286 || hdist > 30) {
+                        throw new Error('Invalid DEFLATE dynamic Huffman counts');
+                    }
                     const clOrder = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
                     const clLengths = new Array<number>(19).fill(0);
                     for (let i = 0; i < hclen; i++) {
@@ -4296,15 +5835,29 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         if (sym < 16) {
                             codeLengths[idx++] = sym;
                         } else if (sym === 16) {
-                            const prev = idx > 0 ? codeLengths[idx - 1] : 0;
+                            if (idx === 0) {
+                                throw new Error('Invalid DEFLATE repeat previous code at start of table');
+                            }
+                            const prev = codeLengths[idx - 1];
                             const rep = readBits(2) + 3;
-                            for (let r = 0; r < rep && idx < totalCodes; r++) codeLengths[idx++] = prev;
+                            if (idx + rep > totalCodes) {
+                                throw new Error('Invalid DEFLATE code length repeat overflow');
+                            }
+                            for (let r = 0; r < rep; r++) codeLengths[idx++] = prev;
                         } else if (sym === 17) {
                             const rep = readBits(3) + 3;
-                            for (let r = 0; r < rep && idx < totalCodes; r++) codeLengths[idx++] = 0;
+                            if (idx + rep > totalCodes) {
+                                throw new Error('Invalid DEFLATE zero repeat overflow');
+                            }
+                            for (let r = 0; r < rep; r++) codeLengths[idx++] = 0;
                         } else if (sym === 18) {
                             const rep = readBits(7) + 11;
-                            for (let r = 0; r < rep && idx < totalCodes; r++) codeLengths[idx++] = 0;
+                            if (idx + rep > totalCodes) {
+                                throw new Error('Invalid DEFLATE zero repeat overflow');
+                            }
+                            for (let r = 0; r < rep; r++) codeLengths[idx++] = 0;
+                        } else {
+                            throw new Error('Invalid DEFLATE code length symbol');
                         }
                     }
                     litTree = buildHuffman(codeLengths.slice(0, hlit));
@@ -4315,26 +5868,34 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     const sym = decodeSymbol(litTree);
                     if (sym === 256) break;
                     if (sym < 256) {
-                        out.push(sym);
+                        ensureOutputCapacity(1);
+                        buf[outLen++] = sym;
                     } else {
                         const lenIdx = sym - 257;
+                        if (lenIdx < 0 || lenIdx >= lengthBase.length) {
+                            throw new Error('Invalid DEFLATE length symbol');
+                        }
                         const length = lengthBase[lenIdx] + readBits(lengthExtra[lenIdx]);
                         const distSym = decodeSymbol(distTree);
-                        const distance = distBase[distSym] + readBits(distExtra[distSym]);
-                        const startPos = out.length - distance;
-                        for (let i = 0; i < length; i++) {
-                            out.push(out[startPos + i] ?? 0);
+                        if (distSym < 0 || distSym >= distBase.length) {
+                            throw new Error('Invalid DEFLATE distance symbol');
                         }
-                    }
-                    if (expectedSize && out.length >= expectedSize && (bitPos >>> 3) >= data.length) {
-                        break;
+                        const distance = distBase[distSym] + readBits(distExtra[distSym]);
+                        if (distance <= 0 || distance > outLen) {
+                            throw new Error('Invalid DEFLATE lookback distance');
+                        }
+                        ensureOutputCapacity(length);
+                        let srcPos = outLen - distance;
+                        for (let i = 0; i < length; i++) {
+                            buf[outLen++] = buf[srcPos++];
+                        }
                     }
                 }
             } else {
-                break;
+                throw new Error('Invalid DEFLATE block type 3');
             }
         }
-        return new Uint8Array(out);
+        return buf.subarray(0, outLen);
     }
 
     private crc32(bytes: Uint8Array): number {
@@ -4348,3 +5909,730 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         return (c ^ 0xffffffff) >>> 0;
     }
 }
+
+// ---------------------------------------------------------------------------
+// Formula Tokenizer, AST Compiler, DAG Structures, Date & Range Shift Helpers
+// ---------------------------------------------------------------------------
+
+/** Excel 1900 serial date offset from Unix epoch days (`1970-01-01 === 25569`). */
+const EXCEL_EPOCH_OFFSET_DAYS = 25569;
+const MAX_AST_CACHE_ENTRIES = 10_000;
+
+interface WorkbookDependencyGraph {
+    namedRangesSignature: string;
+    astByCellKey: Map<string, FormulaAstNode | null>;
+    directCellDeps: Map<string, string[]>;
+    reverseCellDeps: Map<string, Set<string>>;
+    sheetById: Map<string, WorksheetSpec>;
+}
+
+type BinaryOperator = '=' | '<>' | '<' | '<=' | '>' | '>=' | '&' | '+' | '-' | '*' | '/' | '^';
+
+type FormulaAstNode =
+    | { kind: 'EmptyArg' }
+    | { kind: 'NumberLiteral'; value: number }
+    | { kind: 'StringLiteral'; value: string }
+    | { kind: 'BooleanLiteral'; value: boolean }
+    | { kind: 'ErrorLiteral'; error: string }
+    | { kind: 'CellRef'; sheetName?: string; address: string }
+    | { kind: 'RangeRef'; sheetName?: string; startAddress: string; endAddress: string }
+    | { kind: 'Identifier'; name: string }
+    | { kind: 'UnaryOp'; op: '+' | '-'; operand: FormulaAstNode }
+    | { kind: 'PostfixPercent'; operand: FormulaAstNode }
+    | { kind: 'BinaryOp'; op: BinaryOperator; left: FormulaAstNode; right: FormulaAstNode }
+    | { kind: 'FunctionCall'; name: string; args: FormulaAstNode[] };
+
+type FormulaToken =
+    | { type: 'Number'; value: number }
+    | { type: 'String'; value: string }
+    | { type: 'Error'; value: string }
+    | { type: 'SheetPrefix'; sheetName: string }
+    | { type: 'Ident'; value: string }
+    | { type: 'Op'; value: BinaryOperator }
+    | { type: 'Percent' }
+    | { type: 'Colon' }
+    | { type: 'Comma' }
+    | { type: 'LParen' }
+    | { type: 'RParen' };
+
+const FORMULA_AST_CACHE = new Map<string, FormulaAstNode>();
+
+function compileFormulaAstCached(exprBody: string): FormulaAstNode {
+    const existing = FORMULA_AST_CACHE.get(exprBody);
+    if (existing) {
+        return existing;
+    }
+    const ast = parseFormulaAst(exprBody);
+    if (FORMULA_AST_CACHE.size >= MAX_AST_CACHE_ENTRIES) {
+        const firstKey = FORMULA_AST_CACHE.keys().next().value;
+        if (firstKey !== undefined) {
+            FORMULA_AST_CACHE.delete(firstKey);
+        }
+    }
+    FORMULA_AST_CACHE.set(exprBody, ast);
+    return ast;
+}
+
+function tokenizeFormula(expr: string): FormulaToken[] | { error: string } {
+    const tokens: FormulaToken[] = [];
+    let i = 0;
+    const len = expr.length;
+
+    while (i < len) {
+        const ch = expr[i];
+        if (ch === ' ' || ch === '\t' || ch === '\r' || ch === '\n') {
+            i++;
+            continue;
+        }
+
+        // String literal with doubled "" escapes
+        if (ch === '"') {
+            i++;
+            let buf = '';
+            let closed = false;
+            while (i < len) {
+                if (expr[i] === '"') {
+                    if (expr[i + 1] === '"') {
+                        buf += '"';
+                        i += 2;
+                        continue;
+                    }
+                    i++;
+                    closed = true;
+                    break;
+                }
+                buf += expr[i++];
+            }
+            if (!closed) {
+                return { error: '#VALUE!' };
+            }
+            tokens.push({ type: 'String', value: buf });
+            continue;
+        }
+
+        // Single-quoted sheet prefix: '2025-2026'! or 'O''Brien'!
+        if (ch === "'") {
+            i++;
+            let sheetBuf = '';
+            let closed = false;
+            while (i < len) {
+                if (expr[i] === "'") {
+                    if (expr[i + 1] === "'") {
+                        sheetBuf += "'";
+                        i += 2;
+                        continue;
+                    }
+                    i++;
+                    closed = true;
+                    break;
+                }
+                sheetBuf += expr[i++];
+            }
+            if (!closed || expr[i] !== '!') {
+                return { error: '#VALUE!' };
+            }
+            i++; // consume '!'
+            tokens.push({ type: 'SheetPrefix', sheetName: sheetBuf });
+            continue;
+        }
+
+        // Error literal: #REF!, #DIV/0!, #VALUE!, #NAME?, #N/A, #NUM!, #NULL!, #CYCLE!, #SPILL!, #MJ_*!
+        if (ch === '#') {
+            const rest = expr.slice(i);
+            const errMatch = /^#(REF!|DIV\/0!|VALUE!|NAME\?|N\/A|NUM!|NULL!|CYCLE!|SPILL!|MJ_ACCESS_DENIED!|MJ_PENDING!)/i.exec(rest);
+            if (errMatch) {
+                tokens.push({ type: 'Error', value: `#${errMatch[1].toUpperCase()}` });
+                i += errMatch[0].length;
+                continue;
+            }
+            return { error: '#VALUE!' };
+        }
+
+        // Numeric literal (including leading dot .5 and scientific notation 1e-11, 1.5E+3)
+        if ((ch >= '0' && ch <= '9') || (ch === '.' && i + 1 < len && expr[i + 1] >= '0' && expr[i + 1] <= '9')) {
+            const numMatch = /^(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/.exec(expr.slice(i));
+            if (numMatch) {
+                tokens.push({ type: 'Number', value: Number(numMatch[0]) });
+                i += numMatch[0].length;
+                continue;
+            }
+        }
+
+        // Two-character comparison operators
+        const twoChar = expr.slice(i, i + 2);
+        if (twoChar === '<>' || twoChar === '<=' || twoChar === '>=') {
+            tokens.push({ type: 'Op', value: twoChar });
+            i += 2;
+            continue;
+        }
+
+        // Single-character operators and punctuation
+        if (ch === '=' || ch === '<' || ch === '>' || ch === '&' || ch === '+' || ch === '-' || ch === '*' || ch === '/' || ch === '^') {
+            tokens.push({ type: 'Op', value: ch });
+            i++;
+            continue;
+        }
+        if (ch === '%') {
+            tokens.push({ type: 'Percent' });
+            i++;
+            continue;
+        }
+        if (ch === ':') {
+            tokens.push({ type: 'Colon' });
+            i++;
+            continue;
+        }
+        if (ch === ',') {
+            tokens.push({ type: 'Comma' });
+            i++;
+            continue;
+        }
+        if (ch === '(') {
+            tokens.push({ type: 'LParen' });
+            i++;
+            continue;
+        }
+        if (ch === ')') {
+            tokens.push({ type: 'RParen' });
+            i++;
+            continue;
+        }
+
+        // Cell reference ($B$2), unquoted SheetName! prefix, function identifier, or NamedRange identifier
+        if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || ch === '_' || ch === '$') {
+            const identMatch = /^[\$A-Za-z_][\$A-Za-z0-9_.]*/.exec(expr.slice(i));
+            if (identMatch) {
+                const rawIdent = identMatch[0];
+                i += rawIdent.length;
+                if (expr[i] === '!') {
+                    i++; // consume '!'
+                    tokens.push({ type: 'SheetPrefix', sheetName: rawIdent });
+                } else {
+                    tokens.push({ type: 'Ident', value: rawIdent });
+                }
+                continue;
+            }
+        }
+
+        return { error: '#VALUE!' };
+    }
+
+    return tokens;
+}
+
+function parseFormulaAst(expr: string): FormulaAstNode {
+    const tokRes = tokenizeFormula(expr);
+    if (!Array.isArray(tokRes)) {
+        return { kind: 'ErrorLiteral', error: tokRes.error };
+    }
+    const tokens = tokRes;
+    if (tokens.length === 0) {
+        return { kind: 'EmptyArg' };
+    }
+
+    let pos = 0;
+    const peek = (): FormulaToken | undefined => tokens[pos];
+    const consume = (): FormulaToken | undefined => tokens[pos++];
+
+    // Precedence 1 (lowest): Comparison (=, <>, <, <=, >, >=)
+    const parseComparison = (): FormulaAstNode => {
+        let left = parseConcat();
+        while (true) {
+            const t = peek();
+            if (
+                t?.type === 'Op' &&
+                (t.value === '=' || t.value === '<>' || t.value === '<' || t.value === '<=' || t.value === '>' || t.value === '>=')
+            ) {
+                consume();
+                const right = parseConcat();
+                left = { kind: 'BinaryOp', op: t.value, left, right };
+            } else {
+                break;
+            }
+        }
+        return left;
+    };
+
+    // Precedence 2: Concatenation (&)
+    const parseConcat = (): FormulaAstNode => {
+        let left = parseAddSub();
+        while (peek()?.type === 'Op' && (peek() as { type: 'Op'; value: BinaryOperator }).value === '&') {
+            consume();
+            const right = parseAddSub();
+            left = { kind: 'BinaryOp', op: '&', left, right };
+        }
+        return left;
+    };
+
+    // Precedence 3: Addition / Subtraction (+, -)
+    const parseAddSub = (): FormulaAstNode => {
+        let left = parseMulDiv();
+        while (true) {
+            const t = peek();
+            if (t?.type === 'Op' && (t.value === '+' || t.value === '-')) {
+                consume();
+                const right = parseMulDiv();
+                left = { kind: 'BinaryOp', op: t.value, left, right };
+            } else {
+                break;
+            }
+        }
+        return left;
+    };
+
+    // Precedence 4: Multiplication / Division (*, /)
+    const parseMulDiv = (): FormulaAstNode => {
+        let left = parseUnary();
+        while (true) {
+            const t = peek();
+            if (t?.type === 'Op' && (t.value === '*' || t.value === '/')) {
+                consume();
+                const right = parseUnary();
+                left = { kind: 'BinaryOp', op: t.value, left, right };
+            } else {
+                break;
+            }
+        }
+        return left;
+    };
+
+    // Precedence 5: Prefix Unary (+, -) and Exponentiation (^)
+    const parseUnary = (): FormulaAstNode => {
+        const t = peek();
+        if (t?.type === 'Op' && (t.value === '+' || t.value === '-')) {
+            consume();
+            const operand = parseUnary();
+            return { kind: 'UnaryOp', op: t.value, operand };
+        }
+        return parsePower();
+    };
+
+    const parsePower = (): FormulaAstNode => {
+        let left = parsePostfix();
+        while (peek()?.type === 'Op' && (peek() as { type: 'Op'; value: BinaryOperator }).value === '^') {
+            consume();
+            const right = parseUnary();
+            left = { kind: 'BinaryOp', op: '^', left, right };
+        }
+        return left;
+    };
+
+    // Precedence 6: Postfix % (supports 12%, (A1)%, (B2+C2)%)
+    const parsePostfix = (): FormulaAstNode => {
+        let node = parsePrimary();
+        while (peek()?.type === 'Percent') {
+            consume();
+            node = { kind: 'PostfixPercent', operand: node };
+        }
+        return node;
+    };
+
+    // Precedence 7: Literals, Parenthesized Expressions, Function Calls, Cell/Range Refs, Named Ranges
+    const parsePrimary = (): FormulaAstNode => {
+        const t = peek();
+        if (!t) {
+            return { kind: 'ErrorLiteral', error: '#VALUE!' };
+        }
+
+        if (t.type === 'Number') {
+            consume();
+            return { kind: 'NumberLiteral', value: t.value };
+        }
+        if (t.type === 'String') {
+            consume();
+            return { kind: 'StringLiteral', value: t.value };
+        }
+        if (t.type === 'Error') {
+            consume();
+            return { kind: 'ErrorLiteral', error: t.value };
+        }
+        if (t.type === 'LParen') {
+            consume();
+            const inner = parseComparison();
+            if (peek()?.type !== 'RParen') {
+                return { kind: 'ErrorLiteral', error: '#VALUE!' };
+            }
+            consume();
+            return inner;
+        }
+        if (t.type === 'SheetPrefix') {
+            consume();
+            const next = peek();
+            if (next?.type === 'Error') {
+                consume();
+                return { kind: 'ErrorLiteral', error: next.value };
+            }
+            if (next?.type === 'Ident' && ParseCellAddress(next.value)) {
+                const startAddr = next.value;
+                consume();
+                if (peek()?.type === 'Colon') {
+                    consume();
+                    // Optional repeated sheet prefix on second endpoint ('Sheet'!A1:'Sheet'!B5)
+                    if (peek()?.type === 'SheetPrefix') {
+                        consume();
+                    }
+                    const endTok = peek();
+                    if (endTok?.type === 'Ident' && ParseCellAddress(endTok.value)) {
+                        consume();
+                        return {
+                            kind: 'RangeRef',
+                            sheetName: t.sheetName,
+                            startAddress: startAddr,
+                            endAddress: endTok.value
+                        };
+                    }
+                    return { kind: 'ErrorLiteral', error: '#REF!' };
+                }
+                return { kind: 'CellRef', sheetName: t.sheetName, address: startAddr };
+            }
+            return { kind: 'ErrorLiteral', error: '#REF!' };
+        }
+        if (t.type === 'Ident') {
+            consume();
+            // Function call: IDENT(...)
+            if (peek()?.type === 'LParen') {
+                consume(); // '('
+                const fnArgs: FormulaAstNode[] = [];
+                if (peek()?.type === 'RParen') {
+                    consume();
+                    return { kind: 'FunctionCall', name: t.value, args: fnArgs };
+                }
+                while (true) {
+                    if (peek()?.type === 'Comma' || peek()?.type === 'RParen') {
+                        fnArgs.push({ kind: 'EmptyArg' });
+                    } else {
+                        fnArgs.push(parseComparison());
+                    }
+                    if (peek()?.type === 'Comma') {
+                        consume();
+                        if (peek()?.type === 'RParen') {
+                            fnArgs.push({ kind: 'EmptyArg' });
+                            consume();
+                            break;
+                        }
+                        continue;
+                    }
+                    if (peek()?.type === 'RParen') {
+                        consume();
+                        break;
+                    }
+                    return { kind: 'ErrorLiteral', error: '#VALUE!' };
+                }
+                return { kind: 'FunctionCall', name: t.value, args: fnArgs };
+            }
+
+            // Boolean literals
+            const upper = t.value.toUpperCase();
+            if (upper === 'TRUE') return { kind: 'BooleanLiteral', value: true };
+            if (upper === 'FALSE') return { kind: 'BooleanLiteral', value: false };
+
+            // Local cell or range reference
+            if (ParseCellAddress(t.value)) {
+                if (peek()?.type === 'Colon') {
+                    consume();
+                    const endTok = peek();
+                    if (endTok?.type === 'Ident' && ParseCellAddress(endTok.value)) {
+                        consume();
+                        return { kind: 'RangeRef', startAddress: t.value, endAddress: endTok.value };
+                    }
+                    if (endTok?.type === 'Error') {
+                        consume();
+                        return { kind: 'ErrorLiteral', error: endTok.value };
+                    }
+                    return { kind: 'ErrorLiteral', error: '#REF!' };
+                }
+                return { kind: 'CellRef', address: t.value };
+            }
+
+            return { kind: 'Identifier', name: t.value };
+        }
+
+        consume();
+        return { kind: 'ErrorLiteral', error: '#VALUE!' };
+    };
+
+    const root = parseComparison();
+    if (pos < tokens.length) {
+        return { kind: 'ErrorLiteral', error: '#VALUE!' };
+    }
+    return root;
+}
+
+function cleanExcelFloat(n: number): number {
+    if (!Number.isFinite(n)) return n;
+    if (n === 0) return 0;
+    return Number(n.toPrecision(15));
+}
+
+function decimalShift(absVal: number, expShift: number): number {
+    if (absVal === 0 || expShift === 0) return absVal;
+    const parts = absVal.toString().split(/[eE]/);
+    const mantissa = parts[0];
+    const currentExp = parts[1] ? parseInt(parts[1], 10) : 0;
+    return Number(`${mantissa}e${currentExp + expShift}`);
+}
+
+function excelSerialToUtcDate(serial: number): Date {
+    const daySerial = Math.floor(serial);
+    const fracMs = Math.round((serial - daySerial) * 86_400_000);
+    return new Date((daySerial - EXCEL_EPOCH_OFFSET_DAYS) * 86_400_000 + fracMs);
+}
+
+function formatExcelSerialDate(serial: number, includeTime: boolean): string {
+    const dt = excelSerialToUtcDate(serial);
+    const yyyy = String(dt.getUTCFullYear()).padStart(4, '0');
+    const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(dt.getUTCDate()).padStart(2, '0');
+    if (!includeTime) {
+        return `${yyyy}-${mm}-${dd}`;
+    }
+    const hh = String(dt.getUTCHours()).padStart(2, '0');
+    const min = String(dt.getUTCMinutes()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+}
+
+function isAutoDateFormattedFormula(formula: string): boolean {
+    const body = formula.trim().replace(/^=\s*/, '');
+    if (/^(?:YEAR|MONTH|DAY|DAYS)\s*\(/i.test(body)) {
+        return false;
+    }
+    return /\b(?:TODAY|NOW|DATE|EDATE|EOMONTH)\s*\(/i.test(body);
+}
+
+function hasExcelWildcard(pattern: string): boolean {
+    for (let i = 0; i < pattern.length; i++) {
+        if (pattern[i] === '~') {
+            i++;
+            continue;
+        }
+        if (pattern[i] === '*' || pattern[i] === '?') {
+            return true;
+        }
+    }
+    return false;
+}
+
+function buildExcelWildcardRegex(pattern: string): RegExp {
+    let rx = '^';
+    for (let i = 0; i < pattern.length; i++) {
+        const ch = pattern[i];
+        if (ch === '~' && i + 1 < pattern.length) {
+            const next = pattern[++i];
+            rx += next.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        } else if (ch === '*') {
+            rx += '[\\s\\S]*';
+        } else if (ch === '?') {
+            rx += '[\\s\\S]';
+        } else {
+            rx += ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+    }
+    rx += '$';
+    return new RegExp(rx, 'i');
+}
+
+function shiftSharedFormulaRelativeRefs(formulaBody: string, dRow: number, dCol: number): string {
+    if (dRow === 0 && dCol === 0) return formulaBody;
+    const strLiterals: string[] = [];
+    let masked = formulaBody.replace(/"(?:""|[^"])*"/g, (m) => {
+        strLiterals.push(m);
+        return `__SF_STR_${strLiterals.length - 1}__`;
+    });
+    const sheetPrefixes: string[] = [];
+    masked = masked.replace(/'(?:''|[^'])*'!/g, (m) => {
+        sheetPrefixes.push(m);
+        return `__SF_SH_${sheetPrefixes.length - 1}__!`;
+    });
+
+    const shifted = masked.replace(
+        /(?<![A-Za-z0-9_.])(\$?)([A-Za-z]{1,3})(\$?)([1-9][0-9]*)(?![A-Za-z0-9_.(\[])/g,
+        (_full, absC: string, colLet: string, absR: string, rowStr: string) => {
+            const origRow = parseInt(rowStr, 10);
+            const origCol = ColumnLetterToIndex(colLet);
+            const nextRow = absR === '$' ? origRow : origRow + dRow;
+            const nextCol = absC === '$' ? origCol : origCol + dCol;
+            if (nextRow < 1 || nextCol < 1) return '#REF!';
+            return FormatCellAddress(nextRow, nextCol, absR === '$', absC === '$');
+        }
+    );
+
+    const withSheets = shifted.replace(
+        /__SF_SH_(\d+)__!/g,
+        (_m, idx: string) => sheetPrefixes[parseInt(idx, 10)] ?? ''
+    );
+    return withSheets.replace(/__SF_STR_(\d+)__/g, (_m, idx: string) => strLiterals[parseInt(idx, 10)] ?? '');
+}
+
+function shiftA1RangeRows(
+    rangeStr: string,
+    op: 'insert' | 'delete',
+    startRow1Based: number,
+    count: number,
+    isAnchorCell: boolean,
+    maxSurvivingRow: number
+): string | null {
+    const trimmed = (rangeStr ?? '').trim();
+    if (!trimmed || trimmed === '#REF!') return null;
+    const parts = trimmed.split(':');
+    if (parts.length === 1) {
+        const p = ParseCellAddress(parts[0]);
+        if (!p) return trimmed;
+        if (op === 'insert') {
+            const nextR = p.row >= startRow1Based ? p.row + count : p.row;
+            return FormatCellAddress(nextR, p.col, p.absRow, p.absCol);
+        }
+        const delEnd = startRow1Based + count - 1;
+        if (p.row >= startRow1Based && p.row <= delEnd) {
+            if (isAnchorCell) {
+                return FormatCellAddress(Math.min(startRow1Based, maxSurvivingRow), p.col, p.absRow, p.absCol);
+            }
+            return null;
+        }
+        const nextR = p.row > delEnd ? p.row - count : p.row;
+        return FormatCellAddress(nextR, p.col, p.absRow, p.absCol);
+    }
+    if (parts.length === 2) {
+        const a = ParseCellAddress(parts[0]);
+        const b = ParseCellAddress(parts[1]);
+        if (!a || !b) return trimmed;
+        const r1 = Math.min(a.row, b.row);
+        const r2 = Math.max(a.row, b.row);
+        if (op === 'insert') {
+            const nextR1 = r1 >= startRow1Based ? r1 + count : r1;
+            const nextR2 = r2 >= startRow1Based ? r2 + count : r2;
+            return `${FormatCellAddress(nextR1, a.col, a.absRow, a.absCol)}:${FormatCellAddress(nextR2, b.col, b.absRow, b.absCol)}`;
+        }
+        const delEnd = startRow1Based + count - 1;
+        if (r1 >= startRow1Based && r2 <= delEnd) {
+            return null;
+        }
+        let survivingStart = r1;
+        if (r1 >= startRow1Based && r1 <= delEnd) {
+            survivingStart = startRow1Based;
+        } else if (r1 > delEnd) {
+            survivingStart = r1 - count;
+        }
+        let survivingEnd = r2;
+        if (r2 >= startRow1Based && r2 <= delEnd) {
+            survivingEnd = startRow1Based - 1;
+        } else if (r2 > delEnd) {
+            survivingEnd = r2 - count;
+        }
+        if (survivingEnd < survivingStart || survivingStart < 1) {
+            return null;
+        }
+        return `${FormatCellAddress(survivingStart, a.col, a.absRow, a.absCol)}:${FormatCellAddress(survivingEnd, b.col, b.absRow, b.absCol)}`;
+    }
+    return trimmed;
+}
+
+function shiftA1RangeCols(
+    rangeStr: string,
+    op: 'insert' | 'delete',
+    startCol1Based: number,
+    count: number,
+    isAnchorCell: boolean,
+    maxSurvivingCol: number
+): string | null {
+    const trimmed = (rangeStr ?? '').trim();
+    if (!trimmed || trimmed === '#REF!') return null;
+    const parts = trimmed.split(':');
+    if (parts.length === 1) {
+        const p = ParseCellAddress(parts[0]);
+        if (!p) return trimmed;
+        if (op === 'insert') {
+            const nextC = p.col >= startCol1Based ? p.col + count : p.col;
+            return FormatCellAddress(p.row, nextC, p.absRow, p.absCol);
+        }
+        const delEnd = startCol1Based + count - 1;
+        if (p.col >= startCol1Based && p.col <= delEnd) {
+            if (isAnchorCell) {
+                return FormatCellAddress(p.row, Math.min(startCol1Based, maxSurvivingCol), p.absRow, p.absCol);
+            }
+            return null;
+        }
+        const nextC = p.col > delEnd ? p.col - count : p.col;
+        return FormatCellAddress(p.row, nextC, p.absRow, p.absCol);
+    }
+    if (parts.length === 2) {
+        const a = ParseCellAddress(parts[0]);
+        const b = ParseCellAddress(parts[1]);
+        if (!a || !b) return trimmed;
+        const c1 = Math.min(a.col, b.col);
+        const c2 = Math.max(a.col, b.col);
+        if (op === 'insert') {
+            const nextC1 = c1 >= startCol1Based ? c1 + count : c1;
+            const nextC2 = c2 >= startCol1Based ? c2 + count : c2;
+            return `${FormatCellAddress(a.row, nextC1, a.absRow, a.absCol)}:${FormatCellAddress(b.row, nextC2, b.absRow, b.absCol)}`;
+        }
+        const delEnd = startCol1Based + count - 1;
+        if (c1 >= startCol1Based && c2 <= delEnd) {
+            return null;
+        }
+        let survivingStart = c1;
+        if (c1 >= startCol1Based && c1 <= delEnd) {
+            survivingStart = startCol1Based;
+        } else if (c1 > delEnd) {
+            survivingStart = c1 - count;
+        }
+        let survivingEnd = c2;
+        if (c2 >= startCol1Based && c2 <= delEnd) {
+            survivingEnd = startCol1Based - 1;
+        } else if (c2 > delEnd) {
+            survivingEnd = c2 - count;
+        }
+        if (survivingEnd < survivingStart || survivingStart < 1) {
+            return null;
+        }
+        return `${FormatCellAddress(a.row, survivingStart, a.absRow, a.absCol)}:${FormatCellAddress(b.row, survivingEnd, b.absRow, b.absCol)}`;
+    }
+    return trimmed;
+}
+
+function shiftColumnLetter(
+    colLetter: string,
+    op: 'insert' | 'delete',
+    startCol1Based: number,
+    count: number
+): string | null {
+    const colIdx = ColumnLetterToIndex(colLetter);
+    if (op === 'insert') {
+        const nextCol = colIdx >= startCol1Based ? colIdx + count : colIdx;
+        return ColumnIndexToLetter(nextCol);
+    }
+    const delEnd = startCol1Based + count - 1;
+    if (colIdx >= startCol1Based && colIdx <= delEnd) {
+        return null;
+    }
+    const nextCol = colIdx > delEnd ? colIdx - count : colIdx;
+    return ColumnIndexToLetter(nextCol);
+}
+
+function workbookFromSheet(
+    map: WeakMap<WorksheetSpec, WorkbookSpec>,
+    sheet: WorksheetSpec
+): WorkbookSpec | undefined {
+    return map.get(sheet);
+}
+
+/**
+ * Registers the {@link SpreadsheetEngine} chart/range dataset extractor with
+ * {@link DocumentLiveBlockEngine} (`D5`, breaking circular module imports).
+ */
+export function LoadSpreadsheetEngine(): void {
+    DocumentLiveBlockEngine.Instance.RegisterSpreadsheetChartExtractor(
+        (content, configuration, sheetId, chartId, sheetRange) => {
+            const wb = SpreadsheetEngine.Instance.ParseWorkbook(content, configuration);
+            const targetSheetId = sheetId || wb.ActiveSheetID;
+            let dataset = chartId
+                ? SpreadsheetEngine.Instance.ExtractChartDataset(wb, targetSheetId, chartId)
+                : null;
+            if (!dataset && sheetRange) {
+                dataset = SpreadsheetEngine.Instance.ExtractChartDataset(wb, targetSheetId, sheetRange);
+            }
+            return dataset;
+        }
+    );
+}
+
+LoadSpreadsheetEngine();

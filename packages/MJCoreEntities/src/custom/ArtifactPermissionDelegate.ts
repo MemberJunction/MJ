@@ -35,6 +35,8 @@ export interface ArtifactDelegateContext {
     Depth?: number;
     /** Visited artifact IDs in the current resolution chain for cycle detection. */
     VisitedArtifactIDs?: ReadonlySet<string>;
+    /** Per-resolution memoization map preventing repeated parent-hop evaluations. */
+    Memo?: Map<string, Promise<ResolvedArtifactPermissions>>;
 }
 
 /**
@@ -173,7 +175,8 @@ export class ParentArtifactPermissionDelegate extends BaseArtifactPermissionDele
             context.DelegateRecordID,
             user,
             (context.Depth ?? 0) + 1,
-            context.VisitedArtifactIDs
+            context.VisitedArtifactIDs,
+            context.Memo
         );
         return parentPerms.CanRead ? 'Allow' : 'Deny';
     }
@@ -184,7 +187,8 @@ export class ParentArtifactPermissionDelegate extends BaseArtifactPermissionDele
             context.DelegateRecordID,
             user,
             (context.Depth ?? 0) + 1,
-            context.VisitedArtifactIDs
+            context.VisitedArtifactIDs,
+            context.Memo
         );
         return parentPerms.CanEdit ? 'Allow' : 'Deny';
     }
@@ -195,7 +199,8 @@ export class ParentArtifactPermissionDelegate extends BaseArtifactPermissionDele
             context.DelegateRecordID,
             user,
             (context.Depth ?? 0) + 1,
-            context.VisitedArtifactIDs
+            context.VisitedArtifactIDs,
+            context.Memo
         );
         return parentPerms.CanDelete ? 'Allow' : 'Deny';
     }
@@ -206,7 +211,8 @@ export class ParentArtifactPermissionDelegate extends BaseArtifactPermissionDele
             context.DelegateRecordID,
             user,
             (context.Depth ?? 0) + 1,
-            context.VisitedArtifactIDs
+            context.VisitedArtifactIDs,
+            context.Memo
         );
         return parentPerms.CanShare ? 'Allow' : 'Deny';
     }
@@ -259,6 +265,13 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
             return;
         }
         this._delegatesByEntityKey.delete(key);
+    }
+
+    /**
+     * Whether any real-time permission change listeners are currently subscribed.
+     */
+    public get HasChangeListeners(): boolean {
+        return this._changeListeners.size > 0;
     }
 
     /**
@@ -327,7 +340,8 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
         artifactId: string | null | undefined,
         user: UserInfo | null | undefined,
         depth: number = 0,
-        visitedArtifactIds?: ReadonlySet<string>
+        visitedArtifactIds?: ReadonlySet<string>,
+        memo?: Map<string, Promise<ResolvedArtifactPermissions>>
     ): Promise<ResolvedArtifactPermissions> {
         const normalizedArtifactId = (artifactId ?? '').trim();
         if (!normalizedArtifactId || !user) {
@@ -350,6 +364,33 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
             return this.buildDenied(normalizedArtifactId, 'Metadata provider is not available.');
         }
 
+        const activeMemo = memo ?? new Map<string, Promise<ResolvedArtifactPermissions>>();
+        const memoKey = `${lowerId}::${(user.ID ?? '').toLowerCase()}`;
+        const cachedPromise = activeMemo.get(memoKey);
+        if (cachedPromise) {
+            return cachedPromise;
+        }
+
+        const resolutionPromise = this.resolvePermissionsInternal(
+            activeProvider,
+            normalizedArtifactId,
+            user,
+            depth,
+            visited,
+            activeMemo
+        );
+        activeMemo.set(memoKey, resolutionPromise);
+        return resolutionPromise;
+    }
+
+    private async resolvePermissionsInternal(
+        activeProvider: IMetadataProvider,
+        normalizedArtifactId: string,
+        user: UserInfo,
+        depth: number,
+        visited: ReadonlySet<string>,
+        memo: Map<string, Promise<ResolvedArtifactPermissions>>
+    ): Promise<ResolvedArtifactPermissions> {
         const artifact = await this.loadArtifactRow(activeProvider, normalizedArtifactId, user);
         if (!artifact) {
             return this.buildDenied(normalizedArtifactId, `Artifact '${normalizedArtifactId}' was not found.`);
@@ -365,7 +406,8 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 artifact,
                 user,
                 depth,
-                visited
+                visited,
+                memo
             );
             if (delegateResult) {
                 return delegateResult;
@@ -432,7 +474,8 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
         artifact: ArtifactRowProjection,
         user: UserInfo,
         depth: number,
-        visited: ReadonlySet<string>
+        visited: ReadonlySet<string>,
+        memo: Map<string, Promise<ResolvedArtifactPermissions>>
     ): Promise<ResolvedArtifactPermissions | null> {
         const delegateEntityId = artifact.DelegateEntityID!;
         const delegateRecordId = artifact.DelegateRecordID!;
@@ -444,7 +487,42 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
 
         const delegate = this.resolveDelegateInstance(delegateEntityId, delegateEntityName);
         if (!delegate) {
-            return null;
+            const entityLabel = delegateEntityName || delegateEntityId;
+            LogError(
+                `No permission delegate is registered for delegating entity '${entityLabel}' (${delegateRecordId}) on artifact '${artifact.ID}'.`
+            );
+            return this.buildDenied(
+                artifact.ID,
+                `No permission delegate is registered for delegating entity '${entityLabel}' (${delegateRecordId}).`
+            );
+        }
+
+        // Fast O(depth) path for parent-artifact delegation ('MJ: Artifacts'): resolve the parent once per hop
+        // instead of invoking 4 independent recursive calls across CanRead/CanEdit/CanDelete/CanShare.
+        if (delegate instanceof ParentArtifactPermissionDelegate) {
+            const parentPerms = await this.ResolvePermissions(
+                provider,
+                delegateRecordId,
+                user,
+                depth + 1,
+                visited,
+                memo
+            );
+            if (!parentPerms.CanRead) {
+                return this.buildDenied(
+                    artifact.ID,
+                    `Access denied by delegate entity '${delegateEntityName || delegateEntityId}' (${delegateRecordId}).`
+                );
+            }
+            return {
+                ArtifactID: artifact.ID,
+                CanRead: parentPerms.CanRead,
+                CanEdit: parentPerms.CanEdit,
+                CanDelete: parentPerms.CanDelete,
+                CanShare: parentPerms.CanShare,
+                Source: 'Delegate',
+                Reason: `Permissions resolved via delegate '${delegateEntityName || delegateEntityId}' (${delegateRecordId}).`
+            };
         }
 
         const context: ArtifactDelegateContext = {
@@ -455,7 +533,8 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
             DelegateRecordID: delegateRecordId,
             Provider: provider,
             Depth: depth,
-            VisitedArtifactIDs: visited
+            VisitedArtifactIDs: visited,
+            Memo: memo
         };
 
         const [readDec, editDec, deleteDec, shareDec] = await Promise.all([

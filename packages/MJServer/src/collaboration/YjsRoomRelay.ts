@@ -12,11 +12,21 @@ export interface YjsRelayMessage {
     /** Unique identifier of the MJServer instance that originated the message (used for echo suppression). */
     OriginInstanceID: string;
     /** Kind of room event being relayed. */
-    MessageType: 'sync-update' | 'awareness' | 'permission-revoked';
-    /** Base64-encoded binary payload (Yjs update bytes or encoded awareness update). */
+    MessageType:
+        | 'sync-update'
+        | 'awareness'
+        | 'permission-revoked'
+        | 'sync-request'
+        | 'sync-state'
+        | 'version-saved';
+    /** Base64-encoded binary payload (Yjs update/state-vector bytes or encoded awareness update). */
     PayloadBase64: string;
     /** Optional user ID that authored the update or whose permissions changed. */
     TargetUserID?: string;
+    /** Optional persisted version ID when `MessageType === 'version-saved'`. */
+    VersionID?: string;
+    /** Optional persisted version number when `MessageType === 'version-saved'`. */
+    VersionNumber?: number;
 }
 
 /**

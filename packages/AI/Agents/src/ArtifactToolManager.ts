@@ -1,5 +1,8 @@
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
-import { ArtifactMetadataEngine } from '@memberjunction/core-entities';
+import { createHash } from 'node:crypto';
+import { EscapeSQLString, GetGlobalObjectStore, MJEventType, MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
+import { ArtifactMetadataEngine, MJArtifactVersionEntity } from '@memberjunction/core-entities';
+import { FileStorageEngine } from '@memberjunction/storage';
 import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult, NativeFileInput, InputArtifact } from '@memberjunction/ai-core-plus';
 import { DataSnapshotToolLibrary } from './artifact-tools/DataSnapshotToolLibrary';
 import { JSONToolLibrary } from './artifact-tools/JSONToolLibrary';
@@ -9,6 +12,76 @@ import { TextToolLibrary } from './artifact-tools/TextToolLibrary';
 // './ArtifactToolManager' continue to compile. The canonical declaration
 // now lives in @memberjunction/ai-core-plus alongside ExecuteAgentParams.
 export type { InputArtifact };
+
+const ARTIFACT_LIVE_MUTATION_HOOK_KEY = '___MJ_ARTIFACT_LIVE_MUTATION_HOOK___';
+const ARTIFACT_LIVE_MUTATION_EVENT_CODE = 'ArtifactCollaboration.LiveContentMutation';
+const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const MAX_VERSION_SAVE_RETRIES = 3;
+
+/**
+ * Payload emitted whenever an agent artifact mutation tool updates an artifact's content (`A4`).
+ */
+export interface ArtifactLiveMutationEvent {
+  /** Underlying `MJ: Artifacts` primary key UUID. */
+  artifactId: string;
+  /** Run-scoped alpha identifier (`"A"`, `"B"`, ...). */
+  alphaId: string;
+  /** Newly persisted `MJ: Artifact Versions` primary key UUID, if persisted. */
+  versionId?: string;
+  /** Newly persisted sequential `VersionNumber`, if persisted. */
+  versionNumber?: number;
+  /** Updated serialized artifact content (`Markdown`, `SlideDeckSpec` JSON, `WorkbookSpec` JSON, etc.). */
+  updatedContent: string;
+  /** Optional base64-encoded `.xlsx` binary when produced by `SpreadsheetToolLibrary`. */
+  xlsxBase64?: string;
+  /** Name of the artifact mutation tool that produced the update. */
+  tool: string;
+  /** User context under which the agent tool executed. */
+  contextUser?: UserInfo;
+  /** Active `MJ: AI Agent Runs` ID, if available. */
+  agentRunId?: string;
+}
+
+/**
+ * Callback registered by collaboration hosts (e.g. `ArtifactCollaborationServer`) to broadcast
+ * live agent mutations to connected Yjs rooms (`A4`).
+ */
+export type ArtifactLiveMutationHook = (event: ArtifactLiveMutationEvent) => void | Promise<void>;
+
+/**
+ * Registers (or clears when `null`) the process-wide {@link ArtifactLiveMutationHook}
+ * backed by `GetGlobalObjectStore()['___MJ_ARTIFACT_LIVE_MUTATION_HOOK___']` (`A4`).
+ */
+export function SetArtifactLiveMutationHook(hook: ArtifactLiveMutationHook | null): void {
+  const store = GetGlobalObjectStore();
+  if (!store) return;
+  if (hook) {
+    store[ARTIFACT_LIVE_MUTATION_HOOK_KEY] = hook;
+  } else {
+    delete store[ARTIFACT_LIVE_MUTATION_HOOK_KEY];
+  }
+}
+
+/**
+ * Retrieves the currently registered process-wide {@link ArtifactLiveMutationHook}, if any (`A4`).
+ */
+export function GetArtifactLiveMutationHook(): ArtifactLiveMutationHook | null {
+  const store = GetGlobalObjectStore();
+  const candidate = store?.[ARTIFACT_LIVE_MUTATION_HOOK_KEY];
+  return typeof candidate === 'function' ? (candidate as ArtifactLiveMutationHook) : null;
+}
+
+/**
+ * Optional persistence and execution context passed to {@link ArtifactToolManager.Initialize} (`A4`).
+ */
+export interface ArtifactToolManagerOptions {
+  /** Execution user context used to persist `MJ: Artifact Versions` on mutating tool calls. */
+  contextUser?: UserInfo;
+  /** Metadata/entity provider used to query and save `MJ: Artifact Versions`. */
+  provider?: IMetadataProvider;
+  /** Lazy accessor for the active agent run (resolved after Phase 1 initialization). */
+  getAgentRun?: () => { ID?: string } | null | undefined;
+}
 
 /**
  * A single artifact tool invocation requested by the LLM.
@@ -127,12 +200,18 @@ export class ArtifactToolManager {
   private artifacts: Map<string, ArtifactEntry> = new Map();
   private toolResults: StoredToolResult[] = [];
   private nextAlphaIndex = 0;
+  private contextUser?: UserInfo;
+  private provider?: IMetadataProvider;
+  private getAgentRun?: () => { ID?: string } | null | undefined;
 
   // ─── LIFECYCLE ───
 
-  /** Initialize with input artifacts, assigning alpha IDs */
-  Initialize(inputArtifacts: InputArtifact[]): void {
+  /** Initialize with input artifacts, assigning alpha IDs and optional persistence context (`A4`) */
+  Initialize(inputArtifacts: InputArtifact[], options?: ArtifactToolManagerOptions): void {
     this.Clear();
+    this.contextUser = options?.contextUser;
+    this.provider = options?.provider;
+    this.getAgentRun = options?.getAgentRun;
     for (const artifact of inputArtifacts) {
       const alphaId = this.nextAlphaId();
       this.artifacts.set(alphaId, {
@@ -207,6 +286,9 @@ export class ArtifactToolManager {
     this.artifacts.clear();
     this.toolResults = [];
     this.nextAlphaIndex = 0;
+    this.contextUser = undefined;
+    this.provider = undefined;
+    this.getAgentRun = undefined;
   }
 
   /** Whether any artifacts are available */
@@ -587,16 +669,205 @@ export class ArtifactToolManager {
         errorMessage: `Tool "${call.tool}" on artifact ${entry.alphaId} threw: ${msg}. The artifact content may be malformed for this tool — try a different tool or a different artifact.`,
       };
     }
+
+    let storedResult: ArtifactToolResult = result;
+    if (
+      result.success &&
+      result.data !== null &&
+      typeof result.data === 'object' &&
+      !Array.isArray(result.data) &&
+      typeof (result.data as Record<string, unknown>).updatedContent === 'string'
+    ) {
+      const rawData = result.data as Record<string, unknown>;
+      const updatedContent = rawData.updatedContent as string;
+      const xlsxBase64 = typeof rawData.xlsxBase64 === 'string' ? rawData.xlsxBase64 : undefined;
+
+      // 1. Update in-memory entry.content immediately so sequential tool calls see the new content & revisionHash
+      entry.content = updatedContent;
+
+      // 2. Persist a new MJ: Artifact Versions record when artifactId, contextUser, and provider are available
+      let persisted = false;
+      if (entry.artifactId && this.contextUser && this.provider) {
+        persisted = await this.persistArtifactVersionMutation(entry, updatedContent, xlsxBase64, call.tool);
+      }
+
+      // 3. Notify live Yjs collaboration rooms via registered hook and MJGlobal event
+      const hook = GetArtifactLiveMutationHook();
+      const agentRunId = this.getAgentRun?.()?.ID;
+      if (hook && entry.artifactId) {
+        try {
+          await hook({
+            artifactId: entry.artifactId,
+            alphaId: entry.alphaId,
+            versionId: entry.versionId,
+            versionNumber: entry.versionNumber,
+            updatedContent,
+            xlsxBase64,
+            tool: call.tool,
+            contextUser: this.contextUser,
+            agentRunId,
+          });
+        } catch (hookErr) {
+          LogError(`ArtifactToolManager: live mutation hook failed for artifact '${entry.artifactId}': ${(hookErr as Error).message}`);
+        }
+      }
+      if (entry.artifactId && this.contextUser) {
+        try {
+          MJGlobal.Instance.RaiseEvent({
+            component: this,
+            event: MJEventType.ComponentEvent,
+            eventCode: ARTIFACT_LIVE_MUTATION_EVENT_CODE,
+            args: {
+              ArtifactID: entry.artifactId,
+              NewContent: updatedContent,
+              User: this.contextUser,
+              SaveVersion: false,
+            },
+          });
+        } catch {
+          // Never fail tool execution if event subscribers throw
+        }
+      }
+
+      // 4. Sanitize the LLM-facing copy of result.data without mutating rawData returned by library.InvokeTool
+      const sanitizedData: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(rawData)) {
+        if (k === 'updatedContent' || k === 'xlsxBase64') continue;
+        sanitizedData[k] = v;
+      }
+      sanitizedData.persisted = persisted;
+      if (entry.versionNumber !== undefined) {
+        sanitizedData.versionNumber = entry.versionNumber;
+      }
+      storedResult = {
+        ...result,
+        data: sanitizedData,
+      };
+    }
+
     const stored: StoredToolResult = {
       artifactId: call.artifactId,
       tool: call.tool,
       input: call.input,
-      result,
+      result: storedResult,
       timestamp: new Date(),
       durationMs: Date.now() - startedAt,
     };
     this.toolResults.push(stored);
     return stored;
+  }
+
+  /**
+   * Persists a new `MJ: Artifact Versions` record for an agent tool mutation (`A4`),
+   * retrying up to 3 times on concurrent `VersionNumber` save collisions.
+   */
+  private async persistArtifactVersionMutation(
+    entry: ArtifactEntry,
+    updatedContent: string,
+    xlsxBase64: string | undefined,
+    toolName: string,
+  ): Promise<boolean> {
+    if (!entry.artifactId || !this.contextUser || !this.provider) {
+      return false;
+    }
+
+    const rv = RunView.FromMetadataProvider(this.provider);
+    const contentHash = createHash('sha256').update(updatedContent, 'utf8').digest('hex');
+
+    let uploadedFileId: string | null = null;
+    let xlsxSizeBytes: number | null = null;
+    if (xlsxBase64) {
+      const xlsxBuf = Buffer.from(xlsxBase64, 'base64');
+      xlsxSizeBytes = xlsxBuf.byteLength;
+      try {
+        await FileStorageEngine.Instance.Config(false, this.contextUser);
+        if (FileStorageEngine.Instance.HasStorageAccounts) {
+          const safeFileName = entry.name.toLowerCase().endsWith('.xlsx') ? entry.name : `${entry.name || 'workbook'}.xlsx`;
+          const uploadRes = await FileStorageEngine.Instance.UploadFile({
+            content: xlsxBuf,
+            fileName: safeFileName,
+            mimeType: XLSX_MIME_TYPE,
+            contextUser: this.contextUser,
+            provider: this.provider,
+          });
+          uploadedFileId = uploadRes.FileID;
+        }
+      } catch {
+        uploadedFileId = null;
+      }
+    }
+
+    const queryNextVersionNumber = async (): Promise<number> => {
+      try {
+        const latestRes = await rv.RunView<{ ID: string; VersionNumber: number }>(
+          {
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ArtifactID='${EscapeSQLString(entry.artifactId!)}'`,
+            OrderBy: 'VersionNumber DESC',
+            Fields: ['ID', 'VersionNumber'],
+            MaxRows: 1,
+            SkipTotalRowCount: true,
+            ResultType: 'simple',
+          },
+          this.contextUser,
+        );
+        const maxDbVersion = latestRes.Success ? (latestRes.Results?.[0]?.VersionNumber ?? 0) : 0;
+        return Math.max(maxDbVersion, entry.versionNumber ?? 0) + 1;
+      } catch {
+        return (entry.versionNumber ?? 0) + 1;
+      }
+    };
+
+    let candidateVersion = await queryNextVersionNumber();
+    for (let attempt = 1; attempt <= MAX_VERSION_SAVE_RETRIES; attempt++) {
+      try {
+        const versionEntity = await this.provider.GetEntityObject<MJArtifactVersionEntity>(
+          'MJ: Artifact Versions',
+          this.contextUser,
+        );
+        versionEntity.NewRecord();
+        versionEntity.ArtifactID = entry.artifactId;
+        versionEntity.VersionNumber = candidateVersion;
+        versionEntity.UserID = this.contextUser.ID;
+        versionEntity.Name = entry.name;
+        versionEntity.Comments = `Updated via agent tool '${toolName}'`;
+        versionEntity.ContentHash = contentHash;
+
+        if (uploadedFileId) {
+          const safeFileName = entry.name.toLowerCase().endsWith('.xlsx') ? entry.name : `${entry.name || 'workbook'}.xlsx`;
+          versionEntity.ContentMode = 'File';
+          versionEntity.FileID = uploadedFileId;
+          versionEntity.MimeType = XLSX_MIME_TYPE;
+          versionEntity.FileName = safeFileName;
+          versionEntity.ContentSizeBytes = xlsxSizeBytes;
+          versionEntity.Content = null;
+          versionEntity.Configuration = updatedContent;
+        } else {
+          versionEntity.ContentMode = 'Text';
+          versionEntity.FileID = null;
+          versionEntity.Content = updatedContent;
+          if (xlsxBase64) {
+            versionEntity.Configuration = updatedContent;
+          }
+        }
+
+        const saved = await versionEntity.Save();
+        if (saved) {
+          entry.versionId = versionEntity.ID;
+          entry.versionNumber = candidateVersion;
+          return true;
+        }
+      } catch (err) {
+        if (attempt === MAX_VERSION_SAVE_RETRIES) {
+          LogError(`ArtifactToolManager: failed to persist version for artifact '${entry.artifactId}': ${(err as Error).message}`);
+          return false;
+        }
+      }
+      const refreshedNext = await queryNextVersionNumber();
+      candidateVersion = Math.max(candidateVersion + 1, refreshedNext);
+    }
+
+    return false;
   }
 
   /**
@@ -766,8 +1037,10 @@ export class ArtifactToolManager {
       if (lib) return lib;
     }
     if (lower.includes('excel') || lower.includes('xlsx') || lower.includes('spreadsheet')) {
-      const lib = MJGlobal.Instance.ClassFactory.CreateInstance<BaseArtifactToolLibrary>(BaseArtifactToolLibrary, 'ExcelToolLibrary');
-      if (lib) return lib;
+      const sheetLib = MJGlobal.Instance.ClassFactory.CreateInstance<BaseArtifactToolLibrary>(BaseArtifactToolLibrary, 'SpreadsheetToolLibrary');
+      if (sheetLib) return sheetLib;
+      const excelLib = MJGlobal.Instance.ClassFactory.CreateInstance<BaseArtifactToolLibrary>(BaseArtifactToolLibrary, 'ExcelToolLibrary');
+      if (excelLib) return excelLib;
     }
     if (lower.includes('word') || lower.includes('docx') || lower.includes('document')) {
       const lib = MJGlobal.Instance.ClassFactory.CreateInstance<BaseArtifactToolLibrary>(BaseArtifactToolLibrary, 'DocxToolLibrary');

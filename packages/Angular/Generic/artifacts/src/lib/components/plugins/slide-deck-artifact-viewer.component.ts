@@ -1,15 +1,19 @@
 import {
   Component,
+  Input,
   OnInit,
+  OnChanges,
   OnDestroy,
+  SimpleChanges,
   ChangeDetectorRef,
   HostListener,
   Type,
   inject,
 } from '@angular/core';
 import { Subscription } from 'rxjs';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { Metadata, RunView, UserInfo, type DataSnapshot } from '@memberjunction/core';
+import { EscapeSQLString, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { LogError, RunView, UserInfo, type DataSnapshot, type IMetadataProvider } from '@memberjunction/core';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CreateJsonSnapshot } from '../../snapshot-helpers';
 import {
   MJArtifactEntity,
@@ -305,6 +309,18 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
           </button>
         </div>
       </div>
+
+      @if (StatusBannerMessage) {
+        <div class="mj-slides-presentation-banner" data-testid="slides-status-banner">
+          <div class="mj-slides-presentation-banner-info">
+            <i class="fa-solid fa-circle-info"></i>
+            <span>{{ StatusBannerMessage }}</span>
+          </div>
+          <button type="button" class="mj-slides-tool-btn" (click)="StatusBannerMessage = ''">
+            Dismiss
+          </button>
+        </div>
+      }
 
       <!-- Presentation Freeze Banner (shown in Present and Presenter View modes) -->
       @if (WorkspaceMode === 'present' || WorkspaceMode === 'presenter') {
@@ -681,11 +697,23 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
                                 >
                                   @if (GetOrCreateEmbeddedArtifactVersion(region, block); as childVersion) {
                                     <mj-artifact-type-plugin-viewer
+                                      [Provider]="Provider"
                                       [artifactVersion]="childVersion"
                                       [artifactTypeName]="block.ArtifactType || 'Whiteboard'"
                                       [readonly]="!(IsEditable && WorkspaceMode === 'edit' && IsOleRegionEditing(region.RegionID))"
                                       (ContentCommitted)="OnEmbeddedArtifactContentCommitted(region, block, $event)"
                                     ></mj-artifact-type-plugin-viewer>
+                                  } @else {
+                                    <div
+                                      class="mj-slide-empty-block"
+                                      [attr.data-testid]="'slide-ole-placeholder-' + region.RegionID"
+                                    >
+                                      @if (IsEmbeddedArtifactLoading(block)) {
+                                        <i class="fa-solid fa-spinner fa-spin"></i> Loading embedded artifact…
+                                      } @else {
+                                        <span>{{ GetEmbeddedArtifactError(block) || 'Embedded artifact unavailable or access denied.' }}</span>
+                                      }
+                                    </div>
                                   }
                                 </div>
                               } @else {
@@ -960,7 +988,7 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
                   </button>
                 </div>
 
-                @if (IsEditable) {
+                @if (CanComment) {
                   <div class="mj-slides-new-comment-box">
                     <div class="mj-slides-comment-target-pill">
                       Section: <strong>{{ PendingAnchorLabel }}</strong>
@@ -969,7 +997,7 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
                       class="mj-slides-input"
                       rows="3"
                       [(ngModel)]="NewCommentDraft"
-                      placeholder="Comment on this slide or @SlidesAgent rewrite this slide..."
+                      placeholder="Add an anchored comment on this slide region..."
                       data-testid="slide-comment-draft-input"
                     ></textarea>
                     <button
@@ -1897,13 +1925,20 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
 @RegisterClass(BaseArtifactViewerPluginComponent, 'SlideDeckArtifactViewerPlugin')
 export class SlideDeckArtifactViewerComponent
   extends BaseArtifactViewerPluginComponent
-  implements OnInit, OnDestroy
+  implements OnInit, OnChanges, OnDestroy
 {
   private static readonly USER_SETTING_PREFIX = 'MJ.Slides.WorkspaceState.';
+
+  /**
+   * Optional WebSocket URL (or base URL) override for `/collaboration/yjs` real-time Yjs room sync (§ 3.2).
+   * When omitted, `DocumentCollaborationService` mints a single-use ticket via `GraphQLDataProvider`.
+   */
+  @Input() public CollaborationWsUrl: string | null = null;
 
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly collabService = inject(DocumentCollaborationService);
   private readonly exportService = inject(SlideDeckExportService);
+  private readonly notificationService = inject(MJNotificationService, { optional: true });
 
   public readonly LayoutCatalog: ReadonlyArray<SlideLayoutMetadata> = SLIDE_LAYOUT_CATALOG;
   public readonly ThemePresets: ReadonlyArray<SlideDeckThemeSpec> = SLIDE_DECK_THEME_PRESETS;
@@ -1918,6 +1953,7 @@ export class SlideDeckArtifactViewerComponent
   public WorkspaceMode: SlideWorkspaceMode = 'edit';
   public RightDrawerTab: SlideRightDrawerTab = 'none';
   public ShowFilmstrip = true;
+  public StatusBannerMessage = '';
 
   public RawDeckJsonText = '';
   public BaselineDeckJsonText = '';
@@ -1959,6 +1995,8 @@ export class SlideDeckArtifactViewerComponent
   // Live MJ Block & Inline OLE Whiteboard State
   private readonly blockResultsByBlockId = new Map<string, DocumentBlockExecutionResult>();
   private readonly embeddedArtifactVersions = new Map<string, MJArtifactVersionEntity>();
+  private readonly inFlightEmbeddedVersionKeys = new Set<string>();
+  private readonly failedEmbeddedVersionMessages = new Map<string, string>();
   private readonly oleEditingRegionIds = new Set<string>();
   public PendingFreezeBlock: DocumentBlockSpec | null = null;
   public PendingFreezeRegion: SlideRegionSpec | null = null;
@@ -2010,10 +2048,20 @@ export class SlideDeckArtifactViewerComponent
     if (this.ConnectionStatus === 'readonly' || this.ConnectionStatus === 'revoked') {
       return false;
     }
-    if (this.ResolvedPermissions && !this.ResolvedPermissions.CanEdit) {
-      return false;
+    if (this.artifactVersion?.ArtifactID) {
+      return this.ResolvedPermissions?.CanEdit === true;
     }
     return true;
+  }
+
+  public get CanComment(): boolean {
+    if (this.ConnectionStatus === 'revoked') {
+      return false;
+    }
+    if (this.artifactVersion?.ArtifactID) {
+      return this.ResolvedPermissions?.CanRead === true;
+    }
+    return !this.readonly;
   }
 
   public get HasDisplayContent(): boolean {
@@ -2095,20 +2143,23 @@ export class SlideDeckArtifactViewerComponent
     this.initializePresentationFromArtifactVersion();
   }
 
+  public ngOnChanges(changes: SimpleChanges): void {
+    if (changes['artifactVersion'] && !changes['artifactVersion'].firstChange) {
+      this.initializePresentationFromArtifactVersion();
+      return;
+    }
+    if (changes['CollaborationWsUrl'] && !changes['CollaborationWsUrl'].firstChange) {
+      const artifactId = this.artifactVersion?.ArtifactID || 'slide-deck-default';
+      this.setupCollaborationSession(artifactId, SlideDeckEngine.Instance.SerializeDeckSpec(this.Deck));
+    }
+    if (changes['readonly']) {
+      this.session?.SetCanEdit(this.IsEditable);
+      this.cdr.markForCheck();
+    }
+  }
+
   public ngOnDestroy(): void {
-    this.stopPresenterTimer();
-    for (const s of this.subs) {
-      s.unsubscribe();
-    }
-    this.subs.length = 0;
-    if (this.permissionUnsub) {
-      this.permissionUnsub();
-      this.permissionUnsub = null;
-    }
-    if (this.session) {
-      this.session.Destroy();
-      this.session = null;
-    }
+    this.destroyCollaborationSession();
   }
 
   @HostListener('document:keydown', ['$event'])
@@ -2241,16 +2292,14 @@ export class SlideDeckArtifactViewerComponent
       Subtitle: 'Click to edit subtitle or choose a layout',
       InsertAtIndex: insertIdx,
     });
+    const orderedSlideIds = updatedDeck.Slides.map((s) => s.SlideID);
     this.Deck = updatedDeck;
     this.ActiveSlideID = AddedSlide.SlideID;
     this.FocusedRegionID = AddedSlide.Regions[0]?.RegionID ?? 'main';
 
     if (this.session) {
-      this.session.UpdateSlideInDeck(AddedSlide, this.Deck);
-      this.session.ReorderSlidesInDeck(
-        this.Deck.Slides.map((s) => s.SlideID),
-        this.Deck,
-      );
+      this.session.UpdateSlideInDeck(AddedSlide, updatedDeck);
+      this.session.ReorderSlidesInDeck(orderedSlideIds, updatedDeck);
     }
     this.syncRawDeckJson();
     this.cdr.markForCheck();
@@ -2267,14 +2316,12 @@ export class SlideDeckArtifactViewerComponent
     if (!DuplicatedSlide) {
       return;
     }
+    const orderedSlideIds = updatedDeck.Slides.map((s) => s.SlideID);
     this.Deck = updatedDeck;
     this.ActiveSlideID = DuplicatedSlide.SlideID;
     if (this.session) {
-      this.session.UpdateSlideInDeck(DuplicatedSlide, this.Deck);
-      this.session.ReorderSlidesInDeck(
-        this.Deck.Slides.map((s) => s.SlideID),
-        this.Deck,
-      );
+      this.session.UpdateSlideInDeck(DuplicatedSlide, updatedDeck);
+      this.session.ReorderSlidesInDeck(orderedSlideIds, updatedDeck);
     }
     this.syncRawDeckJson();
     this.cdr.markForCheck();
@@ -2468,22 +2515,26 @@ export class SlideDeckArtifactViewerComponent
 
   /**
    * Embeds an interactive MS OLE `Whiteboard` `Artifact` block into `region` (`§ 3.4.1`, `§ 5.1`),
-   * creating a delegated child `MJ: Artifacts` record (`DelegateEntityID` / `DelegateRecordID` per `O4`)
-   * when a metadata provider is available.
+   * creating and persisting a real delegated child `MJArtifactEntity` + `MJArtifactVersionEntity`
+   * BEFORE inserting the region descriptor (`O4`, `A6`).
    */
   public async EmbedInlineWhiteboardInRegion(region: SlideRegionSpec): Promise<void> {
     if (!this.IsEditable) {
       return;
     }
-    const childArtifactId = await this.createDelegatedWhiteboardArtifactIfPossible(
+    const created = await this.createDelegatedWhiteboardArtifact(
       `${this.ActiveSlide.Title} · Architecture Whiteboard`,
     );
+    if (!created) {
+      return;
+    }
     const blockSpec: DocumentBlockSpec = {
       BlockID: `slide-wb-${this.ActiveSlide.SlideID}-${region.RegionID}`,
       Kind: 'Artifact',
       Mode: 'Live',
       Title: 'Interactive Architecture Whiteboard',
-      ArtifactID: childArtifactId,
+      ArtifactID: created.artifact.ID,
+      VersionID: created.version.ID,
       ArtifactType: 'Whiteboard',
       EmbedMode: 'Inline',
     };
@@ -2515,77 +2566,113 @@ export class SlideDeckArtifactViewerComponent
     return SlideDeckEngine.Instance.ExtractRegionBlockSpec(region);
   }
 
+  private getEmbeddedVersionCacheKey(artifactId: string, versionId?: string | null): string {
+    return `${artifactId.trim().toLowerCase()}::${(versionId || 'latest').trim().toLowerCase()}`;
+  }
+
+  private cacheEmbeddedVersionEntity(artifactId: string, ver: MJArtifactVersionEntity): void {
+    const latestKey = this.getEmbeddedVersionCacheKey(artifactId, undefined);
+    this.embeddedArtifactVersions.set(latestKey, ver);
+    this.failedEmbeddedVersionMessages.delete(latestKey);
+    if (ver.ID) {
+      const pinnedKey = this.getEmbeddedVersionCacheKey(artifactId, ver.ID);
+      this.embeddedArtifactVersions.set(pinnedKey, ver);
+      this.failedEmbeddedVersionMessages.delete(pinnedKey);
+    }
+  }
+
+  public IsEmbeddedArtifactLoading(block: DocumentBlockSpec): boolean {
+    const artifactId = block.ArtifactID?.trim();
+    if (!artifactId) {
+      return false;
+    }
+    return this.inFlightEmbeddedVersionKeys.has(
+      this.getEmbeddedVersionCacheKey(artifactId, block.VersionID),
+    );
+  }
+
+  public GetEmbeddedArtifactError(block: DocumentBlockSpec): string | undefined {
+    const artifactId = block.ArtifactID?.trim();
+    if (!artifactId) {
+      return 'Embedded artifact ID is missing.';
+    }
+    return this.failedEmbeddedVersionMessages.get(
+      this.getEmbeddedVersionCacheKey(artifactId, block.VersionID),
+    );
+  }
+
   public GetOrCreateEmbeddedArtifactVersion(
-    region: SlideRegionSpec,
+    _region: SlideRegionSpec,
     block: DocumentBlockSpec,
-  ): MJArtifactVersionEntity {
-    const key = `${block.BlockID}:${block.ArtifactID || region.RegionID}`;
+  ): MJArtifactVersionEntity | null {
+    const artifactId = block.ArtifactID?.trim();
+    if (!artifactId) {
+      return null;
+    }
+    const key = this.getEmbeddedVersionCacheKey(artifactId, block.VersionID);
     const cached = this.embeddedArtifactVersions.get(key);
     if (cached) {
       return cached;
     }
+    if (!this.inFlightEmbeddedVersionKeys.has(key) && !this.failedEmbeddedVersionMessages.has(key)) {
+      void this.loadEmbeddedArtifactVersion(artifactId, block.VersionID);
+    }
+    return null;
+  }
 
-    const defaultBoardJson = JSON.stringify({
-      version: 1,
-      idCounter: 3,
-      zCounter: 3,
-      pageCounter: 1,
-      activePageId: 'page-1',
-      pages: [
+  private async loadEmbeddedArtifactVersion(artifactId: string, versionId?: string | null): Promise<void> {
+    const key = this.getEmbeddedVersionCacheKey(artifactId, versionId);
+    if (this.inFlightEmbeddedVersionKeys.has(key)) {
+      return;
+    }
+
+    const provider = this.getSafeProvider();
+    const user = this.getSafeCurrentUser();
+    if (!provider || !user) {
+      this.failedEmbeddedVersionMessages.set(key, 'Embedded artifact unavailable or access denied.');
+      this.cdr.markForCheck();
+      return;
+    }
+
+    this.inFlightEmbeddedVersionKeys.add(key);
+    try {
+      const rv = RunView.FromMetadataProvider(provider);
+      const filter = versionId
+        ? `ID='${EscapeSQLString(versionId)}' AND ArtifactID='${EscapeSQLString(artifactId)}'`
+        : `ArtifactID='${EscapeSQLString(artifactId)}'`;
+      const res = await rv.RunView<MJArtifactVersionEntity>(
         {
-          id: 'page-1',
-          name: 'Slide Architecture Diagram',
-          items: [
-            {
-              id: 'node-1',
-              kind: 'shape',
-              shape: 'rect',
-              x: 60,
-              y: 60,
-              w: 180,
-              h: 72,
-              text: 'MJ Slides Stage',
-              strokeColor: '#2563EB',
-              fillColor: '#EFF6FF',
-              strokeWidth: 2,
-              opacity: 1,
-              zIndex: 1,
-            },
-            {
-              id: 'node-2',
-              kind: 'shape',
-              shape: 'rect',
-              x: 320,
-              y: 60,
-              w: 180,
-              h: 72,
-              text: 'Collaborative Sync',
-              strokeColor: '#0EA5E9',
-              fillColor: '#F0F9FF',
-              strokeWidth: 2,
-              opacity: 1,
-              zIndex: 2,
-            },
-          ],
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: filter,
+          OrderBy: 'VersionNumber DESC',
+          MaxRows: 1,
+          ResultType: 'entity_object',
         },
-      ],
-    });
-
-    const stubVersion = {
-      ID: block.VersionID || block.ArtifactID || `wb-ver-${region.RegionID}`,
-      ArtifactID: block.ArtifactID || `wb-art-${region.RegionID}`,
-      VersionNumber: 1,
-      Name: block.Title || 'Embedded Slide Whiteboard',
-      Content: defaultBoardJson,
-      Get: (fieldName: string) => {
-        if (fieldName === 'Content') return defaultBoardJson;
-        if (fieldName === 'Name') return block.Title || 'Embedded Slide Whiteboard';
-        return null;
-      },
-    } as unknown as MJArtifactVersionEntity;
-
-    this.embeddedArtifactVersions.set(key, stubVersion);
-    return stubVersion;
+        user,
+      );
+      const entity = res.Success ? res.Results?.[0] : undefined;
+      if (entity) {
+        this.embeddedArtifactVersions.set(key, entity);
+        if (!versionId && entity.ID) {
+          this.embeddedArtifactVersions.set(this.getEmbeddedVersionCacheKey(artifactId, entity.ID), entity);
+        }
+        this.failedEmbeddedVersionMessages.delete(key);
+      } else {
+        this.failedEmbeddedVersionMessages.set(
+          key,
+          res.ErrorMessage || 'Embedded artifact unavailable or access denied.',
+        );
+      }
+    } catch (err) {
+      LogError(err);
+      this.failedEmbeddedVersionMessages.set(
+        key,
+        err instanceof Error ? err.message : 'Failed to load embedded artifact.',
+      );
+    } finally {
+      this.inFlightEmbeddedVersionKeys.delete(key);
+      this.cdr.markForCheck();
+    }
   }
 
   public async OnEmbeddedArtifactContentCommitted(
@@ -2596,40 +2683,71 @@ export class SlideDeckArtifactViewerComponent
     if (!this.IsEditable) {
       return;
     }
-    const key = `${block.BlockID}:${block.ArtifactID || region.RegionID}`;
-    const existing = this.embeddedArtifactVersions.get(key);
-    const nextVerNum = (existing?.VersionNumber ?? 1) + 1;
-    const updatedStub = {
-      ...(existing ?? {}),
-      ID: block.VersionID || block.ArtifactID || `wb-ver-${region.RegionID}`,
-      ArtifactID: block.ArtifactID || `wb-art-${region.RegionID}`,
-      VersionNumber: nextVerNum,
-      Name: block.Title || 'Embedded Slide Whiteboard',
-      Content: committedContent,
-      Get: (fieldName: string) => {
-        if (fieldName === 'Content') return committedContent;
-        if (fieldName === 'Name') return block.Title || 'Embedded Slide Whiteboard';
-        return null;
-      },
-    } as unknown as MJArtifactVersionEntity;
-    this.embeddedArtifactVersions.set(key, updatedStub);
+    const childArtifactId = block.ArtifactID?.trim();
+    const provider = this.getSafeProvider();
+    const user = this.getSafeCurrentUser();
+    if (!childArtifactId || !provider || !user) {
+      this.notifyError('Cannot commit embedded artifact edits: metadata provider or user context unavailable.');
+      return;
+    }
 
-    await this.persistChildArtifactVersionIfPossible(block.ArtifactID, committedContent, nextVerNum);
+    try {
+      const rv = RunView.FromMetadataProvider(provider);
+      const maxRes = await rv.RunView<{ ID: string; VersionNumber: number }>(
+        {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ArtifactID='${EscapeSQLString(childArtifactId)}'`,
+          OrderBy: 'VersionNumber DESC',
+          Fields: ['ID', 'VersionNumber'],
+          MaxRows: 1,
+          ResultType: 'simple',
+        },
+        user,
+      );
+      const currentMax =
+        maxRes.Success && maxRes.Results?.[0]?.VersionNumber ? maxRes.Results[0].VersionNumber : 0;
+      const nextVerNum = currentMax + 1;
 
-    const updatedBlock: DocumentBlockSpec = {
-      ...block,
-      VersionID: block.VersionID ? `${block.ArtifactID || region.RegionID}-v${nextVerNum}` : undefined,
-    };
-    this.applySingleSlideRegionPatch(this.ActiveSlide.SlideID, {
-      RegionID: region.RegionID,
-      Kind: 'mj-block',
-      BlockSpec: updatedBlock,
-      MarkdownContent: DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(updatedBlock),
-    });
+      const ver = await provider.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', user);
+      ver.NewRecord();
+      ver.ArtifactID = childArtifactId;
+      ver.VersionNumber = nextVerNum;
+      ver.Name = block.Title || 'Embedded Slide Whiteboard';
+      ver.UserID = user.ID;
+      ver.Content = committedContent;
+
+      const saved = await ver.Save();
+      if (!saved || !ver.ID) {
+        const msg = ver.LatestResult?.Message || 'Failed to save embedded artifact version.';
+        LogError(msg);
+        this.notifyError(msg);
+        return;
+      }
+
+      this.cacheEmbeddedVersionEntity(childArtifactId, ver);
+
+      if (block.VersionID) {
+        const updatedBlock: DocumentBlockSpec = {
+          ...block,
+          VersionID: ver.ID,
+        };
+        this.applySingleSlideRegionPatch(this.ActiveSlide.SlideID, {
+          RegionID: region.RegionID,
+          Kind: 'mj-block',
+          BlockSpec: updatedBlock,
+          MarkdownContent: DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(updatedBlock),
+        });
+      } else {
+        this.cdr.markForCheck();
+      }
+    } catch (err) {
+      LogError(err);
+      this.notifyError(err instanceof Error ? err.message : 'Failed to save embedded artifact version.');
+    }
   }
 
   public async ExecuteSlideRegionBlock(
-    region: SlideRegionSpec,
+    _region: SlideRegionSpec,
     block: DocumentBlockSpec,
   ): Promise<void> {
     if (this.IsInlineOleArtifactBlock(block)) {
@@ -2649,24 +2767,37 @@ export class SlideDeckArtifactViewerComponent
       return;
     }
 
+    const provider = this.getSafeProvider();
+    const currentUser = this.getSafeCurrentUser();
+    const hasProviderBackend =
+      Boolean(provider) &&
+      (typeof (provider as { RunView?: unknown }).RunView === 'function' ||
+        (Array.isArray(provider?.Entities) && provider.Entities.length > 0));
+
+    if (!provider || !currentUser || !hasProviderBackend) {
+      this.blockResultsByBlockId.set(block.BlockID, {
+        Success: false,
+        BlockID: block.BlockID,
+        Kind: block.Kind,
+        Mode: block.Mode,
+        ErrorMessage: 'Metadata provider or user context unavailable.',
+        Columns: [],
+        Rows: [],
+        TotalRowCount: 0,
+      });
+      this.cdr.markForCheck();
+      return;
+    }
+
     try {
-      const provider = this.ProviderToUse;
-      const currentUser = this.getSafeCurrentUser();
-      const hasProviderBackend =
-        Boolean(provider) &&
-        (typeof (provider as { RunView?: unknown }).RunView === 'function' ||
-          (Array.isArray(provider?.Entities) && provider.Entities.length > 0));
-      if (provider && currentUser && hasProviderBackend) {
-        const execResult = await DocumentLiveBlockEngine.Instance.ExecuteBlock(
-          block,
-          currentUser,
-          provider,
-        );
-        this.blockResultsByBlockId.set(block.BlockID, execResult);
-        this.cdr.markForCheck();
-        return;
-      }
+      const execResult = await DocumentLiveBlockEngine.Instance.ExecuteBlock(
+        block,
+        currentUser,
+        provider,
+      );
+      this.blockResultsByBlockId.set(block.BlockID, execResult);
     } catch (err) {
+      LogError(err);
       this.blockResultsByBlockId.set(block.BlockID, {
         Success: false,
         BlockID: block.BlockID,
@@ -2677,35 +2808,7 @@ export class SlideDeckArtifactViewerComponent
         Rows: [],
         TotalRowCount: 0,
       });
-      this.cdr.markForCheck();
-      return;
     }
-
-    const fallbackResult: DocumentBlockExecutionResult = {
-      Success: true,
-      BlockID: block.BlockID,
-      Kind: block.Kind,
-      Mode: block.Mode,
-      Columns: [
-        { Name: 'Name', DisplayName: 'Artifact / Initiative', Type: 'nvarchar' },
-        { Name: 'Type', DisplayName: 'Artifact Type', Type: 'nvarchar' },
-        { Name: 'Visibility', DisplayName: 'Status', Type: 'nvarchar' },
-      ],
-      Rows: [
-        {
-          Name: this.Deck.Title,
-          Type: 'Presentation',
-          Visibility: 'Active',
-        },
-        {
-          Name: 'Q4 Strategic Roadmap Doc',
-          Type: 'Markdown Document',
-          Visibility: 'Active',
-        },
-      ],
-      TotalRowCount: 2,
-    };
-    this.blockResultsByBlockId.set(block.BlockID, fallbackResult);
     this.cdr.markForCheck();
   }
 
@@ -2937,63 +3040,57 @@ export class SlideDeckArtifactViewerComponent
   }
 
   /**
-   * Posts an anchored `SlideRegion` comment (`AnchorType = 'SlideRegion'`, `AnchorKey = '<SlideID>:<RegionID>'`)
-   * and invokes `@SlidesAgent` when an `@mention` is present (`Accept #3`).
+   * Posts an anchored `SlideRegion` comment (`AnchorType = 'SlideRegion'`, `AnchorKey = '<SlideID>:<RegionID>'`),
+   * persisting only the user's real `Role = 'User'` comment to the server.
    */
   public async SubmitSlideRegionComment(): Promise<void> {
     const trimmed = this.NewCommentDraft.trim();
-    if (!trimmed || !this.IsEditable) {
+    if (!trimmed || !this.CanComment) {
       return;
     }
     const user = this.getCurrentUserSummary();
     const mentions = (trimmed.match(/@[A-Za-z0-9_-]+/g) ?? []).map((m) => m.slice(1));
-    const threadId = `slide-conv-${Date.now()}`;
+    const nowIso = new Date().toISOString();
 
     const newThread: DocumentAnchoredThread = {
-      ConversationID: threadId,
+      ConversationID: `slide-conv-${Date.now()}`,
       AnchorKey: this.PendingAnchorKey,
       AnchorLabel: this.PendingAnchorLabel,
       QuotedText: this.ActiveSlide.Title,
       Status: 'Open',
       AgentMode: 'edit',
-      CreatedAt: new Date().toISOString(),
+      CreatedAt: nowIso,
       Messages: [
         {
           DetailID: `msg-${Date.now()}-1`,
           UserName: user.Name,
           Role: 'User',
           Message: trimmed,
-          CreatedAt: new Date().toISOString(),
+          CreatedAt: nowIso,
           Mentions: mentions,
         },
       ],
     };
 
-    if (mentions.length > 0) {
-      const agentReply = this.applyAgentSlideMutationFromMention(
-        this.PendingAnchorKey,
-        trimmed,
-        mentions[0],
-      );
-      newThread.Messages.push({
-        DetailID: `msg-${Date.now()}-2`,
-        UserName: `@${mentions[0]}`,
-        Role: 'Agent',
-        Message: agentReply,
-        CreatedAt: new Date().toISOString(),
-        Mentions: [],
-      });
+    if (this.artifactVersion?.ArtifactID) {
+      const saved = await this.persistAnchoredSlideThread(newThread);
+      if (!saved) {
+        return;
+      }
     }
 
     this.AnchoredThreads = [newThread, ...this.AnchoredThreads];
     this.NewCommentDraft = '';
-    await this.persistAnchoredSlideThreadIfPossible(newThread);
     this.cdr.markForCheck();
   }
 
   public async ToggleResolveSlideThread(thread: DocumentAnchoredThread): Promise<void> {
+    const previousStatus = thread.Status;
     thread.Status = thread.Status === 'Open' ? 'Resolved' : 'Open';
-    await this.persistThreadStatusUpdateIfPossible(thread);
+    const ok = await this.persistThreadStatusUpdateIfPossible(thread);
+    if (!ok) {
+      thread.Status = previousStatus;
+    }
     this.cdr.markForCheck();
   }
 
@@ -3045,7 +3142,7 @@ export class SlideDeckArtifactViewerComponent
 
   /**
    * Updates ONLY the targeted slide's metadata in `this.Deck` and broadcasts the single-slide
-   * update via `session.UpdateSlideInDeck` (`Accept #1` & `Accept #3`).
+   * update via `session.UpdateSlideInDeck` (`Accept #1`).
    */
   private applySingleSlideMetadataPatch(
     slideId: string,
@@ -3067,7 +3164,7 @@ export class SlideDeckArtifactViewerComponent
 
   /**
    * Updates ONLY the targeted region on `slideId` and broadcasts the single-slide update via
-   * `session.UpdateSlideInDeck` (`Accept #1` & `Accept #3`).
+   * `session.UpdateSlideInDeck` (`Accept #1`).
    */
   private applySingleSlideRegionPatch(
     slideId: string,
@@ -3090,69 +3187,32 @@ export class SlideDeckArtifactViewerComponent
     this.cdr.markForCheck();
   }
 
-  private applyAgentSlideMutationFromMention(
-    anchorKey: string,
-    promptText: string,
-    agentName: string,
-  ): string {
-    const [slideId, regionId] = anchorKey.split(':');
-    const targetSlideId = slideId || this.ActiveSlide.SlideID;
-    const targetRegionId = regionId || this.FocusedRegionID || 'main';
-    const cleanedInstruction = promptText.replace(/@[A-Za-z0-9_-]+/g, () => '').trim();
-
-    if (/add\s+slide/i.test(cleanedInstruction)) {
-      const { Deck: afterAdd, AddedSlide } = SlideDeckEngine.Instance.AddSlide(this.Deck, {
-        Layout: 'TitleAndBody',
-        Title: cleanedInstruction.replace(/add\s+slide[:\s]*/i, () => '').trim() || 'AI Generated Slide',
-        InsertAtIndex: this.ActiveSlideIndex + 1,
-      });
-      this.Deck = afterAdd;
-      this.ActiveSlideID = AddedSlide.SlideID;
-      if (this.session) {
-        this.session.UpdateSlideInDeck(AddedSlide, this.Deck);
-        this.session.ReorderSlidesInDeck(
-          this.Deck.Slides.map((s) => s.SlideID),
-          this.Deck,
-        );
-      }
-      this.syncRawDeckJson();
-      return `@${agentName} added slide "${AddedSlide.Title}" via SlideDeckToolLibrary.add_slide.`;
+  private destroyCollaborationSession(): void {
+    this.stopPresenterTimer();
+    for (const s of this.subs) {
+      s.unsubscribe();
     }
-
-    const slide = this.Deck.Slides.find((s) => s.SlideID === targetSlideId) ?? this.ActiveSlide;
-    const updatedTitle = cleanedInstruction.includes('Title:')
-      ? cleanedInstruction.split('Title:')[1].split('\n')[0].trim()
-      : `${slide.Title} (AI Refined)`;
-    const updatedBullets = [
-      `- **@${agentName} Synthesis:** ${cleanedInstruction || 'Executive summary refined'}`,
-      `- **Targeted Slide Update:** Updated \`${slide.SlideID}\` (\`${targetRegionId}\`)`,
-      `- **Live Data Ready:** Compatible with embedded Views and Queries`,
-    ].join('\n');
-
-    const { Deck: afterMeta } = SlideDeckEngine.Instance.UpdateSlideMetadata(
-      this.Deck,
-      slide.SlideID,
-      { Title: updatedTitle },
-    );
-    const { Deck: afterRegion } = SlideDeckEngine.Instance.UpsertSlideRegion(
-      afterMeta,
-      slide.SlideID,
-      {
-        RegionID: targetRegionId,
-        MarkdownContent: updatedBullets,
-      },
-    );
-    this.Deck = afterRegion;
-    const finalSlide = this.Deck.Slides.find((s) => s.SlideID === slide.SlideID);
-    if (finalSlide) {
-      this.session?.UpdateSlideInDeck(finalSlide, this.Deck);
+    this.subs.length = 0;
+    if (this.permissionUnsub) {
+      this.permissionUnsub();
+      this.permissionUnsub = null;
     }
-    this.syncRawDeckJson();
-
-    return `@${agentName} updated slide "${updatedTitle}" (${slide.SlideID}:${targetRegionId}) in isolation via SlideDeckToolLibrary.update_slide.`;
+    if (this.session) {
+      this.session.Destroy();
+      this.session = null;
+    }
   }
 
   private initializePresentationFromArtifactVersion(): void {
+    this.destroyCollaborationSession();
+    this.blockResultsByBlockId.clear();
+    this.embeddedArtifactVersions.clear();
+    this.inFlightEmbeddedVersionKeys.clear();
+    this.failedEmbeddedVersionMessages.clear();
+    this.AnchoredThreads = [];
+    this.ResolvedPermissions = null;
+    this.ConnectionStatus = 'local';
+
     const rawContent = this.extractArtifactVersionContent();
     const fallbackTitle = this.artifactVersion?.Name || 'Executive Strategy Presentation';
     const artifactId = this.artifactVersion?.ArtifactID || 'slide-deck-default';
@@ -3171,23 +3231,30 @@ export class SlideDeckArtifactViewerComponent
 
     this.restoreWorkspacePreferences();
     this.setupCollaborationSession(artifactId, serialized);
-    void this.resolveViewerPermissionsAndThreads(artifactId);
+    void this.resolveViewerPermissionsAndThreads();
     void this.executeAllLiveBlocksInDeck(this.Deck);
   }
 
   private setupCollaborationSession(artifactId: string, initialSerializedDeck: string): void {
+    if (this.session) {
+      for (const s of this.subs) {
+        s.unsubscribe();
+      }
+      this.subs.length = 0;
+      this.session.Destroy();
+      this.session = null;
+    }
+
+    const provider = this.getSafeProvider();
     const user = this.getCurrentUserSummary();
-    const wsUrl = this.collabService.ResolveCollaborationWebSocketUrl(
-      artifactId,
-      this.readGlobalWsBaseOverride(),
-    );
+    const hasRemoteBackend = this.collabService.HasCollaborationBackend(provider, this.CollaborationWsUrl);
 
     this.session = this.collabService.CreateSession(
       artifactId,
       initialSerializedDeck,
       { id: user.ID, name: user.Name, email: user.Email },
-      !this.readonly,
-      Boolean(wsUrl),
+      this.IsEditable,
+      hasRemoteBackend,
     );
 
     this.subs.push(
@@ -3223,19 +3290,9 @@ export class SlideDeckArtifactViewerComponent
       }),
     );
 
-    if (wsUrl) {
-      this.session.Connect(wsUrl);
+    if (hasRemoteBackend) {
+      void this.session.Connect(this.CollaborationWsUrl, provider);
     }
-  }
-
-  private readGlobalWsBaseOverride(): string | undefined {
-    if (typeof window !== 'undefined') {
-      const win = window as unknown as { __MJ_COLLAB_WS_URL__?: string };
-      if (typeof win.__MJ_COLLAB_WS_URL__ === 'string' && win.__MJ_COLLAB_WS_URL__.trim()) {
-        return win.__MJ_COLLAB_WS_URL__.trim();
-      }
-    }
-    return undefined;
   }
 
   public IsInlineOleArtifactBlock(block: DocumentBlockSpec): boolean {
@@ -3303,9 +3360,23 @@ export class SlideDeckArtifactViewerComponent
     return '';
   }
 
+  private notifyError(message: string): void {
+    this.StatusBannerMessage = message;
+    this.notificationService?.CreateSimpleNotification?.(message, 'error', 4000);
+    this.cdr.markForCheck();
+  }
+
+  private getSafeProvider(): IMetadataProvider | null {
+    try {
+      return this.ProviderToUse ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   private getSafeCurrentUser(): UserInfo | null {
     try {
-      return this.ProviderToUse?.CurrentUser ?? null;
+      return this.getSafeProvider()?.CurrentUser ?? null;
     } catch {
       return null;
     }
@@ -3321,115 +3392,138 @@ export class SlideDeckArtifactViewerComponent
       };
     }
     return {
-      ID: 'user-slides-author',
-      Name: 'Presentation Author',
-      Email: 'author@memberjunction.org',
+      ID: 'local-user',
+      Name: 'Collaborator',
+      Email: '',
     };
   }
 
-  private isUuid(val: string | undefined | null): boolean {
-    return Boolean(
-      val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim()),
-    );
-  }
-
-  private escapeSql(val: string): string {
-    return val.replace(/'/g, () => "''");
-  }
-
-  private async resolveViewerPermissionsAndThreads(artifactId: string): Promise<void> {
-    const provider = this.ProviderToUse;
-    const currentUser = this.getSafeCurrentUser();
-
-    try {
-      if (provider && currentUser && artifactId && !artifactId.startsWith('slide-deck-')) {
-        const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
-          provider,
-          artifactId,
-          currentUser,
-        );
-        this.ResolvedPermissions = perms;
-        if (!perms.CanRead) {
-          this.ConnectionStatus = 'revoked';
-          if (this.WorkspaceMode === 'edit' || this.WorkspaceMode === 'source') {
-            this.EnterPresentationMode('present');
-          }
-        } else if (!perms.CanEdit) {
-          this.ConnectionStatus = 'readonly';
-        }
+  private resolveArtifactsEntityId(provider: IMetadataProvider): string | undefined {
+    if (typeof provider.EntityByName === 'function') {
+      const byName = provider.EntityByName('MJ: Artifacts');
+      if (byName?.ID) {
+        return byName.ID;
       }
-    } catch {
-      // Ignore permission lookup errors in standalone mode
+    }
+    return provider.Entities?.find((e) => e.Name === 'MJ: Artifacts')?.ID;
+  }
+
+  private async resolveArtifactTypeId(
+    provider: IMetadataProvider,
+    typeName: string,
+    user: UserInfo,
+  ): Promise<string | undefined> {
+    const cachedType =
+      ArtifactMetadataEngine.Instance.FindArtifactType(typeName) ??
+      ArtifactMetadataEngine.Instance.ArtifactTypes?.find(
+        (t) => t.Name.trim().toLowerCase() === typeName.trim().toLowerCase(),
+      );
+    if (cachedType?.ID) {
+      return cachedType.ID;
+    }
+    const rv = RunView.FromMetadataProvider(provider);
+    const typeRes = await rv.RunView<{ ID: string }>(
+      {
+        EntityName: 'MJ: Artifact Types',
+        ExtraFilter: `Name='${EscapeSQLString(typeName)}'`,
+        Fields: ['ID'],
+        MaxRows: 1,
+        ResultType: 'simple',
+      },
+      user,
+    );
+    return typeRes.Success ? typeRes.Results?.[0]?.ID : undefined;
+  }
+
+  private async resolveViewerPermissionsAndThreads(): Promise<void> {
+    const persistedArtifactId = this.artifactVersion?.ArtifactID;
+    if (!persistedArtifactId) {
+      this.cdr.markForCheck();
+      return;
     }
 
-    if (provider && currentUser && artifactId && !artifactId.startsWith('slide-deck-')) {
-      if (this.permissionUnsub) {
-        this.permissionUnsub();
-        this.permissionUnsub = null;
+    const provider = this.getSafeProvider();
+    const currentUser = this.getSafeCurrentUser();
+    if (!provider || !currentUser) {
+      this.ResolvedPermissions = null;
+      this.ConnectionStatus = 'readonly';
+      this.session?.SetCanEdit(false);
+      this.cdr.markForCheck();
+      return;
+    }
+
+    try {
+      const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+        provider,
+        persistedArtifactId,
+        currentUser,
+      );
+      this.ResolvedPermissions = perms;
+      if (!perms.CanRead) {
+        this.ConnectionStatus = 'revoked';
+        this.session?.SetCanEdit(false);
+        if (this.WorkspaceMode === 'edit' || this.WorkspaceMode === 'source') {
+          this.EnterPresentationMode('present');
+        }
+      } else if (!perms.CanEdit) {
+        this.ConnectionStatus = 'readonly';
+        this.session?.SetCanEdit(false);
+      } else {
+        this.session?.SetCanEdit(this.IsEditable);
       }
-      this.permissionUnsub = ArtifactPermissionEngine.Instance.OnPermissionsChanged(async (evt) => {
-        if (UUIDsEqual(evt.ArtifactID, artifactId)) {
+    } catch (err) {
+      LogError(err);
+      this.ResolvedPermissions = null;
+      this.ConnectionStatus = 'readonly';
+      this.session?.SetCanEdit(false);
+    }
+
+    if (this.permissionUnsub) {
+      this.permissionUnsub();
+      this.permissionUnsub = null;
+    }
+    this.permissionUnsub = ArtifactPermissionEngine.Instance.OnPermissionsChanged(async (evt) => {
+      if (UUIDsEqual(evt.ArtifactID, persistedArtifactId)) {
+        try {
           const updated = await ArtifactPermissionEngine.Instance.ResolvePermissions(
             provider,
-            artifactId,
+            persistedArtifactId,
             currentUser,
           );
           this.ResolvedPermissions = updated;
           if (!updated.CanRead) {
             this.ConnectionStatus = 'revoked';
+            this.session?.SetCanEdit(false);
             if (this.WorkspaceMode === 'edit' || this.WorkspaceMode === 'source') {
               this.EnterPresentationMode('present');
             }
           } else if (!updated.CanEdit) {
             this.ConnectionStatus = 'readonly';
+            this.session?.SetCanEdit(false);
+          } else {
+            this.session?.SetCanEdit(this.IsEditable);
           }
           this.cdr.markForCheck();
+        } catch (err) {
+          LogError(err);
         }
-      });
-    }
+      }
+    });
 
-    await this.hydrateAnchoredSlideThreadsFromServer(artifactId, currentUser);
-
-    // Seed an initial slide comment thread so right-margin review is immediately inspectable
-    if (this.AnchoredThreads.length === 0) {
-      this.AnchoredThreads = [
-        {
-          ConversationID: 'slide-thread-initial',
-          AnchorKey: `${this.ActiveSlideID}:main`,
-          AnchorLabel: 'Slide 1 · Cover Tagline',
-          QuotedText: this.Deck.Title,
-          Status: 'Open',
-          AgentMode: 'edit',
-          CreatedAt: new Date().toISOString(),
-          Messages: [
-            {
-              DetailID: 'slide-msg-1',
-              UserName: 'Executive Reviewer',
-              Role: 'User',
-              Message: 'Live Views and Queries pause automatically when entering Presentation Mode.',
-              CreatedAt: new Date().toISOString(),
-              Mentions: [],
-            },
-          ],
-        },
-      ];
-    }
+    await this.hydrateAnchoredSlideThreadsFromServer(persistedArtifactId, currentUser, provider);
     this.cdr.markForCheck();
   }
 
   private async hydrateAnchoredSlideThreadsFromServer(
     artifactId: string,
-    user: UserInfo | null,
+    user: UserInfo,
+    provider: IMetadataProvider,
   ): Promise<void> {
-    if (!this.isUuid(artifactId) || !user || !this.ProviderToUse) {
-      return;
-    }
-
     try {
-      const provider = this.ProviderToUse;
-      const artifactEntityId =
-        provider.Entities?.find((e) => e.Name === 'MJ: Artifacts')?.ID ||
-        'AE24303E-F36B-1410-8DB0-00021F8B792E';
+      const artifactEntityId = this.resolveArtifactsEntityId(provider);
+      if (!artifactEntityId) {
+        return;
+      }
 
       const rv = RunView.FromMetadataProvider(provider);
       const convRes = await rv.RunView<{
@@ -3446,7 +3540,7 @@ export class SlideDeckArtifactViewerComponent
       }>(
         {
           EntityName: 'MJ: Conversations',
-          ExtraFilter: `LinkedEntityID='${this.escapeSql(artifactEntityId)}' AND LinkedRecordID='${this.escapeSql(artifactId)}' AND AnchorType='SlideRegion'`,
+          ExtraFilter: `LinkedEntityID='${EscapeSQLString(artifactEntityId)}' AND LinkedRecordID='${EscapeSQLString(artifactId)}' AND AnchorType='SlideRegion'`,
           OrderBy: '__mj_CreatedAt DESC',
           MaxRows: 200,
           ResultType: 'simple',
@@ -3465,8 +3559,8 @@ export class SlideDeckArtifactViewerComponent
       }
 
       const convIds = readableRows
-        .filter((c) => this.isUuid(c.ID))
-        .map((c) => `'${this.escapeSql(c.ID)}'`);
+        .filter((c) => Boolean(c.ID))
+        .map((c) => `'${EscapeSQLString(c.ID)}'`);
       const detailsByConv = new Map<
         string,
         Array<{ ID: string; ConversationID: string; Role: string; Message: string; __mj_CreatedAt?: string }>
@@ -3497,24 +3591,19 @@ export class SlideDeckArtifactViewerComponent
       }
 
       this.AnchoredThreads = readableRows.map((c) => {
-        let meta: {
-          slideId?: string;
-          regionId?: string;
-          anchorDisplayName?: string;
-          quotedText?: string;
-          agentMode?: 'suggest' | 'edit';
-          status?: 'Open' | 'Resolved';
-        } = {};
-        if (c.AnchorMetadata) {
-          try {
-            meta = JSON.parse(c.AnchorMetadata) as typeof meta;
-          } catch {
-            meta = {};
-          }
-        }
+        const meta = c.AnchorMetadata
+          ? (SafeJSONParse<{
+              slideId?: string;
+              regionId?: string;
+              anchorDisplayName?: string;
+              quotedText?: string;
+              agentMode?: 'suggest' | 'edit';
+              status?: 'Open' | 'Resolved';
+            }>(c.AnchorMetadata) ?? {})
+          : {};
         const msgs = (detailsByConv.get(c.ID) ?? []).map((d) => ({
           DetailID: d.ID,
-          UserName: d.Role === 'AI' ? '@SlidesAgent' : user.Name || 'Collaborator',
+          UserName: d.Role === 'AI' ? 'AI Assistant' : user.Name || 'Collaborator',
           Role: (d.Role === 'AI' ? 'Agent' : 'User') as 'User' | 'Agent',
           Message: d.Message,
           CreatedAt: d.__mj_CreatedAt ?? new Date().toISOString(),
@@ -3538,158 +3627,186 @@ export class SlideDeckArtifactViewerComponent
           Messages: msgs,
         };
       });
-    } catch {
-      // Keep local threads when offline
+    } catch (err) {
+      LogError(err);
     }
   }
 
-  private async createDelegatedWhiteboardArtifactIfPossible(name: string): Promise<string> {
-    const fallbackId = `wb-ole-${Date.now()}`;
+  private async createDelegatedWhiteboardArtifact(
+    name: string,
+  ): Promise<{ artifact: MJArtifactEntity; version: MJArtifactVersionEntity } | null> {
+    const hostArtifactId = this.artifactVersion?.ArtifactID;
+    const provider = this.getSafeProvider();
+    const user = this.getSafeCurrentUser();
+    if (!hostArtifactId || !provider || !user) {
+      this.notifyError('Cannot create embedded Whiteboard: host presentation must be saved with an active provider.');
+      return null;
+    }
+
     try {
-      const provider = this.ProviderToUse;
-      const user = this.getSafeCurrentUser();
-      if (!provider || typeof (provider as { GetEntityObject?: unknown }).GetEntityObject !== 'function') {
-        return fallbackId;
+      const artifactEntityId = this.resolveArtifactsEntityId(provider);
+      if (!artifactEntityId) {
+        this.notifyError('Cannot create embedded Whiteboard: MJ: Artifacts entity metadata unavailable.');
+        return null;
       }
-      const artifact = await provider.GetEntityObject<MJArtifactEntity>(
-        'MJ: Artifacts',
-        user ?? undefined,
-      );
+
+      const rv = RunView.FromMetadataProvider(provider);
+      const [hostArtRes, wbTypeId] = await Promise.all([
+        rv.RunView<{ ID: string; EnvironmentID?: string }>(
+          {
+            EntityName: 'MJ: Artifacts',
+            ExtraFilter: `ID='${EscapeSQLString(hostArtifactId)}'`,
+            Fields: ['ID', 'EnvironmentID'],
+            MaxRows: 1,
+            ResultType: 'simple',
+          },
+          user,
+        ),
+        this.resolveArtifactTypeId(provider, 'Whiteboard', user),
+      ]);
+
+      if (!wbTypeId) {
+        this.notifyError('Artifact type "Whiteboard" could not be resolved.');
+        return null;
+      }
+
+      const hostEnvId = hostArtRes.Success ? hostArtRes.Results?.[0]?.EnvironmentID : undefined;
+      const artifact = await provider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', user);
       artifact.NewRecord();
-      if (user?.ID) {
-        artifact.UserID = user.ID;
-      }
+      artifact.UserID = user.ID;
       artifact.Name = name;
       artifact.Description = 'Inline Whiteboard embedded in MJ Slides presentation';
-      const wbType = ArtifactMetadataEngine.Instance.FindArtifactType('Whiteboard');
-      artifact.TypeID = wbType?.ID || 'D37C0785-C5FD-42B4-9442-D48B076E2BA4';
-      if (this.artifactVersion?.ArtifactID) {
-        const artifactEntityId =
-          provider.Entities?.find((e) => e.Name === 'MJ: Artifacts')?.ID ||
-          'AE24303E-F36B-1410-8DB0-00021F8B792E';
-        artifact.DelegateEntityID = artifactEntityId;
-        artifact.DelegateRecordID = this.artifactVersion.ArtifactID;
+      artifact.TypeID = wbTypeId;
+      if (hostEnvId) {
+        artifact.EnvironmentID = hostEnvId;
       }
-      const saved = await artifact.Save();
-      if (saved && artifact.ID) {
-        const initialBoardJson = JSON.stringify({
-          version: 1,
-          idCounter: 1,
-          zCounter: 1,
-          pageCounter: 1,
-          activePageId: 'page-1',
-          pages: [{ id: 'page-1', name: 'Slide Architecture Diagram', items: [] }],
-        });
-        await this.persistChildArtifactVersionIfPossible(artifact.ID, initialBoardJson, 1);
-        return artifact.ID;
-      }
-      return fallbackId;
-    } catch {
-      return fallbackId;
-    }
-  }
+      artifact.DelegateEntityID = artifactEntityId;
+      artifact.DelegateRecordID = hostArtifactId;
 
-  private async persistChildArtifactVersionIfPossible(
-    childArtifactId: string | undefined,
-    content: string,
-    versionNumber: number,
-  ): Promise<void> {
-    if (!childArtifactId) {
-      return;
-    }
-    try {
-      const provider = this.ProviderToUse;
-      const user = this.getSafeCurrentUser();
-      if (!provider || typeof (provider as { GetEntityObject?: unknown }).GetEntityObject !== 'function') {
-        return;
+      const artSaved = await artifact.Save();
+      if (!artSaved || !artifact.ID) {
+        const msg = artifact.LatestResult?.Message || 'Failed to save embedded Whiteboard artifact.';
+        LogError(msg);
+        this.notifyError(msg);
+        return null;
       }
-      const ver = await provider.GetEntityObject<MJArtifactVersionEntity>(
-        'MJ: Artifact Versions',
-        user ?? undefined,
-      );
+
+      const emptyWhiteboardJson = JSON.stringify({
+        version: 1,
+        activePageId: 'page-1',
+        pages: [{ id: 'page-1', name: 'Page 1', items: [] }],
+      });
+
+      const ver = await provider.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', user);
       ver.NewRecord();
-      if (user?.ID) {
-        ver.UserID = user.ID;
+      ver.UserID = user.ID;
+      ver.ArtifactID = artifact.ID;
+      ver.VersionNumber = 1;
+      ver.Name = artifact.Name;
+      ver.Content = emptyWhiteboardJson;
+
+      const verSaved = await ver.Save();
+      if (!verSaved || !ver.ID) {
+        const msg = ver.LatestResult?.Message || 'Failed to save initial Whiteboard version.';
+        LogError(msg);
+        this.notifyError(msg);
+        return null;
       }
-      ver.ArtifactID = childArtifactId;
-      ver.VersionNumber = versionNumber;
-      ver.Content = content;
-      await ver.Save();
-    } catch {
-      // Ignore in offline/standalone test mode
+
+      this.cacheEmbeddedVersionEntity(artifact.ID, ver);
+      return { artifact, version: ver };
+    } catch (err) {
+      LogError(err);
+      this.notifyError(err instanceof Error ? err.message : 'Failed to create embedded Whiteboard.');
+      return null;
     }
   }
 
   private async saveArtifactVersionViaProvider(): Promise<void> {
-    try {
-      const provider = this.ProviderToUse;
-      const user = this.getSafeCurrentUser();
-      if (
-        !provider ||
-        !this.artifactVersion?.ArtifactID ||
-        typeof (provider as { GetEntityObject?: unknown }).GetEntityObject !== 'function'
-      ) {
-        this.lastSavedComparableDeckJson = this.getComparableDeckJson(this.Deck);
-        this.LastSavedVersionNumber = this.CurrentVersionNumber + 1;
-        this.CurrentVersionNumber = this.LastSavedVersionNumber;
-        this.cdr.markForCheck();
-        return;
-      }
-      const ver = await provider.GetEntityObject<MJArtifactVersionEntity>(
-        'MJ: Artifact Versions',
-        user ?? undefined,
-      );
-      ver.NewRecord();
-      if (user?.ID) {
-        ver.UserID = user.ID;
-      }
-      ver.ArtifactID = this.artifactVersion.ArtifactID;
-      ver.VersionNumber = this.CurrentVersionNumber + 1;
-      const serializedContent = SlideDeckEngine.Instance.SerializeDeckSpec(this.Deck);
-      ver.Content = serializedContent;
-      const saved = await ver.Save();
-      if (saved) {
-        this.lastSavedComparableDeckJson = this.getComparableDeckJson(this.Deck);
-        this.CurrentVersionNumber = ver.VersionNumber;
-        this.LastSavedVersionNumber = ver.VersionNumber;
-        this.ContentCommitted.emit(serializedContent);
-      }
-      this.cdr.markForCheck();
-    } catch {
+    const serializedContent = SlideDeckEngine.Instance.SerializeDeckSpec(this.Deck);
+    const artifactId = this.artifactVersion?.ArtifactID;
+    if (!artifactId) {
       this.lastSavedComparableDeckJson = this.getComparableDeckJson(this.Deck);
       this.LastSavedVersionNumber = this.CurrentVersionNumber + 1;
       this.CurrentVersionNumber = this.LastSavedVersionNumber;
+      this.ContentCommitted.emit(serializedContent);
       this.cdr.markForCheck();
+      return;
+    }
+
+    const provider = this.getSafeProvider();
+    const user = this.getSafeCurrentUser();
+    if (!provider || !user) {
+      this.notifyError('Cannot save presentation version: metadata provider or user context unavailable.');
+      return;
+    }
+
+    try {
+      const rv = RunView.FromMetadataProvider(provider);
+      const maxRes = await rv.RunView<{ ID: string; VersionNumber: number }>(
+        {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ArtifactID='${EscapeSQLString(artifactId)}'`,
+          OrderBy: 'VersionNumber DESC',
+          Fields: ['ID', 'VersionNumber'],
+          MaxRows: 1,
+          ResultType: 'simple',
+        },
+        user,
+      );
+      const dbMax = maxRes.Success && maxRes.Results?.[0]?.VersionNumber ? maxRes.Results[0].VersionNumber : 0;
+      const nextVerNum = Math.max(dbMax, this.CurrentVersionNumber, this.LastSavedVersionNumber) + 1;
+
+      const ver = await provider.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', user);
+      ver.NewRecord();
+      ver.UserID = user.ID;
+      ver.ArtifactID = artifactId;
+      ver.VersionNumber = nextVerNum;
+      ver.Name = this.Deck.Title || this.artifactVersion?.Name || 'Presentation';
+      ver.Content = serializedContent;
+      const saved = await ver.Save();
+      if (!saved) {
+        const msg = ver.LatestResult?.Message || 'Failed to save presentation version.';
+        LogError(msg);
+        this.notifyError(msg);
+        return;
+      }
+      this.lastSavedComparableDeckJson = this.getComparableDeckJson(this.Deck);
+      this.CurrentVersionNumber = nextVerNum;
+      this.LastSavedVersionNumber = nextVerNum;
+      this.StatusBannerMessage = `Saved presentation version v${nextVerNum}.`;
+      this.ContentCommitted.emit(serializedContent);
+      this.cdr.markForCheck();
+    } catch (err) {
+      LogError(err);
+      this.notifyError(err instanceof Error ? err.message : 'Failed to save presentation version.');
     }
   }
 
-  private async persistAnchoredSlideThreadIfPossible(thread: DocumentAnchoredThread): Promise<void> {
+  private async persistAnchoredSlideThread(thread: DocumentAnchoredThread): Promise<boolean> {
+    const artifactId = this.artifactVersion?.ArtifactID;
+    const provider = this.getSafeProvider();
+    const user = this.getSafeCurrentUser();
+    if (!artifactId || !provider || !user) {
+      this.notifyError('Cannot save slide comment: metadata provider or user context unavailable.');
+      return false;
+    }
+
     try {
-      const provider = this.ProviderToUse;
-      const user = this.getSafeCurrentUser();
-      if (!provider || typeof (provider as { GetEntityObject?: unknown }).GetEntityObject !== 'function') {
-        return;
+      const artifactEntityId = this.resolveArtifactsEntityId(provider);
+      if (!artifactEntityId) {
+        this.notifyError('Cannot save slide comment: MJ: Artifacts entity metadata unavailable.');
+        return false;
       }
-      const artifactEntityId =
-        provider.Entities?.find((e) => e.Name === 'MJ: Artifacts')?.ID ||
-        'AE24303E-F36B-1410-8DB0-00021F8B792E';
-      const artifactId = this.artifactVersion?.ArtifactID;
       const [slideId, regionId] = thread.AnchorKey.split(':');
 
-      const conv = await provider.GetEntityObject<MJConversationEntity>(
-        'MJ: Conversations',
-        user ?? undefined,
-      );
+      const conv = await provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', user);
       conv.NewRecord();
-      if (user?.ID) {
-        conv.UserID = user.ID;
-      }
+      conv.UserID = user.ID;
       conv.Name = `SlideComment: ${thread.AnchorLabel} (${thread.AnchorKey})`;
       conv.Status = 'Available';
       conv.LinkedEntityID = artifactEntityId;
-      if (artifactId) {
-        conv.LinkedRecordID = artifactId;
-      }
+      conv.LinkedRecordID = artifactId;
       conv.AnchorType = 'SlideRegion';
       conv.AnchorKey = thread.AnchorKey;
       conv.IsResolved = thread.Status === 'Resolved';
@@ -3702,55 +3819,83 @@ export class SlideDeckArtifactViewerComponent
         agentMode: thread.AgentMode,
         status: thread.Status,
       });
-      if (await conv.Save()) {
-        thread.ConversationID = conv.ID;
-        for (const msg of thread.Messages) {
-          const detail = await provider.GetEntityObject<MJConversationDetailEntity>(
-            'MJ: Conversation Details',
-            user ?? undefined,
-          );
-          detail.NewRecord();
-          detail.ConversationID = conv.ID;
-          if (user?.ID) {
-            detail.UserID = user.ID;
-          }
-          detail.Message = msg.Message;
-          detail.Role = msg.Role === 'Agent' ? 'AI' : 'User';
-          await detail.Save();
+
+      const convSaved = await conv.Save();
+      if (!convSaved || !conv.ID) {
+        const msg = conv.LatestResult?.Message || 'Failed to save slide comment conversation.';
+        LogError(msg);
+        this.notifyError(msg);
+        return false;
+      }
+
+      thread.ConversationID = conv.ID;
+      for (const msg of thread.Messages) {
+        const detail = await provider.GetEntityObject<MJConversationDetailEntity>(
+          'MJ: Conversation Details',
+          user,
+        );
+        detail.NewRecord();
+        detail.ConversationID = conv.ID;
+        detail.UserID = user.ID;
+        detail.Message = msg.Message;
+        detail.Role = 'User';
+        const detailSaved = await detail.Save();
+        if (!detailSaved) {
+          const errMsg = detail.LatestResult?.Message || 'Failed to save slide comment detail.';
+          LogError(errMsg);
+          this.notifyError(errMsg);
+          return false;
+        }
+        if (detail.ID) {
+          msg.DetailID = detail.ID;
         }
       }
-    } catch {
-      // Ignore in standalone browser mode
+      return true;
+    } catch (err) {
+      LogError(err);
+      this.notifyError(err instanceof Error ? err.message : 'Failed to save slide comment.');
+      return false;
     }
   }
 
-  private async persistThreadStatusUpdateIfPossible(thread: DocumentAnchoredThread): Promise<void> {
+  private async persistThreadStatusUpdateIfPossible(thread: DocumentAnchoredThread): Promise<boolean> {
+    if (!this.artifactVersion?.ArtifactID) {
+      return true;
+    }
+    const provider = this.getSafeProvider();
+    const user = this.getSafeCurrentUser();
+    if (!provider || !user) {
+      this.notifyError('Cannot update comment resolution: metadata provider or user context unavailable.');
+      return false;
+    }
     try {
-      const provider = this.ProviderToUse;
-      const user = this.getSafeCurrentUser();
-      if (!provider || typeof (provider as { GetEntityObject?: unknown }).GetEntityObject !== 'function') {
-        return;
-      }
       const [slideId, regionId] = thread.AnchorKey.split(':');
-      const conv = await provider.GetEntityObject<MJConversationEntity>(
-        'MJ: Conversations',
-        user ?? undefined,
-      );
-      if (await conv.Load(thread.ConversationID)) {
-        conv.IsResolved = thread.Status === 'Resolved';
-        conv.IsArchived = thread.Status === 'Resolved';
-        conv.AnchorMetadata = JSON.stringify({
-          slideId: slideId || this.ActiveSlideID,
-          regionId: regionId || this.FocusedRegionID,
-          anchorDisplayName: thread.AnchorLabel,
-          quotedText: thread.QuotedText,
-          agentMode: thread.AgentMode,
-          status: thread.Status,
-        });
-        await conv.Save();
+      const conv = await provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', user);
+      const loaded = await conv.Load(thread.ConversationID);
+      if (!loaded) {
+        return false;
       }
-    } catch {
-      // Ignore in standalone browser mode
+      conv.IsResolved = thread.Status === 'Resolved';
+      conv.IsArchived = thread.Status === 'Resolved';
+      conv.AnchorMetadata = JSON.stringify({
+        slideId: slideId || this.ActiveSlideID,
+        regionId: regionId || this.FocusedRegionID,
+        anchorDisplayName: thread.AnchorLabel,
+        quotedText: thread.QuotedText,
+        agentMode: thread.AgentMode,
+        status: thread.Status,
+      });
+      const ok = await conv.Save();
+      if (!ok) {
+        const msg = conv.LatestResult?.Message || 'Failed to update comment resolution status.';
+        LogError(msg);
+        this.notifyError(msg);
+      }
+      return ok;
+    } catch (err) {
+      LogError(err);
+      this.notifyError(err instanceof Error ? err.message : 'Failed to update comment resolution status.');
+      return false;
     }
   }
 
@@ -3761,19 +3906,21 @@ export class SlideDeckArtifactViewerComponent
         `${SlideDeckArtifactViewerComponent.USER_SETTING_PREFIX}${artifactId}`,
       );
       if (raw) {
-        const parsed = JSON.parse(raw) as {
+        const parsed = SafeJSONParse<{
           showFilmstrip?: boolean;
           rightDrawerTab?: SlideRightDrawerTab;
-        };
-        if (typeof parsed.showFilmstrip === 'boolean') {
-          this.ShowFilmstrip = parsed.showFilmstrip;
-        }
-        if (parsed.rightDrawerTab) {
-          this.RightDrawerTab = parsed.rightDrawerTab;
+        }>(raw);
+        if (parsed) {
+          if (typeof parsed.showFilmstrip === 'boolean') {
+            this.ShowFilmstrip = parsed.showFilmstrip;
+          }
+          if (parsed.rightDrawerTab) {
+            this.RightDrawerTab = parsed.rightDrawerTab;
+          }
         }
       }
     } catch {
-      // Ignore when UserInfoEngine is not initialized
+      // Ignore when UserInfoEngine is not initialized in isolated unit tests
     }
   }
 
@@ -3788,7 +3935,7 @@ export class SlideDeckArtifactViewerComponent
         }),
       );
     } catch {
-      // Ignore when UserInfoEngine is not initialized
+      // Ignore when UserInfoEngine is not initialized in isolated unit tests
     }
   }
 }

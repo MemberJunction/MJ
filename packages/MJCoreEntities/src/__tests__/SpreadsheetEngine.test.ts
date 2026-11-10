@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { deflateRawSync } from 'node:zlib';
+import { EntityFieldInfo, EntityFieldTSType, EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
     ColumnIndexToLetter,
     ColumnLetterToIndex,
@@ -433,25 +434,360 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         ]);
     });
 
-    it('§ 6.1 & O7: initializes and evaluates a 100,000-cell grid in under 500ms', () => {
-        const start = performance.now();
-        // Create a 5,000 row x 20 column (100,000 cell coordinates) worksheet with sample populated cells & formulas
+    it('§ 6.1, O7 & D2: evaluates 2,500+ formula cells including a 1,500-row running-total chain with zero stack overflow and sub-50ms incremental SetCell updates', () => {
         const wb = engine.CreateEmptyWorkbook('100k Stress Test', ['BigGrid'], 5000, 20);
         const ws = wb.Worksheets[0];
-        for (let r = 1; r <= 200; r++) {
+
+        // Populate A1:A1500 with inputs, B1:B1500 with a 1,500-row running-total chain, and C1:C1500 with 1,500 extra formulas (3,000 total formulas!)
+        for (let r = 1; r <= 1500; r++) {
             const addrA = `A${r}`;
             ws.Cells[addrA] = {
                 RowID: ws.Rows[r - 1].RowID,
                 ColumnID: ws.Columns[0].ColumnID,
                 Address: addrA,
-                RawValue: r * 10
+                RawValue: 2
+            };
+            const addrB = `B${r}`;
+            const bFormula = r === 1 ? '=A1' : `=B${r - 1}+A${r}`;
+            ws.Cells[addrB] = {
+                RowID: ws.Rows[r - 1].RowID,
+                ColumnID: ws.Columns[1].ColumnID,
+                Address: addrB,
+                RawValue: null,
+                Formula: bFormula
+            };
+            const addrC = `C${r}`;
+            ws.Cells[addrC] = {
+                RowID: ws.Rows[r - 1].RowID,
+                ColumnID: ws.Columns[2].ColumnID,
+                Address: addrC,
+                RawValue: null,
+                Formula: `=A${r}*10+5`
             };
         }
-        engine.SetCell(wb, ws.SheetID, 'B1', { Formula: '=SUM(A1:A200)' }, true);
-        const elapsedMs = performance.now() - start;
+
+        const evalStart = performance.now();
+        engine.EvaluateWorkbook(wb);
+        const fullEvalMs = performance.now() - evalStart;
 
         expect(ws.Rows.length * ws.Columns.length).toBe(100_000);
-        expect(ws.Cells['B1'].ComputedValue).toBe(201000);
-        expect(elapsedMs).toBeLessThan(500);
+        expect(ws.Cells['B1500'].ComputedValue).toBe(3000);
+        expect(ws.Cells['C1500'].ComputedValue).toBe(25);
+        expect(fullEvalMs).toBeLessThan(1000);
+
+        // Incremental dirty-subgraph recalculation: editing A1500 updates ONLY B1500 and C1500 in milliseconds
+        const incStart = performance.now();
+        engine.SetCell(wb, ws.SheetID, 'A1500', { Value: 102 }, true);
+        const incMs = performance.now() - incStart;
+        expect(ws.Cells['B1500'].ComputedValue).toBe(3100);
+        expect(ws.Cells['C1500'].ComputedValue).toBe(1025);
+        expect(incMs).toBeLessThan(50);
+    });
+
+    it('D2 & D4: enforces full Excel parity across rounding, modulo, strings, blank coercion, lookups, criteria wildcards, scientific notation, and 1900 serial dates', () => {
+        const wb = engine.CreateEmptyWorkbook('Excel Parity Suite', ['Parity'], 40, 15);
+        const s = wb.Worksheets[0];
+
+        // Rounding & Modulo parity
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=ROUND(-2.5, 0)')).toBe(-3);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=ROUND(1.005, 2)')).toBe(1.01);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=INT(-2.3)')).toBe(-3);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=MOD(-1, 3)')).toBe(2);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=MOD(5, 0)')).toBe('#DIV/0!');
+
+        // Scientific notation & postfix percent on arbitrary expressions
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUM(1e-11, 2e-11)')).toBe(3e-11);
+        engine.SetCell(wb, s.SheetID, 'A1', { Value: 25 }, true);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=(A1)%')).toBe(0.25);
+
+        // LEFT / RIGHT zero-length & error propagation
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=LEFT("abc", 0)')).toBe('');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=RIGHT("abc", 0)')).toBe('');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=LEFT(#REF!, 2)')).toBe('#REF!');
+
+        // Blank cell coercion & IS* functions (A9 is blank)
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=IF(A9=0, "zero", "nonzero")')).toBe('zero');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=IF(A9="", "empty", "nonempty")')).toBe('empty');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=ISBLANK(A9)')).toBe(true);
+        engine.SetCell(wb, s.SheetID, 'A10', { Formula: '=LEFT("abc", 0)' }, true);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=ISBLANK(A10)')).toBe(false);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=ISTEXT(A10)')).toBe(true);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=ISNUMBER(A1)')).toBe(true);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=ISERROR(#DIV/0!)')).toBe(true);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=ISNA(#N/A)')).toBe(true);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=ISNA(#DIV/0!)')).toBe(false);
+
+        // IFNA catches #N/A ONLY (distinct from IFERROR)
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=IFNA(#N/A, "missing")')).toBe('missing');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=IFNA(#DIV/0!, "missing")')).toBe('#DIV/0!');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=IFERROR(#DIV/0!, "fallback")')).toBe('fallback');
+
+        // COUNTIF skipping blanks on numeric < criteria + wildcard matching
+        engine.SetCell(wb, s.SheetID, 'B1', { Value: 2 }, true);
+        // B2:B5 remain blank!
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIF(B1:B5, "<5")')).toBe(1);
+
+        engine.SetCell(wb, s.SheetID, 'C1', { Value: 'Enterprise Gold' }, false);
+        engine.SetCell(wb, s.SheetID, 'C2', { Value: 'Starter Plan' }, false);
+        engine.SetCell(wb, s.SheetID, 'C3', { Value: 'Enterprise Plus' }, false);
+        engine.SetCell(wb, s.SheetID, 'D1', { Value: 100 }, false);
+        engine.SetCell(wb, s.SheetID, 'D2', { Value: 50 }, false);
+        engine.SetCell(wb, s.SheetID, 'D3', { Value: 300 }, true);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIF(C1:C5, "Enterprise*")')).toBe(2);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(D1:D3, C1:C3, "Enterprise*", D1:D3, ">150")')).toBe(300);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(C1:C3, "Enterprise*", D1:D3, ">=100")')).toBe(2);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=AVERAGEIFS(D1:D3, C1:C3, "Enterprise*")')).toBe(200);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMPRODUCT(D1:D3, D1:D3)')).toBe(100 * 100 + 50 * 50 + 300 * 300);
+
+        // 1D horizontal INDEX(F1:H1, 2), VLOOKUP 4th arg approx vs exact, XLOOKUP, and MATCH
+        engine.SetCell(wb, s.SheetID, 'F1', { Value: 'Jan' }, false);
+        engine.SetCell(wb, s.SheetID, 'G1', { Value: 'Feb' }, false);
+        engine.SetCell(wb, s.SheetID, 'H1', { Value: 'Mar' }, false);
+        engine.SetCell(wb, s.SheetID, 'J1', { Value: 10 }, false);
+        engine.SetCell(wb, s.SheetID, 'K1', { Value: 'Tier 1' }, false);
+        engine.SetCell(wb, s.SheetID, 'J2', { Value: 20 }, false);
+        engine.SetCell(wb, s.SheetID, 'K2', { Value: 'Tier 2' }, false);
+        engine.SetCell(wb, s.SheetID, 'J3', { Value: 30 }, false);
+        engine.SetCell(wb, s.SheetID, 'K3', { Value: 'Tier 3' }, true);
+
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=INDEX(F1:H1, 2)')).toBe('Feb');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=VLOOKUP(25, J1:K3, 2, TRUE)')).toBe('Tier 2');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=VLOOKUP(25, J1:K3, 2, FALSE)')).toBe('#N/A');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=VLOOKUP(20, J1:K3, 0, FALSE)')).toBe('#VALUE!');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=XLOOKUP(20, J1:J3, K1:K3, "None")')).toBe('Tier 2');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=XLOOKUP(99, J1:J3, K1:K3, "Missing")')).toBe('Missing');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=MATCH(25, J1:J3, 1)')).toBe(2);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=MATCH(25, J1:J3, 0)')).toBe('#N/A');
+
+        // Excel 1900 serial dates + date arithmetic + TEXT
+        const datePlus10 = engine.SetCell(wb, s.SheetID, 'M1', { Formula: '=DATE(2026, 1, 15) + 10' }, true);
+        expect(typeof datePlus10.ComputedValue).toBe('number');
+        expect(datePlus10.DisplayValue).toBe('2026-01-25');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=YEAR(M1)')).toBe(2026);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=MONTH(M1)')).toBe(1);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=DAY(M1)')).toBe(25);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=DAYS(M1, DATE(2026, 1, 15))')).toBe(10);
+        expect(engine.FormatCellValue(engine.EvaluateFormulaExpression(wb, s.SheetID, '=EDATE(DATE(2026, 1, 31), 1)'), { FormatType: 'date' })).toBe('2026-02-28');
+        expect(engine.FormatCellValue(engine.EvaluateFormulaExpression(wb, s.SheetID, '=EOMONTH(DATE(2024, 1, 15), 1)'), { FormatType: 'date' })).toBe('2024-02-29');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=TEXT(DATE(2026, 1, 15), "yyyy-mm-dd")')).toBe('2026-01-15');
+
+        const todayCell = engine.SetCell(wb, s.SheetID, 'M2', { Formula: '=TODAY()+7' }, true);
+        const todayBase = engine.EvaluateFormulaExpression(wb, s.SheetID, '=TODAY()') as number;
+        expect(todayCell.ComputedValue).toBe(todayBase + 7);
+        expect(todayCell.DisplayValue).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it('B6: rejects truncated DEFLATE streams and high-ratio decompression bombs immediately', () => {
+        // Helper to build a single-entry DEFLATE ZIP archive
+        const buildDeflateZip = (entryName: string, compressedPayload: Uint8Array, declaredUncompSize: number): Uint8Array => {
+            const nameBytes = new TextEncoder().encode(entryName);
+            const local = new Uint8Array(30 + nameBytes.length);
+            const lv = new DataView(local.buffer);
+            lv.setUint32(0, 0x04034b50, true);
+            lv.setUint16(4, 20, true);
+            lv.setUint16(8, 8, true); // method 8 = DEFLATE
+            lv.setUint32(18, compressedPayload.length, true);
+            lv.setUint32(22, declaredUncompSize, true);
+            lv.setUint16(26, nameBytes.length, true);
+            local.set(nameBytes, 30);
+
+            const central = new Uint8Array(46 + nameBytes.length);
+            const cv = new DataView(central.buffer);
+            cv.setUint32(0, 0x02014b50, true);
+            cv.setUint16(4, 20, true);
+            cv.setUint16(6, 20, true);
+            cv.setUint16(10, 8, true);
+            cv.setUint32(20, compressedPayload.length, true);
+            cv.setUint32(24, declaredUncompSize, true);
+            cv.setUint16(28, nameBytes.length, true);
+            cv.setUint32(42, 0, true);
+            central.set(nameBytes, 46);
+
+            const cdOffset = local.length + compressedPayload.length;
+            const eocd = new Uint8Array(22);
+            const ev = new DataView(eocd.buffer);
+            ev.setUint32(0, 0x06054b50, true);
+            ev.setUint16(8, 1, true);
+            ev.setUint16(10, 1, true);
+            ev.setUint32(12, central.length, true);
+            ev.setUint32(16, cdOffset, true);
+
+            const total = new Uint8Array(cdOffset + central.length + eocd.length);
+            total.set(local, 0);
+            total.set(compressedPayload, local.length);
+            total.set(central, cdOffset);
+            total.set(eocd, cdOffset + central.length);
+            return total;
+        };
+
+        // 1. Truncated DEFLATE stream (chopped mid-stream)
+        const validXml = new TextEncoder().encode('<worksheet><sheetData/></worksheet>'.repeat(50));
+        const fullCompressed = new Uint8Array(deflateRawSync(validXml));
+        const truncatedCompressed = fullCompressed.subarray(0, Math.max(2, Math.floor(fullCompressed.length / 2)));
+        const truncatedZip = buildDeflateZip('xl/worksheets/sheet1.xml', truncatedCompressed, validXml.length);
+        expect(() => engine.ImportFromXlsxBytes(truncatedZip)).toThrow(/Truncated DEFLATE stream|Invalid/i);
+
+        // 2. High-ratio compression bomb: 18 MB of zeroes compressed into ~18 KB with spoofed 1 KB header uncompSize
+        const bombPlain = new Uint8Array(18 * 1024 * 1024);
+        const bombCompressed = new Uint8Array(deflateRawSync(bombPlain));
+        expect(bombCompressed.byteLength).toBeLessThan(100_000);
+        const bombZip = buildDeflateZip('xl/worksheets/sheet1.xml', bombCompressed, 1024);
+        expect(() => engine.ImportFromXlsxBytes(bombZip)).toThrow(/exceeds maximum allowed/i);
+    });
+
+    it('B4 & A5: strips viewer-scoped live table/spill/=MJ.* values on serialization and preserves =MJ.VIEW 3rd-arg filter', async () => {
+        // A5: =MJ.VIEW 3rd argument with '=' must stay in positional Arguments, NOT split into NamedParameters
+        const parsedView = engine.ParseMjCustomFunctionFormula(`=MJ.VIEW("Members", "Active Members", "Status='Active'")`);
+        expect(parsedView).toBeTruthy();
+        expect(parsedView!.Kind).toBe('VIEW');
+        expect(parsedView!.Arguments).toEqual(["Status='Active'"]);
+        expect(parsedView!.NamedParameters).toEqual({});
+
+        const wb = engine.CreateEmptyWorkbook('Viewer Leak Guard', ['Data'], 20, 8);
+        const ws = wb.Worksheets[0];
+        engine.SetCell(wb, ws.SheetID, 'D1', { Formula: `=MJ.VIEW("Members", "(Default)", "Status='Active'")` }, false);
+
+        ws.LiveTables.push({
+            TableID: 'tbl-live',
+            Title: 'Live Members',
+            SourceType: 'EntityView',
+            EntityName: 'Members',
+            AnchorCell: 'A1',
+            IncludeHeaders: true,
+            Mode: 'Live'
+        });
+
+        let rowsToReturn: Array<Record<string, unknown>> = [
+            { ID: 'm1', Name: 'Secret Alice', Status: 'Active' },
+            { ID: 'm2', Name: 'Secret Bob', Status: 'Active' }
+        ];
+        const mockEntity = {
+            ID: 'ent-mem',
+            Name: 'Members',
+            DisplayNameOrName: 'Members',
+            PrimaryKeys: [{ Name: 'ID', IsPrimaryKey: true, TSType: EntityFieldTSType.String }],
+            Fields: [
+                { Name: 'ID', DisplayNameOrName: 'ID', IsPrimaryKey: true, DefaultInView: true, TSType: EntityFieldTSType.String },
+                { Name: 'Name', DisplayNameOrName: 'Name', IsPrimaryKey: false, DefaultInView: true, TSType: EntityFieldTSType.String },
+                { Name: 'Status', DisplayNameOrName: 'Status', IsPrimaryKey: false, DefaultInView: true, TSType: EntityFieldTSType.String }
+            ] as unknown as EntityFieldInfo[],
+            FieldLevelSecurityApplies: false,
+            GetUserPermisions: () => ({ CanRead: true }),
+            GetDeniedReadFields: () => new Set<string>()
+        } as unknown as EntityInfo;
+
+        let lastExtraFilter = '';
+        const provider = {
+            Entities: [mockEntity],
+            Queries: [],
+            RunView: async (params: { ExtraFilter?: string }) => {
+                lastExtraFilter = params.ExtraFilter ?? '';
+                return { Success: true, Results: rowsToReturn, TotalRowCount: rowsToReturn.length };
+            }
+        } as unknown as IMetadataProvider;
+
+        const viewer = createMockUser('u-viewer', 'Alice', true);
+        await engine.RefreshLiveTables(wb, viewer, provider);
+        await engine.EvaluateMjCustomFunctions(wb, viewer, provider);
+
+        expect(lastExtraFilter).toContain("Status = 'Active'");
+        expect(ws.Cells['B2'].ComputedValue).toBe('Secret Alice');
+        expect(ws.Cells['B3'].ComputedValue).toBe('Secret Bob');
+        expect(ws.Cells['E1']?.SpilledFrom).toBe('D1');
+
+        // Shrinking live table results clears stale row 3!
+        rowsToReturn = [{ ID: 'm1', Name: 'Secret Alice', Status: 'Active' }];
+        await engine.RefreshLiveTables(wb, viewer, provider);
+        expect(ws.Cells['B2'].ComputedValue).toBe('Secret Alice');
+        expect(ws.Cells['B3']).toBeUndefined();
+
+        // SerializeWorkbook strips live table cells, spill cells, and resets D1 ComputedValue/DisplayValue
+        const serialized = engine.SerializeWorkbook(wb);
+        expect(serialized).not.toContain('Secret Alice');
+        const reparsed = JSON.parse(serialized);
+        expect(reparsed.Worksheets[0].Cells['B2']).toBeUndefined();
+        expect(reparsed.Worksheets[0].Cells['E1']).toBeUndefined();
+        expect(reparsed.Worksheets[0].Cells['D1'].ComputedValue).toBeNull();
+        expect(reparsed.Worksheets[0].Cells['D1'].DisplayValue).toBe('');
+    });
+
+    it('D3 & E6: preserves unique RowID/ColumnID after deletes, shrinks cross-sheet @SHEET_RANGE endpoints, shifts non-cell metadata, and imports OOXML shared formulas & date numFmts', () => {
+        const wb = engine.CreateEmptyWorkbook('Structural & XLSX', ['Summary', 'FY24 Q1'], 12, 8);
+        const sumSheet = wb.Worksheets[0];
+        const q1Sheet = wb.Worksheets[1];
+
+        engine.SetCell(wb, q1Sheet.SheetID, 'B2', { Value: 10 }, false);
+        engine.SetCell(wb, q1Sheet.SheetID, 'B3', { Value: 20 }, false);
+        engine.SetCell(wb, q1Sheet.SheetID, 'B4', { Value: 30 }, true);
+
+        const crossSum = engine.SetCell(wb, sumSheet.SheetID, 'A1', { Formula: "='FY24 Q1'!B2:B4" }, false);
+        expect(crossSum.FormulaStable).toContain('@SHEET_RANGE(');
+        engine.SetCell(wb, sumSheet.SheetID, 'A2', { Formula: "=SUM('FY24 Q1'!B2:B4)" }, true);
+        expect(sumSheet.Cells['A2'].ComputedValue).toBe(60);
+
+        // Configure non-cell range metadata on q1Sheet
+        wb.NamedRanges.push({ Name: 'Q1Range', SheetID: q1Sheet.SheetID, Range: 'B2:B4' });
+        q1Sheet.Charts.push({ ChartID: 'c1', Title: 'C', ChartType: 'bar', SheetID: q1Sheet.SheetID, SourceRange: 'B2:B4', PositionCell: 'D5' });
+        q1Sheet.SortSpec = { ColumnLetter: 'B', Direction: 'asc' };
+        q1Sheet.FilterSpecs = [{ ColumnLetter: 'B', Operator: 'gt', Value: '5' }];
+
+        // Delete endpoint row 2 on 'FY24 Q1' -> range B2:B4 shrinks to surviving rows (now B2:B3 = 20 + 30 = 50), NOT #REF!!
+        engine.DeleteRows(wb, q1Sheet.SheetID, 2, 1);
+        expect(sumSheet.Cells['A2'].Formula).toBe("=SUM('FY24 Q1'!B2:B3)");
+        expect(sumSheet.Cells['A2'].ComputedValue).toBe(50);
+        expect(wb.NamedRanges[0].Range).toBe('B2:B3');
+        expect(q1Sheet.Charts[0].SourceRange).toBe('B2:B3');
+        expect(q1Sheet.Charts[0].PositionCell).toBe('D4');
+
+        // Expand capacity after deletion -> never mints duplicate RowIDs!
+        engine.SetCell(wb, q1Sheet.SheetID, 'A15', { Value: 99 }, true);
+        const rowIds = q1Sheet.Rows.map((r) => r.RowID);
+        expect(new Set(rowIds).size).toBe(rowIds.length);
+
+        // Insert column at A on q1Sheet -> SortSpec and FilterSpecs shift from B to C
+        engine.InsertColumns(wb, q1Sheet.SheetID, 1, 1);
+        expect(q1Sheet.SortSpec?.ColumnLetter).toBe('C');
+        expect(q1Sheet.FilterSpecs[0].ColumnLetter).toBe('C');
+
+        // E6: Import .xlsx with OOXML shared formulas (<f t="shared" si="0">) and built-in date numFmtId="14"
+        const exported = engine.ExportToXlsxBytes(engine.CreateEmptyWorkbook('SharedTest', ['Sheet1'], 5, 5), false);
+        // Build a synthetic worksheet XML containing shared formulas and numFmtId=14 date style
+        const baseWb = engine.CreateEmptyWorkbook('SharedFormulaBook', ['Sheet1'], 6, 6);
+        const customWsXml = [
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+            '<sheetData>',
+            '<row r="1"><c r="A1" t="n"><v>10</v></c><c r="B1" t="n"><f t="shared" ref="B1:B3" si="0">A1*2</f><v>20</v></c><c r="C1" s="1" t="n"><v>46037</v></c></row>',
+            '<row r="2"><c r="A2" t="n"><v>15</v></c><c r="B2" t="n"><f t="shared" si="0"/><v>30</v></c></row>',
+            '<row r="3"><c r="A3" t="n"><v>25</v></c><c r="B3" t="n"><f t="shared" si="0"/><v>50</v></c></row>',
+            '</sheetData></worksheet>'
+        ].join('');
+        const customStylesXml = [
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+            '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+            '<fonts count="1"><font><sz val="11"/></font></fonts>',
+            '<cellXfs count="2"><xf numFmtId="0" fontId="0"/><xf numFmtId="14" fontId="0" applyNumberFormat="1"/></cellXfs>',
+            '</styleSheet>'
+        ].join('');
+        // Use internal buildZipArchive via a minimal stored ZIP helper
+        expect(exported.length).toBeGreaterThan(0);
+        expect(baseWb.Worksheets).toHaveLength(1);
+        const enc = new TextEncoder();
+        const zipEntries = [
+            { Name: '[Content_Types].xml', Data: enc.encode('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>') },
+            { Name: 'xl/workbook.xml', Data: enc.encode('<workbook><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>') },
+            { Name: 'xl/_rels/workbook.xml.rels', Data: enc.encode('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>') },
+            { Name: 'xl/styles.xml', Data: enc.encode(customStylesXml) },
+            { Name: 'xl/worksheets/sheet1.xml', Data: enc.encode(customWsXml) }
+        ];
+        const customZip = (engine as unknown as { buildZipArchive: (e: Array<{ Name: string; Data: Uint8Array }>) => Uint8Array }).buildZipArchive(zipEntries);
+        const importedShared = engine.ImportFromXlsxBytes(customZip);
+        const impWs = importedShared.Worksheets[0];
+        expect(impWs.Cells['B1'].Formula).toBe('=A1*2');
+        expect(impWs.Cells['B2'].Formula).toBe('=A2*2');
+        expect(impWs.Cells['B3'].Formula).toBe('=A3*2');
+        expect(impWs.Cells['B3'].ComputedValue).toBe(50);
+        expect(impWs.Cells['C1'].Style?.FormatType).toBe('date');
+        expect(impWs.Cells['C1'].DisplayValue).toBe('2026-01-15');
     });
 });

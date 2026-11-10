@@ -9,8 +9,8 @@
  *
  * @module @memberjunction/excel-addin-server
  */
-import { BaseRemotableOperation, IMetadataProvider, IRunQueryProvider, ProjectEntityValueRowsForUser, RunQuery, RunView, UserInfo } from '@memberjunction/core';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { BaseRemotableOperation, EntityInfo, IMetadataProvider, IRunQueryProvider, ProjectEntityValueRowsForUser, RunQuery, RunView, UserInfo } from '@memberjunction/core';
+import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     EXCEL_WORKBOOK_CONTRACT_VERSION,
     ExcelAddinBuildWorkbookInput,
@@ -42,7 +42,7 @@ import {
 import { BuildExcelCatalog, LoadExcelEntityViews } from './catalog';
 import { CreateExcelConnectionKey } from './connection';
 import { ExcelAddinRuntime } from './runtime';
-import { ResolveSingleWorkbookSource, ResolveWorkbookSources } from './sources';
+import { ExcelSourceError, ResolveSingleWorkbookSource, ResolveViewByNameOrId, ResolveWorkbookSources } from './sources';
 import { BuildConnectedWorkbook } from './workbook-builder';
 
 const MAX_FILE_NAME_LENGTH = 100;
@@ -220,27 +220,22 @@ export class ExcelAddinEvaluateCustomFunctionServerOperation extends ExcelAddinE
             if (!entity || !entity.GetUserPermisions(user).CanRead) {
                 throw new Error(`You don't have access to the entity "${target}".`);
             }
-            const viewRef = (input.ViewNameOrId ?? '').trim();
-            const isDefault = !viewRef || viewRef.toLowerCase() === '(default)';
-            const resolved = await ResolveSingleWorkbookSource(
-                isDefault
-                    ? { Kind: 'Entity', ID: entity.ID }
-                    : { Kind: 'View', ID: viewRef },
-                provider,
-                user
-            );
+            const resolved = await ResolveViewByNameOrId(entity, input.ViewNameOrId, provider, user);
+            const safeExtraFilter = buildSafeViewExtraFilter(entity, user, input.Filter);
             const rv = RunView.FromMetadataProvider(provider);
             const vRes = await rv.RunView(
-                isDefault
+                resolved.Kind === 'Entity'
                     ? {
                           EntityName: entity.Name,
                           Fields: resolved.Columns.map(c => c.Name),
+                          ExtraFilter: safeExtraFilter,
                           MaxRows: maxRows,
                           ResultType: 'simple',
                       }
                     : {
                           ViewID: resolved.ID,
                           Fields: resolved.Columns.map(c => c.Name),
+                          ExtraFilter: safeExtraFilter,
                           MaxRows: maxRows,
                           ResultType: 'simple',
                       },
@@ -266,6 +261,47 @@ export class ExcelAddinEvaluateCustomFunctionServerOperation extends ExcelAddinE
 
         throw new Error('Only Query and View custom functions are supported.');
     }
+}
+
+function buildSafeViewExtraFilter(entity: EntityInfo, user: UserInfo, rawFilter: string | undefined): string | undefined {
+    const trimmed = (rawFilter ?? '').trim();
+    if (!trimmed) {
+        return undefined;
+    }
+    if (
+        /;|--|\/\*|\*\/|\b(SELECT|UNION|DROP|DELETE|UPDATE|INSERT|EXEC|EXECUTE|ALTER|CREATE|TRUNCATE|MERGE|GRANT|REVOKE|WAITFOR|OPENROWSET)\b/i.test(
+            trimmed,
+        ) ||
+        /\bxp_[A-Za-z0-9_]*/i.test(trimmed)
+    ) {
+        throw new ExcelSourceError('Unsafe SQL filter expression refused in =MJ.VIEW.');
+    }
+
+    const eqMatch = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:'((?:''|[^'])*)'|"([^"]*)"|([+-]?\d+(?:\.\d+)?)|(TRUE|FALSE))$/i.exec(trimmed);
+    if (!eqMatch) {
+        throw new ExcelSourceError('Only simple Field=\'Value\' equality filters are permitted in =MJ.VIEW.');
+    }
+
+    const fieldName = eqMatch[1];
+    const matchedField = entity.Fields.find(f => f.Name.toLowerCase() === fieldName.toLowerCase());
+    if (!matchedField) {
+        throw new ExcelSourceError(`The entity "${entity.DisplayNameOrName}" has no field "${fieldName}".`);
+    }
+    const denied = entity.GetDeniedReadFields ? entity.GetDeniedReadFields(user) : new Set<string>();
+    for (const d of denied) {
+        if (d.toLowerCase() === matchedField.Name.toLowerCase()) {
+            throw new ExcelSourceError(`You do not have permission to filter on field "${matchedField.Name}".`);
+        }
+    }
+
+    if (eqMatch[4] !== undefined) {
+        return `${matchedField.Name} = ${Number(eqMatch[4])}`;
+    }
+    if (eqMatch[5] !== undefined) {
+        return `${matchedField.Name} = ${eqMatch[5].toUpperCase() === 'TRUE' ? 1 : 0}`;
+    }
+    const strVal = eqMatch[2] !== undefined ? eqMatch[2].replace(/''/g, "'") : (eqMatch[3] ?? '');
+    return `${matchedField.Name} = '${EscapeSQLString(strVal)}'`;
 }
 
 /** A file name safe on every desktop platform, from the first source's name. */

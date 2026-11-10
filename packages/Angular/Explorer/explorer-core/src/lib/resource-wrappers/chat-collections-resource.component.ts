@@ -21,7 +21,8 @@ import { LibraryResource } from './library-resource.component';
         #workspace
         [CurrentUser]="CurrentUser"
         [EnvironmentId]="EnvironmentId"
-        [InitialMode]="'navigator'"
+        [InitialMode]="DefaultSurfaceMode"
+        [InitialSection]="DefaultNavigatorSection"
         (StateChange)="OnWorkspaceStateChange($event)"
         (HostNavigate)="OnHostNavigate($event)"
         (LoadComplete)="OnWorkspaceLoadComplete()"
@@ -45,6 +46,7 @@ export class ChatCollectionsResource extends LibraryResource {
   public constructor() {
     super();
     this.DefaultSurfaceMode = 'navigator';
+    this.DefaultNavigatorSection = 'collections';
   }
 
   public override async GetResourceDisplayName(data: ResourceData): Promise<string> {

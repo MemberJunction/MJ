@@ -14,7 +14,26 @@ import {
 } from '@memberjunction/core';
 import { BaseSingleton, EscapeSQLString, IndexByUUID, MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { ArtifactPermissionEngine } from './ArtifactPermissionDelegate';
-import { SpreadsheetEngine } from './SpreadsheetEngine';
+
+/**
+ * Extracted tabular/chart dataset returned by a registered spreadsheet chart extractor (`D5`).
+ */
+export interface SpreadsheetChartExtractResult {
+    Columns: DocumentBlockColumn[];
+    Rows: Array<Record<string, unknown>>;
+}
+
+/**
+ * Callback registered by `SpreadsheetEngine` so `DocumentLiveBlockEngine` can resolve
+ * embedded spreadsheet chart/range blocks without a circular module import (`D5`).
+ */
+export type SpreadsheetChartExtractorFn = (
+    content: string,
+    configuration: string | null,
+    sheetId: string | undefined,
+    chartId: string | undefined,
+    sheetRange: string | undefined
+) => SpreadsheetChartExtractResult | null;
 
 /**
  * Discriminator for the 5 canonical block types embeddable across MJ Docs, Slides, and Sheets.
@@ -91,6 +110,8 @@ export interface FrozenBlockSnapshot {
     ArtifactTypeSnapshot?: string;
     /** Must be `true` to confirm the user accepted the RLS/FLS visibility warning modal (`O5`). */
     SecurityWarningAcknowledged: boolean;
+    /** Deterministic SHA-256 content hash over the snapshot payload computed at freeze time (`B7`). */
+    SnapshotContentHash?: string;
 }
 
 /**
@@ -219,6 +240,15 @@ export interface DocumentBlockExecutionResult {
         FrozenAt: string;
         FrozenByUserID: string;
         FrozenByUserName: string;
+        SnapshotVerified?: boolean;
+    };
+    /** Verification summary for the frozen snapshot when `Mode === 'Frozen'` (`B7`). */
+    FrozenSnapshot?: {
+        SnapshotVerified: boolean;
+        FrozenAt: string;
+        FrozenByUserID: string;
+        FrozenByUserName: string;
+        SnapshotContentHash?: string;
     };
 }
 
@@ -268,7 +298,7 @@ export class EntityViewDocumentBlock extends BaseDocumentBlock {
         provider: IMetadataProvider,
         user: UserInfo
     ): Promise<DocumentBlockExecutionResult> {
-        if (spec.Mode === 'Frozen' && spec.FrozenSnapshot) {
+        if (spec.Mode === 'Frozen') {
             return buildFrozenExecutionResult(spec);
         }
 
@@ -278,15 +308,19 @@ export class EntityViewDocumentBlock extends BaseDocumentBlock {
         }
 
         let targetEntityName = (spec.EntityName ?? '').trim();
+        let resolvedViewId = spec.ViewID;
         const rv = RunView.FromMetadataProvider(provider);
 
-        // If ViewID is provided without EntityName, look up the UserView's Entity name first.
-        if (!targetEntityName && spec.ViewID) {
-            const viewLookup = await rv.RunView<{ ID: string; Entity: string }>(
+        // If ViewID or ViewName is provided without EntityName, look up the UserView's Entity first.
+        if (!targetEntityName && (spec.ViewID || spec.ViewName)) {
+            const viewFilter = spec.ViewID
+                ? `ID='${EscapeSQLString(spec.ViewID)}'`
+                : `Name='${EscapeSQLString(spec.ViewName ?? '')}'`;
+            const viewLookup = await rv.RunView<{ ID: string; Entity?: string; EntityID?: string }>(
                 {
                     EntityName: 'MJ: User Views',
-                    ExtraFilter: `ID='${EscapeSQLString(spec.ViewID)}'`,
-                    Fields: ['ID', 'Entity'],
+                    ExtraFilter: viewFilter,
+                    Fields: ['ID', 'Entity', 'EntityID'],
                     MaxRows: 1,
                     SkipTotalRowCount: true,
                     ResultType: 'simple'
@@ -294,7 +328,17 @@ export class EntityViewDocumentBlock extends BaseDocumentBlock {
                 user
             );
             if (viewLookup.Success && viewLookup.Results && viewLookup.Results.length > 0) {
-                targetEntityName = viewLookup.Results[0].Entity;
+                const matchedView = viewLookup.Results[0];
+                targetEntityName = (matchedView.Entity ?? '').trim();
+                if (!targetEntityName && matchedView.EntityID) {
+                    const matchedEntity = provider.Entities?.find((e) => UUIDsEqual(e.ID, matchedView.EntityID!));
+                    if (matchedEntity) {
+                        targetEntityName = matchedEntity.Name;
+                    }
+                }
+                if (!resolvedViewId && matchedView.ID) {
+                    resolvedViewId = matchedView.ID;
+                }
             }
         }
 
@@ -324,8 +368,42 @@ export class EntityViewDocumentBlock extends BaseDocumentBlock {
         // Determine allowed fields after FLS denied-read filtering
         // fls-guard: filter EntityView live block columns and rows using GetDeniedReadFields + ProjectEntityValueRowsForUser
         const deniedFields = entityInfo.FieldLevelSecurityApplies
-            ? entityInfo.GetDeniedReadFields(user)
+            ? new Set(Array.from(entityInfo.GetDeniedReadFields(user)).map((f) => f.trim().toLowerCase()))
             : new Set<string>();
+
+        if (typeof spec.OrderBy === 'string' && spec.OrderBy.trim().length > 0) {
+            const orderCheck = validateEntityViewOrderBy(spec.OrderBy, entityInfo, deniedFields);
+            if (!orderCheck.Valid) {
+                return {
+                    BlockID: spec.BlockID,
+                    Kind: spec.Kind,
+                    Mode: 'Live',
+                    Success: false,
+                    AccessDenied: true,
+                    ErrorMessage: orderCheck.ErrorMessage ?? 'Invalid or unauthorized OrderBy expression.',
+                    Columns: [],
+                    Rows: [],
+                    TotalRowCount: 0
+                };
+            }
+        }
+
+        if (typeof spec.ExtraFilter === 'string' && spec.ExtraFilter.trim().length > 0) {
+            const filterCheck = validateEntityViewExtraFilter(spec.ExtraFilter, entityInfo, deniedFields);
+            if (!filterCheck.Valid) {
+                return {
+                    BlockID: spec.BlockID,
+                    Kind: spec.Kind,
+                    Mode: 'Live',
+                    Success: false,
+                    AccessDenied: true,
+                    ErrorMessage: filterCheck.ErrorMessage ?? 'Invalid or unauthorized ExtraFilter expression.',
+                    Columns: [],
+                    Rows: [],
+                    TotalRowCount: 0
+                };
+            }
+        }
 
         let requestedFields: string[] = [];
         if (Array.isArray(spec.Fields) && spec.Fields.length > 0) {
@@ -365,12 +443,12 @@ export class EntityViewDocumentBlock extends BaseDocumentBlock {
 
         const runParams: RunViewParams = {
             EntityName: entityInfo.Name,
-            ViewID: spec.ViewID,
+            ViewID: resolvedViewId,
             ViewName: spec.ViewName,
             ExtraFilter: spec.ExtraFilter,
             OrderBy: spec.OrderBy,
             Fields: fetchFields.length > 0 ? fetchFields : undefined,
-            MaxRows: spec.MaxRows ?? 100,
+            MaxRows: clampBlockMaxRows(spec.MaxRows),
             ResultType: 'simple'
         };
 
@@ -463,7 +541,7 @@ export class SavedQueryDocumentBlock extends BaseDocumentBlock {
         user: UserInfo,
         serverParameters?: Record<string, unknown>
     ): Promise<DocumentBlockExecutionResult> {
-        if (spec.Mode === 'Frozen' && spec.FrozenSnapshot) {
+        if (spec.Mode === 'Frozen') {
             return buildFrozenExecutionResult(spec);
         }
 
@@ -494,7 +572,7 @@ export class SavedQueryDocumentBlock extends BaseDocumentBlock {
             QueryName: spec.QueryName,
             CategoryPath: spec.CategoryPath,
             Parameters: cleanParameters,
-            MaxRows: spec.MaxRows ?? 100
+            MaxRows: clampBlockMaxRows(spec.MaxRows)
         });
 
         const finalRunParams: RunQueryParams =
@@ -625,7 +703,7 @@ export class DashboardPartDocumentBlock extends BaseDocumentBlock {
         provider: IMetadataProvider,
         user: UserInfo
     ): Promise<DocumentBlockExecutionResult> {
-        if (spec.Mode === 'Frozen' && spec.FrozenSnapshot) {
+        if (spec.Mode === 'Frozen') {
             return buildFrozenExecutionResult(spec);
         }
         const validation = this.ValidateSpec(spec);
@@ -700,7 +778,7 @@ export class InteractiveComponentDocumentBlock extends BaseDocumentBlock {
         _provider: IMetadataProvider,
         _user: UserInfo
     ): Promise<DocumentBlockExecutionResult> {
-        if (spec.Mode === 'Frozen' && spec.FrozenSnapshot) {
+        if (spec.Mode === 'Frozen') {
             return buildFrozenExecutionResult(spec);
         }
         const validation = this.ValidateSpec(spec);
@@ -741,7 +819,7 @@ export class ArtifactDocumentBlock extends BaseDocumentBlock {
         provider: IMetadataProvider,
         user: UserInfo
     ): Promise<DocumentBlockExecutionResult> {
-        if (spec.Mode === 'Frozen' && spec.FrozenSnapshot) {
+        if (spec.Mode === 'Frozen') {
             return buildFrozenExecutionResult(spec);
         }
 
@@ -809,17 +887,13 @@ export class ArtifactDocumentBlock extends BaseDocumentBlock {
             (spec.SheetChartID || spec.SheetRange || resolvedType === 'Excel Spreadsheet') &&
             (spec.SheetChartID || spec.SheetRange)
         ) {
-            const wb = SpreadsheetEngine.Instance.ParseWorkbook(
+            const dataset = DocumentLiveBlockEngine.Instance.ExtractSpreadsheetChartDataset(
                 versionRow?.Content ?? '',
-                versionRow?.Configuration ?? null
+                versionRow?.Configuration ?? null,
+                spec.SheetID,
+                spec.SheetChartID,
+                spec.SheetRange
             );
-            const targetSheetId = spec.SheetID || wb.ActiveSheetID;
-            let dataset = spec.SheetChartID
-                ? SpreadsheetEngine.Instance.ExtractChartDataset(wb, targetSheetId, spec.SheetChartID)
-                : null;
-            if (!dataset && spec.SheetRange) {
-                dataset = SpreadsheetEngine.Instance.ExtractChartDataset(wb, targetSheetId, spec.SheetRange);
-            }
             if (dataset) {
                 return {
                     BlockID: spec.BlockID,
@@ -889,6 +963,8 @@ export interface ParsedDocumentSegment {
  * across MJ Docs, Slides, and Sheets.
  */
 export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngine> {
+    private _spreadsheetChartExtractor: SpreadsheetChartExtractorFn | null = null;
+
     protected constructor() {
         super();
     }
@@ -896,6 +972,30 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
     /** Returns the process-wide singleton instance of {@link DocumentLiveBlockEngine}. */
     public static get Instance(): DocumentLiveBlockEngine {
         return super.getInstance<DocumentLiveBlockEngine>();
+    }
+
+    /**
+     * Registers the spreadsheet chart/range dataset extractor (`SpreadsheetEngine`), avoiding a circular
+     * module import between `DocumentLiveBlockEngine` and `SpreadsheetEngine` (`D5`).
+     */
+    public RegisterSpreadsheetChartExtractor(fn: SpreadsheetChartExtractorFn): void {
+        this._spreadsheetChartExtractor = fn;
+    }
+
+    /**
+     * Invokes the registered spreadsheet chart/range dataset extractor if available (`D5`).
+     */
+    public ExtractSpreadsheetChartDataset(
+        content: string,
+        configuration: string | null,
+        sheetId?: string,
+        chartId?: string,
+        sheetRange?: string
+    ): SpreadsheetChartExtractResult | null {
+        if (!this._spreadsheetChartExtractor) {
+            return null;
+        }
+        return this._spreadsheetChartExtractor(content, configuration, sheetId, chartId, sheetRange);
     }
 
     /**
@@ -931,12 +1031,15 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
         provider?: IMetadataProvider | null,
         serverParameters?: Record<string, unknown>
     ): Promise<DocumentBlockExecutionResult> {
+        if (!user) {
+            return buildErrorResult(spec, 'Authenticated user context is required to execute a block.');
+        }
+        if (spec.Mode === 'Frozen') {
+            return buildFrozenExecutionResult(spec);
+        }
         const activeProvider = provider ?? Metadata.Provider;
         if (!activeProvider) {
             return buildErrorResult(spec, 'Metadata provider is not initialized.');
-        }
-        if (!user) {
-            return buildErrorResult(spec, 'Authenticated user context is required to execute a block.');
         }
         const handler = this.GetBlockHandler(spec.Kind);
         if (!handler) {
@@ -974,7 +1077,7 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
             };
         }
 
-        const snapshot: FrozenBlockSnapshot = {
+        const snapshotBase: FrozenBlockSnapshot = {
             FrozenAt: new Date().toISOString(),
             FrozenByUserID: user.ID,
             FrozenByUserName: user.Name || user.Email || user.ID,
@@ -984,6 +1087,10 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
             ArtifactContentSnapshot: result.ArtifactContent,
             ArtifactTypeSnapshot: result.ArtifactType,
             SecurityWarningAcknowledged: true
+        };
+        const snapshot: FrozenBlockSnapshot = {
+            ...snapshotBase,
+            SnapshotContentHash: ComputeFrozenSnapshotHash(snapshotBase)
         };
 
         return {
@@ -1019,17 +1126,73 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
     /**
      * Parses a Markdown document into alternating `'markdown'` prose segments and `'mj-block'`
      * embedded block segments.
+     *
+     * Respects fenced code blocks (` ``` ` / ` ~~~ ` of length >= 3) so example `:::mj-block`
+     * snippets inside code fences are never parsed as live directives, and treats unterminated
+     * `:::mj-block` fences as plain `'markdown'` without fabricating a closing `:::` (`D6`).
      */
     public ParseMarkdownDirectives(markdown: string): ParsedDocumentSegment[] {
         const lines = (markdown ?? '').split(/\r?\n/);
         const segments: ParsedDocumentSegment[] = [];
         let proseLines: string[] = [];
         let proseStartLine = 1;
+        let activeFenceChar: '`' | '~' | null = null;
+        let activeFenceLen = 0;
 
         let i = 0;
         while (i < lines.length) {
-            const trimmed = lines[i].trim();
+            const rawLine = lines[i];
+            const trimmed = rawLine.trim();
+
+            if (activeFenceChar !== null) {
+                if (proseLines.length === 0) {
+                    proseStartLine = i + 1;
+                }
+                proseLines.push(rawLine);
+                const closeFenceMatch = /^\s*(`{3,}|~{3,})\s*$/.exec(rawLine);
+                if (
+                    closeFenceMatch &&
+                    closeFenceMatch[1][0] === activeFenceChar &&
+                    closeFenceMatch[1].length >= activeFenceLen
+                ) {
+                    activeFenceChar = null;
+                    activeFenceLen = 0;
+                }
+                i++;
+                continue;
+            }
+
+            const openFenceMatch = /^\s*(`{3,}|~{3,})/.exec(rawLine);
+            if (openFenceMatch) {
+                activeFenceChar = openFenceMatch[1][0] as '`' | '~';
+                activeFenceLen = openFenceMatch[1].length;
+                if (proseLines.length === 0) {
+                    proseStartLine = i + 1;
+                }
+                proseLines.push(rawLine);
+                i++;
+                continue;
+            }
+
             if (trimmed === ':::mj-block' || trimmed.startsWith(':::mj-block ')) {
+                // Scan ahead to verify a matching closing ':::' exists before EOF
+                let closeIdx = i + 1;
+                while (closeIdx < lines.length && lines[closeIdx].trim() !== ':::') {
+                    closeIdx++;
+                }
+
+                // Unterminated :::mj-block reaching EOF: emit raw lines verbatim as markdown without fabricating ':::'
+                if (closeIdx >= lines.length) {
+                    if (proseLines.length === 0) {
+                        proseStartLine = i + 1;
+                    }
+                    while (i < lines.length) {
+                        proseLines.push(lines[i]);
+                        i++;
+                    }
+                    break;
+                }
+
                 if (proseLines.length > 0) {
                     segments.push({
                         Type: 'markdown',
@@ -1039,14 +1202,10 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
                     });
                     proseLines = [];
                 }
+
                 const blockStartLine = i + 1;
-                const blockJsonLines: string[] = [];
-                i++;
-                while (i < lines.length && lines[i].trim() !== ':::') {
-                    blockJsonLines.push(lines[i]);
-                    i++;
-                }
-                const blockEndLine = Math.min(i + 1, lines.length);
+                const blockJsonLines = lines.slice(i + 1, closeIdx);
+                const blockEndLine = closeIdx + 1;
                 const rawJson = blockJsonLines.join('\n').trim();
                 let parsedSpec: DocumentBlockSpec | undefined;
                 try {
@@ -1057,7 +1216,7 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
                 } catch {
                     parsedSpec = undefined;
                 }
-                const rawDirective = [':::mj-block', ...blockJsonLines, ':::'].join('\n');
+                const rawDirective = [rawLine, ...blockJsonLines, lines[closeIdx]].join('\n');
                 if (parsedSpec) {
                     segments.push({
                         Type: 'mj-block',
@@ -1074,13 +1233,13 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
                         EndLine: blockEndLine
                     });
                 }
-                i++;
+                i = closeIdx + 1;
                 proseStartLine = i + 1;
             } else {
                 if (proseLines.length === 0) {
                     proseStartLine = i + 1;
                 }
-                proseLines.push(lines[i]);
+                proseLines.push(rawLine);
                 i++;
             }
         }
@@ -1127,36 +1286,339 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
     }
 }
 
-function buildFrozenExecutionResult(spec: DocumentBlockSpec): DocumentBlockExecutionResult {
-    const snap = spec.FrozenSnapshot!;
+/**
+ * Validates the structure and security acknowledgement of a {@link FrozenBlockSnapshot} (`B7`).
+ */
+export function ValidateFrozenBlockSnapshot(snap: FrozenBlockSnapshot | null | undefined): {
+    Valid: boolean;
+    SnapshotVerified: boolean;
+    ErrorMessage?: string;
+} {
+    if (!snap || typeof snap !== 'object') {
+        return {
+            Valid: false,
+            SnapshotVerified: false,
+            ErrorMessage: 'Frozen block is missing a valid FrozenSnapshot payload.'
+        };
+    }
     if (snap.SecurityWarningAcknowledged !== true) {
+        return {
+            Valid: false,
+            SnapshotVerified: false,
+            ErrorMessage:
+                'Security violation: Frozen block snapshots require explicit acknowledgement of the RLS/FLS security warning (SecurityWarningAcknowledged: true).'
+        };
+    }
+    if (typeof snap.FrozenByUserID !== 'string' || snap.FrozenByUserID.trim().length === 0) {
+        return {
+            Valid: false,
+            SnapshotVerified: false,
+            ErrorMessage: 'Invalid FrozenSnapshot: FrozenByUserID is required.'
+        };
+    }
+    if (
+        typeof snap.FrozenAt !== 'string' ||
+        !/^\d{4}-\d{2}-\d{2}T/.test(snap.FrozenAt.trim()) ||
+        Number.isNaN(Date.parse(snap.FrozenAt))
+    ) {
+        return {
+            Valid: false,
+            SnapshotVerified: false,
+            ErrorMessage: 'Invalid FrozenSnapshot: FrozenAt must be a valid ISO 8601 timestamp.'
+        };
+    }
+    if (!Array.isArray(snap.Columns) || !Array.isArray(snap.Rows)) {
+        return {
+            Valid: false,
+            SnapshotVerified: false,
+            ErrorMessage: 'Invalid FrozenSnapshot: Columns and Rows must be arrays.'
+        };
+    }
+
+    const expectedHash = ComputeFrozenSnapshotHash(snap);
+    const snapshotVerified = Boolean(snap.SnapshotContentHash && snap.SnapshotContentHash === expectedHash);
+    return {
+        Valid: true,
+        SnapshotVerified: snapshotVerified
+    };
+}
+
+/**
+ * Computes a deterministic SHA-256 content hash over a {@link FrozenBlockSnapshot} (`B7`).
+ */
+export function ComputeFrozenSnapshotHash(
+    snap: Pick<
+        FrozenBlockSnapshot,
+        | 'FrozenAt'
+        | 'FrozenByUserID'
+        | 'Columns'
+        | 'Rows'
+        | 'TotalRowCount'
+        | 'ArtifactContentSnapshot'
+        | 'ArtifactTypeSnapshot'
+        | 'SecurityWarningAcknowledged'
+    >
+): string {
+    const payload = canonicalizeForHash({
+        FrozenAt: snap.FrozenAt,
+        FrozenByUserID: snap.FrozenByUserID,
+        Columns: snap.Columns,
+        Rows: snap.Rows,
+        TotalRowCount: snap.TotalRowCount,
+        ArtifactContentSnapshot: snap.ArtifactContentSnapshot ?? null,
+        ArtifactTypeSnapshot: snap.ArtifactTypeSnapshot ?? null,
+        SecurityWarningAcknowledged: snap.SecurityWarningAcknowledged === true
+    });
+    return sha256HexUtf8(payload);
+}
+
+function canonicalizeForHash(value: unknown): string {
+    if (value === null || value === undefined) {
+        return 'null';
+    }
+    if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'string') {
+        return JSON.stringify(value);
+    }
+    if (Array.isArray(value)) {
+        return `[${value.map((item) => canonicalizeForHash(item)).join(',')}]`;
+    }
+    if (typeof value === 'object') {
+        const rec = value as Record<string, unknown>;
+        const keys = Object.keys(rec)
+            .filter((k) => rec[k] !== undefined)
+            .sort();
+        return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalizeForHash(rec[k])}`).join(',')}}`;
+    }
+    return JSON.stringify(String(value));
+}
+
+const SHA256_K: ReadonlyArray<number> = [
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+];
+
+function sha256HexUtf8(text: string): string {
+    const bytes = new TextEncoder().encode(text);
+    const bitLenHi = Math.floor((bytes.length * 8) / 0x100000000);
+    const bitLenLo = (bytes.length * 8) >>> 0;
+    const paddedLen = ((bytes.length + 9 + 63) >>> 6) << 6;
+    const buf = new Uint8Array(paddedLen);
+    buf.set(bytes, 0);
+    buf[bytes.length] = 0x80;
+    const dv = new DataView(buf.buffer);
+    dv.setUint32(paddedLen - 8, bitLenHi, false);
+    dv.setUint32(paddedLen - 4, bitLenLo, false);
+
+    let h0 = 0x6a09e667;
+    let h1 = 0xbb67ae85;
+    let h2 = 0x3c6ef372;
+    let h3 = 0xa54ff53a;
+    let h4 = 0x510e527f;
+    let h5 = 0x9b05688c;
+    let h6 = 0x1f83d9ab;
+    let h7 = 0x5be0cd19;
+    const w = new Uint32Array(64);
+
+    const rotr = (x: number, n: number): number => ((x >>> n) | (x << (32 - n))) >>> 0;
+
+    for (let offset = 0; offset < paddedLen; offset += 64) {
+        for (let i = 0; i < 16; i++) {
+            w[i] = dv.getUint32(offset + i * 4, false);
+        }
+        for (let i = 16; i < 64; i++) {
+            const s0 = (rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >>> 3)) >>> 0;
+            const s1 = (rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ (w[i - 2] >>> 10)) >>> 0;
+            w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;
+        }
+
+        let a = h0;
+        let b = h1;
+        let c = h2;
+        let d = h3;
+        let e = h4;
+        let f = h5;
+        let g = h6;
+        let h = h7;
+
+        for (let i = 0; i < 64; i++) {
+            const S1 = (rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25)) >>> 0;
+            const ch = ((e & f) ^ (~e & g)) >>> 0;
+            const temp1 = (h + S1 + ch + SHA256_K[i] + w[i]) >>> 0;
+            const S0 = (rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22)) >>> 0;
+            const maj = ((a & b) ^ (a & c) ^ (b & c)) >>> 0;
+            const temp2 = (S0 + maj) >>> 0;
+
+            h = g;
+            g = f;
+            f = e;
+            e = (d + temp1) >>> 0;
+            d = c;
+            c = b;
+            b = a;
+            a = (temp1 + temp2) >>> 0;
+        }
+
+        h0 = (h0 + a) >>> 0;
+        h1 = (h1 + b) >>> 0;
+        h2 = (h2 + c) >>> 0;
+        h3 = (h3 + d) >>> 0;
+        h4 = (h4 + e) >>> 0;
+        h5 = (h5 + f) >>> 0;
+        h6 = (h6 + g) >>> 0;
+        h7 = (h7 + h) >>> 0;
+    }
+
+    return [h0, h1, h2, h3, h4, h5, h6, h7].map((v) => v.toString(16).padStart(8, '0')).join('');
+}
+
+function clampBlockMaxRows(rawMaxRows?: number): number {
+    if (typeof rawMaxRows !== 'number' || !Number.isFinite(rawMaxRows) || rawMaxRows <= 0) {
+        return 100;
+    }
+    return Math.min(500, Math.max(1, Math.floor(rawMaxRows)));
+}
+
+function validateEntityViewOrderBy(
+    orderBy: string,
+    entityInfo: EntityInfo,
+    deniedFields: ReadonlySet<string>
+): { Valid: boolean; ErrorMessage?: string } {
+    const allowedFieldNames = new Set(entityInfo.Fields.map((f) => f.Name.trim().toLowerCase()));
+    const clauses = orderBy.split(',');
+    for (const rawClause of clauses) {
+        const clause = rawClause.trim();
+        if (!clause) {
+            return { Valid: false, ErrorMessage: 'Invalid empty clause in OrderBy.' };
+        }
+        const match = /^(?:\[([A-Za-z_][A-Za-z0-9_]*)\]|([A-Za-z_][A-Za-z0-9_]*))(?:\s+(ASC|DESC))?$/i.exec(clause);
+        if (!match) {
+            return { Valid: false, ErrorMessage: `Invalid OrderBy clause '${clause}'.` };
+        }
+        const fieldName = (match[1] || match[2]).toLowerCase();
+        if (!allowedFieldNames.has(fieldName) || deniedFields.has(fieldName)) {
+            return {
+                Valid: false,
+                ErrorMessage: `Field '${match[1] || match[2]}' is not permitted or does not exist in OrderBy.`
+            };
+        }
+    }
+    return { Valid: true };
+}
+
+function validateEntityViewExtraFilter(
+    extraFilter: string,
+    entityInfo: EntityInfo,
+    deniedFields: ReadonlySet<string>
+): { Valid: boolean; ErrorMessage?: string } {
+    if (/--|\/\*|\*\/|;/.test(extraFilter)) {
+        return { Valid: false, ErrorMessage: 'SQL comments and statement terminators are not permitted in ExtraFilter.' };
+    }
+    if (
+        /\b(SELECT|UNION|DROP|DELETE|UPDATE|INSERT|EXEC|EXECUTE|ALTER|CREATE|TRUNCATE|MERGE|GRANT|REVOKE|WAITFOR|OPENROWSET)\b/i.test(
+            extraFilter
+        ) ||
+        /\bxp_[A-Za-z0-9_]*/i.test(extraFilter)
+    ) {
+        return { Valid: false, ErrorMessage: 'Subqueries, DDL, DML, and system procedures are not permitted in ExtraFilter.' };
+    }
+
+    // Verify balanced single quotes and mask string literals before inspecting column identifiers
+    let inSingleQuote = false;
+    for (let i = 0; i < extraFilter.length; i++) {
+        if (extraFilter[i] === "'") {
+            if (inSingleQuote && extraFilter[i + 1] === "'") {
+                i++;
+                continue;
+            }
+            inSingleQuote = !inSingleQuote;
+        }
+    }
+    if (inSingleQuote) {
+        return { Valid: false, ErrorMessage: 'Unclosed string literal in ExtraFilter.' };
+    }
+
+    const masked = extraFilter.replace(/'(?:''|[^'])*'/g, "'__STR__'");
+    const allowedFieldNames = new Set(entityInfo.Fields.map((f) => f.Name.trim().toLowerCase()));
+
+    // Ensure no FLS-denied field appears anywhere as an identifier token in ExtraFilter
+    const allIdentsRegex = /(?:\[([A-Za-z_][A-Za-z0-9_]*)\]|([A-Za-z_][A-Za-z0-9_]*))/g;
+    let identMatch: RegExpExecArray | null;
+    while ((identMatch = allIdentsRegex.exec(masked)) !== null) {
+        const token = (identMatch[1] || identMatch[2]).toLowerCase();
+        if (token === '__str__') continue;
+        if (deniedFields.has(token)) {
+            return {
+                Valid: false,
+                ErrorMessage: `Access denied: ExtraFilter cannot reference restricted field '${identMatch[1] || identMatch[2]}'.`
+            };
+        }
+    }
+
+    // Verify every identifier preceding a comparison operator exists on entityInfo.Fields and is not in deniedFields
+    const comparisonLhsRegex =
+        /(?:\[([A-Za-z_][A-Za-z0-9_]*)\]|([A-Za-z_][A-Za-z0-9_]*))\s*(?:<>|!=|<=|>=|=|<|>|\b(?:NOT\s+)?(?:IN|LIKE)\b|\bIS\b)/gi;
+    let cmpMatch: RegExpExecArray | null;
+    while ((cmpMatch = comparisonLhsRegex.exec(masked)) !== null) {
+        const rawField = cmpMatch[1] || cmpMatch[2];
+        const lowerField = rawField.toLowerCase();
+        if (lowerField === '__str__') continue;
+        if (!allowedFieldNames.has(lowerField) || deniedFields.has(lowerField)) {
+            return {
+                Valid: false,
+                ErrorMessage: `Field '${rawField}' in ExtraFilter does not exist on ${entityInfo.Name} or access is denied.`
+            };
+        }
+    }
+
+    return { Valid: true };
+}
+
+function buildFrozenExecutionResult(spec: DocumentBlockSpec): DocumentBlockExecutionResult {
+    const validation = ValidateFrozenBlockSnapshot(spec.FrozenSnapshot);
+    if (!validation.Valid || !spec.FrozenSnapshot) {
         return {
             BlockID: spec.BlockID,
             Kind: spec.Kind,
             Mode: 'Frozen',
             Success: false,
-            ErrorMessage:
-                'Security violation: Frozen block snapshots require explicit acknowledgement of the RLS/FLS security warning (SecurityWarningAcknowledged: true).',
+            ErrorMessage: validation.ErrorMessage ?? 'Invalid FrozenSnapshot.',
             Columns: [],
             Rows: [],
             TotalRowCount: 0
         };
     }
+
+    const snap = spec.FrozenSnapshot;
+    const frozenByUserName = snap.FrozenByUserName || snap.FrozenByUserID;
     return {
         BlockID: spec.BlockID,
         Kind: spec.Kind,
         Mode: 'Frozen',
         Success: true,
-        Columns: snap.Columns ?? [],
-        Rows: snap.Rows ?? [],
-        TotalRowCount: snap.TotalRowCount ?? (snap.Rows ? snap.Rows.length : 0),
+        Columns: snap.Columns,
+        Rows: snap.Rows,
+        TotalRowCount: snap.TotalRowCount ?? snap.Rows.length,
         ArtifactContent: snap.ArtifactContentSnapshot,
         ArtifactType: snap.ArtifactTypeSnapshot ?? spec.ArtifactType,
         CanEditArtifact: false,
         FrozenMetadata: {
             FrozenAt: snap.FrozenAt,
             FrozenByUserID: snap.FrozenByUserID,
-            FrozenByUserName: snap.FrozenByUserName
+            FrozenByUserName: frozenByUserName,
+            SnapshotVerified: validation.SnapshotVerified
+        },
+        FrozenSnapshot: {
+            SnapshotVerified: validation.SnapshotVerified,
+            FrozenAt: snap.FrozenAt,
+            FrozenByUserID: snap.FrozenByUserID,
+            FrozenByUserName: frozenByUserName,
+            SnapshotContentHash: snap.SnapshotContentHash
         }
     };
 }

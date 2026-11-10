@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import {
   DocumentLiveBlockEngine,
@@ -476,5 +476,89 @@ describe('ArtifactVersionCompareComponent (DOM) — Git History, Visual Diff & U
     cFixture.detectChanges();
     expect(query(cFixture, '[data-testid="component-visual-version-diff"]')).not.toBeNull();
     expect(queryAll(cFixture, '[data-testid="comp-diff-change-request"]').length).toBe(1);
+  });
+
+  it('diffs two 20,000-line versions quickly using bounded Myers + hash-anchor fallback without quadratic allocation (E4)', () => {
+    const svc = TestBed.inject(ArtifactVersionDiffService);
+    const baseLines: string[] = [];
+    const targetLines: string[] = [];
+    for (let i = 0; i < 20000; i++) {
+      baseLines.push(`line-${i}: steady baseline payload entry ${i}`);
+      if (i === 5000) {
+        targetLines.push(`line-${i}: UPDATED payload entry ${i}`);
+        targetLines.push(`line-${i}-extra: inserted audit note`);
+      } else if (i !== 12000) {
+        targetLines.push(`line-${i}: steady baseline payload entry ${i}`);
+      }
+    }
+
+    const startMs = performance.now();
+    const diff = svc.ComputeGitTextDiff(baseLines.join('\n'), targetLines.join('\n'), false);
+    const elapsedMs = performance.now() - startMs;
+
+    expect(elapsedMs).toBeLessThan(250);
+    expect(diff.AddedLines).toBe(2);
+    expect(diff.RemovedLines).toBe(2);
+    expect(diff.UnchangedLines).toBe(19998);
+  });
+
+  it('computes StructuralJsonDiff and GitTextDiff lazily only for the active tab and caches per version pair (E4)', () => {
+    const v1 = createVersionFixture({
+      ID: 'lazy-v1',
+      VersionNumber: 1,
+      Content: JSON.stringify({ title: 'Draft 1', count: 1 }),
+    });
+    const v2 = createVersionFixture({
+      ID: 'lazy-v2',
+      VersionNumber: 2,
+      Content: JSON.stringify({ title: 'Draft 2', count: 2 }),
+    });
+
+    const jsonDiffSpy = vi.spyOn(ArtifactVersionDiffService.prototype, 'ComputeStructuralJsonDiff');
+    const gitDiffSpy = vi.spyOn(ArtifactVersionDiffService.prototype, 'ComputeGitTextDiff');
+
+    const f = renderComponentFixture(ArtifactVersionCompareComponent, {
+      imports: [ArtifactVersionCompareComponent, DocsVersionDiffComponent],
+      inputs: {
+        Versions: [v2, v1],
+        BaseVersion: v1,
+        TargetVersion: v2,
+        BaseVersionNumber: 1,
+        TargetVersionNumber: 2,
+        VisualDiffComponentType: DocsVersionDiffComponent,
+        CanEdit: false,
+      },
+    });
+    f.detectChanges();
+
+    // In 'visual' mode, neither StructuralJsonDiff nor GitTextDiff should run eagerly
+    expect(f.componentInstance.ActiveMode).toBe('visual');
+    expect(jsonDiffSpy).not.toHaveBeenCalled();
+    expect(gitDiffSpy).not.toHaveBeenCalled();
+
+    // Switch to 'unified' -> computes GitTextDiff once, still skips StructuralJsonDiff
+    f.componentInstance.SetMode('unified');
+    f.detectChanges();
+    expect(gitDiffSpy).toHaveBeenCalledTimes(1);
+    expect(jsonDiffSpy).not.toHaveBeenCalled();
+
+    // Switch to 'split' -> reuses cached GitTextDiff without recomputing
+    f.componentInstance.SetMode('split');
+    f.detectChanges();
+    expect(gitDiffSpy).toHaveBeenCalledTimes(1);
+
+    // Switch to 'json-tree' -> computes StructuralJsonDiff once
+    f.componentInstance.SetMode('json-tree');
+    f.detectChanges();
+    expect(jsonDiffSpy).toHaveBeenCalledTimes(1);
+
+    // Switch back to 'unified' and 'json-tree' -> both served from per-pair cache
+    f.componentInstance.SetMode('unified');
+    f.componentInstance.SetMode('json-tree');
+    expect(gitDiffSpy).toHaveBeenCalledTimes(1);
+    expect(jsonDiffSpy).toHaveBeenCalledTimes(1);
+
+    jsonDiffSpy.mockRestore();
+    gitDiffSpy.mockRestore();
   });
 });

@@ -655,7 +655,7 @@ import {
     FileBrowserResource,
 } from '@memberjunction/ng-file-storage';
 
-// @memberjunction/ng-explorer-core (17 classes)
+// @memberjunction/ng-explorer-core (16 classes)
 import {
     ArtifactResource,
     ChatCollectionsResource,
@@ -663,7 +663,6 @@ import {
     ConversationFeedbackResource,
     DashboardResource,
     EntityRecordResource,
-    LibraryDriveResource,
     LibraryResource,
     ListDetailResource,
     MeetingsResource,
@@ -1358,7 +1357,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ConversationFeedbackResource,
     DashboardResource,
     EntityRecordResource,
-    LibraryDriveResource,
     LibraryResource,
     ListDetailResource,
     MeetingsResource,
@@ -1376,11 +1374,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     AIPromptCategoryHierarchyPanel,
     ActionCategoryHierarchyPanel,
     BrandKitAssetsPanelComponent,
+    BrandKitGenerationPolicyPanelComponent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
-    BrandKitGenerationPolicyPanelComponent,
     CompanyHeaderPanel,
     CompanyOverviewPanel,
     ContentItemHierarchyPanel,
@@ -1462,7 +1460,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 668;
+export const CLASS_REGISTRATIONS_COUNT = 667;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

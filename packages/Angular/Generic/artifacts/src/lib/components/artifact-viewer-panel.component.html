@@ -178,7 +178,7 @@
               [VisualDiffComponentType]="ActiveVisualDiffComponentType"
               [MessageLinkedVersionIds]="MessageLinkedVersionIds"
               [IsLoadingVersions]="IsLoadingCompareVersions"
-              [CanEdit]="canEdit !== false"
+              [CanEdit]="canEdit === true"
               [IsRestoring]="IsRestoringVersion"
               (ExitRequested)="ExitVersionCompare()"
               (ComparePairChanged)="OnComparePairChanged($event)"
@@ -190,10 +190,11 @@
           @if (hasPlugin && artifactVersion && artifactTypeName) {
             <div class="plugin-container" [class.plugin-hidden]="IsCompareMode || activeTab !== 'display'">
               <mj-artifact-type-plugin-viewer
+                [Provider]="Provider"
                 [artifactVersion]="artifactVersion"
                 [artifactTypeName]="artifactTypeName"
                 [contentType]="contentType"
-                [readonly]="canEdit === false"
+                [readonly]="!canEdit"
                 [VisibleVersionNumbers]="PluginVisibleVersionNumbers"
                 (openEntityRecord)="onOpenEntityRecord($event)"
                 (navigationRequest)="onNavigationRequest($event)"

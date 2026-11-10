@@ -169,4 +169,34 @@ describe('SlideDeckEngine (Wave 2 Slides Schema, Layouts, Theme Seeds, Freeze & 
         expect(blockSpec?.FrozenSnapshot?.Rows).toHaveLength(2);
         expect(blockSpec?.FrozenSnapshot?.Rows[0]['Name']).toBe('Project Aurora');
     });
+
+    it('D6: mints collision-free UUID SlideIDs in AddSlide/DuplicateSlide, mints fresh BlockIDs on DuplicateSlide, and uses clean neutral placeholders', () => {
+        const initial = engine.CreateDefaultDeck('Collision Deck', 'deck-uuid');
+        const { Deck: afterAdd1, AddedSlide: sA } = engine.AddSlide(initial, { Layout: 'TitleAndBody', Title: 'Added A' });
+        const { Deck: afterDelete } = engine.DeleteSlide(afterAdd1, 'slide-2');
+        const { Deck: afterAdd2, AddedSlide: sB } = engine.AddSlide(afterDelete, { Layout: 'TitleAndBody', Title: 'Added B' });
+
+        expect(sA.SlideID).not.toBe(sB.SlideID);
+        const allSlideIds = afterAdd2.Slides.map((s) => s.SlideID);
+        expect(new Set(allSlideIds).size).toBe(allSlideIds.length);
+
+        // DuplicateSlide on slide-3 (which has slide-blk-ev-1) mints both a fresh SlideID and a fresh BlockID
+        const { Deck: afterDup, DuplicatedSlide } = engine.DuplicateSlide(afterAdd2, 'slide-3');
+        expect(DuplicatedSlide).toBeTruthy();
+        expect(DuplicatedSlide!.SlideID).not.toBe('slide-3');
+        const origBlock = engine.ExtractRegionBlockSpec(afterDup.Slides.find((s) => s.SlideID === 'slide-3')!.Regions[0]);
+        const dupBlock = engine.ExtractRegionBlockSpec(DuplicatedSlide!.Regions[0]);
+        expect(origBlock?.BlockID).toBe('slide-blk-ev-1');
+        expect(dupBlock?.BlockID).toBeTruthy();
+        expect(dupBlock?.BlockID).not.toBe(origBlock?.BlockID);
+
+        // Clean placeholders check
+        const liveSlideRegions = engine.BuildRegionsForLayout('LiveDataSlide');
+        const liveSpec = engine.ExtractRegionBlockSpec(liveSlideRegions[0]);
+        expect(liveSpec?.ExtraFilter).toBeUndefined();
+        const quoteRegions = engine.BuildRegionsForLayout('Quote');
+        expect(quoteRegions[0].MarkdownContent).not.toContain('VP of Enterprise Architecture');
+        const bigNumRegions = engine.BuildRegionsForLayout('BigNumber');
+        expect(bigNumRegions[0].MarkdownContent).not.toContain('99.98%');
+    });
 });

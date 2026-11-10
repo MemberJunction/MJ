@@ -53,7 +53,7 @@
             mjButton
             variant="secondary"
             size="sm"
-            (click)="OpenExportToDriveModal(ActiveItem)"
+            (click)="OpenExportToDriveModal(ActiveItem, $event, ActiveVersionNumber)"
             data-testid="full-canvas-export-drive-btn"
           >
             <i class="fa-solid fa-cloud-arrow-up"></i>
@@ -427,8 +427,8 @@
                 [Collections]="CollectionTree"
                 [ShowBackButton]="true"
                 [StorageClientOverride]="StorageClientOverride"
-                (PrefixChange)="DriveFolderPrefix = $event"
-                (BackRequested)="SelectedDriveId = null; DriveFolderPrefix = ''"
+                (PrefixChange)="OnDrivePrefixChange($event)"
+                (BackRequested)="OnDriveBackRequested()"
                 (ArtifactConverted)="OnRemoteDriveArtifactConverted($event)"
               ></mj-library-remote-drive-pane>
             } @else if (ConnectedDrives.length === 0) {
@@ -549,6 +549,18 @@
               <button
                 type="button"
                 class="rail-item"
+                [class.active]="NavigatorSection === 'collections'"
+                (click)="SelectNavigatorView('collections')"
+              >
+                <i class="fa-solid fa-folder-open rail-item-icon"></i>
+                <span class="rail-item-label">Collections</span>
+                @if (FlatCollections.length > 0) {
+                  <span class="rail-badge">{{ FlatCollections.length }}</span>
+                }
+              </button>
+              <button
+                type="button"
+                class="rail-item"
                 [class.active]="NavigatorSection === 'shared'"
                 (click)="SelectNavigatorView('shared')"
               >
@@ -632,7 +644,7 @@
               [Collections]="CollectionTree"
               [ShowBackButton]="false"
               [StorageClientOverride]="StorageClientOverride"
-              (PrefixChange)="DriveFolderPrefix = $event"
+              (PrefixChange)="OnDrivePrefixChange($event)"
               (ArtifactConverted)="OnRemoteDriveArtifactConverted($event)"
             ></mj-library-remote-drive-pane>
           </div>
@@ -663,7 +675,7 @@
                       mjButton
                       variant="flat"
                       size="sm"
-                      (click)="OpenExportToDriveModal(ActiveItem)"
+                      (click)="OpenExportToDriveModal(ActiveItem, $event, ActiveVersionNumber)"
                     >
                       <i class="fa-solid fa-cloud-arrow-up"></i>
                       Export to Drive…
@@ -737,11 +749,26 @@
           }
         </div>
       }
-      <mj-stat-badge [Count]="FilteredItems.length" Label="items"></mj-stat-badge>
+      @if (NavigatorSection === 'collections') {
+        <mj-stat-badge [Count]="FilteredCollections.length" Label="collections"></mj-stat-badge>
+      } @else {
+        <mj-stat-badge [Count]="FilteredItems.length" Label="items"></mj-stat-badge>
+      }
     </ng-container>
 
     <div actions>
-      @if (NavigatorSection === 'collection' && SelectedCollectionNode; as colNode) {
+      @if (NavigatorSection === 'collections') {
+        <button
+          type="button"
+          mjButton
+          variant="secondary"
+          size="sm"
+          (click)="OpenNewCollectionModal()"
+        >
+          <i class="fa-solid fa-folder-plus"></i>
+          New Collection
+        </button>
+      } @else if (NavigatorSection === 'collection' && SelectedCollectionNode; as colNode) {
         @if (colNode.CanShare) {
           <button
             type="button"
@@ -801,28 +828,46 @@
 
 <!-- Navigator Subfolders + Items -->
 <ng-template #navigatorSubfoldersAndItemsTemplate>
-  @if (NavigatorSection === 'collection' && SelectedCollectionNode && SelectedCollectionNode.Children.length > 0) {
-    <div class="subfolders-strip">
-      @for (sub of SelectedCollectionNode.Children; track sub.Id) {
-        <button
-          type="button"
-          class="subfolder-pill"
-          (click)="OpenCollectionById(sub.Id)"
-          (dragover)="OnCollectionDragOver(sub, $event)"
-          (dragleave)="DragOverCollectionId = null"
-          (drop)="OnCollectionDrop(sub, $event)"
-          [class.drag-over]="DragOverCollectionId === sub.Id"
-        >
-          <i [class]="sub.Icon" [style.color]="sub.Color"></i>
-          <span class="subfolder-name">{{ sub.Name }}</span>
-          <span class="subfolder-count">{{ sub.TotalItemCount }}</span>
-        </button>
-      }
-    </div>
+  @if (NavigatorSection === 'collections') {
+    @if (FilteredCollections.length === 0) {
+      <mj-empty-state
+        [Variant]="SearchQuery ? 'no-results' : 'empty'"
+        Icon="fa-solid fa-folder-open"
+        [Title]="SearchQuery ? 'No collections match your filter' : 'No collections yet'"
+        [Message]="SearchQuery ? 'Try clearing your search filter.' : 'Create a collection to organize and share documents, spreadsheets, presentations, and artifacts.'"
+        ActionText="New Collection"
+        ActionIcon="fa-solid fa-folder-plus"
+        (Action)="OpenNewCollectionModal()"
+      ></mj-empty-state>
+    } @else {
+      <ng-container
+        *ngTemplateOutlet="collectionsGridTemplate; context: { $implicit: FilteredCollections }"
+      ></ng-container>
+    }
+  } @else {
+    @if (NavigatorSection === 'collection' && SelectedCollectionNode && SelectedCollectionNode.Children.length > 0) {
+      <div class="subfolders-strip">
+        @for (sub of SelectedCollectionNode.Children; track sub.Id) {
+          <button
+            type="button"
+            class="subfolder-pill"
+            (click)="OpenCollectionById(sub.Id)"
+            (dragover)="OnCollectionDragOver(sub, $event)"
+            (dragleave)="DragOverCollectionId = null"
+            (drop)="OnCollectionDrop(sub, $event)"
+            [class.drag-over]="DragOverCollectionId === sub.Id"
+          >
+            <i [class]="sub.Icon" [style.color]="sub.Color"></i>
+            <span class="subfolder-name">{{ sub.Name }}</span>
+            <span class="subfolder-count">{{ sub.TotalItemCount }}</span>
+          </button>
+        }
+      </div>
+    }
+    <ng-container
+      *ngTemplateOutlet="itemsBrowserBodyTemplate; context: { $implicit: FilteredItems, emptyTitle: 'No items in this view' }"
+    ></ng-container>
   }
-  <ng-container
-    *ngTemplateOutlet="itemsBrowserBodyTemplate; context: { $implicit: FilteredItems, emptyTitle: 'No items in this view' }"
-  ></ng-container>
 </ng-template>
 
 <!-- Recursive Collection Tree Node -->
@@ -1237,8 +1282,10 @@
 <mj-library-export-drive-dialog
   [IsOpen]="IsExportDriveDialogOpen"
   [Item]="ExportingItem"
+  [VersionNumber]="ExportingVersionNumber"
   [Drives]="ConnectedDrives"
   [CurrentUser]="EffectiveUser"
+  [StorageClientOverride]="StorageClientOverride"
   (Published)="IsExportDriveDialogOpen = false"
   (Cancelled)="IsExportDriveDialogOpen = false"
 ></mj-library-export-drive-dialog>

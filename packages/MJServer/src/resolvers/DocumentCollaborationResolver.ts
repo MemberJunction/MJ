@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Resolver, Query, Mutation, Arg, Ctx, ObjectType, Field, Int } from 'type-graphql';
-import { IMetadataProvider, Metadata, RunView } from '@memberjunction/core';
+import { IMetadataProvider, LogError, Metadata, RunView } from '@memberjunction/core';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { EscapeSQLString } from '@memberjunction/global';
 import {
     ArtifactMetadataEngine,
@@ -10,9 +11,37 @@ import {
     MJArtifactEntity,
     MJArtifactVersionEntity
 } from '@memberjunction/core-entities';
-import { AppContext } from '../types.js';
+import { ApiRoute } from '../apiRoot.js';
+import {
+    ARTIFACT_COLLABORATION_WS_PATH,
+    ArtifactCollaborationServer
+} from '../collaboration/ArtifactCollaborationServer.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
-import { ArtifactCollaborationServer } from '../collaboration/ArtifactCollaborationServer.js';
+import { AppContext } from '../types.js';
+
+@ObjectType()
+export class CollaborationTicketResult {
+    @Field()
+    Success: boolean;
+
+    @Field({ nullable: true })
+    Ticket?: string;
+
+    @Field({ nullable: true })
+    WsPath?: string;
+
+    @Field({ nullable: true })
+    ExpiresAt?: string;
+
+    @Field()
+    CanRead: boolean;
+
+    @Field()
+    CanEdit: boolean;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string;
+}
 
 @ObjectType()
 export class DocumentLiveBlockResultOutput {
@@ -96,9 +125,9 @@ export class ArtifactPermissionsOutput {
 }
 
 /**
- * GraphQL resolver supporting viewer-scoped live MJ blocks, freeze/unfreeze snapshots,
- * inline OLE child artifact creation (such as `/whiteboard` inside a Document), and
- * inline edit commits.
+ * GraphQL resolver supporting single-use collaboration WebSocket ticket minting (`A3`),
+ * viewer-scoped live MJ blocks, freeze/unfreeze snapshots, inline OLE child artifact creation
+ * (such as `/whiteboard` inside a Document), and inline edit commits.
  */
 @Resolver()
 export class DocumentCollaborationResolver extends ResolverBase {
@@ -106,6 +135,78 @@ export class DocumentCollaborationResolver extends ResolverBase {
         const readWrite = context.providers?.find((p) => p.type === 'Read-Write')?.provider;
         const anyProv = context.providers?.[0]?.provider;
         return (readWrite ?? anyProv ?? Metadata.Provider) as IMetadataProvider;
+    }
+
+    @Mutation(() => CollaborationTicketResult)
+    async MintArtifactCollaborationTicket(
+        @Arg('artifactId') artifactId: string,
+        @Ctx() context: AppContext
+    ): Promise<CollaborationTicketResult> {
+        const user = this.GetUserFromPayload(context.userPayload);
+        if (!user) {
+            return {
+                Success: false,
+                CanRead: false,
+                CanEdit: false,
+                ErrorMessage: 'Authentication required.'
+            };
+        }
+
+        const normalizedArtifactId = (artifactId ?? '').trim();
+        if (!normalizedArtifactId) {
+            return {
+                Success: false,
+                CanRead: false,
+                CanEdit: false,
+                ErrorMessage: 'artifactId is required.'
+            };
+        }
+
+        await this.CheckAPIKeyScopeAuthorization('artifact:read', normalizedArtifactId, context.userPayload);
+
+        const provider = this.resolveProvider(context);
+        const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+            provider,
+            normalizedArtifactId,
+            user
+        );
+        if (!perms.CanRead) {
+            return {
+                Success: false,
+                CanRead: false,
+                CanEdit: false,
+                ErrorMessage: 'Access denied'
+            };
+        }
+
+        let effectiveCanEdit = perms.CanEdit;
+        if (context.userPayload.apiKeyHash && effectiveCanEdit) {
+            const hasEditScope = await ArtifactCollaborationServer.Instance.CheckApiKeyScope(
+                context.userPayload.apiKeyHash,
+                'artifact:edit',
+                normalizedArtifactId,
+                user,
+                true
+            );
+            if (!hasEditScope) {
+                effectiveCanEdit = false;
+            }
+        }
+
+        const issued = ArtifactCollaborationServer.Instance.IssueTicket({
+            ArtifactID: normalizedArtifactId,
+            User: user,
+            ApiKeyHash: context.userPayload.apiKeyHash
+        });
+
+        return {
+            Success: true,
+            Ticket: issued.Ticket,
+            WsPath: ApiRoute(ARTIFACT_COLLABORATION_WS_PATH),
+            ExpiresAt: issued.ExpiresAt,
+            CanRead: true,
+            CanEdit: effectiveCanEdit
+        };
     }
 
     @Query(() => ArtifactPermissionsOutput)
@@ -125,6 +226,9 @@ export class DocumentCollaborationResolver extends ResolverBase {
                 Reason: 'Authentication required.'
             };
         }
+
+        await this.CheckAPIKeyScopeAuthorization('artifact:read', artifactId, context.userPayload);
+
         const provider = this.resolveProvider(context);
         return await ArtifactPermissionEngine.Instance.ResolvePermissions(provider, artifactId, user);
     }
@@ -144,23 +248,35 @@ export class DocumentCollaborationResolver extends ResolverBase {
                 ResultJSON: '{}'
             };
         }
+
+        const normalizedHostId = (hostArtifactId ?? '').trim();
+        await this.CheckAPIKeyScopeAuthorization('artifact:read', normalizedHostId || '*', context.userPayload);
+
+        if (!normalizedHostId) {
+            return {
+                Success: false,
+                AccessDenied: true,
+                ErrorMessage: 'hostArtifactId is required to execute a live document block.',
+                ResultJSON: '{}'
+            };
+        }
+
         try {
             const provider = this.resolveProvider(context);
-            if (hostArtifactId && hostArtifactId.trim().length > 0) {
-                const hostPerms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
-                    provider,
-                    hostArtifactId.trim(),
-                    user
-                );
-                if (!hostPerms.CanRead) {
-                    return {
-                        Success: false,
-                        AccessDenied: true,
-                        ErrorMessage: hostPerms.Reason || 'You do not have permission to read the host artifact.',
-                        ResultJSON: '{}'
-                    };
-                }
+            const hostPerms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+                provider,
+                normalizedHostId,
+                user
+            );
+            if (!hostPerms.CanRead) {
+                return {
+                    Success: false,
+                    AccessDenied: true,
+                    ErrorMessage: hostPerms.Reason || 'You do not have permission to read the host artifact.',
+                    ResultJSON: '{}'
+                };
             }
+
             const spec = JSON.parse(specJson) as DocumentBlockSpec;
             const execResult = await DocumentLiveBlockEngine.Instance.ExecuteBlock(spec, user, provider);
             return {
@@ -189,22 +305,32 @@ export class DocumentCollaborationResolver extends ResolverBase {
         if (!user) {
             return { Success: false, ErrorMessage: 'Authentication required.' };
         }
+
+        const normalizedHostId = (hostArtifactId ?? '').trim();
+        await this.CheckAPIKeyScopeAuthorization('artifact:edit', normalizedHostId || '*', context.userPayload);
+
+        if (!normalizedHostId) {
+            return {
+                Success: false,
+                ErrorMessage: 'hostArtifactId is required to freeze a live document block.'
+            };
+        }
+
         try {
             const provider = this.resolveProvider(context);
-            if (hostArtifactId && hostArtifactId.trim().length > 0) {
-                const hostPerms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
-                    provider,
-                    hostArtifactId.trim(),
-                    user
-                );
-                if (!hostPerms.CanEdit) {
-                    return {
-                        Success: false,
-                        ErrorMessage:
-                            hostPerms.Reason || 'You must have Edit permission on the host artifact to freeze a block.'
-                    };
-                }
+            const hostPerms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+                provider,
+                normalizedHostId,
+                user
+            );
+            if (!hostPerms.CanEdit) {
+                return {
+                    Success: false,
+                    ErrorMessage:
+                        hostPerms.Reason || 'You must have Edit permission on the host artifact to freeze a block.'
+                };
             }
+
             const spec = JSON.parse(specJson) as DocumentBlockSpec;
             const res = await DocumentLiveBlockEngine.Instance.FreezeBlock(
                 spec,
@@ -236,6 +362,9 @@ export class DocumentCollaborationResolver extends ResolverBase {
         if (!user) {
             return { Success: false, ErrorMessage: 'Authentication required.' };
         }
+
+        await this.CheckAPIKeyScopeAuthorization('artifact:edit', artifactId, context.userPayload);
+
         const provider = this.resolveProvider(context);
         const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(provider, artifactId, user);
         if (!perms.CanEdit) {
@@ -271,10 +400,18 @@ export class DocumentCollaborationResolver extends ResolverBase {
         if (!user) {
             return { Success: false, ErrorMessage: 'Authentication required.' };
         }
+
+        const normalizedHostId = (hostArtifactId ?? '').trim();
+        await this.CheckAPIKeyScopeAuthorization('artifact:edit', normalizedHostId || '*', context.userPayload);
+
+        if (!normalizedHostId) {
+            return { Success: false, ErrorMessage: 'hostArtifactId is required.' };
+        }
+
         const provider = this.resolveProvider(context);
         const hostPerms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
             provider,
-            hostArtifactId,
+            normalizedHostId,
             user
         );
         if (!hostPerms.CanEdit) {
@@ -302,20 +439,31 @@ export class DocumentCollaborationResolver extends ResolverBase {
         }
 
         const rv = RunView.FromMetadataProvider(provider);
+        const lookupUser = UserCache.Instance.GetSystemUser() ?? user;
         const hostRes = await rv.RunView<{ ID: string; EnvironmentID?: string }>(
             {
                 EntityName: 'MJ: Artifacts',
-                ExtraFilter: `ID='${EscapeSQLString(hostArtifactId.trim())}'`,
+                ExtraFilter: `ID='${EscapeSQLString(normalizedHostId)}'`,
                 Fields: ['ID', 'EnvironmentID'],
                 MaxRows: 1,
                 SkipTotalRowCount: true,
                 ResultType: 'simple'
             },
-            user
+            lookupUser
         );
-        const hostEnvironmentId =
-            (hostRes.Success ? hostRes.Results?.[0]?.EnvironmentID : undefined) ||
-            'F51358F3-9447-4176-B313-BF8025FD8D09';
+        if (!hostRes.Success || !hostRes.Results || hostRes.Results.length === 0) {
+            return {
+                Success: false,
+                ErrorMessage: hostRes.ErrorMessage || `Host artifact '${normalizedHostId}' was not found.`
+            };
+        }
+        const hostEnvironmentId = hostRes.Results[0].EnvironmentID;
+        if (!hostEnvironmentId) {
+            return {
+                Success: false,
+                ErrorMessage: `Host artifact '${normalizedHostId}' is missing EnvironmentID.`
+            };
+        }
 
         const childArtifact = await provider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', user);
         childArtifact.NewRecord();
@@ -324,36 +472,67 @@ export class DocumentCollaborationResolver extends ResolverBase {
         childArtifact.UserID = user.ID;
         childArtifact.EnvironmentID = hostEnvironmentId;
         childArtifact.DelegateEntityID = artifactsEntityInfo.ID;
-        childArtifact.DelegateRecordID = hostArtifactId;
+        childArtifact.DelegateRecordID = normalizedHostId;
 
         const savedArtifact = await childArtifact.Save();
         if (!savedArtifact) {
             return {
                 Success: false,
-                ErrorMessage: childArtifact.LatestResult?.CompleteMessage || 'Failed to create delegated child artifact.'
+                ErrorMessage:
+                    childArtifact.LatestResult?.CompleteMessage || 'Failed to create delegated child artifact.'
             };
         }
 
-        const version = await provider.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', user);
-        version.NewRecord();
-        version.ArtifactID = childArtifact.ID;
-        version.VersionNumber = 1;
-        version.UserID = user.ID;
-        version.Content = initialContent;
-        version.ContentHash = createHash('sha256').update(initialContent, 'utf8').digest('hex');
+        try {
+            const version = await provider.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', user);
+            version.NewRecord();
+            version.ArtifactID = childArtifact.ID;
+            version.VersionNumber = 1;
+            version.UserID = user.ID;
+            version.Content = initialContent;
+            version.ContentHash = createHash('sha256').update(initialContent, 'utf8').digest('hex');
 
-        const savedVersion = await version.Save();
-        if (!savedVersion) {
+            const savedVersion = await version.Save();
+            if (!savedVersion) {
+                const rolledBack = await childArtifact.Delete();
+                if (!rolledBack) {
+                    LogError(
+                        `DocumentCollaborationResolver.CreateInlineDelegatedArtifact failed to roll back orphaned child artifact '${childArtifact.ID}': ${
+                            childArtifact.LatestResult?.CompleteMessage ?? 'unknown error'
+                        }`
+                    );
+                }
+                return {
+                    Success: false,
+                    ErrorMessage:
+                        version.LatestResult?.CompleteMessage || 'Failed to create initial artifact version.'
+                };
+            }
+
+            return {
+                Success: true,
+                ArtifactID: childArtifact.ID,
+                VersionID: version.ID
+            };
+        } catch (err) {
+            try {
+                const rolledBack = await childArtifact.Delete();
+                if (!rolledBack) {
+                    LogError(
+                        `DocumentCollaborationResolver.CreateInlineDelegatedArtifact failed to roll back orphaned child artifact '${childArtifact.ID}' after error.`
+                    );
+                }
+            } catch (rollbackErr) {
+                LogError(
+                    `DocumentCollaborationResolver.CreateInlineDelegatedArtifact rollback threw for '${childArtifact.ID}': ${
+                        rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)
+                    }`
+                );
+            }
             return {
                 Success: false,
-                ErrorMessage: version.LatestResult?.CompleteMessage || 'Failed to create initial artifact version.'
+                ErrorMessage: err instanceof Error ? err.message : String(err)
             };
         }
-
-        return {
-            Success: true,
-            ArtifactID: childArtifact.ID,
-            VersionID: version.ID
-        };
     }
 }

@@ -129,7 +129,7 @@ describe('WhiteboardArtifactViewerComponent — plugin contract', () => {
     expect(viewer.EditableBoardState).toBeInstanceOf(WhiteboardState);
   });
 
-  it('emits ContentCommitted with serialized WhiteboardState.ToJSON() when OnCommitInlineChanges() is called in inline OLE mode', () => {
+  it('emits ContentCommitted ONLY when OnCommitInlineChanges() is explicitly called (never auto-committing on timers or ngOnDestroy) and preserves EditableBoardState across commit', async () => {
     const viewer = new WhiteboardArtifactViewerComponent();
     viewer.readonly = false;
     viewer.artifactVersion = fakeVersion(buildBoardJson(), 'Architecture Board');
@@ -137,20 +137,29 @@ describe('WhiteboardArtifactViewerComponent — plugin contract', () => {
     const committedPayloads: string[] = [];
     viewer.ContentCommitted.subscribe((json: string) => committedPayloads.push(json));
 
-    viewer.EditableBoardState.AddItem({ Kind: 'sticky', X: 220, Y: 140, Text: 'Inline OLE edit' }, 'user');
+    const initialEditable = viewer.EditableBoardState;
+    initialEditable.AddItem({ Kind: 'sticky', X: 220, Y: 140, Text: 'Inline OLE edit' }, 'user');
     expect(viewer.IsDirty).toBe(true);
+
+    // Waiting beyond the old 600ms debounce window must NOT auto-commit
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    expect(committedPayloads).toHaveLength(0);
+    expect(viewer.IsDirty).toBe(true);
+
+    // Explicit Save / Commit Changes emits once and keeps parsedForJson synced so host version echo doesn't recreate EditableBoardState
     viewer.OnCommitInlineChanges();
     expect(viewer.IsDirty).toBe(false);
-
     expect(committedPayloads).toHaveLength(1);
     const rehydrated = ParseBoardStateJson(committedPayloads[0]);
     expect(rehydrated?.ElementCount).toBe(3);
 
-    // Further mutation flushes automatically on ngOnDestroy if uncommitted
-    viewer.EditableBoardState.AddItem({ Kind: 'sticky', X: 300, Y: 180, Text: 'Flush on destroy' }, 'user');
+    viewer.artifactVersion = fakeVersion(committedPayloads[0], 'Architecture Board');
+    expect(viewer.EditableBoardState).toBe(initialEditable);
+
+    // Uncommitted edits must NOT auto-commit on ngOnDestroy
+    viewer.EditableBoardState.AddItem({ Kind: 'sticky', X: 300, Y: 180, Text: 'Unsaved draft stroke' }, 'user');
     expect(viewer.IsDirty).toBe(true);
     viewer.ngOnDestroy();
-    expect(committedPayloads).toHaveLength(2);
-    expect(ParseBoardStateJson(committedPayloads[1])?.ElementCount).toBe(4);
+    expect(committedPayloads).toHaveLength(1);
   });
 });

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
 import {
@@ -15,6 +15,8 @@ import {
 export interface ParsedMarkdownLogicalBlock {
     /** Stable block identifier (from `<!-- mj-block-id: ... -->`, `BlockSpec.BlockID`, or deterministic `blk-<index>`). */
     blockId: string;
+    /** True when the block carried an explicit `<!-- mj-block-id: ... -->` anchor comment in the Markdown (`D6`). */
+    hasExplicitId?: boolean;
     /** Block kind (`'heading' | 'paragraph' | 'table' | 'code' | 'callout' | 'list' | 'mj-block'`). */
     kind: 'heading' | 'paragraph' | 'table' | 'code' | 'callout' | 'list' | 'mj-block';
     /** Heading level (1–6) when `kind === 'heading'`. */
@@ -389,21 +391,23 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                 }
 
                 const blockStartOffset = i;
-                const assignId = (): string => {
+                const assignId = (): { blockId: string; hasExplicitId: boolean } => {
                     if (pendingBlockId) {
                         const id = pendingBlockId;
                         pendingBlockId = null;
-                        return id;
+                        return { blockId: id, hasExplicitId: true };
                     }
-                    return `blk-${autoCounter++}`;
+                    return { blockId: `blk-${autoCounter++}`, hasExplicitId: false };
                 };
 
                 // 1. Heading (# .. ######)
                 const headingMatch = /^(#{1,6})\s+(.+)$/.exec(trimmed);
                 if (headingMatch) {
                     const lineNum = seg.StartLine + i;
+                    const assigned = assignId();
                     blocks.push({
-                        blockId: assignId(),
+                        blockId: assigned.blockId,
+                        hasExplicitId: assigned.hasExplicitId,
                         kind: 'heading',
                         headingLevel: headingMatch[1].length,
                         headingText: headingMatch[2].trim(),
@@ -428,8 +432,10 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                         codeLines.push(lines[i]);
                         i++;
                     }
+                    const assigned = assignId();
                     blocks.push({
-                        blockId: assignId(),
+                        blockId: assigned.blockId,
+                        hasExplicitId: assigned.hasExplicitId,
                         kind: 'code',
                         startLine: seg.StartLine + blockStartOffset,
                         endLine: seg.StartLine + i - 1,
@@ -445,8 +451,10 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                         tableLines.push(lines[i]);
                         i++;
                     }
+                    const assigned = assignId();
                     blocks.push({
-                        blockId: assignId(),
+                        blockId: assigned.blockId,
+                        hasExplicitId: assigned.hasExplicitId,
                         kind: 'table',
                         startLine: seg.StartLine + blockStartOffset,
                         endLine: seg.StartLine + i - 1,
@@ -462,8 +470,10 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                         quoteLines.push(lines[i]);
                         i++;
                     }
+                    const assigned = assignId();
                     blocks.push({
-                        blockId: assignId(),
+                        blockId: assigned.blockId,
+                        hasExplicitId: assigned.hasExplicitId,
                         kind: 'callout',
                         startLine: seg.StartLine + blockStartOffset,
                         endLine: seg.StartLine + i - 1,
@@ -483,8 +493,10 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                         listLines.push(lines[i]);
                         i++;
                     }
+                    const assigned = assignId();
                     blocks.push({
-                        blockId: assignId(),
+                        blockId: assigned.blockId,
+                        hasExplicitId: assigned.hasExplicitId,
                         kind: 'list',
                         startLine: seg.StartLine + blockStartOffset,
                         endLine: seg.StartLine + i - 1,
@@ -503,8 +515,10 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                     paraLines.push(lines[i]);
                     i++;
                 }
+                const assigned = assignId();
                 blocks.push({
-                    blockId: assignId(),
+                    blockId: assigned.blockId,
+                    hasExplicitId: assigned.hasExplicitId,
                     kind: 'paragraph',
                     startLine: seg.StartLine + blockStartOffset,
                     endLine: seg.StartLine + i - 1,
@@ -683,7 +697,18 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
     }
 
     private serializeLogicalBlocks(blocks: ParsedMarkdownLogicalBlock[]): string {
-        return blocks.map((b) => b.rawMarkdown).join('\n\n');
+        return blocks
+            .map((b) => {
+                if (
+                    b.kind !== 'mj-block' &&
+                    b.hasExplicitId &&
+                    !/^\s*<!--\s*mj-block-id:/i.test(b.rawMarkdown)
+                ) {
+                    return `<!-- mj-block-id: ${b.blockId} -->\n${b.rawMarkdown}`;
+                }
+                return b.rawMarkdown;
+            })
+            .join('\n\n');
     }
 
     private handleInsertBlockAfter(content: string, input: Record<string, unknown>): ArtifactToolResult {
@@ -697,10 +722,35 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             return { success: false, data: null, errorMessage: 'insert_block_after requires non-empty markdown.' };
         }
 
-        const explicitId = typeof input.newBlockId === 'string' && input.newBlockId.trim() ? input.newBlockId.trim() : null;
-        const stampedMarkdown = explicitId ? `<!-- mj-block-id: ${explicitId} -->\n${newMarkdown}` : newMarkdown;
-
         const blocks = this.ParseLogicalBlocks(content);
+        const existingIds = new Set(blocks.map((b) => b.blockId));
+
+        const isMjBlockDirective = newMarkdown.startsWith(':::mj-block');
+        const leadingCommentMatch = /^<!--\s*mj-block-id:\s*([A-Za-z0-9_-]+)\s*-->\s*\r?\n([\s\S]*)$/.exec(newMarkdown);
+        const explicitId =
+            typeof input.newBlockId === 'string' && input.newBlockId.trim()
+                ? input.newBlockId.trim()
+                : leadingCommentMatch?.[1] ?? null;
+
+        let mintedBlockId: string;
+        let cleanBody = leadingCommentMatch ? leadingCommentMatch[2].trim() : newMarkdown;
+        if (isMjBlockDirective) {
+            const parsedSegs = DocumentLiveBlockEngine.Instance.ParseMarkdownDirectives(newMarkdown);
+            mintedBlockId = parsedSegs[0]?.BlockSpec?.BlockID ?? explicitId ?? `mj-${randomUUID().slice(0, 8)}`;
+        } else if (explicitId && !existingIds.has(explicitId)) {
+            mintedBlockId = explicitId;
+        } else {
+            let candidate = `blk-${randomUUID().slice(0, 8)}`;
+            while (existingIds.has(candidate)) {
+                candidate = `blk-${randomUUID().slice(0, 8)}`;
+            }
+            mintedBlockId = candidate;
+        }
+
+        const stampedMarkdown = isMjBlockDirective
+            ? cleanBody
+            : `<!-- mj-block-id: ${mintedBlockId} -->\n${cleanBody}`;
+
         const afterBlockId = typeof input.afterBlockId === 'string' ? input.afterBlockId.trim() : '';
 
         let updatedContent: string;
@@ -718,11 +768,12 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                 };
             }
             const newBlockEntry: ParsedMarkdownLogicalBlock = {
-                blockId: explicitId ?? `blk-inserted`,
-                kind: 'paragraph',
+                blockId: mintedBlockId,
+                hasExplicitId: !isMjBlockDirective,
+                kind: isMjBlockDirective ? 'mj-block' : 'paragraph',
                 startLine: 0,
                 endLine: 0,
-                rawMarkdown: stampedMarkdown
+                rawMarkdown: cleanBody
             };
             blocks.splice(idx + 1, 0, newBlockEntry);
             updatedContent = this.serializeLogicalBlocks(blocks);
@@ -731,6 +782,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         return {
             success: true,
             data: {
+                blockId: mintedBlockId,
                 updatedContent,
                 revisionHash: this.ComputeRevisionHash(updatedContent)
             }
@@ -744,7 +796,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         }
 
         const blockId = String(input.blockId ?? '').trim();
-        const replacement = String(input.markdown ?? '').trim();
+        const rawReplacement = String(input.markdown ?? '').trim();
         if (!blockId) {
             return { success: false, data: null, errorMessage: 'replace_block requires blockId.' };
         }
@@ -755,9 +807,14 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             return { success: false, data: null, errorMessage: `Block '${blockId}' was not found.` };
         }
 
+        const leadingComment = /^<!--\s*mj-block-id:\s*([A-Za-z0-9_-]+)\s*-->\s*\r?\n([\s\S]*)$/.exec(rawReplacement);
+        const cleanedReplacement = leadingComment ? leadingComment[2].trim() : rawReplacement;
+        const preserveExplicitId = Boolean(blocks[idx].hasExplicitId || leadingComment);
+
         blocks[idx] = {
             ...blocks[idx],
-            rawMarkdown: replacement
+            hasExplicitId: preserveExplicitId,
+            rawMarkdown: cleanedReplacement
         };
         const updatedContent = this.serializeLogicalBlocks(blocks);
         return {
@@ -805,10 +862,17 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             return { success: false, data: null, errorMessage: 'upsert_table requires at least one column header.' };
         }
 
-        const headerLine = `| ${headers.join(' | ')} |`;
+        const escapeTableCell = (cellText: string): string =>
+            cellText
+                .replace(/\\/g, '\\\\')
+                .replace(/\|/g, '\\|')
+                .replace(/\r?\n/g, ' ');
+
+        const escapedHeaders = headers.map((h) => escapeTableCell(h));
+        const headerLine = `| ${escapedHeaders.join(' | ')} |`;
         const dividerLine = `| ${headers.map(() => '---').join(' | ')} |`;
         const rowLines = rows.map((row) => {
-            const padded = headers.map((_, colIdx) => (row[colIdx] ?? '').replace(/\|/g, '\\|'));
+            const padded = headers.map((_, colIdx) => escapeTableCell(row[colIdx] ?? ''));
             return `| ${padded.join(' | ')} |`;
         });
         const tableMarkdown = [headerLine, dividerLine, ...rowLines].join('\n');
@@ -893,7 +957,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
 
     private handleProposeSuggestion(content: string, input: Record<string, unknown>): ArtifactToolResult {
         const targetBlockId = String(input.targetBlockId ?? '').trim();
-        const proposedMarkdown = String(input.proposedMarkdown ?? '').trim();
+        const proposedMarkdown = String(input.proposedMarkdown ?? input.proposedText ?? '').trim();
         const rationale = String(input.rationale ?? '').trim();
 
         const blocks = this.ParseLogicalBlocks(content);

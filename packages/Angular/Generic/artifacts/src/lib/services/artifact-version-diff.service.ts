@@ -31,6 +31,7 @@ import {
   ComponentSpec,
 } from '@memberjunction/interactive-component-types';
 import {
+  ComputeBoundedSequenceDiff,
   DocumentCollaborationService,
   type DocumentWordDiffSpan,
 } from './document-collaboration.service';
@@ -1337,43 +1338,33 @@ export class ArtifactVersionDiffService {
     baseChunks: ParsedDocChunk[],
     targetChunks: ParsedDocChunk[],
   ): DocsVisualDiffBlock[] {
-    const m = baseChunks.length;
-    const n = targetChunks.length;
+    const seqOps = ComputeBoundedSequenceDiff(
+      baseChunks,
+      targetChunks,
+      (a, b) => this.areDocChunksExactOrSameId(a, b),
+      (chunk) =>
+        chunk.MatchId
+          ? `id:${chunk.MatchId}`
+          : `md:${chunk.Category}:${chunk.RawMarkdown.trim()}`,
+    );
 
-    // Exact match DP for anchor alignment
-    const dp: number[][] = Array.from({ length: m + 1 }, () => new Array<number>(n + 1).fill(0));
-    for (let i = m - 1; i >= 0; i--) {
-      for (let j = n - 1; j >= 0; j--) {
-        if (this.areDocChunksExactOrSameId(baseChunks[i], targetChunks[j])) {
-          dp[i][j] = dp[i + 1][j + 1] + 1;
-        } else {
-          dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
-        }
+    const rawOps: Array<{
+      kind: 'match' | 'del' | 'add';
+      base?: ParsedDocChunk;
+      target?: ParsedDocChunk;
+    }> = seqOps.map((op) => {
+      if (op.Kind === 'equal') {
+        return {
+          kind: 'match',
+          base: baseChunks[op.OldIndex],
+          target: targetChunks[op.NewIndex],
+        };
       }
-    }
-
-    const rawOps: Array<{ kind: 'match' | 'del' | 'add'; base?: ParsedDocChunk; target?: ParsedDocChunk }> = [];
-    let i = 0;
-    let j = 0;
-    while (i < m && j < n) {
-      if (this.areDocChunksExactOrSameId(baseChunks[i], targetChunks[j])) {
-        rawOps.push({ kind: 'match', base: baseChunks[i], target: targetChunks[j] });
-        i++;
-        j++;
-      } else if (dp[i + 1][j] >= dp[i][j + 1]) {
-        rawOps.push({ kind: 'del', base: baseChunks[i] });
-        i++;
-      } else {
-        rawOps.push({ kind: 'add', target: targetChunks[j] });
-        j++;
+      if (op.Kind === 'delete') {
+        return { kind: 'del', base: baseChunks[op.OldIndex] };
       }
-    }
-    while (i < m) {
-      rawOps.push({ kind: 'del', base: baseChunks[i++] });
-    }
-    while (j < n) {
-      rawOps.push({ kind: 'add', target: targetChunks[j++] });
-    }
+      return { kind: 'add', target: targetChunks[op.NewIndex] };
+    });
 
     // Coalesce adjacent del+add runs into word-diffed modified blocks when compatible
     const result: DocsVisualDiffBlock[] = [];

@@ -1,7 +1,8 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ChangeDetectorRef, ViewChild, ElementRef, Type, inject } from '@angular/core';
-import { CompositeKey, DataSnapshot, Metadata, RunView, type EntityInfo, type QueryInfo } from '@memberjunction/core';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { CompositeKey, DataSnapshot, LogError, RunView, type EntityInfo, type IMetadataProvider, type QueryInfo } from '@memberjunction/core';
+import { EscapeSQLString, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
+  ArtifactMetadataEngine,
   DocumentLiveBlockEngine,
   ArtifactPermissionEngine,
   UserInfoEngine,
@@ -15,10 +16,12 @@ import {
   type MJConversationEntity,
   type MJConversationDetailEntity,
 } from '@memberjunction/core-entities';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import type { PdfOrientation } from '@memberjunction/ng-react';
 import { Subscription } from 'rxjs';
 import { BaseArtifactViewerPluginComponent, IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
 import { DocsVersionDiffComponent } from '../version-diff/docs-version-diff.component';
+import { EscapeHtml } from '../previews/office-preview.logic';
 import { CreateMarkdownSnapshot } from '../../snapshot-helpers';
 import {
   DocumentCollaborationService,
@@ -212,16 +215,18 @@ export interface DocsPermissionEntry {
             (change)="OnImportFileSelected($event)"
           />
 
-          <button
-            type="button"
-            class="mj-docs-btn"
-            title="Share & Document Permissions"
-            data-testid="open-permissions-modal-btn"
-            (click)="OpenPermissionsModal()"
-          >
-            <i class="fas fa-user-shield"></i>
-            <span>Share</span>
-          </button>
+          @if (CanUserShareArtifact) {
+            <button
+              type="button"
+              class="mj-docs-btn"
+              title="Share & Document Permissions"
+              data-testid="open-permissions-modal-btn"
+              (click)="OpenPermissionsModal()"
+            >
+              <i class="fas fa-user-shield"></i>
+              <span>Share</span>
+            </button>
+          }
 
           @if (CanUserEdit) {
             <button
@@ -931,10 +936,16 @@ export interface DocsPermissionEntry {
                               <span class="mj-docs-badge mj-docs-badge--brand">
                                 Embedded · {{ seg.Descriptor.ArtifactType || 'Artifact' }}
                               </span>
-                              <span class="mj-docs-badge">
-                                v{{ GetEmbeddedArtifactVersion(seg.Descriptor).VersionNumber || 1 }}
-                                {{ seg.Descriptor.VersionID ? '· Pinned' : '· Latest' }}
-                              </span>
+                              @if (GetEmbeddedArtifactVersion(seg.Descriptor); as embHeaderVer) {
+                                <span class="mj-docs-badge">
+                                  v{{ embHeaderVer.VersionNumber || 1 }}
+                                  {{ seg.Descriptor.VersionID ? '· Pinned' : '· Latest' }}
+                                </span>
+                              } @else {
+                                <span class="mj-docs-badge">
+                                  {{ seg.Descriptor.VersionID ? 'Pinned' : 'Latest' }}
+                                </span>
+                              }
                             </div>
 
                             <div class="mj-docs-ole-block__actions">
@@ -980,7 +991,7 @@ export interface DocsPermissionEntry {
                                   (click)="TogglePinArtifactVersion(seg.Descriptor)"
                                 >
                                   <i class="fas fa-thumbtack"></i>
-                                  <span>{{ seg.Descriptor.VersionID ? 'Unpin' : 'Pin v' + (GetEmbeddedArtifactVersion(seg.Descriptor).VersionNumber || 1) }}</span>
+                                  <span>{{ GetPinArtifactVersionButtonLabel(seg.Descriptor) }}</span>
                                 </button>
                               }
                               <button
@@ -1018,11 +1029,23 @@ export interface DocsPermissionEntry {
                           >
                             @if (GetEmbeddedArtifactVersion(seg.Descriptor); as embeddedVer) {
                               <mj-artifact-type-plugin-viewer
+                                [Provider]="Provider"
                                 [artifactVersion]="embeddedVer"
                                 [ArtifactTypeName]="seg.Descriptor.ArtifactType || 'Whiteboard'"
                                 [readonly]="!IsInlineEditingBlock(seg.Descriptor.BlockID)"
                                 (ContentCommitted)="OnEmbeddedArtifactContentCommitted(seg.Descriptor, $event)"
                               ></mj-artifact-type-plugin-viewer>
+                            } @else {
+                              <div
+                                class="mj-docs-live-block__empty"
+                                [attr.data-testid]="'ole-artifact-placeholder-' + seg.Descriptor.BlockID"
+                              >
+                                @if (IsEmbeddedArtifactLoading(seg.Descriptor)) {
+                                  <i class="fas fa-spinner fa-spin"></i> Loading embedded artifact…
+                                } @else {
+                                  <span>{{ GetEmbeddedArtifactError(seg.Descriptor) || 'Embedded artifact unavailable or access denied.' }}</span>
+                                }
+                              </div>
                             }
                           </div>
                         </div>
@@ -3834,8 +3857,8 @@ export class MarkdownArtifactViewerComponent
   @Output() public openEntityRecord = this.OpenEntityRecord;
 
   /**
-   * Optional WebSocket URL (or base URL) for `/collaboration/yjs` real-time Yjs room sync (§ 3.2).
-   * When omitted, falls back to `globalThis.__MJ_COLLAB_WS_URL__` if configured.
+   * Optional WebSocket URL (or base URL) override for `/collaboration/yjs` real-time Yjs room sync (§ 3.2).
+   * When omitted, `DocumentCollaborationService` mints a single-use ticket via `GraphQLDataProvider`.
    */
   @Input() public CollaborationWsUrl: string | null = null;
 
@@ -3851,6 +3874,7 @@ export class MarkdownArtifactViewerComponent
 
   private readonly collabService = inject(DocumentCollaborationService);
   private readonly importExportService = inject(DocumentImportExportService);
+  private readonly notificationService = inject(MJNotificationService, { optional: true });
   private readonly cdr = inject(ChangeDetectorRef);
 
   public MarkdownContent = '';
@@ -3900,9 +3924,9 @@ export class MarkdownArtifactViewerComponent
   private permissionUnsub: (() => void) | null = null;
   public CollaborationStatus: CollaborationConnectionStatus = 'local';
   public Collaborators: CollaboratorPresence[] = [];
-  public HasEditPermission = true;
-  public CanUserShareArtifact = true;
-  public CurrentUserEffectiveRoleLabel = 'Owner / Editor';
+  public HasEditPermission = false;
+  public CanUserShareArtifact = false;
+  public CurrentUserEffectiveRoleLabel = 'Viewer';
 
   // Share & Permissions Modal State
   public ArtifactPermissionEntries: DocsPermissionEntry[] = [];
@@ -3918,6 +3942,8 @@ export class MarkdownArtifactViewerComponent
   private userCollapsedBlockOverrides = new Map<string, boolean>();
   private collapsedHeadingIds = new Set<string>();
   private embeddedArtifactVersions = new Map<string, MJArtifactVersionEntity>();
+  private inFlightEmbeddedVersionKeys = new Set<string>();
+  private failedEmbeddedVersionMessages = new Map<string, string>();
   private inlineEditingBlockIds = new Set<string>();
 
   // Freeze Warning Modal (O5)
@@ -4035,6 +4061,10 @@ export class MarkdownArtifactViewerComponent
       if (this.readonly && (this.ViewMode === 'edit' || this.ViewMode === 'suggest')) {
         this.ViewMode = 'preview';
       }
+      if (!this.artifactVersion?.ArtifactID) {
+        this.HasEditPermission = !this.readonly;
+      }
+      this.session?.SetCanEdit(this.CanUserEdit);
       this.cdr.markForCheck();
     }
   }
@@ -4048,7 +4078,7 @@ export class MarkdownArtifactViewerComponent
   }
 
   public override async ExportPDF(orientation: PdfOrientation = 'portrait'): Promise<void> {
-    const html = this.PrintableCanvas?.nativeElement?.innerHTML ?? `<pre>${this.MarkdownContent}</pre>`;
+    const html = this.PrintableCanvas?.nativeElement?.innerHTML ?? `<pre>${EscapeHtml(this.MarkdownContent)}</pre>`;
     this.importExportService.ExportPrintablePdf(html, this.getDisplayTitle() || 'Document', orientation);
   }
 
@@ -4577,6 +4607,14 @@ export class MarkdownArtifactViewerComponent
     this.cdr.markForCheck();
   }
 
+  public GetPinArtifactVersionButtonLabel(block: DocumentBlockSpec): string {
+    if (block.VersionID) {
+      return 'Unpin Version';
+    }
+    const currentVer = this.GetEmbeddedArtifactVersion(block);
+    return `Pin to v${currentVer?.VersionNumber || 1}`;
+  }
+
   /**
    * Toggles whether an embedded OLE `Artifact` block pins a specific `VersionID` or tracks the latest version (§ 3.4.1).
    */
@@ -4585,9 +4623,13 @@ export class MarkdownArtifactViewerComponent
       return;
     }
     const currentVer = this.GetEmbeddedArtifactVersion(block);
+    if (!block.VersionID && !currentVer?.ID) {
+      this.notifyError('Embedded artifact version is not loaded yet and cannot be pinned.');
+      return;
+    }
     const updatedDescriptor: DocumentBlockSpec = {
       ...block,
-      VersionID: block.VersionID ? undefined : currentVer.ID,
+      VersionID: block.VersionID ? undefined : currentVer?.ID,
     };
     const updatedRes = DocumentLiveBlockEngine.Instance.UpdateBlockInMarkdown(
       this.MarkdownContent,
@@ -4596,7 +4638,7 @@ export class MarkdownArtifactViewerComponent
     );
     this.OnMarkdownChanged(updatedRes.Markdown);
     this.StatusBannerMessage = updatedDescriptor.VersionID
-      ? `Pinned ${block.Title || 'embedded artifact'} to v${currentVer.VersionNumber || 1}.`
+      ? `Pinned ${block.Title || 'embedded artifact'} to v${currentVer?.VersionNumber || 1}.`
       : `Unpinned ${block.Title || 'embedded artifact'} (now tracking latest version).`;
   }
 
@@ -4684,7 +4726,7 @@ export class MarkdownArtifactViewerComponent
       this.PendingBlockIsWhiteboard = true;
       this.NewBlockLabel = 'Interactive Architecture Whiteboard';
       this.NewBlockArtifactTypeName = 'Whiteboard';
-      this.NewBlockArtifactID = `wb-${Date.now()}`;
+      this.NewBlockArtifactID = '';
       this.NewBlockDefaultCollapsed = false;
       this.cdr.markForCheck();
       return;
@@ -5032,98 +5074,74 @@ export class MarkdownArtifactViewerComponent
   }
 
   private resolveEntityPickerOptions(): DocsEntityPickerOption[] {
-    try {
-      const md = this.ProviderToUse;
-      const entities: EntityInfo[] = md.Entities ?? [];
-      if (entities.length > 0) {
-        return [...entities]
-          .sort((a, b) => (a.DisplayNameOrName || a.Name).localeCompare(b.DisplayNameOrName || b.Name))
-          .map((e) => ({
-            ID: e.ID,
-            Name: e.Name,
-            DisplayName: e.DisplayNameOrName || e.Name,
-            Icon: e.Icon || 'fa-solid fa-table',
-            Subtitle: `${e.SchemaName || '__mj'}.${e.BaseTable || ''} · ${e.Fields?.length || 0} fields`,
-            FieldCount: e.Fields?.length || 0,
-          }));
-      }
-    } catch {
-      // Fall back to curated defaults in isolated test environments
+    const md = this.getSafeProvider();
+    if (!md) {
+      return [];
     }
-    return [
-      {
-        ID: 'ent-artifacts',
-        Name: 'MJ: Artifacts',
-        DisplayName: 'Artifacts',
-        Icon: 'fa-solid fa-cube',
-        Subtitle: '__mj.Artifact · 14 fields',
-        FieldCount: 14,
-      },
-      {
-        ID: 'ent-conversations',
-        Name: 'MJ: Conversations',
-        DisplayName: 'Conversations',
-        Icon: 'fa-solid fa-comments',
-        Subtitle: '__mj.Conversation · 12 fields',
-        FieldCount: 12,
-      },
-      {
-        ID: 'ent-ai-models',
-        Name: 'MJ: AI Models',
-        DisplayName: 'AI Models',
-        Icon: 'fa-solid fa-microchip',
-        Subtitle: '__mj.AIModel · 18 fields',
-        FieldCount: 18,
-      },
-      {
-        ID: 'ent-users',
-        Name: 'MJ: Users',
-        DisplayName: 'Users',
-        Icon: 'fa-solid fa-user',
-        Subtitle: '__mj.User · 15 fields',
-        FieldCount: 15,
-      },
-    ];
+    const entities: EntityInfo[] = md.Entities ?? [];
+    if (entities.length === 0) {
+      return [];
+    }
+    return [...entities]
+      .sort((a, b) => (a.DisplayNameOrName || a.Name).localeCompare(b.DisplayNameOrName || b.Name))
+      .map((e) => ({
+        ID: e.ID,
+        Name: e.Name,
+        DisplayName: e.DisplayNameOrName || e.Name,
+        Icon: e.Icon || 'fa-solid fa-table',
+        Subtitle: `${e.SchemaName || '__mj'}.${e.BaseTable || ''} · ${e.Fields?.length || 0} fields`,
+        FieldCount: e.Fields?.length || 0,
+      }));
   }
 
   private resolveQueryPickerOptions(): DocsQueryPickerOption[] {
-    try {
-      const md = this.ProviderToUse;
-      const queries: QueryInfo[] = md.Queries ?? [];
-      if (queries.length > 0) {
-        return [...queries]
-          .sort((a, b) => a.Name.localeCompare(b.Name))
-          .map((q) => ({
-            ID: q.ID,
-            Name: q.Name,
-            Category: q.Category || 'General',
-            Description: q.Description || '',
-          }));
-      }
-    } catch {
-      // Ignore in isolated test environments
+    const md = this.getSafeProvider();
+    if (!md) {
+      return [];
     }
-    return [];
+    const queries: QueryInfo[] = md.Queries ?? [];
+    if (queries.length === 0) {
+      return [];
+    }
+    return [...queries]
+      .sort((a, b) => a.Name.localeCompare(b.Name))
+      .map((q) => ({
+        ID: q.ID,
+        Name: q.Name,
+        Category: q.Category || 'General',
+        Description: q.Description || '',
+      }));
   }
 
   private async loadSavedViewsForEntity(entityName: string, entityId?: string): Promise<void> {
+    const provider = this.getSafeProvider();
+    if (!provider) {
+      this.IsLoadingEntityViews = false;
+      this.AvailableEntityViews = [];
+      this.cdr.markForCheck();
+      return;
+    }
+
     this.IsLoadingEntityViews = true;
     this.AvailableEntityViews = [];
     this.cdr.markForCheck();
 
     try {
-      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const rv = RunView.FromMetadataProvider(provider);
       const filter = entityId
-        ? `EntityID='${this.escapeSql(entityId)}'`
-        : `Entity='${this.escapeSql(entityName)}'`;
-      const res = await rv.RunView<{ ID: string; Name: string; Description: string }>({
-        EntityName: 'MJ: User Views',
-        ExtraFilter: filter,
-        OrderBy: 'Name ASC',
-        Fields: ['ID', 'Name', 'Description'],
-        MaxRows: 50,
-        ResultType: 'simple',
-      });
+        ? `EntityID='${EscapeSQLString(entityId)}'`
+        : `Entity='${EscapeSQLString(entityName)}'`;
+      const res = await rv.RunView<{ ID: string; Name: string; Description: string }>(
+        {
+          EntityName: 'MJ: User Views',
+          ExtraFilter: filter,
+          OrderBy: 'Name ASC',
+          Fields: ['ID', 'Name', 'Description'],
+          MaxRows: 50,
+          ResultType: 'simple',
+        },
+        this.getSafeCurrentUser(),
+      );
       if (res.Success && Array.isArray(res.Results)) {
         this.AvailableEntityViews = res.Results.map((r) => ({
           ID: r.ID,
@@ -5131,8 +5149,8 @@ export class MarkdownArtifactViewerComponent
           Description: r.Description || '',
         }));
       }
-    } catch {
-      // Ignore in offline/unit-test contexts
+    } catch (err) {
+      LogError(err);
     } finally {
       this.IsLoadingEntityViews = false;
       this.cdr.markForCheck();
@@ -5140,16 +5158,23 @@ export class MarkdownArtifactViewerComponent
   }
 
   private async loadAvailableArtifactsForPicker(): Promise<void> {
+    const provider = this.getSafeProvider();
+    if (!provider) {
+      return;
+    }
     try {
-      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const res = await rv.RunView<{ ID: string; Name: string; Type: string }>({
-        EntityName: 'MJ: Artifacts',
-        ExtraFilter: `Visibility='Always'`,
-        OrderBy: '__mj_UpdatedAt DESC',
-        Fields: ['ID', 'Name', 'Type'],
-        MaxRows: 25,
-        ResultType: 'simple',
-      });
+      const rv = RunView.FromMetadataProvider(provider);
+      const res = await rv.RunView<{ ID: string; Name: string; Type: string }>(
+        {
+          EntityName: 'MJ: Artifacts',
+          ExtraFilter: `Visibility='Always'`,
+          OrderBy: '__mj_UpdatedAt DESC',
+          Fields: ['ID', 'Name', 'Type'],
+          MaxRows: 25,
+          ResultType: 'simple',
+        },
+        this.getSafeCurrentUser(),
+      );
       if (res.Success && Array.isArray(res.Results)) {
         this.AvailableArtifactsForPicker = res.Results.map((r) => ({
           ID: r.ID,
@@ -5160,16 +5185,17 @@ export class MarkdownArtifactViewerComponent
           this.SelectArtifactOption(this.AvailableArtifactsForPicker[0]);
         }
       }
-    } catch {
-      // Ignore in offline/unit-test contexts
+    } catch (err) {
+      LogError(err);
     }
   }
 
   /**
    * Inserts a new `:::mj-block` directive or updates an existing block (`EditingBlockID`) in place,
-   * and creates an inline Whiteboard child artifact when `PendingBlockIsWhiteboard === true` (§ 3.4.1 / O4).
+   * creating and saving a real delegated child `MJArtifactEntity` + `MJArtifactVersionEntity` first
+   * when `PendingBlockIsWhiteboard === true` (§ 3.4.1 / O4).
    */
-  public ConfirmBlockInsertModal(): void {
+  public async ConfirmBlockInsertModal(): Promise<void> {
     if (!this.PendingBlockInsertType) {
       return;
     }
@@ -5210,91 +5236,30 @@ export class MarkdownArtifactViewerComponent
     } else if (this.PendingBlockInsertType === 'SavedQuery') {
       descriptor.QueryName = this.NewBlockQueryName || 'Active Artifacts Overview';
     } else if (this.PendingBlockInsertType === 'Artifact') {
-      const artifactId = this.NewBlockArtifactID.trim() || `inline-wb-${Date.now()}`;
-      descriptor.ArtifactID = artifactId;
       descriptor.ArtifactType = this.PendingBlockIsWhiteboard
         ? 'Whiteboard'
         : this.NewBlockArtifactTypeName || 'Whiteboard';
       descriptor.EmbedMode = this.PendingBlockIsWhiteboard ? 'Inline' : 'Link';
       descriptor.HeightPx = 440;
 
-      if (!isEditingExisting) {
-        // Seed an inline Whiteboard version so it renders immediately
-        const defaultWbJson = JSON.stringify(
-          {
-            version: 2,
-            seq: 1,
-            idCounter: 4,
-            zCounter: 4,
-            pageCounter: 1,
-            activePageId: 'page-1',
-            pages: [
-              {
-                id: 'page-1',
-                name: descriptor.Title || 'Architecture Diagram',
-                author: 'user',
-                items: [
-                  {
-                    ID: 'wb-1',
-                    Kind: 'shape',
-                    Shape: 'rect',
-                    X: 70,
-                    Y: 80,
-                    W: 190,
-                    H: 76,
-                    Text: 'MJ Docs Host Artifact',
-                    Sub: 'Markdown Document',
-                    Tag: 'Host',
-                    Author: 'user',
-                    Z: 1,
-                  },
-                  {
-                    ID: 'wb-2',
-                    Kind: 'shape',
-                    Shape: 'rect',
-                    X: 360,
-                    Y: 80,
-                    W: 210,
-                    H: 76,
-                    Text: 'Inline Whiteboard',
-                    Sub: 'WhiteboardState v2',
-                    Tag: 'Artifact Plugin',
-                    Author: 'agent',
-                    Z: 2,
-                  },
-                  {
-                    ID: 'wb-3',
-                    Kind: 'connector',
-                    X1: 260,
-                    Y1: 118,
-                    X2: 360,
-                    Y2: 118,
-                    FromId: 'wb-1',
-                    ToId: 'wb-2',
-                    Author: 'user',
-                    Z: 3,
-                  },
-                ],
-              },
-            ],
-          },
-          null,
-          2,
+      if (!isEditingExisting && this.PendingBlockIsWhiteboard) {
+        const created = await this.createDelegatedChildArtifact(
+          descriptor.Title || 'Interactive Architecture Whiteboard',
+          descriptor.ArtifactType,
         );
-        this.embeddedArtifactVersions.set(
-          artifactId,
-          {
-            ID: `ver-${artifactId}-1`,
-            ArtifactID: artifactId,
-            VersionNumber: 1,
-            Name: descriptor.Title ?? 'Embedded Whiteboard',
-            Content: defaultWbJson,
-          } as unknown as MJArtifactVersionEntity,
-        );
+        if (!created) {
+          return;
+        }
+        descriptor.ArtifactID = created.artifact.ID;
+        descriptor.VersionID = created.version.ID;
         this.inlineEditingBlockIds.add(blockId);
-
-        // When connected to a live provider and host artifact is a persisted UUID, also create the delegated child MJ: Artifacts row (O4)
-        void this.persistInlineDelegatedArtifactIfConnected(descriptor, defaultWbJson);
+      } else {
+        const artifactId = this.NewBlockArtifactID.trim();
+        if (!artifactId) {
+          this.notifyError('Please select a target artifact before embedding.');
+          return;
+        }
+        descriptor.ArtifactID = artifactId;
       }
     }
 
@@ -5435,10 +5400,13 @@ export class MarkdownArtifactViewerComponent
       if (!raw) {
         return;
       }
-      const parsed = JSON.parse(raw) as {
+      const parsed = SafeJSONParse<{
         blocks?: Record<string, boolean>;
         headings?: string[];
-      };
+      }>(raw);
+      if (!parsed) {
+        return;
+      }
       if (parsed.blocks && typeof parsed.blocks === 'object') {
         for (const [k, v] of Object.entries(parsed.blocks)) {
           this.userCollapsedBlockOverrides.set(k, Boolean(v));
@@ -5593,79 +5561,114 @@ export class MarkdownArtifactViewerComponent
   private async loadArtifactPermissionsForModal(): Promise<void> {
     const artifactId = this.artifactVersion?.ArtifactID;
     const user = this.getSafeCurrentUser();
+    const provider = this.getSafeProvider();
     const entries: DocsPermissionEntry[] = [];
 
-    if (user) {
-      entries.push({
-        ID: `owner-${user.ID}`,
-        UserID: user.ID,
-        UserName: user.Name || 'Current User',
-        UserEmail: user.Email || '',
-        CanRead: true,
-        CanEdit: this.HasEditPermission,
-        CanShare: this.CanUserShareArtifact,
-        IsOwner: true,
-      });
+    if (!artifactId || !user || !provider) {
+      if (user) {
+        entries.push({
+          ID: `viewer-${user.ID}`,
+          UserID: user.ID,
+          UserName: user.Name || 'Current User',
+          UserEmail: user.Email || '',
+          CanRead: true,
+          CanEdit: this.HasEditPermission,
+          CanShare: this.CanUserShareArtifact,
+          IsOwner: false,
+        });
+      }
+      this.ArtifactPermissionEntries = entries;
+      this.cdr.markForCheck();
+      return;
     }
 
-    if (this.isUuid(artifactId) && user && this.ProviderToUse) {
-      try {
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const [permRes, usersRes] = await Promise.all([
-          rv.RunView<{
-            ID: string;
-            UserID: string;
-            User?: string;
-            CanRead: boolean;
-            CanEdit: boolean;
-            CanShare: boolean;
-          }>(
-            {
-              EntityName: 'MJ: Artifact Permissions',
-              ExtraFilter: `ArtifactID='${this.escapeSql(artifactId)}'`,
-              MaxRows: 100,
-              ResultType: 'simple',
-            },
-            user,
-          ),
-          rv.RunView<{ ID: string; Name: string; Email: string }>(
-            {
-              EntityName: 'MJ: Users',
-              ExtraFilter: `IsActive=1`,
-              OrderBy: 'Name ASC',
-              Fields: ['ID', 'Name', 'Email'],
-              MaxRows: 100,
-              ResultType: 'simple',
-            },
-            user,
-          ),
-        ]);
+    try {
+      const rv = RunView.FromMetadataProvider(provider);
+      const [artRes, permRes, usersRes] = await Promise.all([
+        rv.RunView<{ ID: string; UserID: string }>(
+          {
+            EntityName: 'MJ: Artifacts',
+            ExtraFilter: `ID='${EscapeSQLString(artifactId)}'`,
+            Fields: ['ID', 'UserID'],
+            MaxRows: 1,
+            ResultType: 'simple',
+          },
+          user,
+        ),
+        rv.RunView<{
+          ID: string;
+          UserID: string;
+          User?: string;
+          CanRead: boolean;
+          CanEdit: boolean;
+          CanShare: boolean;
+        }>(
+          {
+            EntityName: 'MJ: Artifact Permissions',
+            ExtraFilter: `ArtifactID='${EscapeSQLString(artifactId)}'`,
+            MaxRows: 100,
+            ResultType: 'simple',
+          },
+          user,
+        ),
+        rv.RunView<{ ID: string; Name: string; Email: string }>(
+          {
+            EntityName: 'MJ: Users',
+            ExtraFilter: `IsActive=1`,
+            OrderBy: 'Name ASC',
+            Fields: ['ID', 'Name', 'Email'],
+            MaxRows: 100,
+            ResultType: 'simple',
+          },
+          user,
+        ),
+      ]);
 
-        if (usersRes.Success && Array.isArray(usersRes.Results)) {
-          this.AvailableUsersForSharing = usersRes.Results.filter((u) => !UUIDsEqual(u.ID, user.ID));
-        }
+      const ownerUserId = artRes.Success ? artRes.Results?.[0]?.UserID : undefined;
+      const allUsers = usersRes.Success && Array.isArray(usersRes.Results) ? usersRes.Results : [];
+      this.AvailableUsersForSharing = allUsers.filter(
+        (u) => !UUIDsEqual(u.ID, user.ID) && (!ownerUserId || !UUIDsEqual(u.ID, ownerUserId)),
+      );
 
-        if (permRes.Success && Array.isArray(permRes.Results)) {
-          for (const p of permRes.Results) {
-            if (UUIDsEqual(p.UserID, user.ID)) {
-              continue;
-            }
-            const matchedUser = this.AvailableUsersForSharing.find((u) => UUIDsEqual(u.ID, p.UserID));
-            entries.push({
-              ID: p.ID,
-              UserID: p.UserID,
-              UserName: matchedUser?.Name || p.User || p.UserID,
-              UserEmail: matchedUser?.Email || '',
-              CanRead: Boolean(p.CanRead),
-              CanEdit: Boolean(p.CanEdit),
-              CanShare: Boolean(p.CanShare),
-              IsOwner: false,
-            });
-          }
-        }
-      } catch {
-        // Keep current user entry when offline
+      if (ownerUserId) {
+        const ownerUser = UUIDsEqual(ownerUserId, user.ID)
+          ? { ID: user.ID, Name: user.Name || 'Artifact Owner', Email: user.Email || '' }
+          : allUsers.find((u) => UUIDsEqual(u.ID, ownerUserId));
+        entries.push({
+          ID: `owner-${ownerUserId}`,
+          UserID: ownerUserId,
+          UserName: ownerUser?.Name || ownerUserId,
+          UserEmail: ownerUser?.Email || '',
+          CanRead: true,
+          CanEdit: true,
+          CanShare: true,
+          IsOwner: true,
+        });
       }
+
+      if (permRes.Success && Array.isArray(permRes.Results)) {
+        for (const p of permRes.Results) {
+          if (ownerUserId && UUIDsEqual(p.UserID, ownerUserId)) {
+            continue;
+          }
+          const matchedUser = UUIDsEqual(p.UserID, user.ID)
+            ? { ID: user.ID, Name: user.Name || p.User || p.UserID, Email: user.Email || '' }
+            : allUsers.find((u) => UUIDsEqual(u.ID, p.UserID));
+          entries.push({
+            ID: p.ID,
+            UserID: p.UserID,
+            UserName: matchedUser?.Name || p.User || p.UserID,
+            UserEmail: matchedUser?.Email || '',
+            CanRead: Boolean(p.CanRead),
+            CanEdit: Boolean(p.CanEdit),
+            CanShare: Boolean(p.CanShare),
+            IsOwner: false,
+          });
+        }
+      }
+    } catch (err) {
+      LogError(err);
+      this.notifyError('Failed to load artifact permissions.');
     }
 
     this.ArtifactPermissionEntries = entries;
@@ -5676,6 +5679,14 @@ export class MarkdownArtifactViewerComponent
     if (!this.SelectedPermissionUserID || this.IsSavingPermission) {
       return;
     }
+    const artifactId = this.artifactVersion?.ArtifactID;
+    const user = this.getSafeCurrentUser();
+    const provider = this.getSafeProvider();
+    if (!artifactId || !user || !provider) {
+      this.notifyError('Cannot grant permissions: metadata provider or user context unavailable.');
+      return;
+    }
+
     const targetUser = this.AvailableUsersForSharing.find((u) => UUIDsEqual(u.ID, this.SelectedPermissionUserID));
     const canEdit = this.SelectedPermissionLevel === 'Edit' || this.SelectedPermissionLevel === 'Share';
     const canShare = this.SelectedPermissionLevel === 'Share';
@@ -5683,33 +5694,44 @@ export class MarkdownArtifactViewerComponent
     this.IsSavingPermission = true;
     this.cdr.markForCheck();
     try {
-      const artifactId = this.artifactVersion?.ArtifactID;
-      const user = this.getSafeCurrentUser();
-      let savedId = `perm-${Date.now()}`;
+      const rv = RunView.FromMetadataProvider(provider);
+      const existingPermRes = await rv.RunView<MJArtifactPermissionEntity>(
+        {
+          EntityName: 'MJ: Artifact Permissions',
+          ExtraFilter: `ArtifactID='${EscapeSQLString(artifactId)}' AND UserID='${EscapeSQLString(this.SelectedPermissionUserID)}'`,
+          MaxRows: 1,
+          ResultType: 'entity_object',
+        },
+        user,
+      );
 
-      if (this.isUuid(artifactId) && user && this.ProviderToUse) {
-        const permEntity = await this.ProviderToUse.GetEntityObject<MJArtifactPermissionEntity>(
-          'MJ: Artifact Permissions',
-          user,
-        );
+      let permEntity: MJArtifactPermissionEntity;
+      if (existingPermRes.Success && existingPermRes.Results && existingPermRes.Results.length > 0) {
+        permEntity = existingPermRes.Results[0];
+      } else {
+        permEntity = await provider.GetEntityObject<MJArtifactPermissionEntity>('MJ: Artifact Permissions', user);
         permEntity.NewRecord();
         permEntity.ArtifactID = artifactId;
         permEntity.UserID = this.SelectedPermissionUserID;
-        permEntity.CanRead = true;
-        permEntity.CanEdit = canEdit;
-        permEntity.CanShare = canShare;
-        permEntity.SharedByUserID = user.ID;
-        const ok = await permEntity.Save();
-        if (ok) {
-          savedId = permEntity.ID;
-        }
+      }
+
+      permEntity.CanRead = true;
+      permEntity.CanEdit = canEdit;
+      permEntity.CanShare = canShare;
+      permEntity.SharedByUserID = user.ID;
+      const ok = await permEntity.Save();
+      if (!ok || !permEntity.ID) {
+        const msg = permEntity.LatestResult?.Message || 'Failed to save artifact permission.';
+        LogError(msg);
+        this.notifyError(msg);
+        return;
       }
 
       const existingIdx = this.ArtifactPermissionEntries.findIndex((e) =>
         UUIDsEqual(e.UserID, this.SelectedPermissionUserID),
       );
       const entry: DocsPermissionEntry = {
-        ID: savedId,
+        ID: permEntity.ID,
         UserID: this.SelectedPermissionUserID,
         UserName: targetUser?.Name || this.SelectedPermissionUserID,
         UserEmail: targetUser?.Email || '',
@@ -5725,6 +5747,9 @@ export class MarkdownArtifactViewerComponent
       }
       this.SelectedPermissionUserID = '';
       this.StatusBannerMessage = `Shared document with ${entry.UserName}.`;
+    } catch (err) {
+      LogError(err);
+      this.notifyError(err instanceof Error ? err.message : 'Failed to grant artifact permission.');
     } finally {
       this.IsSavingPermission = false;
       this.cdr.markForCheck();
@@ -5736,80 +5761,118 @@ export class MarkdownArtifactViewerComponent
       return;
     }
     const user = this.getSafeCurrentUser();
-    if (this.isUuid(entry.ID) && user && this.ProviderToUse) {
-      try {
-        const permEntity = await this.ProviderToUse.GetEntityObject<MJArtifactPermissionEntity>(
-          'MJ: Artifact Permissions',
-          user,
-        );
-        const loaded = await permEntity.Load(entry.ID);
-        if (loaded) {
-          await permEntity.Delete();
-        }
-      } catch {
-        // Remove from local list if offline
-      }
-    }
-    this.ArtifactPermissionEntries = this.ArtifactPermissionEntries.filter((e) => e.ID !== entry.ID);
-    this.StatusBannerMessage = `Removed access for ${entry.UserName}.`;
-    this.cdr.markForCheck();
-  }
-
-  private isUuid(value: string | undefined | null): value is string {
-    return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.trim());
-  }
-
-  private escapeSql(value: string): string {
-    return value.replace(/'/g, "''");
-  }
-
-  private async persistInlineDelegatedArtifactIfConnected(
-    descriptor: DocumentBlockSpec,
-    initialContent: string,
-  ): Promise<void> {
-    const hostArtifactId = this.artifactVersion?.ArtifactID;
-    const user = this.getSafeCurrentUser();
-    if (!this.isUuid(hostArtifactId) || !user || !this.ProviderToUse) {
+    const provider = this.getSafeProvider();
+    if (!entry.ID || !user || !provider) {
+      this.notifyError('Cannot revoke permission: metadata provider or user context unavailable.');
       return;
     }
 
     try {
-      const provider = this.ProviderToUse;
-      const artifactsEntityId = provider.Entities?.find((e) => e.Name === 'MJ: Artifacts')?.ID;
-      if (!artifactsEntityId) {
+      const permEntity = await provider.GetEntityObject<MJArtifactPermissionEntity>(
+        'MJ: Artifact Permissions',
+        user,
+      );
+      const loaded = await permEntity.Load(entry.ID);
+      if (!loaded) {
+        this.notifyError(`Failed to load permission record for ${entry.UserName}.`);
         return;
+      }
+      const deleted = await permEntity.Delete();
+      if (!deleted) {
+        const msg = permEntity.LatestResult?.Message || `Failed to revoke access for ${entry.UserName}.`;
+        LogError(msg);
+        this.notifyError(msg);
+        return;
+      }
+      this.ArtifactPermissionEntries = this.ArtifactPermissionEntries.filter((e) => e.ID !== entry.ID);
+      this.StatusBannerMessage = `Removed access for ${entry.UserName}.`;
+      this.cdr.markForCheck();
+    } catch (err) {
+      LogError(err);
+      this.notifyError(err instanceof Error ? err.message : `Failed to revoke access for ${entry.UserName}.`);
+    }
+  }
+
+  private resolveArtifactsEntityId(provider: IMetadataProvider): string | undefined {
+    if (typeof provider.EntityByName === 'function') {
+      const byName = provider.EntityByName('MJ: Artifacts');
+      if (byName?.ID) {
+        return byName.ID;
+      }
+    }
+    return provider.Entities?.find((e) => e.Name === 'MJ: Artifacts')?.ID;
+  }
+
+  private async resolveArtifactTypeId(
+    provider: IMetadataProvider,
+    typeName: string,
+    user: ReturnType<MarkdownArtifactViewerComponent['getSafeCurrentUser']>,
+  ): Promise<string | undefined> {
+    const cachedType =
+      ArtifactMetadataEngine.Instance.FindArtifactType(typeName) ??
+      ArtifactMetadataEngine.Instance.ArtifactTypes?.find(
+        (t) => t.Name.trim().toLowerCase() === typeName.trim().toLowerCase(),
+      );
+    if (cachedType?.ID) {
+      return cachedType.ID;
+    }
+    const rv = RunView.FromMetadataProvider(provider);
+    const typeRes = await rv.RunView<{ ID: string }>(
+      {
+        EntityName: 'MJ: Artifact Types',
+        ExtraFilter: `Name='${EscapeSQLString(typeName)}'`,
+        Fields: ['ID'],
+        MaxRows: 1,
+        ResultType: 'simple',
+      },
+      user,
+    );
+    return typeRes.Success ? typeRes.Results?.[0]?.ID : undefined;
+  }
+
+  private async createDelegatedChildArtifact(
+    title: string,
+    artifactTypeName: string,
+  ): Promise<{ artifact: MJArtifactEntity; version: MJArtifactVersionEntity } | null> {
+    const hostArtifactId = this.artifactVersion?.ArtifactID;
+    const user = this.getSafeCurrentUser();
+    const provider = this.getSafeProvider();
+    if (!hostArtifactId || !user || !provider) {
+      this.notifyError('Cannot create embedded Whiteboard: host artifact must be saved with an active provider.');
+      return null;
+    }
+
+    try {
+      const artifactsEntityId = this.resolveArtifactsEntityId(provider);
+      if (!artifactsEntityId) {
+        this.notifyError('Cannot create embedded Whiteboard: MJ: Artifacts entity metadata unavailable.');
+        return null;
       }
 
       const rv = RunView.FromMetadataProvider(provider);
-      const [hostArtRes, typeRes] = await Promise.all([
-        rv.RunView<{ ID: string; EnvironmentID: string }>(
+      const [hostArtRes, typeId] = await Promise.all([
+        rv.RunView<{ ID: string; EnvironmentID?: string }>(
           {
             EntityName: 'MJ: Artifacts',
-            ExtraFilter: `ID='${this.escapeSql(hostArtifactId)}'`,
+            ExtraFilter: `ID='${EscapeSQLString(hostArtifactId)}'`,
             Fields: ['ID', 'EnvironmentID'],
             MaxRows: 1,
             ResultType: 'simple',
           },
           user,
         ),
-        rv.RunView<{ ID: string }>(
-          {
-            EntityName: 'MJ: Artifact Types',
-            ExtraFilter: `Name='${this.escapeSql(descriptor.ArtifactType || 'Whiteboard')}'`,
-            Fields: ['ID'],
-            MaxRows: 1,
-            ResultType: 'simple',
-          },
-          user,
-        ),
+        this.resolveArtifactTypeId(provider, artifactTypeName || 'Whiteboard', user),
       ]);
 
-      const hostEnvId = hostArtRes.Results?.[0]?.EnvironmentID;
-      const typeId = typeRes.Results?.[0]?.ID ?? 'D37C0785-C5FD-42B4-9442-D48B076E2BA4';
+      if (!typeId) {
+        this.notifyError(`Artifact type "${artifactTypeName || 'Whiteboard'}" could not be resolved.`);
+        return null;
+      }
 
+      const hostEnvId = hostArtRes.Success ? hostArtRes.Results?.[0]?.EnvironmentID : undefined;
       const childArt = await provider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', user);
       childArt.NewRecord();
-      childArt.Name = descriptor.Title || 'Embedded Whiteboard';
+      childArt.Name = title || 'Embedded Whiteboard';
       childArt.TypeID = typeId;
       childArt.UserID = user.ID;
       if (hostEnvId) {
@@ -5819,9 +5882,18 @@ export class MarkdownArtifactViewerComponent
       childArt.DelegateRecordID = hostArtifactId;
 
       const artSaved = await childArt.Save();
-      if (!artSaved) {
-        return;
+      if (!artSaved || !childArt.ID) {
+        const msg = childArt.LatestResult?.Message || 'Failed to save embedded Whiteboard artifact.';
+        LogError(msg);
+        this.notifyError(msg);
+        return null;
       }
+
+      const emptyWhiteboardJson = JSON.stringify({
+        version: 1,
+        activePageId: 'page-1',
+        pages: [{ id: 'page-1', name: 'Page 1', items: [] }],
+      });
 
       const childVer = await provider.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', user);
       childVer.NewRecord();
@@ -5829,25 +5901,22 @@ export class MarkdownArtifactViewerComponent
       childVer.VersionNumber = 1;
       childVer.Name = childArt.Name;
       childVer.UserID = user.ID;
-      childVer.Content = initialContent;
+      childVer.Content = emptyWhiteboardJson;
+
       const verSaved = await childVer.Save();
-      if (!verSaved) {
-        return;
+      if (!verSaved || !childVer.ID) {
+        const msg = childVer.LatestResult?.Message || 'Failed to save initial Whiteboard version.';
+        LogError(msg);
+        this.notifyError(msg);
+        return null;
       }
 
-      this.embeddedArtifactVersions.set(childArt.ID, childVer);
-      const updatedDescriptor: DocumentBlockSpec = {
-        ...descriptor,
-        ArtifactID: childArt.ID,
-      };
-      const updatedRes = DocumentLiveBlockEngine.Instance.UpdateBlockInMarkdown(
-        this.MarkdownContent,
-        descriptor.BlockID,
-        updatedDescriptor,
-      );
-      this.OnMarkdownChanged(updatedRes.Markdown);
-    } catch {
-      // Keep local synthetic version when offline
+      this.cacheEmbeddedVersionEntity(childArt.ID, childVer);
+      return { artifact: childArt, version: childVer };
+    } catch (err) {
+      LogError(err);
+      this.notifyError(err instanceof Error ? err.message : 'Failed to create embedded Whiteboard.');
+      return null;
     }
   }
 
@@ -5873,7 +5942,7 @@ export class MarkdownArtifactViewerComponent
 
   /**
    * Executes `DocumentLiveBlockEngine.Instance.FreezeBlock` once the user acknowledges the
-   * security warning modal (`O5`), embedding the viewer's current rows into the block.
+   * security warning modal (`O5`), embedding the viewer's current rows into the block only if execution succeeds.
    */
   public async ConfirmFreezeBlock(): Promise<void> {
     if (!this.PendingFreezeBlock || !this.FreezeWarningAcknowledged) {
@@ -5884,45 +5953,37 @@ export class MarkdownArtifactViewerComponent
     this.FreezeWarningAcknowledged = false;
 
     const currentUser = this.getSafeCurrentUser();
-    let frozenBlock: DocumentBlockSpec | undefined;
+    const provider = this.getSafeProvider();
+    if (!currentUser || !provider) {
+      this.notifyError('Cannot freeze block: metadata provider or user context unavailable.');
+      return;
+    }
 
-    if (currentUser) {
+    try {
       const freezeRes = await DocumentLiveBlockEngine.Instance.FreezeBlock(
         target,
         currentUser,
         true,
-        this.ProviderToUse,
+        provider,
       );
-      if (freezeRes.Success && freezeRes.UpdatedSpec) {
-        frozenBlock = freezeRes.UpdatedSpec;
+      if (!freezeRes.Success || !freezeRes.UpdatedSpec) {
+        this.notifyError(freezeRes.ErrorMessage || 'Failed to freeze live block.');
+        return;
       }
-    }
 
-    if (!frozenBlock) {
-      const existingResult = this.GetBlockExecutionResult(target);
-      frozenBlock = {
-        ...target,
-        Mode: 'Frozen',
-        FrozenSnapshot: {
-          FrozenAt: new Date().toISOString(),
-          FrozenByUserID: currentUser?.ID ?? 'local-user',
-          FrozenByUserName: currentUser?.Name ?? 'Current User',
-          Columns: existingResult.Columns,
-          Rows: existingResult.Rows,
-          TotalRowCount: existingResult.TotalRowCount,
-          SecurityWarningAcknowledged: true,
-        },
-      };
+      const frozenBlock = freezeRes.UpdatedSpec;
+      const updatedRes = DocumentLiveBlockEngine.Instance.UpdateBlockInMarkdown(
+        this.MarkdownContent,
+        frozenBlock.BlockID,
+        frozenBlock,
+      );
+      this.blockResults.delete(frozenBlock.BlockID);
+      this.OnMarkdownChanged(updatedRes.Markdown);
+      this.StatusBannerMessage = `Block "${frozenBlock.Title || frozenBlock.BlockID}" frozen into document snapshot.`;
+    } catch (err) {
+      LogError(err);
+      this.notifyError(err instanceof Error ? err.message : 'Failed to freeze live block.');
     }
-
-    const updatedRes = DocumentLiveBlockEngine.Instance.UpdateBlockInMarkdown(
-      this.MarkdownContent,
-      frozenBlock.BlockID,
-      frozenBlock,
-    );
-    this.blockResults.delete(frozenBlock.BlockID);
-    this.OnMarkdownChanged(updatedRes.Markdown);
-    this.StatusBannerMessage = `Block "${frozenBlock.Title || frozenBlock.BlockID}" frozen into document snapshot.`;
   }
 
   /**
@@ -5942,83 +6003,42 @@ export class MarkdownArtifactViewerComponent
   }
 
   /**
-   * Executes a live MJ block under the viewer's permissions and caches the result.
+   * Executes a live MJ block under the viewer's permissions and caches the exact execution result.
    */
   public async RefreshLiveBlock(block: DocumentBlockSpec): Promise<void> {
     const currentUser = this.getSafeCurrentUser();
-    if (currentUser) {
-      try {
-        const res = await DocumentLiveBlockEngine.Instance.ExecuteBlock(block, currentUser, this.ProviderToUse);
-        if (res.Success && res.Columns.length > 0) {
-          this.blockResults.set(block.BlockID, res);
-          this.cdr.markForCheck();
-          return;
-        }
-      } catch {
-        // Fall through to deterministic preview rows when offline
-      }
+    const provider = this.getSafeProvider();
+    if (!currentUser || !provider) {
+      this.blockResults.set(block.BlockID, {
+        BlockID: block.BlockID,
+        Kind: block.Kind,
+        Mode: block.Mode,
+        Success: false,
+        ErrorMessage: 'Metadata provider or user context unavailable.',
+        Columns: [],
+        Rows: [],
+        TotalRowCount: 0,
+      });
+      this.cdr.markForCheck();
+      return;
     }
 
-    // Deterministic fallback preview rows when provider/DB is not connected in unit/demo context
-    const strippedServerSet: string[] = [];
-    if (block.Parameters) {
-      for (const key of Object.keys(block.Parameters)) {
-        if (key.toLowerCase().includes('serverset') || key.toLowerCase() === 'context' || key.startsWith('__server_')) {
-          strippedServerSet.push(key);
-        }
-      }
+    try {
+      const res = await DocumentLiveBlockEngine.Instance.ExecuteBlock(block, currentUser, provider);
+      this.blockResults.set(block.BlockID, res);
+    } catch (err) {
+      LogError(err);
+      this.blockResults.set(block.BlockID, {
+        BlockID: block.BlockID,
+        Kind: block.Kind,
+        Mode: block.Mode,
+        Success: false,
+        ErrorMessage: err instanceof Error ? err.message : String(err),
+        Columns: [],
+        Rows: [],
+        TotalRowCount: 0,
+      });
     }
-    this.blockResults.set(block.BlockID, {
-      BlockID: block.BlockID,
-      Kind: block.Kind,
-      Mode: block.Mode,
-      Success: true,
-      Columns: [
-        {
-          Name: 'ID',
-          DisplayName: 'ID',
-          IsPrimaryKey: true,
-          TargetEntityName: block.EntityName || 'MJ: Artifacts',
-          RecordIDFieldName: 'ID',
-        },
-        {
-          Name: 'Name',
-          DisplayName: 'Name',
-          IsNameField: true,
-          TargetEntityName: block.EntityName || 'MJ: Artifacts',
-          RecordIDFieldName: 'ID',
-        },
-        {
-          Name: 'Type',
-          DisplayName: 'Type',
-          IsForeignKey: true,
-          TargetEntityName: 'MJ: Artifact Types',
-          RecordIDFieldName: 'TypeID',
-        },
-        { Name: 'Status', DisplayName: 'Status' },
-        { Name: 'Updated', DisplayName: 'Updated' },
-      ],
-      Rows: [
-        {
-          ID: '22222222-AAAA-4BBB-8CCC-000000000001',
-          Name: block.Title || block.EntityName || block.QueryName || 'Primary Record',
-          Type: block.Kind,
-          TypeID: 'AE674C7E-EA0D-49EA-89E4-0649F5EB20D4',
-          Status: 'Active',
-          Updated: new Date().toISOString().slice(0, 10),
-        },
-        {
-          ID: '33333333-AAAA-4BBB-8CCC-000000000002',
-          Name: 'Quarterly Executive Summary',
-          Type: 'Markdown Document',
-          TypeID: 'AE674C7E-EA0D-49EA-89E4-0649F5EB20D4',
-          Status: 'Shared',
-          Updated: new Date().toISOString().slice(0, 10),
-        },
-      ],
-      TotalRowCount: 2,
-      StrippedServerSetParameters: strippedServerSet,
-    });
     this.cdr.markForCheck();
   }
 
@@ -6053,12 +6073,9 @@ export class MarkdownArtifactViewerComponent
       Kind: block.Kind,
       Mode: block.Mode,
       Success: true,
-      Columns: [
-        { Name: 'Name', DisplayName: 'Name' },
-        { Name: 'Status', DisplayName: 'Status' },
-      ],
-      Rows: [{ Name: block.Title || block.EntityName || block.QueryName || block.BlockID, Status: 'Loading…' }],
-      TotalRowCount: 1,
+      Columns: [],
+      Rows: [],
+      TotalRowCount: 0,
     };
   }
 
@@ -6081,148 +6098,185 @@ export class MarkdownArtifactViewerComponent
     return this.CanUserEdit && this.inlineEditingBlockIds.has(blockId);
   }
 
+  private getEmbeddedVersionCacheKey(artifactId: string, versionId?: string | null): string {
+    return `${artifactId.trim().toLowerCase()}::${(versionId || 'latest').trim().toLowerCase()}`;
+  }
+
+  private cacheEmbeddedVersionEntity(artifactId: string, ver: MJArtifactVersionEntity): void {
+    const latestKey = this.getEmbeddedVersionCacheKey(artifactId, undefined);
+    this.embeddedArtifactVersions.set(latestKey, ver);
+    this.failedEmbeddedVersionMessages.delete(latestKey);
+    if (ver.ID) {
+      const pinnedKey = this.getEmbeddedVersionCacheKey(artifactId, ver.ID);
+      this.embeddedArtifactVersions.set(pinnedKey, ver);
+      this.failedEmbeddedVersionMessages.delete(pinnedKey);
+    }
+  }
+
+  public IsEmbeddedArtifactLoading(block: DocumentBlockSpec): boolean {
+    if (!block.ArtifactID || !block.ArtifactID.trim()) {
+      return false;
+    }
+    return this.inFlightEmbeddedVersionKeys.has(
+      this.getEmbeddedVersionCacheKey(block.ArtifactID, block.VersionID),
+    );
+  }
+
+  public GetEmbeddedArtifactError(block: DocumentBlockSpec): string | undefined {
+    if (!block.ArtifactID || !block.ArtifactID.trim()) {
+      return 'Embedded artifact ID is missing.';
+    }
+    return this.failedEmbeddedVersionMessages.get(
+      this.getEmbeddedVersionCacheKey(block.ArtifactID, block.VersionID),
+    );
+  }
+
   /**
-   * Resolves the `MJArtifactVersionEntity` for an embedded OLE `Artifact` block.
+   * Returns the loaded `MJArtifactVersionEntity` for an embedded OLE `Artifact` block, or `null`
+   * while asynchronously fetching from `MJ: Artifact Versions` via `RunView` (or when unavailable).
    */
-  public GetEmbeddedArtifactVersion(block: DocumentBlockSpec): MJArtifactVersionEntity {
-    const key = block.ArtifactID || block.BlockID;
+  public GetEmbeddedArtifactVersion(block: DocumentBlockSpec): MJArtifactVersionEntity | null {
+    const artifactId = block.ArtifactID?.trim();
+    if (!artifactId) {
+      return null;
+    }
+    const key = this.getEmbeddedVersionCacheKey(artifactId, block.VersionID);
     const existing = this.embeddedArtifactVersions.get(key);
     if (existing) {
       return existing;
     }
+    if (!this.inFlightEmbeddedVersionKeys.has(key) && !this.failedEmbeddedVersionMessages.has(key)) {
+      void this.loadEmbeddedArtifactVersion(artifactId, block.VersionID);
+    }
+    return null;
+  }
 
-    const fallbackJson = JSON.stringify({
-      version: 2,
-      seq: 1,
-      idCounter: 3,
-      zCounter: 3,
-      pageCounter: 1,
-      activePageId: 'page-1',
-      pages: [
+  private async loadEmbeddedArtifactVersion(artifactId: string, versionId?: string | null): Promise<void> {
+    const key = this.getEmbeddedVersionCacheKey(artifactId, versionId);
+    if (this.inFlightEmbeddedVersionKeys.has(key)) {
+      return;
+    }
+
+    const provider = this.getSafeProvider();
+    const user = this.getSafeCurrentUser();
+    if (!provider || !user) {
+      this.failedEmbeddedVersionMessages.set(key, 'Embedded artifact unavailable or access denied.');
+      this.cdr.markForCheck();
+      return;
+    }
+
+    this.inFlightEmbeddedVersionKeys.add(key);
+    try {
+      const rv = RunView.FromMetadataProvider(provider);
+      const filter = versionId
+        ? `ID='${EscapeSQLString(versionId)}' AND ArtifactID='${EscapeSQLString(artifactId)}'`
+        : `ArtifactID='${EscapeSQLString(artifactId)}'`;
+      const res = await rv.RunView<MJArtifactVersionEntity>(
         {
-          id: 'page-1',
-          name: block.Title || 'Embedded Whiteboard',
-          author: 'user',
-          items: [
-            {
-              ID: 'wb-1',
-              Kind: 'shape',
-              Shape: 'rect',
-              X: 60,
-              Y: 60,
-              W: 210,
-              H: 76,
-              Text: block.Title || 'Embedded Whiteboard Canvas',
-              Sub: 'Interactive Embedded Artifact',
-              Author: 'user',
-              Z: 1,
-            },
-            {
-              ID: 'wb-2',
-              Kind: 'sticky',
-              X: 310,
-              Y: 60,
-              W: 170,
-              H: 96,
-              Text: 'Click Edit Inline to draw or @mention an agent',
-              Tint: 'amber',
-              Author: 'agent',
-              Z: 2,
-            },
-          ],
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: filter,
+          OrderBy: 'VersionNumber DESC',
+          MaxRows: 1,
+          ResultType: 'entity_object',
         },
-      ],
-    });
-
-    const synth = {
-      ID: block.VersionID || `ver-${key}-1`,
-      ArtifactID: key,
-      VersionNumber: 1,
-      Name: block.Title || 'Embedded Artifact',
-      Content: fallbackJson,
-    } as unknown as MJArtifactVersionEntity;
-    this.embeddedArtifactVersions.set(key, synth);
-    return synth;
+        user,
+      );
+      const entity = res.Success ? res.Results?.[0] : undefined;
+      if (entity) {
+        this.embeddedArtifactVersions.set(key, entity);
+        if (!versionId && entity.ID) {
+          this.embeddedArtifactVersions.set(this.getEmbeddedVersionCacheKey(artifactId, entity.ID), entity);
+        }
+        this.failedEmbeddedVersionMessages.delete(key);
+      } else {
+        this.failedEmbeddedVersionMessages.set(
+          key,
+          res.ErrorMessage || 'Embedded artifact unavailable or access denied.',
+        );
+      }
+    } catch (err) {
+      LogError(err);
+      this.failedEmbeddedVersionMessages.set(
+        key,
+        err instanceof Error ? err.message : 'Failed to load embedded artifact.',
+      );
+    } finally {
+      this.inFlightEmbeddedVersionKeys.delete(key);
+      this.cdr.markForCheck();
+    }
   }
 
   /**
    * Handles `ContentCommitted` emitted by an inline-edited OLE child artifact (e.g. `WhiteboardArtifactViewerComponent`).
-   * Creates a new version of the child artifact and advances `VersionID` only when the parent block had pinned `VersionID` (§ 3.4.1).
+   * Queries `MAX(VersionNumber)`, saves a real `MJArtifactVersionEntity`, and updates cached state + `VersionID`
+   * ONLY if `Save()` succeeds (§ 3.4.1).
    */
-  public OnEmbeddedArtifactContentCommitted(block: DocumentBlockSpec, serializedContent: string): void {
-    const key = block.ArtifactID || block.BlockID;
-    const currentVer = this.GetEmbeddedArtifactVersion(block);
-    const nextVersionNumber = (currentVer.VersionNumber || 1) + 1;
-    const nextVerId = `ver-${key}-${nextVersionNumber}`;
-
-    this.embeddedArtifactVersions.set(
-      key,
-      {
-        ...currentVer,
-        ID: nextVerId,
-        VersionNumber: nextVersionNumber,
-        Content: serializedContent,
-      } as unknown as MJArtifactVersionEntity,
-    );
-
-    // Per § 3.4.1: Only advance VersionID on the block descriptor when VersionID was already pinned.
-    // When VersionID was omitted (undefined), the block tracks the latest version without pinning.
-    if (block.VersionID) {
-      const updatedDescriptor: DocumentBlockSpec = {
-        ...block,
-        VersionID: nextVerId,
-      };
-      const updatedRes = DocumentLiveBlockEngine.Instance.UpdateBlockInMarkdown(
-        this.MarkdownContent,
-        block.BlockID,
-        updatedDescriptor,
-      );
-      this.OnMarkdownChanged(updatedRes.Markdown);
-    } else {
-      this.cdr.markForCheck();
-    }
-
-    void this.persistEmbeddedArtifactVersionIfConnected(block, nextVersionNumber, serializedContent);
-    this.StatusBannerMessage = `Committed inline edits to ${block.Title || 'embedded artifact'} (v${nextVersionNumber}).`;
-  }
-
-  private async persistEmbeddedArtifactVersionIfConnected(
+  public async OnEmbeddedArtifactContentCommitted(
     block: DocumentBlockSpec,
-    nextVersionNumber: number,
     serializedContent: string,
   ): Promise<void> {
-    const childArtifactId = block.ArtifactID;
+    const childArtifactId = block.ArtifactID?.trim();
     const user = this.getSafeCurrentUser();
-    if (!this.isUuid(childArtifactId) || !user || !this.ProviderToUse) {
+    const provider = this.getSafeProvider();
+    if (!childArtifactId || !user || !provider) {
+      this.notifyError('Cannot commit embedded artifact edits: metadata provider or user context unavailable.');
       return;
     }
 
     try {
-      const ver = await this.ProviderToUse.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', user);
+      const rv = RunView.FromMetadataProvider(provider);
+      const maxRes = await rv.RunView<{ ID: string; VersionNumber: number }>(
+        {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ArtifactID='${EscapeSQLString(childArtifactId)}'`,
+          OrderBy: 'VersionNumber DESC',
+          Fields: ['ID', 'VersionNumber'],
+          MaxRows: 1,
+          ResultType: 'simple',
+        },
+        user,
+      );
+      const currentMax =
+        maxRes.Success && maxRes.Results?.[0]?.VersionNumber ? maxRes.Results[0].VersionNumber : 0;
+      const nextVersionNumber = currentMax + 1;
+
+      const ver = await provider.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', user);
       ver.NewRecord();
       ver.ArtifactID = childArtifactId;
       ver.VersionNumber = nextVersionNumber;
       ver.Name = block.Title || 'Embedded Artifact';
       ver.UserID = user.ID;
       ver.Content = serializedContent;
+
       const saved = await ver.Save();
-      if (saved) {
-        this.embeddedArtifactVersions.set(childArtifactId, ver);
-        if (block.VersionID) {
-          const updatedDescriptor: DocumentBlockSpec = {
-            ...block,
-            VersionID: ver.ID,
-          };
-          const updatedRes = DocumentLiveBlockEngine.Instance.UpdateBlockInMarkdown(
-            this.MarkdownContent,
-            block.BlockID,
-            updatedDescriptor,
-          );
-          this.OnMarkdownChanged(updatedRes.Markdown);
-        }
+      if (!saved || !ver.ID) {
+        const msg = ver.LatestResult?.Message || 'Failed to save embedded artifact version.';
+        LogError(msg);
+        this.notifyError(msg);
+        return;
       }
-    } catch {
-      // Keep in-memory version when offline
+
+      this.cacheEmbeddedVersionEntity(childArtifactId, ver);
+
+      // Per § 3.4.1: Only advance VersionID on the block descriptor when VersionID was already pinned.
+      if (block.VersionID) {
+        const updatedDescriptor: DocumentBlockSpec = {
+          ...block,
+          VersionID: ver.ID,
+        };
+        const updatedRes = DocumentLiveBlockEngine.Instance.UpdateBlockInMarkdown(
+          this.MarkdownContent,
+          block.BlockID,
+          updatedDescriptor,
+        );
+        this.OnMarkdownChanged(updatedRes.Markdown);
+      } else {
+        this.cdr.markForCheck();
+      }
+      this.StatusBannerMessage = `Committed inline edits to ${block.Title || 'embedded artifact'} (v${nextVersionNumber}).`;
+    } catch (err) {
+      LogError(err);
+      this.notifyError(err instanceof Error ? err.message : 'Failed to save embedded artifact version.');
     }
   }
 
@@ -6261,8 +6315,38 @@ export class MarkdownArtifactViewerComponent
     return item;
   }
 
+  private applySuggestionReplacement(
+    blockId: string,
+    originalMarkdown: string,
+    replacementMarkdown: string,
+    segments: DocumentRenderSegment[],
+    currentMarkdown: string,
+  ): { matched: boolean; markdown: string } {
+    if (!originalMarkdown) {
+      return { matched: false, markdown: currentMarkdown };
+    }
+    const targetSeg = segments.find((s) => s.SegmentID === blockId);
+    if (
+      targetSeg &&
+      (targetSeg.RawMarkdown === originalMarkdown || targetSeg.RawMarkdown.trim() === originalMarkdown.trim())
+    ) {
+      const nextMd = segments
+        .map((s) => (s.SegmentID === targetSeg.SegmentID ? replacementMarkdown : s.RawMarkdown))
+        .join('\n\n');
+      return { matched: true, markdown: nextMd };
+    }
+    if (currentMarkdown.includes(originalMarkdown)) {
+      return {
+        matched: true,
+        markdown: currentMarkdown.replace(originalMarkdown, () => replacementMarkdown),
+      };
+    }
+    return { matched: false, markdown: currentMarkdown };
+  }
+
   /**
-   * Commits all pending tracked suggestions into the working Markdown document and marks them Accepted.
+   * Commits all pending tracked suggestions whose target blocks still match into the working Markdown document.
+   * Leaves non-matching suggestions untouched and notifies the user on conflict.
    */
   public CommitPendingSuggestions(): number {
     const pending = this.Suggestions.filter((s) => s.Status === 'Pending');
@@ -6270,33 +6354,60 @@ export class MarkdownArtifactViewerComponent
       return 0;
     }
     let nextMd = this.MarkdownContent;
+    let workingSegments = this.DocumentSegments;
+    let acceptedCount = 0;
+    let conflictCount = 0;
+
     for (const sug of pending) {
-      sug.Status = 'Accepted';
-      if (nextMd.includes(sug.OriginalMarkdown)) {
-        nextMd = nextMd.replace(sug.OriginalMarkdown, () => sug.ProposedMarkdown);
+      const applied = this.applySuggestionReplacement(
+        sug.BlockID,
+        sug.OriginalMarkdown,
+        sug.ProposedMarkdown,
+        workingSegments,
+        nextMd,
+      );
+      if (applied.matched) {
+        sug.Status = 'Accepted';
+        nextMd = applied.markdown;
+        workingSegments = this.collabService.ParseDocumentSegments(nextMd);
+        acceptedCount++;
       } else {
-        const seg = this.DocumentSegments.find((s) => s.SegmentID === sug.BlockID);
-        if (seg && nextMd.includes(seg.RawMarkdown)) {
-          nextMd = nextMd.replace(seg.RawMarkdown, () => sug.ProposedMarkdown);
-        } else {
-          nextMd = sug.ProposedMarkdown;
-        }
+        conflictCount++;
       }
     }
-    this.OnMarkdownChanged(nextMd);
-    this.StatusBannerMessage = `Committed ${pending.length} tracked suggestion${pending.length === 1 ? '' : 's'}.`;
-    return pending.length;
+
+    if (acceptedCount > 0) {
+      this.OnMarkdownChanged(nextMd);
+    }
+    if (conflictCount > 0) {
+      this.notifyError(
+        `Conflict: ${conflictCount} suggestion${conflictCount === 1 ? ' could' : 's could'} not be applied because the target block changed.`,
+      );
+    } else if (acceptedCount > 0) {
+      this.StatusBannerMessage = `Committed ${acceptedCount} tracked suggestion${acceptedCount === 1 ? '' : 's'}.`;
+    }
+    return acceptedCount;
   }
 
   public OpenSuggestionModalForSegment(seg: DocumentRenderSegment): void {
-    const proposed = `${seg.RawMarkdown}\n\n> [!TIP]\n> Suggested refinement for this section.`;
-    this.CreateOrUpdatePendingSuggestion(
-      seg.SegmentID,
-      seg.RawMarkdown,
-      proposed,
-      'Refined clarity and callout summary',
-    );
-    this.StatusBannerMessage = 'Created tracked suggestion card on block.';
+    if (!this.CanUserEdit) {
+      return;
+    }
+    this.SetViewMode('suggest');
+    this.SelectedAnchorKey = seg.SegmentID;
+    this.SelectedAnchorLabel = seg.HeadingText ?? seg.SegmentID;
+    this.StatusBannerMessage = 'Suggest Mode active — edit the selected block to propose your suggestion.';
+    this.cdr.markForCheck();
+    queueMicrotask(() => {
+      if (typeof document === 'undefined') {
+        return;
+      }
+      const host = this.PrintableCanvas?.nativeElement;
+      const targetEl = host?.querySelector<HTMLElement>(
+        `[data-segment-id="${seg.SegmentID}"] [contenteditable="true"]`,
+      );
+      targetEl?.focus();
+    });
   }
 
   public GetSuggestionsForBlock(blockId: string): DocumentSuggestionItem[] {
@@ -6316,19 +6427,20 @@ export class MarkdownArtifactViewerComponent
    * in the same paragraph open for review.
    */
   public AcceptSuggestionHunk(sug: DocumentSuggestionItem, hunk: DocumentWordChangeHunk): void {
-    const prevOriginal = sug.OriginalMarkdown;
-    const nextBaseline = hunk.AcceptedMarkdown;
-
-    if (this.MarkdownContent.includes(prevOriginal)) {
-      this.OnMarkdownChanged(this.MarkdownContent.replace(prevOriginal, () => nextBaseline));
-    } else {
-      const seg = this.DocumentSegments.find((s) => s.SegmentID === sug.BlockID);
-      if (seg && this.MarkdownContent.includes(seg.RawMarkdown)) {
-        this.OnMarkdownChanged(this.MarkdownContent.replace(seg.RawMarkdown, () => nextBaseline));
-      }
+    const applied = this.applySuggestionReplacement(
+      sug.BlockID,
+      sug.OriginalMarkdown,
+      hunk.AcceptedMarkdown,
+      this.DocumentSegments,
+      this.MarkdownContent,
+    );
+    if (!applied.matched) {
+      this.notifyError('Conflict: the target block changed and no longer matches this suggestion hunk.');
+      return;
     }
 
-    sug.OriginalMarkdown = nextBaseline;
+    this.OnMarkdownChanged(applied.markdown);
+    sug.OriginalMarkdown = hunk.AcceptedMarkdown;
     if (sug.OriginalMarkdown.trim() === sug.ProposedMarkdown.trim()) {
       sug.Status = 'Accepted';
     }
@@ -6350,15 +6462,22 @@ export class MarkdownArtifactViewerComponent
   }
 
   /**
-   * Accepts a pending Suggestion Card and applies its proposed Markdown to the document.
+   * Accepts a pending Suggestion Card and applies its proposed Markdown to the matching target block.
    */
   public AcceptSuggestion(sug: DocumentSuggestionItem): void {
-    sug.Status = 'Accepted';
-    if (this.MarkdownContent.includes(sug.OriginalMarkdown)) {
-      this.OnMarkdownChanged(this.MarkdownContent.replace(sug.OriginalMarkdown, () => sug.ProposedMarkdown));
-    } else {
-      this.OnMarkdownChanged(sug.ProposedMarkdown);
+    const applied = this.applySuggestionReplacement(
+      sug.BlockID,
+      sug.OriginalMarkdown,
+      sug.ProposedMarkdown,
+      this.DocumentSegments,
+      this.MarkdownContent,
+    );
+    if (!applied.matched) {
+      this.notifyError('Conflict: the target block changed and no longer matches the original text.');
+      return;
     }
+    sug.Status = 'Accepted';
+    this.OnMarkdownChanged(applied.markdown);
     this.StatusBannerMessage = `Accepted suggestion from ${sug.AuthorName}.`;
   }
 
@@ -6392,7 +6511,7 @@ export class MarkdownArtifactViewerComponent
 
   /**
    * Posts a new anchored `DocBlock` comment thread (`MJ: Conversations` with `AnchorType='DocBlock'`,
-   * `AnchorKey=<blockId>`) and invokes `@mention` agent assistance when an `@agent` handle is present.
+   * `AnchorKey=<blockId>`) persisting only the user's real `Role = 'User'` comment to the server.
    */
   public async PostAnchoredComment(): Promise<void> {
     const message = this.NewCommentText.trim();
@@ -6400,97 +6519,83 @@ export class MarkdownArtifactViewerComponent
       return;
     }
 
+    const user = this.getSafeCurrentUser();
     const mentions = Array.from(message.matchAll(/@([A-Za-z0-9_-]+)/g)).map((m) => m[1]);
-    const threadId = `conv-${Date.now()}`;
+    const nowIso = new Date().toISOString();
     const newThread: DocumentAnchoredThread = {
-      ConversationID: threadId,
+      ConversationID: `conv-${Date.now()}`,
       AnchorKey: this.SelectedAnchorKey,
       AnchorLabel: this.SelectedAnchorLabel,
       QuotedText: this.SelectedAnchorQuote,
       Status: 'Open',
       AgentMode: this.NewCommentAgentMode,
-      CreatedAt: new Date().toISOString(),
+      CreatedAt: nowIso,
       Messages: [
         {
           DetailID: `msg-${Date.now()}-1`,
-          UserName: 'Current User',
+          UserName: user?.Name || 'Current User',
           Role: 'User',
           Message: message,
-          CreatedAt: new Date().toISOString(),
+          CreatedAt: nowIso,
           Mentions: mentions,
         },
       ],
     };
 
-    // If an @mention agent is present, invoke DocumentToolLibrary / WhiteboardToolLibrary assistance
-    if (mentions.length > 0) {
-      const agentHandle = mentions[0];
-      const targetSeg =
-        this.DocumentSegments.find((s) => s.SegmentID === this.SelectedAnchorKey) ?? this.DocumentSegments[0];
-
-      if (this.NewCommentAgentMode === 'suggest' && targetSeg) {
-        const proposedText = `${targetSeg.RawMarkdown}\n\n*Updated by @${agentHandle}: Added executive action summary.*`;
-        this.CreateOrUpdatePendingSuggestion(
-          targetSeg.SegmentID,
-          targetSeg.RawMarkdown,
-          proposedText,
-          `@${agentHandle} response to: "${message}"`,
-          `@${agentHandle}`,
-        );
-        newThread.Messages.push({
-          DetailID: `msg-${Date.now()}-2`,
-          UserName: `@${agentHandle}`,
-          Role: 'Agent',
-          Message: `Proposed a tracked suggestion card on "${this.SelectedAnchorLabel}" via DocumentToolLibrary.propose_suggestion.`,
-          CreatedAt: new Date().toISOString(),
-          Mentions: [],
-        });
-      } else if (targetSeg) {
-        const updatedText = `${targetSeg.RawMarkdown}\n\n> [!IMPORTANT]\n> **@${agentHandle} Synthesis:** ${message.replace(/@[A-Za-z0-9_-]+\s*/, '')}`;
-        this.OnMarkdownChanged(this.MarkdownContent.replace(targetSeg.RawMarkdown, () => updatedText));
-        newThread.Messages.push({
-          DetailID: `msg-${Date.now()}-2`,
-          UserName: `@${agentHandle}`,
-          Role: 'Agent',
-          Message: `Applied direct block update to "${this.SelectedAnchorLabel}" via DocumentToolLibrary.replace_block.`,
-          CreatedAt: new Date().toISOString(),
-          Mentions: [],
-        });
+    const artifactId = this.artifactVersion?.ArtifactID;
+    if (artifactId) {
+      const persisted = await this.persistAnchoredThreadToServer(newThread);
+      if (!persisted) {
+        return;
       }
     }
 
     this.AnchoredThreads = [newThread, ...this.AnchoredThreads];
     this.NewCommentText = '';
-    void this.persistAnchoredThreadToServer(newThread);
+    this.StatusBannerMessage = 'Posted anchored comment.';
     this.cdr.markForCheck();
   }
 
   public ToggleResolveThread(thread: DocumentAnchoredThread): void {
+    const previousStatus = thread.Status;
     thread.Status = thread.Status === 'Resolved' ? 'Open' : 'Resolved';
-    void this.persistThreadResolutionStatus(thread);
+    void this.persistThreadResolutionStatus(thread, previousStatus);
     this.cdr.markForCheck();
   }
 
-  private async persistThreadResolutionStatus(thread: DocumentAnchoredThread): Promise<void> {
+  private async persistThreadResolutionStatus(
+    thread: DocumentAnchoredThread,
+    previousStatus: 'Open' | 'Resolved',
+  ): Promise<void> {
     const user = this.getSafeCurrentUser();
-    if (!this.isUuid(thread.ConversationID) || !user || !this.ProviderToUse) {
+    const provider = this.getSafeProvider();
+    if (!this.artifactVersion?.ArtifactID || !thread.ConversationID || !user || !provider) {
       return;
     }
 
     try {
-      const conv = await this.ProviderToUse.GetEntityObject<MJConversationEntity>('MJ: Conversations', user);
+      const conv = await provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', user);
       const loaded = await conv.Load(thread.ConversationID);
-      if (loaded) {
-        conv.AnchorMetadata = JSON.stringify({
-          label: thread.AnchorLabel,
-          quote: thread.QuotedText,
-          agentMode: thread.AgentMode,
-          status: thread.Status,
-        });
-        await conv.Save();
+      if (!loaded) {
+        return;
       }
-    } catch {
-      // Keep local thread status when offline
+      conv.AnchorMetadata = JSON.stringify({
+        label: thread.AnchorLabel,
+        quote: thread.QuotedText,
+        agentMode: thread.AgentMode,
+        status: thread.Status,
+      });
+      const ok = await conv.Save();
+      if (!ok) {
+        thread.Status = previousStatus;
+        const msg = conv.LatestResult?.Message || 'Failed to update comment resolution status.';
+        LogError(msg);
+        this.notifyError(msg);
+      }
+    } catch (err) {
+      thread.Status = previousStatus;
+      LogError(err);
+      this.notifyError(err instanceof Error ? err.message : 'Failed to update comment resolution status.');
     }
   }
 
@@ -6559,8 +6664,9 @@ export class MarkdownArtifactViewerComponent
 
   /**
    * Saves a new `MJArtifactVersionEntity` snapshot (committing any pending Suggest Mode edits first),
-   * triggers room compaction when connected via WebSocket, persists to `MJ: Artifact Versions` when
-   * connected to a provider, and emits `ContentCommitted`.
+   * triggers room compaction when connected via WebSocket, or persists via `ProviderToUse` after
+   * querying `MAX(VersionNumber)` and checking `ver.Save()`. Does NOT emit `ContentCommitted` when
+   * `sentViaSocket === true` to prevent duplicate version creation in `ArtifactViewerPanelComponent`.
    */
   public async OnSaveDocumentVersion(): Promise<void> {
     if (!this.CanUserEdit || this.IsSavingVersion || !this.HasUnsavedChanges) {
@@ -6569,20 +6675,37 @@ export class MarkdownArtifactViewerComponent
     this.IsSavingVersion = true;
     this.cdr.markForCheck();
     try {
+      const hadPendingBefore = this.PendingSuggestionsCount;
       const committedSuggestionsCount = this.CommitPendingSuggestions();
-      const nextVerNum =
-        Math.max(
-          this.artifactVersion?.VersionNumber ?? 1,
-          ...this.SavedVersionSnapshots.map((s) => s.VersionNumber),
-        ) + 1;
+      if (hadPendingBefore > 0 && this.PendingSuggestionsCount > 0) {
+        return;
+      }
 
       const sentViaSocket = this.session?.RequestSaveVersion() ?? false;
-      if (!sentViaSocket) {
-        await this.persistDocumentVersionToProvider(nextVerNum, this.MarkdownContent);
+      if (sentViaSocket) {
+        this.StatusBannerMessage = 'Saving collaborative document version…';
+        return;
+      }
+
+      const artifactId = this.artifactVersion?.ArtifactID;
+      let savedVersionNumber: number;
+      if (artifactId) {
+        const persisted = await this.persistDocumentVersionToProvider(artifactId, this.MarkdownContent);
+        if (!persisted.ok) {
+          this.notifyError(persisted.errorMessage || 'Failed to save document version.');
+          return;
+        }
+        savedVersionNumber = persisted.versionNumber;
+      } else {
+        savedVersionNumber =
+          Math.max(
+            this.artifactVersion?.VersionNumber ?? 1,
+            ...this.SavedVersionSnapshots.map((s) => s.VersionNumber),
+          ) + 1;
       }
 
       this.SavedVersionSnapshots.push({
-        VersionNumber: nextVerNum,
+        VersionNumber: savedVersionNumber,
         Content: this.MarkdownContent,
         Timestamp: new Date().toLocaleTimeString(),
       });
@@ -6590,32 +6713,70 @@ export class MarkdownArtifactViewerComponent
       this.ContentCommitted.emit(this.MarkdownContent);
       this.StatusBannerMessage =
         committedSuggestionsCount > 0
-          ? `Committed ${committedSuggestionsCount} suggestion${committedSuggestionsCount === 1 ? '' : 's'} and saved document version v${nextVerNum}.`
-          : `Saved document version v${nextVerNum}.`;
+          ? `Committed ${committedSuggestionsCount} suggestion${committedSuggestionsCount === 1 ? '' : 's'} and saved document version v${savedVersionNumber}.`
+          : `Saved document version v${savedVersionNumber}.`;
     } finally {
       this.IsSavingVersion = false;
       this.cdr.markForCheck();
     }
   }
 
-  private async persistDocumentVersionToProvider(versionNumber: number, content: string): Promise<void> {
-    const artifactId = this.artifactVersion?.ArtifactID;
+  private async persistDocumentVersionToProvider(
+    artifactId: string,
+    content: string,
+  ): Promise<{ ok: boolean; versionNumber: number; errorMessage?: string }> {
     const user = this.getSafeCurrentUser();
-    if (!this.isUuid(artifactId) || !user || !this.ProviderToUse) {
-      return;
+    const provider = this.getSafeProvider();
+    if (!user || !provider) {
+      return {
+        ok: false,
+        versionNumber: 0,
+        errorMessage: 'Metadata provider or user context unavailable.',
+      };
     }
 
     try {
-      const ver = await this.ProviderToUse.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', user);
+      const rv = RunView.FromMetadataProvider(provider);
+      const maxRes = await rv.RunView<{ ID: string; VersionNumber: number }>(
+        {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ArtifactID='${EscapeSQLString(artifactId)}'`,
+          OrderBy: 'VersionNumber DESC',
+          Fields: ['ID', 'VersionNumber'],
+          MaxRows: 1,
+          ResultType: 'simple',
+        },
+        user,
+      );
+      const dbMax = maxRes.Success && maxRes.Results?.[0]?.VersionNumber ? maxRes.Results[0].VersionNumber : 0;
+      const nextVerNum =
+        Math.max(
+          dbMax,
+          this.artifactVersion?.VersionNumber ?? 0,
+          ...this.SavedVersionSnapshots.map((s) => s.VersionNumber),
+        ) + 1;
+
+      const ver = await provider.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', user);
       ver.NewRecord();
       ver.ArtifactID = artifactId;
-      ver.VersionNumber = versionNumber;
+      ver.VersionNumber = nextVerNum;
       ver.Name = this.getDisplayTitle() || 'Document';
       ver.UserID = user.ID;
       ver.Content = content;
-      await ver.Save();
-    } catch {
-      // Keep snapshot in memory when offline
+      const ok = await ver.Save();
+      if (!ok) {
+        const msg = ver.LatestResult?.Message || 'Failed to save document version.';
+        LogError(msg);
+        return { ok: false, versionNumber: 0, errorMessage: msg };
+      }
+      return { ok: true, versionNumber: nextVerNum };
+    } catch (err) {
+      LogError(err);
+      return {
+        ok: false,
+        versionNumber: 0,
+        errorMessage: err instanceof Error ? err.message : 'Failed to save document version.',
+      };
     }
   }
 
@@ -6640,7 +6801,8 @@ export class MarkdownArtifactViewerComponent
       this.OnMarkdownChanged(importedMd);
       this.StatusBannerMessage = `Imported "${file.name}" into document.`;
     } catch (err) {
-      this.StatusBannerMessage = `Import failed: ${err instanceof Error ? err.message : String(err)}`;
+      LogError(err);
+      this.notifyError(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       if (input) {
         input.value = '';
@@ -6670,7 +6832,7 @@ export class MarkdownArtifactViewerComponent
           this.cdr.markForCheck();
         })
         .catch((err) => {
-          console.error('Failed to copy to clipboard:', err);
+          LogError(err);
         });
     }
   }
@@ -6728,12 +6890,51 @@ export class MarkdownArtifactViewerComponent
     return String(value);
   }
 
+  private notifyError(message: string): void {
+    this.StatusBannerMessage = message;
+    this.notificationService?.CreateSimpleNotification?.(message, 'error', 4000);
+    this.cdr.markForCheck();
+  }
+
+  private getSafeProvider(): IMetadataProvider | null {
+    try {
+      return this.ProviderToUse ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private getSafeCurrentUser() {
+    try {
+      return this.getSafeProvider()?.CurrentUser;
+    } catch {
+      return undefined;
+    }
+  }
+
   private initializeDocument(): void {
     const raw = this.getContent();
     this.MarkdownContent = raw;
     this.initialLoadedMarkdown = raw;
+    this.blockResults.clear();
+    this.embeddedArtifactVersions.clear();
+    this.inFlightEmbeddedVersionKeys.clear();
+    this.failedEmbeddedVersionMessages.clear();
+    this.AnchoredThreads = [];
+
+    const hasPersistedArtifact = Boolean(this.artifactVersion?.ArtifactID);
+    if (hasPersistedArtifact) {
+      this.HasEditPermission = false;
+      this.CanUserShareArtifact = false;
+      this.CurrentUserEffectiveRoleLabel = 'Viewer';
+    } else {
+      this.HasEditPermission = !this.readonly;
+      this.CanUserShareArtifact = false;
+      this.CurrentUserEffectiveRoleLabel = this.readonly ? 'Viewer' : 'Editor';
+    }
+
     this.loadCollapsedStateFromUserSettings();
-    if (!this.userExplicitlySelectedMode) {
+    if (!this.userExplicitlySelectedMode || !this.CanUserEdit) {
       this.ViewMode = 'preview';
     }
     this.SavedVersionSnapshots = [
@@ -6766,28 +6967,12 @@ export class MarkdownArtifactViewerComponent
     }
   }
 
-  private getSafeCurrentUser() {
-    try {
-      return this.ProviderToUse?.CurrentUser;
-    } catch {
-      return undefined;
-    }
-  }
-
-  private resolveConfiguredWsUrl(artifactId: string): string {
-    const globalWsUrl = (globalThis as { __MJ_COLLAB_WS_URL__?: string }).__MJ_COLLAB_WS_URL__;
-    const candidate = this.CollaborationWsUrl || globalWsUrl;
-    if (!candidate) {
-      return '';
-    }
-    return this.collabService.ResolveCollaborationWebSocketUrl(artifactId, candidate);
-  }
-
   private setupCollaborationSession(): void {
     this.destroyCollaborationSession();
     const artifactId = this.artifactVersion?.ArtifactID || this.artifactVersion?.ID || 'local-doc';
+    const provider = this.getSafeProvider();
     const user = this.getSafeCurrentUser();
-    const wsUrl = this.resolveConfiguredWsUrl(artifactId);
+    const hasRemoteBackend = this.collabService.HasCollaborationBackend(provider, this.CollaborationWsUrl);
 
     this.session = this.collabService.CreateSession(
       artifactId,
@@ -6797,8 +6982,8 @@ export class MarkdownArtifactViewerComponent
         name: user?.Name ?? 'Collaborator',
         email: user?.Email,
       },
-      !this.readonly,
-      Boolean(wsUrl),
+      this.CanUserEdit,
+      hasRemoteBackend,
     );
 
     this.sessionSubs.push(
@@ -6835,8 +7020,8 @@ export class MarkdownArtifactViewerComponent
       }),
     );
 
-    if (wsUrl) {
-      this.session.Connect(wsUrl);
+    if (hasRemoteBackend) {
+      void this.session.Connect(this.CollaborationWsUrl, provider);
     }
 
     this.Collaborators = this.session.GetCollaborators();
@@ -6859,15 +7044,27 @@ export class MarkdownArtifactViewerComponent
 
   private async evaluatePermissionsAndLoadThreads(): Promise<void> {
     const artifactId = this.artifactVersion?.ArtifactID;
+    if (!artifactId) {
+      return;
+    }
+    const provider = this.getSafeProvider();
     const user = this.getSafeCurrentUser();
-    if (!artifactId || !user) {
+    if (!provider || !user) {
+      this.HasEditPermission = false;
+      this.CanUserShareArtifact = false;
+      this.CurrentUserEffectiveRoleLabel = 'Viewer';
+      this.session?.SetCanEdit(false);
+      if (this.ViewMode === 'edit' || this.ViewMode === 'suggest') {
+        this.ViewMode = 'preview';
+      }
+      this.cdr.markForCheck();
       return;
     }
 
     try {
-      const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(this.ProviderToUse, artifactId, user);
+      const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(provider, artifactId, user);
       this.HasEditPermission = perms.CanEdit;
-      this.CanUserShareArtifact = perms.CanShare || perms.CanEdit;
+      this.CanUserShareArtifact = perms.CanShare;
       this.CurrentUserEffectiveRoleLabel = perms.CanShare
         ? 'Owner / Co-Owner'
         : perms.CanEdit
@@ -6878,42 +7075,62 @@ export class MarkdownArtifactViewerComponent
       if (!perms.CanRead) {
         this.CollaborationStatus = 'revoked';
         this.ViewMode = 'preview';
-      } else if (!perms.CanEdit && (this.ViewMode === 'edit' || this.ViewMode === 'suggest')) {
+        this.session?.SetCanEdit(false);
+      } else {
+        this.session?.SetCanEdit(this.CanUserEdit);
+        if (!perms.CanEdit && (this.ViewMode === 'edit' || this.ViewMode === 'suggest')) {
+          this.ViewMode = 'preview';
+        }
+      }
+      this.cdr.markForCheck();
+    } catch (err) {
+      LogError(err);
+      this.HasEditPermission = false;
+      this.CanUserShareArtifact = false;
+      this.CurrentUserEffectiveRoleLabel = 'Viewer';
+      this.session?.SetCanEdit(false);
+      if (this.ViewMode === 'edit' || this.ViewMode === 'suggest') {
         this.ViewMode = 'preview';
       }
-    } catch {
-      // Keep default permission state when offline
+      this.cdr.markForCheck();
     }
 
-    await this.hydrateAnchoredThreadsFromServer(artifactId, user);
+    await this.hydrateAnchoredThreadsFromServer(artifactId, user, provider);
 
-    // Subscribe to live permission changes
     this.permissionUnsub = ArtifactPermissionEngine.Instance.OnPermissionsChanged(async (evt) => {
       if (evt.ArtifactID === artifactId && user) {
-        const updated = await ArtifactPermissionEngine.Instance.ResolvePermissions(
-          this.ProviderToUse,
-          artifactId,
-          user,
-        );
-        this.HasEditPermission = updated.CanEdit;
-        this.CanUserShareArtifact = updated.CanShare || updated.CanEdit;
-        this.CurrentUserEffectiveRoleLabel = updated.CanShare
-          ? 'Owner / Co-Owner'
-          : updated.CanEdit
-            ? 'Editor'
-            : updated.CanRead
-              ? 'Viewer'
-              : 'No Access';
-        if (!updated.CanRead) {
-          this.CollaborationStatus = 'revoked';
-          this.ViewMode = 'preview';
-        } else if (!updated.CanEdit) {
-          this.CollaborationStatus = 'readonly';
-          if (this.ViewMode === 'edit' || this.ViewMode === 'suggest') {
+        try {
+          const updated = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+            provider,
+            artifactId,
+            user,
+          );
+          this.HasEditPermission = updated.CanEdit;
+          this.CanUserShareArtifact = updated.CanShare;
+          this.CurrentUserEffectiveRoleLabel = updated.CanShare
+            ? 'Owner / Co-Owner'
+            : updated.CanEdit
+              ? 'Editor'
+              : updated.CanRead
+                ? 'Viewer'
+                : 'No Access';
+          if (!updated.CanRead) {
+            this.CollaborationStatus = 'revoked';
             this.ViewMode = 'preview';
+            this.session?.SetCanEdit(false);
+          } else {
+            this.session?.SetCanEdit(this.CanUserEdit);
+            if (!updated.CanEdit) {
+              this.CollaborationStatus = 'readonly';
+              if (this.ViewMode === 'edit' || this.ViewMode === 'suggest') {
+                this.ViewMode = 'preview';
+              }
+            }
           }
+          this.cdr.markForCheck();
+        } catch (err) {
+          LogError(err);
         }
-        this.cdr.markForCheck();
       }
     });
   }
@@ -6921,14 +7138,10 @@ export class MarkdownArtifactViewerComponent
   private async hydrateAnchoredThreadsFromServer(
     artifactId: string,
     user: NonNullable<ReturnType<MarkdownArtifactViewerComponent['getSafeCurrentUser']>>,
+    provider: IMetadataProvider,
   ): Promise<void> {
-    if (!this.isUuid(artifactId) || !this.ProviderToUse) {
-      return;
-    }
-
     try {
-      const provider = this.ProviderToUse;
-      const artifactEntityId = provider.Entities?.find((e) => e.Name === 'MJ: Artifacts')?.ID;
+      const artifactEntityId = this.resolveArtifactsEntityId(provider);
       if (!artifactEntityId) {
         return;
       }
@@ -6943,7 +7156,7 @@ export class MarkdownArtifactViewerComponent
       }>(
         {
           EntityName: 'MJ: Conversations',
-          ExtraFilter: `LinkedEntityID='${this.escapeSql(artifactEntityId)}' AND LinkedRecordID='${this.escapeSql(artifactId)}' AND AnchorType='DocBlock'`,
+          ExtraFilter: `LinkedEntityID='${EscapeSQLString(artifactEntityId)}' AND LinkedRecordID='${EscapeSQLString(artifactId)}' AND AnchorType='DocBlock'`,
           OrderBy: '__mj_CreatedAt DESC',
           MaxRows: 200,
           ResultType: 'simple',
@@ -6956,7 +7169,7 @@ export class MarkdownArtifactViewerComponent
         return;
       }
 
-      const convIds = convRows.filter((c) => this.isUuid(c.ID)).map((c) => `'${this.escapeSql(c.ID)}'`);
+      const convIds = convRows.filter((c) => Boolean(c.ID)).map((c) => `'${EscapeSQLString(c.ID)}'`);
       const detailsByConv = new Map<
         string,
         Array<{ ID: string; ConversationID: string; Role: string; Message: string; __mj_CreatedAt?: string }>
@@ -6987,17 +7200,17 @@ export class MarkdownArtifactViewerComponent
       }
 
       this.AnchoredThreads = convRows.map((c) => {
-        let meta: { label?: string; quote?: string; agentMode?: 'suggest' | 'edit'; status?: 'Open' | 'Resolved' } = {};
-        if (c.AnchorMetadata) {
-          try {
-            meta = JSON.parse(c.AnchorMetadata) as typeof meta;
-          } catch {
-            meta = {};
-          }
-        }
+        const meta = c.AnchorMetadata
+          ? (SafeJSONParse<{
+              label?: string;
+              quote?: string;
+              agentMode?: 'suggest' | 'edit';
+              status?: 'Open' | 'Resolved';
+            }>(c.AnchorMetadata) ?? {})
+          : {};
         const msgs = (detailsByConv.get(c.ID) ?? []).map((d) => ({
           DetailID: d.ID,
-          UserName: d.Role === 'AI' ? '@DocsAgent' : user.Name || 'Collaborator',
+          UserName: d.Role === 'AI' ? 'AI Assistant' : user.Name || 'Collaborator',
           Role: (d.Role === 'AI' ? 'Agent' : 'User') as 'User' | 'Agent',
           Message: d.Message,
           CreatedAt: d.__mj_CreatedAt ?? new Date().toISOString(),
@@ -7016,26 +7229,29 @@ export class MarkdownArtifactViewerComponent
         };
       });
       this.cdr.markForCheck();
-    } catch {
-      // Keep local threads when offline
+    } catch (err) {
+      LogError(err);
     }
   }
 
-  private async persistAnchoredThreadToServer(thread: DocumentAnchoredThread): Promise<void> {
+  private async persistAnchoredThreadToServer(thread: DocumentAnchoredThread): Promise<boolean> {
     const artifactId = this.artifactVersion?.ArtifactID;
     const user = this.getSafeCurrentUser();
-    if (!this.isUuid(artifactId) || !user || !this.ProviderToUse) {
-      return;
+    const provider = this.getSafeProvider();
+    if (!artifactId || !user || !provider) {
+      this.notifyError('Cannot save anchored comment: metadata provider or user context unavailable.');
+      return false;
     }
 
     try {
-      const provider = this.ProviderToUse;
-      const artifactEntityId = provider.Entities?.find((e) => e.Name === 'MJ: Artifacts')?.ID;
+      const artifactEntityId = this.resolveArtifactsEntityId(provider);
       if (!artifactEntityId) {
-        return;
+        this.notifyError('Cannot save anchored comment: MJ: Artifacts entity metadata unavailable.');
+        return false;
       }
 
       const conv = await provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', user);
+      conv.NewRecord();
       conv.UserID = user.ID;
       conv.Name = `DocComment: ${thread.AnchorLabel}`;
       conv.LinkedEntityID = artifactEntityId;
@@ -7048,20 +7264,38 @@ export class MarkdownArtifactViewerComponent
         agentMode: thread.AgentMode,
         status: thread.Status,
       });
-      const saved = await conv.Save();
-      if (saved) {
-        thread.ConversationID = conv.ID;
-        for (const msg of thread.Messages) {
-          const detail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', user);
-          detail.ConversationID = conv.ID;
-          detail.UserID = user.ID;
-          detail.Role = msg.Role === 'Agent' ? 'AI' : 'User';
-          detail.Message = msg.Message;
-          await detail.Save();
+      const convSaved = await conv.Save();
+      if (!convSaved || !conv.ID) {
+        const msg = conv.LatestResult?.Message || 'Failed to save anchored comment conversation.';
+        LogError(msg);
+        this.notifyError(msg);
+        return false;
+      }
+
+      thread.ConversationID = conv.ID;
+      for (const msg of thread.Messages) {
+        const detail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', user);
+        detail.NewRecord();
+        detail.ConversationID = conv.ID;
+        detail.UserID = user.ID;
+        detail.Role = 'User';
+        detail.Message = msg.Message;
+        const detailSaved = await detail.Save();
+        if (!detailSaved) {
+          const errMsg = detail.LatestResult?.Message || 'Failed to save anchored comment detail.';
+          LogError(errMsg);
+          this.notifyError(errMsg);
+          return false;
+        }
+        if (detail.ID) {
+          msg.DetailID = detail.ID;
         }
       }
-    } catch {
-      // Keep thread in local session state if persistence is unavailable
+      return true;
+    } catch (err) {
+      LogError(err);
+      this.notifyError(err instanceof Error ? err.message : 'Failed to save anchored comment.');
+      return false;
     }
   }
 }

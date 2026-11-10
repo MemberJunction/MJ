@@ -7,6 +7,7 @@ import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-app
 import {
   LibraryExternalRouteParams,
   LibraryHostNavigationEvent,
+  LibraryNavigatorSection,
   LibrarySurfaceMode,
   LibraryWorkspaceComponent,
   LibraryWorkspaceState,
@@ -40,6 +41,7 @@ import {
         [CurrentUser]="CurrentUser"
         [EnvironmentId]="EnvironmentId"
         [InitialMode]="DefaultSurfaceMode"
+        [InitialSection]="DefaultNavigatorSection"
         [InitialDriveMode]="StartInDriveMode"
         (StateChange)="OnWorkspaceStateChange($event)"
         (HostNavigate)="OnHostNavigate($event)"
@@ -65,6 +67,7 @@ export class LibraryResource extends BaseResourceComponent implements OnInit, On
 
   public CurrentUser: UserInfo | null = null;
   public DefaultSurfaceMode: LibrarySurfaceMode | null = null;
+  public DefaultNavigatorSection: LibraryNavigatorSection | null = null;
   public StartInDriveMode = false;
 
   private latestState: LibraryWorkspaceState | null = null;
@@ -94,16 +97,17 @@ export class LibraryResource extends BaseResourceComponent implements OnInit, On
   }
 
   public OnWorkspaceLoadComplete(): void {
-    this.hasHydratedOnce = true;
     if (this.pendingRouteParams && this.Workspace) {
+      const paramsToApply = this.pendingRouteParams;
+      this.pendingRouteParams = null;
       this.isApplyingExternalParams = true;
       try {
-        this.Workspace.ApplyExternalRouteState(this.pendingRouteParams);
+        this.Workspace.ApplyExternalRouteState(paramsToApply);
       } finally {
         this.isApplyingExternalParams = false;
-        this.pendingRouteParams = null;
       }
     }
+    this.hasHydratedOnce = true;
     if (!this.hasNotifiedLoadComplete) {
       this.hasNotifiedLoadComplete = true;
       this.NotifyLoadComplete();
@@ -115,7 +119,7 @@ export class LibraryResource extends BaseResourceComponent implements OnInit, On
     this.navigationService.SetAgentContext(this, BuildLibraryAgentContext(state));
     this.updateTabDisplayName(state);
 
-    if (!this.isApplyingExternalParams && (this.hasHydratedOnce || this.hasNonDefaultState(state))) {
+    if (!this.isApplyingExternalParams && this.hasHydratedOnce && !this.pendingRouteParams) {
       this.pushStateToUrl(state);
     }
   }
@@ -212,23 +216,15 @@ export class LibraryResource extends BaseResourceComponent implements OnInit, On
     }
   }
 
-  private hasNonDefaultState(state: LibraryWorkspaceState): boolean {
-    return Boolean(
-      state.CollectionId ||
-        state.DriveId ||
-        state.ActiveArtifactId ||
-        state.SearchQuery ||
-        state.HubTab !== 'overview',
-    );
-  }
-
   private pushStateToUrl(state: LibraryWorkspaceState): void {
+    const defaultMode: LibrarySurfaceMode = this.DefaultSurfaceMode ?? 'hub';
+    const defaultSection: LibraryNavigatorSection = this.DefaultNavigatorSection ?? 'all';
     const nextParams: Record<string, string | null> = {
-      mode: state.Mode === 'navigator' ? 'navigator' : null,
+      mode: state.Mode !== defaultMode ? state.Mode : null,
       tab: state.Mode === 'hub' && state.HubTab !== 'overview' ? state.HubTab : null,
       section:
         state.Mode === 'navigator' &&
-        state.NavigatorSection !== 'all' &&
+        state.NavigatorSection !== defaultSection &&
         state.NavigatorSection !== 'collection' &&
         state.NavigatorSection !== 'drive'
           ? state.NavigatorSection
@@ -323,11 +319,10 @@ export class LibraryResource extends BaseResourceComponent implements OnInit, On
 }
 
 /**
- * Higher-priority backward-compatibility registration for saved workspace tabs referencing
- * the legacy `FileBrowserResource` driver class — opens the unified `Library` workspace
- * focused directly on Connected Drives.
+ * Unregistered Connected-Drives resource wrapper kept solely for NgModule and generated
+ * manifest symbol compatibility. `FileBrowserResource` is owned by `@memberjunction/ng-file-storage`.
+ * @deprecated Use {@link LibraryResource} (`?tab=drives` / `?driveId=...`) or `FileBrowserResource`.
  */
-@RegisterClass(BaseResourceComponent, 'FileBrowserResource', 10)
 @Component({
   standalone: false,
   selector: 'mj-library-drive-resource',

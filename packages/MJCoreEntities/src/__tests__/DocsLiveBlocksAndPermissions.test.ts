@@ -543,4 +543,203 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
     const reparsedBlocks = reparsed.filter((s) => s.Type === 'mj-block');
     expect(reparsedBlocks[0].BlockSpec?.VersionID).toBe('v-3');
   });
+
+  it('B2 & C2: fails closed when delegating entity has no registered delegate and resolves multi-hop parent chains in O(depth)', async () => {
+    const u = createMockUser('99999999-9999-9999-9999-999999999999', 'Delegate Tester');
+    const unregisteredProvider = {
+      Entities: [{ ID: 'ent-custom-unregistered', Name: 'Custom: Unregistered Host' }],
+      RunView: vi.fn().mockResolvedValue({
+        Success: true,
+        Results: [
+          {
+            ID: 'art-delegated-missing',
+            UserID: u.ID, // Even as owner, missing delegate must fail closed!
+            DelegateEntityID: 'ent-custom-unregistered',
+            DelegateRecordID: 'rec-123',
+          },
+        ],
+      }),
+    } as unknown as IMetadataProvider;
+
+    const denied = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+      unregisteredProvider,
+      'art-delegated-missing',
+      u,
+    );
+    expect(denied.CanRead).toBe(false);
+    expect(denied.CanEdit).toBe(false);
+    expect(denied.CanDelete).toBe(false);
+    expect(denied.CanShare).toBe(false);
+    expect(denied.Source).toBe('Denied');
+    expect(denied.Reason).toContain('No permission delegate is registered');
+
+    // C2: 4-hop parent artifact chain should query each artifact once (5 total artifact lookups, NOT 4^4 = 256)
+    let artifactQueryCount = 0;
+    const chainRecords: Record<string, { ID: string; UserID: string; DelegateEntityID: string | null; DelegateRecordID: string | null }> = {
+      'art-hop-4': { ID: 'art-hop-4', UserID: 'other', DelegateEntityID: 'ent-artifacts', DelegateRecordID: 'art-hop-3' },
+      'art-hop-3': { ID: 'art-hop-3', UserID: 'other', DelegateEntityID: 'ent-artifacts', DelegateRecordID: 'art-hop-2' },
+      'art-hop-2': { ID: 'art-hop-2', UserID: 'other', DelegateEntityID: 'ent-artifacts', DelegateRecordID: 'art-hop-1' },
+      'art-hop-1': { ID: 'art-hop-1', UserID: 'other', DelegateEntityID: 'ent-artifacts', DelegateRecordID: 'art-root' },
+      'art-root': { ID: 'art-root', UserID: u.ID, DelegateEntityID: null, DelegateRecordID: null },
+    };
+    const chainProvider = {
+      Entities: [{ ID: 'ent-artifacts', Name: 'MJ: Artifacts' }],
+      RunView: vi.fn().mockImplementation(async (params: { EntityName: string; ExtraFilter?: string }) => {
+        if (params.EntityName === 'MJ: Artifacts') {
+          artifactQueryCount++;
+          const m = /ID='([^']+)'/.exec(params.ExtraFilter ?? '');
+          const rec = m ? chainRecords[m[1]] : undefined;
+          return { Success: true, Results: rec ? [rec] : [] };
+        }
+        return { Success: true, Results: [] };
+      }),
+    } as unknown as IMetadataProvider;
+
+    const chainPerms = await ArtifactPermissionEngine.Instance.ResolvePermissions(chainProvider, 'art-hop-4', u);
+    expect(chainPerms.CanRead).toBe(true);
+    expect(chainPerms.CanEdit).toBe(true);
+    expect(artifactQueryCount).toBe(5);
+  });
+
+  it('D6 & B7: ignores :::mj-block inside code fences, keeps unterminated :::mj-block as markdown, clamps MaxRows, validates OrderBy/ExtraFilter, resolves ViewName-only, and verifies FrozenSnapshot hash', async () => {
+    const viewer = createMockUser('77777777-7777-7777-7777-777777777777', 'Viewer Dan');
+
+    // 1. Code fences and unterminated :::mj-block
+    const mdWithCodeFenceAndUnterminated = [
+      '# Developer Guide',
+      '```markdown',
+      ':::mj-block',
+      '{"BlockID":"inside-code-fence","Kind":"EntityView","Mode":"Live","EntityName":"Accounts"}',
+      ':::',
+      '```',
+      '',
+      '~~~yaml',
+      ':::mj-block',
+      '{"BlockID":"inside-tilde-fence","Kind":"EntityView","Mode":"Live","EntityName":"Accounts"}',
+      ':::',
+      '~~~',
+      '',
+      ':::mj-block',
+      '{"BlockID":"unterminated-block","Kind":"EntityView","Mode":"Live","EntityName":"Accounts"}',
+      'Trailing prose without closing colons.',
+    ].join('\n');
+
+    const segments = DocumentLiveBlockEngine.Instance.ParseMarkdownDirectives(mdWithCodeFenceAndUnterminated);
+    expect(segments.filter((s) => s.Type === 'mj-block')).toHaveLength(0);
+    expect(segments.map((s) => s.RawText).join('\n')).toBe(mdWithCodeFenceAndUnterminated);
+
+    // 2. EntityView MaxRows clamping, ViewName-only lookup, OrderBy & ExtraFilter FLS/SQL validation
+    const mockEntity = {
+      ID: 'ent-acc',
+      Name: 'Accounts',
+      DisplayNameOrName: 'Accounts',
+      PrimaryKeys: [{ Name: 'ID', IsPrimaryKey: true, TSType: EntityFieldTSType.String }],
+      Fields: [
+        { Name: 'ID', DisplayNameOrName: 'ID', IsPrimaryKey: true, DefaultInView: true, TSType: EntityFieldTSType.String },
+        { Name: 'Name', DisplayNameOrName: 'Name', IsPrimaryKey: false, DefaultInView: true, TSType: EntityFieldTSType.String },
+        { Name: 'Status', DisplayNameOrName: 'Status', IsPrimaryKey: false, DefaultInView: true, TSType: EntityFieldTSType.String },
+        { Name: 'SecretRevenue', DisplayNameOrName: 'SecretRevenue', IsPrimaryKey: false, DefaultInView: false, TSType: EntityFieldTSType.Number },
+      ] as unknown as EntityFieldInfo[],
+      FieldLevelSecurityApplies: true,
+      GetUserPermisions: vi.fn().mockReturnValue({ CanRead: true }),
+      GetDeniedReadFields: vi.fn().mockReturnValue(new Set(['SecretRevenue'])),
+    } as unknown as EntityInfo;
+
+    const capturedRunViewCalls: Array<{ EntityName?: string; MaxRows?: number; ExtraFilter?: string; OrderBy?: string }> = [];
+    const provider = {
+      Entities: [mockEntity],
+      RunView: vi.fn().mockImplementation(async (params: { EntityName?: string; MaxRows?: number; ExtraFilter?: string; OrderBy?: string }) => {
+        capturedRunViewCalls.push(params);
+        if (params.EntityName === 'MJ: User Views') {
+          return {
+            Success: true,
+            Results: [{ ID: 'uv-active', Name: 'Active Accounts', EntityID: 'ent-acc', UserID: viewer.ID, IsShared: true }],
+          };
+        }
+        return {
+          Success: true,
+          Results: [{ ID: 'a-1', Name: 'Acme', Status: 'Active' }],
+          TotalRowCount: 1,
+        };
+      }),
+    } as unknown as IMetadataProvider;
+
+    // MaxRows: 0 clamps to 100; ViewName without EntityName resolves Accounts via MJ: User Views
+    const viewNameOnlyRes = await DocumentLiveBlockEngine.Instance.ExecuteBlock(
+      {
+        BlockID: 'blk-vn',
+        Kind: 'EntityView',
+        Mode: 'Live',
+        ViewName: 'Active Accounts',
+        MaxRows: 0,
+        OrderBy: 'Name DESC',
+        ExtraFilter: "Status = 'Active'",
+      },
+      viewer,
+      provider,
+    );
+    expect(viewNameOnlyRes.Success).toBe(true);
+    const dataCall = capturedRunViewCalls.find((c) => c.EntityName === 'Accounts');
+    expect(dataCall?.MaxRows).toBe(100);
+
+    // MaxRows: 9999 clamps to 500
+    await DocumentLiveBlockEngine.Instance.ExecuteBlock(
+      { BlockID: 'blk-max', Kind: 'EntityView', Mode: 'Live', EntityName: 'Accounts', MaxRows: 9999 },
+      viewer,
+      provider,
+    );
+    expect(capturedRunViewCalls[capturedRunViewCalls.length - 1].MaxRows).toBe(500);
+
+    // OrderBy on FLS-denied field fails closed
+    const deniedOrderRes = await DocumentLiveBlockEngine.Instance.ExecuteBlock(
+      { BlockID: 'blk-ord', Kind: 'EntityView', Mode: 'Live', EntityName: 'Accounts', OrderBy: 'SecretRevenue DESC' },
+      viewer,
+      provider,
+    );
+    expect(deniedOrderRes.Success).toBe(false);
+    expect(deniedOrderRes.AccessDenied).toBe(true);
+
+    // ExtraFilter with SQL comment, unknown column, or FLS-denied column fails closed
+    for (const badFilter of ["Status = 'Active' -- comment", "NonExistentCol = 'x'", 'SecretRevenue > 1000', "Status = 'Active'; SELECT 1"]) {
+      const badRes = await DocumentLiveBlockEngine.Instance.ExecuteBlock(
+        { BlockID: 'blk-flt', Kind: 'EntityView', Mode: 'Live', EntityName: 'Accounts', ExtraFilter: badFilter },
+        viewer,
+        provider,
+      );
+      expect(badRes.Success).toBe(false);
+      expect(badRes.AccessDenied).toBe(true);
+    }
+
+    // B7: Mode === 'Frozen' with missing FrozenSnapshot NEVER falls back to Live
+    const missingSnapRes = await DocumentLiveBlockEngine.Instance.ExecuteBlock(
+      { BlockID: 'blk-frozen-missing', Kind: 'EntityView', Mode: 'Frozen', EntityName: 'Accounts' },
+      viewer,
+      provider,
+    );
+    expect(missingSnapRes.Success).toBe(false);
+    expect(missingSnapRes.Mode).toBe('Frozen');
+
+    // B7: FreezeBlock computes SnapshotContentHash and verifies tampering
+    const frozenWrap = await DocumentLiveBlockEngine.Instance.FreezeBlock(
+      { BlockID: 'blk-hash', Kind: 'EntityView', Mode: 'Live', EntityName: 'Accounts' },
+      viewer,
+      true,
+      provider,
+    );
+    expect(frozenWrap.UpdatedSpec?.FrozenSnapshot?.SnapshotContentHash).toMatch(/^[0-9a-f]{64}$/);
+    const verifiedExec = await DocumentLiveBlockEngine.Instance.ExecuteBlock(frozenWrap.UpdatedSpec!, viewer, provider);
+    expect(verifiedExec.Success).toBe(true);
+    expect(verifiedExec.FrozenSnapshot?.SnapshotVerified).toBe(true);
+
+    const mutatedRowsSpec: DocumentBlockSpec = {
+      ...frozenWrap.UpdatedSpec!,
+      FrozenSnapshot: {
+        ...frozenWrap.UpdatedSpec!.FrozenSnapshot!,
+        Rows: [{ ID: 'a-1', Name: 'Tampered Corp', Status: 'Active' }],
+      },
+    };
+    const tamperedHashExec = await DocumentLiveBlockEngine.Instance.ExecuteBlock(mutatedRowsSpec, viewer, provider);
+    expect(tamperedHashExec.Success).toBe(true);
+    expect(tamperedHashExec.FrozenSnapshot?.SnapshotVerified).toBe(false);
+  });
 });
