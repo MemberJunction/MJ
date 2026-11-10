@@ -294,13 +294,15 @@ describe('OpenAIRealtimeClient (extended)', () => {
             expect(errors).toEqual([{ Message: 'Unknown provider error', Code: undefined, Fatal: false }]);
         });
 
-        it('should suppress the closed emission when the channel closes after a transport error', () => {
-            const { states } = collect(client);
+        it('should neither end the call nor emit closed when a live channel errors and then closes', () => {
+            const reconnect = vi.spyOn(client, 'TriggerReconnect').mockResolvedValue(true);
+            const { states, errors } = collect(client);
             channel.onerror?.(new Event('error'));
-            expect(states[states.length - 1]).toBe('error');
             channel.onclose?.(new Event('close'));
-            // no trailing 'closed' over the fatal error state
-            expect(states.filter((s) => s === 'closed')).toEqual([]);
+            // Both go to the connection-lost reconnect (it coalesces repeat triggers); nothing ends the call.
+            expect(reconnect).toHaveBeenCalledWith('connection-lost');
+            expect(errors).toEqual([]);
+            expect(states.filter((s) => s === 'closed' || s === 'error')).toEqual([]);
         });
     });
 
@@ -364,9 +366,9 @@ describe('OpenAIRealtimeClient (extended)', () => {
         it('should NOT emit closed when disconnecting after a fatal transport error', async () => {
             const connectClient = new OpenAIConnectTestClient();
             await connectClient.Connect(makeOpenAIConfig(), new FakeMediaStream([new FakeTrack()]));
-            connectClient.Pc.Channel.Open();
             const { states } = collect(connectClient);
 
+            // Before the channel opens the call is not live, so a transport error is fatal (a live one reconnects).
             connectClient.Pc.Channel.onerror?.(new Event('error'));
             expect(states[states.length - 1]).toBe('error');
 
