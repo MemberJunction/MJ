@@ -29,15 +29,16 @@ These are settled. Each row names where it was decided so nobody reopens it by a
 
 | Decision | Outcome | Where |
 | --- | --- | --- |
-| Encapsulation and CSS layers (Lego D1) | Primitives ship with Angular's emulated encapsulation off and their CSS in a named `@layer`, the way `mj-realtime-widget` already does. Host CSS wins by construction. | Lego, decided Oct 2026 |
+| Encapsulation and CSS layers (Lego D1) | Primitives ship with Angular's emulated encapsulation off, a class prefix so names do not collide, and all of their CSS in a named `@layer`, so host CSS wins by construction. Prefix and layer do different jobs, so it is both. This is a new pattern: `mj-realtime-widget` turns encapsulation off and prefixes its classes (`.mjw-`), but only its generated global defaults sit in a layer. | Lego, decided Oct 2026 |
 | Open axes (Lego D2) | Roles and tones map to variables at runtime so a brand can add its own; unknown names fall back to the author's explicit emphasis. | Lego |
 | Package shape (Lego D9) | Secondary entry points or chunk boundaries per primitive family, decided in wave 0 before the catalog grows. | Lego |
-| App categories | A hierarchical `Application Categories` entity with an `ApplicationCategoryID` FK on Application, rank for display order, per-user order on top. Not a text `Category` column. | Meeting 2026-11-03 (Amith, Matt) |
+| App categories | A hierarchical `MJ: Application Categories` entity with an `ApplicationCategoryID` FK on Application, rank for display order, per-user order on top. Not a text `Category` column. | Meeting 2026-11-03 (Amith, Matt) |
 | Nav `Children` | Recursive nav items in the strongly typed interface. The framework renders level 1 as the top bar, level 2 as a side rail, level 3 as tabs, so dashboards stop hard-coding rails. | Meeting 2026-11-03 |
 | URLs | Backwards compatible from here. A breaking change ships with a URL mapping layer. | Meeting 2026-11-03 |
-| Elevation ramp | Ramp B (soft), ambient off by default, density 32 / 44 / 52 kept, Montserrat as the one heading face. Ships with its contrast table as the contract. | Mockup review 2026-09-18 (Matt) |
+| Elevation ramp | Ramp B (soft), ambient off by default, Montserrat as the one heading face. Ships with its contrast table as the contract. | Mockup review 2026-09-18 (Matt) |
+| Control heights and density | One scale with three steps: `--mj-control-height-sm` / `md` / `lg` at 32 / 40 / 52, with sm and md at 44 on touch. This replaces both earlier sets of numbers, the 32 / 44 / 52 from the September mockup review and the five-step 28 / 32 / 38 / 44 / 52 proposal. Density is the same axis, not a second set of numbers: it is the user preference that picks which step controls default to. Details in [NAMING.md](NAMING.md). | Naming review 2026-11-10 (Matt, Colin) |
 | Dialogs and sheets | Slide-outs for heavy configuration, dialogs for simple prompts. On phones a dialog becomes a bottom sheet or full screen. | Meeting 2026-11-03 (Matt); shipping in custom-forms-phone-layout |
-| Button order | Pick one convention and hold it everywhere; follow platform conventions unless there is a reason not to. Not part of the overhaul's scope. | Meeting 2026-11-03 (Amith, Robert) |
+| Button order | The affirmative button (Yes, OK, Submit) goes on the left and the decline button (Cancel, No) to its right, everywhere: dialogs, modals, popovers and action button groups. This is the Windows order, and it is already the rule in `packages/Angular/CLAUDE.md`. Not part of the overhaul's scope. | Amith, PR review 2026-11-09 |
 | App builder (WS7 builder) | Study Form Studio, Form Builder, component spec and metadata dashboards before building. No build until demand is shown. | Meeting 2026-11-03 (Amith) |
 | Kit gallery, token index, CI gate | Yes from everyone. Includes when-to-use guidance with positive and negative examples, written for agents as much as people. | Meeting 2026-11-03 |
 | Angular Elements | Everything in both plans must work inside an Angular Element on a host page (Grace, LXP checkout). | Meeting 2026-11-03 (Amith) |
@@ -51,7 +52,7 @@ Every overhaul workstream lands in exactly one place: Colin's, Matt's, or a shar
 | App categories entity, nav `Children`, auto-rendered rails | WS1 IA metadata | Out of scope (§10) | Colin | Go now | 1 | Rails and tabs render with Lego's navigation primitives once wave 4 lands; until then, today's components. |
 | Homepage: clickable and configurable chips, recents, information over navigation | WS2 Home | Out of scope | Colin | Go now | 1 | Card and stat tile come from Lego wave 1 when it ships; chips default to today's look. |
 | Per-user sitemap, scoped shell config, header controls, access map, UX preferences | WS3 UX runtime | Out of scope | Colin | Needs spec | 4 | Setting keys get a governed namespace; access questions go through the authorizations engine. ThemeEngine already carries tenant themes. |
-| Font Awesome to npm, Montserrat retoken, card-grid hex, toast cleanup | WS4 contract fixes | §3.1 measurements | Colin | Go now | 0 | Edits land in `explorer-app`, never in MJExplorer. Two toasts exist (conversations, notifications); retire to one in wave 2. |
+| Font Awesome to npm, Montserrat retoken, card-grid hex, toast cleanup | WS4 contract fixes | §3.1 measurements | Colin | Go now | 0 | Edits land in `explorer-app`, never in MJExplorer. Three toasts exist: conversations, notifications, and the service worker's `mj-update-notification`. Retire the first two to one in wave 2. The update notice is single-purpose and stays as it is. |
 | tokens.json and components.json generator, ghost-token ratchet, membership gate, UI guide | WS5 index and gate | Catalog tooling (§5), one catalog (§7) | Colin + Matt | Needs spec | 3 | One machine-readable catalog. The gate replaces `check:ui` and feeds `measure-ui-adoption.sh`, never a third system. |
 | Component control surface: exposed values on the top ten primitives, named parts, generic slot | WS6a | Wave 0 contract, waves 1 and 2 | Matt | Needs spec | 2 | Matt owns the contract and names; Colin's per-component variables carry over as exposed values with a default chain. The generic slot is rebuilt as named parts, because D1 turns encapsulation off. |
 | Surface and elevation ramp, control-height scale, ambient layer, dark text tiers | WS6b | Wave 0 tokens | Colin | Go now | 0 | Colin implements under the ramp B contrast table signed off 2026-09-18. Any ramp change re-runs the table. |
@@ -77,9 +78,10 @@ Phase 0 ends when the wave 0 spec is written, the prototype gate passes, and the
 - [ ] Cascade layer order declared before any component moves to `@layer`: resets first, then foundation, then primitives. Unlayered Explorer globals in `explorer-app/_common.scss` (input border colors, heading margins) move into the reset layer or they will override every layered primitive (Matt)
 - [ ] Visual regression harness lands before the first conversion (Matt)
 - [ ] Prototype gate: surface, layer and row rendered three radically different ways in a host that is not Explorer. The host page doubles as the MJ Elements Phase 0 test page (Matt)
-- [ ] WS6b tokens: surface and elevation ramp B, control-height scale 28 / 32 / 38 / 44 / 52, ambient layer off by default, dark text tiers re-declared on elevated surfaces. Ships with the contrast table (Colin)
+- [ ] WS6b tokens: surface and elevation ramp B, control-height scale 32 / 40 / 52 with sm and md at 44 on touch, surface levels mapped per [NAMING.md](NAMING.md), ambient layer off by default, dark text tiers re-declared on elevated surfaces. Ships with the contrast table (Colin)
+- [ ] Intentional visible changes called out in the wave 0 spec, not shipped as silent defaults: on desktop the medium button goes from 44 to 40 and inputs and dropdowns from 38 to 40, the view toggle goes from 28 to 32, and dialogs, sheets, slide panels and windows get one step lighter in the dark theme when they move to the overlay surface (Matt)
 - [ ] WS4 contract fixes: Font Awesome from npm, Montserrat as the one heading face with Ubuntu removed, card-grid hex to tokens, in `explorer-app` (Colin)
-- [ ] Naming decision written into the wave 0 spec: public values `--mj-<component>-<part?>-<property>`, private variables under a marked prefix, default chain component value, then role token, then scale token (Matt proposes, Colin reviews)
+- [x] Naming decision written up in [NAMING.md](NAMING.md): public values `--mj-<component>[-<variant>][-<part>]-<property>[-<state>]`, private variables under `--_mj-`, default chain component value, then role token, then scale token (Matt wrote it, Colin reviewed and agreed 2026-11-09 and 2026-11-10)
 - [ ] Ownership decision (Lego D11) written down: Matt owns the component contract, catalog and names; Colin owns Explorer IA, Home and runtime; the token mechanics are shared under the two principles (Matt and Colin confirm, Amith and Robert see it)
 
 ## Phase 1: metadata and IA
@@ -126,7 +128,7 @@ Phase 4 is WS3 with the two conditions Amith added. It ends when an app can hide
 - [ ] Governed namespace for user setting keys: a registry of known keys, their scope and their default, instead of free strings (Colin proposes, Amith reviews)
 - [ ] Access map built on the authorizations engine, not a parallel permissions check; one query answers apps, nav items and header pieces (Colin, with the authorizations engine owner)
 - [ ] Header controls: search, notifications, app switcher and theme toggle become scoped shell config an app or a user can turn off. LXP and Betty both hide these with CSS today; both move to the config (Colin, Matt converts LXP)
-- [ ] UX preferences: per-user density, default landing, chip set, stored through UserInfoEngine (Colin)
+- [ ] UX preferences: per-user density (picks the default control-height step, adds no new sizes), default landing, chip set, stored through UserInfoEngine (Colin)
 - [ ] Settings inspector: a page where a user sees their stored settings and can reset to defaults (Colin)
 - [ ] Per-user sitemap and scoped shell config for tenants, on top of the access map (Colin)
 
@@ -184,6 +186,7 @@ Five things the Nov 3 meeting left to Matt and Colin, settled on the Nov 9 sync.
 
 - Project Lego: [PR #5911](https://github.com/MemberJunction/MJ/pull/5911), with Amith's signals and compositions proposal in [PR #6181](https://github.com/MemberJunction/MJ/pull/6181)
 - MJ Elements: [PR #5903](https://github.com/MemberJunction/MJ/pull/5903) (plan) and [PR #5916](https://github.com/MemberJunction/MJ/pull/5916) (Phase 0 test page)
+- Naming convention: [NAMING.md](NAMING.md)
 - Guides: `guides/UI_LAYERING_GUIDE.md`, `guides/BUILDING_UI_ON_MJ.md`, `.claude/rules/design-tokens.md`
 - Meeting: UI/UX Discussion (Plan + Realtime), 2026-11-03, Teams transcript
 - Mockup review and ramp B contrast table: 2026-09-18 notes from Matt to Colin
