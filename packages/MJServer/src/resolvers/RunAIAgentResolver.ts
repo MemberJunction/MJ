@@ -1,10 +1,10 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID, Int } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
-import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider, ServerOperationScopeManager } from '@memberjunction/core';
 import { MJConversationDetailEntity, MJConversationDetailEntityExtended, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { RouteArtifact } from './artifact-routing.js';
 import { AgentRunner, ArtifactToolManager, CanAgentOwnSubAgentConsults, LoadOpenSubAgentConsults, HostAllowedAgentIDs } from '@memberjunction/ai-agents';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData, ContinuationAnnouncementText } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData, ContinuationAnnouncementText, BuildTaskGraphStartDebug } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -1036,7 +1036,10 @@ export class RunAIAgentResolver extends ResolverBase {
             const rv = RunView.FromMetadataProvider(provider);
             const result = await rv.RunView<MJAIAgentRequestEntity>({
                 EntityName: 'MJ: AI Agent Requests',
-                ExtraFilter: `OriginatingAgentRunID='${EscapeSQLString(trimmedLastRunId)}' AND Status='Requested'`,
+                // Not a workflow step's request (OriginatingTaskID): the graph's own run is its provenance, so a
+                // follow-up message to that run is not an answer to it. A person answers a workflow step on purpose,
+                // through the request itself; resumption and AgentWake skip those requests the same way.
+                ExtraFilter: `OriginatingAgentRunID='${EscapeSQLString(trimmedLastRunId)}' AND Status='Requested' AND OriginatingTaskID IS NULL`,
                 MaxRows: 1,
                 SkipTotalRowCount: true,
                 ResultType: 'entity_object'
@@ -1055,7 +1058,9 @@ export class RunAIAgentResolver extends ResolverBase {
                 request.Response = userMessage;
             }
 
-            const saved = await request.Save();
+            // The user's own reply, made through this request: saved as their client request, so the server
+            // records them as the responder (`MJAIAgentRequestEntityServer`), as it does for a CRUD save.
+            const saved = await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() => request.Save());
             if (saved) {
                 LogStatus(`📋 Synced feedback request ${request.ID} → Responded (via conversation)`);
             } else {
@@ -1506,7 +1511,9 @@ export class RunAIAgentResolver extends ResolverBase {
             request.RespondedAt = new Date();
             request.ResponseByUserID = currentUser.ID;
 
-            const saved = await request.Save();
+            // The caller's own answer, made through this mutation: saved as their client request, so the
+            // server records them as the responder (`MJAIAgentRequestEntityServer`), as it does for a CRUD save.
+            const saved = await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() => request.Save());
             if (!saved) {
                 throw new Error(`Failed to save response for request ${requestId}`);
             }
@@ -1580,7 +1587,9 @@ export class RunAIAgentResolver extends ResolverBase {
                     : reassignEntry;
             }
 
-            const saved = await request.Save();
+            // The caller's own reassignment, made through this mutation: saved as their client request, which a
+            // workflow step's request requires (`MJAIAgentRequestEntityServer`), as a CRUD save is.
+            const saved = await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() => request.Save());
             if (!saved) {
                 throw new Error(`Failed to save reassignment for request ${requestId}`);
             }
@@ -2000,10 +2009,11 @@ function parseAgentHistoryFrom(raw?: string | null): Date | undefined {
     return parsed;
 }
 
-function parseTaskGraphDebug(raw?: string): { paused?: boolean } | undefined {
+function parseTaskGraphDebug(raw?: string): { paused?: boolean; breakpointStepIDs?: string[] } | undefined {
     if (!raw) return undefined;
     const parsed: unknown = SafeJSONParse(raw);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
-    const paused = (parsed as { paused?: unknown }).paused;
-    return paused === true ? { paused: true } : undefined;
+    const request = parsed as { paused?: unknown; breakpointStepIDs?: unknown };
+    // Remembered breakpoints (#3798) travel as stable step IDs; Submit maps them to this run's task IDs.
+    return BuildTaskGraphStartDebug({ paused: request.paused === true, breakpointStepIDs: request.breakpointStepIDs });
 }

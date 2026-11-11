@@ -49,11 +49,12 @@ The `RedisProviderConfig` object supports the following options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `url` | `string` | — | Redis connection URL (`redis://` or `rediss://` for TLS). Mutually exclusive with `options`. |
-| `options` | `RedisOptions` | — | Full [`ioredis` options](https://github.com/redis/ioredis#connect-to-redis) object. Mutually exclusive with `url`. |
+| `url` | `string` | — | Redis connection URL (`redis://` or `rediss://` for TLS). |
+| `options` | `RedisOptions` | — | Full [`ioredis` options](https://github.com/redis/ioredis#connect-to-redis) object, applied after the provider's defaults. With a `url`, it is applied on top of what the URL sets. |
 | `keyPrefix` | `string` | `'mj'` | Prefix for all Redis keys. Useful for isolating MJ data in a shared Redis instance. |
 | `defaultTTLSeconds` | `number` | `3600` | Default time-to-live for all cached entries. `0` means keys persist until explicitly removed. |
 | `maxRetries` | `number` | `10` | Maximum reconnection attempts with exponential backoff before giving up. |
+| `readTimeoutMs` | `number` | `2000` | Longest a cache read (`GetItem`, `GetItems`, `GetIndexGroupKeys`, `GetCategoryKeys`) waits before it is answered as a cache miss. Writes, removals and invalidations have no limit. When `GetIndexGroupKeys` (asked on save) times out, the slots it returns are removed once Redis answers. `0` waits without a limit. |
 | `enableLogging` | `boolean` | `true` | Whether to log connection events via MJ's `LogStatus`/`LogError`. |
 
 ### Connection Examples

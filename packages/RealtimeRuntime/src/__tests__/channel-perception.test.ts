@@ -5,16 +5,21 @@ import { ChannelPerceptionCoalescer, DEFAULT_CHANNEL_PERCEPTION_OPTIONS } from '
 function makeHost(initial: JSONObject) {
     const state = { current: initial };
     const notes: string[] = [];
+    const latestStates: Array<JSONObject | undefined> = [];
     const errors: unknown[] = [];
     return {
         state,
         notes,
+        latestStates,
         errors,
         host: {
             ChannelKey: 'Board',
             InstanceId: '1',
             GetState: () => state.current,
-            SendNote: (text: string) => notes.push(text),
+            SendNote: (text: string, latestState?: JSONObject) => {
+                notes.push(text);
+                latestStates.push(latestState);
+            },
             OnError: (error: unknown) => errors.push(error),
         },
     };
@@ -49,6 +54,7 @@ describe('ChannelPerceptionCoalescer', () => {
         vi.advanceTimersByTime(1000);
         expect(h.notes[1]).toContain('"delta":{"changed":{"title":"x"},"removed":[]}');
         expect(h.notes[1]).not.toContain('snapshot');
+        expect(h.latestStates[1]).toEqual({ items: [1], title: 'x' });
     });
 
     it('sends nothing when a burst nets out to no change', () => {

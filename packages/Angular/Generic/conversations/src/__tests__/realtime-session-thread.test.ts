@@ -93,4 +93,22 @@ describe('RealtimeSessionThreadComponent — clamping and expansion', () => {
     const alreadyMultiLine = '# Title\n\n### Subtitle\n\nParagraph text here.\n\n- Item 1\n- Item 2';
     expect(comp.FormatMarkdownText(alreadyMultiLine)).toBe(alreadyMultiLine);
   });
+
+  it.each([
+    ['Title ### Heading', 'Title\n\n### Heading'],
+    ['Intro \t— \n## Next', 'Intro\n\n## Next'],
+    ['a ####### seven', 'a ####### seven'],
+    ['a #tag here', 'a #tag here'],
+    ['one # two ## three', 'one\n\n# two\n\n## three'],
+  ])('starts the mid-line heading in %j on a new paragraph', (text, expected) => {
+    expect(createComponent().FormatMarkdownText(text)).toBe(expected);
+  });
+
+  it('reads 100k tabs with no heading after them in linear time', () => {
+    const comp = createComponent();
+    const text = 'x' + '\t'.repeat(100_000) + 'y';
+    const started = Date.now();
+    expect(comp.FormatMarkdownText(text)).toBe(text);
+    expect(Date.now() - started).toBeLessThan(2500);
+  });
 });

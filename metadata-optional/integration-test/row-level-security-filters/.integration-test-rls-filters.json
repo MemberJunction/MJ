@@ -1,0 +1,12 @@
+[
+  {
+    "fields": {
+      "Name": "Integration Test: Own Rows by UserID",
+      "Description": "Integration-test-only Row-Level-Security filter: scopes a read to rows whose UserID is the caller's own. Bound by the 'Integration Test: RLS Mixed Filtered' role to 'MJ: User Roles', where every user owns at least one row, so the rls-isolation checks RLS12/RLS13 can compare the narrowed row set with the full one on any database. Safe to delete together with that role.",
+      "FilterText": "UserID = '{{UserID}}'"
+    },
+    "primaryKey": {
+      "ID": "79C954BC-D56B-495D-BCE1-415D763BE4BB"
+    }
+  }
+]

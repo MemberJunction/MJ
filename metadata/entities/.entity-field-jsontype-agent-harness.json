@@ -28,8 +28,8 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Harnesses&Name=CapabilitySettings"
           },
           "sync": {
-            "lastModified": "2026-08-07T23:58:29.694Z",
-            "checksum": "d5c63ce6fafbd4f2a26930ebabb7dc8a5f5697a4f942505f4588f32759a36c32"
+            "lastModified": "2026-11-10T23:41:05.462Z",
+            "checksum": "d1057322a49de8ac1b6ee2a23f40e0cce92520a34fe65c1ff54ee39859e2367c"
           }
         }
       ]

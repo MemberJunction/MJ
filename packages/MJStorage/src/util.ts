@@ -1,5 +1,5 @@
 import { MJFileStorageProviderEntity, MJFileStorageAccountEntity } from '@memberjunction/core-entities';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, TrimChars } from '@memberjunction/global';
 import { LogStatus, UserInfo } from '@memberjunction/core';
 import { CredentialEngine } from '@memberjunction/credentials';
 import mime from 'mime-types';
@@ -763,7 +763,7 @@ export const CopyObjectBetweenProviders = async (
 
     // Normalize source path: remove leading/trailing slashes and collapse multiple slashes
     // This ensures consistent path handling across different storage providers
-    const normalizedSourcePath = sourcePath.replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/');
+    const normalizedSourcePath = TrimChars(sourcePath, '/').replace(/\/+/g, '/');
     console.log('[copyObjectBetweenProviders] Path normalization:', {
       original: sourcePath,
       normalized: normalizedSourcePath,

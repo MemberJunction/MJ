@@ -1,7 +1,7 @@
 import { Arg, Ctx, Field, InputType, Int, ObjectType, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { ResolverBase, type RunViewResultWithResolvedView } from './ResolverBase.js';
-import { LogError, LogStatus, EntityInfo, FieldSecurityError, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult, CompositeKey, ViewPropertyValues } from '@memberjunction/core';
+import { LogError, LogStatus, EntityInfo, FieldSecurityError, RunViewParameters, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult, CompositeKey, ViewPropertyValues } from '@memberjunction/core';
 import { GraphQLJSONObject } from 'graphql-type-json';
 
 import { ReplaceByteArraysWithBase64, UUIDsEqual } from '@memberjunction/global';
@@ -229,6 +229,20 @@ export class RunViewByIDInput {
       "Optional values for the view's declared properties, keyed by property name ({ \"Chapter\": \"<id>\" }). A list is accepted only for a property whose operator is IN; null means no value. A name the view does not declare, a value of the wrong type, a value for a property that only the server may set, or a required property left without a value refuses the run with an error naming the property.",
   })
   Properties?: ViewPropertyValues;
+
+  @Field(() => GraphQLJSONObject, {
+    nullable: true,
+    description:
+      'Optional map of named parameter values referenced as @paramName in ExtraFilter. Values may be string, number, boolean, Date, null, or a non-empty array of scalars for IN (@list).',
+  })
+  Parameters?: RunViewParameters;
+
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Optional JSON-encoded CompositeFilterDescriptor for structured, parameterized filtering. When combined with ExtraFilter, both are ANDed.',
+  })
+  Filter?: string;
 }
 
 @InputType()
@@ -378,6 +392,20 @@ export class RunViewByNameInput {
       "Optional values for the view's declared properties, keyed by property name ({ \"Chapter\": \"<id>\" }). A list is accepted only for a property whose operator is IN; null means no value. A name the view does not declare, a value of the wrong type, a value for a property that only the server may set, or a required property left without a value refuses the run with an error naming the property.",
   })
   Properties?: ViewPropertyValues;
+
+  @Field(() => GraphQLJSONObject, {
+    nullable: true,
+    description:
+      'Optional map of named parameter values referenced as @paramName in ExtraFilter. Values may be string, number, boolean, Date, null, or a non-empty array of scalars for IN (@list).',
+  })
+  Parameters?: RunViewParameters;
+
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Optional JSON-encoded CompositeFilterDescriptor for structured, parameterized filtering. When combined with ExtraFilter, both are ANDed.',
+  })
+  Filter?: string;
 }
 
 @InputType()
@@ -506,6 +534,20 @@ export class RunDynamicViewInput {
       'Optional registered Alternate Base View logical Name (from EntityAlternateBaseView.Name) for this entity. When set, routes the dynamic view read through the named alternate base view instead of the entity default BaseView.',
   })
   AlternateBaseView?: string;
+
+  @Field(() => GraphQLJSONObject, {
+    nullable: true,
+    description:
+      'Optional map of named parameter values referenced as @paramName in ExtraFilter. Values may be string, number, boolean, Date, null, or a non-empty array of scalars for IN (@list).',
+  })
+  Parameters?: RunViewParameters;
+
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Optional JSON-encoded CompositeFilterDescriptor for structured, parameterized filtering. When combined with ExtraFilter, both are ANDed.',
+  })
+  Filter?: string;
 }
 
 @InputType()
@@ -670,6 +712,20 @@ export class RunViewGenericInput {
       "Optional values for the view's declared properties, keyed by property name ({ \"Chapter\": \"<id>\" }). A list is accepted only for a property whose operator is IN; null means no value. A name the view does not declare, a value of the wrong type, a value for a property that only the server may set, or a required property left without a value refuses the run with an error naming the property.",
   })
   Properties?: ViewPropertyValues;
+
+  @Field(() => GraphQLJSONObject, {
+    nullable: true,
+    description:
+      'Optional map of named parameter values referenced as @paramName in ExtraFilter. Values may be string, number, boolean, Date, null, or a non-empty array of scalars for IN (@list).',
+  })
+  Parameters?: RunViewParameters;
+
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Optional JSON-encoded CompositeFilterDescriptor for structured, parameterized filtering. When combined with ExtraFilter, both are ANDed.',
+  })
+  Filter?: string;
 }
 
 //****************************************************************************
@@ -1002,6 +1058,7 @@ export class RunViewResolver extends ResolverBase {
         TotalRowCount: rawData?.TotalRowCount,
         ExecutionTime: rawData?.ExecutionTime,
         Success: rawData?.Success,
+        ErrorMessage: rawData?.ErrorMessage,
         AggregateResults: this.processAggregateResults(rawData?.AggregateResults),
         AggregateExecutionTime: rawData?.AggregateExecutionTime,
       };
@@ -1364,6 +1421,8 @@ export class RunViewResolver extends ResolverBase {
           AfterKey: item.params.AfterKey
             ? CompositeKey.FromKeyValuePairs(item.params.AfterKey.KeyValuePairs)
             : undefined,
+          Parameters: this.sanitizeRunViewParameters(item.params.Parameters),
+          Filter: this.parseStructuredRunViewFilter(item.params.Filter),
           TimeZone: userPayload?.TimeZone,
         },
         cacheStatus: item.cacheStatus ? {

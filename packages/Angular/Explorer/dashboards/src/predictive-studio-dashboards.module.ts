@@ -22,6 +22,7 @@ import { PSRegistryComponent } from './PredictiveStudio/components/ps-registry.c
 import { PSCompareComponent } from './PredictiveStudio/components/ps-compare.component';
 import { PSProductionComponent } from './PredictiveStudio/components/ps-production.component';
 import { PSPredictionsGridComponent } from './PredictiveStudio/components/ps-predictions-grid.component';
+import { PSVersionedListComponent } from './PredictiveStudio/components/versioned-list/versioned-list.component';
 
 import { PSPredictionsResourceComponent } from './PredictiveStudio/resources/ps-predictions-resource.component';
 import { PSStudioResourceComponent } from './PredictiveStudio/resources/ps-studio-resource.component';
@@ -35,7 +36,7 @@ import { PSModelsResourceComponent } from './PredictiveStudio/resources/ps-model
  * Predictive Studio is a **three-door** app — a business front door plus two analyst workbench doors —
  * each a `BaseResourceComponent` registered under its own DriverClass:
  *   - PredictiveStudioPredictionsResource  → business catalog + trust-gated workspace + "New prediction" copilot
- *   - PredictiveStudioStudioResource       → internal left-nav over ps-home / ps-pipelines / ps-catalog / ps-experiments / ps-compare
+ *   - PredictiveStudioStudioResource       → internal left-nav over ps-home / unit and protocol lists / ps-pipelines / ps-catalog / ps-experiments / ps-compare
  *   - PredictiveStudioModelsResource       → internal left-nav over ps-registry / ps-production
  *
  * This consolidates the prior eight flat top-nav items (each its own resource) into three, so a business
@@ -70,6 +71,7 @@ import { PSModelsResourceComponent } from './PredictiveStudio/resources/ps-model
     PSCompareComponent,
     PSProductionComponent,
     PSPredictionsGridComponent,
+    PSVersionedListComponent,
   ],
   exports: [
     PSPredictionsResourceComponent,
@@ -86,3 +88,5 @@ export class PredictiveStudioDashboardsModule {}
 export { PSPredictionsResourceComponent, LoadPSPredictionsResource } from './PredictiveStudio/resources/ps-predictions-resource.component';
 export { PSStudioResourceComponent, LoadPSStudioResource } from './PredictiveStudio/resources/ps-studio-resource.component';
 export { PSModelsResourceComponent, LoadPSModelsResource } from './PredictiveStudio/resources/ps-models-resource.component';
+// The record-form panels this chunk registers (keyed BaseFormPanel registrations), so the lazy config maps each key to this chunk.
+export { PSProtocolVersionsPanel, PSUnitVersionsPanel, PSPipelineBindingsPanel, PSModelEvaluationPanel, PS_RECORD_PANELS } from './PredictiveStudio/record-panels/ps-protocol-panels';

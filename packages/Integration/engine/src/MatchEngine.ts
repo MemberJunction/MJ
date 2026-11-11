@@ -3,6 +3,7 @@ import type { ICompanyIntegrationFieldMap, ICompanyIntegrationEntityMap } from '
 import type { MappedRecord, ConflictResolution } from './types.js';
 import { SerializeKeyValue } from './KeySerialization.js';
 import { QuoteTextLiteral } from './prefetchFilter.js';
+import { TrimTrailingChars } from '@memberjunction/global';
 
 /**
  * The field/value pairs a record is matched on — parallel arrays, so the same criteria can be
@@ -52,7 +53,7 @@ function normalizeExternalID(id: string): string {
     // ASCII 0x20; a trailing tab or newline is significant to it. Folding those too would make
     // the batch index equate `abc\t` with `abc`, which the database does not — a fold the
     // per-record query would never confirm, and a wrong mapping is worse than a missed one.
-    return id.replace(/ +$/, '').toLowerCase();
+    return TrimTrailingChars(id, ' ').toLowerCase();
 }
 
 /**

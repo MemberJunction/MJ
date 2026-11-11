@@ -2,7 +2,9 @@
  * @memberjunction/ng-filter-builder
  *
  * A modern, intuitive filter builder component for Angular applications.
- * Creates complex boolean filter expressions with Kendo-compatible JSON output.
+ * Creates complex boolean filter expressions. The filter payload shapes
+ * (`CompositeFilterDescriptor` et al.) come from `@memberjunction/core` — import them
+ * from there; this package exports only the builder and its UI-facing types.
  *
  * @packageDocumentation
  */
@@ -17,17 +19,11 @@ export { FilterRuleComponent } from './lib/filter-rule/filter-rule.component';
 
 // Types
 export {
-  FilterOperator,
-  FilterLogic,
   FilterFieldType,
-  FilterDescriptor,
-  CompositeFilterDescriptor,
   FilterFieldInfo,
   FilterValueOption,
   FilterBuilderConfig,
   FilterSource,
-  IsCompositeFilter,
-  IsSimpleFilter,
   CreateEmptyFilter,
   CreateFilterRule
 } from './lib/types/filter.types';

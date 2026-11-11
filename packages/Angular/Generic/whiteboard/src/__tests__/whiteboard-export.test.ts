@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { BuildWhiteboardExportHtml, BuildWhiteboardExportSvg, WhiteboardExportOptions } from '../lib/whiteboard-export';
+import { BuildWhiteboardExportHtml, BuildWhiteboardExportSvg, RenderMarkdownInert, WhiteboardExportOptions } from '../lib/whiteboard-export';
 import { WhiteboardState } from '../lib/whiteboard-state';
 
 /**
@@ -174,5 +174,29 @@ describe('BuildWhiteboardExportSvg', () => {
   it('is deterministic for the same state', () => {
     const state = buildFullBoard();
     expect(BuildWhiteboardExportSvg(state)).toBe(BuildWhiteboardExportSvg(state));
+  });
+});
+
+describe('RenderMarkdownInert — line matching', () => {
+  it.each([
+    ['# Title', '<h1>Title</h1>'],
+    ['###\tTabbed heading', '<h3>Tabbed heading</h3>'],
+    ['####### Seven', '<p>####### Seven</p>'],
+    ['#NoSpace', '<p>#NoSpace</p>'],
+    ['- one\n* two', '<ul><li>one</li><li>two</li></ul>'],
+    ['  -   indented', '<ul><li>indented</li></ul>'],
+    ['1. first\n22.\tsecond', '<ol><li>first</li><li>second</li></ol>'],
+    ['-dash', '<p>-dash</p>'],
+  ])('renders %j', (markdown, html) => {
+    expect(RenderMarkdownInert(markdown)).toBe(html);
+  });
+
+  it('reads 100k-character heading and list lines before a carriage return in linear time', () => {
+    const tabs = '\t'.repeat(100_000);
+    const started = Date.now();
+    for (const prefix of ['#', '*', '0.']) {
+      expect(RenderMarkdownInert(prefix + tabs + 'x\ry')).toContain('x\ry');
+    }
+    expect(Date.now() - started).toBeLessThan(2500);
   });
 });
