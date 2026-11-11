@@ -1,6 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import { TextToolLibrary } from '../artifact-tools/TextToolLibrary';
 
+interface LineMatch {
+    lineNumber: number;
+    text: string;
+}
+
+interface TextGrepResultData {
+    matches: LineMatch[];
+    matchCount: number;
+    partial: boolean;
+    timedOut: boolean;
+    unsearchableCount: number;
+    unsearchableLines: Array<{ lineNumber: number; reason: string }>;
+    warnings: string[];
+}
+
 const sampleText = `Line zero: Hello World
 Line one: foo bar
 Line two: HELLO again
@@ -24,31 +39,44 @@ describe('TextToolLibrary', () => {
 
     // Slice 2: grep returns matching lines with line numbers
     describe('grep', () => {
-        it('should return matching lines with line numbers', async () => {
-            const result = await lib.InvokeTool('grep', { pattern: 'Hello' }, sampleText);
+        it('should return matching lines with line numbers with case_sensitive: true', async () => {
+            const result = await lib.InvokeTool('grep', { pattern: 'Hello', case_sensitive: true }, sampleText);
             expect(result.success).toBe(true);
-            const matches = result.data as { lineNumber: number; text: string }[];
-            expect(matches).toHaveLength(1);
-            expect(matches[0].lineNumber).toBe(0);
-            expect(matches[0].text).toBe('Line zero: Hello World');
+            const data = result.data as TextGrepResultData;
+            expect(data.matches).toHaveLength(1);
+            expect(data.matchCount).toBe(1);
+            expect(data.matches[0].lineNumber).toBe(0);
+            expect(data.matches[0].text).toBe('Line zero: Hello World');
         });
 
-        // Slice 3: grep with case-insensitive flag
-        it('should support case-insensitive flag', async () => {
-            const result = await lib.InvokeTool('grep', { pattern: 'hello', flags: 'i' }, sampleText);
+        it('should perform case-insensitive literal search by default', async () => {
+            const result = await lib.InvokeTool('grep', { pattern: 'hello' }, sampleText);
             expect(result.success).toBe(true);
-            const matches = result.data as { lineNumber: number; text: string }[];
-            expect(matches).toHaveLength(2);
-            expect(matches[0].lineNumber).toBe(0);
-            expect(matches[1].lineNumber).toBe(2);
+            const data = result.data as TextGrepResultData;
+            expect(data.matches).toHaveLength(2);
+            expect(data.matchCount).toBe(2);
+            expect(data.matches[0].lineNumber).toBe(0);
+            expect(data.matches[1].lineNumber).toBe(2);
+        });
+
+        // Slice 3: grep with case-insensitive flag in regex mode
+        it('should support case-insensitive flag', async () => {
+            const result = await lib.InvokeTool('grep', { pattern: 'hello', flags: 'i', use_regex: true }, sampleText);
+            expect(result.success).toBe(true);
+            const data = result.data as TextGrepResultData;
+            expect(data.matches).toHaveLength(2);
+            expect(data.matchCount).toBe(2);
+            expect(data.matches[0].lineNumber).toBe(0);
+            expect(data.matches[1].lineNumber).toBe(2);
         });
 
         // Slice 4: grep with no matches returns empty array
         it('should return empty array when no matches', async () => {
             const result = await lib.InvokeTool('grep', { pattern: 'ZZZZZ' }, sampleText);
             expect(result.success).toBe(true);
-            const matches = result.data as { lineNumber: number; text: string }[];
-            expect(matches).toHaveLength(0);
+            const data = result.data as TextGrepResultData;
+            expect(data.matches).toHaveLength(0);
+            expect(data.matchCount).toBe(0);
         });
     });
 
@@ -57,7 +85,7 @@ describe('TextToolLibrary', () => {
         it('should return a slice of lines', async () => {
             const result = await lib.InvokeTool('get_lines', { start: 1, count: 2 }, sampleText);
             expect(result.success).toBe(true);
-            const lines = result.data as { lineNumber: number; text: string }[];
+            const lines = result.data as LineMatch[];
             expect(lines).toHaveLength(2);
             expect(lines[0]).toEqual({ lineNumber: 1, text: 'Line one: foo bar' });
             expect(lines[1]).toEqual({ lineNumber: 2, text: 'Line two: HELLO again' });
@@ -67,7 +95,7 @@ describe('TextToolLibrary', () => {
         it('should handle out-of-bounds gracefully', async () => {
             const result = await lib.InvokeTool('get_lines', { start: 3, count: 100 }, sampleText);
             expect(result.success).toBe(true);
-            const lines = result.data as { lineNumber: number; text: string }[];
+            const lines = result.data as LineMatch[];
             expect(lines).toHaveLength(2); // only lines 3 and 4 exist
             expect(lines[0].lineNumber).toBe(3);
             expect(lines[1].lineNumber).toBe(4);
@@ -76,7 +104,7 @@ describe('TextToolLibrary', () => {
         it('should return empty when start is beyond end', async () => {
             const result = await lib.InvokeTool('get_lines', { start: 999, count: 5 }, sampleText);
             expect(result.success).toBe(true);
-            const lines = result.data as { lineNumber: number; text: string }[];
+            const lines = result.data as LineMatch[];
             expect(lines).toHaveLength(0);
         });
     });

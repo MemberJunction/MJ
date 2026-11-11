@@ -5,6 +5,7 @@ import {
   ArtifactMetadataEngine,
   ArtifactPermissionEngine,
   MJArtifactVersionEntity,
+  MJFileEntity,
   SpreadsheetEngine,
   XlsxOpenXmlAdapter,
 } from '@memberjunction/core-entities';
@@ -1109,6 +1110,24 @@ export class ArtifactToolManager {
                   const warnMsg = `Deferred mutation was not applied to active room for artifact '${targetEntry.artifactId}'`;
                   LogError(`ArtifactToolManager: ${warnMsg}`);
                   commitWarning = warnMsg;
+                  targetEntry.content = previousContent;
+                  if (previousOriginalXlsxBytes) {
+                    targetEntry.originalXlsxBytes = previousOriginalXlsxBytes;
+                  }
+                  const failedStored: StoredToolResult = {
+                    artifactId: call.artifactId,
+                    tool: call.tool,
+                    input: call.input,
+                    result: {
+                      success: false,
+                      data: null,
+                      errorMessage: warnMsg,
+                    },
+                    timestamp: new Date(),
+                    durationMs: Date.now() - startedAt,
+                  };
+                  this.toolResults.push(failedStored);
+                  return failedStored;
                 }
                 if (typeof commitOutcome.mergedContent === 'string' && commitOutcome.mergedContent !== effectiveContent) {
                   effectiveContent = commitOutcome.mergedContent;
@@ -1127,15 +1146,50 @@ export class ArtifactToolManager {
                       );
                     }
                   }
-                  await this.persistArtifactVersionMutation(targetEntry, effectiveContent, xlsxBase64, call.tool);
+                  const rePersistOutcome = await this.persistArtifactVersionMutation(targetEntry, effectiveContent, xlsxBase64, call.tool);
+                  if (!rePersistOutcome.persisted) {
+                    const failMsg = rePersistOutcome.errorMessage ?? 'Failed to persist merged artifact version after concurrent edit reconciliation';
+                    LogError(`ArtifactToolManager: ${failMsg}`);
+                    const failedStored: StoredToolResult = {
+                      artifactId: call.artifactId,
+                      tool: call.tool,
+                      input: call.input,
+                      result: {
+                        success: false,
+                        data: null,
+                        errorMessage: failMsg,
+                      },
+                      timestamp: new Date(),
+                      durationMs: Date.now() - startedAt,
+                    };
+                    this.toolResults.push(failedStored);
+                    return failedStored;
+                  }
                 }
               }
             } catch (commitErr) {
-              LogError(
-                `ArtifactToolManager: commit hook failed for artifact '${targetEntry.artifactId}': ${
-                  commitErr instanceof Error ? commitErr.message : String(commitErr)
-                }`,
-              );
+              const errMsg = `ArtifactToolManager: commit hook failed for artifact '${targetEntry.artifactId}': ${
+                commitErr instanceof Error ? commitErr.message : String(commitErr)
+              }`;
+              LogError(errMsg);
+              targetEntry.content = previousContent;
+              if (previousOriginalXlsxBytes) {
+                targetEntry.originalXlsxBytes = previousOriginalXlsxBytes;
+              }
+              const failedStored: StoredToolResult = {
+                artifactId: call.artifactId,
+                tool: call.tool,
+                input: call.input,
+                result: {
+                  success: false,
+                  data: null,
+                  errorMessage: errMsg,
+                },
+                timestamp: new Date(),
+                durationMs: Date.now() - startedAt,
+              };
+              this.toolResults.push(failedStored);
+              return failedStored;
             }
           }
         }
@@ -1165,7 +1219,25 @@ export class ArtifactToolManager {
               effectiveContent = hookResult.mergedContent;
               targetEntry.content = effectiveContent;
               if (this.contextUser && this.provider) {
-                await this.persistArtifactVersionMutation(targetEntry, effectiveContent, xlsxBase64, call.tool);
+                const rePersistOutcome = await this.persistArtifactVersionMutation(targetEntry, effectiveContent, xlsxBase64, call.tool);
+                if (!rePersistOutcome.persisted) {
+                  const failMsg = rePersistOutcome.errorMessage ?? 'Failed to persist merged artifact version after concurrent edit reconciliation';
+                  LogError(`ArtifactToolManager: ${failMsg}`);
+                  const failedStored: StoredToolResult = {
+                    artifactId: call.artifactId,
+                    tool: call.tool,
+                    input: call.input,
+                    result: {
+                      success: false,
+                      data: null,
+                      errorMessage: failMsg,
+                    },
+                    timestamp: new Date(),
+                    durationMs: Date.now() - startedAt,
+                  };
+                  this.toolResults.push(failedStored);
+                  return failedStored;
+                }
               }
             }
           } catch (hookErr) {
@@ -1569,6 +1641,7 @@ export class ArtifactToolManager {
 
     const conflictBeforeSave = await this.checkConcurrentDatabaseModification(entry);
     if (conflictBeforeSave) {
+      LogError(`ArtifactToolManager: concurrent modification detected before save for artifact '${entry.artifactId}': ${conflictBeforeSave}`);
       return { persisted: false, errorMessage: conflictBeforeSave };
     }
 
@@ -1644,6 +1717,7 @@ export class ArtifactToolManager {
     try {
       let versionEntity = entry.agentRunVersionEntity;
       const isReuse = Boolean(versionEntity && entry.agentRunVersionId);
+      const previousReusedFileId = isReuse && versionEntity ? versionEntity.FileID : null;
       const targetVersionNumber = isReuse
         ? (entry.currentVersionNumber ?? entry.versionNumber ?? 1)
         : (entry.currentVersionNumber ?? entry.versionNumber ?? 0) + 1;
@@ -1695,15 +1769,36 @@ export class ArtifactToolManager {
         entry.currentVersionNumber = targetVersionNumber;
         entry.agentRunVersionId = versionEntity.ID;
         entry.agentRunVersionEntity = versionEntity;
+
+        if (
+          previousReusedFileId &&
+          uploadedFileId &&
+          !UUIDsEqual(previousReusedFileId, uploadedFileId) &&
+          this.provider &&
+          this.contextUser
+        ) {
+          try {
+            const oldFile = await this.provider.GetEntityObject<MJFileEntity>('MJ: Files', this.contextUser);
+            if (await oldFile.Load(previousReusedFileId)) {
+              await oldFile.Delete();
+            }
+          } catch {
+            // best-effort orphan cleanup
+          }
+        }
+
         return { persisted: true };
       }
 
       // If Save() returned false, check whether a concurrent human version was saved in the meantime
       const postSaveConflict = await this.checkConcurrentDatabaseModification(entry);
       if (postSaveConflict) {
+        LogError(`ArtifactToolManager: concurrent modification detected after save for artifact '${entry.artifactId}': ${postSaveConflict}`);
         return { persisted: false, errorMessage: postSaveConflict };
       }
-      return { persisted: false, errorMessage: `Failed to save MJ: Artifact Versions record for '${entry.artifactId}'` };
+      const saveErrMsg = `Failed to save MJ: Artifact Versions record for '${entry.artifactId}'`;
+      LogError(`ArtifactToolManager: ${saveErrMsg}`);
+      return { persisted: false, errorMessage: saveErrMsg };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       LogError(`ArtifactToolManager: failed to persist version for artifact '${entry.artifactId}': ${msg}`);

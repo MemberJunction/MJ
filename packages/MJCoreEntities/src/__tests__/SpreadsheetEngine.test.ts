@@ -2756,23 +2756,181 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         engine.SetCell(wb, s.SheetID, 'D1', { Formula: '=UNIQUE(A1:A4)' }, true);
         expect(s.Cells['D1']?.ComputedValue).toBe('#NAME?');
 
-        // In both argument orders, SUMIFS must produce #NAME? (not 0 when pair 1 is checked after non-matching pair 0)
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(B1:B4, A1:A4, "zz", D1:D4, ">1")')).toBe('#NAME?');
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(B1:B4, D1:D4, ">1", A1:A4, "zz")')).toBe('#NAME?');
+        // In both argument orders, SUMIFS must produce #NAME? when the row matches the other criterion
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(B1:B4, A1:A4, "a", D1:D4, ">1")')).toBe('#NAME?');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(B1:B4, D1:D4, ">1", A1:A4, "a")')).toBe('#NAME?');
 
-        // COUNTIFS in both argument orders
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(A1:A4, "zz", D1:D4, ">1")')).toBe('#NAME?');
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(D1:D4, ">1", A1:A4, "zz")')).toBe('#NAME?');
+        // COUNTIFS in both argument orders when matching
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(A1:A4, "a", D1:D4, ">1")')).toBe('#NAME?');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(D1:D4, ">1", A1:A4, "a")')).toBe('#NAME?');
+
+        // R11-3: When row fails known criterion ("zz"), it must exclude the row ('nomatch') and return 0
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(B1:B4, A1:A4, "zz", D1:D4, ">1")')).toBe(0);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(B1:B4, D1:D4, ">1", A1:A4, "zz")')).toBe(0);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(A1:A4, "zz", D1:D4, ">1")')).toBe(0);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(D1:D4, ">1", A1:A4, "zz")')).toBe(0);
 
         // Case 2: D has access-denied cell
         engine.SetCell(wb, s.SheetID, 'D1', { Formula: '=MJ.VIEW("Denied")', AccessDenied: true, ErrorMessage: 'No permission' }, false);
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(B1:B4, A1:A4, "zz", D1:D4, ">1")')).toBe('#MJ_ACCESS_DENIED!');
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(B1:B4, D1:D4, ">1", A1:A4, "zz")')).toBe('#MJ_ACCESS_DENIED!');
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(A1:A4, "zz", D1:D4, ">1")')).toBe('#MJ_ACCESS_DENIED!');
-        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(D1:D4, ">1", A1:A4, "zz")')).toBe('#MJ_ACCESS_DENIED!');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(B1:B4, A1:A4, "a", D1:D4, ">1")')).toBe('#MJ_ACCESS_DENIED!');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(B1:B4, D1:D4, ">1", A1:A4, "a")')).toBe('#MJ_ACCESS_DENIED!');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(A1:A4, "a", D1:D4, ">1")')).toBe('#MJ_ACCESS_DENIED!');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(D1:D4, ">1", A1:A4, "a")')).toBe('#MJ_ACCESS_DENIED!');
+
+        // R11-3: Non-matching row with access-denied cell excludes the row ('nomatch')
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(B1:B4, A1:A4, "zz", D1:D4, ">1")')).toBe(0);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(B1:B4, D1:D4, ">1", A1:A4, "zz")')).toBe(0);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(A1:A4, "zz", D1:D4, ">1")')).toBe(0);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(D1:D4, ">1", A1:A4, "zz")')).toBe(0);
 
         // Case 3: IFERROR(SUMIFS(B1:B4, UNIQUE(B1:B5), ">1"), 0) propagates #NAME? (NOT swallowed to 0 via #VALUE!)
         expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=IFERROR(SUMIFS(B1:B4, UNIQUE(B1:B5), ">1"), 0)')).toBe('#NAME?');
         expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=IFERROR(COUNTIFS(UNIQUE(B1:B5), ">1"), 0)')).toBe('#NAME?');
+    });
+
+    it('R11-3: *IFS must return "nomatch" when any known criterion on that row fails (both direct and flattened)', () => {
+        const wb = engine.CreateEmptyWorkbook('IFS_R11_3_Test', ['Sheet1'], 10, 10);
+        const s = wb.Worksheets[0];
+
+        // Setup base data in A1:A4, B1:B4, C1:C3
+        engine.SetCell(wb, s.SheetID, 'A1', { Value: 'k1_1' }, false);
+        engine.SetCell(wb, s.SheetID, 'A2', { Value: 'k1_2' }, false);
+        engine.SetCell(wb, s.SheetID, 'A3', { Value: 'k2' }, false);
+        engine.SetCell(wb, s.SheetID, 'A4', { Value: 'k4' }, false);
+
+        engine.SetCell(wb, s.SheetID, 'B1', { Value: 10 }, false);
+        engine.SetCell(wb, s.SheetID, 'B2', { Value: 20 }, false);
+        engine.SetCell(wb, s.SheetID, 'B3', { Value: 21 }, false);
+        engine.SetCell(wb, s.SheetID, 'B4', { Value: 40 }, false);
+
+        engine.SetCell(wb, s.SheetID, 'C1', { Value: 10 }, false);
+        engine.SetCell(wb, s.SheetID, 'C2', { Value: 20 }, false);
+        engine.SetCell(wb, s.SheetID, 'C3', { Value: 30 }, false);
+
+        type DescriptorResult = {
+            targetSheet: typeof s;
+            startRow: number;
+            endRow: number;
+            startCol: number;
+            endCol: number;
+        } | '#REF!' | null;
+
+        interface EngineInternalDescriptorResolver {
+            resolveAstRangeDescriptor(
+                argNode: { type: string },
+                workbook: typeof wb,
+                sheet: typeof s,
+                useExcelGridMax?: boolean
+            ): DescriptorResult;
+        }
+
+        const runSuite = (mode: 'direct' | 'flattened', sentinelType: 'unimplemented' | 'accessDenied') => {
+            const expectedSentinel = sentinelType === 'unimplemented' ? '#NAME?' : '#MJ_ACCESS_DENIED!';
+
+            if (sentinelType === 'unimplemented') {
+                engine.SetCell(wb, s.SheetID, 'C4', { Formula: '=LARGE(B1:B3, 1)' }, true);
+                expect(s.Cells['C4']?.ComputedValue).toBe('#NAME?');
+            } else {
+                engine.SetCell(
+                    wb,
+                    s.SheetID,
+                    'C4',
+                    { Formula: '=MJ.VIEW("Denied")', AccessDenied: true, ErrorMessage: 'No permission' },
+                    false
+                );
+            }
+
+            // 1. COUNTIFS
+            // Excluded row: row 4 fails "k1*"
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(A1:A4, "k1*", C1:C4, ">5")')).toBe(2);
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(C1:C4, ">5", A1:A4, "k1*")')).toBe(2);
+            // Explicitly excluded row: row 4 excluded by "<>k4"
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(A1:A4, "<>k4", C1:C4, ">0")')).toBe(3);
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(C1:C4, ">0", A1:A4, "<>k4")')).toBe(3);
+            // Zero-match query
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(A1:A4, "zz", C1:C4, ">0")')).toBe(0);
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(C1:C4, ">0", A1:A4, "zz")')).toBe(0);
+            // Matching row where non-sentinel criterion passes on row 4
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(A1:A4, "k4", C1:C4, ">0")')).toBe(expectedSentinel);
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(C1:C4, ">0", A1:A4, "k4")')).toBe(expectedSentinel);
+
+            // 2. SUMIFS
+            // Excluded row: rows 1 and 2 match "k1*" (10 + 20 = 30)
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(B1:B4, A1:A4, "k1*", C1:C4, ">5")')).toBe(30);
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(B1:B4, C1:C4, ">5", A1:A4, "k1*")')).toBe(30);
+            // Explicitly excluded row: row 4 excluded by "<>k4" (10 + 20 + 21 = 51)
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(B1:B4, A1:A4, "<>k4", C1:C4, ">0")')).toBe(51);
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(B1:B4, C1:C4, ">0", A1:A4, "<>k4")')).toBe(51);
+            // Zero-match query
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(B1:B4, A1:A4, "zz", C1:C4, ">0")')).toBe(0);
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(B1:B4, C1:C4, ">0", A1:A4, "zz")')).toBe(0);
+            // Matching row where row 4 passes
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(B1:B4, A1:A4, "k4", C1:C4, ">0")')).toBe(expectedSentinel);
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(B1:B4, C1:C4, ">0", A1:A4, "k4")')).toBe(expectedSentinel);
+
+            // 3. AVERAGEIFS
+            // Excluded row: (10 + 20) / 2 = 15
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=AVERAGEIFS(B1:B4, A1:A4, "k1*", C1:C4, ">5")')).toBe(15);
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=AVERAGEIFS(B1:B4, C1:C4, ">5", A1:A4, "k1*")')).toBe(15);
+            // Explicitly excluded row: (10 + 20 + 21) / 3 = 17
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=AVERAGEIFS(B1:B4, A1:A4, "<>k4", C1:C4, ">0")')).toBe(17);
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=AVERAGEIFS(B1:B4, C1:C4, ">0", A1:A4, "<>k4")')).toBe(17);
+            // Zero-match query -> #DIV/0!
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=AVERAGEIFS(B1:B4, A1:A4, "zz", C1:C4, ">0")')).toBe('#DIV/0!');
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=AVERAGEIFS(B1:B4, C1:C4, ">0", A1:A4, "zz")')).toBe('#DIV/0!');
+            // Matching row where row 4 passes
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=AVERAGEIFS(B1:B4, A1:A4, "k4", C1:C4, ">0")')).toBe(expectedSentinel);
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=AVERAGEIFS(B1:B4, C1:C4, ">0", A1:A4, "k4")')).toBe(expectedSentinel);
+
+            // 4. MAXIFS
+            // Excluded row: max(10, 20) = 20
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=MAXIFS(B1:B4, A1:A4, "k1*", C1:C4, ">5")')).toBe(20);
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=MAXIFS(B1:B4, C1:C4, ">5", A1:A4, "k1*")')).toBe(20);
+            // Explicitly excluded row: max(10, 20, 21) = 21
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=MAXIFS(B1:B4, A1:A4, "<>k4", C1:C4, ">0")')).toBe(21);
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=MAXIFS(B1:B4, C1:C4, ">0", A1:A4, "<>k4")')).toBe(21);
+            // Zero-match query -> 0
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=MAXIFS(B1:B4, A1:A4, "zz", C1:C4, ">0")')).toBe(0);
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=MAXIFS(B1:B4, C1:C4, ">0", A1:A4, "zz")')).toBe(0);
+            // Matching row where row 4 passes
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=MAXIFS(B1:B4, A1:A4, "k4", C1:C4, ">0")')).toBe(expectedSentinel);
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=MAXIFS(B1:B4, C1:C4, ">0", A1:A4, "k4")')).toBe(expectedSentinel);
+
+            // 5. MINIFS
+            // Excluded row: min(10, 20) = 10
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=MINIFS(B1:B4, A1:A4, "k1*", C1:C4, ">5")')).toBe(10);
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=MINIFS(B1:B4, C1:C4, ">5", A1:A4, "k1*")')).toBe(10);
+            // Explicitly excluded row: min(10, 20, 21) = 10
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=MINIFS(B1:B4, A1:A4, "<>k4", C1:C4, ">0")')).toBe(10);
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=MINIFS(B1:B4, C1:C4, ">0", A1:A4, "<>k4")')).toBe(10);
+            // Zero-match query -> 0
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=MINIFS(B1:B4, A1:A4, "zz", C1:C4, ">0")')).toBe(0);
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=MINIFS(B1:B4, C1:C4, ">0", A1:A4, "zz")')).toBe(0);
+            // Matching row where row 4 passes
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=MINIFS(B1:B4, A1:A4, "k4", C1:C4, ">0")')).toBe(expectedSentinel);
+            expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=MINIFS(B1:B4, C1:C4, ">0", A1:A4, "k4")')).toBe(expectedSentinel);
+        };
+
+        // Direct range execution
+        runSuite('direct', 'unimplemented');
+        runSuite('direct', 'accessDenied');
+
+        // Flattened range execution: simulate non-direct range AST descriptors via spy
+        const internalEngine = engine as never as EngineInternalDescriptorResolver;
+        const origResolveDesc = internalEngine.resolveAstRangeDescriptor.bind(engine);
+        const spy = vi.spyOn(internalEngine, 'resolveAstRangeDescriptor').mockImplementation(
+            (argNode, workbookSpec, sheetSpec, useExcelGridMax = true) => {
+                if (useExcelGridMax) {
+                    return null;
+                }
+                return origResolveDesc(argNode, workbookSpec, sheetSpec, useExcelGridMax);
+            }
+        );
+        try {
+            runSuite('flattened', 'unimplemented');
+            runSuite('flattened', 'accessDenied');
+        } finally {
+            spy.mockRestore();
+        }
     });
 });

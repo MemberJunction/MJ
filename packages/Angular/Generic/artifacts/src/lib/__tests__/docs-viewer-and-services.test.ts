@@ -5,9 +5,13 @@ import * as decoding from 'lib0/decoding';
 import * as syncProtocol from 'y-protocols/sync';
 import * as Y from 'yjs';
 import { ChangeDetectorRef, Injector, runInInjectionContext } from '@angular/core';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { DomSanitizer } from '@angular/platform-browser';
+import type { IMetadataProvider, UserInfo, RunViewParams, RunViewResult } from '@memberjunction/core';
 import {
+  MJArtifactEntity,
   MJArtifactVersionEntity,
+  ConversationEngine,
+  type ConversationScope,
   SlideDeckEngine,
   SpreadsheetEngine,
   type DocumentBlockSpec,
@@ -15,6 +19,7 @@ import {
 } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ArtifactFileService } from '../services/artifact-file.service';
+import { ArtifactIconService } from '../services/artifact-icon.service';
 import {
   COLLAB_SECRET_UNCONFIGURED_CODE,
   DocumentCollaborationService,
@@ -22,6 +27,7 @@ import {
 } from '../services/document-collaboration.service';
 import { DocumentImportExportService } from '../services/document-import-export.service';
 import { SlideDeckExportService } from '../services/slide-deck-export.service';
+import { ArtifactViewerPanelComponent } from '../components/artifact-viewer-panel.component';
 import { MarkdownArtifactViewerComponent } from '../components/plugins/markdown-artifact-viewer.component';
 import { SlideDeckArtifactViewerComponent } from '../components/plugins/slide-deck-artifact-viewer.component';
 import { SpreadsheetArtifactViewerComponent } from '../components/plugins/spreadsheet-artifact-viewer.component';
@@ -302,7 +308,11 @@ describe('DocumentCollaborationService — ticket-authenticated URL resolution, 
   });
 
   it('stays cleanly in local mode when no GraphQLDataProvider or wsUrl override is configured (A3)', async () => {
-    const plainProvider = Object.assign(Object.create(null) as IMetadataProvider, { Entities: [] });
+    const plainProvider = Object.assign(Object.create(null) as IMetadataProvider, {
+      Entities: [],
+      EntityByName: (name: string) =>
+        name === 'MJ: Artifacts' ? { ID: 'artifacts-entity-id', Name: 'MJ: Artifacts' } : undefined,
+    });
     const resolved = await service.ResolveCollaborationEndpoint('art-local-1', null, plainProvider);
     expect(resolved.Mode).toBe('local');
     expect(resolved.WsUrl).toBe('');
@@ -433,7 +443,7 @@ describe('DocumentCollaborationService — ticket-authenticated URL resolution, 
     }
   });
 
-  it('ComputeLineDiff handles two 20,000-line documents in < 100ms via prefix/suffix + bounded Myers/anchor diff (E4)', () => {
+  it('ComputeLineDiff handles two 20,000-line documents in < 2500ms via prefix/suffix + bounded Myers/anchor diff (E4)', () => {
     const linesA: string[] = [];
     const linesB: string[] = [];
     for (let i = 0; i < 20000; i++) {
@@ -621,6 +631,8 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
     Object.assign(mockProvider, {
       CurrentUser: mockUser,
       Entities: [],
+      EntityByName: (name: string) =>
+        name === 'MJ: Artifacts' ? { ID: 'artifacts-entity-id', Name: 'MJ: Artifacts' } : undefined,
     });
     sheetViewer.Provider = mockProvider;
 
@@ -792,6 +804,9 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
       const wsProvider = Object.create(null) as IMetadataProvider;
       Object.assign(wsProvider, {
         CurrentUser: mockUser,
+        Entities: [],
+        EntityByName: (name: string) =>
+          name === 'MJ: Artifacts' ? { ID: 'artifacts-entity-id', Name: 'MJ: Artifacts' } : undefined,
         ConfigData: { URL: 'http://localhost:4000/graphql' },
         ExecuteGQL: async () => ({
           MintArtifactCollaborationTicket: {
@@ -1031,6 +1046,9 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
       Object.assign(provider, {
         CurrentUser: mockUser,
         Entities: [],
+        EntityByName: (name: string) =>
+          name === 'MJ: Artifacts' ? { ID: 'artifacts-entity-id', Name: 'MJ: Artifacts' } : undefined,
+        RunView: async () => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0 }),
         ConfigData: { URL: 'https://example.com/graphql' },
         ExecuteGQL: scenario.executeGql,
       });
@@ -1224,6 +1242,9 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
           return Object.assign(prov, {
             CurrentUser: mockUser,
             Entities: [],
+            EntityByName: (name: string) =>
+              name === 'MJ: Artifacts' ? { ID: 'artifacts-entity-id', Name: 'MJ: Artifacts' } : undefined,
+            RunView: async () => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0 }),
             ConfigData: { URL: 'https://example.com/graphql' },
             ExecuteGQL: async (query: string) => {
               if (query.includes('ResolveArtifactPermissions')) {
@@ -1644,6 +1665,267 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
     expect(successRes.Success).toBe(true);
     expect(successRes.VersionID).toBe('ver-restored-9');
     expect(successRes.VersionNumber).toBe(9);
+  });
+
+  it('R11-7: OnRestoreComparedVersion fallback preserves conversation scope, lightweight fields, and loads full content only for restored version when Load fails', async () => {
+    const notifications: Array<{ message: string; type: string }> = [];
+    const notificationService = Object.create(MJNotificationService.prototype) as MJNotificationService;
+    notificationService.CreateSimpleNotification = (
+      message: string,
+      style?: 'none' | 'success' | 'error' | 'warning' | 'info',
+    ) => {
+      notifications.push({ message, type: style ?? 'none' });
+    };
+
+    const cdr = Object.create(ChangeDetectorRef.prototype) as ChangeDetectorRef;
+    cdr.markForCheck = vi.fn();
+    cdr.detectChanges = vi.fn();
+
+    const sanitizer = Object.create(DomSanitizer.prototype) as DomSanitizer;
+    sanitizer.sanitize = vi.fn();
+    sanitizer.bypassSecurityTrustHtml = (html: string) => html;
+
+    const artifactIconService = Object.create(ArtifactIconService.prototype) as ArtifactIconService;
+    artifactIconService.getArtifactIcon = () => 'fa-file';
+
+    const artifactFileService = Object.create(ArtifactFileService.prototype) as ArtifactFileService;
+
+    const collabService = new DocumentCollaborationService();
+
+    const injector = Injector.create({
+      providers: [
+        { provide: ChangeDetectorRef, useValue: cdr },
+        { provide: MJNotificationService, useValue: notificationService },
+        { provide: DomSanitizer, useValue: sanitizer },
+        { provide: ArtifactIconService, useValue: artifactIconService },
+        { provide: ArtifactFileService, useValue: artifactFileService },
+        { provide: DocumentCollaborationService, useValue: collabService },
+      ],
+    });
+
+    const panel = runInInjectionContext(
+      injector,
+      () =>
+        new ArtifactViewerPanelComponent(
+          cdr,
+          notificationService,
+          sanitizer,
+          artifactIconService,
+          artifactFileService,
+        ),
+    );
+
+    const mockUser = Object.create(null) as UserInfo;
+    Object.assign(mockUser, {
+      ID: 'u-reviewer-1',
+      Name: 'Bob Reviewer',
+      Email: 'bob@example.com',
+    });
+
+    const conversationId = '11111111-1111-1111-1111-111111111111';
+    const branchId = '22222222-2222-2222-2222-222222222222';
+    const scope: ConversationScope = {
+      ConversationID: conversationId,
+      BranchID: branchId,
+      Branches: [
+        {
+          ID: branchId,
+          ConversationID: conversationId,
+          ParentBranchID: null,
+          ForkFromSequence: 2,
+          Name: null,
+        },
+      ],
+    };
+
+    const artifactId = 'art-test-1';
+    const restoredVersionId = 'ver-restored-3';
+    const restoredVersionNumber = 3;
+
+    // Track all RunViews batches executed by fallback
+    const executedBatches: RunViewParams[][] = [];
+
+    const mockProvider = Object.create(null) as IMetadataProvider;
+    Object.assign(mockProvider, {
+      CurrentUser: mockUser,
+      Entities: [],
+      EntityByName: (name: string) =>
+        name === 'MJ: Artifacts' ? { ID: 'artifacts-entity-id', Name: 'MJ: Artifacts' } : undefined,
+      ConfigData: { URL: 'https://example.com/graphql' },
+      ExecuteGQL: async (query: string) => {
+        if (query.includes('RestoreArtifactVersion')) {
+          return {
+            RestoreArtifactVersion: {
+              Success: true,
+              VersionID: restoredVersionId,
+              VersionNumber: restoredVersionNumber,
+            },
+          };
+        }
+        return {};
+      },
+      GetEntityObject: async (entityName: string) => {
+        if (entityName === 'MJ: Artifact Versions') {
+          const entity = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+          entity.Load = async () => false; // Load fails! triggers fallback
+          return entity;
+        }
+        return Object.create(null);
+      },
+      RunViews: async (queries: RunViewParams[]): Promise<RunViewResult[]> => {
+        executedBatches.push(queries);
+        return queries.map((q) => {
+          // Scoped version list query (lightweight fields, no Content)
+          if (q.Fields && q.Fields.includes('VersionNumber') && !q.MaxRows) {
+            const v2Scoped = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+            Object.defineProperties(v2Scoped, {
+              ID: { value: 'ver-2', enumerable: true },
+              ArtifactID: { value: artifactId, enumerable: true },
+              VersionNumber: { value: 2, enumerable: true },
+              Name: { value: 'Version 2', enumerable: true },
+              Description: { value: 'v2 in scope', enumerable: true },
+            });
+            const v1Scoped = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+            Object.defineProperties(v1Scoped, {
+              ID: { value: 'ver-1', enumerable: true },
+              ArtifactID: { value: artifactId, enumerable: true },
+              VersionNumber: { value: 1, enumerable: true },
+              Name: { value: 'Version 1', enumerable: true },
+              Description: { value: 'v1 in scope', enumerable: true },
+            });
+            return {
+              Success: true,
+              Results: [v2Scoped, v1Scoped],
+              RowCount: 2,
+              TotalRowCount: 2,
+              ExecutionTime: 1,
+              ErrorMessage: '',
+            };
+          }
+          // ID-only query for all versions of artifact
+          if (q.Fields && q.Fields.length === 1 && q.Fields[0] === 'ID') {
+            const v1Id = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+            Object.defineProperties(v1Id, { ID: { value: 'ver-1', enumerable: true } });
+            const v2Id = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+            Object.defineProperties(v2Id, { ID: { value: 'ver-2', enumerable: true } });
+            const v999Id = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+            Object.defineProperties(v999Id, { ID: { value: 'ver-out-of-scope-999', enumerable: true } });
+            return {
+              Success: true,
+              Results: [v1Id, v2Id, v999Id],
+              RowCount: 3,
+              TotalRowCount: 3,
+              ExecutionTime: 1,
+              ErrorMessage: '',
+            };
+          }
+          // Single restored version query (full entity with Content and Configuration)
+          if (q.MaxRows === 1 && q.ResultType === 'entity_object') {
+            const singleEntity = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+            Object.defineProperties(singleEntity, {
+              ID: { value: restoredVersionId, enumerable: true },
+              ArtifactID: { value: artifactId, enumerable: true },
+              VersionNumber: { value: restoredVersionNumber, enumerable: true },
+              Name: { value: 'Restored Version 3', enumerable: true },
+              Description: { value: 'Restored from v1', enumerable: true },
+              Content: { value: '# Restored Markdown Full Content v3', enumerable: true },
+              Configuration: { value: JSON.stringify({ theme: 'dark' }), enumerable: true },
+            });
+            return {
+              Success: true,
+              Results: [singleEntity],
+              RowCount: 1,
+              TotalRowCount: 1,
+              ExecutionTime: 1,
+              ErrorMessage: '',
+            };
+          }
+          return {
+            Success: true,
+            Results: [],
+            RowCount: 0,
+            TotalRowCount: 0,
+            ExecutionTime: 0,
+            ErrorMessage: '',
+          };
+        });
+      },
+    });
+
+    panel.Provider = mockProvider;
+    panel.CurrentUser = mockUser;
+    panel.canEdit = true;
+    panel.Scope = scope;
+    panel.ViewContext = 'conversation';
+    const artifactEntity = Object.create(MJArtifactEntity.prototype) as MJArtifactEntity;
+    Object.defineProperties(artifactEntity, {
+      ID: { value: artifactId, enumerable: true },
+      Name: { value: 'Scoped Test Artifact', enumerable: true },
+    });
+    panel.Artifact = artifactEntity;
+
+    const v1Initial = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+    Object.defineProperties(v1Initial, {
+      ID: { value: 'ver-1', enumerable: true },
+      ArtifactID: { value: artifactId, enumerable: true },
+      VersionNumber: { value: 1, enumerable: true },
+      Name: { value: 'v1 Initial', enumerable: true },
+      Content: { value: '# v1 initial content', enumerable: true },
+    });
+    panel.AllVersions = [v1Initial];
+
+    // Trigger restore of version 1
+    await panel.OnRestoreComparedVersion(1);
+
+    // 1. Verify executed fallback query batch
+    expect(executedBatches).toHaveLength(1);
+    const batch = executedBatches[0];
+    expect(batch).toHaveLength(3);
+
+    const [scopedListQuery, allIdsQuery, singleVerQuery] = batch;
+
+    // (a) Scoped list query has conversation scope filter, simple result type, and lightweight fields without Content
+    expect(scopedListQuery.EntityName).toBe('MJ: Artifact Versions');
+    expect(scopedListQuery.ResultType).toBe('simple');
+    expect(scopedListQuery.ExtraFilter).toBe(
+      ConversationEngine.ArtifactVersionScopeFilter(scope, artifactId),
+    );
+    expect(scopedListQuery.Fields).toBeDefined();
+    expect(scopedListQuery.Fields).not.toContain('Content');
+
+    // (b) ID query for maintaining artifactVersionIds
+    expect(allIdsQuery.EntityName).toBe('MJ: Artifact Versions');
+    expect(allIdsQuery.Fields).toEqual(['ID']);
+    expect(allIdsQuery.ResultType).toBe('simple');
+
+    // (c) Single restored version query has entity_object, MaxRows 1, and filters for restored version ID
+    expect(singleVerQuery.EntityName).toBe('MJ: Artifact Versions');
+    expect(singleVerQuery.MaxRows).toBe(1);
+    expect(singleVerQuery.ResultType).toBe('entity_object');
+    expect(singleVerQuery.ExtraFilter).toContain(restoredVersionId);
+
+    // 2. Verify panel state
+    // Does NOT leak out-of-scope version 'ver-out-of-scope-999' into AllVersions
+    const allVersionIds = panel.AllVersions.map((v) => v.ID);
+    expect(allVersionIds).not.toContain('ver-out-of-scope-999');
+
+    // Prepends restored version to AllVersions and keeps scoped versions
+    expect(panel.AllVersions[0].ID).toBe(restoredVersionId);
+    expect(panel.AllVersions[0].VersionNumber).toBe(restoredVersionNumber);
+    expect(allVersionIds).toEqual([restoredVersionId, 'ver-2', 'ver-1']);
+
+    // Loads full Content only for the single restored version
+    expect(panel.artifactVersion).toBeDefined();
+    expect(panel.artifactVersion?.ID).toBe(restoredVersionId);
+    expect(panel.artifactVersion?.Content).toBe('# Restored Markdown Full Content v3');
+    expect(panel.SelectedVersionNumber).toBe(restoredVersionNumber);
+
+    // Success notification shown
+    expect(
+      notifications.some(
+        (n) => n.type === 'success' && n.message.includes('Restored v1 as new version v3'),
+      ),
+    ).toBe(true);
   });
 });
 

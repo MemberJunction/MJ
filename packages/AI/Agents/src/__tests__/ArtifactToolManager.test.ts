@@ -1791,5 +1791,237 @@ describe('ArtifactToolManager', () => {
             expect(cellMap.get('C1')).toBe('Human C1');
             expect(cellMap.get('D1')).toBe('Agent D1');
         });
+
+        it('S7d: second Save() during concurrent merge re-persist returns false -> result.success === false and logs error', async () => {
+            const artifactUuid = 'cccc1111-2222-4333-8444-888888888888';
+            const user = new UserInfo();
+            user.ID = 'user-s7d';
+            user.Name = 'Agent User';
+            user.Email = 'agent@example.com';
+            user.IsActive = true;
+
+            let saveCount = 0;
+            const mockProvider = {
+                RunView: async (params: { EntityName: string }) => {
+                    if (params.EntityName === 'MJ: Artifacts') {
+                        return {
+                            Success: true,
+                            Results: [
+                                {
+                                    ID: artifactUuid,
+                                    Name: 'Document.md',
+                                    UserID: user.ID,
+                                    DelegateEntityID: null,
+                                    DelegateRecordID: null,
+                                },
+                            ],
+                        };
+                    }
+                    if (params.EntityName === 'MJ: Artifact Versions') {
+                        return {
+                            Success: true,
+                            Results: [{ ID: 'ver-s7d-1', VersionNumber: 1, ContentMode: 'Text' }],
+                        };
+                    }
+                    return { Success: true, Results: [] };
+                },
+                GetEntityObject: async (entityName: string) => {
+                    if (entityName === 'MJ: Artifact Versions') {
+                        return {
+                            ID: 'ver-s7d-2',
+                            ArtifactID: artifactUuid,
+                            VersionNumber: 2,
+                            UserID: user.ID,
+                            Name: 'Document.md',
+                            Comments: null as string | null,
+                            ContentHash: null as string | null,
+                            ContentMode: 'Text' as const,
+                            FileID: null as string | null,
+                            Content: null as string | null,
+                            Configuration: null as string | null,
+                            NewRecord: () => {},
+                            Load: async () => false,
+                            Save: async () => {
+                                saveCount++;
+                                // First Save() succeeds; second Save() fails
+                                return saveCount === 1;
+                            },
+                        };
+                    }
+                    return null;
+                },
+            };
+
+            const initialMarkdown = '# Document\n\nInitial content.\n';
+            const agentDesired = '# Document\n\nAgent edit.\n';
+            const humanMerged = '# Document\n\nHuman concurrent edit.\n';
+
+            SetArtifactLiveMutationHook(async (evt) => {
+                expect(evt.deferCommit).toBe(true);
+                return {
+                    mergedContent: agentDesired,
+                    hadConflict: false,
+                    rejectedHunksCount: 0,
+                    commit: async () => {
+                        return {
+                            applied: true,
+                            mergedContent: humanMerged,
+                            hadConflict: false,
+                            rejectedHunksCount: 0,
+                        };
+                    },
+                };
+            });
+
+            manager.Initialize(
+                [
+                    {
+                        name: 'Document.md',
+                        typeName: 'Markdown Document',
+                        toolLibraryClass: 'DocumentToolLibrary',
+                        artifactId: artifactUuid,
+                        versionId: 'ver-s7d-1',
+                        versionNumber: 1,
+                        content: initialMarkdown,
+                    },
+                ],
+                { contextUser: user, provider: Object.assign(Object.create(null) as IMetadataProvider, mockProvider) },
+            );
+
+            const blocksCall = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'get_blocks',
+                input: {},
+            });
+            const blocksData = blocksCall.result.data as {
+                blocks: Array<{ blockId: string; rawMarkdown: string }>;
+            };
+            const firstBlock = blocksData.blocks[0];
+
+            const result = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'replace_block',
+                input: { blockId: firstBlock.blockId, content: 'Agent edit.' },
+            });
+
+            expect(saveCount).toBe(2);
+            expect(result.result.success).toBe(false);
+            expect(result.result.errorMessage).toContain('Failed to save MJ: Artifact Versions record');
+        });
+
+        it('S7e: commit() returns applied: false -> result.success === false and rolls back in-memory content', async () => {
+            const artifactUuid = 'cccc1111-2222-4333-8444-999999999999';
+            const user = new UserInfo();
+            user.ID = 'user-s7e';
+            user.Name = 'Agent User';
+            user.Email = 'agent@example.com';
+            user.IsActive = true;
+
+            const mockProvider = {
+                RunView: async (params: { EntityName: string }) => {
+                    if (params.EntityName === 'MJ: Artifacts') {
+                        return {
+                            Success: true,
+                            Results: [
+                                {
+                                    ID: artifactUuid,
+                                    Name: 'Doc.md',
+                                    UserID: user.ID,
+                                    DelegateEntityID: null,
+                                    DelegateRecordID: null,
+                                },
+                            ],
+                        };
+                    }
+                    if (params.EntityName === 'MJ: Artifact Versions') {
+                        return {
+                            Success: true,
+                            Results: [{ ID: 'ver-s7e-1', VersionNumber: 1, ContentMode: 'Text' }],
+                        };
+                    }
+                    return { Success: true, Results: [] };
+                },
+                GetEntityObject: async (entityName: string) => {
+                    if (entityName === 'MJ: Artifact Versions') {
+                        return {
+                            ID: 'ver-s7e-2',
+                            ArtifactID: artifactUuid,
+                            VersionNumber: 2,
+                            UserID: user.ID,
+                            Name: 'Doc.md',
+                            Comments: null as string | null,
+                            ContentHash: null as string | null,
+                            ContentMode: 'Text' as const,
+                            FileID: null as string | null,
+                            Content: null as string | null,
+                            Configuration: null as string | null,
+                            NewRecord: () => {},
+                            Load: async () => false,
+                            Save: async () => true,
+                        };
+                    }
+                    return null;
+                },
+            };
+
+            const initialMarkdown = '# Document\n\nInitial content.\n';
+
+            SetArtifactLiveMutationHook(async (evt) => {
+                expect(evt.deferCommit).toBe(true);
+                return {
+                    mergedContent: '# Document\n\nAgent edit.\n',
+                    hadConflict: false,
+                    commit: async () => {
+                        return { applied: false };
+                    },
+                };
+            });
+
+            manager.Initialize(
+                [
+                    {
+                        name: 'Doc.md',
+                        typeName: 'Markdown Document',
+                        toolLibraryClass: 'DocumentToolLibrary',
+                        artifactId: artifactUuid,
+                        versionId: 'ver-s7e-1',
+                        versionNumber: 1,
+                        content: initialMarkdown,
+                    },
+                ],
+                { contextUser: user, provider: Object.assign(Object.create(null) as IMetadataProvider, mockProvider) },
+            );
+
+            const blocksCall = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'get_blocks',
+                input: {},
+            });
+            const blocksData = blocksCall.result.data as {
+                blocks: Array<{ blockId: string; rawMarkdown: string }>;
+            };
+            const firstBlock = blocksData.blocks[0];
+
+            const result = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'replace_block',
+                input: { blockId: firstBlock.blockId, content: 'Agent edit.' },
+            });
+
+            expect(result.result.success).toBe(false);
+            expect(result.result.errorMessage).toContain('Deferred mutation was not applied to active room');
+
+            const checkBlocks = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'get_blocks',
+                input: {},
+            });
+            const checkData = checkBlocks.result.data as {
+                blocks: Array<{ rawMarkdown: string }>;
+            };
+            const allMarkdown = checkData.blocks.map((b) => b.rawMarkdown).join('\n\n');
+            expect(allMarkdown).toContain('Initial content.');
+            expect(allMarkdown).not.toContain('Agent edit.');
+        });
     });
 });

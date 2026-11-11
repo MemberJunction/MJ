@@ -59,6 +59,12 @@ export interface IYjsRoomRelay {
      * Cleanly releases all active subscriptions and underlying transport resources.
      */
     Shutdown(): Promise<void>;
+
+    /**
+     * Optional probe checking if at least one peer server instance is currently subscribed
+     * to `artifactId`.
+     */
+    HasRoomPeers?(artifactId: string): boolean;
 }
 
 /**
@@ -91,6 +97,20 @@ export class InMemoryYjsRelayBus {
                 this._handlersByRoom.delete(key);
             }
         };
+    }
+
+    public HasPeerSubscribers(artifactId: string, excludeInstanceId: string): boolean {
+        const key = artifactId.trim().toLowerCase();
+        const set = this._handlersByRoom.get(key);
+        if (!set || set.size === 0) {
+            return false;
+        }
+        for (const entry of set) {
+            if (entry.InstanceID !== excludeInstanceId) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public async Publish(message: YjsRelayMessage): Promise<void> {
@@ -128,6 +148,10 @@ export class InMemoryYjsRoomRelay implements IYjsRoomRelay {
     constructor(bus?: InMemoryYjsRelayBus, instanceId?: string) {
         this.InstanceID = instanceId ?? uuidv4();
         this._bus = bus ?? new InMemoryYjsRelayBus();
+    }
+
+    public HasRoomPeers(artifactId: string): boolean {
+        return this._bus.HasPeerSubscribers(artifactId, this.InstanceID);
     }
 
     public async SubscribeRoom(artifactId: string, handler: YjsRelayMessageHandler): Promise<() => void> {

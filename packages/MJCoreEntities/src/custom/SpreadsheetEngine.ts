@@ -6056,16 +6056,23 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     readCritVal: (pairIdx: number) => SpreadsheetCellValue
                 ): 'match' | 'nomatch' | '#MJ_ACCESS_DENIED!' | typeof UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL => {
                     let matched = true;
+                    let rowTaint: '#MJ_ACCESS_DENIED!' | typeof UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL | null = null;
                     for (let pIdx = 0; pIdx < descPairs.length; pIdx++) {
                         const cv = readCritVal(pIdx);
                         if (cv === '#MJ_ACCESS_DENIED!' || cv === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) {
-                            return cv;
+                            if (rowTaint === null || cv === '#MJ_ACCESS_DENIED!') {
+                                rowTaint = cv;
+                            }
+                            continue;
                         }
                         if (!this.matchesCriteria(cv, descPairs[pIdx].crit)) {
                             matched = false;
+                            break;
                         }
                     }
-                    return matched ? 'match' : 'nomatch';
+                    if (!matched) return 'nomatch';
+                    if (rowTaint !== null) return rowTaint;
+                    return 'match';
                 };
 
                 if (allDirectDescriptors && descPairs.length > 0) {
@@ -6155,16 +6162,22 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 let matches = 0;
                 for (let idx = 0; idx < len; idx++) {
                     let matched = true;
+                    let rowTaint: '#MJ_ACCESS_DENIED!' | typeof UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL | null = null;
                     for (const p of pairs) {
                         const cv = p.range[idx];
                         if (cv === '#MJ_ACCESS_DENIED!' || cv === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) {
-                            return cv;
+                            if (rowTaint === null || cv === '#MJ_ACCESS_DENIED!') {
+                                rowTaint = cv;
+                            }
+                            continue;
                         }
                         if (!this.matchesCriteria(cv, p.crit)) {
                             matched = false;
+                            break;
                         }
                     }
                     if (!matched) continue;
+                    if (rowTaint !== null) return rowTaint;
                     matches++;
                 }
                 return matches;
@@ -6208,6 +6221,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         dc: number
                     ): 'match' | 'nomatch' | '#MJ_ACCESS_DENIED!' | typeof UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL => {
                         let matched = true;
+                        let rowTaint: '#MJ_ACCESS_DENIED!' | typeof UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL | null = null;
                         for (let pIdx = 0; pIdx < critDescPairs.length; pIdx++) {
                             const pd = critDescPairs[pIdx].desc;
                             const cv = getCellVal(
@@ -6215,13 +6229,19 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                                 FormatCellAddress(pd.startRow + dr, pd.startCol + dc)
                             );
                             if (cv === '#MJ_ACCESS_DENIED!' || cv === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) {
-                                return cv;
+                                if (rowTaint === null || cv === '#MJ_ACCESS_DENIED!') {
+                                    rowTaint = cv;
+                                }
+                                continue;
                             }
                             if (!this.matchesCriteria(cv, critDescPairs[pIdx].crit)) {
                                 matched = false;
+                                break;
                             }
                         }
-                        return matched ? 'match' : 'nomatch';
+                        if (!matched) return 'nomatch';
+                        if (rowTaint !== null) return rowTaint;
+                        return 'match';
                     };
 
                     const totalCells = rowSpan * colSpan;
@@ -6324,16 +6344,22 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 let numericCount = 0;
                 for (let idx = 0; idx < targetRange.length; idx++) {
                     let matched = true;
+                    let rowTaint: '#MJ_ACCESS_DENIED!' | typeof UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL | null = null;
                     for (const p of pairs) {
                         const cv = p.range[idx];
                         if (cv === '#MJ_ACCESS_DENIED!' || cv === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) {
-                            return cv;
+                            if (rowTaint === null || cv === '#MJ_ACCESS_DENIED!') {
+                                rowTaint = cv;
+                            }
+                            continue;
                         }
                         if (!this.matchesCriteria(cv, p.crit)) {
                             matched = false;
+                            break;
                         }
                     }
                     if (!matched) continue;
+                    if (rowTaint !== null) return rowTaint;
                     const tv = targetRange[idx];
                     if (tv === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL || this.isErrorValue(tv)) return tv;
                     if (typeof tv === 'number' && !Number.isNaN(tv)) {
@@ -7559,6 +7585,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         dc: number
                     ): 'match' | 'nomatch' | '#MJ_ACCESS_DENIED!' | typeof UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL => {
                         let matched = true;
+                        let rowTaint: '#MJ_ACCESS_DENIED!' | typeof UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL | null = null;
                         for (let pIdx = 0; pIdx < critDescPairs.length; pIdx++) {
                             const pd = critDescPairs[pIdx].desc;
                             const cv = getCellVal(
@@ -7566,13 +7593,19 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                                 FormatCellAddress(pd.startRow + dr, pd.startCol + dc)
                             );
                             if (cv === '#MJ_ACCESS_DENIED!' || cv === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) {
-                                return cv;
+                                if (rowTaint === null || cv === '#MJ_ACCESS_DENIED!') {
+                                    rowTaint = cv;
+                                }
+                                continue;
                             }
                             if (!this.matchesCriteria(cv, critDescPairs[pIdx].crit)) {
                                 matched = false;
+                                break;
                             }
                         }
-                        return matched ? 'match' : 'nomatch';
+                        if (!matched) return 'nomatch';
+                        if (rowTaint !== null) return rowTaint;
+                        return 'match';
                     };
 
                     const totalCells = rowSpan * colSpan;
@@ -7682,16 +7715,22 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 const matched: number[] = [];
                 for (let rIdx = 0; rIdx < targetVals.length; rIdx++) {
                     let rowMatched = true;
+                    let rowTaint: '#MJ_ACCESS_DENIED!' | typeof UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL | null = null;
                     for (const p of pairs) {
                         const cv = p.vals[rIdx];
                         if (cv === '#MJ_ACCESS_DENIED!' || cv === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) {
-                            return cv;
+                            if (rowTaint === null || cv === '#MJ_ACCESS_DENIED!') {
+                                rowTaint = cv;
+                            }
+                            continue;
                         }
                         if (!this.matchesCriteria(cv, p.crit)) {
                             rowMatched = false;
+                            break;
                         }
                     }
                     if (!rowMatched) continue;
+                    if (rowTaint !== null) return rowTaint;
                     const tv = targetVals[rIdx];
                     if (tv === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL || this.isErrorValue(tv)) return tv;
                     if (typeof tv === 'number' && Number.isFinite(tv)) {

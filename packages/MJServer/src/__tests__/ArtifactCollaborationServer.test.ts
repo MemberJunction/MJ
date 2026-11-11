@@ -6343,6 +6343,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         const wsBobReconnect = new WsClient(
             `ws://127.0.0.1:${wsPort}${ARTIFACT_COLLABORATION_WS_PATH}?artifactId=${reconnectArtId}&testUserId=${secondEditorUser.ID}`
         );
+        wsBobReconnect.on('error', () => {});
 
         wsBobReconnect.on('message', (raw: Buffer) => {
             const bytes = new Uint8Array(raw);
@@ -6565,5 +6566,354 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         };
         expect(mergedWbObj.idCounter).toBeGreaterThanOrEqual(3);
         expect(mergedWbObj.zCounter).toBe(3);
+    });
+
+    it('R11-1 / N6: independent out-of-band restore on two nodes with suppressed sync-update/state converges with zero duplication', async () => {
+        class R11NodeA extends ArtifactCollaborationServer {
+            public ReconcileOob(
+                room: CollaborationRoom,
+                version: { ID: string; VersionNumber: number; Content?: string | null; Configuration?: string | null }
+            ): void {
+                this.reconcileOutOfBandVersionIntoRoom(room, version, { isRestore: true });
+            }
+        }
+        class R11NodeB extends ArtifactCollaborationServer {
+            public ReconcileOob(
+                room: CollaborationRoom,
+                version: { ID: string; VersionNumber: number; Content?: string | null; Configuration?: string | null }
+            ): void {
+                this.reconcileOutOfBandVersionIntoRoom(room, version, { isRestore: true });
+            }
+        }
+
+        const bus = new InMemoryYjsRelayBus();
+        const relayA = new InMemoryYjsRoomRelay(bus, 'r11-node-a');
+        const relayB = new InMemoryYjsRoomRelay(bus, 'r11-node-b');
+        const nodeA = new R11NodeA();
+        const nodeB = new R11NodeB();
+        nodeA.SetMetadataProviderOverride(createMockProvider());
+        nodeB.SetMetadataProviderOverride(createMockProvider());
+        nodeA.SetRoomRelay(relayA);
+        nodeB.SetRoomRelay(relayB);
+
+        const testArtId = 'e8110000-0000-4000-8000-000000000001';
+        permissionTable.set(testArtId, { CanRead: true, CanEdit: true });
+        const v1Clean = '# System Spec\n\nOriginal v1 text.\n';
+        const v2Draft = '# System Spec\n\nDraft v2 text with changes.\n';
+
+        versions.push(
+            {
+                ID: 'ver-r11-1',
+                ArtifactID: testArtId,
+                VersionNumber: 1,
+                Name: 'Spec.md',
+                Content: v1Clean,
+                ContentHash: 'hash-r11-1',
+                UserID: editorUser.ID
+            },
+            {
+                ID: 'ver-r11-2',
+                ArtifactID: testArtId,
+                VersionNumber: 2,
+                Name: 'Spec.md',
+                Content: v2Draft,
+                ContentHash: 'hash-r11-2',
+                UserID: editorUser.ID
+            }
+        );
+
+        try {
+            const roomA = await nodeA.GetOrCreateRoom(testArtId, editorUser);
+            const roomB = await nodeB.GetOrCreateRoom(testArtId, secondEditorUser);
+            expect(roomA).not.toBeNull();
+            expect(roomB).not.toBeNull();
+
+            // Both rooms start at v2Draft
+            expect(await nodeA.GetRoomContent(testArtId, editorUser)).toBe(v2Draft);
+            expect(await nodeB.GetRoomContent(testArtId, secondEditorUser)).toBe(v2Draft);
+
+            const v3Restore = {
+                ID: 'ver-r11-3',
+                ArtifactID: testArtId,
+                VersionNumber: 3,
+                Name: 'Spec.md',
+                Content: v1Clean,
+                ContentHash: 'hash-r11-1',
+                Description: 'Restored from Version 1',
+                UserID: editorUser.ID
+            };
+            versions.push(v3Restore);
+
+            // Node A and Node B independently execute reconcileOutOfBandVersionIntoRoom with isRestore: true
+            nodeA.ReconcileOob(roomA!, v3Restore);
+            nodeB.ReconcileOob(roomB!, v3Restore);
+
+            // Now simulate nodes syncing their Y.Docs directly
+            const updateFromB = Y.encodeStateAsUpdate(roomB!.Doc);
+            const updateFromA = Y.encodeStateAsUpdate(roomA!.Doc);
+            Y.applyUpdate(roomA!.Doc, updateFromB, 'relay');
+            Y.applyUpdate(roomB!.Doc, updateFromA, 'relay');
+
+            const contentA = await nodeA.GetRoomContent(testArtId, editorUser);
+            const contentB = await nodeB.GetRoomContent(testArtId, secondEditorUser);
+
+            // BOTH A and B end with a SINGLE copy of the restored text (0 duplication!)
+            expect(contentA).toBe(v1Clean);
+            expect(contentB).toBe(v1Clean);
+            expect(contentA).not.toContain(v2Draft);
+            expect(contentB).not.toContain(v2Draft);
+        } finally {
+            await nodeA.Shutdown();
+            await nodeB.Shutdown();
+            await relayA.Shutdown();
+            await relayB.Shutdown();
+        }
+    });
+
+    it('R11-2 / N5: second node edits propagate to first node without pendingStructs clock stall', async () => {
+        class R11N5NodeA extends ArtifactCollaborationServer {}
+        class R11N5NodeB extends ArtifactCollaborationServer {}
+
+        const bus = new InMemoryYjsRelayBus();
+        const relayA = new InMemoryYjsRoomRelay(bus, 'r11-n5-node-a');
+        const relayB = new InMemoryYjsRoomRelay(bus, 'r11-n5-node-b');
+        const nodeA = new R11N5NodeA();
+        const nodeB = new R11N5NodeB();
+        nodeA.SetMetadataProviderOverride(createMockProvider());
+        nodeB.SetMetadataProviderOverride(createMockProvider());
+        nodeA.SetRoomRelay(relayA);
+        nodeB.SetRoomRelay(relayB);
+
+        const n5ArtId = 'e8110000-0000-4000-8000-000000000002';
+        permissionTable.set(n5ArtId, { CanRead: true, CanEdit: true });
+        const v1Base = '# Document Title\n\nInitial paragraph.\n';
+
+        versions.push({
+            ID: 'ver-r11-n5-1',
+            ArtifactID: n5ArtId,
+            VersionNumber: 1,
+            Name: 'Doc.md',
+            Content: v1Base,
+            ContentHash: 'hash-n5-1',
+            UserID: editorUser.ID
+        });
+
+        try {
+            // Node A opens room first
+            const roomA = await nodeA.GetOrCreateRoom(n5ArtId, editorUser);
+            expect(roomA).not.toBeNull();
+
+            // Node B hydrates the same room from DB while A still holds it
+            const roomB = await nodeB.GetOrCreateRoom(n5ArtId, secondEditorUser);
+            expect(roomB).not.toBeNull();
+
+            // Node B applies a pre-restore edit
+            roomB!.Doc.transact(() => {
+                const yTextB = roomB!.Doc.getText('content');
+                yTextB.insert(yTextB.length, 'B pre.\n');
+            }, 'node-b-pre');
+
+            // Wait for B's pre-restore edit to propagate to Node A
+            await vi.waitFor(async () => {
+                const textA = await nodeA.GetRoomContent(n5ArtId, editorUser);
+                expect(textA).toContain('B pre.\n');
+            });
+
+            // Register v2 restore in DB and execute RestoreToSavedVersion from Node B
+            const v2Restore = {
+                ID: 'ver-r11-n5-2',
+                ArtifactID: n5ArtId,
+                VersionNumber: 2,
+                Name: 'Doc.md',
+                Content: v1Base,
+                Description: 'Restored from Version 1',
+                UserID: secondEditorUser.ID
+            };
+            versions.push(v2Restore);
+
+            await nodeB.RestoreToSavedVersion(n5ArtId, v2Restore, secondEditorUser);
+
+            // Wait for restore to propagate to Node A
+            await vi.waitFor(async () => {
+                const textA = await nodeA.GetRoomContent(n5ArtId, editorUser);
+                expect(textA).not.toContain('B pre.\n');
+                expect(textA).toBe(v1Base);
+            });
+
+            // Node B applies "B post.\n"
+            roomB!.Doc.transact(() => {
+                const yTextB = roomB!.Doc.getText('content');
+                yTextB.insert(yTextB.length, 'B post.\n');
+            }, 'node-b-post');
+
+            // Node A applies "A post.\n"
+            roomA!.Doc.transact(() => {
+                const yTextA = roomA!.Doc.getText('content');
+                yTextA.insert(yTextA.length, 'A post.\n');
+            }, 'node-a-post');
+
+            // Wait for both edits to propagate across the relay
+            await vi.waitFor(async () => {
+                const textA = await nodeA.GetRoomContent(n5ArtId, editorUser);
+                const textB = await nodeB.GetRoomContent(n5ArtId, secondEditorUser);
+                expect(textA).toContain('B post.\n');
+                expect(textA).toContain('A post.\n');
+                expect(textB).toContain('B post.\n');
+                expect(textB).toContain('A post.\n');
+                expect(textA).toBe(textB);
+            });
+
+            // Verify zero stuck pendingStructs on both nodes
+            expect(roomA!.Doc.store.pendingStructs).toBeNull();
+            expect(roomB!.Doc.store.pendingStructs).toBeNull();
+        } finally {
+            await nodeA.Shutdown();
+            await nodeB.Shutdown();
+            await relayA.Shutdown();
+            await relayB.Shutdown();
+        }
+    });
+
+    it('R11-4: single-node RestoreToSavedVersion completes in < 100 ms without waiting 1.5s timeout', async () => {
+        const bus = new InMemoryYjsRelayBus();
+        const relay = new InMemoryYjsRoomRelay(bus, 'r11-single-node');
+        class SingleRestoreNode extends ArtifactCollaborationServer {}
+        const server = new SingleRestoreNode();
+        server.SetMetadataProviderOverride(createMockProvider());
+        server.SetRoomRelay(relay);
+
+        const restoreArtId = 'e8110000-0000-4000-8000-000000000003';
+        permissionTable.set(restoreArtId, { CanRead: true, CanEdit: true });
+        const v1Text = '# Fast Restore\n\nv1 clean content.\n';
+        const v2Text = '# Fast Restore\n\nv2 dirty content.\n';
+
+        versions.push(
+            {
+                ID: 'ver-r11-fast-1',
+                ArtifactID: restoreArtId,
+                VersionNumber: 1,
+                Name: 'Fast.md',
+                Content: v1Text,
+                ContentHash: 'hash-fast-1',
+                UserID: editorUser.ID
+            },
+            {
+                ID: 'ver-r11-fast-2',
+                ArtifactID: restoreArtId,
+                VersionNumber: 2,
+                Name: 'Fast.md',
+                Content: v2Text,
+                ContentHash: 'hash-fast-2',
+                UserID: editorUser.ID
+            }
+        );
+
+        try {
+            const room = await server.GetOrCreateRoom(restoreArtId, editorUser);
+            expect(room).not.toBeNull();
+
+            const v3Restore = {
+                ID: 'ver-r11-fast-3',
+                ArtifactID: restoreArtId,
+                VersionNumber: 3,
+                Name: 'Fast.md',
+                Content: v1Text,
+                Description: 'Restored from Version 1',
+                UserID: editorUser.ID
+            };
+            versions.push(v3Restore);
+
+            // Case A: Without prior MJ_ARTIFACT_VERSION_SAVED event (HasRoomPeers returns false, catches up immediately)
+            const startA = Date.now();
+            await server.RestoreToSavedVersion(restoreArtId, v3Restore, editorUser);
+            const durationA = Date.now() - startA;
+            expect(durationA).toBeLessThan(100);
+            expect(await server.GetRoomContent(restoreArtId, editorUser)).toBe(v1Text);
+
+            // Case B: With prior MJ_ARTIFACT_VERSION_SAVED event (alreadyAppliedByListener is true)
+            const v4Restore = {
+                ID: 'ver-r11-fast-4',
+                ArtifactID: restoreArtId,
+                VersionNumber: 4,
+                Name: 'Fast.md',
+                Content: v1Text,
+                Description: 'Restored from Version 1',
+                UserID: editorUser.ID
+            };
+            versions.push(v4Restore);
+
+            // Simulate MJ_ARTIFACT_VERSION_SAVED firing before RestoreToSavedVersion
+            MJGlobal.Instance.RaiseEvent({
+                component: null,
+                event: MJEventType.ComponentEvent,
+                eventCode: 'MJ_ARTIFACT_VERSION_SAVED',
+                args: {
+                    ArtifactID: restoreArtId,
+                    VersionID: v4Restore.ID,
+                    VersionNumber: v4Restore.VersionNumber,
+                    Content: v4Restore.Content,
+                    IsRestore: true
+                }
+            });
+
+            const startB = Date.now();
+            await server.RestoreToSavedVersion(restoreArtId, v4Restore, editorUser);
+            const durationB = Date.now() - startB;
+            expect(durationB).toBeLessThan(100);
+            expect(await server.GetRoomContent(restoreArtId, editorUser)).toBe(v1Text);
+        } finally {
+            await server.Shutdown();
+            await relay.Shutdown();
+        }
+    });
+
+    it('S7g: room edited between commit() and re-persist MJ_ARTIFACT_VERSION_SAVED updates BaseVersionText with DirtyVersion true', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+        const s7gArtId = 'e8110000-0000-4000-8000-000000000004';
+        permissionTable.set(s7gArtId, { CanRead: true, CanEdit: true });
+        const v1Base = '# Spec\n\nInitial content.\n';
+        const v2Repersisted = '# Spec\n\nAgent modified content.\n';
+
+        versions.push({
+            ID: 'ver-s7g-1',
+            ArtifactID: s7gArtId,
+            VersionNumber: 1,
+            Name: 'Spec.md',
+            Content: v1Base,
+            ContentHash: 'hash-s7g-1',
+            UserID: editorUser.ID
+        });
+
+        const room = await server.GetOrCreateRoom(s7gArtId, editorUser);
+        expect(room).not.toBeNull();
+        expect(room!.BaseVersionID).toBe('ver-s7g-1');
+        expect(room!.BaseVersionText).toBe(v1Base);
+
+        // Simulate agent commit updating room text, but then collaborator types an additional line before MJ_ARTIFACT_VERSION_SAVED arrives
+        room!.Doc.transact(() => {
+            const yText = room!.Doc.getText('content');
+            yText.delete(0, yText.length);
+            yText.insert(0, `${v2Repersisted}Collaborator concurrent typing.\n`);
+        }, 'collaborator-edit');
+
+        // Fire MJ_ARTIFACT_VERSION_SAVED for ver-s7g-1 with v2Repersisted content
+        MJGlobal.Instance.RaiseEvent({
+            component: null,
+            event: MJEventType.ComponentEvent,
+            eventCode: 'MJ_ARTIFACT_VERSION_SAVED',
+            args: {
+                ArtifactID: s7gArtId,
+                VersionID: 'ver-s7g-1',
+                VersionNumber: 1,
+                Content: v2Repersisted
+            }
+        });
+
+        // S7g verification: BaseVersionText is updated to re-persisted v2 content,
+        // and DirtyVersion is true because room serialized content !== eventContent!
+        expect(room!.BaseVersionText).toBe(v2Repersisted);
+        expect(room!.DirtyVersion).toBe(true);
+        expect(room!.LastCompactedStateVector).toBeNull();
+        expect(room!.DirtyWorkingState).toBe(true);
     });
 });

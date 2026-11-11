@@ -95,15 +95,24 @@ describe('DocumentToolLibrary & TextToolLibrary Grep Enhancements', () => {
         const sampleText = 'prefix_hit_1\nprefix_hit_2\nprefix_hit_3\nno_match_line\nprefix_hit_4';
         const res = await textLib.InvokeTool(
             'grep',
-            { pattern: 'prefix_hit', flags: 'g' },
+            { pattern: 'prefix_hit', flags: 'g', use_regex: true },
             sampleText
         );
 
         expect(res.success).toBe(true);
-        const matches = res.data as Array<{ lineNumber: number; text: string }>;
+        const data = res.data as {
+            matches: Array<{ lineNumber: number; text: string }>;
+            matchCount: number;
+            partial: boolean;
+            timedOut: boolean;
+            unsearchableCount: number;
+            unsearchableLines: Array<{ lineNumber: number; reason: string }>;
+            warnings: string[];
+        };
         // 'g' flag should be stripped so regex.test does not advance lastIndex and skip alternating lines!
-        expect(matches).toHaveLength(4);
-        expect(matches.map((m) => m.lineNumber)).toEqual([0, 1, 2, 4]);
+        expect(data.matches).toHaveLength(4);
+        expect(data.matchCount).toBe(4);
+        expect(data.matches.map((m) => m.lineNumber)).toEqual([0, 1, 2, 4]);
     });
 
     it('R10-9: TextToolLibrary.grep rejects ReDoS patterns safely', async () => {
@@ -112,7 +121,7 @@ describe('DocumentToolLibrary & TextToolLibrary Grep Enhancements', () => {
         // ReDoS pattern with nested quantifiers
         const resReDoS = await textLib.InvokeTool(
             'grep',
-            { pattern: '(a+)+$' },
+            { pattern: '(a+)+$', use_regex: true },
             sampleText
         );
         expect(resReDoS.success).toBe(false);
@@ -122,7 +131,7 @@ describe('DocumentToolLibrary & TextToolLibrary Grep Enhancements', () => {
         const longPattern = 'a'.repeat(257);
         const resLong = await textLib.InvokeTool(
             'grep',
-            { pattern: longPattern },
+            { pattern: longPattern, use_regex: true },
             sampleText
         );
         expect(resLong.success).toBe(false);
@@ -140,10 +149,135 @@ describe('DocumentToolLibrary & TextToolLibrary Grep Enhancements', () => {
         // Invalid regex syntax
         const resSyntax = await textLib.InvokeTool(
             'grep',
-            { pattern: '[unclosed' },
+            { pattern: '[unclosed', use_regex: true },
             sampleText
         );
         expect(resSyntax.success).toBe(false);
         expect(resSyntax.errorMessage).toContain('Invalid regular expression');
+    });
+
+    it('R11-6: TextToolLibrary.grep literal default finds $100 and [DRAFT] case-insensitively without escaping', async () => {
+        const sample = 'Cost: $100 for basic tier\nStatus: [DRAFT] review pending\nLowercase [draft] notes\nTotal is $100.00 USD';
+
+        const resDollar = await textLib.InvokeTool('grep', { pattern: '$100' }, sample);
+        expect(resDollar.success).toBe(true);
+        const dataDollar = resDollar.data as {
+            matches: Array<{ lineNumber: number; text: string }>;
+            matchCount: number;
+            partial: boolean;
+            timedOut: boolean;
+            unsearchableCount: number;
+            unsearchableLines: Array<{ lineNumber: number; reason: string }>;
+            warnings: string[];
+        };
+        expect(dataDollar.matchCount).toBe(2);
+        expect(dataDollar.matches.map((m) => m.lineNumber)).toEqual([0, 3]);
+        expect(dataDollar.partial).toBe(false);
+        expect(dataDollar.timedOut).toBe(false);
+
+        const resDraft = await textLib.InvokeTool('grep', { pattern: '[DRAFT]' }, sample);
+        expect(resDraft.success).toBe(true);
+        const dataDraft = resDraft.data as typeof dataDollar;
+        expect(dataDraft.matchCount).toBe(2);
+        expect(dataDraft.matches.map((m) => m.lineNumber)).toEqual([1, 2]);
+    });
+
+    it('R11-6: TextToolLibrary.grep 500,000-line log with match on line 499_999 returns matchCount: 1 in < 500 ms', async () => {
+        const logContent = 'standard log row entry info\n'.repeat(499_999) + 'CRITICAL_ERROR at end of processing log';
+        const t0 = performance.now();
+        const res = await textLib.InvokeTool('grep', { pattern: 'CRITICAL_ERROR' }, logContent);
+        const elapsed = performance.now() - t0;
+
+        expect(res.success).toBe(true);
+        const data = res.data as {
+            matches: Array<{ lineNumber: number; text: string }>;
+            matchCount: number;
+            partial: boolean;
+            timedOut: boolean;
+            unsearchableCount: number;
+            unsearchableLines: Array<{ lineNumber: number; reason: string }>;
+            warnings: string[];
+        };
+        expect(data.matchCount).toBe(1);
+        expect(data.matches[0].lineNumber).toBe(499_999);
+        expect(data.matches[0].text).toBe('CRITICAL_ERROR at end of processing log');
+        expect(elapsed).toBeLessThan(500);
+    });
+
+    it('R11-6: TextToolLibrary.grep use_regex: true with a poison 16 KB line reports timeout and finds matches in later batches', async () => {
+        const lineCount = 600;
+        const lines: string[] = [];
+        for (let i = 0; i < lineCount; i++) {
+            if (i === 10) {
+                lines.push(`Line ${i}: HIT_TARGET in batch 1 ` + 'x'.repeat(450));
+            } else if (i === 50) {
+                // Poison line: 16 KB of 'a's that triggers catastrophic backtracking on (a|b)+c
+                lines.push('a'.repeat(16_384));
+            } else if (i === 550) {
+                // Line in second 256 KB batch (> 512 items or > 262,144 chars)
+                lines.push(`Line ${i}: HIT_TARGET in batch 2 ` + 'x'.repeat(450));
+            } else {
+                lines.push(`Line ${i}: filler row data without target ` + 'z'.repeat(450));
+            }
+        }
+        const textContent = lines.join('\n');
+
+        const res = await textLib.InvokeTool(
+            'grep',
+            { pattern: 'HIT_TARGET|(a|b)+c', use_regex: true },
+            textContent
+        );
+
+        expect(res.success).toBe(true);
+        const data = res.data as {
+            matches: Array<{ lineNumber: number; text: string }>;
+            matchCount: number;
+            partial: boolean;
+            timedOut: boolean;
+            unsearchableCount: number;
+            unsearchableLines: Array<{ lineNumber: number; reason: string }>;
+            warnings: string[];
+        };
+
+        expect(data.matchCount).toBe(2);
+        expect(data.matches.map((m) => m.lineNumber)).toEqual([10, 550]);
+        expect(data.partial).toBe(true);
+        expect(data.timedOut).toBe(true);
+        expect(data.unsearchableCount).toBe(1);
+        expect(data.unsearchableLines).toEqual([
+            { lineNumber: 50, reason: 'regex_timeout' }
+        ]);
+        expect(data.warnings.length).toBeGreaterThan(0);
+    });
+
+    it('R11-6: TextToolLibrary.grep use_regex: true on quadratic \\d+y across 60x8000-digit lines surfaces partial/unsearchableLines instead of silently returning []', async () => {
+        const lines: string[] = [];
+        for (let i = 0; i < 60; i++) {
+            if (i === 59) {
+                lines.push('9'.repeat(7_999) + 'y');
+            } else {
+                lines.push('9'.repeat(8_000));
+            }
+        }
+        const res = await textLib.InvokeTool(
+            'grep',
+            { pattern: '\\d+y', use_regex: true },
+            lines.join('\n')
+        );
+        expect(res.success).toBe(true);
+        const data = res.data as {
+            matches: Array<{ lineNumber: number; text: string }>;
+            matchCount: number;
+            partial: boolean;
+            timedOut: boolean;
+            unsearchableCount: number;
+            unsearchableLines: Array<{ lineNumber: number; reason: string }>;
+            warnings: string[];
+        };
+        expect(data.partial).toBe(true);
+        expect(data.timedOut).toBe(true);
+        expect(data.unsearchableCount).toBeGreaterThan(0);
+        expect(data.unsearchableLines.length).toBeGreaterThan(0);
+        expect(data.warnings.length).toBeGreaterThan(0);
     });
 });
