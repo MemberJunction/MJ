@@ -19,7 +19,10 @@ CREATE TABLE [${flyway:defaultSchema}].[UserExternalIdentity] (
     [ID] UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_UserExternalIdentity_ID] DEFAULT NEWSEQUENTIALID(),
     [UserID] UNIQUEIDENTIFIER NOT NULL,
     [Issuer] NVARCHAR(400) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-    [Subject] NVARCHAR(400) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    -- Case-sensitive on purpose: an OIDC `sub` is case-sensitive, so two subjects differing only by case are
+    -- different accounts and must not collide on UQ_UserExternalIdentity_Issuer_Subject.
+    -- mj-standards-allow: collation
+    [Subject] NVARCHAR(400) COLLATE SQL_Latin1_General_CP1_CS_AS NOT NULL,
     [ProviderName] NVARCHAR(100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     [LastLoginAt] DATETIMEOFFSET NULL,
     CONSTRAINT [PK_UserExternalIdentity] PRIMARY KEY ([ID]),
