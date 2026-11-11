@@ -388,6 +388,33 @@ describe('SQLServerCodeGenProvider — tolerant SP signatures', () => {
             expect(sql).toMatch(/INSERT INTO[^(]*\([^)]*\[BID\]/);
         });
 
+        // #3526: a NULL key part never matched `col = @p`, so the create re-selected nothing.
+        it('composite PK with a nullable part re-selects the row NULL-safely; non-null parts are unchanged', () => {
+            const entity = createMockEntity(
+                { Name: 'StagedRow', BaseTable: 'StagedRow', BaseTableCodeName: 'StagedRow' },
+                [
+                    { ID: 'pk1', Name: 'AccountNo', Type: 'nvarchar', Length: 100, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                    { ID: 'pk2', Name: 'SubCode', Type: 'nvarchar', Length: 100, IsPrimaryKey: true, AllowsNull: true, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                    { ID: 'f3', Name: 'Amount', Type: 'decimal', Length: 9, IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                ],
+            );
+            const sql = provider.generateCRUDCreate(entity);
+            expect(sql).toContain('[AccountNo] = @AccountNo AND ([SubCode] = @SubCode OR ([SubCode] IS NULL AND @SubCode IS NULL))');
+        });
+
+        it('composite PK with no nullable part keeps the plain equality predicate', () => {
+            const entity = createMockEntity(
+                { Name: 'JunctionTable', BaseTable: 'JunctionTable', BaseTableCodeName: 'JunctionTable' },
+                [
+                    { ID: 'pk1', Name: 'AID', Type: 'uniqueidentifier', Length: 16, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                    { ID: 'pk2', Name: 'BID', Type: 'uniqueidentifier', Length: 16, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                ],
+            );
+            const sql = provider.generateCRUDCreate(entity);
+            expect(sql).toContain('[AID] = @AID AND [BID] = @BID');
+            expect(sql).not.toContain('IS NULL AND @');
+        });
+
         it('single non-UUID PK (e.g. string `Code` key)', () => {
             const entity = createMockEntity(
                 { Name: 'CountryRef', BaseTable: 'CountryRef', BaseTableCodeName: 'CountryRef' },
