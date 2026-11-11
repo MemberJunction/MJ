@@ -6,7 +6,7 @@
  * Also tracks column types in ConversionContext for downstream INSERT boolean casting.
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { ConvertIdentifiers, RemoveCollate, RemoveNPrefix, QuoteConstraintNames, ConvertJsonFunctions } from './ExpressionHelpers.js';
+import { ConvertIdentifiers, RemoveCollate, RemoveNPrefix, QuoteConstraintNames, ConvertJsonFunctions, AddNullsNotDistinct } from './ExpressionHelpers.js';
 
 export class CreateTableRule implements IConversionRule {
   Name = 'CreateTableRule';
@@ -228,6 +228,9 @@ export class CreateTableRule implements IConversionRule {
         return `${prefix}${quotedCols}${suffix}`;
       }
     );
+
+    // A SQL Server UNIQUE constraint treats NULLs as equal; keep that on PostgreSQL (#5194).
+    joined = AddNullsNotDistinct(joined);
 
     // REFERENCES [schema.]table(Column) — handle arbitrary schema-qualified table names
     joined = joined.replace(

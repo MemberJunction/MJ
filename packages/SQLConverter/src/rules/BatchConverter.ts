@@ -16,6 +16,8 @@ import { StripComments } from './ExpressionHelpers.js';
 import { PostProcess } from './PostProcessor.js';
 import { FindBracketIdentifiersInDollarBlocks } from './ExpressionHelpers.js';
 import { GetHeaderBuilder } from './DialectHeaderBuilder.js';
+import { CollectTSQLBitColumns, MergeTableColumns } from './BitColumnRegistry.js';
+import type { TableColumnRegistry } from './BitColumnRegistry.js';
 import type {
   IConversionRule, ConversionContext, ConversionStats,
   OutputGroups, StatementType,
@@ -57,6 +59,13 @@ export interface BatchConverterConfig {
   IncludeHeader?: boolean;
   /** Enable post-processing pass (default: true) */
   EnablePostProcess?: boolean;
+  /**
+   * Run-wide column registry (#5016). When given, its columns seed this file's conversion context
+   * (so a view comparing a boolean column of a table created by an earlier file converts `= 1` to
+   * `= TRUE`), and this file's own tables and BIT columns are added to it afterwards for the files
+   * that follow. Build it with {@link CollectTSQLBitColumns} from the latest baseline.
+   */
+  TableColumns?: TableColumnRegistry;
 }
 
 /** Result of batch conversion */
@@ -87,6 +96,11 @@ export function ConvertFile(config: BatchConverterConfig): BatchConverterResult 
     ? readFileSync(config.Source, 'utf-8')
     : config.Source;
   log(`  File size: ${rawSQL.length.toLocaleString()} bytes, ${rawSQL.split('\n').length.toLocaleString()} lines`);
+
+  // Seed the context with the run's columns and this file's own BIT columns (CREATE TABLE and
+  // ALTER TABLE … ADD), so a statement earlier in the file than the ALTER, or a later file, sees them.
+  if (config.TableColumns) MergeTableColumns(context.TableColumns, config.TableColumns);
+  CollectTSQLBitColumns(rawSQL, context.TableColumns);
 
   // Detect DDL changes (ALTER TABLE, CREATE TABLE) — used by ViewRule to decide
   // whether DROP CASCADE is needed (column lists may change) or just CREATE OR REPLACE
@@ -159,6 +173,9 @@ export function ConvertFile(config: BatchConverterConfig): BatchConverterResult 
       groups.Other.push(`-- Original (first 200 chars): ${batch.slice(0, 200)}\n\n`);
     }
   }
+
+  // Hand this file's columns to the files that follow in the run.
+  if (config.TableColumns) MergeTableColumns(config.TableColumns, context.TableColumns);
 
   // Inject hand-written PG blocks for complex migration patterns
   // (cursor + dynamic SQL + temp procedures that can't be auto-converted)

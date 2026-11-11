@@ -22,12 +22,24 @@ import type { DataSourceResult } from '@memberjunction/codegen-lib';
  * Requires a LIVE working PG database (DB_PLATFORM=postgresql + PG_* env, as `mj codegen`) seeded
  * to the latest baseline; the command brings it forward as it re-bakes.
  */
+/**
+ * Whether `mj migrate rebake` writes files (#3345 item 4). A single `--file` re-bake writes; a full
+ * re-bake of every committed counterpart after the baseline writes only with `--write`, since those
+ * files are an applied ledger. `--dry-run` never writes. Pure.
+ */
+export function DecideRebakeWrites(args: { file?: string; write: boolean; dryRun: boolean }): boolean {
+  if (args.dryRun) return false;
+  return Boolean(args.file) || args.write;
+}
+
 export default class MigrateRebake extends Command {
   static description = 'Re-bake the post-baseline PG migration set with inline native CodeGen';
 
   static examples = [
     '<%= config.bin %> migrate rebake',
     '<%= config.bin %> migrate rebake --baseline-floor V202605291452 --dry-run',
+    '<%= config.bin %> migrate rebake --write',
+    '<%= config.bin %> migrate rebake --file V202611031700__v0.10.x__Foo.sql --capture-only',
   ];
 
   static flags = {
@@ -41,6 +53,21 @@ export default class MigrateRebake extends Command {
     }),
     'baseline-floor': Flags.string({ description: 'Re-bake migrations strictly AFTER this version key (default: the latest B* in output-dir)' }),
     'dry-run': Flags.boolean({ description: 'Report what would be re-baked without writing files', default: false }),
+    file: Flags.string({
+      description:
+        'Re-bake one migration (filename in source-dir), whatever the baseline floor. Writes its counterpart. ' +
+        'The committed hand region of a baked file is kept byte for byte; only the CodeGen section is replaced.',
+    }),
+    'capture-only': Flags.boolean({
+      description:
+        'With --file: do not apply the migration; it is already applied to the working DB (a capture that ' +
+        'failed after the apply, or a hand-finished file applied by hand). Capture its CodeGen only.',
+      default: false,
+    }),
+    write: Flags.boolean({
+      description: 'Without --file: write the re-baked files. Without it, a full re-bake is a dry run.',
+      default: false,
+    }),
   };
 
   async run(): Promise<void> {
@@ -50,10 +77,21 @@ export default class MigrateRebake extends Command {
     if (!fs.existsSync(sourceDir)) this.error(`Source directory not found: ${sourceDir}`);
     if (!fs.existsSync(outputDir)) this.error(`Output directory not found: ${outputDir}`);
 
-    const floor = flags['baseline-floor'] ?? this.latestBaselineFloor(outputDir);
-    this.log(`Re-baking migrations after baseline floor: ${floor}`);
+    if (flags['capture-only'] && !flags.file) this.error('--capture-only requires --file.');
+    const dryRun = !DecideRebakeWrites({ file: flags.file, write: flags.write, dryRun: flags['dry-run'] });
+    if (dryRun && !flags['dry-run']) {
+      this.log('No --file or --write: dry run (committed counterparts are not rewritten).');
+    }
 
-    const migrations = this.postBaselineMigrations(sourceDir, floor);
+    let migrations: Array<{ source: string; outName: string }>;
+    if (flags.file) {
+      if (!fs.existsSync(path.join(sourceDir, flags.file))) this.error(`--file ${flags.file} not found in ${sourceDir}`);
+      migrations = [{ source: flags.file, outName: flags.file.replace(/\.sql$/, '.pg.sql') }];
+    } else {
+      const floor = flags['baseline-floor'] ?? this.latestBaselineFloor(outputDir);
+      this.log(`Re-baking migrations after baseline floor: ${floor}`);
+      migrations = this.postBaselineMigrations(sourceDir, floor);
+    }
     if (migrations.length === 0) {
       this.log('No post-baseline migrations to re-bake.');
       return;
@@ -81,9 +119,9 @@ export default class MigrateRebake extends Command {
         }
         const committed = fs.readFileSync(committedPath, 'utf8');
         try {
-          const result = await baker.bakeMigration(ssSql, m.source, committed);
+          const result = await baker.bakeMigration(ssSql, m.source, committed, { CaptureOnly: flags['capture-only'] });
           if (result.mode === 'baked') {
-            if (!flags['dry-run']) fs.writeFileSync(committedPath, result.pgSQL);
+            if (!dryRun) fs.writeFileSync(committedPath, result.pgSQL);
             summary.baked.push(m.source);
             this.log(`  baked   ${m.source}  (E(M)=${result.affectedEntities.length})`);
           } else {
@@ -106,7 +144,7 @@ export default class MigrateRebake extends Command {
     this.log(`  baked native:        ${summary.baked.length}`);
     this.log(`  preserved committed: ${summary.preserved.length}`);
     this.log(`  skipped (no PG):     ${summary.skipped.length}`);
-    if (flags['dry-run']) this.log('  (dry run — no files written)');
+    if (dryRun) this.log('  (dry run — no files written)');
     this.log('\nDeploy: mj migrate  +  mj sync push   (no mj codegen step)');
 
     // setupDataSource opened pg pools that keep the event loop alive; mirror `mj codegen`.

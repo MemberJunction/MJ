@@ -1001,11 +1001,95 @@ function cteListReadsItself(masked: string, from: number): boolean {
 }
 
 /**
+ * Keep SQL Server NULL semantics on converted unique constraints and indexes (#5194): SQL Server
+ * treats NULLs as equal in a unique index, PostgreSQL does not unless `NULLS NOT DISTINCT` (PG 15+).
+ * - `UNIQUE (cols)` constraints (table-level or `ALTER TABLE … ADD`) → `UNIQUE NULLS NOT DISTINCT (cols)`
+ * - `CREATE UNIQUE INDEX … ON t (cols)` → `… ON t (cols) NULLS NOT DISTINCT`
+ * Code only; text inside literals and comments is untouched, and a statement that already says
+ * NULLS [NOT] DISTINCT is left alone.
+ */
+export function AddNullsNotDistinct(sql: string): string {
+  return TransformCodeOnly(sql, (code) => {
+    if (/\bNULLS\s+(?:NOT\s+)?DISTINCT\b/i.test(code)) return code;
+    if (/^\s*CREATE\s+UNIQUE\s+INDEX\b/i.test(code)) {
+      return code.replace(/(\bON\s+\S+?\s*\([^)]*\))/i, '$1 NULLS NOT DISTINCT');
+    }
+    return code.replace(/\bUNIQUE\s*\(/gi, 'UNIQUE NULLS NOT DISTINCT (');
+  });
+}
+
+/** HASHBYTES algorithms with a PostgreSQL builtin; others are left for a person (pgcrypto). */
+const HASHBYTES_FUNCTIONS: Record<string, (arg: string) => string> = {
+  SHA2_256: (arg) => `sha256(convert_to(${arg}, 'UTF8'))`,
+  SHA2_512: (arg) => `sha512(convert_to(${arg}, 'UTF8'))`,
+  MD5: (arg) => `decode(md5(${arg}), 'hex')`,
+};
+
+/**
+ * Rewrite every call `NAME(…)` in the code of `sql` (outside literals and comments) through
+ * `rewrite`, innermost-last. `rewrite` returns null to leave a call unchanged.
+ */
+function rewriteCalls(sql: string, name: string, rewrite: (args: string[]) => string | null): string {
+  const masked = maskNonCode(sql);
+  const re = new RegExp(`\\b${name}\\s*\\(`, 'gi');
+  const hits: number[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(masked)) !== null) hits.push(m.index);
+  let out = sql;
+  for (const start of hits.reverse()) {
+    const open = out.indexOf('(', start);
+    const parsed = parseBalancedArgs(out, open);
+    if (!parsed) continue;
+    const replacement = rewrite(parsed.args);
+    if (replacement !== null) out = out.slice(0, start) + replacement + out.slice(parsed.endIdx);
+  }
+  return out;
+}
+
+/**
+ * T-SQL `HASHBYTES('SHA2_256' | 'SHA2_512' | 'MD5', x)` → PostgreSQL `sha256 | sha512(convert_to(x,
+ * 'UTF8'))` / `decode(md5(x), 'hex')` (#6538 item 3). Other algorithms are left unchanged.
+ */
+export function ConvertHashBytes(sql: string): string {
+  return rewriteCalls(sql, 'HASHBYTES', (args) => {
+    if (args.length !== 2) return null;
+    const alg = args[0].replace(/^N?'|'$/g, '').toUpperCase();
+    const fn = HASHBYTES_FUNCTIONS[alg];
+    return fn ? fn(args[1]) : null;
+  });
+}
+
+/** True when a CONVERT argument is a binary value: a HASHBYTES call or a VARBINARY/BINARY cast. */
+function isBinaryArgument(arg: string): boolean {
+  return /^HASHBYTES\s*\(/i.test(arg) || /^CAST\s*\([\s\S]*\bAS\s+"?(?:VAR)?BINARY"?\b/i.test(arg);
+}
+
+/**
+ * T-SQL `CONVERT(VARCHAR(n), <binary>, 1|2)` → `CAST(upper(encode(<binary>, 'hex')) AS VARCHAR(n))`,
+ * `0x`-prefixed for style 1 (#6538 item 3). The generic CONVERT rewrite drops the style, which turns
+ * a hex rendering into PostgreSQL's raw bytea text. Other styles on a binary value are left as they
+ * are for the gap scan to report.
+ */
+export function ConvertBinaryStyleConvert(sql: string): string {
+  return rewriteCalls(sql, 'CONVERT', (args) => {
+    if (args.length !== 3 || !isBinaryArgument(args[1])) return null;
+    const style = args[2].trim();
+    if (style !== '1' && style !== '2') return null;
+    const hex = `upper(encode(${ConvertHashBytes(args[1])}, 'hex'))`;
+    const value = style === '1' ? `'0x' || ${hex}` : hex;
+    return `CAST(${value} AS ${mapInlineType(args[0].trim())})`;
+  });
+}
+
+/**
  * Convert T-SQL CONVERT(type, expr[, style]) → CAST(expr AS mapped_type).
- * Drops the optional style parameter. TRY_CONVERT is converted first ({@link ConvertTryConvert}).
+ * Drops the optional style parameter, except for a binary value with style 1 or 2
+ * ({@link ConvertBinaryStyleConvert}). TRY_CONVERT is converted first ({@link ConvertTryConvert}).
  */
 export function ConvertConvertFunction(sql: string): string {
   sql = ConvertTryConvert(sql);
+  sql = ConvertBinaryStyleConvert(sql);
+  sql = ConvertHashBytes(sql);
   // 3-arg: CONVERT(type, expr, style)
   sql = sql.replace(
     /\bCONVERT\s*\(\s*(\w+(?:\s*\([^)]*\))?)\s*,\s*([^,)]+)\s*,\s*[^)]+\)/gi,

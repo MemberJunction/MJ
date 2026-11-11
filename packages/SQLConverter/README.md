@@ -108,6 +108,22 @@ sequenceDiagram
     PP->>O: Final PostgreSQL SQL
 ```
 
+## Bake and rebake
+
+`mj migrate convert --split --bake-codegen` applies each new migration to a working PostgreSQL database
+and bakes native CodeGen into its `.pg.sql` (see `IncrementalBaker`). `mj migrate rebake` re-captures
+the CodeGen of migrations that already have a counterpart:
+
+| Flag | Effect |
+|---|---|
+| `--file <name>.sql` | Re-bake one migration and write it. A file the baker wrote keeps its hand region (everything above the CodeGen section header) byte for byte; only the CodeGen section is replaced. |
+| `--capture-only` | With `--file`: do not apply the migration (it is already applied); capture its CodeGen only. |
+| `--write` | Without `--file`: write the re-baked files. Without it, a full re-bake is a dry run. |
+
+A CodeGen capture that fails after the apply throws `BakeApplyError` naming the file and the
+`mj migrate rebake --file … --capture-only` command that resumes it. `convert` skips `V…` files
+older than the oldest baseline in the source folder (they are inside it).
+
 ## Rule System
 
 ### How Rules Work
