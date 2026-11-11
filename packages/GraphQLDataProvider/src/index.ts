@@ -6,7 +6,6 @@ export {
     GraphQLProviderConfigData,
     RegisterNetworkDiagnosticObserver,
     RegisterResponseHeaderObserver,
-    RunOutsideAngularZone,
 } from './graphQLDataProvider';
 export type {
     AuthenticationErrorCallback,

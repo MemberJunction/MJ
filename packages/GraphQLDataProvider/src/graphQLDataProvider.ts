@@ -168,28 +168,6 @@ export type SocketConnectionState = 'connected' | 'disconnected' | 'unknown';
  */
 export type AuthenticationErrorCallback = (error: Error) => void;
 
-interface ZoneLike {
-    run<T>(fn: () => T): T;
-}
-
-interface GlobalWithZone {
-    Zone?: {
-        root?: ZoneLike;
-    };
-}
-
-/**
- * Runs a function outside the Angular Zone (in Zone.js root zone) if Zone.js is present in the global scope.
- * In non-Zone.js environments (Node.js, vanilla JS, zoneless Angular), executes the function directly.
- *
- * This prevents WebSocket creation, event listeners (onmessage, ping/pong), and internal background
- * timers from triggering spurious full-application Angular change detection ticks on every incoming frame.
- */
-export function RunOutsideAngularZone<T>(fn: () => T): T {
-    const rootZone = (globalThis as GlobalWithZone).Zone?.root;
-    return rootZone ? rootZone.run(fn) : fn();
-}
-
 interface QueuedEntityRecordNameRequest {
     entityName: string;
     compositeKey: CompositeKey;
@@ -476,14 +454,6 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     public static CoalesceEntityRecordNames: boolean = true;
 
     /**
-     * Runs a function outside the Angular Zone (in Zone.js root zone) if Zone.js is present in the global scope.
-     * In non-Zone.js environments (Node.js, vanilla JS, zoneless Angular), executes the function directly.
-     */
-    public static RunOutsideAngularZone<T>(fn: () => T): T {
-        return RunOutsideAngularZone(fn);
-    }
-
-    /**
      * Global Object Store key — follows BaseSingleton's naming convention so the
      * singleton is discoverable in the same way as BaseSingleton-derived classes.
      *
@@ -540,11 +510,31 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         super();
         const g = GetGlobalObjectStore();
         if (g && g[GraphQLDataProvider._globalStoreKey]) {
-            return g[GraphQLDataProvider._globalStoreKey] as this;
+            const existing = g[GraphQLDataProvider._globalStoreKey] as GraphQLDataProvider;
+            // Allow a more-specific UI-layer subclass (e.g. AngularGraphQLDataProvider) constructed
+            // prior to Config() to upgrade an unconfigured base singleton, while preserving strict
+            // singleton identity for same-class or already-configured instances.
+            if (this.constructor === GraphQLDataProvider || existing instanceof this.constructor || existing.ConfigData) {
+                return existing as this;
+            }
         }
         if (g) {
             g[GraphQLDataProvider._globalStoreKey] = this;
         }
+    }
+
+    /**
+     * Lifecycle hook invoked around background transport operations (WebSocket connection
+     * creation/teardown, ping/pong watchdog timers, subscription frame listeners, and periodic
+     * maintenance intervals) that should not trigger host UI framework render/tick cycles on
+     * every frame.
+     *
+     * Default implementation executes `fn()` directly with zero framework coupling. UI framework
+     * subclasses override this hook to run background transport I/O outside their framework's
+     * automatic change-detection tracking.
+     */
+    protected ExecuteInBackgroundScope<T>(fn: () => T): T {
+        return fn();
     }
 
     private _client: GraphQLClient;
@@ -4620,7 +4610,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @returns Active WebSocket client
      */
     private getOrCreateWSClient(): Client {
-        return RunOutsideAngularZone(() => {
+        return this.ExecuteInBackgroundScope(() => {
             const now = Date.now();
 
             // Check if existing client is too old and should be recreated
@@ -4684,7 +4674,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         return;
                     }
                     disarmPongWatchdog();
-                    pongTimeout = RunOutsideAngularZone(() => setTimeout(() => {
+                    pongTimeout = this.ExecuteInBackgroundScope(() => setTimeout(() => {
                         pongTimeout = null;
                         try {
                             // Issues a synthetic `4499 Terminated` close. graphql-ws treats terminate
@@ -4744,7 +4734,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
                 // Start cleanup timer if not already running
                 if (!this._subscriptionCleanupTimer) {
-                    this._subscriptionCleanupTimer = RunOutsideAngularZone(() => setInterval(() => {
+                    this._subscriptionCleanupTimer = this.ExecuteInBackgroundScope(() => setInterval(() => {
                         this.cleanupStaleSubscriptions();
                     }, this.SUBSCRIPTION_CLEANUP_INTERVAL_MS));
                 }
@@ -4759,7 +4749,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * Does NOT complete subjects - caller should handle that separately to avoid double-cleanup
      */
     private disposeWSClient(): void {
-        RunOutsideAngularZone(() => {
+        this.ExecuteInBackgroundScope(() => {
             if (this._wsClient) {
                 this._isDisposingSocketIntentionally = true;
                 // Disarm before disposing: a deliberate teardown must not leave a watchdog running
@@ -4898,7 +4888,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 ...(diagCtx?.sessionId ? { diagnosticSessionId: diagCtx.sessionId } : {}),
             };
 
-            const unsubscribe = RunOutsideAngularZone(() => client.subscribe(
+            const unsubscribe = this.ExecuteInBackgroundScope(() => client.subscribe(
                 { query: subscription, variables, extensions },
                 {
                     next: (data) => {
@@ -4942,7 +4932,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // whether by error, completion, or manual unsubscribe
             return () => {
                 this._activeSubscriptionCount--;
-                RunOutsideAngularZone(() => unsubscribe());
+                this.ExecuteInBackgroundScope(() => unsubscribe());
             };
         });
     }
@@ -4999,7 +4989,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         const subscription = new Subscription();
         subscription.add(
             new Observable((observer) => {
-                const unsubscribe = RunOutsideAngularZone(() => client.subscribe(
+                const unsubscribe = this.ExecuteInBackgroundScope(() => client.subscribe(
                     { query: SUBSCRIBE_TO_STATUS, variables: { sessionId } },
                     {
                         next: (data: any) => {
@@ -5049,7 +5039,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
                 return () => {
                     this._activeSubscriptionCount--;
-                    RunOutsideAngularZone(() => unsubscribe());
+                    this.ExecuteInBackgroundScope(() => unsubscribe());
                 };
             }).subscribe({
                 next: (message: string) => subject.next(message),
@@ -5219,7 +5209,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * Call this when shutting down the provider or on logout
      */
     public DisposeWebSocketResources(): void {
-        RunOutsideAngularZone(() => {
+        this.ExecuteInBackgroundScope(() => {
             // Stop cleanup timer
             if (this._subscriptionCleanupTimer) {
                 clearInterval(this._subscriptionCleanupTimer);
