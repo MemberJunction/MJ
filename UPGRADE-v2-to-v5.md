@@ -625,6 +625,8 @@ Key changes from 2.x:
 
 > **Important:** Build output is now at `dist/[AppName]/browser/` (not `dist/[AppName]/`). Update CI/CD deployment paths accordingly.
 
+> **Note:** `"exclude": ["@memberjunction/*"]` belongs to the MJ monorepo, where MJ packages are symlinked. An app that installs MJ from npm should leave the list empty (`"exclude": []`); see *Remove `@memberjunction/*` from your app's `prebundle.exclude`* in [UPGRADE-v6.0.md](UPGRADE-v6.0.md).
+
 ### 4.10 Create the Placeholder Manifest
 
 Create `packages/MJExplorer/src/app/generated/class-registrations-manifest.ts`:
