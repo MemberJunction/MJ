@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { RouteScrubber } from '../../telemetry/RouteScrubber';
+import { RouteScrubber, ScrubMjRoute } from '../../telemetry/RouteScrubber';
 
 describe('RouteScrubber.Scrub', () => {
   it('tokenizes a record ID in an app-scoped record route', () => {
@@ -41,6 +41,54 @@ describe('RouteScrubber.Scrub', () => {
     expect(result.ScrubbedPath).toBe('/resource/record/Contacts/_id_');
     expect(result.ScrubbedPath).not.toContain('tab');
     expect(result.ScrubbedPath).not.toContain('ref');
+  });
+
+  it('strips fragment identifier entirely so hash fragments never leak into ScrubbedPath or EntityName', () => {
+    const result = RouteScrubber.Scrub('/resource/record/Contacts/123#jane@example.com');
+    expect(result.RouteTemplate).toBe('resource/record/:entityName/:recordId');
+    expect(result.ScrubbedPath).toBe('/resource/record/Contacts/_id_');
+    expect(result.EntityName).toBe('Contacts');
+    expect(result.ScrubbedPath).not.toContain('jane@example.com');
+
+    const appResult = RouteScrubber.Scrub('/app/CRM/record/Leads/42#notes');
+    expect(appResult.RouteTemplate).toBe('app/:appName/record/:entityName/:recordId');
+    expect(appResult.ScrubbedPath).toBe('/app/CRM/record/Leads/_id_');
+    expect(appResult.EntityName).toBe('Leads');
+    expect(appResult.ApplicationName).toBe('CRM');
+    expect(appResult.ScrubbedPath).not.toContain('notes');
+  });
+
+  it('strips both query parameters and fragment when both are present', () => {
+    const result = RouteScrubber.Scrub('/resource/record/Contacts/123?q=secret#jane@example.com');
+    expect(result.RouteTemplate).toBe('resource/record/:entityName/:recordId');
+    expect(result.ScrubbedPath).toBe('/resource/record/Contacts/_id_');
+    expect(result.ScrubbedPath).not.toContain('secret');
+    expect(result.ScrubbedPath).not.toContain('jane@example.com');
+  });
+
+  it('safely decodes percent-encoded path segments', () => {
+    const result = RouteScrubber.Scrub('/resource/record/Active%20Users/123');
+    expect(result.RouteTemplate).toBe('resource/record/:entityName/:recordId');
+    expect(result.ScrubbedPath).toBe('/resource/record/Active Users/_id_');
+    expect(result.EntityName).toBe('Active Users');
+  });
+
+  it('fails closed on malformed percent-encoded sequences', () => {
+    const result = RouteScrubber.Scrub('/resource/record/Contacts/%ZZ/123');
+    expect(result.RouteTemplate).toBe('unknown');
+    expect(result.ScrubbedPath).toBe('/unknown');
+  });
+
+  it('fails closed on path traversal attempts', () => {
+    const result = RouteScrubber.Scrub('/resource/record/Contacts/../../etc/passwd');
+    expect(result.RouteTemplate).toBe('unknown');
+    expect(result.ScrubbedPath).toBe('/unknown');
+  });
+
+  it('ScrubMjRoute convenience function matches RouteScrubber.Scrub', () => {
+    const result1 = RouteScrubber.Scrub('/resource/view/view-123');
+    const result2 = ScrubMjRoute('/resource/view/view-123');
+    expect(result2).toEqual(result1);
   });
 
   it('fails closed on an unrecognized path', () => {

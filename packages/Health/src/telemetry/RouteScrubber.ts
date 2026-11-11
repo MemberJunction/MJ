@@ -56,12 +56,24 @@ export class RouteScrubber {
   ];
 
   /**
-   * Scrubs `rawUrl`, stripping its query string entirely (all query parameters — no allowlist;
-   * `RouteScrubber` itself cannot enumerate "non-PII system flags", so stripping everything is the
-   * fail-closed posture) and matching the remaining path against {@link KNOWN_ROUTES}.
+   * Scrubs `rawUrl`, stripping both query string and fragment entirely (all query parameters and
+   * fragments — no allowlist), safely decoding percent-encoding, preventing path traversal, and
+   * matching the remaining clean path against {@link KNOWN_ROUTES}.
    */
   public static Scrub(rawUrl: string): ScrubbedRouteResult {
-    const cleanUrl = rawUrl.split('?')[0].replace(/^\//, '');
+    const withoutQueryOrFragment = rawUrl.split(/[?#]/)[0];
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(withoutQueryOrFragment);
+    } catch {
+      return { RouteTemplate: 'unknown', ScrubbedPath: '/unknown' };
+    }
+
+    if (decoded.split('/').some((seg) => seg === '..')) {
+      return { RouteTemplate: 'unknown', ScrubbedPath: '/unknown' };
+    }
+
+    const cleanUrl = decoded.replace(/^\/+|\/+$/g, '');
 
     for (const route of this.KNOWN_ROUTES) {
       const match = cleanUrl.match(route.pattern);
@@ -97,4 +109,9 @@ export class RouteScrubber {
     }
     return {};
   }
+}
+
+/** Convenience wrapper for {@link RouteScrubber.Scrub}. */
+export function ScrubMjRoute(rawUrlOrPath: string): ScrubbedRouteResult {
+  return RouteScrubber.Scrub(rawUrlOrPath);
 }

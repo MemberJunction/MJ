@@ -1,6 +1,7 @@
 import { BaseSingleton } from '@memberjunction/global';
 import type { TelemetryCategory, TelemetryEvent, TelemetryEventCallback, TelemetryManager } from '@memberjunction/core';
 import type { InstanceHealthReport } from '../types';
+import { ScrubMjRoute, type ScrubbedRouteResult } from './RouteScrubber';
 
 /** Bucket granularity for {@link LocalTelemetrySignalBridge} rollups — matches `{ kind: 'date_bucket' }`. */
 export type SignalBucketGranularity = 'minute' | 'hour' | 'day';
@@ -11,6 +12,8 @@ export interface TelemetryCountBucket {
   Category: TelemetryCategory;
   Count: number;
   TotalElapsedMs: number;
+  TotalInputTokens: number;
+  TotalOutputTokens: number;
 }
 
 /** One time-bucketed rollup of `MJHealthEngine` evaluation outcomes. */
@@ -21,8 +24,28 @@ export interface HealthStatusBucket {
   Red: number;
 }
 
+/** One time-bucketed rollup of per-probe signal evaluation outcomes. */
+export interface ProbeSignalBucket {
+  BucketStartIso: string;
+  SignalCode: string;
+  OwnerApp: string;
+  Green: number;
+  Yellow: number;
+  Red: number;
+  TotalDurationMs: number;
+  SampleCount: number;
+}
+
+/** One time-bucketed rollup of feature route navigation counts. */
+export interface FeatureUsageBucket {
+  BucketStartIso: string;
+  ApplicationName: string;
+  RouteTemplate: string;
+  Count: number;
+}
+
 export interface LocalTelemetrySignalBridgeOptions {
-  /** Time-bucket granularity for both rollup series. Defaults to `'minute'`. */
+  /** Time-bucket granularity for rollup series. Defaults to `'minute'`. */
   Granularity?: SignalBucketGranularity;
   /** Maximum buckets retained per series before the oldest are pruned. Defaults to 1440 (24h of minute buckets). */
   MaxBucketsPerSeries?: number;
@@ -52,6 +75,8 @@ export class LocalTelemetrySignalBridge extends BaseSingleton<LocalTelemetrySign
 
   private _countBuckets: Map<string, TelemetryCountBucket> = new Map();
   private _healthBuckets: Map<string, HealthStatusBucket> = new Map();
+  private _probeSignalBuckets: Map<string, ProbeSignalBucket> = new Map();
+  private _featureUsageBuckets: Map<string, FeatureUsageBucket> = new Map();
   private _unsubscribeTelemetry?: () => void;
 
   protected constructor() {
@@ -91,7 +116,7 @@ export class LocalTelemetrySignalBridge extends BaseSingleton<LocalTelemetrySign
     this._unsubscribeTelemetry = undefined;
   }
 
-  /** Rolls one `MJHealthEngine.Evaluate()` report's summary counts into the health bucket series. */
+  /** Rolls one `MJHealthEngine.Evaluate()` report's summary counts and probe signals into the health bucket series. */
   public RecordHealthReport(report: InstanceHealthReport, atEpochMs: number = Date.now()): void {
     const bucketKey = this.bucketStartIso(atEpochMs);
     const bucket = this._healthBuckets.get(bucketKey) ?? { BucketStartIso: bucketKey, Green: 0, Yellow: 0, Red: 0 };
@@ -100,14 +125,74 @@ export class LocalTelemetrySignalBridge extends BaseSingleton<LocalTelemetrySign
     bucket.Red += report.SummaryCounts.Red;
     this._healthBuckets.set(bucketKey, bucket);
     this.pruneMap(this._healthBuckets, (b) => b.BucketStartIso);
+
+    for (const signal of report.Signals) {
+      const signalKey = `${signal.Code}:${bucketKey}`;
+      const probeBucket = this._probeSignalBuckets.get(signalKey) ?? {
+        BucketStartIso: bucketKey,
+        SignalCode: signal.Code,
+        OwnerApp: signal.OwnerApp,
+        Green: 0,
+        Yellow: 0,
+        Red: 0,
+        TotalDurationMs: 0,
+        SampleCount: 0,
+      };
+      if (signal.Status === 'GREEN') probeBucket.Green++;
+      else if (signal.Status === 'YELLOW') probeBucket.Yellow++;
+      else if (signal.Status === 'RED') probeBucket.Red++;
+      probeBucket.TotalDurationMs += signal.DurationMs;
+      probeBucket.SampleCount++;
+      this._probeSignalBuckets.set(signalKey, probeBucket);
+    }
+    this.pruneMap(this._probeSignalBuckets, (b) => b.BucketStartIso);
+  }
+
+  /**
+   * Scrubs `featurePathOrUrl` using {@link ScrubMjRoute} and, if recognized, rolls the navigation into
+   * a bounded `FeatureUsageBucket`.
+   */
+  public RecordFeatureUsage(appName: string, featurePathOrUrl: string, atEpochMs: number = Date.now()): ScrubbedRouteResult {
+    const scrubbed = ScrubMjRoute(featurePathOrUrl);
+    if (scrubbed.RouteTemplate !== 'unknown') {
+      const bucketStart = this.bucketStartIso(atEpochMs);
+      const app = scrubbed.ApplicationName ?? appName;
+      const key = `${app}:${scrubbed.RouteTemplate}:${bucketStart}`;
+      const bucket = this._featureUsageBuckets.get(key) ?? {
+        BucketStartIso: bucketStart,
+        ApplicationName: app,
+        RouteTemplate: scrubbed.RouteTemplate,
+        Count: 0,
+      };
+      bucket.Count += 1;
+      this._featureUsageBuckets.set(key, bucket);
+      this.pruneMap(this._featureUsageBuckets, (b) => b.BucketStartIso);
+    }
+    return scrubbed;
   }
 
   private recordTelemetryEvent(event: TelemetryEvent, atEpochMs: number = Date.now()): void {
     const bucketStart = this.bucketStartIso(atEpochMs);
     const key = `${event.category}:${bucketStart}`;
-    const bucket = this._countBuckets.get(key) ?? { BucketStartIso: bucketStart, Category: event.category, Count: 0, TotalElapsedMs: 0 };
+    const bucket = this._countBuckets.get(key) ?? {
+      BucketStartIso: bucketStart,
+      Category: event.category,
+      Count: 0,
+      TotalElapsedMs: 0,
+      TotalInputTokens: 0,
+      TotalOutputTokens: 0,
+    };
     bucket.Count += 1;
     bucket.TotalElapsedMs += event.elapsedMs ?? 0;
+    if (event.category === 'AI' && event.params && typeof event.params === 'object') {
+      const aiParams = event.params as { inputTokens?: number; outputTokens?: number };
+      if (typeof aiParams.inputTokens === 'number' && Number.isFinite(aiParams.inputTokens) && aiParams.inputTokens >= 0) {
+        bucket.TotalInputTokens += aiParams.inputTokens;
+      }
+      if (typeof aiParams.outputTokens === 'number' && Number.isFinite(aiParams.outputTokens) && aiParams.outputTokens >= 0) {
+        bucket.TotalOutputTokens += aiParams.outputTokens;
+      }
+    }
     this._countBuckets.set(key, bucket);
     this.pruneMap(this._countBuckets, (b) => b.BucketStartIso);
   }
@@ -123,10 +208,22 @@ export class LocalTelemetrySignalBridge extends BaseSingleton<LocalTelemetrySign
     return [...this._healthBuckets.values()];
   }
 
+  /** Every probe signal bucket currently retained. */
+  public GetProbeSignalBuckets(): readonly ProbeSignalBucket[] {
+    return [...this._probeSignalBuckets.values()];
+  }
+
+  /** Every feature usage bucket currently retained. */
+  public GetFeatureUsageBuckets(): readonly FeatureUsageBucket[] {
+    return [...this._featureUsageBuckets.values()];
+  }
+
   /** Clears all recorded buckets (not the telemetry subscription). */
   public Reset(): void {
     this._countBuckets.clear();
     this._healthBuckets.clear();
+    this._probeSignalBuckets.clear();
+    this._featureUsageBuckets.clear();
   }
 
   /** Floors `epochMs` to this bridge's configured bucket granularity and returns it as an ISO-8601 string. */

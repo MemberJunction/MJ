@@ -35,6 +35,15 @@ export type TelemetrySchema<T> = {
   readonly [K in keyof T]: TelemetryFieldType;
 };
 
+/** Plain object representing a histogram value (bucket label -> count). */
+export type TelemetryHistogramValue = Readonly<Record<string, number>>;
+
+/** Concrete allowable field value types eligible to leave an MJ deployment boundary. */
+export type TelemetryFieldValue = number | string | boolean | TelemetryHistogramValue;
+
+/** Record shape mapped to concrete shareable field values. */
+export type TelemetryRecordShape<T> = { readonly [K in keyof T]: TelemetryFieldValue };
+
 /** The full `SafeEntityType` allowlist, as a runtime-checkable set. */
 export const SAFE_ENTITY_TYPES: ReadonlySet<SafeEntityType> = new Set<SafeEntityType>([
   'Entity',
@@ -65,15 +74,22 @@ export const FORBIDDEN_FIELD_NAME_SUBSTRINGS: readonly string[] = [
   'content',
   'prompttext',
   'completiontext',
+  'text',
   'message',
+  'body',
   'user',
+  'conversation',
   'email',
   'secret',
   'token',
   'password',
   'recordid',
   'primaryvalue',
+  'ipaddress',
+  'clientip',
 ];
+
+const STANDALONE_IP_PATTERN = /(?:^|_)ip(?:$|_)|(?:^|[a-zA-Z])(?:IP|Ip)(?:[A-Z0-9_]|$)|^Ip/;
 
 /** A single violation surfaced by {@link CheckTelemetrySchemaAllowlist}. */
 export interface TelemetrySchemaAllowlistViolation {
@@ -99,14 +115,32 @@ export function CheckTelemetrySchemaAllowlist<T>(schema: TelemetrySchema<T>): Te
   const violations: TelemetrySchemaAllowlistViolation[] = [];
 
   for (const field of Object.keys(schema) as (keyof T & string)[]) {
+    const fieldType = schema[field as keyof T];
     const lowerField = field.toLowerCase();
-    const forbiddenMatch = FORBIDDEN_FIELD_NAME_SUBSTRINGS.find((substring) => lowerField.includes(substring));
+
+    // Check token exception: explicitly allow numeric tokens fields ending in Tokens or TokenCount
+    const isAllowedTokensField = fieldType.kind === 'tokens' && /(?:Tokens|TokenCount)$/i.test(field);
+
+    let forbiddenMatch: string | undefined;
+    for (const sub of FORBIDDEN_FIELD_NAME_SUBSTRINGS) {
+      if (sub === 'token' && isAllowedTokensField) {
+        continue;
+      }
+      if (lowerField.includes(sub)) {
+        forbiddenMatch = sub;
+        break;
+      }
+    }
+
+    if (!forbiddenMatch && STANDALONE_IP_PATTERN.test(field)) {
+      forbiddenMatch = 'ip';
+    }
+
     if (forbiddenMatch) {
       violations.push({ Field: field, Reason: `Field name contains the forbidden substring '${forbiddenMatch}'.` });
       continue;
     }
 
-    const fieldType = schema[field as keyof T];
     if (fieldType.kind === 'metadata_uuid' && !SAFE_ENTITY_TYPES.has(fieldType.entity)) {
       violations.push({ Field: field, Reason: `metadata_uuid references entity '${fieldType.entity}', which is outside the SafeEntityType allowlist.` });
     }
@@ -118,7 +152,84 @@ export function CheckTelemetrySchemaAllowlist<T>(schema: TelemetrySchema<T>): Te
   return violations;
 }
 
-const SEMVER_PATTERN = /^\d+\.\d+\.\d+/;
+/** Validates `schema` against the static allowlist, returning a status object with violations list. */
+export function ValidateTelemetrySchemaAllowlist<T>(schema: TelemetrySchema<T>): { Valid: boolean; Violations: TelemetrySchemaAllowlistViolation[] } {
+  const violations = CheckTelemetrySchemaAllowlist(schema);
+  return { Valid: violations.length === 0, Violations: violations };
+}
+
+/** Asserts that `schema` satisfies all allowlist rules, throwing an Error if any violations are found. */
+export function AssertTelemetrySchemaAllowlist<T>(schema: TelemetrySchema<T>): void {
+  const violations = CheckTelemetrySchemaAllowlist(schema);
+  if (violations.length > 0) {
+    throw new Error(`Telemetry schema violates allowlist:\n${violations.map((v) => `  - ${v.Field}: ${v.Reason}`).join('\n')}`);
+  }
+}
+
+/** Allowlisted share record shape for periodic health evaluations. */
+export interface HealthBucketShareRecord {
+  BucketStartIso: string;
+  Green: number;
+  Yellow: number;
+  Red: number;
+}
+
+/** Normative shareable schema for health reports. */
+export const HEALTH_REPORT_SHARE_SCHEMA: TelemetrySchema<HealthBucketShareRecord> = {
+  BucketStartIso: { kind: 'date_bucket', granularity: 'day' },
+  Green: { kind: 'count' },
+  Yellow: { kind: 'count' },
+  Red: { kind: 'count' },
+};
+
+/** Allowlisted share record shape for daily aggregated usage. */
+export interface DailyUsageShareRecord {
+  DateBucket: string;
+  Category: string;
+  Count: number;
+  TotalElapsedMs: number;
+  TotalInputTokens: number;
+  TotalOutputTokens: number;
+}
+
+/** Normative shareable schema for aggregated category usage. */
+export const DAILY_USAGE_SHARE_SCHEMA: TelemetrySchema<DailyUsageShareRecord> = {
+  DateBucket: { kind: 'date_bucket', granularity: 'day' },
+  Category: { kind: 'enum', values: ['RunView', 'RunQuery', 'AI', 'Action', 'Engine', 'Cache', 'Coalesce', 'Network', 'Custom'] },
+  Count: { kind: 'count' },
+  TotalElapsedMs: { kind: 'duration_ms' },
+  TotalInputTokens: { kind: 'tokens' },
+  TotalOutputTokens: { kind: 'tokens' },
+};
+
+/** Allowlisted share record shape for daily scrubbed feature usage. */
+export interface FeatureUsageShareRecord {
+  DateBucket: string;
+  RouteTemplate: string;
+  NavigationCount: number;
+}
+
+/** Normative shareable schema for feature route navigation usage. */
+export const FEATURE_USAGE_SHARE_SCHEMA: TelemetrySchema<FeatureUsageShareRecord> = {
+  DateBucket: { kind: 'date_bucket', granularity: 'day' },
+  RouteTemplate: {
+    kind: 'enum',
+    values: [
+      'app/:appName/record/:entityName/:recordId',
+      'resource/record/:entityName/:recordId',
+      'resource/search/:searchInput',
+      'resource/view/:viewId',
+      'resource/dashboard/:dashboardId',
+    ],
+  },
+  NavigationCount: { kind: 'count' },
+};
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const STRICT_SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]{1,32})?$/;
+const DAY_DATE_PATTERN = /^(?:\d{4}-\d{2}-\d{2}|\d{4}-\d{2}-\d{2}T00:00:00(?:\.000)?Z)$/;
+const HOUR_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:00:00(?:\.000)?Z$/;
+const MINUTE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00(?:\.000)?Z$/;
 
 /** A single violation surfaced by {@link ValidateTelemetryRecord}. */
 export interface TelemetryRecordValidationError {
@@ -143,7 +254,7 @@ export interface TelemetryRecordValidationResult {
  * false` is the normative schema's posture (§5), and a field that slipped past the DSL at
  * authoring time must still be caught here.
  */
-export function ValidateTelemetryRecord<T extends Record<string, unknown>>(schema: TelemetrySchema<T>, record: T): TelemetryRecordValidationResult {
+export function ValidateTelemetryRecord<T extends object>(schema: TelemetrySchema<T>, record: T): TelemetryRecordValidationResult {
   const errors: TelemetryRecordValidationError[] = [];
   const schemaFields = new Set(Object.keys(schema));
 
@@ -153,9 +264,10 @@ export function ValidateTelemetryRecord<T extends Record<string, unknown>>(schem
     }
   }
 
+  const recordMap = record as Record<string, TelemetryFieldValue | null | undefined>;
   for (const field of Object.keys(schema) as (keyof T & string)[]) {
     const fieldType = schema[field as keyof T];
-    const value = record[field];
+    const value = recordMap[field];
     const error = validateFieldValue(field, fieldType, value);
     if (error) {
       errors.push(error);
@@ -165,34 +277,81 @@ export function ValidateTelemetryRecord<T extends Record<string, unknown>>(schem
   return { Valid: errors.length === 0, Errors: errors };
 }
 
-function validateFieldValue(field: string, fieldType: TelemetryFieldType, value: unknown): TelemetryRecordValidationError | undefined {
+function validateFieldValue(field: string, fieldType: TelemetryFieldType, value: TelemetryFieldValue | null | undefined): TelemetryRecordValidationError | undefined {
+  if (value === undefined || value === null) {
+    return { Field: field, Reason: 'Field value cannot be null or undefined.' };
+  }
+
   switch (fieldType.kind) {
     case 'count':
     case 'tokens':
-      return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? undefined : { Field: field, Reason: `Expected a non-negative integer for kind '${fieldType.kind}'.` };
-    case 'duration_ms':
-      return typeof value === 'number' && value >= 0 ? undefined : { Field: field, Reason: 'Expected a non-negative number for kind \'duration_ms\'.' };
-    case 'rating':
-      return typeof value === 'number' && value >= fieldType.min && value <= fieldType.max
+      return typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value) && value >= 0
         ? undefined
-        : { Field: field, Reason: `Expected a number between ${fieldType.min} and ${fieldType.max} for kind 'rating'.` };
+        : { Field: field, Reason: `Expected a non-negative finite integer for kind '${fieldType.kind}'.` };
+    case 'duration_ms':
     case 'percentile':
-      return typeof value === 'number' && value >= 0 ? undefined : { Field: field, Reason: 'Expected a non-negative number for kind \'percentile\'.' };
+      return typeof value === 'number' && Number.isFinite(value) && value >= 0
+        ? undefined
+        : { Field: field, Reason: `Expected a non-negative finite number for kind '${fieldType.kind}'.` };
+    case 'rating':
+      return typeof value === 'number' && Number.isFinite(value) && value >= fieldType.min && value <= fieldType.max
+        ? undefined
+        : { Field: field, Reason: `Expected a finite number between ${fieldType.min} and ${fieldType.max} for kind 'rating'.` };
     case 'enum':
       return typeof value === 'string' && (fieldType.values as readonly string[]).includes(value)
         ? undefined
         : { Field: field, Reason: `Expected one of [${fieldType.values.join(', ')}] for kind 'enum'.` };
-    case 'metadata_uuid':
-      return typeof value === 'string' && value.length > 0 ? undefined : { Field: field, Reason: 'Expected a non-empty UUID string for kind \'metadata_uuid\'.' };
-    case 'histogram':
-      return typeof value === 'object' && value !== null && !Array.isArray(value) ? undefined : { Field: field, Reason: 'Expected an object (bucket key -> count) for kind \'histogram\'.' };
-    case 'date_bucket':
-      return typeof value === 'string' && !Number.isNaN(Date.parse(value)) ? undefined : { Field: field, Reason: 'Expected an ISO-8601 date string for kind \'date_bucket\'.' };
+    case 'metadata_uuid': {
+      if (typeof value !== 'string' || !UUID_PATTERN.test(value)) {
+        return { Field: field, Reason: 'Expected a canonical UUID string for kind \'metadata_uuid\'.' };
+      }
+      if (!SAFE_ENTITY_TYPES.has(fieldType.entity)) {
+        return { Field: field, Reason: `metadata_uuid references entity '${fieldType.entity}', which is outside the SafeEntityType allowlist.` };
+      }
+      return undefined;
+    }
+    case 'histogram': {
+      if (!SAFE_BUCKET_KEYS.has(fieldType.bucketKey)) {
+        return { Field: field, Reason: `histogram references bucketKey '${fieldType.bucketKey}', which is outside the SafeBucketKey allowlist.` };
+      }
+      if (typeof value !== 'object' || Array.isArray(value)) {
+        return { Field: field, Reason: 'Expected an object (bucket key -> count) for kind \'histogram\'.' };
+      }
+      const hist = value as Record<string, number>;
+      for (const [k, v] of Object.entries(hist)) {
+        if (typeof k !== 'string' || k.length === 0 || k.length > 64 || /\s|@/.test(k)) {
+          return { Field: field, Reason: `Histogram bucket key '${k}' is invalid (must be 1-64 chars without whitespace or '@').` };
+        }
+        if (typeof v !== 'number' || !Number.isFinite(v) || !Number.isInteger(v) || v < 0) {
+          return { Field: field, Reason: `Histogram bucket value for key '${k}' must be a non-negative finite integer.` };
+        }
+      }
+      return undefined;
+    }
+    case 'date_bucket': {
+      if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) {
+        return { Field: field, Reason: 'Expected a valid date string for kind \'date_bucket\'.' };
+      }
+      let matchesGranularity = false;
+      if (fieldType.granularity === 'day') {
+        matchesGranularity = DAY_DATE_PATTERN.test(value);
+      } else if (fieldType.granularity === 'hour') {
+        matchesGranularity = HOUR_DATE_PATTERN.test(value);
+      } else if (fieldType.granularity === 'minute') {
+        matchesGranularity = MINUTE_DATE_PATTERN.test(value);
+      }
+      if (!matchesGranularity) {
+        return { Field: field, Reason: `Expected a date string floored to '${fieldType.granularity}' granularity for kind 'date_bucket'.` };
+      }
+      return undefined;
+    }
     case 'boolean':
       return typeof value === 'boolean' ? undefined : { Field: field, Reason: 'Expected a boolean for kind \'boolean\'.' };
     case 'version_string':
-      return typeof value === 'string' && SEMVER_PATTERN.test(value) ? undefined : { Field: field, Reason: 'Expected a SemVer string (e.g. 6.2.0) for kind \'version_string\'.' };
+      return typeof value === 'string' && value.length <= 64 && STRICT_SEMVER_PATTERN.test(value)
+        ? undefined
+        : { Field: field, Reason: 'Expected a valid SemVer string (e.g. 6.2.0 or 6.2.0-beta.1, max 64 chars) for kind \'version_string\'.' };
     default:
-      return { Field: field, Reason: `Unrecognized TelemetryFieldType kind.` };
+      return { Field: field, Reason: 'Unrecognized TelemetryFieldType kind.' };
   }
 }

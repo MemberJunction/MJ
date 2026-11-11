@@ -1,16 +1,42 @@
 import { createHash, createHmac } from 'node:crypto';
 import { BaseSingleton } from '@memberjunction/global';
-import { LocalTelemetrySignalBridge, type HealthStatusBucket, type TelemetryCountBucket } from './LocalTelemetrySignalBridge';
+import { LocalTelemetrySignalBridge, type TelemetryCountBucket, type FeatureUsageBucket } from './LocalTelemetrySignalBridge';
 import { BaseTelemetrySink, ConsentTierSatisfies, type ConsentTier, type SinkAckResult, type SinkExecutionContext } from './BaseTelemetrySink';
+import {
+  ValidateTelemetryRecord,
+  HEALTH_REPORT_SHARE_SCHEMA,
+  DAILY_USAGE_SHARE_SCHEMA,
+  FEATURE_USAGE_SHARE_SCHEMA,
+  type HealthBucketShareRecord,
+  type DailyUsageShareRecord,
+  type FeatureUsageShareRecord,
+} from './TelemetrySchemaDsl';
+
+function toDayString(iso: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    return iso;
+  }
+  const d = new Date(iso);
+  const year = d.getUTCFullYear();
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 /** The exact shareable payload shape for one consent-tier package, before serialization. */
 export interface TelemetryPackagePayload {
   ConsentTier: ConsentTier;
   GeneratedAtIso: string;
   /** Present at `HealthOnly` and above. */
-  HealthSignals?: { Buckets: readonly HealthStatusBucket[] };
+  HealthSignals?: { Buckets: readonly HealthBucketShareRecord[] };
   /** Present at `HealthAndAggregatedUsage` and above. */
-  AggregatedUsage?: { Buckets: readonly TelemetryCountBucket[] };
+  AggregatedUsage?: {
+    Buckets: readonly TelemetryCountBucket[];
+    DailyBuckets?: readonly DailyUsageShareRecord[];
+  };
+  FeatureUsage?: {
+    DailyBuckets: readonly FeatureUsageShareRecord[];
+  };
 }
 
 /** A fully-built, hashed (but not yet signed) telemetry package, ready to preview or dispatch. */
@@ -33,8 +59,10 @@ export interface TelemetryPackageAudit {
   Ack: SinkAckResult;
 }
 
-/** The source of bucketed local data a package is built from. Narrowed to the two read methods {@link ShareLayerPackager} actually needs. */
-export type TelemetryBucketSource = Pick<LocalTelemetrySignalBridge, 'GetHealthBuckets' | 'GetCountBuckets'>;
+/** The source of bucketed local data a package is built from. */
+export type TelemetryBucketSource = Pick<LocalTelemetrySignalBridge, 'GetHealthBuckets' | 'GetCountBuckets'> & {
+  GetFeatureUsageBuckets?(): readonly FeatureUsageBucket[];
+};
 
 /**
  * Builds consent-gated `TelemetryPackage`s from `LocalTelemetrySignalBridge`'s local rollups,
@@ -78,10 +106,111 @@ export class ShareLayerPackager extends BaseSingleton<ShareLayerPackager> {
 
     const payload: TelemetryPackagePayload = { ConsentTier: tier, GeneratedAtIso: new Date().toISOString() };
     if (ConsentTierSatisfies(tier, 'HealthOnly')) {
-      payload.HealthSignals = { Buckets: source.GetHealthBuckets() };
+      const healthDailyMap = new Map<string, HealthBucketShareRecord>();
+      for (const b of source.GetHealthBuckets()) {
+        const day = toDayString(b.BucketStartIso);
+        const existing = healthDailyMap.get(day) ?? {
+          BucketStartIso: day,
+          Green: 0,
+          Yellow: 0,
+          Red: 0,
+        };
+        existing.Green += b.Green;
+        existing.Yellow += b.Yellow;
+        existing.Red += b.Red;
+        healthDailyMap.set(day, existing);
+      }
+      const sanitizedHealthBuckets = Array.from(healthDailyMap.values());
+      for (const rec of sanitizedHealthBuckets) {
+        const val = ValidateTelemetryRecord(HEALTH_REPORT_SHARE_SCHEMA, rec);
+        if (!val.Valid) {
+          throw new Error(`HealthSignals validation failed: ${val.Errors.map((e) => `${e.Field}: ${e.Reason}`).join(', ')}`);
+        }
+      }
+      payload.HealthSignals = { Buckets: sanitizedHealthBuckets };
     }
+
     if (ConsentTierSatisfies(tier, 'HealthAndAggregatedUsage')) {
-      payload.AggregatedUsage = { Buckets: source.GetCountBuckets() };
+      const rawCountBuckets: TelemetryCountBucket[] = source.GetCountBuckets().map((b) => ({
+        BucketStartIso: b.BucketStartIso,
+        Category: b.Category,
+        Count: b.Count,
+        TotalElapsedMs: b.TotalElapsedMs,
+        TotalInputTokens: b.TotalInputTokens ?? 0,
+        TotalOutputTokens: b.TotalOutputTokens ?? 0,
+      }));
+
+      const dailyMap = new Map<string, DailyUsageShareRecord>();
+      for (const b of rawCountBuckets) {
+        const day = toDayString(b.BucketStartIso);
+        const key = `${day}:${b.Category}`;
+        const existing = dailyMap.get(key) ?? {
+          DateBucket: day,
+          Category: b.Category,
+          Count: 0,
+          TotalElapsedMs: 0,
+          TotalInputTokens: 0,
+          TotalOutputTokens: 0,
+        };
+        existing.Count += b.Count;
+        existing.TotalElapsedMs += b.TotalElapsedMs;
+        existing.TotalInputTokens += b.TotalInputTokens;
+        existing.TotalOutputTokens += b.TotalOutputTokens;
+        dailyMap.set(key, existing);
+      }
+      const dailyBuckets = Array.from(dailyMap.values());
+      for (const rec of dailyBuckets) {
+        const val = ValidateTelemetryRecord(DAILY_USAGE_SHARE_SCHEMA, rec);
+        if (!val.Valid) {
+          throw new Error(`DailyUsageBuckets validation failed: ${val.Errors.map((e) => `${e.Field}: ${e.Reason}`).join(', ')}`);
+        }
+      }
+      // At Tier 2 (HealthAndAggregatedUsage), outbound usage buckets are floored to daily UTC
+      // boundaries so minute-by-minute activity timing never leaves the deployment; sub-day
+      // buckets are only retained when the admin explicitly grants Tier 3 (HealthAndMetadataEvents).
+      const outboundBuckets: TelemetryCountBucket[] = ConsentTierSatisfies(tier, 'HealthAndMetadataEvents')
+        ? rawCountBuckets
+        : dailyBuckets.map((d) => ({
+            BucketStartIso: d.DateBucket,
+            Category: d.Category as TelemetryCountBucket['Category'],
+            Count: d.Count,
+            TotalElapsedMs: d.TotalElapsedMs,
+            TotalInputTokens: d.TotalInputTokens,
+            TotalOutputTokens: d.TotalOutputTokens,
+          }));
+
+      payload.AggregatedUsage = {
+        Buckets: outboundBuckets,
+        DailyBuckets: dailyBuckets,
+      };
+
+      if (typeof source.GetFeatureUsageBuckets === 'function') {
+        const rawFeatures = source.GetFeatureUsageBuckets();
+        if (rawFeatures && rawFeatures.length > 0) {
+          const featureDailyMap = new Map<string, FeatureUsageShareRecord>();
+          for (const fb of rawFeatures) {
+            const day = toDayString(fb.BucketStartIso);
+            const key = `${day}:${fb.RouteTemplate}`;
+            const existing = featureDailyMap.get(key) ?? {
+              DateBucket: day,
+              RouteTemplate: fb.RouteTemplate,
+              NavigationCount: 0,
+            };
+            existing.NavigationCount += fb.Count;
+            featureDailyMap.set(key, existing);
+          }
+          const featureDailyBuckets = Array.from(featureDailyMap.values());
+          for (const rec of featureDailyBuckets) {
+            const val = ValidateTelemetryRecord(FEATURE_USAGE_SHARE_SCHEMA, rec);
+            if (!val.Valid) {
+              throw new Error(`FeatureUsage validation failed: ${val.Errors.map((e) => `${e.Field}: ${e.Reason}`).join(', ')}`);
+            }
+          }
+          payload.FeatureUsage = {
+            DailyBuckets: featureDailyBuckets,
+          };
+        }
+      }
     }
 
     const payloadJson = JSON.stringify(payload);
@@ -117,7 +246,11 @@ export class ShareLayerPackager extends BaseSingleton<ShareLayerPackager> {
 
     const pkg = this.BuildPackage(tier, source);
     const signatureHeader = this.SignPackage(pkg, context.SigningKeyHex);
-    const ack = await sink.DeliverPackage(pkg, context);
+    const signedContext: SinkExecutionContext = {
+      ...context,
+      SignatureHeader: signatureHeader,
+    };
+    const ack = await sink.DeliverPackage(pkg, signedContext);
 
     return {
       Package: pkg,
