@@ -18,7 +18,7 @@
 
 const fs = require('fs');
 const os = require('os');
-const { probeHttp, probeTcp } = require('./lib/probes.cjs');
+const { probeHttp, probeTcp, probeWebSocket } = require('./lib/probes.cjs');
 
 (async () => {
     const results = {};
@@ -42,13 +42,7 @@ const { probeHttp, probeTcp } = require('./lib/probes.cjs');
         );
     }
 
-    results.wsUpgrade = await probeHttp('WebSocket upgrade', 'http://localhost:4200/api/', {
-        headers: {
-            Connection: 'Upgrade',
-            Upgrade: 'websocket',
-            'Sec-WebSocket-Version': '13',
-            'Sec-WebSocket-Key': 'dGhlIHNhbXBsZSBub25jZQ==',
-        },
+    results.wsUpgrade = await probeWebSocket('WebSocket upgrade', 'http://localhost:4200/api/', {
         timeoutMs: 5000,
         log: true,
     });
