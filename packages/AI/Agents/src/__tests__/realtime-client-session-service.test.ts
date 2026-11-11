@@ -2665,13 +2665,13 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
                 expect(params.RunScope).toEqual(scope);
                 expect(params.RunScope).not.toBe(scope);
                 expect(params.RunScope?.SecondaryScopes?.Teams).not.toBe(scope.SecondaryScopes.Teams);
-                expect(params.Context).toEqual({ ActiveSkillIDs: ['SKILL-1'] });
+                expect(params.Context).toEqual({ AgentID: 'target-1', ActiveSkillIDs: ['SKILL-1'] });
             });
 
             it('passes an unscoped run scope, never none, when the session has no scope', async () => {
                 const params = await runDirect({});
                 expect(params.RunScope).toEqual({ PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null });
-                expect(params.Context).toEqual({ ActiveSkillIDs: [] });
+                expect(params.Context).toEqual({ AgentID: 'target-1', ActiveSkillIDs: [] });
             });
         });
 
