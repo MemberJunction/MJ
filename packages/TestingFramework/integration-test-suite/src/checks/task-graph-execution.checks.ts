@@ -18,7 +18,7 @@
  *
  * @module @memberjunction/integration-test-suite
  */
-import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { RunView, ServerOperationScopeManager, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import {
     MJTaskEntity,
     MJTaskTypeEntity,
@@ -49,6 +49,7 @@ import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunct
 import {
     GetTaskGraphSubmitter,
     SuppressTaskGraphSubmission,
+    TASK_GRAPH_RUNTIME_SECURITY_OPERATION,
     TaskGraphSubmissionSuppressedBecause,
 } from '@memberjunction/ai-core-plus';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -399,13 +400,26 @@ class CountingDeliverer implements TaskContinuationDeliverer {
  * wrote — stays exactly as the dispatcher left it, so what the sweep sees is the real shape a crash
  * between the terminal write and the delivery produces.
  */
+/**
+ * Runs `save` in the task-graph dispatcher's runtime-security scope, bound to the check's user: how a fixture stages
+ * state the dispatcher would have written (a claim a crashed instance left, a workflow's metadata), now that a workflow
+ * step's status and data and a workflow's metadata are the dispatcher's (`MJTaskEntityServer`).
+ */
+function asDispatcher(ctx: IntegrationCheckContext, save: () => Promise<boolean>): Promise<boolean> {
+    return ServerOperationScopeManager.Instance.RunWithAuthority(
+        { operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION, source: 'ServerEngine', allowedEntities: ['MJ: Tasks'], userId: ctx.User.ID },
+        save,
+    );
+}
+
 async function stripDeliveryMarker(ctx: IntegrationCheckContext, parentID: string): Promise<void> {
     const parent = await loadTask(ctx, parentID);
     const meta = ParseTaskGraphParentMetadata(parent.InputPayload) as Record<string, unknown>;
     delete meta.continuationDeliveredAt;
     delete meta.continuationDeliveredAs;
     parent.InputPayload = JSON.stringify(meta);
-    Assert(await parent.Save(), `could not strip the delivery marker: ${parent.LatestResult?.CompleteMessage ?? 'unknown'}`);
+    // A workflow's metadata is the dispatcher's (`MJTaskEntityServer`): written here as the dispatcher would.
+    Assert(await asDispatcher(ctx, () => parent.Save()), `could not strip the delivery marker: ${parent.LatestResult?.CompleteMessage ?? 'unknown'}`);
 }
 
 /** The delivery marker on a graph's parent, or null while it has not been claimed. */
@@ -747,7 +761,8 @@ async function repointSubmittingRun(
     const meta = ParseTaskGraphParentMetadata(parent.InputPayload) as Record<string, unknown>;
     meta.submittedByAgentRunID = runID;
     parent.InputPayload = JSON.stringify(meta);
-    Assert(await parent.Save(), `could not repoint the submitting run: ${parent.LatestResult?.CompleteMessage ?? 'unknown'}`);
+    // A workflow's metadata is the dispatcher's (`MJTaskEntityServer`): written here as the dispatcher would.
+    Assert(await asDispatcher(ctx, () => parent.Save()), `could not repoint the submitting run: ${parent.LatestResult?.CompleteMessage ?? 'unknown'}`);
 }
 
 /** Creates an agent run in a chosen state, for the settle-path checks. */
@@ -1077,7 +1092,7 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
             child.Status = 'In Progress';
             child.ClaimedBy = 'it-tx7-dead-instance';
             child.ClaimExpiresAt = new Date(Date.now() - 60_000); // lease already expired
-            Assert(await child.Save(), `could not stage the orphaned claim: ${child.LatestResult?.CompleteMessage ?? 'unknown'}`);
+            Assert(await asDispatcher(ctx, () => child.Save()), `could not stage the orphaned claim: ${child.LatestResult?.CompleteMessage ?? 'unknown'}`);
 
             const mine = await taskNames(ctx, parentID);
             const survivor = buildDispatcher(ctx, RUNNER, 'it-tx7-survivor');
@@ -1349,7 +1364,7 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
             child.Status = 'In Progress';
             child.ClaimedBy = 'it-tx12-dead-instance';
             child.ClaimExpiresAt = new Date(Date.now() - 60_000);
-            Assert(await child.Save(), `could not stage the orphaned prompt claim: ${child.LatestResult?.CompleteMessage ?? 'unknown'}`);
+            Assert(await asDispatcher(ctx, () => child.Save()), `could not stage the orphaned prompt claim: ${child.LatestResult?.CompleteMessage ?? 'unknown'}`);
 
             const survivor = buildDispatcher(ctx, RUNNER, 'it-tx12', undefined, undefined, TEST_POLL_SECONDS, promptRunner);
             await survivor.Reconcile();
@@ -1664,7 +1679,13 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
                 duplicate.Status = 'Requested';
                 duplicate.RequestedAt = new Date();
                 duplicate.Request = 'a second ask for the same step';
-                Assert(await duplicate.Save(), 'could not stage the duplicate request');
+                // Saved as the losing dispatcher instance saves its own: only the dispatcher raises a request
+                // for a workflow step (`MJAIAgentRequestEntityServer`), inside its runtime-security scope.
+                const staged = await ServerOperationScopeManager.Instance.RunWithAuthority(
+                    { operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION, source: 'ServerEngine', allowedEntities: ['MJ: AI Agent Requests'], userId: ctx.User.ID },
+                    () => duplicate.Save(),
+                );
+                Assert(staged, `could not stage the duplicate request: ${duplicate.LatestResult?.CompleteMessage ?? ''}`);
                 AssertEqual(await openRequestCount(ctx, task.ID), 2, 'the fixture did not stage a duplicate');
 
                 await waitFor(() => openRequestCount(ctx, task.ID), n => n === 1,
@@ -1893,7 +1914,7 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
             child.Status = 'In Progress';
             child.ClaimedBy = 'it-tx26-dead-peer';
             child.ClaimExpiresAt = new Date(Date.now() - 60_000);
-            Assert(await child.Save(), `could not stage the orphaned claim: ${child.LatestResult?.CompleteMessage ?? 'unknown'}`);
+            Assert(await asDispatcher(ctx, () => child.Save()), `could not stage the orphaned claim: ${child.LatestResult?.CompleteMessage ?? 'unknown'}`);
 
             await settle(4_000);   // several reconcile intervals, had one been installed
 
@@ -2160,9 +2181,18 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('task-graph-execution', {
                 const depRes = await RunView.FromMetadataProvider(ctx.Provider).RunView(
                     { EntityName: 'MJ: Task Dependencies', ExtraFilter: `TaskID IN (${ids})`, ResultType: 'entity_object' }, ctx.User,
                 );
+                // A workflow's edges are the task-graph service's (`MJTaskDependencyEntityServer`): removed as it would.
                 for (const dep of (depRes.Results ?? []) as Array<{ Delete: () => Promise<boolean> }>) {
-                    await dep.Delete();
+                    await ServerOperationScopeManager.Instance.RunWithAuthority(
+                        { operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION, source: 'ServerEngine', allowedEntities: ['MJ: Task Dependencies'], userId: ctx.User.ID },
+                        () => dep.Delete(),
+                    );
                 }
+                // The requests raised for (or staged on) a Human step reference it, so they go before it.
+                const requestRes = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJAIAgentRequestEntity>(
+                    { EntityName: 'MJ: AI Agent Requests', ExtraFilter: `OriginatingTaskID IN (${ids})`, ResultType: 'entity_object', BypassCache: true }, ctx.User,
+                );
+                for (const request of requestRes.Results ?? []) await request.Delete();
             }
             for (const c of children) await c.Delete();
 

@@ -8,7 +8,10 @@
       "Type": "Custom",
       "CodeApprovalStatus": "Approved",
       "Status": "Active",
-      "IconClass": "fa-solid fa-arrows-rotate"
+      "IconClass": "fa-solid fa-arrows-rotate",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [

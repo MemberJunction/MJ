@@ -147,7 +147,7 @@ export class PredictiveStudioScoreRecordSetAction extends BasePredictiveStudioAc
 
       const writeBack = this.parseWriteBack(params);
 
-      const provider = params.Provider || Metadata.Provider; // global-provider-ok: RunActionParams.Provider is optional; ActionEngine contract falls back to the global provider (ActionEngine-Base.ts:413-419)
+      const provider = params.Provider || Metadata.Provider; // global-provider-ok: RunActionParams.Provider is optional; ActionEngine contract falls back to the global provider (ActionEngine-Base.ts)
       const runner = this.createRunner();
       const result = await runner.run({
         modelId,

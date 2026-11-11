@@ -17,7 +17,10 @@ export interface FieldMappingFieldMeta {
     IsPrimaryKey: boolean;
     IsIdentity?: boolean;
     IsNameField?: boolean;
+    /** Unique on its own: a single-column primary key or the only column of a unique key. */
     IsUnique?: boolean;
+    /** A column of any unique index or constraint, composite or filtered ones included. */
+    IsInUniqueKey?: boolean;
     RelatedEntityID?: string | null;
     RelatedEntity?: string | null;
     RelatedEntityJoinField?: string | null;
@@ -35,9 +38,12 @@ export interface FieldMappingFieldMeta {
     MaxLength?: number;
 }
 
-/** Whether the mapper renames this field on a clone: the name field, a field called Name, or a unique nvarchar. */
+/**
+ * Whether the mapper renames this field on a clone: the name field, a field called Name, or an
+ * nvarchar that is unique or a column of a unique key (a copy keeping its value could collide).
+ */
 export function IsRenameField(field: FieldMappingFieldMeta): boolean {
-    return !!field.IsNameField || field.Name.toLowerCase() === 'name' || (!!field.IsUnique && field.Type === 'nvarchar');
+    return !!field.IsNameField || field.Name.toLowerCase() === 'name' || ((!!field.IsUnique || !!field.IsInUniqueKey) && field.Type === 'nvarchar');
 }
 
 export interface CloneFieldMappingContext {

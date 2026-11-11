@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+    AgentDisplayName,
     CHIEF_OF_STAFF_AGENT_NAME,
     CHIEF_OF_STAFF_PAGES,
     CHIEF_OF_STAFF_PAGE_LABELS,
@@ -14,7 +15,9 @@ import {
     IsApprovalRequest,
     PolicyGovernanceSummary,
     RequestSummaryItem,
+    ResolveSelectableAgent,
     RoutineSummaryItem,
+    SelectableAgentsForGovernance,
     ValidateChiefOfStaffPageParam,
     ValidateSearchQueryParam,
     IsSpentOneShotRoutine,
@@ -178,12 +181,10 @@ describe('BuildChiefOfStaffScopeFilters', () => {
     const USER = 'UUUUUUUU-0000-0000-0000-000000000001';
     const AGENT = 'C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E00';
 
-    it('scopes policy, routines, and requests to the current user and the Chief of Staff agent', () => {
+    it('scopes policy, routines, and requests to the current user and the selected agent', () => {
         const f = BuildChiefOfStaffScopeFilters(USER, AGENT);
         expect(f.Policy).toBe(`AgentID = '${AGENT}' AND UserID = '${USER}'`);
-        expect(f.Routines).toBe(
-            `UserID = '${USER}' AND (RoutineType = 'AgentWake' OR TargetID = '${AGENT}')`,
-        );
+        expect(f.Routines).toBe(`UserID = '${USER}' AND TargetID = '${AGENT}'`);
         expect(f.Requests).toBe(
             `AgentID = '${AGENT}' AND RequestForUserID = '${USER}' AND (RequestType IS NULL OR RequestType <> 'Information')`,
         );
@@ -332,5 +333,66 @@ describe('Policy drafts', () => {
         expect(summary.HasPolicyRecord).toBe(true);
         expect(summary.DisplayName).toBe('Chief of Staff');
         expect(JSON.stringify(summary)).not.toContain('private standing instructions');
+    });
+});
+
+describe('Multi-agent picker helpers (Chief of Staff + Software Factory)', () => {
+    const COS_ID = 'C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E00';
+    const FACTORY_ID = 'FAC70A11-0000-4000-8000-000000000001';
+    const PLANNER_SUB_ID = 'FAC70A11-0000-4000-8000-000000000002';
+    const DISABLED_ID = 'D15AB1ED-0000-4000-8000-000000000003';
+
+    it('lists active top-level agents with Chief of Staff first and excludes child or disabled agents unless referenced', () => {
+        const raw = [
+            { ID: FACTORY_ID, Name: 'Software Factory', ParentID: null, Status: 'Active' },
+            { ID: PLANNER_SUB_ID, Name: 'Planner', ParentID: FACTORY_ID, Status: 'Active' },
+            { ID: DISABLED_ID, Name: 'Archived Agent', ParentID: null, Status: 'Disabled' },
+            { ID: COS_ID, Name: 'Chief of Staff', ParentID: null, Status: 'Active' },
+        ];
+
+        const selectable = SelectableAgentsForGovernance(raw);
+        expect(selectable.map((a) => a.Name)).toEqual(['Chief of Staff', 'Software Factory']);
+
+        const withRef = SelectableAgentsForGovernance(raw, new Set([DISABLED_ID]));
+        expect(withRef.map((a) => a.Name)).toEqual([
+            'Chief of Staff',
+            'Archived Agent',
+            'Software Factory',
+        ]);
+    });
+
+    it('resolves selectable agents by exact ID, exact name, or unique partial name', () => {
+        const agents = [
+            { ID: COS_ID, Name: 'Chief of Staff' },
+            { ID: FACTORY_ID, Name: 'Software Factory' },
+        ];
+
+        expect(ResolveSelectableAgent(agents, FACTORY_ID.toLowerCase())?.Name).toBe('Software Factory');
+        expect(ResolveSelectableAgent(agents, 'software factory')?.ID).toBe(FACTORY_ID);
+        expect(ResolveSelectableAgent(agents, 'factory')?.ID).toBe(FACTORY_ID);
+        expect(ResolveSelectableAgent(agents, 'nonexistent')).toBeNull();
+    });
+
+    it('derives display names and default drafts cleanly for non-Chief-of-Staff agents', () => {
+        const factoryDraft = BuildPolicyDraftFromEntity(null, 'Software Factory');
+        expect(factoryDraft.DisplayNameOverride).toBe('Software Factory');
+        expect(AgentDisplayName({ DisplayNameOverride: '' }, 'Software Factory')).toBe('Software Factory');
+        expect(AgentDisplayName({ DisplayNameOverride: 'Factory Bot' }, 'Software Factory')).toBe('Factory Bot');
+        expect(AgentDisplayName({ DisplayNameOverride: '' }, 'Chief of Staff')).toBe('My Chief of Staff');
+
+        const ctx = BuildChiefOfStaffAgentContext({
+            Page: 'approvals-wakes',
+            SearchText: '',
+            SelectedAgentID: FACTORY_ID,
+            SelectedAgentName: 'Software Factory',
+            AvailableAgentNames: ['Chief of Staff', 'Software Factory'],
+            Metrics: CalculateChiefOfStaffMetrics([], []),
+            Governance: BuildGovernanceSummary(factoryDraft, false, 'Software Factory'),
+            Routines: [],
+            PendingRequests: [],
+        });
+        expect(ctx['SelectedAgentID']).toBe(FACTORY_ID);
+        expect(ctx['SelectedAgentName']).toBe('Software Factory');
+        expect(ctx['AvailableAgentNames']).toEqual(['Chief of Staff', 'Software Factory']);
     });
 });

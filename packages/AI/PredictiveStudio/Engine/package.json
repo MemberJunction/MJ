@@ -26,6 +26,8 @@
     "@memberjunction/ai-core-plus": "6.2.0",
     "@memberjunction/core": "6.2.0",
     "@memberjunction/core-entities": "6.2.0",
+    "@memberjunction/feature-pipelines": "6.2.0",
+    "@memberjunction/generic-database-provider": "6.2.0",
     "@memberjunction/global": "6.2.0",
     "@memberjunction/predictive-studio-core": "6.2.0",
     "@memberjunction/predictive-studio-sidecar": "6.2.0",

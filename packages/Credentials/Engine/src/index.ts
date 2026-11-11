@@ -37,7 +37,9 @@ export {
     DatabaseConnectionCredentialValues,
     TwilioCredentialValues,
     UserDelegatedOAuthCredentialValues,
-    StoreUserDelegatedCredentialOptions
+    StoreUserDelegatedCredentialOptions,
+    GitHubAppCredentialValues,
+    GitHubPATCredentialValues
 } from './types';
 
 // Re-export entity types for convenience
