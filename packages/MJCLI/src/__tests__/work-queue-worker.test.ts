@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { EventEmitter } from 'node:events';
-import { RunUntilStopped, WorkerStartFailure } from '../lib/work-queue/queue-worker.js';
+import { BuildWorkerHostConfig, RunUntilStopped, WorkerStartFailure } from '../lib/work-queue/queue-worker.js';
 import type { StoppableWorkHost } from '../lib/work-queue/queue-worker.js';
 
 function health(states: Array<[string, 'Running' | 'Paused' | 'Unsupported' | 'HandlerNotRegistered' | 'Error', string | null]>) {
@@ -51,5 +51,37 @@ describe('RunUntilStopped', () => {
         expect(await RunUntilStopped(h, Promise.resolve(), signals)).toBe('Finished');
         expect(h.Shutdowns).toBe(0);
         expect(signals.listenerCount('SIGTERM') + signals.listenerCount('SIGINT')).toBe(0);
+    });
+});
+
+describe('BuildWorkerHostConfig (#6274)', () => {
+    const base = { subscription: 'venue-import', concurrency: 1, 'shutdown-drain-ms': 30000 };
+
+    it('neither sweeps nor re-plans in --once mode', () => {
+        const config = BuildWorkerHostConfig({ ...base, once: true }, 42);
+        expect(config.SweeperIntervalMs).toBe(0);
+        expect(config.ReconcileIntervalMs).toBe(0);
+    });
+
+    it('sweeps every minute and re-plans every 30 s by default in long-running mode', () => {
+        const config = BuildWorkerHostConfig({ ...base, once: false }, 42);
+        expect(config.SweeperIntervalMs).toBe(60000);
+        expect(config.ReconcileIntervalMs).toBe(30000);
+    });
+
+    it('honors explicit intervals in either mode, with 0 disabling', () => {
+        const longRunning = BuildWorkerHostConfig({ ...base, once: false, 'sweeper-interval-ms': 0, 'reconcile-interval-ms': 5000 }, 42);
+        expect(longRunning.SweeperIntervalMs).toBe(0);
+        expect(longRunning.ReconcileIntervalMs).toBe(5000);
+        const once = BuildWorkerHostConfig({ ...base, once: true, 'sweeper-interval-ms': 15000 }, 42);
+        expect(once.SweeperIntervalMs).toBe(15000);
+        expect(once.ReconcileIntervalMs).toBe(0);
+    });
+
+    it('carries the subscription, concurrency, drain and pid-scoped instance id', () => {
+        const config = BuildWorkerHostConfig({ ...base, once: false, concurrency: 3 }, 42);
+        expect(config.InstanceID).toBe('mj-queue-work-42');
+        expect(config.Subscriptions).toEqual([{ Name: 'venue-import', Concurrency: 3 }]);
+        expect(config.ShutdownDrainMs).toBe(30000);
     });
 });

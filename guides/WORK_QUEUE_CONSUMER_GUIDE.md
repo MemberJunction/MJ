@@ -27,6 +27,10 @@ Why: the delivery row is claimed, leased and purged on a retention schedule, and
 through the transport (256 KB cap, 10 attributes). `Progress` is a small operator hint (a percentage, a short message,
 a resume checkpoint), not a log.
 
+**`this.Provider` is yours alone for the delivery.** Every host mints a provider per delivery and releases it when
+your handler settles, so a provider-level transaction around your domain write and a follow-on publish never
+interleaves with another handler's, whatever the host's concurrency. Do not keep the provider past `Handle`.
+
 ## 2. Handlers must be idempotent
 
 At-least-once delivery plus lease takeover means your handler can run twice for one message — after a crash, a network

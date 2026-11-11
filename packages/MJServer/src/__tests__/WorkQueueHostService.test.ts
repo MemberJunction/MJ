@@ -148,4 +148,17 @@ describe('MJServerWorkQueueProviderSource', () => {
         const source = new MJServerWorkQueueProviderSource(null, PROVIDER);
         expect(await source.CreateProvider()).toBe(PROVIDER);
     });
+
+    it('releases a minted independent instance but never the shared fallback (#6273)', async () => {
+        const release = vi.fn().mockResolvedValue(undefined);
+        const independent = { Name: 'independent-pg-provider', ReleaseIndependentInstance: release } as unknown as IMetadataProvider;
+        const pgFallback = Object.assign({}, PROVIDER, { CreateIndependentInstance: vi.fn().mockResolvedValue(independent) });
+        const source = new MJServerWorkQueueProviderSource(null, pgFallback);
+        await source.ReleaseProvider(await source.CreateProvider());
+        expect(release).toHaveBeenCalledTimes(1);
+
+        const shared = new MJServerWorkQueueProviderSource(null, Object.assign({}, PROVIDER, { ReleaseIndependentInstance: release }));
+        await shared.ReleaseProvider(await shared.CreateProvider());
+        expect(release).toHaveBeenCalledTimes(1);
+    });
 });
