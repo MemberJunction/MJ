@@ -21,6 +21,27 @@
 import { ComponentStyles } from '@memberjunction/interactive-component-types';
 import { UnwrapLibraryComponent } from './component-unwrapper';
 
+/**
+ * The argument text of the first non-empty `rgb(…)` or `rgba(…)` in `s` (any case), up to the next
+ * `)`, or null. Same result as `/rgba?\(([^)]+)\)/i`, found by index: that regex rescans to the
+ * next `)` from every `rgb(`, which is quadratic on a value full of unclosed calls (CodeQL
+ * js/polynomial-redos). The next `)` is remembered across openings.
+ */
+function rgbArguments(s: string): string | null {
+  const opener = /rgba?\(/gi;
+  let close = -1;
+  let open: RegExpExecArray | null;
+  while ((open = opener.exec(s)) !== null) {
+    const start = open.index + open[0].length;
+    if (close < start) {
+      close = s.indexOf(')', start);
+      if (close === -1) return null;
+    }
+    if (close > start) return s.slice(start, close);
+  }
+  return null;
+}
+
 /** Relative luminance (0 = black, 1 = white) of a hex or rgb()/rgba() color; 1 if unparseable. */
 function colorLuminance(color: string | undefined): number {
   if (!color) return 1;
@@ -33,9 +54,9 @@ function colorLuminance(color: string | undefined): number {
     const n = parseInt(h, 16);
     r = (n >> 16) & 255; g = (n >> 8) & 255; b = n & 255;
   } else {
-    const m = /rgba?\(([^)]+)\)/i.exec(s);
-    if (!m) return 1;
-    const p = m[1].split(',').map((x) => parseFloat(x));
+    const args = rgbArguments(s);
+    if (args === null) return 1;
+    const p = args.split(',').map((x) => parseFloat(x));
     r = p[0]; g = p[1]; b = p[2];
     if ([r, g, b].some((v) => Number.isNaN(v))) return 1;
   }

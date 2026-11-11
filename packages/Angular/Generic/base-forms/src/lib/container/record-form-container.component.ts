@@ -499,14 +499,20 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       // OR'd with the form's own extra state: a section that owns an editor (a flow canvas, a
       // designer) holds edits no entity field reflects, and reporting the record clean would let
       // the navigate-away guard discard them without asking.
-      return (this.Fc.record?.Dirty ?? false) || this.Fc.HasAdditionalUnsavedChanges;
+      return (
+        (this.Fc.record?.Dirty ?? false) ||
+        this.Fc.IsFoldedSubtypeDirty ||
+        this.Fc.HasAdditionalUnsavedChanges
+      );
     }
     return this.IsDirty;
   }
 
   get EffectiveDirtyFieldNames(): string[] {
     if (this.Fc?.record?.Fields) {
-      return this.Fc.record.Fields.filter(f => f.Dirty).map(f => f.Name);
+      const ownDirty = this.Fc.record.Fields.filter(f => f.Dirty).map(f => f.Name);
+      const foldedDirty = this.Fc.FoldedSubtypeDirtyFieldNames;
+      return foldedDirty.length > 0 ? [...ownDirty, ...foldedDirty] : ownDirty;
     }
     return this.DirtyFieldNames;
   }
@@ -915,6 +921,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.recordRefresh.SingleFieldRestoreRequested$.pipe(takeUntil(this.destroy$)).subscribe((req) => {
       void this.onSingleFieldRestoreRequested(req);
     });
+    this.CommentsCoordinator.BindRefreshCoordinator(this.recordRefresh);
     this.CommentsCoordinator.Changed$.pipe(takeUntil(this.destroy$)).subscribe(() => {
       this.ShowRecordComments = this.CommentsCoordinator.IsDrawerOpen;
       this.CommentCount = this.CommentsCoordinator.Rollup.TotalOpenCount;
@@ -2686,6 +2693,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    */
   private refreshAfterSave(): void {
     const record = this.EffectiveRecord;
+    if (record?.IsSaved && this.CommentsCoordinator.IsLoaded) {
+      void this.CommentsCoordinator.LoadForRecord(record, this.ProviderToUse, true);
+    }
     if (!record?.EntityInfo?.TrackRecordChanges) return;
 
     // Refresh version count badge

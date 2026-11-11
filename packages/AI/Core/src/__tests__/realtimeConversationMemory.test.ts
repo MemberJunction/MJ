@@ -9,6 +9,9 @@ import {
     REALTIME_MEMORY_CONTINUITY_PREAMBLE,
     REALTIME_MEMORY_MAX_SEED_CHARS,
     REALTIME_MEMORY_MAX_ENTRY_CHARS,
+    REALTIME_MEMORY_MAX_STATE_CHARS,
+    REALTIME_MEMORY_MAX_STATE_ENTRY_CHARS,
+    REALTIME_MEMORY_MAX_PINNED_HEAD_CHARS,
     REALTIME_MEMORY_TRUNCATED_TAIL,
     REALTIME_MEMORY_MAX_PENDING_USER_TURNS,
 } from '../generic/realtimeConversationMemory';
@@ -469,5 +472,211 @@ describe('RealtimeConversationMemory reserved user turns (late transcription)', 
         m.Record({ Kind: 'assistant', Text: 'a' });
         m.Record({ Kind: 'user', Text: 'u', ItemId: 'item_1' });
         expect(lines(m)).toEqual(['assistant:a', 'user:u']);
+    });
+});
+
+describe('RealtimeConversationMemory context note retention (Ephemeral, StateKey, MemoryText)', () => {
+    it('ignores Ephemeral notes completely so transient progress frames never enter reconnect seeds', () => {
+        const m = new RealtimeConversationMemory();
+        m.Record({ Kind: 'user', Text: 'Run the revenue report' });
+        for (let i = 0; i < 30; i++) {
+            m.Record({
+                Kind: 'note',
+                Text: `[delegated-agent progress] step ${i + 1}/30 querying ledger`,
+                Ephemeral: true,
+            });
+        }
+        m.Record({
+            Kind: 'note',
+            Text: '[visual: camera] frame captured',
+            Ephemeral: true,
+            StateKey: 'should-not-be-stored',
+        });
+        m.Record({ Kind: 'assistant', Text: 'Here is the Q3 revenue breakdown.' });
+
+        expect(m.EntryCount).toBe(2);
+        expect(m.StateEntryCount).toBe(0);
+        expect(m.Seed().Entries).toEqual([
+            { Kind: 'user', Text: 'Run the revenue report' },
+            { Kind: 'assistant', Text: 'Here is the Q3 revenue breakdown.' },
+        ]);
+    });
+
+    it('replaces keyed state in place so 50 Explorer screen notes keep only the latest screen and evict zero user turns', () => {
+        const m = new RealtimeConversationMemory();
+        m.Record({ Kind: 'user', Text: "Remember I'm working on AIDP." });
+        m.Record({ Kind: 'assistant', Text: "Got it — I'll remember you're working on AIDP." });
+
+        for (let i = 1; i <= 50; i++) {
+            const screenPayload = `[app-context]\nlocation: Data Explorer › Screen ${i}\n${'detail: x\n'.repeat(190)}`;
+            expect(screenPayload.length).toBeGreaterThan(1_900);
+            m.Record({ Kind: 'note', Text: screenPayload, StateKey: 'app-context' });
+        }
+
+        expect(m.StateEntryCount).toBe(1);
+        expect(m.DroppedEntryCount).toBe(0);
+        const seed = m.Seed();
+        expect(seed.DroppedEntries).toBe(0);
+        expect(seed.Entries).toHaveLength(3);
+        expect(seed.Entries[0]).toEqual({ Kind: 'user', Text: "Remember I'm working on AIDP." });
+        expect(seed.Entries[1]).toEqual({ Kind: 'assistant', Text: "Got it — I'll remember you're working on AIDP." });
+        expect(seed.Entries[2].Kind === 'note' && seed.Entries[2].Text).toContain('Screen 50');
+        expect(seed.Entries[2].Kind === 'note' && seed.Entries[2].Text).not.toContain('Screen 49');
+    });
+
+    it('keeps keyed state isolated from MaxSeedChars in both directions (5,000 turns never evict app-context)', () => {
+        expect(REALTIME_MEMORY_MAX_STATE_CHARS).toBe(4_000);
+        expect(REALTIME_MEMORY_MAX_STATE_ENTRY_CHARS).toBe(3_500);
+
+        const m = new RealtimeConversationMemory();
+        m.Record({
+            Kind: 'note',
+            Text: '[app-context]\nlocation: Explorer › Accounts (Entity)',
+            StateKey: 'app-context',
+        });
+        for (let i = 0; i < 5_000; i++) {
+            m.Record({
+                Kind: i % 2 === 0 ? 'user' : 'assistant',
+                Text: `Turn ${i}: ${'conversation '.repeat(20)}`,
+            });
+        }
+
+        expect(m.StateEntryCount).toBe(1);
+        expect(m.DroppedEntryCount).toBeGreaterThan(4_900);
+        const seed = m.Seed();
+        const tailNote = seed.Entries.at(-1);
+        expect(tailNote).toEqual({
+            Kind: 'note',
+            Text: '[app-context]\nlocation: Explorer › Accounts (Entity)',
+        });
+    });
+
+    it('stores MemoryText in reconnect memory when live wire Text is a compact delta, and deletes state on blank MemoryText', () => {
+        const m = new RealtimeConversationMemory();
+        m.Record({
+            Kind: 'note',
+            Text: '[app-context]\nlocation: Explorer › Contacts',
+            MemoryText: '[app-context]\nlocation: Explorer › Contacts\notherScreensInApp: Home, Accounts\ncapabilities:\n  tools: Search',
+            StateKey: 'app-context',
+        });
+
+        expect(m.Seed().Entries).toEqual([
+            {
+                Kind: 'note',
+                Text: '[app-context]\nlocation: Explorer › Contacts\notherScreensInApp: Home, Accounts\ncapabilities:\n  tools: Search',
+            },
+        ]);
+
+        // Clearing a keyed state with blank text removes it
+        m.Record({ Kind: 'note', Text: '', MemoryText: '   ', StateKey: 'app-context' });
+        expect(m.StateEntryCount).toBe(0);
+        expect(m.Seed().Entries).toEqual([]);
+    });
+
+    it('evicts oldest keyed state entries when multiple StateKeys exceed MaxStateChars and refreshes recency on update', () => {
+        const m = new RealtimeConversationMemory({ MaxStateChars: 120 });
+        m.Record({ Kind: 'note', Text: 'a'.repeat(50), StateKey: 'state-a' });
+        m.Record({ Kind: 'note', Text: 'b'.repeat(50), StateKey: 'state-b' });
+        // Refresh state-a so state-b becomes oldest
+        m.Record({ Kind: 'note', Text: 'A'.repeat(50), StateKey: 'state-a' });
+        // Adding state-c (50 chars -> 150 > 120) evicts state-b, keeping state-a and state-c
+        m.Record({ Kind: 'note', Text: 'c'.repeat(50), StateKey: 'state-c' });
+
+        expect(m.StateEntryCount).toBe(2);
+        expect(m.Seed().Entries).toEqual([
+            { Kind: 'note', Text: 'A'.repeat(50) },
+            { Kind: 'note', Text: 'c'.repeat(50) },
+        ]);
+    });
+
+    it('preserves full keyed state snapshots up to REALTIME_MEMORY_MAX_STATE_ENTRY_CHARS even though turn MaxEntryChars is 2,000', () => {
+        const m = new RealtimeConversationMemory();
+        const richSnapshot = '[app-context]\n' + 'x'.repeat(3_000);
+        m.Record({ Kind: 'note', Text: richSnapshot, StateKey: 'app-context' });
+        expect(m.Seed().Entries).toEqual([{ Kind: 'note', Text: richSnapshot }]);
+        m.Clear();
+        expect(m.StateEntryCount).toBe(0);
+        expect(m.Seed().Entries).toEqual([]);
+    });
+});
+
+describe('RealtimeConversationMemory opening-turn head pinning', () => {
+    it('pins opening turns across 60+ minutes of conversation and renders a middle-gap marker instead of dropping call-start goals', () => {
+        expect(REALTIME_MEMORY_MAX_PINNED_HEAD_CHARS).toBe(2_400);
+        const m = new RealtimeConversationMemory();
+        m.Record({ Kind: 'user', Text: "Remember I'm working on AIDP and targeting a Friday launch." });
+        m.Record({ Kind: 'assistant', Text: "Understood — you're working on AIDP with a Friday launch target." });
+
+        // Push ~36,000 chars of middle and late turns (> 24,000 MaxSeedChars)
+        for (let i = 1; i <= 120; i++) {
+            m.Record({
+                Kind: i % 2 === 1 ? 'user' : 'assistant',
+                Text: `Discussion turn ${i}: ${'mid-call detail '.repeat(18)}`,
+            });
+        }
+        m.Record({
+            Kind: 'note',
+            Text: '[app-context]\nlocation: Explorer › AIDP Dashboard',
+            StateKey: 'app-context',
+        });
+
+        const seed = m.Seed();
+        expect(seed.PinnedHeadEntries).toBeGreaterThanOrEqual(2);
+        expect(seed.DroppedEntries).toBeGreaterThan(30);
+        expect(seed.Entries[0]).toEqual({
+            Kind: 'user',
+            Text: "Remember I'm working on AIDP and targeting a Friday launch.",
+        });
+        expect(seed.Entries[1]).toEqual({
+            Kind: 'assistant',
+            Text: "Understood — you're working on AIDP with a Friday launch target.",
+        });
+        expect(seed.Entries.some((e) => e.Kind !== 'toolCall' && e.Kind !== 'toolResult' && e.Text.includes('Discussion turn 120'))).toBe(
+            true
+        );
+        expect(seed.Entries.at(-1)).toEqual({
+            Kind: 'note',
+            Text: '[app-context]\nlocation: Explorer › AIDP Dashboard',
+        });
+
+        const rendered = RenderRealtimeMemorySeed(seed);
+        // Opening turns were kept, so top preamble must NOT claim earlier entries before turn 1 were omitted
+        expect(rendered[0].Texts[0]).toBe(ResumePreamble(0));
+        const flatNote = RenderRealtimeMemorySeedAsContextNote(seed) ?? '';
+        expect(flatNote).toContain("Remember I'm working on AIDP and targeting a Friday launch.");
+        expect(flatNote).toContain(`[${seed.DroppedEntries} middle conversation entries omitted; recent conversation follows.]`);
+        expect(flatNote).toContain('Discussion turn 120');
+        expect(flatNote).toContain('[app-context]\nlocation: Explorer › AIDP Dashboard');
+    });
+
+    it('never allows ReplacesPrevious after middle eviction to overwrite a pinned opening turn across the gap', () => {
+        const m = new RealtimeConversationMemory({ MaxSeedChars: 5_000, MaxPinnedHeadChars: 500 });
+        m.Record({ Kind: 'user', Text: 'Opening goal: project AIDP' });
+        m.Record({ Kind: 'assistant', Text: 'Noted project AIDP.' });
+
+        // Overflow MaxSeedChars with assistant-only entries so the tail has NO user turn right after the gap
+        for (let i = 0; i < 30; i++) {
+            m.Record({ Kind: 'assistant', Text: `Filler response ${i}: ${'y'.repeat(220)}` });
+        }
+        expect(m.Seed().PinnedHeadEntries).toBeGreaterThanOrEqual(2);
+
+        // Now record a user turn with ReplacesPrevious: true; it must append to the tail, NOT overwrite slot 0!
+        m.Record({ Kind: 'user', Text: 'New tail question', ReplacesPrevious: true });
+
+        const seed = m.Seed();
+        expect(seed.Entries[0]).toEqual({ Kind: 'user', Text: 'Opening goal: project AIDP' });
+        expect(seed.Entries.at(-1)).toEqual({ Kind: 'user', Text: 'New tail question' });
+    });
+
+    it('can disable head pinning explicitly via MaxPinnedHeadChars: 0', () => {
+        const m = new RealtimeConversationMemory({ MaxSeedChars: 5_000, MaxPinnedHeadChars: 0 });
+        m.Record({ Kind: 'user', Text: 'Opening turn that will not be pinned' });
+        for (let i = 0; i < 30; i++) {
+            m.Record({ Kind: 'assistant', Text: `Turn ${i}: ${'z'.repeat(220)}` });
+        }
+        const seed = m.Seed();
+        expect(seed.PinnedHeadEntries).toBeUndefined();
+        expect(seed.DroppedEntries).toBeGreaterThan(0);
+        expect(seed.Entries[0]).not.toEqual({ Kind: 'user', Text: 'Opening turn that will not be pinned' });
     });
 });

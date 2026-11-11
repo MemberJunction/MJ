@@ -53,7 +53,11 @@ async function seedBaseFixture(dir: string): Promise<void> {
     'packages/MJExplorer/tsconfig.json',
     '{ "extends": "../../tsconfig.angular.json", "compilerOptions": { "paths": { "@memberjunction/ng-bootstrap": ["x"] } } }',
   );
-  await writeUnder(dir, 'packages/MJExplorer/angular.json', '{ "version": 1 }');
+  await writeUnder(
+    dir,
+    'packages/MJExplorer/angular.json',
+    '{ "version": 1, "projects": { "MJExplorer": { "architect": { "serve": { "options": { "prebundle": { "exclude": ["@memberjunction/*"] } } } } } } }',
+  );
   await writeUnder(dir, 'packages/MJExplorer/src/main.ts', 'bootstrap();');
   await writeUnder(dir, 'packages/MJExplorer/src/environments/environment.ts', 'export const secret = 1;');
   await writeUnder(dir, 'packages/MJExplorer/src/app/generated/form.ts', 'export const f = 1;');
@@ -361,7 +365,8 @@ describe('DistributionAssembler sinks', () => {
       const apiPkg = JSON.parse(await readFile(path.join(dest, 'apps', 'MJAPI', 'package.json'), 'utf-8')) as { scripts: Record<string, string> };
       expect(apiPkg.scripts.build).toBe('tsc');
       const angularJson = await readFile(path.join(dest, 'apps', 'MJExplorer', 'angular.json'), 'utf-8');
-      expect(JSON.parse(angularJson)).toEqual({ version: 1 });
+      // The monorepo's @memberjunction/* prebundle exclude is dropped; the empty list stays for mj dev workspace.
+      expect(JSON.parse(angularJson)).toEqual({ version: 1, projects: { MJExplorer: { architect: { serve: { options: { prebundle: { exclude: [] } } } } } } });
       const rootEntries = await readdir(dest);
       expect(rootEntries).toContain('package.json');
       expect(rootEntries).not.toContain('migrations');
