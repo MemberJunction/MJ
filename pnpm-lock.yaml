@@ -1051,6 +1051,9 @@ importers:
 
   packages/AI/Knowledge/FeaturePipelines:
     dependencies:
+      '@memberjunction/actions-base':
+        specifier: 6.2.0
+        version: link:../../../Actions/Base
       '@memberjunction/core':
         specifier: 6.2.0
         version: link:../../../MJCore

