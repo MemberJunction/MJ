@@ -1583,6 +1583,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT169 - Record Change Snapshots Record the Stored Row",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D3B0B7D3-CE23-4B86-82D2-7F963D217DD2"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT166 - Predictive Shadow Scoring and Drift",
             "Sequence": 49,
             "Status": "Active"
@@ -1616,7 +1627,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT169 - Collaborative Docs, Slides, Sheets, Working States, and Library Workspace",
+            "TestID": "@lookup:MJ: Tests.Name=IT170 - Collaborative Docs, Slides, Sheets, Working States, and Library Workspace",
             "Sequence": 49,
             "Status": "Active"
           },
@@ -1627,7 +1638,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT170 - Collaborative Docs, Slides, Sheets and Working States over GraphQL and WebSocket",
+            "TestID": "@lookup:MJ: Tests.Name=IT171 - Collaborative Docs, Slides, Sheets and Working States over GraphQL and WebSocket",
             "Sequence": 83,
             "Status": "Active"
           },
