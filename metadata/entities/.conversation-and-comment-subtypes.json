@@ -17,6 +17,10 @@
           "BaseClass": "ConversationTypeDriver"
         }
       }
+    },
+    "sync": {
+      "lastModified": "2026-11-10T23:41:05.115Z",
+      "checksum": "421ab8b06b519ae9cfcae017d1c2cd09cbe1ae830a96981934487b9e9d892653"
     }
   },
   {
@@ -41,6 +45,10 @@
           "Path": "CommentTypeID.UIDriverClass"
         }
       }
+    },
+    "sync": {
+      "lastModified": "2026-11-10T23:41:05.150Z",
+      "checksum": "cdae68d88c0e2b6652209a18a1bc079370ed5abdcf63440a9e45bb390be68f24"
     }
   },
   {
