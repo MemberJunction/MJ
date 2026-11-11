@@ -1,0 +1,22 @@
+{
+  // Comments are supported
+  "name": "Member Junction",
+  "entryPoints": ["packages/**"],
+  "entryPointStrategy": "packages",
+  "out": "docs",
+  "exclude": [
+    "packages/DocUtils/",
+    "packages/MJCLI/",
+    "packages/CodeGen/",
+    "packages/GeneratedEntities/",
+    "packages/GeneratedActions/",
+    "packages/MJAPI/",
+    "packages/MJExplorer/",
+    "packages/AngularElements/mj-angular-elements-demo/",
+    "packages/MJCodeGenAPI/",
+    "packages/React/test-harness/react-test-example/",
+    "**/*.spec.ts",
+    "**/*.d.ts",
+    "node_modules"
+  ]
+}

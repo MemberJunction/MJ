@@ -1,0 +1,430 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// Mock all heavy dependencies
+vi.mock('graphql-request', () => ({
+  gql: vi.fn((strings: TemplateStringsArray) => strings.join('')),
+  GraphQLClient: vi.fn().mockImplementation(() => ({
+    request: vi.fn().mockResolvedValue({}),
+    setHeader: vi.fn(),
+  })),
+}));
+
+vi.mock('graphql-ws', () => ({
+  createClient: vi.fn().mockReturnValue({
+    subscribe: vi.fn(),
+    dispose: vi.fn(),
+  }),
+}));
+
+vi.mock('uuid', () => ({
+  v4: vi.fn().mockReturnValue('mock-uuid-1234'),
+}));
+
+vi.mock('rxjs', () => ({
+  Observable: vi.fn(),
+  // A class, not `vi.fn().mockImplementation(...)`: an arrow-returning mock is not
+  // constructable, so any `new Subject()` in a field initializer throws
+  // "is not a constructor" before the provider is even built. Mirrors the
+  // BehaviorSubject mock directly below.
+  Subject: class {
+    next = vi.fn();
+    error = vi.fn();
+    complete = vi.fn();
+    subscribe = vi.fn();
+    asObservable = vi.fn();
+  },
+  BehaviorSubject: class {
+    value: unknown;
+    constructor(initialValue: unknown) { this.value = initialValue; }
+    next = vi.fn();
+    complete = vi.fn();
+    subscribe = vi.fn();
+    asObservable = vi.fn();
+    getValue = vi.fn();
+  },
+  Subscription: vi.fn(),
+}));
+
+vi.mock('@memberjunction/core', () => {
+  class MockProviderBase {
+    static _globalProviderKey = 'GraphQL';
+    protected _localStorageProvider: Record<string, string> = {};
+    async Config() { return true; }
+    get LocalStorageProvider() { return null; }
+  }
+  return {
+    BaseEntity: vi.fn(),
+    ProviderBase: MockProviderBase,
+    EntityRecordNameCache: class {
+      Get() { return undefined; }
+      Has() { return false; }
+      Set() {}
+    },
+    ProviderConfigDataBase: class {
+      Data: Record<string, unknown> = {};
+      constructor(data: Record<string, unknown>) { this.Data = data; }
+    },
+    ProviderType: { Network: 'Network' },
+    UserInfo: vi.fn(),
+    UserRoleInfo: vi.fn(),
+    RecordChange: vi.fn(),
+    RunViewResult: vi.fn(),
+    EntityInfo: vi.fn(),
+    EntityFieldInfo: vi.fn(),
+    EntityFieldTSType: vi.fn(),
+    RunViewParams: vi.fn(),
+    LogError: vi.fn(),
+    TransactionGroupBase: class { PendingTransactions: unknown[] = []; Variables: unknown[] = []; },
+    TransactionItem: vi.fn(),
+    TransactionResult: vi.fn(),
+    DatasetItemFilterType: vi.fn(),
+    DatasetResultType: vi.fn(),
+    DatasetStatusResultType: vi.fn(),
+    EntityRecordNameInput: vi.fn(),
+    EntityRecordNameResult: vi.fn(),
+    RecordDependency: vi.fn(),
+    RecordMergeRequest: vi.fn(),
+    RecordMergeResult: vi.fn(),
+    RunQueryResult: vi.fn(),
+    PotentialDuplicateRequest: vi.fn(),
+    PotentialDuplicateResponse: vi.fn(),
+    CompositeKey: vi.fn(),
+    EntityDeleteOptions: vi.fn(),
+    RunQueryParams: vi.fn(),
+    BaseEntityResult: vi.fn(),
+    RunViewWithCacheCheckParams: vi.fn(),
+    RunViewsWithCacheCheckResponse: vi.fn(),
+    RunViewWithCacheCheckResult: vi.fn(),
+    RunQueryWithCacheCheckParams: vi.fn(),
+    RunQueriesWithCacheCheckResponse: vi.fn(),
+    RunQueryWithCacheCheckResult: vi.fn(),
+    KeyValuePair: vi.fn(),
+    getGraphQLTypeNameBase: vi.fn().mockReturnValue('MJTestEntity'),
+    AggregateExpression: vi.fn(),
+    InMemoryLocalStorageProvider: vi.fn(),
+    SetProvider: vi.fn(),
+    StartupManager: { Instance: { Startup: vi.fn().mockResolvedValue(true) } },
+    Metadata: vi.fn(),
+    RunView: vi.fn(),
+    RunQuery: vi.fn(),
+    EntitySaveOptions: vi.fn(),
+    EntityMergeOptions: vi.fn(),
+  };
+});
+
+vi.mock('@memberjunction/core-entities', () => ({
+  MJUserViewEntityExtended: vi.fn(),
+  ViewInfo: vi.fn(),
+}));
+
+vi.mock('@memberjunction/global', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@memberjunction/global')>();
+  return {
+    ...actual,
+    RegisterClass: vi.fn(() => (target: Function) => target),
+    MJGlobal: {
+      Instance: {
+        RaiseEvent: vi.fn(),
+        ClassFactory: { CreateInstance: vi.fn() },
+      },
+    },
+    MJEventType: { LoggedIn: 'LoggedIn' },
+    SafeJSONParse: vi.fn((str: string) => {
+      try { return JSON.parse(str); } catch { return null; }
+    }),
+  };
+});
+
+vi.mock('@tempfix/idb', () => ({
+  openDB: vi.fn(),
+}));
+
+vi.mock('../storage-providers', () => ({
+  BrowserIndexedDBStorageProvider: vi.fn(),
+}));
+
+vi.mock('../graphQLAIClient', () => ({
+  GraphQLAIClient: vi.fn().mockImplementation(() => ({})),
+}));
+
+import { GraphQLProviderConfigData, GraphQLDataProvider } from '../graphQLDataProvider';
+import { GetGlobalObjectStore } from '@memberjunction/global';
+import { v4 } from 'uuid';
+
+function resetSingleton(): void {
+  const g = GetGlobalObjectStore();
+  const key = '___SINGLETON__GraphQLDataProvider';
+  if (g && g[key]) {
+    delete g[key];
+  }
+}
+
+describe('GraphQLProviderConfigData', () => {
+  it('should create config with all required parameters', () => {
+    const config = new GraphQLProviderConfigData(
+      'test-jwt-token',
+      'http://localhost:4000/graphql',
+      'ws://localhost:4000/graphql',
+      async () => 'refreshed-token',
+    );
+
+    expect(config.Token).toBe('test-jwt-token');
+    expect(config.URL).toBe('http://localhost:4000/graphql');
+    expect(config.WSURL).toBe('ws://localhost:4000/graphql');
+    // Note: RefreshTokenFunction getter reads this.Data.RefreshFunction but
+    // the constructor stores it as this.Data.RefreshTokenFunction (key mismatch in source)
+    expect(config.RefreshTokenFunction).toBeUndefined();
+  });
+
+  it('should set and get Token', () => {
+    const config = new GraphQLProviderConfigData(
+      'initial-token',
+      'http://localhost:4000',
+      'ws://localhost:4000',
+      async () => 'new-token',
+    );
+
+    expect(config.Token).toBe('initial-token');
+    config.Token = 'updated-token';
+    expect(config.Token).toBe('updated-token');
+  });
+
+  it('should handle MJAPIKey parameter', () => {
+    const config = new GraphQLProviderConfigData(
+      'token',
+      'http://localhost:4000',
+      'ws://localhost:4000',
+      async () => 'token',
+      undefined,
+      undefined,
+      undefined,
+      'my-api-key',
+    );
+
+    expect(config.MJAPIKey).toBe('my-api-key');
+  });
+
+  it('should handle UserAPIKey parameter', () => {
+    const config = new GraphQLProviderConfigData(
+      'token',
+      'http://localhost:4000',
+      'ws://localhost:4000',
+      async () => 'token',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'mj_sk_user_key',
+    );
+
+    expect(config.UserAPIKey).toBe('mj_sk_user_key');
+  });
+
+  it('should handle schema configuration', () => {
+    const config = new GraphQLProviderConfigData(
+      'token',
+      'http://localhost:4000',
+      'ws://localhost:4000',
+      async () => 'token',
+      '__mj',
+      ['schema1', 'schema2'],
+      ['excluded_schema'],
+    );
+
+    expect(config.Token).toBe('token');
+    // Schema config passed to parent ProviderConfigDataBase
+  });
+
+  it('should set MJAPIKey via setter', () => {
+    const config = new GraphQLProviderConfigData(
+      'token',
+      'http://localhost:4000',
+      'ws://localhost:4000',
+      async () => 'token',
+    );
+
+    config.MJAPIKey = 'new-api-key';
+    expect(config.MJAPIKey).toBe('new-api-key');
+  });
+
+  it('should set UserAPIKey via setter', () => {
+    const config = new GraphQLProviderConfigData(
+      'token',
+      'http://localhost:4000',
+      'ws://localhost:4000',
+      async () => 'token',
+    );
+
+    config.UserAPIKey = 'mj_sk_updated';
+    expect(config.UserAPIKey).toBe('mj_sk_updated');
+  });
+});
+
+describe('GraphQLDataProvider', () => {
+  let provider: GraphQLDataProvider;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetSingleton();
+    provider = new GraphQLDataProvider();
+  });
+
+  describe('constructor', () => {
+    it('should create a singleton instance', () => {
+      expect(GraphQLDataProvider.Instance).toBe(provider);
+    });
+
+    it('should not replace existing singleton', () => {
+      // provider is already the singleton from beforeEach
+      const provider2 = new GraphQLDataProvider();
+      // With global store backing, constructor returns the existing instance
+      expect(provider2).toBe(provider);
+      expect(GraphQLDataProvider.Instance).toBe(provider);
+    });
+  });
+
+  describe('GenerateUUID', () => {
+    it('should return a UUID string', () => {
+      const uuid = provider.GenerateUUID();
+      expect(uuid).toBe('mock-uuid-1234');
+    });
+
+    it('should call uuid v4', () => {
+      provider.GenerateUUID();
+      expect(v4).toHaveBeenCalled();
+    });
+  });
+
+  describe('DatabaseConnection', () => {
+    it('should throw when accessed', () => {
+      expect(() => provider.DatabaseConnection).toThrow('DatabaseConnection not implemented');
+    });
+  });
+
+  describe('sessionId', () => {
+    it('should return the session ID after config', () => {
+      // Before config, sessionId is undefined
+      expect(provider.sessionId).toBeUndefined();
+    });
+  });
+});
+
+describe('GraphQLDataProvider - Config flow', () => {
+  it('should accept GraphQLProviderConfigData', () => {
+    const config = new GraphQLProviderConfigData(
+      'token',
+      'http://localhost:4000',
+      'ws://localhost:4000',
+      async () => 'refreshed',
+    );
+
+    expect(config).toBeDefined();
+    expect(config.Token).toBe('token');
+    expect(config.URL).toBe('http://localhost:4000');
+    expect(config.WSURL).toBe('ws://localhost:4000');
+  });
+});
+
+// ─── Metadata refresh after a metadata member entity changes ──────────────
+//
+// Which entities can stale this provider's metadata — and the debounce, burst collapse, and
+// backend matching — live in ProviderBase's dataset-membership mechanism, tested in MJCore
+// (providerBase.metadataMemberRefresh.test.ts) where ProviderBase is real (this file mocks
+// @memberjunction/core away). What is GraphQL-specific, and pinned here, is the refresh
+// POLICY: a browser must not re-pull the full metadata graph on every member write, so the
+// client override runs the staleness check instead of the base class's hard Refresh — and it
+// bypasses the min-check-interval throttle, because the caller holds positive evidence that a
+// member entity was just written.
+
+describe('GraphQLDataProvider - refresh policy after a metadata member change', () => {
+  it('runs the staleness check (RefreshIfNeeded) with the throttle bypassed, not a hard Refresh', async () => {
+    const provider = Object.create(GraphQLDataProvider.prototype) as GraphQLDataProvider;
+    const refreshIfNeeded = vi.fn().mockResolvedValue(true);
+    const hardRefresh = vi.fn().mockResolvedValue(true);
+    (provider as unknown as { RefreshIfNeeded: unknown }).RefreshIfNeeded = refreshIfNeeded;
+    (provider as unknown as { Refresh: unknown }).Refresh = hardRefresh;
+
+    const result = await (provider as unknown as { RefreshAfterMetadataMemberChange(): Promise<boolean> })
+      .RefreshAfterMetadataMemberChange();
+
+    expect(result).toBe(true);
+    expect(refreshIfNeeded).toHaveBeenCalledTimes(1);
+    expect(refreshIfNeeded).toHaveBeenCalledWith(undefined, true);
+    expect(hardRefresh).not.toHaveBeenCalled();
+  });
+
+  it('uses a long randomized coalescing window, not the server debounce', () => {
+    // Every browser receives every write broadcast, and MJ_Metadata's members include
+    // routinely-written entities (dashboards, queries) — the long jittered window is what caps
+    // each browser at one staleness check per window and spreads the fleet's checks apart.
+    const provider = Object.create(GraphQLDataProvider.prototype) as GraphQLDataProvider;
+    const min = GraphQLDataProvider.ClientMemberRefreshWindowMinMs;
+    const jitter = GraphQLDataProvider.ClientMemberRefreshWindowJitterMs;
+    expect(min).toBeGreaterThanOrEqual(10_000); // "tens of seconds", never the 500ms server debounce
+
+    const seen = new Set<number>();
+    for (let i = 0; i < 25; i++) {
+      const delay = (provider as unknown as { MetadataMemberRefreshDelayMs: number }).MetadataMemberRefreshDelayMs;
+      expect(delay).toBeGreaterThanOrEqual(min);
+      expect(delay).toBeLessThanOrEqual(min + jitter);
+      seen.add(delay);
+    }
+    expect(seen.size).toBeGreaterThan(1); // genuinely jittered, not a constant
+
+    // Coalesce, never re-arm: with a window this long, re-arming would let steady org-wide
+    // write activity postpone the refresh forever.
+    expect((provider as unknown as { MetadataMemberRefreshRearmsOnNewEvents: boolean }).MetadataMemberRefreshRearmsOnNewEvents).toBe(false);
+  });
+});
+
+describe('GraphQLDataProvider - dataset failure status preservation (MJ#6106)', () => {
+  it('preserves DatasetID and Status when GetDatasetByName returns Success=false', async () => {
+    const provider = Object.create(GraphQLDataProvider.prototype) as GraphQLDataProvider;
+    (provider as unknown as { ExecuteGQL: unknown }).ExecuteGQL = vi.fn().mockResolvedValue({
+      GetDatasetByName: {
+        DatasetID: 'DS-TEMPLATE',
+        DatasetName: 'Template_Metadata',
+        Success: false,
+        Status: 'User restricted@example.com does not have read permissions on MJ: Templates',
+        LatestUpdateDate: null,
+        Results: null,
+      },
+    });
+
+    const result = await provider.GetDatasetByName('Template_Metadata');
+    expect(result).toEqual({
+      DatasetID: 'DS-TEMPLATE',
+      DatasetName: 'Template_Metadata',
+      Success: false,
+      Status: 'User restricted@example.com does not have read permissions on MJ: Templates',
+      LatestUpdateDate: null,
+      Results: null,
+    });
+  });
+
+  it('preserves DatasetID and Status when executeDatasetStatusByName returns Success=false', async () => {
+    const provider = Object.create(GraphQLDataProvider.prototype) as GraphQLDataProvider;
+    (provider as unknown as { ExecuteGQL: unknown }).ExecuteGQL = vi.fn().mockResolvedValue({
+      GetDatasetStatusByName: {
+        DatasetID: 'DS-TEMPLATE',
+        DatasetName: 'Template_Metadata',
+        Success: false,
+        Status: 'User restricted@example.com does not have read permissions on MJ: Templates',
+        LatestUpdateDate: null,
+        EntityUpdateDates: null,
+      },
+    });
+
+    const result = await (
+      provider as unknown as { executeDatasetStatusByName(name: string): Promise<unknown> }
+    ).executeDatasetStatusByName('Template_Metadata');
+    expect(result).toEqual({
+      DatasetID: 'DS-TEMPLATE',
+      DatasetName: 'Template_Metadata',
+      Success: false,
+      Status: 'User restricted@example.com does not have read permissions on MJ: Templates',
+      LatestUpdateDate: null,
+      EntityUpdateDates: null,
+    });
+  });
+});

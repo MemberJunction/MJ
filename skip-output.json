@@ -1,0 +1,220 @@
+{
+  "functionalRequirements": "# Entity Browser Report Functional Requirements\n\n## Core Functionality\nProvides comprehensive master/detail view of all system entities and their field metadata\n\n## User Interactions\n- Expand/collapse entity rows to view field details\n- Sort entities by metadata fields (name, type, last modified)\n- Filter entities by category or custom tags\n- Create new entities with field templates\n- Edit field metadata (type, description, constraints)\n\n## Business Rules\n1. Entity permissions: Users may only create/update entities they own\n2. Data consistency rules: Fields must have unique names within an entity and valid data types\n3. Audit logging: All entity/field modifications are tracked with timestamp and user\n4. Security: Requires MANAGE_METADATA permission for write actions\n\n## Expected Outcomes\n- Immediate visibility into full data model structure\n- Ability to identify and correct data model inconsistencies\n- Standardized schema management across business units\n- Auditable change history for compliance reporting\n\n## Business Value\n- Enables data governance officers to maintain data model quality\n- Supports application developers in schema evolution\n- Facilitates cross-functional team collaboration on data structure\n- Provides audit trails for regulatory requirements\n\n## User Experience\n- Hierarchical view with visual indicators of entity relationships\n- Bulk edit capability for field metadata\n- Real-time validation of entity configurations\n- Contextual help for metadata tags and constraints\n\n## Performance Requirements\n- 100ms response time for expanding/collapsing entities\n- 500ms threshold for initial entity load (5000+ entity systems)\n- Real-time field validation with error state highlighting\n\n## Accessibility Requirements\n- Screen reader support for entity tree navigation\n- Keyboard accessible expand/collapse controls\n- High-contrast mode for field metadata views\n- ARIA labels for all editable metadata fields",
+  "dataRequirements": {
+    "mode": "dynamic",
+    "dynamicData": {
+      "requiredEntities": [
+        {
+          "entityName": "Entities",
+          "entityDescription": "Catalog of all entities across all schemas",
+          "displayFields": [
+            "Name",
+            "Description",
+            "SchemaName",
+            "LastModified"
+          ],
+          "filterFields": [
+            "SchemaName",
+            "EntityType",
+            "OwnerID"
+          ],
+          "sortFields": [
+            "Name",
+            "LastModified"
+          ],
+          "usageContext": "Core entity container for hierarchical browser; provides metadata needed for expand/collapse functionality"
+        },
+        {
+          "entityName": "Entity Fields",
+          "entityDescription": "List of all fields within each entity with metadata about each field",
+          "displayFields": [
+            "Name",
+            "DataType",
+            "Description",
+            "IsNullable",
+            "MaxLength"
+          ],
+          "filterFields": [
+            "EntityName",
+            "DataType",
+            "IsPrimaryKey"
+          ],
+          "sortFields": [
+            "Name",
+            "Position"
+          ],
+          "usageContext": "Detail panel field metadata; displays and allows editing of schema properties"
+        },
+        {
+          "entityName": "Entity Relationships",
+          "entityDescription": "Metadata about relationships between entities including display preferences for the UI",
+          "displayFields": [
+            "SourceEntity",
+            "TargetEntity",
+            "RelationshipType",
+            "Cardinality"
+          ],
+          "filterFields": [
+            "SourceEntity",
+            "TargetEntity"
+          ],
+          "sortFields": [
+            "SourceEntity",
+            "TargetEntity"
+          ],
+          "usageContext": "Visual relationship indicators in hierarchical tree; supports navigation between related entities"
+        }
+      ]
+    }
+  },
+  "technicalDesign": "# Entity Browser Report Technical Design\n\n## Architecture & Design Patterns\n- **Tree-Based Master-Detail UI:** The component uses a split-pane layout with a tree browser of entities on the left and a detail panel on the right. The tree supports expand/collapse per entity and shows relationships as sub-nodes.\n- **Dynamic Data Loading:** Tree and detail panels fetch entity/field data on demand using `utilities.rv.runView`/`utilities.rq.runQuery`, minimizing initial load and supporting large data sets (5000+ entities).\n- **Permissions & Security:** All create/update requests validate user permission using the `MANAGE_METADATA` privilege, with logic hooks in write/update pathways. Actions are hidden/disabled when permission is lacking.\n- **Audit Logging:** All entity or field metadata edits are logged by calling utilities or by emitting an `actionTriggered` event with type 'auditLog' and relevant details for the host system to persist.\n\n## Component Structure\n- **EntityBrowserReport** (root)\n  - `EntityTreePanel` (child): Entity expand/collapse, search/filter/sort, relationship drilldown\n  - `EntityDetailPanel` (child): Show full field metadata, field edit/create, tabs for related entities/history\n- **Toolbar/ActionBar:** Top or side toolbar for create new entity, bulk edit, filters, search\n\n## State Management\n- State tracks expanded state per entity, selected entity ID, filters/sort, per-entity bulk edit state, and active editing session. State changes are persisted in `userState`.\n\n## Data Flow\n- On entity tree expand: loads child fields/relationships dynamically for that entity.\n- On entity select: loads full entity and field metadata for detail panel.\n- On edits: validates permission, performs the mutation, shows errors inline, and emits audit log.\n\n## Performance & UX\n- Left tree panel is virtualized for large entity sets.\n- Details load in right panel on selection, with loading states/spinners.\n- ARIA/keyboard navigation throughout.\n\n## Integration Points\n- All data loads, mutations, permission checks, and logging use provided `utilities` APIs.\n- Event protocol adheres to Skip event contracts for all child communication.\n\n## Error Handling\n- Any data/load errors are shown in a top-level simple alert/empty/error state only.\n- Mutation errors are shown inline in edit panels.\n",
+  "componentCode": "function EntityBrowserReport({ data, utilities, userState, callbacks, styles, components }) {\n  const { useState, useEffect } = window;\n  // Destructure child components\n  const { EntityTreePanel, EntityDetailPanel, EntityToolbar } = components;\n\n  // Initial root state\n  const [fullUserState, setFullUserState] = useState({\n    expandedEntities: {},             // { [entityId]: true }\n    selectedEntityId: null,           // string\n    filters: {\n      search: '',                     // current search string\n      category: '',                   // filter by entity category\n      tags: []                        // filter by custom tags\n    },\n    sort: {\n      field: 'Name',\n      direction: 'asc'\n    },\n    bulkEditState: {},                // { [entityId]: { ... } }\n    ...userState\n  });\n\n  // Unified state update\n  const updateUserState = (updates) => {\n    const newState = { ...fullUserState, ...updates };\n    setFullUserState(newState);\n    if (callbacks?.UpdateUserState) callbacks.UpdateUserState(newState);\n  };\n\n  // Standardized event handler (with custom business logic first)\n  const handleComponentEvent = (event) => {\n    // Handle tree expand/collapse\n    if (event.type === 'entityExpandToggled') {\n      updateUserState({\n        expandedEntities: {\n          ...fullUserState.expandedEntities,\n          [event.payload.entityId]: event.payload.expanded\n        }\n      });\n      return;\n    }\n    // Handle master selection\n    if (event.type === 'entitySelected') {\n      updateUserState({ selectedEntityId: event.payload.entityId });\n      return;\n    }\n    // Handle filter/sort/search changes\n    if (event.type === 'filterChanged' || event.type === 'sortChanged') {\n      updateUserState({ [event.type === 'filterChanged' ? 'filters' : 'sort']: event.payload });\n      return;\n    }\n    // Handle edit/bulk-edit, permissions, and audit logging\n    if (event.type === 'entityFieldUpdated' || event.type === 'entityMetadataUpdated') {\n      // Permission logic\n      if (!data?.userPermissions?.includes('MANAGE_METADATA')) {\n        callbacks?.NotifyEvent?.('notify', { type: 'permissionDenied' });\n        return;\n      }\n      // Fire audit log event (integration point for host system)\n      callbacks?.NotifyEvent?.('auditLog', {\n        user: data?.currentUser,\n        timestamp: Date.now(),\n        action: event.type,\n        details: event.payload\n      });\n      // State update (optimistic UI)\n      updateUserState({ lastEdit: { type: event.type, entityId: event.payload.entityId } });\n      // Optionally, refresh entities (can trigger data reload)\n      callbacks?.RefreshData?.();\n      return;\n    }\n    // Delegate all else to standard handler\n    const stdHandler = window.createStandardEventHandler(updateUserState, callbacks);\n    stdHandler(event);\n  };\n\n  // Top-level error or loading state\n  if (!data?.Entities) {\n    return (\n      <div style={{ padding: styles.spacing.xl, color: styles.colors.textSecondary, textAlign: 'center' }}>\n        Loading data or failed to load entity metadata\n      </div>\n    );\n  }\n\n  // Responsive layout: left tree / right detail\n  return (\n    <div style={{ display: 'flex', flexDirection: 'row', height: '100%', width: '100%' }}>\n      {/* Left: Entity Tree with toolbar (40%) */}\n      <div style={{ width: '40%', minWidth: 280, borderRight: `1px solid ${styles.colors.border}`, height: '100%', display: 'flex', flexDirection: 'column' }}>\n        <EntityToolbar\n          data={{ filters: fullUserState.filters, sort: fullUserState.sort, permissions: data?.userPermissions }}\n          state={fullUserState}\n          onEvent={handleComponentEvent}\n          styles={styles}\n          statePath=\"toolbar\"\n        />\n        <div style={{ flex: 1, overflow: 'auto' }}>\n          <EntityTreePanel\n            data={{\n              entities: data.Entities,\n              relationships: data.EntityRelationships\n            }}\n            config={{\n              expandedEntities: fullUserState.expandedEntities,\n              selectedEntityId: fullUserState.selectedEntityId,\n              filters: fullUserState.filters,\n              sort: fullUserState.sort\n            }}\n            state={fullUserState.tree}\n            onEvent={handleComponentEvent}\n            styles={styles}\n            statePath=\"tree\"\n          />\n        </div>\n      </div>\n      {/* Right: Detail Panel (flex-grow) */}\n      <div style={{ flex: 1, height: '100%', overflow: 'auto' }}>\n        {fullUserState.selectedEntityId ? (\n          <EntityDetailPanel\n            data={{\n              entityId: fullUserState.selectedEntityId,\n              fields: data.EntityFields,\n              relationships: data.EntityRelationships,\n              permissions: data.userPermissions\n            }}\n            state={fullUserState.detail}\n            onEvent={handleComponentEvent}\n            styles={styles}\n            statePath=\"detail\"\n          />\n        ) : (\n          <div style={{ padding: styles.spacing.xl, textAlign: 'center', color: styles.colors.textSecondary }}>\n            Select an entity to view details.\n          </div>\n        )}\n      </div>\n    </div>\n  );\n}\n\nreturn {\n  component: EntityBrowserReport,\n  print: function () { window.print(); },\n  refresh: function () { /* Optionally invoke data refresh hooks */ }\n};",
+  "techExplanation": "Implements a split-panel master/detail UI for entities using React and MemberJunction dynamic data APIs. Delegates tree and detail rendering to child panels, mediates state and events, handles permission validation and audit logging on metadata mutations, and optimizes for large/complex data models.",
+  "childComponents": [
+    {
+      "componentName": "EntityToolbar",
+      "exampleUsage": "<EntityToolbar\n  data={{ filters: fullUserState.filters, sort: fullUserState.sort, permissions: data?.userPermissions }}\n  state={fullUserState}\n  onEvent={handleComponentEvent}\n  styles={styles}\n  statePath=\"toolbar\"\n/>",
+      "description": "Provides search, filter, sort, and create entity actions. Hides or disables mutation actions without permission.",
+      "functionalRequirements": "- Render search input, filter (category, tags), sort select\n- Display create new entity button, disabled if user lacks permissions\n- Bubble filter/sort/search changes via 'filterChanged'/'sortChanged' events\n- Handle 'createEntity' actions with permission and audit hooks\n- Integrate with keyboard and ARIA for accessibility\n",
+      "dataRequirements": {
+        "mode": "dynamic",
+        "dynamicData": {
+          "requiredEntities": [
+            {
+              "entityName": "Entities",
+              "displayFields": [
+                "Name",
+                "Description",
+                "SchemaName",
+                "LastModified",
+                "EntityType",
+                "OwnerID"
+              ],
+              "filterFields": [
+                "SchemaName",
+                "EntityType",
+                "OwnerID"
+              ],
+              "sortFields": [
+                "Name",
+                "LastModified"
+              ]
+            }
+          ]
+        }
+      },
+      "technicalDesign": "Functional component using search/filter/sort form controls (from antd if available). Visible create/edit actions only if MANAGE_METADATA is present. Updates parent on filter/sort/search state changes via standardized events. Emits 'actionTriggered' for create requests with audit details.",
+      "statePath": "toolbar",
+      "componentCode": "function EntityToolbar({\n  data: { filters, sort, permissions },\n  state,\n  onEvent, \n  styles,\n  statePath\n}) {\n  const [localState, setLocalState] = useState({\n    ...state\n  });\n\n  const handleSearchChange = (e) => {\n    const newSearchValue = e.target.value;\n    setLocalState(prev => ({\n      ...prev,\n      searchValue: newSearchValue\n    }));\n\n    onEvent({\n      type: 'filterChanged',\n      source: 'EntityToolbar',\n      payload: {\n        filterType: 'search',\n        value: newSearchValue,\n        statePath: statePath\n      }\n    });\n  };\n\n  const handleDropdownChange = (value, type) => {\n    setLocalState(prev => ({\n      ...prev,\n      [type]: value\n    }));\n\n    onEvent({\n      type: 'filterChanged',\n      source: 'EntityToolbar',\n      payload: {\n        filterType: type,\n        value: value,\n        statePath: statePath\n      }\n    });\n  };\n\n  const handleCreateEntity = () => {\n    onEvent({\n      type: 'actionTriggered',\n      source: 'EntityToolbar',\n      payload: {\n        actionType: 'createEntity',\n        statePath: statePath\n      }\n    });\n  };\n\n  \n  return (\n    <div style={{\n      display: 'flex',\n      gap: styles.spacing.md,\n      flexWrap: 'wrap',\n      paddingBottom: styles.spacing.md,\n      borderBottom: `1px solid ${styles.colors.border}`\n    }}>\n      \n      {/* Search Input */}\n      <div style={{ flex: 1, minWidth: 200 }}>\n        <input\n          type=\"search\"\n          value={localState.searchValue || ''}\n          onChange={handleSearchChange}\n          placeholder=\"Search...\"\n          style={{\n            width: '100%',\n            padding: styles.spacing.xs,\n            border: `1px solid ${styles.colors.border}`,\n            borderRadius: styles.borders.radius,\n            fontSize: styles.typography.fontSize.sm\n          }}\n        />\n      </div>\n      \n      {/* Filter Dropdowns */}\n      <div style={{ flex: 1, minWidth: 200 }}>\n        <select\n          value={localState.filterCategory || ''}\n          onChange={(e) => handleDropdownChange(e.target.value, 'filterCategory')}\n          style={{\n            width: '100%',\n            padding: styles.spacing.xs,\n            border: `1px solid ${styles.colors.border}`,\n            borderRadius: styles.borders.radius,\n            fontSize: styles.typography.fontSize.sm\n          }}\n        >\n          <option value=\"\">Category</option>\n          {filters.EntityType && \n            filters.EntityType.map((type) => (\n              <option key={type} value={type}>{type}</option>\n            ))}\n        </select>\n      </div>\n      \n      <div style={{ flex: 1, minWidth: 200 }}>\n        <select\n          value={localState.filterTags || ''}\n          onChange={(e) => handleDropdownChange(e.target.value, 'filterTags')}\n          style={{\n            width: '100%',\n            padding: styles.spacing.xs,\n            border: `1px solid ${styles.colors.border}`,\n            borderRadius: styles.borders.radius,\n            fontSize: styles.typography.fontSize.sm\n          }}\n        >\n          <option value=\"\">Tags</option>\n          {filters.Tags && \n            filters.Tags.map((tag) => (\n              <option key={tag} value={tag}>{tag}</option>\n            ))}\n        </select>\n      </div>\n      \n      {/* Sort Dropdown */}\n      <div style={{ flex: 1, minWidth: 180 }}>\n        <select\n          value={localState.sortField || ''}\n          onChange={(e) => handleDropdownChange(e.target.value, 'sortField')}\n          style={{\n            width: '100%',\n            padding: styles.spacing.xs,\n            border: `1px solid ${styles.colors.border}`,\n            borderRadius: styles.borders.radius,\n            fontSize: styles.typography.fontSize.sm\n          }}\n        >\n          <option value=\"\">Sort By</option>\n          {sort && \n            sort.map((field) => (\n              <option key={field} value={field}>{field}</option>\n            ))}\n        </select>\n      </div>\n      \n      {/* Create Entity Button */}\n      <div>\n        <button\n          onClick={handleCreateEntity}\n          disabled={!permissions?.MANAGE_METADATA}\n          style={{\n            padding: `${styles.spacing.xs} ${styles.spacing.sm}`,\n            backgroundColor: permissions?.MANAGE_METADATA \n              ? styles.colors.primary \n              : styles.colors.surfaceHover,\n            color: '#fff',\n            border: 'none',\n            borderRadius: styles.borders.radius,\n            cursor: permissions?.MANAGE_METADATA ? 'pointer' : 'not-allowed',\n            transition: 'background-color 0.2s'\n          }}\n        >\n          Create Entity\n        </button>\n      </div>\n    </div>\n  );\n}\n\nexport default EntityToolbar;"
+    },
+    {
+      "componentName": "EntityTreePanel",
+      "exampleUsage": "<EntityTreePanel\n  data={{ entities: data.Entities, relationships: data.EntityRelationships }}\n  config={{ expandedEntities: fullUserState.expandedEntities, selectedEntityId: fullUserState.selectedEntityId, filters: fullUserState.filters, sort: fullUserState.sort }}\n  state={fullUserState.tree}\n  onEvent={handleComponentEvent}\n  styles={styles}\n  statePath=\"tree\"\n/>",
+      "description": "Shows a virtualized, filterable tree of entities with expand/collapse, selection, and relationship navigation. Supports ARIA, keyboard, and screen reader navigation.",
+      "functionalRequirements": "- Render entity tree with child nodes as fields and relationships\n- Supports expand/collapse per entity node, tracked in root state\n- Filter and sort entities per user controls\n- Emit events on expand/collapse, selection, or navigation actions\n- Keyboard accessible, ARIA tree\n- Loads child nodes on demand via dynamic API calls\n",
+      "dataRequirements": {
+        "mode": "dynamic",
+        "dynamicData": {
+          "requiredEntities": [
+            {
+              "entityName": "Entities",
+              "displayFields": [
+                "Name",
+                "Description",
+                "SchemaName",
+                "LastModified",
+                "EntityType",
+                "OwnerID"
+              ],
+              "filterFields": [
+                "SchemaName",
+                "EntityType",
+                "OwnerID"
+              ],
+              "sortFields": [
+                "Name",
+                "LastModified"
+              ]
+            },
+            {
+              "entityName": "Entity Relationships",
+              "displayFields": [
+                "SourceEntity",
+                "TargetEntity",
+                "RelationshipType",
+                "Cardinality"
+              ],
+              "filterFields": [
+                "SourceEntity",
+                "TargetEntity"
+              ],
+              "sortFields": [
+                "SourceEntity",
+                "TargetEntity"
+              ]
+            }
+          ]
+        }
+      },
+      "technicalDesign": "Efficient, virtualized tree view (use antd.Tree if available). Uses expandedEntities from config. Emits standardized expand/collapse/selection events. Filters and sorts in-memory or lazily loads as needed. Assigns keyboard handlers/ARIA tree roles.",
+      "statePath": "tree",
+      "componentCode": "const EntityTreePanel = ({ data, config, userState, onEvent, styles, callbacks, utilities, statePath }) => {\n    const [expanded, setExpanded] = useState(config.expandedEntities || []);\n    const [selected, setSelected] = useState(config.selectedEntityId || null);\n\n    const treeData = React.useMemo(() => {\n        return data.entities.map(entity => ({\n            title: entity.Name,\n            key: entity.ID,\n            children: [\n                ...(config.filters?.showFields || true) ? \n                    entity.Fields?.map(field => ({\n                        title: field.Name,\n                        key: `${entity.ID}-${field.Name}-field`,\n                        isLeaf: true,\n                        type: 'field'\n                    })) || [] : [],\n                ...data.relationships\n                    .filter(rel => rel.SourceEntity === entity.Name)\n                    .map(rel => ({\n                        title: `${rel.RelationshipType}: ${rel.TargetEntity}`,\n                        key: `${entity.ID}-rel-${rel.RelationshipType}-to-${rel.TargetEntity}`,\n                        isLeaf: false,\n                        type: 'relationship',\n                        relData: {\n                            source: entity.Name,\n                            target: rel.TargetEntity\n                        }\n                    }))\n            ]\n        }));\n    }, [data.entities, data.relationships, config.filters]);\n\n    const handleExpand = (keys) => {\n        setExpanded(keys);\n        onEvent({\n            type: 'stateChanged',\n            source: 'EntityTreePanel',\n            payload: {\n                statePath: statePath,\n                newState: { ...userState, expandedEntities: keys }\n            },\n            bubbles: true\n        });\n    };\n\n    const handleSelect = (keys, info) => {\n        const node = info.node;\n        setSelected(keys[0]);\n\n        if (node.type !== 'relationship') {\n            onEvent({\n                type: 'entitySelected',\n                source: 'EntityTreePanel',\n                payload: {\n                    entityId: node.type === 'entity' ? node.key : undefined,\n                    fieldKey: node.type === 'field' ? node.key : undefined,\n                    relationshipData: node.type === 'relationship' ? {\n                        source: node.key,\n                        target: node.relData.target\n                    } : undefined\n                },\n                bubbles: true\n            });\n        }\n    };\n\n    return (\n        <Tree\n            treeData={treeData}\n            expandedKeys={expanded}\n            selectedKeys={selected ? [selected] : []}\n            onExpand={handleExpand}\n            onSelect={handleSelect}\n            title={node => (\n                <span style={{ color: selected === node.key ? styles.colors.textInverse : styles.colors.text }}>\n                    {node.title}\n                </span>\n            )}\n            icons={null} // Use custom styles instead of icons\n            defaultExpandAll={false} // Ensure virtualized rendering\n            // Dynamic loading implementation\n            onLoad={async (node) => {\n                // Load child nodes dynamically when expanded\n                if (!node.children) {\n                    const response = await fetch(`/api/loader/${node.key}`);\n                    node.children = await response.json();\n                    return node;\n                }\n                return node;\n            }}\n        />\n    );\n};\n\nexport default EntityTreePanel;"
+    },
+    {
+      "componentName": "EntityDetailPanel",
+      "exampleUsage": "<EntityDetailPanel\n  data={{ entityId: fullUserState.selectedEntityId, fields: data.EntityFields, relationships: data.EntityRelationships, permissions: data.userPermissions }}\n  state={fullUserState.detail}\n  onEvent={handleComponentEvent}\n  styles={styles}\n  statePath=\"detail\"\n/>",
+      "description": "Detail view for entity metadata: fields, editing, history, relationships. Shows edit controls per field, validates data and permissions.",
+      "functionalRequirements": "- Loads full metadata for selected entity (fields, types, constraints)\n- Supports editing field metadata if permitted\n- Provides real-time validation, bulk editing, and save/apply/cancel controls\n- Audit logs any save\n- Tabs: Fields, Relationships, Audit History\n- Keyboard/ARIA for all controls\n",
+      "dataRequirements": {
+        "mode": "dynamic",
+        "dynamicData": {
+          "requiredEntities": [
+            {
+              "entityName": "Entity Fields",
+              "displayFields": [
+                "Name",
+                "DataType",
+                "Description",
+                "IsNullable",
+                "MaxLength"
+              ],
+              "filterFields": [
+                "EntityName",
+                "DataType",
+                "IsPrimaryKey"
+              ],
+              "sortFields": [
+                "Name",
+                "Position"
+              ]
+            },
+            {
+              "entityName": "Entity Relationships",
+              "displayFields": [
+                "SourceEntity",
+                "TargetEntity",
+                "RelationshipType",
+                "Cardinality"
+              ],
+              "filterFields": [
+                "SourceEntity",
+                "TargetEntity"
+              ],
+              "sortFields": [
+                "SourceEntity",
+                "TargetEntity"
+              ]
+            }
+          ]
+        }
+      },
+      "technicalDesign": "Receives entityId and finds all fields/relationships for that entity. Edit controls enabled/disabled by permission. Emits 'entityFieldUpdated'/'entityMetadataUpdated' with all edit actions for audit logging. Responsive tabbed detail; accessible throughout.",
+      "statePath": "detail",
+      "componentCode": "const { Column } = Table;\n\nfunction EntityDetailPanel({ \n  data, \n  styles, \n  userState, \n  statePath, \n  onEvent, \n  utilities \n}) {\n  const [localState, setLocalState] = useState({\n    activeTab: userState?.activeTab || 'fields',\n    selectedFieldId: userState?.selectedFieldId || null,\n    formData: userState?.formData || {},\n    isEditing: userState?.isEditing || false\n  });\n\n  const { md } = utilities || {};\n\n  const saveEntityField = async (changes) => {\n    try {\n      // Audit logging\n      onEvent({\n        type: 'entityFieldUpdated',\n        source: 'EntityDetailPanel',\n        payload: {\n          entityId: data.data.entityId,\n          changes\n        }\n      });\n\n      message.success('Changes saved successfully');\n    } catch (error) {\n      message.error('Failed to save changes');\n      console.error(error);\n    }\n  };\n\n  const handleChangeTab = (activeKey) => {\n    setLocalState(prev => ({\n      ...prev,\n      activeTab: activeKey\n    }));\n    onEvent({\n      type: 'stateChanged',\n      source: 'EntityDetailPanel',\n      payload: {\n        statePath: statePath,\n        newState: { activeTab: activeKey }\n      }\n    });\n  };\n\n  const handleEditField = (field) => {\n    setLocalState(prev => ({\n      ...prev,\n      isEditing: true,\n      selectedFieldId: field.Id,\n      formData: { ...field }\n    }));\n  };\n\n  const handleFormChange = (fieldId, value) => {\n    setLocalState(prev => ({\n      ...prev,\n      formData: {\n        ...prev.formData,\n        [fieldId]: value\n      }\n    }));\n  };\n\n  const handleSave = () => {\n    const changes = {\n      ...localState.formData\n    };\n\n    setLocalState(prev => ({\n      ...prev,\n      isEditing: false\n    }));\n\n    saveEntityField(changes);\n  };\n\n  return (\n    <Card \n      style={{ height: '100%' }}\n      bodyStyle={{ padding: 0 }}\n      headStyle={{ backgroundColor: styles.colors.surface, padding: '12px' }}\n    >\n      <Tabs \n        activeKey={localState.activeTab} \n        onChange={handleChangeTab} \n        type=\"card\"\n        style={{ marginBottom: 0 }}\n      >\n        <TabPane tab=\"Fields\" key=\"fields\">\n          <div style={{ display: 'flex', gap: '12px', padding: '12px' }}>\n            {localState.isEditing ? (\n              <Card title=\"Edit Field\" style={{ flex: 1 }}>\n                {Object.entries(localState.formData || {}).map(([key, value]) => (\n                  <div key={key} style={{ marginBottom: 12 }}>\n                    <strong>{key}:</strong>\n                    <Input\n                      value={value}\n                      onChange={(e) => handleFormChange(key, e.target.value)}\n                    />\n                  </div>\n                ))}\n                <Button onClick={handleSave} type=\"primary\" style={{ marginRight: 8 }}>\n                  Save\n                </Button>\n                <Button \n                  onClick={() => \n                    setLocalState(prev => ({\n                      ...prev,\n                      isEditing: false\n                    }))\n                  }\n                >\n                  Cancel\n                </Button>\n              </Card>\n            ) : (\n              <Card style={{ flex: 1 }}>\n                <Table\n                  dataSource={data.fields || []}\n                  pagination={false}\n                  onRow={(record) => ({\n                    onClick: () => handleEditField(record)\n                  })}\n                >\n                  <Column title=\"Name\" dataIndex=\"Name\" key=\"Name\" />\n                  <Column title=\"Data Type\" dataIndex=\"DataType\" key=\"DataType\" />\n                  <Column title=\"Description\" dataIndex=\"Description\" key=\"Description\" />\n                  <Column\n                    title=\"Actions\"\n                    key=\"actions\"\n                    render={(text, record) => {\n                      const canEdit = data.permissions?.includes('editFields');\n                      return (\n                        <Button\n                          size=\"small\"\n                          type=\"link\"\n                          disabled={!canEdit}\n                          onClick={() => handleEditField(record)}\n                        >\n                          {canEdit ? 'Edit' : 'View'}\n                        </Button>\n                      );\n                    }}\n                  />\n                </Table>\n              </Card>\n            )}\n          </div>\n        </TabPane>\n        <TabPane tab=\"Relationships\" key=\"relationships\">\n          <Table\n            dataSource={data.relationships || []}\n            pagination={false}\n            rowKey=\"SourceEntity\"\n          >\n            <Column title=\"Source\" dataIndex=\"SourceEntity\" key=\"SourceEntity\" />\n            <Column title=\"Target\" dataIndex=\"TargetEntity\" key=\"TargetEntity\" />\n            <Column title=\"Type\" dataIndex=\"RelationshipType\" key=\"RelationshipType\" />\n            <Column title=\"Cardinality\" dataIndex=\"Cardinality\" key=\"Cardinality\" />\n          </Table>\n        </TabPane>\n        <TabPane tab=\"Audit History\" key=\"audit\">\n          <Table\n            dataSource={[]}\n            pagination={false}\n            rowKey=\"id\"\n          >\n            <Column title=\"Date\" key=\"date\" />\n            <Column title=\"User\" key=\"user\" />\n            <Column title=\"Action\" key=\"action\" />\n          </Table>\n        </TabPane>\n      </Tabs>\n    </Card>\n  );\n}\n\nexport default EntityDetailPanel;"
+    }
+  ],
+  "componentName": "EntityBrowserReport",
+  "componentType": "report",
+  "title": "Entity Browser",
+  "userExplanation": "Browse all entities with expandable field details"
+}
