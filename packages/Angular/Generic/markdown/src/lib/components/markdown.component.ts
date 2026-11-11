@@ -582,6 +582,61 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     this.hasMath = html.includes('class="mj-math') || /<math[\s>]/.test(html);
   }
 
+  /**
+   * Linear O(N) non-regex detector for whole-document Markdown cross-references:
+   * - Reference-style link definitions: `[id]: url`
+   * - Footnote definitions: `[^id]:`
+   * - Table-of-contents directives: `[toc]` or `[[toc]]`
+   *
+   * Uses pure string scanning with zero regular expressions to avoid polynomial backtracking (ReDoS).
+   */
+  private hasWholeDocCrossRef(text: string): boolean {
+    if (!text.includes('[')) {
+      return false;
+    }
+    if (text.toLowerCase().includes('[toc]')) {
+      return true;
+    }
+    if (!text.includes(']:')) {
+      return false;
+    }
+
+    let lineStart = 0;
+    const len = text.length;
+    while (lineStart < len) {
+      const nlIdx = text.indexOf('\n', lineStart);
+      const rawLineEnd = nlIdx === -1 ? len : nlIdx;
+      const lineEnd = rawLineEnd > lineStart && text.charCodeAt(rawLineEnd - 1) === 13 ? rawLineEnd - 1 : rawLineEnd;
+
+      let pos = lineStart;
+      while (pos < lineEnd && (text.charCodeAt(pos) === 32 || text.charCodeAt(pos) === 9)) {
+        pos++;
+      }
+      if (pos < lineEnd && text.charCodeAt(pos) === 91 /* '[' */) {
+        const closeBracket = text.indexOf(']', pos + 1);
+        if (closeBracket > pos + 1 && closeBracket + 1 < lineEnd && text.charCodeAt(closeBracket + 1) === 58 /* ':' */) {
+          if (text.charCodeAt(pos + 1) === 94 /* '^' */) {
+            return true;
+          }
+          let afterColon = closeBracket + 2;
+          while (afterColon < lineEnd && (text.charCodeAt(afterColon) === 32 || text.charCodeAt(afterColon) === 9)) {
+            afterColon++;
+          }
+          if (afterColon < lineEnd) {
+            return true;
+          }
+        }
+      }
+
+      if (nlIdx === -1) {
+        break;
+      }
+      lineStart = nlIdx + 1;
+    }
+
+    return false;
+  }
+
   private canStreamAppend(markdown: string): boolean {
     if (!this.lastRenderedMarkdown || this.streamingFallbackForced) return false;
     if (markdown.length <= this.lastRenderedMarkdown.length) return false;
@@ -590,14 +645,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     // Scan only the uncommitted tail (+1 newline lookbehind) so per-frame checks stay O(1)
     const scanStart = this.committedPrefixMarkdown.length > 0 ? this.committedPrefixMarkdown.length - 1 : 0;
     const uncommittedWindow = markdown.slice(scanStart);
-    // Whole-document cross-references:
-    // Reference-style link definitions: [id]: url
-    if (/(?:^|\n)\s*\[[^\]]+\]:\s*\S+/.test(uncommittedWindow)) return false;
-    // Footnotes: [^1]:
-    if (/(?:^|\n)\s*\[\^[^\]]+\]:/.test(uncommittedWindow)) return false;
-    // Table of contents: [toc] or [[toc]]
-    if (/\[\[?toc\]?\]/i.test(uncommittedWindow)) return false;
-    return true;
+    return !this.hasWholeDocCrossRef(uncommittedWindow);
   }
 
   private hasDuplicateHeadingsAgainstPrefix(tokens: ReturnType<MarkdownService['ParseToTokens']>): boolean {
@@ -662,9 +710,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
       !forceSinglePass &&
       !this.EnableCollapsibleHeadings &&
       markdown.includes('\n\n') &&
-      !/(?:^|\n)\s*\[[^\]]+\]:\s*\S+/.test(markdown) &&
-      !/(?:^|\n)\s*\[\^[^\]]+\]:/.test(markdown) &&
-      !/\[\[?toc\]?\]/i.test(markdown);
+      !this.hasWholeDocCrossRef(markdown);
 
     let tokens: ReturnType<MarkdownService['ParseToTokens']> | null = null;
     if (mayHaveMultipleBlocks) {
