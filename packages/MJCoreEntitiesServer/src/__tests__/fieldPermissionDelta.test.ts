@@ -423,3 +423,28 @@ describe('ComputeFieldPermissionDelta — orphan test uses EP existence, not EP 
         expect(insertFor(delta, SALARY_FIELD_ID, HR_ROLE_ID)).toBeDefined();
     });
 });
+
+describe('ComputeFieldPermissionDelta — existing rows read from the database', () => {
+    it('inserts a row metadata still lists but the database no longer has', () => {
+        const entity = buildEntity({
+            salaryRows: [fieldPermission(SALARY_FIELD_ID, { ID: 'gone', RoleID: HR_ROLE_ID, Read: ALLOW })],
+            notesRows: [fieldPermission(NOTES_FIELD_ID, { ID: 'kept', RoleID: HR_ROLE_ID, Read: ALLOW })],
+        });
+        expect(insertFor(ComputeFieldPermissionDelta(entity), SALARY_FIELD_ID, HR_ROLE_ID)).toBeUndefined();
+
+        const delta = ComputeFieldPermissionDelta(entity, [{ ID: 'kept', EntityFieldID: NOTES_FIELD_ID, RoleID: HR_ROLE_ID }]);
+        expect(insertFor(delta, SALARY_FIELD_ID, HR_ROLE_ID)).toBeDefined();
+        expect(insertFor(delta, NOTES_FIELD_ID, HR_ROLE_ID)).toBeUndefined();
+        expect(delta.ToDelete).toEqual([]);
+    });
+
+    it('finds orphans among the database rows, matching field IDs case-insensitively', () => {
+        const entity = buildEntity();
+        const delta = ComputeFieldPermissionDelta(entity, [
+            { ID: 'orphan', EntityFieldID: SALARY_FIELD_ID.toLowerCase(), RoleID: INTERN_ROLE_ID },
+            { ID: 'kept', EntityFieldID: SALARY_FIELD_ID.toLowerCase(), RoleID: HR_ROLE_ID },
+        ]);
+        expect(delta.ToDelete).toEqual(['orphan']);
+        expect(insertFor(delta, SALARY_FIELD_ID, HR_ROLE_ID)).toBeUndefined();
+    });
+});
