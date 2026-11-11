@@ -642,6 +642,8 @@ flowchart TD
 - **Fresh pick** — when nothing valid is flagged, the first *eligible* AI candidate wins.
 - **Pinning** — fields with `AutoUpdateIsNameField = 0` are never set or cleared by CodeGen, and a pinned flagged field always wins, even one that is not eligible (a virtual name field). Any auto-flagged second field beside a pin is cleared on the next analysis pass. With several pinned, the literal `Name` wins, else the first in sequence order; the integrity check warns about any entity with more than one `IsNameField = 1`.
 
+**Pin a name field that is not called `Name`.** When an entity has no `Name` column, the fresh pick above comes from the AI's ranked candidates, so two databases with the same schema can end with different name fields (or none), and with them different related-entity name columns in every view that joins to the entity. Set the flag and pin it in the entity's metadata (or with SQL against `EntityField`): `IsNameField = 1, AutoUpdateIsNameField = 0` on the intended field. A pinned field always wins, so later runs keep it.
+
 Why this matters: with multiple flags, the FK-name pick silently drifted between CodeGen runs as flags accumulated (observed: a related entity's name column flipping from one field to another, reshaping every view that joins to it).
 
 ### Form Layout Stability Guarantees
@@ -1526,6 +1528,7 @@ mj codegen
 
 # Skip database operations, only regenerate code files from existing metadata
 mj codegen --skipdb
+
 ```
 
 | Flag | Description |
