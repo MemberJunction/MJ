@@ -171,7 +171,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   };
 
   // Data state
-  public readonly ArtifactPageSize = 200;
+  @Input() public ArtifactPageSize = 200;
   public IsLoading = true;
   public IsLoadingMore = false;
   public LoadError: string | null = null;
