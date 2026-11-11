@@ -175,6 +175,25 @@ describe('SchemaEvolution', () => {
             expect(added).not.toContain('__mj_integration_SyncStatus');
             expect(added).not.toContain('__mj_integration_LastSyncedAt');
         });
+
+        it('should add a key column that the existing table does not have, as nullable', () => {
+            // The key gained a parent column: `list_id` → `list_id + newsletter_id`.
+            const target: TargetTableConfig = {
+                ...MakeTargetConfig([
+                    { SourceFieldName: 'list_id', TargetColumnName: 'list_id', TargetSqlType: 'NVARCHAR(100)', IsNullable: false, MaxLength: 100, Precision: null, Scale: null, DefaultValue: null },
+                    { SourceFieldName: 'newsletter_id', TargetColumnName: 'newsletter_id', TargetSqlType: 'NVARCHAR(100)', IsNullable: false, MaxLength: 100, Precision: null, Scale: null, DefaultValue: null },
+                ]),
+                PrimaryKeyFields: ['list_id', 'newsletter_id'],
+            };
+            const existing = MakeExistingTable([
+                { Name: 'list_id', SqlType: 'NVARCHAR(100)', IsNullable: false },
+            ]);
+
+            const diff = evo.DiffSchema(MakeSourceObject(), target, existing, 'sqlserver');
+            expect(diff.AddedColumns.map(c => c.TargetColumnName)).toEqual(['newsletter_id']);
+            // Rows already in the table have no value for it, so it cannot be NOT NULL.
+            expect(diff.AddedColumns[0].IsNullable).toBe(true);
+        });
     });
 
     describe('GenerateEvolutionMigration', () => {

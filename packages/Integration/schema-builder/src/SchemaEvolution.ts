@@ -50,7 +50,7 @@ export class SchemaEvolution {
         const removed: string[] = [];
         const warnings: string[] = [];
 
-        // Build set of PK column names — changes are warned but not executed
+        // Build set of PK column names — changes to existing ones are warned but not executed
         const pkNames = new Set(
             (targetConfig.PrimaryKeyFields ?? []).map(f => f.toLowerCase())
         );
@@ -60,13 +60,17 @@ export class SchemaEvolution {
             const lowerName = col.TargetColumnName.toLowerCase();
             if (standardCols.has(lowerName)) continue;
 
-            // PK columns: detect changes but only warn, never alter
+            // PK columns: an existing one is never altered (a change only warns). A missing one is
+            // added as nullable, because the rows already stored have no value for it.
             if (pkNames.has(lowerName)) {
                 if (existingNames.has(lowerName)) {
                     const existingCol = existing.Columns.find(c => c.Name.toLowerCase() === lowerName);
                     if (existingCol && this.hasColumnChanged(existingCol, col)) {
                         warnings.push(`PK column '${col.TargetColumnName}' type changed from ${existingCol.SqlType} to ${col.TargetSqlType} — skipped (requires manual constraint drop/recreate)`);
                     }
+                } else {
+                    added.push({ ...col, IsNullable: true });
+                    warnings.push(`PK column '${col.TargetColumnName}' added to existing table ${targetConfig.SchemaName}.${targetConfig.TableName} as nullable — rows stored before this change have no value in it until they are synced again`);
                 }
                 continue;
             }
