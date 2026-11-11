@@ -8,7 +8,7 @@
 
 # MemberJunction BizApps
 
-BizApps are the business applications built on MemberJunction. There are **14** in the public catalog (11 released, 3 in development). Each one is an MJ **Open App**: its own repository, database schema and npm packages, installed into any MJ instance with `mj app install`, which installs the apps it builds on first.
+BizApps are the business applications built on MemberJunction. There are **16** in the public catalog (11 released, 5 in development). Each one is an MJ **Open App**: its own repository, database schema and npm packages, installed into any MJ instance with `mj app install`, which installs the apps it builds on first.
 
 This page lists every public `bizapps-*` repository in the [MemberJunction GitHub organization](https://github.com/MemberJunction) and is generated from each app's `mj-app.json`, so it follows the apps rather than a hand-kept list.
 
@@ -35,18 +35,22 @@ flowchart LR
     bizapps_credentialing["Credentialing"]
     bizapps_forms["Forms"]
     bizapps_issues["Issues"]
+    bizapps_tasks_github["Tasks — GitHub Extension"]
   end
   subgraph layer3["Level 3"]
+    bizapps_community["Community"]
     bizapps_orders["Orders"]
   end
   subgraph layer4["Level 4"]
     bizapps_sales["Sales"]
   end
   bizapps_accounting --> bizapps_orders
+  bizapps_collaboration --> bizapps_community
   bizapps_common --> bizapps_secure_messaging
   bizapps_common --> bizapps_tasks
   bizapps_common --> bizapps_voting
   bizapps_contracts --> bizapps_sales
+  bizapps_forms --> bizapps_community
   bizapps_orders --> bizapps_sales
   bizapps_tasks --> bizapps_accounting
   bizapps_tasks --> bizapps_collaboration
@@ -55,8 +59,9 @@ flowchart LR
   bizapps_tasks --> bizapps_credentialing
   bizapps_tasks --> bizapps_forms
   bizapps_tasks --> bizapps_issues
+  bizapps_tasks --> bizapps_tasks_github
   classDef dev stroke-dasharray: 5 4
-  class bizapps_collaboration,bizapps_credentialing,bizapps_voting dev
+  class bizapps_collaboration,bizapps_community,bizapps_credentialing,bizapps_tasks_github,bizapps_voting dev
 ```
 
 An arrow points from an app to the apps that build on it. Only direct links are drawn: when Sales builds on Orders and Orders builds on Accounting, there is no separate arrow from Accounting to Sales. Each app below lists everything it declares. A dashed box is an app still in development.
@@ -65,8 +70,8 @@ An arrow points from an app to the apps that build on it. Only direct links are 
 
 - **Foundation:** Common, Sonar
 - **Level 1:** Secure Messaging, Tasks, Voting
-- **Level 2:** Accounting, Collaboration, Committees, Contracts, Credentialing, Forms, Issues
-- **Level 3:** Orders
+- **Level 2:** Accounting, Collaboration, Committees, Contracts, Credentialing, Forms, Issues, Tasks — GitHub Extension
+- **Level 3:** Community, Orders
 - **Level 4:** Sales
 
 ## At a glance
@@ -77,6 +82,7 @@ An arrow points from an app to the apps that build on it. Only direct links are 
 | [Collaboration](#collaboration) | Spaces: the permission boundary and the agent retrieval boundary for collaborative team and outside work. | [Common](#common), [Tasks](#tasks) | In development |
 | [Committees](#committees) | Unified governance platform for managing committees, memberships, meetings, action items, and documents — with AI-powered minutes generation and health analytics | [Common](#common), [Tasks](#tasks) | Released |
 | [Common](#common) | Common business entities (Person, Organization, Address, ContactMethod, Relationship) shared across MemberJunction business applications | — | Released |
+| [Community](#community) | AI-native member discussions, self-collapsing thread syntheses, personalized digests, and reply-by-email built on BizApps Collaboration spaces — where every… | [Collaboration](#collaboration), [Common](#common), [Forms](#forms), [Tasks](#tasks) | In development |
 | [Contracts](#contracts) | The record of customer agreements — executed documents, which version of the standard agreement each one incorporates, the provisions negotiated away from it, and the… | [Common](#common), [Tasks](#tasks) | Released |
 | [Credentialing](#credentialing) | Credentialing, certification, and licensure management for MemberJunction: credential definitions, requirements, holder records, verification, expiration and renewal… | [Common](#common), [Tasks](#tasks) | In development |
 | [Forms](#forms) | Forms, surveys & intake for MemberJunction — anonymous-friendly, mobile-first, responses as first-class records. | [Common](#common), [Tasks](#tasks) | Released |
@@ -86,6 +92,7 @@ An arrow points from an app to the apps that build on it. Only direct links are 
 | [Secure Messaging](#secure-messaging) | A secure client portal for exchanging messages, documents, and e-signatures with external contacts. | [Common](#common) | Released |
 | [Sonar](#sonar) | Configurable engagement scoring engine on the MemberJunction entity graph. | — | Released |
 | [Tasks](#tasks) | Reusable task management with multi-person assignment, sub-tasks, dependencies, Kanban/Gantt views, templates, and activity tracking | [Common](#common) | Released |
+| [Tasks — GitHub Extension](#tasks--github-extension) | Extends BizApps Tasks with GitHub Issue and Pull Request IS-A task subtypes, pull-ownership sync, webhook handlers, Field Suggestion planning inference, and Chief of… | [Common](#common), [Tasks](#tasks) | In development |
 | [Voting](#voting) | Secret, verifiable, embeddable voting (motions, elections, referendums and polls) for any app built on MemberJunction | [Common](#common) | In development |
 
 ## How they fit together
@@ -117,6 +124,7 @@ Spaces: the permission boundary and the agent retrieval boundary for collaborati
 - **Status:** In development
 - **Database schema:** `__mj_BizAppsCollaboration`
 - **Builds on:** [Common](#common), [Tasks](#tasks)
+- **Used by:** [Community](#community)
 - **Packages:** `@mj-biz-apps/collaboration-server` (server), `@mj-biz-apps/collaboration-core-entities-server` (server), `@mj-biz-apps/collaboration-ng` (client), `@mj-biz-apps/collaboration-ng-widgets` (client), `@mj-biz-apps/collaboration-entities` (shared), `@mj-biz-apps/collaboration-actions` (shared), `@mj-biz-apps/collaboration-core` (shared)
 
 ### Committees
@@ -127,7 +135,7 @@ Unified governance platform for managing committees, memberships, meetings, acti
 - **Status:** Released
 - **Database schema:** `__mj_BizAppsCommittees`
 - **Builds on:** [Common](#common), [Tasks](#tasks)
-- **Packages:** `@mj-biz-apps/committees-server` (server), `@mj-biz-apps/committees-ng` (client), `@mj-biz-apps/committees-entities` (shared), `@mj-biz-apps/committees-core-entities-server` (shared), `@mj-biz-apps/committees-core` (shared), `@mj-biz-apps/committees-actions` (shared)
+- **Packages:** `@mj-biz-apps/committees-server` (server), `@mj-biz-apps/committees-core-entities-server` (server), `@mj-biz-apps/committees-actions` (server), `@mj-biz-apps/committees-ng` (client), `@mj-biz-apps/committees-entities` (shared), `@mj-biz-apps/committees-core` (shared)
 
 ### Common
 
@@ -137,8 +145,18 @@ Common business entities (Person, Organization, Address, ContactMethod, Relation
 - **Status:** Released
 - **Database schema:** `__mj_BizAppsCommon`
 - **Builds on:** MemberJunction core only
-- **Used by:** [Accounting](#accounting), [Collaboration](#collaboration), [Committees](#committees), [Contracts](#contracts), [Credentialing](#credentialing), [Forms](#forms), [Issues](#issues), [Orders](#orders), [Sales](#sales), [Secure Messaging](#secure-messaging), [Tasks](#tasks), [Voting](#voting)
+- **Used by:** [Accounting](#accounting), [Collaboration](#collaboration), [Committees](#committees), [Community](#community), [Contracts](#contracts), [Credentialing](#credentialing), [Forms](#forms), [Issues](#issues), [Orders](#orders), [Sales](#sales), [Secure Messaging](#secure-messaging), [Tasks](#tasks), [Tasks — GitHub Extension](#tasks--github-extension), [Voting](#voting)
 - **Packages:** `@mj-biz-apps/common-server` (server), `@mj-biz-apps/common-actions` (server), `@mj-biz-apps/common-ng` (client), `@mj-biz-apps/common-entities` (shared)
+
+### Community
+
+AI-native member discussions, self-collapsing thread syntheses, personalized digests, and reply-by-email built on BizApps Collaboration spaces — where every conversation stays in your database and enriches your organization's AI context.
+
+- **Repository:** [MemberJunction/bizapps-community](https://github.com/MemberJunction/bizapps-community)
+- **Status:** In development
+- **Database schema:** `__mj_BizAppsCommunity`
+- **Builds on:** [Collaboration](#collaboration), [Common](#common), [Forms](#forms), [Tasks](#tasks)
+- **Packages:** `@mj-biz-apps/community-server` (server), `@mj-biz-apps/community-core-entities-server` (server), `@mj-biz-apps/community-ng` (client), `@mj-biz-apps/community-ng-widgets` (client), `@mj-biz-apps/community-entities` (shared), `@mj-biz-apps/community-actions` (shared), `@mj-biz-apps/community-core` (shared)
 
 ### Contracts
 
@@ -169,7 +187,8 @@ Forms, surveys & intake for MemberJunction — anonymous-friendly, mobile-first,
 - **Status:** Released
 - **Database schema:** `__mj_BizAppsForms`
 - **Builds on:** [Common](#common), [Tasks](#tasks)
-- **Packages:** `@mj-biz-apps/forms-server` (server), `@mj-biz-apps/forms-ng` (client), `@mj-biz-apps/forms-entities` (shared), `@mj-biz-apps/forms-actions` (shared)
+- **Used by:** [Community](#community)
+- **Packages:** `@mj-biz-apps/forms-server` (server), `@mj-biz-apps/forms-core-entities-server` (server), `@mj-biz-apps/forms-actions` (server), `@mj-biz-apps/forms-ng` (client), `@mj-biz-apps/forms-entities` (shared)
 
 ### Issues
 
@@ -179,7 +198,7 @@ Reusable case / issue / ticket primitives — Issue, IssueType, IssueStatus, Iss
 - **Status:** Released
 - **Database schema:** `__mj_BizAppsIssues`
 - **Builds on:** [Common](#common), [Tasks](#tasks)
-- **Packages:** `@mj-biz-apps/issues-server` (server), `@mj-biz-apps/issues-core-entities-server` (server), `@mj-biz-apps/issues-ng` (client), `@mj-biz-apps/issues-entities` (shared), `@mj-biz-apps/issues-actions` (shared), `@mj-biz-apps/issues-core` (shared)
+- **Packages:** `@mj-biz-apps/issues-server` (server), `@mj-biz-apps/issues-core-entities-server` (server), `@mj-biz-apps/issues-actions` (server), `@mj-biz-apps/issues-core` (server), `@mj-biz-apps/issues-ng` (client), `@mj-biz-apps/issues-entities` (shared)
 
 ### Orders
 
@@ -230,8 +249,18 @@ Reusable task management with multi-person assignment, sub-tasks, dependencies, 
 - **Status:** Released
 - **Database schema:** `__mj_BizAppsTasks`
 - **Builds on:** [Common](#common)
-- **Used by:** [Accounting](#accounting), [Collaboration](#collaboration), [Committees](#committees), [Contracts](#contracts), [Credentialing](#credentialing), [Forms](#forms), [Issues](#issues), [Orders](#orders), [Sales](#sales)
+- **Used by:** [Accounting](#accounting), [Collaboration](#collaboration), [Committees](#committees), [Community](#community), [Contracts](#contracts), [Credentialing](#credentialing), [Forms](#forms), [Issues](#issues), [Orders](#orders), [Sales](#sales), [Tasks — GitHub Extension](#tasks--github-extension)
 - **Packages:** `@mj-biz-apps/tasks-server` (server), `@mj-biz-apps/tasks-entities-server` (server), `@mj-biz-apps/tasks-actions` (server), `@mj-biz-apps/tasks-ng` (client), `@mj-biz-apps/tasks-entities` (shared), `@mj-biz-apps/tasks-core` (shared)
+
+### Tasks — GitHub Extension
+
+Extends BizApps Tasks with GitHub Issue and Pull Request IS-A task subtypes, pull-ownership sync, webhook handlers, Field Suggestion planning inference, and Chief of Staff / Software Factory GitHub skills.
+
+- **Repository:** [MemberJunction/bizapps-tasks-github](https://github.com/MemberJunction/bizapps-tasks-github)
+- **Status:** In development
+- **Database schema:** `__mj_BizAppsTasksGitHub`
+- **Builds on:** [Common](#common), [Tasks](#tasks)
+- **Packages:** `@mj-biz-apps/tasks-github-actions` (server), `@mj-biz-apps/tasks-github-server` (server), `@mj-biz-apps/tasks-github-ng` (client), `@mj-biz-apps/tasks-github-entities` (shared), `@mj-biz-apps/tasks-github-core` (shared)
 
 ### Voting
 
