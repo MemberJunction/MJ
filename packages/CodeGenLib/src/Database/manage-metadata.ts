@@ -481,6 +481,18 @@ export interface ViewRegenEntry {
    Reason: ViewRegenReason;
 }
 
+/**
+ * The schemas the search-flag hygiene pass may touch (#6384). Only what the config authored:
+ * `IncludeSchemas` (the run's allow-list, when set) and the authored `excludeSchemas`, never the
+ * exclude list compiled from `includeSchemas`, which names every other schema on the database.
+ */
+export interface SearchFlagHygieneScope {
+   /** The run's `includeSchemas`; when non-empty, only these schemas are touched. */
+   IncludeSchemas?: string[];
+   /** The authored `excludeSchemas` from the config (see `GetAuthoredExcludeSchemas`). */
+   AuthoredExclude: string[];
+}
+
 export class ManageMetadataBase {
 
    // ─── Database Provider Infrastructure ─────────────────────────────
@@ -5928,7 +5940,13 @@ export class ManageMetadataBase {
       // default is precisely the one that ends up flagged searchable with nothing searchable on
       // it. Ordered after it so the model's choices, where it did run, are already applied and
       // the seed only fills a genuine gap. See buildSearchFlagHygieneSQL.
-      if (!await this.applySearchFlagHygiene(pool, excludeSchemas)) {
+      // Scoped by the authored exclude list and the include list, never the compiled exclude list:
+      // that one names every other schema on the publisher's database, so a capture carrying it
+      // would touch entities in schemas this run does not own on a host (#6384).
+      if (!await this.applySearchFlagHygiene(pool, {
+         IncludeSchemas: configInfo.includeSchemas,
+         AuthoredExclude: GetAuthoredExcludeSchemas(excludeSchemas),
+      })) {
          logError('Error applying search flag hygiene');
          // FATAL, unlike advanced generation. This pass compares before it writes, so a failure
          // means the probes could not run — and because nothing is written in that case, the pass
@@ -10676,7 +10694,7 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
     * Written as `UPDATE ... WHERE <key> IN (subquery)` rather than `UPDATE ... FROM ... JOIN`,
     * which is T-SQL-only. The subquery form is ANSI and runs unchanged on both platforms.
     */
-   protected buildSearchFlagHygieneSQL(excludeSchemas: string[]): {
+   protected buildSearchFlagHygieneSQL(scope: SearchFlagHygieneScope): {
       seedSQL: string;
       clearSQL: string;
       /** COUNT of the rows {@link seedSQL} would touch — see the compare-first note on the apply method. */
@@ -10736,9 +10754,17 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
       const entityShapeFilter = `AND NOT (${shapeClauses})`;
       // Schema names are configuration, not literals we control: double any apostrophe rather
       // than interpolating it straight into the statement.
-      const schemaFilter = excludeSchemas.length > 0
-         ? `AND e.${this.qi('SchemaName')} NOT IN (${excludeSchemas.map(sc => `'${sc.replace(/'/g, "''")}'`).join(',')})`
-         : '';
+      //
+      // The filter names only what the config authored: `includeSchemas` as an IN list, the
+      // authored excludes as NOT IN. Never the compiled exclude list (#6384): with
+      // `includeSchemas` set, that list holds every other schema on the publisher's database, and
+      // a capture replayed on a host would then touch entities in schemas this run does not own.
+      const schemaList = (schemas: string[]) => schemas.map(sc => `'${sc.replace(/'/g, "''")}'`).join(',');
+      const includeSchemas = scope.IncludeSchemas ?? [];
+      const schemaFilter = [
+         includeSchemas.length > 0 ? `AND e.${this.qi('SchemaName')} IN (${schemaList(includeSchemas)})` : '',
+         scope.AuthoredExclude.length > 0 ? `AND e.${this.qi('SchemaName')} NOT IN (${schemaList(scope.AuthoredExclude)})` : '',
+      ].filter(clause => clause.length > 0).join('\n                 ');
 
       // "This entity has nothing a user search can match." Mirrors
       // `EntityInfo.HasSearchFields` and the runtime screen in EntitySearchProvider.
@@ -10855,9 +10881,9 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
     * idempotent — the data converged, the log did not. So each statement is emitted only when its
     * own candidate probe finds work.
     */
-   protected async applySearchFlagHygiene(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
+   protected async applySearchFlagHygiene(pool: CodeGenConnection, scope: SearchFlagHygieneScope): Promise<boolean> {
       try {
-         const { seedSQL, clearSQL, seedProbeSQL, clearProbeSQL } = this.buildSearchFlagHygieneSQL(excludeSchemas);
+         const { seedSQL, clearSQL, seedProbeSQL, clearProbeSQL } = this.buildSearchFlagHygieneSQL(scope);
 
          // Order matters: seeding first means an entity whose name field was just flagged is no
          // longer a candidate for having its AllowUserSearchAPI cleared. Reversed, the pass would
