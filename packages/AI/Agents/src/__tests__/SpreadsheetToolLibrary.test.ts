@@ -111,4 +111,152 @@ describe('SpreadsheetToolLibrary & DocumentToolLibrary (Round 4 — E6, E8, D1)'
         expect(byAddr.get('B2')?.computedValue).toBe(0.3);
         expect(byAddr.get('B3')?.computedValue).toBe(true);
     });
+
+    it('R6-6: plain-text search finds matches in > 64 KB blocks/cells without regex caps, while use_regex=true enforces cumulative 50ms budget and reports unsearchable items + warnings', async () => {
+        // 1. 105 KB block & 105 KB cell containing 'revenue' near the end
+        const large105kb = `${'padding text '.repeat(8200)}annual revenue grew 42% YoY`;
+        expect(Buffer.byteLength(large105kb, 'utf8')).toBeGreaterThan(105_000);
+
+        const largeDoc = `# Executive Summary\n\n${large105kb}\n`;
+
+        const plainDocStart = performance.now();
+        const plainDocRes = await docLib.InvokeTool('search_blocks', { query: 'revenue' }, largeDoc);
+        const plainDocMs = performance.now() - plainDocStart;
+        expect(plainDocRes.success).toBe(true);
+        const plainDocData = plainDocRes.data as {
+            matchCount: number;
+            unsearchableCount: number;
+            warnings: string[];
+        };
+        expect(plainDocData.matchCount).toBe(1);
+        expect(plainDocData.unsearchableCount).toBe(0);
+        expect(plainDocMs).toBeLessThan(50);
+
+        // With use_regex: true on the 105 KB block -> reports unsearchableCount: 1 + warning
+        const regex105kbDocRes = await docLib.InvokeTool(
+            'search_blocks',
+            { query: 'revenue', use_regex: true },
+            largeDoc
+        );
+        expect(regex105kbDocRes.success).toBe(true);
+        const regex105kbDocData = regex105kbDocRes.data as {
+            matchCount: number;
+            unsearchableCount: number;
+            unsearchableBlocks: Array<{ blockId: string; reason: string }>;
+            warnings: string[];
+        };
+        expect(regex105kbDocData.matchCount).toBe(0);
+        expect(regex105kbDocData.unsearchableCount).toBe(1);
+        expect(regex105kbDocData.unsearchableBlocks[0]?.reason).toBe('exceeds_64kb_regex_limit');
+        expect(regex105kbDocData.warnings.length).toBeGreaterThan(0);
+        expect(regex105kbDocData.warnings[0]).toContain('64 KB');
+
+        // Same for SpreadsheetToolLibrary search_cells on a 105 KB cell
+        const seed105 = await sheetLib.InvokeTool(
+            'write_cells',
+            { cells: [{ address: 'A1', value: large105kb }] },
+            ''
+        );
+        expect(seed105.success).toBe(true);
+        const wb105Json = (seed105.data as { updatedContent: string }).updatedContent;
+
+        const plainCellRes = await sheetLib.InvokeTool('search_cells', { query: 'revenue' }, wb105Json);
+        expect(plainCellRes.success).toBe(true);
+        expect((plainCellRes.data as { matches: Array<{ cell: string }> }).matches).toHaveLength(1);
+
+        const regex105CellRes = await sheetLib.InvokeTool(
+            'search_cells',
+            { query: 'revenue', use_regex: true },
+            wb105Json
+        );
+        expect(regex105CellRes.success).toBe(true);
+        const regex105CellData = regex105CellRes.data as {
+            matches: Array<{ cell: string }>;
+            unsearchableCount: number;
+            unsearchableCells: Array<{ sheet: string; cell: string; reason: string }>;
+            warnings: string[];
+        };
+        expect(regex105CellData.matches).toHaveLength(0);
+        expect(regex105CellData.unsearchableCount).toBe(1);
+        expect(regex105CellData.unsearchableCells[0]?.reason).toBe('exceeds_64kb_regex_limit');
+        expect(regex105CellData.warnings.length).toBeGreaterThan(0);
+
+        // 2. 20 blocks of 16 KB 'a' with use_regex: true and slow pattern (a|b)+c or \s*\w+\s*$
+        const block16kAs = 'a'.repeat(16_384);
+        const block16kSpaces = `${' '.repeat(8192)}${'a'.repeat(8191)}!`;
+        const twentyBlocksAsDoc = Array.from({ length: 20 }, (_, i) => `## Block ${i + 1}\n\n${block16kAs}`).join('\n\n');
+        const twentyBlocksSpacesDoc = Array.from({ length: 20 }, (_, i) => `## Block ${i + 1}\n\n${block16kSpaces}`).join('\n\n');
+
+        const tBlocks1 = performance.now();
+        const resBlocksAs = await docLib.InvokeTool(
+            'search_blocks',
+            { query: '(a|b)+c', use_regex: true },
+            twentyBlocksAsDoc
+        );
+        const elapsedBlocksAs = performance.now() - tBlocks1;
+        expect(resBlocksAs.success).toBe(true);
+        expect(elapsedBlocksAs).toBeLessThan(150);
+        const resBlocksAsData = resBlocksAs.data as {
+            unsearchableCount: number;
+            unsearchableBlocks: Array<{ blockId: string; reason: string }>;
+            warnings: string[];
+        };
+        expect(resBlocksAsData.unsearchableCount).toBeGreaterThan(0);
+        expect(resBlocksAsData.unsearchableBlocks.some((u) => u.reason === 'regex_timeout')).toBe(true);
+        expect(resBlocksAsData.warnings.length).toBeGreaterThan(0);
+        expect(resBlocksAsData.warnings[0]).toContain('50ms');
+
+        const tBlocks2 = performance.now();
+        const resBlocksSpaces = await docLib.InvokeTool(
+            'search_blocks',
+            { query: '\\s*\\w+\\s*$', use_regex: true },
+            twentyBlocksSpacesDoc
+        );
+        const elapsedBlocksSpaces = performance.now() - tBlocks2;
+        expect(resBlocksSpaces.success).toBe(true);
+        expect(elapsedBlocksSpaces).toBeLessThan(150);
+
+        // Also test grep across 20 lines of 16 KB
+        const tGrep = performance.now();
+        const resGrep = await docLib.InvokeTool(
+            'grep',
+            { pattern: '(a|b)+c', use_regex: true },
+            twentyBlocksAsDoc
+        );
+        const elapsedGrep = performance.now() - tGrep;
+        expect(resGrep.success).toBe(true);
+        expect(elapsedGrep).toBeLessThan(150);
+
+        // Also test SpreadsheetToolLibrary search_cells across 20 cells of 16 KB 'a'
+        const seed20Cells = await sheetLib.InvokeTool(
+            'write_cells',
+            {
+                cells: Array.from({ length: 20 }, (_, i) => ({
+                    address: `A${i + 1}`,
+                    value: block16kAs
+                }))
+            },
+            ''
+        );
+        expect(seed20Cells.success).toBe(true);
+        const wb20Json = (seed20Cells.data as { updatedContent: string }).updatedContent;
+
+        const tCells = performance.now();
+        const resCells = await sheetLib.InvokeTool(
+            'search_cells',
+            { query: '(a|b)+c', use_regex: true },
+            wb20Json
+        );
+        const elapsedCells = performance.now() - tCells;
+        expect(resCells.success).toBe(true);
+        expect(elapsedCells).toBeLessThan(150);
+        const resCellsData = resCells.data as {
+            unsearchableCount: number;
+            unsearchableCells: Array<{ sheet: string; cell: string; reason: string }>;
+            warnings: string[];
+        };
+        expect(resCellsData.unsearchableCount).toBeGreaterThan(0);
+        expect(resCellsData.unsearchableCells.some((u) => u.reason === 'regex_timeout')).toBe(true);
+        expect(resCellsData.warnings.length).toBeGreaterThan(0);
+    });
 });

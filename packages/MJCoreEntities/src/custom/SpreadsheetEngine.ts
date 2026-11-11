@@ -733,36 +733,294 @@ export function CompileSafeUserRegex(pattern: string, flags?: string): RegExp | 
     }
 }
 
-const SAFE_REGEX_VALIDATION_CACHE = new WeakMap<RegExp, RegExp | false>();
+/**
+ * Detailed outcome returned by {@link SafeRegexSearchDetailed} (`R6-6`).
+ */
+export interface SafeRegexSearchResult {
+    Matched: boolean;
+    TimedOut: boolean;
+    InputTooLong: boolean;
+}
+
+interface CompiledSafeRegexPlan {
+    multiline: boolean;
+    anchoredStart: boolean;
+    anchoredEnd: boolean;
+    fullSingleRx: RegExp;
+    stickyStartRx: RegExp | null;
+    firstWinRx: RegExp;
+    midWinRx: RegExp;
+    lastWinRx: RegExp;
+}
+
+const SAFE_REGEX_VALIDATION_CACHE = new WeakMap<RegExp, CompiledSafeRegexPlan | false>();
+const SAFE_REGEX_UTF8_ENCODER = new TextEncoder();
+const SAFE_REGEX_WINDOW_SIZE = 256;
+const SAFE_REGEX_WINDOW_STRIDE = 128;
+const SAFE_REGEX_TAIL_ANCHOR_WINDOW = 512;
+
+function getMonotonicNowMs(): number {
+    return typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : Date.now();
+}
+
+function analyzeAndRewriteAnchors(
+    source: string
+): {
+    anchoredStart: boolean;
+    anchoredEnd: boolean;
+    hasAnyCaret: boolean;
+    hasAnyDollar: boolean;
+    noDollarSource: string;
+    noCaretSource: string;
+    noCaretNoDollarSource: string;
+} {
+    let escaped = false;
+    let inCharClass = false;
+    let charClassFirstPos = -1;
+    let parenDepth = 0;
+    let hasTopLevelAlternation = false;
+    const unescapedCaretPositions = new Set<number>();
+    const unescapedDollarPositions = new Set<number>();
+
+    for (let i = 0; i < source.length; i++) {
+        const ch = source[i];
+        if (escaped) {
+            escaped = false;
+            continue;
+        }
+        if (ch === '\\') {
+            escaped = true;
+            continue;
+        }
+        if (inCharClass) {
+            if (ch === ']' && i > charClassFirstPos) {
+                inCharClass = false;
+            }
+            continue;
+        }
+        if (ch === '[') {
+            inCharClass = true;
+            charClassFirstPos = source[i + 1] === '^' ? i + 2 : i + 1;
+            continue;
+        }
+        if (ch === '(') {
+            parenDepth++;
+        } else if (ch === ')' && parenDepth > 0) {
+            parenDepth--;
+        } else if (ch === '|' && parenDepth === 0) {
+            hasTopLevelAlternation = true;
+        } else if (ch === '^') {
+            unescapedCaretPositions.add(i);
+        } else if (ch === '$') {
+            unescapedDollarPositions.add(i);
+        }
+    }
+
+    const anchoredStart = !hasTopLevelAlternation && unescapedCaretPositions.has(0);
+    const anchoredEnd = !hasTopLevelAlternation && source.length > 0 && unescapedDollarPositions.has(source.length - 1);
+    const hasAnyCaret = unescapedCaretPositions.size > 0;
+    const hasAnyDollar = unescapedDollarPositions.size > 0;
+
+    const rewrite = (stripCaret: boolean, stripDollar: boolean): string => {
+        if ((!stripCaret || !hasAnyCaret) && (!stripDollar || !hasAnyDollar)) {
+            return source;
+        }
+        let out = '';
+        for (let i = 0; i < source.length; i++) {
+            if (stripCaret && unescapedCaretPositions.has(i)) {
+                out += '(?!.)';
+            } else if (stripDollar && unescapedDollarPositions.has(i)) {
+                out += '(?!.)';
+            } else {
+                out += source[i];
+            }
+        }
+        return out;
+    };
+
+    return {
+        anchoredStart,
+        anchoredEnd,
+        hasAnyCaret,
+        hasAnyDollar,
+        noDollarSource: rewrite(false, true),
+        noCaretSource: rewrite(true, false),
+        noCaretNoDollarSource: rewrite(true, true)
+    };
+}
+
+function getOrCompileSafeRegexPlan(regex: RegExp): CompiledSafeRegexPlan | false {
+    const cached = SAFE_REGEX_VALIDATION_CACHE.get(regex);
+    if (cached !== undefined) {
+        return cached;
+    }
+    if (!IsSafeUserRegex(regex.source, regex.flags)) {
+        SAFE_REGEX_VALIDATION_CACHE.set(regex, false);
+        return false;
+    }
+    const cleanFlags = regex.flags.replace(/[gy]/g, () => '');
+    const singleLineFlags = cleanFlags.replace(/m/g, () => '');
+    const info = analyzeAndRewriteAnchors(regex.source);
+
+    const fullSingleRx = new RegExp(regex.source, singleLineFlags);
+    const stickyStartRx = info.anchoredStart ? new RegExp(regex.source, `${singleLineFlags}y`) : null;
+    const firstWinRx =
+        info.noDollarSource === regex.source ? fullSingleRx : new RegExp(info.noDollarSource, singleLineFlags);
+    const lastWinRx =
+        info.noCaretSource === regex.source ? fullSingleRx : new RegExp(info.noCaretSource, singleLineFlags);
+    const midWinRx =
+        info.noCaretNoDollarSource === regex.source
+            ? fullSingleRx
+            : new RegExp(info.noCaretNoDollarSource, singleLineFlags);
+
+    const plan: CompiledSafeRegexPlan = {
+        multiline: regex.multiline,
+        anchoredStart: info.anchoredStart,
+        anchoredEnd: info.anchoredEnd,
+        fullSingleRx,
+        stickyStartRx,
+        firstWinRx,
+        midWinRx,
+        lastWinRx
+    };
+    SAFE_REGEX_VALIDATION_CACHE.set(regex, plan);
+    return plan;
+}
+
+function executeBoundedSingleSegment(
+    plan: CompiledSafeRegexPlan,
+    segment: string,
+    deadline: number
+): 'matched' | 'no_match' | 'timeout' {
+    if (getMonotonicNowMs() >= deadline) {
+        return 'timeout';
+    }
+    if (plan.anchoredStart && plan.anchoredEnd) {
+        plan.fullSingleRx.lastIndex = 0;
+        return plan.fullSingleRx.test(segment) ? 'matched' : 'no_match';
+    }
+    if (plan.anchoredStart && plan.stickyStartRx) {
+        plan.stickyStartRx.lastIndex = 0;
+        return plan.stickyStartRx.test(segment) ? 'matched' : 'no_match';
+    }
+    if (plan.anchoredEnd) {
+        const tail =
+            segment.length <= SAFE_REGEX_TAIL_ANCHOR_WINDOW
+                ? segment
+                : segment.slice(-SAFE_REGEX_TAIL_ANCHOR_WINDOW);
+        plan.fullSingleRx.lastIndex = 0;
+        return plan.fullSingleRx.test(tail) ? 'matched' : 'no_match';
+    }
+    if (segment.length <= SAFE_REGEX_WINDOW_SIZE) {
+        plan.fullSingleRx.lastIndex = 0;
+        return plan.fullSingleRx.test(segment) ? 'matched' : 'no_match';
+    }
+
+    for (let offset = 0; offset < segment.length; offset += SAFE_REGEX_WINDOW_STRIDE) {
+        if (getMonotonicNowMs() >= deadline) {
+            return 'timeout';
+        }
+        const end = Math.min(segment.length, offset + SAFE_REGEX_WINDOW_SIZE);
+        const slice = segment.slice(offset, end);
+        const isFirst = offset === 0;
+        const isLast = end === segment.length;
+        const rx =
+            isFirst && isLast
+                ? plan.fullSingleRx
+                : isFirst
+                  ? plan.firstWinRx
+                  : isLast
+                    ? plan.lastWinRx
+                    : plan.midWinRx;
+        rx.lastIndex = 0;
+        if (rx.test(slice)) {
+            return 'matched';
+        }
+        if (isLast) {
+            break;
+        }
+    }
+    return 'no_match';
+}
 
 /**
- * Executes `regex.test(candidate)` directly against the full input string (up to `maxInputLength = 65536`)
- * without window-slicing so `^` and `$` anchors remain 100% accurate (`E8`).
+ * Executes a validated user regex with both an input byte cap (`maxInputBytes = 65536`) and
+ * a wall-clock time budget (`maxDurationMs = 20`) via overlapping 256-char windows while
+ * preserving exact `^`, `$`, and `m`-flag anchor semantics (`R6-6`).
+ */
+export function SafeRegexSearchDetailed(
+    regex: RegExp,
+    input: string,
+    maxDurationMs: number = 20,
+    maxInputBytes: number = 65536
+): SafeRegexSearchResult {
+    if (typeof input !== 'string') {
+        return { Matched: false, TimedOut: false, InputTooLong: false };
+    }
+    if (input.length > maxInputBytes) {
+        return { Matched: false, TimedOut: false, InputTooLong: true };
+    }
+    if (input.length * 3 > maxInputBytes) {
+        const byteLen =
+            typeof Buffer !== 'undefined'
+                ? Buffer.byteLength(input, 'utf8')
+                : SAFE_REGEX_UTF8_ENCODER.encode(input).length;
+        if (byteLen > maxInputBytes) {
+            return { Matched: false, TimedOut: false, InputTooLong: true };
+        }
+    }
+
+    const plan = getOrCompileSafeRegexPlan(regex);
+    if (plan === false) {
+        return { Matched: false, TimedOut: false, InputTooLong: false };
+    }
+
+    const deadline = getMonotonicNowMs() + Math.max(1, maxDurationMs);
+
+    if (plan.multiline) {
+        let lineStart = 0;
+        while (lineStart <= input.length) {
+            const nlIdx = input.indexOf('\n', lineStart);
+            const rawEnd = nlIdx === -1 ? input.length : nlIdx;
+            const lineEnd = rawEnd > lineStart && input[rawEnd - 1] === '\r' ? rawEnd - 1 : rawEnd;
+            const line = input.slice(lineStart, lineEnd);
+            const outcome = executeBoundedSingleSegment(plan, line, deadline);
+            if (outcome === 'matched') {
+                return { Matched: true, TimedOut: false, InputTooLong: false };
+            }
+            if (outcome === 'timeout') {
+                return { Matched: false, TimedOut: true, InputTooLong: false };
+            }
+            if (nlIdx === -1) {
+                break;
+            }
+            lineStart = nlIdx + 1;
+        }
+        return { Matched: false, TimedOut: false, InputTooLong: false };
+    }
+
+    const outcome = executeBoundedSingleSegment(plan, input, deadline);
+    if (outcome === 'matched') {
+        return { Matched: true, TimedOut: false, InputTooLong: false };
+    }
+    if (outcome === 'timeout') {
+        return { Matched: false, TimedOut: true, InputTooLong: false };
+    }
+    return { Matched: false, TimedOut: false, InputTooLong: false };
+}
+
+/**
+ * Time- and byte-bounded boolean wrapper around {@link SafeRegexSearchDetailed} (`E8`, `R6-6`).
  */
 export function SafeRegexTest(
     regex: RegExp,
     candidate: string,
     maxInputLength = 65536,
-    _maxDurationMs = 20
+    maxDurationMs = 20
 ): boolean {
-    if (typeof candidate !== 'string' || candidate.length > maxInputLength) {
-        return false;
-    }
-    let safeRx = SAFE_REGEX_VALIDATION_CACHE.get(regex);
-    if (safeRx === undefined) {
-        if (!IsSafeUserRegex(regex.source, regex.flags)) {
-            SAFE_REGEX_VALIDATION_CACHE.set(regex, false);
-            return false;
-        }
-        const cleanFlags = regex.flags.replace(/[gy]/g, () => '');
-        safeRx = cleanFlags === regex.flags ? regex : new RegExp(regex.source, cleanFlags);
-        SAFE_REGEX_VALIDATION_CACHE.set(regex, safeRx);
-    }
-    if (safeRx === false) {
-        return false;
-    }
-    safeRx.lastIndex = 0;
-    return safeRx.test(candidate);
+    return SafeRegexSearchDetailed(regex, candidate, maxDurationMs, maxInputLength).Matched;
 }
 
 /**
@@ -1713,10 +1971,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         continue;
                     }
 
-                    const resolvedFormula =
-                        cell.FormulaStable && cell.FormulaStable.includes('@SHEET_')
-                            ? this.ResolveFormulaFromStableIds(ws, cell.FormulaStable, workbook)
-                            : cell.Formula;
+                    const resolvedFormula = cell.FormulaStable
+                        ? this.ResolveFormulaFromStableIds(ws, cell.FormulaStable, workbook)
+                        : cell.Formula;
 
                     if (transitivelyDependentFormulaKeys.has(cellKey)) {
                         cleanedCells[addr] = {
@@ -1937,11 +2194,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         const sheetId = raw.SheetID || fallbackId;
         let maxRow = Math.max(
             DEFAULT_ROW_COUNT,
-            Math.min(MAX_DENSE_ROWS, Array.isArray(raw.Rows) ? raw.Rows.length : 0)
+            Math.min(EXCEL_MAX_ROWS, Array.isArray(raw.Rows) ? raw.Rows.length : 0)
         );
         let maxCol = Math.max(
             DEFAULT_COLUMN_COUNT,
-            Math.min(MAX_DENSE_COLS, Array.isArray(raw.Columns) ? raw.Columns.length : 0)
+            Math.min(EXCEL_MAX_COLS, Array.isArray(raw.Columns) ? raw.Columns.length : 0)
         );
 
         const rawCells = raw.Cells ?? {};
@@ -2433,28 +2690,33 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         }
         this.bindSheetsToWorkbook(workbook);
         this.ensureAllWorkbookFormulasHaveStableIds(workbook);
-        const insertIdx = Math.max(0, Math.min(sheet.Rows.length, Math.floor(atRowNumber) - 1));
-        const startRow1Based = insertIdx + 1;
+        const requestedRow1 = Math.max(1, Math.min(EXCEL_MAX_ROWS, Math.floor(atRowNumber)));
         const numToInsert = Math.max(1, Math.floor(count));
-        const existingIds = new Set(sheet.Rows.map((r) => r.RowID));
-        const inserted: SpreadsheetRowSpec[] = [];
-        for (let i = 0; i < numToInsert; i++) {
-            let candidate = `${sheet.SheetID}-row-${generateSpreadsheetUuid()}`;
-            while (existingIds.has(candidate)) {
-                candidate = `${sheet.SheetID}-row-${generateSpreadsheetUuid()}`;
-            }
-            existingIds.add(candidate);
-            inserted.push({
-                RowID: candidate,
-                Index: insertIdx + i + 1,
-                Height: DEFAULT_ROW_HEIGHT,
-                Hidden: false
-            });
+        if (requestedRow1 - 1 > sheet.Rows.length && requestedRow1 - 1 <= MAX_DENSE_ROWS) {
+            this.ensureSheetCapacity(sheet, requestedRow1 - 1, 1);
         }
-        sheet.Rows.splice(insertIdx, 0, ...inserted);
+        const inserted: SpreadsheetRowSpec[] = [];
+        if (requestedRow1 <= sheet.Rows.length + 1) {
+            const insertIdx = requestedRow1 - 1;
+            const existingIds = new Set(sheet.Rows.map((r) => r.RowID));
+            for (let i = 0; i < numToInsert; i++) {
+                let candidate = `${sheet.SheetID}-row-${generateSpreadsheetUuid()}`;
+                while (existingIds.has(candidate)) {
+                    candidate = `${sheet.SheetID}-row-${generateSpreadsheetUuid()}`;
+                }
+                existingIds.add(candidate);
+                inserted.push({
+                    RowID: candidate,
+                    Index: insertIdx + i + 1,
+                    Height: DEFAULT_ROW_HEIGHT,
+                    Hidden: false
+                });
+            }
+            sheet.Rows.splice(insertIdx, 0, ...inserted);
+        }
         this.sheetLookupCache.delete(sheet);
-        this.shiftVirtualAxisIds(workbook, sheet, 'row', 'insert', startRow1Based, numToInsert);
-        this.shiftNonCellMetadataForRowEdit(workbook, sheet, 'insert', startRow1Based, numToInsert);
+        this.shiftVirtualAxisIds(workbook, sheet, 'row', 'insert', requestedRow1, numToInsert);
+        this.shiftNonCellMetadataForRowEdit(workbook, sheet, 'insert', requestedRow1, numToInsert);
         this.reindexWorkbookAfterStructuralEdit(workbook, sheet);
         this.EvaluateWorkbook(workbook);
         return inserted;
@@ -2462,30 +2724,44 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
 
     /**
      * Deletes `count` rows starting at 1-based `atRowNumber` in `sheetId`, shrinking `@RANGE` endpoints
-     * to surviving rows (or `#REF!` if the entire range was deleted) and updating non-cell range metadata (`D3`).
+     * to surviving rows (or `#REF!` if the entire range was deleted) and updating non-cell range metadata (`D3`, `R6-10`).
      */
     public DeleteRows(workbook: WorkbookSpec, sheetId: string, atRowNumber: number, count = 1): void {
         const sheet = this.GetWorksheet(workbook, sheetId);
-        if (!sheet || sheet.Rows.length <= 1) return;
+        if (!sheet) return;
+        const requestedStart1 = Math.max(1, Math.min(EXCEL_MAX_ROWS, Math.floor(atRowNumber)));
+        const requestedCount = Math.max(1, Math.min(EXCEL_MAX_ROWS - requestedStart1 + 1, Math.floor(count)));
+        if (sheet.Rows.length <= 1 && requestedStart1 === 1 && requestedCount === 1 && Object.keys(sheet.Cells).length === 0) {
+            return;
+        }
         this.bindSheetsToWorkbook(workbook);
         this.ensureAllWorkbookFormulasHaveStableIds(workbook);
-        const startIdx = Math.max(0, Math.min(sheet.Rows.length - 1, Math.floor(atRowNumber) - 1));
-        const startRow1Based = startIdx + 1;
-        const maxDeletable = Math.min(Math.max(1, Math.floor(count)), sheet.Rows.length - 1);
-        const removedRowSet = new Set(sheet.Rows.slice(startIdx, startIdx + maxDeletable).map((r) => r.RowID));
 
-        // Shrink @RANGE and @SHEET_RANGE endpoints BEFORE removing the rows so surviving endpoints are preserved
-        this.shrinkFormulaStableRowEndpointsBeforeDelete(workbook, sheet, removedRowSet);
+        // Shrink @RANGE, @ROWS, @SHEET_RANGE, and @SHEET_ROWS endpoints (both dense and virtual) BEFORE splicing rows
+        this.shrinkFormulaStableRowEndpointsBeforeDelete(workbook, sheet, requestedStart1, requestedCount);
 
-        sheet.Rows.splice(startIdx, maxDeletable);
-        this.sheetLookupCache.delete(sheet);
-        for (const [addr, cell] of Object.entries(sheet.Cells)) {
-            if (removedRowSet.has(cell.RowID)) {
-                delete sheet.Cells[addr];
+        if (requestedStart1 <= sheet.Rows.length) {
+            const startIdx = requestedStart1 - 1;
+            const denseCount = Math.min(requestedCount, sheet.Rows.length - startIdx);
+            const removedRowSet = new Set(sheet.Rows.slice(startIdx, startIdx + denseCount).map((r) => r.RowID));
+            sheet.Rows.splice(startIdx, denseCount);
+            if (sheet.Rows.length === 0) {
+                sheet.Rows.push({
+                    RowID: `${sheet.SheetID}-row-${generateSpreadsheetUuid()}`,
+                    Index: 1,
+                    Height: DEFAULT_ROW_HEIGHT,
+                    Hidden: false
+                });
+            }
+            for (const [addr, cell] of Object.entries(sheet.Cells)) {
+                if (removedRowSet.has(cell.RowID)) {
+                    delete sheet.Cells[addr];
+                }
             }
         }
-        this.shiftVirtualAxisIds(workbook, sheet, 'row', 'delete', startRow1Based, maxDeletable);
-        this.shiftNonCellMetadataForRowEdit(workbook, sheet, 'delete', startRow1Based, maxDeletable);
+        this.sheetLookupCache.delete(sheet);
+        this.shiftVirtualAxisIds(workbook, sheet, 'row', 'delete', requestedStart1, requestedCount);
+        this.shiftNonCellMetadataForRowEdit(workbook, sheet, 'delete', requestedStart1, requestedCount);
         this.reindexWorkbookAfterStructuralEdit(workbook, sheet);
         this.EvaluateWorkbook(workbook);
     }
@@ -2506,29 +2782,34 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         }
         this.bindSheetsToWorkbook(workbook);
         this.ensureAllWorkbookFormulasHaveStableIds(workbook);
-        const insertIdx = Math.max(0, Math.min(sheet.Columns.length, Math.floor(atColumnNumber) - 1));
-        const startCol1Based = insertIdx + 1;
+        const requestedCol1 = Math.max(1, Math.min(EXCEL_MAX_COLS, Math.floor(atColumnNumber)));
         const numToInsert = Math.max(1, Math.floor(count));
-        const existingIds = new Set(sheet.Columns.map((c) => c.ColumnID));
-        const inserted: SpreadsheetColumnSpec[] = [];
-        for (let i = 0; i < numToInsert; i++) {
-            let candidate = `${sheet.SheetID}-col-${generateSpreadsheetUuid()}`;
-            while (existingIds.has(candidate)) {
-                candidate = `${sheet.SheetID}-col-${generateSpreadsheetUuid()}`;
-            }
-            existingIds.add(candidate);
-            inserted.push({
-                ColumnID: candidate,
-                Index: insertIdx + i + 1,
-                Letter: ColumnIndexToLetter(insertIdx + i + 1),
-                Width: DEFAULT_COLUMN_WIDTH,
-                Hidden: false
-            });
+        if (requestedCol1 - 1 > sheet.Columns.length && requestedCol1 - 1 <= MAX_DENSE_COLS) {
+            this.ensureSheetCapacity(sheet, 1, requestedCol1 - 1);
         }
-        sheet.Columns.splice(insertIdx, 0, ...inserted);
+        const inserted: SpreadsheetColumnSpec[] = [];
+        if (requestedCol1 <= sheet.Columns.length + 1) {
+            const insertIdx = requestedCol1 - 1;
+            const existingIds = new Set(sheet.Columns.map((c) => c.ColumnID));
+            for (let i = 0; i < numToInsert; i++) {
+                let candidate = `${sheet.SheetID}-col-${generateSpreadsheetUuid()}`;
+                while (existingIds.has(candidate)) {
+                    candidate = `${sheet.SheetID}-col-${generateSpreadsheetUuid()}`;
+                }
+                existingIds.add(candidate);
+                inserted.push({
+                    ColumnID: candidate,
+                    Index: insertIdx + i + 1,
+                    Letter: ColumnIndexToLetter(insertIdx + i + 1),
+                    Width: DEFAULT_COLUMN_WIDTH,
+                    Hidden: false
+                });
+            }
+            sheet.Columns.splice(insertIdx, 0, ...inserted);
+        }
         this.sheetLookupCache.delete(sheet);
-        this.shiftVirtualAxisIds(workbook, sheet, 'col', 'insert', startCol1Based, numToInsert);
-        this.shiftNonCellMetadataForColEdit(workbook, sheet, 'insert', startCol1Based, numToInsert);
+        this.shiftVirtualAxisIds(workbook, sheet, 'col', 'insert', requestedCol1, numToInsert);
+        this.shiftNonCellMetadataForColEdit(workbook, sheet, 'insert', requestedCol1, numToInsert);
         this.reindexWorkbookAfterStructuralEdit(workbook, sheet);
         this.EvaluateWorkbook(workbook);
         return inserted;
@@ -2536,30 +2817,45 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
 
     /**
      * Deletes `count` columns starting at 1-based `atColumnNumber` in `sheetId`, shrinking `@RANGE` endpoints
-     * to surviving columns (or `#REF!` if the entire range was deleted) and updating non-cell range metadata (`D3`).
+     * to surviving columns (or `#REF!` if the entire range was deleted) and updating non-cell range metadata (`D3`, `R6-10`).
      */
     public DeleteColumns(workbook: WorkbookSpec, sheetId: string, atColumnNumber: number, count = 1): void {
         const sheet = this.GetWorksheet(workbook, sheetId);
-        if (!sheet || sheet.Columns.length <= 1) return;
+        if (!sheet) return;
+        const requestedStart1 = Math.max(1, Math.min(EXCEL_MAX_COLS, Math.floor(atColumnNumber)));
+        const requestedCount = Math.max(1, Math.min(EXCEL_MAX_COLS - requestedStart1 + 1, Math.floor(count)));
+        if (sheet.Columns.length <= 1 && requestedStart1 === 1 && requestedCount === 1 && Object.keys(sheet.Cells).length === 0) {
+            return;
+        }
         this.bindSheetsToWorkbook(workbook);
         this.ensureAllWorkbookFormulasHaveStableIds(workbook);
-        const startIdx = Math.max(0, Math.min(sheet.Columns.length - 1, Math.floor(atColumnNumber) - 1));
-        const startCol1Based = startIdx + 1;
-        const maxDeletable = Math.min(Math.max(1, Math.floor(count)), sheet.Columns.length - 1);
-        const removedColSet = new Set(sheet.Columns.slice(startIdx, startIdx + maxDeletable).map((c) => c.ColumnID));
 
-        // Shrink @RANGE and @SHEET_RANGE endpoints BEFORE removing the columns so surviving endpoints are preserved
-        this.shrinkFormulaStableColEndpointsBeforeDelete(workbook, sheet, removedColSet);
+        // Shrink @RANGE, @COLS, @SHEET_RANGE, and @SHEET_COLS endpoints (both dense and virtual) BEFORE splicing columns
+        this.shrinkFormulaStableColEndpointsBeforeDelete(workbook, sheet, requestedStart1, requestedCount);
 
-        sheet.Columns.splice(startIdx, maxDeletable);
-        this.sheetLookupCache.delete(sheet);
-        for (const [addr, cell] of Object.entries(sheet.Cells)) {
-            if (removedColSet.has(cell.ColumnID)) {
-                delete sheet.Cells[addr];
+        if (requestedStart1 <= sheet.Columns.length) {
+            const startIdx = requestedStart1 - 1;
+            const denseCount = Math.min(requestedCount, sheet.Columns.length - startIdx);
+            const removedColSet = new Set(sheet.Columns.slice(startIdx, startIdx + denseCount).map((c) => c.ColumnID));
+            sheet.Columns.splice(startIdx, denseCount);
+            if (sheet.Columns.length === 0) {
+                sheet.Columns.push({
+                    ColumnID: `${sheet.SheetID}-col-${generateSpreadsheetUuid()}`,
+                    Index: 1,
+                    Letter: 'A',
+                    Width: DEFAULT_COLUMN_WIDTH,
+                    Hidden: false
+                });
+            }
+            for (const [addr, cell] of Object.entries(sheet.Cells)) {
+                if (removedColSet.has(cell.ColumnID)) {
+                    delete sheet.Cells[addr];
+                }
             }
         }
-        this.shiftVirtualAxisIds(workbook, sheet, 'col', 'delete', startCol1Based, maxDeletable);
-        this.shiftNonCellMetadataForColEdit(workbook, sheet, 'delete', startCol1Based, maxDeletable);
+        this.sheetLookupCache.delete(sheet);
+        this.shiftVirtualAxisIds(workbook, sheet, 'col', 'delete', requestedStart1, requestedCount);
+        this.shiftNonCellMetadataForColEdit(workbook, sheet, 'delete', requestedStart1, requestedCount);
         this.reindexWorkbookAfterStructuralEdit(workbook, sheet);
         this.EvaluateWorkbook(workbook);
     }
@@ -2575,35 +2871,49 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         const tag = axis === 'row' ? '-vrow-' : '-vcol-';
         const prefix = `${targetSheet.SheetID}${tag}`;
         const maxBound = axis === 'row' ? EXCEL_MAX_ROWS : EXCEL_MAX_COLS;
-        const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, (m) => `\\${m}`);
         const tokenRx = new RegExp(`${escapedPrefix}(\\d+)`, 'g');
 
-        const shiftIndex = (n: number): number => {
-            if (op === 'insert') {
-                return n >= start1Based ? Math.min(maxBound, n + count) : n;
-            }
-            if (n >= start1Based + count) {
-                return Math.max(1, n - count);
-            }
-            return n;
-        };
-
-        for (const cell of Object.values(targetSheet.Cells)) {
+        for (const [addr, cell] of Object.entries(targetSheet.Cells)) {
             if (axis === 'row' && cell.RowID.startsWith(prefix)) {
                 const n = parseInt(cell.RowID.slice(prefix.length), 10);
                 if (Number.isFinite(n)) {
-                    const nextN = shiftIndex(n);
-                    cell.RowID = axis === 'row' && nextN <= targetSheet.Rows.length
-                        ? targetSheet.Rows[nextN - 1].RowID
-                        : `${prefix}${nextN}`;
+                    if (op === 'delete' && n >= start1Based && n < start1Based + count) {
+                        delete targetSheet.Cells[addr];
+                        continue;
+                    }
+                    const nextN =
+                        op === 'insert'
+                            ? n >= start1Based
+                                ? Math.min(maxBound, n + count)
+                                : n
+                            : n >= start1Based + count
+                              ? Math.max(1, n - count)
+                              : n;
+                    cell.RowID =
+                        nextN <= targetSheet.Rows.length
+                            ? targetSheet.Rows[nextN - 1].RowID
+                            : `${prefix}${nextN}`;
                 }
             } else if (axis === 'col' && cell.ColumnID.startsWith(prefix)) {
                 const n = parseInt(cell.ColumnID.slice(prefix.length), 10);
                 if (Number.isFinite(n)) {
-                    const nextN = shiftIndex(n);
-                    cell.ColumnID = nextN <= targetSheet.Columns.length
-                        ? targetSheet.Columns[nextN - 1].ColumnID
-                        : `${prefix}${nextN}`;
+                    if (op === 'delete' && n >= start1Based && n < start1Based + count) {
+                        delete targetSheet.Cells[addr];
+                        continue;
+                    }
+                    const nextN =
+                        op === 'insert'
+                            ? n >= start1Based
+                                ? Math.min(maxBound, n + count)
+                                : n
+                            : n >= start1Based + count
+                              ? Math.max(1, n - count)
+                              : n;
+                    cell.ColumnID =
+                        nextN <= targetSheet.Columns.length
+                            ? targetSheet.Columns[nextN - 1].ColumnID
+                            : `${prefix}${nextN}`;
                 }
             }
         }
@@ -2613,7 +2923,17 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 if (cell.FormulaStable && cell.FormulaStable.includes(prefix)) {
                     cell.FormulaStable = cell.FormulaStable.replace(tokenRx, (_m, numStr: string) => {
                         const n = parseInt(numStr, 10);
-                        const nextN = shiftIndex(n);
+                        if (op === 'delete' && n >= start1Based && n < start1Based + count) {
+                            return '__deleted_axis__';
+                        }
+                        const nextN =
+                            op === 'insert'
+                                ? n >= start1Based
+                                    ? Math.min(maxBound, n + count)
+                                    : n
+                                : n >= start1Based + count
+                                  ? Math.max(1, n - count)
+                                  : n;
                         if (axis === 'row' && nextN <= targetSheet.Rows.length) {
                             return targetSheet.Rows[nextN - 1].RowID;
                         }
@@ -2700,47 +3020,48 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     private shrinkFormulaStableRowEndpointsBeforeDelete(
         workbook: WorkbookSpec,
         targetSheet: WorksheetSpec,
-        removedRowIds: ReadonlySet<string>
+        delStart1: number,
+        delCount: number
     ): void {
+        const delEnd1 = delStart1 + delCount - 1;
         const preRowIndexById = new Map<string, number>();
-        targetSheet.Rows.forEach((r, idx) => preRowIndexById.set(r.RowID, idx));
+        targetSheet.Rows.forEach((r, idx) => preRowIndexById.set(r.RowID, idx + 1));
 
-        const resolvePreRow0 = (id: string): number | undefined => {
+        const resolvePreRow1 = (id: string): number | undefined => {
             const direct = preRowIndexById.get(id);
             if (direct !== undefined) return direct;
             const vm = /-vrow-(\d+)$/.exec(id);
-            return vm ? parseInt(vm[1], 10) - 1 : undefined;
+            if (!vm) return undefined;
+            const parsed = parseInt(vm[1], 10);
+            return parsed >= 1 && parsed <= EXCEL_MAX_ROWS ? parsed : undefined;
         };
+
+        const toPreRowToken = (pre1: number): string =>
+            pre1 <= targetSheet.Rows.length
+                ? targetSheet.Rows[pre1 - 1].RowID
+                : `${targetSheet.SheetID}-vrow-${pre1}`;
 
         const shrinkRowPair = (rawR1: string, rawR2: string): { nextR1: string; nextR2: string } | null => {
             const absR1 = rawR1.trim().startsWith('$');
             const absR2 = rawR2.trim().startsWith('$');
             const id1 = absR1 ? rawR1.trim().slice(1) : rawR1.trim();
             const id2 = absR2 ? rawR2.trim().slice(1) : rawR2.trim();
-            const idx1 = resolvePreRow0(id1);
-            const idx2 = resolvePreRow0(id2);
-            if (idx1 === undefined || idx2 === undefined) return null;
-            if (!removedRowIds.has(id1) && !removedRowIds.has(id2)) {
+            const r1 = resolvePreRow1(id1);
+            const r2 = resolvePreRow1(id2);
+            if (r1 === undefined || r2 === undefined) return null;
+            const minR = Math.min(r1, r2);
+            const maxR = Math.max(r1, r2);
+            if (maxR < delStart1 || minR > delEnd1) {
                 return { nextR1: rawR1.trim(), nextR2: rawR2.trim() };
             }
-            const minIdx = Math.min(idx1, idx2);
-            const maxIdx = Math.max(idx1, idx2);
-            const denseEnd = Math.min(maxIdx + 1, targetSheet.Rows.length);
-            const survivingDense = targetSheet.Rows.slice(minIdx, denseEnd).filter((r) => !removedRowIds.has(r.RowID));
-            if (survivingDense.length === 0 && maxIdx < targetSheet.Rows.length) {
+            if (minR >= delStart1 && maxR <= delEnd1) {
                 return null;
             }
-            const firstId =
-                survivingDense.length > 0
-                    ? survivingDense[0].RowID
-                    : `${targetSheet.SheetID}-vrow-${Math.max(targetSheet.Rows.length + 1, minIdx + 1)}`;
-            const lastId =
-                maxIdx >= targetSheet.Rows.length
-                    ? `${targetSheet.SheetID}-vrow-${maxIdx + 1}`
-                    : survivingDense[survivingDense.length - 1].RowID;
+            const survFirst1 = minR < delStart1 ? minR : delEnd1 + 1;
+            const survLast1 = maxR > delEnd1 ? maxR : delStart1 - 1;
             return {
-                nextR1: `${absR1 ? '$' : ''}${firstId}`,
-                nextR2: `${absR2 ? '$' : ''}${lastId}`
+                nextR1: `${absR1 ? '$' : ''}${toPreRowToken(survFirst1)}`,
+                nextR2: `${absR2 ? '$' : ''}${toPreRowToken(survLast1)}`
             };
         };
 
@@ -2798,47 +3119,48 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     private shrinkFormulaStableColEndpointsBeforeDelete(
         workbook: WorkbookSpec,
         targetSheet: WorksheetSpec,
-        removedColIds: ReadonlySet<string>
+        delStart1: number,
+        delCount: number
     ): void {
+        const delEnd1 = delStart1 + delCount - 1;
         const preColIndexById = new Map<string, number>();
-        targetSheet.Columns.forEach((c, idx) => preColIndexById.set(c.ColumnID, idx));
+        targetSheet.Columns.forEach((c, idx) => preColIndexById.set(c.ColumnID, idx + 1));
 
-        const resolvePreCol0 = (id: string): number | undefined => {
+        const resolvePreCol1 = (id: string): number | undefined => {
             const direct = preColIndexById.get(id);
             if (direct !== undefined) return direct;
             const vm = /-vcol-(\d+)$/.exec(id);
-            return vm ? parseInt(vm[1], 10) - 1 : undefined;
+            if (!vm) return undefined;
+            const parsed = parseInt(vm[1], 10);
+            return parsed >= 1 && parsed <= EXCEL_MAX_COLS ? parsed : undefined;
         };
+
+        const toPreColToken = (pre1: number): string =>
+            pre1 <= targetSheet.Columns.length
+                ? targetSheet.Columns[pre1 - 1].ColumnID
+                : `${targetSheet.SheetID}-vcol-${pre1}`;
 
         const shrinkColPair = (rawC1: string, rawC2: string): { nextC1: string; nextC2: string } | null => {
             const absC1 = rawC1.trim().startsWith('$');
             const absC2 = rawC2.trim().startsWith('$');
             const id1 = absC1 ? rawC1.trim().slice(1) : rawC1.trim();
             const id2 = absC2 ? rawC2.trim().slice(1) : rawC2.trim();
-            const idx1 = resolvePreCol0(id1);
-            const idx2 = resolvePreCol0(id2);
-            if (idx1 === undefined || idx2 === undefined) return null;
-            if (!removedColIds.has(id1) && !removedColIds.has(id2)) {
+            const c1 = resolvePreCol1(id1);
+            const c2 = resolvePreCol1(id2);
+            if (c1 === undefined || c2 === undefined) return null;
+            const minC = Math.min(c1, c2);
+            const maxC = Math.max(c1, c2);
+            if (maxC < delStart1 || minC > delEnd1) {
                 return { nextC1: rawC1.trim(), nextC2: rawC2.trim() };
             }
-            const minIdx = Math.min(idx1, idx2);
-            const maxIdx = Math.max(idx1, idx2);
-            const denseEnd = Math.min(maxIdx + 1, targetSheet.Columns.length);
-            const survivingDense = targetSheet.Columns.slice(minIdx, denseEnd).filter((c) => !removedColIds.has(c.ColumnID));
-            if (survivingDense.length === 0 && maxIdx < targetSheet.Columns.length) {
+            if (minC >= delStart1 && maxC <= delEnd1) {
                 return null;
             }
-            const firstId =
-                survivingDense.length > 0
-                    ? survivingDense[0].ColumnID
-                    : `${targetSheet.SheetID}-vcol-${Math.max(targetSheet.Columns.length + 1, minIdx + 1)}`;
-            const lastId =
-                maxIdx >= targetSheet.Columns.length
-                    ? `${targetSheet.SheetID}-vcol-${maxIdx + 1}`
-                    : survivingDense[survivingDense.length - 1].ColumnID;
+            const survFirst1 = minC < delStart1 ? minC : delEnd1 + 1;
+            const survLast1 = maxC > delEnd1 ? maxC : delStart1 - 1;
             return {
-                nextC1: `${absC1 ? '$' : ''}${firstId}`,
-                nextC2: `${absC2 ? '$' : ''}${lastId}`
+                nextC1: `${absC1 ? '$' : ''}${toPreColToken(survFirst1)}`,
+                nextC2: `${absC2 ? '$' : ''}${toPreColToken(survLast1)}`
             };
         };
 
@@ -3245,9 +3567,12 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     private ensureSheetCapacity(sheet: WorksheetSpec, minRow: number, minCol: number): void {
         const cappedMinRow = Math.min(minRow, MAX_DENSE_ROWS);
         const cappedMinCol = Math.min(minCol, MAX_DENSE_COLS);
-        let changed = false;
+        const oldRowLen = sheet.Rows.length;
+        const oldColLen = sheet.Columns.length;
+        let rowsGrew = false;
+        let colsGrew = false;
         if (sheet.Rows.length < cappedMinRow) {
-            changed = true;
+            rowsGrew = true;
             const existingRowIds = new Set(sheet.Rows.map((r) => r.RowID));
             while (sheet.Rows.length < cappedMinRow) {
                 const nextIdx = sheet.Rows.length + 1;
@@ -3260,7 +3585,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
         }
         if (sheet.Columns.length < cappedMinCol) {
-            changed = true;
+            colsGrew = true;
             const existingColIds = new Set(sheet.Columns.map((c) => c.ColumnID));
             while (sheet.Columns.length < cappedMinCol) {
                 const nextIdx = sheet.Columns.length + 1;
@@ -3274,8 +3599,62 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 });
             }
         }
-        if (changed) {
+        if (rowsGrew || colsGrew) {
             this.sheetLookupCache.delete(sheet);
+            this.promoteMaterializedVirtualAxisIds(sheet, oldRowLen, sheet.Rows.length, oldColLen, sheet.Columns.length);
+        }
+    }
+
+    private promoteMaterializedVirtualAxisIds(
+        sheet: WorksheetSpec,
+        oldRowLen: number,
+        newRowLen: number,
+        oldColLen: number,
+        newColLen: number
+    ): void {
+        const rowPrefix = `${sheet.SheetID}-vrow-`;
+        const colPrefix = `${sheet.SheetID}-vcol-`;
+        const rowRx =
+            newRowLen > oldRowLen
+                ? new RegExp(`${rowPrefix.replace(/[.*+?^${}()|[\]\\]/g, (m) => `\\${m}`)}(\\d+)`, 'g')
+                : null;
+        const colRx =
+            newColLen > oldColLen
+                ? new RegExp(`${colPrefix.replace(/[.*+?^${}()|[\]\\]/g, (m) => `\\${m}`)}(\\d+)`, 'g')
+                : null;
+
+        for (const cell of Object.values(sheet.Cells)) {
+            if (rowRx && cell.RowID.startsWith(rowPrefix)) {
+                const k = parseInt(cell.RowID.slice(rowPrefix.length), 10);
+                if (k >= 1 && k <= newRowLen) {
+                    cell.RowID = sheet.Rows[k - 1].RowID;
+                }
+            }
+            if (colRx && cell.ColumnID.startsWith(colPrefix)) {
+                const k = parseInt(cell.ColumnID.slice(colPrefix.length), 10);
+                if (k >= 1 && k <= newColLen) {
+                    cell.ColumnID = sheet.Columns[k - 1].ColumnID;
+                }
+            }
+        }
+
+        const sheetsToScan = this.sheetToWorkbook.get(sheet)?.Worksheets ?? [sheet];
+        for (const ws of sheetsToScan) {
+            for (const cell of Object.values(ws.Cells)) {
+                if (!cell.FormulaStable) continue;
+                if (rowRx && cell.FormulaStable.includes(rowPrefix)) {
+                    cell.FormulaStable = cell.FormulaStable.replace(rowRx, (full, numStr: string) => {
+                        const k = parseInt(numStr, 10);
+                        return k >= 1 && k <= newRowLen ? sheet.Rows[k - 1].RowID : full;
+                    });
+                }
+                if (colRx && cell.FormulaStable.includes(colPrefix)) {
+                    cell.FormulaStable = cell.FormulaStable.replace(colRx, (full, numStr: string) => {
+                        const k = parseInt(numStr, 10);
+                        return k >= 1 && k <= newColLen ? sheet.Columns[k - 1].ColumnID : full;
+                    });
+                }
+            }
         }
     }
 
@@ -3399,7 +3778,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             this.EvaluateWorkbook(workbook);
         }
         const ast = compileFormulaAstCached(body);
-        return this.evalAstNode(ast, workbook, sheet, null);
+        const raw = this.evalAstNode(ast, workbook, sheet, null);
+        return raw === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL ? '#NAME?' : raw;
     }
 
     private buildWorkbookDependencyGraph(workbook: WorkbookSpec): WorkbookDependencyGraph {
@@ -3681,6 +4061,12 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             if (!cell.Formula || !cell.Formula.trim().startsWith('=')) {
                 return cell.RawValue ?? null;
             }
+            if (
+                cell.ComputedValue === '#NAME?' &&
+                containsUnimplementedDynamicArrayCall(cell.Formula.trim().slice(1))
+            ) {
+                return UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL;
+            }
             return cell.ComputedValue !== undefined ? cell.ComputedValue : null;
         };
 
@@ -3693,7 +4079,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             const ws = dag.sheetById.get(sheetId);
             const cell = ws?.Cells[addr];
             if (cell && ws) {
-                cell.ComputedValue = val;
+                cell.ComputedValue = val === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL ? '#NAME?' : val;
                 cell.DisplayValue = this.formatCellForDisplay(cell);
                 this.validateCellAgainstSheetRules(ws, cell);
             }
@@ -4064,7 +4450,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             const area = (desc.endRow - desc.startRow + 1) * (desc.endCol - desc.startCol + 1);
             const cellKeys = Object.keys(desc.targetSheet.Cells);
             const useSparse =
-                (cellLookup === null && area > Math.max(256, cellKeys.length * 2)) || area > 65_536;
+                area > 4096 || (cellLookup === null && area > Math.max(256, cellKeys.length * 2));
             if (!useSparse) {
                 const denseVals: SpreadsheetCellValue[] = [];
                 for (let r = desc.startRow; r <= desc.endRow; r++) {
@@ -4161,12 +4547,12 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     if (arg.kind === 'EmptyArg') continue;
                     if (isDirectRangeOrRef(arg)) {
                         for (const v of resolveNonBlankRangeValues(arg)) {
-                            if (v === '#MJ_ACCESS_DENIED!') return '#MJ_ACCESS_DENIED!';
+                            if (v === '#MJ_ACCESS_DENIED!' || v === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return v;
                             if (typeof v === 'number' && !Number.isNaN(v)) count++;
                         }
                     } else {
                         const v = evalScalar(arg);
-                        if (v === '#MJ_ACCESS_DENIED!') return '#MJ_ACCESS_DENIED!';
+                        if (v === '#MJ_ACCESS_DENIED!' || v === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return v;
                         if (typeof v === 'number' && !Number.isNaN(v)) count++;
                         else if (typeof v === 'string' && v.trim() !== '' && !this.isErrorValue(v) && !Number.isNaN(Number(v))) {
                             count++;
@@ -4181,12 +4567,12 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     if (arg.kind === 'EmptyArg') continue;
                     if (isDirectRangeOrRef(arg)) {
                         for (const v of resolveNonBlankRangeValues(arg)) {
-                            if (v === '#MJ_ACCESS_DENIED!') return '#MJ_ACCESS_DENIED!';
+                            if (v === '#MJ_ACCESS_DENIED!' || v === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return v;
                             if (v !== null && v !== undefined && v !== '') count++;
                         }
                     } else {
                         const v = evalScalar(arg);
-                        if (v === '#MJ_ACCESS_DENIED!') return '#MJ_ACCESS_DENIED!';
+                        if (v === '#MJ_ACCESS_DENIED!' || v === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return v;
                         if (v !== null && v !== undefined && v !== '') count++;
                     }
                 }
@@ -4203,19 +4589,19 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                             const totalArea = (desc.endRow - desc.startRow + 1) * (desc.endCol - desc.startCol + 1);
                             let nonBlankCount = 0;
                             for (const v of resolveNonBlankRangeValues(arg)) {
-                                if (v === '#MJ_ACCESS_DENIED!') return '#MJ_ACCESS_DENIED!';
+                                if (v === '#MJ_ACCESS_DENIED!' || v === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return v;
                                 if (v !== null && v !== undefined && v !== '') nonBlankCount++;
                             }
                             count += totalArea - nonBlankCount;
                         } else {
                             for (const v of resolveFlattenedRange(arg)) {
-                                if (v === '#MJ_ACCESS_DENIED!') return '#MJ_ACCESS_DENIED!';
+                                if (v === '#MJ_ACCESS_DENIED!' || v === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return v;
                                 if (v === null || v === undefined || v === '') count++;
                             }
                         }
                     } else {
                         const v = evalScalar(arg);
-                        if (v === '#MJ_ACCESS_DENIED!') return '#MJ_ACCESS_DENIED!';
+                        if (v === '#MJ_ACCESS_DENIED!' || v === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return v;
                         if (v === null || v === undefined || v === '') count++;
                     }
                 }
@@ -4398,9 +4784,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
             case 'IFERROR': {
                 const primary = evalScalar(args[0]);
-                // Item 15: Never allow IFERROR to mask viewer-scoped access denial (#MJ_ACCESS_DENIED!)
-                if (primary === '#MJ_ACCESS_DENIED!') {
-                    return '#MJ_ACCESS_DENIED!';
+                // Item 15 & R6-9: Never allow IFERROR to mask viewer-scoped access denial or unimplemented dynamic arrays
+                if (primary === '#MJ_ACCESS_DENIED!' || primary === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) {
+                    return primary;
                 }
                 if (this.isErrorValue(primary)) {
                     return evalScalar(args[1]) ?? '';
@@ -4410,6 +4796,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             case 'IFNA': {
                 // Catches #N/A ONLY (distinct from IFERROR!)
                 const primary = evalScalar(args[0]);
+                if (primary === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) {
+                    return primary;
+                }
                 if (primary === '#N/A') {
                     return evalScalar(args[1]) ?? '';
                 }
@@ -4455,23 +4844,55 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             }
             case 'ISBLANK': {
                 const v = evalScalar(args[0]);
+                if (v === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return v;
                 return v === null || v === undefined;
             }
             case 'ISNUMBER': {
                 const v = evalScalar(args[0]);
+                if (v === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return v;
                 return typeof v === 'number' && !Number.isNaN(v);
             }
             case 'ISTEXT': {
                 const v = evalScalar(args[0]);
+                if (v === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return v;
                 return typeof v === 'string' && !this.isErrorValue(v);
             }
             case 'ISERROR': {
                 const v = evalScalar(args[0]);
+                if (v === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return v;
                 return this.isErrorValue(v);
+            }
+            case 'ISERR': {
+                const v = evalScalar(args[0]);
+                if (v === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return v;
+                return this.isErrorValue(v) && v !== '#N/A';
             }
             case 'ISNA': {
                 const v = evalScalar(args[0]);
+                if (v === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return v;
                 return v === '#N/A';
+            }
+            case 'ERROR.TYPE': {
+                const v = evalScalar(args[0]);
+                if (v === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return v;
+                switch (v) {
+                    case '#NULL!':
+                        return 1;
+                    case '#DIV/0!':
+                        return 2;
+                    case '#VALUE!':
+                        return 3;
+                    case '#REF!':
+                        return 4;
+                    case '#NAME?':
+                        return 5;
+                    case '#NUM!':
+                        return 6;
+                    case '#N/A':
+                        return 7;
+                    default:
+                        return '#N/A';
+                }
             }
             case 'CONCAT':
             case 'CONCATENATE': {
@@ -4552,16 +4973,16 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             case 'SUMIF':
             case 'AVERAGEIF': {
                 const criteria = evalScalar(args[1]);
-                if (criteria === '#MJ_ACCESS_DENIED!') return '#MJ_ACCESS_DENIED!';
+                if (criteria === '#MJ_ACCESS_DENIED!' || criteria === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return criteria;
                 const desc0 = this.resolveAstRangeDescriptor(args[0], workbook, sheet, true);
                 if (desc0 === '#REF!') return '#REF!';
                 const desc2 = isArgProvided(2) ? this.resolveAstRangeDescriptor(args[2], workbook, sheet, true) : desc0;
                 if (desc2 === '#REF!') return '#REF!';
 
-                if (desc0 && desc2 && cellLookup === null) {
+                if (desc0 && desc2) {
                     const area = (desc0.endRow - desc0.startRow + 1) * (desc0.endCol - desc0.startCol + 1);
                     const cellKeys0 = Object.keys(desc0.targetSheet.Cells);
-                    if (area > Math.max(256, cellKeys0.length * 2)) {
+                    if (area > 4096 || (cellLookup === null && area > Math.max(256, cellKeys0.length * 2))) {
                         const populatedOffsets: Array<{ dr: number; dc: number; cv: SpreadsheetCellValue }> = [];
                         for (let k = 0; k < cellKeys0.length; k++) {
                             const pos = parseCellCoordsFast(cellKeys0[k]);
@@ -4573,7 +4994,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                                 pos.col <= desc0.endCol
                             ) {
                                 const cv = getCellVal(desc0.targetSheet, FormatCellAddress(pos.row, pos.col));
-                                if (cv === '#MJ_ACCESS_DENIED!') return '#MJ_ACCESS_DENIED!';
+                                if (cv === '#MJ_ACCESS_DENIED!' || cv === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return cv;
                                 populatedOffsets.push({
                                     dr: pos.row - desc0.startRow,
                                     dc: pos.col - desc0.startCol,
@@ -4597,7 +5018,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                                         desc2.targetSheet,
                                         FormatCellAddress(desc2.startRow + entry.dr, desc2.startCol + entry.dc)
                                     );
-                                    if (tv === '#MJ_ACCESS_DENIED!') return '#MJ_ACCESS_DENIED!';
+                                    if (tv === '#MJ_ACCESS_DENIED!' || tv === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return tv;
                                     if (this.isErrorValue(tv)) return tv;
                                     if (typeof tv === 'number' && !Number.isNaN(tv)) {
                                         sum += tv;
@@ -4621,7 +5042,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                                     !populatedDrDc.has(`${dr}:${dc}`)
                                 ) {
                                     const tv = getCellVal(desc2.targetSheet, FormatCellAddress(pos2.row, pos2.col));
-                                    if (tv === '#MJ_ACCESS_DENIED!') return '#MJ_ACCESS_DENIED!';
+                                    if (tv === '#MJ_ACCESS_DENIED!' || tv === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return tv;
                                     if (this.isErrorValue(tv)) return tv;
                                     if (typeof tv === 'number' && !Number.isNaN(tv)) {
                                         sum += tv;
@@ -4641,7 +5062,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 const criteriaRange = resolveFlattenedRange(args[0]);
                 const targetRange = isArgProvided(2) ? resolveFlattenedRange(args[2]) : criteriaRange;
                 for (const cv of criteriaRange) {
-                    if (cv === '#MJ_ACCESS_DENIED!') return '#MJ_ACCESS_DENIED!';
+                    if (cv === '#MJ_ACCESS_DENIED!' || cv === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return cv;
                 }
                 let sum = 0;
                 let matchCount = 0;
@@ -4650,7 +5071,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     if (this.matchesCriteria(criteriaRange[i], criteria)) {
                         matchCount++;
                         const tv = targetRange[i];
-                        if (tv === '#MJ_ACCESS_DENIED!') return '#MJ_ACCESS_DENIED!';
+                        if (tv === '#MJ_ACCESS_DENIED!' || tv === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return tv;
                         if (this.isErrorValue(tv) && fnName !== 'COUNTIF') return tv;
                         if (typeof tv === 'number' && !Number.isNaN(tv)) {
                             sum += tv;
@@ -5158,7 +5579,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         : desc.endCol - desc.startCol + 1;
                 }
                 const matrix = this.resolveAstRangeMatrix(args[0], workbook, sheet, getCellVal, cellLookup, currentCellAddress);
-                if (matrix.length === 1 && matrix[0]?.length === 1 && matrix[0][0] === '#REF!') return '#REF!';
+                if (matrix.length === 1 && matrix[0]?.length === 1 && this.isErrorValue(matrix[0][0])) {
+                    return matrix[0][0];
+                }
                 return fnName === 'ROWS' ? matrix.length : (matrix[0]?.length ?? 0);
             }
             case 'PROPER': {
@@ -5316,7 +5739,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     if (tv === '#MJ_ACCESS_DENIED!') return '#MJ_ACCESS_DENIED!';
                     let allMatch = true;
                     for (const p of pairs) {
-                        if (p.vals[rIdx] === '#MJ_ACCESS_DENIED!') return '#MJ_ACCESS_DENIED!';
+                        if (p.vals[rIdx] === '#MJ_ACCESS_DENIED!' || p.vals[rIdx] === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) {
+                            return p.vals[rIdx];
+                        }
                         if (!this.matchesCriteria(p.vals[rIdx], p.crit)) {
                             allMatch = false;
                             break;
@@ -5333,6 +5758,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 return fnName === 'MAXIFS' ? Math.max(...matched) : Math.min(...matched);
             }
             default:
+                if (UNIMPLEMENTED_DYNAMIC_ARRAY_FN_SET.has(fnName)) {
+                    return UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL;
+                }
                 return '#NAME?';
         }
     }
@@ -7211,6 +7639,12 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             orderedSheetPaths.push(path);
         }
 
+        const existingMetaXml = files.has('xl/metadata.xml')
+            ? this.decodeUtf8(files.get('xl/metadata.xml')!)
+            : null;
+        const xldaprPlan = this.resolveOrEnsureXldaprMetadataXml(existingMetaXml);
+        const cmAttrToken = ` cm="${xldaprPlan.cmIndex}"`;
+
         let patchedAnyDynamicArrayCm = false;
         sanitized.Worksheets.forEach((ws, idx) => {
             const targetPath =
@@ -7219,8 +7653,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 `xl/worksheets/sheet${idx + 1}.xml`;
             const existingBytes = files.get(targetPath);
             if (!existingBytes) {
-                const freshXml = this.buildWorksheetXml(ws, () => 0);
-                if (freshXml.includes(' cm="1"')) {
+                const freshXml = this.buildWorksheetXml(ws, () => 0, xldaprPlan.cmIndex);
+                if (freshXml.includes(cmAttrToken)) {
                     patchedAnyDynamicArrayCm = true;
                 }
                 files.set(targetPath, this.encodeUtf8(freshXml));
@@ -7230,21 +7664,24 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 baselineWb.Worksheets.find((b) => b.Name.toLowerCase() === ws.Name.toLowerCase()) ??
                 baselineWb.Worksheets[idx];
             const origXml = this.decodeUtf8(existingBytes);
-            const patchedXml = this.patchSingleWorksheetXml(origXml, ws, baselineWs);
-            if (patchedXml.includes(' cm="1"')) {
+            const patchedXml = this.patchSingleWorksheetXml(origXml, ws, baselineWs, xldaprPlan.cmIndex);
+            if (patchedXml.includes(cmAttrToken) || / cm="\d+"/.test(patchedXml)) {
                 patchedAnyDynamicArrayCm = true;
             }
             files.set(targetPath, this.encodeUtf8(patchedXml));
         });
 
-        if (patchedAnyDynamicArrayCm && !files.has('xl/metadata.xml')) {
-            files.set('xl/metadata.xml', this.encodeUtf8(this.buildCellMetadataXml()));
+        if (patchedAnyDynamicArrayCm) {
+            if (xldaprPlan.needsWrite) {
+                files.set('xl/metadata.xml', this.encodeUtf8(xldaprPlan.metadataXml));
+            }
             if (files.has('[Content_Types].xml')) {
                 const ctXml = this.decodeUtf8(files.get('[Content_Types].xml')!);
                 if (!/PartName="\/?xl\/metadata\.xml"/i.test(ctXml)) {
                     const updatedCt = ctXml.replace(
                         /<\/Types>/i,
-                        '<Override PartName="/xl/metadata.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheetMetadata+xml"/></Types>'
+                        () =>
+                            '<Override PartName="/xl/metadata.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheetMetadata+xml"/></Types>'
                     );
                     files.set('[Content_Types].xml', this.encodeUtf8(updatedCt));
                 }
@@ -7277,7 +7714,112 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         return this.buildZipArchive(updatedEntries);
     }
 
-    private patchSingleWorksheetXml(origXml: string, ws: WorksheetSpec, baselineWs?: WorksheetSpec): string {
+    private resolveOrEnsureXldaprMetadataXml(
+        existingXml: string | null
+    ): { cmIndex: number; metadataXml: string; needsWrite: boolean } {
+        if (!existingXml) {
+            return {
+                cmIndex: 1,
+                metadataXml: this.buildCellMetadataXml(),
+                needsWrite: true
+            };
+        }
+
+        let xml = existingXml;
+        let mutated = false;
+
+        if (!/xmlns:xda=/i.test(xml)) {
+            xml = xml.replace(
+                /<metadata\b/,
+                () => '<metadata xmlns:xda="http://schemas.microsoft.com/office/spreadsheetml/2017/dynamicarray"'
+            );
+            mutated = true;
+        }
+
+        const xldaprTypeTag =
+            '<metadataType name="XLDAPR" minSupportedVersion="120000" copy="1" pasteAll="1" pasteValues="1" merge="1" splitFirst="1" rowColShift="1" clearFormats="1" clearComments="1" assign="1" coerce="1" cellMeta="1"/>';
+        const xldaprFutureBlock =
+            '<futureMetadata name="XLDAPR" count="1"><bk><extLst><ext uri="{bdbb8cdc-fa1e-496e-a857-3c3f30c029c3}"><xda:dynamicArrayProperties fDynamic="1" fCollapsed="0"/></ext></extLst></bk></futureMetadata>';
+
+        let xldaprTypeIdx = 1;
+        const typesBlockMatch = /<metadataTypes\b([^>]*)>([\s\S]*?)<\/metadataTypes>/i.exec(xml);
+        if (typesBlockMatch) {
+            const innerTypes = typesBlockMatch[2] ?? '';
+            const typeTags = innerTypes.match(/<metadataType\b[^>]*\/?>/gi) ?? [];
+            const foundZeroIdx = typeTags.findIndex((t) => /\bname="XLDAPR"/i.test(t));
+            if (foundZeroIdx >= 0) {
+                xldaprTypeIdx = foundZeroIdx + 1;
+            } else {
+                xldaprTypeIdx = typeTags.length + 1;
+                const nextAttrs = /\bcount="\d+"/i.test(typesBlockMatch[1])
+                    ? typesBlockMatch[1].replace(/\bcount="\d+"/i, () => `count="${xldaprTypeIdx}"`)
+                    : `${typesBlockMatch[1]} count="${xldaprTypeIdx}"`;
+                const nextTypesBlock = `<metadataTypes${nextAttrs}>${innerTypes}${xldaprTypeTag}</metadataTypes>`;
+                xml = xml.replace(/<metadataTypes\b[^>]*>[\s\S]*?<\/metadataTypes>/i, () => nextTypesBlock);
+                mutated = true;
+            }
+        } else {
+            xldaprTypeIdx = 1;
+            xml = xml.replace(
+                /(<metadata\b[^>]*>)/i,
+                (_m, openTag: string) => `${openTag}<metadataTypes count="1">${xldaprTypeTag}</metadataTypes>`
+            );
+            mutated = true;
+        }
+
+        if (!/<futureMetadata\b[^>]*\bname="XLDAPR"/i.test(xml)) {
+            if (/<cellMetadata\b/i.test(xml)) {
+                xml = xml.replace(/<cellMetadata\b/i, () => `${xldaprFutureBlock}<cellMetadata`);
+            } else if (/<valueMetadata\b/i.test(xml)) {
+                xml = xml.replace(/<valueMetadata\b/i, () => `${xldaprFutureBlock}<valueMetadata`);
+            } else {
+                xml = xml.replace(/<\/metadata>/i, () => `${xldaprFutureBlock}</metadata>`);
+            }
+            mutated = true;
+        }
+
+        let cmIndex = 1;
+        const cellMetaMatch = /<cellMetadata\b([^>]*)>([\s\S]*?)<\/cellMetadata>/i.exec(xml);
+        if (cellMetaMatch) {
+            const innerCellMeta = cellMetaMatch[2] ?? '';
+            const bkBlocks = innerCellMeta.match(/<bk\b[^>]*>[\s\S]*?<\/bk>/gi) ?? [];
+            const targetRcRx = new RegExp(`<rc\\b[^>]*\\bt="${xldaprTypeIdx}"`, 'i');
+            const foundBkZeroIdx = bkBlocks.findIndex((bk) => targetRcRx.test(bk));
+            if (foundBkZeroIdx >= 0) {
+                cmIndex = foundBkZeroIdx + 1;
+            } else {
+                cmIndex = bkBlocks.length + 1;
+                const nextAttrs = /\bcount="\d+"/i.test(cellMetaMatch[1])
+                    ? cellMetaMatch[1].replace(/\bcount="\d+"/i, () => `count="${cmIndex}"`)
+                    : `${cellMetaMatch[1]} count="${cmIndex}"`;
+                const nextCellMeta = `<cellMetadata${nextAttrs}>${innerCellMeta}<bk><rc t="${xldaprTypeIdx}" v="0"/></bk></cellMetadata>`;
+                xml = xml.replace(/<cellMetadata\b[^>]*>[\s\S]*?<\/cellMetadata>/i, () => nextCellMeta);
+                mutated = true;
+            }
+        } else {
+            cmIndex = 1;
+            const freshCellMeta = `<cellMetadata count="1"><bk><rc t="${xldaprTypeIdx}" v="0"/></bk></cellMetadata>`;
+            if (/<valueMetadata\b/i.test(xml)) {
+                xml = xml.replace(/<valueMetadata\b/i, () => `${freshCellMeta}<valueMetadata`);
+            } else {
+                xml = xml.replace(/<\/metadata>/i, () => `${freshCellMeta}</metadata>`);
+            }
+            mutated = true;
+        }
+
+        return {
+            cmIndex,
+            metadataXml: xml,
+            needsWrite: mutated
+        };
+    }
+
+    private patchSingleWorksheetXml(
+        origXml: string,
+        ws: WorksheetSpec,
+        baselineWs?: WorksheetSpec,
+        dynamicArrayCmIndex: number = 1
+    ): string {
         interface OrigXmlCellMeta {
             addr: string;
             row: number;
@@ -7499,10 +8041,10 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 const isSpillDynArray = isSpillDynamicArrayFormulaBody(rawFormulaBody);
                 const isExistingCseOrArray = orig?.fType === 'array' || Boolean(orig?.cmAttr);
                 if (isExistingCseOrArray || isSpillDynArray) {
-                    const cmVal = orig?.cmAttr ?? (isSpillDynArray ? '1' : null);
+                    const cmVal = orig?.cmAttr ?? (isSpillDynArray ? String(dynamicArrayCmIndex) : null);
                     if (cmVal) cExtraMetaAttrs += ` cm="${this.escapeXml(cmVal)}"`;
                     if (orig?.vmAttr) cExtraMetaAttrs += ` vm="${this.escapeXml(orig.vmAttr)}"`;
-                    const arrRef = orig?.fRef || cell.Address;
+                    const arrRef = cmVal ? cell.Address : (orig?.fRef || cell.Address);
                     formulaXml = `<f t="array" ref="${this.escapeXml(arrRef)}">${this.escapeXml(prefixedFormula)}</f>`;
                 } else {
                     formulaXml = `<f>${this.escapeXml(prefixedFormula)}</f>`;
@@ -7845,7 +8387,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
 
     private buildWorksheetXml(
         ws: WorksheetSpec,
-        getStyleIndex: (style?: SpreadsheetCellStyleSpec) => number
+        getStyleIndex: (style?: SpreadsheetCellStyleSpec) => number,
+        dynamicArrayCmIndex: number = 1
     ): string {
         let maxRow = 1;
         let maxCol = 1;
@@ -7907,7 +8450,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 );
                 const rawFormulaBody = hasStandardFormula ? cell.Formula!.trim().slice(1) : '';
                 const isSpillDynArray = rawFormulaBody.length > 0 && isSpillDynamicArrayFormulaBody(rawFormulaBody);
-                const cmAttr = isSpillDynArray ? ' cm="1"' : '';
+                const cmAttr = isSpillDynArray ? ` cm="${dynamicArrayCmIndex}"` : '';
                 const prefixedFormula = rawFormulaBody.length > 0 ? prefixOoxmlFutureFunctions(rawFormulaBody) : '';
                 const formulaXml = hasStandardFormula
                     ? isSpillDynArray
@@ -9729,6 +10272,149 @@ function getEffectiveSheetDimensions(ws: WorksheetSpec): { maxRow: number; maxCo
 const OOXML_FUTURE_FUNCTION_REGEX =
     /(?<![A-Za-z0-9_.])\b(SEQUENCE|XLOOKUP|XMATCH|FILTER|UNIQUE|SORT|SORTBY|RANDARRAY|LET|TEXTJOIN|IFS|SWITCH|MAXIFS|MINIFS|CONCAT|IFNA|DAYS)(?=\s*\()/gi;
 
+const UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL = '#UNIMPL_DYN!';
+const UNIMPLEMENTED_DYNAMIC_ARRAY_FN_SET = new Set<string>([
+    'UNIQUE',
+    'SORT',
+    'SORTBY',
+    'FILTER',
+    'SEQUENCE',
+    'RANDARRAY',
+    'LET',
+    'LAMBDA',
+    'MAP',
+    'REDUCE',
+    'SCAN',
+    'MAKEARRAY',
+    'BYROW',
+    'BYCOL',
+    'VSTACK',
+    'HSTACK',
+    'TOCOL',
+    'TOROW',
+    'WRAPROWS',
+    'WRAPCOLS',
+    'TAKE',
+    'DROP',
+    'CHOOSEROWS',
+    'CHOOSECOLS',
+    'EXPAND'
+]);
+
+const UNIMPLEMENTED_DYNAMIC_ARRAY_CALL_REGEX =
+    /\b(SEQUENCE|FILTER|UNIQUE|SORT|SORTBY|RANDARRAY|LET|LAMBDA|MAP|REDUCE|SCAN|MAKEARRAY|BYROW|BYCOL|VSTACK|HSTACK|TOCOL|TOROW|WRAPROWS|WRAPCOLS|TAKE|DROP|CHOOSEROWS|CHOOSECOLS|EXPAND)\s*\(/i;
+
+function prefixLetParametersInMaskedFormula(expr: string, boundParams: ReadonlySet<string>): string {
+    let out = '';
+    let i = 0;
+    while (i < expr.length) {
+        const ch = expr[i];
+        if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || ch === '_') {
+            const start = i;
+            i++;
+            while (i < expr.length) {
+                const c = expr[i];
+                if (
+                    (c >= 'A' && c <= 'Z') ||
+                    (c >= 'a' && c <= 'z') ||
+                    (c >= '0' && c <= '9') ||
+                    c === '_' ||
+                    c === '.'
+                ) {
+                    i++;
+                } else {
+                    break;
+                }
+            }
+            const ident = expr.slice(start, i);
+            if (/^__XLFN_(?:STR|SH)_\d+__$/.test(ident)) {
+                out += ident;
+                continue;
+            }
+            const prevChar = start > 0 ? expr[start - 1] : '';
+            let wsEnd = i;
+            while (wsEnd < expr.length && /\s/.test(expr[wsEnd])) {
+                wsEnd++;
+            }
+            const nextNonWs = wsEnd < expr.length ? expr[wsEnd] : '';
+
+            if (ident.toUpperCase() === 'LET' && prevChar !== '.' && prevChar !== '!' && nextNonWs === '(') {
+                let depth = 1;
+                let closeIdx = wsEnd + 1;
+                while (closeIdx < expr.length && depth > 0) {
+                    if (expr[closeIdx] === '(') depth++;
+                    else if (expr[closeIdx] === ')') depth--;
+                    if (depth === 0) break;
+                    closeIdx++;
+                }
+                if (depth === 0) {
+                    const innerRaw = expr.slice(wsEnd + 1, closeIdx);
+                    const rawArgs: string[] = [];
+                    let argStart = 0;
+                    let argDepth = 0;
+                    for (let k = 0; k < innerRaw.length; k++) {
+                        if (innerRaw[k] === '(') argDepth++;
+                        else if (innerRaw[k] === ')') argDepth--;
+                        else if (innerRaw[k] === ',' && argDepth === 0) {
+                            rawArgs.push(innerRaw.slice(argStart, k));
+                            argStart = k + 1;
+                        }
+                    }
+                    rawArgs.push(innerRaw.slice(argStart));
+
+                    if (rawArgs.length >= 3) {
+                        const localScope = new Set<string>(boundParams);
+                        const transformedArgs: string[] = [];
+                        let pendingParamLower: string | null = null;
+                        for (let aIdx = 0; aIdx < rawArgs.length; aIdx++) {
+                            const seg = rawArgs[aIdx];
+                            const isParamDecl = aIdx < rawArgs.length - 1 && aIdx % 2 === 0;
+                            if (isParamDecl) {
+                                const paramMatch = /^(\s*)(?:_xlpm\.)?([A-Za-z_][A-Za-z0-9_.]*)(\s*)$/i.exec(seg);
+                                if (paramMatch) {
+                                    const paramName = paramMatch[2];
+                                    pendingParamLower = paramName.toLowerCase();
+                                    transformedArgs.push(`${paramMatch[1]}_xlpm.${paramName}${paramMatch[3]}`);
+                                } else {
+                                    pendingParamLower = null;
+                                    transformedArgs.push(prefixLetParametersInMaskedFormula(seg, localScope));
+                                }
+                            } else {
+                                transformedArgs.push(prefixLetParametersInMaskedFormula(seg, localScope));
+                                if (pendingParamLower) {
+                                    localScope.add(pendingParamLower);
+                                    pendingParamLower = null;
+                                }
+                            }
+                        }
+                        out += `${ident}${expr.slice(i, wsEnd)}(${transformedArgs.join(',')})`;
+                        i = closeIdx + 1;
+                        continue;
+                    }
+                }
+            }
+
+            if (
+                boundParams.size > 0 &&
+                prevChar !== '.' &&
+                prevChar !== '!' &&
+                nextNonWs !== '!' &&
+                nextNonWs !== '(' &&
+                !ident.toLowerCase().startsWith('_xlpm.') &&
+                boundParams.has(ident.toLowerCase())
+            ) {
+                out += `_xlpm.${ident}`;
+                continue;
+            }
+            out += ident;
+            continue;
+        }
+        out += ch;
+        i++;
+    }
+    return out;
+}
+
 function prefixOoxmlFutureFunctions(formulaBody: string): string {
     if (!formulaBody) return formulaBody;
     const strippedBody = stripOoxmlFormulaPrefixes(formulaBody);
@@ -9742,6 +10428,9 @@ function prefixOoxmlFutureFunctions(formulaBody: string): string {
         sheetQuotes.push(m);
         return `__XLFN_SH_${sheetQuotes.length - 1}__`;
     });
+    if (/\bLET\s*\(/i.test(masked)) {
+        masked = prefixLetParametersInMaskedFormula(masked, new Set<string>());
+    }
     const prefixed = masked.replace(OOXML_FUTURE_FUNCTION_REGEX, (_full, fn: string) => {
         const upper = fn.toUpperCase();
         if (upper === 'SORT' || upper === 'FILTER') {
@@ -9760,7 +10449,7 @@ function prefixOoxmlFutureFunctions(formulaBody: string): string {
 }
 
 function stripOoxmlFormulaPrefixes(formulaBody: string): string {
-    if (!formulaBody || !/_xlfn\.|_xlws\./i.test(formulaBody)) return formulaBody;
+    if (!formulaBody || !/_xlfn\.|_xlws\.|_xlpm\./i.test(formulaBody)) return formulaBody;
     const strLiterals: string[] = [];
     let masked = formulaBody.replace(/"(?:""|[^"])*"/g, (m) => {
         strLiterals.push(m);
@@ -9771,7 +10460,7 @@ function stripOoxmlFormulaPrefixes(formulaBody: string): string {
         sheetQuotes.push(m);
         return `__UNXLFN_SH_${sheetQuotes.length - 1}__`;
     });
-    const stripped = masked.replace(/(?<![A-Za-z0-9_])(?:_xlfn\.|_xlws\.)+(?=[A-Za-z_])/gi, () => '');
+    const stripped = masked.replace(/(?<![A-Za-z0-9_])(?:_xlfn\.|_xlws\.|_xlpm\.)+(?=[A-Za-z_])/gi, () => '');
     const withSheets = stripped.replace(
         /__UNXLFN_SH_(\d+)__/g,
         (_m, idx: string) => sheetQuotes[parseInt(idx, 10)] ?? ''
@@ -9783,14 +10472,22 @@ function stripOoxmlFormulaPrefixes(formulaBody: string): string {
 }
 
 function isSpillDynamicArrayFormulaBody(formulaBody: string): boolean {
-    const clean = stripOoxmlFormulaPrefixes(formulaBody);
+    const clean = stripOoxmlFormulaPrefixes(formulaBody).replace(/"(?:""|[^"])*"/g, () => '""');
     return /\b(SEQUENCE|FILTER|UNIQUE|SORT|SORTBY|RANDARRAY)\s*\(/i.test(clean);
 }
 
+function containsUnimplementedDynamicArrayCall(formulaBody: string): boolean {
+    if (!formulaBody) return false;
+    const clean = stripOoxmlFormulaPrefixes(formulaBody).replace(/"(?:""|[^"])*"/g, () => '""');
+    return UNIMPLEMENTED_DYNAMIC_ARRAY_CALL_REGEX.test(clean);
+}
+
 function isUnimplementedDynamicArrayError(formulaBody: string, val: SpreadsheetCellValue): boolean {
-    if (val !== '#NAME?' || !formulaBody) return false;
-    const clean = stripOoxmlFormulaPrefixes(formulaBody);
-    return /\b(SEQUENCE|FILTER|UNIQUE|SORT|SORTBY|RANDARRAY|LET)\s*\(/i.test(clean);
+    if (!formulaBody) return false;
+    if (val === '#NAME?' || val === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) {
+        return true;
+    }
+    return containsUnimplementedDynamicArrayCall(formulaBody);
 }
 
 /**
@@ -9887,10 +10584,16 @@ export function ValidateExtraFilter(extraFilter: string): {
                 rawClause.trim()
             );
         if (!simpleCmp) {
+            const hasDisallowedToken =
+                /\b(USER_NAME|APP_NAME|DB_NAME|HOST_NAME|SUSER_NAME|SUSER_SNAME|ORIGINAL_LOGIN|SCHEMA_NAME|OBJECT_NAME|OBJECT_DEFINITION|HAS_PERMS_BY_NAME)\b/i.test(
+                    maskedClause
+                );
             return {
                 Valid: false,
-                AccessDenied: false,
-                ErrorMessage: `Invalid filter expression '${candidate}' in =MJ.VIEW. Only simple Field op Value comparisons (joined by AND) are supported.`
+                AccessDenied: hasDisallowedToken,
+                ErrorMessage: hasDisallowedToken
+                    ? 'Unsafe SQL filter expression rejected in =MJ.VIEW.'
+                    : `Invalid filter expression '${candidate}' in =MJ.VIEW. Only simple Field op Value comparisons (joined by AND) are supported.`
             };
         }
         const col = simpleCmp[1];

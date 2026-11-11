@@ -1,5 +1,5 @@
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo, WellKnownUserSource } from '@memberjunction/core';
-import { BaseSingleton, EscapeSQLString, MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, MJGlobal, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Discrete permission actions supported on an `MJ: Artifacts` record.
@@ -232,6 +232,7 @@ export class ParentArtifactPermissionDelegate extends BaseArtifactPermissionDele
 export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEngine> {
     private readonly _delegatesByEntityKey = new Map<string, IArtifactPermissionDelegate>();
     private readonly _changeListeners = new Set<ArtifactPermissionChangeListener>();
+    private readonly _inFlightResolutions = new Set<string>();
 
     protected constructor() {
         super();
@@ -353,24 +354,30 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
         }
 
         const visited = new Set<string>(visitedArtifactIds ?? []);
-        const lowerId = normalizedArtifactId.toLowerCase();
-        if (visited.has(lowerId)) {
+        const normArtifactId = NormalizeUUID(normalizedArtifactId);
+        if (visited.has(normArtifactId)) {
             return this.buildDenied(normalizedArtifactId, 'Circular artifact permission delegation detected.');
         }
-        visited.add(lowerId);
+        visited.add(normArtifactId);
 
         const activeProvider = provider ?? Metadata.Provider;
         if (!activeProvider) {
             return this.buildDenied(normalizedArtifactId, 'Metadata provider is not available.');
         }
 
+        const normUserId = NormalizeUUID(user.ID ?? '');
         const activeMemo = memo ?? new Map<string, Promise<ResolvedArtifactPermissions>>();
-        const memoKey = `${lowerId}::${(user.ID ?? '').toLowerCase()}`;
+        const memoKey = `${normArtifactId}::${normUserId}`;
         const cachedPromise = activeMemo.get(memoKey);
         if (cachedPromise) {
             return cachedPromise;
         }
 
+        if (this._inFlightResolutions.has(memoKey)) {
+            return this.buildDenied(normalizedArtifactId, 'Recursive artifact permission resolution detected.');
+        }
+
+        this._inFlightResolutions.add(memoKey);
         const resolutionPromise = this.resolvePermissionsInternal(
             activeProvider,
             normalizedArtifactId,
@@ -378,7 +385,9 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
             depth,
             visited,
             activeMemo
-        );
+        ).finally(() => {
+            this._inFlightResolutions.delete(memoKey);
+        });
         activeMemo.set(memoKey, resolutionPromise);
         return resolutionPromise;
     }

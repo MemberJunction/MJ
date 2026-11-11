@@ -79,6 +79,14 @@ type ArtifactPermissionSummaryRow = Pick<
   'ID' | 'ArtifactID' | 'UserID' | 'CanRead' | 'CanEdit' | 'CanShare' | 'CanDelete'
 >;
 
+interface EnvironmentScopedArtifactIdRow {
+  ID: string;
+  EnvironmentID?: string | null;
+  UserID?: string | null;
+}
+
+const MAX_CONCURRENT_PERMISSION_PAGES = 5;
+
 const SETTING_SURFACE_MODE = 'Library.SurfaceMode';
 const SETTING_LIST_STYLE = 'Library.ListStyle';
 const SETTING_STARRED_IDS = 'Library.StarredArtifactIDs';
@@ -1073,8 +1081,10 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       const rv = RunView.FromMetadataProvider(md);
       const safeEnvId = EscapeSQLString(this.EffectiveEnvironmentId);
       const safeUserId = EscapeSQLString(user.ID);
+      const targetEnvNorm = NormalizeUUID(this.EffectiveEnvironmentId);
       const envFilter = `EnvironmentID='${safeEnvId}'`;
       const visibleFilter = `(Visibility IS NULL OR Visibility <> 'System Only')`;
+      const pageSize = Math.max(1, this.ArtifactPageSize);
 
       const hasRemainingDirectShared =
         Array.isArray(this.allDirectSharedArtIds) &&
@@ -1082,7 +1092,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       const nextDirectSlice = hasRemainingDirectShared
         ? this.allDirectSharedArtIds.slice(
             this.directSharedArtifactOffset,
-            this.directSharedArtifactOffset + this.ArtifactPageSize,
+            this.directSharedArtifactOffset + pageSize,
           )
         : [];
 
@@ -1092,14 +1102,14 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
           ExtraFilter: `${envFilter} AND ${visibleFilter} AND UserID='${safeUserId}'`,
           OrderBy: '__mj_UpdatedAt DESC',
           StartRow: this.ownedArtifactOffset,
-          MaxRows: this.ArtifactPageSize,
+          MaxRows: pageSize,
           ResultType: 'entity_object',
         },
       ];
       for (const chunk of this.chunkIds(nextDirectSlice)) {
         pageQueries.push({
           EntityName: 'MJ: Artifacts',
-          ExtraFilter: `${envFilter} AND ${visibleFilter} AND ID IN (${this.sqlUuidInList(chunk)})`,
+          ExtraFilter: `${envFilter} AND ${visibleFilter} AND UserID <> '${safeUserId}' AND ID IN (${this.sqlUuidInList(chunk)})`,
           OrderBy: '__mj_UpdatedAt DESC',
           StartRow: 0,
           MaxRows: chunk.length,
@@ -1110,11 +1120,17 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       const pageBatch = await rv.RunViews(pageQueries, user);
       this.assertRunViewsSucceeded(pageBatch);
       const [nextArtRes, ...directArtResList] = pageBatch;
-      const nextOwnedArtifacts = (nextArtRes?.Results ?? []) as MJArtifactEntity[];
+      const nextOwnedArtifacts = ((nextArtRes?.Results ?? []) as MJArtifactEntity[]).filter(
+        (a) => !a.EnvironmentID || NormalizeUUID(a.EnvironmentID) === targetEnvNorm,
+      );
       const nextDirectArtifacts: MJArtifactEntity[] = [];
       for (const directRes of directArtResList) {
         if (directRes?.Results) {
-          nextDirectArtifacts.push(...(directRes.Results as MJArtifactEntity[]));
+          for (const art of directRes.Results as MJArtifactEntity[]) {
+            if (!art.EnvironmentID || NormalizeUUID(art.EnvironmentID) === targetEnvNorm) {
+              nextDirectArtifacts.push(art);
+            }
+          }
         }
       }
       const nextArtifacts = this.dedupeEntitiesById([...nextOwnedArtifacts, ...nextDirectArtifacts]);
@@ -1213,6 +1229,17 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     }
   }
 
+  private fetchArtifactPermissionPage(
+    rv: RunView,
+    params: RunViewParams,
+    user: UserInfo,
+  ): Promise<{ Success?: boolean; ErrorMessage?: string; Results?: ArtifactPermissionSummaryRow[] }> {
+    if (typeof rv.RunView === 'function') {
+      return rv.RunView<ArtifactPermissionSummaryRow>(params, user);
+    }
+    return rv.RunViews([params], user).then((batch) => batch[0] ?? { Success: false, Results: [] });
+  }
+
   /**
    * Loads user-accessible `MJ: Artifacts`, `MJ: Artifact Versions` (excluding heavy `Content`),
    * `MJ: Collections`, `MJ: Collection Artifacts`, and permission rows via 2-phase server-side
@@ -1232,8 +1259,11 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   }> {
     const safeEnvId = EscapeSQLString(this.EffectiveEnvironmentId);
     const safeUserId = EscapeSQLString(user.ID);
+    const targetEnvNorm = NormalizeUUID(this.EffectiveEnvironmentId);
+    const currentUserNorm = NormalizeUUID(user.ID);
     const envFilter = `EnvironmentID='${safeEnvId}'`;
     const visibleFilter = `(Visibility IS NULL OR Visibility <> 'System Only')`;
+    const pageSize = Math.max(1, this.ArtifactPageSize);
 
     // Batch 1: First page of owned artifacts, first bounded page of lightweight artifact permission rows,
     // owned collections, and user collection grants
@@ -1244,7 +1274,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
           ExtraFilter: `${envFilter} AND ${visibleFilter} AND UserID='${safeUserId}'`,
           OrderBy: '__mj_UpdatedAt DESC',
           StartRow: 0,
-          MaxRows: this.ArtifactPageSize,
+          MaxRows: pageSize,
           ResultType: 'entity_object',
         },
         {
@@ -1253,7 +1283,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
           Fields: ARTIFACT_PERMISSION_SUMMARY_FIELDS,
           OrderBy: '__mj_CreatedAt DESC',
           StartRow: 0,
-          MaxRows: this.ArtifactPageSize,
+          MaxRows: pageSize,
           ResultType: 'simple',
         },
         {
@@ -1275,50 +1305,75 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     this.assertRunViewsSucceeded(batch1Results);
     const [ownedArtRes, artPermRes, ownedColRes, colPermRes] = batch1Results;
 
-    const ownedArtifacts = (ownedArtRes?.Results ?? []) as MJArtifactEntity[];
+    const ownedArtifacts = ((ownedArtRes?.Results ?? []) as MJArtifactEntity[]).filter(
+      (a) => !a.EnvironmentID || NormalizeUUID(a.EnvironmentID) === targetEnvNorm,
+    );
     const firstPagePerms = (artPermRes?.Results ?? []) as ArtifactPermissionSummaryRow[];
     const artifactPerms: ArtifactPermissionSummaryRow[] = [...firstPagePerms];
     const totalPermRows =
       typeof artPermRes?.TotalRowCount === 'number' ? artPermRes.TotalRowCount : firstPagePerms.length;
-    let permOffset = firstPagePerms.length;
-    while (permOffset < totalPermRows && firstPagePerms.length > 0) {
-      const nextPermBatch = await rv.RunViews(
-        [
-          {
-            EntityName: 'MJ: Artifact Permissions',
-            ExtraFilter: `UserID='${safeUserId}' AND CanRead=1`,
-            Fields: ARTIFACT_PERMISSION_SUMMARY_FIELDS,
-            OrderBy: '__mj_CreatedAt DESC',
-            StartRow: permOffset,
-            MaxRows: this.ArtifactPageSize,
-            ResultType: 'simple',
-          },
-        ],
-        user,
-      );
-      this.assertRunViewsSucceeded(nextPermBatch);
-      const nextRows = (nextPermBatch[0]?.Results ?? []) as ArtifactPermissionSummaryRow[];
-      if (nextRows.length === 0) {
-        break;
+    if (firstPagePerms.length > 0 && totalPermRows > firstPagePerms.length) {
+      const remainingOffsets: number[] = [];
+      for (let startRow = firstPagePerms.length; startRow < totalPermRows; startRow += pageSize) {
+        remainingOffsets.push(startRow);
       }
-      artifactPerms.push(...nextRows);
-      permOffset += nextRows.length;
+      for (
+        let windowIdx = 0;
+        windowIdx < remainingOffsets.length;
+        windowIdx += MAX_CONCURRENT_PERMISSION_PAGES
+      ) {
+        const offsetWindow = remainingOffsets.slice(
+          windowIdx,
+          windowIdx + MAX_CONCURRENT_PERMISSION_PAGES,
+        );
+        const pageResults = await Promise.all(
+          offsetWindow.map((startRow) =>
+            this.fetchArtifactPermissionPage(
+              rv,
+              {
+                EntityName: 'MJ: Artifact Permissions',
+                ExtraFilter: `UserID='${safeUserId}' AND CanRead=1`,
+                Fields: ARTIFACT_PERMISSION_SUMMARY_FIELDS,
+                OrderBy: '__mj_CreatedAt DESC',
+                StartRow: startRow,
+                MaxRows: pageSize,
+                SkipTotalRowCount: true,
+                ResultType: 'simple',
+              },
+              user,
+            ),
+          ),
+        );
+        this.assertRunViewsSucceeded(pageResults);
+        let receivedAnyRow = false;
+        for (const pageRes of pageResults) {
+          const rows = (pageRes.Results ?? []) as ArtifactPermissionSummaryRow[];
+          if (rows.length > 0) {
+            receivedAnyRow = true;
+            artifactPerms.push(...rows);
+          }
+        }
+        if (!receivedAnyRow) {
+          break;
+        }
+      }
     }
 
-    const ownedCollections = (ownedColRes?.Results ?? []) as MJCollectionEntity[];
+    const ownedCollections = ((ownedColRes?.Results ?? []) as MJCollectionEntity[]).filter(
+      (c) => !c.EnvironmentID || NormalizeUUID(c.EnvironmentID) === targetEnvNorm,
+    );
     const collectionPerms = (colPermRes?.Results ?? []) as MJCollectionPermissionEntity[];
 
     const ownedArtNormIds = new Set(ownedArtifacts.map((a) => NormalizeUUID(a.ID)));
     const ownedColNormIds = new Set(ownedCollections.map((c) => NormalizeUUID(c.ID)));
 
-    const directSharedArtIds = this.uniqueIds(
+    const candidateDirectSharedArtIds = this.uniqueIds(
       artifactPerms
         .filter((ap) => ap.CanRead && !ownedArtNormIds.has(NormalizeUUID(ap.ArtifactID)))
         .map((ap) => ap.ArtifactID),
     );
-    this.allDirectSharedArtIds = directSharedArtIds;
-    const firstPageDirectSharedArtIds = directSharedArtIds.slice(0, this.ArtifactPageSize);
-    this.directSharedArtifactOffset = firstPageDirectSharedArtIds.length;
+    const firstPageDirectSharedArtIds = candidateDirectSharedArtIds.slice(0, pageSize);
+    const remainingCandidateDirectSharedIds = candidateDirectSharedArtIds.slice(pageSize);
 
     const sharedColIds = this.uniqueIds(
       collectionPerms
@@ -1330,11 +1385,13 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       ...sharedColIds,
     ]);
 
-    // Batch 2: Shared collections, collection-artifact links, and first bounded page of directly shared artifacts
+    // Batch 2: Shared collections, collection-artifact links, first bounded page of directly shared artifacts,
+    // and lightweight environment-scoped ID verification for any unpaged direct share candidates
     const batch2Queries: RunViewParams[] = [];
     const sharedColIndices: number[] = [];
     const colLinksIndices: number[] = [];
     const directSharedArtIndices: number[] = [];
+    const remainingDirectSharedEnvCheckIndices: number[] = [];
     const immediateVersionIndices: number[] = [];
 
     for (const chunk of this.chunkIds(sharedColIds)) {
@@ -1363,11 +1420,24 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       directSharedArtIndices.push(batch2Queries.length);
       batch2Queries.push({
         EntityName: 'MJ: Artifacts',
-        ExtraFilter: `${envFilter} AND ${visibleFilter} AND ID IN (${this.sqlUuidInList(chunk)})`,
+        ExtraFilter: `${envFilter} AND ${visibleFilter} AND UserID <> '${safeUserId}' AND ID IN (${this.sqlUuidInList(chunk)})`,
         OrderBy: '__mj_UpdatedAt DESC',
         StartRow: 0,
         MaxRows: chunk.length,
         ResultType: 'entity_object',
+      });
+    }
+
+    for (const chunk of this.chunkIds(remainingCandidateDirectSharedIds)) {
+      remainingDirectSharedEnvCheckIndices.push(batch2Queries.length);
+      batch2Queries.push({
+        EntityName: 'MJ: Artifacts',
+        ExtraFilter: `${envFilter} AND ${visibleFilter} AND UserID <> '${safeUserId}' AND ID IN (${this.sqlUuidInList(chunk)})`,
+        Fields: ['ID', 'EnvironmentID', 'UserID'],
+        OrderBy: '__mj_UpdatedAt DESC',
+        IgnoreMaxRows: true,
+        SkipTotalRowCount: true,
+        ResultType: 'simple',
       });
     }
 
@@ -1390,7 +1460,11 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     const sharedCollections: MJCollectionEntity[] = [];
     for (const idx of sharedColIndices) {
       if (batch2Results[idx]?.Results) {
-        sharedCollections.push(...(batch2Results[idx].Results as MJCollectionEntity[]));
+        for (const col of batch2Results[idx].Results as MJCollectionEntity[]) {
+          if (!col.EnvironmentID || NormalizeUUID(col.EnvironmentID) === targetEnvNorm) {
+            sharedCollections.push(col);
+          }
+        }
       }
     }
     const rawCollectionLinks: CollectionArtifactLinkRow[] = [];
@@ -1402,7 +1476,25 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     const directSharedArtifacts: MJArtifactEntity[] = [];
     for (const idx of directSharedArtIndices) {
       if (batch2Results[idx]?.Results) {
-        directSharedArtifacts.push(...(batch2Results[idx].Results as MJArtifactEntity[]));
+        for (const art of batch2Results[idx].Results as MJArtifactEntity[]) {
+          const inTargetEnv = !art.EnvironmentID || NormalizeUUID(art.EnvironmentID) === targetEnvNorm;
+          const notOwnedByCurrent = !art.UserID || NormalizeUUID(art.UserID) !== currentUserNorm;
+          if (inTargetEnv && notOwnedByCurrent) {
+            directSharedArtifacts.push(art);
+          }
+        }
+      }
+    }
+    const remainingEnvDirectSharedRows: EnvironmentScopedArtifactIdRow[] = [];
+    for (const idx of remainingDirectSharedEnvCheckIndices) {
+      if (batch2Results[idx]?.Results) {
+        for (const row of batch2Results[idx].Results as EnvironmentScopedArtifactIdRow[]) {
+          const inTargetEnv = !row.EnvironmentID || NormalizeUUID(row.EnvironmentID) === targetEnvNorm;
+          const notOwnedByCurrent = !row.UserID || NormalizeUUID(row.UserID) !== currentUserNorm;
+          if (row.ID && inTargetEnv && notOwnedByCurrent) {
+            remainingEnvDirectSharedRows.push(row);
+          }
+        }
       }
     }
 
@@ -1479,7 +1571,11 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
           const colSharedArts: MJArtifactEntity[] = [];
           for (const idx of colArtIndices) {
             if (colArtBatch[idx]?.Results) {
-              colSharedArts.push(...(colArtBatch[idx].Results as MJArtifactEntity[]));
+              for (const art of colArtBatch[idx].Results as MJArtifactEntity[]) {
+                if (!art.EnvironmentID || NormalizeUUID(art.EnvironmentID) === targetEnvNorm) {
+                  colSharedArts.push(art);
+                }
+              }
             }
           }
           const colSharedVers: VersionSummaryRow[] = [];
@@ -1502,16 +1598,22 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       return bTime - aTime;
     });
 
+    const loadedArtNormSet = new Set(allArtifacts.map((a) => NormalizeUUID(a.ID)));
+    const loadedDirectSharedIds = this.uniqueIds(directSharedArtifacts.map((a) => a.ID));
+    const unpagedEnvDirectSharedIds = this.uniqueIds(
+      remainingEnvDirectSharedRows.map((r) => r.ID),
+    ).filter((id) => !loadedArtNormSet.has(NormalizeUUID(id)));
+
+    this.allDirectSharedArtIds = [...loadedDirectSharedIds, ...unpagedEnvDirectSharedIds];
+    this.directSharedArtifactOffset = loadedDirectSharedIds.length;
+
     this.ownedArtifactOffset = ownedArtifacts.length;
     const ownedTotal =
       typeof ownedArtRes?.TotalRowCount === 'number' && ownedArtRes.TotalRowCount >= ownedArtifacts.length
         ? ownedArtRes.TotalRowCount
         : ownedArtifacts.length;
     const loadedSharedDelta = Math.max(0, allArtifacts.length - ownedArtifacts.length);
-    const unpagedDirectSharedCount = Math.max(
-      0,
-      directSharedArtIds.length - firstPageDirectSharedArtIds.length,
-    );
+    const unpagedDirectSharedCount = unpagedEnvDirectSharedIds.length;
     this.LoadedArtifactCount = allArtifacts.length;
     this.TotalArtifactCount = Math.max(
       this.LoadedArtifactCount,

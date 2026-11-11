@@ -9,6 +9,7 @@ import {
     InMemoryLocalStorageProvider,
     IRunViewProvider,
     LocalCacheManager,
+    Metadata,
     ProviderBase,
     ProviderConfigDataBase,
     RoleInfo,
@@ -892,9 +893,24 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
         expect(provider.internalRunViewCalls).toHaveLength(1);
         expect(deniedCacheHit.Results).toEqual([]);
         expect(deniedCacheHit.RowCount).toBe(0);
+
+        // 4. R6-3: Server RunView with missing `contextUser` (`undefined`) hitting the warm cache
+        //    (where ProviderBase.RunView skips CheckUserReadPermissions on cache hit!) MUST also
+        //    fail closed and scrub all cached Content rows!
+        const missingUserCacheHit = await provider.RunView<MockVersionRow>(
+            {
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: `ArtifactID='${targetArtifactId}'`,
+                ResultType: 'simple'
+            },
+            undefined
+        );
+        expect(missingUserCacheHit.Results).toEqual([]);
+        expect(missingUserCacheHit.RowCount).toBe(0);
+        expect(missingUserCacheHit.TotalRowCount).toBe(0);
     });
 
-    it('preserves server-vetted Results when client ProviderBase invokes PostRunView with contextUser === undefined (DSLC2)', async () => {
+    it('preserves server-vetted Results on Network providers (DSLC2) and fails closed on Database or null providers when contextUser === undefined (R6-3)', async () => {
         const serverVettedResults: RunViewResult<MockVersionRow> = {
             Success: true,
             Results: [
@@ -902,7 +918,8 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
                     ID: targetVersionId,
                     ArtifactID: targetArtifactId,
                     VersionNumber: 2,
-                    Content: 'Shared Read-Only child content'
+                    Content: 'Shared Read-Only child content',
+                    __mj_UpdatedAt: '2026-11-10T12:00:00.000Z'
                 }
             ],
             RowCount: 1,
@@ -910,6 +927,14 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
             ExecutionTime: 1,
             ErrorMessage: ''
         };
+
+        const networkProviderPartial: Partial<IMetadataProvider> = {
+            ProviderType: 'Network',
+            Entities: []
+        };
+        const providerGetterSpy = vi
+            .spyOn(Metadata, 'Provider', 'get')
+            .mockReturnValue(networkProviderPartial as IMetadataProvider);
 
         const clientParams: RunViewParams = {
             EntityName: 'MJ: Artifact Versions',
@@ -926,6 +951,43 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
         );
         expect(clientPostRes.Results).toHaveLength(1);
         expect((clientPostRes.Results[0] as MockVersionRow).Content).toBe('Shared Read-Only child content');
+
+        // R6-3a: Database provider with contextUser === undefined fails closed (scrubs all rows)
+        const dbProviderPartial: Partial<IMetadataProvider> = {
+            ProviderType: 'Database',
+            Entities: []
+        };
+        providerGetterSpy.mockReturnValue(dbProviderPartial as IMetadataProvider);
+        const serverMissingUserRes = await ArtifactVersionPostRunViewHook(
+            clientParams,
+            serverVettedResults,
+            undefined
+        );
+        expect(serverMissingUserRes.Results).toEqual([]);
+        expect(serverMissingUserRes.RowCount).toBe(0);
+        expect(serverMissingUserRes.TotalRowCount).toBe(0);
+
+        // R6-3b: Null provider with contextUser === undefined also fails closed
+        providerGetterSpy.mockRestore();
+        const origProviderDesc = Object.getOwnPropertyDescriptor(Metadata, 'Provider');
+        Object.defineProperty(Metadata, 'Provider', {
+            get: () => null,
+            configurable: true
+        });
+        try {
+            const nullProviderRes = await ArtifactVersionPostRunViewHook(
+                clientParams,
+                serverVettedResults,
+                undefined
+            );
+            expect(nullProviderRes.Results).toEqual([]);
+            expect(nullProviderRes.RowCount).toBe(0);
+            expect(nullProviderRes.TotalRowCount).toBe(0);
+        } finally {
+            if (origProviderDesc) {
+                Object.defineProperty(Metadata, 'Provider', origProviderDesc);
+            }
+        }
 
         // By contrast, a server call WITH contextUser on an unclassifiable row still fails closed
         const provider = new TestServerVersionProvider(async () => ({

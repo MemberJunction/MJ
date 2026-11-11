@@ -31,6 +31,7 @@ import {
     MJEnvironmentEntityExtended, ArtifactMetadataEngine, ArtifactPermissionEngine, ConversationEngine, ExtractBase64FromDataUrl, DecideInlineStorage
 } from '@memberjunction/core-entities';
 import { ActionEngineServer } from '@memberjunction/actions';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { FileStorageEngine } from '@memberjunction/storage';
 
 /**
@@ -1938,8 +1939,10 @@ export class AgentRunner {
                                 ? normalizedCallerSource
                                 : rejectedCandidateIds[0];
                         if (forkedSourceArtifactId) {
+                            const callerDisplayName =
+                                contextUser.Name?.trim() || contextUser.Email?.trim() || 'current user';
                             forkCommentNote =
-                                `Forked new artifact from ${forkedSourceArtifactId} because edit access was not granted on the source artifact for user ${contextUser.ID}.`;
+                                `Forked new artifact from ${forkedSourceArtifactId} because edit access was not granted on the source artifact for user ${callerDisplayName}.`;
                         }
                     }
                     const artifact = await this.createArtifactHeader(
@@ -1970,7 +1973,16 @@ export class AgentRunner {
                                 ? `${forkCommentNote} ${warningNote}`
                                 : warningNote;
                             artifact.Comments = forkCommentNote;
-                            await artifact.Save();
+                            const savedWarning = await artifact.Save();
+                            if (!savedWarning) {
+                                LogError(
+                                    `Failed to save fork permission warning comment on artifact ${artifact.ID}: ${
+                                        artifact.LatestResult?.CompleteMessage ||
+                                        artifact.LatestResult?.Message ||
+                                        'Save() returned false'
+                                    }`
+                                );
+                            }
                         }
                     }
                 }
@@ -2285,10 +2297,10 @@ export class AgentRunner {
     }
 
     /**
-     * When a shared-conversation turn falls back to `'create-new'` because `contextUser` lacks `CanEdit`
-     * on a participant's artifact, grants `CanRead = true` on the newly forked artifact to the source
+     * Grants explicit `CanRead = true` on a newly forked artifact to the original source
      * artifact's owner, the conversation's owner, and every distinct conversation participant (`D3`).
-     * Returns the list of participant `UserID`s whose grant could not be persisted.
+     * Returns human-readable display names for any recipients whose grant could not be persisted
+     * (never raw user GUIDs).
      */
     private async grantForkedArtifactReadPermissions(
         md: IMetadataProvider,
@@ -2299,9 +2311,13 @@ export class AgentRunner {
     ): Promise<string[]> {
         const failedRecipients: string[] = [];
         const recipientByNormId = new Map<string, string>();
+        const displayNameByNormId = new Map<string, string>();
         try {
             const rv = RunView.FromMetadataProvider(md);
-            const addRecipient = (candidateUserId: string | null | undefined): void => {
+            const addRecipient = (
+                candidateUserId: string | null | undefined,
+                candidateDisplayName?: string | null
+            ): void => {
                 const trimmed = (candidateUserId ?? '').trim();
                 if (!trimmed || UUIDsEqual(trimmed, contextUser.ID)) {
                     return;
@@ -2310,9 +2326,13 @@ export class AgentRunner {
                 if (!recipientByNormId.has(norm)) {
                     recipientByNormId.set(norm, trimmed);
                 }
+                const cleanDisplay = (candidateDisplayName ?? '').trim();
+                if (cleanDisplay && !displayNameByNormId.has(norm)) {
+                    displayNameByNormId.set(norm, cleanDisplay);
+                }
             };
 
-            const sourceArtRes = await rv.RunView<{ ID: string; UserID?: string | null }>(
+            const sourceArtRes = await rv.RunView<{ ID: string; UserID?: string | null; User?: string | null }>(
                 {
                     EntityName: 'MJ: Artifacts',
                     ExtraFilter: `ID='${EscapeSQLString(sourceArtifactId)}'`,
@@ -2324,7 +2344,7 @@ export class AgentRunner {
                 contextUser
             );
             if (sourceArtRes.Success && sourceArtRes.Results?.length) {
-                addRecipient(sourceArtRes.Results[0].UserID);
+                addRecipient(sourceArtRes.Results[0].UserID, sourceArtRes.Results[0].User);
             }
 
             if (conversationDetailId && IsValidUUID(conversationDetailId)) {
@@ -2343,7 +2363,7 @@ export class AgentRunner {
                 if (convId && IsValidUUID(convId)) {
                     const safeConvId = EscapeSQLString(convId);
                     const [convRes, participantsRes] = await Promise.all([
-                        rv.RunView<{ ID: string; UserID?: string | null }>(
+                        rv.RunView<{ ID: string; UserID?: string | null; User?: string | null }>(
                             {
                                 EntityName: 'MJ: Conversations',
                                 ExtraFilter: `ID='${safeConvId}'`,
@@ -2354,11 +2374,12 @@ export class AgentRunner {
                             },
                             contextUser
                         ),
-                        rv.RunView<{ UserID?: string | null }>(
+                        rv.RunView<{ UserID?: string | null; User?: string | null; UserName?: string | null }>(
                             {
                                 EntityName: 'MJ: Conversation Details',
                                 ExtraFilter: `ConversationID='${safeConvId}' AND UserID IS NOT NULL`,
-                                Fields: ['UserID'],
+                                Fields: ['UserID', 'User'],
+                                MaxRows: 200,
                                 SkipTotalRowCount: true,
                                 ResultType: 'simple'
                             },
@@ -2366,17 +2387,46 @@ export class AgentRunner {
                         )
                     ]);
                     if (convRes.Success && convRes.Results?.length) {
-                        addRecipient(convRes.Results[0].UserID);
+                        addRecipient(convRes.Results[0].UserID, convRes.Results[0].User);
                     }
-                    if (participantsRes.Success && Array.isArray(participantsRes.Results)) {
+                    if (!participantsRes.Success) {
+                        LogError(
+                            `Failed to query conversation participants for forked artifact ${newArtifactId} (conversation ${convId}): ${
+                                participantsRes.ErrorMessage || 'RunView returned Success=false'
+                            }`
+                        );
+                    } else if (Array.isArray(participantsRes.Results)) {
                         for (const row of participantsRes.Results) {
-                            addRecipient(row.UserID);
+                            addRecipient(row.UserID, row.User ?? row.UserName);
                         }
                     }
                 }
             }
 
-            for (const recipientUserId of recipientByNormId.values()) {
+            const userByNormId = new Map<string, UserInfo>();
+            const cachedUsers = UserCache.Instance.Users;
+            if (Array.isArray(cachedUsers)) {
+                for (const u of cachedUsers) {
+                    if (u?.ID) {
+                        userByNormId.set(NormalizeUUID(u.ID), u);
+                    }
+                }
+            }
+
+            const formatRecipientLabel = (normId: string): string => {
+                const u = userByNormId.get(normId);
+                const fromUser = u?.Name?.trim() || u?.Email?.trim();
+                if (fromUser) {
+                    return fromUser;
+                }
+                const fromRow = displayNameByNormId.get(normId);
+                if (fromRow) {
+                    return fromRow;
+                }
+                return 'participant';
+            };
+
+            for (const [normId, recipientUserId] of recipientByNormId.entries()) {
                 try {
                     const perm = await md.GetEntityObject<MJArtifactPermissionEntity>(
                         'MJ: Artifact Permissions',
@@ -2391,7 +2441,7 @@ export class AgentRunner {
                     perm.CanShare = false;
                     perm.SharedByUserID = contextUser.ID;
                     if (!(await perm.Save())) {
-                        failedRecipients.push(recipientUserId);
+                        failedRecipients.push(formatRecipientLabel(normId));
                         LogError(
                             `Failed to grant CanRead on forked artifact ${newArtifactId} to user ${recipientUserId}: ${
                                 perm.LatestResult?.CompleteMessage ||
@@ -2401,7 +2451,7 @@ export class AgentRunner {
                         );
                     }
                 } catch (saveErr) {
-                    failedRecipients.push(recipientUserId);
+                    failedRecipients.push(formatRecipientLabel(normId));
                     LogError(
                         `Failed to grant CanRead on forked artifact ${newArtifactId} to user ${recipientUserId}: ${
                             saveErr instanceof Error ? saveErr.message : String(saveErr)

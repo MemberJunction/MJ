@@ -9,8 +9,19 @@ import {
     DocumentBlockSpec,
     DocumentLiveBlockEngine,
     IsSafeUserRegex,
-    SafeRegexTest
+    SafeRegexSearchDetailed
 } from '@memberjunction/core-entities';
+
+const TOOL_REGEX_BUDGET_MS = 50;
+const PER_BLOCK_REGEX_MAX_MS = 15;
+const MAX_REGEX_INPUT_BYTES = 65_536;
+
+export interface UnsearchableDocumentBlock {
+    blockId: string;
+    startLine: number;
+    endLine: number;
+    reason: 'exceeds_64kb_regex_limit' | 'regex_timeout';
+}
 
 /**
  * Logical block parsed from a Markdown Document.
@@ -113,14 +124,20 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             },
             {
                 name: 'search_blocks',
-                description: 'Searches logical blocks in the document by text query or regex pattern.',
+                description:
+                    'Searches logical blocks in the document by plain-text substring (default) or regex pattern (when use_regex is true).',
                 inputSchema: {
                     type: 'object',
                     properties: {
                         query: { type: 'string', description: 'Case-insensitive text or regex pattern to find.' },
+                        use_regex: {
+                            type: 'boolean',
+                            description:
+                                'Optional (default false): set true to evaluate query as a regular expression; leave false for fast plain-text search with no 64 KB cap.'
+                        },
                         useRegex: {
                             type: 'boolean',
-                            description: 'Optional: set false to force literal substring matching, or true to require regex syntax.'
+                            description: 'Alias for use_regex (default false).'
                         }
                     },
                     required: ['query']
@@ -132,8 +149,12 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                 inputSchema: {
                     type: 'object',
                     properties: {
-                        pattern: { type: 'string', description: 'Regex pattern (or literal text when useRegex is false) to search for.' },
+                        pattern: { type: 'string', description: 'Regex pattern (or literal text when use_regex/useRegex is false) to search for.' },
                         flags: { type: 'string', description: 'Optional regex flags (e.g., "i" for case-insensitive).' },
+                        use_regex: {
+                            type: 'boolean',
+                            description: 'Optional: set false to match pattern as a literal substring instead of a regular expression.'
+                        },
                         useRegex: {
                             type: 'boolean',
                             description: 'Optional: set false to match pattern as a literal substring instead of a regular expression.'
@@ -653,15 +674,10 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         if (!query) {
             return { success: false, data: null, errorMessage: 'search_blocks requires a non-empty query.' };
         }
-        if (query.length > 256) {
-            return {
-                success: false,
-                data: null,
-                errorMessage: 'Unsafe or overly complex regular expression rejected'
-            };
-        }
+        const useRegex = input.use_regex === true || input.useRegex === true;
         const blocks = this.ParseLogicalBlocks(content);
-        if (input.useRegex === false) {
+
+        if (!useRegex) {
             const needle = query.toLowerCase();
             const matches = blocks.filter((b) => b.rawMarkdown.toLowerCase().includes(needle));
             return {
@@ -669,54 +685,104 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                 data: {
                     revisionHash: this.ComputeRevisionHash(content),
                     matchCount: matches.length,
-                    matches
+                    matches,
+                    unsearchableCount: 0,
+                    unsearchableBlocks: [],
+                    warnings: []
                 }
             };
         }
 
-        let syntaxValid = true;
+        if (query.length > 256) {
+            return {
+                success: false,
+                data: null,
+                errorMessage: 'Unsafe or overly complex regular expression rejected'
+            };
+        }
+
         try {
             new RegExp(query, 'i');
         } catch (err) {
-            syntaxValid = false;
-            if (input.useRegex === true) {
-                return {
-                    success: false,
-                    data: null,
-                    errorMessage: `Invalid regular expression: ${err instanceof Error ? err.message : String(err)}`
-                };
-            }
-        }
-
-        if (syntaxValid) {
-            const activeRegex = CompileSafeUserRegex(query, 'i');
-            if (!activeRegex) {
-                return {
-                    success: false,
-                    data: null,
-                    errorMessage: 'Unsafe or overly complex regular expression rejected'
-                };
-            }
-            const matches = blocks.filter((b) => SafeRegexTest(activeRegex, b.rawMarkdown));
             return {
-                success: true,
-                data: {
-                    revisionHash: this.ComputeRevisionHash(content),
-                    matchCount: matches.length,
-                    matches
-                }
+                success: false,
+                data: null,
+                errorMessage: `Invalid regular expression: ${err instanceof Error ? err.message : String(err)}`
             };
         }
 
-        // Literal fallback for plain strings containing unescaped regex metacharacters like "C++"
-        const needle = query.toLowerCase();
-        const matches = blocks.filter((b) => b.rawMarkdown.toLowerCase().includes(needle));
+        const activeRegex = CompileSafeUserRegex(query, 'i');
+        if (!activeRegex) {
+            return {
+                success: false,
+                data: null,
+                errorMessage: 'Unsafe or overly complex regular expression rejected'
+            };
+        }
+
+        const matches: ParsedMarkdownLogicalBlock[] = [];
+        const unsearchableBlocks: UnsearchableDocumentBlock[] = [];
+        const regexDeadline = performance.now() + TOOL_REGEX_BUDGET_MS;
+
+        for (const block of blocks) {
+            const remainingMs = regexDeadline - performance.now();
+            if (remainingMs <= 0) {
+                unsearchableBlocks.push({
+                    blockId: block.blockId,
+                    startLine: block.startLine,
+                    endLine: block.endLine,
+                    reason: 'regex_timeout'
+                });
+                continue;
+            }
+            const res = SafeRegexSearchDetailed(
+                activeRegex,
+                block.rawMarkdown,
+                Math.min(PER_BLOCK_REGEX_MAX_MS, remainingMs),
+                MAX_REGEX_INPUT_BYTES
+            );
+            if (res.Matched) {
+                matches.push(block);
+            } else if (res.InputTooLong) {
+                unsearchableBlocks.push({
+                    blockId: block.blockId,
+                    startLine: block.startLine,
+                    endLine: block.endLine,
+                    reason: 'exceeds_64kb_regex_limit'
+                });
+            } else if (res.TimedOut) {
+                unsearchableBlocks.push({
+                    blockId: block.blockId,
+                    startLine: block.startLine,
+                    endLine: block.endLine,
+                    reason: 'regex_timeout'
+                });
+            }
+        }
+
+        const warnings: string[] = [];
+        const tooLongCount = unsearchableBlocks.filter((u) => u.reason === 'exceeds_64kb_regex_limit').length;
+        const timeoutCount = unsearchableBlocks.filter((u) => u.reason === 'regex_timeout').length;
+        if (tooLongCount > 0) {
+            warnings.push(
+                `${tooLongCount} block(s) exceeded the 64 KB regex limit and were not searched. Retry with use_regex: false for plain-text search across arbitrarily large blocks.`
+            );
+        }
+        if (timeoutCount > 0) {
+            warnings.push(
+                `${timeoutCount} block(s) were skipped because regex evaluation reached the ${TOOL_REGEX_BUDGET_MS}ms tool time budget. Simplify the pattern or retry with use_regex: false for plain-text search.`
+            );
+        }
+
         return {
             success: true,
             data: {
                 revisionHash: this.ComputeRevisionHash(content),
                 matchCount: matches.length,
-                matches
+                matches,
+                unsearchableCount: unsearchableBlocks.length,
+                unsearchableBlocks,
+                warnings
             }
         };
     }
@@ -726,17 +792,13 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         if (!patternStr) {
             return { success: false, data: null, errorMessage: 'grep requires a non-empty pattern.' };
         }
-        if (patternStr.length > 256) {
-            return {
-                success: false,
-                data: null,
-                errorMessage: 'Unsafe or overly complex regular expression rejected'
-            };
-        }
         const flags = input.flags != null ? String(input.flags) : undefined;
         const lines = content.split('\n');
+        const explicitLiteral = input.useRegex === false || input.use_regex === false;
+        const explicitRegex = input.useRegex === true || input.use_regex === true;
+        const hasRegexMeta = /[\\^$.|?*+()[\]{}]/.test(patternStr);
 
-        if (input.useRegex === false) {
+        if (explicitLiteral || (!explicitRegex && !hasRegexMeta)) {
             const caseInsensitive = Boolean(flags?.includes('i'));
             const needle = caseInsensitive ? patternStr.toLowerCase() : patternStr;
             const matches: Array<{ lineNumber: number; text: string }> = [];
@@ -749,11 +811,19 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             return { success: true, data: matches };
         }
 
+        if (patternStr.length > 256) {
+            return {
+                success: false,
+                data: null,
+                errorMessage: 'Unsafe or overly complex regular expression rejected'
+            };
+        }
+
         const cleanFlags = flags ? flags.replace(/[gy]/g, () => '') : undefined;
         try {
             new RegExp(patternStr, cleanFlags);
         } catch (err) {
-            if (input.useRegex === true) {
+            if (explicitRegex) {
                 return {
                     success: false,
                     data: null,
@@ -774,7 +844,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         }
 
         const safeRegex = CompileSafeUserRegex(patternStr, cleanFlags);
-        if (!safeRegex || !IsSafeUserRegex(patternStr)) {
+        if (!safeRegex || !IsSafeUserRegex(patternStr, cleanFlags)) {
             return {
                 success: false,
                 data: null,
@@ -783,8 +853,19 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         }
 
         const matches: Array<{ lineNumber: number; text: string }> = [];
+        const regexDeadline = performance.now() + TOOL_REGEX_BUDGET_MS;
         for (let i = 0; i < lines.length; i++) {
-            if (SafeRegexTest(safeRegex, lines[i])) {
+            const remainingMs = regexDeadline - performance.now();
+            if (remainingMs <= 0) {
+                break;
+            }
+            const res = SafeRegexSearchDetailed(
+                safeRegex,
+                lines[i],
+                Math.min(PER_BLOCK_REGEX_MAX_MS, remainingMs),
+                MAX_REGEX_INPUT_BYTES
+            );
+            if (res.Matched) {
                 matches.push({ lineNumber: i, text: lines[i] });
             }
         }

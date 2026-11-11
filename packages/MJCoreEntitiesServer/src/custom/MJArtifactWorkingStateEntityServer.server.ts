@@ -63,12 +63,22 @@ function resolveTargetEntityName(params: RunViewParams): string {
     return '';
 }
 
-function resolveProviderForUser(contextUser: UserInfo): IMetadataProvider | null {
+function resolveMetadataProvider(
+    entityProvider: IEntityDataProvider | null | undefined,
+    contextUser: UserInfo | undefined | null
+): IMetadataProvider | null {
+    if (isMetadataProvider(entityProvider)) {
+        return entityProvider;
+    }
     return (
-        contextUser.OwningProvider ??
+        contextUser?.OwningProvider ??
         Metadata.Provider ?? // global-provider-ok: fallback when UserInfo was constructed without an OwningProvider
         null
     );
+}
+
+function resolveProviderForUser(contextUser: UserInfo): IMetadataProvider | null {
+    return resolveMetadataProvider(undefined, contextUser);
 }
 
 function readWorkingStateArtifactId(row: unknown): string | null {
@@ -100,11 +110,12 @@ export const ArtifactWorkingStatePreRunViewHook: PreRunViewHook = (
     params: RunViewParams,
     contextUser: UserInfo | undefined
 ): RunViewParams => {
+    const provider = resolveMetadataProvider(undefined, contextUser);
     if (
         !params ||
         resolveTargetEntityName(params) !== 'MJ: Artifact Working States' ||
         isServerSystemUser(contextUser) ||
-        !contextUser
+        (!contextUser && provider !== null && provider.ProviderType !== 'Database')
     ) {
         return params;
     }
@@ -143,21 +154,42 @@ export const ArtifactWorkingStatePostRunViewHook: PostRunViewHook = async (
         return results;
     }
 
+    const provider = resolveMetadataProvider(undefined, contextUser);
+
     if (!contextUser) {
-        // Client-side providers (e.g. GraphQLDataProvider in hybrid Node processes) invoke
+        // Client-side providers (e.g. GraphQLDataProvider where ProviderType === 'Network') invoke
         // PostRunView hooks with contextUser === undefined after MJServer has already enforced
-        // server-side CanRead (`DSLC2`).
-        if (shouldStripSyntheticArtifactId && Array.isArray(results.Results)) {
-            return {
-                ...results,
-                Results: results.Results.map(stripSyntheticWorkingStateArtifactId)
-            };
+        // server-side CanRead (`DSLC2`). On a server DatabaseProviderBase (`ProviderType === 'Database'`)
+        // or when no provider is configured, missing `contextUser` MUST fail closed (`R6-3`) because
+        // `DatabaseProviderBase.InternalRunView` falls back to `this.CurrentUser` and
+        // `ProviderBase.RunView`'s `LocalCacheManager` cache-hit path skips `CheckUserReadPermissions`.
+        if (provider !== null && provider.ProviderType !== 'Database') {
+            if (shouldStripSyntheticArtifactId && Array.isArray(results.Results)) {
+                return {
+                    ...results,
+                    Results: results.Results.map(stripSyntheticWorkingStateArtifactId)
+                };
+            }
+            return results;
         }
-        return results;
+        return {
+            ...results,
+            Results: [],
+            RowCount: 0,
+            TotalRowCount: 0
+        };
     }
 
-    const provider = resolveProviderForUser(contextUser);
-    if (!provider || provider.ProviderType !== 'Database') {
+    if (!provider) {
+        return {
+            ...results,
+            Results: [],
+            RowCount: 0,
+            TotalRowCount: 0
+        };
+    }
+
+    if (provider.ProviderType !== 'Database') {
         if (shouldStripSyntheticArtifactId && Array.isArray(results.Results)) {
             return {
                 ...results,

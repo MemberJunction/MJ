@@ -1343,6 +1343,18 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
             Markdown: outputParts.join('\n')
         };
     }
+
+    /**
+     * Validates an `EntityView` `ExtraFilter` predicate against SQL injection, disallowed SQL globals/functions
+     * (on either side of an operator), and optional entity/FLS field allowlists.
+     */
+    public ValidateExtraFilter(
+        extraFilter: string,
+        entityInfo?: EntityInfo,
+        deniedFields: ReadonlySet<string> = new Set<string>()
+    ): { Valid: boolean; ErrorMessage?: string } {
+        return validateEntityViewExtraFilter(extraFilter, entityInfo, deniedFields);
+    }
 }
 
 /**
@@ -1673,22 +1685,14 @@ function validateEntityViewOrderBy(
 
 function validateEntityViewExtraFilter(
     extraFilter: string,
-    entityInfo: EntityInfo,
-    deniedFields: ReadonlySet<string>
+    entityInfo?: EntityInfo,
+    deniedFields: ReadonlySet<string> = new Set<string>()
 ): { Valid: boolean; ErrorMessage?: string } {
     if (/--|\/\*|\*\/|;/.test(extraFilter)) {
         return { Valid: false, ErrorMessage: 'SQL comments and statement terminators are not permitted in ExtraFilter.' };
     }
-    if (
-        /\b(SELECT|UNION|DROP|DELETE|UPDATE|INSERT|EXEC|EXECUTE|ALTER|CREATE|TRUNCATE|MERGE|GRANT|REVOKE|WAITFOR|OPENROWSET)\b/i.test(
-            extraFilter
-        ) ||
-        /\bxp_[A-Za-z0-9_]*/i.test(extraFilter)
-    ) {
-        return { Valid: false, ErrorMessage: 'Subqueries, DDL, DML, and system procedures are not permitted in ExtraFilter.' };
-    }
 
-    // Verify balanced single quotes and mask string literals before inspecting column identifiers
+    // Verify balanced single quotes and mask string literals before inspecting SQL keywords, globals, and column identifiers
     let inSingleQuote = false;
     for (let i = 0; i < extraFilter.length; i++) {
         if (extraFilter[i] === "'") {
@@ -1703,7 +1707,37 @@ function validateEntityViewExtraFilter(
         return { Valid: false, ErrorMessage: 'Unclosed string literal in ExtraFilter.' };
     }
 
-    const masked = extraFilter.replace(/'(?:''|[^'])*'/g, "'__STR__'");
+    const masked = extraFilter.replace(/'(?:''|[^'])*'/g, () => "'__STR__'");
+
+    if (
+        /\b(SELECT|UNION|DROP|DELETE|UPDATE|INSERT|EXEC|EXECUTE|ALTER|CREATE|TRUNCATE|MERGE|GRANT|REVOKE|WAITFOR|OPENROWSET|OPENQUERY|OPENDATASOURCE)\b/i.test(
+            masked
+        ) ||
+        /\bxp_[A-Za-z0-9_]*/i.test(masked)
+    ) {
+        return { Valid: false, ErrorMessage: 'Subqueries, DDL, DML, and system procedures are not permitted in ExtraFilter.' };
+    }
+
+    // Reject SQL global/local variables anywhere outside string literals (e.g. 'M' < @@VERSION, @@SERVERNAME, @var)
+    if (/@@?[A-Za-z_]/.test(masked)) {
+        return {
+            Valid: false,
+            ErrorMessage: 'SQL global and local variables (e.g. @@VERSION) are not permitted in ExtraFilter.'
+        };
+    }
+
+    // Reject disallowed SQL system globals / niladic built-ins anywhere outside string literals (both LHS and RHS, e.g. 'sa' = SYSTEM_USER)
+    const maskedUnbracketed = masked.replace(/\[[^\]]*\]/g, () => '__BRACKET_IDENT__');
+    if (
+        /\b(SYSTEM_USER|CURRENT_USER|SESSION_USER|SUSER_SNAME|SUSER_NAME|SUSER_ID|SUSER_SID|ORIGINAL_LOGIN|USER_NAME|USER_ID|USER|HOST_NAME|HOST_ID|APP_NAME|DB_NAME|DB_ID|OBJECT_NAME|OBJECT_ID|SCHEMA_NAME|PERMISSIONS|HAS_PERMS_BY_NAME|IS_MEMBER|IS_SRVROLEMEMBER)\b/i.test(
+            maskedUnbracketed
+        )
+    ) {
+        return {
+            Valid: false,
+            ErrorMessage: 'Disallowed SQL system globals and functions (e.g. SYSTEM_USER) are not permitted in ExtraFilter.'
+        };
+    }
 
     // Reject schema/table-qualified identifiers (e.g. __mj.fnSecret(ID) or dbo.Users.ID) and SQL function calls (e.g. REPLICATE('a', 1e8))
     if (/[A-Za-z_][A-Za-z0-9_]*\s*\.\s*[A-Za-z_]/.test(masked)) {
@@ -1730,34 +1764,42 @@ function validateEntityViewExtraFilter(
         }
     }
 
-    const allowedFieldNames = new Set(entityInfo.Fields.map((f) => f.Name.trim().toLowerCase()));
+    const allowedSqlPredicateKeywords = new Set([
+        'and',
+        'or',
+        'not',
+        'in',
+        'is',
+        'null',
+        'like',
+        'between',
+        'escape',
+        'true',
+        'false'
+    ]);
+    const allowedFieldNames = entityInfo
+        ? new Set(entityInfo.Fields.map((f) => f.Name.trim().toLowerCase()))
+        : null;
 
-    // Ensure no FLS-denied field appears anywhere as an identifier token in ExtraFilter
-    const allIdentsRegex = /(?:\[([A-Za-z_][A-Za-z0-9_]*)\]|([A-Za-z_][A-Za-z0-9_]*))/g;
+    // Verify EVERY identifier token anywhere outside string literals (both LHS and RHS) against FLS deniedFields and entityInfo.Fields
+    const allIdentsRegex = /(?<![0-9])(?:\[([A-Za-z_][A-Za-z0-9_]*)\]|([A-Za-z_][A-Za-z0-9_]*))/g;
     let identMatch: RegExpExecArray | null;
     while ((identMatch = allIdentsRegex.exec(masked)) !== null) {
-        const token = (identMatch[1] || identMatch[2]).toLowerCase();
+        const isBracketed = Boolean(identMatch[1]);
+        const rawIdent = identMatch[1] || identMatch[2];
+        const token = rawIdent.toLowerCase();
         if (token === '__str__') continue;
+        if (!isBracketed && allowedSqlPredicateKeywords.has(token)) continue;
         if (deniedFields.has(token)) {
             return {
                 Valid: false,
-                ErrorMessage: `Access denied: ExtraFilter cannot reference restricted field '${identMatch[1] || identMatch[2]}'.`
+                ErrorMessage: `Access denied: ExtraFilter cannot reference restricted field '${rawIdent}'.`
             };
         }
-    }
-
-    // Verify every identifier preceding a comparison operator exists on entityInfo.Fields and is not in deniedFields
-    const comparisonLhsRegex =
-        /(?:\[([A-Za-z_][A-Za-z0-9_]*)\]|([A-Za-z_][A-Za-z0-9_]*))\s*(?:<>|!=|<=|>=|=|<|>|\b(?:NOT\s+)?(?:IN|LIKE)\b|\bIS\b)/gi;
-    let cmpMatch: RegExpExecArray | null;
-    while ((cmpMatch = comparisonLhsRegex.exec(masked)) !== null) {
-        const rawField = cmpMatch[1] || cmpMatch[2];
-        const lowerField = rawField.toLowerCase();
-        if (lowerField === '__str__') continue;
-        if (!allowedFieldNames.has(lowerField) || deniedFields.has(lowerField)) {
+        if (allowedFieldNames && !allowedFieldNames.has(token)) {
             return {
                 Valid: false,
-                ErrorMessage: `Field '${rawField}' in ExtraFilter does not exist on ${entityInfo.Name} or access is denied.`
+                ErrorMessage: `Field '${rawIdent}' in ExtraFilter does not exist on ${entityInfo?.Name ?? 'entity'} or access is denied.`
             };
         }
     }

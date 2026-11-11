@@ -2354,7 +2354,7 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public get LiveSyncUnavailable(): boolean {
-    return this.liveSyncUnavailable || Boolean(this.CollaborationSession?.IsLiveSyncUnavailable);
+    return this.liveSyncUnavailable || Boolean(this.CollaborationSession?.LiveSyncUnavailable);
   }
 
   public get CanEdit(): boolean {
@@ -2616,7 +2616,7 @@ export class SpreadsheetArtifactViewerComponent
       hasRemoteBackend,
     );
     this.CollaborationSession = session;
-    this.liveSyncUnavailable = Boolean(session.IsLiveSyncUnavailable);
+    this.liveSyncUnavailable = Boolean(session.LiveSyncUnavailable);
     if (this.ConnectionStatus !== 'revoked' && this.ConnectionStatus !== 'readonly') {
       this.ConnectionStatus = session.Status;
     }
@@ -2748,10 +2748,14 @@ export class SpreadsheetArtifactViewerComponent
       } else {
         this.PermissionVerifyError = false;
         this.AccessRevoked = false;
-        if (this.ConnectionStatus === 'readonly' || this.ConnectionStatus === 'revoked') {
-          this.ConnectionStatus = this.CollaborationSession ? this.CollaborationSession.Status : 'local';
+        const effectiveCanEdit =
+          !this.readonly && this.FallbackXlsxBytes === null && !this.LiveSyncUnavailable;
+        if (this.CollaborationSession) {
+          this.CollaborationSession.SetCanEdit(effectiveCanEdit);
+          this.ConnectionStatus = this.CollaborationSession.Status;
+        } else {
+          this.ConnectionStatus = effectiveCanEdit ? 'local' : 'readonly';
         }
-        this.CollaborationSession?.SetCanEdit(this.hasPermissionToEdit);
       }
       await this.loadPersistedSheetRangeComments();
       if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {

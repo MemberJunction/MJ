@@ -1,11 +1,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
 import {
+    CompileSafeUserRegex,
     FormatCellAddress,
     IsSafeUserRegex,
     ParseCellAddress,
     ParseRangeAddress,
-    SafeRegexTest,
+    SafeRegexSearchDetailed,
     SpreadsheetCalculatedColumnSpec,
     SpreadsheetCellFormatType,
     SpreadsheetCellSpec,
@@ -24,6 +25,15 @@ const MAX_SHEET_COLUMN_COUNT = 256;
 const MAX_INSERT_COUNT = 1_000;
 const MAX_READ_RANGE_CELLS = 10_000;
 const SEARCH_MATCH_LIMIT = 100;
+const TOOL_REGEX_BUDGET_MS = 50;
+const PER_CELL_REGEX_MAX_MS = 15;
+const MAX_REGEX_INPUT_BYTES = 65_536;
+
+export interface UnsearchableSpreadsheetCell {
+    sheet: string;
+    cell: string;
+    reason: 'exceeds_64kb_regex_limit' | 'regex_timeout';
+}
 
 type AggregateOperation = 'sum' | 'avg' | 'count' | 'min' | 'max';
 const VALID_AGGREGATE_OPS: ReadonlySet<string> = new Set<AggregateOperation>(['sum', 'avg', 'count', 'min', 'max']);
@@ -294,12 +304,22 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             },
             {
                 name: 'search_cells',
-                description: 'Regex search across all cells. Optionally scope to a single sheet. Returns up to 100 matches.',
+                description:
+                    'Case-insensitive plain-text search (default) or regex search (when use_regex is true) across all cells. Optionally scope to a single sheet. Returns up to 100 matches.',
                 inputSchema: {
                     type: 'object',
                     properties: {
-                        query: { type: 'string', description: 'Regex pattern to search for' },
-                        sheet: { type: 'string', description: 'Optional sheet name or SheetID to limit search scope' }
+                        query: { type: 'string', description: 'Case-insensitive substring or regex pattern to search for' },
+                        sheet: { type: 'string', description: 'Optional sheet name or SheetID to limit search scope' },
+                        use_regex: {
+                            type: 'boolean',
+                            description:
+                                'Optional (default false): set true to evaluate query as a regular expression; leave false for fast plain-text search with no 64 KB cap.'
+                        },
+                        useRegex: {
+                            type: 'boolean',
+                            description: 'Alias for use_regex (default false).'
+                        }
                     },
                     required: ['query']
                 }
@@ -1006,24 +1026,24 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         if (!query) {
             return this.errorResult('Parameter "query" is required.');
         }
-        if (query.length > 256) {
-            return this.errorResult('Unsafe or overly complex regular expression rejected');
-        }
+
+        const useRegex = input.use_regex === true || input.useRegex === true;
         let regex: RegExp | null = null;
-        if (input.useRegex !== false) {
-            try {
-                regex = new RegExp(query, 'i');
-            } catch {
-                if (input.useRegex === true) {
-                    return this.errorResult(`Invalid regex pattern: "${query}".`);
-                }
-                regex = null;
+        if (useRegex) {
+            if (query.length > 256) {
+                return this.errorResult('Unsafe or overly complex regular expression rejected');
             }
-            if (regex && !IsSafeUserRegex(query)) {
+            try {
+                new RegExp(query, 'i');
+            } catch {
+                return this.errorResult(`Invalid regex pattern: "${query}".`);
+            }
+            regex = CompileSafeUserRegex(query, 'i');
+            if (!regex || !IsSafeUserRegex(query, 'i')) {
                 return this.errorResult('Unsafe or overly complex regular expression rejected');
             }
         }
-        const literalNeedle = query.toLowerCase();
+        const literalNeedle = useRegex ? '' : query.toLowerCase();
 
         const sheetScope = input.sheet ?? input.sheetName;
         let targetSheets: WorksheetSpec[];
@@ -1038,6 +1058,9 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         }
 
         const matches: Array<{ sheet: string; cell: string; value: string }> = [];
+        const unsearchableCells: UnsearchableSpreadsheetCell[] = [];
+        const regexDeadline = useRegex ? performance.now() + TOOL_REGEX_BUDGET_MS : 0;
+
         for (const ws of targetSheets) {
             if (matches.length >= SEARCH_MATCH_LIMIT) break;
             const sortedCells = Object.values(ws.Cells).sort((a, b) => {
@@ -1050,21 +1073,123 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                 if (matches.length >= SEARCH_MATCH_LIMIT) break;
                 const val = cell.ComputedValue ?? cell.RawValue;
                 if (val === null || val === undefined || val === '') continue;
-                const text = cell.DisplayValue || String(val);
-                const matched = regex
-                    ? (SafeRegexTest(regex, text) || SafeRegexTest(regex, String(val)))
-                    : (text.toLowerCase().includes(literalNeedle) || String(val).toLowerCase().includes(literalNeedle));
-                if (matched) {
+                const rawStr = String(val);
+                const text = cell.DisplayValue || rawStr;
+
+                if (!regex) {
+                    const matched =
+                        text.toLowerCase().includes(literalNeedle) ||
+                        (rawStr !== text && rawStr.toLowerCase().includes(literalNeedle));
+                    if (matched) {
+                        matches.push({
+                            sheet: ws.Name,
+                            cell: cell.Address,
+                            value: text
+                        });
+                    }
+                    continue;
+                }
+
+                const remainingMs = regexDeadline - performance.now();
+                if (remainingMs <= 0) {
+                    unsearchableCells.push({
+                        sheet: ws.Name,
+                        cell: cell.Address,
+                        reason: 'regex_timeout'
+                    });
+                    continue;
+                }
+
+                const res1 = SafeRegexSearchDetailed(
+                    regex,
+                    text,
+                    Math.min(PER_CELL_REGEX_MAX_MS, remainingMs),
+                    MAX_REGEX_INPUT_BYTES
+                );
+                if (res1.Matched) {
                     matches.push({
                         sheet: ws.Name,
                         cell: cell.Address,
                         value: text
                     });
+                    continue;
+                }
+                if (res1.InputTooLong) {
+                    unsearchableCells.push({
+                        sheet: ws.Name,
+                        cell: cell.Address,
+                        reason: 'exceeds_64kb_regex_limit'
+                    });
+                    continue;
+                }
+                if (res1.TimedOut) {
+                    unsearchableCells.push({
+                        sheet: ws.Name,
+                        cell: cell.Address,
+                        reason: 'regex_timeout'
+                    });
+                    continue;
+                }
+
+                if (rawStr !== text) {
+                    const remainingMs2 = regexDeadline - performance.now();
+                    if (remainingMs2 <= 0) {
+                        unsearchableCells.push({
+                            sheet: ws.Name,
+                            cell: cell.Address,
+                            reason: 'regex_timeout'
+                        });
+                        continue;
+                    }
+                    const res2 = SafeRegexSearchDetailed(
+                        regex,
+                        rawStr,
+                        Math.min(PER_CELL_REGEX_MAX_MS, remainingMs2),
+                        MAX_REGEX_INPUT_BYTES
+                    );
+                    if (res2.Matched) {
+                        matches.push({
+                            sheet: ws.Name,
+                            cell: cell.Address,
+                            value: text
+                        });
+                    } else if (res2.InputTooLong) {
+                        unsearchableCells.push({
+                            sheet: ws.Name,
+                            cell: cell.Address,
+                            reason: 'exceeds_64kb_regex_limit'
+                        });
+                    } else if (res2.TimedOut) {
+                        unsearchableCells.push({
+                            sheet: ws.Name,
+                            cell: cell.Address,
+                            reason: 'regex_timeout'
+                        });
+                    }
                 }
             }
         }
 
-        return this.successResult({ matches });
+        const warnings: string[] = [];
+        const tooLongCount = unsearchableCells.filter((u) => u.reason === 'exceeds_64kb_regex_limit').length;
+        const timeoutCount = unsearchableCells.filter((u) => u.reason === 'regex_timeout').length;
+        if (tooLongCount > 0) {
+            warnings.push(
+                `${tooLongCount} cell(s) exceeded the 64 KB regex limit and were not searched. Retry with use_regex: false for plain-text search across arbitrarily large cells.`
+            );
+        }
+        if (timeoutCount > 0) {
+            warnings.push(
+                `${timeoutCount} cell(s) were skipped because regex evaluation reached the ${TOOL_REGEX_BUDGET_MS}ms tool time budget. Simplify the pattern or retry with use_regex: false for plain-text search.`
+            );
+        }
+
+        return this.successResult({
+            matches,
+            unsearchableCount: unsearchableCells.length,
+            unsearchableCells,
+            warnings
+        });
     }
 
     private handleAggregateColumn(

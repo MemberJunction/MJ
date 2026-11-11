@@ -10,6 +10,7 @@ import {
     IsSafeUserRegex,
     ParseCellAddress,
     ParseRangeAddress,
+    SafeRegexSearchDetailed,
     SafeRegexTest,
     SpreadsheetEngine,
     SpreadsheetLiveTableSpec,
@@ -1216,9 +1217,9 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         expect(xmlB).toContain('<f>G3*2</f><v>40</v>');
         expect(xmlB).toContain('<f>G4*2</f><v>60</v>');
         expect(xmlB).toContain('<f>G5*2</f><v>80</v>');
-        // Newly edited future functions get _xlfn. prefix in both PatchXlsxBytes and ExportToXlsxBytes, and A1 keeps cm="1" + t="array" while omitting <v>#NAME?</v>!
+        // Newly edited future functions get _xlfn. prefix in both PatchXlsxBytes and ExportToXlsxBytes, and A1 keeps cm="1" + t="array" with updated non-stale ref="A1" while omitting <v>#NAME?</v>!
         expect(xmlB).toContain('cm="1"');
-        expect(xmlB).toContain('<f t="array" ref="A1:A3">_xlfn.SEQUENCE(5, 1, 10)</f></c>');
+        expect(xmlB).toContain('<f t="array" ref="A1">_xlfn.SEQUENCE(5, 1, 10)</f></c>');
         expect(xmlB).not.toContain('#NAME?');
         expect(xmlB).toContain('<f>_xlfn.XLOOKUP(20, G2:G5, H2:H5)</f><v>40</v>');
 
@@ -1529,5 +1530,333 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         const dv = new DataView(xlsxBytes.buffer, xlsxBytes.byteOffset, xlsxBytes.byteLength);
         expect(dv.getUint32(0, true)).toBe(0x04034b50);
         expect(dv.getUint16(12, true)).toBe(0x0021);
+    });
+
+    it('R6-5: preserves all rows > 10,000 and columns > 512 across InsertRows/InsertColumns and SerializeWorkbook -> ParseWorkbook without #REF!', () => {
+        // 1. Exact AN-BC reproduction: Fill A1:A10000, B1=A10000, C1=SUM(A9998:A10000), InsertRows(5, 3), SerializeWorkbook -> ParseWorkbook
+        const wb = engine.CreateEmptyWorkbook('LargeRowsRepro', ['Sheet1'], 10_000, 5);
+        const s = wb.Worksheets[0];
+        for (let r = 1; r <= 10_000; r++) {
+            const rSpec = s.Rows[r - 1];
+            const cSpec = s.Columns[0];
+            const addr = `A${r}`;
+            s.Cells[addr] = {
+                RowID: rSpec.RowID,
+                ColumnID: cSpec.ColumnID,
+                Address: addr,
+                RawValue: r,
+                Formula: null,
+                FormulaStable: null,
+                ComputedValue: r,
+                DisplayValue: String(r)
+            };
+        }
+        engine.SetCell(wb, s.SheetID, 'B1', { Formula: '=A10000' }, false);
+        engine.SetCell(wb, s.SheetID, 'C1', { Formula: '=SUM(A9998:A10000)' }, true);
+        expect(s.Cells['B1']?.ComputedValue).toBe(10_000);
+        expect(s.Cells['C1']?.ComputedValue).toBe(29_997);
+
+        engine.InsertRows(wb, s.SheetID, 5, 3);
+        expect(s.Rows.length).toBe(10_003);
+        expect(s.Cells['B1']?.Formula).toBe('=A10003');
+        expect(s.Cells['C1']?.Formula).toBe('=SUM(A10001:A10003)');
+
+        const json = engine.SerializeWorkbook(wb);
+        const reloaded = engine.ParseWorkbook(json);
+        const rs = reloaded.Worksheets[0];
+        expect(rs.Rows.length).toBe(10_003);
+        expect(rs.Cells['B1']?.Formula).toBe('=A10003');
+        expect(rs.Cells['B1']?.ComputedValue).toBe(10_000);
+        expect(rs.Cells['C1']?.Formula).toBe('=SUM(A10001:A10003)');
+        expect(rs.Cells['C1']?.ComputedValue).toBe(29_997);
+
+        // 2. Workbook with 15,000 rows and 600 columns + InsertRows + InsertColumns + SerializeWorkbook -> ParseWorkbook
+        const wbLarge = engine.CreateEmptyWorkbook('Sheet15k600', ['Data'], 15_000, 600);
+        const wsLarge = wbLarge.Worksheets[0];
+        const col600Letter = ColumnIndexToLetter(600); // WB
+        engine.SetCell(wbLarge, wsLarge.SheetID, 'A14999', { Value: 111 }, false);
+        engine.SetCell(wbLarge, wsLarge.SheetID, 'A15000', { Value: 222 }, false);
+        engine.SetCell(wbLarge, wsLarge.SheetID, `${col600Letter}15000`, { Value: 777 }, false);
+        engine.SetCell(wbLarge, wsLarge.SheetID, 'B1', { Formula: '=A15000' }, false);
+        engine.SetCell(wbLarge, wsLarge.SheetID, 'C1', { Formula: `=${col600Letter}15000` }, false);
+        engine.SetCell(wbLarge, wsLarge.SheetID, 'D1', { Formula: '=SUM(A14999:A15000)' }, true);
+
+        engine.InsertRows(wbLarge, wsLarge.SheetID, 10, 4);
+        engine.InsertColumns(wbLarge, wsLarge.SheetID, 5, 2);
+        const col602Letter = ColumnIndexToLetter(602); // WD
+
+        const reloadedLarge = engine.ParseWorkbook(engine.SerializeWorkbook(wbLarge));
+        const rwsLarge = reloadedLarge.Worksheets[0];
+        expect(rwsLarge.Rows.length).toBe(15_004);
+        expect(rwsLarge.Columns.length).toBe(602);
+        // Note: B1..D1 shifted right by 2 columns when 2 columns were inserted at column 5 (E)? No, B..D are cols 2..4 < 5, so they stay at B1..D1!
+        expect(rwsLarge.Cells['B1']?.Formula).toBe('=A15004');
+        expect(rwsLarge.Cells['B1']?.ComputedValue).toBe(222);
+        expect(rwsLarge.Cells['C1']?.Formula).toBe(`=${col602Letter}15004`);
+        expect(rwsLarge.Cells['C1']?.ComputedValue).toBe(777);
+        expect(rwsLarge.Cells['D1']?.Formula).toBe('=SUM(A15003:A15004)');
+        expect(rwsLarge.Cells['D1']?.ComputedValue).toBe(333);
+    });
+
+    it('R6-10: deleting a row or column that started out virtual (and stayed virtual or materialized later) emits #REF! and clamps partial ranges', () => {
+        // Repro 1 (AN-BC): 25-row sheet -> B1="=A50" -> fill rows 26..60 (A50=5000, A51=5100) -> DeleteRows(50, 1) -> #REF!
+        const wb1 = engine.CreateEmptyWorkbook('VirtRowMat', ['Sheet1'], 25, 5);
+        const s1 = wb1.Worksheets[0];
+        engine.SetCell(wb1, s1.SheetID, 'B1', { Formula: '=A50' }, false);
+        for (let r = 26; r <= 60; r++) {
+            engine.SetCell(wb1, s1.SheetID, `A${r}`, { Value: r * 100 }, false);
+        }
+        engine.EvaluateWorkbook(wb1);
+        expect(s1.Cells['B1']?.ComputedValue).toBe(5000);
+
+        engine.DeleteRows(wb1, s1.SheetID, 50, 1);
+        expect(s1.Cells['B1']?.Formula).toBe('=#REF!');
+        expect(s1.Cells['B1']?.ComputedValue).toBe('#REF!');
+
+        // Repro 2 (AN-BC): 25-row sheet -> B1="=A25" -> DeleteRows(20, 11) -> #REF!, plus pure virtual DeleteRows & range clamping
+        const wb2 = engine.CreateEmptyWorkbook('VirtRowSpan', ['Sheet1'], 25, 5);
+        const s2 = wb2.Worksheets[0];
+        engine.SetCell(wb2, s2.SheetID, 'A24', { Value: 10 }, false);
+        engine.SetCell(wb2, s2.SheetID, 'A25', { Value: 25 }, false);
+        engine.SetCell(wb2, s2.SheetID, 'B1', { Formula: '=A25' }, false);
+        engine.SetCell(wb2, s2.SheetID, 'C1', { Formula: '=A50' }, false);
+        engine.SetCell(wb2, s2.SheetID, 'D1', { Formula: '=A55' }, false);
+        engine.SetCell(wb2, s2.SheetID, 'E1', { Formula: '=SUM(A20:A50)' }, true);
+
+        engine.DeleteRows(wb2, s2.SheetID, 50, 2);
+        expect(s2.Cells['C1']?.Formula).toBe('=#REF!');
+        expect(s2.Cells['C1']?.ComputedValue).toBe('#REF!');
+        expect(s2.Cells['D1']?.Formula).toBe('=A53');
+        expect(s2.Cells['E1']?.Formula).toBe('=SUM(A20:A49)');
+
+        engine.DeleteRows(wb2, s2.SheetID, 20, 11);
+        expect(s2.Cells['B1']?.Formula).toBe('=#REF!');
+        expect(s2.Cells['B1']?.ComputedValue).toBe('#REF!');
+
+        // Column equivalent: 12-col sheet -> B1="=Z1" -> fill cols 13..30 (Z1=900, AA1=901) -> DeleteColumns(26, 1) -> #REF!
+        const wbCol = engine.CreateEmptyWorkbook('VirtColMat', ['Sheet1'], 10, 12);
+        const sCol = wbCol.Worksheets[0];
+        engine.SetCell(wbCol, sCol.SheetID, 'B1', { Formula: '=Z1' }, false);
+        engine.SetCell(wbCol, sCol.SheetID, 'B2', { Formula: '=AF1' }, false);
+        engine.SetCell(wbCol, sCol.SheetID, 'B3', { Formula: '=SUM(M1:AF1)' }, false);
+        for (let c = 13; c <= 30; c++) {
+            engine.SetCell(wbCol, sCol.SheetID, `${ColumnIndexToLetter(c)}1`, { Value: c * 10 }, false);
+        }
+        engine.EvaluateWorkbook(wbCol);
+        expect(sCol.Cells['B1']?.ComputedValue).toBe(260);
+
+        engine.DeleteColumns(wbCol, sCol.SheetID, 26, 1); // Delete Z (promoted to real ColumnSpec)
+        expect(sCol.Cells['B1']?.Formula).toBe('=#REF!');
+        expect(sCol.Cells['B1']?.ComputedValue).toBe('#REF!');
+        // AF was col 32 -> shifted to AE (col 31, still virtual since cols grew to 30 -> 29)
+        expect(sCol.Cells['B2']?.Formula).toBe('=AE1');
+        expect(sCol.Cells['B3']?.Formula).toBe('=SUM(M1:AE1)');
+
+        // Now delete pure-virtual col 31 (AE)
+        engine.DeleteColumns(wbCol, sCol.SheetID, 31, 1);
+        expect(sCol.Cells['B2']?.Formula).toBe('=#REF!');
+        expect(sCol.Cells['B2']?.ComputedValue).toBe('#REF!');
+        expect(sCol.Cells['B3']?.Formula).toBe('=SUM(M1:AD1)');
+    });
+
+    it('R6-6: SafeRegexSearchDetailed enforces time bound (< 50ms) on 64 KB adversarial inputs, preserves ^/$ anchors, and flags > 64 KB inputs', () => {
+        expect(IsSafeUserRegex('(a|b)*c')).toBe(true);
+        expect(IsSafeUserRegex('\\d+y')).toBe(true);
+        expect(IsSafeUserRegex('\\s*\\w+\\s*$')).toBe(true);
+
+        const rxDigitsY = CompileSafeUserRegex('\\d+y')!;
+        const rxDisjointPlus = CompileSafeUserRegex('(a|b)+c')!;
+        const rxAdjSpaces = CompileSafeUserRegex('\\s*\\w+\\s*$')!;
+
+        const input64kOnes = '1'.repeat(65_536);
+        const t1 = performance.now();
+        const res1 = SafeRegexSearchDetailed(rxDigitsY, input64kOnes, 20, 65_536);
+        const dt1 = performance.now() - t1;
+        expect(res1.Matched).toBe(false);
+        expect(dt1).toBeLessThan(50);
+
+        const input64kAs = 'a'.repeat(65_536);
+        const t2 = performance.now();
+        const res2 = SafeRegexSearchDetailed(rxDisjointPlus, input64kAs, 20, 65_536);
+        const dt2 = performance.now() - t2;
+        expect(res2.Matched).toBe(false);
+        expect(dt2).toBeLessThan(50);
+
+        const inputSpacesAExcl = ' '.repeat(32_768) + 'a'.repeat(32_767) + '!';
+        const t3 = performance.now();
+        const res3 = SafeRegexSearchDetailed(rxAdjSpaces, inputSpacesAExcl, 20, 65_536);
+        const dt3 = performance.now() - t3;
+        expect(res3.Matched).toBe(false);
+        expect(dt3).toBeLessThan(50);
+
+        const inputAsExcl = 'a'.repeat(65_535) + '!';
+        const t4 = performance.now();
+        const res4 = SafeRegexSearchDetailed(rxAdjSpaces, inputAsExcl, 20, 65_536);
+        const dt4 = performance.now() - t4;
+        expect(res4.Matched).toBe(false);
+        expect(dt4).toBeLessThan(50);
+
+        // Anchor accuracy across window boundaries
+        const rxEnd = CompileSafeUserRegex('end$')!;
+        expect(SafeRegexSearchDetailed(rxEnd, 'end of first window ' + 'x'.repeat(600) + ' more text').Matched).toBe(false);
+        expect(SafeRegexSearchDetailed(rxEnd, 'x'.repeat(600) + ' at the end').Matched).toBe(true);
+
+        const rxStart = CompileSafeUserRegex('^begin')!;
+        expect(SafeRegexSearchDetailed(rxStart, 'begin ' + 'x'.repeat(600)).Matched).toBe(true);
+        expect(SafeRegexSearchDetailed(rxStart, 'x'.repeat(600) + ' begin').Matched).toBe(false);
+
+        const rxMulti = new RegExp('^target$', 'm');
+        expect(SafeRegexSearchDetailed(rxMulti, 'alpha\n' + 'x'.repeat(600) + '\ntarget\nomega').Matched).toBe(true);
+        expect(SafeRegexSearchDetailed(rxMulti, 'alpha\n' + 'x'.repeat(600) + ' target here\nomega').Matched).toBe(false);
+
+        // > 64 KB input reports InputTooLong: true
+        const over64k = SafeRegexSearchDetailed(rxEnd, 'a'.repeat(70_000), 20, 65_536);
+        expect(over64k).toEqual({ Matched: false, TimedOut: false, InputTooLong: true });
+    });
+
+    it('R6-9: wrappers around unimplemented dynamic arrays evaluate to #NAME? and omit <v> on export/patch; ROWS/COLUMNS propagate scalar errors', () => {
+        const wb = engine.CreateEmptyWorkbook('DynWrappers', ['Sheet1'], 10, 6);
+        const s = wb.Worksheets[0];
+        for (let r = 1; r <= 5; r++) {
+            engine.SetCell(wb, s.SheetID, `A${r}`, { Value: r * 10 }, false);
+        }
+        engine.SetCell(wb, s.SheetID, 'B1', { Formula: '=ROWS(UNIQUE(A1:A5))' }, false);
+        engine.SetCell(wb, s.SheetID, 'B2', { Formula: '=COLUMNS(UNIQUE(A1:A5))' }, false);
+        engine.SetCell(wb, s.SheetID, 'B3', { Formula: '=COUNTA(UNIQUE(A1:A5))' }, false);
+        engine.SetCell(wb, s.SheetID, 'B4', { Formula: '=IFERROR(SORT(A1:A5), 0)' }, false);
+        engine.SetCell(wb, s.SheetID, 'B5', { Formula: '=ROWS(1/0)' }, false);
+        engine.SetCell(wb, s.SheetID, 'B6', { Formula: '=COLUMNS(1/0)' }, true);
+
+        expect(s.Cells['B1']?.ComputedValue).toBe('#NAME?');
+        expect(s.Cells['B2']?.ComputedValue).toBe('#NAME?');
+        expect(s.Cells['B3']?.ComputedValue).toBe('#NAME?');
+        expect(s.Cells['B4']?.ComputedValue).toBe('#NAME?');
+        expect(s.Cells['B5']?.ComputedValue).toBe('#DIV/0!');
+        expect(s.Cells['B6']?.ComputedValue).toBe('#DIV/0!');
+
+        const decoder = new TextDecoder();
+        const exportedBytes = engine.ExportToXlsxBytes(wb, false);
+        const exportedXml = decoder.decode(engine.ExtractZipArchive(exportedBytes).get('xl/worksheets/sheet1.xml')!);
+        for (const addr of ['B1', 'B2', 'B3', 'B4']) {
+            const cellTagMatch = new RegExp(`<c r="${addr}"[^>]*>[\\s\\S]*?<\\/c>`).exec(exportedXml);
+            expect(cellTagMatch).not.toBeNull();
+            expect(cellTagMatch![0]).not.toContain('<v>');
+        }
+
+        // Also verify PatchXlsxBytes omits <v> when patching a wrapper over an unimplemented dynamic-array function
+        const baseWb = engine.CreateEmptyWorkbook('PatchDynBase', ['Sheet1'], 10, 6);
+        engine.SetCell(baseWb, 'Sheet1', 'A1', { Value: 10 }, true);
+        const seedBytes = engine.ExportToXlsxBytes(baseWb, false);
+        const imported = engine.ImportFromXlsxBytes(seedBytes);
+        engine.SetCell(imported, 'Sheet1', 'C1', { Formula: '=ROWS(UNIQUE(A1:A5))' }, false);
+        engine.SetCell(imported, 'Sheet1', 'C2', { Formula: '=IFERROR(SORT(A1:A5), 0)' }, true);
+        const patchedBytes = engine.PatchXlsxBytes(seedBytes, imported);
+        const patchedXml = decoder.decode(engine.ExtractZipArchive(patchedBytes).get('xl/worksheets/sheet1.xml')!);
+        for (const addr of ['C1', 'C2']) {
+            const cellTagMatch = new RegExp(`<c r="${addr}"[^>]*>[\\s\\S]*?<\\/c>`).exec(patchedXml);
+            expect(cellTagMatch).not.toBeNull();
+            expect(cellTagMatch![0]).not.toContain('<v>');
+        }
+    });
+
+    it('R6 OOXML E7, Sparse COUNTIF/SUMIF (< 50ms), & ValidateExtraFilter RHS: injects XLDAPR into valueMetadata-only metadata.xml, prefixes _xlpm. in LET, and runs sparse A:A COUNTIF/SUMIF fast', () => {
+        const encoder = new TextEncoder();
+        const decoder = new TextDecoder();
+
+        // 1. E7.2 & E7.3: Existing xl/metadata.xml with ONLY valueMetadata AND existing non-XLDAPR cellMetadata + LET _xlpm. prefixing
+        const seedWb = engine.CreateEmptyWorkbook('MetaAndLet', ['Sheet1'], 6, 4);
+        engine.SetCell(seedWb, 'Sheet1', 'A1', { Value: 10 }, false);
+        engine.SetCell(seedWb, 'Sheet1', 'A2', { Value: 20 }, true);
+        const baseXlsx = engine.ExportToXlsxBytes(seedWb, false);
+        const filesValueOnly = engine.ExtractZipArchive(baseXlsx);
+        filesValueOnly.set(
+            'xl/metadata.xml',
+            encoder.encode(
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+                    '<metadata xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+                    '<metadataTypes count="1"><metadataType name="XLRICHVALUE" minSupportedVersion="120000" copy="1" pasteAll="1" valueMeta="1"/></metadataTypes>' +
+                    '<valueMetadata count="1"><bk><rc t="1" v="0"/></bk></valueMetadata>' +
+                    '</metadata>'
+            )
+        );
+        const seedValueOnlyBytes = engine.BuildZipArchive(
+            Array.from(filesValueOnly.entries()).map(([Name, Data]) => ({ Name, Data }))
+        );
+
+        const editWb1 = engine.ImportFromXlsxBytes(seedValueOnlyBytes);
+        engine.SetCell(editWb1, 'Sheet1', 'B1', { Formula: '=UNIQUE(A1:A2)' }, false);
+        engine.SetCell(editWb1, 'Sheet1', 'B2', { Formula: '=LET(x, 1, y, 2, x+y)' }, false);
+        engine.SetCell(
+            editWb1,
+            'Sheet1',
+            'B3',
+            { Formula: '=LET(rate, 5, IF(rate>0, "rate", Sheet1!A1 + SUM(rate)))' },
+            true
+        );
+
+        const patched1 = engine.PatchXlsxBytes(seedValueOnlyBytes, editWb1);
+        const patchedFiles1 = engine.ExtractZipArchive(patched1);
+        const metaXml1 = decoder.decode(patchedFiles1.get('xl/metadata.xml')!);
+        const sheetXml1 = decoder.decode(patchedFiles1.get('xl/worksheets/sheet1.xml')!);
+
+        expect(metaXml1).toContain('name="XLDAPR"');
+        expect(metaXml1).toContain('<futureMetadata name="XLDAPR"');
+        expect(metaXml1).toContain('<cellMetadata count="1"><bk><rc t="2" v="0"/></bk></cellMetadata>');
+        expect(sheetXml1).toContain('<c r="B1" cm="1"><f t="array" ref="B1">_xlfn.UNIQUE(A1:A2)</f></c>');
+        expect(sheetXml1).toContain('<f>_xlfn.LET(_xlpm.x, 1, _xlpm.y, 2, _xlpm.x+_xlpm.y)</f>');
+        expect(sheetXml1).toContain(
+            '<f>_xlfn.LET(_xlpm.rate, 5, IF(_xlpm.rate&gt;0, &quot;rate&quot;, Sheet1!A1 + SUM(_xlpm.rate)))</f>'
+        );
+
+        // Round-trip re-import strips _xlpm. cleanly
+        const reimported1 = engine.ImportFromXlsxBytes(patched1);
+        expect(reimported1.Worksheets[0].Cells['B2']?.Formula).toBe('=LET(x, 1, y, 2, x+y)');
+
+        // Case with an existing non-XLDAPR <cellMetadata> entry -> XLDAPR gets cm="2"!
+        const filesExistingCellMeta = engine.ExtractZipArchive(baseXlsx);
+        filesExistingCellMeta.set(
+            'xl/metadata.xml',
+            encoder.encode(
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+                    '<metadata xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+                    '<metadataTypes count="1"><metadataType name="OTHERMETA" minSupportedVersion="120000" cellMeta="1"/></metadataTypes>' +
+                    '<cellMetadata count="1"><bk><rc t="1" v="0"/></bk></cellMetadata>' +
+                    '</metadata>'
+            )
+        );
+        const seedCellMetaBytes = engine.BuildZipArchive(
+            Array.from(filesExistingCellMeta.entries()).map(([Name, Data]) => ({ Name, Data }))
+        );
+        const editWb2 = engine.ImportFromXlsxBytes(seedCellMetaBytes);
+        engine.SetCell(editWb2, 'Sheet1', 'B1', { Formula: '=UNIQUE(A1:A2)' }, true);
+        const patched2 = engine.PatchXlsxBytes(seedCellMetaBytes, editWb2);
+        const patchedFiles2 = engine.ExtractZipArchive(patched2);
+        expect(decoder.decode(patchedFiles2.get('xl/metadata.xml')!)).toContain(
+            '<cellMetadata count="2"><bk><rc t="1" v="0"/></bk><bk><rc t="2" v="0"/></bk></cellMetadata>'
+        );
+        expect(decoder.decode(patchedFiles2.get('xl/worksheets/sheet1.xml')!)).toContain(
+            '<c r="B1" cm="2"><f t="array" ref="B1">_xlfn.UNIQUE(A1:A2)</f></c>'
+        );
+
+        // 2. Item 5.2: Sparse COUNTIF / SUMIF on A:A with A1000000 = 42 runs in < 50ms
+        const sparseWb = engine.CreateEmptyWorkbook('SparseCountIf', ['Sheet1'], 25, 6);
+        const ss = sparseWb.Worksheets[0];
+        const t0 = performance.now();
+        engine.SetCell(sparseWb, ss.SheetID, 'A1000000', { Value: 42 }, false);
+        engine.SetCell(sparseWb, ss.SheetID, 'B1', { Formula: '=COUNTIF(A:A, ">0")' }, false);
+        engine.SetCell(sparseWb, ss.SheetID, 'C1', { Formula: '=SUMIF(A:A, ">0")' }, false);
+        engine.SetCell(sparseWb, ss.SheetID, 'D1', { Formula: '=COUNTIF(A:A, "")' }, true);
+        const elapsedSparse = performance.now() - t0;
+
+        expect(ss.Cells['B1']?.ComputedValue).toBe(1);
+        expect(ss.Cells['C1']?.ComputedValue).toBe(42);
+        expect(ss.Cells['D1']?.ComputedValue).toBe(1_048_575);
+        expect(elapsedSparse).toBeLessThan(50);
+
+        // 3. ValidateExtraFilter RHS checks
+        expect(ValidateExtraFilter("'sa' = SYSTEM_USER")).toMatchObject({ Valid: false, AccessDenied: true });
+        expect(ValidateExtraFilter("'M' < @@VERSION")).toMatchObject({ Valid: false, AccessDenied: true });
+        expect(ValidateExtraFilter("'dbo' = USER_NAME")).toMatchObject({ Valid: false, AccessDenied: true });
+        expect(ValidateExtraFilter("'x' = SUSER_SNAME")).toMatchObject({ Valid: false, AccessDenied: true });
     });
 });

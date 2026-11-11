@@ -2140,7 +2140,7 @@ export class SlideDeckArtifactViewerComponent
   }
 
   public get LiveSyncUnavailable(): boolean {
-    return this.liveSyncUnavailable || Boolean(this.session?.IsLiveSyncUnavailable);
+    return this.liveSyncUnavailable || Boolean(this.session?.LiveSyncUnavailable);
   }
 
   public get IsEditable(): boolean {
@@ -3396,7 +3396,7 @@ export class SlideDeckArtifactViewerComponent
       this.hasPermissionToEdit,
       hasRemoteBackend,
     );
-    this.liveSyncUnavailable = Boolean(this.session.IsLiveSyncUnavailable);
+    this.liveSyncUnavailable = Boolean(this.session.LiveSyncUnavailable);
 
     this.subs.push(
       this.session.OnLiveSyncUnavailable$.subscribe((unavailable) => {
@@ -3649,10 +3649,13 @@ export class SlideDeckArtifactViewerComponent
       } else {
         this.PermissionVerifyError = false;
         this.AccessRevoked = false;
-        if (this.ConnectionStatus === 'readonly' || this.ConnectionStatus === 'revoked') {
-          this.ConnectionStatus = this.session ? this.session.Status : 'local';
+        const effectiveCanEdit = !this.readonly && !this.LiveSyncUnavailable;
+        if (this.session) {
+          this.session.SetCanEdit(effectiveCanEdit);
+          this.ConnectionStatus = this.session.Status;
+        } else {
+          this.ConnectionStatus = effectiveCanEdit ? 'local' : 'readonly';
         }
-        this.session?.SetCanEdit(this.hasPermissionToEdit);
       }
     } catch (err) {
       LogError(err);
@@ -3713,10 +3716,13 @@ export class SlideDeckArtifactViewerComponent
           } else {
             this.PermissionVerifyError = false;
             this.AccessRevoked = false;
-            if (this.ConnectionStatus === 'readonly' || this.ConnectionStatus === 'revoked') {
-              this.ConnectionStatus = this.session ? this.session.Status : 'local';
+            const effectiveCanEdit = !this.readonly && !this.LiveSyncUnavailable;
+            if (this.session) {
+              this.session.SetCanEdit(effectiveCanEdit);
+              this.ConnectionStatus = this.session.Status;
+            } else {
+              this.ConnectionStatus = effectiveCanEdit ? 'local' : 'readonly';
             }
-            this.session?.SetCanEdit(this.hasPermissionToEdit);
           }
           this.cdr.markForCheck();
         } catch (err) {

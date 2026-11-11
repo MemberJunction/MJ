@@ -1139,7 +1139,20 @@ export class DocumentCollaborationResolver extends ResolverBase {
                 },
                 user
             );
-            if (!convRes.Success || !convRes.Results || convRes.Results.length === 0) {
+            if (!convRes.Success) {
+                LogError(
+                    `DocumentCollaborationResolver.persistAnchoredAgentReplyIfThreadExists failed querying anchored conversations for artifact '${artifactId}': ${
+                        convRes.ErrorMessage || 'RunView returned Success=false'
+                    }`
+                );
+                return;
+            }
+            if (!convRes.Results || convRes.Results.length === 0) {
+                LogError(
+                    `DocumentCollaborationResolver.persistAnchoredAgentReplyIfThreadExists found no anchored conversation threads on artifact '${artifactId}' (conversationId=${
+                        conversationId ?? 'none'
+                    }, anchorQuote=${anchorQuote ? JSON.stringify(anchorQuote.slice(0, 80)) : 'none'}).`
+                );
                 return;
             }
 
@@ -1161,12 +1174,21 @@ export class DocumentCollaborationResolver extends ResolverBase {
                             targetConversationId = row.ID;
                             break;
                         }
-                    } catch {
-                        // Ignore malformed metadata JSON
+                    } catch (parseErr) {
+                        LogError(
+                            `DocumentCollaborationResolver.persistAnchoredAgentReplyIfThreadExists failed parsing AnchorMetadata on conversation '${row.ID}': ${
+                                parseErr instanceof Error ? parseErr.message : String(parseErr)
+                            }`
+                        );
                     }
                 }
             }
             if (!targetConversationId) {
+                LogError(
+                    `DocumentCollaborationResolver.persistAnchoredAgentReplyIfThreadExists could not match an open anchored thread on artifact '${artifactId}' (conversationId=${
+                        conversationId ?? 'none'
+                    }, anchorQuote=${anchorQuote ? JSON.stringify(anchorQuote.slice(0, 80)) : 'none'}).`
+                );
                 return;
             }
 

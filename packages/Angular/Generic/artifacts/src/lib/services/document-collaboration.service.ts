@@ -169,8 +169,38 @@ const VERIFY_FROZEN_BLOCK_SNAPSHOT_QUERY = `
   }
 `;
 
-const RECONNECT_BACKOFF_MS = [1000, 2000, 4000, 8000, 15000] as const;
-const MAX_RECONNECT_ATTEMPTS = 8;
+const RECONNECT_BACKOFF_MS = [1000, 2000, 4000, 8000, 15000, 30000] as const;
+
+/**
+ * Returns `true` strictly when `MintArtifactCollaborationTicket` explicitly reports that the
+ * server's collaboration ticket signing secret (`MJ_ARTIFACT_COLLAB_HMAC_SECRET` /
+ * `MJ_COLLABORATION_TICKET_SECRET`) is unset, too short, or unconfigured.
+ *
+ * Transient failures (network errors such as `Failed to fetch`, HTTP 5xx, GraphQL transport
+ * errors, MJAPI restarts, or generic server errors) return `false` so exponential-backoff
+ * reconnection remains active without locking viewers read-only.
+ */
+function isCollaborationSecretUnconfiguredMessage(message: string | null | undefined): boolean {
+  if (!message) {
+    return false;
+  }
+  const normalized = message.trim();
+  if (!normalized) {
+    return false;
+  }
+  return (
+    /MJ_ARTIFACT_COLLAB_HMAC_SECRET/i.test(normalized) ||
+    /MJ_COLLABORATION_TICKET_SECRET/i.test(normalized) ||
+    /collaboration\s+ticket\s+signing\s+secret/i.test(normalized) ||
+    /signing\s+secret\b[\s\S]*\b(?:must\s+be\s+configured|not\s+configured|unset|shorter\s+than)/i.test(
+      normalized,
+    ) ||
+    /live\s+collaborative\s+editing\s+is\s+disabled/i.test(normalized) ||
+    /\b(?:collab(?:oration)?|hmac|ticket)\b[\s\S]*\b(?:not\s+configured|must\s+be\s+configured|unconfigured)\b/i.test(
+      normalized,
+    )
+  );
+}
 
 export interface CollaborationTicketPayload {
   Success: boolean;
@@ -527,8 +557,8 @@ export class DocumentCollaborationSession {
     return this.liveSyncUnavailable;
   }
 
-  public get IsLiveSyncUnavailable(): boolean {
-    return this.liveSyncUnavailable;
+  public get HasPendingReconnect(): boolean {
+    return this.reconnectTimer !== null;
   }
 
   public get LiveSyncErrorReason(): string {
@@ -606,7 +636,9 @@ export class DocumentCollaborationSession {
       ...userState,
       canEdit,
     });
-    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+    if (this.liveSyncUnavailable) {
+      this.setStatus('readonly');
+    } else if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.setStatus(canEdit ? 'connected' : 'readonly');
     } else if (this.status !== 'connecting') {
       this.setStatus(canEdit ? 'local' : 'readonly');
@@ -895,9 +927,6 @@ export class DocumentCollaborationSession {
           this.setStatus('revoked');
           return;
         }
-        if (resolved.CanEdit === false) {
-          this.canEdit = false;
-        }
         if (resolved.Mode === 'local' || !resolved.WsUrl) {
           if (resolved.LiveSyncUnavailable === true) {
             this.setLiveSyncUnavailable(true, resolved.LiveSyncErrorReason ?? '');
@@ -905,15 +934,26 @@ export class DocumentCollaborationSession {
             this.setStatus('readonly');
             return;
           }
+          this.setLiveSyncUnavailable(false);
+          if (resolved.LiveSyncErrorReason) {
+            this.liveSyncErrorReason = resolved.LiveSyncErrorReason;
+          }
           if (resolved.HasBackend === false && this.transport === 'local-only') {
             this.ensureLocalSeedIfUnseeded();
           }
           this.setStatus(this.canEdit ? 'local' : 'readonly');
-          if (resolved.HasBackend !== false && this.transport === 'websocket') {
+          if (
+            resolved.HasBackend === true ||
+            (resolved.HasBackend !== false && this.transport === 'websocket')
+          ) {
             this.scheduleReconnect();
           }
           return;
         }
+        if (resolved.CanEdit === false) {
+          this.canEdit = false;
+        }
+        this.setLiveSyncUnavailable(false);
         this.transport = 'websocket';
         targetWsUrl = resolved.WsUrl;
       } else if (!targetWsUrl) {
@@ -1475,14 +1515,7 @@ export class DocumentCollaborationSession {
   }
 
   private scheduleReconnect(): void {
-    if (this.destroyed) {
-      return;
-    }
-    if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-      if (this.transport === 'websocket' && !this.hasCompletedInitialSync) {
-        this.setLiveSyncUnavailable(true, 'Maximum collaboration reconnect attempts reached.');
-      }
-      this.statusChanged$.next(this.status);
+    if (this.destroyed || this.liveSyncUnavailable) {
       return;
     }
     this.clearReconnectTimer();
@@ -1492,7 +1525,7 @@ export class DocumentCollaborationSession {
     this.reconnectAttempts++;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      if (!this.destroyed) {
+      if (!this.destroyed && !this.liveSyncUnavailable) {
         void this.Connect(this.configuredWsUrlOverride, this.configuredProvider);
       }
     }, baseDelay + jitter);
@@ -2065,7 +2098,7 @@ export class DocumentCollaborationService {
             Mode: 'local',
             WsUrl: '',
             HasBackend: true,
-            LiveSyncUnavailable: true,
+            LiveSyncUnavailable: false,
             LiveSyncErrorReason: 'Collaboration ticket payload missing.',
           };
         }
@@ -2073,13 +2106,22 @@ export class DocumentCollaborationService {
           return { Mode: 'revoked', WsUrl: '', CanEdit: false, HasBackend: true };
         }
         if (!ticketData.Success || !ticketData.Ticket) {
+          const errorMessage = ticketData.ErrorMessage || '';
+          const secretUnconfigured = isCollaborationSecretUnconfiguredMessage(errorMessage);
           return {
             Mode: 'local',
             WsUrl: '',
-            CanEdit: typeof ticketData.CanEdit === 'boolean' ? ticketData.CanEdit : undefined,
+            CanEdit:
+              secretUnconfigured && typeof ticketData.CanEdit === 'boolean'
+                ? ticketData.CanEdit
+                : undefined,
             HasBackend: true,
-            LiveSyncUnavailable: true,
-            LiveSyncErrorReason: ticketData.ErrorMessage || 'Live collaboration is unavailable.',
+            LiveSyncUnavailable: secretUnconfigured,
+            LiveSyncErrorReason:
+              errorMessage ||
+              (secretUnconfigured
+                ? 'Collaboration ticket signing secret is not configured.'
+                : 'Temporary collaboration ticket error.'),
           };
         }
         const explicitTicketWsUrl = (ticketData.wsUrl ?? ticketData.WsUrl ?? '').trim();
@@ -2099,7 +2141,7 @@ export class DocumentCollaborationService {
             WsUrl: '',
             CanEdit: typeof ticketData.CanEdit === 'boolean' ? ticketData.CanEdit : undefined,
             HasBackend: true,
-            LiveSyncUnavailable: true,
+            LiveSyncUnavailable: false,
             LiveSyncErrorReason: 'Unable to resolve collaboration WebSocket URL.',
           };
         }
@@ -2112,11 +2154,12 @@ export class DocumentCollaborationService {
       } catch (err) {
         LogError(err);
         const reason = err instanceof Error ? err.message : String(err);
+        const secretUnconfigured = isCollaborationSecretUnconfiguredMessage(reason);
         return {
           Mode: 'local',
           WsUrl: '',
           HasBackend: true,
-          LiveSyncUnavailable: true,
+          LiveSyncUnavailable: secretUnconfigured,
           LiveSyncErrorReason: reason,
         };
       }

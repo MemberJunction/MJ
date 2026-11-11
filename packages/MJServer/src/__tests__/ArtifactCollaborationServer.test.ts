@@ -245,7 +245,9 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
     let resolvePermissionsSpy: ReturnType<typeof vi.spyOn>;
     let aiConfigSpy: ReturnType<typeof vi.spyOn>;
 
-    function createMockProvider(): IMetadataProvider {
+    function createMockProvider(options?: {
+        onBeforeVersionSave?: (draft: MockStoredVersion) => Promise<boolean>;
+    }): IMetadataProvider {
         const runViewFn = async (params: RunViewParams) => {
             const filter = typeof params.ExtraFilter === 'string' ? params.ExtraFilter : '';
             const artMatch = filter.match(/\bArtifactID='([^']+)'/);
@@ -359,6 +361,19 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
                             this.ID = `ver-${versions.length + 1}`;
                         },
                         async Save() {
+                            if (options?.onBeforeVersionSave) {
+                                const allow = await options.onBeforeVersionSave({
+                                    ID: this.ID,
+                                    ArtifactID: this.ArtifactID,
+                                    VersionNumber: this.VersionNumber,
+                                    Content: this.Content,
+                                    ContentHash: this.ContentHash,
+                                    UserID: this.UserID
+                                });
+                                if (!allow) {
+                                    return false;
+                                }
+                            }
                             const now = new Date().toISOString();
                             versions.push({
                                 ID: this.ID,
@@ -2869,10 +2884,10 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         }
     });
 
-    it('R5-3c, R5-3d & R5-3e: empty-base reconcile avoids duplication, full agent rewrite replaces authoritatively while preserving PreOutOfBandDocState, and newer-version hydrate performs 3-way merge', async () => {
+    it('R5-3c, R5-3d & R5-3e: empty-base reconcile preserves concurrent human lines without duplication, full agent rewrite rebases concurrent human edits, and newer-version hydrate performs 3-way merge', async () => {
         const server = ArtifactCollaborationServer.Instance;
 
-        // R5-3c: Empty base ("") reconcile never concatenates "Hello\nWorld\nHello\n"
+        // R5-3c / R6-7: Empty base ("") reconcile deduplicates "Hello\n" while preserving human's "World\n"
         versions[0].Content = '';
         const emptyRoom = await server.GetOrCreateRoom(artifactId, editorUser);
         expect(emptyRoom).not.toBeNull();
@@ -2883,9 +2898,10 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         await server.ApplyServerContentMutation(artifactId, 'Hello\n', editorUser, false, '');
         const afterEmptyReconcile = await server.GetRoomContent(artifactId, editorUser);
         expect(afterEmptyReconcile).not.toBe('Hello\nWorld\nHello\n');
-        expect(afterEmptyReconcile).toBe('Hello\n');
+        expect(afterEmptyReconcile).toBe('Hello\nWorld\n');
 
-        // R5-3d: Full agent rewrite ("Alpha.\nBeta.\nGamma.\n" -> "ALPHA formal.\nBETA formal.\nGAMMA formal.\n")
+        // R5-3d / R6-4: Full agent rewrite ("Alpha.\nBeta.\nGamma.\n" -> "ALPHA formal.\nBETA formal.\nGAMMA formal.\n")
+        // rebases human's concurrent edit ("Beta, edited.") without resurrecting stale base lines!
         const rewriteArtId = '33333333-4444-5555-6666-777777777777';
         const baseThreeLines = 'Alpha.\nBeta.\nGamma.\n';
         versions = [
@@ -2915,7 +2931,9 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             false,
             baseThreeLines
         );
-        expect(await server.GetRoomContent(rewriteArtId, editorUser)).toBe(fullAgentRewrite);
+        expect(await server.GetRoomContent(rewriteArtId, editorUser)).toBe(
+            'ALPHA formal.\nBeta, edited.\nGAMMA formal.\n'
+        );
         expect(rwRoom!.PreOutOfBandDocState).toBeInstanceOf(Uint8Array);
         const recoveredPreDoc = new Y.Doc();
         Y.applyUpdate(recoveredPreDoc, rwRoom!.PreOutOfBandDocState!);
@@ -3345,5 +3363,790 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
                 mappingProvider as IMetadataProvider
             )
         ).toEqual([]);
+    });
+
+    it('R6-4: Yjs simulations preserve concurrent human edits across WD1, R2, prepend + full rewrite, 1-line doc without trailing newline, and zero-human-edit full rewrites', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+
+        const runYjsSim = async (
+            simArtifactId: string,
+            baseContent: string,
+            applyHumanEdit: (yText: Y.Text) => void,
+            agentContent: string
+        ): Promise<{ serverText: string; clientText: string }> => {
+            versions = [
+                {
+                    ID: `ver-${simArtifactId}`,
+                    ArtifactID: simArtifactId,
+                    VersionNumber: 1,
+                    Content: baseContent,
+                    ContentHash: `hash-${simArtifactId}`,
+                    UserID: editorUser.ID
+                }
+            ];
+            workingStates.delete(simArtifactId);
+            const room = await server.GetOrCreateRoom(simArtifactId, editorUser);
+            expect(room).not.toBeNull();
+
+            // Simulate a live browser Y.Doc synced with the server room
+            const clientDoc = new Y.Doc();
+            Y.applyUpdate(clientDoc, Y.encodeStateAsUpdate(room!.Doc));
+            clientDoc.transact(() => {
+                applyHumanEdit(clientDoc.getText('content'));
+            }, 'browser-human');
+            Y.applyUpdate(room!.Doc, Y.encodeStateAsUpdate(clientDoc), 'browser-sync');
+
+            const res = await server.ApplyServerContentMutation(
+                simArtifactId,
+                agentContent,
+                editorUser,
+                false,
+                baseContent
+            );
+            expect(res.Success).toBe(true);
+
+            // Sync server's minimal CRDT diff back into the browser Y.Doc
+            Y.applyUpdate(clientDoc, Y.encodeStateAsUpdate(room!.Doc));
+            const serverText = await server.GetRoomContent(simArtifactId, editorUser);
+            const clientText = clientDoc.getText('content').toString();
+            clientDoc.destroy();
+            expect(clientText).toBe(serverText);
+            return { serverText, clientText };
+        };
+
+        // 1. Simulation WD1: 1-line doc ('Helo world.\n'), human appends paragraph, agent fixes typo ('Hello world.\n')
+        const wd1 = await runYjsSim(
+            'r64-wd1-1111-4111-8111-111111111111',
+            'Helo world.\n',
+            (yText) => {
+                yText.insert(yText.length, '\nHuman paragraph.\n');
+            },
+            'Hello world.\n'
+        );
+        expect(wd1.serverText).toBe('Hello world.\n\nHuman paragraph.\n');
+
+        // 2. Simulation R2: 3-line doc rewritten by agent while human edits line 2
+        const r2 = await runYjsSim(
+            'r64-r2a-2222-4222-8222-222222222222',
+            'Line 1\nLine 2\nLine 3\n',
+            (yText) => {
+                const idx = yText.toString().indexOf('Line 2');
+                yText.delete(idx, 'Line 2'.length);
+                yText.insert(idx, 'Human 2');
+            },
+            'Agent 1\nAgent 2\nAgent 3\n'
+        );
+        expect(r2.serverText).toBe('Agent 1\nHuman 2\nAgent 3\n');
+        expect(r2.serverText).not.toContain('Line 1');
+        expect(r2.serverText).not.toContain('Line 3');
+
+        // 2b. Simulation R2 with line-count-changing full rewrite: Human 2 still survives, base lines do NOT
+        const r2Condensed = await runYjsSim(
+            'r64-r2b-2222-4222-8222-222222222223',
+            'Line 1\nLine 2\nLine 3\n',
+            (yText) => {
+                const idx = yText.toString().indexOf('Line 2');
+                yText.delete(idx, 'Line 2'.length);
+                yText.insert(idx, 'Human 2');
+            },
+            'Agent condensed summary.\n'
+        );
+        expect(r2Condensed.serverText).toBe('Agent condensed summary.\nHuman 2\n');
+        expect(r2Condensed.serverText).not.toContain('Line 1');
+        expect(r2Condensed.serverText).not.toContain('Line 3');
+
+        // 3. Prepend + full rewrite: human prepends header at pos 0 while agent rewrites entire base
+        const prependSim = await runYjsSim(
+            'r64-pre-3333-4333-8333-333333333333',
+            'Line 1\nLine 2\n',
+            (yText) => {
+                yText.insert(0, 'Human prepended intro.\n\n');
+            },
+            'Agent 1\nAgent 2\n'
+        );
+        expect(prependSim.serverText).toBe('Human prepended intro.\n\nAgent 1\nAgent 2\n');
+
+        // 4. 1-line doc WITHOUT trailing '\n': human appends paragraph while agent fixes line 1 without '\n'
+        const noTrailingNl = await runYjsSim(
+            'r64-nonl-4444-4444-8444-444444444444',
+            'Helo world.',
+            (yText) => {
+                yText.insert(yText.length, '\n\nHuman paragraph.');
+            },
+            'Hello world.'
+        );
+        expect(noTrailingNl.serverText).toBe('Hello world.\n\nHuman paragraph.');
+
+        // 5. Full rewrite with ZERO human edits: result MUST be incomingText ONLY (never append old base lines!)
+        const zeroHumanRewrite = await runYjsSim(
+            'r64-zero-5555-4555-8555-555555555555',
+            'Old 1\nOld 2\nOld 3\nOld 4\n',
+            () => {
+                // No human edits
+            },
+            'Brand new concise rewrite.\n'
+        );
+        expect(zeroHumanRewrite.serverText).toBe('Brand new concise rewrite.\n');
+    });
+
+    it('R6-7 (1, 3 & 4): multi-Y.Doc relay applies pure deletes via savedDocUpdateB64, awaits sync-state on >256KB docs, scopes relay vectors to exact VersionID, and suppresses compaction echoes per VersionID only', async () => {
+        class R67NodeA1 extends ArtifactCollaborationServer {
+            public constructor() {
+                super();
+            }
+        }
+        class R67NodeB1 extends ArtifactCollaborationServer {
+            public constructor() {
+                super();
+            }
+        }
+        class R67NodeA2 extends ArtifactCollaborationServer {
+            public constructor() {
+                super();
+            }
+        }
+        class R67NodeB2 extends ArtifactCollaborationServer {
+            public constructor() {
+                super();
+            }
+        }
+        class R67NodeB3 extends ArtifactCollaborationServer {
+            public constructor() {
+                super();
+            }
+        }
+
+        // --- 1a. Pure delete on Node A propagates CRDT DeleteSet to Node B via savedDocUpdateB64 ---
+        const bus1 = new InMemoryYjsRelayBus();
+        const relayA1 = new InMemoryYjsRoomRelay(bus1, 'r67-node-a1');
+        const relayB1 = new InMemoryYjsRoomRelay(bus1, 'r67-node-b1');
+        const nodeA1 = new R67NodeA1();
+        const nodeB1 = new R67NodeB1();
+        expect(nodeA1).not.toBe(nodeB1);
+        nodeA1.SetRoomRelay(relayA1);
+        nodeB1.SetRoomRelay(relayB1);
+        nodeA1.SetMetadataProviderOverride(createMockProvider());
+        nodeB1.SetMetadataProviderOverride(createMockProvider());
+
+        try {
+            const artDel = 'a1111111-1111-4111-8111-111111111111';
+            versions = [
+                {
+                    ID: 'ver-del-1',
+                    ArtifactID: artDel,
+                    VersionNumber: 1,
+                    Content: 'Keep line.\nDelete me.\n',
+                    ContentHash: 'hash-del-1',
+                    UserID: editorUser.ID
+                }
+            ];
+            workingStates.delete(artDel);
+
+            const roomA = await nodeA1.GetOrCreateRoom(artDel, editorUser);
+            const roomB = await nodeB1.GetOrCreateRoom(artDel, secondEditorUser);
+            expect(roomA).not.toBeNull();
+            expect(roomB).not.toBeNull();
+
+            // Simulate a client on Node A deleting "Delete me.\n" when `sync-update` was dropped/delayed
+            // (passing origin = 'relay' suppresses live sync-update broadcast so ONLY 'version-saved' carries it!)
+            const clientOnA = new Y.Doc();
+            Y.applyUpdate(clientOnA, Y.encodeStateAsUpdate(roomA!.Doc));
+            const delIdx = clientOnA.getText('content').toString().indexOf('Delete me.\n');
+            clientOnA.getText('content').delete(delIdx, 'Delete me.\n'.length);
+            Y.applyUpdate(roomA!.Doc, Y.encodeStateAsUpdate(clientOnA), 'relay');
+            clientOnA.destroy();
+
+            // Notice: insert state vectors on roomA and roomB are IDENTICAL because a Yjs delete does NOT advance insert clocks!
+            expect(nodeB1.DoesDocContainStateVector(roomB!.Doc, Y.encodeStateVector(roomA!.Doc))).toBe(true);
+
+            // Meanwhile a client on Node B appends "B concurrent tail.\n" locally
+            const clientOnB = new Y.Doc();
+            Y.applyUpdate(clientOnB, Y.encodeStateAsUpdate(roomB!.Doc));
+            clientOnB.getText('content').insert(clientOnB.getText('content').length, 'B concurrent tail.\n');
+            Y.applyUpdate(roomB!.Doc, Y.encodeStateAsUpdate(clientOnB), 'relay');
+            roomB!.DirtyVersion = true;
+            clientOnB.destroy();
+
+            const compactDel = await nodeA1.CompactRoomToArtifactVersion(artDel, editorUser);
+            expect(compactDel.Saved).toBe(true);
+
+            await vi.waitFor(async () => {
+                expect(await nodeB1.GetRoomContent(artDel, secondEditorUser)).toBe(
+                    'Keep line.\nB concurrent tail.\n'
+                );
+            });
+        } finally {
+            await nodeA1.Shutdown();
+            await nodeB1.Shutdown();
+            await relayA1.Shutdown();
+            await relayB1.Shutdown();
+        }
+
+        // --- 1b. Large doc (>262,144 bytes) omits inline savedDocUpdateB64, publishes sync-request, and AWAITS delayed sync-state before reconcile ---
+        const bus2 = new InMemoryYjsRelayBus();
+        const baseRelayA2 = new InMemoryYjsRoomRelay(bus2, 'r67-node-a2');
+        const baseRelayB2 = new InMemoryYjsRoomRelay(bus2, 'r67-node-b2');
+        let syncRequestCount = 0;
+
+        // Wrap Node A's relay so 'sync-state' reply is dispatched asynchronously 40ms AFTER 'sync-request' PublishToRoom resolves
+        const delayedRelayA2: IYjsRoomRelay = {
+            get InstanceID(): string {
+                return baseRelayA2.InstanceID;
+            },
+            PublishToRoom: async (msg) => {
+                if (msg.MessageType === 'sync-state') {
+                    setTimeout(() => {
+                        void baseRelayA2.PublishToRoom(msg);
+                    }, 40);
+                    return;
+                }
+                await baseRelayA2.PublishToRoom(msg);
+            },
+            SubscribeRoom: (artId, handler) =>
+                baseRelayA2.SubscribeRoom(artId, async (msg) => {
+                    if (msg.MessageType === 'sync-request') {
+                        syncRequestCount++;
+                    }
+                    await handler(msg);
+                }),
+            Shutdown: () => baseRelayA2.Shutdown()
+        };
+
+        const nodeA2 = new R67NodeA2();
+        const nodeB2 = new R67NodeB2();
+        expect(nodeA2).not.toBe(nodeB2);
+        nodeA2.SetRoomRelay(delayedRelayA2);
+        nodeB2.SetRoomRelay(baseRelayB2);
+        nodeA2.SetMetadataProviderOverride(createMockProvider());
+        nodeB2.SetMetadataProviderOverride(createMockProvider());
+
+        try {
+            const artLarge = 'a2222222-2222-4222-8222-222222222222';
+            const largeBody = `${'Large paragraph line for >256KB relay threshold test.\n'.repeat(5200)}`;
+            expect(Buffer.byteLength(largeBody, 'utf8')).toBeGreaterThan(262_144);
+            versions = [
+                {
+                    ID: 'ver-large-1',
+                    ArtifactID: artLarge,
+                    VersionNumber: 1,
+                    Content: largeBody,
+                    ContentHash: 'hash-large-1',
+                    UserID: editorUser.ID
+                }
+            ];
+            workingStates.delete(artLarge);
+
+            const roomALarge = await nodeA2.GetOrCreateRoom(artLarge, editorUser);
+            const roomBLarge = await nodeB2.GetOrCreateRoom(artLarge, secondEditorUser);
+            expect(roomALarge).not.toBeNull();
+            expect(roomBLarge).not.toBeNull();
+            syncRequestCount = 0;
+
+            // Unrelayed edit on Node A ("A line.\n") + concurrent edit on Node B ("B line.\n") at end of >256KB doc
+            const docOnA = new Y.Doc();
+            Y.applyUpdate(docOnA, Y.encodeStateAsUpdate(roomALarge!.Doc));
+            docOnA.getText('content').insert(docOnA.getText('content').length, 'A line.\n');
+            Y.applyUpdate(roomALarge!.Doc, Y.encodeStateAsUpdate(docOnA), 'relay');
+            docOnA.destroy();
+
+            const docOnB = new Y.Doc();
+            Y.applyUpdate(docOnB, Y.encodeStateAsUpdate(roomBLarge!.Doc));
+            docOnB.getText('content').insert(docOnB.getText('content').length, 'B line.\n');
+            Y.applyUpdate(roomBLarge!.Doc, Y.encodeStateAsUpdate(docOnB), 'relay');
+            roomBLarge!.DirtyVersion = true;
+            docOnB.destroy();
+
+            const compactLarge = await nodeA2.CompactRoomToArtifactVersion(artLarge, editorUser);
+            expect(compactLarge.Saved).toBe(true);
+
+            await vi.waitFor(async () => {
+                expect(syncRequestCount).toBeGreaterThanOrEqual(1);
+                const mergedLargeB = await nodeB2.GetRoomContent(artLarge, secondEditorUser);
+                const tail = mergedLargeB.slice(largeBody.length);
+                // Exact CRDT merge without redundant text-merge duplication ('A line.\nB line.\nA line.\n' never happens!)
+                expect(tail === 'A line.\nB line.\n' || tail === 'B line.\nA line.\n').toBe(true);
+                expect(tail.match(/A line\.\n/g)?.length).toBe(1);
+                expect(tail.match(/B line\.\n/g)?.length).toBe(1);
+            });
+        } finally {
+            await nodeA2.Shutdown();
+            await nodeB2.Shutdown();
+            await baseRelayA2.Shutdown();
+            await baseRelayB2.Shutdown();
+        }
+
+        // --- 3. Relay vector applies ONLY when latest DB version ID matches relay VersionID ---
+        const bus3 = new InMemoryYjsRelayBus();
+        const relayA3 = new InMemoryYjsRoomRelay(bus3, 'r67-node-a3');
+        const relayB3 = new InMemoryYjsRoomRelay(bus3, 'r67-node-b3');
+        const nodeB3 = new R67NodeB3();
+        nodeB3.SetRoomRelay(relayB3);
+        nodeB3.SetMetadataProviderOverride(createMockProvider());
+
+        try {
+            const artMismatch = 'a3333333-3333-4333-8333-333333333333';
+            versions = [
+                {
+                    ID: 'ver-mm-1',
+                    ArtifactID: artMismatch,
+                    VersionNumber: 1,
+                    Content: 'Base v1.\n',
+                    ContentHash: 'hash-mm-1',
+                    UserID: editorUser.ID
+                }
+            ];
+            workingStates.delete(artMismatch);
+            const roomBMm = await nodeB3.GetOrCreateRoom(artMismatch, secondEditorUser);
+            expect(roomBMm).not.toBeNull();
+            const bSvB64 = BytesToBase64(Y.encodeStateVector(roomBMm!.Doc));
+
+            // DB already moved ahead to v3 (out-of-band agent write) before v2's relay arrives!
+            versions.push(
+                {
+                    ID: 'ver-mm-2',
+                    ArtifactID: artMismatch,
+                    VersionNumber: 2,
+                    Content: 'Base v1.\n',
+                    ContentHash: 'hash-mm-2',
+                    UserID: editorUser.ID
+                },
+                {
+                    ID: 'ver-mm-3',
+                    ArtifactID: artMismatch,
+                    VersionNumber: 3,
+                    Content: 'Base v1.\nOut-of-band v3 paragraph.\n',
+                    ContentHash: 'hash-mm-3',
+                    UserID: editorUser.ID
+                }
+            );
+
+            // Relay carries v2's VersionID + a state vector already contained in roomBMm
+            await relayA3.PublishToRoom({
+                ArtifactID: artMismatch,
+                MessageType: 'version-saved',
+                PayloadBase64: JSON.stringify({ savedStateVectorB64: bSvB64 }),
+                VersionID: 'ver-mm-2',
+                VersionNumber: 2
+            });
+
+            await vi.waitFor(async () => {
+                // Because latest.ID ('ver-mm-3') !== relayVersionId ('ver-mm-2'), Node B runs full text reconcile for v3!
+                expect(await nodeB3.GetRoomContent(artMismatch, secondEditorUser)).toBe(
+                    'Base v1.\nOut-of-band v3 paragraph.\n'
+                );
+            });
+        } finally {
+            await nodeB3.Shutdown();
+            await relayA3.Shutdown();
+            await relayB3.Shutdown();
+        }
+
+        // --- 4. Compaction echo suppression is scoped to in-flight VersionID, NOT entire ArtifactID ---
+        const echoServer = ArtifactCollaborationServer.Instance;
+        const artEcho = 'a4444444-4444-4444-8444-444444444444';
+        versions = [
+            {
+                ID: 'ver-echo-1',
+                ArtifactID: artEcho,
+                VersionNumber: 1,
+                Content: 'Line A\nLine B\n',
+                ContentHash: 'hash-echo-1',
+                UserID: editorUser.ID
+            }
+        ];
+        workingStates.delete(artEcho);
+        const echoProvider = createMockProvider({
+            onBeforeVersionSave: async (draftVersion) => {
+                // 1) Own echo for the in-flight compaction VersionID IS suppressed
+                MJGlobal.Instance.RaiseEvent({
+                    component: null,
+                    event: MJEventType.ComponentEvent,
+                    eventCode: ARTIFACT_VERSION_SAVED_EVENT_CODE,
+                    args: {
+                        ArtifactID: artEcho,
+                        VersionID: draftVersion.ID,
+                        VersionNumber: draftVersion.VersionNumber,
+                        Content: 'SHOULD_BE_SUPPRESSED_SELF_ECHO\n'
+                    }
+                });
+                // 2) Concurrent out-of-band save with a DIFFERENT VersionID on the SAME ArtifactID is NOT suppressed!
+                MJGlobal.Instance.RaiseEvent({
+                    component: null,
+                    event: MJEventType.ComponentEvent,
+                    eventCode: ARTIFACT_VERSION_SAVED_EVENT_CODE,
+                    args: {
+                        ArtifactID: artEcho,
+                        VersionID: 'ver-concurrent-oob-99',
+                        VersionNumber: 99,
+                        Content: 'Line A\nLine B\nConcurrent OOB addition.\n'
+                    }
+                });
+                return true;
+            }
+        });
+        echoServer.SetMetadataProviderOverride(echoProvider);
+        const echoRoom = await echoServer.GetOrCreateRoom(artEcho, editorUser);
+        echoRoom!.Doc.transact(() => {
+            const yText = echoRoom!.Doc.getText('content');
+            yText.delete(0, 'Line A'.length);
+            yText.insert(0, 'Human Line A');
+        }, 'human-echo-edit');
+
+        const echoCompacted = await echoServer.CompactRoomToArtifactVersion(artEcho, editorUser);
+        expect(echoCompacted.Saved).toBe(true);
+        const afterEchoContent = await echoServer.GetRoomContent(artEcho, editorUser);
+        expect(afterEchoContent).not.toContain('SHOULD_BE_SUPPRESSED_SELF_ECHO');
+        expect(afterEchoContent).toContain('Human Line A');
+        expect(afterEchoContent).toContain('Concurrent OOB addition.');
+    });
+
+    it('R6-7 (2 & 5): never records stale art:<id>:v:N vectors before Save() succeeds, rejects mismatched versionId/contentHash vectors, and 3-way merges hydrate on empty base and Restored versions', async () => {
+        class HydrateNode extends ArtifactCollaborationServer {
+            public constructor() {
+                super();
+            }
+        }
+        const node = new HydrateNode();
+
+        try {
+            // --- 2a. Failed compaction Save() NEVER writes art:<id>:v:N, so subsequent OOB v2 reconciles cleanly ---
+            const artFail = 'b1111111-1111-4111-8111-111111111111';
+            versions = [
+                {
+                    ID: 'ver-f-1',
+                    ArtifactID: artFail,
+                    VersionNumber: 1,
+                    Content: 'Initial v1.\n',
+                    ContentHash: 'hash-f-1',
+                    UserID: editorUser.ID
+                }
+            ];
+            workingStates.delete(artFail);
+
+            let failSaves = true;
+            node.SetMetadataProviderOverride(
+                createMockProvider({
+                    onBeforeVersionSave: async () => !failSaves
+                })
+            );
+            const roomFail = await node.GetOrCreateRoom(artFail, editorUser);
+            expect(roomFail).not.toBeNull();
+            roomFail!.Doc.transact(() => {
+                roomFail!.Doc.getText('content').insert(roomFail!.Doc.getText('content').length, 'Human draft.\n');
+            }, 'human-draft');
+
+            const failedCompact = await node.CompactRoomToArtifactVersion(artFail, editorUser);
+            expect(failedCompact.Saved).toBe(false);
+            expect(
+                roomFail!.Doc.getMap('meta').has(`art:${artFail.toLowerCase()}:v:2`)
+            ).toBe(false);
+
+            // Now an out-of-band REST/agent save writes v2 -> must NOT falsely match a stale v2 vector!
+            failSaves = false;
+            MJGlobal.Instance.RaiseEvent({
+                component: null,
+                event: MJEventType.ComponentEvent,
+                eventCode: ARTIFACT_VERSION_SAVED_EVENT_CODE,
+                args: {
+                    ArtifactID: artFail,
+                    VersionID: 'ver-oob-v2',
+                    VersionNumber: 2,
+                    Content: 'Initial v1.\nAgent v2 section.\n'
+                }
+            });
+            const afterOobV2 = await node.GetRoomContent(artFail, editorUser);
+            expect(afterOobV2).toContain('Human draft.');
+            expect(afterOobV2).toContain('Agent v2 section.');
+
+            // --- 2b. Stale or legacy art:<id>:v:N entry in meta with mismatched versionId/contentHash is rejected ---
+            const staleMetaKey = `art:${artFail.toLowerCase()}:v:3`;
+            const currentSvB64 = BytesToBase64(Y.encodeStateVector(roomFail!.Doc));
+            roomFail!.Doc.transact(() => {
+                roomFail!.Doc.getMap('meta').set(
+                    staleMetaKey,
+                    JSON.stringify({
+                        sv: currentSvB64,
+                        versionId: 'ver-stale-other-3',
+                        contentHash: 'stale-hash'
+                    })
+                );
+            }, 'test-stale-meta');
+
+            MJGlobal.Instance.RaiseEvent({
+                component: null,
+                event: MJEventType.ComponentEvent,
+                eventCode: ARTIFACT_VERSION_SAVED_EVENT_CODE,
+                args: {
+                    ArtifactID: artFail,
+                    VersionID: 'ver-real-3',
+                    VersionNumber: 3,
+                    Content: 'Initial v1.\nAgent v2 section.\nRestored v3 appendix.\n'
+                }
+            });
+            expect(await node.GetRoomContent(artFail, editorUser)).toContain('Restored v3 appendix.');
+
+            // --- 5a. Hydrate 3-way merge on EMPTY base ("") ---
+            const artEmptyHydrate = 'b2222222-2222-4222-8222-222222222222';
+            const emptyBaseWorkingDoc = new Y.Doc();
+            emptyBaseWorkingDoc.getText('content').insert(0, 'Human draft from empty base.\n');
+            emptyBaseWorkingDoc.getMap('meta').set('baseContent', '');
+            workingStates.set(artEmptyHydrate, {
+                ID: 'ws-empty-base',
+                ArtifactID: artEmptyHydrate,
+                YjsState: BytesToBase64(Y.encodeStateAsUpdate(emptyBaseWorkingDoc)),
+                LastModifiedByUserID: editorUser.ID,
+                __mj_UpdatedAt: new Date().toISOString()
+            });
+            emptyBaseWorkingDoc.destroy();
+
+            versions = [
+                {
+                    ID: 'ver-empty-hyd-1',
+                    ArtifactID: artEmptyHydrate,
+                    VersionNumber: 1,
+                    Content: 'Agent v1 from empty base.\n',
+                    ContentHash: 'hash-empty-hyd-1',
+                    UserID: editorUser.ID,
+                    __mj_CreatedAt: new Date(Date.now() - 5_000).toISOString(),
+                    __mj_UpdatedAt: new Date(Date.now() - 5_000).toISOString()
+                }
+            ];
+
+            const hydratedEmptyRoom = await node.GetOrCreateRoom(artEmptyHydrate, editorUser);
+            expect(hydratedEmptyRoom).not.toBeNull();
+            const mergedFromEmpty = await node.GetRoomContent(artEmptyHydrate, editorUser);
+            expect(mergedFromEmpty).toContain('Human draft from empty base.');
+            expect(mergedFromEmpty).toContain('Agent v1 from empty base.');
+            expect(hydratedEmptyRoom!.Doc.getMap('meta').get('baseVersionId')).toBe('ver-empty-hyd-1');
+
+            // --- 5b. Hydrate recognizes a Restored DB version whose text equals base (baseVersionId !== latestVersion.ID) ---
+            const artRestored = 'b3333333-3333-4333-8333-333333333333';
+            const workingAtV1 = new Y.Doc();
+            workingAtV1.getText('content').insert(0, 'Original v1 body.\nUncompacted human note.\n');
+            workingAtV1.getMap('meta').set('baseVersionId', 'ver-rest-1');
+            workingAtV1.getMap('meta').set('baseVersionNumber', 1);
+            workingAtV1.getMap('meta').set('baseContent', 'Original v1 body.\n');
+            workingAtV1.getMap('meta').set('versionId', 'ver-rest-1');
+            workingAtV1.getMap('meta').set('versionNumber', 1);
+            workingStates.set(artRestored, {
+                ID: 'ws-rest-1',
+                ArtifactID: artRestored,
+                YjsState: BytesToBase64(Y.encodeStateAsUpdate(workingAtV1)),
+                LastModifiedByUserID: editorUser.ID,
+                // Working state flushed AFTER v3 was restored — must still detect baseVersionId !== ver-rest-3!
+                __mj_UpdatedAt: new Date(Date.now() + 10_000).toISOString()
+            });
+            workingAtV1.destroy();
+
+            versions = [
+                {
+                    ID: 'ver-rest-3',
+                    ArtifactID: artRestored,
+                    VersionNumber: 3,
+                    Content: 'Original v1 body.\n',
+                    ContentHash: 'hash-rest-3',
+                    UserID: editorUser.ID,
+                    __mj_CreatedAt: new Date().toISOString(),
+                    __mj_UpdatedAt: new Date().toISOString()
+                }
+            ];
+
+            const restoredRoom = await node.GetOrCreateRoom(artRestored, editorUser);
+            expect(restoredRoom).not.toBeNull();
+            expect(restoredRoom!.BaseVersionID).toBe('ver-rest-3');
+            expect(restoredRoom!.Doc.getMap('meta').get('baseVersionId')).toBe('ver-rest-3');
+            expect(restoredRoom!.Doc.getMap('meta').get('versionNumber')).toBe(3);
+            expect(await node.GetRoomContent(artRestored, editorUser)).toBe(
+                'Original v1 body.\nUncompacted human note.\n'
+            );
+        } finally {
+            await node.Shutdown();
+        }
+    });
+
+    it('Polish: empty-string HMAC env vars fall through to secondary secrets, and malformed vectors, relay sync-request failures, malformed AnchorMetadata, and unmatched threads log errors', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+        const prevCollab = process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET;
+        const prevTicket = process.env.MJ_COLLABORATION_TICKET_SECRET;
+        const prevFrozen = process.env.MJ_FROZEN_BLOCK_HMAC_SECRET;
+        const prevSnapshot = process.env.MJ_FROZEN_SNAPSHOT_SECRET;
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+        try {
+            // 1. Empty/whitespace primary env vars fall through identically in CheckStartupSecrets() and IssueTicket()
+            server.SetTicketHmacSecret(null);
+            process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET = '   ';
+            process.env.MJ_COLLABORATION_TICKET_SECRET = 'fallback-collab-ticket-secret-at-least-32-bytes!!';
+            process.env.MJ_FROZEN_BLOCK_HMAC_SECRET = '';
+            process.env.MJ_FROZEN_SNAPSHOT_SECRET = 'fallback-frozen-snapshot-secret-at-least-32-bytes!!';
+
+            const status = server.CheckStartupSecrets();
+            expect(status.CollabSecretConfigured).toBe(true);
+            expect(status.FrozenBlockSecretConfigured).toBe(true);
+            expect(status.Warnings).toHaveLength(0);
+
+            const ticket = server.IssueTicket({ ArtifactID: artifactId, User: editorUser });
+            expect(ticket.Ticket.length).toBeGreaterThan(20);
+
+            // 2. Corrupted state vector bytes in DoesDocContainStateVector log via LogError and return false
+            const dummyDoc = new Y.Doc();
+            errorSpy.mockClear();
+            const containsCorrupt = server.DoesDocContainStateVector(
+                dummyDoc,
+                new Uint8Array([255, 255, 255, 255, 255, 255])
+            );
+            dummyDoc.destroy();
+            expect(containsCorrupt).toBe(false);
+            expect(
+                errorSpy.mock.calls.some((args) =>
+                    args.map(String).join(' ').includes('DoesDocContainStateVector failed')
+                )
+            ).toBe(true);
+
+            // 3. Relay sync-request publish failure during version-saved logs via LogError
+            class FailingSyncReqNode extends ArtifactCollaborationServer {
+                public constructor() {
+                    super();
+                }
+            }
+            const bus = new InMemoryYjsRelayBus();
+            const baseRelayA = new InMemoryYjsRoomRelay(bus, 'pol-a');
+            const baseRelayB = new InMemoryYjsRoomRelay(bus, 'pol-b');
+            const failingRelayB: IYjsRoomRelay = {
+                get InstanceID(): string {
+                    return baseRelayB.InstanceID;
+                },
+                PublishToRoom: async (msg) => {
+                    if (msg.MessageType === 'sync-request') {
+                        throw new Error('Simulated Redis publish outage on sync-request');
+                    }
+                    await baseRelayB.PublishToRoom(msg);
+                },
+                SubscribeRoom: (artId, handler) => baseRelayB.SubscribeRoom(artId, handler),
+                Shutdown: () => baseRelayB.Shutdown()
+            };
+            const nodeB = new FailingSyncReqNode();
+            nodeB.SetRoomRelay(failingRelayB);
+            nodeB.SetMetadataProviderOverride(createMockProvider());
+            try {
+                const roomB = await nodeB.GetOrCreateRoom(artifactId, secondEditorUser);
+                expect(roomB).not.toBeNull();
+                errorSpy.mockClear();
+
+                const foreignDoc = new Y.Doc();
+                foreignDoc.getText('content').insert(0, 'Foreign op');
+                const foreignSvB64 = BytesToBase64(Y.encodeStateVector(foreignDoc));
+                foreignDoc.destroy();
+
+                await baseRelayA.PublishToRoom({
+                    ArtifactID: artifactId,
+                    MessageType: 'version-saved',
+                    PayloadBase64: JSON.stringify({ savedStateVectorB64: foreignSvB64 }),
+                    VersionID: 'ver-pol-2',
+                    VersionNumber: 2
+                });
+
+                await vi.waitFor(() => {
+                    expect(
+                        errorSpy.mock.calls.some((args) =>
+                            args
+                                .map(String)
+                                .join(' ')
+                                .includes('Simulated Redis publish outage on sync-request')
+                        )
+                    ).toBe(true);
+                });
+            } finally {
+                await nodeB.Shutdown();
+                await baseRelayA.Shutdown();
+                await baseRelayB.Shutdown();
+            }
+
+            // 4. DocumentCollaborationResolver logs malformed AnchorMetadata JSON and unmatched thread early returns
+            const resolver = new DocumentCollaborationResolver();
+            const baseProv = createMockProvider();
+            const malformedAnchorProvider: Partial<IMetadataProvider> = {
+                ...baseProv,
+                RunView: (async (params: RunViewParams) => {
+                    if (params.EntityName === 'MJ: Conversations') {
+                        return {
+                            Success: true,
+                            Results: [{ ID: 'conv-bad-json', AnchorMetadata: '{not-valid-json' }],
+                            RowCount: 1,
+                            TotalRowCount: 1,
+                            ExecutionTime: 1,
+                            ErrorMessage: '',
+                            UserViewRunID: ''
+                        };
+                    }
+                    return await baseProv.RunView(params);
+                }) as IMetadataProvider['RunView']
+            };
+
+            const activeAgent: Partial<MJAIAgentEntityExtended> = {
+                ID: '98989898-1212-4343-8585-cdcdcdcdcdcd',
+                Name: 'Thread Reviewer',
+                Status: 'Active'
+            };
+            const fakeRun: Partial<MJAIAgentRunEntityExtended> = {
+                ID: '76767676-1212-4343-8585-efefefefefef',
+                AgentID: activeAgent.ID
+            };
+            const loadedSpy = vi.spyOn(AIEngine.Instance, 'Loaded', 'get').mockReturnValue(true);
+            const agentsSpy = vi
+                .spyOn(AIEngine.Instance, 'Agents', 'get')
+                .mockReturnValue([activeAgent as MJAIAgentEntityExtended]);
+            const canRunSpy = vi.spyOn(AIEngine.Instance, 'CanUserRunAgent').mockReturnValue(true);
+            const runCommentSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockResolvedValueOnce({
+                success: true,
+                payload: { reply: 'Reviewed note.' },
+                agentRun: fakeRun as MJAIAgentRunEntityExtended
+            });
+
+            const resolverCtx: AppContext = {
+                dataSource: {} as AppContext['dataSource'],
+                dataSources: [],
+                providers: [{ provider: malformedAnchorProvider as IMetadataProvider, type: 'Read-Write' }],
+                userPayload: {
+                    userRecord: editorUser,
+                    email: editorUser.Email,
+                    sessionId: 'sess-polish-resolver'
+                }
+            };
+
+            try {
+                errorSpy.mockClear();
+                const mentionRes = await resolver.ExecuteAnchoredCommentAgentMention(
+                    artifactId,
+                    '@thread-reviewer',
+                    'comment',
+                    '@thread-reviewer check quote',
+                    'target quote',
+                    resolverCtx
+                );
+                expect(mentionRes.Success).toBe(true);
+                const resolverErrors = errorSpy.mock.calls
+                    .map((args) => args.map(String).join(' '))
+                    .join('\n');
+                expect(resolverErrors).toContain('failed parsing AnchorMetadata');
+                expect(resolverErrors).toContain('could not match an open anchored thread');
+            } finally {
+                runCommentSpy.mockRestore();
+                canRunSpy.mockRestore();
+                agentsSpy.mockRestore();
+                loadedSpy.mockRestore();
+            }
+        } finally {
+            errorSpy.mockRestore();
+            server.SetTicketHmacSecret('test-collab-ticket-hmac-secret-at-least-32-bytes!!');
+            if (prevCollab === undefined) delete process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET;
+            else process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET = prevCollab;
+            if (prevTicket === undefined) delete process.env.MJ_COLLABORATION_TICKET_SECRET;
+            else process.env.MJ_COLLABORATION_TICKET_SECRET = prevTicket;
+            if (prevFrozen === undefined) delete process.env.MJ_FROZEN_BLOCK_HMAC_SECRET;
+            else process.env.MJ_FROZEN_BLOCK_HMAC_SECRET = prevFrozen;
+            if (prevSnapshot === undefined) delete process.env.MJ_FROZEN_SNAPSHOT_SECRET;
+            else process.env.MJ_FROZEN_SNAPSHOT_SECRET = prevSnapshot;
+        }
     });
 });

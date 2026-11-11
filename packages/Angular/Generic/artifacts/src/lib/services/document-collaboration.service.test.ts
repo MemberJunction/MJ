@@ -408,7 +408,7 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
     expect(executeSpy).toHaveBeenCalledTimes(2);
   });
 
-  it('R5-7: sets IsLiveSyncUnavailable and emits true on OnLiveSyncUnavailable$ when MintArtifactCollaborationTicket throws missing HMAC secret or returns Success=false', async () => {
+  it('R5-7 & R6-8: sets LiveSyncUnavailable strictly for explicit unconfigured collaboration secret responses and stops reconnect timer', async () => {
     const throwingSecretProvider = mockGqlProvider({
       ConfigData: { URL: 'https://example.com/graphql' },
       ExecuteGQL: async () => {
@@ -425,8 +425,8 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
     );
     await throwSession.Connect(null, throwingSecretProvider);
 
-    expect(throwSession.IsLiveSyncUnavailable).toBe(true);
     expect(throwSession.LiveSyncUnavailable).toBe(true);
+    expect(throwSession.HasPendingReconnect).toBe(false);
     expect(throwSession.LiveSyncErrorReason).toContain('MJ_ARTIFACT_COLLAB_HMAC_SECRET is not configured');
     expect(throwSession.Status).toBe('readonly');
     expect(throwSession.CanMutateDocument).toBe(false);
@@ -438,6 +438,8 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
     subThrow.unsubscribe();
     throwSession.Destroy();
 
+    const exactServerSecretMsg =
+      'Collaboration ticket signing secret (MJ_ARTIFACT_COLLAB_HMAC_SECRET, >= 32 bytes) must be configured before issuing WebSocket collaboration tickets.';
     const unconfiguredPayloadProvider = mockGqlProvider({
       ConfigData: { URL: 'https://example.com/graphql' },
       ExecuteGQL: async () => ({
@@ -445,7 +447,7 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
           Success: false,
           CanRead: true,
           CanEdit: true,
-          ErrorMessage: 'Live collaboration is unavailable',
+          ErrorMessage: exactServerSecretMsg,
         },
       }),
     });
@@ -459,9 +461,9 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
     );
     await payloadSession.Connect(null, unconfiguredPayloadProvider);
 
-    expect(payloadSession.IsLiveSyncUnavailable).toBe(true);
     expect(payloadSession.LiveSyncUnavailable).toBe(true);
-    expect(payloadSession.LiveSyncErrorReason).toBe('Live collaboration is unavailable');
+    expect(payloadSession.HasPendingReconnect).toBe(false);
+    expect(payloadSession.LiveSyncErrorReason).toBe(exactServerSecretMsg);
     expect(payloadSession.Status).toBe('readonly');
     expect(payloadSession.CanMutateDocument).toBe(false);
 
@@ -494,8 +496,142 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
     );
     await deniedSession.Connect(null, accessDeniedProvider);
     expect(deniedSession.Status).toBe('revoked');
-    expect(deniedSession.IsLiveSyncUnavailable).toBe(false);
+    expect(deniedSession.LiveSyncUnavailable).toBe(false);
+    expect(deniedSession.HasPendingReconnect).toBe(false);
     deniedSession.Destroy();
+  });
+
+  it('R6-8: keeps LiveSyncUnavailable === false, preserves exponential backoff reconnect, and recovers cleanly after transient ticket mint errors (Failed to fetch, 503, Internal server error)', async () => {
+    vi.useFakeTimers();
+    const prevWebSocket = Reflect.get(globalThis, 'WebSocket');
+
+    class FakeCollabSocket {
+      public static readonly CONNECTING = 0;
+      public static readonly OPEN = 1;
+      public static readonly CLOSING = 2;
+      public static readonly CLOSED = 3;
+
+      public static instances: FakeCollabSocket[] = [];
+      public readonly url: string;
+      public readyState = FakeCollabSocket.CONNECTING;
+      public binaryType = 'blob';
+      public onopen: (() => void) | null = null;
+      public onmessage: ((evt: MessageEvent) => void) | null = null;
+      public onclose: ((evt: CloseEvent) => void) | null = null;
+      public onerror: (() => void) | null = null;
+
+      constructor(url: string) {
+        this.url = url;
+        FakeCollabSocket.instances.push(this);
+      }
+
+      public send(_data: Uint8Array): void {
+        // no-op in unit test
+      }
+
+      public close(): void {
+        this.readyState = FakeCollabSocket.CLOSED;
+      }
+    }
+
+    Reflect.set(globalThis, 'WebSocket', FakeCollabSocket);
+
+    try {
+      const transientScenarios: Array<{
+        name: string;
+        failCall: () => Promise<Record<string, object>>;
+        expectedTransientReason: string;
+      }> = [
+        {
+          name: 'network error (Failed to fetch)',
+          failCall: async () => {
+            throw new TypeError('Failed to fetch');
+          },
+          expectedTransientReason: 'Failed to fetch',
+        },
+        {
+          name: 'HTTP 503 Service Unavailable',
+          failCall: async () => {
+            throw new Error('503 Service Unavailable');
+          },
+          expectedTransientReason: '503 Service Unavailable',
+        },
+        {
+          name: 'generic server error payload',
+          failCall: async () => ({
+            MintArtifactCollaborationTicket: {
+              Success: false,
+              ErrorMessage: 'Internal server error',
+            },
+          }),
+          expectedTransientReason: 'Internal server error',
+        },
+      ];
+
+      for (const scenario of transientScenarios) {
+        FakeCollabSocket.instances = [];
+        let attempt = 0;
+        const provider = mockGqlProvider({
+          ConfigData: { URL: 'https://example.com/graphql' },
+          ExecuteGQL: async () => {
+            attempt++;
+            if (attempt === 1) {
+              return scenario.failCall();
+            }
+            return {
+              MintArtifactCollaborationTicket: {
+                Success: true,
+                Ticket: `recovered-ticket-${attempt}`,
+                WsPath: '/collaboration/yjs',
+                CanRead: true,
+                CanEdit: true,
+              },
+            };
+          },
+        });
+
+        const session = service.CreateSession(
+          `art-transient-${scenario.name}`,
+          '# Resilient Doc',
+          { id: 'u1', name: 'Alice' },
+          true,
+          true,
+        );
+        const unavailableEmissions: boolean[] = [];
+        const sub = session.OnLiveSyncUnavailable$.subscribe((val) => unavailableEmissions.push(val));
+
+        await session.Connect(null, provider);
+
+        // Attempt 1 failed transiently: LiveSyncUnavailable MUST stay false and backoff timer MUST stay armed
+        expect(session.LiveSyncUnavailable, scenario.name).toBe(false);
+        expect(unavailableEmissions, scenario.name).toEqual([false]);
+        expect(session.HasPendingReconnect, scenario.name).toBe(true);
+        expect(session.Status, scenario.name).toBe('local');
+        expect(session.CanEdit, scenario.name).toBe(true);
+        expect(session.LiveSyncErrorReason, scenario.name).toBe(scenario.expectedTransientReason);
+        expect(FakeCollabSocket.instances, scenario.name).toHaveLength(0);
+
+        // Advance timer past first backoff window (1000ms + <250ms jitter) -> Attempt 2 mints ticket & opens WS
+        await vi.advanceTimersByTimeAsync(1500);
+        expect(attempt, scenario.name).toBe(2);
+        expect(FakeCollabSocket.instances, scenario.name).toHaveLength(1);
+        expect(FakeCollabSocket.instances[0].url, scenario.name).toContain('ticket=recovered-ticket-2');
+        expect(session.LiveSyncErrorReason, scenario.name).toBe('');
+
+        FakeCollabSocket.instances[0].readyState = FakeCollabSocket.OPEN;
+        FakeCollabSocket.instances[0].onopen?.();
+        expect(session.Status, scenario.name).toBe('connected');
+        expect(session.LiveSyncUnavailable, scenario.name).toBe(false);
+        expect(session.HasPendingReconnect, scenario.name).toBe(false);
+        expect(session.LiveSyncErrorReason, scenario.name).toBe('');
+
+        sub.unsubscribe();
+        session.Destroy();
+      }
+    } finally {
+      Reflect.set(globalThis, 'WebSocket', prevWebSocket);
+      vi.useRealTimers();
+    }
   });
 
   it('R5-6: DispatchAnchoredCommentAgentMention forwards optional conversationId to ExecuteAnchoredCommentAgentMention', async () => {

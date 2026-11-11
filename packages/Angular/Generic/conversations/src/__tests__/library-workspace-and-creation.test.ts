@@ -24,7 +24,7 @@ import { LibraryRemoteDrivePaneComponent } from '../lib/components/library/libra
 import { LibraryExportDriveDialogComponent } from '../lib/components/library/library-create-dialog.component';
 import { TasksFullViewComponent } from '../lib/components/task/tasks-full-view.component';
 import { LibraryCollectionNode, LibraryDriveSummary, LibraryItemSummary, LibraryWorkspaceState } from '../lib/components/library/library.models';
-import { RunView } from '@memberjunction/core';
+import { RunView, RunViewParams, RunViewResult } from '@memberjunction/core';
 import { StorageObjectMetadata } from '@memberjunction/graphql-dataprovider';
 
 interface RecordedEntitySave {
@@ -1223,6 +1223,329 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     expect(view.InspectedGroup).toBeNull();
     expect(view.SelectedTask).toBeNull();
     expect(emittedSelections).toHaveLength(0);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('fetches remaining MJ: Artifact Permissions pages concurrently via Promise.all in bounded windows', async () => {
+    const { component } = buildWorkspaceComponent();
+    component.ArtifactPageSize = 2;
+    component.EnvironmentId = 'env-default';
+
+    const allPermRows = Array.from({ length: 14 }, (_unused, idx) => ({
+      ID: `perm-${idx + 1}`,
+      ArtifactID: `art-shared-${idx + 1}`,
+      UserID: TEST_USER.ID,
+      CanRead: true,
+      CanEdit: idx % 2 === 0,
+      CanShare: false,
+    }));
+
+    let inFlightPermPages = 0;
+    let maxConcurrentPermPages = 0;
+    const requestedPermOffsets: number[] = [];
+
+    const mockRunView = vi.fn(async (params: RunViewParams): Promise<RunViewResult<Record<string, string | boolean>>> => {
+      if (params.EntityName === 'MJ: Artifact Permissions') {
+        inFlightPermPages++;
+        maxConcurrentPermPages = Math.max(maxConcurrentPermPages, inFlightPermPages);
+        const startRow = params.StartRow ?? 0;
+        const maxRows = params.MaxRows ?? 2;
+        requestedPermOffsets.push(startRow);
+        expect(params.SkipTotalRowCount).toBe(true);
+        await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 15));
+        inFlightPermPages--;
+        return {
+          Success: true,
+          TotalRowCount: allPermRows.length,
+          RowCount: Math.min(maxRows, Math.max(0, allPermRows.length - startRow)),
+          ExecutionTime: 1,
+          ErrorMessage: '',
+          UserViewRunID: '',
+          Results: allPermRows.slice(startRow, startRow + maxRows),
+        };
+      }
+      return {
+        Success: true,
+        TotalRowCount: 0,
+        RowCount: 0,
+        ExecutionTime: 1,
+        ErrorMessage: '',
+        UserViewRunID: '',
+        Results: [],
+      };
+    });
+
+    const mockRunViews = vi.fn(async (queries: RunViewParams[]) =>
+      queries.map((q) => {
+        if (q.EntityName === 'MJ: Artifact Permissions' && (q.StartRow ?? 0) === 0) {
+          return {
+            Success: true,
+            TotalRowCount: allPermRows.length,
+            Results: allPermRows.slice(0, 2),
+          };
+        }
+        if (q.EntityName === 'MJ: Artifacts' && q.ExtraFilter?.includes('ID IN (')) {
+          const matched = allPermRows
+            .filter((p) => q.ExtraFilter?.includes(`'${p.ArtifactID}'`))
+            .map((p, idx) => ({
+              ID: p.ArtifactID,
+              Name: `Shared Doc ${p.ArtifactID}`,
+              TypeID: ARTIFACT_TYPES[0].ID,
+              EnvironmentID: 'env-default',
+              UserID: '22222222-2222-4222-8222-222222222222',
+              __mj_UpdatedAt: new Date(Date.UTC(2026, 10, 9, 12, 0, idx)),
+            }));
+          return {
+            Success: true,
+            TotalRowCount: matched.length,
+            Results: matched,
+          };
+        }
+        if (q.EntityName === 'MJ: Artifact Versions') {
+          return {
+            Success: true,
+            Results: ['art-shared-1', 'art-shared-2'].map((artId, idx) => ({
+              ID: `ver-${artId}`,
+              ArtifactID: artId,
+              VersionNumber: 1,
+              Name: `Shared Doc ${artId}`,
+              Description: null,
+              ContentMode: 'Text',
+              MimeType: 'text/markdown',
+              FileName: null,
+              __mj_UpdatedAt: new Date(Date.UTC(2026, 10, 9, 12, 0, idx)),
+            })),
+          };
+        }
+        return { Success: true, TotalRowCount: 0, Results: [] };
+      }),
+    );
+
+    const mockRv: Partial<RunView> = {
+      RunView: mockRunView as RunView['RunView'],
+      RunViews: mockRunViews as RunView['RunViews'],
+    };
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(mockRv as RunView);
+    vi.spyOn(ArtifactMetadataEngine.Instance, 'Config').mockResolvedValue(undefined);
+    vi.spyOn(ArtifactMetadataEngine.Instance, 'ArtifactTypes', 'get').mockReturnValue(ARTIFACT_TYPES);
+
+    const mockProvider: Partial<IMetadataProvider> = { CurrentUser: TEST_USER };
+    Object.assign(component as object, {
+      iconService: { GetArtifactIcon: () => 'fa-solid fa-file-lines' },
+      collectionPermByColId: new Map(),
+      collectionLinksByCollectionAndVersion: new Map(),
+    });
+    Object.defineProperty(component, 'ProviderToUse', {
+      configurable: true,
+      get: () => mockProvider as IMetadataProvider,
+    });
+
+    await component.ReloadWorkspaceData();
+
+    // 14 total rows with pageSize=2 => 6 remaining pages (offsets 2,4,6,8,10,12):
+    // window 1 runs 5 pages concurrently via Promise.all, window 2 runs the 6th page
+    expect(component.LoadError).toBeNull();
+    expect(requestedPermOffsets).toEqual([2, 4, 6, 8, 10, 12]);
+    expect(maxConcurrentPermPages).toBe(5);
+    expect(component.AllItems.map((i) => i.Id)).toEqual(['art-shared-2', 'art-shared-1']);
+    expect(component.LoadedArtifactCount).toBe(2);
+    expect(component.TotalArtifactCount).toBe(14);
+  });
+
+  it('excludes shared artifacts from other environments in TotalArtifactCount and paging', async () => {
+    const { component } = buildWorkspaceComponent();
+    component.EnvironmentId = 'env-alpha';
+    component.ArtifactPageSize = 2;
+
+    const otherOwnerId = '22222222-2222-4222-8222-222222222222';
+    const sharedArtifactCatalog = [
+      {
+        ID: 'art-shared-alpha-1',
+        Name: 'Alpha Shared One',
+        TypeID: ARTIFACT_TYPES[0].ID,
+        EnvironmentID: 'env-alpha',
+        UserID: otherOwnerId,
+        __mj_UpdatedAt: new Date('2026-11-09T14:00:00Z'),
+      },
+      {
+        ID: 'art-shared-beta-1',
+        Name: 'Beta Shared One',
+        TypeID: ARTIFACT_TYPES[0].ID,
+        EnvironmentID: 'env-beta',
+        UserID: otherOwnerId,
+        __mj_UpdatedAt: new Date('2026-11-09T13:00:00Z'),
+      },
+      {
+        ID: 'art-shared-alpha-2',
+        Name: 'Alpha Shared Two',
+        TypeID: ARTIFACT_TYPES[0].ID,
+        EnvironmentID: 'env-alpha',
+        UserID: otherOwnerId,
+        __mj_UpdatedAt: new Date('2026-11-09T12:00:00Z'),
+      },
+      {
+        ID: 'art-shared-beta-2',
+        Name: 'Beta Shared Two',
+        TypeID: ARTIFACT_TYPES[0].ID,
+        EnvironmentID: 'env-beta',
+        UserID: otherOwnerId,
+        __mj_UpdatedAt: new Date('2026-11-09T11:00:00Z'),
+      },
+      {
+        ID: 'art-shared-beta-3',
+        Name: 'Beta Shared Three',
+        TypeID: ARTIFACT_TYPES[0].ID,
+        EnvironmentID: 'env-beta',
+        UserID: otherOwnerId,
+        __mj_UpdatedAt: new Date('2026-11-09T10:00:00Z'),
+      },
+    ];
+
+    const permRows = sharedArtifactCatalog.map((art, idx) => ({
+      ID: `perm-cross-${idx + 1}`,
+      ArtifactID: art.ID,
+      UserID: TEST_USER.ID,
+      CanRead: true,
+      CanEdit: true,
+      CanShare: false,
+    }));
+
+    const recordedArtifactFilters: string[] = [];
+
+    const mockRunViews = vi.fn(async (queries: RunViewParams[]) =>
+      queries.map((q) => {
+        if (q.EntityName === 'MJ: Artifacts') {
+          recordedArtifactFilters.push(q.ExtraFilter ?? '');
+          const startRow = q.StartRow ?? 0;
+
+          // Owned artifacts query
+          if (q.ExtraFilter?.includes(`UserID='${TEST_USER.ID}'`)) {
+            if (startRow > 0) {
+              return { Success: true, TotalRowCount: 1, Results: [] };
+            }
+            return {
+              Success: true,
+              TotalRowCount: 1,
+              Results: [
+                {
+                  ID: 'art-owned-alpha-1',
+                  Name: 'Alpha Owned Doc',
+                  TypeID: ARTIFACT_TYPES[0].ID,
+                  EnvironmentID: 'env-alpha',
+                  UserID: TEST_USER.ID,
+                  __mj_UpdatedAt: new Date('2026-11-09T15:00:00Z'),
+                },
+              ],
+            };
+          }
+
+          // Shared artifacts / unpaged environment verification queries
+          if (q.ExtraFilter?.includes('ID IN (')) {
+            const enforcesAlphaEnv = q.ExtraFilter.includes("EnvironmentID='env-alpha'");
+            const matched = sharedArtifactCatalog.filter((art) => {
+              if (!q.ExtraFilter?.includes(`'${art.ID}'`)) {
+                return false;
+              }
+              // Simulate server EnvironmentID filter for beta-1 & beta-2, and let beta-3 test the defensive client guard too
+              if (art.ID === 'art-shared-beta-3') {
+                return true;
+              }
+              return enforcesAlphaEnv ? art.EnvironmentID === 'env-alpha' : true;
+            });
+            return {
+              Success: true,
+              TotalRowCount: matched.length,
+              Results: matched,
+            };
+          }
+        }
+
+        if (q.EntityName === 'MJ: Artifact Permissions') {
+          const startRow = q.StartRow ?? 0;
+          const maxRows = q.MaxRows ?? 2;
+          return {
+            Success: true,
+            TotalRowCount: permRows.length,
+            Results: permRows.slice(startRow, startRow + maxRows),
+          };
+        }
+
+        if (q.EntityName === 'MJ: Artifact Versions') {
+          const verCandidates = [
+            'art-owned-alpha-1',
+            'art-shared-alpha-1',
+            'art-shared-alpha-2',
+          ].filter((artId) => q.ExtraFilter?.includes(`'${artId}'`));
+          return {
+            Success: true,
+            Results: verCandidates.map((artId) => ({
+              ID: `ver-${artId}`,
+              ArtifactID: artId,
+              VersionNumber: 1,
+              Name: `Version for ${artId}`,
+              Description: null,
+              ContentMode: 'Text',
+              MimeType: 'text/markdown',
+              FileName: null,
+              __mj_UpdatedAt: new Date('2026-11-09T15:00:00Z'),
+            })),
+          };
+        }
+
+        return { Success: true, TotalRowCount: 0, Results: [] };
+      }),
+    );
+
+    const mockRv: Partial<RunView> = {
+      RunViews: mockRunViews as RunView['RunViews'],
+    };
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(mockRv as RunView);
+    vi.spyOn(ArtifactMetadataEngine.Instance, 'Config').mockResolvedValue(undefined);
+    vi.spyOn(ArtifactMetadataEngine.Instance, 'ArtifactTypes', 'get').mockReturnValue(ARTIFACT_TYPES);
+
+    const mockProvider: Partial<IMetadataProvider> = { CurrentUser: TEST_USER };
+    Object.assign(component as object, {
+      iconService: { GetArtifactIcon: () => 'fa-solid fa-file-lines' },
+      collectionPermByColId: new Map(),
+      collectionLinksByCollectionAndVersion: new Map(),
+    });
+    Object.defineProperty(component, 'ProviderToUse', {
+      configurable: true,
+      get: () => mockProvider as IMetadataProvider,
+    });
+
+    await component.ReloadWorkspaceData();
+    expect(component.LoadError).toBeNull();
+
+    // Every MJ: Artifacts query scopes to EnvironmentID='env-alpha' with cross-DB-safe SQL
+    expect(recordedArtifactFilters.length).toBeGreaterThanOrEqual(3);
+    for (const filter of recordedArtifactFilters) {
+      expect(filter).toContain("EnvironmentID='env-alpha'");
+      expect(filter).not.toContain('__mj.');
+      expect(filter).not.toContain('[');
+      expect(filter).not.toContain(']');
+    }
+
+    // 1 owned ('env-alpha') + 1 loaded shared ('art-shared-alpha-1') + 1 unpaged shared ('art-shared-alpha-2') = 3 total
+    // None of the 3 'env-beta' shares are included in AllItems or TotalArtifactCount!
+    expect(component.AllItems.map((i) => i.Id)).toEqual(['art-owned-alpha-1', 'art-shared-alpha-1']);
+    expect(component.LoadedArtifactCount).toBe(2);
+    expect(component.TotalArtifactCount).toBe(3);
+    expect(component.HasMoreArtifacts).toBe(true);
+
+    // Paging loads the remaining 'env-alpha' shared artifact ('art-shared-alpha-2') cleanly
+    await component.LoadMoreArtifacts();
+    expect(component.AllItems.map((i) => i.Id)).toEqual([
+      'art-owned-alpha-1',
+      'art-shared-alpha-1',
+      'art-shared-alpha-2',
+    ]);
+    expect(component.LoadedArtifactCount).toBe(3);
+    expect(component.TotalArtifactCount).toBe(3);
+    expect(component.HasMoreArtifacts).toBe(false);
   });
 
   it('uses 100% --mj-* semantic CSS design tokens with zero hardcoded hex or rgb colors', () => {

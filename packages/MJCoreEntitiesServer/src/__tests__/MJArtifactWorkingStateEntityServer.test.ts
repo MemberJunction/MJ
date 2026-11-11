@@ -5,6 +5,7 @@ import {
     DatabaseProviderBase,
     ExecuteSQLOptions,
     IMetadataProvider,
+    Metadata,
     ProviderConfigDataBase,
     RunViewParams,
     RunViewResult,
@@ -434,7 +435,14 @@ describe('MJArtifactWorkingStateEntityServer & ArtifactWorkingStatePostRunViewHo
         expect(postRes.Results).toEqual([{ ID: 'ws-allowed' }]);
         expect(Object.prototype.hasOwnProperty.call(postRes.Results[0], 'ArtifactID')).toBe(false);
 
-        // Client-side PostRunView invocation (contextUser === undefined) preserves server-vetted rows (DSLC2)
+        // Client-side PostRunView invocation (ProviderType === 'Network' & contextUser === undefined) preserves server-vetted rows (DSLC2)
+        const networkProviderPartial: Partial<IMetadataProvider> = {
+            ProviderType: 'Network',
+            Entities: []
+        };
+        const providerSpy = vi
+            .spyOn(Metadata, 'Provider', 'get')
+            .mockReturnValue(networkProviderPartial as IMetadataProvider);
         const clientRes = await ArtifactWorkingStatePostRunViewHook(
             { EntityName: 'MJ: Artifact Working States', ResultType: 'simple' },
             {
@@ -448,5 +456,62 @@ describe('MJArtifactWorkingStateEntityServer & ArtifactWorkingStatePostRunViewHo
             undefined
         );
         expect(clientRes.Results).toEqual([{ ID: 'ws-client', ArtifactID: allowedArtifactId }]);
+        providerSpy.mockRestore();
+    });
+
+    it('fails closed when contextUser is undefined on a Database or null provider, scrubbing cached rows (R6-3)', async () => {
+        const cachedWorkingStateResults: RunViewResult = {
+            Success: true,
+            Results: [
+                {
+                    ID: 'ws-cached-1',
+                    ArtifactID: allowedArtifactId,
+                    YjsState: 'AQIDBA==',
+                    Content: 'Cached working state content'
+                }
+            ],
+            RowCount: 1,
+            TotalRowCount: 1,
+            ExecutionTime: 0,
+            ErrorMessage: ''
+        };
+
+        const dbProviderPartial: Partial<IMetadataProvider> = {
+            ProviderType: 'Database',
+            Entities: []
+        };
+        const providerSpy = vi
+            .spyOn(Metadata, 'Provider', 'get')
+            .mockReturnValue(dbProviderPartial as IMetadataProvider);
+
+        const scrubbedDbRes = await ArtifactWorkingStatePostRunViewHook(
+            { EntityName: 'MJ: Artifact Working States', ResultType: 'simple' },
+            cachedWorkingStateResults,
+            undefined
+        );
+        expect(scrubbedDbRes.Results).toEqual([]);
+        expect(scrubbedDbRes.RowCount).toBe(0);
+        expect(scrubbedDbRes.TotalRowCount).toBe(0);
+        providerSpy.mockRestore();
+
+        const origProviderDesc = Object.getOwnPropertyDescriptor(Metadata, 'Provider');
+        Object.defineProperty(Metadata, 'Provider', {
+            get: () => null,
+            configurable: true
+        });
+        try {
+            const scrubbedNullRes = await ArtifactWorkingStatePostRunViewHook(
+                { EntityName: 'MJ: Artifact Working States', ResultType: 'simple' },
+                cachedWorkingStateResults,
+                undefined
+            );
+            expect(scrubbedNullRes.Results).toEqual([]);
+            expect(scrubbedNullRes.RowCount).toBe(0);
+            expect(scrubbedNullRes.TotalRowCount).toBe(0);
+        } finally {
+            if (origProviderDesc) {
+                Object.defineProperty(Metadata, 'Provider', origProviderDesc);
+            }
+        }
     });
 });

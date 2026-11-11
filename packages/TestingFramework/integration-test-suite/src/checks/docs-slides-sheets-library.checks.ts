@@ -105,7 +105,7 @@ function extractToolData<T extends object>(res: ArtifactToolResult, contextLabel
 // ─── DSL1: Metadata coherence, Artifact Types, and Library / Chat wiring ──────
 
 async function checkDsl1MetadataAndAppWiring(ctx: IntegrationCheckContext): Promise<void> {
-    // 1. MJ: Artifact Working States entity & FK metadata (IncludeInAPI=true for CodeGen entity class, all 5 Allow*API=false, TrackRecordChanges=false, zero EntityPermission rows)
+    // 1. MJ: Artifact Working States entity & FK metadata (IncludeInAPI=true for CodeGen entity class, all 5 Allow*API=false, TrackRecordChanges=false, Developer/Integration-only CRUD permissions)
     const workingStatesEnt = ctx.Provider.Entities.find((e) => e.Name === 'MJ: Artifact Working States');
     Assert(workingStatesEnt !== undefined, 'Entity "MJ: Artifact Working States" must exist in Provider.Entities');
     AssertEqual(workingStatesEnt!.BaseTable, 'ArtifactWorkingState', 'MJ: Artifact Working States BaseTable');
@@ -126,13 +126,15 @@ async function checkDsl1MetadataAndAppWiring(ctx: IntegrationCheckContext): Prom
     const wsUiPerm = workingStatesEnt!.Permissions.find((p) => resolvePermRoleName(p) === 'UI' && !p.IsDeny);
     AssertEqual(wsUiPerm?.CanRead ?? false, false, 'MJ: Artifact Working States must deny UI role CanRead');
     for (const perm of workingStatesEnt!.Permissions) {
-        if (perm.CanRead && !perm.IsDeny) {
-            const roleName = resolvePermRoleName(perm);
-            Assert(
-                roleName === 'Developer' || roleName === 'Integration',
-                `Only Developer/Integration roles may hold server-internal permission on MJ: Artifact Working States (found '${roleName}')`,
-            );
+        const hasAnyPermission = Boolean(perm.CanRead || perm.CanCreate || perm.CanUpdate || perm.CanDelete);
+        if (!hasAnyPermission || perm.IsDeny) {
+            continue;
         }
+        const roleName = resolvePermRoleName(perm);
+        Assert(
+            roleName === 'Developer' || roleName === 'Integration',
+            `Only Developer/Integration roles may hold server-internal permission on MJ: Artifact Working States (found '${roleName}')`,
+        );
     }
 
     const wsFields = new Set(workingStatesEnt!.Fields.map((f) => f.Name));
@@ -1313,13 +1315,15 @@ async function checkDslc1WorkingStateUnreachableOverGraphQL(ctx: IntegrationChec
     const wsClientUiPerm = wsEnt!.Permissions.find((p) => resolveClientPermRoleName(p) === 'UI' && !p.IsDeny);
     AssertEqual(wsClientUiPerm?.CanRead ?? false, false, 'MJ: Artifact Working States must deny UI role CanRead');
     for (const perm of wsEnt!.Permissions) {
-        if (perm.CanRead && !perm.IsDeny) {
-            const roleName = resolveClientPermRoleName(perm);
-            Assert(
-                roleName === 'Developer' || roleName === 'Integration',
-                `Only Developer/Integration roles may hold server-internal permission on MJ: Artifact Working States (found '${roleName}')`,
-            );
+        const hasAnyPermission = Boolean(perm.CanRead || perm.CanCreate || perm.CanUpdate || perm.CanDelete);
+        if (!hasAnyPermission || perm.IsDeny) {
+            continue;
         }
+        const roleName = resolveClientPermRoleName(perm);
+        Assert(
+            roleName === 'Developer' || roleName === 'Integration',
+            `Only Developer/Integration roles may hold server-internal permission on MJ: Artifact Working States (found '${roleName}')`,
+        );
     }
 
     // 1. Create / Update / Delete mutations are omitted from the GraphQL schema entirely (AllowCreate/Update/DeleteAPI=false)

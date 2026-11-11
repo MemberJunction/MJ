@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { EntityFieldInfo, EntityFieldTSType, EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { EntityFieldInfo, EntityFieldTSType, EntityInfo, IMetadataProvider, RunView, UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import {
   ArtifactPermissionEngine,
@@ -800,5 +800,96 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
     };
     const plainShaExec = await DocumentLiveBlockEngine.Instance.ExecuteBlock(plainShaSpec, viewer, provider);
     expect(plainShaExec.FrozenSnapshot?.SnapshotVerified).toBe(false);
+
+    // R6 Item 5.3: ValidateExtraFilter & ExecuteBlock reject disallowed SQL globals/functions & FLS fields on BOTH LHS and RHS
+    const rhsDisallowedFilters = [
+      "'sa' = SYSTEM_USER",
+      "'M' < @@VERSION",
+      "'dbo' = USER_NAME",
+      "'sa' = SUSER_SNAME",
+      "'sa' = ORIGINAL_LOGIN",
+      "'dbo' = CURRENT_USER",
+      "'dbo' = SESSION_USER",
+      "'srv' = HOST_NAME",
+      "'mj' = APP_NAME",
+      "'prod' = DB_NAME",
+      '1000 < SecretRevenue',
+      "'x' = NonExistentCol",
+    ];
+    const deniedLower = new Set(['secretrevenue']);
+    for (const rhsFilter of rhsDisallowedFilters) {
+      const directValidation = DocumentLiveBlockEngine.Instance.ValidateExtraFilter(rhsFilter, mockEntity, deniedLower);
+      expect(directValidation.Valid).toBe(false);
+
+      const execDenied = await DocumentLiveBlockEngine.Instance.ExecuteBlock(
+        { BlockID: 'blk-rhs-sec', Kind: 'EntityView', Mode: 'Live', EntityName: 'Accounts', ExtraFilter: rhsFilter },
+        viewer,
+        provider,
+      );
+      expect(execDenied.Success).toBe(false);
+      expect(execDenied.AccessDenied).toBe(true);
+    }
+    // Single-quoted literal containing those substrings still passes cleanly
+    expect(
+      DocumentLiveBlockEngine.Instance.ValidateExtraFilter("Name = 'SYSTEM_USER and @@VERSION'", mockEntity, deniedLower).Valid,
+    ).toBe(true);
+
+    // R6 Item 5.4: ArtifactPermissionEngine.ResolvePermissions guards against recursion when GetSystemUser() returns null
+    const sysUserSpy = vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue(null);
+    try {
+      const recursiveArtId = 'abababab-abab-abab-abab-abababababab';
+      let versionQueryEntries = 0;
+      let grantDirectOnRetry = false;
+
+      const dbProvider: IMetadataProvider = {
+        ...provider,
+        ProviderType: 'Database',
+      };
+      const mockRunViewFn = vi.fn().mockImplementation(async (params: { EntityName: string }) => {
+        if (params.EntityName === 'MJ: Artifacts') {
+          return {
+            Success: true,
+            Results: [{ ID: recursiveArtId, UserID: '00000000-0000-0000-0000-000000000001', DelegateEntityID: null, DelegateRecordID: null }],
+          };
+        }
+        if (params.EntityName === 'MJ: Artifact Permissions') {
+          return {
+            Success: true,
+            Results: grantDirectOnRetry
+              ? [{ ID: 'p-1', ArtifactID: recursiveArtId, UserID: viewer.ID, CanRead: true, CanEdit: false, CanDelete: false, CanShare: false }]
+              : [],
+          };
+        }
+        if (params.EntityName === 'MJ: Artifact Versions') {
+          versionQueryEntries++;
+          // Simulate ArtifactVersionPostRunViewHook re-entering ResolvePermissions when queryActor fell back to `viewer`
+          const nested = await ArtifactPermissionEngine.Instance.ResolvePermissions(dbProvider, recursiveArtId, viewer);
+          expect(nested.CanRead).toBe(false);
+          expect(nested.Source).toBe('Denied');
+          expect(nested.Reason).toContain('Recursive artifact permission resolution detected');
+          return { Success: true, Results: [] };
+        }
+        return { Success: true, Results: [] };
+      });
+      const rvInstance = new RunView();
+      vi.spyOn(rvInstance, 'RunView').mockImplementation(mockRunViewFn);
+      const fromProviderSpy = vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(rvInstance);
+      try {
+        const outerResult = await ArtifactPermissionEngine.Instance.ResolvePermissions(dbProvider, recursiveArtId, viewer);
+        expect(versionQueryEntries).toBe(1);
+        expect(outerResult.CanRead).toBe(false);
+        expect(outerResult.Source).toBe('Denied');
+
+        // Verify _inFlightResolutions was cleaned up in finally so subsequent calls succeed
+        grantDirectOnRetry = true;
+        const retryResult = await ArtifactPermissionEngine.Instance.ResolvePermissions(dbProvider, recursiveArtId, viewer);
+        expect(retryResult.CanRead).toBe(true);
+        expect(retryResult.Source).toBe('ArtifactPermission');
+      } finally {
+        fromProviderSpy.mockRestore();
+      }
+    } finally {
+      sysUserSpy.mockRestore();
+    }
   });
 });

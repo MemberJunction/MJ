@@ -952,7 +952,7 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
     }
   });
 
-  it('R5-7 (Viewers): sets LiveSyncUnavailable === true across Markdown, SlideDeck, and Spreadsheet viewers when MintArtifactCollaborationTicket throws or returns Success=false', async () => {
+  it('R5-7 & R6-8 (Viewers): sets LiveSyncUnavailable === true across Markdown, SlideDeck, and Spreadsheet viewers strictly when collaboration secret is unconfigured', async () => {
     const scenarios: Array<{
       name: string;
       executeGql: (query: string) => Promise<Record<string, object>>;
@@ -976,7 +976,7 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
         },
       },
       {
-        name: 'Success=false with CanRead=true payload',
+        name: 'Success=false with explicit signing secret unconfigured payload',
         executeGql: async (query: string) => {
           if (query.includes('ResolveArtifactPermissions')) {
             return {
@@ -995,7 +995,8 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
               Success: false,
               CanRead: true,
               CanEdit: true,
-              ErrorMessage: 'Live collaboration is unavailable',
+              ErrorMessage:
+                'Collaboration ticket signing secret (MJ_ARTIFACT_COLLAB_HMAC_SECRET, >= 32 bytes) must be configured before issuing WebSocket collaboration tickets.',
             },
           };
         },
@@ -1052,7 +1053,8 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
         [],
       );
       await new Promise((r) => setTimeout(r, 0));
-      expect(mdViewer.CollaborationSession?.IsLiveSyncUnavailable, scenario.name).toBe(true);
+      expect(mdViewer.CollaborationSession?.LiveSyncUnavailable, scenario.name).toBe(true);
+      expect(mdViewer.CollaborationSession?.HasPendingReconnect, scenario.name).toBe(false);
       expect(mdViewer.LiveSyncUnavailable, scenario.name).toBe(true);
       expect(mdViewer.CanUserEdit, scenario.name).toBe(false);
       mdViewer.ngOnDestroy();
@@ -1076,7 +1078,8 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
         ['88888888-8888-4888-8888-888888888888', deckJson],
       );
       await new Promise((r) => setTimeout(r, 0));
-      expect(deckViewer.CollaborationSession?.IsLiveSyncUnavailable, scenario.name).toBe(true);
+      expect(deckViewer.CollaborationSession?.LiveSyncUnavailable, scenario.name).toBe(true);
+      expect(deckViewer.CollaborationSession?.HasPendingReconnect, scenario.name).toBe(false);
       expect(deckViewer.LiveSyncUnavailable, scenario.name).toBe(true);
       expect(deckViewer.IsEditable, scenario.name).toBe(false);
       deckViewer.ngOnDestroy();
@@ -1108,11 +1111,252 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
         Reflect.get(sheetViewer, 'initializeWorkbookSession') as () => Promise<void>
       ).call(sheetViewer);
       await new Promise((r) => setTimeout(r, 0));
-      expect(sheetViewer.CollaborationSession?.IsLiveSyncUnavailable, scenario.name).toBe(true);
+      expect(sheetViewer.CollaborationSession?.LiveSyncUnavailable, scenario.name).toBe(true);
+      expect(sheetViewer.CollaborationSession?.HasPendingReconnect, scenario.name).toBe(false);
       expect(sheetViewer.LiveSyncUnavailable, scenario.name).toBe(true);
       expect(sheetViewer.CanEdit, scenario.name).toBe(false);
       expect(detectChangesSpy).toHaveBeenCalled();
       sheetViewer.ngOnDestroy();
+    }
+  });
+
+  it('R6-8 (Viewers): transient ticket mint failures (Failed to fetch, 503, Internal server error) keep LiveSyncUnavailable === false across all 3 viewers and recover editability on next backoff retry', async () => {
+    vi.useFakeTimers();
+    const originalWebSocket = Reflect.get(globalThis, 'WebSocket');
+
+    class FakeRecoverableSocket {
+      public static readonly CONNECTING = 0;
+      public static readonly OPEN = 1;
+      public static readonly CLOSING = 2;
+      public static readonly CLOSED = 3;
+
+      public static instances: FakeRecoverableSocket[] = [];
+      public readonly url: string;
+      public readyState = FakeRecoverableSocket.CONNECTING;
+      public binaryType = 'blob';
+      public onopen: (() => void) | null = null;
+      public onmessage: ((evt: MessageEvent) => void) | null = null;
+      public onclose: ((evt: CloseEvent) => void) | null = null;
+      public onerror: (() => void) | null = null;
+
+      constructor(url: string) {
+        this.url = url;
+        FakeRecoverableSocket.instances.push(this);
+      }
+
+      public send(_data: Uint8Array): void {
+        // no-op
+      }
+
+      public close(): void {
+        this.readyState = FakeRecoverableSocket.CLOSED;
+      }
+    }
+
+    Reflect.set(globalThis, 'WebSocket', FakeRecoverableSocket);
+
+    const deliverInitialSyncFrame = (sock: FakeRecoverableSocket, content: string): void => {
+      sock.readyState = FakeRecoverableSocket.OPEN;
+      sock.onopen?.();
+      const serverDoc = new Y.Doc();
+      serverDoc.getText('content').insert(0, content);
+      const step2Encoder = encoding.createEncoder();
+      encoding.writeVarUint(step2Encoder, 0);
+      syncProtocol.writeSyncStep2(step2Encoder, serverDoc);
+      sock.onmessage?.({ data: encoding.toUint8Array(step2Encoder).buffer } as MessageEvent);
+    };
+
+    try {
+      const transientFailures: Array<{
+        name: string;
+        failTicket: () => Promise<Record<string, object>>;
+      }> = [
+        {
+          name: 'Failed to fetch',
+          failTicket: async () => {
+            throw new TypeError('Failed to fetch');
+          },
+        },
+        {
+          name: '503 Service Unavailable',
+          failTicket: async () => {
+            throw new Error('503 Service Unavailable');
+          },
+        },
+        {
+          name: 'Internal server error payload',
+          failTicket: async () => ({
+            MintArtifactCollaborationTicket: {
+              Success: false,
+              ErrorMessage: 'Internal server error',
+            },
+          }),
+        },
+      ];
+
+      for (const scenario of transientFailures) {
+        const collabService = new DocumentCollaborationService();
+        const injector = Injector.create({
+          providers: [
+            {
+              provide: ChangeDetectorRef,
+              useValue: { markForCheck: () => {}, detectChanges: () => {} },
+            },
+            { provide: DocumentCollaborationService, useValue: collabService },
+            { provide: DocumentImportExportService, useValue: new DocumentImportExportService() },
+            { provide: SlideDeckExportService, useValue: new SlideDeckExportService() },
+            { provide: ArtifactFileService, useValue: null },
+            { provide: MJNotificationService, useValue: { CreateSimpleNotification: () => {} } },
+          ],
+        });
+
+        const mockUser = Object.create(null) as UserInfo;
+        Object.assign(mockUser, {
+          ID: '99999999-9999-4999-8999-999999999999',
+          Name: 'Alice',
+          Email: 'alice@example.com',
+        });
+
+        const makeRecoveringProvider = (): IMetadataProvider => {
+          let mintAttempts = 0;
+          const prov = Object.create(null) as IMetadataProvider;
+          return Object.assign(prov, {
+            CurrentUser: mockUser,
+            Entities: [],
+            ConfigData: { URL: 'https://example.com/graphql' },
+            ExecuteGQL: async (query: string) => {
+              if (query.includes('ResolveArtifactPermissions')) {
+                return {
+                  ResolveArtifactPermissions: {
+                    ArtifactID: '88888888-8888-4888-8888-888888888888',
+                    CanRead: true,
+                    CanEdit: true,
+                    CanDelete: false,
+                    CanShare: false,
+                    Source: 'Owner',
+                  },
+                };
+              }
+              mintAttempts++;
+              if (mintAttempts === 1) {
+                return scenario.failTicket();
+              }
+              return {
+                MintArtifactCollaborationTicket: {
+                  Success: true,
+                  Ticket: `tkt-ok-${mintAttempts}`,
+                  WsPath: '/collaboration/yjs',
+                  CanRead: true,
+                  CanEdit: true,
+                },
+              };
+            },
+          });
+        };
+
+        // 1. MarkdownArtifactViewerComponent
+        FakeRecoverableSocket.instances = [];
+        const mdViewer = runInInjectionContext(injector, () => new MarkdownArtifactViewerComponent());
+        mdViewer.Provider = makeRecoveringProvider();
+        mdViewer.readonly = false;
+        const mdVer = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+        Object.defineProperties(mdVer, {
+          ID: { value: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2', enumerable: true },
+          ArtifactID: { value: '88888888-8888-4888-8888-888888888888', enumerable: true },
+          VersionNumber: { value: 1, enumerable: true },
+          Content: { value: '# Resilient Markdown', enumerable: true },
+        });
+        mdViewer.artifactVersion = mdVer;
+        mdViewer.ngOnInit();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(mdViewer.LiveSyncUnavailable, `md/${scenario.name}`).toBe(false);
+        expect(mdViewer.CollaborationSession?.HasPendingReconnect, `md/${scenario.name}`).toBe(true);
+        expect(mdViewer.HasEditPermission, `md/${scenario.name}`).toBe(true);
+
+        await vi.advanceTimersByTimeAsync(1500);
+        expect(FakeRecoverableSocket.instances, `md/${scenario.name}`).toHaveLength(1);
+        deliverInitialSyncFrame(FakeRecoverableSocket.instances[0], '# Resilient Markdown');
+        expect(mdViewer.LiveSyncUnavailable, `md/${scenario.name}`).toBe(false);
+        expect(mdViewer.CollaborationSession?.LiveSyncErrorReason, `md/${scenario.name}`).toBe('');
+        expect(mdViewer.CanUserEdit, `md/${scenario.name}`).toBe(true);
+        mdViewer.ngOnDestroy();
+
+        // 2. SlideDeckArtifactViewerComponent
+        FakeRecoverableSocket.instances = [];
+        const deckViewer = runInInjectionContext(
+          injector,
+          () => new SlideDeckArtifactViewerComponent(),
+        );
+        deckViewer.Provider = makeRecoveringProvider();
+        deckViewer.readonly = false;
+        const deckJson = SlideDeckEngine.Instance.SerializeDeckSpec(
+          SlideDeckEngine.Instance.CreateDefaultDeck('Resilient Deck'),
+        );
+        const deckVer = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+        Object.defineProperties(deckVer, {
+          ID: { value: 'cccccccc-cccc-4ccc-8ccc-ccccccccccc2', enumerable: true },
+          ArtifactID: { value: '88888888-8888-4888-8888-888888888888', enumerable: true },
+          VersionNumber: { value: 1, enumerable: true },
+          Name: { value: 'Resilient Deck', enumerable: true },
+          Content: { value: deckJson, enumerable: true },
+        });
+        deckViewer.artifactVersion = deckVer;
+        deckViewer.ngOnInit();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(deckViewer.LiveSyncUnavailable, `deck/${scenario.name}`).toBe(false);
+        expect(deckViewer.CollaborationSession?.HasPendingReconnect, `deck/${scenario.name}`).toBe(true);
+
+        await vi.advanceTimersByTimeAsync(1500);
+        expect(FakeRecoverableSocket.instances, `deck/${scenario.name}`).toHaveLength(1);
+        deliverInitialSyncFrame(FakeRecoverableSocket.instances[0], deckJson);
+        expect(deckViewer.LiveSyncUnavailable, `deck/${scenario.name}`).toBe(false);
+        expect(deckViewer.CollaborationSession?.LiveSyncErrorReason, `deck/${scenario.name}`).toBe('');
+        expect(deckViewer.IsEditable, `deck/${scenario.name}`).toBe(true);
+        deckViewer.ngOnDestroy();
+
+        // 3. SpreadsheetArtifactViewerComponent
+        FakeRecoverableSocket.instances = [];
+        const sheetViewer = runInInjectionContext(
+          injector,
+          () => new SpreadsheetArtifactViewerComponent(),
+        );
+        sheetViewer.Provider = makeRecoveringProvider();
+        sheetViewer.readonly = false;
+        const wbJson = SpreadsheetEngine.Instance.SerializeWorkbook(
+          SpreadsheetEngine.Instance.CreateEmptyWorkbook('Resilient Sheet'),
+        );
+        const wbVer = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+        Object.defineProperties(wbVer, {
+          ID: { value: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2', enumerable: true },
+          ArtifactID: { value: '88888888-8888-4888-8888-888888888888', enumerable: true },
+          VersionNumber: { value: 1, enumerable: true },
+          Name: { value: 'Resilient Sheet', enumerable: true },
+          Configuration: { value: null, enumerable: true },
+          ContentMode: { value: 'Inline', enumerable: true },
+          Content: { value: wbJson, enumerable: true },
+        });
+        sheetViewer.artifactVersion = wbVer;
+        await (
+          Reflect.get(sheetViewer, 'initializeWorkbookSession') as () => Promise<void>
+        ).call(sheetViewer);
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(sheetViewer.LiveSyncUnavailable, `sheet/${scenario.name}`).toBe(false);
+        expect(sheetViewer.CollaborationSession?.HasPendingReconnect, `sheet/${scenario.name}`).toBe(true);
+
+        await vi.advanceTimersByTimeAsync(1500);
+        expect(FakeRecoverableSocket.instances, `sheet/${scenario.name}`).toHaveLength(1);
+        deliverInitialSyncFrame(FakeRecoverableSocket.instances[0], wbJson);
+        expect(sheetViewer.LiveSyncUnavailable, `sheet/${scenario.name}`).toBe(false);
+        expect(sheetViewer.CollaborationSession?.LiveSyncErrorReason, `sheet/${scenario.name}`).toBe('');
+        expect(sheetViewer.CanEdit, `sheet/${scenario.name}`).toBe(true);
+        sheetViewer.ngOnDestroy();
+      }
+    } finally {
+      Reflect.set(globalThis, 'WebSocket', originalWebSocket);
+      vi.useRealTimers();
     }
   });
 });

@@ -49,6 +49,8 @@ export interface ArtifactVersionSavedEventPayload {
     UpdatedByUserID?: string;
     OriginServerID?: string;
     SavedStateVectorB64?: string;
+    SavedDocUpdateB64?: string;
+    SavedContentHash?: string;
 }
 
 type ExtractedAttributeItem = Parameters<typeof ArtifactExtractor.SerializeForStorage>[0][number];
@@ -226,12 +228,13 @@ export const ArtifactVersionPreRunViewHook: PreRunViewHook = (
     params: RunViewParams,
     contextUser: UserInfo | undefined
 ): RunViewParams => {
+    const provider = resolveMetadataProvider(undefined, contextUser);
     if (
         !params ||
         INTERNAL_VERSION_SECURITY_QUERY_PARAMS.has(params) ||
         resolveTargetEntityName(params) !== 'MJ: Artifact Versions' ||
         isServerSystemUser(contextUser) ||
-        !contextUser
+        (!contextUser && provider !== null && provider.ProviderType !== 'Database')
     ) {
         return params;
     }
@@ -269,22 +272,42 @@ export const ArtifactVersionPostRunViewHook: PostRunViewHook = async (
         return results;
     }
 
+    const provider = resolveMetadataProvider(undefined, contextUser);
+
     if (!contextUser) {
-        // Client-side providers (e.g. GraphQLDataProvider in hybrid Node processes) invoke
+        // Client-side providers (e.g. GraphQLDataProvider where ProviderType === 'Network') invoke
         // PostRunView hooks with contextUser === undefined after MJServer has already enforced
-        // server-side CanRead (`DSLC2`).DatabaseProviderBase always rejects missing contextUser
-        // in CheckUserReadPermissions before PostRunView ever executes.
-        if (shouldStripSyntheticArtifactId && Array.isArray(results.Results)) {
-            return {
-                ...results,
-                Results: results.Results.map(stripSyntheticArtifactId)
-            };
+        // server-side CanRead (`DSLC2`). On a server DatabaseProviderBase (`ProviderType === 'Database'`)
+        // or when no provider is configured, missing `contextUser` MUST fail closed (`R6-3`) because
+        // `DatabaseProviderBase.InternalRunView` falls back to `this.CurrentUser` and
+        // `ProviderBase.RunView`'s `LocalCacheManager` cache-hit path skips `CheckUserReadPermissions`.
+        if (provider !== null && provider.ProviderType !== 'Database') {
+            if (shouldStripSyntheticArtifactId && Array.isArray(results.Results)) {
+                return {
+                    ...results,
+                    Results: results.Results.map(stripSyntheticArtifactId)
+                };
+            }
+            return results;
         }
-        return results;
+        return {
+            ...results,
+            Results: [],
+            RowCount: 0,
+            TotalRowCount: 0
+        };
     }
 
-    const provider = resolveMetadataProvider(undefined, contextUser);
-    if (!provider || provider.ProviderType !== 'Database') {
+    if (!provider) {
+        return {
+            ...results,
+            Results: [],
+            RowCount: 0,
+            TotalRowCount: 0
+        };
+    }
+
+    if (provider.ProviderType !== 'Database') {
         if (shouldStripSyntheticArtifactId && Array.isArray(results.Results)) {
             return {
                 ...results,

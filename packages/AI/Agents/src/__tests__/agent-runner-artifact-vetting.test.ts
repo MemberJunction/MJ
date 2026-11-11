@@ -14,6 +14,7 @@ import {
     MJAIAgentRunEntityExtended,
 } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
     ArtifactPermissionEngine,
@@ -745,11 +746,18 @@ describe('AgentRunner — Shared conversation artifact vetting & read visibility
         expect(gathered[0].artifactId).toBe(READABLE_ARTIFACT_ID);
     });
 
-    it('grants CanRead on forked artifacts to 3rd-party participants in MJ: Conversation Details and surfaces warning when a grant Save() fails (D3)', async () => {
+    it('grants CanRead on forked artifacts to 3rd-party participants in MJ: Conversation Details and surfaces human-readable names when a grant Save() fails (D3)', async () => {
         const participantD = createUser('dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'Participant Dan', 'dan@example.com');
+        vi.spyOn(UserCache.Instance, 'Users', 'get').mockReturnValue([
+            userA,
+            userB,
+            convOwnerC,
+            participantD,
+        ]);
         const createdHeaders: MockArtifactHeaderDraft[] = [];
         const savedVersions: MockArtifactVersionDraft[] = [];
         const savedPermissions: MockArtifactPermissionDraft[] = [];
+        let capturedParticipantParams: RunViewParams | undefined;
 
         const provider = asMetadataProvider({
             Entities: [],
@@ -768,6 +776,7 @@ describe('AgentRunner — Shared conversation artifact vetting & read visibility
                 if (params.EntityName === 'MJ: Conversation Details') {
                     const filterStr = typeof params.ExtraFilter === 'string' ? params.ExtraFilter : '';
                     if (filterStr.includes('ConversationID=')) {
+                        capturedParticipantParams = params;
                         return {
                             Success: true,
                             Results: [
@@ -892,11 +901,191 @@ describe('AgentRunner — Shared conversation artifact vetting & read visibility
             provider
         );
 
-        // userA and convOwnerC succeeded; participantD failed and surfaced warning in Comments!
+        // Participant RunView uses MaxRows: 200 and SkipTotalRowCount: true
+        expect(capturedParticipantParams?.MaxRows).toBe(200);
+        expect(capturedParticipantParams?.SkipTotalRowCount).toBe(true);
+
+        // userA and convOwnerC succeeded; participantD failed and surfaced human-readable display name (NEVER raw GUIDs) in Comments!
         expect(savedPermissions.map((p) => p.UserID).sort()).toEqual([userA.ID, convOwnerC.ID].sort());
         expect(savedVersions[0]?.Comments).toContain('Warning:');
-        expect(savedVersions[0]?.Comments).toContain(participantD.ID);
-        expect(createdHeaders[0]?.Comments).toContain(participantD.ID);
+        expect(savedVersions[0]?.Comments).toContain('Participant Dan');
+        expect(savedVersions[0]?.Comments).not.toContain(participantD.ID);
+        expect(savedVersions[0]?.Comments).not.toContain(userB.ID);
+        expect(createdHeaders[0]?.Comments).toContain('Participant Dan');
+        expect(createdHeaders[0]?.Comments).not.toContain(participantD.ID);
+        expect(createdHeaders[0]?.Comments).not.toContain(userB.ID);
+    });
+
+    it('logs errors when participant RunView or warning-comment artifact.Save() fails and falls back to row User or "participant" (D3)', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        vi.spyOn(UserCache.Instance, 'Users', 'get').mockReturnValue([]);
+
+        const uncachedRowUser = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+        const mysteryOwnerId = 'abababab-abab-4bab-8bab-abababababab';
+        let participantQueryShouldFail = true;
+        let headerSaveCallCount = 0;
+        const createdHeaders: MockArtifactHeaderDraft[] = [];
+
+        const makeProvider = (): IMetadataProvider =>
+            asMetadataProvider({
+                Entities: [],
+                RunView: async (params: RunViewParams) => {
+                    if (params.EntityName === 'MJ: Artifacts') {
+                        return {
+                            Success: true,
+                            Results: [{ ID: SOURCE_ARTIFACT_ID, UserID: mysteryOwnerId, DelegateEntityID: null, DelegateRecordID: null }],
+                            RowCount: 1,
+                            TotalRowCount: 1,
+                            ExecutionTime: 1,
+                            ErrorMessage: '',
+                            UserViewRunID: '',
+                        };
+                    }
+                    if (params.EntityName === 'MJ: Conversation Details') {
+                        const filterStr = typeof params.ExtraFilter === 'string' ? params.ExtraFilter : '';
+                        if (filterStr.includes('ConversationID=')) {
+                            if (participantQueryShouldFail) {
+                                return {
+                                    Success: false,
+                                    Results: [],
+                                    RowCount: 0,
+                                    TotalRowCount: 0,
+                                    ExecutionTime: 1,
+                                    ErrorMessage: 'Simulated participant query failure',
+                                    UserViewRunID: '',
+                                };
+                            }
+                            return {
+                                Success: true,
+                                Results: [{ UserID: uncachedRowUser, User: 'Row Eve' }],
+                                RowCount: 1,
+                                TotalRowCount: 1,
+                                ExecutionTime: 1,
+                                ErrorMessage: '',
+                                UserViewRunID: '',
+                            };
+                        }
+                        return {
+                            Success: true,
+                            Results: [{ ID: CONVERSATION_DETAIL_ID, ConversationID: CONVERSATION_ID }],
+                            RowCount: 1,
+                            TotalRowCount: 1,
+                            ExecutionTime: 1,
+                            ErrorMessage: '',
+                            UserViewRunID: '',
+                        };
+                    }
+                    if (params.EntityName === 'MJ: Conversations') {
+                        return {
+                            Success: true,
+                            Results: [{ ID: CONVERSATION_ID, UserID: userB.ID }],
+                            RowCount: 1,
+                            TotalRowCount: 1,
+                            ExecutionTime: 1,
+                            ErrorMessage: '',
+                            UserViewRunID: '',
+                        };
+                    }
+                    return {
+                        Success: true,
+                        Results: [],
+                        RowCount: 0,
+                        TotalRowCount: 0,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                        UserViewRunID: '',
+                    };
+                },
+                GetEntityObject: async (entityName: string) => {
+                    if (entityName === 'MJ: Artifacts') {
+                        const hdr: MockArtifactHeaderDraft = {
+                            ID: 'aaaaaaaa-bbbb-4ccc-8ddd-121212121212',
+                            Name: '',
+                            Description: null,
+                            Comments: null,
+                            TypeID: '',
+                            UserID: '',
+                            EnvironmentID: '',
+                            Visibility: 'Always',
+                            LatestResult: { Message: 'Simulated warning Save() failure' },
+                            NewRecord: () => undefined,
+                            Load: async () => true,
+                            Save: async () => {
+                                headerSaveCallCount++;
+                                if (!createdHeaders.includes(hdr)) {
+                                    createdHeaders.push(hdr);
+                                }
+                                // First Save() creates header; second Save() persists warning Comments -> simulate failure!
+                                return headerSaveCallCount === 1;
+                            },
+                        };
+                        return hdr;
+                    }
+                    if (entityName === 'MJ: Artifact Permissions') {
+                        const perm: MockArtifactPermissionDraft = {
+                            ID: 'perm-fail',
+                            ArtifactID: '',
+                            UserID: '',
+                            CanRead: false,
+                            CanEdit: false,
+                            CanDelete: false,
+                            CanShare: false,
+                            SharedByUserID: null,
+                            LatestResult: { Message: 'Grant failed' },
+                            NewRecord: () => undefined,
+                            Save: async () => false,
+                        };
+                        return perm;
+                    }
+                    const ver: MockArtifactVersionDraft = {
+                        ID: 'ffffffff-1111-4222-8333-666666666666',
+                        ArtifactID: '',
+                        VersionNumber: 0,
+                        Content: null,
+                        Comments: null,
+                        Name: null,
+                        Description: null,
+                        UserID: '',
+                        LatestResult: null,
+                        NewRecord: () => undefined,
+                        Save: async () => true,
+                    };
+                    return ver;
+                },
+            });
+
+        // 1. Participant RunView failure + warning-comment Save() failure + 'participant' fallback
+        const provider1 = makeProvider();
+        const runner1 = new VettingTestableAgentRunner(provider1);
+        await runner1.ProcessAgentArtifacts(
+            makeExecuteResult(),
+            CONVERSATION_DETAIL_ID,
+            SOURCE_ARTIFACT_ID,
+            userB,
+            provider1
+        );
+
+        const loggedMessages = errorSpy.mock.calls.map((args) => args.map(String).join(' ')).join('\n');
+        expect(loggedMessages).toContain('Simulated participant query failure');
+        expect(loggedMessages).toContain('Failed to save fork permission warning comment');
+        expect(createdHeaders[0]?.Comments).toContain('participant(s): participant.');
+        expect(createdHeaders[0]?.Comments).not.toContain(mysteryOwnerId);
+
+        // 2. Row User display name fallback ('Row Eve') when UserCache is empty
+        participantQueryShouldFail = false;
+        headerSaveCallCount = 0;
+        createdHeaders.length = 0;
+        const provider2 = makeProvider();
+        const runner2 = new VettingTestableAgentRunner(provider2);
+        await runner2.ProcessAgentArtifacts(
+            makeExecuteResult(),
+            CONVERSATION_DETAIL_ID,
+            SOURCE_ARTIFACT_ID,
+            userB,
+            provider2
+        );
+        expect(createdHeaders[0]?.Comments).toContain('Row Eve');
+        expect(createdHeaders[0]?.Comments).not.toContain(uncachedRowUser);
     });
 
     it('gatherConversationArtifacts skips rows with empty or missing ArtifactID rather than bypassing CanRead (D3)', async () => {

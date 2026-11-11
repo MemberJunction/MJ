@@ -4106,7 +4106,7 @@ export class MarkdownArtifactViewerComponent
   }
 
   public get LiveSyncUnavailable(): boolean {
-    return this.liveSyncUnavailable || Boolean(this.session?.IsLiveSyncUnavailable);
+    return this.liveSyncUnavailable || Boolean(this.session?.LiveSyncUnavailable);
   }
 
   public get CanUserEdit(): boolean {
@@ -7676,7 +7676,7 @@ export class MarkdownArtifactViewerComponent
       this.hasPermissionToEdit,
       hasRemoteBackend,
     );
-    this.liveSyncUnavailable = Boolean(this.session.IsLiveSyncUnavailable);
+    this.liveSyncUnavailable = Boolean(this.session.LiveSyncUnavailable);
 
     this.sessionSubs.push(
       this.session.OnLiveSyncUnavailable$.subscribe((unavailable) => {
@@ -7701,7 +7701,7 @@ export class MarkdownArtifactViewerComponent
       }),
       this.session.StatusChanged$.subscribe((status) => {
         this.CollaborationStatus = status;
-        if (status === 'readonly' || status === 'revoked') {
+        if (status === 'revoked' || (status === 'readonly' && !this.session?.CanEdit)) {
           this.HasEditPermission = false;
           if (this.ViewMode === 'edit' || this.ViewMode === 'suggest') {
             this.ViewMode = 'preview';
