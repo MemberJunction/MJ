@@ -61,7 +61,32 @@ describe('KMeansCluster', () => {
     expect(result.centroids?.get(1)).toEqual([10.5, 0]);
   });
 
-  it('keeps the previous centroid for a cluster that receives no points', () => {
+  it('relocates an empty cluster to the farthest point instead of returning fewer than k clusters', () => {
+    // Math.random() = 0 makes K-Means++ seed all three centroids on p0, so after the first
+    // assignment two clusters are empty. Each must take the point farthest from its centroid.
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const service = onLine([0, 1, 2, 10, 11, 12, 20, 21, 22]);
+    const result = service.KMeansCluster(3, 100, 'euclidean');
+    expect(result.clusters.get(0)).toEqual(['p3', 'p4', 'p5']);
+    expect(result.clusters.get(1)).toEqual(['p0', 'p1', 'p2']);
+    expect(result.clusters.get(2)).toEqual(['p6', 'p7', 'p8']);
+  });
+
+  it('relocates empty clusters the same way under the cosine metric', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const service = new SimpleVectorService<Meta>({ Accelerator: new BaseVectorAccelerator() });
+    const directions: number[][] = [
+      [1, 0, 0], [0.99, 0.01, 0],
+      [0, 1, 0], [0.01, 0.99, 0],
+      [0, 0, 1], [0, 0.01, 0.99],
+    ];
+    directions.forEach((v, i) => service.AddVector(`p${i}`, v, { group: i % 2 }));
+    const result = service.KMeansCluster(3, 100, 'cosine');
+    const groups = Array.from(result.clusters.values()).map(members => [...members].sort()).sort();
+    expect(groups).toEqual([['p0', 'p1'], ['p2', 'p3'], ['p4', 'p5']]);
+  });
+
+  it('keeps the previous centroid when every point coincides with its centroid', () => {
     // Identical points: K-Means++ picks the same point twice, and the first centroid wins every tie.
     vi.spyOn(Math, 'random').mockReturnValue(0);
     const service = onLine([3, 3, 3]);
