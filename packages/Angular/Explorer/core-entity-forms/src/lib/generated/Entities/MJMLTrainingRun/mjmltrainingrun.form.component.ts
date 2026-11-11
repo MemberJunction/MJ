@@ -22,8 +22,8 @@ export class MJMLTrainingRunFormComponent extends BaseFormComponent {
             { sectionKey: 'executionTimeline', sectionName: 'Execution Timeline', isExpanded: true },
             { sectionKey: 'resourceUsage', sectionName: 'Resource Usage', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJMLModels', sectionName: 'ML Models', isExpanded: false },
             { sectionKey: 'mJMLMonitoringResults', sectionName: 'ML Monitoring Results', isExpanded: false },
+            { sectionKey: 'mJMLModels', sectionName: 'ML Models', isExpanded: false },
             { sectionKey: 'mJMLModelPublishRecords', sectionName: 'ML Model Publish Records', isExpanded: false }
         ]);
     }

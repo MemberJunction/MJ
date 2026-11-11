@@ -23,8 +23,8 @@ export class MJScheduledJobRunFormComponent extends BaseFormComponent {
             { sectionKey: 'mJProcessRuns', sectionName: 'Process Runs', isExpanded: false },
             { sectionKey: 'mJAIAgentRuns', sectionName: 'AI Agent Runs', isExpanded: false },
             { sectionKey: 'mJCompanyIntegrationRuns', sectionName: 'Company Integration Runs', isExpanded: false },
-            { sectionKey: 'mJMLScoringRuns', sectionName: 'ML Scoring Runs', isExpanded: false },
-            { sectionKey: 'mJMLMonitoringResults', sectionName: 'ML Monitoring Results', isExpanded: false }
+            { sectionKey: 'mJMLMonitoringResults', sectionName: 'ML Monitoring Results', isExpanded: false },
+            { sectionKey: 'mJMLScoringRuns', sectionName: 'ML Scoring Runs', isExpanded: false }
         ]);
     }
 }

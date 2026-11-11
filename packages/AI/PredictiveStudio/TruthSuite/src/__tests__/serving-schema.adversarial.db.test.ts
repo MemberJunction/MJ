@@ -906,15 +906,21 @@ describe('spDeleteEntityWithCoreDependencies removes an entity with its serving 
 
 // ── the hand-written blocks that must apply twice ─────────────────────────────────────────────────────────────────
 
-/** The migration whose hand-written section the run-twice case re-applies, from the repository root. */
-const SERVING_MIGRATION = new URL('../../../../../../migrations/v6/V202611101201__v6.3.x__PS_Honest_Serving_Schema.sql', import.meta.url);
-/** The fixed IDs those blocks write under (the migration's literals). */
+/** The migration whose hand-written Entity insert the run-twice case re-applies, from the repository root. */
+const SERVING_MIGRATION = new URL('../../../../../../migrations/v6/V202611110217__v6.3.x__PS_Honest_Serving_Schema.sql', import.meta.url);
+/**
+ * The entities the census looks up: MJ: Feature Values and MJ: ML Models are existing core entities, and the
+ * virtual entity's ID is this migration's literal. FeatureValue's Role and MLModelID, with their metadata rows, are
+ * next's (V202611101901), so the census finds them by entity and name, never by ID.
+ */
 const FEATURE_VALUES_ENTITY_ID = '3BED585D-B150-4899-AB06-8A19624EA9BE';
 const ML_MODELS_ENTITY_ID = 'A3997636-011D-46E0-BC01-8B1E61E1087B';
-const ROLE_FIELD_ID = '234FB2CE-776D-4D36-B356-0FE1348132B4';
 const LATEST_VALUES_ENTITY_ID = '1AC777D7-EEE8-485F-83DB-2127DBB4BFB7';
 
-/** How many of each object the guarded block and the Entity insert own: each must be 1 (2 for the pairs), before and after. */
+/**
+ * How many of each object exist: the FeatureValue objects V202611101901 ships (present once, the pairs twice) and the
+ * virtual Entity row this migration's insert owns (once, before and after a second application).
+ */
 interface ServingObjectCensus {
   readonly RoleColumn: number;
   readonly MLModelIDColumn: number;
@@ -938,14 +944,14 @@ function sliceBetween(text: string, start: string, end: string): string {
 }
 
 /**
- * #6180's guarded block (section 4: FeatureValue's Role and MLModelID, their constraints, descriptions and metadata
- * rows) and the virtual Entity insert of section 6, as the batches Flyway sends, with the schema placeholder resolved.
+ * The virtual Entity insert of section 5 (vwLatestFeatureValues and MJ: Latest Feature Values), as the batch Flyway
+ * sends, with the schema placeholder resolved.
  */
 function idempotentBatches(schema: string): string[] {
   const text = readFileSync(SERVING_MIGRATION, 'utf8');
-  const guarded = sliceBetween(text, '-- 4. FeatureValue + Role and MLModelID', '-- 5. FeatureValue: the latest value');
-  const entityInsert = sliceBetween(text, `IF NOT EXISTS (SELECT 1 FROM [\${flyway:defaultSchema}].[Entity] WHERE [ID] = '${LATEST_VALUES_ENTITY_ID}')`, '\nGO');
-  return `${guarded}\nGO\n${entityInsert}`
+  const section = sliceBetween(text, '-- 5. vwLatestFeatureValues and the MJ: Latest Feature Values virtual entity', '-- 6. spDeleteEntityWithCoreDependencies');
+  const entityInsert = sliceBetween(section, `IF NOT EXISTS (SELECT 1 FROM [\${flyway:defaultSchema}].[Entity] WHERE [ID] = '${LATEST_VALUES_ENTITY_ID}')`, '\nGO');
+  return entityInsert
     .split('${flyway:defaultSchema}').join(schema)
     .split(/^\s*GO\s*$/m)
     .filter((batch) => batch.replace(/--.*$/gm, '').trim().length > 0);
@@ -958,7 +964,6 @@ async function censusOf(request: sql.Request, schema: string): Promise<ServingOb
   const result = await request
     .input('FVEntity', sql.UniqueIdentifier, FEATURE_VALUES_ENTITY_ID)
     .input('ModelsEntity', sql.UniqueIdentifier, ML_MODELS_ENTITY_ID)
-    .input('RoleField', sql.UniqueIdentifier, ROLE_FIELD_ID)
     .input('LatestEntity', sql.UniqueIdentifier, LATEST_VALUES_ENTITY_ID)
     .query<ServingObjectCensus>(`SELECT
       (SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID(${fv}) AND name = N'Role') AS RoleColumn,
@@ -970,26 +975,27 @@ async function censusOf(request: sql.Request, schema: string): Promise<ServingOb
       (SELECT COUNT(*) FROM sys.extended_properties WHERE major_id = OBJECT_ID(${fv}) AND name = N'MS_Description'
          AND minor_id IN (COLUMNPROPERTY(OBJECT_ID(${fv}), N'Role', 'ColumnId'), COLUMNPROPERTY(OBJECT_ID(${fv}), N'MLModelID', 'ColumnId'))) AS ColumnDescriptions,
       (SELECT COUNT(*) FROM ${t('MJ: Entity Fields')} WHERE EntityID = @FVEntity AND Name IN (N'Role', N'MLModelID')) AS EntityFields,
-      (SELECT COUNT(*) FROM ${t('MJ: Entity Field Values')} WHERE EntityFieldID = @RoleField) AS RoleFieldValues,
+      (SELECT COUNT(*) FROM ${t('MJ: Entity Field Values')} WHERE EntityFieldID IN
+         (SELECT ID FROM ${t('MJ: Entity Fields')} WHERE EntityID = @FVEntity AND Name = N'Role')) AS RoleFieldValues,
       (SELECT COUNT(*) FROM ${t('MJ: Entity Relationships')} WHERE EntityID = @ModelsEntity AND RelatedEntityID = @FVEntity
          AND RelatedEntityJoinField = N'MLModelID') AS Relationship,
       (SELECT COUNT(*) FROM ${t('MJ: Entities')} WHERE ID = @LatestEntity OR Name = N'MJ: Latest Feature Values') AS LatestValuesEntity`);
   return result.recordset[0];
 }
 
-/** One of each object, two of each pair: what the migration's first application leaves. */
+/** One of each object, two of each pair: what next's migration and this migration's first application leave. */
 const ONE_OF_EACH: ServingObjectCensus = {
   RoleColumn: 1, MLModelIDColumn: 1, RoleDefault: 1, RoleCheck: 1, MLModelForeignKey: 1, MLModelIndex: 1,
   ColumnDescriptions: 2, EntityFields: 2, RoleFieldValues: 2, Relationship: 1, LatestValuesEntity: 1,
 };
 
 describe("the migration's idempotent blocks apply a second time", () => {
-  it("re-applies the Entity insert and #6180's guarded block with no duplicate object and no error", async () => {
+  it("re-applies the Entity insert with no duplicate object and no error, over next's FeatureValue Role and MLModelID", async () => {
     const entities = server.Provider.EntityByName('MJ: Entities');
     if (!entities) throw new Error('MJ: Entities is not in metadata');
     const schema = entities.SchemaName;
     const batches = idempotentBatches(schema);
-    expect(batches.length).toBeGreaterThan(10);
+    expect(batches.length).toBe(1);
     expect(await censusOf(pool.request(), schema)).toEqual(ONE_OF_EACH);
     // The second application runs inside a transaction that is always rolled back: the dev database keeps its state.
     const tx = new sql.Transaction(pool);

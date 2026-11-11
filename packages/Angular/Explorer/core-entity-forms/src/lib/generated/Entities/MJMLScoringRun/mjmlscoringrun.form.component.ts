@@ -15,9 +15,10 @@ export class MJMLScoringRunFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'modelConfiguration', sectionName: 'Model Configuration', isExpanded: true },
-            { sectionKey: 'scoringScopeAndContext', sectionName: 'Scoring Scope and Context', isExpanded: true },
-            { sectionKey: 'executionResultsAndMetrics', sectionName: 'Execution Results and Metrics', isExpanded: true },
+            { sectionKey: 'modelAndExecutionDetails', sectionName: 'Model and Execution Details', isExpanded: true },
+            { sectionKey: 'scopeAndConfiguration', sectionName: 'Scope and Configuration', isExpanded: true },
+            { sectionKey: 'timelineAndRequestors', sectionName: 'Timeline and Requestors', isExpanded: true },
+            { sectionKey: 'executionStatusAndResults', sectionName: 'Execution Status and Results', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

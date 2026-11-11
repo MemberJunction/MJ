@@ -246,7 +246,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (492 classes)
+// @memberjunction/core-entities (497 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -569,8 +569,12 @@ import {
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
+    MJMLModelPublishRecordEntity,
     MJMLModelScoringBindingEntity,
+    MJMLMonitoringResultEntity,
+    MJMLOutputBindingEntity,
     MJMLPredictionUnitEntity,
+    MJMLScoringRunEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
     MJMLTrainingSnapshotEntity,
@@ -735,6 +739,7 @@ import {
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    MJvwLatestFeatureValuesEntity,
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
     QueryPermissionProvider,
@@ -2275,14 +2280,18 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
+    MJMLModelPublishRecordEntity,
     MJMLModelScoringBindingEntity,
-    MJMLPredictionUnitEntity,
-    MJMLTrainingPipelineEntity,
-    MJMLTrainingRunEntity,
+    MJMLMonitoringResultEntity,
+    MJMLOutputBindingEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJMLPredictionUnitEntity,
+    MJMLScoringRunEntity,
+    MJMLTrainingPipelineEntity,
+    MJMLTrainingRunEntity,
     MJMLTrainingSnapshotEntity,
     MJMagicLinkInviteAllowedDomainEntity,
     MJMagicLinkInviteAllowedPathEntity,
@@ -2445,6 +2454,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    MJvwLatestFeatureValuesEntity,
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
     QueryPermissionProvider,
@@ -2478,15 +2488,15 @@ const CLASS_REGISTRATIONS_2: any[] = [
     LoopbackBridge,
     OpenAISipBridge,
     MSGraphProvider,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     SendGridProvider,
     DataContextItemServer,
     MJLibraryEntityExtended,
     MJLibraryItemEntityExtended,
     EntityActionInvocationMultipleRecords,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     EntityActionInvocationSingleRecord,
     EntityActionInvocationValidate,
     ApolloCreateListAction,
@@ -2682,15 +2692,15 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RemoteBrowserChannel,
     RubricEngineBase,
     MJScheduledJobEntityExtended,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     AWSFileStorage,
     AzureFileStorage,
     BoxFileStorage,
     DropboxFileStorage,
     GoogleDriveFileStorage,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     GoogleFileStorage,
     LocalFileSystemStorage,
     SharePointFileStorage,
@@ -2886,15 +2896,15 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
     MJAIAgentSessionEntityServer,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     MJAIAgentUserPolicyEntityServer,
     MJAIBridgeAgentIdentityEntityServer,
     MJAIBridgeProviderChannelEntityServer,
     MJAIBridgeProviderEntityServer,
     MJAIPromptEntityServer,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     MJAIPromptRunEntityServer,
     MJAIRemoteBrowserProviderEntityServer,
     MJAISkillEntityServer,
@@ -3090,15 +3100,15 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GetSkillDetailsAction,
     GetStockPriceAction,
     GetUploadUrlAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_6: any[] = [
     GetWeatherAction,
     Get_AI_Model_Cost_Action,
     GitHubAddCommentAction,
     GitHubCommitFilesAndCreatePRAction,
     GitHubCommitFilesToBranchAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_6: any[] = [
     GitHubCreateOrUpdateIssueAction,
     GitHubCreatePullRequestAction,
     GitHubGetPullRequestContextAction,
@@ -3247,7 +3257,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1331;
+export const CLASS_REGISTRATIONS_COUNT = 1336;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

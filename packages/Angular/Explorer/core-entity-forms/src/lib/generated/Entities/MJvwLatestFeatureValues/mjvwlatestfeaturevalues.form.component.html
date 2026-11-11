@@ -14,7 +14,7 @@
     <mj-collapsible-panel
         SectionKey="recordContext"
         SectionName="Record Context"
-        Icon="fa-solid fa-cube"
+        Icon="fa-solid fa-database"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -64,7 +64,7 @@
     <mj-collapsible-panel
         SectionKey="featureDetails"
         SectionName="Feature Details"
-        Icon="fa-solid fa-tag"
+        Icon="fa-solid fa-list-check"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -90,7 +90,7 @@
     <mj-collapsible-panel
         SectionKey="pipelineProvenance"
         SectionName="Pipeline Provenance"
-        Icon="fa-solid fa-code-branch"
+        Icon="fa-solid fa-diagram-project"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -116,7 +116,7 @@
     <mj-collapsible-panel
         SectionKey="featureValues"
         SectionName="Feature Values"
-        Icon="fa-solid fa-database"
+        Icon="fa-solid fa-chart-column"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -159,9 +159,19 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- AI Insights Section -->
+    <mj-collapsible-panel
+        SectionKey="aIInsights"
+        SectionName="AI Insights"
+        Icon="fa-solid fa-brain"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="Confidence"
             Type="number"
             [EditMode]="EditMode"

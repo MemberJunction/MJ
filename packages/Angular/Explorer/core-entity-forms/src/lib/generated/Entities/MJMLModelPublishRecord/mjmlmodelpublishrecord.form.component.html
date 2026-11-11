@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Model References Section -->
+    <!-- Publish References Section -->
     <mj-collapsible-panel
-        SectionKey="modelReferences"
-        SectionName="Model References"
-        Icon="fa fa-cube"
+        SectionKey="publishReferences"
+        SectionName="Publish References"
+        Icon="fa fa-link"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -56,11 +56,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Publish & Action Details Section -->
+    <!-- Publish Details Section -->
     <mj-collapsible-panel
-        SectionKey="publishActionDetails"
-        SectionName="Publish & Action Details"
-        Icon="fa fa-tasks"
+        SectionKey="publishDetails"
+        SectionName="Publish Details"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -82,26 +82,26 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Decision"
-            Type="textbox"
+            FieldName="RecordedAt"
+            Type="datepicker"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Reason"
-            Type="textarea"
+            FieldName="Transient"
+            Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Authorization & Actor Section -->
+    <!-- Approval and Actor Section -->
     <mj-collapsible-panel
-        SectionKey="authorizationActor"
-        SectionName="Authorization & Actor"
+        SectionKey="approvalAndActor"
+        SectionName="Approval and Actor"
         Icon="fa fa-user-shield"
         [Form]="this"
         [FormContext]="formContext">
@@ -133,13 +133,29 @@
 
     </mj-collapsible-panel>
 
-    <!-- Audit Trail & Evidence Section -->
+    <!-- Audit and Evaluation Section -->
     <mj-collapsible-panel
-        SectionKey="auditTrailEvidence"
-        SectionName="Audit Trail & Evidence"
-        Icon="fa fa-file-contract"
+        SectionKey="auditAndEvaluation"
+        SectionName="Audit and Evaluation"
+        Icon="fa fa-shield-alt"
         [Form]="this"
         [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Decision"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Reason"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -180,14 +196,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Transient"
-            Type="checkbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -198,14 +206,6 @@
         Icon="fa fa-cog"
         [Form]="this"
         [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="RecordedAt"
-            Type="datepicker"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"

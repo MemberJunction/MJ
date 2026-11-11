@@ -18,7 +18,8 @@ export class MJvwLatestFeatureValuesFormComponent extends BaseFormComponent {
             { sectionKey: 'recordContext', sectionName: 'Record Context', isExpanded: true },
             { sectionKey: 'featureDetails', sectionName: 'Feature Details', isExpanded: true },
             { sectionKey: 'pipelineProvenance', sectionName: 'Pipeline Provenance', isExpanded: true },
-            { sectionKey: 'featureValues', sectionName: 'Feature Values', isExpanded: true }
+            { sectionKey: 'featureValues', sectionName: 'Feature Values', isExpanded: true },
+            { sectionKey: 'aIInsights', sectionName: 'AI Insights', isExpanded: true }
         ]);
     }
 }

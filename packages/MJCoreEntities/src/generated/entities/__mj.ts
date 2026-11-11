@@ -24221,10 +24221,6 @@ export const MJFeatureValueSchema = z.object({
         * * Field Name: AIModel
         * * Display Name: AI Model Details
         * * SQL Data Type: nvarchar(50)`),
-    MLModel: z.string().nullable().describe(`
-        * * Field Name: MLModel
-        * * Display Name: ML Model Name
-        * * SQL Data Type: nvarchar(500)`),
 });
 
 export type MJFeatureValueEntityType = z.infer<typeof MJFeatureValueSchema>;
@@ -26947,12 +26943,12 @@ export const MJvwLatestFeatureValuesSchema = z.object({
         * * Field Name: ID
         * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
-        * * Description: Unique identifier of the feature value record.`),
+        * * Description: Unique identifier of the champion feature value record.`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier
-        * * Description: Unique identifier of the entity this feature was computed for.`),
+        * * Description: The entity of the record this feature was computed for.`),
     RecordID: z.string().describe(`
         * * Field Name: RecordID
         * * Display Name: Record ID
@@ -26962,67 +26958,67 @@ export const MJvwLatestFeatureValuesSchema = z.object({
         * * Field Name: FeatureName
         * * Display Name: Feature Name
         * * SQL Data Type: nvarchar(255)
-        * * Description: Name of the feature.`),
+        * * Description: Name of the computed feature.`),
     Source: z.string().describe(`
         * * Field Name: Source
         * * Display Name: Source
         * * SQL Data Type: nvarchar(20)
-        * * Description: Origin of the value: Pipeline or Human.`),
+        * * Description: Origin of the value: Pipeline (computed by Feature Pipeline) or Human.`),
     Role: z.string().describe(`
         * * Field Name: Role
         * * Display Name: Role
         * * SQL Data Type: nvarchar(20)
-        * * Description: Role of the score/value, such as Champion.`),
+        * * Description: Role classification of the feature value (e.g., Champion).`),
     EffectiveAsOf: z.date().nullable().describe(`
         * * Field Name: EffectiveAsOf
         * * Display Name: Effective As Of
         * * SQL Data Type: datetimeoffset
-        * * Description: Effective instant from which this value applies to the record.`),
+        * * Description: Timestamp from which this value is considered active and effective.`),
     ComputedAt: z.date().describe(`
         * * Field Name: ComputedAt
         * * Display Name: Computed At
         * * SQL Data Type: datetimeoffset
-        * * Description: Timestamp when this feature value was computed.`),
+        * * Description: Timestamp when the feature value was computed.`),
     MLModelID: z.string().nullable().describe(`
         * * Field Name: MLModelID
         * * Display Name: ML Model ID
         * * SQL Data Type: uniqueidentifier
-        * * Description: Reference to the ML Model that produced or scored this feature value, if applicable.`),
+        * * Description: Optional reference to the ML Model that computed or scored this value.`),
     RecordProcessID: z.string().describe(`
         * * Field Name: RecordProcessID
         * * Display Name: Record Process ID
         * * SQL Data Type: uniqueidentifier
-        * * Description: Reference to the Record Process (Feature Pipeline) that computed this feature value.`),
+        * * Description: Identifier of the Record Process or Feature Pipeline that generated the value.`),
     ValueText: z.string().nullable().describe(`
         * * Field Name: ValueText
         * * Display Name: Value (Text)
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: Computed value formatted as text or categorical string.`),
+        * * Description: Computed value formatted as text for categorical or textual features.`),
     ValueNumeric: z.number().nullable().describe(`
         * * Field Name: ValueNumeric
         * * Display Name: Value (Numeric)
         * * SQL Data Type: float(53)
-        * * Description: Computed value formatted as a floating-point numeric value.`),
+        * * Description: Computed numeric floating-point value for numeric and score features.`),
     ValueDate: z.date().nullable().describe(`
         * * Field Name: ValueDate
         * * Display Name: Value (Date)
         * * SQL Data Type: datetimeoffset
-        * * Description: Computed value formatted as a date/time offset.`),
+        * * Description: Computed datetimeoffset value for date and timestamp features.`),
     ValueBoolean: z.boolean().nullable().describe(`
         * * Field Name: ValueBoolean
         * * Display Name: Value (Boolean)
         * * SQL Data Type: bit
-        * * Description: Computed value formatted as a boolean flag.`),
+        * * Description: Computed boolean flag value.`),
     ValueJSON: z.string().nullable().describe(`
         * * Field Name: ValueJSON
         * * Display Name: Value (JSON)
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: Computed value formatted as a raw JSON string for complex objects.`),
+        * * Description: Computed complex value formatted as a JSON string.`),
     Confidence: z.number().nullable().describe(`
         * * Field Name: Confidence
         * * Display Name: Confidence
         * * SQL Data Type: float(53)
-        * * Description: Confidence score associated with the computed feature value.`),
+        * * Description: Confidence score associated with this computed feature value.`),
 });
 
 export type MJvwLatestFeatureValuesEntityType = z.infer<typeof MJvwLatestFeatureValuesSchema>;
@@ -28587,7 +28583,7 @@ export const MJMLModelPublishRecordSchema = z.object({
         * * Description: JSON EvidenceSnapshot built by the server from stored rows at the moment of the sign-off or publish.`),
     EvidenceSha256: z.string().nullable().describe(`
         * * Field Name: EvidenceSha256
-        * * Display Name: Evidence SHA-256
+        * * Display Name: Evidence SHA256
         * * SQL Data Type: char(64)
         * * Description: SHA-256 of the canonical Evidence JSON; a sign-off authorises a publish only while it equals a fresh recomputation.`),
     OverridesFlags: z.string().describe(`
@@ -28598,7 +28594,7 @@ export const MJMLModelPublishRecordSchema = z.object({
         * * Description: JSON array of the leakage flags a sign-off acknowledges by name; empty on every other row.`),
     SignOffID: z.string().nullable().describe(`
         * * Field Name: SignOffID
-        * * Display Name: Sign-Off
+        * * Display Name: Sign Off
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: ML Model Publish Records (vwMLModelPublishRecords.ID)
         * * Description: Publish rows: the human sign-off this publish consumed, when one was required.`),
@@ -28630,18 +28626,10 @@ export const MJMLModelPublishRecordSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Model: z.string().nullable().describe(`
-        * * Field Name: Model
-        * * Display Name: Model
-        * * SQL Data Type: nvarchar(500)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
-        * * Display Name: User Info
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
-    ReplacesModel: z.string().nullable().describe(`
-        * * Field Name: ReplacesModel
-        * * Display Name: Replaces Model
-        * * SQL Data Type: nvarchar(500)`),
 });
 
 export type MJMLModelPublishRecordEntityType = z.infer<typeof MJMLModelPublishRecordSchema>;
@@ -28714,10 +28702,6 @@ export const MJMLModelScoringBindingSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    MLModel: z.string().nullable().describe(`
-        * * Field Name: MLModel
-        * * Display Name: ML Model
-        * * SQL Data Type: nvarchar(500)`),
     RecordProcess: z.string().nullable().describe(`
         * * Field Name: RecordProcess
         * * Display Name: Record Process
@@ -28848,31 +28832,31 @@ export const MJMLModelSchema = z.object({
         * * Default Value: getutcdate()`),
     PredictionUnitID: z.string().nullable().describe(`
         * * Field Name: PredictionUnitID
-        * * Display Name: Prediction Unit
+        * * Display Name: Prediction Unit ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: ML Prediction Units (vwMLPredictionUnits.ID)
         * * Description: The Prediction Unit version the model was trained under (the exact version row).`),
     EvaluationProtocolID: z.string().nullable().describe(`
         * * Field Name: EvaluationProtocolID
-        * * Display Name: Evaluation Protocol
+        * * Display Name: Evaluation Protocol ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: ML Evaluation Protocols (vwMLEvaluationProtocols.ID)
         * * Description: The Evaluation Protocol version the model was graded under (the exact version row).`),
     TrainingSnapshotID: z.string().nullable().describe(`
         * * Field Name: TrainingSnapshotID
-        * * Display Name: Training Snapshot
+        * * Display Name: Training Snapshot ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: ML Training Snapshots (vwMLTrainingSnapshots.ID)
         * * Description: The Training Snapshot the model was trained on.`),
     TrainingRunID: z.string().nullable().describe(`
         * * Field Name: TrainingRunID
-        * * Display Name: Training Run
+        * * Display Name: Training Run ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: ML Training Runs (vwMLTrainingRuns.ID)
         * * Description: The training run that produced the model.`),
     ArtifactSha256: z.string().nullable().describe(`
         * * Field Name: ArtifactSha256
-        * * Display Name: Artifact SHA-256
+        * * Display Name: Artifact SHA256
         * * SQL Data Type: char(64)
         * * Description: SHA-256 of the shipped artifact's stored bytes; a load that hashes differently is refused.`),
     SnapshotHash: z.string().nullable().describe(`
@@ -28946,15 +28930,15 @@ export const MJMLModelSchema = z.object({
         * * SQL Data Type: nvarchar(500)`),
     PredictionUnit: z.string().nullable().describe(`
         * * Field Name: PredictionUnit
-        * * Display Name: Prediction Unit Details
+        * * Display Name: Prediction Unit
         * * SQL Data Type: nvarchar(255)`),
     EvaluationProtocol: z.string().nullable().describe(`
         * * Field Name: EvaluationProtocol
-        * * Display Name: Evaluation Protocol Details
+        * * Display Name: Evaluation Protocol
         * * SQL Data Type: nvarchar(255)`),
     TrainingSnapshot: z.string().nullable().describe(`
         * * Field Name: TrainingSnapshot
-        * * Display Name: Training Snapshot Details
+        * * Display Name: Training Snapshot
         * * SQL Data Type: nvarchar(64)`),
 });
 
@@ -29107,10 +29091,6 @@ export const MJMLMonitoringResultSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Model: z.string().nullable().describe(`
-        * * Field Name: Model
-        * * Display Name: Model
-        * * SQL Data Type: nvarchar(500)`),
     ScheduledJobRun: z.string().nullable().describe(`
         * * Field Name: ScheduledJobRun
         * * Display Name: Scheduled Job Run
@@ -29180,10 +29160,6 @@ export const MJMLOutputBindingSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Model: z.string().nullable().describe(`
-        * * Field Name: Model
-        * * Display Name: Model
-        * * SQL Data Type: nvarchar(500)`),
 });
 
 export type MJMLOutputBindingEntityType = z.infer<typeof MJMLOutputBindingSchema>;
@@ -29324,7 +29300,7 @@ export const MJMLScoringRunSchema = z.object({
         * * Description: The model's Version, copied at the run.`),
     MLModelScoringBindingID: z.string().nullable().describe(`
         * * Field Name: MLModelScoringBindingID
-        * * Display Name: ML Model Scoring Binding
+        * * Display Name: Scoring Binding
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: ML Model Scoring Bindings (vwMLModelScoringBindings.ID)
         * * Description: The scoring binding a writing run scored for; NULL for a call that returns its scores and writes no Feature Value.`),
@@ -29482,17 +29458,13 @@ export const MJMLScoringRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Model: z.string().nullable().describe(`
-        * * Field Name: Model
-        * * Display Name: Model
-        * * SQL Data Type: nvarchar(500)`),
     MLModelScoringBinding: z.string().nullable().describe(`
         * * Field Name: MLModelScoringBinding
-        * * Display Name: ML Model Scoring Binding Details
+        * * Display Name: ML Model Scoring Binding
         * * SQL Data Type: nvarchar(255)`),
     ScopeEntity: z.string().nullable().describe(`
         * * Field Name: ScopeEntity
-        * * Display Name: Scope Entity Details
+        * * Display Name: Scope Entity Name
         * * SQL Data Type: nvarchar(255)`),
     RequestedByUser: z.string().nullable().describe(`
         * * Field Name: RequestedByUser
@@ -29762,10 +29734,6 @@ export const MJMLTrainingRunSchema = z.object({
         * * Field Name: Pipeline
         * * Display Name: Pipeline
         * * SQL Data Type: nvarchar(255)`),
-    ResultingModel: z.string().nullable().describe(`
-        * * Field Name: ResultingModel
-        * * Display Name: Resulting Model
-        * * SQL Data Type: nvarchar(500)`),
     ExperimentSessionIteration: z.string().nullable().describe(`
         * * Field Name: ExperimentSessionIteration
         * * Display Name: Experiment Session Iteration
@@ -113341,15 +113309,6 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     get AIModel(): string | null {
         return this.Get('AIModel');
     }
-
-    /**
-    * * Field Name: MLModel
-    * * Display Name: ML Model Name
-    * * SQL Data Type: nvarchar(500)
-    */
-    get MLModel(): string | null {
-        return this.Get('MLModel');
-    }
 }
 
 
@@ -120340,7 +120299,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
-    * * Description: Unique identifier of the feature value record.
+    * * Description: Unique identifier of the champion feature value record.
     */
     get ID(): string {
         return this.Get('ID');
@@ -120351,9 +120310,9 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
-    * * Description: Unique identifier of the entity this feature was computed for.
+    * * Description: The entity of the record this feature was computed for.
     */
     get EntityID(): string {
         return this.Get('EntityID');
@@ -120379,7 +120338,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: FeatureName
     * * Display Name: Feature Name
     * * SQL Data Type: nvarchar(255)
-    * * Description: Name of the feature.
+    * * Description: Name of the computed feature.
     */
     get FeatureName(): string {
         return this.Get('FeatureName');
@@ -120392,7 +120351,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: Source
     * * Display Name: Source
     * * SQL Data Type: nvarchar(20)
-    * * Description: Origin of the value: Pipeline or Human.
+    * * Description: Origin of the value: Pipeline (computed by Feature Pipeline) or Human.
     */
     get Source(): string {
         return this.Get('Source');
@@ -120405,7 +120364,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: Role
     * * Display Name: Role
     * * SQL Data Type: nvarchar(20)
-    * * Description: Role of the score/value, such as Champion.
+    * * Description: Role classification of the feature value (e.g., Champion).
     */
     get Role(): string {
         return this.Get('Role');
@@ -120418,7 +120377,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: EffectiveAsOf
     * * Display Name: Effective As Of
     * * SQL Data Type: datetimeoffset
-    * * Description: Effective instant from which this value applies to the record.
+    * * Description: Timestamp from which this value is considered active and effective.
     */
     get EffectiveAsOf(): Date | null {
         return this.Get('EffectiveAsOf');
@@ -120431,7 +120390,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: ComputedAt
     * * Display Name: Computed At
     * * SQL Data Type: datetimeoffset
-    * * Description: Timestamp when this feature value was computed.
+    * * Description: Timestamp when the feature value was computed.
     */
     get ComputedAt(): Date {
         return this.Get('ComputedAt');
@@ -120444,7 +120403,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: MLModelID
     * * Display Name: ML Model ID
     * * SQL Data Type: uniqueidentifier
-    * * Description: Reference to the ML Model that produced or scored this feature value, if applicable.
+    * * Description: Optional reference to the ML Model that computed or scored this value.
     */
     get MLModelID(): string | null {
         return this.Get('MLModelID');
@@ -120457,7 +120416,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: RecordProcessID
     * * Display Name: Record Process ID
     * * SQL Data Type: uniqueidentifier
-    * * Description: Reference to the Record Process (Feature Pipeline) that computed this feature value.
+    * * Description: Identifier of the Record Process or Feature Pipeline that generated the value.
     */
     get RecordProcessID(): string {
         return this.Get('RecordProcessID');
@@ -120470,7 +120429,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: ValueText
     * * Display Name: Value (Text)
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: Computed value formatted as text or categorical string.
+    * * Description: Computed value formatted as text for categorical or textual features.
     */
     get ValueText(): string | null {
         return this.Get('ValueText');
@@ -120483,7 +120442,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: ValueNumeric
     * * Display Name: Value (Numeric)
     * * SQL Data Type: float(53)
-    * * Description: Computed value formatted as a floating-point numeric value.
+    * * Description: Computed numeric floating-point value for numeric and score features.
     */
     get ValueNumeric(): number | null {
         return this.Get('ValueNumeric');
@@ -120496,7 +120455,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: ValueDate
     * * Display Name: Value (Date)
     * * SQL Data Type: datetimeoffset
-    * * Description: Computed value formatted as a date/time offset.
+    * * Description: Computed datetimeoffset value for date and timestamp features.
     */
     get ValueDate(): Date | null {
         return this.Get('ValueDate');
@@ -120509,7 +120468,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: ValueBoolean
     * * Display Name: Value (Boolean)
     * * SQL Data Type: bit
-    * * Description: Computed value formatted as a boolean flag.
+    * * Description: Computed boolean flag value.
     */
     get ValueBoolean(): boolean | null {
         return this.Get('ValueBoolean');
@@ -120522,7 +120481,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: ValueJSON
     * * Display Name: Value (JSON)
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: Computed value formatted as a raw JSON string for complex objects.
+    * * Description: Computed complex value formatted as a JSON string.
     */
     get ValueJSON(): string | null {
         return this.Get('ValueJSON');
@@ -120535,7 +120494,7 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     * * Field Name: Confidence
     * * Display Name: Confidence
     * * SQL Data Type: float(53)
-    * * Description: Confidence score associated with the computed feature value.
+    * * Description: Confidence score associated with this computed feature value.
     */
     get Confidence(): number | null {
         return this.Get('Confidence');
@@ -124730,7 +124689,7 @@ export class MJMLModelPublishRecordEntity extends BaseEntity<MJMLModelPublishRec
 
     /**
     * * Field Name: EvidenceSha256
-    * * Display Name: Evidence SHA-256
+    * * Display Name: Evidence SHA256
     * * SQL Data Type: char(64)
     * * Description: SHA-256 of the canonical Evidence JSON; a sign-off authorises a publish only while it equals a fresh recomputation.
     */
@@ -124757,7 +124716,7 @@ export class MJMLModelPublishRecordEntity extends BaseEntity<MJMLModelPublishRec
 
     /**
     * * Field Name: SignOffID
-    * * Display Name: Sign-Off
+    * * Display Name: Sign Off
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: ML Model Publish Records (vwMLModelPublishRecords.ID)
     * * Description: Publish rows: the human sign-off this publish consumed, when one was required.
@@ -124847,30 +124806,12 @@ export class MJMLModelPublishRecordEntity extends BaseEntity<MJMLModelPublishRec
     }
 
     /**
-    * * Field Name: Model
-    * * Display Name: Model
-    * * SQL Data Type: nvarchar(500)
-    */
-    get Model(): string | null {
-        return this.Get('Model');
-    }
-
-    /**
     * * Field Name: User
-    * * Display Name: User Info
+    * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string | null {
         return this.Get('User');
-    }
-
-    /**
-    * * Field Name: ReplacesModel
-    * * Display Name: Replaces Model
-    * * SQL Data Type: nvarchar(500)
-    */
-    get ReplacesModel(): string | null {
-        return this.Get('ReplacesModel');
     }
 }
 
@@ -125049,15 +124990,6 @@ export class MJMLModelScoringBindingEntity extends BaseEntity<MJMLModelScoringBi
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: MLModel
-    * * Display Name: ML Model
-    * * SQL Data Type: nvarchar(500)
-    */
-    get MLModel(): string | null {
-        return this.Get('MLModel');
     }
 
     /**
@@ -125471,7 +125403,7 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
 
     /**
     * * Field Name: PredictionUnitID
-    * * Display Name: Prediction Unit
+    * * Display Name: Prediction Unit ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: ML Prediction Units (vwMLPredictionUnits.ID)
     * * Description: The Prediction Unit version the model was trained under (the exact version row).
@@ -125485,7 +125417,7 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
 
     /**
     * * Field Name: EvaluationProtocolID
-    * * Display Name: Evaluation Protocol
+    * * Display Name: Evaluation Protocol ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: ML Evaluation Protocols (vwMLEvaluationProtocols.ID)
     * * Description: The Evaluation Protocol version the model was graded under (the exact version row).
@@ -125499,7 +125431,7 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
 
     /**
     * * Field Name: TrainingSnapshotID
-    * * Display Name: Training Snapshot
+    * * Display Name: Training Snapshot ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: ML Training Snapshots (vwMLTrainingSnapshots.ID)
     * * Description: The Training Snapshot the model was trained on.
@@ -125513,7 +125445,7 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
 
     /**
     * * Field Name: TrainingRunID
-    * * Display Name: Training Run
+    * * Display Name: Training Run ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: ML Training Runs (vwMLTrainingRuns.ID)
     * * Description: The training run that produced the model.
@@ -125527,7 +125459,7 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
 
     /**
     * * Field Name: ArtifactSha256
-    * * Display Name: Artifact SHA-256
+    * * Display Name: Artifact SHA256
     * * SQL Data Type: char(64)
     * * Description: SHA-256 of the shipped artifact's stored bytes; a load that hashes differently is refused.
     */
@@ -125741,7 +125673,7 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
 
     /**
     * * Field Name: PredictionUnit
-    * * Display Name: Prediction Unit Details
+    * * Display Name: Prediction Unit
     * * SQL Data Type: nvarchar(255)
     */
     get PredictionUnit(): string | null {
@@ -125750,7 +125682,7 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
 
     /**
     * * Field Name: EvaluationProtocol
-    * * Display Name: Evaluation Protocol Details
+    * * Display Name: Evaluation Protocol
     * * SQL Data Type: nvarchar(255)
     */
     get EvaluationProtocol(): string | null {
@@ -125759,7 +125691,7 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
 
     /**
     * * Field Name: TrainingSnapshot
-    * * Display Name: Training Snapshot Details
+    * * Display Name: Training Snapshot
     * * SQL Data Type: nvarchar(64)
     */
     get TrainingSnapshot(): string | null {
@@ -126136,15 +126068,6 @@ export class MJMLMonitoringResultEntity extends BaseEntity<MJMLMonitoringResultE
     }
 
     /**
-    * * Field Name: Model
-    * * Display Name: Model
-    * * SQL Data Type: nvarchar(500)
-    */
-    get Model(): string | null {
-        return this.Get('Model');
-    }
-
-    /**
     * * Field Name: ScheduledJobRun
     * * Display Name: Scheduled Job Run
     * * SQL Data Type: nvarchar(200)
@@ -126298,15 +126221,6 @@ export class MJMLOutputBindingEntity extends BaseEntity<MJMLOutputBindingEntityT
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: Model
-    * * Display Name: Model
-    * * SQL Data Type: nvarchar(500)
-    */
-    get Model(): string | null {
-        return this.Get('Model');
     }
 }
 
@@ -126680,7 +126594,7 @@ export class MJMLScoringRunEntity extends BaseEntity<MJMLScoringRunEntityType> {
 
     /**
     * * Field Name: MLModelScoringBindingID
-    * * Display Name: ML Model Scoring Binding
+    * * Display Name: Scoring Binding
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: ML Model Scoring Bindings (vwMLModelScoringBindings.ID)
     * * Description: The scoring binding a writing run scored for; NULL for a call that returns its scores and writes no Feature Value.
@@ -127041,17 +126955,8 @@ export class MJMLScoringRunEntity extends BaseEntity<MJMLScoringRunEntityType> {
     }
 
     /**
-    * * Field Name: Model
-    * * Display Name: Model
-    * * SQL Data Type: nvarchar(500)
-    */
-    get Model(): string | null {
-        return this.Get('Model');
-    }
-
-    /**
     * * Field Name: MLModelScoringBinding
-    * * Display Name: ML Model Scoring Binding Details
+    * * Display Name: ML Model Scoring Binding
     * * SQL Data Type: nvarchar(255)
     */
     get MLModelScoringBinding(): string | null {
@@ -127060,7 +126965,7 @@ export class MJMLScoringRunEntity extends BaseEntity<MJMLScoringRunEntityType> {
 
     /**
     * * Field Name: ScopeEntity
-    * * Display Name: Scope Entity Details
+    * * Display Name: Scope Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get ScopeEntity(): string | null {
@@ -127716,15 +127621,6 @@ export class MJMLTrainingRunEntity extends BaseEntity<MJMLTrainingRunEntityType>
     */
     get Pipeline(): string | null {
         return this.Get('Pipeline');
-    }
-
-    /**
-    * * Field Name: ResultingModel
-    * * Display Name: Resulting Model
-    * * SQL Data Type: nvarchar(500)
-    */
-    get ResultingModel(): string | null {
-        return this.Get('ResultingModel');
     }
 
     /**

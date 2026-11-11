@@ -36,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (492 classes)
+// @memberjunction/core-entities (497 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -359,8 +359,12 @@ import {
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
+    MJMLModelPublishRecordEntity,
     MJMLModelScoringBindingEntity,
+    MJMLMonitoringResultEntity,
+    MJMLOutputBindingEntity,
     MJMLPredictionUnitEntity,
+    MJMLScoringRunEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
     MJMLTrainingSnapshotEntity,
@@ -525,6 +529,7 @@ import {
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    MJvwLatestFeatureValuesEntity,
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
     QueryPermissionProvider,
@@ -1111,8 +1116,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
+    MJMLModelPublishRecordEntity,
     MJMLModelScoringBindingEntity,
+    MJMLMonitoringResultEntity,
+    MJMLOutputBindingEntity,
     MJMLPredictionUnitEntity,
+    MJMLScoringRunEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
     MJMLTrainingSnapshotEntity,
@@ -1173,14 +1182,14 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordProcessWatermarkEntity,
     MJRemoteOperationCategoryEntity,
     MJRemoteOperationEntity,
-    MJResourceLinkEntity,
-    MJResourcePermissionEntity,
-    MJResourcePermissionEntityExtended,
-    MJResourceTypeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJResourceLinkEntity,
+    MJResourcePermissionEntity,
+    MJResourcePermissionEntityExtended,
+    MJResourceTypeEntity,
     MJRoleEntity,
     MJRowLevelSecurityFilterEntity,
     MJRubricBandEntity,
@@ -1281,6 +1290,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    MJvwLatestFeatureValuesEntity,
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
     QueryPermissionProvider,
@@ -1376,15 +1386,15 @@ const CLASS_REGISTRATIONS_2: any[] = [
     SearchResultsResource,
     UserViewResource,
     RubricEngineBase,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     AIAgentCategoryHeaderPanel,
     AIAgentCategoryHierarchyPanel,
     AIAgentCategoryOverviewPanel,
     AIPromptCategoryHierarchyPanel,
     ActionCategoryHierarchyPanel,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     BrandKitAssetsPanelComponent,
     BrandKitGenerationPolicyPanelComponent,
     CompanyHeaderPanel,
@@ -1468,7 +1478,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 669;
+export const CLASS_REGISTRATIONS_COUNT = 674;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Model Configuration Section -->
+    <!-- Monitoring Context Section -->
     <mj-collapsible-panel
-        SectionKey="modelConfiguration"
-        SectionName="Model Configuration"
-        Icon="fa fa-cogs"
+        SectionKey="monitoringContext"
+        SectionName="Monitoring Context"
+        Icon="fa fa-clock"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -35,16 +35,6 @@
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Monitoring Period Section -->
-    <mj-collapsible-panel
-        SectionKey="monitoringPeriod"
-        SectionName="Monitoring Period"
-        Icon="fa fa-calendar-alt"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -69,21 +59,13 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ErrorMessage"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Evaluation Metrics Section -->
+    <!-- Evaluation & Metrics Section -->
     <mj-collapsible-panel
         SectionKey="evaluationMetrics"
-        SectionName="Evaluation Metrics"
+        SectionName="Evaluation & Metrics"
         Icon="fa fa-chart-bar"
         [Form]="this"
         [FormContext]="formContext">
@@ -162,11 +144,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Drift and Parity Checks Section -->
+    <!-- Drift & Parity Analysis Section -->
     <mj-collapsible-panel
-        SectionKey="driftAndParityChecks"
-        SectionName="Drift and Parity Checks"
-        Icon="fa fa-exclamation-triangle"
+        SectionKey="driftParityAnalysis"
+        SectionName="Drift & Parity Analysis"
+        Icon="fa fa-search"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -196,10 +178,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Triggers and Automation Section -->
+    <!-- Triggers & Automated Checks Section -->
     <mj-collapsible-panel
-        SectionKey="triggersAndAutomation"
-        SectionName="Triggers and Automation"
+        SectionKey="triggersAutomatedChecks"
+        SectionName="Triggers & Automated Checks"
         Icon="fa fa-bolt"
         [Form]="this"
         [FormContext]="formContext">
@@ -232,6 +214,14 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="RollbackCheck"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ErrorMessage"
             Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"

@@ -16,10 +16,10 @@ export class MJMLModelPublishRecordFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'modelReferences', sectionName: 'Model References', isExpanded: true },
-            { sectionKey: 'publishActionDetails', sectionName: 'Publish & Action Details', isExpanded: true },
-            { sectionKey: 'authorizationActor', sectionName: 'Authorization & Actor', isExpanded: true },
-            { sectionKey: 'auditTrailEvidence', sectionName: 'Audit Trail & Evidence', isExpanded: true },
+            { sectionKey: 'publishReferences', sectionName: 'Publish References', isExpanded: true },
+            { sectionKey: 'publishDetails', sectionName: 'Publish Details', isExpanded: true },
+            { sectionKey: 'approvalAndActor', sectionName: 'Approval and Actor', isExpanded: true },
+            { sectionKey: 'auditAndEvaluation', sectionName: 'Audit and Evaluation', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJMLModelPublishRecords', sectionName: 'ML Model Publish Records', isExpanded: false }
         ]);

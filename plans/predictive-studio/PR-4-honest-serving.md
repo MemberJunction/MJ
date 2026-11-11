@@ -11,7 +11,7 @@
 | PR | 4 of 6 — Honest serving: Model Registry, lifecycle gate, durable artifacts, governance, Scoring Service and Monitoring |
 | Status | not-started |
 | Tier | Ready (kickoff 2026-11-09) |
-| Anchored to | MJ `origin/next` @ `25f11768a7` (2026-11-10). #6180's head as fetched, `pr6180` @ `0b37229bd7` (re-pinned 2026-11-10, §12), is read for the `source: pr6180` facts of §12 and the A-6180 checks of §8.2, never as an anchor (D-069) |
+| Anchored to | MJ `origin/next` @ `25f11768a7` (2026-11-10); merged into the branch at `5fd5335a5f` (2026-11-11, the M1 merge-of-next pass, D4-79). #6180 merged into `next` as `fa33e94dbe` (2026-11-10T22:19Z); its migration is next's `V202611101901__v6.3.x__Task_Security_Saga_Shadow_Scoring.sql`, so the `pr6180` ref and the A-6180 checks of §8.2 are retired (§12's `source: pr6180` facts are historical) |
 | Last refresh | 2026-11-10, Claude (Fable 5.1), 25f11768a7 (origin/next), 0b37229bd7 (pr6180) — kickoff tier upgrade and D-070 review (§12) |
 | Depends on | Both merged: PR 1, and PR 3 (#6064, `641426085b`, 2026-11-09). **PR 1** (`MJ: Feature Values` with its `Source` column and value key, `FeatureValueCacheService` as the one Feature Value writer, the human-value guard on column write-back; consumed by the prediction store, §5.8). **PR 3** (Prediction Unit, as-of assembly `AssemblyRequest`, Training Snapshot, Evaluation Protocol, Trainer/Evaluator `TrainerResult`, stored gate intervals and `incumbentDiff` on training runs, `decideGate`, trust verdict rendering). PR 3 also adds `MJ: Feature Values.EffectiveAsOf` (D-018), which a prediction row uses as its as-of date. Transitively PR 2 (planted-truth suite and gate registry with G0.2/G0.3's agent-run bodies as `Pending` rows; G5.6 is not registered on `next`, so this PR creates its row and M5b writes its body, scoring status check, dry run). PR 2 does **not** contain the automated publish path (D-030): auto-train and the agent keep publishing until this PR routes them through the gate. |
 | Unblocks | **PR 5** (agent as drafter submits to this gate; Feature Pipeline version pins go into this registry's lineage; model predictions are effective-dated `Source = 'Model'` Feature Values it reads as model inputs, D-058), **PR 6** (every shipped / Blue Cypress / Sonar model is published through this gate, served by this service into Feature Values through a scoring binding, shown by the generic record panel and monitored; no score columns are added by migration, D-058) |
@@ -19,7 +19,7 @@
 | MJ destination | `plans/predictive-studio/PR-4-honest-serving.md` |
 | Gates owned | 31 (Phase 0: 2 — G0.2, G0.3, moved from PR 2 by D-030; Phase 3: 11, Phase 5: 6 — G5.6 added by D-060; Phase 6: 12; listed in §4) |
 | Findings closed | 30 (S1 5, S2 18, S3 7; listed in §3.2) |
-| Absorbs | **#6180** (open; conditionally, D-069): PR 4 takes `origin/next` only and cherry-picks nothing; it adds #6180's `FeatureValue.MLModelID` and `Role` columns guarded, with #6180's metadata IDs (§5.8.1), keeps the live challenger mirror on `Source = 'Model'` rows (§5.8.3), adds the `Role = 'Champion'` filters in `FeatureValueCacheService.ts`, and supersedes the PSI drift action, its job and `PSIDriftDetector` with M6's monitoring; the M5/M6 absorption tasks run only after a merge of `next` brings #6180 in. Source-plan Workstreams E1–E9, F1–F8, H1–H9 and M2. **#5001** superseded by PR 3's storage-provider store (D4-01; decided at kickoff, kickoff design §6.4) |
+| Absorbs | **#6180** (merged `fa33e94dbe`, on the branch since the M1 merge of `next` @ `5fd5335a5f`; D-069, D4-79): PR 4 takes `origin/next` only and cherry-picks nothing; `FeatureValue.MLModelID` and `Role` with their metadata rows are next's (`V202611101901`, §5.8.1), keeps the live challenger mirror on `Source = 'Model'` rows (§5.8.3), adds the `Role = 'Champion'` filters in `FeatureValueCacheService.ts`, and supersedes the PSI drift action, its job and `PSIDriftDetector` with M6's monitoring; the M5/M6 absorption tasks (M5.11, M6.8) are active (D4-31's condition met). Source-plan Workstreams E1–E9, F1–F8, H1–H9 and M2. **#5001** superseded by PR 3's storage-provider store (D4-01; decided at kickoff, kickoff design §6.4) |
 
 **Goal:** a model can reach `Published` only through one lifecycle gate that re-derives its evidence from stored rows;
 the gate publishes **automatically** when the stored gate outcome is `model`, `PublishRules.ReverifyPublish` passes under the locks,
@@ -133,6 +133,10 @@ database; `mj test` skips that check because the client-transport suites need MJ
 
 Read the regenerated diff after CodeGen: append any `CodeGen_Run_*.sql` to the migration that caused it (after at least
 50 blank lines) or delete it if there was no DDL; restore `sync` blocks CodeGen writes back into `metadata/**/*.json`.
+After any tail regeneration, re-apply the tail's four `HAND EDIT`s: D4-72's three `EntityUniqueKey` guards and D4-80's
+pin (`[AutoUpdateRelatedEntityInfo] = 0` in the `MJ: Latest Feature Values.EntityID` `EntityField` insert, and CodeGen's
+"Set LLM-identified FKs for MJ: Latest Feature Values" block removed); then prove a clean build's `codegen --skipfiles`
+emits nothing.
 Never run `mj migrate`, `mj codegen` or `mj sync push` against a database you did not create.
 
 **Bootstrap facts measured at M1 (2026-11-10):**
@@ -331,7 +335,7 @@ e2e/**/ps-honest-serving*.spec.ts
 guides/PREDICTIVE_STUDIO_GUIDE.md
 plans/predictive-studio/PR-4-honest-serving.md
 .changeset/ps-honest-serving.md
-# Conditional (D-069): only after a merge of next brings #6180 in; its checks import the drift action M6 deletes,
+# Active (D-069, D4-31; #6180 merged fa33e94dbe, on the branch since the M1 merge of next): its checks import the drift action M6 deletes,
 # save Status = 'Published' directly (M3's hook refuses it) and assert Source = 'Pipeline' on model predictions
 packages/TestingFramework/integration-test-suite/src/checks/predictive-shadow-drift.checks.ts
 packages/TestingFramework/integration-test-suite/src/__tests__/predictive-shadow-drift.checks.test.ts
@@ -1490,7 +1494,7 @@ Python assets as shipped. Exit counts are measured on the agent's database at ea
 | PR 1's Feature Pipeline writes and reads: `Pipeline` and `Human` Feature Value rows keep their key, writer, history and visibility (the view-gate filter matches only `Source = 'Model'` rows) | D-058 adds a source to PR 1's store; it must not change PR 1's behaviour | PR 1's FeaturePipelines unit tests and its gates (`C1 → C2.1`, `C1 → C2.2`, `C1 → C2.3`, `C1 → C2.5`, `C1 → C3.3`) by name; an M5b test reads pipeline rows as a user without any prediction authorization and gets them all |
 | PR 1's human-value guard on column write-back (a person's value is kept unless the run is told to overwrite) | Reused by the binding's column copy (§5.8.3) | PR 1's writeBack tests + an M5 copy test |
 | Existing apps that read a model's score from an entity column (MoreCheese `MemberProfile.RenewalProbability`, PR 6) | The binding's `TargetColumn` copy keeps the column filled (D-058 decision 3) | M5 copy test; PR 6 re-applies it |
-| `CK_FeatureValue_Role`, `FK_FeatureValue_MLModel` and #6180's metadata rows on a database that ran #6180 first (D-069) | PR 4's migration must apply before or after #6180 | A-6180-COLUMNS (§8.2); M1 runs the migration on a scratch copy with #6180's columns present and absent |
+| `CK_FeatureValue_Role`, `FK_FeatureValue_MLModel` and the FeatureValue metadata rows next ships in `V202611101901` (#6180, merged `fa33e94dbe`) | PR 4's migration runs after it on every database (D4-79) | the clean build of §2.3 (fresh-install order: `V202611101901` before PR 4's migration in `flyway_schema_history`) and the serving-schema DB lane's run-twice case (presence checks by entity and name) |
 | Deterministic integration tier (`Integration Tests — Deterministic`) | Definition of Done | §7 |
 
 The suites run by name at each milestone end are `Predictive Studio Gates — Containment` (10; PR 2's Phase 0 gates),
@@ -1524,7 +1528,7 @@ values. Every new table gets `__mj_CreatedAt`/`__mj_UpdatedAt` from CodeGen. JSO
 and JSONType metadata naming the contract type; every string column says `COLLATE SQL_Latin1_General_CP1_CI_AS`
 (§2.5). **One migration file** (D-069; owner, PR 3, 2026-11-04: "we should only have a single migration file"):
 `migrations/v6/V<ts>__v6.3.x__PS_Honest_Serving_Schema.sql`, created at M1 with the DDL below and the hand-written
-sections of §5.8.1 (#6180's two columns and their metadata rows, guarded) and §5.8.4 (the view and its `Entity` row), and
+sections of §5.8.1 (the as-of index over next's `Role` and `MLModelID`, D4-79) and §5.8.4 (the view and its `Entity` row), and
 extended at M5 (the rest of the prediction store, §5.8.1–§5.8.2, shipped with the code that writes it) and at M7 (the
 data section of §5.6), each time with a regenerated CodeGen tail (PR 3's D3-224 checksum rule applies). Every milestone
 whose extension adds, alters or drops a foreign key into a table `spDeleteEntityWithCoreDependencies` deletes updates
@@ -2488,8 +2492,8 @@ records, queryable across the population, kept with history and lineage, and vis
 names — with no migration, no CodeGen run and no developer step per model. The store of record is PR 1's
 `MJ: Feature Values`; one read-only virtual entity over a view, `MJ: Latest Feature Values`, serves the latest values
 live (D-078: nothing is materialized and nothing is refreshed); one generic panel shows them; one row-level security
-filter gates them. The DDL of §5.8.1, §5.8.2 and §5.8.4 is hand-written in the one migration (D-069): #6180's two
-columns with their metadata rows, the view, its index and its `Entity` row at M1; the lineage columns, the binding
+filter gates them. The DDL of §5.8.1, §5.8.2 and §5.8.4 is hand-written in the one migration (D-069): the view, its
+index and its `Entity` row at M1 (#6180's two columns with their metadata rows are next's `V202611101901`, D4-79); the lineage columns, the binding
 reshape and the view's lineage columns at M5. Then ≥ 50 blank lines and the CodeGen output; no literal `Sequence`.
 
 #### 5.8.1 `MJ: Feature Values` — one store for pipeline answers and model predictions
@@ -2498,64 +2502,20 @@ Today (`599c288dee`) `Source` is `Pipeline | Human`
 (`migrations/v6/V202610201100__v6.2.x__Feature_Value_Key_And_Versions.sql:25`), `RecordProcessID` is NOT NULL
 (`V202609212241__v6.2.x__Feature_Pipelines.sql:72`) and PR 3 added `EffectiveAsOf` and `InputAsOf DATETIMEOFFSET NULL`
 with `IX_FeatureValue_Entity_Feature_EffectiveAsOf` (`V202611080314__v6.3.x__PS_Honest_Training_Schema.sql:286-295`).
-`MLModelID` and `Role` are not on `next`; MemberJunction PR #6180 adds both (`pr6180` @ `0b37229bd7`,
-`migrations/v6/V202611090911__v6.3.x__Task_Security_Saga_Shadow_Scoring.sql:59-64` and `:108-113`), unguarded.
+`MLModelID` and `Role` are on `next` since MemberJunction PR #6180 merged (`fa33e94dbe`, 2026-11-10T22:19Z):
+`migrations/v6/V202611101901__v6.3.x__Task_Security_Saga_Shadow_Scoring.sql`, section "4. FeatureValue" (its lines 55–120).
 
-**(M1) #6180's columns, consumed and added only when absent (D-069),** so the migration applies before or after #6180:
-
-```sql
-IF COL_LENGTH(N'${flyway:defaultSchema}.FeatureValue', N'Role') IS NULL
-    ALTER TABLE ${flyway:defaultSchema}.FeatureValue
-        ADD Role NVARCHAR(20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL
-            CONSTRAINT DF_FeatureValue_Role DEFAULT (N'Champion');
-GO
-IF OBJECT_ID(N'${flyway:defaultSchema}.CK_FeatureValue_Role', N'C') IS NULL
-    ALTER TABLE ${flyway:defaultSchema}.FeatureValue
-        ADD CONSTRAINT CK_FeatureValue_Role CHECK (Role IN (N'Champion', N'Challenger'));
-GO
-IF COL_LENGTH(N'${flyway:defaultSchema}.FeatureValue', N'MLModelID') IS NULL
-    ALTER TABLE ${flyway:defaultSchema}.FeatureValue ADD MLModelID UNIQUEIDENTIFIER NULL;   -- FK MJ: ML Models
-GO
-IF OBJECT_ID(N'${flyway:defaultSchema}.FK_FeatureValue_MLModel', N'F') IS NULL
-    ALTER TABLE ${flyway:defaultSchema}.FeatureValue
-        ADD CONSTRAINT FK_FeatureValue_MLModel FOREIGN KEY (MLModelID) REFERENCES ${flyway:defaultSchema}.MLModel(ID);
-GO
--- Each description is added only when the column has none, with #6180's string verbatim (its lines 95 and 117), laid out
--- as #6180 lays it out (`@value = N'…',` then the level-1 and level-2 lines) so A-6180-COLUMNS reads both files alike:
---   Role:      N'Champion for the production value of the record process; Challenger for a shadow score from its challenger, kept for comparison only.'
---   MLModelID: N'The MJ: ML Models record that scored this value, for values written by an ML Model record process (the champion''s audit row or a shadow challenger''s row). NULL for values from AI prompts, which record their model in AIModelID.'
--- spUpdateExistingEntityFieldsFromSchema rewrites EntityField.Description from the extended property where
--- AutoUpdateDescription = 1, so any other string would overwrite #6180's on every database that runs both.
-```
-
-**(M1) The CodeGen metadata rows of the two columns, hand-written with #6180's IDs (D-069).** CodeGen inserts an
-`EntityField` only where `vwSQLColumnsAndEntityFields.EntityFieldID IS NULL`
-(`CodeGenLib/src/Database/manage-metadata.ts:7178` on `599c288dee`) and skips an existing `EntityFieldValue` (`:7673`),
-so a tail generated on a database with #6180 applied emits nothing and two PRs that add the same column under different
-UUIDs collide on whichever applies second (the `EntityFieldValue` inserts are unguarded and `EntityFieldValue` has no
-unique key besides its primary key). The rows therefore live in the hand-written section, each guarded, each copied from
-`pr6180:migrations/v6/V202611090911__v6.3.x__Task_Security_Saga_Shadow_Scoring.sql` (column lists and values as #6180
-writes them; `MJ: Feature Values` is `3BED585D-B150-4899-AB06-8A19624EA9BE`, `MJ: ML Models` is
-`A3997636-011D-46E0-BC01-8B1E61E1087B`):
-
-| Row | ID (`pr6180` @ `0b37229bd7`) | #6180 lines | Guard in PR 4's migration |
-|---|---|---|---|
-| `EntityField` `Role` (`nvarchar` 40, default `Champion`, `Sequence` = `(SELECT COALESCE(MAX([Sequence]), 0) + 1 … WHERE [EntityID] = '3BED585D-…')`) | `234fb2ce-776d-4d36-b356-0fe1348132b4` | 776–837 | #6180's own: `IF NOT EXISTS (… WHERE ID = '234fb2ce-…' OR (EntityID = '3BED585D-…' AND Name = 'Role'))` |
-| `EntityField` `MLModelID` (`uniqueidentifier`, `RelatedEntityID` `A3997636-…`, `RelatedEntityFieldName` `ID`, same `Sequence` expression) | `728338f3-7230-42c1-9ad1-6956afec40b7` | 839–900 | #6180's own, by ID or `(EntityID, Name = 'MLModelID')` |
-| `EntityFieldValue` `Challenger` (`Sequence` 1, `Code` `Challenger`, `Source` `Check`) | `77b68e90-506f-4019-b6a3-914699c91335` | 1091–1095 | added: `IF NOT EXISTS (… WHERE EntityFieldID = '234FB2CE-…' AND Value = 'Challenger')` |
-| `EntityFieldValue` `Champion` (`Sequence` 2, `Code` `Champion`, `Source` `Check`) | `13832682-906a-4d0f-a819-ce365aa93d97` | 1097–1101 | added: `IF NOT EXISTS (… WHERE EntityFieldID = '234FB2CE-…' AND Value = 'Champion')` |
-| `UPDATE … SET ValueListType='List' WHERE ID='234FB2CE-776D-4D36-B356-0FE1348132B4'` (#6180's insert omits the column; without it `syncEntityFieldValues` emits this `UPDATE` into every later tail) | — | 1103–1104 | idempotent, unguarded |
-| `EntityRelationship` `MJ: ML Models` → `MJ: Feature Values` on `MLModelID` (`One To Many`, `BundleInAPI` 1, `DisplayInForm` 1, `Sequence` 3) | `502b4788-9425-4cbf-8fbe-a5e8b0599f9c` | 1117–1124 | #6180's own, by ID or `(EntityID, RelatedEntityID, RelatedEntityJoinField)` |
-
-The tail is then generated on a database where PR 4's migration has run, so CodeGen emits nothing for the two columns
-and the TypeScript sees #6180's state. A-6180-COLUMNS (§8.2) greps these IDs, the `ValueListType` update and the two
-description strings out of #6180's migration at every refresh and compares them with PR 4's migration and the agent's
-database. **#6180 regenerates its tail** (it rebased onto `next` at `f40161febb`, committed 2026-11-09T21:54Z, 613 commits
-ahead of `79fbbc6ea7`, and regenerated all five IDs; the table carries them, read at `0b37229bd7`, whose migration is
-byte-identical to `f40161febb`'s; §9.1 D4-38): the IDs PR 4 ships are the ones #6180 carries when M1's migration is written,
-re-read by A-6180-COLUMNS at every milestone start until #6180 merges or closes. If #6180 merges after PR 4, its unguarded
-`EntityFieldValue` inserts collide with these rows on every database that ran PR 4 first; that rebase is #6180's (§10
-Coordination).
+**(M1) Provided by next (D4-79).** PR 4's migration adds none of the two columns' objects: next's `V202611101901`
+adds `Role` (`DF_FeatureValue_Role`, `CK_FeatureValue_Role`) and `MLModelID` (`FK_FeatureValue_MLModel`,
+`IDX_AUTO_MJ_FKEY_FeatureValue_MLModelID`), their descriptions, and five metadata rows under its own IDs —
+`EntityField` `Role` `bab2f6f6-56d7-4372-9f00-505790d71886` (its line 778), `EntityField` `MLModelID`
+`24ace2b5-b5e9-4048-80ed-7d55cbcd2846` (:841), `EntityFieldValue` `Challenger` `0f42095a-2938-4b51-814b-fce520307b18`
+(:1100), `EntityFieldValue` `Champion` `dff637a2-5ef8-4da9-bdd2-c4a15f81a75b` (:1104), the `ValueListType='List'`
+update (:1107) and the `EntityRelationship` `MJ: ML Models` → `MJ: Feature Values` `eb42f51a-4e80-4378-9892-95815fcfb08b`
+(:1122). PR 4's migration sorts after it, so every database runs his first (the fresh-install order is recorded in §11's
+M1 merge-of-next entry). The guarded section M1 first wrote (#6180's columns and rows under the IDs of its unmerged
+head) was removed at the M1 merge-of-next pass; no code or test names those IDs (the serving-schema DB lane finds the
+`Role` field by `(EntityID, Name)`).
 
 **(M5) The prediction lineage:**
 
@@ -2597,8 +2557,8 @@ CREATE INDEX IX_FeatureValue_Record_Feature_AsOf ON ${flyway:defaultSchema}.Feat
 - `Role` (#6180's) is `Champion` on every row PR 1's and PR 4's writers write, except the live mirror's challenger rows
   (§5.8.3). Readers that mean "the value" read `Role = 'Champion'`: the view (§5.8.4), the panel, the column copy and
   the outcome join of the current model. PR 4 adds those filters in `FeatureValueCacheService.ts` only (D-069); the
-  ones #6180 adds in `FeaturePipelineVersionService.ts` and `feature-values.panel.ts` arrive with #6180, because its
-  `InferProcessor` prompt challenger writes `Source = 'Pipeline', Role = 'Challenger'` rows once it lands.
+  ones #6180 added in `FeaturePipelineVersionService.ts` and `feature-values.panel.ts` are on `next` since its merge
+  (`fa33e94dbe`), because its `InferProcessor` prompt challenger writes `Source = 'Pipeline', Role = 'Challenger'` rows.
 - Pipeline and human rows keep PR 1's key: `UQ_FeatureValue_ValueKey (RecordProcessID, ValueKeyHash)` is filtered
   `WHERE ValueKeyHash IS NOT NULL` (`V202610201100…sql:29-31`); `Model` rows keep `ValueKeyHash` NULL and use
   `UQ_FeatureValue_ModelRow`.
@@ -2723,7 +2683,7 @@ call `Predict` and write nothing (no feature identity, authorization or retentio
    (`RecordSetProcessor/engine/src/writeBack.ts:41`; §5.2): a person's value is kept unless the run's
    `OverwriteHumanValues` (a `ScoringContext` member carrying PR 1's run option, default `false`) says otherwise.
 5. **The live challenger mirror** (architecture C7's same-rows principle; D-069 keeps it as monitoring's divergence
-   signal). When the binding's monitoring job names a challenger (once #6180 is on the branch, also when the binding's
+   signal). When the binding's monitoring job names a challenger (#6180 being on the branch, also when the binding's
    Record Process carries a `ChallengerConfiguration`), the same batch's assembled features are scored by the challenger
    and written as `Source = 'Model'` rows with `Role = 'Challenger'` and the same `EffectiveAsOf`, under a **second
    `MJ: ML Scoring Runs` row** (its `ModelID` the challenger; one run row per role, §9.1 D4-37), in the same transaction
@@ -2811,7 +2771,8 @@ for a view, so §8.2 carries A-078. This is the first virtual entity MJ core shi
 WHERE VirtualEntity = 1` → 0 on the local `MJ_BranchableRuns`, 2026-11-10), so the fresh-install path is exercised by
 `bootstrap-clean-db` at M5b's exit, not assumed. The view's SQL and the guarded column DDL above were run once in
 `tempdb` against scratch tables at the kickoff (the view returns the newest dated `Champion` row per key, a `Challenger`
-row never, `ID` as its first column; the guarded block run twice adds each object once). The bootstrap order, `AGENTS.md`, `conventions.md` §4 and
+row never, `ID` as its first column; the guarded block run twice adds each object once; that block was removed at the
+M1 merge-of-next pass, next's `V202611101901` adding the columns, D4-79). The bootstrap order, `AGENTS.md`, `conventions.md` §4 and
 `program/release-procedure.md` §1.3 are unchanged: the deterministic CI lane's `mj migrate` + `mj sync push` is enough
 to have the entity, so the M5b bundle "PS Prediction Serving — Zero Schema Change" joins the deterministic tier.
 
@@ -2957,8 +2918,10 @@ removed with D-078 (D4-39).
 `spDeleteEntityWithCoreDependencies` removes an entity together with the core rows that depend on it; on
 `599c288dee` its newest definition was PR 3's (`V202611080314__v6.3.x__PS_Honest_Training_Schema.sql:313`, section 7,
 which deletes the pipelines' `MLTrainingSnapshot` rows after their runs and models, `:611-614`); on PR 4's merge base
-`378daae9ab` it is next's `V202611101200__v6.3.x__Entity_Unique_Key_Sets.sql:332` (PR 3's body plus the entity's
-`EntityUniqueKey` step), which M1 re-creates (D4-74). Among the tables it
+`378daae9ab` it was next's `V202611101200__v6.3.x__Entity_Unique_Key_Sets.sql:332` (PR 3's body plus the entity's
+`EntityUniqueKey` step), and since the M1 merge of `next` @ `5fd5335a5f` it is `V202611101901__v6.3.x__Task_Security_Saga_Shadow_Scoring.sql:123`
+(`V202611101200`'s body plus one line, `UPDATE … FeatureValue SET MLModelID = NULL …`), which M1 re-creates as a
+superset (D4-74, D4-79). Among the tables it
 deletes from are `MLModel`, `MLModelScoringBinding`, `MLTrainingPipeline`, `MLTrainingRun`, `MLTrainingSnapshot`,
 `RecordProcess`, `ProcessRunDetail` and `FeatureValue`. `packages/CodeGenLib/src/__tests__/delete-entity-fk-coverage.test.ts`
 fails on a missing or stale `entity-delete-fk-policy.json` entry, a nullability drift, or a child statement placed after
@@ -2971,14 +2934,14 @@ fixture is the one CodeGenLib path in the allowlist; CodeGenLib source is not to
 
 | Milestone | Foreign keys the procedure and the policy must cover |
 |---|---|
-| M1 | `MLModel.TrainingSnapshotID` and `MLModel.TrainingRunID`; the five FKs of `MLModelPublishRecord` (`ModelID` — nullable since a run-level refusal has no model (D4-56), so its policy entry says `"nullable": true` with action `delete` —, `TrainingRunID` — nullable, action `null`: the records of doomed models and the run-level records of doomed runs are deleted, and a surviving model's record keeps with `TrainingRunID` nulled, because `CK_MLModelPublishRecord_Subject` forbids nulling it only on a run-level row (D4-74, D4-73) —, `UserID`, `SignOffID`, `ReplacesModelID`); `FeatureValue.MLModelID` (#6180's column, added guarded); `MLScoringRun`'s FKs into tables the procedure deletes from (`ModelID`, `MLModelScoringBindingID`) and its `ScopeEntityID` reference into `Entity`; `MLOutputBinding.ModelID`; `MLMonitoringResult`'s FKs (`ModelID` → `MLModel`, `ChallengerRunID` → `MLTrainingRun`; its `ScheduledJobRunID` points at `ScheduledJobRun`, which the procedure never deletes from, so it needs no step). M1 creates every new table (D-069, D4-44), so the former M3 and M6 rows are here |
+| M1 | `MLModel.TrainingSnapshotID` and `MLModel.TrainingRunID`; the five FKs of `MLModelPublishRecord` (`ModelID` — nullable since a run-level refusal has no model (D4-56), so its policy entry says `"nullable": true` with action `delete` —, `TrainingRunID` — nullable, action `null`: the records of doomed models and the run-level records of doomed runs are deleted, and a surviving model's record keeps with `TrainingRunID` nulled, because `CK_MLModelPublishRecord_Subject` forbids nulling it only on a run-level row (D4-74, D4-73) —, `UserID`, `SignOffID`, `ReplacesModelID`); `FeatureValue.MLModelID` (next's column, `V202611101901`); `MLScoringRun`'s FKs into tables the procedure deletes from (`ModelID`, `MLModelScoringBindingID`) and its `ScopeEntityID` reference into `Entity`; `MLOutputBinding.ModelID`; `MLMonitoringResult`'s FKs (`ModelID` → `MLModel`, `ChallengerRunID` → `MLTrainingRun`; its `ScheduledJobRunID` points at `ScheduledJobRun`, which the procedure never deletes from, so it needs no step). M1 creates every new table (D-069, D4-44), so the former M3 and M6 rows are here |
 | M5 | the binding reshape (`FK_MLModelScoringBinding_MLModel` dropped; `MLTrainingPipelineID`, `ViewAuthorizationID` added); `FeatureValue.RecordProcessID` made nullable (a nullability change the policy records); the Feature Value FKs `FK_FeatureValue_ScoringBinding`, `FK_FeatureValue_MLModel`, `FK_FeatureValue_ScoringRun` |
 
 **Order constraint.** `FeatureValue` rows that reference `MLModel`, `MLModelScoringBinding` or `MLScoringRun` are deleted
 or nulled before those tables' `DELETE`. `Source = 'Model'` rows of a model being deleted are **deleted** before
 `MLModelID` is nulled on any other row, because the `Model` branch of `CK_FeatureValue_SourceLineage` requires
-`MLModelID` (§5.8.1); #6180's procedure only nulls it (`pr6180` line 352). A-6180-DELETE-PROC (§8.2) checks the text at
-every refresh. The exact statement order and the policy entries are written in M1's task (kickoff design §8).
+`MLModelID` (§5.8.1); #6180's procedure (`V202611101901`) only nulled it, and PR 4's keeps that line after the delete.
+A-6180-DELETE-PROC (§8.2) checks PR 4's body ⊇ `V202611101901`'s wherever a milestone re-creates the procedure. The exact statement order and the policy entries are written in M1's task (kickoff design §8).
 
 ## 6. Milestones (Ready)
 
@@ -2995,8 +2958,9 @@ migration `migrations/v6/V<ts>__v6.3.x__PS_Honest_Serving_Schema.sql` exists wit
 table §5.1 defines (D-069, D4-40, D4-44): `MJ: ML Model Publish Records` (with `UX_MLModelPublishRecord_OnePublishPerRun`),
 `MJ: ML Scoring Runs`, `MJ: ML Monitoring Results` and `MJ: ML Output Bindings`, each with its foreign keys — the
 `MJ: ML Models` extension (the new
-columns, the widened `CK_MLModel_Status`, duplicate versions renumbered, then `UX_MLModel_PipelineVersion`), #6180's
-`Role` and `MLModelID` columns and their five metadata rows added only when absent with #6180's IDs (§5.8.1, D4-30),
+columns, the widened `CK_MLModel_Status`, duplicate versions renumbered, then `UX_MLModel_PipelineVersion`), (#6180's
+`Role` and `MLModelID` columns and their five metadata rows are next's `V202611101901`, IDs `bab2f6f6…`, `24ace2b5…`,
+`0f42095a…`, `dff637a2…`, `eb42f51a…`; the guarded section was removed at the merge-of-next pass, §5.8.1, D4-79),
 `IX_FeatureValue_Record_Feature_AsOf`, `vwLatestFeatureValues` with `ID` first and the `MJ: Latest Feature Values`
 `Entity` row `1AC777D7-EEE8-485F-83DB-2127DBB4BFB7` (§5.8.4, D4-29), `spDeleteEntityWithCoreDependencies` re-created
 with every step M1's foreign keys need (§5.9's M1 row) — then ≥ 50 blank lines and the CodeGen tail;
@@ -3043,8 +3007,8 @@ JSONType for any ML column: `git ls-tree --name-only origin/next metadata/entiti
 
 - [x] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
   `"$PLANS/tools/ps-env.sh" <command>` (D-074).
-- [x] `git fetch origin && git fetch origin pull/6180/head:pr6180 --force`; A-6180-STATE and A-6180-COLUMNS (§8.2)
-  re-run; an ID that differs from D4-30 is followed in this milestone's commit (D4-38).
+- [x] `git fetch origin next` (at M1's start also `git fetch origin pull/6180/head:pr6180 --force` with A-6180-STATE and
+  A-6180-COLUMNS, retired at the M1 merge-of-next pass, D4-79).
 - [x] merge `origin/next`: when `git diff --name-only HEAD..origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
@@ -3187,7 +3151,7 @@ getters, `MJFeatureValueEntity.Role`/`MLModelID`
   `"$PLANS/tools/ps-env.sh" pnpm mj codegen` → `pnpm run build`.
 - [x] Step 4: Step 2's command → the eight cases pass, 0 failed; `node .github/scripts/check-migration-entityfield-sequence.mjs`
   → exit 0; `npm run check:codegen-tail` → exit 0; A-078 (§8.2) → `git grep -ci "1AC777D7-EEE8-485F-83DB-2127DBB4BFB7" HEAD -- "$OURS"`
-  ≥ 1 + the view's column count (16 at M1), and A-6180-COLUMNS → `A-6180-COLUMNS ok`.
+  ≥ 1 + the view's column count (16 at M1), and A-6180-COLUMNS → `A-6180-COLUMNS ok` (retired at the merge-of-next pass, D4-79).
 - [x] Step 5: Runtime (`sqlcmd` with the env loaded):
   `SELECT name FROM sys.tables WHERE name IN ('MLModelPublishRecord','MLScoringRun','MLMonitoringResult','MLOutputBinding')`
   → 4 rows;
@@ -3197,8 +3161,8 @@ getters, `MJFeatureValueEntity.Role`/`MLModelID`
   `SELECT Name, BaseView, BaseViewGenerated, IncludeInAPI, AllowCreateAPI, AllowUpdateAPI, AllowDeleteAPI FROM __mj.Entity WHERE VirtualEntity = 1`
   → exactly `MJ: Latest Feature Values | vwLatestFeatureValues | 0 | 1 | 0 | 0 | 0`;
   `SELECT Name FROM __mj.EntityField WHERE EntityID = '1AC777D7-EEE8-485F-83DB-2127DBB4BFB7' AND IsPrimaryKey = 1` → `ID`;
-  the migration applied a second time to a scratch copy of the database (`#6180`'s columns present: run `pr6180`'s
-  migration on the copy first) → 0 errors and each guarded object present once (§4.2 keep row).
+  the migration applied a second time to a scratch copy of the database (at M1 with `pr6180`'s migration run on the
+  copy first; since the merge-of-next pass next's `V202611101901` always runs first, D4-79) → 0 errors and each guarded object present once (§4.2 keep row).
 
 #### Task M1.3: `spDeleteEntityWithCoreDependencies` and the delete policy in lockstep (§5.9, D4-32)
 
@@ -3258,7 +3222,8 @@ M1; D4-74):
   the migration, then CodeGen, as Task M1.2 Step 3.
 - [x] Step 4: `cd packages/CodeGenLib && pnpm test` → `delete-entity-fk-coverage.test.ts` passes (its 10 cases), total
   measured at M1 (the local tree's CodeGenLib differs from `599c288dee`); A-6180-DELETE-PROC (§8.2) → the training-snapshot
-  step, the `Source = N'Model'` `DELETE` and the `MLModelID` `UPDATE`, the `DELETE`'s line number smaller.
+  step, the `Source = N'Model'` `DELETE` and the `MLModelID` `UPDATE`, the `DELETE`'s line number smaller, and PR 4's
+  body ⊇ `V202611101901`'s (re-pointed at the merge-of-next pass, D4-79).
 - [x] Step 5: Runtime on a scratch copy: create an entity's pipeline with a model, a publish record pair (sign-off and
   the publish that consumed it), a no-signal run's run-level refusal (`ModelID` null), an output binding, a scoring run scoped to the entity, a monitoring result, a training
   run and a snapshot, then
@@ -3467,7 +3432,7 @@ annotated tag answers `tag <sha>`: dereference it with `gh api repos/actions/set
   (M8.4) does not carry it. The truth-suite pytest (`TruthSuite`, `pnpm run test:python`) still runs at every milestone
   exit, counts in §11. **Carried at the M1 exit:** this box is ticked so the exit gate's `tasks` check
   (boxes above `milestone-exit.mjs`) passes, but the step needs the push, which the merge-of-next pass makes; that pass
-  runs `gh pr checks` and pastes both lines into its §11 entry.
+  runs `gh pr checks` after its push and records the CI result in its §11 entry (D4-79).
 
 **Coverage table**
 
@@ -3507,8 +3472,8 @@ TypeScript compiler API in the unit lane, Core's `jsontype-mirrors.compile.test.
 does not depend on `@memberjunction/core-entities`)
 
 - [x] Step 1: Add the cases the table names that Task M1.2 did not write — an artifact status outside its CHECK; a
-  same-day re-run; a publish record for a missing model — plus: the `Entity` insert and #6180's guarded block run twice
-  (no duplicate object, no error); a `sign-off` row with `OverridesFlags` and an empty `Reason` (`CK_MLModelPublishRecord_Reason`);
+  same-day re-run; a publish record for a missing model — plus: the `Entity` insert run twice over next's FeatureValue
+  `Role` and `MLModelID` (no duplicate object, no error; next's objects checked present by entity and name, D4-79); a `sign-off` row with `OverridesFlags` and an empty `Reason` (`CK_MLModelPublishRecord_Reason`);
   a `refusal` row without `Refusal` (`CK_MLModelPublishRecord_Refusal`); a `sign-off` row with an `automated-gate`
   approver (`CK_MLModelPublishRecord_SignOff`); a `refused` scoring run with `Written = 1` (`CK_MLScoringRun_Refused`); a
   second monitoring row for one model and period (`UQ_MLMonitoringResult_ModelPeriod`); a second output binding for one
@@ -3535,11 +3500,15 @@ does not depend on `@memberjunction/core-entities`)
 - `cd packages/AI/PredictiveStudio/TruthSuite && pnpm test` → 103 passed / 17 files (measured on `599c288dee`'s tree),
   and its DB lane `pnpm run test:db -- serving-schema` → every case of Tasks M1.2 and M1.7 passing (count measured at M1).
 - `node .github/scripts/check-migration-entityfield-sequence.mjs`, `npm run check:codegen-tail`, `npm run check:guards`,
-  `npm run check:standards` → exit 0; A-078, A-6180-COLUMNS, A-6180-DELETE-PROC (§8.2) as Task M1.2/M1.3 state.
+  `npm run check:standards` → exit 0; A-078 and A-6180-DELETE-PROC → PR 4's procedure body ⊇ `V202611101901`'s (§8.2: the two `awk` extracts, `diff` shows only
+  added lines and the one widened `@Handled` line) as Task M1.2/M1.3 state
+  (A-6180-COLUMNS retired, D4-79).
 - The sidecar pytest suite (`cd packages/AI/PredictiveStudio/Sidecar && pnpm run test:python`) and the truth-suite
   pytest (`cd packages/AI/PredictiveStudio/TruthSuite && pnpm run test:python`) → 0 failed (counts measured at M1; the sidecar suite also runs in CI from M1, Task M1.6).
 - `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Integration Tests — Deterministic"`
-  → 0 failed (count measured at M1); the §4.2 keep-list suites by name → 0 failed.
+  → 0 failed (count measured at M1), measured in two forms: CI's PR lane form (no flag; `MJ_REST_API_ENABLED=true MJ_DISABLE_TASK_GRAPH_DISPATCHER=1`)
+  → 0 failed, skip gate PASSED; with RUN_MUTATION_TESTS=1 → every failure root-caused and named in §11, and 0 failures
+  attributable to PR 4's changes (D4-79); the §4.2 keep-list suites by name → 0 failed.
 
 **Milestone exit, in order (design §6.5; M1 ships no UI, so there is no UI step):**
 
@@ -3555,9 +3524,9 @@ does not depend on `@memberjunction/core-entities`)
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
 - [x] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M1` → exit 0, summary in the commit body
 - [x] one checkpoint commit, each path staged by name (the plan and `.changeset/ps-honest-serving.md` among them)
-- [ ] `git push` through the pre-push hook (`milestone-exit.mjs --mode pre-push`, D-072)
+- [x] `git push` through the pre-push hook (`milestone-exit.mjs --mode pre-push`, D-072) — at the merge-of-next pass (D4-79)
 - [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --edit-pr` → the open PR's body from §10 (the only file it changes is
-  §10's `gen:head`, which rides in the next commit)
+  §10's `gen:head`, which rides in the next commit) — at the merge-of-next pass (D4-79)
 
 **Milestone exit (UI first where the milestone ships UI, D-076):** `pr-body.mjs` (no `--edit-pr`) → `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M1` → exit 0, summary in the commit body → one checkpoint commit (the plan and the changeset staged by name) → push (the pre-push hook runs `--mode pre-push`, D-072) → `pr-body.mjs --edit-pr`
 
@@ -3595,8 +3564,8 @@ the `ModelNeedsTrainingError` throws at `:320`, `:324`, `:329`), the auto-train 
 
 - [ ] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
   `"$PLANS/tools/ps-env.sh" <command>` (D-074).
-- [ ] `git fetch origin && git fetch origin pull/6180/head:pr6180 --force`; A-6180-STATE and A-6180-COLUMNS (§8.2)
-  re-run; an ID that differs from D4-30 is followed in this milestone's commit (D4-38).
+- [ ] `git fetch origin next`; `git rev-parse --short origin/next` recorded in §11 (#6180 merged `fa33e94dbe`; the
+  `pr6180` fetch and A-6180-STATE/A-6180-COLUMNS are retired, D4-79).
 - [ ] merge `origin/next`: when `git diff --name-only HEAD..origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
@@ -3871,7 +3840,7 @@ milestone; counts, cells and claims go to §11.
   `SELECT ArtifactSha256 FROM __mj.MLModel WHERE ID = @model` equals `shasum -a 256` of the stored object.
 - `cd packages/TestingFramework/integration-test-suite && pnpm test` and the TruthSuite DB lane
   (`pnpm run test:db -- artifact-registry`) → 0 failed (counts measured at M2); the sidecar and truth-suite pytest →
-  0 failed (counts measured at M2; the sidecar suite also in CI, Task M1.6); `Integration Tests — Deterministic` and the §4.2 keep-list suites → 0 failed.
+  0 failed (counts measured at M2; the sidecar suite also in CI, Task M1.6); `Integration Tests — Deterministic` (D4-79's two forms) and the §4.2 keep-list suites → 0 failed.
 
 **Milestone exit, in order (design §6.5; M2 ships no UI, so there is no UI step):**
 
@@ -3879,7 +3848,7 @@ milestone; counts, cells and claims go to §11.
 - [ ] Task M2.5's harness run by the reviewer (D-071), its counts, cells and claims in §11
 - [ ] self-audit of every added and changed line against `reference/coding-standards.md`, findings fixed
 - [ ] tasks ticked
-- [ ] §11 entry `### <date> — <agent> — M2` with the counts, the `**Mutation output G3.1:**` and `**Mutation output G3.2:**` lines and #6180's merge state
+- [ ] §11 entry `### <date> — <agent> — M2` with the counts, the `**Mutation output G3.1:**` and `**Mutation output G3.2:**` lines
 - [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
 - [ ] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M2` → exit 0, summary in the commit body
@@ -3957,8 +3926,8 @@ tests (`Sidecar/src/python/tests/test_gate_parity.py`, `TruthSuite/python/tests/
 
 - [ ] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
   `"$PLANS/tools/ps-env.sh" <command>` (D-074).
-- [ ] `git fetch origin && git fetch origin pull/6180/head:pr6180 --force`; A-6180-STATE and A-6180-COLUMNS (§8.2)
-  re-run; an ID that differs from D4-30 is followed in this milestone's commit (D4-38).
+- [ ] `git fetch origin next`; `git rev-parse --short origin/next` recorded in §11 (#6180 merged `fa33e94dbe`; the
+  `pr6180` fetch and A-6180-STATE/A-6180-COLUMNS are retired, D4-79).
 - [ ] merge `origin/next`: when `git diff --name-only HEAD..origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
@@ -4774,7 +4743,7 @@ milestone; counts, cells and claims go to §11.
   Task M3.5 Step 5), pasted into §11; every process that
   imports the Engine (`git grep -ln "@memberjunction/predictive-studio\"" -- packages/*/package.json packages/*/*/package.json`)
   loads `Engine/src/index.ts`, so the hook is registered in each (listed in §11).
-- `Integration Tests — Deterministic` and the §4.2 keep-list suites → 0 failed.
+- `Integration Tests — Deterministic` (D4-79's two forms) and the §4.2 keep-list suites → 0 failed.
 
 **Milestone exit, in order (design §6.5; M3 changes the model detail's publish call but adds no UI surface, so its UI
 change is covered by the DOM test and Task M3.4 Step 5; M7 owns the publish flow's browser walk, D-076):**
@@ -4783,7 +4752,7 @@ change is covered by the DOM test and Task M3.4 Step 5; M7 owns the publish flow
 - [ ] Task M3.6's harness run by the reviewer (D-071), its counts, cells and claims in §11
 - [ ] self-audit of every added and changed line against `reference/coding-standards.md`, findings fixed
 - [ ] tasks ticked
-- [ ] §11 entry `### <date> — <agent> — M3` with the counts, the four `**Mutation output G3.x:**` lines and #6180's merge state
+- [ ] §11 entry `### <date> — <agent> — M3` with the counts, the four `**Mutation output G3.x:**` lines
 - [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
 - [ ] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M3` → exit 0, summary in the commit body
@@ -4841,8 +4810,8 @@ private `renderMarkdownReport`; its one caller outside the file is `agent/__test
 
 - [ ] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
   `"$PLANS/tools/ps-env.sh" <command>` (D-074).
-- [ ] `git fetch origin && git fetch origin pull/6180/head:pr6180 --force`; A-6180-STATE and A-6180-COLUMNS (§8.2)
-  re-run; an ID that differs from D4-30 is followed in this milestone's commit (D4-38).
+- [ ] `git fetch origin next`; `git rev-parse --short origin/next` recorded in §11 (#6180 merged `fa33e94dbe`; the
+  `pr6180` fetch and A-6180-STATE/A-6180-COLUMNS are retired, D4-79).
 - [ ] merge `origin/next`: when `git diff --name-only HEAD..origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
@@ -5209,7 +5178,7 @@ milestone; counts, cells and claims go to §11.
   user, `SignOffID` set); `sqlcmd`: both `publish` records (`ApproverKind`, `RecordedAt`, `GateDecision`,
   `EvidenceSha256`), the `sign-off` row, and the Record Changes rows of both status changes.
 - The TruthSuite DB lane `pnpm run test:db -- governance` → 0 failed; sidecar and truth-suite pytest → 0 failed
-  (counts measured at M4; the sidecar suite also in CI, Task M1.6); `Integration Tests — Deterministic` and the §4.2 keep-list suites → 0 failed.
+  (counts measured at M4; the sidecar suite also in CI, Task M1.6); `Integration Tests — Deterministic` (D4-79's two forms) and the §4.2 keep-list suites → 0 failed.
 
 **Milestone exit, in order (design §6.5; M4 changes how existing dashboard surfaces read their polarity but ships no
 new surface, D-076's browser walk is M5b's and M7's; the DOM tests of Task M4.3 cover the change):**
@@ -5219,7 +5188,7 @@ new surface, D-076's browser walk is M5b's and M7's; the DOM tests of Task M4.3 
 - [ ] self-audit of every added and changed line against `reference/coding-standards.md`, findings fixed
 - [ ] tasks ticked
 - [ ] §11 entry `### <date> — <agent> — M4` with the counts, the four `**Mutation output G3.x:**` lines, the grid's
-  `git grep -c "@deprecated"` → 0 and #6180's merge state
+  `git grep -c "@deprecated"` → 0
 - [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
 - [ ] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M4` → exit 0, summary in the commit body
@@ -5282,8 +5251,8 @@ M4 → M4b → M5, so M5's merge is the one that re-reads M4b's auto-train branc
 
 - [ ] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
   `"$PLANS/tools/ps-env.sh" <command>` (D-074).
-- [ ] `git fetch origin && git fetch origin pull/6180/head:pr6180 --force`; A-6180-STATE and A-6180-COLUMNS (§8.2)
-  re-run; an ID that differs from D4-30 is followed in this milestone's commit (D4-38).
+- [ ] `git fetch origin next`; `git rev-parse --short origin/next` recorded in §11 (#6180 merged `fa33e94dbe`; the
+  `pr6180` fetch and A-6180-STATE/A-6180-COLUMNS are retired, D4-79).
 - [ ] merge `origin/next`: when `git diff --name-only HEAD..origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
@@ -5632,7 +5601,7 @@ milestone; counts, cells and claims go to §11.
   0 of 2 `Published`); `… "Predictive Studio Gates — Registry and Gate"` → 9 passed.
 - Runtime: Task M4b.2 Step 5's three run-nows on MJAPI with their `sqlcmd` results.
 - The TruthSuite DB lane `pnpm run test:db -- automated-publishing` → 0 failed; sidecar and truth-suite pytest → 0 failed
-  (counts measured at M4b; the sidecar suite also in CI, Task M1.6); `Integration Tests — Deterministic` and the §4.2 keep-list suites → 0 failed.
+  (counts measured at M4b; the sidecar suite also in CI, Task M1.6); `Integration Tests — Deterministic` (D4-79's two forms) and the §4.2 keep-list suites → 0 failed.
 
 **Milestone exit, in order (design §6.5; M4b ships no UI, so there is no UI step):**
 
@@ -5640,7 +5609,7 @@ milestone; counts, cells and claims go to §11.
 - [ ] Task M4b.6's harness run by the reviewer (D-071), its counts, cells and claims in §11
 - [ ] self-audit of every added and changed line against `reference/coding-standards.md`, findings fixed
 - [ ] tasks ticked
-- [ ] §11 entry `### <date> — <agent> — M4b` with the counts, the `**Mutation output G0.2:**` and `**Mutation output G0.3:**` lines and #6180's merge state
+- [ ] §11 entry `### <date> — <agent> — M4b` with the counts, the `**Mutation output G0.2:**` and `**Mutation output G0.3:**` lines
 - [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
 - [ ] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M4b` → exit 0, summary in the commit body
@@ -5750,8 +5719,8 @@ list), so M5's merge resolves both files.
 
 - [ ] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
   `"$PLANS/tools/ps-env.sh" <command>` (D-074).
-- [ ] `git fetch origin && git fetch origin pull/6180/head:pr6180 --force`; A-6180-STATE and A-6180-COLUMNS (§8.2)
-  re-run; an ID that differs from D4-30 is followed in this milestone's commit (D4-38).
+- [ ] `git fetch origin next`; `git rev-parse --short origin/next` recorded in §11 (#6180 merged `fa33e94dbe`; the
+  `pr6180` fetch and A-6180-STATE/A-6180-COLUMNS are retired, D4-79).
 - [ ] (M5) branch check (D4-63, serial default): work continues on the PR branch after M4b's checkpoint; `git branch -vv`
   shows `[origin/ps/pr-4-honest-serving]`. Only under D4-63's parallel option: `ps/pr-4-honest-serving--m5` created from
   the PR branch after M3's checkpoint, its upstream set in the M3 exit push (review minor m6), `git branch -vv` showing
@@ -5848,7 +5817,7 @@ M1's sections, then the regenerated tail) · Modify (CodeGen output only) `packa
   against the two views' column lists.
 - [ ] Step 4: Step 2's command → the six cases pass; `node .github/scripts/check-migration-entityfield-sequence.mjs` →
   exit 0; `npm run check:codegen-tail` → exit 0; A-078 → `git grep -ci "1AC777D7-EEE8-485F-83DB-2127DBB4BFB7" HEAD -- "$OURS"`
-  ≥ 1 + 19; A-6180-COLUMNS → `A-6180-COLUMNS ok`.
+  ≥ 1 + 19 (A-6180-COLUMNS retired, D4-79).
 - [ ] Step 5: Runtime (`sqlcmd` with the env loaded): `SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('__mj.MLModelScoringBinding') AND name IN ('MLModelID','MaterializedResultID')`
   → 0; `SELECT is_nullable FROM sys.columns WHERE object_id = OBJECT_ID('__mj.FeatureValue') AND name = 'RecordProcessID'`
   → 1; `SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('__mj.vwLatestFeatureValues')` → 19;
@@ -5901,7 +5870,7 @@ none: the procedure deletes from no `[Authorization]` row. `references` stays at
 - [ ] Step 4: `cd packages/CodeGenLib && pnpm test` → `delete-entity-fk-coverage.test.ts` passes (its 10 cases), total
   measured at M5 (the local tree's CodeGenLib differs from `599c288dee`: `git -C $MJ diff --stat HEAD origin/next -- packages/CodeGenLib`
   → 6 files changed); A-6180-DELETE-PROC → the training-snapshot step, the `Source = N'Model'` `DELETE` before the
-  `MLModelID` `UPDATE`.
+  `MLModelID` `UPDATE`, and PR 4's body ⊇ `V202611101901`'s (D4-79).
 - [ ] Step 5: Runtime on a scratch copy: an entity whose pipeline has a Published model, a binding with `Model` rows of
   two scoring runs, a binding `Human` row without a Record Process, and a scoring run scoped to the entity →
   `EXEC __mj.spDeleteEntityWithCoreDependencies @EntityID = '<the scratch entity>'` → exit 0;
@@ -5965,8 +5934,8 @@ by `(EntityID, RecordID, FeatureName, Source, MLModelScoringBindingID)`
   `protected static RecordFeatureFilter(p: FeatureValueRecordRef): string` and `LoadByKeyHashes` emit
   `RecordProcessID IS NULL AND MLModelScoringBindingID = '<id>'` when `RecordProcessID` is null and the ID filter
   otherwise (`UUIDsEqual`-normalised IDs through `EscapeSQLString`); `readLatestPipelineRows`, `LoadByKeyHashes`,
-  `GetLatestValue` and `RetireHumanValue` add ` AND Role = 'Champion'` (the filters #6180 adds to the same four
-  readers, D-069); a `RecordProcessID` null without a binding ID throws (a structured `FeatureValueKeyError` with
+  `GetLatestValue` and `RetireHumanValue` add ` AND Role = 'Champion'` (the filters #6180 added to the same four
+  readers, on `next` since `fa33e94dbe`: M5.3 re-reads them at its start, D-069); a `RecordProcessID` null without a binding ID throws (a structured `FeatureValueKeyError` with
   `Field: 'MLModelScoringBindingID'`). No `@deprecated` alias exists in the file (`git grep -n "@deprecated" origin/next --
   packages/AI/Knowledge/FeaturePipelines/src/cache/FeatureValueCacheService.ts` → 0 hits).
 - [ ] Step 4: Step 2's command → passes; `cd packages/AI/Knowledge/FeaturePipelines && pnpm test` → 285 (measured on
@@ -6111,36 +6080,36 @@ run, valid because the service is constructed per call (§5.2)
   ```ts
   it('refuses a withdrawn binding with a refused run row and writes nothing', async () => {
     const r = await new ScoringService(ctx).Score(Withdrawn(binding), scope, asOf, false);
-    expect(r).toMatchObject({ status: 'refused', reason: { kind: 'binding-withdrawn', bindingId: binding.ID } });
+    expect(r).toMatchObject({ Status: 'refused', Reason: { kind: 'binding-withdrawn', bindingId: binding.ID } });
     expect([runs.Statuses(), values.Calls()]).toEqual([['refused'], []]);
   });
   it('refuses a caller who does not hold the binding\'s view authorization before any read, with a refused run row', async () => {
     const r = await new ScoringService({ ...ctx, ContextUser: WithoutAuthorization(binding.ViewAuthorizationID) }).Score(binding, scope, asOf, false);
-    expect(r).toMatchObject({ status: 'refused', reason: { kind: 'binding-not-authorized', bindingId: binding.ID } });
+    expect(r).toMatchObject({ Status: 'refused', Reason: { kind: 'binding-not-authorized', bindingId: binding.ID } });
     expect([values.Reads(), values.Calls()]).toEqual([[], []]);
   });
   it('serves a pipeline with no Published model through its ServingWhileUnevaluated model', async () => {
     const r = await new ScoringService(ctx).Score(LegacyServedBinding(), scope, asOf, false);
-    expect(r).toMatchObject({ status: 'completed' });
+    expect(r).toMatchObject({ Status: 'completed' });
     expect(values.Calls()[0]).toMatchObject({ MLModelID: legacyServing.ID });
   });
   it('checks a serving pre-change model against its stored FeatureSchema and refuses one flagged by the dominance re-run', async () => {
     expect(await new ScoringService(ctx).Score(LegacyServedBinding({ RenamedColumn: 'Tenure' }), scope, asOf, false))
-      .toMatchObject({ status: 'refused', reason: { kind: 'feature-schema-mismatch', missing: ['Tenure'] } });
+      .toMatchObject({ Status: 'refused', Reason: { kind: 'feature-schema-mismatch', missingColumns: ['Tenure'] } });
     expect(await new ScoringService(ctx).Score(LegacyServedBinding({ FeatureImportance: { leaky: 0.95, other: 0.05 } }), scope, asOf, false))
-      .toMatchObject({ status: 'refused', reason: { kind: 'model-flagged' } });
+      .toMatchObject({ Status: 'refused', Reason: { kind: 'model-flagged' } });
     expect(await new ScoringService(ctx).Score(LegacyServedBinding({ FeatureImportance: null }), scope, asOf, false))
-      .toMatchObject({ status: 'refused', reason: { kind: 'leakage-unknown' } });
+      .toMatchObject({ Status: 'refused', Reason: { kind: 'leakage-unknown' } });
   });
   it('refuses a backfill of a serving pre-change model without a unit, and scores it on the run date', async () => {
     expect(await new ScoringService(ctx).Score(LegacyServedBinding({ Unit: null }), scope, new Date('2026-01-05T00:00:00Z'), false))
-      .toMatchObject({ status: 'refused', reason: { kind: 'as-of-unsupported' } });
+      .toMatchObject({ Status: 'refused', Reason: { kind: 'as-of-unsupported' } });
     expect(values.Calls()).toEqual([]);
-    expect(await new ScoringService(ctx).Score(LegacyServedBinding({ Unit: null }), scope, RUN_DATE, false)).toMatchObject({ status: 'completed' });
+    expect(await new ScoringService(ctx).Score(LegacyServedBinding({ Unit: null }), scope, RUN_DATE, false)).toMatchObject({ Status: 'completed' });
   });
   it('refuses a binding whose pipeline has only a non-serving Unevaluated model as no-published-model', async () => {
     expect(await new ScoringService(ctx).Score(BindingOfPipelineWith(UnevaluatedNotServing()), scope, asOf, false))
-      .toMatchObject({ status: 'refused', reason: { kind: 'no-published-model' } });
+      .toMatchObject({ Status: 'refused', Reason: { kind: 'no-published-model' } });
   });
   it('assembles a grain-x-periods unit with the unit rule and every other unit with the as-of date', async () => {
     await new ScoringService(ctx).Score(PeriodUnitBinding(), scope, asOf, false);
@@ -6149,7 +6118,7 @@ run, valid because the service is constructed per call (§5.2)
   });
   it('refuses a binding whose pipeline has no Published model, with a null ModelID on the run row', async () => {
     const r = await new ScoringService(ctx).Score(UnpublishedPipelineBinding(), scope, asOf, false);
-    expect(r).toMatchObject({ status: 'refused', reason: { kind: 'no-published-model' } });
+    expect(r).toMatchObject({ Status: 'refused', Reason: { kind: 'no-published-model' } });
     expect(runs.Last()).toMatchObject({ Status: 'refused', ModelID: null, Written: 0 });
   });
   it('normalises asOf to 00:00 UTC and writes every row with the run\'s lineage', async () => {
@@ -6158,7 +6127,7 @@ run, valid because the service is constructed per call (§5.2)
   });
   it('a failing third batch leaves batches 1 and 2, ends failed with counts, and a re-run replaces exactly those rows', async () => {
     sidecar.FailBatch(3);
-    expect(await new ScoringService(ctx).Score(binding, ThreeBatches(), asOf, false)).toMatchObject({ status: 'failed', total: 3 * BATCH });
+    expect(await new ScoringService(ctx).Score(binding, ThreeBatches(), asOf, false)).toMatchObject({ Status: 'failed', Total: 3 * BATCH });
     expect(runs.Last().Written).toBe(2 * BATCH);   // the failed arm carries no written count; the run row does
     sidecar.FailBatch(null);
     await new ScoringService(ctx).Score(binding, ThreeBatches(), asOf, false);
@@ -6180,7 +6149,7 @@ run, valid because the service is constructed per call (§5.2)
     const service = new ScoringService(ctx);
     const r = await service.Score(WithColumn(binding, '$.Value'), Records('r1'), asOf, true);
     expect([runs.Last().DryRun, values.Calls().length, target.Writes()]).toEqual([true, 0, 0]);
-    expect(r).toMatchObject({ status: 'completed', dryRun: true, written: 0 });
+    expect(r).toMatchObject({ Status: 'completed', DryRun: true, Written: 0 });
     expect(service.DryRunPreview()).toEqual([{ RecordID: 'r1', Column: 'Score', From: null, To: ValueOf('r1') }]);
   });
   it('the live mirror writes the challenger\'s rows under a second run row in the same transaction', async () => {
@@ -6520,12 +6489,12 @@ mutation check), shipped in one commit (D-064); G5.3/G5.4 assert §4.1's single-
   bindings and `Model` rows by pipeline after Task M5.4), so the evidence is the logged measurement: G5.3's line shows
   `"runRows":20` and `"complete"` equal to `"rows"`, G3.9's `20` of `20`; the lines are pasted into §11.
 
-#### Task M5.11: Conditional absorption — #6180's champion and challenger rows (D-069, D4-31)
+#### Task M5.11: Absorption — #6180's champion and challenger rows (D-069, D4-31; ACTIVE: #6180 merged `fa33e94dbe`)
 
-**Files (only when the condition holds):** Modify `packages/AI/PredictiveStudio/Engine/src/scoring/shadow-scoring.ts`
+**Files (active: D4-31's condition is met, #6180 is on the branch since the M1 merge of `next`):** Modify `packages/AI/PredictiveStudio/Engine/src/scoring/shadow-scoring.ts`
 (#6180; `ShadowScoringCoordinator`'s champion audit write through `RecordFeatureValues` with `Source = 'Pipeline'` and
-`Role = 'Champion'`, and `ExecuteChallengerEnvelope`'s `Role = 'Challenger'` audit record, at `pr6180-live` @
-`f40161febb`) so a bound process's champion and challenger rows are `Source = 'Model'` rows of their scoring runs
+`Role = 'Champion'`, and `ExecuteChallengerEnvelope`'s `Role = 'Challenger'` audit record, read at `pr6180-live` @
+`f40161febb` and re-read on the branch at M5's start) so a bound process's champion and challenger rows are `Source = 'Model'` rows of their scoring runs
 written by `ScoringService` (§5.8.3 step 5, the process's `ChallengerConfiguration` naming the challenger),
 `Engine/src/scoring/__tests__/shadow-scoring.test.ts`, the shadow hooks #6180 adds to
 `Engine/src/scoring/ml-model-inference-processor.ts`, `register.ts`, `startup-register.ts`, `seams.ts`, `types.ts` and
@@ -6538,11 +6507,9 @@ become `Source = 'Model'`; the drift-action half is M6's) · Kept unchanged: the
 added the same four), #6180's `InferProcessor` prompt challenger (`FeaturePipelinesEngine/src/processors/InferProcessor.ts`,
 outside the allowlist; its `Source = 'Pipeline', Role = 'Challenger'` rows are what the Champion filters exclude)
 
-- [ ] Step 1: **If `git log origin/next` contains #6180's merge** (`git log --oneline origin/next --grep "Merge pull request #6180"`
-  prints a line): re-point its champion and challenger rows to `Source = 'Model'` rows of a scoring run, keep its
-  `Role = 'Champion'` filters, and rewrite the conditional allowlist files of §2.6 that read them. When the condition is
-  false at this milestone's end, every step of this task is ticked with `not applicable` appended and §11 records the
-  merge state (A-6180-STATE's output).
+- [ ] Step 1: **#6180 is merged** (`git log --oneline origin/next --grep "Merge pull request #6180"` → `fa33e94dbe Merge pull request #6180 from MemberJunction/docs/plan-next-gen-ai-agents-durable-graphs` (recorded at the M1 merge-of-next pass, D4-79)):
+  re-point its champion and challenger rows to `Source = 'Model'` rows of a scoring run, keep its
+  `Role = 'Champion'` filters, and rewrite the conditional allowlist files of §2.6 that read them.
 - [ ] Step 2: The failing test: `shadow-scoring.test.ts › a sampled record's champion and challenger rows are Model rows of two scoring runs`
   (`expect(values.Calls().map((c) => [c.Source, c.Role])).toEqual([['Model', 'Champion'], ['Model', 'Challenger']])`)
   and `git grep -n "Source: 'Pipeline'" -- packages/AI/PredictiveStudio/Engine/src/scoring` → expected 0, at the merge
@@ -6552,7 +6519,7 @@ outside the allowlist; its `Source = 'Pipeline', Role = 'Challenger'` rows are w
   are deleted; IT166's check asserts `Source = 'Model'` rows with `MLScoringRunID` set for both roles.
 - [ ] Step 4: Step 2's command → passes; `git grep -n "Source: 'Pipeline'" -- packages/AI/PredictiveStudio/Engine/src/scoring`
   → 0; Engine `pnpm test` → 0 failed; `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 pnpm mj test run "IT166 - Predictive Shadow Scoring and Drift"`
-  (its name at `pr6180-live` @ `f40161febb`; re-read from the merged file) → 0 failed.
+  (its name in next's `metadata-optional/integration-test/tests/integration/.IT166-predictive-shadow-drift.json`) → 0 failed.
 - [ ] Step 5: Runtime: a bound process with a `ChallengerConfiguration` run-now on MJAPI →
   `SELECT Source, Role, COUNT(*) FROM __mj.FeatureValue WHERE MLModelScoringBindingID = @b GROUP BY Source, Role` →
   `Model | Champion` and `Model | Challenger`, no `Pipeline` row for the process's target variable.
@@ -6649,10 +6616,11 @@ milestone; counts, cells and claims go to §11.
   the parallel option until the sub-branches are merged), 0 failed.
 - The TruthSuite DB lanes `pnpm run test:db -- scoring-service` and `-- serving-schema` → 0 failed (counts measured at
   M5); `node .github/scripts/check-migration-entityfield-sequence.mjs`, `npm run check:codegen-tail`,
-  `npm run check:guards`, `npm run check:standards`, `npm run check:ui` → exit 0; A-078, A-6180-COLUMNS,
-  A-6180-DELETE-PROC as Tasks M5.1/M5.2 state.
+  `npm run check:guards`, `npm run check:standards`, `npm run check:ui` → exit 0; A-078 and
+  A-6180-DELETE-PROC → PR 4's procedure body ⊇ `V202611101901`'s (§8.2: the two `awk` extracts, `diff` shows only
+  added lines and the one widened `@Handled` line) as Tasks M5.1/M5.2 state (A-6180-COLUMNS retired, D4-79).
 - Runtime: Task M5.6 Step 5's calls and queries with their outputs in §11.
-- `Integration Tests — Deterministic` and the §4.2 keep-list suites (PR 1's Feature Pipelines gates, G0.1, G0.7) → 0
+- `Integration Tests — Deterministic` (D4-79's two forms) and the §4.2 keep-list suites (PR 1's Feature Pipelines gates, G0.1, G0.7) → 0
   failed.
 
 **Milestone exit, in order (design §6.5; M5 changes how existing surfaces read a binding but ships no new surface; the
@@ -6665,7 +6633,7 @@ record panel and the binding editor are M5b's, whose browser walk is D-076's):**
   in, D-067), findings fixed
 - [ ] tasks ticked (Task M5.11 ticked `not applicable` with the merge state when the condition is false)
 - [ ] §11 entry `### <date> — <agent> — M5` with the counts, the six `**Mutation output G…:**` lines, A-FV-AUTHZ,
-  A-FV-VOLUME and A-FV-BINDINGS outcomes and #6180's merge state
+  A-FV-VOLUME and A-FV-BINDINGS outcomes
 - [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
 - [ ] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M5` → exit 0, summary in the commit body
@@ -6724,14 +6692,14 @@ A-FV-VOLUME's outcome (M5).
 `fls-client.checks.ts` (`SEEDED_FLS_READER_EMAIL`, `GetAPIKeyEngine`); PR 3's Playwright spec form
 (`e2e/specs/ps-honest-training.spec.ts`: `openSignedIn` with a one-time `PS_SIGN_IN_URL`); the deterministic suite file
 (`metadata-optional/integration-test/test-suites/.integration-suite.json`, client-transport members sequenced last);
-`IT163` the highest bundle number on `599c288dee` and `IT164`–`IT166` on #6180's head `f40161febb`.
+`IT163` the highest bundle number on `599c288dee` and `IT164`–`IT166` on `next` since #6180 merged (`fa33e94dbe`).
 
 **Milestone start (design §6.5; the same five steps at every milestone):**
 
 - [ ] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
   `"$PLANS/tools/ps-env.sh" <command>` (D-074).
-- [ ] `git fetch origin && git fetch origin pull/6180/head:pr6180 --force`; A-6180-STATE and A-6180-COLUMNS (§8.2)
-  re-run; an ID that differs from D4-30 is followed in this milestone's commit (D4-38).
+- [ ] `git fetch origin next`; `git rev-parse --short origin/next` recorded in §11 (#6180 merged `fa33e94dbe`; the
+  `pr6180` fetch and A-6180-STATE/A-6180-COLUMNS are retired, D4-79).
 - [ ] merge `origin/next`: when `git diff --name-only HEAD..origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
@@ -6746,7 +6714,7 @@ A-FV-VOLUME's outcome (M5).
 - [ ] (M5b) work is on the PR branch (serial default, D4-63; under the parallel option both sub-branches are merged
   into it first, M4 → M4b → M5): `git branch -vv` shows `[origin/ps/pr-4-honest-serving]`; the bundle number is re-checked:
   `git ls-tree --name-only origin/next metadata-optional/integration-test/tests/integration/ | grep -oE "IT[0-9]+" | sort -t T -k2 -n | tail -1`
-  and the same on `pr6180` → both below `IT167` (else D4-47's rule takes the next free number).
+  → below `IT167` (else D4-47's rule takes the next free number).
 
 #### Task M5b.1: The view gate as metadata — filter, authorization, grants, attachment
 
@@ -6784,7 +6752,7 @@ or this task's file keys on the same rows, never both); the entity's `Applicatio
   it('a writer without the binding\'s authorization is refused before reading: no duplicate rows, no column write, no withdrawal (D4-60)', async () => {
     const before = await ModelRowCount(pool, binding.ID);
     const rerun = await ScoreAs(server, developerWithoutCustomAuth, CustomAuthBinding(binding), sameAsOf);
-    expect(rerun).toMatchObject({ status: 'refused', reason: { kind: 'binding-not-authorized' } });
+    expect(rerun).toMatchObject({ Status: 'refused', Reason: { kind: 'binding-not-authorized' } });
     expect(await ModelRowCount(pool, binding.ID)).toBe(before);              // UQ_FeatureValue_ModelRow never reached
     expect(await TargetColumnValues(pool, binding)).toEqual(copiedBefore);
     expect(await WithdrawAs(server, developerWithoutCustomAuth, binding.ID)).toMatchObject({ Ok: false });
@@ -7037,7 +7005,9 @@ recorded in the check's header), the authorized one a seeded Developer
 - [ ] Step 4: Step 2's command → 8 passed, 0 failed; `cd packages/TestingFramework/integration-test-suite && pnpm test`
   → 0 failed (the pinned bundle count + 1).
 - [ ] Step 5: `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Integration Tests — Deterministic"`
-  → 0 failed, its count one higher than at M5 (measured at M5b).
+  → 0 failed, its count one higher than at M5 (measured at M5b), measured in two forms: CI's PR lane form (no flag; `MJ_REST_API_ENABLED=true MJ_DISABLE_TASK_GRAPH_DISPATCHER=1`)
+  → 0 failed, skip gate PASSED; with RUN_MUTATION_TESTS=1 → every failure root-caused and named in §11, and 0 failures
+  attributable to PR 4's changes (D4-79).
 
 #### Task M5b.7: Gate G5.6 `C1 -> S7.4 #2`
 
@@ -7170,7 +7140,9 @@ M5b.1's file)
   0 failed.
 - The TruthSuite DB lanes `pnpm run test:db -- view-gate held-authorizations` → 0 failed (counts measured at M5b).
 - `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Integration Tests — Deterministic"`
-  → 0 failed, IT167 a passing member; `… "Predictive Studio Gates — Scoring"` → 7 passed; the §4.2 keep-list suites
+  → 0 failed, IT167 a passing member, measured in two forms: CI's PR lane form (no flag; `MJ_REST_API_ENABLED=true MJ_DISABLE_TASK_GRAPH_DISPATCHER=1`)
+  → 0 failed, skip gate PASSED; with RUN_MUTATION_TESTS=1 → every failure root-caused and named in §11, and 0 failures
+  attributable to PR 4's changes (D4-79); `… "Predictive Studio Gates — Scoring"` → 7 passed; the §4.2 keep-list suites
   (PR 1's Feature Pipelines gates, read as the UI user's identity too) → 0 failed.
 - Task M5b.8's fresh-install outputs; `npm run check:ui`, `npm run check:guards`, `npm run check:standards` → exit 0;
   the sidecar and truth-suite pytest → 0 failed (counts measured at M5b; the sidecar suite also in CI, Task M1.6).
@@ -7183,7 +7155,7 @@ M5b.1's file)
 - [ ] self-audit of every added and changed line against `reference/coding-standards.md`, findings fixed
 - [ ] tasks ticked
 - [ ] §11 entry `### <date> — <agent> — M5b` with the counts, the `**Mutation output G5.6:**` line, A-FV-AUTHZ,
-  A-FV-SYSUSER and the fresh-install outputs and #6180's merge state
+  A-FV-SYSUSER and the fresh-install outputs
 - [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
 - [ ] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M5b` → exit 0, summary in the commit body
@@ -7258,8 +7230,8 @@ and its three test files), `export * from './maintenance'` (`Engine/src/index.ts
 
 - [ ] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
   `"$PLANS/tools/ps-env.sh" <command>` (D-074).
-- [ ] `git fetch origin && git fetch origin pull/6180/head:pr6180 --force`; A-6180-STATE and A-6180-COLUMNS (§8.2)
-  re-run; an ID that differs from D4-30 is followed in this milestone's commit (D4-38).
+- [ ] `git fetch origin next`; `git rev-parse --short origin/next` recorded in §11 (#6180 merged `fa33e94dbe`; the
+  `pr6180` fetch and A-6180-STATE/A-6180-COLUMNS are retired, D4-79).
 - [ ] merge `origin/next`: when `git diff --name-only HEAD..origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
@@ -7604,9 +7576,9 @@ G3.4), `packages/AI/PredictiveStudio/TruthSuite/src/stats/seed-rules.ts` (`StatR
   → 3 passed (G3.4, G6.6, G6.8), 0 failed; each member's `MaxExecutionTimeMS` set from the measured run.
 - [ ] Step 5: The logged counts (alarming replays of 400, flagged seeds of 400, mean FDP) pasted into §11.
 
-#### Task M6.8: Conditional absorption — #6180's detector, drift action, drift job and IT166 (D-069, D4-31, D4-35)
+#### Task M6.8: Absorption — #6180's detector, drift action, drift job and IT166 (D-069, D4-31, D4-35; ACTIVE: #6180 merged `fa33e94dbe`)
 
-**Files (only when the condition holds):** Delete `packages/AI/PredictiveStudio/Engine/src/maintenance/psi-drift-detector.ts`
+**Files (active: D4-31's condition is met, #6180 is on the branch since the M1 merge of `next`):** Delete `packages/AI/PredictiveStudio/Engine/src/maintenance/psi-drift-detector.ts`
 and `…/maintenance/__tests__/psi-drift-detector.test.ts` (with the module, Task M6.5; #6180's `DriftContext`/`IDriftDetector`
 changes to the maintenance seams go with it), `Engine/src/actions/evaluate-drift.action.ts` and
 `Engine/src/actions/__tests__/evaluate-drift.action.test.ts` · Modify `Engine/src/actions/driver-classes.ts`
@@ -7616,14 +7588,12 @@ changes to the maintenance seams go with it), `Engine/src/actions/evaluate-drift
 M6.5's), `packages/TestingFramework/integration-test-suite/src/checks/predictive-shadow-drift.checks.ts`,
 `…/src/__tests__/predictive-shadow-drift.checks.test.ts`, `metadata-optional/integration-test/tests/integration/.IT166-predictive-shadow-drift.json`
 (the bundle asserts the mirror's divergence component on `MJ: ML Monitoring Results` instead of the drift action, and
-no longer saves `Status = 'Published'` directly: it publishes through the gate's op) · facts at `pr6180-live` @
-`f40161febb`
+no longer saves `Status = 'Published'` directly: it publishes through the gate's op) · facts read at `pr6180-live` @
+`f40161febb`, re-read on the branch at M6's start
 
-- [ ] Step 1: **If `git log origin/next` contains #6180's merge** (`git log --oneline origin/next --grep "Merge pull request #6180"`
-  prints a line): delete its `PSIDriftDetector`, its PSI drift action and its weekly drift job, keep its
-  `Role = 'Champion'` filters, and rewrite the three conditional allowlist files (§2.6). When the condition is false at
-  this milestone's end, every step of this task is ticked with `not applicable` appended and §11 records the merge state
-  (A-6180-STATE's output).
+- [ ] Step 1: **#6180 is merged** (`git log --oneline origin/next --grep "Merge pull request #6180"` → `fa33e94dbe Merge pull request #6180 from MemberJunction/docs/plan-next-gen-ai-agents-durable-graphs` (recorded at the M1 merge-of-next pass, D4-79)):
+  delete its `PSIDriftDetector`, its PSI drift action and its weekly drift job, keep its
+  `Role = 'Champion'` filters, and rewrite the three conditional allowlist files (§2.6).
 - [ ] Step 2: The failing check: `git grep -n "PSIDriftDetector\|EvaluateFeatureAndPredictionDriftAction\|PredictiveStudioEvaluateDriftAction" -- packages metadata`
   → hits; `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 pnpm mj test run "IT166 - Predictive Shadow Scoring and Drift"` with M3's hook and M6's driver in place → fails (its direct
   `Status = 'Published'` save is refused `status-changed-outside-gate`; its drift-action import is gone).
@@ -7703,7 +7673,7 @@ milestone; counts, cells and claims go to §11.
   with its clock 31 days later → the waiting model `Archived` with `sign-off-wait-closed`, the incumbent untouched; a
   newer evaluated model of the pipeline closes the wait the same way).
 - `git grep -n -i "human should confirm" -- packages/AI/PredictiveStudio` → 0 hits;
-  `git grep -n "0.01004\|0.01737" -- packages` → 0 hits; `Integration Tests — Deterministic` and the §4.2 keep-list
+  `git grep -n "0.01004\|0.01737" -- packages` → 0 hits; `Integration Tests — Deterministic` (D4-79's two forms) and the §4.2 keep-list
   suites → 0 failed; `npm run check:guards`, `npm run check:standards` → exit 0.
 
 **Milestone exit, in order (design §6.5; M6 ships no UI — the monitoring view is M7's — so there is no UI step):**
@@ -7712,7 +7682,7 @@ milestone; counts, cells and claims go to §11.
 - [ ] Task M6.9's harness run by the reviewer (D-071), its counts, cells and claims in §11
 - [ ] self-audit of every added and changed line against `reference/coding-standards.md`, findings fixed
 - [ ] tasks ticked (Task M6.8 ticked `not applicable` with the merge state when the condition is false)
-- [ ] §11 entry `### <date> — <agent> — M6` with the counts, the twelve `**Mutation output G6.<n>:**` lines and #6180's merge state
+- [ ] §11 entry `### <date> — <agent> — M6` with the counts, the twelve `**Mutation output G6.<n>:**` lines
 - [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
 - [ ] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M6` → exit 0, summary in the commit body
@@ -7775,8 +7745,8 @@ the Pipeline Builder's auto-train outcome on the Process Run (M4b); PR 3's Playw
 
 - [ ] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
   `"$PLANS/tools/ps-env.sh" <command>` (D-074).
-- [ ] `git fetch origin && git fetch origin pull/6180/head:pr6180 --force`; A-6180-STATE and A-6180-COLUMNS (§8.2)
-  re-run; an ID that differs from D4-30 is followed in this milestone's commit (D4-38).
+- [ ] `git fetch origin next`; `git rev-parse --short origin/next` recorded in §11 (#6180 merged `fa33e94dbe`; the
+  `pr6180` fetch and A-6180-STATE/A-6180-COLUMNS are retired, D4-79).
 - [ ] merge `origin/next`: when `git diff --name-only HEAD..origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
@@ -7890,7 +7860,7 @@ retrained until a change-detection column moves; no Prediction Unit → `no-pred
     expect(models.Get(pr3Bad.ID)).toMatchObject({ Status: 'Unevaluated', ServingWhileUnevaluated: false, StatusReason: expect.stringContaining('gate-no-signal') });
     expect([records.OfModel(pr3Bad.ID).map((r) => r.Kind), notifications.Count()]).toEqual([['refusal'], 1]);
     expect(models.Get(pr3BadIncumbent.ID).Status).toBe('Published');      // the newest Archived model with a publish record, rolled back
-    expect(await scoring.Score(BindingOf(pr3BadNoIncumbent.PipelineID), scope, asOf, false)).toMatchObject({ status: 'refused', reason: { kind: 'no-published-model' } });
+    expect(await scoring.Score(BindingOf(pr3BadNoIncumbent.PipelineID), scope, asOf, false)).toMatchObject({ Status: 'refused', Reason: { kind: 'no-published-model' } });
   });
   it('refuses AdoptPublished, and so Published → Unevaluated, for any initiator but a Registry Check job run', async () => {
     for (const initiator of [human, agent(agentRun.ID), monitoringJobRun(run.ID)]) {
@@ -8257,7 +8227,7 @@ milestone; counts, cells and claims go to §11.
   every demoted pipeline with a unit carrying a `publish` or `refusal` record from a registry-started run, every one
   without a unit a `no-prediction-unit` entry.
 - `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Registry and Gate"`
-  → 9 passed (G3.6 on the migrated database); `… "Containment"` → 12 passed; `Integration Tests — Deterministic` and the
+  → 9 passed (G3.6 on the migrated database); `… "Containment"` → 12 passed; `Integration Tests — Deterministic` (D4-79's two forms) and the
   §4.2 keep-list suites → 0 failed.
 
 **Milestone exit, in order (design §6.5; M7 ships UI, so the Playwright check is first, D-076):**
@@ -8267,7 +8237,7 @@ milestone; counts, cells and claims go to §11.
 - [ ] Task M7.8's harness run by the reviewer (D-071), its counts, cells and claims in §11
 - [ ] self-audit of every added and changed line against `reference/coding-standards.md`, findings fixed
 - [ ] tasks ticked
-- [ ] §11 entry `### <date> — <agent> — M7` with the counts, §5.6 step 5's outputs, the G3.6, G0.2 and G0.3 lines and #6180's merge state
+- [ ] §11 entry `### <date> — <agent> — M7` with the counts, §5.6 step 5's outputs, the G3.6, G0.2 and G0.3 lines
 - [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
 - [ ] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M7` → exit 0, summary in the commit body
@@ -8317,8 +8287,8 @@ design §4).
 
 - [ ] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
   `"$PLANS/tools/ps-env.sh" <command>` (D-074).
-- [ ] `git fetch origin && git fetch origin pull/6180/head:pr6180 --force`; A-6180-STATE and A-6180-COLUMNS (§8.2)
-  re-run; an ID that differs from D4-30 is followed in this milestone's commit (D4-38).
+- [ ] `git fetch origin next`; `git rev-parse --short origin/next` recorded in §11 (#6180 merged `fa33e94dbe`; the
+  `pr6180` fetch and A-6180-STATE/A-6180-COLUMNS are retired, D4-79).
 - [ ] merge `origin/next`: when `git diff --name-only HEAD..origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
@@ -8391,7 +8361,7 @@ env loaded
   `Predictive Studio Gates — Registry and Gate` → 9, `— Scoring` → 7, `— Monitoring` → 10, `— Monitoring (statistical)`
   → 3, `— Containment` → 12, each 0 failed (31 owned gates, G0.2 in the nightly lane's suite run here on the final head);
   the keep-list suites of §4.2 (PR 1's, PR 2's and PR 3's gates by name, including `Predictive Studio Gates — Pending`'s
-  remaining member) → 0 failed; `Integration Tests — Deterministic` → 0 failed (IT167 a member).
+  remaining member) → 0 failed; `Integration Tests — Deterministic` (D4-79's two forms) → 0 failed (IT167 a member).
 - [ ] Step 4: §7's unit tests (`cd <pkg> && pnpm test` for Core, Engine, Sidecar, TruthSuite, MJCore, dashboards,
   core-entity-forms, FeaturePipelines, CodeGenLib, RecordSetProcessor/engine, MJCoreEntitiesServer,
   integration-test-suite; `pnpm run test:python` for the sidecar and the truth suite) → each `N passed / 0 failed / K
@@ -8497,7 +8467,7 @@ merge-readiness check → `0` commits behind `next`, every check `SUCCESS`, four
 - [ ] self-audit of every added and changed line of the PR against `reference/coding-standards.md`, findings fixed (a fix
   re-runs this list from the first item)
 - [ ] tasks ticked
-- [ ] §11 entry `### <date> — <agent> — M8` with the head SHA, every count, the open deferrals and #6180's merge state
+- [ ] §11 entry `### <date> — <agent> — M8` with the head SHA, every count, the open deferrals
 - [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
 - [ ] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M8` → exit 0 (its `changeset-file` and `handoff` checks treat M8 as the last milestone), summary in the commit body
@@ -8523,6 +8493,9 @@ merge-readiness check → `0` commits behind `next`, every check `SUCCESS`, four
   pnpm test` (no change expected; run because the human-value guard interface is reused).
   Report `N passed / M failed / K skipped`.
 - **Integration (deterministic tier):** `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 mj test suite "Integration Tests — Deterministic"`,
+  measured in two forms: CI's PR lane form (no flag; `MJ_REST_API_ENABLED=true MJ_DISABLE_TASK_GRAPH_DISPATCHER=1`)
+  → 0 failed, skip gate PASSED; with RUN_MUTATION_TESTS=1 → every failure root-caused and named in §11, and 0 failures
+  attributable to PR 4's changes (D4-79),
   which includes this PR's new bundle "IT167 - PS Prediction Serving — Zero Schema Change" (M5b, D4-47; single run:
   `pnpm mj test run "IT167 - PS Prediction Serving — Zero Schema Change"`).
 - **Gates:** the 31 named tests of §4.1 (G5.6 `C1 → S7.4 #2` is D-058's acceptance gate: trained model → prediction visible on a Person, zero schema change) (G0.2 in the nightly lane) as the `MJ: Tests` rows of §4.1a, run per suite with
@@ -8649,16 +8622,24 @@ handled like a changed anchor: update the design and record a decision in §9.
   `packages/TestingFramework/testing-integration/src/check.ts` (no output beyond them).
   **Kickoff refresh 2026-11-10 @ `599c288dee`: ok.** Run with `origin/next` for `HEAD` (no PR 4 branch yet; the MJ working tree is on another branch): exactly `packages/TestingFramework/testing-integration/CATALOG.md` and `packages/TestingFramework/testing-integration/src/check.ts`.
 
-**#6180 checks (D-069).** #6180's files are read at `refs/pull/6180/head`, fetched as `pr6180`
-(`git fetch origin pull/6180/head:pr6180 --force`; never an anchor). Run at every refresh and every milestone start
-until #6180 merges or closes.
+**#6180 checks (D-069).** #6180 merged into `next` as `fa33e94dbe` (2026-11-10T22:19Z) and is on the branch since the
+M1 merge of `next` @ `5fd5335a5f` (D4-79). A-6180-STATE and A-6180-COLUMNS are closed (there is one source now:
+next's `V202611101901__v6.3.x__Task_Security_Saga_Shadow_Scoring.sql`); A-6180-DELETE-PROC is re-pointed at that file and
+stays a per-milestone check wherever a milestone re-creates the procedure. The history below is kept as it was run.
 
-- [x] **A-6180-STATE.** `gh pr view 6180 --json state,mergeCommit,headRefOid` and
+- [x] **A-6180-STATE.** **Closed at the M1 merge-of-next pass (2026-11-11):** `gh pr view 6180 --json state,mergeCommit,mergedAt`
+  → `{"mergeCommit":{"oid":"fa33e94dbe02d046489b3135c719bc7fc6829533"},"mergedAt":"2026-11-10T22:19:02Z","state":"MERGED"}`;
+  `git log --oneline origin/next --grep "Merge pull request #6180"` → `fa33e94dbe Merge pull request #6180 from
+  MemberJunction/docs/plan-next-gen-ai-agents-durable-graphs`; merged into the branch with `origin/next` @ `5fd5335a5f`.
+  The conditional tasks M5.11 and M6.8 are active (D4-31). History: `gh pr view 6180 --json state,mergeCommit,headRefOid` and
   `git log --oneline $REF --grep "Merge pull request #6180"` → at the kickoff `state: OPEN`, `mergeCommit: null`, no
   merge on `next`. A changed `headRefOid` means: re-fetch `pr6180` and re-run A-6180-COLUMNS. A merge on `next` turns
   on the conditional absorption tasks of M5 and M6 (D4-31) at the next milestone-start merge.
   **Kickoff refresh 2026-11-10 @ `599c288dee`: ok; head changed, `pr6180` re-pinned.** `{"headRefOid":"0b37229bd7c10423b3ddc8d27fb6d9f4fef23b71","mergeCommit":null,"state":"OPEN"}` (`mergeable: MERGEABLE`); the `--grep` log on `origin/next` prints nothing. The head moved from `79fbbc6ea7` (rebased onto `next`, `f40161febb`, then 20 commits past it, `git -C $MJ rev-list --count f40161febb..pr6180` → `20`; `git diff --stat f40161febb pr6180 -- migrations metadata` prints nothing), so `pr6180` now points at `0b37229bd7` and A-6180-COLUMNS was re-run (D4-38).
-- [x] **A-6180-COLUMNS.** The metadata facts of #6180's two columns, extracted from #6180's migration and from PR 4's,
+- [x] **A-6180-COLUMNS.** **Retired at the M1 merge-of-next pass (2026-11-11, D4-79):** PR 4's migration no longer
+  carries the two columns or their rows (section 4 removed), so there is nothing to compare; the database check that
+  remains is the clean build's five-row query (§11 M1 merge-of-next entry: next's IDs `bab2f6f6…`, `24ace2b5…`,
+  `0f42095a…`, `dff637a2…`, `eb42f51a…`). History: the metadata facts of #6180's two columns, extracted from #6180's migration and from PR 4's,
   must be equal (and, with the env loaded, equal to the database's):
   ```bash
   F=migrations/v6/V202611101117__v6.3.x__Task_Security_Saga_Shadow_Scoring.sql   # at pr6180 8ac6ade7c5 (D4-38, M1)
@@ -8688,7 +8669,14 @@ until #6180 merges or closes.
   → the IDs above, `ValueListType` `List` on `Role`. A difference is handled as a changed anchor: PR 4's hand-written
   rows take #6180's current IDs (D4-38).
   **Kickoff refresh 2026-11-10 @ `599c288dee`: corrected (`pr6180` half); PR 4 half and database half scheduled: after M1 on `MJ_PS_PR4_claude`.** No `V*__v6.3.x__PS_Honest_Serving_Schema.sql` exists yet (M1 writes it). `git show pr6180:$F | a6180_facts` at `0b37229bd7` prints the six lines above; at `79fbbc6ea7` it printed the five old IDs, so the expected values here, §5.8.1's ID table and D4-30 now carry the new five (D4-38's follow rule; verified with `grep -n` on lines 776, 839, 1095, 1101, 1104, 1123). `a6180_descriptions` prints the same two strings at both heads (`diff` empty; lines 95 and 117).
-- [x] **A-6180-DELETE-PROC.** `awk '/CREATE OR ALTER PROC.*spDeleteEntityWithCoreDependencies/,/^GO/' "$OURS" | grep -n "MLTrainingSnapshot\|\[FeatureValue\] WHERE \[Source\] = N'Model'\|\[FeatureValue\] SET \[MLModelID\] = NULL"`
+- [x] **A-6180-DELETE-PROC.** **Re-pointed at the M1 merge-of-next pass (2026-11-11, D4-79)** at next's
+  `V202611101901`, kept wherever a milestone re-creates the procedure: extract both bodies with
+  `X='index($0,"PROC [${flyway:defaultSchema}].[spDeleteEntityWithCoreDependencies]"){p=1} p{print} p&&/^GO[[:space:]]*$/{exit}'`,
+  `awk "$X" migrations/v6/V202611101901__v6.3.x__Task_Security_Saga_Shadow_Scoring.sql > his.sql`, `awk "$X" "$OURS" > ours.sql`,
+  `diff his.sql ours.sql` → PR 4's body ⊇ his: every `<` line is either the one `@Handled` line PR 4 widens (it adds
+  `(N'MLScoringRun.ScopeEntityID')`) or his `UPDATE … [FeatureValue] SET [MLModelID] = NULL …`, which PR 4 carries
+  verbatim later (after the `Source = N'Model'` delete, D4-32). At the merge-of-next pass: 2 `<` lines, both those.
+  History: `awk '/CREATE OR ALTER PROC.*spDeleteEntityWithCoreDependencies/,/^GO/' "$OURS" | grep -n "MLTrainingSnapshot\|\[FeatureValue\] WHERE \[Source\] = N'Model'\|\[FeatureValue\] SET \[MLModelID\] = NULL"`
   → the PR 3 training-snapshot step (`UPDATE … [MLTrainingRun] SET [TrainingSnapshotID] = NULL …` and
   `DELETE FROM … [MLTrainingSnapshot] …`), one `DELETE` of the model's `Source = N'Model'` Feature Values and one
   `UPDATE … [FeatureValue] SET [MLModelID] = NULL`, the `DELETE`'s line number smaller than the `UPDATE`'s (§5.9); and
@@ -8969,7 +8957,9 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   "the value". Alternatives rejected: a `NOT EXISTS (newer row)` form (two probes of the table per row, and NULL
   `EffectiveAsOf` needs its own branch); a view including challenger rows (two "latest" rows per key whenever the mirror
   runs).
-- **D4-30 · #6180's metadata IDs** (decided; D-069; IDs re-pinned 2026-11-10 by D4-38's rule). PR 4's hand-written
+- **D4-30 · #6180's metadata IDs** (decided; D-069; IDs re-pinned 2026-11-10 by D4-38's rule; **closed 2026-11-11**:
+  #6180 merged `fa33e94dbe`; section 4 removed at the M1 merge-of-next pass, next's `V202611101901` carries the rows
+  under its own IDs, D4-79). PR 4's hand-written
   section carries, at `pr6180` @ `0b37229bd7`: `EntityField` `Role` `234fb2ce-776d-4d36-b356-0fe1348132b4` (#6180 line
   776), `EntityField` `MLModelID` `728338f3-7230-42c1-9ad1-6956afec40b7` (line 839), `EntityFieldValue` `Challenger`
   `77b68e90-506f-4019-b6a3-914699c91335` (`Sequence` 1, line 1095), `EntityFieldValue` `Champion`
@@ -8980,7 +8970,9 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   fields, two values, one relationship); the kickoff design lists the two values as "Champion, Challenger" with the IDs
   in the opposite order, and #6180's file is the authority: `77b68e90…` is `Challenger`, `13832682…` is `Champion`.
   Each row is guarded (§5.8.1); A-6180-COLUMNS compares them at every refresh; D4-38 says what happens when #6180 moves.
-- **D4-31 · The conditional absorption tasks** (decided; D-069, kickoff design §6.2 bullet 4). M5 and M6 each carry one
+- **D4-31 · The conditional absorption tasks** (decided; D-069, kickoff design §6.2 bullet 4; **condition met at the M1
+  merge of `next` @ `5fd5335a5f`** — `git log --oneline origin/next --grep "Merge pull request #6180"` →
+  `fa33e94dbe Merge pull request #6180 …` — so **M5.11 and M6.8 are ACTIVE** and their Step 1 records the fact). M5 and M6 each carry one
   task worded: "**If `git log origin/next` contains #6180's merge** (`git log --oneline origin/next --grep "Merge pull
   request #6180"` prints a line): re-point its champion and challenger rows to `Source = 'Model'` rows of a scoring run
   (M5), delete its `PSIDriftDetector`, its PSI drift action and its weekly drift job (M6), keep its `Role = 'Champion'`
@@ -8993,8 +8985,9 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   every `FeatureValue` row that references `MLModel`, `MLModelScoringBinding` or `MLScoringRun` before those tables'
   `DELETE`, and deletes a deleted model's `Source = 'Model'` rows before it nulls `MLModelID` on any other row (the
   `Model` branch of `CK_FeatureValue_SourceLineage` requires the column). Each milestone that adds, alters or drops such
-  an FK updates the procedure and `entity-delete-fk-policy.json` in the same commit (§5.9). #6180's procedure nulls
-  without deleting (`pr6180` line 352), which is its rebase to make if it lands after PR 4 (§10 Coordination).
+  an FK updates the procedure and `entity-delete-fk-policy.json` in the same commit (§5.9). #6180's procedure
+  (`V202611101901:123`, merged before PR 4) nulled `MLModelID` without deleting; PR 4's re-created body keeps that line
+  after the `Source = N'Model'` delete, so it is a superset of his (A-6180-DELETE-PROC, D4-79).
 - **D4-33 · D4-01 decided: #5001 is superseded by PR 3's storage-provider store** (kickoff design §6.4). On `599c288dee`
   PR 3 ships `StorageProviderArtifactStore implements IArtifactStore`
   (`Engine/src/training/storage-provider-artifact-store.ts:27`, `IArtifactStore` at `Engine/src/training/types.ts:142`)
@@ -9005,7 +8998,7 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   (`packages/MJStorage/src/drivers/LocalFileSystemStorage.ts:115`), so dev and CI have a provider; the Outline's "add a
   local driver to MJStorage" text and its MJStorage paths are gone (no MJStorage path is in the allowlist).
 - **D4-35 · D4-15 amended: the maintenance engine is deleted together with #6180's detector** (D-069). M6 deletes
-  `MaintenanceEngine` and its decision logic as D4-15 decided; if #6180 is on the branch by then, its `PSIDriftDetector`
+  `MaintenanceEngine` and its decision logic as D4-15 decided; #6180 is on the branch (merged `fa33e94dbe`), so its `PSIDriftDetector`
   and the `DriftContext`/`IDriftDetector` changes it makes to the maintenance seams go in the same commit (the
   conditional task of D4-31). M6's monitoring (procedure M on input features, realised-outcome triggers) supersedes the
   PSI drift action and job; drift alerts and never retrains (architecture C7).
@@ -9020,7 +9013,8 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   lineage join (`MLScoringRun.ArtifactSha256 = MLModel.ArtifactSha256`) holds for every row of either role; both runs
   share the batch's assembled features and transaction. `UQ_FeatureValue_ModelRow` gains `Role`. Alternative rejected:
   one run row with two roles (the run's model and artifact hash would describe only one of them).
-- **D4-38 · #6180 regenerates its tail; PR 4 follows its IDs until it merges** (decided; D-069). At the kickoff
+- **D4-38 · #6180 regenerates its tail; PR 4 follows its IDs until it merges** (decided; D-069; **closed 2026-11-11**:
+  #6180 merged `fa33e94dbe` with regenerated IDs; section 4 removed at the M1 merge-of-next pass, D4-79). At the kickoff
   `gh pr view 6180` reports head `f40161febb` (a merge of `next`, committed 2026-11-09T21:54Z; `gh api …/compare/79fbbc6ea7...f40161febb`
   → `ahead`, 613 ahead, 0 behind), newer than the `pr6180` ref `79fbbc6ea7` this plan reads. Its migration there (`gh api …/contents/migrations/v6/V202611090911__v6.3.x__Task_Security_Saga_Shadow_Scoring.sql?ref=f40161febb…`)
   carries new IDs for all five rows (`Role` `234fb2ce-776d-4d36-b356-0fe1348132b4`, `MLModelID`
@@ -9263,7 +9257,7 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   branch (§2.7); the headings keep `parallel-safe: yes` as a capability with "default: serial"; the sub-branch steps
   run only if the owner chooses the parallel option, whose upstream is set in the M3 exit push (review minor m6).
 - **D4-64 · Mutation checks whose red does not depend on W2's outcome mix** (decided at the kickoff review; finding I8).
-  G0.2's mutation needed a no-signal model to publish (impossible, D4-56) and G3.4's needed ≥ 29 keep-baseline seeds,
+  G0.2's mutation needed a no-signal model to publish (impossible, D4-56) and G3.4's needed 28 keep-baseline seeds,
   a count no run recorded (PR 3's final verification logs `W2-noise 1/400` for the `model` outcome only,
   `PR-3-honest-training.md:32014`). The new mutations drop the refusal record (G0.2) or the stored reason (G3.4), red on
   every non-published run (≥ 54 of 60, ≥ 372 of 400 on a passing build). Task M1.1 Step 6 measures the mix with the
@@ -9358,7 +9352,9 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   collides on `UQ_EntityUniqueKey_EntityID_Name` on any database where CodeGen already wrote them. Each of the tail's
   three inserts is wrapped in `IF NOT EXISTS (… WHERE [ID] = … OR ([EntityID] = … AND [Name] = …))`, marked
   `HAND EDIT`, and re-applied after any tail regeneration that still emits them. Reported to next's owners in §10
-  Coordination.
+  Coordination. The tail's hand edits are four since the M1 merge-of-next pass: these three guards and D4-80's pin
+  (`AutoUpdateRelatedEntityInfo = 0` on `MJ: Latest Feature Values.EntityID`, `HAND EDIT (4)`, with CodeGen's
+  "Set LLM-identified FKs" block for that entity left out).
 - **D4-73 · Publish-record immutability has one exception: the entity-delete procedure** (decided at M1, Task M1.3's
   review). `spDeleteEntityWithCoreDependencies` clears `SignOffID`, `ReplacesModelID` and `TrainingRunID` on the
   `MJ: ML Model Publish Records` rows that survive when the row they reference is removed with its entity; no other
@@ -9396,6 +9392,43 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   Protocols.Promotion` has no JSONType on next and M1.5 adds none. `MJ: ML Scoring Runs.TrackRecordChanges = 0` is set
   through `metadata/entities/.entity-ml-scoring-runs.json` (sync push), not a migration `UPDATE`. Alternative rejected:
   one file per type (duplicates shared types in CodeGen's per-entity block and forced a renamed type).
+- **D4-79 · The M1 merge of `next` after #6180 merged** (recorded 2026-11-11, the merge-of-next pass; controller ruling,
+  D-069's merged-branch case). Merged `origin/next` @ `5fd5335a5f` (455 commits past the merge base `378daae9ab`; #6180
+  merged as `fa33e94dbe`) in `da45376b51`; seven CodeGen-owned conflicts took next's side and were regenerated. The
+  migration is retimed `V202611101201` → `V202611110217` (after next's newest, `V202611110216`). Its section 4 (#6180's
+  `Role`/`MLModelID` columns, constraints, FK index, descriptions and five metadata rows, guarded) is removed: next's
+  `V202611101901` is the only source, and its rows (`bab2f6f6…`, `24ace2b5…`, `0f42095a…`, `dff637a2…`, `eb42f51a…`)
+  replace the old IDs everywhere; sections 5–7 become 4–6. The re-created delete procedure is a superset of
+  `V202611101901`'s (A-6180-DELETE-PROC: the `diff` shows 2 `<` lines, the widened `@Handled` line and his
+  `MLModelID` clear, which PR 4 carries after the `Source = N'Model'` delete). The CodeGen tail is regenerated on
+  databases built from scratch (two passes; `spDeleteAIConfiguration`, which CodeGen emitted in both passes in two
+  different forms, is excluded; D4-72's three guards re-applied); a third clean build emits nothing. The run-twice DB case
+  re-applies the `Entity` insert only and checks next's FeatureValue objects present by entity and name. The fixture
+  keeps one `FeatureValue.MLModelID` dependent (`references=95 dependents=74`). The tail's view field
+  `MJ: Latest Feature Values.EntityID` is pinned (D4-80). The deterministic tier's exit test is measured in two forms
+  from here on: CI's PR lane form (no flag) → 0 failed, skip gate PASSED; with RUN_MUTATION_TESTS=1 → every failure
+  root-caused and named in §11, and 0 failures attributable to PR 4's changes (OF4-7, OF4-8). At this pass the flag
+  form fails two of next's own checks, `IT01 - Server RunView Cache Integrity` (`server-cache.S34`, "a delete upserts
+  nothing — expected 0, got 1") and `IT132 - Alternate Base Views` (`ABV3`, "AlternateBaseView 'ActiveUsersCheck' is
+  not registered on entity 'MJ: Users'"). Root cause: next's #6316 (`020b9c87d3`, `providerBase.ts:1328`), whose
+  asynchronous full metadata reload on a metadata-entity write ("Full reload needed: a metadata member entity was
+  written, but no item timestamp moved") lands just before ABV3 and replaces the `EntityInfo` that holds its temporary
+  alternate view, and leaves S34's delete phase reading an upsert payload. next's own CI is flaky on the same tier:
+  run `42970910551` at `5fd5335a5f` (`server-cache.S26`) and run `42970820988` at `a414d526e6` (this S34 message;
+  run `42970229098` at the same SHA passed). Controller ruling: no change to TestingFramework or MJCore inside PR 4
+  (D-062; the regression is fixed by its own PR against next); CI's PR lane (122 / 0 / 23, skip gate PASSED) is the
+  merging gate. Counts in §11's merge-of-next entry.
+- **D4-80 · `vwLatestFeatureValues.EntityID` is pinned** (controller ruling at the M1 merge-of-next pass, 2026-11-11).
+  vwLatestFeatureValues.EntityID is pinned (AutoUpdateRelatedEntityInfo = 0) so CodeGen's LLM decoration never infers
+  a soft FK on the view entity; the real FK is FeatureValue.EntityID, which the delete procedure already covers; the
+  fixture needs no view entry. The tail's `INSERT INTO EntityField` for that field carries
+  `[AutoUpdateRelatedEntityInfo] = 0` (marked `HAND EDIT (4)`), and CodeGen's "Set LLM-identified FKs for MJ: Latest
+  Feature Values" block is left out of the tail; `ManageMetadata.LLMForeignKeyMayApply` (`manage-metadata.ts:4524`)
+  and the field-sync step (`:4775`) skip a field so pinned, so the tail is the same whether or not the LLM decoration
+  runs or what it decides (M1's run inferred nothing; the merge-of-next run inferred `EntityID → MJ: Entities`, which
+  failed `delete-entity-fk-coverage.test.ts` and next's `polymorphic-fk` standard). Alternatives rejected: a policy
+  or test change for view-backed soft FKs (leaves the nondeterminism in place, and the test is outside the allowlist);
+  dropping the LLM block alone (the next regeneration could infer it again).
 
 #### Kickoff review (D-070)
 
@@ -9462,7 +9495,9 @@ reviewer's paste); none was rejected. No Critical finding is open.
 | Default-on rollback flips between two models | A rollback needs the predecessor to beat the current model by the margin on the same rows in 2 consecutive periods, and a rolled-back model is never re-published by a retry (R1); returning to it needs a new training run that beats the restored model through the gate |
 | Auto-train retrains every run after a deterministic refusal (compute cost) | `retryAfterHours` (D4-12) |
 | A role keeps read on `MJ: Feature Values` without the view-gate filter (a role added later, a CodeGen default grant), so its users are exempt from it (`entityInfo.ts:4100`) and see every prediction | The filter ships on every role's read permission (§5.8.4); the registry job checks that every read permission on both entities carries it and re-attaches it when one does not (an R7 finding); the M5b bundle asserts an unauthorized user sees nothing |
-| #6180 regenerates its tail again, or merges first | A-6180-STATE and A-6180-COLUMNS at every milestone start (D4-38); every hand-written row is guarded by ID or natural key; the conditional tasks of D4-31 |
+| #6180 regenerates its tail again, or merges first | Closed: #6180 merged first (`fa33e94dbe`); PR 4's migration follows it and carries none of its rows (D4-79); M5.11 and M6.8 active (D4-31) |
+| The deterministic tier under `RUN_MUTATION_TESTS=1` reports host-environment skips of mutation-only TestingFramework checks (`server-cache.S30`, `role-elevation.RE6`, `realtime-session-verification.RSV1/2/4/5/6`, `entity-server-invariants.ESI9`) and next's own failures | CI's PR lane form (no flag, skip gate PASSED) is the merging gate; in the flag form every failure is root-caused and named in §11 and none is attributable to PR 4 (D4-79); a TestingFramework or MJCore change is outside PR 4's allowlist (D-062), owner flags OF4-7, OF4-8 |
+| next #6316 metadata-reload race breaks IT01 S34 / IT132 ABV3 under the mutation flag — fix belongs in a next PR; PR 4 does not touch TestingFramework/MJCore | Owner flag OF4-8; recorded in D4-79 and §11 |
 | The view's population-wide read is slow at PS volumes (a top-1-per-group read over the live table) | A-FV-VOLUME times it at 1M rows; partition-column filters seek the as-of index; a DBA may later promote the query to a materialization under MJ's own process (D-078's residual) |
 | Feature Value growth (records × bindings × runs) | A-FV-VOLUME sizes the indexes at 1M rows and sets the default `RetentionDays`; the daily sweep (D4-28) |
 
@@ -9486,7 +9521,7 @@ All resolved; the defaults are implemented and the kickoff only confirms the fac
 The owner's ruling of 2026-11-10 (D4-69) removed OF4-1, OF4-2, OF4-4 and OF4-6: CI gains the sidecar pytest job at M1
 (Task M1.6), M5.4 drops `'Materialized'` from `ModeBadgeClass`, M4.3 deletes the grid's `@deprecated` aliases, and M3.4
 deletes `ProductionModelPromotionGate` and rewrites RD9 and the `ps-live-*` rigs, each with the test or rig it breaks
-updated as caller maintenance (§2.6). Two flags remain, each decided out of scope with its default implemented:
+updated as caller maintenance (§2.6). Four flags remain, each decided out of scope with its default implemented:
 
 - **OF4-3 · `packages/Angular/Explorer/core-entity-forms/src/lib/custom/RecordProcesses/**` stays out of scope**
   (layering; D-062 (4): `ng-core-entity-forms` outside the `MLModels` and `model-predictions` folders is foundational,
@@ -9502,6 +9537,17 @@ updated as caller maintenance (§2.6). Two flags remain, each decided out of sco
   `PR-3-honest-training.md:30940-30942`, which recommended a "rule model" row type to PR 4). Delivering and serving a
   rule would be a new model kind — a scope addition (D-062 (2)). **Default, implemented: PR 3's** — no row, not served;
   the run carries a run-level `kept-existing-rule` record and the incumbent, if any, keeps serving. **Expiry: PR 6.**
+- **OF4-7 · The deterministic tier's mutation-form skip gate is an environment item, out of scope** (recorded at the M1
+  merge-of-next pass, D4-79). Under `RUN_MUTATION_TESTS=1` the tier reports 0 failures attributable to PR 4 (next's
+  own failures are OF4-8), and its skip gate fails on
+  host-environment skips of mutation-only checks in `packages/TestingFramework/integration-test-suite` (8 at M1:
+  `server-cache.S30`, `role-elevation.RE6`, `realtime-session-verification.RSV1`, `RSV2`, `RSV4`, `RSV5`, `RSV6`,
+  `entity-server-invariants.ESI9`), none of which PR 4 touches. Making that gate green needs a TestingFramework
+  config or allowlist change, outside PR 4's allowlist (D-062). **Default, implemented:** each milestone measures both
+  forms and records the skips by name; CI's PR lane (no flag, skip gate PASSED) is the merging gate. No deferred work.
+- **OF4-8 · next #6316 metadata-reload race breaks IT01 S34 / IT132 ABV3 under the mutation flag — fix belongs in a next
+  PR; PR 4 does not touch TestingFramework/MJCore** (controller ruling at the M1 merge-of-next pass, D4-79). Evidence in
+  §11's merge-of-next entry.
 
 ## 10. PR description draft
 
@@ -9550,7 +9596,7 @@ are monitored on real outcomes.
 - Environment variables read by new code: <!-- gen:env -->none<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->0<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->0<!-- /gen:checks -->
-- Head: <!-- gen:head -->14aa59a14b<!-- /gen:head -->
+- Head: <!-- gen:head -->da45376b51<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,
@@ -9569,24 +9615,15 @@ loses its `'Materialized'` case; Score Record Set writes predictions only when c
 `@deprecated` alias of a file this PR modifies is removed (M8.2 writes the full list here). No compatibility shim keeps an old form
 working (program D-042, D-053).
 
-**Coordination with #6180 (open).** This PR takes `next` only and carries none of #6180's commits. It adds #6180's
-`FeatureValue.Role` and `FeatureValue.MLModelID` columns guarded (`IF COL_LENGTH(…) IS NULL`), with #6180's
-`EntityField`, `EntityFieldValue` and `EntityRelationship` IDs, its `ValueListType` update and its two column
-descriptions verbatim, each row guarded, so the migration applies before or after #6180. What the review verified in
-#6180's migration `V202611090911__v6.3.x__Task_Security_Saga_Shadow_Scoring.sql`:
-- at `79fbbc6ea7` its `spCreateFeatureValue` and `spUpdateFeatureValue` were regenerated from a pre-PR 3 base (zero
-  mentions of `EffectiveAsOf` in the file), so applied after PR 3 they drop PR 3's columns from the procedures (its
-  `vwFeatureValues` selects `f.*`); at its head `f40161febb`, a merge of `next`, the procedures carry `EffectiveAsOf`;
-- its `ALTER TABLE … ADD` statements for `Role` and `MLModelID` are unguarded, so on a database that ran this PR first
-  they fail on the existing columns;
-- its `spDeleteEntityWithCoreDependencies` nulls `FeatureValue.MLModelID` (line 352) without deleting the model's
-  `Model` rows, which this PR's `CK_FeatureValue_SourceLineage` refuses; this PR's procedure deletes them first;
-- its `EntityFieldValue` inserts are unguarded and reference its own IDs, so they collide with this PR's rows on every
-  database that ran this PR first (with different IDs they would instead be silent duplicates: `EntityFieldValue` has no
-  unique key besides its primary key); its IDs change when it regenerates its tail (all five differ at `f40161febb`),
-  and this PR re-reads them at every milestone start.
-If #6180 merges after this PR, the rebase onto `next` — guards on its `ALTER`s and inserts, and the delete order — is
-#6180's.
+**Coordination with #6180 (merged `fa33e94dbe`).** #6180 merged into `next` on 2026-11-10 (`fa33e94dbe`); its
+migration is `V202611101901__v6.3.x__Task_Security_Saga_Shadow_Scoring.sql`, which adds `FeatureValue.Role` and
+`FeatureValue.MLModelID` with their constraints, descriptions and metadata rows and re-creates
+`spDeleteEntityWithCoreDependencies` with a `MLModelID` clear. This PR took `next` with it (merge of `origin/next` @
+`5fd5335a5f`) and carries none of #6180's commits beyond that merge. PR 4's migration was retimed to sort after it and
+no longer adds the two columns or their rows (the guarded section that did is removed: one source, next's); its
+re-created delete procedure is a superset of #6180's (it deletes the deleted models' `Source = 'Model'` rows before the
+same `MLModelID` clear, D4-32). A fresh install runs #6180's migration, then this PR's. M5.11 and M6.8 absorb #6180's
+shadow-scoring rows, PSI drift detector, drift action, drift job and IT166 (D4-31).
 
 **Coordination with `next`'s owners (found at M1).** next's `V202611101200__v6.3.x__Entity_Unique_Key_Sets.sql` created
 `__mj.EntityUniqueKey` without rows for PR 3's three unique constraints (`UQ_MLEvaluationProtocol_Lineage_Version`,
@@ -9969,6 +10006,146 @@ plus the keep-list, runtime verification against MJAPI and the database (§7 of 
   deviations), D4-77 (G0.2's shipped check passes when every build is refused), D4-78 (one JSONType mirror file per
   entity). The deterministic tier's skip gate fails with `RUN_MUTATION_TESTS=1` on 8 mutation-only environmental skips (Tests above). `SERVING_MIGRATION` hardcodes
   the migration's file name — the retime must change it.
+
+### 2026-11-11 09:55 CST — Claude (Opus 5.5, merge-of-next pass) — M1
+
+- **Merge:** merged next @5fd5335a5f (#6180 merged fa33e94dbe), migration retimed V202611101201 → V202611110217.
+  `git fetch origin next` → `git rev-parse --short origin/next` → `5fd5335a5f` (455 commits past the merge base
+  `378daae9ab`; six new `migrations/v6` files: `V202611101900`, `V202611101901` (#6180), `V202611101911`,
+  `V202611102342` (Metadata_Sync), `V202611110215`, `V202611110216`). `git merge --no-ff origin/next` → 7 conflicts, all
+  CodeGen-owned (the three `mj-class-registrations.ts` pairs and both Bootstrap manifests, `mjmlmodel.form.component.{html,ts}`,
+  MJServer `graphql-schemas/__mj.ts`), each `git checkout --theirs` then regenerated by `codegen --skipdb`. The
+  auto-merged fixture held two `FeatureValue.MLModelID` dependents; next's copy was removed (ours kept):
+  `references=95 dependents=74`, `FeatureValue.MLModelID entries=1`. `integration.yml` parses (jobs incl.
+  `ps-sidecar-pytest`, steps intact). `pnpm install` → done (exit 0). Merge commit `da45376b51`.
+- **Retime:** `retime-migration.mjs --dry-run` → `retime: 202611101201 → 202611110217`; for real → the `git mv`, 1
+  plan replacement, 0 in the changeset; `flyway: no row for 202611101201, skipped` (the tool read `pstruth`'s
+  `flyway_schema_history`, the first of the database's two; the database was rebuilt anyway). `git grep -n
+  V202611101201` → only the M1 entry's history line above. `SERVING_MIGRATION` (TruthSuite DB test) names the new file.
+- **Section 4 removed** (D4-79): `wc -l` 18815 → 18602 after the removal and the comment rewrites; sections 5–7 → 4–6;
+  the header and the procedure comment name `V202611101901`. `grep -n -i "6180\|234fb2ce\|728338f3\|77b68e90\|13832682\|502b4788"`
+  on the migration → 0 hits. Procedure: `diff` of the two `awk` extracts (`V202611101901` 394 lines, ours 416) → his
+  only lines are the `@Handled` line PR 4 widens with `(N'MLScoringRun.ScopeEntityID')` and his `MLModelID` clear,
+  which ours carries verbatim after the `Source = N'Model'` delete; `grep -vxFf` → 1 non-blank line of his not in ours
+  (that `@Handled` line). `V202611101200` → `V202611101901` adds exactly that one `UPDATE`.
+- **Tail regenerated** (the brief's branch: the old tail carried the old IDs at three places): tail removed (928 lines
+  left: hand-written + 57 blank lines + the comment block) → fresh DB → `migrate` (`176 applied`) → `codegen
+  --skipfiles` → 12831-line `CodeGen_Run` appended, D4-72's three guards re-applied (`grep -c "HAND EDIT (re-apply"` → 3)
+  → fresh DB → `176 applied` → `codegen --skipfiles` → 450 lines: the `MJ: Entities → MJ: Latest Feature Values`
+  relationship (appended as the second pass) and `spDeleteAIConfiguration` again, now with the cascade delete of
+  `AIPromptModel` that the committed `V202610231210` body has, where pass 1 had emitted a cascade update; that proc is
+  not this migration's and is excluded (header says so) → third fresh DB → `176 applied` → `codegen --skipfiles` →
+  `MJ CodeGen complete — 460 entities`, `find migrations -name "CodeGen_Run_*"` → 0 files: **a database built only from
+  the migrations emits nothing**. Migration `wc -l` 18815 (HEAD) → 13321. D4-73's sentence comes from the extended
+  property (no hand edit). `check-migration-entityfield-sequence.mjs` → `✓ no literal EntityField sequences`.
+- **Fresh-install proof** (third clean build, `READ_COMMITTED_SNAPSHOT` 1): `flyway_schema_history` → 170
+  `V202611101901…Task_Security_Saga_Shadow_Scoring` … 175 `V202611110217…PS_Honest_Serving_Schema` (his before ours),
+  177 successful rows. FeatureValue rows with next's IDs: `EntityField` `Role` `bab2f6f6-56d7-4372-9f00-505790d71886`
+  (`List`), `MLModelID` `24ace2b5-b5e9-4048-80ed-7d55cbcd2846`; `EntityFieldValue` `Challenger`
+  `0f42095a-2938-4b51-814b-fce520307b18` (1), `Champion` `dff637a2-5ef8-4da9-bdd2-c4a15f81a75b` (2); relationship
+  `eb42f51a-4e80-4378-9892-95815fcfb08b`; `IDX_AUTO_MJ_FKEY_FeatureValue_MLModelID` 1; `vwLatestFeatureValues`
+  present; `CK_`/`DF_FeatureValue_Role`, `FK_FeatureValue_MLModel` present; the three guarded `EntityUniqueKey` rows
+  present; virtual entity `MJ: Latest Feature Values|vwLatestFeatureValues|0|1|0|0|0`, `EntityFields 16 = ViewColumns 16`, key `ID`.
+- **Bootstrap after the proof:** `sync push --dir=metadata --ci` → `"created":3,"updated":12,"unchanged":16759,
+  "deleted":0,…,"errorCount":0`; 3 write-backs restored from the index (`.component-libraries.json`, `.components.json`,
+  `.latest-feature-values-permissions.json`). `codegen --skipdb` → `460 entities in 48.59s`. `pnpm run build` →
+  `Tasks: 321 successful, 321 total`. `truth:provision` → `pstruth: 47 entities, direct SQL sanctioned on 47`; IT
+  metadata from `~/.mj-ps/pr4-claude/merge-next/it-metadata` → `"created":699,…,"errorCount":0`; truth sidecar restarted
+  (`http://127.0.0.1:61968`); MJAPI on 4041 (ps-env, `STORAGE_LOCAL_ROOT`, `PREDICTIVE_STUDIO_SIDECAR_URL`,
+  `MJ_REST_API_ENABLED=true`, `MJ_DISABLE_TASK_GRAPH_DISPATCHER=1`); `load-c1-corpus.ts` →
+  `{"C1Person":2015,"C1OrderHeader":15420,…}`, `immutable fields declared: 272`; MJAPI restarted.
+- **Fix round 1 (controller rulings, D4-80):** the third clean build's `check:standards` failed `✗ polymorphic-fk …
+  Entity "MJ: Latest Feature Values" has polymorphic record field "RecordID" alongside MJ: Entities FK (EntityID)`, and
+  after `codegen --skipdb` CodeGenLib failed `delete-entity-fk-coverage.test.ts › has a policy entry for every generated
+  FK into Entity` → `expected [ 'vwLatestFeatureValues.EntityID' ] to deeply equal []` (`Tests 1 failed | 2482 passed |
+  66 skipped (2549)`). Both came from the regenerated tail's "Set LLM-identified FKs for MJ: Latest Feature Values"
+  block (`RelatedEntityID` = MJ: Entities, `IsSoftForeignKey=1`; M1's tail had none). Ruling (c): the block is deleted,
+  the tail's `EntityField` insert for that `EntityID` carries `[AutoUpdateRelatedEntityInfo] = 0` (`HAND EDIT (4)`,
+  header "Four hand edits"), and the polymorphic declaration I had added is removed (restored from the index; `git diff
+  --stat HEAD -- metadata` empty). Fourth clean build: `migrate` → `Migrations complete in 209.5s — 176 applied` →
+  `codegen --skipfiles` → `MJ CodeGen complete — 460 entities in 140.56s`, emitted files **0**, `grep -c "LLM-identified
+  FKs for MJ: Latest Feature Values"` in the CodeGen log → 0; `SELECT AutoUpdateRelatedEntityInfo, IsSoftForeignKey,
+  RelatedEntityID … Name='EntityID'` → `0|0|NULL`; flyway 170 `V202611101901`, 175 `V202611110217`; `sync push` →
+  `"created":3,"updated":12,"unchanged":16759,"deleted":0,…,"errorCount":0` (3 write-backs restored); `codegen --skipdb` →
+  `460 entities in 49.76s`; the generated `MJvwLatestFeatureValuesSchema` has 0 `Related Entity/Foreign Key` lines;
+  `pnpm run build` → `Tasks: 321 successful, 321 total`; CodeGenLib `pnpm test` → `Test Files 164 passed | 6 skipped (170)
+  / Tests 2483 passed | 66 skipped (2549)`, `delete-entity-fk-coverage.test.ts (11 tests)`; `check:standards` →
+  `✓ polymorphic-fk … 51 polymorphic FK pairs verified against 51 metadata declarations`, `✓ No errors. 14302
+  warning(s)`; `check:codegen-tail` OK; entityfield-sequence ✓. Migration `wc -l` 13317.
+- **Tests:** Core `pnpm test` → `Test Files 34 passed (34) / Tests 468 passed (468)` (466 at M1 + next's
+  `leakage-guard-validation` cases); Core `pnpm run build` → exit 0. CodeGenLib → see fix round 1 (all passed after `codegen --skipdb` on the fourth build). TruthSuite
+  → `Test Files 18 passed (18) / Tests 105 passed (105)`; `test:db -- serving-schema` → `Test Files 3 passed (3) / Tests
+  25 passed (25)` (serving-schema 21; the rewritten case `re-applies the Entity insert with no duplicate object and no
+  error, over next's FeatureValue Role and MLModelID` → passed). Engine → `Test Files 87 passed (87) / Tests 1318 passed
+  (1318)`. Checks: entityfield-sequence ✓; `check:codegen-tail` → `codegen-tail: OK — committed generated code matches
+  committed migrations` (460 entities, 794 migrations); `check:guards` exit 0; `check:standards` exit 0 (after fix round 1). A-078 →
+  `grep -ci 1AC777D7-…` → 78 (≥ 17). A-6180-DELETE-PROC → as above. Sidecar `test:python` → `495 passed in 130.91s`;
+  TruthSuite `test:python` → `24 passed in 18.01s`, mypy `Success: no issues found in 48 source files`.
+- **Integration** (one MJAPI, one suite at a time, `STORAGE_LOCAL_ROOT` in both processes):
+  - `Integration Tests — Deterministic`, `RUN_MUTATION_TESTS=1`: run `F7A58588-6723-48B9-9F6B-316550AF3F94` →
+    142 / **2** / 1 of 145, skip gate FAILED (the 8 unexpected skips of OF4-7). Failed: `IT01 - Server RunView Cache
+    Integrity` (`server-cache.S33` "exactly one cache write … expected 1, got 2"; `server-cache.S34` "a delete upserts
+    nothing — expected 0, got 1") and `IT132 - Alternate Base Views` (`ABV3` "AlternateBaseView 'ActiveUsersCheck' is not
+    registered on entity 'MJ: Users'"). Root cause: next's #6316 (`020b9c87d3`, `providerBase.ts:1328`) makes the test
+    process run an asynchronous full metadata reload whenever a metadata member entity is written ("Full reload needed: a
+    metadata member entity was written, but no item timestamp moved"; 259 `Full reload` lines in this run, 0 in M1's exit
+    run `c6-run-5`); ABV3's failure is preceded by one (log lines 6056–6065), which replaces the `EntityInfo` objects and
+    drops the check's temporary in-memory alternate view, and IT01's counts take the reload's cache writes. next fails
+    the same way on its own CI: run `42970910551` at `5fd5335a5f` (`server-cache.S26` "expected 0, got 2") and run
+    `42970820988` at `a414d526e6` (`server-cache.S34`, the message above), while run `42970229098` at the same
+    `a414d526e6` passed. PR 4 changes no MJCore or TestingFramework path; the fix is outside the allowlist (D-062).
+    Re-run on a quiet host (load 6.66): run `726CB645-1130-4CEC-A4F0-6FEAF6A600F4` → 142 / **2** / 1 of 145, the same
+    `server-cache.S34` and `alternate-base-views.ABV3`. Alone: `IT132 - Alternate Base Views` → Passed (6 / 0, run
+    `E7879E09-424F-48DE-81AC-2D9E3D521F18`); `IT01 - Server RunView Cache Integrity` → Failed 33 / 1 (`S34`, run
+    `3DD948A4-9CB7-4549-8FDE-64906250DB21`). `S34` is `RequiresMutation`, so CI's PR lane skips it. Controller ruling
+    (D4-79, OF4-8): both checks are next's own, the root cause is next's #6316, no TestingFramework or MJCore change in
+    PR 4 (D-062), CI's PR lane is the merging gate; the flag form's exit test is met as amended — every failure
+    root-caused and named here, 0 attributable to PR 4's changes (S33, seen once at load 43–47, is the same IT01
+    class).
+  - CI's PR lane (no flag): run `B6E52F26-F83F-4D08-8BBB-C51ADD2A7684` → **122 / 0 / 23 of 145, `Skip gate: PASSED`,
+    exit 0**; re-run on the fourth build: `3586C8DD-EBDD-4FB4-90D8-944E74241F98` → **122 / 0 / 23 of 145, `Skip gate: PASSED`, exit 0** (850 s).
+  - Keep-list (`RUN_MUTATION_TESTS=1`): Containment `6C8CFB84-2FC9-4751-A59F-06BDC9790CB9` → **10 / 0 / 0** (590 s);
+    Prediction Units `A7D05646-5132-441D-ABD1-DAB81E5C78A9` → **12 / 0 / 0** (289 s); Training
+    `F710C518-0EAD-44D1-AD0F-B5DA504ED4AE` → **35 / 0 / 0** (1017 s); Training (statistical)
+    `568B2521-64CD-40C7-BBFB-50AF55D8D892` → 3 / 3 / 0 (3764 s): `W2 -> S5.2`, `N1c -> S6.5`, `N1r -> S6.5` "exceeded the
+    … remaining run budget (hung check)", run while the host's load average was 43–47 (`uptime` after it: `13.76 46.93
+    43.90`; durations 176 / 1060 / 691 s against 60 / 215 / 163 s at M1's exit); re-run alone at load 8–13 → `W2 -> S5.2`
+    Passed 39.7 s (`96AE8793-E396-4668-9C37-8585EACCD0C1`), `N1c -> S6.5` Passed 137.9 s
+    (`4CC8E0F6-5EB9-42CB-8258-84ED1653E40F`), `N1r -> S6.5` Passed 109.3 s (`443BFCC6-55FE-4FF8-949A-4041F2B51580`); the
+    whole suite re-run alone on the fourth build (no other heavy work on the host): `76B91B86-873A-441E-BE54-CE640FAD622E` → **6 / 0 / 0** (2351 s, load 21.35 → 13.11);
+    Feature Pipelines `4D47107E-D759-4E09-98DD-982AA3681C6E` → 0 / 5 / 0, every fixture "needs bizapps-common installed"
+    (D3-78, environment-blocked as at M1's exit).
+- **Plan edits:** §1 (Anchored to, Absorbs); every milestone Start list (the `pr6180` fetch bullet → `git fetch origin
+  next`, 10 lists); §2.6 conditional comment → active; §4.2 keep row; §5.1/§5.8 intro; §5.8.1 (provided-by-next note
+  replaces the ID table; Role filters past tense); §5.8.3 step 5; §5.8.4 note; §5.9 (base `V202611101901:123`, M1 row,
+  order constraint); M1 Outcome; M1.2/M1.3/M1.7 steps (annotated); M1 exit tests (A-6180-COLUMNS retired,
+  A-6180-DELETE-PROC re-pointed, the two forms); M1 exit list (`git push`, `--edit-pr` ticked); M1.6 Step 5 note;
+  M2–M8 §11 requirement (merge-state phrase dropped, 9 lines); M5.1/M5.2/M5 exit lines; M5.5 snippets PascalCase
+  (`Status`, `Reason`, `Total`, `DryRun`, `Written`; `missing` → `missingColumns`, 14 lines: 6079–6148, 6751, 7859);
+  M5.11 and M6.8 ACTIVE (headers, Files, Step 1 = the recorded `git log` fact); M5b IT bundle lines; the deterministic
+  two forms on M1/M5b/§7 lines and D4-79's short form on the other milestones' lines; §8.2 (#6180 checks intro,
+  A-6180-STATE closed, A-6180-COLUMNS retired, A-6180-DELETE-PROC re-pointed); §9.1 D4-30, D4-38 closed, D4-31 condition
+  met, D4-32 past tense, D4-35, D4-64 (28), D4-72 (four hand edits), D4-79 and D4-80 added; §2 (re-apply the four
+  hand edits after a tail regeneration); §9.2 (#6180 row closed, skip-gate row and the #6316 owner-flag row added);
+  §9.4 OF4-7 and OF4-8 added (four flags); §10 Coordination with #6180 (merged `fa33e94dbe`); the exit-test amendment
+  worded per the controller ruling (M1, M5b ×2, §7; D4-79's short form elsewhere).
+- **Addendum to the M1 exit entry above (review I1, M1):** the deterministic exit test is met by 0 failed under
+  `RUN_MUTATION_TESTS=1` (139 / 0 / 1 at the exit); its 8 unexpected skips are host-environment skips of mutation-only
+  TestingFramework checks PR 4 does not touch — `server-cache.S30`, `role-elevation.RE6`,
+  `realtime-session-verification.RSV1`, `RSV2`, `RSV4`, `RSV5`, `RSV6`, `entity-server-invariants.ESI9` (next's own
+  nightly run `42970820988` lists the same 8); CI's PR lane run (118 / 0 / 22, `Skip gate: PASSED`, exit 0) is the
+  merging gate; Feature Pipelines (0 / 5) is outside §4.2's 53 + 10 (PR 3's D3-78). Write-backs at the exit: 11 = 10
+  tracked files restored from the index + the then-untracked `.latest-feature-values-permissions.json` whose `sync`
+  block was stripped (`m1-exit-report.md` §3a).
+- **M1.6 Step 5 (CI after the push):** read after this commit's push with `gh pr checks 6517`; the result (or the run
+  URL, if still running) is the line below, which rides M2's first commit with §10's `gen:head` (M2's start reads it).
+- **State left behind:** `MJ_PS_PR4_claude` from the fourth clean build (D4-80's pin), plus the sync push,
+  `truth:provision`, the IT metadata, the C1 corpus and the two suite runs above; truth sidecar on `:61968`; MJAPI
+  stopped; the seven owner files untracked as before; the interrupted deterministic re-run of this pass went with the
+  database it ran on. The retime tool's history-table choice (it read `pstruth`'s) is the controller's to fix in the
+  plans repo.
+- **Next step (exact):** M2's Start list, first command: `export PS_MJ="$MJ" PS_AGENT="$AGENT"` with `tools/ps-env.sh`
+  loaded, then `git fetch origin next` (read the M1.6 CI line below first).
 
 ## 12. Refresh log (append-only)
 
