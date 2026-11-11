@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "appId": {
+      "type": "string",
+      "title": "GitHub App ID",
+      "description": "The numeric App ID or Client ID of the GitHub App from the GitHub Developer Settings page.",
+      "isSecret": false,
+      "order": 0
+    },
+    "installationId": {
+      "type": "string",
+      "title": "Installation ID",
+      "description": "The GitHub App Installation ID for the target organization or user account.",
+      "isSecret": false,
+      "order": 1
+    },
+    "privateKey": {
+      "type": "string",
+      "title": "RSA Private Key (PEM)",
+      "description": "RSA private key (PEM) generated for the GitHub App. Used to sign short-lived RS256 JWT assertions to mint scoped installation access tokens.",
+      "isSecret": true,
+      "order": 2
+    },
+    "defaultOwner": {
+      "type": "string",
+      "title": "Default Organization / Owner",
+      "description": "Optional default GitHub organization or user login (e.g., 'MemberJunction') used when a repository owner is not explicitly provided.",
+      "isSecret": false,
+      "order": 3
+    },
+    "allowedRepositories": {
+      "type": "string",
+      "title": "Allowed Repositories",
+      "description": "Optional comma-separated list of allowed 'owner/repo' or 'owner/*' patterns (e.g., 'MemberJunction/*,BlueCypress/Skip-Client-Open-App'). When set, minted installation tokens are restricted to matching repositories.",
+      "isSecret": false,
+      "order": 4
+    },
+    "allowMerge": {
+      "type": "boolean",
+      "title": "Allow Pull Request Merge",
+      "description": "Whether this GitHub App credential is permitted to merge pull requests. Defaults to false so an identity that opens PRs cannot also self-merge them.",
+      "isSecret": false,
+      "order": 5,
+      "default": false
+    },
+    "defaultPRMode": {
+      "type": "string",
+      "enum": ["draft", "ready"],
+      "title": "Default Pull Request Mode",
+      "description": "Whether pull requests created using this credential default to 'draft' or 'ready' for review.",
+      "isSecret": false,
+      "order": 6,
+      "default": "draft"
+    },
+    "apiBaseUrl": {
+      "type": "string",
+      "title": "GitHub API Base URL",
+      "description": "GitHub REST API base URL. Defaults to 'https://api.github.com' (use 'https://<hostname>/api/v3' for GitHub Enterprise Server).",
+      "isSecret": false,
+      "order": 7,
+      "default": "https://api.github.com"
+    },
+    "webhookSecret": {
+      "type": "string",
+      "title": "Webhook HMAC Secret",
+      "description": "Optional GitHub App webhook secret used to verify X-Hub-Signature-256 HMAC signatures on inbound webhook events.",
+      "isSecret": true,
+      "order": 8
+    }
+  },
+  "required": ["appId", "installationId", "privateKey"]
+}

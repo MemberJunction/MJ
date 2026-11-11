@@ -39,7 +39,7 @@ import {
 import { ComputeParentRollup, type TaskGraphInvocationEnvelope, type TaskGraphNodeStatus, type TaskGraphSpec } from '@memberjunction/ai-core-plus';
 import { ClampReinvokeDepth, TaskGraphService, TaskGraphSubmitContext } from '../TaskGraphService';
 import { LoadWorkflowDraftOperation } from './WorkflowDraftOperation';
-import { LoadTaskGraphDebugOperations } from './TaskGraphDebugOperations';
+import { LoadTaskGraphDebugOperations, AuthorizeGraphControl, GraphOfTask } from './TaskGraphDebugOperations';
 
 /**
  * The columns `GetStatus` reads. `Status` is pinned to the algorithm's own node-status union rather
@@ -260,13 +260,16 @@ export class TaskGraphRetryTaskServerOperation extends TaskGraphRetryTaskOperati
         user: UserInfo,
     ): Promise<TaskGraphControlOutput> {
         if (!input?.taskID) throw new Error('taskID is required');
+        // Only the run's owner retries its steps, as with the debug verbs: a retry can carry an edited input,
+        // and its save writes the step in the dispatcher's scope.
+        const graph = await GraphOfTask(input.taskID, provider, user);
+        if ('error' in graph) return { success: false, errorMessage: graph.error };
+        const denied = await AuthorizeGraphControl(graph.parentTaskID, provider, user);
+        if (denied) return { success: false, errorMessage: denied };
 
-        const ok = await new TaskGraphService().Retry(input.taskID, submitContext(provider, user, ''), input.inputPayload);
-        if (!ok) {
-            return {
-                success: false,
-                errorMessage: 'Retry failed; the task may be neither Failed nor a Decision step holding an answer below its minConfidence.',
-            };
+        const outcome = await new TaskGraphService().RetryTask(input.taskID, submitContext(provider, user, ''), input.inputPayload);
+        if (!outcome.Success) {
+            return { success: false, errorMessage: outcome.ErrorMessage ?? 'The task could not be retried.' };
         }
 
         const task = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', user);

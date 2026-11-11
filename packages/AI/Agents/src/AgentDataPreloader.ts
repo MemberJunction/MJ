@@ -13,7 +13,7 @@
 
 import { AIEngine } from '@memberjunction/aiengine';
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, RunView, RunQuery, UserInfo } from '@memberjunction/core';
-import { UUIDsEqual, BaseSingleton, UserScopedCacheKey } from '@memberjunction/global';
+import { UUIDsEqual, BaseSingleton, UserScopedCacheKey, MJLruCache } from '@memberjunction/global';
 import { RunViewParams, RunQueryParams } from '@memberjunction/core';
 import { MJAIAgentDataSourceEntity } from '@memberjunction/core-entities'; 
 import _ from 'lodash';
@@ -78,9 +78,16 @@ const PRELOAD_CONCURRENCY_LIMIT = 10;
 
 export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
     /**
-     * Per-agent cache (TTL-based), keyed by agent, data source and user
+     * Per-agent cache, keyed by agent, data source and user. Each entry carries its own
+     * data-source-specific TTL (checked on read); the LRU cap bounds total entries so
+     * expired-but-never-re-read keys cannot accumulate (one entry per user x agent x source).
      */
-    private _perAgentCache: Map<string, CacheEntry> = new Map();
+    private _perAgentCache: MJLruCache<string, CacheEntry> = new MJLruCache<string, CacheEntry>({
+        maxSize: AgentDataPreloader.MAX_PER_AGENT_CACHE_ENTRIES
+    });
+
+    /** Upper bound on cached per-agent datasets before least-recently-used eviction. */
+    public static readonly MAX_PER_AGENT_CACHE_ENTRIES = 200;
 
     /**
      * Per-run cache (scoped to a single run ID)
@@ -238,7 +245,7 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
      * Can be called to force refresh of global cached data.
      */
     public ClearAgentCache(): void {
-        this._perAgentCache.clear();
+        this._perAgentCache.Clear();
         LogStatusEx({
             message: `AgentDataPreloader: Cleared all per-agent cache`,
             verboseOnly: true,
@@ -465,7 +472,7 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
             if (cacheKey === null) {
                 return null;
             }
-            const entry = this._perAgentCache.get(cacheKey);
+            const entry = this._perAgentCache.Get(cacheKey);
 
             if (entry) {
                 // Check if expired
@@ -476,7 +483,7 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
                     return entry.data;
                 } else {
                     // Expired, remove from cache
-                    this._perAgentCache.delete(cacheKey);
+                    this._perAgentCache.Delete(cacheKey);
                 }
             }
             return null;
@@ -525,7 +532,7 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
                 timestamp: new Date(),
                 timeoutSeconds: source.CacheTimeoutSeconds
             };
-            this._perAgentCache.set(cacheKey, entry);
+            this._perAgentCache.Set(cacheKey, entry);
         }
     }
 

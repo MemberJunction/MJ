@@ -2,6 +2,12 @@ import { describe, it, expect } from 'vitest';
 import type { ComponentFixture } from '@angular/core/testing';
 import { renderComponentFixture, query, text, capture } from '@memberjunction/ng-test-utils';
 import { DocxPreviewComponent } from './docx-preview.component';
+import { ExpectConsoleLines } from '@memberjunction/ng-test-utils';
+
+/** The lines these tests log on purpose: mammoth's note that the fixture document references a style it does not define. Any other line fails its test. */
+ExpectConsoleLines({
+  warn: [/^\[DocxPreview\] mammoth: Paragraph style with ID Heading1 was referenced but not defined in the document/],
+});
 
 /**
  * DOM coverage for <mj-docx-preview>, the one Word renderer in Explorer (the artifact plugin and the Files form both draw

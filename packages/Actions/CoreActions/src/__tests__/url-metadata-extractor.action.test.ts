@@ -100,3 +100,16 @@ describe('URLMetadataExtractorAction — response body draining', () => {
         expect(drainResponseBodyMock).not.toHaveBeenCalled();
     });
 });
+
+describe('URLMetadataExtractorAction — cleanText (CodeQL js/double-escaping)', () => {
+    const clean = (text: string): string =>
+        (new URLMetadataExtractorAction() as unknown as { cleanText(t: string): string }).cleanText(text);
+
+    it('decodes each entity once, so &amp;lt; stays &lt;', () => {
+        expect(clean('a &amp;lt; b &amp; c &lt;d&gt; &quot;e&quot; &#39;f&#39;')).toBe('a &lt; b & c <d> "e" \'f\'');
+    });
+
+    it('leaves no tag behind in nested markup', () => {
+        expect(clean('<<b>b>bold<</b>/b> text')).not.toMatch(/<[a-z/]/i);
+    });
+});

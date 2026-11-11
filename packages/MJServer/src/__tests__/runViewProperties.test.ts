@@ -111,4 +111,43 @@ describe('GraphQL view resolvers and view properties', () => {
         const result = await new RunViewResolver().RunViewByID(smuggled({ ViewID: VIEW_ID } as RunViewByIDInput), appContext(provider), undefined as never);
         expect(result).toMatchObject({ Success: false, ErrorMessage: REFUSAL });
     });
+
+    it('sanitizes and forwards RunView Parameters and rejects invalid parameter names or empty arrays', async () => {
+        const { provider, views } = recordingProvider();
+        await new Probe().RunDynamicViewGeneric(
+            {
+                EntityName: ENTITY_NAME,
+                ExtraFilter: 'Status = @status AND ID IN (@ids)',
+                Parameters: { '@status': 'Active', ids: ['a', 'b'] },
+            } as RunDynamicViewInput,
+            provider,
+            payload(),
+            undefined as never,
+        );
+        expect(views[0].Parameters).toEqual({ status: 'Active', ids: ['a', 'b'] });
+
+        const badEmptyArray = await new RunViewResolver().RunDynamicView(
+            {
+                EntityName: ENTITY_NAME,
+                ExtraFilter: 'ID IN (@ids)',
+                Parameters: { ids: [] },
+            } as RunDynamicViewInput,
+            appContext(provider),
+            undefined as never,
+        );
+        expect(badEmptyArray.Success).toBe(false);
+        expect(badEmptyArray.ErrorMessage).toMatch(/parameter '@ids' cannot be an empty array/);
+
+        const badParamName = await new RunViewResolver().RunDynamicView(
+            {
+                EntityName: ENTITY_NAME,
+                ExtraFilter: 'Status = @s',
+                Parameters: { '123invalid': 'Active' },
+            } as RunDynamicViewInput,
+            appContext(provider),
+            undefined as never,
+        );
+        expect(badParamName.Success).toBe(false);
+        expect(badParamName.ErrorMessage).toMatch(/Invalid RunView parameter name '123invalid'/);
+    });
 });

@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseRecordMutationAction } from "./base-record-mutation.action";
 import { BaseAction } from '@memberjunction/actions';
+import { AgentDataPolicyGuard } from "./agent-data-policy-guard";
 
 /**
  * Generic action for updating existing entity records in the database.
@@ -76,17 +77,75 @@ export class UpdateRecordAction extends BaseRecordMutationAction {
             const fieldNamesError = this.validateFieldNames(entity!, entityInfo!, fields);
             if (fieldNamesError) return fieldNamesError;
 
+            const requestedMutatedFields = Object.keys(fields).map(
+                (fieldName) => this.resolveEntityFieldName(entity!, fieldName, entityInfo) ?? fieldName
+            );
+            const preLoadPolicy = await AgentDataPolicyGuard.EvaluateRecordOperation({
+                params,
+                entityInfo: entityInfo!,
+                operation: 'Update',
+                mutatedFields: requestedMutatedFields,
+            });
+            if ('Blocked' in preLoadPolicy) {
+                return preLoadPolicy.Blocked;
+            }
+            if (preLoadPolicy.Allowed.Active && preLoadPolicy.Allowed.EffectiveWhereClause) {
+                const rlsError = await AgentDataPolicyGuard.VerifyPrimaryKeyPassesWhereClause({
+                    params,
+                    entityInfo: entityInfo!,
+                    primaryKey,
+                    effectiveWhereClause: preLoadPolicy.Allowed.EffectiveWhereClause,
+                });
+                if (rlsError) {
+                    return rlsError;
+                }
+            }
+
             // Load the existing record
             const loadResult = await this.loadRecord(entity!, entityInfo!, primaryKey, entityName);
             if (!loadResult.success) return loadResult.error!;
 
+            if (preLoadPolicy.Allowed.Active && preLoadPolicy.Allowed.HasRecordConditionRules) {
+                // fls-guard: loaded as params.ContextUser and passed only to internal agent policy evaluation (not returned to caller)
+                const preUpdateRecord = entity!.GetAll();
+                const preConditionError = AgentDataPolicyGuard.CheckRecordCondition({
+                    params,
+                    policy: preLoadPolicy.Allowed.Policy,
+                    entityInfo: entityInfo!,
+                    operation: 'Update',
+                    mutatedFields: requestedMutatedFields,
+                    record: preUpdateRecord,
+                });
+                if (preConditionError) {
+                    return preConditionError;
+                }
+            }
+
             // Track which fields are actually being changed
-            const updatedFields: Record<string, { oldValue: unknown, newValue: unknown }> = {};
+            const updatedFields: Record<string, { oldValue?: unknown, newValue: unknown }> = {};
             let hasChanges = false;
+            const deniedPatterns = preLoadPolicy.Allowed.Active
+                ? preLoadPolicy.Allowed.EvalResult.deniedFieldPatterns
+                : [];
 
             // Set each field value (every name resolved above, so resolution cannot miss here)
             for (const [fieldName, fieldValue] of Object.entries(fields)) {
                 const resolvedName = this.resolveEntityFieldName(entity!, fieldName, entityInfo) ?? fieldName;
+                const readDenied = AgentDataPolicyGuard.IsFieldReadDeniedForCaller({
+                    fieldName: resolvedName,
+                    entityInfo: entityInfo,
+                    contextUser: params.ContextUser,
+                    deniedFieldPatterns: deniedPatterns,
+                });
+                if (readDenied) {
+                    // Never compare or echo prior value for read-denied fields (prevents both leakage and NO_CHANGES equality oracle)
+                    entity!.Set(resolvedName, fieldValue);
+                    updatedFields[resolvedName] = {
+                        newValue: fieldValue
+                    };
+                    hasChanges = true;
+                    continue;
+                }
                 const currentValue = entity!.Get(resolvedName);
                 if (currentValue !== fieldValue) {
                     entity!.Set(resolvedName, fieldValue);
@@ -105,6 +164,35 @@ export class UpdateRecordAction extends BaseRecordMutationAction {
                     ResultCode: 'NO_CHANGES',
                     Message: 'No fields were modified'
                 };
+            }
+
+            if (preLoadPolicy.Allowed.Active && preLoadPolicy.Allowed.EffectiveWhereClause) {
+                const postWhereError = await AgentDataPolicyGuard.VerifyEntityStatePassesWhereClause({
+                    params,
+                    entity: entity!,
+                    entityInfo: entityInfo!,
+                    effectiveWhereClause: preLoadPolicy.Allowed.EffectiveWhereClause,
+                    dirtyOnlyOptimization: true,
+                });
+                if (postWhereError) {
+                    return postWhereError;
+                }
+            }
+
+            if (preLoadPolicy.Allowed.Active && preLoadPolicy.Allowed.HasRecordConditionRules) {
+                // fls-guard: loaded as params.ContextUser and passed only to internal agent policy evaluation (not returned to caller)
+                const postUpdateRecord = entity!.GetAll();
+                const postConditionError = AgentDataPolicyGuard.CheckRecordCondition({
+                    params,
+                    policy: preLoadPolicy.Allowed.Policy,
+                    entityInfo: entityInfo!,
+                    operation: 'Update',
+                    mutatedFields: Object.keys(updatedFields),
+                    record: postUpdateRecord,
+                });
+                if (postConditionError) {
+                    return postConditionError;
+                }
             }
 
             // Save the record

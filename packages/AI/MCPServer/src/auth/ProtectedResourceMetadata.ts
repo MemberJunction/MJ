@@ -171,6 +171,20 @@ export function extractAuthorizationServers(
 }
 
 /**
+ * True when an issuer URL belongs to Azure AD / Entra ID, e.g.
+ * `https://login.microsoftonline.com/{tenant}/v2.0` or `https://sts.windows.net/{tenant}/`.
+ * Compares the parsed hostname, so the domain appearing in a path or query does not count.
+ */
+export function IsAzureADIssuer(issuer: string): boolean {
+  try {
+    const host = new URL(issuer).hostname.toLowerCase();
+    return ['microsoftonline.com', 'sts.windows.net'].some((domain) => host === domain || host.endsWith(`.${domain}`));
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Generates OAuth scopes from configured auth providers.
  *
  * This function auto-generates the appropriate scopes based on the provider:
@@ -188,10 +202,7 @@ function generateScopesFromProviders(providers: AuthProviderInfo[]): string[] {
   const scopes = new Set<string>();
 
   for (const provider of providers) {
-    // Detect Azure AD by issuer URL pattern
-    // Azure AD issuers are like: https://login.microsoftonline.com/{tenant}/v2.0
-    const isAzureAD = provider.issuer?.includes('microsoftonline.com') ||
-                      provider.issuer?.includes('sts.windows.net');
+    const isAzureAD = provider.issuer ? IsAzureADIssuer(provider.issuer) : false;
 
     if (isAzureAD && provider.audience) {
       // For Azure AD, audience is the clientId (WEB_CLIENT_ID)

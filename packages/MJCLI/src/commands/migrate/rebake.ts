@@ -2,7 +2,7 @@ import { Command, Flags } from '@oclif/core';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { IncrementalBaker } from '@memberjunction/sql-converter';
+import { IncrementalBaker, SelectBakeableEntities } from '@memberjunction/sql-converter';
 import type { BakerWorkingDB } from '@memberjunction/sql-converter';
 import { MJPostgresTranspiler } from '@memberjunction/sqlglot-ts';
 import type { BitColumnRef } from '@memberjunction/sqlglot-ts';
@@ -221,13 +221,9 @@ export default class MigrateRebake extends Command {
         return { sql: r.sql ?? '', permissionsSQL: r.permissionsSQL ?? '' };
       },
       // Only exercised for baseline bakes (rebake advances via committedPgSql, not this path);
-      // mirrors the full CodeGen entity set for interface completeness.
-      listBakeableEntities: async () => {
-        const excluded = new Set((configInfo.excludeSchemas ?? []).map((s: string) => s.toLowerCase()));
-        return ds.provider.Entities
-          .filter((e) => e.IncludeInAPI && !excluded.has(e.SchemaName.toLowerCase()))
-          .map((e) => e.Name);
-      },
+      // the same target-schema selection as `migrate convert --bake-codegen` (issue #5364).
+      listBakeableEntities: async (targetSchema: string) =>
+        SelectBakeableEntities(ds.provider.Entities, targetSchema, configInfo.excludeSchemas ?? []),
     };
     return { baker: new IncrementalBaker({ transpiler, db, schema, coreSchema }), dispose: async () => {} };
   }

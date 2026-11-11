@@ -148,4 +148,21 @@ describe('MJServerWorkQueueProviderSource', () => {
         const source = new MJServerWorkQueueProviderSource(null, PROVIDER);
         expect(await source.CreateProvider()).toBe(PROVIDER);
     });
+
+    // #6273: a minted instance used to be dropped without a release.
+    it('releases a provider it minted, once, and never the shared one', async () => {
+        const release = vi.fn().mockResolvedValue(undefined);
+        const independent = { Name: 'independent', ReleaseIndependentInstance: release } as unknown as IMetadataProvider;
+        const sharedRelease = vi.fn().mockResolvedValue(undefined);
+        const fallback = Object.assign({}, PROVIDER, { CreateIndependentInstance: vi.fn().mockResolvedValue(independent), ReleaseIndependentInstance: sharedRelease });
+        const source = new MJServerWorkQueueProviderSource(null, fallback);
+
+        const minted = await source.CreateProvider();
+        await source.ReleaseProvider(minted);
+        await source.ReleaseProvider(minted);
+        await source.ReleaseProvider(fallback);
+
+        expect(release).toHaveBeenCalledTimes(1);
+        expect(sharedRelease).not.toHaveBeenCalled();
+    });
 });

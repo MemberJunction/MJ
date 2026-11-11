@@ -277,6 +277,8 @@ credential looked up through them is simply not found.
 | AWS IAM | `AWSIAMCredentialValues` | `accessKeyId`, `secretAccessKey`, `region` |
 | Database Connection | `DatabaseConnectionCredentialValues` | `host`, `port`, `database`, `username`, `password` |
 | Twilio | `TwilioCredentialValues` | `accountSid`, `authToken` |
+| GitHub App | `GitHubAppCredentialValues` | `appId`, `installationId`, `privateKey`, `defaultOwner?`, `allowedRepositories?`, `allowPRMerge?`, `requireDraftPRs?`, `apiBaseUrl?` |
+| GitHub Personal Access Token | `GitHubPATCredentialValues` | `token`, `defaultOwner?`, `allowedRepositories?`, `allowPRMerge?`, `apiBaseUrl?` |
 
 ## Storing Credentials
 

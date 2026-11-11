@@ -1,10 +1,12 @@
 import { Base64DecodedByteLength, ClassFactory, ClassRegistration, DeserializeValidationErrors, Float32VectorToBase64, IsValidBase64, IsMemberOverridden, MJEventType, MJGlobal, NormalizeUUID, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, UserCacheKeySegment, WarningManager, ComputeContentHashAsync, EscapeSQLString } from '@memberjunction/global';
-import { GetDataHooks, PreDeleteHook, PreSaveHook } from './dataHooks';
+import { GetDataHooks, PostSaveHook, PreDeleteHook, PreSaveHook } from './dataHooks';
 import { EntityLifecyclePolicyEngine } from './entityLifecyclePolicy';
 import { DocumentNumberingEngine } from './documentNumberingEngine';
 import { CrossEntityPolicyEngine } from './crossEntityPolicyEngine';
-import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, FieldSecurityError, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
+import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, FieldSecurityError, RecordChange, ValidationErrorInfo, ValidationErrorType, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntitySubtypeResolver } from './entitySubtypeResolver';
+import { EntitySubtypeDriverBase } from './entitySubtypeDriver';
+import type { IEntitySubtypeDriverConfig } from './JSONType-interfaces/IEntitySubtypeSelectorConfig';
 import { CanonicalPrimaryKeyValue } from './util';
 import { BaseEngineRegistry } from './baseEngineRegistry';
 import { IsPermittedImageFieldValue, IsValidCssColor, TryParseJsonText } from './extendedTypeValue';
@@ -944,6 +946,14 @@ export class BaseEntityResult {
      */
     EndedAt: Date;
 
+    /**
+     * Populated when a server-side UPDATE fails (or records a conflict) due to a field-level
+     * concurrency conflict detected under a row lock.
+     */
+    ConcurrencyConflict?: {
+        ConflictingFields: string[];
+    };
+
     constructor(success?: boolean, message?: string, type? : 'create' | 'update' | 'delete') {
         this.Success = success === undefined ? false : success;
         this.Type = type === undefined ? 'create' : type;
@@ -1136,6 +1146,24 @@ interface SubtypeLoadHintResolverEntry {
     /** The instance asked for load hints; null when the class doesn't override `ResolveLoadHint`, or couldn't be constructed. */
     Resolver: EntitySubtypeResolver | null;
 }
+
+/** Cached singleton instance for one `(BaseClass, DriverClass)` registration resolved via `SubtypeSelector.Driver`. */
+interface SubtypeDriverCacheEntry {
+    Registration: ClassRegistration;
+    Driver: EntitySubtypeDriverBase | null;
+}
+
+/** Derived rule checking that a type table's extension-entity column names a declared IS-A child of `ParentEntity`. */
+interface SubtypeTypeFieldRule {
+    TerminalFieldName: string;
+    ParentEntity: EntityInfo;
+    SelectorPath: string;
+    DeclaredChildNamesLower: Set<string>;
+}
+
+type SubtypeChainReconcileOutcome =
+    | { kind: 'proceed' }
+    | { kind: 'handled'; result: boolean };
 
 /**
  * An index over one engine-cached array of entity objects, from each row's key value (normalized
@@ -1451,6 +1479,16 @@ export abstract class BaseEntity<T = unknown> {
      * a hint would name it and miss.
      */
     private _skipSubtypeLoadHint: boolean = false;
+
+    /**
+     * Set while an already-loaded parent links and loads an IS-A child downward
+     * ({@link linkAndLoadChildEntity}, {@link loadChildRowQuietly}). Child views join the parent's
+     * physical base table rather than the parent's view, so they omit the parent's virtual joined
+     * columns (e.g. `Conversation.Type`, `Comment.CommentType`). Skipping `this._parentEntity.Hydrate`
+     * during downward child hydration preserves the parent's authoritative virtual columns while
+     * `SetMany` still synchronizes shared physical columns.
+     */
+    private _skipParentChainHydration: boolean = false;
 
     /**
      * For **overlapping** subtype parents (AllowMultipleSubtypes = true), stores
@@ -1895,8 +1933,15 @@ export abstract class BaseEntity<T = unknown> {
         // Capture any pending modifications on this entity or its ancestors before child InnerLoad
         const dirtySnapshots = this.captureChainDirtyState();
 
-        // Load the child's record using our shared PK
-        const loaded = await childEntity.InnerLoad(this.PrimaryKey);
+        // Load the child's record using our shared PK without wiping virtual columns on the
+        // already-loaded parent chain (child views join parent base tables, not parent views).
+        childEntity._skipParentChainHydration = true;
+        let loaded: boolean;
+        try {
+            loaded = await childEntity.InnerLoad(this.PrimaryKey);
+        } finally {
+            childEntity._skipParentChainHydration = false;
+        }
         if (!loaded) {
             // Load failed — clean up the link
             this._childEntity = null;
@@ -2185,18 +2230,66 @@ export abstract class BaseEntity<T = unknown> {
     /** Per entity (lowercased name): the resolver asked for load hints, decided once per registration. */
     private static _subtypeLoadHintResolvers = new Map<string, SubtypeLoadHintResolverEntry>();
 
+    /** Cached driver instances keyed by `${baseClassName.toLowerCase()}|${driverKey.toLowerCase()}`. */
+    private static _subtypeDrivers = new Map<string, SubtypeDriverCacheEntry>();
+
+    /** Memoized type-table field rules derived from entities declaring multi-segment `SubtypeSelector.Path`s. */
+    private static _subtypeTypeFieldRulesCache: {
+        Signature: string;
+        ByTypeEntityName: Map<string, SubtypeTypeFieldRule[]>;
+    } | null = null;
+
+    /**
+     * Active `(EntitySaveOptions -> WeakSet<RootEntity>)` pairs whose IS-A chain is currently inside
+     * an initiating `Save()` call, preventing leaf delegation from double-reconciling the same chain
+     * while allowing callers to reuse a single `EntitySaveOptions` instance across sequential or
+     * concurrent saves of other records.
+     */
+    private static readonly _reconciledSaveChains = new WeakMap<EntitySaveOptions, WeakSet<BaseEntity>>();
+
+    /** Per-instance async queue serializing `EnsureISAChild` and `ReconcileISAChild` calls. */
+    private _isaChildOpQueue: Promise<unknown> = Promise.resolve();
+
+    private static hasReconciledSaveChain(options: EntitySaveOptions, root: BaseEntity): boolean {
+        return BaseEntity._reconciledSaveChains.get(options)?.has(root) ?? false;
+    }
+
+    private static markReconciledSaveChain(options: EntitySaveOptions, root: BaseEntity): void {
+        let roots = BaseEntity._reconciledSaveChains.get(options);
+        if (!roots) {
+            roots = new WeakSet<BaseEntity>();
+            BaseEntity._reconciledSaveChains.set(options, roots);
+        }
+        roots.add(root);
+    }
+
+    private static unmarkReconciledSaveChain(options: EntitySaveOptions, root: BaseEntity): void {
+        BaseEntity._reconciledSaveChains.get(options)?.delete(root);
+    }
+
+    private runExclusiveISAChildOp<T>(fn: () => Promise<T>): Promise<T> {
+        const next = this._isaChildOpQueue.then(fn, fn);
+        this._isaChildOpQueue = next.then(
+            () => undefined,
+            () => undefined
+        );
+        return next;
+    }
+
     /** Indexes over engine-cached arrays, keyed by the live array itself; see {@link findEngineCachedRow}. */
     private static _engineCachedRowIndexes = new WeakMap<readonly BaseEntity[], EngineCachedRowIndex>();
 
     /**
      * Clears the static caches IsA subtype resolution keeps: the create path's SubtypeSelector
-     * lookup memo, the per-entity decision about which resolver gives load hints, the indexes over
-     * engine-cached rows, and the record of load-hint messages already logged, so each can be
-     * reported again.
+     * lookup memo, the per-entity decision about which resolver gives load hints, cached subtype
+     * drivers, derived type-table validation rules, the indexes over engine-cached rows, and the
+     * record of load-hint messages already logged, so each can be reported again.
      */
     public static ClearSubtypeLookupCache(): void {
         BaseEntity._subtypeLookupCache = new WeakMap();
         BaseEntity._subtypeLoadHintResolvers.clear();
+        BaseEntity._subtypeDrivers.clear();
+        BaseEntity._subtypeTypeFieldRulesCache = null;
         BaseEntity._engineCachedRowIndexes = new WeakMap();
         BaseEntity._loggedSubtypeLoadHintMessages.clear();
     }
@@ -2293,6 +2386,10 @@ export abstract class BaseEntity<T = unknown> {
      * @returns The linked child BaseEntity, or null if no subtype applies.
      */
     public async EnsureISAChild(entityName?: string): Promise<BaseEntity | null> {
+        return this.runExclusiveISAChildOp(() => this.ensureISAChildInternal(entityName));
+    }
+
+    private async ensureISAChildInternal(entityName?: string): Promise<BaseEntity | null> {
         if (!entityName) {
             entityName = await this.ResolveSubtypeEntityName();
         }
@@ -2385,10 +2482,12 @@ export abstract class BaseEntity<T = unknown> {
     private async loadChildRowQuietly(childEntity: BaseEntity): Promise<boolean> {
         const probe: SubtypeHintProbe = { RowReadFailed: false };
         childEntity._subtypeHintProbe = probe;
+        childEntity._skipParentChainHydration = true;
         try {
             return await childEntity.InnerLoad(this.PrimaryKey);
         } finally {
             childEntity._subtypeHintProbe = null;
+            childEntity._skipParentChainHydration = false;
         }
     }
 
@@ -2493,6 +2592,487 @@ export abstract class BaseEntity<T = unknown> {
             return false;
         }
         return record === this || !actingUser || record.EntityInfo.IsFieldReadableByUser(fieldName, actingUser);
+    }
+
+    /**
+     * Synchronous counterpart of {@link evaluateSubtypeSelectorPath} for hooks that cannot await
+     * (`OnFieldChanged`, synchronous `Validate()`, and cache-hot UI driver checks). Walks hops
+     * strictly through `findTargetSync` and returns `null` when any hop misses memory.
+     */
+    private evaluateSubtypeSelectorPathSync(
+        path: string,
+        findTargetSync: (entityName: string, pkValue: unknown) => BaseEntity | null
+    ): string | null {
+        const segments = path.split('.').map(s => s.trim()).filter(Boolean);
+        if (segments.length === 0) return null;
+
+        let currentEntity: BaseEntity = this;
+        let currentEntityInfo: EntityInfo = this.EntityInfo;
+        const actingUser = this.resolveActiveUserOrNull();
+
+        for (let i = 0; i < segments.length - 1; i++) {
+            const fieldName = segments[i];
+            const fieldInfo = currentEntityInfo.Fields.find(
+                f => f.Name.trim().toLowerCase() === fieldName.toLowerCase()
+            );
+            if (!fieldInfo) {
+                return null;
+            }
+            if (!this.subtypeSelectorMayRead(currentEntity, fieldInfo.Name, actingUser)) {
+                return null;
+            }
+            const fkValue = currentEntity.Get(fieldInfo.Name);
+            if (fkValue == null || fkValue === '') {
+                return null;
+            }
+            const relatedEntityName = fieldInfo.RelatedEntity;
+            if (!relatedEntityName) {
+                return null;
+            }
+            const targetEntity = findTargetSync(relatedEntityName, fkValue);
+            if (!targetEntity) {
+                return null;
+            }
+            currentEntity = targetEntity;
+            currentEntityInfo = targetEntity.EntityInfo;
+        }
+
+        const terminalSegment = segments[segments.length - 1];
+        const terminalField = currentEntityInfo.Fields.find(
+            f => f.Name.trim().toLowerCase() === terminalSegment.toLowerCase()
+        );
+        if (!terminalField) {
+            return null;
+        }
+        if (!this.subtypeSelectorMayRead(currentEntity, terminalField.Name, actingUser)) {
+            return null;
+        }
+        const terminalValue = currentEntity.Get(terminalField.Name);
+        if (terminalValue == null || typeof terminalValue !== 'string' || terminalValue.trim() === '') {
+            return null;
+        }
+        return terminalValue.trim();
+    }
+
+    private findSubtypePathTargetSync(entityName: string, pkValue: unknown): BaseEntity | null {
+        const engineHit = BaseEntity.findSubtypePathTargetInEngineCache(entityName, pkValue);
+        if (engineHit) {
+            return engineHit;
+        }
+        const cacheKey = `${entityName.trim().toLowerCase()}|${String(pkValue).trim().toLowerCase()}`;
+        const provider = this.ProviderToUse as unknown as IMetadataProvider;
+        const lookupCache = BaseEntity.subtypeLookupCacheFor(provider, this.resolveActiveUserOrNull());
+        if (lookupCache?.has(cacheKey)) {
+            return lookupCache.get(cacheKey) ?? null;
+        }
+        return null;
+    }
+
+    /**
+     * Reconciles this disjoint parent's attached IS-A child against {@link ResolveSubtypeEntityName}.
+     *
+     * Unlike {@link EnsureISAChild}, which throws if a different child is already attached,
+     * `ReconcileISAChild` cleanly replaces an **unsaved** prospective child when the user changes
+     * the record's type before its first save (for example, inside an Angular form with
+     * `FoldIntoForm: true`). If a **saved** child is already attached, `ReconcileISAChild` leaves
+     * it intact so `Save()` can enforce `OnSubtypeChange` (`'Refuse'` or `'Replace'`).
+     */
+    public async ReconcileISAChild(): Promise<BaseEntity | null> {
+        return this.runExclusiveISAChildOp(() => this.reconcileISAChildInternal());
+    }
+
+    private async reconcileISAChildInternal(): Promise<BaseEntity | null> {
+        if (!this.EntityInfo.IsParentType || this.EntityInfo.AllowMultipleSubtypes) {
+            return null;
+        }
+        const resolvedName = await this.ResolveSubtypeEntityName();
+        if (this._childEntity) {
+            if (resolvedName && sameEntityName(this._childEntity.EntityInfo.Name, resolvedName)) {
+                if (this._childEntity.EntityInfo.IsParentType) {
+                    await this._childEntity.ReconcileISAChild();
+                }
+                return this._childEntity;
+            }
+            if (this._childEntity.IsSaved) {
+                return this._childEntity;
+            }
+            // Detach unsaved prospective child when type changed to another subtype or to no subtype
+            const selectorPath = this.EntityInfo.SubtypeSelectorConfig?.Path;
+            const firstHopVal = selectorPath ? this.getSubtypeSelectorFirstHopValue(selectorPath) : undefined;
+            const shouldDetach = resolvedName !== null || (firstHopVal !== null && firstHopVal !== undefined && firstHopVal !== '');
+            if (shouldDetach) {
+                this.detachUnsavedChildSubtree();
+            } else {
+                return this._childEntity;
+            }
+        }
+        if (!resolvedName) {
+            return null;
+        }
+        const ensured = await this.ensureISAChildInternal(resolvedName);
+        if (ensured && ensured.EntityInfo.IsParentType) {
+            await ensured.ReconcileISAChild();
+        }
+        return ensured;
+    }
+
+    private detachUnsavedChildSubtree(): void {
+        const child = this._childEntity;
+        if (!child || child.IsSaved) {
+            return;
+        }
+        child._parentEntity = null;
+        this._childEntity = null;
+    }
+
+    private getSubtypeSelectorFirstHopField(path: string): EntityField | null {
+        const firstSegment = path.split('.').map(s => s.trim()).filter(Boolean)[0];
+        if (!firstSegment) {
+            return null;
+        }
+        return this.GetFieldByName(firstSegment);
+    }
+
+    private getSubtypeSelectorFirstHopValue(path: string): unknown {
+        const firstSegment = path.split('.').map(s => s.trim()).filter(Boolean)[0];
+        if (!firstSegment) {
+            return undefined;
+        }
+        const field = this.GetFieldByName(firstSegment);
+        return field ? field.Value : undefined;
+    }
+
+    private isSubtypeSelectorFirstHopDirty(path: string): boolean {
+        const field = this.getSubtypeSelectorFirstHopField(path);
+        return Boolean(field?.Dirty);
+    }
+
+    /**
+     * Resolves and caches the behavior driver configured on `EntityInfo.SubtypeSelectorConfig.Driver`
+     * for this record's current type row, loading the type row if needed.
+     */
+    public async ResolveSubtypeDriver<TDriver extends EntitySubtypeDriverBase = EntitySubtypeDriverBase>(): Promise<TDriver | null> {
+        const driverConfig = this.EntityInfo?.SubtypeSelectorConfig?.Driver;
+        if (!driverConfig?.Path) {
+            return null;
+        }
+        const driverClassKey = await this.evaluateSubtypeSelectorPath(
+            driverConfig.Path,
+            (entityName, pkValue) => this.getSubtypePathTargetEntity(entityName, pkValue)
+        );
+        if (!driverClassKey) {
+            return null;
+        }
+        return BaseEntity.resolveSubtypeDriverByKey<TDriver>(driverConfig, driverClassKey);
+    }
+
+    /**
+     * Synchronous cache-only counterpart of {@link ResolveSubtypeDriver}. Returns `null` when a hop
+     * is not yet in memory or no driver class is registered for the type.
+     */
+    public ResolveSubtypeDriverSync<TDriver extends EntitySubtypeDriverBase = EntitySubtypeDriverBase>(): TDriver | null {
+        const driverConfig = this.EntityInfo?.SubtypeSelectorConfig?.Driver;
+        if (!driverConfig?.Path) {
+            return null;
+        }
+        const driverClassKey = this.evaluateSubtypeSelectorPathSync(
+            driverConfig.Path,
+            (entityName, pkValue) => this.findSubtypePathTargetSync(entityName, pkValue)
+        );
+        if (!driverClassKey) {
+            return null;
+        }
+        return BaseEntity.resolveSubtypeDriverByKey<TDriver>(driverConfig, driverClassKey);
+    }
+
+    /**
+     * Resolves the `UIDriver` class registration key configured on `EntityInfo.SubtypeSelectorConfig.UIDriver`
+     * for this record's current type row, loading the type row if needed.
+     */
+    public async ResolveSubtypeUIDriverName(): Promise<string | null> {
+        const uiDriverConfig = this.EntityInfo?.SubtypeSelectorConfig?.UIDriver;
+        if (!uiDriverConfig?.Path) {
+            return null;
+        }
+        return this.evaluateSubtypeSelectorPath(
+            uiDriverConfig.Path,
+            (entityName, pkValue) => this.getSubtypePathTargetEntity(entityName, pkValue)
+        );
+    }
+
+    /**
+     * Synchronous cache-only counterpart of {@link ResolveSubtypeUIDriverName}.
+     */
+    public ResolveSubtypeUIDriverNameSync(): string | null {
+        const uiDriverConfig = this.EntityInfo?.SubtypeSelectorConfig?.UIDriver;
+        if (!uiDriverConfig?.Path) {
+            return null;
+        }
+        return this.evaluateSubtypeSelectorPathSync(
+            uiDriverConfig.Path,
+            (entityName, pkValue) => this.findSubtypePathTargetSync(entityName, pkValue)
+        );
+    }
+
+    private static resolveSubtypeDriverByKey<TDriver extends EntitySubtypeDriverBase>(
+        driverConfig: IEntitySubtypeDriverConfig,
+        driverClassKey: string
+    ): TDriver | null {
+        const baseName = driverConfig.BaseClass?.trim() || EntitySubtypeDriverBase.name;
+        const cacheKey = `${baseName.toLowerCase()}|${driverClassKey.trim().toLowerCase()}`;
+        const cf = MJGlobal.Instance.ClassFactory;
+
+        const namedBaseToken: { name: string } = { name: baseName };
+        const reg =
+            cf.GetRegistration(namedBaseToken, driverClassKey) ??
+            (baseName !== EntitySubtypeDriverBase.name
+                ? cf.GetRegistration(EntitySubtypeDriverBase, driverClassKey)
+                : null);
+
+        if (!reg) {
+            return null;
+        }
+
+        const cached = BaseEntity._subtypeDrivers.get(cacheKey);
+        if (cached && cached.Registration === reg) {
+            return cached.Driver as TDriver | null;
+        }
+
+        try {
+            const Ctor = reg.SubClass as new () => EntitySubtypeDriverBase;
+            const instance = new Ctor();
+            BaseEntity._subtypeDrivers.set(cacheKey, { Registration: reg, Driver: instance });
+            return instance as TDriver;
+        } catch (err) {
+            LogError(
+                `SubtypeSelector.Driver: failed to construct driver '${driverClassKey}' (base '${baseName}'): ${BaseEntity.errorText(err)}`
+            );
+            BaseEntity._subtypeDrivers.set(cacheKey, { Registration: reg, Driver: null });
+            return null;
+        }
+    }
+
+    private chainHasSubtypeDriver(): boolean {
+        for (let node: BaseEntity | null = this.RootEntity; node; node = node._childEntity) {
+            if (node.EntityInfo?.SubtypeSelectorConfig?.Driver) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private notifySubtypeDriversFieldChanged(fieldName: string, newValue: unknown, oldValue: unknown): void {
+        if (this._isLoading || newValue === oldValue) {
+            return;
+        }
+        for (let node: BaseEntity | null = this.RootEntity; node; node = node._childEntity) {
+            if (!node.EntityInfo?.SubtypeSelectorConfig?.Driver) {
+                continue;
+            }
+            const driver = node.ResolveSubtypeDriverSync();
+            if (driver?.OnFieldChanged) {
+                driver.OnFieldChanged(node, fieldName, newValue, oldValue);
+            }
+        }
+    }
+
+    private validateSubtypeDriverSync(result: ValidationResult): void {
+        if (!this.EntityInfo?.SubtypeSelectorConfig?.Driver) {
+            return;
+        }
+        const driver = this.ResolveSubtypeDriverSync();
+        if (!driver?.Validate) {
+            return;
+        }
+        const maybePromise = driver.Validate(this, result, this.resolveActiveUserOrNull());
+        if (maybePromise instanceof Promise) {
+            maybePromise.catch((err) => {
+                LogError(
+                    `SubtypeSelector.Driver Validate rejected asynchronously during synchronous Validate() on '${this.EntityInfo.Name}': ${BaseEntity.errorText(err)}`
+                );
+            });
+            const msg = `Subtype driver for '${this.EntityInfo.Name}' requires asynchronous validation; use ValidateAsync() or Save() instead of synchronous Validate().`;
+            LogError(msg);
+            result.Success = false;
+            result.Errors.push(
+                new ValidationErrorInfo(
+                    this.EntityInfo.FirstPrimaryKey?.Name ?? 'ID', // first-pk-ok: fallback source field name for entity-level validation error
+                    msg,
+                    null,
+                    ValidationErrorType.Failure
+                )
+            );
+        }
+    }
+
+    private async validateSubtypeDriverAsync(result: ValidationResult): Promise<void> {
+        if (!this.EntityInfo?.SubtypeSelectorConfig?.Driver) {
+            return;
+        }
+        const driver = await this.ResolveSubtypeDriver();
+        if (!driver?.Validate) {
+            return;
+        }
+        await driver.Validate(this, result, this.resolveActiveUserOrNull());
+    }
+
+    private async runSubtypeDriverBeforeSave(): Promise<void> {
+        if (!this.EntityInfo?.SubtypeSelectorConfig?.Driver) {
+            return;
+        }
+        const driver = await this.ResolveSubtypeDriver();
+        if (!driver?.BeforeSave) {
+            return;
+        }
+        const outcome = await driver.BeforeSave(this, !this.IsSaved, this.resolveActiveUserOrNull());
+        if (outcome === false) {
+            throw new Error(`Save rejected by subtype driver for '${this.EntityInfo.Name}'`);
+        }
+        if (typeof outcome === 'string' && outcome.trim().length > 0) {
+            throw new Error(outcome);
+        }
+    }
+
+    private async runSubtypeDriverAfterSave(wasNew: boolean): Promise<void> {
+        if (!this.EntityInfo?.SubtypeSelectorConfig?.Driver) {
+            return;
+        }
+        const driver = await this.ResolveSubtypeDriver();
+        if (!driver?.AfterSave) {
+            return;
+        }
+        await driver.AfterSave(this, wasNew, this.resolveActiveUserOrNull());
+    }
+
+    /**
+     * Validates that when this entity is a type table referenced by one or more parent entities'
+     * `SubtypeSelector.Path` declarations, every non-empty extension-entity name stored on this row
+     * is a declared IS-A child of the corresponding parent entity.
+     */
+    private validateSubtypeTypeRowFields(result: ValidationResult): void {
+        const provider = (this.ProviderToUse as unknown as IMetadataProvider | null) ?? Metadata.Provider;
+        const entities = provider?.Entities;
+        if (!entities || entities.length === 0 || !this.EntityInfo?.Name) {
+            return;
+        }
+        const rules = BaseEntity.subtypeTypeFieldRulesForEntity(entities, this.EntityInfo.Name);
+        if (!rules || rules.length === 0) {
+            return;
+        }
+        for (const rule of rules) {
+            const field = this.GetFieldByName(rule.TerminalFieldName);
+            if (!field) {
+                continue;
+            }
+            const rawVal = field.Value;
+            if (rawVal === null || rawVal === undefined) {
+                continue;
+            }
+            if (typeof rawVal !== 'string') {
+                continue;
+            }
+            const candidate = rawVal.trim();
+            if (candidate.length === 0) {
+                continue;
+            }
+            const isDeclaredChild = rule.DeclaredChildNamesLower.has(candidate.toLowerCase());
+            if (!isDeclaredChild) {
+                result.Errors.push(
+                    new ValidationErrorInfo(
+                        field.Name,
+                        `'${candidate}' is not a declared IS-A child entity of '${rule.ParentEntity.Name}' (referenced via SubtypeSelector '${rule.SelectorPath}').`,
+                        rawVal,
+                        ValidationErrorType.Failure
+                    )
+                );
+                result.Success = false;
+            }
+        }
+    }
+
+    private static subtypeTypeFieldRulesForEntity(
+        entities: readonly EntityInfo[],
+        entityName: string
+    ): SubtypeTypeFieldRule[] | undefined {
+        let sigParts: string[] | null = null;
+        for (let i = 0; i < entities.length; i++) {
+            const ent = entities[i];
+            if (ent.SubtypeSelector) {
+                (sigParts ??= []).push(`${ent.ID}:${ent.SubtypeSelector}:${ent.ChildEntities?.length ?? 0}`);
+            }
+        }
+        if (!sigParts) {
+            return undefined;
+        }
+        const signature = `${entities.length}|${sigParts.join('||')}`;
+        if (!BaseEntity._subtypeTypeFieldRulesCache || BaseEntity._subtypeTypeFieldRulesCache.Signature !== signature) {
+            const byTypeEntity = new Map<string, SubtypeTypeFieldRule[]>();
+            const childNamesByParentId = new Map<string, Set<string>>();
+            for (const ent of entities) {
+                if (!ent.ParentID || !ent.Name) {
+                    continue;
+                }
+                const parentKey = NormalizeUUID(ent.ParentID);
+                let set = childNamesByParentId.get(parentKey);
+                if (!set) {
+                    set = new Set<string>();
+                    childNamesByParentId.set(parentKey, set);
+                }
+                set.add(ent.Name.trim().toLowerCase());
+            }
+            for (const parentEntity of entities) {
+                const selector = parentEntity.SubtypeSelectorConfig;
+                if (!selector?.Path) {
+                    continue;
+                }
+                const segments = selector.Path.split('.').map(s => s.trim()).filter(Boolean);
+                if (segments.length < 2) {
+                    continue;
+                }
+                let currentInfo: EntityInfo | undefined = parentEntity;
+                for (let sIdx = 0; sIdx < segments.length - 1 && currentInfo; sIdx++) {
+                    const hopField = currentInfo.Fields.find(
+                        f => f.Name.trim().toLowerCase() === segments[sIdx].toLowerCase()
+                    );
+                    if (!hopField?.RelatedEntity) {
+                        currentInfo = undefined;
+                        break;
+                    }
+                    currentInfo = entities.find(e => sameEntityName(e.Name, hopField.RelatedEntity));
+                }
+                const terminalSegment = segments[segments.length - 1];
+                const terminalField = currentInfo?.Fields.find(
+                    f => f.Name.trim().toLowerCase() === terminalSegment.toLowerCase()
+                );
+                if (currentInfo && terminalField) {
+                    const declaredChildNamesLower = new Set<string>(
+                        childNamesByParentId.get(NormalizeUUID(parentEntity.ID)) ?? []
+                    );
+                    for (const child of parentEntity.ChildEntities ?? []) {
+                        if (child.Name) {
+                            declaredChildNamesLower.add(child.Name.trim().toLowerCase());
+                        }
+                    }
+                    const key = currentInfo.Name.trim().toLowerCase();
+                    let list = byTypeEntity.get(key);
+                    if (!list) {
+                        list = [];
+                        byTypeEntity.set(key, list);
+                    }
+                    list.push({
+                        TerminalFieldName: terminalField.Name,
+                        ParentEntity: parentEntity,
+                        SelectorPath: selector.Path,
+                        DeclaredChildNamesLower: declaredChildNamesLower,
+                    });
+                }
+            }
+            BaseEntity._subtypeTypeFieldRulesCache = {
+                Signature: signature,
+                ByTypeEntityName: byTypeEntity,
+            };
+        }
+        return BaseEntity._subtypeTypeFieldRulesCache.ByTypeEntityName.get(entityName.trim().toLowerCase());
     }
 
     private async getSubtypePathTargetEntity(entityName: string, pkValue: unknown): Promise<BaseEntity | null> {
@@ -3217,6 +3797,7 @@ export abstract class BaseEntity<T = unknown> {
         const saveSubType: BaseEntityEvent['saveSubType'] = this.IsSaved ? 'update' : 'create';
 
         const changedFieldNames = this.dirtyFieldNames();
+        const postSaveChangedFields = this.computePostSaveChangedFieldNames(saveSubType, changedFieldNames);
 
         // Root: rebase field values and dirty state onto what the database now holds.
         this.init();
@@ -3242,6 +3823,28 @@ export abstract class BaseEntity<T = unknown> {
         this.RegisterResultHistoryEntry(result);
 
         this.RaiseEvent('save', null, saveSubType, changedFieldNames);
+        await this.runPostSaveHooks(postSaveChangedFields, saveSubType ?? 'update');
+    }
+
+    /**
+     * Computes the changed field list for PostSave hooks. On 'update', this equals `dirtyFieldNames()`.
+     * On 'create', `EntityField.Value` records the initial non-null write into `_oldValue` so `Dirty`
+     * is false; include populated writable fields so PostSave observers see newly created field values.
+     */
+    private computePostSaveChangedFieldNames(
+        saveSubType: BaseEntityEvent['saveSubType'],
+        dirtyNames: string[]
+    ): string[] {
+        if (saveSubType !== 'create' && this.IsSaved) {
+            return dirtyNames;
+        }
+        const combined = new Set<string>(dirtyNames);
+        for (const f of this.Fields) {
+            if (!f.ReadOnly && !f.EntityFieldInfo.IsVirtual && (!f.NeverSet || (f.Value !== null && f.Value !== undefined))) {
+                combined.add(f.Name);
+            }
+        }
+        return Array.from(combined);
     }
 
     /**
@@ -3788,12 +4391,22 @@ export abstract class BaseEntity<T = unknown> {
         }
     }
 
+    private _pendingPostSave: {
+        changedFieldNames: string[];
+        saveSubType: 'create' | 'update';
+    } | null = null;
+
     /**
      * The failure path of a save: rolls back the transaction scope this entity holds, if any, then
      * settles this save's part in its unit of work (see {@link settleRollback}). `part` is null when
      * this save took none (see `_innerSave`), and then only the scope is rolled back.
      */
     private async rollbackChainSave(part: UnitOfWorkPart | null): Promise<void> {
+        let cur: BaseEntity | null = this.RootEntity;
+        while (cur) {
+            cur._pendingPostSave = null;
+            cur = cur._childEntity;
+        }
         await this.rollbackEntityTransactionScope();
         BaseEntity.settleRollback(part);
     }
@@ -4383,7 +4996,13 @@ export abstract class BaseEntity<T = unknown> {
                 this.assertFieldActiveStatus(FieldName, 'BaseEntity.Set');
             }
             this.assertFieldReadable(FieldName);
+            const hasDriver = !this._isLoading && this.chainHasSubtypeDriver();
+            const fieldObj = hasDriver ? this.GetFieldByName(FieldName) : null;
+            const oldValue = fieldObj ? fieldObj.Value : undefined;
             this.setLocal(FieldName, Value);
+            if (hasDriver && fieldObj) {
+                this.notifySubtypeDriversFieldChanged(fieldObj.Name, fieldObj.Value, oldValue);
+            }
         }
     }
 
@@ -5551,23 +6170,53 @@ export abstract class BaseEntity<T = unknown> {
         // in one, taken only when this entity starts an IS-A chain save whose writes a failure undoes.
         const enclosing = this._unitOfWork;
         let part: UnitOfWorkPart | null = null;
+        let activeSaveOptions: EntitySaveOptions | null = null;
+        let reconciledChainRoot: BaseEntity | null = null;
 
         try {
             this.FlushJSONFieldObjects(); // idempotent; covers graph-node saves that bypass Save()
             const initialDirtyState = this.Dirty; // save this because parent entity save cycle, if any, will clear their dirty flags
 
             const _options: EntitySaveOptions = options ? options : new EntitySaveOptions();
+            activeSaveOptions = _options;
+
+            // Generic SubtypeSelector orchestration (AutoEnsureOnSave & OnSubtypeChange: 'Refuse' | 'Replace').
+            // Runs once on the initiating Save() across the IS-A chain from root downward before leaf
+            // delegation, so newly-ensured children participate in the leaf's single atomic transaction.
+            if (
+                !_options.IsParentEntitySave &&
+                !_options.ReplayOnly &&
+                !BaseEntity.hasReconciledSaveChain(_options, this.RootEntity)
+            ) {
+                reconciledChainRoot = this.RootEntity;
+                BaseEntity.markReconciledSaveChain(_options, reconciledChainRoot);
+                const reconcileOutcome = await this.reconcileISAChainBeforeSave(_options);
+                if (reconcileOutcome.kind === 'handled') {
+                    return reconcileOutcome.result;
+                }
+            }
 
             // IS-A leaf delegation: if this entity has a child entity and we are NOT
             // already being called as part of a parent chain save, delegate to the leaf.
             // The leaf's Save() will then save the full chain (root → branch → leaf)
             // using the existing IS-A parent chain orchestration.
             if (this._childEntity && !_options.IsParentEntitySave) {
-                return this.LeafEntity.Save(_options);
+                const leaf = this.LeafEntity;
+                const leafSaved = await leaf.Save(_options);
+                if (!leafSaved && currentResultCount === this.ResultHistory.length && leaf.LatestResult) {
+                    this.copyFailureResultFrom(leaf.LatestResult);
+                }
+                return leafSaved;
             }
 
             // IS-A orchestration: determine if this is the initiating save in a parent chain
-            const isISAInitiator = (!!this._parentEntity) && !_options.IsParentEntitySave;
+            // (or a standalone entity whose active SubtypeSelector.Driver resolves to a registered driver)
+            const hasActiveDriver =
+                !this._parentEntity &&
+                !_options.IsParentEntitySave &&
+                Boolean(this.EntityInfo?.SubtypeSelectorConfig?.Driver) &&
+                (await this.ResolveSubtypeDriver()) !== null;
+            const isISAInitiator = (Boolean(this._parentEntity) || hasActiveDriver) && !_options.IsParentEntitySave;
 
             // Open (or join) a transaction scope for the parent chain. The provider arbitrates:
             // if a transaction is already in flight — an application cascade, an enclosing graph
@@ -5599,12 +6248,38 @@ export abstract class BaseEntity<T = unknown> {
                 parentSaveOptions.SkipEntityActions = _options.SkipEntityActions;
                 parentSaveOptions.ReplayOnly = _options.ReplayOnly;
                 parentSaveOptions.SkipOldValuesCheck = _options.SkipOldValuesCheck;
+                if (_options.ConcurrencyBaseline) {
+                    const parentChainFieldNames = new Set<string>();
+                    for (let anc: BaseEntity | null = this._parentEntity; anc; anc = anc._parentEntity) {
+                        for (const f of anc.EntityInfo.Fields) {
+                            parentChainFieldNames.add(f.Name);
+                            parentChainFieldNames.add(f.CodeName);
+                        }
+                    }
+                    const filteredParentBaseline: Record<string, unknown> = {};
+                    let hasParentBaseline = false;
+                    for (const [k, v] of Object.entries(_options.ConcurrencyBaseline)) {
+                        if (parentChainFieldNames.has(k)) {
+                            filteredParentBaseline[k] = v;
+                            hasParentBaseline = true;
+                        }
+                    }
+                    if (hasParentBaseline) {
+                        parentSaveOptions.ConcurrencyBaseline = filteredParentBaseline;
+                    }
+                }
+                parentSaveOptions.ConcurrencyCheck = _options.ConcurrencyCheck;
                 parentSaveOptions.SkipAsyncValidation = _options.SkipAsyncValidation;
                 parentSaveOptions.IsParentEntitySave = true;
                 parentSaveOptions.ISAActiveChildEntityName = this.EntityInfo.Name;
 
                 const parentResult = await this._parentEntity.Save(parentSaveOptions); // we know parent entity exists hre
                 if (!parentResult) {
+                    // Capture parent failure BEFORE rollbackChainSave restores pre-save ResultHistory
+                    // on any ancestor that reached finalizeSave() before failing in AfterSave/commit.
+                    const parentLatest = this._parentEntity.LatestResult;
+                    const parentErrors = parentLatest?.Errors ?? [];
+
                     // Parent save failed — roll back if we started the transaction, and put back
                     // the levels above it that had already saved
                     await this.rollbackChainSave(part);
@@ -5617,8 +6292,6 @@ export abstract class BaseEntity<T = unknown> {
                     // the child never set fails with literally no message anywhere the caller can
                     // reach. Mirrors the transaction-group-failure and catch-block paths below.
                     if (currentResultCount === this.ResultHistory.length) {
-                        const parentLatest = this._parentEntity.LatestResult;
-                        const parentErrors = parentLatest?.Errors ?? [];
                         // A failed parent commonly reports its detail ONLY in Errors (validation
                         // failures leave Message empty), so fall back to the error text rather than
                         // handing the caller a message that says nothing.
@@ -5632,6 +6305,9 @@ export abstract class BaseEntity<T = unknown> {
                             `Failed to save parent entity '${this._parentEntity.EntityInfo?.Name}': ${detail}`;
                         // Surface the parent's field-level errors so the caller can act on them.
                         newResult.Errors = parentErrors;
+                        if (parentLatest?.ConcurrencyConflict) {
+                            newResult.ConcurrencyConflict = parentLatest.ConcurrencyConflict;
+                        }
                         // When `detail` was built from `parentErrors` (no parent Message), `Message` already renders
                         // them — say so, or CompleteMessage repeats every one.
                         newResult.MessageIncludesErrors = !parentLatest?.Message && parentErrors.length > 0;
@@ -5687,8 +6363,15 @@ export abstract class BaseEntity<T = unknown> {
                         valResult.Success = true; // bypassing validation since we are in replay only....
                     }
                     else {
-                        // First run synchronous validation
-                        valResult = this.Validate();
+                        // First run synchronous validation (suppressing sync subtype-driver validation
+                        // on self and already-saved IS-A ancestors so each level's validateSubtypeDriverAsync
+                        // runs its driver's Validate exactly once)
+                        this.setChainInSaveValidation(true);
+                        try {
+                            valResult = this.Validate();
+                        } finally {
+                            this.setChainInSaveValidation(false);
+                        }
 
                         // Determine if we should run async validation, in order of authority:
                         //   1. An explicit SkipAsyncValidation in the options.
@@ -5739,10 +6422,14 @@ export abstract class BaseEntity<T = unknown> {
                         // save in production: the class never overrode DefaultSkipAsyncValidation
                         // (which defaults to true) and no caller ever passed SkipAsyncValidation:false.
                         await this.validateCompanionsAsync(valResult);
+                        await this.validateSubtypeDriverAsync(valResult);
                     }
                     if (valResult.Success) {
-                        // Run registered PreSave hooks (e.g., tenant validation)
+                        // Run registered PreSave hooks (e.g., tenant validation) and subtype driver BeforeSave
                         await this.runPreSaveHooks();
+                        if (!_options.ReplayOnly) {
+                            await this.runSubtypeDriverBeforeSave();
+                        }
 
                         // Optimistic-UI hook: every pre-flight check (Validate, ValidateAsync,
                         // PreSave hooks) has passed and the DB write is imminent. Fire the optional
@@ -5781,6 +6468,7 @@ export abstract class BaseEntity<T = unknown> {
                             });
                             throw saveErr;
                         }
+                        const wasNewBeforeFinalize = !this.IsSaved;
                         if (!this.TransactionGroup) {
                             // no transaction group, so we have our results here
                             const result = this.finalizeSave(data, saveSubType, _options);
@@ -5792,8 +6480,14 @@ export abstract class BaseEntity<T = unknown> {
                             // chain around a leaf that reported failure: precisely the torn write
                             // this scope exists to prevent.
                             if (result) {
+                                if (!_options.ReplayOnly) {
+                                    await this.runSubtypeDriverAfterSave(wasNewBeforeFinalize);
+                                }
                                 await this.commitEntityTransactionScope();
                                 BaseEntity.settleCommit(part);
+                                if (!_options.IsParentEntitySave && !_options.ReplayOnly) {
+                                    await this.runChainPostSaveHooks();
+                                }
                             }
                             else {
                                 await this.rollbackChainSave(part);
@@ -5802,13 +6496,43 @@ export abstract class BaseEntity<T = unknown> {
                             return result;
                         }
                         else {
+                            // Enlist SubtypeSelector.Driver AfterSave inside the open group transaction
+                            // so it runs atomically (and rolls back the group if it throws), matching direct Save().
+                            // Finalize the entity before running AfterSave so the hook observes IsSaved === true
+                            // and any server-returned values, restoring the pre-save snapshot if the group rolls back.
+                            let finalizedInAfterSaveHook = false;
+                            const preFinalizeSnapshots = BaseEntity.captureChains([this]);
+                            if (!_options.ReplayOnly && this.EntityInfo?.SubtypeSelectorConfig?.Driver) {
+                                this.TransactionGroup.RegisterInTransactionAfterSave(this, async (resultRecord) => {
+                                    const finalized = this.finalizeSave(
+                                        resultRecord as BaseEntity | Record<string, unknown> | null | undefined,
+                                        saveSubType,
+                                        _options
+                                    );
+                                    if (!finalized) {
+                                        return;
+                                    }
+                                    finalizedInAfterSaveHook = true;
+                                    await this.runSubtypeDriverAfterSave(wasNewBeforeFinalize);
+                                });
+                            }
                             // we are part of a transaction group, so we return true and subscribe to the transaction groups' events and do the finalization work then
                             this.TransactionGroup.TransactionNotifications$.subscribe(({ success, results, error }) => {
                                 const transItem = success && results ? results.find(r => r.Transaction.BaseEntity === this) : undefined;
                                 if (transItem) {
-                                    this.finalizeSave(transItem.Result, saveSubType, _options); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
+                                    const finalized = finalizedInAfterSaveHook || this.finalizeSave(transItem.Result, saveSubType, _options); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
+                                    if (finalized && !_options.ReplayOnly && !_options.IsParentEntitySave) {
+                                        void this.runChainPostSaveHooks().catch(hookErr => {
+                                            LogError(`PostSave hook failed after TransactionGroup commit on '${this.EntityInfo?.Name}': ${BaseEntity.errorText(hookErr)}`);
+                                        });
+                                    }
                                 }
                                 else {
+                                    if (finalizedInAfterSaveHook) {
+                                        this._pendingPostSave = null;
+                                        BaseEntity.restoreChains(preFinalizeSnapshots);
+                                        finalizedInAfterSaveHook = false;
+                                    }
                                     // The transaction group failed / rolled back, OR (should never happen) reported success
                                     // without a result for this entity. Either way, RECORD the failure on ResultHistory rather
                                     // than throwing. This handler runs ASYNCHRONOUSLY — after Save() has already returned true and
@@ -5846,6 +6570,9 @@ export abstract class BaseEntity<T = unknown> {
                 // empty scope writes nothing; it only releases the transaction.
                 await this.commitEntityTransactionScope();
                 BaseEntity.settleCommit(part);
+                if (!_options.IsParentEntitySave && !_options.ReplayOnly) {
+                    await this.runChainPostSaveHooks();
+                }
                 return true; // nothing to save since we're not dirty
             }
         }
@@ -5869,6 +6596,268 @@ export abstract class BaseEntity<T = unknown> {
 
             return false;
         }
+        finally {
+            if (activeSaveOptions && reconciledChainRoot) {
+                BaseEntity.unmarkReconciledSaveChain(activeSaveOptions, reconciledChainRoot);
+            }
+        }
+    }
+
+    /**
+     * Walks the IS-A chain from `RootEntity` downward before an initiating `Save()`, applying:
+     * 1. `AutoEnsureOnSave` — creates missing child entities in the same transaction.
+     * 2. Unsaved subtype switching — swaps an unsaved prospective child when the record's type changed before first save.
+     * 3. `OnSubtypeChange` (`'Refuse'` | `'Replace'`) — enforces subtype-change policy when a saved record's
+     *    selector resolves to a different child entity (or to no child entity after its selector FK changed).
+     *    Moving from a type with no extension entity to one with an extension entity is always allowed.
+     */
+    private async reconcileISAChainBeforeSave(options: EntitySaveOptions): Promise<SubtypeChainReconcileOutcome> {
+        let level: BaseEntity | null = this.RootEntity;
+        while (level) {
+            if (!level.EntityInfo?.IsParentType || level.EntityInfo.AllowMultipleSubtypes) {
+                level = level._childEntity;
+                continue;
+            }
+            const selector = level.EntityInfo.SubtypeSelectorConfig;
+            if (!selector) {
+                level = level._childEntity;
+                continue;
+            }
+
+            if (level.IsSaved) {
+                // Ensure any existing persisted child row is discovered before deciding subtype-change policy
+                if (!level._childEntity && !level._childEntityDiscoveryDone) {
+                    level._childEntityDiscoveryDone = true;
+                    const childCheck = await level.CheckForChildRecords();
+                    if (childCheck.HasChildren && childCheck.ChildEntityName) {
+                        await level.createAndLinkChildEntity(childCheck.ChildEntityName);
+                    }
+                }
+
+                const resolvedSubtype = await level.ResolveSubtypeEntityName();
+                const currentChild = level._childEntity;
+
+                if (currentChild && currentChild.IsSaved) {
+                    const changedToDifferentExtension =
+                        resolvedSubtype !== null && !sameEntityName(currentChild.EntityInfo.Name, resolvedSubtype);
+                    const changedToNoExtension =
+                        resolvedSubtype === null && level.isSubtypeSelectorFirstHopDirty(selector.Path);
+
+                    if (changedToDifferentExtension || changedToNoExtension) {
+                        const policy = selector.OnSubtypeChange ?? 'Refuse';
+                        if (policy === 'Refuse') {
+                            const targetDesc = resolvedSubtype ? `'${resolvedSubtype}'` : 'no extension entity';
+                            const msg =
+                                `Cannot change subtype of saved '${level.EntityInfo.Name}' record from ` +
+                                `'${currentChild.EntityInfo.Name}' to ${targetDesc} (OnSubtypeChange is 'Refuse').`;
+                            level.recordSaveFailure(msg);
+                            if (this !== level) {
+                                this.recordSaveFailure(msg);
+                            }
+                            return { kind: 'handled', result: false };
+                        }
+                        const replaced = await this.executeSubtypeReplacementSave(
+                            level,
+                            currentChild,
+                            resolvedSubtype,
+                            options
+                        );
+                        return { kind: 'handled', result: replaced };
+                    }
+                } else if (currentChild && !currentChild.IsSaved) {
+                    // Unsaved prospective child attached for promotion on a saved parent
+                    if (!resolvedSubtype || !sameEntityName(currentChild.EntityInfo.Name, resolvedSubtype)) {
+                        const firstHopVal = level.getSubtypeSelectorFirstHopValue(selector.Path);
+                        const shouldDetach =
+                            resolvedSubtype !== null || (firstHopVal !== null && firstHopVal !== undefined && firstHopVal !== '');
+                        if (shouldDetach) {
+                            level.detachUnsavedChildSubtree();
+                        }
+                    }
+                    if (!level._childEntity && resolvedSubtype && selector.AutoEnsureOnSave) {
+                        await level.EnsureISAChild(resolvedSubtype);
+                    }
+                } else if (!currentChild && resolvedSubtype && selector.AutoEnsureOnSave) {
+                    // Saved parent had no extension row; promoting from null -> ExtensionEntity is always allowed
+                    await level.EnsureISAChild(resolvedSubtype);
+                }
+            } else {
+                // Unsaved parent record
+                const resolvedSubtype = await level.ResolveSubtypeEntityName();
+                if (level._childEntity && !level._childEntity.IsSaved) {
+                    if (!resolvedSubtype || !sameEntityName(level._childEntity.EntityInfo.Name, resolvedSubtype)) {
+                        const firstHopVal = level.getSubtypeSelectorFirstHopValue(selector.Path);
+                        const shouldDetach =
+                            resolvedSubtype !== null || (firstHopVal !== null && firstHopVal !== undefined && firstHopVal !== '');
+                        if (shouldDetach) {
+                            level.detachUnsavedChildSubtree();
+                        }
+                    }
+                }
+                if (!level._childEntity && resolvedSubtype && selector.AutoEnsureOnSave) {
+                    await level.EnsureISAChild(resolvedSubtype);
+                }
+            }
+
+            level = level._childEntity;
+        }
+
+        return { kind: 'proceed' };
+    }
+
+    /**
+     * Executes an atomic `OnSubtypeChange: 'Replace'` transition: deletes `oldChild` (and any deeper
+     * child subtree, without cascading up to `levelWithReplacement`), attaches `resolvedSubtype` if
+     * non-null, and saves the updated chain — all inside one `EntityTransactionScope` and `UnitOfWork`.
+     */
+    private async executeSubtypeReplacementSave(
+        levelWithReplacement: BaseEntity,
+        oldChild: BaseEntity,
+        resolvedSubtype: string | null,
+        options: EntitySaveOptions
+    ): Promise<boolean> {
+        const root = this.RootEntity;
+        const provider = root.ProviderToUse;
+        const enclosing = this._unitOfWork;
+        let scope: EntityTransactionScope | null = null;
+        let part: UnitOfWorkPart | null = null;
+        let attachedNewChild: BaseEntity | null = null;
+
+        try {
+            if (!root.TransactionGroup && provider?.SupportsEntityTransactions === true && provider.BeginEntityTransaction) {
+                scope = await provider.BeginEntityTransaction();
+            }
+            if (!root.TransactionGroup && (scope || provider?.SupportsEntityTransactions !== true)) {
+                part = BaseEntity.beginUnitOfWork(enclosing, BaseEntity.captureChains([root, oldChild]));
+            }
+            const unit = part?.unit ?? enclosing;
+
+            // Detach oldChild from levelWithReplacement so deleting oldChild deletes only the old
+            // child subtree (logging Record Changes for the deleted child row(s)) and never cascades
+            // upward to levelWithReplacement.
+            levelWithReplacement._childEntity = null;
+            oldChild._parentEntity = null;
+
+            const deleteOptions = new EntityDeleteOptions();
+            deleteOptions.SkipEntityAIActions = options.SkipEntityAIActions;
+            deleteOptions.SkipEntityActions = options.SkipEntityActions;
+            deleteOptions.ReplayOnly = options.ReplayOnly;
+
+            const deleted = await BaseEntity.inUnitOfWork(oldChild, unit, c => c.Delete(deleteOptions));
+            if (!deleted) {
+                oldChild._parentEntity = levelWithReplacement;
+                levelWithReplacement._childEntity = oldChild;
+                await scope?.Rollback();
+                BaseEntity.settleRollback(part);
+                const errMsg =
+                    oldChild.LatestResult?.Message ||
+                    `Failed to delete replaced subtype '${oldChild.EntityInfo.Name}' on '${levelWithReplacement.EntityInfo.Name}'.`;
+                levelWithReplacement.recordSaveFailure(errMsg, oldChild.LatestResult?.Errors);
+                if (this !== levelWithReplacement) {
+                    this.recordSaveFailure(errMsg, oldChild.LatestResult?.Errors);
+                }
+                return false;
+            }
+
+            if (resolvedSubtype) {
+                attachedNewChild = await levelWithReplacement.EnsureISAChild(resolvedSubtype);
+                // Recursively reconcile deeper levels if the newly attached child is also a parent type
+                let sub: BaseEntity | null = attachedNewChild;
+                while (sub) {
+                    const subSelector = sub.EntityInfo?.SubtypeSelectorConfig;
+                    if (sub.EntityInfo?.IsParentType && !sub.EntityInfo.AllowMultipleSubtypes && !sub._childEntity && subSelector?.AutoEnsureOnSave) {
+                        const grandChildName = await sub.ResolveSubtypeEntityName();
+                        if (grandChildName) {
+                            await sub.EnsureISAChild(grandChildName);
+                        }
+                    }
+                    sub = sub._childEntity;
+                }
+            }
+
+            const leafToSave = root.LeafEntity;
+            const saveOpts = Object.assign(new EntitySaveOptions(), options);
+            BaseEntity.markReconciledSaveChain(saveOpts, root);
+
+            let saved: boolean;
+            try {
+                saved = await BaseEntity.inUnitOfWork(leafToSave, unit, target => target._innerSave(saveOpts));
+            } finally {
+                BaseEntity.unmarkReconciledSaveChain(saveOpts, root);
+            }
+            if (!saved) {
+                if (attachedNewChild) {
+                    attachedNewChild._parentEntity = null;
+                    levelWithReplacement._childEntity = null;
+                }
+                oldChild._parentEntity = levelWithReplacement;
+                levelWithReplacement._childEntity = oldChild;
+                await scope?.Rollback();
+                BaseEntity.settleRollback(part);
+                if (leafToSave.LatestResult) {
+                    if (levelWithReplacement !== leafToSave) {
+                        levelWithReplacement.copyFailureResultFrom(leafToSave.LatestResult);
+                    }
+                    if (this !== leafToSave && this !== levelWithReplacement) {
+                        this.copyFailureResultFrom(leafToSave.LatestResult);
+                    }
+                }
+                return false;
+            }
+
+            await scope?.Commit();
+            BaseEntity.settleCommit(part);
+            return true;
+        } catch (err) {
+            if (attachedNewChild) {
+                attachedNewChild._parentEntity = null;
+                levelWithReplacement._childEntity = null;
+            }
+            oldChild._parentEntity = levelWithReplacement;
+            levelWithReplacement._childEntity = oldChild;
+            try {
+                await scope?.Rollback();
+            } catch (rbErr) {
+                LogError(`Error rolling back subtype replacement scope on '${root.EntityInfo?.Name}': ${BaseEntity.errorText(rbErr)}`);
+            }
+            BaseEntity.settleRollback(part);
+            const msg = BaseEntity.errorText(err);
+            const errors = (err as { Errors?: ValidationErrorInfo[] })?.Errors;
+            levelWithReplacement.recordSaveFailure(msg, errors);
+            if (this !== levelWithReplacement) {
+                this.recordSaveFailure(msg, errors);
+            }
+            return false;
+        }
+    }
+
+    private recordSaveFailure(message: string, errors?: ValidationErrorInfo[]): void {
+        const entry = new BaseEntityResult();
+        entry.StartedAt = new Date();
+        entry.EndedAt = new Date();
+        entry.Success = false;
+        entry.Type = this.IsSaved ? 'update' : 'create';
+        entry.Message = message;
+        entry.Errors = errors ? [...errors] : [];
+        entry.OriginalValues = this.Fields.map(f => ({ FieldName: f.CodeName, Value: f.OldValue }));
+        this.RegisterResultHistoryEntry(entry);
+    }
+
+    private copyFailureResultFrom(source: BaseEntityResult): void {
+        const detail =
+            source.Message ||
+            (source.Errors ?? []).map(e => e?.Message ?? String(e)).filter(Boolean).join('; ') ||
+            'Child entity save failed';
+        const entry = new BaseEntityResult();
+        entry.StartedAt = source.StartedAt ?? new Date();
+        entry.EndedAt = source.EndedAt ?? new Date();
+        entry.Success = false;
+        entry.Type = this.IsSaved ? 'update' : 'create';
+        entry.Message = detail;
+        entry.Errors = source.Errors ? [...source.Errors] : [];
+        entry.MessageIncludesErrors = !source.Message && entry.Errors.length > 0;
+        entry.OriginalValues = this.Fields.map(f => ({ FieldName: f.CodeName, Value: f.OldValue }));
+        this.RegisterResultHistoryEntry(entry);
     }
 
     /**
@@ -5885,6 +6874,79 @@ export abstract class BaseEntity<T = unknown> {
             if (typeof hookResult === 'string') {
                 throw new Error(hookResult);
             }
+        }
+    }
+
+    /**
+     * Runs all registered PostSave hooks for this single entity after a committed save.
+     * Errors thrown by PostSave hooks are logged and never abort the already-committed save.
+     */
+    private async runPostSaveHooks(
+        changedFieldNames: ReadonlyArray<string>,
+        saveSubType: 'create' | 'update'
+    ): Promise<void> {
+        const postSaveHooks = GetDataHooks<PostSaveHook>('PostSave');
+        if (postSaveHooks.length === 0) {
+            return;
+        }
+        for (const hook of postSaveHooks) {
+            try {
+                await hook(this, this.ActiveUser, changedFieldNames, saveSubType);
+            } catch (hookErr) {
+                LogError(`PostSave hook failed on '${this.EntityInfo?.Name}': ${BaseEntity.errorText(hookErr)}`);
+            }
+        }
+    }
+
+    /**
+     * Runs registered PostSave hooks across every finalized node in this entity's IS-A chain
+     * once the outermost save scope has committed. Propagates inherited dirty field names from
+     * ancestors to live child nodes so observers on either level see modified fields.
+     */
+    private async runChainPostSaveHooks(): Promise<void> {
+        const postSaveHooks = GetDataHooks<PostSaveHook>('PostSave');
+        const chain: BaseEntity[] = [];
+        let cur: BaseEntity | null = this.RootEntity;
+        while (cur) {
+            chain.push(cur);
+            cur = cur._childEntity;
+        }
+
+        const unionChanged = new Set<string>();
+        let chainSaveSubType: 'create' | 'update' | null = null;
+        for (const node of chain) {
+            if (node._pendingPostSave) {
+                for (const name of node._pendingPostSave.changedFieldNames) {
+                    unionChanged.add(name);
+                }
+                if (chainSaveSubType === null) {
+                    chainSaveSubType = node._pendingPostSave.saveSubType;
+                }
+            }
+        }
+
+        const pendingByNode = new Map<BaseEntity, { changedFieldNames: string[]; saveSubType: 'create' | 'update' }>();
+        for (const node of chain) {
+            if (node._pendingPostSave) {
+                pendingByNode.set(node, node._pendingPostSave);
+                node._pendingPostSave = null;
+            }
+        }
+
+        if (postSaveHooks.length === 0 || (pendingByNode.size === 0 && unionChanged.size === 0)) {
+            return;
+        }
+
+        const allChangedArray = Array.from(unionChanged);
+        for (const node of chain) {
+            const ownPending = pendingByNode.get(node);
+            const nodeFieldNames = new Set(node.EntityInfo.Fields.map(f => f.Name));
+            const effectiveChanged = allChangedArray.filter(name => nodeFieldNames.has(name));
+            if (!ownPending && effectiveChanged.length === 0) {
+                continue;
+            }
+            const subType = ownPending?.saveSubType ?? chainSaveSubType ?? 'update';
+            await node.runPostSaveHooks(effectiveChanged, subType);
         }
     }
 
@@ -5964,6 +7026,7 @@ export abstract class BaseEntity<T = unknown> {
         if (data) {
             // The 'save' event names the fields this save wrote; init() below clears every dirty flag.
             const changedFieldNames = this.dirtyFieldNames();
+            const postSaveChangedFields = this.computePostSaveChangedFieldNames(saveSubType, changedFieldNames);
             const effectiveReturnMode = options?.SaveReturnMode ?? this.EntityInfo.SaveReturnMode;
             const hasGetAll = (val: BaseEntity | Record<string, unknown>): val is BaseEntity =>
                 val instanceof BaseEntity || typeof (val as { GetAll?: () => Record<string, unknown> }).GetAll === 'function';
@@ -6009,6 +7072,11 @@ export abstract class BaseEntity<T = unknown> {
 
             // Cache the record name for faster lookups (updates cache with potentially new name)
             this.cacheRecordName();
+
+            this._pendingPostSave = {
+                changedFieldNames: postSaveChangedFields,
+                saveSubType: saveSubType === 'create' ? 'create' : 'update',
+            };
 
             this.RaiseEvent('save', null, saveSubType, changedFieldNames);
 
@@ -6408,11 +7476,10 @@ export abstract class BaseEntity<T = unknown> {
             // did not narrow its SELECT (see narrowHydrationSource).
             data = this.narrowHydrationSource(data);
 
-            // IS-A: hydrate parent chain from loaded data before populating self.
-            // Hydrate resets each parent via init() (giving fresh _NeverSet=true on PK fields)
-            // then populates from data. This must happen before self's SetMany so parents
-            // are in clean state when they receive routed field values.
-            if (this._parentEntity) {
+            // IS-A: hydrate parent chain from loaded data before populating self when loading
+            // upward from a child/leaf instance. Skipped when an already-loaded parent links a
+            // child downward so the parent's virtual view columns are not cleared.
+            if (this._parentEntity && !this._skipParentChainHydration) {
                 this._parentEntity.Hydrate(data);
             }
 
@@ -7905,14 +8972,67 @@ export abstract class BaseEntity<T = unknown> {
      */
     private _jsonFieldBindings: Map<string, JSONFieldBinding> | undefined;
 
+    /**
+     * Walks this instance's prototype chain up to (but excluding) `BaseEntity.prototype` and
+     * `Object.prototype` to resolve the most-derived property `get` and `set` accessors for
+     * `codeName`. Resolving `get` and `set` independently supports multi-level subclasses where an
+     * intermediate class defines both and a leaf subclass overrides only `set` (or only `get`).
+     */
+    private resolveSubclassFieldAccessors(codeName: string): {
+        get?: (this: BaseEntity) => unknown;
+        set?: (this: BaseEntity, value: string | null) => void;
+    } {
+        let getter: ((this: BaseEntity) => unknown) | undefined;
+        let setter: ((this: BaseEntity, value: string | null) => void) | undefined;
+        let proto: object | null = Object.getPrototypeOf(this);
+        while (proto && proto !== BaseEntity.prototype && proto !== Object.prototype && (!getter || !setter)) {
+            const desc = Object.getOwnPropertyDescriptor(proto, codeName);
+            if (desc) {
+                if (!getter && typeof desc.get === 'function') {
+                    getter = desc.get;
+                }
+                if (!setter && typeof desc.set === 'function') {
+                    setter = desc.set;
+                }
+            }
+            proto = Object.getPrototypeOf(proto);
+        }
+        return { get: getter, set: setter };
+    }
+
     private getJSONFieldBinding(fieldName: string): JSONFieldBinding {
         this._jsonFieldBindings ??= new Map<string, JSONFieldBinding>();
         let binding = this._jsonFieldBindings.get(fieldName);
         if (!binding) {
+            const codeName = this.EntityInfo?.FieldByName(fieldName)?.CodeName ?? fieldName;
+            const accessors = this.resolveSubclassFieldAccessors(codeName);
+            let inAccessorRead = false;
+            let inAccessorWrite = false;
             binding = new JSONFieldBinding(
                 fieldName,
-                () => this.Get(fieldName),
-                (raw) => this.Set(fieldName, raw),
+                () => {
+                    if (!inAccessorRead && accessors.get) {
+                        inAccessorRead = true;
+                        try {
+                            return accessors.get.call(this);
+                        } finally {
+                            inAccessorRead = false;
+                        }
+                    }
+                    return this.Get(fieldName);
+                },
+                (raw) => {
+                    if (!inAccessorWrite && accessors.set) {
+                        inAccessorWrite = true;
+                        try {
+                            accessors.set.call(this, raw);
+                            return;
+                        } finally {
+                            inAccessorWrite = false;
+                        }
+                    }
+                    this.Set(fieldName, raw);
+                },
             );
             this._jsonFieldBindings.set(fieldName, binding);
         }
@@ -8012,6 +9132,13 @@ export abstract class BaseEntity<T = unknown> {
      * @returns ValidationResult The validation result
      */
     private _isValidating: boolean = false;
+    private _inSaveValidation: boolean = false;
+
+    private setChainInSaveValidation(flag: boolean): void {
+        for (let node: BaseEntity | null = this; node; node = node._parentEntity) {
+            node._inSaveValidation = flag;
+        }
+    }
 
     public Validate(): ValidationResult  {
         if (this._isValidating) {
@@ -8068,8 +9195,18 @@ export abstract class BaseEntity<T = unknown> {
             }
 
             // Declarative & programmatic lifecycle state machine, field-freeze, and auto-number reserved-namespace rules
-            EntityLifecyclePolicyEngine.Instance.ValidateLifecycleOnEntity(this, this.ActiveUser, result);
+            EntityLifecyclePolicyEngine.Instance.ValidateLifecycleOnEntity(this, this.resolveActiveUserOrNull() ?? this.ActiveUser, result);
             DocumentNumberingEngine.Instance.ValidateAutoNumberFields(this, result);
+
+            // Type-table validation: ensure any ExtensionEntity column referenced by a parent entity's
+            // SubtypeSelector.Path names a declared IS-A child of that parent entity
+            this.validateSubtypeTypeRowFields(result);
+
+            // Synchronous cached subtype-driver validation when Validate() is invoked directly
+            // (during Save(), _innerSave runs validateSubtypeDriverAsync instead so cold caches load)
+            if (!this._inSaveValidation) {
+                this.validateSubtypeDriverSync(result);
+            }
 
             // Companions validate LAST but still BEFORE any write, over their complete state including
             // pending removals. That ordering is what lets a cross-child invariant — "debits must equal

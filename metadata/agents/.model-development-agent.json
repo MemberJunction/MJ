@@ -410,7 +410,7 @@
             "ParentID": "@parent:ID",
             "Name": "Pipeline Builder",
             "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Research and Analysis",
-            "Description": "Code-based agent (no LLM) that deterministically turns the approved ModelingPlanSpec into a real MJ: ML Training Pipeline, trains the model, and publishes it ONLY if the trust verdict clears the bar (publish gated on trust). Mirrors the Database Designer schema builder. The orchestrator forces this sub-agent once the user approves the plan.",
+            "Description": "Code-based agent (no LLM) that deterministically turns the approved ModelingPlanSpec into a real MJ: ML Training Pipeline, trains the model, and publishes it ONLY when the stored gate decision of its training run ships it (publish gated on the stored decision). Mirrors the Database Designer schema builder. The orchestrator forces this sub-agent once the user approves the plan.",
             "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
             "Status": "Active",
             "ExecutionOrder": 4,
@@ -429,8 +429,8 @@
             "ID": "3EF80176-DEEF-492B-97BF-B889DD404B64"
           },
           "sync": {
-            "lastModified": "2026-09-21T02:45:36.928Z",
-            "checksum": "89152f070684e2a19fe0566b6615217da8273db030696809ff171aedf3dfdd40"
+            "lastModified": "2026-11-10T23:41:45.217Z",
+            "checksum": "81a47618733b412be15f5f36a348e4676954aa8c9c18bc2326517aa25775a8f9"
           }
         }
       ]

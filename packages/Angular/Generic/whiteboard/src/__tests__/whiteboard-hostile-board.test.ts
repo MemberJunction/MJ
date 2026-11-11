@@ -5,7 +5,7 @@ import {
   BuildWhiteboardExportSvg,
   WhiteboardExportOptions
 } from '../lib/whiteboard-export';
-import { WhiteboardState, WhiteboardStickyItem, WhiteboardTextItem } from '../lib/whiteboard-state';
+import { WHITEBOARD_PEN_COLORS, WhiteboardInkItem, WhiteboardState, WhiteboardStickyItem, WhiteboardTextItem } from '../lib/whiteboard-state';
 
 /**
  * HOSTILE SHARED BOARDS (CodeQL #366 / #367, issue #5569) — board JSON is shared between
@@ -95,5 +95,57 @@ describe('FromJSON coerces hostile persisted items', () => {
     expect(hostile.Author).toBe('user');
     expect(hostile.FontWeight).toBeUndefined();
     expect(hostile.FontFamily).toBeUndefined();
+  });
+});
+
+describe('item Color is a hex color on load and on export (#5595, #6189)', () => {
+  const HOSTILE_COLORS = ['red;background:url(https://example.invalid/t)', 'url(https://example.invalid/t)', 'var(--x)', 'rgb(1,2,3)', '#12345', 42];
+
+  function boardJson(color: unknown): string {
+    const items = [
+      { ID: 'text-1', Kind: 'text', X: 0, Y: 0, Text: 't', Z: 1, Author: 'user', Color: color },
+      { ID: 'ink-2', Kind: 'ink', X: 0, Y: 0, Z: 2, Author: 'user', Points: [{ X: 0, Y: 0 }, { X: 10, Y: 10 }], StrokeWidth: 4, Color: color }
+    ];
+    return JSON.stringify({ version: 2, activePageId: 'page-1', pages: [{ id: 'page-1', name: 'P', items }] });
+  }
+
+  it.each(HOSTILE_COLORS)('load drops a text Color of %j and defaults ink to the first pen color', (color) => {
+    const state = WhiteboardState.FromJSON(boardJson(color));
+    expect((state.GetItem('text-1') as WhiteboardTextItem).Color).toBeUndefined();
+    expect((state.GetItem('ink-2') as WhiteboardInkItem).Color).toBe(WHITEBOARD_PEN_COLORS[0]);
+  });
+
+  it.each(['#abc', '#a1b2c3', '#A1B2C3'])('load keeps the hex color %s', (color) => {
+    const state = WhiteboardState.FromJSON(boardJson(color));
+    expect((state.GetItem('text-1') as WhiteboardTextItem).Color).toBe(color);
+    expect((state.GetItem('ink-2') as WhiteboardInkItem).Color).toBe(color);
+  });
+
+  it('ink with no Color gets the first pen color', () => {
+    const state = WhiteboardState.FromJSON(boardJson(undefined));
+    expect((state.GetItem('ink-2') as WhiteboardInkItem).Color).toBe(WHITEBOARD_PEN_COLORS[0]);
+  });
+
+  it('HTML and SVG exports of live state with a hostile Color contain no url( or extra declarations', () => {
+    const state = new WhiteboardState();
+    const text = state.AddItem({ Kind: 'text', X: 0, Y: 0, Text: 'label' }, 'user');
+    const ink = state.AddItem({ Kind: 'ink', X: 0, Y: 0, Points: [{ X: 0, Y: 0 }, { X: 5, Y: 5 }], StrokeWidth: 3, Color: '#abc' }, 'user');
+    Object.assign(state.GetItem(text.ID)!, { Color: HOSTILE_COLORS[0] });
+    Object.assign(state.GetItem(ink.ID)!, { Color: HOSTILE_COLORS[1] });
+    for (const output of [BuildWhiteboardExportHtml(state, OPTS), BuildWhiteboardExportSvg(state)]) {
+      expect(output).not.toContain('url(');
+      expect(output).not.toContain('example.invalid');
+      expect(output).not.toContain('background:url');
+    }
+  });
+
+  it('a hex Color still reaches the exports', () => {
+    const state = new WhiteboardState();
+    state.AddItem({ Kind: 'text', X: 0, Y: 0, Text: 'label', Color: '#4ade80' }, 'user');
+    state.AddItem({ Kind: 'ink', X: 0, Y: 0, Points: [{ X: 0, Y: 0 }, { X: 5, Y: 5 }], StrokeWidth: 3, Color: '#fbbf24' }, 'user');
+    expect(BuildWhiteboardExportHtml(state, OPTS)).toContain('color:#4ade80;');
+    const svg = BuildWhiteboardExportSvg(state);
+    expect(svg).toContain('fill="#4ade80"');
+    expect(svg).toContain('stroke="#fbbf24"');
   });
 });
