@@ -1,5 +1,5 @@
 -- ============================================================================
--- v6.2.x — UI-role users create and manage their own conversation folders (#4816)
+-- v6.3.x — UI-role users create and manage their own conversation folders (#4816)
 --
 -- WHY. The UI role holds Read on MJ: Projects, narrowed by "UI: Own or Shared
 -- Projects" (V202609260053, widened in V202611021720), and nothing else. Only

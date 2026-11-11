@@ -575,7 +575,7 @@ export class ExportService {
         ArtifactID: artifact.ID,
         VersionID: version.ID,
         Name: version.Name || artifact.Name || 'Untitled artifact',
-        Type: artifact.Type,
+        Type: artifact.Type ?? 'Unknown type',
         VersionNumber: version.VersionNumber,
         Content: version.FileID ? null : version.Content,
         MimeType: version.MimeType,
