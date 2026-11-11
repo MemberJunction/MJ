@@ -1529,11 +1529,18 @@ mj codegen
 # Skip database operations, only regenerate code files from existing metadata
 mj codegen --skipdb
 
+# Re-emit every schema's generated files after rebuilding a database from migrations
+mj codegen --all-schemas
 ```
 
 | Flag | Description |
 |------|-------------|
 | `--skipdb` | Skip all database operations (metadata sync, SQL object generation). Only regenerates TypeScript entities, Angular components, and GraphQL resolvers from existing metadata. |
+| `--all-schemas` | Re-emit the generated files of every schema, not only schemas with a new or modified entity. Files are still written only when their content changes. Same as `fileEmit.dirtySchemaOnly: false`, for one run. |
+
+#### Rebuilding generated files from a fresh database
+
+A database run re-emits only the schemas that contain a new or modified entity, plus any schema whose generated file is missing. A database rebuilt from migrations has no new or modified entities, so files that exist but are stale (for example after switching branches) are left as they are. Run `mj codegen --all-schemas` once after the rebuild to refresh every schema; unchanged files keep their content and timestamps.
 
 #### Verbose Mode
 
