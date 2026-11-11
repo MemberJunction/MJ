@@ -18,9 +18,9 @@
 CREATE TABLE [${flyway:defaultSchema}].[UserExternalIdentity] (
     [ID] UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_UserExternalIdentity_ID] DEFAULT NEWSEQUENTIALID(),
     [UserID] UNIQUEIDENTIFIER NOT NULL,
-    [Issuer] NVARCHAR(400) NOT NULL,
-    [Subject] NVARCHAR(400) NOT NULL,
-    [ProviderName] NVARCHAR(100) NULL,
+    [Issuer] NVARCHAR(400) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [Subject] NVARCHAR(400) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [ProviderName] NVARCHAR(100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     [LastLoginAt] DATETIMEOFFSET NULL,
     CONSTRAINT [PK_UserExternalIdentity] PRIMARY KEY ([ID]),
     CONSTRAINT [FK_UserExternalIdentity_User] FOREIGN KEY ([UserID]) REFERENCES [${flyway:defaultSchema}].[User]([ID]),
