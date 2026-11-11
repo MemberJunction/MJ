@@ -19,6 +19,7 @@ function fakeTarget(prepareError?: Error): { Target: PipelineTarget; Calls: Call
   const target: PipelineTarget = {
     Prepare: async (r: RevisionRef): Promise<PreparedRevision> => { calls.Prepare.push(r); if (prepareError) throw prepareError; return { Ref: r, RootDir: '/work/head' }; },
     BuildPackages: async (r: PreparedRevision, p: string[]) => { calls.Build.push({ Kind: r.Ref.Kind, Packages: p }); },
+    PackagesAt: (_r: PreparedRevision, p: string[]) => p,
     WriteTests: async (r: PreparedRevision) => { calls.Write.push(r.Ref.Kind); },
     TypeCheck: async (_r: PreparedRevision, t: CandidateTest[]) => new Map(t.map((x) => [x.ID, null])),
     Run: async (r: PreparedRevision, t: CandidateTest[], repeats: number) => {
