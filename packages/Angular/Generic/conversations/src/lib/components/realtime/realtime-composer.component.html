@@ -33,7 +33,10 @@
 
     @if (HasMoreItems) {
       <div class="lean-more" [class.lean-more--open]="MoreOpen">
-        <div class="lean-sheet" (click)="$event.stopPropagation()" role="group" aria-label="More call controls">
+        <!-- Closed, the sheet is only faded out, so it stays where it opens, over the call body. Inert keeps its
+             buttons out of focus, the accessibility tree and clicks until "•••" opens it (#6545). -->
+        <div class="lean-sheet" (click)="$event.stopPropagation()" role="group" aria-label="More call controls"
+             [attr.inert]="MoreOpen ? null : ''">
           @if ((ShowCamera && !CameraOn) || (ShowShare && !Sharing)) {
             <mj-media-controls class="lean-sheet__media"
                                Size="md"
