@@ -1,337 +1,319 @@
-# MJ Core & Open App Health Signals, Live Verification Probes, and Agent Remediation Infrastructure
+# MJ Telemetry & Health Probes: Unified Local-First Observability, Live Verification, Agent Remediation & Opt-In Sharing
 
-- **Status:** Plan Proposed (Plan-Only PR)
-- **Date:** November 5, 2026
-- **Authors:** @amith-bc, @MS-BC
-- **Target Packages:**
+- **Status:** Architecture Plan Proposed (Unified Plan for PR #6420)
+- **Date:** November 11, 2026
+- **Authors:** @amith-bc, @MS-BC, @MattC-BC, @cadam11
+- **Target Packages & Modules:**
   - `@memberjunction/health` *(new core package: `packages/Health`)*
-  - `@memberjunction/open-app-engine` *(`packages/OpenApp/Engine`)*
-  - `@memberjunction/server` *(`packages/MJServer`)*
-  - `@memberjunction/server-extensions-core` *(`packages/ServerExtensionsCore`)*
-  - `@memberjunction/cli` *(`packages/MJCLI`)*
+  - `@memberjunction/core` *(`packages/MJCore` — `TelemetryManager.Instance.OnEvent` hook & signal bus)*
+  - `@memberjunction/server-telemetry` *(new package: `packages/ServerTelemetry` — OpenTelemetry meters, traces & bootstrap)*
+  - `@memberjunction/open-app-engine` *(`packages/OpenApp/Engine` — manifest schema & orchestrator rollback gates)*
+  - `@memberjunction/server` *(`packages/MJServer` — `/api/health/signals`, `/api/health/signals/verify`, `MJHealthResolver`, OTELMiddleware)*
+  - `@memberjunction/cli` *(`packages/MJCLI` — `mj app health`, `mj doctor --live`)*
+  - `@memberjunction/analytics` / `@memberjunction/ng-analytics` *(`packages/Angular/Generic` — `RouteScrubber`, semantic interaction taps, pluggable client analytics seam)*
+  - `@memberjunction/telemetry` *(new package: `packages/Telemetry` — `TelemetrySchema` DSL, CI allowlist gate, packager & sink framework)*
 
 ---
 
-## 1. Executive Summary & Problem Statement
+## 1. Executive Summary, Principles & Unified Lineage
 
-As **MJ Central (MJC)** scales to auto-provision, upgrade, and operate hundreds or thousands of dedicated MemberJunction instances across clouds (including low-cost **\$10–\$20/month AWS PostgreSQL** instances for associations alongside Azure SQL and GCP deployments), each customer instance runs **MJ Core** plus a composable stack of **MJ Open Apps** (`mj-bizapps-common`, `mj-bizapps-collaboration`, `mj-bizapps-community`, `mj-bizapps-tasks`, `skip-client-open-app`, and AMS/community connectors).
+As MemberJunction (MJ) scales from single self-hosted server deployments to fleet-managed multi-tenant environments across **MJ Central (MJC)** — running hundreds or thousands of dedicated instances on low-cost **\$10–\$20/month AWS PostgreSQL** instances alongside Azure SQL and GCP deployments — the platform requires a cohesive, trustworthy, and battle-hardened observability and verification architecture.
 
-Today, MJ's operational health surface has three structural gaps:
+Historically, this problem was addressed in separate silos:
+1. **PR #6420** designed deterministic health signals (`GREEN`/`YELLOW`/`RED`), rolled-back live functional verification probes, and autonomous AI SRE agent remediation playbooks (`@memberjunction/health`).
+2. **Issue #2970 / PR #2484** and Matt Chriest's July 2026 findings formulated the opt-in "Phone Home" telemetry sharing system, the compile-time schema DSL, the distinction between local per-user Lieb dot-plots and cross-install aggregate dot-plots, and the three-population MJ Central consent topology.
+3. **Issue #2281** (by Craig Adam) specified OpenTelemetry production metrics and distributed tracing via a non-blocking `TelemetryManager.Instance.OnEvent` hook in `@memberjunction/core`, exporting OTLP histograms and counters without vendor lock-in.
+4. **PR #4835** established the pluggable client-side analytics seam (`BaseAnalyticsProvider`), featuring fail-closed `RouteScrubber` mechanics and mask-by-default policies for rendered data.
 
-1. **Process Liveness != MJ Core Readiness:**
-   - `GET /api/healthcheck` (`packages/MJServer/src/coreRoutes.ts`) returns a static `200 { status: 'ok' }`. It proves the Node process is listening, not that the database connection pool is healthy, metadata is synchronized, Skyway/Flyway migrations match the running code version, background queues/schedulers are ticking, or AI/embedding providers are reachable.
-2. **No Per-Open-App Health Contract:**
-   - `GET /api/health/extensions` (`packages/MJServer/src/coreRoutes.ts`) only invokes `BaseServerExtension.HealthCheck()` and returns an unstructured boolean `{ Healthy: boolean, Name: string, Details?: Record<string, unknown> }`.
-   - Open Apps declared via `mj-app.json` (`packages/OpenApp/Engine/manifest.reference.jsonc`) have no contract for reporting schema parity, required seed records, background pipeline lag (e.g., `ContentUploadIngestor` or digest schedulers), or version drift between the database schema and installed npm packages.
-3. **No Live Functional Verification Probes or Agent Remediation Playbooks:**
-   - Neither MJ Core nor Open Apps ship **live functional smoke tests** that can be executed automatically after `mj app install` / `mj app upgrade` (or periodically by MJC) to verify that core workflows actually work end-to-end.
-   - More importantly, when a check degrades or fails, there is **no standardized domain of `GREEN` / `YELLOW` / `RED` signals paired with deterministic remediation instructions and escalation boundaries** that an MJC SRE Agent can act upon autonomously and use to escalate to human engineers when needed.
+This document unifies all four initiatives into a single coherent architecture: **MJ Telemetry & Health Probes**. It bridges passive operational health checks, active transactional live probes, server-side OpenTelemetry performance metrics, client-side scrubbed interaction taps, and opt-in cross-install sharing under one rigorous umbrella.
 
-### Architectural Thesis
-**Health signals, live functional verification probes, and agent remediation playbooks must be first-class MJ Core Infrastructure (`@memberjunction/health` + `mj-app.json`)** so that:
-- MJ Core ships a canonical catalog of platform health signals and live verification probes.
-- Every Open App ships its own domain-specific health signals, post-upgrade live smoke tests, and agent remediation instructions inside its own repository alongside its migrations and code.
-- MJ Central (MJC) and its SRE agents consume a single, uniform `GREEN` / `YELLOW` / `RED` signal contract across every instance and every installed Open App.
+```mermaid
+flowchart TD
+    subgraph S1["PR #6420: Health & Probes"]
+        P1["Health Signals (GREEN/YELLOW/RED)"]
+        P2["Transactional Live Probes"]
+        P3["Agent Remediation Playbooks"]
+        P4["InstallOrchestrator Rollback Gate"]
+    end
+
+    subgraph S2["Issue #2281: OpenTelemetry"]
+        O1["TelemetryManager.OnEvent() Hook"]
+        O2["@memberjunction/server-telemetry"]
+        O3["Metrics-First Histograms & Counters"]
+        O4["Standard OTLP Exporters"]
+    end
+
+    subgraph S3["PR #4835: Client Analytics Seam"]
+        C1["RouteScrubber (Strip Record IDs & PII)"]
+        C2["Mask-by-Default Rendered Data Policy"]
+        C3["Semantic UI Interaction Taps"]
+        C4["Pluggable BaseAnalyticsProvider"]
+    end
+
+    subgraph S4["Issue #2970: Opt-In Sharing"]
+        T1["Compile-Time TelemetrySchema DSL"]
+        T2["CI Static Allowlist Gate Test"]
+        T3["PreviewNextPackage & Local Audit Log"]
+        T4["MJC 3-Population Consent Topology"]
+    end
+
+    S1 --> UNIFIED["Unified Architecture: MJ Telemetry & Health Probes"]
+    S2 --> UNIFIED
+    S3 --> UNIFIED
+    S4 --> UNIFIED
+```
+
+### The Five Core Architectural Principles
+
+1. **Local First, Full Resolution:** The instance owner has absolute ownership of all telemetry. Full-resolution event logs, latencies, traces, health probe histories, and per-user activity dot-plots live inside the local database or customer-designated OpenTelemetry collector. Retention, scrubbing, and rollups are fully governed by local admin configuration.
+2. **Off by Default Outside MJ Central (Explicit Opt-In):** For all self-hosted and independent instances, external sharing is completely disabled (`Tier 0: Off`) by default. Telemetry packages are never emitted unless an authorized administrator explicitly selects a consent tier.
+3. **No PII, No Content — Enforced by Architecture, Not Policy:** The system provides cryptographic and structural guarantees against data leakage. The `TelemetrySchema` DSL completely lacks a generic `string` shape, lacks a raw `timestamp` type, and lacks a generic `uuid` type. Prompt text, completions, user IDs, conversation IDs, customer record primary keys, and search terms cannot exist in a shareable payload.
+4. **Radical Transparency:** The administrator retains total visibility. Every field that can ever leave the machine is declared in published schema files and inspectable via the auto-generated in-app Schema Viewer. The `PreviewNextPackage()` facility renders the exact JSON payload before any bytes are transmitted, and an append-only local `TelemetryAuditLog` records every dispatch.
+5. **Open and Portable on OpenTelemetry:** The platform builds directly on CNCF OpenTelemetry standards. Local and exported metrics use OTLP (HTTP/protobuf or gRPC). The platform avoids proprietary monitoring lock-in, integrating seamlessly with Azure Monitor, AWS CloudWatch, Datadog, Grafana, and Jaeger.
 
 ---
 
-## 2. Three-Layer Verification Model
+## 2. Architecture Overview: Three Horizontal Tiers
+
+The architecture organizes data generation, validation, and transport into three horizontal tiers:
 
 ```mermaid
 flowchart TB
-    subgraph L1["Layer 1: MJ Core Platform Signals (MJ.CORE.*)"]
-        C1["DB Connectivity, Pool Saturation & Dialect Parity (SQL Server / Postgres)"]
-        C2["Core Schema Migration Watermark vs. @memberjunction/core Version"]
-        C3["Metadata Cache Freshness & Entity/Action ClassFactory Registration"]
-        C4["MJQueue / WorkQueue / Scheduling Engine Heartbeat & Dead-Letter Depth"]
-        C5["AI Model & Vector/Embedding Provider Reachability"]
-        C6["Auth Provider Catalog & MagicLink / JWKS Signing Readiness"]
+    subgraph Tier1["Tier 1: Local Layer & Local Store (Full Resolution)"]
+        direction TB
+        subgraph Producers["Telemetry Producers"]
+            P_HP["Health Probes<br/>(MJ.CORE.*, OPENAPP.*, LIVE.*)"]
+            P_SRV["Server Telemetry<br/>(RunView, RunQuery, AI, Engine, Cache)"]
+            P_UI["Client Semantic UI Taps<br/>(MJButton, FormField, ErrorHandler)"]
+        end
+
+        subgraph CoreBus["In-Process Backbone"]
+            TM["TelemetryManager.Instance.OnEvent()<br/>(@memberjunction/core)"]
+            HE["MJHealthEngine<br/>(@memberjunction/health)"]
+            RS["RouteScrubber<br/>(Redacts :recordId & :searchInput)"]
+        end
+
+        subgraph LocalStore["Local Data & Internal Sinks"]
+            OTEL_LOC["@memberjunction/server-telemetry<br/>(OTEL MeterProvider & TracerProvider)"]
+            DB_LOC["Local System Tables<br/>(HealthSignals, ErrorLogs, Lieb Dot-Plots)"]
+            CLI_TOOL["Local Operator Tools<br/>(mj app health, mj doctor --live)"]
+        end
+
+        P_HP --> HE
+        P_SRV --> TM
+        P_UI --> RS --> TM
+        HE --> TM
+        TM --> OTEL_LOC
+        TM --> DB_LOC
+        HE --> CLI_TOOL
     end
 
-    subgraph L2["Layer 2: Installed Open App Signals (OPENAPP.<APP>.*)"]
-        A1["Manifest vs. Installed Package vs. DB Schema Version Parity"]
-        A2["Required Database Objects (Views, TVFs, Stored Procs/Functions, Seed Rows)"]
-        A3["App-Specific Pipeline & Queue Health (e.g. ContentUploadIngestor, Digest Lag)"]
-        A4["Dependency Graph Health (All Upstream Open App Dependencies Active & Green)"]
+    subgraph AirLock["Air-Lock Boundary (Consent & Verification Gate)"]
+        DSL_CHECK["1. Compile-Time TelemetrySchema DSL (No string/uuid/timestamp)"]
+        CI_GATE["2. CI Static Allowlist Gate (Fails build on unsafe fields)"]
+        CR_GATE["3. Consent Resolver (Tier 0: Off -> Tier 1: Health -> Tier 2: Agg -> Tier 3: Events)"]
+        ZOD_GATE["4. Runtime Zod Schema Validator & Packager"]
+        PREVIEW["5. PreviewNextPackage() & TelemetryAuditLog"]
     end
 
-    subgraph L3["Layer 3: Active Live Verification Probes (LIVE.<CORE|APP>.*)"]
-        T1["Savepoint / Rolled-Back Transactional Smoke Tests"]
-        T2["Permission & RLS Enforcement Verification (e.g. fnCollaborationAccess)"]
-        T3["Scoped Search & Content Pipeline End-to-End Probe"]
-        T4["Post-Install / Post-Upgrade Gate in InstallOrchestrator"]
+    subgraph Tier2["Tier 2: Consent-Gated Share Layer"]
+        PACKAGER["ShareLayerPackager<br/>(Time-Bucketed Rollups & Fresh Ephemeral EventIDs)"]
+        OUT_QUEUE["__mj.TelemetryOutboundQueue<br/>(Idempotent Retry & Dead-Letter Buffer)"]
     end
 
-    L1 --> Engine["@memberjunction/health (MJHealthEngine)"]
-    L2 --> Engine
-    L3 --> Engine
-    Engine --> MJC["MJ Central (MJC) Fleet Monitor & SRE Agent"]
+    subgraph Tier3["Tier 3: Configurable Sinks (BaseTelemetrySink)"]
+        SINK_FED["Federated MJ Sink<br/>(Parent-Child Peer Sync #6021/#6502)"]
+        SINK_MJC["MJ Central Fleet Sink<br/>(MJ Care & Proactive SRE Remediation)"]
+        SINK_OSS["Blue Cypress Product Sink<br/>(telemetry.memberjunction.org)"]
+        SINK_OTLP["Generic OTLP Exporter<br/>(Azure Monitor, CloudWatch, Datadog, Grafana)"]
+        SINK_PRIV["Deployment Analytics Adapters<br/>(Customer's PostHog/Hotjar Estate)"]
+    end
+
+    Tier1 --> AirLock
+    AirLock --> Tier2
+    PACKAGER --> OUT_QUEUE
+    OUT_QUEUE --> SINK_FED
+    OUT_QUEUE --> SINK_MJC
+    OUT_QUEUE --> SINK_OSS
+    OTEL_LOC -.-> SINK_OTLP
+    RS -.-> SINK_PRIV
 ```
+
+1. **Tier 1: Local Layer & Local Store:** Real-time event producers emit structured telemetry into `@memberjunction/core` (`TelemetryManager.Instance.OnEvent`) and `@memberjunction/health` (`MJHealthEngine`). Data is retained in full resolution within local system tables and exported to customer-managed OpenTelemetry collectors. Per-user Lieb dot-plots and operational diagnostics run locally and never leave the instance boundary.
+2. **The Air-Lock Boundary:** Telemetry cannot transition from local storage to outbound transmission without passing through a five-stage verification pipeline: (1) compile-time DSL constraints, (2) static CI build-gate tests, (3) database-backed consent verification, (4) runtime Zod structural schema validation, and (5) dry-run previewing and local audit log recording.
+3. **Tier 2: Consent-Gated Share Layer:** Encapsulates aggregation, watermarking (`__mj.TelemetryWatermark`), outbound spooling (`__mj.TelemetryOutboundQueue`), and ephemeral anonymization (replacing local entity run IDs with freshly minted payload `EventID`s).
+4. **Tier 3: Configurable Sinks:** Pluggable destinations subclassing `BaseTelemetrySink` receive formatted, verified packages according to their configured consent tiers and delivery cadences.
 
 ---
 
-## 3. The Defined Domain of `GREEN` / `YELLOW` / `RED` Signals & Agent Playbooks
+## 3. Local Layer Part A — Three-Layer Health Signals, Rolled-Back Live Probes & Agent Remediation Playbooks (`@memberjunction/health`)
 
-Every health check or live test in MJ evaluates to one or more **registered signals** from a deterministic catalog. Unstructured, ad-hoc error strings are never the primary contract; every signal has a stable `SignalCode`, explicit severity criteria, and explicit instructions for both an autonomous agent and a human operator.
+Phase 1 of `@memberjunction/health` establishes a deterministic health and verification model for MJ Core, Open Apps, server extensions, and connectors.
 
-### 3.1 Core TypeScript Contract (`@memberjunction/health`)
+### 3.1 Three-Layer Verification Taxonomy
+
+| Layer | Namespace | Focus Subsystems | Execution Mode |
+|---|---|---|---|
+| **Layer 1: Core Platform** | `MJ.CORE.*` | Database connection pools, schema migration parity, metadata cache freshness, work queue heartbeats, AI/embedding provider latency, runtime event loop lag. | `passive` (runs on every health poll) |
+| **Layer 2: Installed Open Apps** | `OPENAPP.<APP>.*` | Open App manifest vs DB parity, required database objects (views, TVFs, SPs, seed rows), background pipeline processing lag (e.g. `ContentUploadIngestor`, digest queues), upstream dependency graph health. | `passive` (runs on every health poll) |
+| **Layer 3: Live Verification** | `LIVE.<CORE\|APP>.*` | Active functional smoke tests exercising synthetic CRUD, RLS enforcement (`fnCollaborationAccess`), vector embeddings, and full workflow round-trips. | `live-test` (executed on install/upgrade gates and scheduled SRE verification) |
+
+### 3.2 The `GREEN` / `YELLOW` / `RED` Domain & Agent Playbook Contracts
+
+Ad-hoc, unstructured error strings are prohibited as primary health signals. Every signal evaluates to a strict tri-state severity:
 
 ```typescript
+// packages/Health/src/types.ts
+
 export type HealthStatus = 'GREEN' | 'YELLOW' | 'RED';
-
 export type HealthLayer = 'core' | 'open-app' | 'server-extension' | 'connector' | 'live-test';
-
 export type ProbeExecutionMode = 'passive' | 'live-test';
 
-/**
- * Declarative metadata for a known signal in the MJ Core or Open App signal catalog.
- * Can be declared in `mj-app.json` and/or registered in code on `BaseHealthProbe`.
- */
-export interface HealthSignalDefinition {
-    /**
-     * Globally unique, dot-namespaced signal code.
-     * Examples:
-     * - 'MJ.CORE.DB.POOL_SATURATION'
-     * - 'MJ.OPENAPP.SCHEMA_VERSION_PARITY'
-     * - 'BIZAPPS.COLLAB.ACCESS_TVF_PARITY'
-     * - 'BIZAPPS.COMMUNITY.DIGEST_QUEUE_LAG'
-     */
-    Code: string;
-
-    /** Human-readable title for dashboards and alerts. */
-    Title: string;
-
-    /** Architectural layer this signal belongs to. */
-    Layer: HealthLayer;
-
-    /** Owning Open App name (e.g., 'mj-bizapps-collaboration') or '__mj' for MJ Core. */
-    OwnerApp: string;
-
-    /** Whether this signal is evaluated during fast passive polling or active live testing. */
-    Mode: ProbeExecutionMode;
-
-    /** Description of what invariant or subsystem this signal verifies. */
-    Description: string;
-
-    /**
-     * Deterministic playbook for an autonomous SRE Agent when the signal is YELLOW (Degraded / Warning).
-     */
-    YellowPlaybook: AgentRemediationPlaybook;
-
-    /**
-     * Deterministic playbook for an autonomous SRE Agent when the signal is RED (Critical / Failing).
-     */
-    RedPlaybook: AgentRemediationPlaybook;
-}
-
 export interface AgentRemediationPlaybook {
-    /**
-     * Clear, step-by-step instructions written specifically for an AI SRE agent.
-     * Defines what context to inspect, what safe remediation to attempt, and how to verify recovery.
-     */
-    AgentInstructions: string;
-
-    /**
-     * Explicit allow-list of MJ Action names, CLI commands, or MJC fleet operations
-     * the agent is authorized to execute autonomously when this state triggers.
-     */
-    AllowedAutonomousActions: string[];
-
-    /** Maximum number of autonomous remediation attempts before mandatory human escalation. */
-    MaxAutonomousAttempts: number;
-
-    /** Cooldown window in seconds between autonomous attempts. */
-    RetryCooldownSeconds: number;
-
-    /**
-     * Deterministic rule stating when the agent MUST stop and escalate to a human operator,
-     * and what diagnostic artifacts to attach to the escalation ticket/alert.
-     */
-    HumanEscalationCriteria: string;
-
-    /** Recommended runbook steps for the human engineer who receives the escalation. */
-    HumanOperatorRunbook?: string;
+  AgentInstructions: string;
+  AllowedAutonomousActions: string[];
+  MaxAutonomousAttempts: number;
+  RetryCooldownSeconds: number;
+  HumanEscalationCriteria: string;
+  HumanOperatorRunbook?: string;
 }
-```
 
-### 3.2 Runtime Signal Evaluation Result (`HealthSignalEvaluation`)
+export interface HealthSignalDefinition {
+  Code: string;
+  Title: string;
+  Layer: HealthLayer;
+  OwnerApp: string;
+  Mode: ProbeExecutionMode;
+  Description: string;
+  YellowPlaybook: AgentRemediationPlaybook;
+  RedPlaybook: AgentRemediationPlaybook;
+}
 
-When `MJHealthEngine.Instance.Evaluate(options)` runs, each signal produces a self-contained evaluation payload:
-
-```typescript
 export interface HealthSignalEvaluation {
-    /** Signal code from the registered catalog. */
-    Code: string;
-    Title: string;
-    Layer: HealthLayer;
-    OwnerApp: string;
-    Mode: ProbeExecutionMode;
-
-    /** Current evaluated state: GREEN, YELLOW, or RED. */
-    Status: HealthStatus;
-
-    /** Concise 1-sentence summary of the current state (e.g. "Pool utilization at 42% (threshold: 80%)"). */
-    Summary: string;
-
-    /** Structured metrics measured during the check (latencies, counts, versions, watermarks). */
-    ObservedMetrics: Record<string, string | number | boolean | null>;
-
-    /** Thresholds against which ObservedMetrics were compared. */
-    Thresholds?: Record<string, string | number | boolean>;
-
-    /** ISO-8601 timestamp when the probe executed. */
-    EvaluatedAt: string;
-
-    /** Execution duration of this probe in milliseconds. */
-    DurationMs: number;
-
-    /**
-     * Populated automatically from the signal definition when Status is YELLOW or RED,
-     * with template variables (e.g. {{appName}}, {{observedVersion}}) interpolated.
-     */
-    ActivePlaybook?: AgentRemediationPlaybook;
-
-    /** Optional error stack or diagnostic snippet if an exception occurred during evaluation. */
-    DiagnosticError?: string;
+  Code: string;
+  Title: string;
+  Layer: HealthLayer;
+  OwnerApp: string;
+  Mode: ProbeExecutionMode;
+  Status: HealthStatus;
+  Summary: string;
+  ObservedMetrics: Record<string, string | number | boolean | null>;
+  Thresholds?: Record<string, string | number | boolean>;
+  EvaluatedAt: string;
+  DurationMs: number;
+  ActivePlaybook?: AgentRemediationPlaybook;
+  DiagnosticError?: string;
 }
 
 export interface InstanceHealthReport {
-    /** Overall rollup status across all evaluated signals (RED if any RED, YELLOW if any YELLOW, else GREEN). */
-    OverallStatus: HealthStatus;
-    MJVersion: string;
-    DatabasePlatform: 'sqlserver' | 'postgresql';
-    EvaluatedAt: string;
-    TotalDurationMs: number;
-    Mode: ProbeExecutionMode;
-    SummaryCounts: {
-        Green: number;
-        Yellow: number;
-        Red: number;
-    };
-    Signals: HealthSignalEvaluation[];
+  OverallStatus: HealthStatus;
+  MJVersion: string;
+  DatabasePlatform: 'sqlserver' | 'postgresql';
+  EvaluatedAt: string;
+  TotalDurationMs: number;
+  Mode: ProbeExecutionMode;
+  SummaryCounts: {
+    Green: number;
+    Yellow: number;
+    Red: number;
+  };
+  Signals: HealthSignalEvaluation[];
 }
 ```
 
----
+### 3.3 Core Platform Signal Catalog (`MJ.CORE.*`)
 
-## 4. `BaseHealthProbe` & ClassFactory Registration Pattern
+The following canonical signals are built into `@memberjunction/health` and evaluate across both SQL Server and PostgreSQL engines:
 
-Following MJ's standard extensibility architecture, health probes and live verification tests subclass `BaseHealthProbe` and register via `@RegisterClass(BaseHealthProbe, '...')`.
+| Signal Code | Mode | `GREEN` Invariants | `YELLOW` Remediation Playbook | `RED` Remediation Playbook |
+|---|---|---|---|---|
+| `MJ.CORE.DB.CONNECTIVITY_AND_POOL` | `passive` | `SELECT 1` round-trip < 50ms; connection pool saturation < 75% max capacity. | **Agent:** Query `sys.dm_exec_requests` or `pg_stat_activity` for transactions blocked > 15s. Log top slow queries. Do not restart pool. | **Agent:** Check database instance connectivity. Attempt single connection pool recycle. If unresolved, escalate immediately with connection pool exhaustion diagnostics. |
+| `MJ.CORE.SCHEMA.MIGRATION_PARITY` | `passive` | Applied Skyway/Flyway migration watermark strictly equals the running `@memberjunction/core` package version. | **Agent:** Pending non-breaking migration detected. Inspect migration history table and verify pending scripts. | **Agent:** Checksum mismatch or failed migration detected. Halt traffic; do not run auto-mutations. Escalate to human engineer with schema diff. |
+| `MJ.CORE.METADATA.CACHE_PARITY` | `passive` | In-memory `Metadata.Entities` length matches database `SELECT COUNT(*) FROM __mj.Entity`. | **Agent:** Entity cache drift detected following dynamic DDL or OpenApp install. Dispatch `RefreshOpenAppMetadata` action once and re-verify. | **Agent:** Metadata cache empty or failed reload. Recycle MJServer worker process. If persistent, escalate with entity load error stack. |
+| `MJ.CORE.QUEUE.WORKER_HEARTBEAT` | `passive` | Queue processor heartbeat < 60s old; dead-letter task ratio over last 1 hour < 5%. | **Agent:** Failed tasks between 5% and 15%. Inspect error codes on `MJ: Queue Tasks`. Retry transient network/timeout tasks (`RetryCount < 3`). | **Agent:** Heartbeat expired > 180s or failure rate > 15%. Restart queue worker process. If failures persist with SQL errors, pause queue and alert. |
+| `MJ.CORE.AI.PROVIDER_READINESS` | `passive` | Default LLM and vector embedding model endpoints reachable with valid credentials. | **Agent:** Provider rate-limiting (HTTP 429) or fallback provider active. Shift non-critical agent jobs to secondary model; alert on quota burn. | **Agent:** Primary and fallback providers returning HTTP 401/403/5xx. Check key rotation in MJC vault. Escalate to human operator. |
+| `MJ.CORE.OPENAPP.FLEET_STATUS` | `passive` | All records in `MJ: Open Apps` exhibit `Status = 'Active'` with stable installation checkpoints. | **Agent:** An Open App has remained in `Installing` or `Upgrading` for > 10m. Inspect orchestrator lock; if orphaned, resume upgrade step. | **Agent:** Open App in `Status = 'Error'`. Attempt one checkpoint resume; if failing, trigger snapshot rollback and page on-call SRE. |
+| `MJ.CORE.RUNTIME.EVENT_LOOP_LAG` | `passive` | Node.js libuv event loop latency < 20ms (addressing Issue #5510). | **Agent:** Event loop lag between 20ms and 50ms for > 2m. Profile active GraphQL subscriptions, large JSON payloads, or un-indexed in-memory filters. | **Agent:** Event loop lag > 250ms for > 30s. Process at risk of heartbeat timeouts. Escalate with heap snapshot and active CPU profiles. |
+| `MJ.CORE.LIVE.ENTITY_CRUD_AND_RLS` | `live-test` | Synthetic entity write, read, and RLS evaluation round-trip succeeds in < 500ms. | **Agent:** Transactional round-trip succeeded but exceeded 500ms latency budget. Record performance anomaly. | **Agent:** Synthetic write or permission validation failed with SQL error. Halt post-upgrade promotion and escalate with complete query trace. |
+
+### 3.4 Open App Health Contracts & Reference Probes
+
+Every Open App specifies its health invariants inside its server package. For example, `mj-bizapps-collaboration` and `mj-bizapps-community` register the following reference probes:
+
+- `BIZAPPS.COLLAB.SCHEMA_AND_SEEDS`: Verifies table existence, validates `fnCollaborationAccess` Table-Valued Function (TVF) signature, and confirms required seed records (`SpaceType`: Team, Project, Committee, ClientPortal, Cohort, Community; `SpaceRoleType`).
+- `BIZAPPS.COLLAB.UPLOAD_INGEST_PIPELINE`: Verifies that items uploaded to `SpaceItem` do not linger in `ContentUploadIngestor` chunking or embedding queues for > 30 minutes.
+- `BIZAPPS.COLLAB.LIVE.ACCESS_REACH_PROBE`: In a rolled-back savepoint, generates a synthetic `Space`, assigns a `SpaceMember`, executes `fnCollaborationAccess`, and validates reachability.
+- `BIZAPPS.COMMUNITY.DIGEST_SCHEDULER`: Evaluates scheduled digest generation jobs against expected execution schedules and checks email delivery bounce rates.
+
+### 3.5 Safe Transactional Execution for Live Probes (`WithRolledBackTransaction`)
+
+Live functional verification probes execute real database mutations to guarantee end-to-end viability without leaving orphaned records in production databases. `BaseHealthProbe` implements `WithRolledBackTransaction`:
 
 ```typescript
-import { RegisterClass } from '@memberjunction/global';
-import type { DatabaseProviderBase, IMetadataProvider, UserInfo } from '@memberjunction/core';
-
-export interface HealthProbeContext {
-    DatabaseProvider: DatabaseProviderBase;
-    MetadataProvider: IMetadataProvider;
-    SystemUser: UserInfo;
-    Mode: ProbeExecutionMode;
-    /** Target Open App filter if checking a specific app. */
-    AppFilter?: string;
-    /** Timeout budget in milliseconds for this probe. */
-    TimeoutMs: number;
-}
+// packages/Health/src/BaseHealthProbe.ts
 
 export abstract class BaseHealthProbe {
-    /** Unique probe key matching the @RegisterClass key. */
-    abstract get ProbeKey(): string;
+  public abstract get ProbeKey(): string;
+  public abstract get OwnerApp(): string;
+  public abstract get Mode(): ProbeExecutionMode;
+  public abstract get SignalDefinitions(): readonly HealthSignalDefinition[];
+  public abstract Evaluate(context: HealthProbeContext): Promise<HealthSignalEvaluation[]>;
 
-    /** Owning Open App name (e.g. 'mj-bizapps-collaboration') or '__mj' for MJ Core. */
-    abstract get OwnerApp(): string;
-
-    /** Execution mode ('passive' runs on every poll; 'live-test' runs on install/upgrade/scheduled verification). */
-    abstract get Mode(): ProbeExecutionMode;
-
-    /** Signals emitted by this probe. */
-    abstract get SignalDefinitions(): readonly HealthSignalDefinition[];
-
-    /**
-     * Executes the probe and returns evaluations for its declared signals.
-     * Note: If the probe throws an unhandled error or times out, `MJHealthEngine` catches it
-     * and automatically emits a RED evaluation for the probe's signals with the exception attached.
-     */
-    abstract Evaluate(context: HealthProbeContext): Promise<HealthSignalEvaluation[]>;
+  protected async WithRolledBackTransaction<T>(
+    context: HealthProbeContext,
+    fn: (txProvider: DatabaseProviderBase) => Promise<T>
+  ): Promise<T> {
+    const provider = context.DatabaseProvider;
+    // Joins ambient transaction as savepoint if present, or opens a dedicated transaction
+    const scope = await provider.BeginEntityTransaction();
+    try {
+      return await fn(provider);
+    } finally {
+      try {
+        await scope.Rollback();
+      } catch (rollbackError) {
+        LogError(
+          `BaseHealthProbe.WithRolledBackTransaction (${this.ProbeKey}): rollback failed. ` +
+          `Error: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`
+        );
+      }
+    }
+  }
 }
 ```
 
-### Safe Transactional Execution for `live-test` Probes (`RunInRolledBackSavepoint`)
-A major concern with running "live tests" in production instances is avoiding leftover test data or side effects. `@memberjunction/health` will provide a helper on `BaseHealthProbe`:
-- `protected async WithRolledBackTransaction<T>(context: HealthProbeContext, fn: (txProvider: DatabaseProviderBase) => Promise<T>): Promise<T>`
-- This starts an isolated transaction/savepoint on an isolated `DatabaseProviderBase` (via `HostRuntimeService.CreateIsolatedProvider()`), executes the synthetic smoke test (e.g., creating a test `Space`, adding a `SpaceMember`, evaluating `fnCollaborationAccess`, verifying RLS visibility), asserts the invariants, and **unconditionally rolls back the transaction** before returning the `GREEN`/`YELLOW`/`RED` signal evaluation.
+### 3.6 OpenApp Manifest (`mj-app.json`) & `InstallOrchestrator` Rollback Gate
 
----
-
-## 5. Standard Signal Catalogs
-
-### 5.1 Built-in MJ Core Signals (`__mj`)
-
-| Signal Code | Mode | `GREEN` Criteria | `YELLOW` Criteria & Agent Playbook | `RED` Criteria & Agent Playbook |
-|---|---|---|---|---|
-| `MJ.CORE.DB.CONNECTIVITY_AND_POOL` | `passive` | `SELECT 1` < 50ms; pool active connections < 75% of max. | Latency 50–250ms or pool 75–90%. **Agent:** Inspect long-running queries; log top 5 slow queries; monitor for 3 polls. | DB unreachable, timeout, or pool > 90%. **Agent:** Check DB instance status in MJC; attempt connection pool recycle once; if still RED, escalate immediately to human SRE with pg_stat_activity / dm_exec_requests snapshot. |
-| `MJ.CORE.SCHEMA.MIGRATION_PARITY` | `passive` | Core `__mj` migration history matches running `@memberjunction/core` version with zero failed migrations. | Pending minor/optional migration or drift warning. **Agent:** Inspect `flyway_schema_history` / `skyway_schema_history`. | Failed migration row or major version mismatch between code and DB. **Agent:** Do not auto-mutate core schema; halt traffic and escalate to human operator with migration checksum diff. |
-| `MJ.CORE.METADATA.CACHE_PARITY` | `passive` | `Metadata.Entities.length > 0` and matches `SELECT COUNT(*) FROM __mj.Entity`. | Entity count in memory differs from DB table count (stale cache after DDL/OpenApp install). **Agent:** Run `RefreshOpenAppMetadata` / provider metadata refresh action once and re-evaluate. | `Metadata.Entities` empty or refresh fails twice. **Agent:** Restart MJServer worker container via MJC; escalate if still RED after restart. |
-| `MJ.CORE.QUEUE.WORKER_HEARTBEAT` | `passive` | Active queue processor heartbeat < 60s old; dead-letter / failed tasks in last 1h < 5%. | Failed tasks 5–15% or queue backlog growing for 15m. **Agent:** Inspect failure reasons on `MJ: Queue Tasks`; retry transient timeout tasks (`RetryCount < 3`). | Queue heartbeat stale > 180s or failure rate > 15%. **Agent:** Restart worker process once; if tasks fail with deterministic code/schema errors, pause queue and escalate to human with top error stack. |
-| `MJ.CORE.AI.PROVIDER_READINESS` | `passive` | Default LLM & Embedding model credentials configured and reachable. | Elevated rate-limit (429) or fallback model active. **Agent:** Switch traffic to configured secondary provider/key if available; alert on quota usage. | Primary and fallback AI/Embedding providers failing with 401/403/5xx. **Agent:** Verify secret rotation status in MJC; escalate to human operator. |
-| `MJ.CORE.OPENAPP.FLEET_STATUS` | `passive` | All installed rows in `MJ: Open Apps` have `Status = 'Active'` and `LastCompletedStep` settled. | An Open App is in `Installing` or `Upgrading` for > 10 minutes. **Agent:** Check active installer lock; if orphaned, run `mj app upgrade <name>` to resume from checkpoint. | Any Open App is in `Status = 'Error'` or has unresolved dependencies. **Agent:** Attempt `mj app upgrade <name>` resume once; if it fails again, trigger snapshot restore and escalate to human with `MJ: Open App Install Histories` log. |
-| `MJ.CORE.LIVE.ENTITY_CRUD_AND_RLS` | `live-test` | Synthetic read + metadata permission check + rolled-back write succeeds in < 500ms. | Succeeds but latency > 500ms. **Agent:** Record performance regression metric for MJC trend analysis. | Synthetic CRUD or permission check throws SQL/provider error. **Agent:** Block post-upgrade promotion and escalate with full SQL/stack trace. |
-
-### 5.2 Open App Signal Pattern (Example: `mj-bizapps-collaboration` & `mj-bizapps-community`)
-
-Each Open App ships its own probes in its server package:
-
-| Signal Code | Mode | What It Checks | Agent Playbook Summary (`YELLOW` / `RED`) |
-|---|---|---|---|
-| `BIZAPPS.COLLAB.SCHEMA_AND_SEEDS` | `passive` | Verifies `__mj_BizAppsCollaboration` tables, `fnCollaborationAccess` TVF, and required `SpaceType` (`Team`, `Project`, `Committee`, `ClientPortal`, `Cohort`, `Community`) & `SpaceRoleType` seeds exist and match package version. | **YELLOW:** Missing non-critical seed description -> run `RefreshOpenAppMetadata`. **RED:** `fnCollaborationAccess` missing or broken -> run `mj app upgrade mj-bizapps-collaboration` or roll back; escalate if DDL fails. |
-| `BIZAPPS.COLLAB.UPLOAD_INGEST_PIPELINE` | `passive` | Checks `SpaceItem` uploads pending `ContentUploadIngestor` chunking/embedding for > 30 mins. | **YELLOW:** 1–10 stuck items -> re-trigger `ContentUploadIngestor` for stalled `SpaceItemID`s. **RED:** >10 items failing repeatedly -> inspect embedding provider & `MJ: Content Sources` config; escalate with sample error. |
-| `BIZAPPS.COLLAB.LIVE.ACCESS_REACH_PROBE` | `live-test` | In a rolled-back savepoint, creates a test Space + Member, runs `fnCollaborationAccess`, asserts member has reach and non-member has zero reach. | **RED:** Permission boundary regression! Immediately mark app unhealthy, abort upgrade rollout in MJC, and page security/platform engineer. |
-| `BIZAPPS.COMMUNITY.DIGEST_SCHEDULER` | `passive` | Verifies daily/weekly Personalized Digest scheduled job executed within its expected window and bounce/error rate < 2%. | **YELLOW:** Digest job delayed 15–60m -> re-trigger digest scheduler task. **RED:** Digest job failed or communication provider rejecting sends -> pause digest batch and escalate with provider error log. |
-| `BIZAPPS.COMMUNITY.LIVE.FORUM_THREAD_PROBE` | `live-test` | In a rolled-back savepoint, creates a synthetic `ForumThread` + `ForumPost` inside a test Space, verifies RLS visibility and `EntityRecordDocument` vector chunk preparation. | **RED:** Halt `mj-bizapps-community` upgrade promotion; roll back to previous package snapshot and escalate. |
-
----
-
-## 6. Open App Manifest (`mj-app.json`) & `InstallOrchestrator` Integration
-
-### 6.1 Additive `"health"` Capability Block in `mj-app.json`
-
-We extend `packages/OpenApp/Engine/src/manifest/manifest-schema.ts` and `manifest.reference.jsonc` with an optional, backwards-compatible `"health"` block:
+The OpenApp manifest specification (`packages/OpenApp/Engine/src/manifest/manifest-schema.ts`) includes an optional, backwards-compatible `"health"` block:
 
 ```jsonc
 {
   "manifestVersion": 1,
   "name": "mj-bizapps-collaboration",
-  // ...
   "health": {
-    // Optional: require all 'live-test' probes for this app to return GREEN (or YELLOW)
-    // during `mj app install` and `mj app upgrade` before marking the app 'Active'.
-    // Default: true when probes are registered for this app.
     "verifyOnInstall": true,
     "verifyOnUpgrade": true,
-    // Action when a live-test probe returns RED during upgrade:
-    // 'rollback' (restore file snapshot & set Status='Error') | 'mark-error' | 'warn-only'
-    "onUpgradeProbeFailure": "rollback",
+    "onUpgradeProbeFailure": "rollback", // 'rollback' | 'mark-error' | 'warn-only'
     "timeoutMs": 15000,
-    // Declarative signal catalog so MJ Central (MJC) knows all possible signals,
-    // severities, and agent playbooks for this app even before runtime evaluation:
     "signals": [
       {
         "code": "BIZAPPS.COLLAB.SCHEMA_AND_SEEDS",
-        "title": "Collaboration Schema, fnCollaborationAccess & Seed Parity",
+        "title": "Collaboration Schema & TVF Parity",
         "mode": "passive",
-        "description": "Verifies __mj_BizAppsCollaboration schema objects and required SpaceType/SpaceRoleType seed rows.",
+        "description": "Verifies collaboration tables, fnCollaborationAccess, and seed rows.",
         "yellowPlaybook": {
-          "agentInstructions": "Run RefreshOpenAppMetadata and re-evaluate in 60 seconds.",
+          "agentInstructions": "Execute RefreshOpenAppMetadata and re-evaluate.",
           "allowedAutonomousActions": ["RefreshOpenAppMetadata"],
           "maxAutonomousAttempts": 2,
           "retryCooldownSeconds": 60,
-          "humanEscalationCriteria": "Escalate if status remains YELLOW for > 15 minutes after metadata refresh."
+          "humanEscalationCriteria": "Escalate if state remains YELLOW after metadata refresh."
         },
         "redPlaybook": {
-          "agentInstructions": "Attempt `mj app upgrade mj-bizapps-collaboration` once to resume any incomplete migration. If still RED, do not route traffic and escalate immediately.",
+          "agentInstructions": "Attempt `mj app upgrade mj-bizapps-collaboration` once to resume migration. If still RED, do not route traffic and escalate.",
           "allowedAutonomousActions": ["ResumeOpenAppUpgrade"],
           "maxAutonomousAttempts": 1,
           "retryCooldownSeconds": 120,
-          "humanEscalationCriteria": "Escalate immediately if resume fails or fnCollaborationAccess is invalid."
+          "humanEscalationCriteria": "Escalate immediately if migration resume fails."
         }
       }
     ]
@@ -339,77 +321,596 @@ We extend `packages/OpenApp/Engine/src/manifest/manifest-schema.ts` and `manifes
 }
 ```
 
-### 6.2 New `HealthVerified` Checkpoint in `InstallOrchestrator`
+In `packages/OpenApp/Engine/src/install/install-orchestrator.ts`, the installation and upgrade lifecycles integrate the `'HealthVerified'` checkpoint:
 
-In `packages/OpenApp/Engine/src/install/install-orchestrator.ts`:
-- Extend `INSTALL_STEP_ORDER` and `UPGRADE_STEP_ORDER`:
-  ```typescript
-  const INSTALL_STEP_ORDER: InstallStep[] = [
-    'RecordCreated',
-    'PackagesInstalled',
-    'ConfigUpdated',
-    'AngularExcludesUpdated',
-    'Finalized',
-    'HooksRun',
-    'HealthVerified', // <-- NEW: runs passive + live-test probes for the app
-  ];
+```typescript
+const INSTALL_STEP_ORDER: InstallStep[] = [
+  'RecordCreated',
+  'PackagesInstalled',
+  'ConfigUpdated',
+  'AngularExcludesUpdated',
+  'Finalized',
+  'HooksRun',
+  'HealthVerified', // Evaluates passive + live probes before activating
+];
 
-  const UPGRADE_STEP_ORDER: UpgradeStep[] = [
-    'MigrationsApplied',
-    'PackagesInstalled',
-    'ConfigUpdated',
-    'AngularExcludesUpdated',
-    'RecordUpdated',
-    'HooksRun',
-    'DependenciesReplaced',
-    'HealthVerified', // <-- NEW: runs passive + live-test probes; triggers file-snapshot rollback if RED
-  ];
-  ```
-- During `UpgradeApp`, if `HealthVerified` evaluates any signal for the upgraded app as `RED` and `onUpgradeProbeFailure === 'rollback'`, `InstallOrchestrator` automatically restores the pre-upgrade file snapshot (`RestoreFileSnapshot`), records the structured `HealthSignalEvaluation[]` JSON in `MJ: Open App Install Histories.ErrorMessage`, and leaves the app in a known state so MJC halts fleet rollout before affecting other customer instances.
+const UPGRADE_STEP_ORDER: UpgradeStep[] = [
+  'MigrationsApplied',
+  'PackagesInstalled',
+  'ConfigUpdated',
+  'AngularExcludesUpdated',
+  'RecordUpdated',
+  'HooksRun',
+  'DependenciesReplaced',
+  'HealthVerified', // Evaluates live probes; triggers automated snapshot rollback on RED
+];
+```
 
-### 6.3 CLI Commands (`@memberjunction/cli`)
-
-Add `mj app health` (and `mj doctor --live`) to `packages/MJCLI`:
-- `mj app health` — Evaluates all `passive` MJ Core + installed Open App health signals and prints a color-coded `GREEN` / `YELLOW` / `RED` table (or `--json` for MJC / CI).
-- `mj app health mj-bizapps-collaboration --mode live-test` — Runs both passive and rolled-back live functional verification probes for `mj-bizapps-collaboration`.
+If an upgrade evaluates any signal as `RED` and `onUpgradeProbeFailure === 'rollback'`, the orchestrator invokes `RestoreFileSnapshot`, restores database state, logs the structured `HealthSignalEvaluation[]` into `MJ: Open App Install Histories`, and leaves the application in its prior stable state.
 
 ---
 
-## 7. MJServer HTTP Endpoints & GraphQL Surface
+## 4. Local Layer Part B — Unified OpenTelemetry Spine & Server Instrumentation (Integrating Issue #2281)
 
-### 7.1 HTTP Endpoints (`packages/MJServer/src/coreRoutes.ts`)
+Issue #2281 provides enterprise production telemetry using native CNCF OpenTelemetry standards. Rather than duplicating existing instrumentation in `@memberjunction/core`, the architecture bridges in-process events to OpenTelemetry meters and tracers.
 
-1. **`GET /api/healthcheck` (Unchanged — Unauthenticated Liveness Probe):**
-   - Kept ultra-lightweight (`200 { status: 'ok' }`) for ALB / Kubernetes container liveness probes that fire every 5 seconds without credentials.
-2. **`GET /api/health/signals` (Authenticated / Scoped MJC Telemetry Endpoint):**
-   - Query params: `?mode=passive` (default), `?layer=all|core|open-app`, `?app=<appName>`.
-   - Protected by either a valid system/admin JWT or a scoped MJC API Key (`health:read`).
-   - Returns `InstanceHealthReport` JSON (`HTTP 200` for `GREEN`/`YELLOW`, `HTTP 503` if `OverallStatus === 'RED'` and `?strictStatus=true`).
-3. **`POST /api/health/signals/verify` (Authenticated Live-Test Execution Endpoint):**
-   - Body: `{ apps?: string[], includeCore?: boolean, timeoutMs?: number }`.
-   - Protected by `sysadmin` role or scoped MJC API Key (`health:verify`).
-   - Executes `mode: 'live-test'` probes (using rolled-back savepoints) and returns the complete `InstanceHealthReport`.
-4. **Backwards-Compatible Bridge for `BaseServerExtension.HealthCheck()`:**
-   - Existing `BaseServerExtension` implementations are automatically wrapped by `ServerExtensionHealthProbeAdapter` so `/api/health/signals` includes all loaded server extensions alongside MJ Core and Open Apps.
+### 4.1 The `TelemetryManager.Instance.OnEvent` Hook
+
+`packages/MJCore/src/generic/telemetryManager.ts` introduces an in-process synchronous event broadcast:
+
+```typescript
+// packages/MJCore/src/generic/telemetryManager.ts
+
+export type TelemetryEventCallback = (
+  event: TelemetryEvent,
+  type: 'start' | 'end'
+) => void;
+
+export class TelemetryManager {
+  private _eventCallbacks: TelemetryEventCallback[] = [];
+
+  /**
+   * Registers a callback invoked whenever telemetry events start or complete.
+   * Callbacks are executed synchronously. Exceptions are caught and swallowed
+   * so an observer error can never disrupt application execution.
+   */
+  public OnEvent(callback: TelemetryEventCallback): () => void {
+    this._eventCallbacks.push(callback);
+    return () => {
+      const idx = this._eventCallbacks.indexOf(callback);
+      if (idx >= 0) this._eventCallbacks.splice(idx, 1);
+    };
+  }
+
+  private notifyCallbacks(event: TelemetryEvent, type: 'start' | 'end'): void {
+    for (const cb of this._eventCallbacks) {
+      try {
+        cb(event, type);
+      } catch {
+        // Swallowed: observers must never break producers
+      }
+    }
+  }
+}
+```
+
+### 4.2 The `@memberjunction/server-telemetry` Package
+
+A dedicated package (`packages/ServerTelemetry`) provides the server-side OpenTelemetry bridge:
+
+1. **`bootstrap.ts` (ESM `--import` entrypoint):**
+   - Discovered via `node --import @memberjunction/server-telemetry/bootstrap`.
+   - Reads `mj.config.cjs` via cosmiconfig.
+   - Evaluates standard OTel environment variables (`OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, `OTEL_TRACES_SAMPLER_ARG`), which override configuration file values.
+   - Configures `MeterProvider`, `PeriodicExportingMetricReader`, and optionally `TracerProvider`.
+   - Caches initialized providers in `GetGlobalObjectStore()`.
+2. **`OTELMiddleware` (`BaseServerMiddleware` implementation):**
+   - Subclasses `BaseServerMiddleware` and registers via `@RegisterClass(BaseServerMiddleware, 'OpenTelemetry')`.
+   - Subscribes to `TelemetryManager.Instance.OnEvent()`.
+   - Implements `GetPreAuthMiddleware()` and `GetPostRouteMiddleware()` to capture HTTP request latencies.
+   - Provides Apollo Server plugins to record GraphQL operation execution latencies.
+
+### 4.3 Standard OpenTelemetry Metrics Mapping
+
+| Metric Name | Type | Key Dimensions / Attributes | Source Event |
+|---|---|---|---|
+| `mj.runview.duration` | Histogram | `entity`, `cached`, `row_count_bucket` | `RunView` completion |
+| `mj.runquery.duration` | Histogram | `query_name`, `cached` | `RunQuery` completion |
+| `mj.ai.duration` | Histogram | `model`, `vendor`, `operation` (chat/embedding) | AI operation completion |
+| `mj.ai.tokens` | Counter | `model`, `direction` (input/output) | AI token count |
+| `mj.engine.load.duration` | Histogram | `engine_class`, `cache_hit` | Engine initialization |
+| `mj.cache.operations` | Counter | `cache_type`, `status` (hit/miss/evict) | Metadata & query caching |
+| `mj.http.request.duration` | Histogram | `method`, `route`, `status_code` | Server HTTP middleware |
+| `mj.graphql.operations` | Histogram | `operation_name`, `operation_type` | Apollo Server plugin |
+| `mj.errors` | Counter | `category`, `error_class`, `operation` | EndEvent with error |
+| `mj.health.probe.status` | Gauge | `signal_code`, `layer`, `owner_app` (0=RED, 1=YELLOW, 2=GREEN) | `MJHealthEngine` evaluation |
+| `mj.health.probe.duration` | Histogram | `probe_key`, `mode` | `MJHealthEngine` evaluation |
+
+### 4.4 Backward Compatibility & Graceful Degradation
+
+Because `MJAPI` is a customizable host application template, `@memberjunction/server-telemetry` degrades gracefully across all deployment configurations:
+
+| Host Application Scenario | Behavior |
+|---|---|
+| **Package installed + config present + `--import` bootstrap flag** | Full metrics and traces exported via OTLP; pre-execution hooks active. |
+| **Package installed + config present, without `--import` flag** | `OTELMiddleware` detects missing global providers during `Initialize()` and instantiates providers lazily from config. |
+| **Package installed, no `openTelemetry` section in `mj.config.cjs`** | Bootstrap and middleware detect missing configuration and become complete no-ops. |
+| **Package not installed in `MJAPI`** | Core engine functions normally; `TelemetryManager` events have no OTEL observer; zero runtime overhead. |
+| **Legacy `MJAPI` running older code** | Continues functioning without breakage. |
+
+### 4.5 Configuration Schema (`mj.config.cjs`)
+
+```typescript
+// packages/MJServer/src/config.ts
+
+const openTelemetrySchema = z.object({
+  enabled: zodBooleanWithTransforms().default(false),
+  serviceName: z.string().default('mjapi'),
+  exporterEndpoint: z.string().optional(), // Defaults to http://localhost:4318
+  exporterProtocol: z.enum(['http/protobuf', 'http/json', 'grpc']).default('http/protobuf'),
+  metrics: z.object({
+    enabled: zodBooleanWithTransforms().default(true),
+    intervalMs: z.number().default(60000),
+  }).default({}),
+  traces: z.object({
+    enabled: zodBooleanWithTransforms().default(false),
+    sampleRate: z.number().min(0).max(1).default(1.0),
+  }).default({}),
+}).optional();
+```
+
+### 4.6 Local Per-User Analytics vs. Cross-Install Telemetry (The Lieb Dot-Plot Architecture)
+
+Matt Chriest's review of David Lieb's YC lecture on dot-plots identified a critical architectural distinction:
+- **David Lieb's Dot-Plot Model:** A grid where each horizontal row represents an **individual user**, each column represents a calendar day, and a cell dot indicates that the user executed a core value action. This exposes user churn, adoption cohorts, and power-user patterns.
+- **The Privacy Invariant:** Shareable cross-install telemetry strictly excludes `User` identifiers. Cross-install payloads can never construct per-user dot-plots.
+- **The Local Resolution:** MemberJunction delivers Lieb-style per-user dot-plots as an **in-situ Explorer feature** running entirely within the customer's deployment boundary. Because the local database maintains full-resolution run histories (`MJ: AI Agent Runs`, `MJ: Audit Logs`), the local administrative console renders per-user engagement matrices without a single user identifier or record ID leaving the deployment.
 
 ---
 
-## 8. Phased Implementation Plan
+## 5. Local Layer Part C — Client UI Surface Telemetry, `RouteScrubber` & Optional Deployment Analytics Seam (Integrating PR #4835)
 
-| Phase | Scope | Key Files & Deliverables |
+PR #4835 addresses client-side telemetry inside `MJExplorer`. Standard commercial analytics scripts (Hotjar, PostHog, Google Analytics) paste into `index.html` and inadvertently leak PII in URL paths, record primary keys, and unmasked text.
+
+### 5.1 The `RouteScrubber` Specification
+
+In MemberJunction, URLs contain database IDs and search terms (e.g., `resource/record/:entityName/:recordId` and `resource/search/:searchInput`). `RouteScrubber` sanitizes navigation paths before telemetry processing:
+
+```typescript
+// packages/Angular/Generic/analytics/src/RouteScrubber.ts
+
+export interface ScrubbedRouteResult {
+  RouteTemplate: string;
+  ScrubbedPath: string;
+  ResourceType?: string;
+  EntityName?: string;
+  ApplicationName?: string;
+}
+
+export class RouteScrubber {
+  private static readonly KNOWN_ROUTES = [
+    { pattern: /^app\/([^/]+)\/record\/([^/]+)\/([^/]+)/, template: 'app/:appName/record/:entityName/:recordId', scrubbed: (m: RegExpMatchArray) => `app/${m[1]}/record/${m[2]}/_id_` },
+    { pattern: /^resource\/record\/([^/]+)\/([^/]+)/, template: 'resource/record/:entityName/:recordId', scrubbed: (m: RegExpMatchArray) => `resource/record/${m[1]}/_id_` },
+    { pattern: /^resource\/search\/(.+)/, template: 'resource/search/:searchInput', scrubbed: () => 'resource/search/[REDACTED]' },
+    { pattern: /^resource\/view\/([^/]+)/, template: 'resource/view/:viewId', scrubbed: () => 'resource/view/_id_' },
+    { pattern: /^resource\/dashboard\/([^/]+)/, template: 'resource/dashboard/:dashboardId', scrubbed: () => 'resource/dashboard/_id_' },
+  ];
+
+  public static Scrub(rawUrl: string): ScrubbedRouteResult {
+    const cleanUrl = rawUrl.split('?')[0].replace(/^\//, '');
+    for (const route of this.KNOWN_ROUTES) {
+      const match = cleanUrl.match(route.pattern);
+      if (match) {
+        return {
+          RouteTemplate: route.template,
+          ScrubbedPath: '/' + route.scrubbed(match),
+        };
+      }
+    }
+    // Fail closed on unrecognized routes
+    return {
+      RouteTemplate: 'unknown',
+      ScrubbedPath: '/unknown',
+    };
+  }
+}
+```
+
+1. **Record IDs are tokenized:** `:recordId` becomes `_id_`. Record primary keys are never hashed (a hash remains a stable correlate).
+2. **Search terms are fully redacted:** `:searchInput` is replaced with `[REDACTED]`. (Furthermore, search terms should be migrated to transient state rather than URL path parameters).
+3. **Query parameters are stripped:** All query string parameters are removed, preserving only an allowlist of non-PII system flags.
+4. **Fails closed:** Any unmatched path resolves to `RouteTemplate: 'unknown'` and `ScrubbedPath: '/unknown'`.
+
+### 5.2 Mask-by-Default Policy for Rendered Data
+
+Commercial tools mask HTML `<input>` elements but capture raw DOM text nodes. In MemberJunction, read-only entity fields, detail forms, cards, and grid rows render sensitive business data directly in DOM text nodes.
+- **Framework-Level Masking:** Standard components (`mj-form-field`, `mj-entity-data-grid`, `mj-entity-cards`) apply vendor-neutral masking attributes (`data-mj-mask="true"`) to all record values.
+- **Adapter Translation:** Pluggable analytics adapters map `data-mj-mask` to vendor-specific suppression attributes (e.g., `data-hj-suppress` for Hotjar or `ph-no-capture` for PostHog).
+
+### 5.3 Semantic UI Interaction Taps
+
+Capturing clicks via raw DOM CSS paths (`div.k-grid > tbody > tr > button`) produces brittle analytics. MemberJunction instruments semantic choke points:
+
+```mermaid
+flowchart LR
+    ROUTE["Angular Router (NavigationEnd)"] -->|ScrubbedPath| SEAM["Analytics Engine"]
+    BTN["MJButtonDirective / mjClickable"] -->|Accessible Label| SEAM
+    FORM["MjFormFieldComponent"] -->|EntityName + FieldName (No Values)| SEAM
+    ERR["Global Angular ErrorHandler"] -->|Error Class + Route| SEAM
+    SESS["MJGlobal Event Bus"] -->|Login / Logout State| SEAM
+```
+
+- **Buttons & Clickables (`MJButtonDirective`, `mjClickable`):** Emits `UI.Button.Clicked` containing the computed accessible label (e.g., `"Save"`, `"Approve Invoice"`), variant, and scrubbed route.
+- **Form Fields (`MjFormFieldComponent`):** Emits `Form.Field.Focused` and `Form.Field.ValidationFailed` with `EntityName` and `FieldName`. **Field values are strictly excluded.**
+- **Global Error Handling:** Implements an Angular `ErrorHandler` logging uncaught client exceptions to `MJ: Error Logs` and dispatching `App.Error` events with sanitized stacks.
+
+### 5.4 Pluggable Deployment Analytics Seam (`BaseAnalyticsProvider`)
+
+Customer deployments wishing to run product analytics (Hotjar, PostHog, Matomo) in their own environments do so via the `BaseAnalyticsProvider` seam:
+- MJ Core distributes the abstract provider contract and no-op default implementation (`NullAnalyticsProvider`).
+- No commercial vendor SDKs are bundled into core MJ packages.
+- Analytics data flows directly from the customer's browser to the customer's private analytics account. No vendor data flows to MemberJunction.
+
+---
+
+## 6. Share Layer — Consent Tiers, Compile-Time `TelemetrySchema` DSL, CI Gate, Preview & Audit (Integrating Issue #2970)
+
+The Share Layer governs the extraction and transmission of anonymized data to external endpoints.
+
+### 6.1 Explicit Consent Tiers
+
+Sharing is governed by four progressive consent tiers:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Tier0: Default Initial State
+    Tier0: Tier 0 - Off (Zero Data Leaves the Deployment)
+    Tier1: Tier 1 - HealthOnly (Signals, Watermarks, Versions, DB Platform)
+    Tier2: Tier 2 - HealthAndAggregatedUsage (Tier 1 + Rollups, Latencies, Tokens, Ratings)
+    Tier3: Tier 3 - HealthAndMetadataEvents (Tier 2 + Un-Rolled Event Streams with Ephemeral IDs)
+
+    Tier0 --> Tier1: Explicit Admin Opt-In
+    Tier1 --> Tier2: Explicit Admin Opt-In
+    Tier2 --> Tier3: Explicit Admin Opt-In (Advanced)
+    Tier3 --> Tier0: Global Kill Switch (Immediate Revocation)
+    Tier2 --> Tier0: Global Kill Switch
+    Tier1 --> Tier0: Global Kill Switch
+```
+
+1. **Tier 0: `Off` (Default Everywhere):** No data is collected, packaged, or transmitted.
+2. **Tier 1: `HealthOnly`:** Emits environment topology (`InstallProfile`: MJ version, database engine, OS family) and rollup health signal evaluations (`GREEN`/`YELLOW`/`RED`, signal counts, error classes).
+3. **Tier 2: `HealthAndAggregatedUsage` (Primary Sharing Mode):** Includes Tier 1 plus daily rollups of system execution: per-agent and per-prompt run counts, latency percentiles (p50, p95, p99), token consumption totals, average user ratings, and feature adoption counts.
+4. **Tier 3: `HealthAndMetadataEvents` (Advanced Event Sharing):** Includes Tier 2 plus un-rolled, minute-bucketed operational event metadata. **Bound by the identical metadata allowlist as Tier 2.** Every raw record carries an ephemeral, freshly minted `EventID` to prevent database correlation.
+
+### 6.2 The `TelemetrySchema` DSL
+
+The `TelemetrySchema` DSL enforces privacy at compile time. It excludes free text, raw timestamps, and generic UUIDs:
+
+```typescript
+// packages/Telemetry/src/schema.ts
+
+export type TelemetryFieldType =
+  | { kind: 'count' }                                       // Non-negative integer
+  | { kind: 'duration_ms' }                                 // Non-negative floating-point latency
+  | { kind: 'tokens' }                                      // Non-negative integer token count
+  | { kind: 'rating'; min: number; max: number }            // Bounded numeric score
+  | { kind: 'percentile'; buckets: readonly number[] }      // Distribution percentiles (e.g. [50, 95, 99])
+  | { kind: 'enum'; values: readonly string[] }             // Compile-time static string union
+  | { kind: 'metadata_uuid'; entity: SafeEntityType }       // Whitelisted metadata entities only
+  | { kind: 'histogram'; bucketKey: SafeBucketKey }         // Pre-defined bucket distributions
+  | { kind: 'date_bucket'; granularity: 'minute' | 'hour' | 'day' } // Bucketed time boundary
+  | { kind: 'boolean' }                                     // Feature flag boolean
+  | { kind: 'version_string' };                             // SemVer string matching /^\d+\.\d+\.\d+/
+
+export type SafeEntityType =
+  | 'Entity'
+  | 'AIAgent'
+  | 'AIAgentType'
+  | 'AIPrompt'
+  | 'AIModel'
+  | 'AIVendor'
+  | 'AIConfiguration'
+  | 'Action'
+  | 'Query'
+  | 'Application'
+  | 'OpenApp'
+  | 'Dashboard';
+
+export type SafeBucketKey =
+  | 'error_class'
+  | 'status_code'
+  | 'model_family'
+  | 'agent_type';
+
+export type TelemetrySchema<T> = {
+  readonly [K in keyof T]: TelemetryFieldType;
+};
+```
+
+#### Why Types Are Excluded
+- **No `string` type:** Arbitrary text fields can accidentally capture names, emails, prompt contents, or SQL fragments.
+- **No `timestamp` type:** Microsecond timestamps enable cross-system correlation and user session reconstruction. Time is constrained to `date_bucket` (minimum 1-minute bucket).
+- **No generic `uuid` type:** Unconstrained UUIDs could ingest record primary keys (`RecordID`, `UserID`, `ConversationID`). `metadata_uuid` requires validation against the `SafeEntityType` allowlist.
+
+### 6.3 The Three-Layer Enforcement Pipeline
+
+```mermaid
+flowchart LR
+    L1["1. TypeScript DSL<br/>(Compile-Time Rejection)"] --> L2["2. Static CI Gate<br/>(AST Scan of Providers)"]
+    L2 --> L3["3. Runtime Zod Validation<br/>(Drop Non-Conformant Rows)"]
+    L3 --> L4["4. Receiver Validation<br/>(Defense-in-Depth Re-Check)"]
+```
+
+1. **Compile-Time DSL Verification:** TypeScript compiler rejects any provider schema containing undeclared types.
+2. **Static CI Build Gate:** A dedicated test suite parses all `@RegisterClass(BaseTelemetryProvider, ...)` classes via AST analysis. It fails the build if field names match forbidden substrings (`Content`, `Message`, `Prompt`, `User`, `Email`, `Secret`, `Key`) or reference unapproved entities.
+3. **Runtime Zod Validation:** The packager converts DSL definitions into runtime Zod schemas. Payloads violating constraints are dropped locally and flagged in `__mj.TelemetryAuditLog`.
+4. **Receiver Defense-in-Depth:** Ingest endpoints re-validate incoming payloads against the canonical schema and reject unauthorized fields.
+
+### 6.4 Administrative Transparency & Local Tables
+
+Four dedicated database tables govern the telemetry lifecycle:
+
+```sql
+-- Core configuration and consent state
+CREATE TABLE __mj.TelemetryConfig (
+    InstallID UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+    ConsentTier NVARCHAR(50) NOT NULL DEFAULT 'Off', -- 'Off', 'HealthOnly', 'HealthAndAggregatedUsage', 'HealthAndMetadataEvents'
+    ShareFriendlyLabel BIT NOT NULL DEFAULT 0,
+    FriendlyLabel NVARCHAR(200) NULL,
+    SigningKey VARBINARY(64) NOT NULL,
+    EndpointURL NVARCHAR(500) NOT NULL DEFAULT 'https://telemetry.memberjunction.org/v1/package',
+    BatchCadenceMinutes INT NOT NULL DEFAULT 60,
+    CreatedAt DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET(),
+    UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET()
+);
+
+-- Idempotent provider watermarks
+CREATE TABLE __mj.TelemetryWatermark (
+    ProviderKey NVARCHAR(100) NOT NULL,
+    Mode NVARCHAR(20) NOT NULL,
+    LastBucketSentUtc DATETIMEOFFSET NOT NULL,
+    UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET(),
+    CONSTRAINT PK_TelemetryWatermark PRIMARY KEY (ProviderKey, Mode)
+);
+
+-- Outbound delivery queue
+CREATE TABLE __mj.TelemetryOutboundQueue (
+    PackageID UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+    SinkKey NVARCHAR(50) NOT NULL,
+    ConsentTier NVARCHAR(50) NOT NULL,
+    PayloadJson NVARCHAR(MAX) NOT NULL,
+    AttemptCount INT NOT NULL DEFAULT 0,
+    NextAttemptAt DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET(),
+    Status NVARCHAR(20) NOT NULL DEFAULT 'Pending', -- 'Pending', 'Delivered', 'DeadLetter'
+    LastError NVARCHAR(MAX) NULL,
+    CreatedAt DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET()
+);
+
+-- Append-only audit log
+CREATE TABLE __mj.TelemetryAuditLog (
+    AuditID UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+    SinkKey NVARCHAR(50) NOT NULL,
+    ConsentTier NVARCHAR(50) NOT NULL,
+    PackageManifestJson NVARCHAR(MAX) NOT NULL, -- Providers, row counts, checksums (no body)
+    DispatchedAt DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET(),
+    StatusCode INT NOT NULL,
+    AcknowledgedAt DATETIMEOFFSET NULL
+);
+```
+
+- **`PreviewNextPackage()` Inspector:** Runs extraction pipelines on demand and returns the exact JSON document to the administrative UI for inspection without sending data.
+- **Auto-Rendered Schema Viewer:** Generates an exhaustive report from live provider code, displaying every field, data type, enum set, and description.
+
+### 6.5 MJ Central 3-Population Consent Topology
+
+Matt Chriest's findings document outlines three deployment populations across MJ Central:
+
+| Deployment Population | Consent Surface | Transmission Path |
 |---|---|---|
-| **Phase 1: `@memberjunction/health` Core Package & Built-in MJ Core Probes** | Create `packages/Health` (`@memberjunction/health`) with `MJHealthEngine`, `BaseHealthProbe`, `WithRolledBackTransaction`, `HealthSignalDefinition`, `HealthSignalEvaluation`, and built-in MJ Core probes (`MJ.CORE.DB.*`, `MJ.CORE.SCHEMA.*`, `MJ.CORE.METADATA.*`, `MJ.CORE.QUEUE.*`, `MJ.CORE.AI.*`, `MJ.CORE.OPENAPP.*`, `MJ.CORE.LIVE.*`). | `packages/Health/src/*` + unit tests in `packages/Health/src/__tests__/` |
-| **Phase 2: `mj-app.json` Schema & `OpenApp/Engine` `HealthVerified` Gate** | Add optional `"health"` block to `manifest-schema.ts` & `manifest.reference.jsonc`; add `'HealthVerified'` checkpoint to `install-orchestrator.ts` with automatic file-snapshot rollback on `RED` upgrade probes; add `mj app health` CLI command. | `packages/OpenApp/Engine/src/manifest/manifest-schema.ts`, `packages/OpenApp/Engine/src/install/install-orchestrator.ts`, `packages/MJCLI/src/commands/app/health.ts` |
-| **Phase 3: `MJServer` Routes, API Key Scopes & GraphQL Resolver** | Mount `/api/health/signals` and `/api/health/signals/verify`, bridge `BaseServerExtension.HealthCheck()`, and add `MJHealthResolver` for MJ Explorer Admin UI & MJC fleet polling. | `packages/MJServer/src/coreRoutes.ts`, `packages/MJServer/src/resolvers/MJHealthResolver.ts` |
-| **Phase 4: Reference Open App Probes (`bizapps-collaboration` & `bizapps-community`)** | Ship passive & rolled-back live verification probes (`BIZAPPS.COLLAB.*` and `BIZAPPS.COMMUNITY.*`) as the reference implementation for all MJ Open Apps. | `MemberJunction/bizapps-collaboration` & `MemberJunction/bizapps-community` |
+| **Hosted (Batteries-Included)** | MJC Signup Funnel (`/start/:tier/keys`) & MJC Environment Settings | SSM Parameter Store environment variable injection at container initialization. |
+| **BYOC / BYOA (Azure/AWS)** | MJC Environment Creation Wizard & Settings | Terraform `custom_env_vars` JSON propagation. |
+| **Self-Hosted OSS** | MJ Explorer Admin Settings Dashboard | Local administrator configuration via `__mj.TelemetryConfig`. |
+
+#### The "Two Promises" Separation
+MJC-managed environments manage two distinct operational channels:
+1. **Hosting Operations Channel:** Infrastructure metrics, credit settlements, and container health monitored via `InstanceUsageService` for fleet operations.
+2. **Anonymous Product Telemetry Channel:** Anonymized, opt-in feature and health metrics shared with the open-source engineering project.
+
+The user interface explicitly presents both channels as separate toggles to preserve complete transparency.
 
 ---
 
-## 9. Verification & Testing Strategy
+## 7. Source-and-Sink Connectivity (`BaseTelemetrySink`)
 
-1. **Unit & Contract Tests (`packages/Health`):**
-   - Verify signal catalog registration, duplicate signal code rejection, timeout isolation (a hung probe times out and emits `RED` with `ActivePlaybook` without blocking sibling probes), and `WithRolledBackTransaction` savepoint rollback guarantee on both SQL Server and PostgreSQL providers.
-2. **Orchestrator Upgrade Rollback Tests (`packages/OpenApp/Engine`):**
-   - Extend `install-orchestrator-upgrade-restore.test.ts` to verify that when an Open App's `HealthVerified` live probe returns `RED` after package installation, the orchestrator restores the pre-upgrade file snapshot and records the structured signal evaluation in `OpenAppInstallHistory`.
-3. **Multi-Database Parity (SQL Server & AWS PostgreSQL):**
-   - Verify all `MJ.CORE.*` probes execute cleanly on both `@memberjunction/sqlserver-dataprovider` and `@memberjunction/postgresql-dataprovider`.
+Outbound delivery is decoupled through the `BaseTelemetrySink` abstraction:
+
+```typescript
+// packages/Telemetry/src/sink.ts
+
+export interface SinkAckResult {
+  Success: boolean;
+  StatusCode: number;
+  RetryAfterSeconds?: number;
+  ErrorMessage?: string;
+}
+
+export abstract class BaseTelemetrySink {
+  public abstract readonly SinkKey: string;
+  public abstract readonly DisplayName: string;
+  public abstract readonly RequiredConsentTier: 'HealthOnly' | 'HealthAndAggregatedUsage' | 'HealthAndMetadataEvents';
+  public abstract readonly BatchCadenceMinutes: number;
+
+  public abstract DeliverPackage(
+    pkg: TelemetryPackage,
+    context: SinkExecutionContext
+  ): Promise<SinkAckResult>;
+}
+```
+
+```mermaid
+flowchart TD
+    QUEUE["__mj.TelemetryOutboundQueue"] --> SINK_ROUTER["Sink Delivery Router"]
+
+    SINK_ROUTER -->|Parent Sync| FED["FederatedMJSink (Peer Sync #6021/#6502)"]
+    SINK_ROUTER -->|MJC Fleet| MJC["MJCentralSink (Fleet Health & Care)"]
+    SINK_ROUTER -->|OSS Product| OSS["BlueCypressProductSink (telemetry.memberjunction.org)"]
+    SINK_ROUTER -->|Custom Metrics| OTLP["OtlpHttpSink (Enterprise Collectors)"]
+```
+
+### Supported Sinks
+
+1. **`FederatedMJSink` (Parent-Child Topology):** Connects distributed nodes to parent enterprise MemberJunction clusters using the `MJ Peer Sync` protocol (#6021/#6502). Enables centralized enterprise compliance monitoring across isolated business units.
+2. **`MJCentralSink` (Fleet Management & MJ Care):** Emits health signals and operational diagnostics to MJ Central control planes, powering autonomous remediation and fleet vulnerability patch tracking.
+3. **`BlueCypressProductSink` (OSS Product Analytics):** Transmits anonymized feature usage to `https://telemetry.memberjunction.org` to guide open-source roadmap investments, AI model defaults, and performance optimizations.
+4. **`OtlpHttpSink` (Generic OpenTelemetry Exporter):** Dispatches standardized OTLP metrics payloads directly to corporate observability pipelines (Datadog, Grafana, CloudWatch, Dynatrace).
+
+### Authentication & Packaging Security
+Payloads sent to external sinks are packaged as compressed JSON documents signed with HMAC-SHA256 headers (`x-mj-signature: sha256=...`) computed using the installation's private `SigningKey`.
+
+---
+
+## 8. Guiding Platform Pruning: Janitor Agent, Dead-Code Detection & Review-Time Guardrails
+
+Aggregated cross-install telemetry powers automated platform maintenance and prevents code sprawl.
+
+### 8.1 The Autonomous Janitor Agent
+
+The Janitor Agent operates as an autonomous background maintenance worker combining three signals:
+1. **Cross-Install Adoption Counts:** Opted-in feature execution metrics identifying rarely used entities, queries, or actions.
+2. **Local Instance Graph Analysis:** Active foreign keys, metadata dependencies, and user view usage.
+3. **Static Codebase AST Scans:** References across core packages and Open App repositories.
+
+```mermaid
+flowchart LR
+    TELEM["Opted-In Usage Data"] --> JANITOR["Janitor Agent"]
+    META["Local Entity Graph"] --> JANITOR
+    REPO["Static Codebase Scan"] --> JANITOR
+
+    JANITOR --> RFC["Deprecation RFC Generation"]
+    JANITOR --> PR["Automated Deprecation PRs"]
+    JANITOR --> INDEX["Agent Convention Index Updates"]
+```
+
+When candidate components are identified (e.g., legacy action verbs or superseded UI layouts with zero usage over 90 days), the Janitor Agent automatically:
+- Formulates a deprecation RFC issue with supporting usage data.
+- Generates a non-breaking PR decorating the component with `@deprecated` notices and migration paths.
+- Alerts engineering teams prior to major version removals.
+
+### 8.2 Review-Time Pattern Index for Coding Agents
+
+To prevent AI coding assistants from re-introducing obsolete patterns, the Janitor Agent publishes an updated `pattern-index.json`. Coding subagents verify proposed modifications against this index during automated pull request reviews.
+
+### 8.3 Mitigating Self-Hosted Opt-In Bias
+
+Because opt-in populations may over-represent managed cloud deployments relative to security-conscious air-gapped enterprise installations, the analytics pipeline applies post-stratification weighting:
+- Metrics are stratified across deployment profiles (`cloud-managed`, `byoc`, `self-hosted-airgapped`).
+- Pruning decisions require confirmation across multiple strata to avoid deprecating features vital to air-gapped enterprise users.
+
+---
+
+## 9. Phased Delivery Roadmap & Proposed Resolutions to Open Questions
+
+### 9.1 Phased Implementation Roadmap
+
+```mermaid
+flowchart LR
+    P1["Phase 1: Core Health Engine<br/>& TelemetryManager.OnEvent"] --> P2["Phase 2: TelemetrySchema DSL,<br/>RouteScrubber & Share Packager"]
+    P2 --> P3["Phase 3: OpenApp HealthVerified Gate,<br/>Server OTel & DB Migrations"]
+    P3 --> P4["Phase 4: Explorer Admin Consent UI,<br/>Federated/MJC Sinks & Janitor Agent"]
+```
+
+- **Phase 1: Core Health Engine & OpenTelemetry Event Hook (PR #6420 Focus):**
+  - Implement `@memberjunction/health` with `MJHealthEngine`, `BaseHealthProbe`, `WithRolledBackTransaction`, and standard `MJ.CORE.*` probes *(completed)*.
+  - Implement non-blocking `TelemetryManager.Instance.OnEvent()` hook in `@memberjunction/core`.
+- **Phase 2: Telemetry Schema DSL, RouteScrubber & Packaging Contracts:**
+  - Define `TelemetrySchema` DSL, `SafeEntityType`, and build the static CI allowlist gate test.
+  - Deliver `RouteScrubber` and semantic interaction taps in Angular shared components.
+  - Implement `ShareLayerPackager`, `PreviewNextPackage()`, and publish `docs/telemetry-shareable-schema.md`.
+- **Phase 3: OpenApp Orchestration Gate, Server Telemetry & Database Migrations:**
+  - Integrate `'HealthVerified'` step into `InstallOrchestrator` with automated file-snapshot rollback on `RED` signals.
+  - Deliver `@memberjunction/server-telemetry` (`bootstrap.ts` and `OTELMiddleware`).
+  - Deploy SQL migrations for `TelemetryConfig`, `TelemetryWatermark`, `TelemetryOutboundQueue`, and `TelemetryAuditLog`.
+  - Mount `/api/health/signals` and `/api/health/signals/verify` endpoints.
+- **Phase 4: Explorer Admin Dashboard, Sinks & Janitor Agent:**
+  - Build Explorer Telemetry Settings, Schema Viewer, and Preview panels.
+  - Implement local per-user Lieb dot-plots inside Explorer Admin.
+  - Deliver pluggable sinks (`FederatedMJSink`, `MJCentralSink`, `BlueCypressProductSink`, `OtlpHttpSink`).
+  - Implement the Autonomous Janitor Agent for data-driven deprecations.
+
+### 9.2 Resolutions to Open Design Questions
+
+| # | Question | Decision & Architectural Resolution |
+|---|---|---|
+| **1** | **Consent Tiers:** How granular should opt-in toggles be? | **Resolution:** 4 structured tiers (`Off`, `HealthOnly`, `HealthAndAggregatedUsage`, `HealthAndMetadataEvents`). Avoids complex matrix toggles while offering clear boundaries. |
+| **2** | **Local Retention:** How long should raw operational telemetry be preserved locally? | **Resolution:** Default to 30 days for raw event buffers and 365 days for daily aggregated rollups, configurable by administrators. |
+| **3** | **Push vs. Pull Transport:** Should the telemetry pipeline push outbound or expose pull endpoints? | **Resolution:** Outbound HTTPS push is the standard (compatible with firewalls and private subnets). Child nodes in federated parent-child topologies support pull via the Peer Sync protocol. |
+| **4** | **MJC Provisioning Consent:** How is consent captured during automated provisioning? | **Resolution:** Separate explicit checkboxes during the MJC onboarding funnel and environment wizard, decoupling hosting operations from product telemetry. |
+| **5** | **Small-Organization Anonymity:** How do we prevent re-identification in low-volume organizations? | **Resolution:** Enforce k-anonymity (minimum 5 active users) before feature-adoption rollups are emitted. |
+| **6** | **Cloud Receiver Architecture:** Where should external telemetry terminate? | **Resolution:** A stateless ingest edge service (`telemetry.memberjunction.org`) deployed on serverless infrastructure, verifying HMAC signatures and spooling into cloud data warehouses independently from MJC core application logic. |
+
+---
+
+## 10. Security, Privacy & Compliance Verification
+
+### 10.1 Threat Model & Countermeasures
+
+| Threat Vector | Attack Scenario | Architectural Defense |
+|---|---|---|
+| **Rogue Provider Extension** | Malicious or buggy probe attempts to capture prompt text or credentials. | Compile-time DSL has no `string` shape. CI AST scanner rejects non-conforming types. Runtime Zod validator drops invalid payloads. |
+| **Payload Interception** | Attacker intercepts outbound HTTP requests. | Strict TLS 1.3 encryption. Payload HMAC-SHA256 signature verification prevents tampering. |
+| **Receiver Database Leak** | Compromise of central telemetry data warehouse. | No user IDs, customer names, conversation text, or record IDs exist in payloads. Ephemeral `EventID`s prevent cross-referencing. |
+| **PII Exposure via URLs** | Sensitive search terms or record identifiers exposed in client page views. | `RouteScrubber` strips record IDs (`_id_`) and redacts search parameters (`[REDACTED]`). Fails closed on unknown paths. |
+| **Denial of Service** | Misconfigured live probe consumes system resources. | Isolated provider execution. Hard per-probe timeout boundaries. Unconditional transaction rollback. |
+
+### 10.2 Compliance Alignment
+
+- **GDPR (Regulation EU 2016/679):** Conforms to Article 25 (Data Protection by Design and by Default) and Article 32 (Security of Processing). Zero personal data is transmitted; processing is local-first.
+- **HIPAA Safe Harbor:** Satisfies 45 CFR § 164.514(b)(2) de-identification requirements. All 18 geographic, demographic, and temporal identifiers are excluded.
+- **SOC 2 Type II:** Satisfies Trust Services Criteria for Security, Availability, and Confidentiality through local audit logs, explicit consent controls, and fail-closed security gates.
+
+---
+
+## 11. Multi-Database Parity & Operational Runbooks (SQL Server & AWS PostgreSQL)
+
+MemberJunction supports both Microsoft SQL Server and AWS PostgreSQL (including low-cost **\$10–\$20/month RDS/Aurora db.t4g.micro** instances).
+
+### 11.1 Query & DDL Dialect Parity
+
+| Subsystem | SQL Server Dialect | PostgreSQL Dialect |
+|---|---|---|
+| **Connection Health** | `SELECT 1;` | `SELECT 1;` |
+| **Active Query Diagnostics** | `SELECT session_id, status, command, wait_time FROM sys.dm_exec_requests WHERE session_id > 50;` | `SELECT pid, state, query, wait_event_type, wait_event FROM pg_stat_activity WHERE state != 'idle' AND pid != pg_backend_pid();` |
+| **Transactional Savepoints** | `SAVE TRANSACTION savepoint_name;` / `ROLLBACK TRANSACTION savepoint_name;` | `SAVEPOINT savepoint_name;` / `ROLLBACK TO SAVEPOINT savepoint_name;` |
+| **Temporal Data Types** | `DATETIMEOFFSET` with `SYSDATETIMEOFFSET()` | `TIMESTAMPTZ` with `CURRENT_TIMESTAMP` |
+| **Payload Storage** | `NVARCHAR(MAX)` | `TEXT` |
+
+### 11.2 Operational Sizing for Small PostgreSQL Deployments
+
+When operating on entry-level AWS PostgreSQL hardware (\$10–\$20/month):
+1. **Connection Throttling:** Small instances permit limited concurrent connections (e.g., 50–100). Health probes share the primary connection pool rather than opening dedicated connections.
+2. **Event Loop Monitoring (#5510):** Single-core or fractional vCPU instances are vulnerable to event loop starvation. The `MJ.CORE.RUNTIME.EVENT_LOOP_LAG` probe provides early warning before connection dropouts occur.
+3. **Savepoint Overhead:** Transactional savepoints (`WithRolledBackTransaction`) avoid WAL write overhead because rolled-back operations do not flush dirty pages to durable disk storage.
+
+---
+
+## 12. Detailed Schema & API Reference
+
+### 12.1 TypeScript Contract Index
+
+| Interface / Class | Defining Package | Role & Responsibility |
+|---|---|---|
+| `BaseHealthProbe` | `@memberjunction/health` | Abstract base class for all passive and live health checks. |
+| `MJHealthEngine` | `@memberjunction/health` | Singleton executing probes, managing timeouts, and aggregating reports. |
+| `HealthSignalDefinition` | `@memberjunction/health` | Declarative contract specifying signals, severity criteria, and playbooks. |
+| `AgentRemediationPlaybook` | `@memberjunction/health` | Deterministic instructions and action allowlists for AI SRE agents. |
+| `TelemetryManager` | `@memberjunction/core` | Core telemetry bus hosting the `OnEvent()` observer hook. |
+| `OTELMiddleware` | `@memberjunction/server-telemetry` | Express/Apollo middleware mapping events to OpenTelemetry instruments. |
+| `RouteScrubber` | `@memberjunction/analytics` | Pure TypeScript URL path sanitization and tokenization engine. |
+| `BaseAnalyticsProvider` | `@memberjunction/analytics` | Pluggable client analytics seam for customer-owned analytics accounts. |
+| `TelemetrySchema` | `@memberjunction/telemetry` | Compile-time DSL defining permitted shareable field types. |
+| `BaseTelemetrySink` | `@memberjunction/telemetry` | Extensible destination adapter for outbound telemetry transmission. |
+
+### 12.2 Cross-Reference to Published Schema
+
+For complete formal schema definitions, JSON examples, entity allowlists, and operator verification procedures, see the companion normative specification:
+[docs/telemetry-shareable-schema.md](file:///Users/amith/Dropbox/develop/MJ-factory-builder/docs/telemetry-shareable-schema.md).

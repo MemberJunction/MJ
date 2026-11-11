@@ -120,6 +120,7 @@ Schema Files/
 # generated TypeDoc output — but hand-written decision records are tracked
 /docs/*
 !/docs/decisions/
+!/docs/telemetry-shareable-schema.md
 SQL Scripts/generated/
 **/SQL Scripts/generated/
 *.old
