@@ -278,13 +278,14 @@ Server-side code (a server extension or an Open App's server package) can call
 
 | Field | Values | Rule |
 |---|---|---|
-| `IdentityMode` | `'email'` (default), `'anonymous'` | Anonymous invites take no `email`, and one with an email is refused. Every redemption resolves to the shared Anonymous principal. |
+| `IdentityMode` | `'email'` (default), `'anonymous'` | An anonymous invite may carry an `email` as a delivery address only: it is stored on the invite and used to send the link, but never binds identity. Every redemption resolves to the shared Anonymous principal. |
 | `Kind` | `'app-session'` (default), `'resource-share'` | `resource-share` requires both `ResourceTypeID` and `ResourceID`; other kinds refuse them. `anonymous-embed` is not minted by the service. |
 | `ResourceTypeID`, `ResourceID` | IDs | Written to the invite; the session carries the resource ID as its scope. |
 
 The issuer check (`Owner` or `magicLink.inviteIssuerRoleNames`), the grantable-role
-allow-list and the redirect check apply unchanged. Anonymous invites are never
-emailed: the caller gets `rawToken` and `redemptionUrl` and delivers the link. The
+allow-list and the redirect check apply unchanged. An anonymous invite is emailed
+only when it carries a delivery `email` and `SendEmail` is not `false`; otherwise the
+caller gets `rawToken` and `redemptionUrl` and delivers the link. The
 `POST /magic-link/create` route does not take these fields.
 
 ---

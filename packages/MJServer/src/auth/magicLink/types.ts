@@ -128,8 +128,8 @@ export interface CreateMagicLinkInviteBaseParams {
   /**
    * When `false`, skips MJServer's default invite email delivery and returns `rawToken` +
    * `redemptionUrl` so the caller (e.g. a `BaseServerExtension`) can send its own branded message.
-   * Defaults to `true` when a communication provider is configured. Anonymous invites have no
-   * recipient, so they are never emailed.
+   * Defaults to `true` when a communication provider is configured. An anonymous invite is emailed
+   * only when it carries a delivery `email`.
    */
   SendEmail?: boolean;
   /**
@@ -151,12 +151,17 @@ export interface CreateEmailMagicLinkInviteParams extends CreateMagicLinkInviteB
 }
 
 /**
- * An invite every redemption of which resolves to the shared Anonymous principal. Carries no
- * email: the link itself is the credential, so it is never emailed.
+ * An invite every redemption of which resolves to the shared Anonymous principal. The link itself
+ * is the credential.
  */
 export interface CreateAnonymousMagicLinkInviteParams extends CreateMagicLinkInviteBaseParams {
   IdentityMode: Extract<MJMagicLinkInviteEntity['IdentityMode'], 'anonymous'>;
-  email?: undefined;  // case-violation-ok-legacy-back-compat: same member as the email-mode variant, which keeps its legacy name
+  /**
+   * Optional delivery address: stored on the invite and used to send the link (unless
+   * `SendEmail` is `false`). It never binds identity — redemption still resolves the shared
+   * Anonymous principal and never looks up or provisions a user by this address.
+   */
+  email?: string;  // case-violation-ok-legacy-back-compat: same member as the email-mode variant, which keeps its legacy name
 }
 
 /** Parameters for creating a magic-link invite (POST /magic-link/create, or in-process callers). */

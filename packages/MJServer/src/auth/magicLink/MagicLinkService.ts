@@ -142,7 +142,9 @@ const MINTABLE_KINDS: readonly MintableMagicLinkInviteKind[] = ['app-session', '
  * Checks the identity-mode, kind and resource fields of an invite request and resolves the column
  * values to write. Pure: reads only `params`.
  *
- * - `email` mode (the default) requires an email; `anonymous` mode refuses one.
+ * - `email` mode (the default) requires an email, which becomes the redeeming user's identity.
+ * - `anonymous` mode takes an optional email as a delivery address only: it is stored on the
+ *   invite and used to send the link, but redemption never reads it, so it binds no identity.
  * - `resource-share` requires both `ResourceTypeID` and `ResourceID`; other kinds refuse them.
  * - `anonymous-embed` is not minted here (its framing-domain and tier checks do not exist yet).
  */
@@ -155,10 +157,6 @@ export function ValidateInviteShape(params: CreateMagicLinkInviteParams): Invite
   if (identityMode === 'email' && !email) {
     return { Ok: false, Error: 'An email-mode invite requires an email address.' };
   }
-  if (identityMode === 'anonymous' && email) {
-    return { Ok: false, Error: 'An anonymous invite must not carry an email address.' };
-  }
-
   const kind = params.Kind ?? 'app-session';
   if (!MINTABLE_KINDS.includes(kind)) {
     return { Ok: false, Error: `Invite kind '${String(kind)}' cannot be minted through MagicLinkService.` };
@@ -313,7 +311,8 @@ export class MagicLinkService implements IServerExtensionMagicLinkService {
       const redemptionUrl = this.buildRedemptionUrl(rawToken, redirectBindingToken);
 
       let emailSent = false;
-      // An anonymous invite has no recipient; the caller delivers the returned link itself.
+      // An email-mode invite goes to its user's address; an anonymous one only to its optional
+      // delivery address. With no address the caller delivers the returned link itself.
       if (shape.Email && params.SendEmail !== false && this.config.communicationProvider) {
         emailSent = await this.sendInviteEmail(shape.Email, redemptionUrl, app.Name, creatingUser);
       }
@@ -764,6 +763,7 @@ export class MagicLinkService implements IServerExtensionMagicLinkService {
     // write any UserRole/UserApplication for it — the anon user must never accrete
     // scope (that would make every anon visitor a superuser). Scope rides on the
     // per-session JWT claims; enforcement is claims-based, not role-based.
+    // An anonymous invite's Email is a delivery address only and is deliberately not read here.
     if (invite.IdentityMode === 'anonymous') {
       return this.resolveAnonymousPrincipal();
     }

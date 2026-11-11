@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
     runViewSuccess: true,
     runViewCalls: [] as Array<{ ExtraFilter?: string }>,
     savedAppRoles: [] as Array<Record<string, unknown>>,
+    cachedUsers: [] as Array<{ ID: string; Email: string }>,
 }));
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
@@ -34,7 +35,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     return { ...actual, RunView: FakeRunView, Metadata: FakeMetadata };
 });
 vi.mock('@memberjunction/generic-database-provider', () => ({
-    UserCache: { Instance: { Users: [] } },
+    UserCache: { Instance: { Users: mocks.cachedUsers } },
 }));
 vi.mock('@memberjunction/communication-engine', () => ({
     CommunicationEngine: {
@@ -56,7 +57,8 @@ vi.mock('../isolatedProvider.js', () => ({
     },
 }));
 
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { IMetadataProvider, RoleInfo, UserInfo } from '@memberjunction/core';
+import type { MJMagicLinkInviteEntity } from '@memberjunction/core-entities';
 import { CommunicationEngine } from '@memberjunction/communication-engine';
 import type { MagicLinkConfig } from '../config.js';
 import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
@@ -125,9 +127,14 @@ describe('ValidateInviteShape', () => {
         expect(ValidateInviteShape({ email: '  ', ApplicationId: 'app' }).Ok).toBe(false);
     });
 
-    it('refuses an email on an anonymous invite', () => {
-        const params = { IdentityMode: 'anonymous', email: 'x@example.com', ApplicationId: 'app' } as object as CreateMagicLinkInviteParams;
-        expect(ValidateInviteShape(params).Ok).toBe(false);
+    it('keeps an anonymous invite\'s email as its delivery address', () => {
+        expect(ValidateInviteShape({ IdentityMode: 'anonymous', email: ' x@example.com ', ApplicationId: 'app' })).toEqual({
+            Ok: true, Email: 'x@example.com', IdentityMode: 'anonymous', Kind: 'app-session', ResourceTypeID: null, ResourceID: null,
+        });
+    });
+
+    it('stores no email on an anonymous invite without one', () => {
+        expect(ValidateInviteShape({ IdentityMode: 'anonymous', email: '  ', ApplicationId: 'app' })).toMatchObject({ Ok: true, Email: null });
     });
 
     it('requires both resource fields for resource-share and refuses them on other kinds', () => {
@@ -183,15 +190,37 @@ describe('MagicLinkService.CreateInvite identity mode and resource', () => {
         expect(saved[0]).toMatchObject({ Email: 'person@example.com', IdentityMode: 'email', Kind: 'app-session', ResourceTypeID: null, ResourceID: null });
     });
 
-    it('refuses an anonymous invite carrying an email, and writes nothing', async () => {
+    it('writes an anonymous invite with a delivery email and returns the link when SendEmail is false', async () => {
         const saved: SavedInvite[] = [];
         const service = new MagicLinkService('https://api.example.com', makeConfig());
-        const params = { IdentityMode: 'anonymous', email: 'x@example.com', ApplicationId: 'app-forms' } as object as CreateMagicLinkInviteParams;
 
-        const res = await service.CreateInvite(params, owner, makeFakeProvider(saved));
+        const res = await service.CreateInvite(
+            { IdentityMode: 'anonymous', email: 'recipient@example.com', ApplicationId: 'app-forms', SendEmail: false },
+            owner,
+            makeFakeProvider(saved),
+        );
 
-        expect(res.success).toBe(false);
-        expect(saved).toHaveLength(0);
+        expect(res.success).toBe(true);
+        expect(res.emailSent).toBe(false);
+        expect(res.rawToken).toBeDefined();
+        expect(CommunicationEngine.Instance.SendSingleMessage).not.toHaveBeenCalled();
+        expect(saved[0]).toMatchObject({ Email: 'recipient@example.com', IdentityMode: 'anonymous', Kind: 'app-session' });
+    });
+
+    it('emails an anonymous invite to its delivery address by default', async () => {
+        const saved: SavedInvite[] = [];
+        const service = new MagicLinkService('https://api.example.com', makeConfig());
+
+        const res = await service.CreateInvite(
+            { IdentityMode: 'anonymous', email: 'recipient@example.com', ApplicationId: 'app-forms' },
+            owner,
+            makeFakeProvider(saved),
+        );
+
+        expect(res.success).toBe(true);
+        expect(res.emailSent).toBe(true);
+        expect(res.rawToken).toBeUndefined();
+        expect(CommunicationEngine.Instance.SendSingleMessage).toHaveBeenCalledTimes(1);
     });
 
     it('refuses a resource-share invite with no resource', async () => {
@@ -266,5 +295,28 @@ describe('open applications at redemption (#3537)', () => {
         await service['ensureAppAccess']('role-guest', 'app-x', contextUser);
 
         expect(mocks.savedAppRoles).toHaveLength(0);
+    });
+});
+
+describe('anonymous redemption ignores the delivery email', () => {
+    const ANONYMOUS_USER_ID = '273910DF-28F1-45C1-A8F8-6E9AD8E5F008';
+
+    beforeEach(() => {
+        mocks.runViewResults = [];
+        mocks.runViewSuccess = true;
+        mocks.cachedUsers.splice(0, mocks.cachedUsers.length,
+            { ID: ANONYMOUS_USER_ID, Email: 'anonymous@magic-link.local' },
+            { ID: 'user-recipient', Email: 'recipient@example.com' },
+        );
+    });
+
+    it('resolves the Anonymous principal, never the user who owns the delivery address', async () => {
+        const service = new MagicLinkService('https://api.example.com', makeConfig());
+        const invite = { IdentityMode: 'anonymous', Email: 'recipient@example.com', RoleID: 'role-guest', ApplicationID: 'app-forms' } as object as MJMagicLinkInviteEntity;
+        const role = { ID: 'role-guest', Name: 'External Guest' } as object as RoleInfo;
+
+        const result = await service['provisionUser'](invite, role, { ID: 'ctx' } as UserInfo);
+
+        expect(result).toMatchObject({ success: true, userId: ANONYMOUS_USER_ID, email: 'anonymous@magic-link.local' });
     });
 });
