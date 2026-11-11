@@ -24,6 +24,7 @@ import {
     DatabaseProviderBase,
     EntityInfo,
     EntityFieldInfo,
+    EntityRelationshipInfo,
     EntityFieldTSType,
     ProjectRowsToFields,
     ProjectEntityValueRowsForUser,
@@ -120,6 +121,7 @@ import { SQLDialect, GetDialect } from '@memberjunction/sql-dialect';
 import { SQLParser, SqlDocument, EditSet, SqlTokens, IsReadOnlyQuery, CheckAggregateExpression, IsBalancedSQLFragment, SplitTopLevelAndTerms, type BalancedFragmentOptions } from '@memberjunction/sql-parser';
 import { DescribeStatementFailure, type DescribedColumn, type DescribeStatementResult } from './describeStatement.js';
 import { NamedQueryParameter, TypedBindValue, TypedQueryParameter } from './typedQueryParameter.js';
+import { RowFilterBoundParameter, RowFilterParameterCollector } from './rowFilterParameters.js';
 import type { TypedQueryParameterValue } from './typedQueryParameter.js';
 import { StatementMemo } from './statementMemo.js';
 import { FindProjectionStars } from './fieldSecurity/projectionStars.js';
@@ -1341,14 +1343,40 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // are independent (write to RecordGeoCode and RecordChange respectively).
         let geoResult: GeocodeResult | null = null;
 
-        // Geocoding: awaited so the SP result can be patched with fresh lat/lng
-        const geoPromise = context.State['geoSyncNeeded']
-            ? GeoCodeSyncService.Instance.SyncIfChanged(entity, user).catch(e => {
-                const msg = e instanceof Error ? e.message : String(e);
-                LogError(`GenericDatabaseProvider: Geo sync failed for ${entity.EntityInfo.Name}: ${msg}`);
-                return null;
-            })
-            : null;
+        // Geocoding: outside an ambient/group transaction, await inline so the SP result
+        // can be patched immediately. Inside an open transaction, defer external HTTP
+        // geocoding I/O via RunAfterCommit so exclusive SQL X-locks are never held across
+        // network round-trips (and rolled-back saves never call external geocoding APIs).
+        let geoPromise: Promise<GeocodeResult | null> | null = null;
+        if (context.State['geoSyncNeeded']) {
+            if (this.IsCallerInAmbientTransaction()) {
+                this.RunAfterCommit(async () => {
+                    const deferredGeo = await GeoCodeSyncService.Instance.SyncIfChanged(entity, user).catch(e => {
+                        const msg = e instanceof Error ? e.message : String(e);
+                        LogError(`GenericDatabaseProvider: Geo sync failed for ${entity.EntityInfo.Name}: ${msg}`);
+                        return null;
+                    });
+                    if (deferredGeo) {
+                        const latField = entity.Fields.find(f => f.Name === '__mj_Latitude');
+                        if (latField) {
+                            latField.Value = deferredGeo.Latitude;
+                            latField.ResetOldValue();
+                        }
+                        const lngField = entity.Fields.find(f => f.Name === '__mj_Longitude');
+                        if (lngField) {
+                            lngField.Value = deferredGeo.Longitude;
+                            lngField.ResetOldValue();
+                        }
+                    }
+                }, `GeoCodeSyncService(${entity.EntityInfo.Name})`);
+            } else {
+                geoPromise = GeoCodeSyncService.Instance.SyncIfChanged(entity, user).catch(e => {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    LogError(`GenericDatabaseProvider: Geo sync failed for ${entity.EntityInfo.Name}: ${msg}`);
+                    return null;
+                });
+            }
+        }
 
         // ISA sibling record-change propagation — when saving an overlapping-subtype entity,
         // propagate the record change to sibling branches so their change history stays in sync.
@@ -1832,6 +1860,43 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      */
     protected getDialect(): SQLDialect | null {
         return null;
+    }
+
+    /**
+     * The binder a RunView's row filter binds the user's values into (#5713), or null to keep them
+     * literal. The default binds untyped named parameters with the dialect's placeholders (`$n` on
+     * PostgreSQL); a provider with no dialect keeps literals. Providers override it to choose the
+     * parameter type.
+     */
+    protected CreateRowFilterParameterBinder(): RowFilterParameterCollector | null {
+        const dialect = this.getDialect();
+        if (!dialect) {
+            return null;
+        }
+        return new RowFilterParameterCollector((index, value) => {
+            const placeholder = dialect.Binding.ParameterPlaceholder(index);
+            return { Placeholder: placeholder, Parameter: new NamedQueryParameter(placeholder.startsWith('@') ? placeholder.slice(1) : placeholder, value) };
+        });
+    }
+
+    /**
+     * Runs several statements that all reference the same `parameters` (one RunView's data, count
+     * and aggregate statements share its WHERE, row-filter parameters included). The default runs
+     * each with the full list; SQL Server overrides it to send one batch that declares them once.
+     */
+    protected async ExecuteSQLBatchWithSharedParameters(
+        queries: string[],
+        parameters: RowFilterBoundParameter[],
+        options?: ExecuteSQLBatchOptions,
+        contextUser?: UserInfo,
+    ): Promise<Record<string, unknown>[][]> {
+        const execOptions: ExecuteSQLOptions | undefined = options ? {
+            description: options.description,
+            ignoreLogging: options.ignoreLogging,
+            isMutation: options.isMutation,
+            ignoreAmbientTransaction: options.ignoreAmbientTransaction,
+        } : undefined;
+        return Promise.all(queries.map(query => this.ExecuteSQL<Record<string, unknown>>(query, parameters, execOptions, contextUser)));
     }
 
     /**
@@ -2553,16 +2618,247 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      *    `QuoteIdentifier` produces `"TotalRowCount"` on PG and `[TotalRowCount]` on SQL
      *    Server — both preserve case.
      */
+    /**
+     * Determines whether a count query can be safely executed against the entity's physical
+     * `BaseTable` instead of the generated `BaseView`.
+     *
+     * Generated `BaseView`s only `LEFT OUTER JOIN` related lookup tables on single-row primary
+     * keys and do not alter row cardinality. When 100% of columns referenced in `whereSQL`
+     * are physical non-virtual columns on `BaseTable`, counting directly from `BaseTable`
+     * bypasses expensive joins, outer applies, and view expansion while returning identical counts.
+     */
+    public CanCountFromBaseTable(entityInfo: EntityInfo, whereSQL: string): boolean {
+        if (!entityInfo) {
+            return false;
+        }
+        // 1) BaseView must be generated by CodeGen (hand-written custom views may filter rows)
+        if (entityInfo.BaseViewGenerated !== true) {
+            return false;
+        }
+        // 2) Must have a physical BaseTable and not be a virtual entity
+        if (entityInfo.VirtualEntity || !entityInfo.BaseTable) {
+            return false;
+        }
+        // 3) IS-A child entities join parent tables and inherit columns — never rewrite IS-A child entities
+        if (entityInfo.IsChildType || Boolean(entityInfo.ParentID) || Boolean(entityInfo.ParentEntityInfo)) {
+            return false;
+        }
+        // 4) Layered base views have an application-owned outer view that might filter rows
+        if (entityInfo.HasLayeredBaseView) {
+            return false;
+        }
+        // 5) Soft-delete entities have `WHERE [DeletedAt] IS NULL` in the view; base table contains deleted rows
+        if (entityInfo.DeleteType === 'Soft') {
+            return false;
+        }
+
+        const trimmed = (whereSQL ?? '').trim();
+        if (!trimmed) {
+            return true;
+        }
+
+        if (!entityInfo.Fields || entityInfo.Fields.length === 0) {
+            return false;
+        }
+
+        const tokens = GenericDatabaseProvider.extractWhereIdentifierTokens(trimmed);
+        if (tokens === null) {
+            return false;
+        }
+
+        const physicalColumns = new Set(
+            entityInfo.Fields
+                .filter(f => !f.IsVirtual)
+                .map(f => f.Name.toLowerCase())
+        );
+
+        for (const token of tokens) {
+            if (GenericDatabaseProvider._forbiddenCountKeywords.has(token)) {
+                return false;
+            }
+            if (!GenericDatabaseProvider._allowedCountKeywords.has(token) && !physicalColumns.has(token)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static readonly _forbiddenCountKeywords = new Set([
+        'select', 'from', 'join', 'exists', 'apply', 'with', 'union', 'intersect', 'except',
+    ]);
+
+    private static readonly _allowedCountKeywords = new Set([
+        'and', 'or', 'not', 'is', 'null', 'in', 'between', 'like', 'ilike', 'escape',
+        'true', 'false', 'asc', 'desc', 'cast', 'convert', 'coalesce', 'isnull', 'nullif',
+        'lower', 'upper', 'ltrim', 'rtrim', 'trim', 'len', 'length',
+        'getdate', 'getutcdate', 'sysdatetime', 'sysutcdatetime', 'now', 'current_timestamp', 'current_date',
+        'dateadd', 'datediff', 'year', 'month', 'day',
+        'as', 'case', 'when', 'then', 'else', 'end', 'where',
+        'int', 'integer', 'bigint', 'smallint', 'tinyint',
+        'varchar', 'nvarchar', 'char', 'nchar', 'text',
+        'date', 'time', 'datetime', 'datetime2', 'datetimeoffset', 'decimal', 'numeric',
+        'float', 'real', 'bit', 'boolean', 'uuid', 'uniqueidentifier', 'max',
+    ]);
+
+    /**
+     * Linear O(N) character scanner (zero regexes — immune to ReDoS) that strips single-quoted
+     * SQL string literals and `@p` / `$n` parameter placeholders, extracts all bracketed `[Col]`,
+     * double-quoted `"Col"`, and bare identifier tokens (lowercased), and returns `null` if an
+     * unclosed quote/bracket or comment token (`--`, `/*`) is encountered.
+     */
+    private static extractWhereIdentifierTokens(sql: string): string[] | null {
+        const tokens: string[] = [];
+        const len = sql.length;
+        let i = 0;
+
+        const isIdentStart = (ch: number): boolean =>
+            (ch >= 65 && ch <= 90) || (ch >= 97 && ch <= 122) || ch === 95;
+        const isIdentPart = (ch: number): boolean =>
+            isIdentStart(ch) || (ch >= 48 && ch <= 57);
+        const isDigit = (ch: number): boolean => ch >= 48 && ch <= 57;
+
+        while (i < len) {
+            const code = sql.charCodeAt(i);
+
+            // Reject SQL line/block comments conservatively
+            if ((code === 45 && i + 1 < len && sql.charCodeAt(i + 1) === 45) ||
+                (code === 47 && i + 1 < len && sql.charCodeAt(i + 1) === 42)) {
+                return null;
+            }
+
+            // N'...' national string literal prefix
+            if ((code === 78 || code === 110) && i + 1 < len && sql.charCodeAt(i + 1) === 39) {
+                i += 2;
+                let closed = false;
+                while (i < len) {
+                    if (sql.charCodeAt(i) === 39) {
+                        if (i + 1 < len && sql.charCodeAt(i + 1) === 39) {
+                            i += 2;
+                            continue;
+                        }
+                        i++;
+                        closed = true;
+                        break;
+                    }
+                    i++;
+                }
+                if (!closed) return null;
+                continue;
+            }
+
+            // '...' single-quoted string literal
+            if (code === 39) {
+                i++;
+                let closed = false;
+                while (i < len) {
+                    if (sql.charCodeAt(i) === 39) {
+                        if (i + 1 < len && sql.charCodeAt(i + 1) === 39) {
+                            i += 2;
+                            continue;
+                        }
+                        i++;
+                        closed = true;
+                        break;
+                    }
+                    i++;
+                }
+                if (!closed) return null;
+                continue;
+            }
+
+            // @param token
+            if (code === 64) {
+                i++;
+                while (i < len && isIdentPart(sql.charCodeAt(i))) {
+                    i++;
+                }
+                continue;
+            }
+
+            // $1 positional parameter token
+            if (code === 36 && i + 1 < len && isDigit(sql.charCodeAt(i + 1))) {
+                i += 2;
+                while (i < len && isDigit(sql.charCodeAt(i))) {
+                    i++;
+                }
+                continue;
+            }
+
+            // [Identifier] bracketed column
+            if (code === 91) {
+                const start = i + 1;
+                const end = sql.indexOf(']', start);
+                if (end === -1) return null;
+                const ident = sql.slice(start, end).trim().toLowerCase();
+                if (ident.length > 0) {
+                    tokens.push(ident);
+                }
+                i = end + 1;
+                continue;
+            }
+
+            // "Identifier" double-quoted column
+            if (code === 34) {
+                const start = i + 1;
+                const end = sql.indexOf('"', start);
+                if (end === -1) return null;
+                const ident = sql.slice(start, end).trim().toLowerCase();
+                if (ident.length > 0) {
+                    tokens.push(ident);
+                }
+                i = end + 1;
+                continue;
+            }
+
+            // Numeric literal (skip digits so e.g. 1e5 isn't treated as identifier e5)
+            if (isDigit(code)) {
+                i++;
+                while (i < len && (isIdentPart(sql.charCodeAt(i)) || sql.charCodeAt(i) === 46)) {
+                    i++;
+                }
+                continue;
+            }
+
+            // Bare identifier or keyword
+            if (isIdentStart(code)) {
+                const start = i;
+                i++;
+                while (i < len && isIdentPart(sql.charCodeAt(i))) {
+                    i++;
+                }
+                tokens.push(sql.slice(start, i).toLowerCase());
+                continue;
+            }
+
+            i++;
+        }
+
+        return tokens;
+    }
+
     protected BuildTotalRowCountSQL(
         entityInfo: EntityInfo,
         usingPagination: boolean,
         maxRowsForQuery: number,
         baseViewOverride?: string,
-        schemaNameOverride?: string
+        schemaNameOverride?: string,
+        whereSQL?: string
     ): string | null {
         const rowsAreLimited = usingPagination || maxRowsForQuery > 0;
         if (!rowsAreLimited) return null;
-        return `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(schemaNameOverride ?? entityInfo.SchemaName, baseViewOverride ?? entityInfo.BaseView)}`;
+
+        const effectiveBaseView = baseViewOverride ?? entityInfo.BaseView;
+        const effectiveSchema = schemaNameOverride ?? entityInfo.SchemaName;
+
+        const isStandardBaseView = !baseViewOverride ||
+            (entityInfo.BaseView && baseViewOverride.trim().toLowerCase() === entityInfo.BaseView.trim().toLowerCase());
+
+        const target = (isStandardBaseView && this.CanCountFromBaseTable(entityInfo, whereSQL ?? ''))
+            ? this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseTable)
+            : this.QuoteSchemaAndView(effectiveSchema, effectiveBaseView);
+
+        return `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${target}`;
     }
 
     /**
@@ -3518,12 +3814,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const effectiveSchemaName = effectiveTarget.schemaName;
             const topFragment = topSQL ? topSQL + ' ' : '';
             let viewSQL = `SELECT ${topFragment}${fields} FROM ${this.QuoteSchemaAndView(effectiveSchemaName, effectiveBaseView)}`;
-            // count_only ALWAYS needs the count query — BuildTotalRowCountSQL only emits
-            // it when rows are limited (its pagination purpose), which previously left
-            // count_only with no COUNT at all (silently returned TotalRowCount 0).
-            let countSQL: string | null = params.ResultType === 'count_only'
-                ? `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(effectiveSchemaName, effectiveBaseView)}`
-                : this.BuildTotalRowCountSQL(entityInfo, usingPagination, maxRowsForQuery, effectiveBaseView, effectiveSchemaName);
+            let countSQL: string | null = null;
 
             // ── WHERE clause assembly ──
             let whereSQL = '';
@@ -3623,7 +3914,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     // SECURITY: the view ID is interpolated; a loaded view's ID is always a GUID.
                     if (!IsValidUUID(String(viewEntity?.ID ?? '')))
                         throw new Error(`ExcludeDataFromAllPriorViewRuns requires a saved view with a GUID ID`);
-                    sExcludeSQL += ` UserViewID=${viewEntity?.ID})`;
+                    sExcludeSQL += ` UserViewID='${viewEntity?.ID}')`;
                 }
                 else {
                     // SECURITY: excludeUserViewRunID is user-supplied (GraphQL input) and is
@@ -3635,7 +3926,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     // anything that is not a well-formed GUID before it reaches the query.
                     if (!/^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/.test(excludeUserViewRunID))
                         throw new Error(`Invalid ExcludeUserViewRunID: must be a GUID`);
-                    sExcludeSQL += ` UserViewRunID=${excludeUserViewRunID})`;
+                    sExcludeSQL += ` UserViewRunID='${excludeUserViewRunID}')`;
                 }
 
                 if (overrideExcludeFilter.length > 0) {
@@ -3649,7 +3940,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             }
 
             // 5. Row-Level Security — role RLS AND API-key row filters (GetEffectiveRowFilterWhereClause; the role-RLS exemption applies only to the role layer)
-            const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '');
+            //    The user's values bind as parameters (#5713), so every user runs the same SQL text and
+            //    the database reuses one plan per query shape. Two paths keep literals because their
+            //    statement cannot carry parameters: the coalesced count batch (one UNION ALL across
+            //    views) and view-run logging (which rebuilds the statement around this WHERE). A
+            //    parameterized ExtraFilter also keeps them literal: its placeholders are numbered from
+            //    the same dialect sequence, and one statement binds a single parameter list.
+            const logsViewRun = !!(viewEntity?.ID && String(viewEntity.ID).length > 0 && saveViewResults && user);
+            const rlsBinder = countExecutor || logsViewRun || queryParameters.length > 0
+                ? null
+                : this.CreateRowFilterParameterBinder();
+            const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '', rlsBinder ?? undefined);
+            const rlsParameters: RowFilterBoundParameter[] = rlsBinder?.Parameters ?? [];
+            const boundParameters: RowFilterBoundParameter[] | undefined = rlsParameters.length > 0 ? rlsParameters : undefined;
             if (rlsWhereClause && rlsWhereClause.length > 0) {
                 whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
                 bHasWhere = true;
@@ -3659,6 +3962,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             //    The count is the total matching the user-visible filters; the seek predicate is
             //    a pagination cursor, conceptually distinct from "how many records match overall".
             const seekPredicateForData = usingKeyset ? keysetSeekPredicate : '';
+
+            // ── COUNT query assembly (with automatic BaseTable rewrite when safe) ──
+            const isCountOnly = params.ResultType === 'count_only';
+            if (isCountOnly) {
+                const isStandardBaseView = !effectiveBaseView ||
+                    (entityInfo.BaseView && effectiveBaseView.trim().toLowerCase() === entityInfo.BaseView.trim().toLowerCase());
+                const countTarget = (isStandardBaseView && this.CanCountFromBaseTable(entityInfo, whereSQL))
+                    ? this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseTable)
+                    : this.QuoteSchemaAndView(effectiveSchemaName, effectiveBaseView);
+                countSQL = `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${countTarget}`;
+            } else {
+                countSQL = this.BuildTotalRowCountSQL(entityInfo, usingPagination, maxRowsForQuery, effectiveBaseView, effectiveSchemaName, whereSQL);
+            }
 
             if (bHasWhere) {
                 viewSQL += ` WHERE ${whereSQL}`;
@@ -3796,11 +4112,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 sqlQueryKeys.push('aggregate');
             }
 
-            const boundParams = queryParameters.length > 0 ? queryParameters : undefined;
+            // At most one of the two lists is non-empty: row-filter values stay literal when the
+            // ExtraFilter binds parameters (step 5).
+            const boundParams: RowFilterBoundParameter[] | undefined = queryParameters.length > 0 ? queryParameters : boundParameters;
             const boundBatchParams = queryParameters.length > 0 ? sqlQueries.map(() => queryParameters) : undefined;
             const resultMap: Record<string, unknown> = {};
             if (sqlQueries.length === 1 && !countExecutorPromise) {
                 resultMap[sqlQueryKeys[0]] = await this.ExecuteSQL(sqlQueries[0], boundParams, undefined, contextUser);
+            } else if (sqlQueries.length > 1 && boundParameters) {
+                const batchResults = await this.ExecuteSQLBatchWithSharedParameters(sqlQueries, boundParameters, undefined, contextUser);
+                sqlQueryKeys.forEach((key, index) => { resultMap[key] = batchResults[index]; });
             } else if (sqlQueries.length > 0 && countExecutorPromise) {
                 const [batchResults, countRes] = await Promise.all([
                     sqlQueries.length === 1
@@ -4165,7 +4486,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
     /**
      * Returns the SELECT list for a single-record load: `*` normally, or an explicit list of
-     * the columns this user is allowed to read when field security denies them any.
+     * the columns this user is allowed to read when field security denies them any. With
+     * `tableAlias`, every column (or the `*`) is qualified with it.
      *
      * Deliberately NOT routed through RunView, which is the other way to get this behavior.
      * That reroute is the tidier long-term shape and is planned separately (it must pass
@@ -4173,19 +4495,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * — and it changes relationship loading, which stays on its current path). Filtering the
      * column list here buys the same protection without touching either.
      */
-    protected buildFieldSecuritySelectList(entityInfo: EntityInfo, user: UserInfo | undefined): string {
+    protected buildFieldSecuritySelectList(entityInfo: EntityInfo, user: UserInfo | undefined, tableAlias?: string): string {
+        const prefix = tableAlias ? `${tableAlias}.` : '';
         if (!user || !entityInfo.FieldLevelSecurityApplies) {
-            return '*'; // the overwhelmingly common case — one boolean, unchanged SQL
+            return `${prefix}*`; // the overwhelmingly common case — one boolean, unchanged SQL
         }
         const denied = entityInfo.GetDeniedReadFields(user);
         if (denied.size === 0) {
-            return '*';
+            return `${prefix}*`;
         }
         const allowed = entityInfo.Fields.filter(f => !denied.has(f.Name.trim().toLowerCase()));
         if (allowed.length === 0) {
-            return '*'; // degenerate; PKs are unrestrictable so this should be unreachable
+            return `${prefix}*`; // degenerate; PKs are unrestrictable so this should be unreachable
         }
-        return allowed.map(f => this.QuoteIdentifier(f.Name)).join(', ');
+        return allowed.map(f => `${prefix}${this.QuoteIdentifier(f.Name)}`).join(', ');
     }
 
     /**
@@ -8043,8 +8366,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
         // Append Read row filters — role RLS AND API-key filters (GetEffectiveRowFilterWhereClause)
         let fullWhere = where;
+        let rlsParameters: RowFilterBoundParameter[] = [];
         if (user) {
-            const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '');
+            const rlsBinder = this.CreateRowFilterParameterBinder();
+            const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '', rlsBinder ?? undefined);
+            if (rlsBinder?.Parameters?.length) {
+                rlsParameters = rlsBinder.Parameters;
+            }
             if (rlsWhereClause && rlsWhereClause.length > 0) {
                 fullWhere = `${where} AND (${rlsWhereClause})`;
             }
@@ -8061,7 +8389,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // Unrestricted users keep the literal `SELECT *` — byte-identical SQL, no plan churn.
         const selectList = this.buildFieldSecuritySelectList(entityInfo, user);
         const sql = `SELECT ${selectList} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)} WHERE ${fullWhere}`;
-        const rawData = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, user);
+        const queryParams = rlsParameters.length > 0 ? rlsParameters : undefined;
+        const rawData = await this.ExecuteSQL<Record<string, unknown>>(sql, queryParams, undefined, user);
         const d = await this.PostProcessRows(rawData, entityInfo, user);
 
         if (d && d.length > 0) {
@@ -8088,15 +8417,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
                     // An EntityRelationship joins on ONE column (RelatedEntityJoinField / JoinEntityJoinField)
                     // that references this entity's key — a single-column foreign-key target by metadata design.
-                    const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: relationship join field is a single-column FK target
-                    const pkValue = ret[entity.FirstPrimaryKey.Name]; // first-pk-ok: relationship join field is a single-column FK target
-                    let relSql: string;
-
-                    if (relInfo.Type.trim().toLowerCase() === 'one to many') {
-                        relSql = `SELECT * FROM ${this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.RelatedEntityBaseView)} WHERE ${this.QuoteIdentifier(relInfo.RelatedEntityJoinField)} = ${quotes}${pkValue}${quotes}`;
-                    } else {
-                        // many to many — use join view
-                        relSql = `SELECT _theview.* FROM ${this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.RelatedEntityBaseView)} _theview INNER JOIN ${this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.JoinView)} _jv ON _theview.${this.QuoteIdentifier(relInfo.RelatedEntityJoinField)} = _jv.${this.QuoteIdentifier(relInfo.JoinEntityInverseJoinField)} WHERE _jv.${this.QuoteIdentifier(relInfo.JoinEntityJoinField)} = ${quotes}${pkValue}${quotes}`;
+                    const relSql = this.BuildRelatedRowsLoadSQL(
+                        relInfo,
+                        relEntityInfo,
+                        ret[entity.FirstPrimaryKey.Name], // first-pk-ok: relationship join field is a single-column FK target
+                        entity.FirstPrimaryKey.NeedsQuotes, // first-pk-ok: relationship join field is a single-column FK target
+                        user,
+                    );
+                    if (relSql === null) {
+                        LogStatus(`[GenericDatabaseProvider] Skipping relationship '${rel}' on '${entityInfo.Name}': the user cannot read '${relEntityInfo.Name}'.`);
+                        continue;
                     }
 
                     const rawRelData = await this.ExecuteSQL<Record<string, unknown>>(relSql, undefined, undefined, user);
@@ -8108,6 +8438,45 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             return ret;
         }
         return null;
+    }
+
+    /**
+     * Builds the SELECT for one relationship of a single-record load, or returns null when the
+     * user may not read the related entity at all (the caller skips the relationship).
+     *
+     * The related rows get the same protection the parent row gets: the column list leaves out
+     * fields the user may not read, and the user's Read row filter narrows the rows. A user with
+     * no field denials and no row filter gets the same SQL as before. With no user (server-side
+     * system work) nothing is narrowed, which matches the parent load.
+     *
+     * For a many-to-many relationship the row filter is applied inside a derived table over the
+     * related view, so its column names cannot clash with the join view's.
+     */
+    protected BuildRelatedRowsLoadSQL(
+        relInfo: EntityRelationshipInfo,
+        relEntityInfo: EntityInfo,
+        pkValue: unknown,
+        pkNeedsQuotes: boolean,
+        user: UserInfo | undefined,
+    ): string | null {
+        if (user && !relEntityInfo.GetUserPermisions(user)?.CanRead) {
+            return null;
+        }
+        const quotes = pkNeedsQuotes ? "'" : '';
+        const safeValue = pkNeedsQuotes ? String(pkValue).replace(/'/g, "''") : String(pkValue);
+        const keyLiteral = `${quotes}${safeValue}${quotes}`;
+        const rowFilter = user ? relEntityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '') : '';
+        const relatedView = this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.RelatedEntityBaseView);
+
+        if (relInfo.Type.trim().toLowerCase() === 'one to many') {
+            const filterClause = rowFilter ? ` AND (${rowFilter})` : '';
+            return `SELECT ${this.buildFieldSecuritySelectList(relEntityInfo, user)} FROM ${relatedView} WHERE ${this.QuoteIdentifier(relInfo.RelatedEntityJoinField)} = ${keyLiteral}${filterClause}`;
+        }
+
+        // many to many — through the join view
+        const columns = this.buildFieldSecuritySelectList(relEntityInfo, user, '_theview');
+        const source = rowFilter ? `(SELECT * FROM ${relatedView} WHERE (${rowFilter}))` : relatedView;
+        return `SELECT ${columns} FROM ${source} _theview INNER JOIN ${this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.JoinView)} _jv ON _theview.${this.QuoteIdentifier(relInfo.RelatedEntityJoinField)} = _jv.${this.QuoteIdentifier(relInfo.JoinEntityInverseJoinField)} WHERE _jv.${this.QuoteIdentifier(relInfo.JoinEntityJoinField)} = ${keyLiteral}`;
     }
 
     /**************************************************************************/
@@ -8125,7 +8494,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         type: EntityPermissionType
     ): Promise<boolean> {
         const entityInfo = entity.EntityInfo;
-        const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, type, '');
+        const rlsBinder = this.CreateRowFilterParameterBinder();
+        const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, type, '', rlsBinder ?? undefined);
         if (!rlsWhereClause || rlsWhereClause.length === 0) {
             return true;
         }
@@ -8143,7 +8513,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         }).join(' AND ');
 
         const sql = `SELECT COUNT(*) AS cnt FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)} WHERE ${pkWhere} AND (${rlsWhereClause})`;
-        const result = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, user);
+        const queryParams = rlsBinder?.Parameters?.length ? rlsBinder.Parameters : undefined;
+        const result = await this.ExecuteSQL<Record<string, unknown>>(sql, queryParams, undefined, user);
         return result && result.length > 0 && Number(result[0]['cnt']) > 0;
     }
 
@@ -8160,14 +8531,24 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         user: UserInfo
     ): Promise<boolean> {
         const entityInfo = entity.EntityInfo;
-        const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Create, '');
+        const rlsBinder = this.CreateRowFilterParameterBinder();
+        const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Create, '', rlsBinder ?? undefined);
         if (!rlsWhereClause || rlsWhereClause.length === 0) {
             return true;
         }
 
-        const projections = this.BuildRLSSyntheticRowProjections(entity, entityInfo);
-        const sql = `SELECT CASE WHEN (${rlsWhereClause}) THEN 1 ELSE 0 END AS pass FROM (SELECT ${projections}) AS newrow`;
-        const result = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, user);
+        const syntheticRow = this.BuildRLSSyntheticRowProjectionsParameterized(
+            entity,
+            entityInfo,
+            false,
+            rlsBinder?.Parameters?.length ?? 0
+        );
+        const allParams: RowFilterBoundParameter[] = [
+            ...(rlsBinder?.Parameters ?? []),
+            ...syntheticRow.parameters
+        ];
+        const sql = `SELECT CASE WHEN (${rlsWhereClause}) THEN 1 ELSE 0 END AS pass FROM (SELECT ${syntheticRow.projections}) AS newrow`;
+        const result = await this.ExecuteSQL<Record<string, unknown>>(sql, allParams.length > 0 ? allParams : undefined, undefined, user);
         return result && result.length > 0 && Number(result[0]['pass']) === 1;
     }
 
@@ -8190,7 +8571,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         user: UserInfo
     ): Promise<boolean> {
         const entityInfo = entity.EntityInfo;
-        const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Update, '');
+        const rlsBinder = this.CreateRowFilterParameterBinder();
+        const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Update, '', rlsBinder ?? undefined);
         if (!rlsWhereClause || rlsWhereClause.length === 0) {
             return true;
         }
@@ -8206,9 +8588,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             }
         }
 
-        const projections = this.BuildRLSSyntheticRowProjections(entity, entityInfo);
-        const sql = `SELECT CASE WHEN (${rlsWhereClause}) THEN 1 ELSE 0 END AS pass FROM (SELECT ${projections}) AS newrow`;
-        const result = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, user);
+        const syntheticRow = this.BuildRLSSyntheticRowProjectionsParameterized(
+            entity,
+            entityInfo,
+            false,
+            rlsBinder?.Parameters?.length ?? 0
+        );
+        const allParams: RowFilterBoundParameter[] = [
+            ...(rlsBinder?.Parameters ?? []),
+            ...syntheticRow.parameters
+        ];
+        const sql = `SELECT CASE WHEN (${rlsWhereClause}) THEN 1 ELSE 0 END AS pass FROM (SELECT ${syntheticRow.projections}) AS newrow`;
+        const result = await this.ExecuteSQL<Record<string, unknown>>(sql, allParams.length > 0 ? allParams : undefined, undefined, user);
         return result && result.length > 0 && Number(result[0]['pass']) === 1;
     }
 
@@ -8260,12 +8651,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 }
             }
         }
-        const projections = this.BuildRLSSyntheticRowProjections(entity, entity.EntityInfo, true);
-        const sql = `SELECT CASE WHEN (${trimmed}) THEN 1 ELSE 0 END AS pass FROM (SELECT ${projections}) AS newrow`;
+        const syntheticRow = this.BuildRLSSyntheticRowProjectionsParameterized(entity, entity.EntityInfo, true);
+        const sql = `SELECT CASE WHEN (${trimmed}) THEN 1 ELSE 0 END AS pass FROM (SELECT ${syntheticRow.projections}) AS newrow`;
         try {
             const result = await this.ExecuteSQL<Record<string, number | string | boolean | null>>(
                 sql,
-                undefined,
+                syntheticRow.parameters.length > 0 ? syntheticRow.parameters : undefined,
                 undefined,
                 user
             );
@@ -8302,6 +8693,73 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             columns.push((m[1] ?? m[2] ?? m[3]).trim().toLowerCase());
         }
         return columns.length > 0 ? columns : null;
+    }
+
+    /**
+     * Builds field projections and query parameters for an RLS synthetic-row subquery.
+     * Null fields are projected as typed `CAST(NULL AS <sqltype>)`.
+     * Non-null fields are bound as query parameters rather than interpolated literals.
+     */
+    protected BuildRLSSyntheticRowProjectionsParameterized(
+        entity: BaseEntity,
+        entityInfo: EntityInfo,
+        includeISAParentFields: boolean = false,
+        paramStartIndex: number = 0
+    ): { projections: string; parameters: RowFilterBoundParameter[] } {
+        const dialect = this.getDialect();
+        const parts: string[] = [];
+        const parameters: RowFilterBoundParameter[] = [];
+        const parentFieldNames = includeISAParentFields ? entityInfo.ParentEntityFieldNames : undefined;
+
+        for (const field of entityInfo.Fields) {
+            if (field.IsVirtual && !parentFieldNames?.has(field.Name)) continue;
+            const val = entity.Get(field.Name);
+
+            if (val == null) {
+                parts.push(`${this.renderRLSProjectionValue(field, val)} AS ${this.QuoteIdentifier(field.Name)}`);
+            } else if (val instanceof Uint8Array) {
+                const hex = Buffer.from(val).toString('hex');
+                const hexExpr = dialect?.BinaryTypeNames.includes('bytea')
+                    ? `decode('${hex}', 'hex')`
+                    : (hex.length > 0 ? `0x${hex}` : '0x');
+                parts.push(`${hexExpr} AS ${this.QuoteIdentifier(field.Name)}`);
+            } else {
+                const paramIdx = paramStartIndex + parameters.length;
+                const placeholder = dialect ? dialect.Binding.ParameterPlaceholder(paramIdx) : `@_syn_p${paramIdx}`;
+                const paramName = placeholder.startsWith('@') ? placeholder.slice(1) : placeholder;
+
+                let boundValue: TypedQueryParameterValue;
+                if (typeof val === 'boolean' || val instanceof Date || typeof val === 'number') {
+                    boundValue = val;
+                } else if (field.NeedsQuotes) {
+                    boundValue = String(val);
+                } else {
+                    const num = Number(String(val));
+                    if (!Number.isFinite(num)) {
+                        throw new Error(
+                            `Cannot build RLS projection: value for numeric field ${field.Name} does not parse as a number`
+                        );
+                    }
+                    boundValue = num;
+                }
+
+                parameters.push(new NamedQueryParameter(paramName, boundValue));
+                const baseType = field.Type;
+                if (baseType && baseType.trim().length > 0) {
+                    const isBinary = /^(var)?binary$/i.test(baseType.trim());
+                    const charLength = field.Length === -1 || isBinary ? field.Length : field.MaxLength;
+                    const mapped = dialect?.MapDataTypeToString(baseType, charLength, field.Precision, field.Scale);
+                    const mappedType = mapped ?? field.SQLFullType ?? baseType;
+                    parts.push(`CAST(${placeholder} AS ${mappedType}) AS ${this.QuoteIdentifier(field.Name)}`);
+                } else if (field.SQLFullType && field.SQLFullType.trim().length > 0) {
+                    parts.push(`CAST(${placeholder} AS ${field.SQLFullType}) AS ${this.QuoteIdentifier(field.Name)}`);
+                } else {
+                    parts.push(`${placeholder} AS ${this.QuoteIdentifier(field.Name)}`);
+                }
+            }
+        }
+
+        return { projections: parts.join(', '), parameters };
     }
 
     /**

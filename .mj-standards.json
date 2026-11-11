@@ -70,7 +70,7 @@
           "V202611022155__v6.2.x__Anchored_Conversations_And_Record_Comments.sql",
           "V202611022300__v6.2.x__Semantic_Graph_And_Graph_Concepts.sql",
           "V202611030307__v6.2.x__Diagnostic_Bundles.sql",
-          "V202611040751__v6.2.x__Document_Sequence_Counter.sql",
+          "V202611040751__v6.3.x__Document_Sequence_Counter.sql",
           "V202611062303__v6.3.x__EntityFieldValue_OrganicKey_Source.sql"
         ]
       }

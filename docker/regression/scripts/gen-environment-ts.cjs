@@ -5,6 +5,9 @@
  * with `new URL()` which rejects relative paths. We point it at
  * http://localhost:4200/api/ — nginx proxies /api/ to mjapi:4000 inside the
  * compose network, so the browser never has to resolve docker hostnames.
+ * MJAPI_URI points MJAPI's other routes (/auth/providers, /auth/login-screen,
+ * /oauth/*, /media/*) through the same proxy; without it Explorer requests them
+ * from the site root and nginx answers with index.html.
  *
  * Inputs come from build args (passed in via Dockerfile.explorer):
  *   AUTH0_DOMAIN
@@ -25,6 +28,7 @@ const content = [
     'export const environment = {',
     "  GRAPHQL_URI: 'http://localhost:4200/api/',",
     "  GRAPHQL_WS_URI: 'ws://localhost:4200/api/',",
+    "  MJAPI_URI: 'http://localhost:4200/api',",
     "  REDIRECT_URI: 'http://localhost:4200/',",
     "  CLIENT_ID: '',",
     "  TENANT_ID: '',",

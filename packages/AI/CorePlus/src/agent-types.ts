@@ -1691,7 +1691,7 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * `paused: true` is start-paused — nothing is claimed until Resume/Step.
      * Must travel with the submit; Pause-after-submit races the first dispatcher poll.
      */
-    taskGraphDebug?: { paused?: boolean };
+    taskGraphDebug?: { paused?: boolean; breakpointStepIDs?: string[] };
 
     /**
      * The security envelope of the task-graph node this run executes, set by the task-graph agent runner

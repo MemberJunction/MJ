@@ -544,10 +544,24 @@ export function DecideTypeOverlay(
       : { value: MapSourceType(''), winner: 'Discovered' };
   }
   const mapped = MapSourceType(sourceType as string);
+  // #3527: integration schemas used to store every number as nvarchar. An EXISTING string column is not
+  // retyped to a number on re-discovery (schema evolution only widens strings); only new columns are typed.
+  if (IsLegacyStringNumber(declared, mapped)) {
+    return { value: declared, winner: 'Declared' };
+  }
   if (declared.length === 0 || declared === mapped) {
     return { value: mapped, winner: declared === mapped ? 'Declared' : 'Discovered' };
   }
   return { value: mapped, winner: 'Discovered' };
+}
+
+/** The numeric MJ types integration schemas now persist instead of nvarchar (#3527). */
+const TYPED_NUMERIC_FIELD_TYPES: ReadonlySet<string> = new Set(['int', 'bigint', 'decimal', 'float']);
+
+/** True when an existing string column would be retyped to a number — kept as it is (#3527). */
+export function IsLegacyStringNumber(declaredType: string, mappedType: string): boolean {
+  const declared = declaredType.trim().toLowerCase();
+  return (declared === 'nvarchar' || declared === 'varchar') && TYPED_NUMERIC_FIELD_TYPES.has(mappedType);
 }
 
 /** @deprecated Use {@link DecideTypeOverlay}. */
@@ -608,7 +622,7 @@ function MapSourceType(sourceType: string): string {
   if (t === 'nvarchar(max)' || t === 'varchar(max)' || t === 'ntext') return 'nvarchar(MAX)'; // already-MAX → preserve on re-discovery
   if (t === 'string' || t === 'nvarchar' || t === 'varchar' || t === 'nchar' || t === 'char') return 'nvarchar';
   if (t === 'integer' || t === 'int') return 'int';
-  if (t === 'bigint') return 'bigint';
+  if (t === 'bigint' || t === 'long') return 'bigint';
   if (t === 'smallint') return 'smallint';
   if (t === 'tinyint') return 'tinyint';
   if (t === 'decimal' || t === 'currency' || t === 'money' || t === 'number' || t === 'numeric' || t === 'percent') return 'decimal';
