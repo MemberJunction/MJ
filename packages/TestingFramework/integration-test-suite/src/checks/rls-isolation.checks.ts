@@ -504,28 +504,88 @@ function requireSeededMixedUser(): UserInfo {
     return user;
 }
 
+interface CapturedSqlStatement {
+    Sql: string;
+    Parameters?: unknown[];
+}
+
 /**
- * Records every statement the provider sends while `run` executes. RunView reaches the database
- * through `ExecuteSQL` (one statement) or `ExecuteSQLBatch` (data + count), so both are wrapped on
+ * Resolves bound `@rls_p<n>` / `$<n>` parameter placeholders in `stmt.Sql` back to their SQL string
+ * literals so the emitted statement can be verified against both literal and parameterized (#5713)
+ * row-level security predicates — proving BOTH the SQL placeholder and the bound parameter value
+ * reached the driver.
+ */
+function resolveBoundParametersInSql(stmt: CapturedSqlStatement): string {
+    if (!Array.isArray(stmt.Parameters) || stmt.Parameters.length === 0) {
+        return stmt.Sql;
+    }
+    let resolved = stmt.Sql;
+    for (const rawParam of stmt.Parameters) {
+        if (!rawParam || typeof rawParam !== 'object') {
+            continue;
+        }
+        const paramObj = rawParam as { Name?: unknown; Value?: unknown };
+        if (typeof paramObj.Name !== 'string' || paramObj.Name.length === 0 || paramObj.Value === undefined) {
+            continue;
+        }
+        const token = paramObj.Name.startsWith('@') || paramObj.Name.startsWith('$')
+            ? paramObj.Name
+            : `@${paramObj.Name}`;
+        const literal = paramObj.Value === null
+            ? 'NULL'
+            : `'${String(paramObj.Value).replace(/'/g, "''")}'`;
+        const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        resolved = resolved.replace(new RegExp(`${escapedToken}(?![A-Za-z0-9_])`, 'g'), () => literal);
+    }
+    return resolved;
+}
+
+/**
+ * Records every statement (and its bound parameters) the provider sends while `run` executes.
+ * RunView reaches the database through `ExecuteSQL` (one statement), `ExecuteSQLBatch` (unparameterized
+ * batch), or `ExecuteSQLBatchWithSharedParameters` (parameterized batch), so all three are wrapped on
  * the instance and the prototype methods are restored afterwards.
  */
-async function captureEmittedSql(provider: GenericDatabaseProvider, run: () => Promise<void>): Promise<string[]> {
-    const statements: string[] = [];
+async function captureEmittedSql(provider: GenericDatabaseProvider, run: () => Promise<void>): Promise<CapturedSqlStatement[]> {
+    const statements: CapturedSqlStatement[] = [];
     const single = provider.ExecuteSQL.bind(provider);
     const batch = provider.ExecuteSQLBatch.bind(provider);
+    const providerWithSharedBatch = provider as unknown as {
+        ExecuteSQLBatchWithSharedParameters: (
+            queries: string[],
+            parameters: unknown[],
+            options?: unknown,
+            contextUser?: UserInfo,
+        ) => Promise<Record<string, unknown>[][]>;
+    };
+    const sharedBatch = providerWithSharedBatch.ExecuteSQLBatchWithSharedParameters.bind(provider);
     provider.ExecuteSQL = <T>(query: string, parameters?: unknown[], options?: ExecuteSQLOptions, contextUser?: UserInfo): Promise<T[]> => {
-        statements.push(query);
+        statements.push({ Sql: query, Parameters: parameters });
         return single<T>(query, parameters, options, contextUser);
     };
     provider.ExecuteSQLBatch = (...args: Parameters<GenericDatabaseProvider['ExecuteSQLBatch']>): ReturnType<GenericDatabaseProvider['ExecuteSQLBatch']> => {
-        statements.push(...args[0]);
+        for (const q of args[0]) {
+            statements.push({ Sql: q });
+        }
         return batch(...args);
+    };
+    providerWithSharedBatch.ExecuteSQLBatchWithSharedParameters = (
+        queries: string[],
+        parameters: unknown[],
+        options?: unknown,
+        contextUser?: UserInfo,
+    ): Promise<Record<string, unknown>[][]> => {
+        for (const q of queries) {
+            statements.push({ Sql: q, Parameters: parameters });
+        }
+        return sharedBatch(queries, parameters, options, contextUser);
     };
     try {
         await run();
     } finally {
         Reflect.deleteProperty(provider, 'ExecuteSQL');
         Reflect.deleteProperty(provider, 'ExecuteSQLBatch');
+        Reflect.deleteProperty(provider, 'ExecuteSQLBatchWithSharedParameters');
     }
     return statements;
 }
@@ -574,10 +634,10 @@ export async function CheckRls13MixedRolesEmittedSql(ctx: IntegrationCheckContex
         );
         Assert(result.Success, `RunView on '${MIXED_RLS_ENTITY}' as ${SEEDED_MIXED_EMAIL} failed: ${result.ErrorMessage}`);
     });
-    const reads = statements.filter(s => s.toLowerCase().includes(view));
+    const reads = statements.filter(s => s.Sql.toLowerCase().includes(view));
     Assert(reads.length > 0, `no statement against ${entity!.BaseView} was sent (captured ${statements.length} statement(s))`);
-    const unscoped = reads.filter(s => !s.includes(clause));
-    Assert(unscoped.length === 0, `RLS LEAK: a read of ${entity!.BaseView} was sent without the clause ${clause}: ${unscoped[0]}`);
+    const unscoped = reads.filter(s => !resolveBoundParametersInSql(s).includes(clause));
+    Assert(unscoped.length === 0, `RLS LEAK: a read of ${entity!.BaseView} was sent without the clause ${clause}: ${unscoped[0]?.Sql}`);
 }
 
 /**

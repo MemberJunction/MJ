@@ -172,6 +172,15 @@ const componentRegistrySchema = z.object({
   headers: z.record(z.string()).optional(),
 }).passthrough(); // Allow additional fields
 
+/**
+ * Unified notification delivery (#5983). Each names a configured Communication Provider; unset falls back to the
+ * NOTIFICATION_EMAIL_PROVIDER / NOTIFICATION_SMS_PROVIDER environment variables, then SendGrid / Twilio.
+ */
+const notificationsSchema = z.object({
+  emailProvider: z.string().optional(),
+  smsProvider: z.string().optional(),
+}).passthrough();
+
 const scheduledJobsSchema = z.object({
   enabled: z.boolean().optional().default(false),
   systemUserEmail: z.string().optional().default('system@memberjunction.org'),
@@ -995,6 +1004,7 @@ const configInfoSchema = z.object({
   authProviders: z.array(authProviderSchema).optional(),
   componentRegistries: z.array(componentRegistrySchema).optional(),
   scheduledJobs: scheduledJobsSchema.optional().default({}),
+  notifications: notificationsSchema.optional().default({}),
   agentSessions: AgentSessionsSchema.optional().default({}),
   agentRunWatchdog: AgentRunWatchdogSchema.optional().default({}),
   conversationDetailReconciler: ConversationDetailReconcilerSchema.optional().default({}),
