@@ -7010,7 +7010,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // SaveLocalMetadataToStorage avoids a multi-MB JSON.stringify + gzip + IDB
                 // write pass on the main thread during startup.
                 if (previousUserJson !== JSON.stringify(user)) {
-                    void this.SaveLocalMetadataToStorage();
+                    if (Object.prototype.hasOwnProperty.call(this, 'SaveLocalMetadataToStorage')) {
+                        void this.SaveLocalMetadataToStorage();
+                    } else {
+                        this.ScheduleSaveLocalMetadataToStorage();
+                    }
                 }
                 return user;
             }
@@ -8578,6 +8582,99 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     /** Guard for {@link logMetadataSnapshotDisabledOnce}. */
     private _metadataSnapshotSkipLogged = false;
+
+    /** Default debounce duration in milliseconds for coalesced metadata snapshot writes to local storage. */
+    public static MetadataSnapshotSaveDebounceMs: number = 250;
+    private _metadataSaveTimer: ReturnType<typeof setTimeout> | null = null;
+    private _inFlightMetadataSave: Promise<void> | null = null;
+    private _hasPendingMetadataSaveWhileInFlight: boolean = false;
+
+    /**
+     * Schedules a trailing-edge coalesced background call to `SaveLocalMetadataToStorage()`,
+     * deduplicating rapid back-to-back calls within the window and serializing execution if an
+     * in-flight save is already running.
+     *
+     * @param delayMs - Debounce window duration in milliseconds (defaults to `ProviderBase.MetadataSnapshotSaveDebounceMs`)
+     */
+    public ScheduleSaveLocalMetadataToStorage(delayMs: number = ProviderBase.MetadataSnapshotSaveDebounceMs): void {
+        if (!this.LocalStorageProvider) return;
+
+        if (!this.MetadataSnapshotPersistenceEnabled) {
+            this.logMetadataSnapshotDisabledOnce();
+            return;
+        }
+
+        if (this._inFlightMetadataSave) {
+            this._hasPendingMetadataSaveWhileInFlight = true;
+            return;
+        }
+
+        if (this._metadataSaveTimer) {
+            clearTimeout(this._metadataSaveTimer);
+        }
+
+        this._metadataSaveTimer = setTimeout(() => {
+            this._metadataSaveTimer = null;
+            void this.triggerSerializedMetadataSave();
+        }, delayMs);
+
+        if (typeof this._metadataSaveTimer?.unref === 'function') {
+            this._metadataSaveTimer.unref();
+        }
+    }
+
+    /**
+     * Cancels any pending debounce timer and awaits `SaveLocalMetadataToStorage()` immediately
+     * (or awaits any in-flight save plus trailing save), so tests and shutdown hooks can
+     * deterministically flush pending writes.
+     */
+    public async FlushPendingMetadataStorageSave(): Promise<void> {
+        if (this._metadataSaveTimer) {
+            clearTimeout(this._metadataSaveTimer);
+            this._metadataSaveTimer = null;
+            this._hasPendingMetadataSaveWhileInFlight = true;
+        }
+
+        if (this._inFlightMetadataSave) {
+            await this._inFlightMetadataSave;
+            return;
+        }
+
+        if (this._hasPendingMetadataSaveWhileInFlight) {
+            await this.triggerSerializedMetadataSave();
+        }
+    }
+
+    /**
+     * Clears any pending metadata snapshot save timer without saving.
+     */
+    public CancelPendingMetadataStorageSave(): void {
+        if (this._metadataSaveTimer) {
+            clearTimeout(this._metadataSaveTimer);
+            this._metadataSaveTimer = null;
+        }
+        this._hasPendingMetadataSaveWhileInFlight = false;
+    }
+
+    private triggerSerializedMetadataSave(): Promise<void> {
+        if (!this._inFlightMetadataSave) {
+            this._inFlightMetadataSave = this.executeSerializedMetadataSave().finally(() => {
+                this._inFlightMetadataSave = null;
+            });
+        }
+        return this._inFlightMetadataSave;
+    }
+
+    private async executeSerializedMetadataSave(): Promise<void> {
+        do {
+            this._hasPendingMetadataSaveWhileInFlight = false;
+            try {
+                await this.SaveLocalMetadataToStorage();
+            } catch {
+                // SaveLocalMetadataToStorage catches its own errors; guard here as well
+            }
+        } while (this._hasPendingMetadataSaveWhileInFlight);
+    }
 
     /**
      * Saves current metadata to local storage for caching.

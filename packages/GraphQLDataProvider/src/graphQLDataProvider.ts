@@ -33,6 +33,7 @@ import { GraphQLAIClient } from "./graphQLAIClient";
 import { BrowserIndexedDBStorageProvider } from "./storage-providers";
 import { SanitizeGraphQLError, ToSafeGraphQLError } from "./sanitizeGraphQLError";
 import { IsGraphQLMutation, FirstGraphQLOperationKind, ExtractGraphQLOperationName } from "./graphQLOperationKind";
+import { ClientTabInvalidationMultiplexer, TabMultiplexerEnvironment, CacheInvalidationEventData } from "./ClientTabInvalidationMultiplexer";
 
 /**
  * Structured network operation observation emitted by {@link GraphQLDataProvider}
@@ -483,14 +484,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return g ? g[GraphQLDataProvider._globalStoreKey] as GraphQLDataProvider : undefined;
     }
 
-    constructor() {
+    constructor(ignoreExistingSingleton: boolean = false) {
         super();
-        const g = GetGlobalObjectStore();
-        if (g && g[GraphQLDataProvider._globalStoreKey]) {
-            return g[GraphQLDataProvider._globalStoreKey] as this;
-        }
-        if (g) {
-            g[GraphQLDataProvider._globalStoreKey] = this;
+        if (!ignoreExistingSingleton) {
+            const g = GetGlobalObjectStore();
+            if (g && g[GraphQLDataProvider._globalStoreKey]) {
+                return g[GraphQLDataProvider._globalStoreKey] as this;
+            }
+            if (g) {
+                g[GraphQLDataProvider._globalStoreKey] = this;
+            }
         }
     }
 
@@ -5056,6 +5059,31 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     private _lastCacheInvalidationSequence = 0;
     private _lastCacheServerProcessId: string | null = null;
     private _catchUpInFlight: Promise<boolean> | null = null;
+    private _tabMuxEnv: TabMultiplexerEnvironment | null = null;
+    private _tabInvalidationMultiplexer: ClientTabInvalidationMultiplexer | null = null;
+
+    /**
+     * Enables or disables multi-tab cache invalidation multiplexing across tabs.
+     * When true (default) and Web Locks + BroadcastChannel/SharedWorker are supported,
+     * tabs coordinate to elect a single leader tab that maintains the WebSocket subscription
+     * and relays invalidations to follower tabs.
+     */
+    public static EnableMultiTabInvalidationMultiplexing: boolean = true;
+
+    /**
+     * Injects a test or custom browser environment for multi-tab cache invalidation multiplexing.
+     * Allows deterministic simulation of Web Locks and BroadcastChannel in tests.
+     */
+    public SetTabInvalidationMultiplexerEnvironment(env: TabMultiplexerEnvironment | null): void {
+        this._tabMuxEnv = env;
+    }
+
+    /**
+     * Gets the active multi-tab invalidation multiplexer, if initialized.
+     */
+    public get TabInvalidationMultiplexer(): ClientTabInvalidationMultiplexer | null {
+        return this._tabInvalidationMultiplexer;
+    }
 
     /**
      * Latest monotonic cache invalidation sequence number observed from the server.
@@ -5100,6 +5128,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         this._lastCacheInvalidationSequence = 0;
         this._lastCacheServerProcessId = null;
         this._catchUpInFlight = null;
+        if (this._tabInvalidationMultiplexer) {
+            void this._tabInvalidationMultiplexer.Dispose();
+            this._tabInvalidationMultiplexer = null;
+        }
     }
 
     /**
@@ -5125,7 +5157,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return;
         }
         if (serverSequence > this._lastCacheInvalidationSequence) {
-            void this.CatchUpCacheInvalidations(this._lastCacheInvalidationSequence);
+            if (this._tabInvalidationMultiplexer && !this._tabInvalidationMultiplexer.IsLeader) {
+                void this._tabInvalidationMultiplexer.RequestCatchUp(
+                    serverSequence,
+                    serverProcessId ?? this._lastCacheServerProcessId
+                );
+            } else {
+                void this.CatchUpCacheInvalidations(this._lastCacheInvalidationSequence);
+            }
         }
     }
 
@@ -5200,10 +5239,27 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 this._lastCacheInvalidationSequence = catchUp.CurrentSequence;
             }
             if (catchUp.RequiresFullRefresh) {
+                if (this._tabInvalidationMultiplexer?.IsLeader) {
+                    this._tabInvalidationMultiplexer.PublishWatermarkSync(
+                        catchUp.CurrentSequence,
+                        catchUp.ServerProcessID,
+                        true
+                    );
+                }
                 return false;
             }
             for (const event of catchUp.Events) {
                 this.dispatchCacheInvalidationEvent(event);
+                if (this._tabInvalidationMultiplexer?.IsLeader) {
+                    this._tabInvalidationMultiplexer.PublishInvalidationToFollowers(event, this._lastCacheServerProcessId);
+                }
+            }
+            if (this._tabInvalidationMultiplexer?.IsLeader) {
+                this._tabInvalidationMultiplexer.PublishWatermarkSync(
+                    catchUp.CurrentSequence,
+                    catchUp.ServerProcessID,
+                    false
+                );
             }
             return true;
         } catch (err) {
@@ -5214,23 +5270,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
-    private dispatchCacheInvalidationEvent(event: {
-        EntityName: string;
-        PrimaryKeyValues: string | null;
-        Action: string;
-        SourceServerID: string;
-        Timestamp: string;
-        OriginSessionID?: string;
-        RecordData?: string;
-        Sequence?: number;
-    }): void {
+    private dispatchCacheInvalidationEvent(event: CacheInvalidationEventData): void {
         if (typeof event.Sequence === 'number' && event.Sequence > this._lastCacheInvalidationSequence) {
             this._lastCacheInvalidationSequence = event.Sequence;
         }
 
         // Skip events that originated from this browser session — we already
         // handled the cache update locally via the BaseEntity.Save()/Delete() event.
-        if (event.OriginSessionID && event.OriginSessionID === this.sessionId) {
+        if (event.OriginSessionID && (UUIDsEqual(event.OriginSessionID, this.sessionId) || event.OriginSessionID === this.sessionId)) {
             if (GraphQLDataProvider.VerboseCacheInvalidationLogging) {
                 console.debug(`[GraphQLDataProvider] Skipping self-originated cache invalidation for "${event.EntityName}" (action: ${event.Action})`);
             }
@@ -5292,12 +5339,68 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public SubscribeToCacheInvalidation(): void {
-        if (this._cacheInvalidationSubscription) {
-            return; // Already subscribed
+        if (this._cacheInvalidationSubscription || this._tabInvalidationMultiplexer) {
+            return; // Already subscribed or multiplexing active
         }
 
         if (!this.ConfigData?.WSURL) {
             return; // No WebSocket URL configured, skip
+        }
+
+        if (GraphQLDataProvider.EnableMultiTabInvalidationMultiplexing &&
+            ClientTabInvalidationMultiplexer.IsSupported(this._tabMuxEnv)) {
+            const userId = this.CurrentUser?.ID ?? 'anon';
+            const scopeKey = `${this.ConfigData.WSURL}|${userId}`;
+            this._tabInvalidationMultiplexer = new ClientTabInvalidationMultiplexer({
+                ScopeKey: scopeKey,
+                Environment: this._tabMuxEnv,
+                Callbacks: {
+                    OnBecomeLeader: async () => {
+                        this.openCacheInvalidationSubscription();
+                        if (this._lastCacheInvalidationSequence > 0) {
+                            await this.CatchUpCacheInvalidations(this._lastCacheInvalidationSequence);
+                        }
+                    },
+                    OnLoseLeadership: () => {
+                        this.closeCacheInvalidationSubscription();
+                    },
+                    OnRemoteInvalidation: (event: CacheInvalidationEventData, serverProcessId: string | null) => {
+                        if (serverProcessId) {
+                            this._lastCacheServerProcessId = serverProcessId;
+                        }
+                        this.dispatchCacheInvalidationEvent(event);
+                    },
+                    OnPerformCatchUp: async (_targetSeq: number, _srvProcId: string | null) => {
+                        return this.CatchUpCacheInvalidations(this._lastCacheInvalidationSequence);
+                    },
+                    GetCurrentSequence: () => this._lastCacheInvalidationSequence,
+                    GetServerProcessId: () => this._lastCacheServerProcessId,
+                    OnWatermarkSync: (sequence: number, serverProcessId: string | null, requiresFullRefresh: boolean) => {
+                        if (serverProcessId) {
+                            this._lastCacheServerProcessId = serverProcessId;
+                        }
+                        if (sequence > this._lastCacheInvalidationSequence) {
+                            this._lastCacheInvalidationSequence = sequence;
+                        }
+                        if (requiresFullRefresh) {
+                            void this.CatchUpCacheInvalidations(this._lastCacheInvalidationSequence);
+                        }
+                    },
+                },
+            });
+            this._tabInvalidationMultiplexer.Start();
+            return;
+        }
+
+        this.openCacheInvalidationSubscription();
+    }
+
+    private openCacheInvalidationSubscription(): void {
+        if (this._cacheInvalidationSubscription) {
+            return;
+        }
+        if (!this.ConfigData?.WSURL) {
+            return;
         }
 
         const CACHE_INVALIDATION_SUB = gql`subscription CacheInvalidation {
@@ -5316,10 +5419,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         const observable = this.Subscribe(CACHE_INVALIDATION_SUB);
 
         this._cacheInvalidationSubscription = observable.subscribe({
-            next: (data: Record<string, { EntityName: string; PrimaryKeyValues: string | null; Action: string; SourceServerID: string; Timestamp: string; OriginSessionID?: string; RecordData?: string; Sequence?: number }>) => {
+            next: (data: Record<string, CacheInvalidationEventData>) => {
                 const event = data?.cacheInvalidation;
                 if (!event) return;
                 this.dispatchCacheInvalidationEvent(event);
+                if (this._tabInvalidationMultiplexer?.IsLeader) {
+                    this._tabInvalidationMultiplexer.PublishInvalidationToFollowers(event, this._lastCacheServerProcessId);
+                }
             },
             error: (error: unknown) => {
                 console.error('[GraphQLDataProvider] Cache invalidation subscription error:', error);
@@ -5331,6 +5437,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 this._cacheInvalidationSubscription = null;
             },
         });
+    }
+
+    private closeCacheInvalidationSubscription(): void {
+        if (this._cacheInvalidationSubscription) {
+            this._cacheInvalidationSubscription.unsubscribe();
+            this._cacheInvalidationSubscription = null;
+        }
     }
 
     /**
@@ -5396,10 +5509,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      */
     public UnsubscribeFromCacheInvalidation(): void {
         this.CancelPendingMetadataMemberRefresh();
-        if (this._cacheInvalidationSubscription) {
-            this._cacheInvalidationSubscription.unsubscribe();
-            this._cacheInvalidationSubscription = null;
+        if (this._tabInvalidationMultiplexer) {
+            void this._tabInvalidationMultiplexer.Dispose();
+            this._tabInvalidationMultiplexer = null;
         }
+        this.closeCacheInvalidationSubscription();
     }
 
     /**************************************************************************
