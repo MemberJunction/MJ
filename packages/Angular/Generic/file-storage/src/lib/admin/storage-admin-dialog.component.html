@@ -103,7 +103,7 @@
                     </td>
                     <td>
                       <span class="mj-provider-badge">
-                        <i [class]="GetProviderIcon(row.provider?.Name || row.account.Provider)"></i>
+                        <i [class]="GetProviderIcon(row.provider?.Name || row.account.Provider || '')"></i>
                         <span>{{ row.provider?.Name || row.account.Provider }}</span>
                       </span>
                     </td>

@@ -290,10 +290,11 @@ export interface RealtimeUnitPrice {
 }
 
 /**
- * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
- * their own; the cost rows stay the authority for token prices. A price belongs to the host that
- * charges it, so set this on the model-vendor row: a price on the model or the model type would
- * reach every vendor that serves the model.
+ * Prices for realtime usage that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own: avatar video, and audio tokens, which providers bill at a different rate from the
+ * text tokens a cost row prices. The cost rows stay the authority for every other token price. A
+ * price belongs to the host that charges it, so set this on the model-vendor row: a price on the
+ * model or the model type would reach every vendor that serves the model.
  */
 export interface RealtimePricingSettings {
     /**
@@ -307,6 +308,22 @@ export interface RealtimePricingSettings {
      * at 6,192 tokens per second.
      */
     AvatarVideoOutput?: RealtimeUnitPrice | null;
+    /**
+     * The price of audio input tokens, charged on a line of its own instead of at the cost row's
+     * input rate. Realtime providers bill audio tokens at a different rate from text tokens (GPT
+     * Realtime: several times the text rate), and a cost row holds one input rate. `'Per 1M Tokens'`
+     * only; any other unit is not applied. Cached audio input tokens are priced at the cost row's cache-read rate, not here. Without this
+     * price, audio input tokens are priced at the cost row's input rate and the run's default cost
+     * line is marked as blended.
+     */
+    AudioInput?: RealtimeUnitPrice | null;
+    /**
+     * The price of audio output tokens, charged on a line of its own instead of at the cost row's
+     * output rate. `'Per 1M Tokens'` only; any other unit is not applied. Without this price, audio
+     * output tokens are priced at the cost row's output rate and the run's default cost line is
+     * marked as blended.
+     */
+    AudioOutput?: RealtimeUnitPrice | null;
 }
 
 /** Realtime (speech-to-speech) knobs. */
@@ -352,6 +369,44 @@ export interface RealtimeConfigurationSettings {
      * model-vendor row.
      */
     Pricing?: RealtimePricingSettings | null;
+
+    /**
+     * Maximum duration in seconds of a single underlying provider transport connection
+     * (WebSocket or WebRTC call) before the provider closes or resets the socket
+     * (for example, 600s on Gemini Live WebSockets, 3600s on OpenAI Realtime, 7200s on xAI).
+     *
+     * Set on `MJ: AI Models.ModelConfiguration` and overridable on
+     * `MJ: AI Model Vendors.ModelConfiguration`. When elapsed (minus `ReconnectBufferSeconds`),
+     * the realtime framework triggers a proactive in-place reconnect on `BaseRealtimeModel` /
+     * `BaseRealtimeClient`.
+     */
+    ConnectionMaxSeconds?: number | null;
+
+    /**
+     * Maximum duration in seconds of a single provider credential or session ceiling
+     * when it differs from `ConnectionMaxSeconds` (for example, 1800s ephemeral token ceiling
+     * on Gemini Developer API vs. 600s per WebSocket connection, or 3600s client_secret TTL on xAI
+     * vs. 7200s WebSocket session ceiling). Overridable at the `MJ: AI Model Vendors` level.
+     */
+    SessionMaxSeconds?: number | null;
+
+    /**
+     * Buffer in seconds before `ConnectionMaxSeconds` expiry at which the framework initiates
+     * a proactive reconnect. Defaults to 10 seconds when omitted.
+     */
+    ReconnectBufferSeconds?: number | null;
+
+    /**
+     * Whether the provider's native session resumption handle/ID reliably restores prior
+     * conversation turns on this endpoint.
+     *
+     * - `true`: pass the native resumption handle/ID and do NOT re-inject conversation history
+     *   (e.g., Gemini Enterprise / Vertex AI `v1`, xAI `resumption.enabled` + `conversation_id`).
+     * - `false`: feed `RealtimeConversationMemory` history into the reconnected session even if
+     *   the provider emits a resumption handle (e.g., Gemini Developer API `v1alpha` ephemeral tokens).
+     * - `null` / `undefined`: defer to the driver's runtime default.
+     */
+    TrustNativeResumption?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */

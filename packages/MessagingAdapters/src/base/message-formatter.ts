@@ -5,6 +5,7 @@
 
 import { OpenResourceCommand } from '@memberjunction/ai-core-plus';
 import { MarkdownSection } from './types.js';
+import { TrimTrailingSlashes } from '@memberjunction/global';
 
 /**
  * Split Markdown text into typed sections for platform-specific formatting.
@@ -108,7 +109,28 @@ export function convertBoldToSlackFormat(text: string): string {
  * @returns Text with Slack-compatible links.
  */
 export function ConvertLinksToSlackFormat(text: string): string {
-    return text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<$2|$1>');
+    // An index scan with the same matches as `/\[([^\]]+)\]\(([^)]+)\)/g`. That regex rescans to
+    // the next `]` from every `[`, which is quadratic on text with many unclosed brackets.
+    let out = '';
+    let copied = 0;
+    let open = text.indexOf('[');
+    while (open !== -1) {
+        const close = text.indexOf(']', open + 1);
+        if (close === -1) break;
+        if (close > open + 1 && text[close + 1] === '(') {
+            const end = text.indexOf(')', close + 2);
+            if (end === -1) break;
+            if (end > close + 2) {
+                out += `${text.substring(copied, open)}<${text.substring(close + 2, end)}|${text.substring(open + 1, close)}>`;
+                copied = end + 1;
+                open = text.indexOf('[', copied);
+                continue;
+            }
+        }
+        // Every `[` before `close` shares this `]`, so it fails the same way.
+        open = text.indexOf('[', close + 1);
+    }
+    return out + text.substring(copied);
 }
 
 /** @deprecated Use {@link ConvertLinksToSlackFormat}. */
@@ -294,7 +316,7 @@ export function isOpenableURI(url: unknown): boolean {
  */
 export function BuildExplorerDeepLink(cmd: OpenResourceCommand, explorerBaseURL?: string): string | null {
     if (!explorerBaseURL) return null;
-    const base = explorerBaseURL.replace(/\/+$/, '');
+    const base = TrimTrailingSlashes(explorerBaseURL);
 
     switch (cmd.resourceType) {
         case 'Record':

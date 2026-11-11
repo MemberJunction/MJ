@@ -3,6 +3,7 @@
  * File-emission only — never executes SQL.
  */
 import { EscapeSQLString } from '@memberjunction/global';
+import { GetDialect } from '@memberjunction/sql-dialect';
 import type { DatabasePlatform, TargetColumnConfig, TargetTableConfig, ColumnModification } from './interfaces.js';
 
 /** Characters allowed in identifiers (schema, table, column names). */
@@ -36,33 +37,87 @@ export class DDLGenerator {
         ValidateIdentifier(config.TableName, 'table');
 
         const q = platform === 'sqlserver' ? QuoteSqlServer : QuotePostgres;
+        const d = GetDialect(platform);
         const fullTable = `${q(config.SchemaName)}.${q(config.TableName)}`;
 
         const lines: string[] = [];
 
-        // User-configured columns (includes PK fields as regular columns)
-        const pkFieldSet = new Set(config.PrimaryKeyFields.map(f => f.toLowerCase()));
+        // User-configured columns (includes PK, Soft FK, and Organic Key fields as regular columns)
+        const indexedColSet = new Set<string>([
+            ...(config.PrimaryKeyFields ?? []).map(f => f.toLowerCase()),
+            ...(config.SoftForeignKeys ?? []).map(fk => fk.FieldName.toLowerCase()),
+            ...(config.OrganicKeyFields ?? []).flat().map(c => c.toLowerCase()),
+        ]);
         for (const col of config.Columns) {
             ValidateIdentifier(col.TargetColumnName, 'column');
             const nullable = col.IsNullable ? 'NULL' : 'NOT NULL';
             const defaultExpr = col.DefaultValue != null ? ` DEFAULT ${col.DefaultValue}` : '';
-            // NVARCHAR(MAX) cannot be indexed — cap PK columns to NVARCHAR(450)
-            const isPkCol = pkFieldSet.has(col.TargetColumnName.toLowerCase());
-            const sqlType = isPkCol && col.TargetSqlType.toUpperCase() === 'NVARCHAR(MAX)'
-                ? 'NVARCHAR(450)'
-                : col.TargetSqlType;
+            // NVARCHAR(MAX) and NVARCHAR(>450) cannot be indexed on SQL Server — cap indexed key columns to NVARCHAR(450)
+            const isIndexedCol = indexedColSet.has(col.TargetColumnName.toLowerCase());
+            const sqlType = isIndexedCol ? d.CapIndexableType(col.TargetSqlType) : col.TargetSqlType;
             lines.push(`    ${q(col.TargetColumnName)} ${sqlType} ${nullable}${defaultExpr}`);
         }
 
         // Standard integration columns (prefixed to avoid collisions)
         lines.push(...this.standardColumns(platform));
 
-        // PK is SOFT-ONLY — declared in additionalSchemaInfo (which CodeGen reads to set the entity's
-        // metadata PK), and emitted as NO database constraint here: not a PRIMARY KEY, and not even a
-        // UNIQUE. Integration PKs are *inferred* (naming + streamed-data statistics at p<0.05), so
-        // enforcing one — even as UNIQUE — would reject valid rows the moment an inference is wrong.
-        // Dedupe is the engine's job via the record-map, not a DB key. So the table carries the PK
-        // columns as ordinary columns; their PK-ness lives only in additionalSchemaInfo.
+        // PK/FK/OrganicKey are SOFT-ONLY — declared in additionalSchemaInfo/metadata, and emitted as
+        // NO database constraint (not PRIMARY KEY, not UNIQUE, not FOREIGN KEY). Instead we emit
+        // idempotent NON-UNIQUE indexes so lookups and joins use Index Seek without blocking writes.
+        const softIndexes: string[] = [];
+        const indexedTuples = new Set<string>();
+
+        if (config.PrimaryKeyFields && config.PrimaryKeyFields.length > 0) {
+            config.PrimaryKeyFields.forEach(f => ValidateIdentifier(f, 'pk column'));
+            const tupleKey = config.PrimaryKeyFields.map(f => f.toLowerCase()).join(',');
+            if (!indexedTuples.has(tupleKey)) {
+                indexedTuples.add(tupleKey);
+                softIndexes.push(
+                    d.CreateIndexIfAbsent({
+                        schema: config.SchemaName,
+                        tableName: config.TableName,
+                        indexName: `IX_${config.SchemaName}_${config.TableName}_PK`,
+                        columns: config.PrimaryKeyFields,
+                        unique: false,
+                    })
+                );
+            }
+        }
+
+        for (const fk of config.SoftForeignKeys ?? []) {
+            ValidateIdentifier(fk.FieldName, 'soft-fk column');
+            const tupleKey = fk.FieldName.toLowerCase();
+            if (!indexedTuples.has(tupleKey)) {
+                indexedTuples.add(tupleKey);
+                softIndexes.push(
+                    d.CreateIndexIfAbsent({
+                        schema: config.SchemaName,
+                        tableName: config.TableName,
+                        indexName: `IX_${config.SchemaName}_${config.TableName}_FK_${fk.FieldName}`,
+                        columns: [fk.FieldName],
+                        unique: false,
+                    })
+                );
+            }
+        }
+
+        for (const cols of config.OrganicKeyFields ?? []) {
+            if (cols.length === 0) continue;
+            cols.forEach(c => ValidateIdentifier(c, 'organic-key column'));
+            const tupleKey = cols.map(c => c.toLowerCase()).join(',');
+            if (!indexedTuples.has(tupleKey)) {
+                indexedTuples.add(tupleKey);
+                softIndexes.push(
+                    d.CreateIndexIfAbsent({
+                        schema: config.SchemaName,
+                        tableName: config.TableName,
+                        indexName: `IX_${config.SchemaName}_${config.TableName}_OK_${cols.join('_')}`,
+                        columns: cols,
+                        unique: false,
+                    })
+                );
+            }
+        }
 
         const body = lines.join(',\n');
         // Idempotent create: skip if the physical table already exists. Makes re-running
@@ -71,12 +126,14 @@ export class DDLGenerator {
         // "There is already an object named '<table>'" collisions.
         const createTable = this.generateIdempotentCreateTableStatement(fullTable, body, platform);
 
+        const trailing: string[] = [...softIndexes];
         // Generate extended properties for descriptions (SQL Server only)
         if (platform === 'sqlserver') {
-            const extProps = this.GenerateExtendedProperties(config);
-            if (extProps.length > 0) {
-                return createTable + '\n\n' + extProps.join('\n\n');
-            }
+            trailing.push(...this.GenerateExtendedProperties(config));
+        }
+
+        if (trailing.length > 0) {
+            return createTable + '\n\n' + trailing.join('\n\n');
         }
 
         return createTable;

@@ -17,9 +17,14 @@ export interface PSSection {
   readonly group: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
-/** Studio door — the build/run workbench: Overview, then Build (pipelines, algorithms) and Run (experiments, compare). */
+/**
+ * Studio door — the analyst workbench: Overview, then Define (Prediction Units, Evaluation Protocols), Build
+ * (pipelines, algorithms) and Run (experiments, compare).
+ */
 export const STUDIO_SECTIONS: readonly PSSection[] = [
   { key: 'home', label: 'Overview', icon: 'fa-solid fa-gauge-high', group: '' },
+  { key: 'units', label: 'Prediction Units', icon: 'fa-solid fa-crosshairs', group: 'Define' },
+  { key: 'protocols', label: 'Evaluation Protocols', icon: 'fa-solid fa-scale-balanced', group: 'Define' },
   { key: 'pipelines', label: 'Training Pipelines', icon: 'fa-solid fa-diagram-project', group: 'Build' },
   { key: 'catalog', label: 'Algorithm Catalog', icon: 'fa-solid fa-shapes', group: 'Build' },
   { key: 'experiments', label: 'Experiments', icon: 'fa-solid fa-flask', group: 'Run' },
@@ -40,39 +45,19 @@ export function SectionGroups(sections: readonly PSSection[]): string[] {
   return [...new Set(sections.map((s) => s.group))];
 }
 
-/** @deprecated Use {@link SectionGroups}. */
-export function sectionGroups(sections: readonly PSSection[]): string[] {
-  return SectionGroups(sections);
-}
-
 /** The sections belonging to one left-nav group, preserving declaration order. */
 export function SectionsInGroup(sections: readonly PSSection[], group: string): PSSection[] {
   return sections.filter((s) => s.group === group);
 }
 
-/** @deprecated Use {@link SectionsInGroup}. */
-export function sectionsInGroup(sections: readonly PSSection[], group: string): PSSection[] {
-  return SectionsInGroup(sections, group);
-}
-
 /** Resolve a section's display label (falls back to the key when unknown — never throws). */
 export function SectionLabel(sections: readonly PSSection[], key: PSPanelKey): string {
-  return sections.find((s) => s.key === key)?.label ?? key;
-}
-
-/** @deprecated Use {@link SectionLabel}. */
-export function sectionLabel(sections: readonly PSSection[], key: PSPanelKey): string {
-  return SectionLabel(sections, key);
+  return sections.find((s) => s.key === key)?.label || key;
 }
 
 /** Resolve a section's icon (falls back to a neutral default when unknown). */
 export function SectionIcon(sections: readonly PSSection[], key: PSPanelKey): string {
-  return sections.find((s) => s.key === key)?.icon ?? 'fa-solid fa-wand-magic-sparkles';
-}
-
-/** @deprecated Use {@link SectionIcon}. */
-export function sectionIcon(sections: readonly PSSection[], key: PSPanelKey): string {
-  return SectionIcon(sections, key);
+  return sections.find((s) => s.key === key)?.icon || 'fa-solid fa-wand-magic-sparkles';
 }
 
 /** Whether `key` is a section hosted inside the given door. */
@@ -80,15 +65,10 @@ export function HasSection(sections: readonly PSSection[], key: PSPanelKey): boo
   return sections.some((s) => s.key === key);
 }
 
-/** @deprecated Use {@link HasSection}. */
-export function hasSection(sections: readonly PSSection[], key: PSPanelKey): boolean {
-  return HasSection(sections, key);
-}
-
 /**
  * Where a Home("Overview")-panel `navigate(PSPanelKey)` intent should land now that the sections are
  * split across two doors:
- * - a Studio section (pipelines / catalog / experiments / compare) → switch the active section in-place;
+ * - a Studio section (units / protocols / pipelines / catalog / experiments / compare) → switch the active section in-place;
  * - a Models section (registry / production) → cross-door switch to the Models app nav item, deep-linked
  *   to that section;
  * - `home` (or anything unmapped) → no-op (we're already on Studio's Overview).
@@ -103,9 +83,4 @@ export function RouteHomeNavigate(key: PSPanelKey): HomeNavTarget {
   if (HasSection(MODELS_SECTIONS, key)) return { Kind: 'app', NavLabel: MODELS_NAV_LABEL, Section: key };
   if (HasSection(STUDIO_SECTIONS, key)) return { Kind: 'section', Key: key };
   return { Kind: 'none' };
-}
-
-/** @deprecated Use {@link RouteHomeNavigate}. */
-export function routeHomeNavigate(key: PSPanelKey): HomeNavTarget {
-  return RouteHomeNavigate(key);
 }

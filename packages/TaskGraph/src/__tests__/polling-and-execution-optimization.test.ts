@@ -20,6 +20,9 @@ const WORKFLOW_TYPE_ID = '11111111-1111-4111-8111-111111111111';
 
 interface MockParentRecord {
     ID: string;
+    /** A workflow: filed under the workflow type, with no parent of its own. */
+    TypeID: string;
+    ParentID: string | null;
     Name: string;
     Status: string;
     PercentComplete: number;
@@ -45,6 +48,8 @@ function makeParentRecord(id: string, name: string, invocationData?: Record<stri
     });
     return {
         ID: id,
+        TypeID: WORKFLOW_TYPE_ID,
+        ParentID: null,
         Name: name,
         Status: 'In Progress',
         PercentComplete: 0,
@@ -511,6 +516,38 @@ describe('TaskGraphDispatcher polling & execution query optimizations (Items 2.1
 
         spyFromProvider.mockRestore();
     });
+
+    it("walks a graph's dependency rows once however many tasks ask for their prerequisites", () => {
+        const dispatcher = new TaskGraphDispatcher(
+            { CreateProvider: vi.fn() },
+            { RunAgentForTask: vi.fn() },
+            TEST_USER,
+            { InstanceID: 'inst-index' },
+        );
+        const internals = dispatcher as unknown as {
+            upstreamTasksInGraph: (taskID: string, graph: object) => MJTaskEntity[];
+            extractDependencyOutputsFromGraph: (taskID: string, graph: object) => Map<string, unknown>;
+        };
+        const ids = Array.from({ length: 6 }, (_, i) => `aaaaaaaa-0000-4000-8000-00000000000${i}`);
+        const entityById = new Map(ids.map((id) => [id, makeChildTask({ ID: id, ParentID: 'p', Name: id, OutputPayload: JSON.stringify({ from: id }) })]));
+        // Each task depends on the one before it, its ID written upper-case so the lookup compares IDs, not strings.
+        const deps = ids.slice(1).map((id, i) => makeDependency(`dep-${i}`, id.toUpperCase(), ids[i]));
+        let walks = 0;
+        const counted = Object.assign([...deps], {
+            [Symbol.iterator]: function* () { walks++; yield* deps; },
+        });
+        const graph = { rawDependencies: counted, entityById };
+
+        for (const id of ids) {
+            internals.upstreamTasksInGraph(id, graph);
+            internals.extractDependencyOutputsFromGraph(id, graph);
+        }
+
+        expect(walks).toBe(1);
+        expect(internals.upstreamTasksInGraph(ids[3], graph).map((t) => t.ID)).toEqual([ids[2]]);
+        expect(internals.extractDependencyOutputsFromGraph(ids[3], graph).get(ids[2])).toEqual({ from: ids[2] });
+        expect(internals.upstreamTasksInGraph(ids[0], graph)).toEqual([]);
+    });
 });
 
 describe('TaskGraphService.Submit & persistComputedLayout parallelization (Item 2.3)', () => {
@@ -640,6 +677,8 @@ describe('TaskGraphService.Submit & persistComputedLayout parallelization (Item 
                 edges: Array<{ taskId: string; dependsOnTaskId: string; dependencyType: 'FinishToStart' }>;
             }): Promise<void>;
         };
+        // Its saves run in the dispatcher's scope, bound to its user.
+        (dispatcher as unknown as { contextUser: UserInfo }).contextUser = TEST_USER;
 
         await dispatcher.persistComputedLayout({
             entityById: new Map<string, MJTaskEntity>([

@@ -176,16 +176,20 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       return;
     }
 
-    // Check if we need to reload due to user change
-    if (this._loadedForUserId && this._loadedForUserId !== userId) {
-      forceRefresh = true; // Force refresh if user changed
-    }
-
     // On the client (Network/GraphQL provider), filter user-specific entities by UserID
     // to avoid loading all users' data. On the server (Database provider), load everything
     // because the server handles multiple users from a single process.
-    const isClientSide = this.ProviderToUse.ProviderType === 'Network';
-    const userFilter = isClientSide && userId ? `UserID='${userId}'` : undefined;
+    const isClientSide = md.ProviderType === 'Network';
+
+    // Check if we need to reload due to user change.
+    // Only client-side instances filter by UserID (`userFilter` below); server-side instances
+    // hold the full unfiltered multi-user dataset in memory, so a different caller's contextUser
+    // must NOT force an 8-table BypassCache reload or clobber `_loadedForUserId`.
+    if (isClientSide && this._loadedForUserId && !UUIDsEqual(this._loadedForUserId, userId)) {
+      forceRefresh = true; // Force refresh if client user changed
+    }
+
+    const userFilter = isClientSide && userId ? `UserID='${EscapeSQLString(userId)}'` : undefined;
 
     const configs: Partial<BaseEnginePropertyConfig>[] = [
       {
@@ -253,7 +257,9 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     ];
 
     await super.Load(configs, provider, forceRefresh, contextUser);
-    this._loadedForUserId = userId;
+    if (isClientSide || forceRefresh || !this._loadedForUserId) {
+      this._loadedForUserId = userId;
+    }
   }
 
   // ========================================================================

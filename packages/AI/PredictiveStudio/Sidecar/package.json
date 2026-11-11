@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/predictive-studio-sidecar",
-  "version": "6.2.0",
-  "description": "Self-managing TypeScript wrapper for the Predictive Studio Python ML sidecar. Spawns a bundled FastAPI microservice as a child process (managed mode) or connects to a remote/containerized instance, exposing a typed /train + /predict + /health client.",
+  "version": "6.3.0-edge.0",
+  "description": "Self-managing TypeScript wrapper for the Predictive Studio Python ML sidecar. Spawns a bundled FastAPI microservice as a child process (managed mode) or connects to a remote/containerized instance, exposing a typed /trainer + /predict + /health client.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "setup:python": "node scripts/setup-python.mjs",
-    "test:python": "node scripts/run-pytest.mjs"
+    "test:python": "node scripts/run-pytest.mjs",
+    "test:gate-parity": "node scripts/run-pytest.mjs -p no:cacheprovider tests/test_gate_parity.py"
   },
   "keywords": [
     "memberjunction",
@@ -32,7 +33,7 @@
   },
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/predictive-studio-core": "6.2.0"
+    "@memberjunction/predictive-studio-core": "6.3.0-edge.0"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

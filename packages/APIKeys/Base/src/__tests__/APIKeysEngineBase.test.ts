@@ -18,6 +18,8 @@ vi.mock('@memberjunction/core', () => {
     }
     get Loaded() { return this._loaded; }
     get ContextUser() { return { ID: 'system-user' }; }
+    // The real one re-reads the table, then rebuilds derived state through AdditionalLoading.
+    async RefreshItem(_propertyName: string) { await (this as unknown as { AdditionalLoading(u: unknown): Promise<void> }).AdditionalLoading(this.ContextUser); }
     TryThrowIfNotLoaded() {}
     static getInstance<T>(): T {
       return new (this as unknown as { new(): T })();
@@ -328,5 +330,21 @@ describe('APIKeysEngineBase refresh interval', () => {
     engine.SetRefreshInterval(30000);
     await Promise.resolve();
     expect(loadCalls(engine)).toHaveLength(2);
+  });
+});
+
+describe('APIKeysEngineBase timed refresh rebuilds the lookup maps', () => {
+  it('serves the re-read application row by ID and name after RefreshItem', async () => {
+    const engine = APIKeysEngineBase.Instance;
+    (engine as unknown as Record<string, unknown>)['_scopes'] = [];
+    (engine as unknown as Record<string, unknown>)['_applications'] = [{ ID: 'app-1', Name: 'WebApp', IsActive: true }];
+    await engine.RefreshItem('_applications');
+    expect(engine.GetApplicationById('app-1')).toMatchObject({ IsActive: true });
+
+    // Simulates the re-read returning the row after another process deactivated it.
+    (engine as unknown as Record<string, unknown>)['_applications'] = [{ ID: 'app-1', Name: 'WebApp', IsActive: false }];
+    await engine.RefreshItem('_applications');
+    expect(engine.GetApplicationById('app-1')).toMatchObject({ IsActive: false });
+    expect(engine.GetApplicationByName('webapp')).toMatchObject({ IsActive: false });
   });
 });

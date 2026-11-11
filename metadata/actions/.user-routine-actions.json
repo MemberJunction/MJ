@@ -8,7 +8,10 @@
       "CategoryID": "@lookup:MJ: Action Categories.Name=System",
       "CodeApprovalStatus": "Approved",
       "Status": "Active",
-      "IconClass": "fa-solid fa-bolt"
+      "IconClass": "fa-solid fa-bolt",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -113,8 +116,8 @@
       "ID": "FAA47BCA-D805-473E-B556-4FFE9D4BE644"
     },
     "sync": {
-      "lastModified": "2026-11-01T22:53:27.359Z",
-      "checksum": "02eb8c5afe4c91de0c67fd1aac88bcb47a01b0754344db6476343009da25df9c"
+      "lastModified": "2026-11-10T23:41:38.137Z",
+      "checksum": "fc28add8650e9f3de20d857f313aefb408a3075a42d29359e9be24bc113af8f9"
     }
   }
 ]

@@ -299,6 +299,58 @@ describe('MJGlobal', () => {
     });
   });
 
+  describe('NonReplayableEventCodes (BaseEntityEvent replay retention guard)', () => {
+    it('does not retain BaseEntityEvent in the replay buffer or evict LoggedIn events', () => {
+      const mjg = MJGlobal.Instance;
+      mjg.Reset();
+
+      mjg.RaiseEvent({
+        component: {} as IMJComponent,
+        event: MJEventType.LoggedIn,
+        eventCode: 'login',
+        args: { userId: 'u-1' },
+      });
+
+      // Raise 150 BaseEntityEvents (exceeding the 100-slot ReplaySubject buffer)
+      for (let i = 0; i < 150; i++) {
+        mjg.RaiseEvent({
+          component: {} as IMJComponent,
+          event: MJEventType.ComponentEvent,
+          eventCode: 'BaseEntityEvent',
+          args: { seq: i },
+        });
+      }
+
+      const lateReceived: MJEvent[] = [];
+      const sub = mjg.GetEventListener(true).subscribe((e) => lateReceived.push(e));
+
+      // Late subscriber receives LoggedIn (never evicted) and zero stale BaseEntityEvents
+      expect(lateReceived).toHaveLength(1);
+      expect(lateReceived[0].event).toBe(MJEventType.LoggedIn);
+      expect(lateReceived[0].eventCode).toBe('login');
+      sub.unsubscribe();
+    });
+
+    it('delivers live BaseEntityEvent emissions once to active GetEventListener(true) subscribers', () => {
+      const mjg = MJGlobal.Instance;
+      mjg.Reset();
+
+      const liveReceived: MJEvent[] = [];
+      const sub = mjg.GetEventListener(true).subscribe((e) => liveReceived.push(e));
+
+      mjg.RaiseEvent({
+        component: {} as IMJComponent,
+        event: MJEventType.ComponentEvent,
+        eventCode: 'BaseEntityEvent',
+        args: { type: 'save' },
+      });
+
+      expect(liveReceived).toHaveLength(1);
+      expect(liveReceived[0].eventCode).toBe('BaseEntityEvent');
+      sub.unsubscribe();
+    });
+  });
+
   describe('GetGlobalObjectStore (via BaseSingleton)', () => {
     it('should return a non-null global object store', () => {
       const store = MJGlobal.Instance.GetGlobalObjectStore();
