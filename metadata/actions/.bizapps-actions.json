@@ -35,6 +35,20 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "64C271DC-6F34-48BD-9A48-9DD20F393EF6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "Email",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -351,8 +365,8 @@
       "ID": "94C7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:55.008Z",
-      "checksum": "a09c483102281e963e5abebdafa37c1d1d621eb20ab0c0f4d22caa8e352ba302"
+      "lastModified": "2026-11-10T23:41:28.104Z",
+      "checksum": "bd74a1d448ca1259ed59a2301049877e8ed2d02e61c40abe48ab65fd5516c7a6"
     }
   },
   {
@@ -598,8 +612,8 @@
       "ID": "9DC7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:55.009Z",
-      "checksum": "fb722efee25ac27a17d6f3533299199ab5d16a900b8b8c3e1a15f338de754f43"
+      "lastModified": "2026-11-10T23:41:28.117Z",
+      "checksum": "40c8f41bbf2988a08fb0cf07233e000d2ac64c5dc0a78526d47eba19d05309ea"
     }
   },
   {
@@ -633,6 +647,20 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:10.253Z",
             "checksum": "f7d7dc16190d77def37d0cca746337841708d07d5c53dca1aa177fa2b1d14102"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (HubSpot connection) to use. Required when the company has more than one active HubSpot connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9D52A30A-F78E-4183-8AAF-85B376772169"
           }
         },
         {
@@ -789,8 +817,8 @@
       "ID": "CDC7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:55.193Z",
-      "checksum": "b8d86769c826084e4d9735e0e40c3f427bc1b9bf6318684cac49b733f41dfe3f"
+      "lastModified": "2026-11-10T23:41:28.131Z",
+      "checksum": "15385836998d9658f5183f934516c4824178bec28bbd867ce4af142437d52a24"
     }
   },
   {
@@ -824,6 +852,20 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:10.470Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (HubSpot connection) to use. Required when the company has more than one active HubSpot connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "75AF130B-8554-4AE3-AFA3-D2F13C168742"
           }
         },
         {
@@ -981,8 +1023,8 @@
       "ID": "DDC7433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:55.195Z",
-      "checksum": "36fbb448bab087cd2c9d00ede7b0ce20faf495e121f0a4e86f93c50e7acbea2f"
+      "lastModified": "2026-11-10T23:41:28.142Z",
+      "checksum": "3649526accca28b0931e1dfcf1981fcab164fc310335d515fd86dd17ed764d7d"
     }
   },
   {
@@ -1016,6 +1058,20 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:11.011Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (HubSpot connection) to use. Required when the company has more than one active HubSpot connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "475A9E55-18EC-4FF4-8EDB-2047D474A864"
           }
         },
         {
@@ -1213,8 +1269,8 @@
       "ID": "12C8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:55.199Z",
-      "checksum": "fe5a274fad22b14c2578767e43c526538e63778bae9ed307294cb8a844f2cda2"
+      "lastModified": "2026-11-10T23:41:28.156Z",
+      "checksum": "0fe049822ba62833646716eae3c1d1b5ffa2db715711c5f3616501466dc71715"
     }
   },
   {
@@ -1245,6 +1301,20 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:11.514Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (HubSpot connection) to use. Required when the company has more than one active HubSpot connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1C3F8AA3-2F25-47E7-BA09-9576125B6AAE"
           }
         },
         {
@@ -1441,6 +1511,20 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:12.042Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B75BD614-B6D3-4358-933F-0E651985B2DE"
           }
         },
         {
@@ -1663,8 +1747,8 @@
       "ID": "62C8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:55.366Z",
-      "checksum": "f8c7a0cec4a3075883d87e102a7f7e61cb742049aa096d0cae57d69c54b2d2b3"
+      "lastModified": "2026-11-10T23:41:28.169Z",
+      "checksum": "bf82a6ba0e1d4eb2a4d8991dc29fc5d8694bd535b081ff78e6628cab348463af"
     }
   },
   {
@@ -1695,6 +1779,20 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:12.187Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AD11C6CC-A890-426F-BC1C-9959EE503D86"
           }
         },
         {
@@ -1857,6 +1955,20 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:12.294Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C3E47F80-A5B3-407B-B743-DDC612B0351E"
           }
         },
         {
@@ -2110,6 +2222,20 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:12.431Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "329E65CE-EBFB-4044-AC1B-D7F3BE2884FF"
           }
         },
         {
@@ -2531,6 +2657,20 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E23A6D9D-E446-4228-9274-5B448209B8A1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "CourseID",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -2707,6 +2847,20 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:12.585Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9F4F1524-5C63-4DAC-9FE1-9387673534CD"
           }
         },
         {
@@ -2890,6 +3044,20 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:12.721Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0D056F1B-402D-492E-A7F9-641F6BF4ADBA"
           }
         },
         {
@@ -3108,8 +3276,8 @@
       "ID": "6EC8433E-F36B-1410-8DB6-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:55.554Z",
-      "checksum": "5c870f80557da055fdbc1258f9b8f6cb345f328d123676b4e5425c5f59ad3889"
+      "lastModified": "2026-11-10T23:41:28.182Z",
+      "checksum": "2b397803009c4a81c6edd73d957b6d8bee326784a15b54113bb6d4f0dfd64ebd"
     }
   },
   {
@@ -3140,6 +3308,20 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:12.867Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0DB7F774-6490-4044-9FC3-929A967B957E"
           }
         },
         {
@@ -3415,6 +3597,20 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "84A99731-BA0B-48BD-BE9E-E2D7122BE1C1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "CourseID",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -3624,6 +3820,20 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:13.129Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F218B3ED-DEB0-4D2A-8A35-5ED67D2946D4"
           }
         },
         {
@@ -3930,6 +4140,20 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:13.264Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F370BFDE-A37A-48BA-B8ED-5CB90AE83408"
           }
         },
         {
@@ -4264,6 +4488,20 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8D6B01C0-AE83-4D49-9DA3-19E06CC550B9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "UserID",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -4369,8 +4607,8 @@
       "ID": "DCE5945A-3108-43A6-B1F9-E9D69EF617C4"
     },
     "sync": {
-      "lastModified": "2026-02-27T03:51:01.297Z",
-      "checksum": "2869440f3a193327eaa58bc6d70326449d6bb8cd2faee1a3edca72f45315cfd0"
+      "lastModified": "2026-11-10T23:41:28.195Z",
+      "checksum": "3315a87210a57a8e008ccda4926f9a258ceb5b188b4e36a1afacff845448cd2b"
     }
   },
   {
@@ -4404,6 +4642,20 @@
           "sync": {
             "lastModified": "2026-02-27T03:51:06.188Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "19BE3EF5-DB56-4894-B802-71517D1B5B1E"
           }
         },
         {
@@ -4514,8 +4766,8 @@
       "ID": "4652495C-D5C1-4725-AFE2-388454CE97A2"
     },
     "sync": {
-      "lastModified": "2026-02-27T03:51:01.310Z",
-      "checksum": "1f9ebe4a19f8751fcd30f0a9236a9dbebb8434c79476aadcbc03d4e9add7fbe2"
+      "lastModified": "2026-11-10T23:41:28.207Z",
+      "checksum": "85351725c5e73f26ba0fe2a14fd466e743ed642489980967b3d512109f8cc4a8"
     }
   },
   {
@@ -4546,6 +4798,20 @@
           "sync": {
             "lastModified": "2026-02-27T03:51:06.278Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D05ED9EC-07AC-4B5D-B12A-C38808A4D29C"
           }
         },
         {
@@ -4834,6 +5100,20 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "48ED068B-6185-401C-A3E2-9DA6C91142CD"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "SearchText",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -4974,6 +5254,20 @@
           "sync": {
             "lastModified": "2026-02-27T03:51:06.547Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8378769A-47D5-4791-B826-9CE681843611"
           }
         },
         {
@@ -5311,8 +5605,8 @@
       "ID": "FB7D4AD2-5D94-453C-99FC-35C08B386E66"
     },
     "sync": {
-      "lastModified": "2026-02-27T03:51:01.354Z",
-      "checksum": "4b64cf68f4fb3d0df9717608ee91b253f5d974ed8d2306b00382e53231b753a7"
+      "lastModified": "2026-11-10T23:41:28.219Z",
+      "checksum": "51a8695eeac77f9bac2b159fc03e6d394632ce07158d112be12e6d542f5ca31f"
     }
   },
   {
@@ -5343,6 +5637,20 @@
           "sync": {
             "lastModified": "2026-02-27T03:51:06.790Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4EC01F18-BC30-4AD2-8BC0-783D35B87F3F"
           }
         },
         {
@@ -5506,6 +5814,20 @@
           "sync": {
             "lastModified": "2026-02-27T03:51:06.892Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "02C4C2FF-D1D4-4886-BC60-F2630E00C4E3"
           }
         },
         {
@@ -5775,8 +6097,8 @@
       "ID": "3CDE4163-878C-4FE2-AF2C-8B51BDE4F651"
     },
     "sync": {
-      "lastModified": "2026-02-27T03:51:01.531Z",
-      "checksum": "df885d712e2696c8a2ca2750935435828ac7ab43b42858650214fcccff6473f6"
+      "lastModified": "2026-11-10T23:41:28.231Z",
+      "checksum": "583ff4402038e1ebe0398ca2bef2b6e4b2729cdc2ced0b5d6fbafecb90a630f5"
     }
   },
   {
@@ -7772,8 +8094,8 @@
       "ID": "6DC6B5F9-CDCC-4BA7-8D1D-6FCD2C2BBA55"
     },
     "sync": {
-      "lastModified": "2026-11-01T22:53:23.706Z",
-      "checksum": "9698444bdfbcb8ad0cd4c4a51753e14cd3caaf07b085b69537c25420a5ef984f"
+      "lastModified": "2026-11-10T23:41:28.247Z",
+      "checksum": "b51d7396b44d31e1e2feda58ef6d0bd2f3af57dc82d08d13fdb7598d223d917d"
     }
   },
   {

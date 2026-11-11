@@ -24,7 +24,7 @@
 import { LogError, UserInfo } from '@memberjunction/core';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import type { MJAIBridgeAgentIdentityEntity } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, IsEmailShaped } from '@memberjunction/global';
 
 /** Default destination allow-list: NANP only. */
 export const DEFAULT_ALLOWED_PREFIXES: readonly string[] = ['+1'];
@@ -349,7 +349,6 @@ export type TransferTarget = NumberTransferTarget | UserTransferTarget | AgentTr
 const MAX_TRANSFER_TARGETS = 20;
 const MAX_TRANSFER_NAME_CHARS = 60;
 const MAX_TRANSFER_DESCRIPTION_CHARS = 200;
-const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * Builds the transfer directory from `telephony.transferTargets`: each entry needs a name, a unique name (case
@@ -415,7 +414,7 @@ function validateNumberTarget(entry: TransferTargetSettings, base: TransferTarge
 
 function validateUserTarget(entry: TransferTargetSettings, base: TransferTargetBase, policy: OutboundCallPolicy): UserTransferTarget | undefined {
     const email = typeof entry.userEmail === 'string' ? entry.userEmail.trim().toLowerCase() : '';
-    if (!EMAIL_SHAPE.test(email)) {
+    if (!IsEmailShaped(email)) {
         LogError(`[Telephony] ignoring telephony.transferTargets entry '${base.Name}': a user target needs a userEmail.`);
         return undefined;
     }

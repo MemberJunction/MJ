@@ -9,6 +9,102 @@ import { RealtimeSessionState, RealtimeThreadItem } from './realtime-session-sta
 import { RealtimeDelegationCardComponent } from './realtime-delegation-card.component';
 import { ParsedDelegationArtifact } from '@memberjunction/realtime-runtime';
 
+function isBlank(c: string): boolean {
+  return c === ' ' || c === '\t';
+}
+
+/** Index just past the spaces and tabs starting at `from`. */
+function skipBlanks(text: string, from: number): number {
+  let i = from;
+  while (i < text.length && isBlank(text[i])) {
+    i++;
+  }
+  return i;
+}
+
+/** Index past an optional `—` and the whitespace after it (the `(?:—\s*)?` of a pattern). */
+function skipEmDash(text: string, at: number): number {
+  if (text[at] !== '—') {
+    return at;
+  }
+  let i = at + 1;
+  while (i < text.length && /\s/.test(text[i])) {
+    i++;
+  }
+  return i;
+}
+
+/** What a {@link replaceAfterBlankRuns} tail matched: the text to write and where the match ends. */
+interface BlankRunTail {
+  Replacement: string;
+  End: number;
+}
+
+/**
+ * Replace each run of spaces or tabs that `tail` accepts, together with what `tail` matched after it,
+ * left to right. This is `.replace(/[ \t]+<tail>/g, …)` for a tail that cannot start with a space or
+ * tab, scanned once: the regex retries from every position inside a long run of spaces with no tail
+ * after it, which is quadratic (CodeQL js/polynomial-redos). A match can only start where a run
+ * starts, since starting later reaches the same run end.
+ */
+function replaceAfterBlankRuns(text: string, tail: (text: string, at: number) => BlankRunTail | null): string {
+  let out = '';
+  let copied = 0;
+  let i = 0;
+  while (i < text.length) {
+    if (!isBlank(text[i])) {
+      i++;
+      continue;
+    }
+    const runStart = i;
+    i = skipBlanks(text, i);
+    const match = tail(text, i);
+    if (match) {
+      out += text.slice(copied, runStart) + match.Replacement;
+      copied = match.End;
+      i = match.End;
+    }
+  }
+  return out + text.slice(copied);
+}
+
+/** `(?:—\s*)?(#{1,6}[ \t]+)` → a blank line, then the hashes and their spaces. */
+function headingTail(text: string, at: number): BlankRunTail | null {
+  const start = skipEmDash(text, at);
+  let hashEnd = start;
+  while (hashEnd < text.length && text[hashEnd] === '#') {
+    hashEnd++;
+  }
+  const hashes = hashEnd - start;
+  if (hashes < 1 || hashes > 6 || !isBlank(text[hashEnd] ?? '')) {
+    return null;
+  }
+  const end = skipBlanks(text, hashEnd);
+  return { Replacement: '\n\n' + text.slice(start, end), End: end };
+}
+
+/** `(?:—\s*)?(---|___|\*\*\*)[ \t]*` → the rule on its own paragraph. */
+function ruleTail(text: string, at: number): BlankRunTail | null {
+  const start = skipEmDash(text, at);
+  const rule = ['---', '___', '***'].find((r) => text.startsWith(r, start));
+  if (!rule) {
+    return null;
+  }
+  return { Replacement: `\n\n${rule}\n\n`, End: skipBlanks(text, start + rule.length) };
+}
+
+/** `-[ \t]+(?=[A-Za-z0-9\*])` → a new `- ` list line. */
+function bulletTail(text: string, at: number): BlankRunTail | null {
+  if (text[at] !== '-') {
+    return null;
+  }
+  const end = skipBlanks(text, at + 1);
+  if (end === at + 1 || !/[A-Za-z0-9*]/.test(text[end] ?? '')) {
+    return null;
+  }
+  return { Replacement: '\n- ', End: end };
+}
+
 /**
  * The unified, chronological live thread for the call overlay: caption bubbles
  * interleaved with delegation cards exactly where they happened.
@@ -144,11 +240,13 @@ export class RealtimeSessionThreadComponent implements OnInit, AfterViewChecked,
     }
     let cleaned = text;
     // Restore newlines before markdown headings on same line: "Title ### Heading" -> "Title\n\n### Heading"
-    cleaned = cleaned.replace(/[ \t]+(?:—\s*)?(#{1,6}[ \t]+)/g, '\n\n$1');
+    // Each step scans by index rather than with `/[ \t]+…/g`, which is quadratic on a long run of
+    // spaces (CodeQL js/polynomial-redos); see replaceAfterBlankRuns.
+    cleaned = replaceAfterBlankRuns(cleaned, headingTail);
     // Restore newlines around horizontal rules on same line: "Text --- ##" -> "Text\n\n---\n\n##"
-    cleaned = cleaned.replace(/[ \t]+(?:—\s*)?(---|___|\*\*\*)[ \t]*/g, '\n\n$1\n\n');
+    cleaned = replaceAfterBlankRuns(cleaned, ruleTail);
     // Restore newlines before bullet items on same line: "around: - Item 1 - Item 2" -> "around:\n- Item 1\n- Item 2"
-    cleaned = cleaned.replace(/[ \t]+-[ \t]+(?=[A-Za-z0-9\*])/g, '\n- ');
+    cleaned = replaceAfterBlankRuns(cleaned, bulletTail);
     return cleaned;
   }
 

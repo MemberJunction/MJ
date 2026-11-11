@@ -17,7 +17,9 @@ export type TemplateScope = Record<string, PipeValue>;
 
 /**
  * If `s` (ignoring outer whitespace) consists of a single `{{ expression }}` placeholder
- * with no nested braces, returns the trimmed inner expression in `O(n)` time; otherwise `null`.
+ * with no nested braces, returns the trimmed inner expression; otherwise `null`. Index checks
+ * rather than a regex, so a long run of whitespace or braces costs linear time
+ * (CodeQL js/polynomial-redos).
  */
 export function ExtractWholeTemplateExpression(s: string): string | null {
     const trimmed = s.trim();
@@ -33,42 +35,40 @@ export function ExtractWholeTemplateExpression(s: string): string | null {
 }
 
 /**
- * Linear `O(n)` scanner that replaces every embedded `{{ expression }}` placeholder in `template`
- * using `replaceExpr(trimmedExpression, rawMatch)`. Malformed or empty placeholders (unclosed `{{`,
- * empty `{{ }}`, or inner `}`) are preserved verbatim without backtracking.
+ * Replace every embedded `{{ expression }}` placeholder in `template`, left to right, with
+ * `replaceExpr(trimmedExpression, rawMatch)`. A placeholder opens at `{{` and closes at the first `}`
+ * after it, which must be the first of `}}`. Malformed or empty placeholders (unclosed `{{`, empty or
+ * all-whitespace `{{ }}`, a single `}`) are kept verbatim, and scanning resumes after them, so a later
+ * well-formed placeholder still resolves. The position of the next `}` is remembered across candidate
+ * openings, so text full of `{{` with no closing brace is scanned once (CodeQL js/polynomial-redos).
  */
 export function ReplaceEmbeddedTemplateExpressions(
     template: string,
     replaceExpr: (expr: string, rawMatch: string) => string
 ): string {
-    if (!template || !template.includes('{{')) {
-        return template;
+    let out = '';
+    let copied = 0;
+    let nextClose = -1;
+    let open = template.indexOf('{{');
+    while (open !== -1) {
+        if (nextClose < open + 2) {
+            nextClose = template.indexOf('}', open + 2);
+            if (nextClose === -1) {
+                break;
+            }
+        }
+        if (template[nextClose + 1] === '}') {
+            const expr = template.slice(open + 2, nextClose).trim();
+            if (expr.length > 0) {
+                out += template.slice(copied, open) + replaceExpr(expr, template.slice(open, nextClose + 2));
+                copied = nextClose + 2;
+                open = template.indexOf('{{', copied);
+                continue;
+            }
+        }
+        open = template.indexOf('{{', open + 1);
     }
-    let result = '';
-    let cursor = 0;
-    while (cursor < template.length) {
-        const openIdx = template.indexOf('{{', cursor);
-        if (openIdx === -1) {
-            result += template.slice(cursor);
-            break;
-        }
-        const closeIdx = template.indexOf('}}', openIdx + 2);
-        if (closeIdx === -1) {
-            result += template.slice(cursor);
-            break;
-        }
-        result += template.slice(cursor, openIdx);
-        const rawInner = template.slice(openIdx + 2, closeIdx);
-        const expr = rawInner.trim();
-        const rawMatch = template.slice(openIdx, closeIdx + 2);
-        if (expr.length === 0 || rawInner.includes('}')) {
-            result += rawMatch;
-        } else {
-            result += replaceExpr(expr, rawMatch);
-        }
-        cursor = closeIdx + 2;
-    }
-    return result;
+    return out + template.slice(copied);
 }
 
 /** Recursively resolve templates in a tool's `with` params object. */
