@@ -17,6 +17,7 @@
 import ts from 'typescript';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
 import { glob } from 'glob';
 import { ordinalCompare } from '@memberjunction/global';
 
@@ -140,6 +141,22 @@ export interface GenerateManifestOptions {
      * @default false
      */
     strict?: boolean;
+
+    /**
+     * Whether to use disk caching for the AST extraction.
+     * When true (the default), loads and saves the AST cache to disk.
+     * When false, uses in-memory caching only.
+     *
+     * @default true
+     */
+    useDiskCache?: boolean;
+
+    /**
+     * Optional explicit file path for the AST cache file.
+     * If omitted and `useDiskCache` is true, the path is resolved automatically
+     * via {@link ResolveDefaultAstCachePath}.
+     */
+    astCachePath?: string;
 }
 
 /**
@@ -747,6 +764,25 @@ function extractRegisterClassFromDecoratorArray(
 // Manifest AST Cache
 // ============================================================================
 
+export const MAX_AST_CACHE_ENTRIES = 20000;
+
+export interface SaveManifestASTCacheOptions {
+    /**
+     * If true (default), prunes entries from the cache whose files no longer exist on disk.
+     */
+    PruneMissingFiles?: boolean;
+    // case-violation-ok-legacy-back-compat: support camelCase caller option
+    pruneMissingFiles?: boolean;
+
+    /**
+     * Maximum number of entries to keep in the cache file.
+     * Defaults to {@link MAX_AST_CACHE_ENTRIES} (20000).
+     */
+    MaxEntries?: number;
+    // case-violation-ok-legacy-back-compat: support camelCase caller option
+    maxEntries?: number;
+}
+
 interface CachedDecoratorShape {
     className: string;
     baseClassName?: string;
@@ -754,14 +790,16 @@ interface CachedDecoratorShape {
 }
 
 interface ManifestAstCacheRecord {
-    mtimeMs: number;
+    contentHash: string;
     size: number;
     isCompiledJS: boolean;
+    lastSeenMs: number;
     classes: CachedDecoratorShape[];
+    mtimeMs?: number;
 }
 
 interface ManifestAstCacheDiskPayload {
-    version: 1;
+    version: 2;
     entries: Record<string, ManifestAstCacheRecord>;
 }
 
@@ -800,11 +838,11 @@ export function LoadManifestASTCacheFromDisk(cacheFilePath: string): void {
         if (!fs.existsSync(cacheFilePath)) return;
         const content = fs.readFileSync(cacheFilePath, 'utf-8');
         const payload = JSON.parse(content) as ManifestAstCacheDiskPayload;
-        if (payload && payload.version === 1 && typeof payload.entries === 'object' && payload.entries !== null) {
+        if (payload && payload.version === 2 && typeof payload.entries === 'object' && payload.entries !== null) {
             for (const [key, record] of Object.entries(payload.entries)) {
                 if (
                     record &&
-                    typeof record.mtimeMs === 'number' &&
+                    typeof record.contentHash === 'string' &&
                     typeof record.size === 'number' &&
                     typeof record.isCompiledJS === 'boolean' &&
                     Array.isArray(record.classes)
@@ -820,10 +858,12 @@ export function LoadManifestASTCacheFromDisk(cacheFilePath: string): void {
                         }
                     }
                     astCacheMap.set(key, {
-                        mtimeMs: record.mtimeMs,
+                        contentHash: record.contentHash,
                         size: record.size,
                         isCompiledJS: record.isCompiledJS,
-                        classes: validClasses
+                        lastSeenMs: typeof record.lastSeenMs === 'number' ? record.lastSeenMs : Date.now(),
+                        classes: validClasses,
+                        ...(typeof record.mtimeMs === 'number' ? { mtimeMs: record.mtimeMs } : {})
                     });
                 }
             }
@@ -835,27 +875,118 @@ export function LoadManifestASTCacheFromDisk(cacheFilePath: string): void {
     }
 }
 
-export function SaveManifestASTCacheToDisk(cacheFilePath: string): void {
+export function SaveManifestASTCacheToDisk(
+    cacheFilePath: string,
+    options?: SaveManifestASTCacheOptions
+): void {
     try {
+        const shouldPrune = options?.PruneMissingFiles ?? options?.pruneMissingFiles ?? true;
+
+        // Concurrent merge: if cache file already exists on disk, read version 2 entries and merge
+        if (fs.existsSync(cacheFilePath)) {
+            try {
+                const diskContent = fs.readFileSync(cacheFilePath, 'utf-8');
+                const diskPayload = JSON.parse(diskContent) as ManifestAstCacheDiskPayload;
+                if (diskPayload && diskPayload.version === 2 && typeof diskPayload.entries === 'object' && diskPayload.entries !== null) {
+                    for (const [key, diskRecord] of Object.entries(diskPayload.entries)) {
+                        if (diskRecord && typeof diskRecord.contentHash === 'string') {
+                            const memRecord = astCacheMap.get(key);
+                            if (!memRecord) {
+                                astCacheMap.set(key, diskRecord);
+                            } else if ((diskRecord.lastSeenMs ?? 0) > (memRecord.lastSeenMs ?? 0)) {
+                                astCacheMap.set(key, diskRecord);
+                            }
+                        }
+                    }
+                }
+            } catch {
+                // Ignore read/parse error during disk merge
+            }
+        }
+
+        // Prune stale entries on save: drop any entry whose filePath no longer exists on disk
+        if (shouldPrune) {
+            for (const [key] of Array.from(astCacheMap.entries())) {
+                const sepIdx = key.indexOf('::');
+                const entryFilePath = sepIdx !== -1 ? key.substring(sepIdx + 2) : key;
+                try {
+                    if (path.isAbsolute(entryFilePath) && !fs.existsSync(entryFilePath)) {
+                        astCacheMap.delete(key);
+                    }
+                } catch {
+                    astCacheMap.delete(key);
+                }
+            }
+        }
+
+        // Cap total entries at maxEntries (defaults to MAX_AST_CACHE_ENTRIES = 20000), keeping newest lastSeenMs
+        const maxEntries = options?.MaxEntries ?? options?.maxEntries ?? MAX_AST_CACHE_ENTRIES;
+        if (astCacheMap.size > maxEntries) {
+            const sortedEntries = Array.from(astCacheMap.entries()).sort(
+                (a, b) => (b[1].lastSeenMs ?? 0) - (a[1].lastSeenMs ?? 0)
+            );
+            astCacheMap.clear();
+            for (let i = 0; i < maxEntries; i++) {
+                astCacheMap.set(sortedEntries[i][0], sortedEntries[i][1]);
+            }
+        }
+
         const entries: Record<string, ManifestAstCacheRecord> = {};
         for (const [key, value] of astCacheMap.entries()) {
             entries[key] = value;
         }
         const payload: ManifestAstCacheDiskPayload = {
-            version: 1,
+            version: 2,
             entries
         };
+
         const dir = path.dirname(cacheFilePath);
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
         }
-        fs.writeFileSync(cacheFilePath, JSON.stringify(payload), 'utf-8');
+
+        const tmpPath = `${cacheFilePath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
+        try {
+            fs.writeFileSync(tmpPath, JSON.stringify(payload), 'utf-8');
+            fs.renameSync(tmpPath, cacheFilePath);
+        } catch (writeErr) {
+            try {
+                if (fs.existsSync(tmpPath)) {
+                    fs.unlinkSync(tmpPath);
+                }
+            } catch {
+                // Ignore unlink failure
+            }
+            throw writeErr;
+        }
+
         astCacheLoadedFromPath = cacheFilePath;
         astCacheDirty = false;
     } catch {
         // Ignored: write errors should never fail manifest generation
     }
 }
+
+export function ResolveDefaultAstCachePath(startDir: string): string | null {
+    const baseDir = findCacheBaseDir(startDir);
+    try {
+        if (
+            fs.existsSync(path.join(baseDir, 'turbo.json')) ||
+            fs.existsSync(path.join(baseDir, '.turbo'))
+        ) {
+            return path.join(baseDir, '.turbo', 'mj-manifest-ast-cache-v2.json');
+        }
+        if (fs.existsSync(path.join(baseDir, 'node_modules'))) {
+            return path.join(baseDir, 'node_modules', '.cache', 'memberjunction', 'mj-manifest-ast-cache-v2.json');
+        }
+    } catch {
+        // Ignore access errors
+    }
+    return null;
+}
+
+/** @deprecated Use {@link ResolveDefaultAstCachePath}. */
+export const resolveDefaultAstCachePath = ResolveDefaultAstCachePath;
 
 function findCacheBaseDir(startDir: string): string {
     let current = startDir;
@@ -884,32 +1015,24 @@ function extractRegisterClassForFile(
     depName: string,
     isCompiledJS: boolean
 ): RegisteredClassInfo[] {
-    let stat: fs.Stats | null = null;
+    let sourceText: string;
     try {
-        const s = fs.statSync(filePath);
-        if (s && typeof s.mtimeMs === 'number' && typeof s.size === 'number') {
-            stat = s;
-        }
+        sourceText = fs.readFileSync(filePath, 'utf-8');
     } catch {
-        stat = null;
+        return [];
     }
 
-    if (stat === null) {
-        const sourceText = fs.readFileSync(filePath, 'utf-8');
-        return isCompiledJS
-            ? extractRegisterClassFromCompiledJS(filePath, sourceText, depName)
-            : extractRegisterClassDecorators(filePath, sourceText, depName);
-    }
-
+    const contentHash = crypto.createHash('sha256').update(sourceText).digest('hex');
     const cacheKey = `${isCompiledJS ? 'js' : 'ts'}::${filePath}`;
     const cached = astCacheMap.get(cacheKey);
+
     if (
         cached &&
-        cached.mtimeMs === stat.mtimeMs &&
-        cached.size === stat.size &&
+        cached.contentHash === contentHash &&
         cached.isCompiledJS === isCompiledJS
     ) {
         astCacheHits++;
+        cached.lastSeenMs = Date.now();
         return cached.classes.map(c => ({
             className: c.className,
             filePath,
@@ -920,15 +1043,15 @@ function extractRegisterClassForFile(
     }
 
     astCacheMisses++;
-    const sourceText = fs.readFileSync(filePath, 'utf-8');
     const parsed = isCompiledJS
         ? extractRegisterClassFromCompiledJS(filePath, sourceText, depName)
         : extractRegisterClassDecorators(filePath, sourceText, depName);
 
     astCacheMap.set(cacheKey, {
-        mtimeMs: stat.mtimeMs,
-        size: stat.size,
+        contentHash,
+        size: Buffer.byteLength(sourceText, 'utf-8'),
         isCompiledJS,
+        lastSeenMs: Date.now(),
         classes: parsed.map(c => ({
             className: c.className,
             ...(c.baseClassName !== undefined ? { baseClassName: c.baseClassName } : {}),
@@ -2347,7 +2470,9 @@ export async function GenerateClassRegistrationsManifest(
         excludePackages = [],
         syncDependencies = true,
         scanDist = false,
-        lazyConfigPath
+        lazyConfigPath,
+        useDiskCache = true,
+        astCachePath: explicitAstCachePath
     } = options;
 
     const errors: string[] = [];
@@ -2363,10 +2488,11 @@ export async function GenerateClassRegistrationsManifest(
     astCacheHits = 0;
     astCacheMisses = 0;
 
-    const isVitest = Boolean(process.env.VITEST);
-    const defaultCachePath = path.join(findCacheBaseDir(absoluteAppDir), '.turbo', 'mj-manifest-ast-cache-v1.json');
-    if (!isVitest) {
-        LoadManifestASTCacheFromDisk(defaultCachePath);
+    const cacheFilePath = useDiskCache
+        ? (explicitAstCachePath ?? ResolveDefaultAstCachePath(absoluteAppDir))
+        : null;
+    if (cacheFilePath) {
+        LoadManifestASTCacheFromDisk(cacheFilePath);
     }
 
     // Read the app's package.json
@@ -2442,8 +2568,8 @@ export async function GenerateClassRegistrationsManifest(
         }
     } catch (err) {
         errors.push(`Error writing manifest: ${err}`);
-        if (!isVitest && astCacheDirty) {
-            SaveManifestASTCacheToDisk(defaultCachePath);
+        if (cacheFilePath && astCacheDirty) {
+            SaveManifestASTCacheToDisk(cacheFilePath);
         }
         return { success: false, outputPath: absoluteOutputPath, ManifestChanged: false, classes: allClasses, packages: [], totalDepsWalked: depTree.size, AddedDependencies: {}, errors };
     }
@@ -2571,8 +2697,8 @@ export async function GenerateClassRegistrationsManifest(
         }
     }
 
-    if (!isVitest && astCacheDirty) {
-        SaveManifestASTCacheToDisk(defaultCachePath);
+    if (cacheFilePath && astCacheDirty) {
+        SaveManifestASTCacheToDisk(cacheFilePath);
     }
 
     return {

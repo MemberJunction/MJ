@@ -10,6 +10,8 @@ import {
     GetManifestASTCacheStats,
     LoadManifestASTCacheFromDisk,
     SaveManifestASTCacheToDisk,
+    ResolveDefaultAstCachePath,
+    MAX_AST_CACHE_ENTRIES,
 } from '../Manifest/GenerateClassRegistrationsManifest';
 
 describe('Wave 4.6 - Manifest Generator Enhancements', () => {
@@ -325,7 +327,8 @@ export class MyFirstEntity {}
                 outputPath: manifestOut,
                 appDir,
                 verbose: false,
-                syncDependencies: false
+                syncDependencies: false,
+                useDiskCache: false
             });
 
             expect(result1.success).toBe(true);
@@ -342,7 +345,8 @@ export class MyFirstEntity {}
                 outputPath: manifestOut,
                 appDir,
                 verbose: false,
-                syncDependencies: false
+                syncDependencies: false,
+                useDiskCache: false
             });
 
             expect(result2.success).toBe(true);
@@ -368,7 +372,8 @@ export class MyFirstEntityUpdated {}
                 outputPath: manifestOut,
                 appDir,
                 verbose: false,
-                syncDependencies: false
+                syncDependencies: false,
+                useDiskCache: false
             });
 
             expect(result3.success).toBe(true);
@@ -396,13 +401,255 @@ export class MyFirstEntityUpdated {}
                 outputPath: manifestOut,
                 appDir,
                 verbose: false,
-                syncDependencies: false
+                syncDependencies: false,
+                useDiskCache: false
             });
 
             expect(result4.success).toBe(true);
             const stats4 = GetManifestASTCacheStats();
             expect(stats4.Hits).toBeGreaterThan(0);
             expect(stats4.Misses).toBe(0);
+        });
+    });
+
+    describe('GenerateClassRegistrationsManifest AST Cache v2', () => {
+        it('invalidates cache on same-length content edit with identical normalized mtime (1985-10-26)', async () => {
+            const appDir = path.join(tempDir, 'app2');
+            const pkgDir = path.join(tempDir, 'sample-pkg');
+            const pkgSrcDir = path.join(pkgDir, 'src');
+            const manifestOut = path.join(appDir, 'src', 'generated', 'manifest.ts');
+
+            fs.mkdirSync(pkgSrcDir, { recursive: true });
+            fs.mkdirSync(path.join(appDir, 'node_modules'), { recursive: true });
+
+            // Exactly the same length strings (107 characters each)
+            const fileContentA = `import { RegisterClass } from '@memberjunction/global';
+@RegisterClass(BaseEntity, 'EntityA')
+export class ClassA {}
+`;
+            const fileContentB = `import { RegisterClass } from '@memberjunction/global';
+@RegisterClass(BaseEntity, 'EntityB')
+export class ClassB {}
+`;
+            expect(fileContentA.length).toBe(fileContentB.length);
+
+            const entityFilePath = path.join(pkgSrcDir, 'MyEntity.ts');
+            fs.writeFileSync(entityFilePath, fileContentA, 'utf-8');
+
+            // Normalized npm pack mtime: 1985-10-26T08:15:00.000Z
+            const fixedDate = new Date('1985-10-26T08:15:00.000Z');
+            fs.utimesSync(entityFilePath, fixedDate, fixedDate);
+
+            fs.writeFileSync(
+                path.join(pkgDir, 'package.json'),
+                JSON.stringify({
+                    name: 'sample-pkg',
+                    version: '1.0.0'
+                }),
+                'utf-8'
+            );
+
+            fs.symlinkSync(pkgDir, path.join(appDir, 'node_modules', 'sample-pkg'), 'dir');
+
+            fs.writeFileSync(
+                path.join(appDir, 'package.json'),
+                JSON.stringify({
+                    name: 'app',
+                    version: '1.0.0',
+                    dependencies: {
+                        'sample-pkg': '1.0.0'
+                    }
+                }),
+                'utf-8'
+            );
+
+            // Run 1: Cold parse of ClassA
+            const res1 = await GenerateClassRegistrationsManifest({
+                outputPath: manifestOut,
+                appDir,
+                verbose: false,
+                syncDependencies: false,
+                useDiskCache: false
+            });
+            expect(res1.success).toBe(true);
+            expect(res1.classes.length).toBe(1);
+            expect(res1.classes[0].className).toBe('ClassA');
+            expect(res1.classes[0].key).toBe('EntityA');
+
+            // Run 2: Cache hit
+            const res2 = await GenerateClassRegistrationsManifest({
+                outputPath: manifestOut,
+                appDir,
+                verbose: false,
+                syncDependencies: false,
+                useDiskCache: false
+            });
+            expect(res2.success).toBe(true);
+            expect(res2.classes[0].className).toBe('ClassA');
+            expect(GetManifestASTCacheStats().Hits).toBeGreaterThan(0);
+
+            // Modify file with SAME LENGTH content and reset to EXACT SAME mtime
+            fs.writeFileSync(entityFilePath, fileContentB, 'utf-8');
+            fs.utimesSync(entityFilePath, fixedDate, fixedDate);
+
+            const statB = fs.statSync(entityFilePath);
+            expect(statB.mtime.toISOString()).toBe(fixedDate.toISOString());
+
+            // Run 3: Must NOT serve stale ClassA from cache; must detect contentHash mismatch and parse ClassB!
+            const res3 = await GenerateClassRegistrationsManifest({
+                outputPath: manifestOut,
+                appDir,
+                verbose: false,
+                syncDependencies: false,
+                useDiskCache: false
+            });
+            expect(res3.success).toBe(true);
+            expect(res3.classes.length).toBe(1);
+            expect(res3.classes[0].className).toBe('ClassB');
+            expect(res3.classes[0].key).toBe('EntityB');
+        });
+
+        it('performs atomic save, merges concurrent disk entries, and prunes deleted files', () => {
+            const cacheFile = path.join(tempDir, 'cache', 'mj-manifest-ast-cache-v2.json');
+            const liveFile = path.join(tempDir, 'LiveFile.ts');
+            const deletedFile = path.join(tempDir, 'DeletedFile.ts');
+            const siblingFile = path.join(tempDir, 'SiblingFile.ts');
+
+            fs.writeFileSync(liveFile, 'export class LiveClass {}', 'utf-8');
+            fs.writeFileSync(deletedFile, 'export class DeletedClass {}', 'utf-8');
+            fs.writeFileSync(siblingFile, 'export class SiblingClass {}', 'utf-8');
+
+            ClearManifestASTCache();
+            const liveKey = `ts::${liveFile}`;
+            const deletedKey = `ts::${deletedFile}`;
+            const siblingKey = `ts::${siblingFile}`;
+
+            // Create an existing disk cache simulating a sibling build process
+            // Actually include deletedKey in disk payload to test pruning an existing entry
+            const initialDiskPayload = {
+                version: 2,
+                entries: {
+                    [siblingKey]: {
+                        contentHash: 'hash-sibling',
+                        size: 100,
+                        isCompiledJS: false,
+                        lastSeenMs: 1000,
+                        classes: [{ className: 'SiblingClass' }]
+                    },
+                    [liveKey]: {
+                        contentHash: 'hash-live-old',
+                        size: 80,
+                        isCompiledJS: false,
+                        lastSeenMs: 500,
+                        classes: [{ className: 'LiveClassOld' }]
+                    },
+                    [deletedKey]: {
+                        contentHash: 'hash-deleted',
+                        size: 90,
+                        isCompiledJS: false,
+                        lastSeenMs: 600,
+                        classes: [{ className: 'DeletedClass' }]
+                    }
+                }
+            };
+
+            fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
+            fs.writeFileSync(cacheFile, JSON.stringify(initialDiskPayload), 'utf-8');
+
+            // Load into memory from disk
+            LoadManifestASTCacheFromDisk(cacheFile);
+
+            // Delete deletedFile from disk
+            fs.unlinkSync(deletedFile);
+            expect(fs.existsSync(deletedFile)).toBe(false);
+
+            // Save with pruning enabled (default)
+            SaveManifestASTCacheToDisk(cacheFile, { PruneMissingFiles: true });
+
+            expect(fs.existsSync(cacheFile)).toBe(true);
+            const savedRaw = fs.readFileSync(cacheFile, 'utf-8');
+            const savedPayload = JSON.parse(savedRaw) as { version: number; entries: Record<string, unknown> };
+
+            expect(savedPayload.version).toBe(2);
+            // Sibling file was merged in from disk
+            expect(savedPayload.entries[siblingKey]).toBeDefined();
+            // Live file exists
+            expect(savedPayload.entries[liveKey]).toBeDefined();
+            // Deleted file was pruned
+            expect(savedPayload.entries[deletedKey]).toBeUndefined();
+        });
+
+        it('caps AST cache at MAX_AST_CACHE_ENTRIES on save', () => {
+            expect(MAX_AST_CACHE_ENTRIES).toBe(20000);
+
+            const cacheFile = path.join(tempDir, 'cache', 'mj-cap-test-cache.json');
+            ClearManifestASTCache();
+
+            const initialDiskPayload = {
+                version: 2,
+                entries: {
+                    'entry1': {
+                        contentHash: 'hash1',
+                        size: 10,
+                        isCompiledJS: false,
+                        lastSeenMs: 100, // oldest
+                        classes: [{ className: 'Class1' }]
+                    },
+                    'entry2': {
+                        contentHash: 'hash2',
+                        size: 20,
+                        isCompiledJS: false,
+                        lastSeenMs: 200,
+                        classes: [{ className: 'Class2' }]
+                    },
+                    'entry3': {
+                        contentHash: 'hash3',
+                        size: 30,
+                        isCompiledJS: false,
+                        lastSeenMs: 300, // newest
+                        classes: [{ className: 'Class3' }]
+                    }
+                }
+            };
+
+            fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
+            fs.writeFileSync(cacheFile, JSON.stringify(initialDiskPayload), 'utf-8');
+
+            LoadManifestASTCacheFromDisk(cacheFile);
+
+            // Pass MaxEntries: 2 and PruneMissingFiles: false so synthetic keys are not pruned for missing files
+            SaveManifestASTCacheToDisk(cacheFile, { MaxEntries: 2, PruneMissingFiles: false });
+
+            const savedRaw = fs.readFileSync(cacheFile, 'utf-8');
+            const savedPayload = JSON.parse(savedRaw) as { version: number; entries: Record<string, unknown> };
+
+            expect(Object.keys(savedPayload.entries).length).toBe(2);
+            // entry1 was oldest (100) -> evicted
+            expect(savedPayload.entries['entry1']).toBeUndefined();
+            // entry2 (200) and entry3 (300) -> kept
+            expect(savedPayload.entries['entry2']).toBeDefined();
+            expect(savedPayload.entries['entry3']).toBeDefined();
+        });
+
+        it('does not create a .turbo directory when turbo.json does not exist (uses node_modules/.cache instead)', async () => {
+            const repoDir = path.join(tempDir, 'plain-project');
+            const nodeModulesDir = path.join(repoDir, 'node_modules');
+            fs.mkdirSync(nodeModulesDir, { recursive: true });
+
+            // No turbo.json or .turbo folder exists in repoDir
+            expect(fs.existsSync(path.join(repoDir, 'turbo.json'))).toBe(false);
+            expect(fs.existsSync(path.join(repoDir, '.turbo'))).toBe(false);
+
+            const resolvedPath = ResolveDefaultAstCachePath(repoDir);
+            expect(resolvedPath).toBe(
+                path.join(nodeModulesDir, '.cache', 'memberjunction', 'mj-manifest-ast-cache-v2.json')
+            );
+
+            // When neither turbo nor node_modules exists, returns null
+            const bareDir = path.join(tempDir, 'bare-dir');
+            fs.mkdirSync(bareDir, { recursive: true });
+            const bareResolved = ResolveDefaultAstCachePath(bareDir);
+            expect(bareResolved).toBeNull();
         });
     });
 });

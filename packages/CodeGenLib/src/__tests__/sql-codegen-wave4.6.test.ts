@@ -9,12 +9,19 @@ import {
 import {
     ExecuteWithFallback,
     RunExclusiveDropCascade,
+    UnwrapMigrationViewRegenSQL,
 } from '../Database/providers/postgresql/viewFallback';
 import type { PGQueryable } from '../Database/providers/postgresql/viewDependencyCapture';
-import type { CodeGenConnection, CodeGenQueryResult } from '../Database/codeGenDatabaseProvider';
+import type {
+    BaseViewGenerationContext,
+    CodeGenConnection,
+    CodeGenQueryResult,
+} from '../Database/codeGenDatabaseProvider';
 import { PostgreSQLCodeGenProvider } from '../Database/providers/postgresql/PostgreSQLCodeGenProvider';
 import { SQLServerCodeGenProvider } from '../Database/providers/sqlserver/SQLServerCodeGenProvider';
 import { configInfo } from '../Config/config';
+import { SQLLogging } from '../Misc/sql_logging';
+import { TempBatchFile } from '../Misc/temp_batch_file';
 
 // ─── Test Helpers ────────────────────────────────────────────────────────────
 
@@ -121,6 +128,20 @@ class TestableSQLCodeGen extends SQLCodeGenBase {
 
     public override async generateSPDelete(entity: EntityInfo, pool: CodeGenConnection): Promise<string> {
         return super.generateSPDelete(entity, pool);
+    }
+
+    public AddEntityNeedingDeleteSPRegeneration(id: string): void {
+        this.entitiesNeedingDeleteSPRegeneration.add(id);
+    }
+
+    public LogSQLForNewOrModifiedEntity(
+        entity: EntityInfo,
+        sql: string,
+        description: string,
+        enableSQLLogging?: boolean,
+        forceLog?: boolean
+    ): boolean {
+        return this.logSQLForNewOrModifiedEntity(entity, sql, description, enableSQLLogging, forceLog);
     }
 }
 
@@ -640,6 +661,323 @@ describe('Wave 4.6 SQL CodeGen Enhancements', () => {
 
             // The DROP CASCADE critical section was strictly serialized!
             expect(maxFallbackConcurrency).toBe(1);
+        });
+    });
+
+    describe('5. Reviews & Optimizations (AN-BC PR #6548)', () => {
+        it('gates phasedSQL.CrudDeleteSQL on spDeleteGenerated so hand-written delete functions are never overwritten during PG phased execution', async () => {
+            const codeGen = new TestableSQLCodeGen();
+            const pgProvider = new PostgreSQLCodeGenProvider();
+            codeGen.DBProvider = pgProvider;
+
+            // Entity 1: spDeleteGenerated = false, but has cascade delete regeneration needed
+            const entityCustomDelete = makeTestEntity({
+                id: 'custom-delete-ent',
+                name: 'CustomDeleteEntity',
+            });
+            entityCustomDelete.spDeleteGenerated = false;
+            codeGen.AddEntityNeedingDeleteSPRegeneration(entityCustomDelete.ID);
+
+            const mockPool = makeMockConnection(async () => ({ recordset: [] }));
+            vi.spyOn(codeGen, 'generateSPDelete').mockResolvedValue('CREATE FUNCTION spDeleteCustom() ...');
+
+            const resCustom = await codeGen.GenerateSingleEntitySQLToSeparateFiles({
+                pool: mockPool,
+                entity: entityCustomDelete,
+                directory: '/tmp/test-mj-output',
+                onlyPermissions: false,
+                writeFiles: false,
+                skipExecution: true,
+            });
+
+            // File / sRet contains the generated delete function for cascade-dependency file output
+            expect(resCustom.sql).toContain('spDeleteCustom');
+            // BUT phasedSQL.CrudDeleteSQL MUST be '' so phased DB execution does NOT overwrite the hand-written delete function!
+            expect(resCustom.phasedSQL?.CrudDeleteSQL).toBe('');
+
+            // Entity 2: spDeleteGenerated = true
+            const entityGeneratedDelete = makeTestEntity({
+                id: 'generated-delete-ent',
+                name: 'GeneratedDeleteEntity',
+            });
+            entityGeneratedDelete.spDeleteGenerated = true;
+
+            const resGenerated = await codeGen.GenerateSingleEntitySQLToSeparateFiles({
+                pool: mockPool,
+                entity: entityGeneratedDelete,
+                directory: '/tmp/test-mj-output',
+                onlyPermissions: false,
+                writeFiles: false,
+                skipExecution: true,
+            });
+
+            // spDeleteGenerated = true populates phasedSQL.CrudDeleteSQL
+            expect(resGenerated.phasedSQL?.CrudDeleteSQL).toContain('spDeleteCustom');
+        });
+
+        it('OnDependentViewUnrestored evicts dropped dependent view from existingBaseViewColumnsPG so subsequent checkBaseViewColumnsChangedPG detects it as missing', async () => {
+            const codeGen = new TestableSQLCodeGen();
+            const pgProvider = new PostgreSQLCodeGenProvider();
+            let capturedOnDependentViewUnrestored: ((schema: string, viewName: string) => void) | undefined;
+
+            pgProvider.executeEntityPhased = vi.fn().mockImplementation(async (opts: {
+                OnDependentViewUnrestored?: (schema: string, viewName: string) => void;
+            }) => {
+                capturedOnDependentViewUnrestored = opts.OnDependentViewUnrestored;
+                return { success: true, phase: null };
+            });
+            codeGen.DBProvider = pgProvider;
+
+            // Populate existingBaseViewColumnsPG with a dependent view that will be dropped by CASCADE
+            const preloadedColumns = new Map<string, Set<string>>([
+                ['__mj.vwtarget', new Set(['id', 'name'])],
+                ['__mj.vwdependent', new Set(['id', 'name'])],
+            ]);
+            codeGen.SetExistingBaseViewColumnsPG(preloadedColumns);
+
+            const targetEntity = makeTestEntity({ id: 'target-ent', name: 'Target' });
+            const mockPool = makeMockConnection(async () => ({ recordset: [] }));
+
+            await codeGen.ExecuteEntityInPhases(mockPool, targetEntity, undefined);
+
+            expect(capturedOnDependentViewUnrestored).toBeDefined();
+
+            // Simulate 42P16 fallback failing to restore the dependent view
+            capturedOnDependentViewUnrestored!('__mj', 'vwDependent');
+
+            // Verified: evicted from existingBaseViewColumnsPG
+            expect(codeGen.GetExistingBaseViewColumnsPG()?.has('__mj.vwdependent')).toBe(false);
+
+            // Now checkBaseViewColumnsChangedPG on the dependent entity:
+            const dependentEntity = makeTestEntity({ id: 'dep-ent', name: 'Dependent' });
+            const changed = await codeGen.TestCheckBaseViewColumnsChangedPG(mockPool, dependentEntity, 'vwDependent');
+            // Since it was evicted, it detects it as changed/missing (true)!
+            expect(changed).toBe(true);
+        });
+
+        it('ExecuteWithFallback invokes OnDependentViewUnrestored when restoring a dependent view fails', async () => {
+            let onUnrestoredCalled = false;
+            let unrestoredSchema = '';
+            let unrestoredView = '';
+
+            interface PostgresTestError extends Error {
+                code?: string;
+            }
+
+            let firstViewCall = true;
+            const mockClient: PGQueryable = {
+                query: vi.fn().mockImplementation(async (sql: string) => {
+                    if (sql.startsWith('CREATE OR REPLACE VIEW')) {
+                        if (firstViewCall) {
+                            firstViewCall = false;
+                            const err: PostgresTestError = new Error('invalid table definition');
+                            err.code = '42P16';
+                            throw err;
+                        }
+                        return { rowCount: 1, rows: [] };
+                    }
+                    if (sql.includes('SELECT c.oid::int AS oid')) {
+                        return { rowCount: 1, rows: [{ oid: 12345 }] };
+                    }
+                    if (sql.includes('JOIN pg_depend') || sql.includes('WITH RECURSIVE deps AS')) {
+                        // Return one dependent view
+                        return {
+                            rowCount: 1,
+                            rows: [{ schema: '__mj', name: 'vwUnrestorable', relkind: 'v', definition: 'SELECT bad_col FROM nowhere;' }],
+                        };
+                    }
+                    if (sql.startsWith('CREATE VIEW "__mj"."vwUnrestorable"')) {
+                        // Simulate restore failure for this dependent view
+                        throw new Error('column bad_col does not exist');
+                    }
+                    if (sql.includes('pg_get_userbyid')) {
+                        return { rowCount: 1, rows: [{ owner: 'postgres', comment: null }] };
+                    }
+                    return { rowCount: 0, rows: [] };
+                }),
+            };
+
+            await ExecuteWithFallback({
+                Client: mockClient,
+                schema: '__mj',
+                ViewName: 'vwTarget',
+                CreateOrReplaceSQL: 'CREATE OR REPLACE VIEW __mj.vwTarget AS SELECT 1 AS ID',
+                OnDependentViewUnrestored: (schema, viewName) => {
+                    onUnrestoredCalled = true;
+                    unrestoredSchema = schema;
+                    unrestoredView = viewName;
+                },
+            });
+
+            expect(onUnrestoredCalled).toBe(true);
+            expect(unrestoredSchema).toBe('__mj');
+            expect(unrestoredView).toBe('vwUnrestorable');
+        });
+
+        it('unwraps DO $vw_regen$ migration wrapper before executing with fallback on PostgreSQL', async () => {
+            const pgProvider = new PostgreSQLCodeGenProvider();
+            const entity = makeTestEntity({ id: 'ent-unwrap', name: 'TestEntities' });
+            const context: BaseViewGenerationContext = {
+                entity,
+                relatedFieldsSelect: '',
+                relatedFieldsJoins: '',
+                parentFieldsSelect: '',
+                parentJoins: '',
+                rootFieldsSelect: '',
+                rootJoins: '',
+            };
+            const generatedSQL = pgProvider.generateBaseView(context);
+
+            // (a) Verify generatedBaseView contains DO $vw_regen$ and UnwrapMigrationViewRegenSQL extracts the inner CREATE OR REPLACE VIEW
+            expect(generatedSQL).toContain('DO $vw_regen$');
+            expect(generatedSQL).toContain('vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW');
+
+            const unwrapped = UnwrapMigrationViewRegenSQL(generatedSQL);
+            expect(unwrapped.startsWith('CREATE OR REPLACE VIEW "__mj"."vwTestEntities"')).toBe(true);
+            expect(unwrapped).not.toContain('DO $vw_regen$');
+            expect(unwrapped).not.toContain('$vsql$');
+
+            // Bare CREATE OR REPLACE VIEW is untouched
+            const bareViewSQL = 'CREATE OR REPLACE VIEW "__mj"."vwBare" AS SELECT 1 AS id;';
+            expect(UnwrapMigrationViewRegenSQL(bareViewSQL)).toBe(bareViewSQL);
+
+            // (b) Passing real generateBaseView output directly to ExecuteWithFallback sends ONLY unwrapped SQL to client.query
+            const executedQueries: string[] = [];
+            let firstAttempt = true;
+            let onUnrestoredInvoked = false;
+
+            interface PostgresTestError extends Error {
+                code?: string;
+            }
+
+            const mockClient: PGQueryable = {
+                query: vi.fn().mockImplementation(async (sql: string) => {
+                    executedQueries.push(sql);
+
+                    if (sql.startsWith('CREATE OR REPLACE VIEW')) {
+                        if (firstAttempt) {
+                            firstAttempt = false;
+                            const err: PostgresTestError = new Error('cannot change name of view column');
+                            err.code = '42P16';
+                            throw err;
+                        }
+                        return { rowCount: 1, rows: [] };
+                    }
+                    if (sql.includes('SELECT c.oid::int AS oid')) {
+                        return { rowCount: 1, rows: [{ oid: 99999 }] };
+                    }
+                    if (sql.includes('JOIN pg_depend') || sql.includes('WITH RECURSIVE deps AS')) {
+                        return {
+                            rowCount: 1,
+                            rows: [{ schema: '__mj', name: 'vwDependent', relkind: 'v', definition: 'SELECT bad_col FROM nowhere;' }],
+                        };
+                    }
+                    if (sql.startsWith('CREATE VIEW "__mj"."vwDependent"')) {
+                        throw new Error('column bad_col does not exist');
+                    }
+                    if (sql.includes('pg_get_userbyid')) {
+                        return { rowCount: 1, rows: [{ owner: 'postgres', comment: null }] };
+                    }
+                    return { rowCount: 0, rows: [] };
+                }),
+            };
+
+            await ExecuteWithFallback({
+                Client: mockClient,
+                schema: '__mj',
+                ViewName: 'vwTestEntities',
+                CreateOrReplaceSQL: generatedSQL, // Real generateBaseView() output containing DO $vw_regen$
+                OnDependentViewUnrestored: (schema, viewName) => {
+                    if (schema === '__mj' && viewName === 'vwDependent') {
+                        onUnrestoredInvoked = true;
+                    }
+                },
+            });
+
+            // Assert that mockClient NEVER saw the outer DO $vw_regen$ wrapper
+            const doCalls = executedQueries.filter(q => q.includes('DO $vw_regen$'));
+            expect(doCalls).toHaveLength(0);
+
+            // Verify execution sequence entered RunExclusiveDropCascade:
+            // 1. First unwrapped CREATE OR REPLACE VIEW (which threw 42P16)
+            expect(executedQueries[0].startsWith('CREATE OR REPLACE VIEW "__mj"."vwTestEntities"')).toBe(true);
+            // 2. BEGIN
+            expect(executedQueries).toContain('BEGIN');
+            // 3. DROP VIEW IF EXISTS "__mj"."vwTestEntities" CASCADE
+            expect(executedQueries).toContain('DROP VIEW IF EXISTS "__mj"."vwTestEntities" CASCADE');
+            // 4. Second unwrapped CREATE OR REPLACE VIEW
+            const createViews = executedQueries.filter(q => q.startsWith('CREATE OR REPLACE VIEW "__mj"."vwTestEntities"'));
+            expect(createViews).toHaveLength(2);
+            // 5. Dependent restore attempted and failed, invoking OnDependentViewUnrestored
+            expect(onUnrestoredInvoked).toBe(true);
+            // 6. COMMIT
+            expect(executedQueries).toContain('COMMIT');
+        });
+
+        it('preserves deterministic SQLLogging and TempBatchFile append order across concurrent entities in a wave', async () => {
+            const codeGen = new TestableSQLCodeGen();
+            const pgProvider = new PostgreSQLCodeGenProvider();
+            codeGen.DBProvider = pgProvider;
+
+            const appendLogSpy = vi.spyOn(SQLLogging, 'appendToSQLLogFile').mockImplementation(() => {});
+            const appendBatchSpy = vi.spyOn(TempBatchFile, 'appendToTempBatchFile').mockImplementation(() => {});
+
+            // Create 3 independent entities in a single wave [EntityA, EntityB, EntityC]
+            const entityA = makeTestEntity({ id: 'ent-a', name: 'EntityA' });
+            const entityB = makeTestEntity({ id: 'ent-b', name: 'EntityB' });
+            const entityC = makeTestEntity({ id: 'ent-c', name: 'EntityC' });
+
+            const wave = [entityA, entityB, entityC];
+
+            // Mock GenerateAndExecuteSingleEntitySQLToSeparateFiles with inverted delays:
+            // EntityA takes 30ms, EntityB takes 15ms, EntityC takes 1ms
+            vi.spyOn(codeGen, 'GenerateAndExecuteSingleEntitySQLToSeparateFiles').mockImplementation(async (opts) => {
+                const delay = opts.entity.Name === 'EntityA' ? 30 : opts.entity.Name === 'EntityB' ? 15 : 1;
+                await new Promise(r => setTimeout(r, delay));
+
+                // Log a statement for this entity
+                codeGen.LogSQLForNewOrModifiedEntity(
+                    opts.entity,
+                    `-- SQL for ${opts.entity.Name}`,
+                    `Description for ${opts.entity.Name}`,
+                    true,
+                    true
+                );
+
+                return { Success: true, Files: [] };
+            });
+
+            const mockPool = makeMockConnection(async () => ({ recordset: [] }));
+
+            await codeGen.GenerateAndExecuteEntitySQLToSeparateFiles({
+                pool: mockPool,
+                entities: wave,
+                directory: '/tmp/test-mj-output',
+                waves: [wave],
+                batchSize: 6,
+                writeFiles: false,
+                skipExecution: true,
+                enableSQLLoggingForNewOrModifiedEntities: true,
+            });
+
+            // Even though EntityC finished first and EntityA finished last,
+            // the flushed log and temp batch file calls MUST strictly match the input batch order: EntityA, EntityB, EntityC!
+            const logCalls = appendLogSpy.mock.calls.map(c => c[1]);
+            expect(logCalls).toEqual([
+                'Description for EntityA',
+                'Description for EntityB',
+                'Description for EntityC',
+            ]);
+
+            const batchCalls = appendBatchSpy.mock.calls.map(c => c[0]);
+            expect(batchCalls).toEqual([
+                '-- SQL for EntityA',
+                '-- SQL for EntityB',
+                '-- SQL for EntityC',
+            ]);
+
+            appendLogSpy.mockRestore();
+            appendBatchSpy.mockRestore();
         });
     });
 });

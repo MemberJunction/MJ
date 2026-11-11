@@ -120,7 +120,38 @@ export interface ExecuteWithFallbackOptions {
      * can resolve to the stub.
      */
     BaseTableQualified?: string;
+    /**
+     * Optional callback invoked when a dependent view dropped by DROP CASCADE
+     * fails to restore during the fallback recovery. Callers can use this to
+     * invalidate cached schema information (e.g. existing base view columns)
+     * so subsequent passes detect the missing view.
+     */
+    OnDependentViewUnrestored?: (schema: string, viewName: string) => void;
 }
+
+/**
+ * Unwraps the inner `CREATE OR REPLACE VIEW ...` statement from a migration-wrapped
+ * `DO $vw_regen$ ... END $vw_regen$;` block.
+ *
+ * Migration files and audit logs retain the `DO $vw_regen$` wrapper for standalone replay,
+ * but executing the wrapper in live codegen causes PL/pgSQL to swallow `42P16` errors
+ * internally, bypassing {@link ExecuteWithFallback}'s recovery logic.
+ */
+export function UnwrapMigrationViewRegenSQL(sql: string): string {
+    if (sql.includes('DO $vw_regen$')) {
+        const startMarker = 'vsql CONSTANT TEXT := $vsql$';
+        const endMarker = '$vsql$;';
+        const startIdx = sql.indexOf(startMarker);
+        const endIdx = sql.lastIndexOf(endMarker);
+        if (startIdx !== -1 && endIdx > startIdx + startMarker.length) {
+            return sql.slice(startIdx + startMarker.length, endIdx);
+        }
+    }
+    return sql;
+}
+
+/** @deprecated Use {@link UnwrapMigrationViewRegenSQL}. */
+export const unwrapMigrationViewRegenSQL = UnwrapMigrationViewRegenSQL;
 
 /**
  * Attempt CREATE OR REPLACE VIEW; on 42P16, perform the full capture + drop +
@@ -130,7 +161,8 @@ export interface ExecuteWithFallbackOptions {
  * from other code is not allowed — this function manages transaction state.
  */
 export async function ExecuteWithFallback(opts: ExecuteWithFallbackOptions): Promise<void> {
-    const { Client: client, schema, ViewName: viewName, CreateOrReplaceSQL: createOrReplaceSQL, BaseTableQualified: baseTableQualified } = opts;
+    const { Client: client, schema, ViewName: viewName, BaseTableQualified: baseTableQualified } = opts;
+    const createOrReplaceSQL = UnwrapMigrationViewRegenSQL(opts.CreateOrReplaceSQL);
     const willRegenerate = opts.WillRegenerate ?? new Set<string>();
 
     // First attempt: happy-path CREATE OR REPLACE. If this succeeds there's
@@ -223,7 +255,8 @@ export async function ExecuteWithFallback(opts: ExecuteWithFallbackOptions): Pro
                 dependentFunctions,
                 grants,
                 metadata,
-                willRegenerate
+                willRegenerate,
+                opts.OnDependentViewUnrestored
             );
 
             await client.query('COMMIT');
@@ -249,7 +282,8 @@ async function restoreDependents(
     dependentFunctions: DependentFunction[],
     grants: ViewGrant[],
     metadata: ViewMetadata,
-    willRegenerate: Set<string>
+    willRegenerate: Set<string>,
+    onDependentViewUnrestored?: (schema: string, viewName: string) => void
 ): Promise<void> {
     // 1. Dependent views/matviews in shallowest-first order. The capture query
     //    already returns them sorted, so we just walk the array.
@@ -291,6 +325,7 @@ async function restoreDependents(
             const msg = e instanceof Error ? e.message : String(e);
             // eslint-disable-next-line no-console
             console.warn(`[viewFallback] best-effort restore skipped dependent ${dep.schema}.${dep.name}: ${msg}`);
+            onDependentViewUnrestored?.(dep.schema, dep.name);
         }
     }
 

@@ -61,6 +61,14 @@ export interface PrecomputedEntityPhasedSQL {
 }
 
 /**
+ * Maximum concurrent entities processed per wave during phased PostgreSQL code generation.
+ * Capped at 6 to bound concurrent pooled `pg.PoolClient` checkouts per wave well below
+ * the default 10-connection `pg.Pool` limit, leaving headroom for `42P16` fallback
+ * introspection queries and metadata reads.
+ */
+export const MAX_PG_PHASED_WAVE_CONCURRENCY = 6;
+
+/**
  * Partitions entities into waves where all entities within each wave can be executed concurrently
  * without SQL object creation or dependency conflicts on PostgreSQL.
  *
@@ -612,6 +620,8 @@ export class SQLCodeGenBase {
      */
     protected existingBaseViewColumnsPG: Map<string, Set<string>> | null = null;
 
+    private _bufferedWaveLogEntries: Map<string, Array<{ Sql: string; Description: string; SchemaName: string }>> | null = null;
+
     /**
      * `schema.routine` keys of CRUD routines whose live definition differed from the body generated
      * this run, so they were force-logged and re-executed. Reported once after generation.
@@ -705,7 +715,7 @@ export class SQLCodeGenBase {
             // OPTIMIZATION: Use a Set for O(1) lookups instead of O(n) array finds to improve performance
             const includedEntities = EntitiesNotInExcludedSchemas(baselineEntities, configInfo.excludeSchemas);
 
-            await this.loadExistingRoutines(pool, includedEntities);
+            await this.loadExistingRoutines(pool, entities);
             await this.loadExistingBaseViews(pool, includedEntities);
 
             // Initialize temp batch files for each schema
@@ -783,25 +793,18 @@ export class SQLCodeGenBase {
                     .map(e => `${e.SchemaName}.${e.BaseView}`)
             );
 
-            // PostgreSQL must serialize per-entity processing. Each PG entity's
-            // phased execution (view → CRUD → permissions) issues
-            // CREATE OR REPLACE VIEW with a 42P16 fallback that does
-            // capture/DROP CASCADE/CREATE/restore via pg_depend. Running this
-            // in parallel against entities with cross-references (e.g.
-            // vwAIModels ←→ vwAIModelVendors, view + dependent function) hits
-            // catalog-level deadlocks ("ERROR: deadlock detected") and the
-            // deadlock victim's transaction rolls back leaving its dependents
-            // dropped but never recreated — net effect: 11+ views silently
-            // missing after one codegen run, then the next run crashes during
-            // AI Engine init because vwAIModels is gone. SQL Server doesn't
-            // hit this because its execution path is bulk-monolithic, not
-            // phased per-entity.
+            // PostgreSQL executes entities in conflict-free waves via PartitionEntitiesIntoConflictFreeWaves,
+            // bounded by MAX_PG_PHASED_WAVE_CONCURRENCY. Within each wave, entities run concurrently
+            // across pooled clients, while RunExclusiveDropCascade serializes any 42P16 DROP VIEW ... CASCADE
+            // fallback transactions to prevent catalog deadlocks on pg_depend.
+            // When useProviderPhasedExecution is false, perEntityBatchSize is 1.
+            // Note that cascadeGenResult below remains batchSize: 1.
             const configuredBatch = configInfo.fileEmit?.sqlEntityBatchSize ?? 8;
             const perEntityBatchSize = configInfo.dbPlatform === 'postgresql' ? 1 : configuredBatch;
 
             let entityWaves: EntityInfo[][] | undefined;
             if (useProviderPhasedExecution && configuredBatch > 1) {
-                const maxWaveSize = Math.min(configuredBatch, 6);
+                const maxWaveSize = Math.min(configuredBatch, MAX_PG_PHASED_WAVE_CONCURRENCY);
                 entityWaves = PartitionEntitiesIntoConflictFreeWaves(entitiesWithoutCascadeRegeneration, maxWaveSize);
             }
 
@@ -1390,31 +1393,54 @@ export class SQLCodeGenBase {
             for (const { batch, offset } of batchIterator) {
                 if (batch.length === 0) continue;
                 this.reportEntityBatchProgress(phaseLabel, offset, totalEntities, batch[0], phaseStart);
-                const promises = batch.map(async (e) => {
-                    const pkeyField = e.Fields.find(f => f.IsPrimaryKey);
-                    if (!pkeyField) {
-                        logError(`SKIPPING SQL GENERATION: Entity ${e.Name} has no primary key field in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
-                        return {entity: e, result: {Success: false, Files: []}};
-                    }
-                    const result = await this.GenerateAndExecuteSingleEntitySQLToSeparateFiles({
-                        pool: options.pool,
-                        entity: e,
-                        directory: options.directory,
-                        onlyPermissions: options.onlyPermissions,
-                        writeFiles: options.writeFiles,
-                        skipExecution: options.skipExecution,
-                        enableSQLLoggingForNewOrModifiedEntities: options.enableSQLLoggingForNewOrModifiedEntities,
-                        willRegenerate,
-                    });
-                    return {entity: e, result};
-                });
 
-                const results = await Promise.all(promises);
-                results.forEach(({entity, result}) => {
-                    if (!result.Success)
-                        failedEntities.push(entity);
-                    files.push(...result.Files); // add the files to the main files array
-                });
+                const useBuffering = batch.length > 1;
+                if (useBuffering) {
+                    this._bufferedWaveLogEntries = new Map();
+                    for (const e of batch) {
+                        this._bufferedWaveLogEntries.set(e.ID, []);
+                    }
+                }
+
+                try {
+                    const promises = batch.map(async (e) => {
+                        const pkeyField = e.Fields.find(f => f.IsPrimaryKey);
+                        if (!pkeyField) {
+                            logError(`SKIPPING SQL GENERATION: Entity ${e.Name} has no primary key field in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
+                            return {entity: e, result: {Success: false, Files: []}};
+                        }
+                        const result = await this.GenerateAndExecuteSingleEntitySQLToSeparateFiles({
+                            pool: options.pool,
+                            entity: e,
+                            directory: options.directory,
+                            onlyPermissions: options.onlyPermissions,
+                            writeFiles: options.writeFiles,
+                            skipExecution: options.skipExecution,
+                            enableSQLLoggingForNewOrModifiedEntities: options.enableSQLLoggingForNewOrModifiedEntities,
+                            willRegenerate,
+                        });
+                        return {entity: e, result};
+                    });
+
+                    const results = await Promise.all(promises);
+                    results.forEach(({entity, result}) => {
+                        if (!result.Success)
+                            failedEntities.push(entity);
+                        files.push(...result.Files); // add the files to the main files array
+                    });
+                } finally {
+                    if (useBuffering && this._bufferedWaveLogEntries) {
+                        for (const e of batch) {
+                            const entries = this._bufferedWaveLogEntries.get(e.ID) ?? [];
+                            for (const entry of entries) {
+                                SQLLogging.appendToSQLLogFile(entry.Sql, entry.Description);
+                                TempBatchFile.appendToTempBatchFile(entry.Sql, entry.SchemaName);
+                            }
+                            this._bufferedWaveLogEntries.delete(e.ID);
+                        }
+                        this._bufferedWaveLogEntries = null;
+                    }
+                }
             }
 
             // Batch summary — makes the full failure scope visible in one pass instead of
@@ -1637,8 +1663,13 @@ export class SQLCodeGenBase {
             return { success: true, phase: null };
         }
 
+        const onDependentViewUnrestored = (schema: string, viewName: string) => {
+            this.existingBaseViewColumnsPG?.delete(`${schema.toLowerCase()}.${viewName.toLowerCase()}`);
+        };
+
+        let phaseResult: PhasedExecutionResult;
         if (precomputed) {
-            return this._dbProvider.executeEntityPhased!({
+            phaseResult = await this._dbProvider.executeEntityPhased!({
                 entity,
                 tvfSQL: precomputed.TvfSQL,
                 viewSQL: precomputed.ViewSQL,
@@ -1648,79 +1679,90 @@ export class SQLCodeGenBase {
                 ftsSQL: precomputed.FtsSQL,
                 viewPermSQL: precomputed.ViewPermSQL,
                 willRegenerate,
+                OnDependentViewUnrestored: onDependentViewUnrestored,
+            });
+        } else {
+            // Pieces needed for the phased executor. Empty string when the entity
+            // doesn't warrant that phase's DDL (e.g. virtual entities don't have
+            // views; entities with AllowCreateAPI=false don't get fn_create_*).
+
+            // Root-ID TVFs — entities with self-referencing ParentID FKs need a
+            // recursive helper function (fn_<table>_<field>_get_root_id) that the
+            // base view references. These MUST exist before phase 1 (view) runs;
+            // otherwise PG raises `function does not exist` and phase 2 (CRUD)
+            // gets gated off.
+            // A LAYERED entity still generates. `BaseViewGenerated = 0` means "do not write BaseView",
+            // and when GeneratedBaseViewName is set that is exactly the intent — the application owns
+            // BaseView while CodeGen keeps writing the inner view underneath it. Gating on
+            // BaseViewGenerated alone would skip the inner view and leave the custom layer selecting
+            // from an object that does not exist.
+            // One pass: overlay already applied → Pass 1 sees extra BaseView columns and logs
+            // EntityField INSERTs; Pass 2 DROPs/creates only GeneratedViewName, never the overlay.
+            const generatesView = (entity.BaseViewGenerated || entity.HasLayeredBaseView) && !entity.VirtualEntity;
+
+            const tvfSQL = generatesView ? this.generateRecursiveFKTVFs(entity) : '';
+
+            const viewPieces = generatesView
+                ? await this.GenerateBaseViewPieces(pool, entity)
+                : { viewSQL: '', viewPermSQL: '' };
+
+            const crudCreateSQL =
+                entity.AllowCreateAPI && entity.spCreateGenerated && !entity.VirtualEntity
+                    ? this.generateSPCreate(entity)
+                    : '';
+            const crudUpdateSQL =
+                entity.AllowUpdateAPI && entity.spUpdateGenerated && !entity.VirtualEntity
+                    ? this.generateSPUpdate(entity)
+                    : '';
+            const crudDeleteSQL =
+                entity.AllowDeleteAPI && entity.spDeleteGenerated && !entity.VirtualEntity
+                    ? await this.generateSPDelete(entity, pool)
+                    : '';
+
+            // Full-text search DDL. Without its own phase the generated
+            // *.fulltext.generated.sql is written to disk and then never executed on
+            // any provider that implements executeEntityPhased — nothing in the
+            // phase list carried it. The search objects were therefore absent while
+            // applyPermissions still GRANTed EXECUTE on the search function, and the
+            // resulting `function does not exist` failed the whole CodeGen run.
+            // Generated here (not in the provider) because building it needs the
+            // internal generators and a pool round trip for the PK index name.
+            let ftsSQL = '';
+            if (entity.FullTextSearchEnabled && !entity.VirtualEntity) {
+                try {
+                    const ft = await this.GenerateEntityFullTextSearchSQL(pool, entity);
+                    ftsSQL = ft.sql;
+                } catch (e) {
+                    return {
+                        success: false,
+                        phase: 'fulltext-generate',
+                        error: e instanceof Error ? e : new Error(String(e)),
+                    };
+                }
+            }
+
+            phaseResult = await this._dbProvider.executeEntityPhased!({
+                entity,
+                tvfSQL,
+                viewSQL: viewPieces.viewSQL,
+                crudCreateSQL,
+                crudUpdateSQL,
+                crudDeleteSQL,
+                ftsSQL,
+                viewPermSQL: viewPieces.viewPermSQL,
+                willRegenerate,
+                OnDependentViewUnrestored: onDependentViewUnrestored,
             });
         }
 
-        // Pieces needed for the phased executor. Empty string when the entity
-        // doesn't warrant that phase's DDL (e.g. virtual entities don't have
-        // views; entities with AllowCreateAPI=false don't get fn_create_*).
-
-        // Root-ID TVFs — entities with self-referencing ParentID FKs need a
-        // recursive helper function (fn_<table>_<field>_get_root_id) that the
-        // base view references. These MUST exist before phase 1 (view) runs;
-        // otherwise PG raises `function does not exist` and phase 2 (CRUD)
-        // gets gated off.
-        // A LAYERED entity still generates. `BaseViewGenerated = 0` means "do not write BaseView",
-        // and when GeneratedBaseViewName is set that is exactly the intent — the application owns
-        // BaseView while CodeGen keeps writing the inner view underneath it. Gating on
-        // BaseViewGenerated alone would skip the inner view and leave the custom layer selecting
-        // from an object that does not exist.
-        // One pass: overlay already applied → Pass 1 sees extra BaseView columns and logs
-        // EntityField INSERTs; Pass 2 DROPs/creates only GeneratedViewName, never the overlay.
-        const generatesView = (entity.BaseViewGenerated || entity.HasLayeredBaseView) && !entity.VirtualEntity;
-
-        const tvfSQL = generatesView ? this.generateRecursiveFKTVFs(entity) : '';
-
-        const viewPieces = generatesView
-            ? await this.GenerateBaseViewPieces(pool, entity)
-            : { viewSQL: '', viewPermSQL: '' };
-
-        const crudCreateSQL =
-            entity.AllowCreateAPI && entity.spCreateGenerated && !entity.VirtualEntity
-                ? this.generateSPCreate(entity)
-                : '';
-        const crudUpdateSQL =
-            entity.AllowUpdateAPI && entity.spUpdateGenerated && !entity.VirtualEntity
-                ? this.generateSPUpdate(entity)
-                : '';
-        const crudDeleteSQL =
-            entity.AllowDeleteAPI && entity.spDeleteGenerated && !entity.VirtualEntity
-                ? await this.generateSPDelete(entity, pool)
-                : '';
-
-        // Full-text search DDL. Without its own phase the generated
-        // *.fulltext.generated.sql is written to disk and then never executed on
-        // any provider that implements executeEntityPhased — nothing in the
-        // phase list carried it. The search objects were therefore absent while
-        // applyPermissions still GRANTed EXECUTE on the search function, and the
-        // resulting `function does not exist` failed the whole CodeGen run.
-        // Generated here (not in the provider) because building it needs the
-        // internal generators and a pool round trip for the PK index name.
-        let ftsSQL = '';
-        if (entity.FullTextSearchEnabled && !entity.VirtualEntity) {
-            try {
-                const ft = await this.GenerateEntityFullTextSearchSQL(pool, entity);
-                ftsSQL = ft.sql;
-            } catch (e) {
-                return {
-                    success: false,
-                    phase: 'fulltext-generate',
-                    error: e instanceof Error ? e : new Error(String(e)),
-                };
-            }
+        if (phaseResult.success && (entity.BaseViewGenerated || entity.HasLayeredBaseView) && !entity.VirtualEntity && this.existingBaseViewColumnsPG) {
+            this.existingBaseViewColumnsPG.set(
+                `${entity.SchemaName.toLowerCase()}.${entity.GeneratedViewName.toLowerCase()}`,
+                new Set(entity.Fields.map(f => f.Name.toLowerCase()))
+            );
         }
 
-        return this._dbProvider.executeEntityPhased!({
-            entity,
-            tvfSQL,
-            viewSQL: viewPieces.viewSQL,
-            crudCreateSQL,
-            crudUpdateSQL,
-            crudDeleteSQL,
-            ftsSQL,
-            viewPermSQL: viewPieces.viewPermSQL,
-            willRegenerate,
-        });
+        return phaseResult;
     }
 
     /** @deprecated Use {@link ExecuteEntityInPhases}. */
@@ -1963,8 +2005,16 @@ export class SQLCodeGenBase {
         }
 
         if (shouldLog) {
-            SQLLogging.appendToSQLLogFile(sql, description);
-            TempBatchFile.appendToTempBatchFile(sql, entity.SchemaName);
+            if (this._bufferedWaveLogEntries && this._bufferedWaveLogEntries.has(entity.ID)) {
+                this._bufferedWaveLogEntries.get(entity.ID)!.push({
+                    Sql: sql,
+                    Description: description,
+                    SchemaName: entity.SchemaName,
+                });
+            } else {
+                SQLLogging.appendToSQLLogFile(sql, description);
+                TempBatchFile.appendToTempBatchFile(sql, entity.SchemaName);
+            }
         }
 
         LogIf(configInfo.verboseOutput, `SQL Generated for ${entity.Name}: ${description}`);
@@ -2262,16 +2312,10 @@ export class SQLCodeGenBase {
                 }
 
                 // Generate the base view (which may reference the TVFs created above)
-                let viewBaseSQL = '';
-                if (this.GenerateBaseView === ORIGINAL_GENERATE_BASE_VIEW) {
-                    const viewPieces = await this.GenerateBaseViewPieces(options.pool, options.entity);
-                    precomputedViewSQL = viewPieces.viewSQL;
-                    precomputedViewPermSQL = viewPieces.viewPermSQL;
-                    viewBaseSQL = viewPieces.viewSQL + viewPieces.viewPermSQL;
-                } else {
-                    viewBaseSQL = await this.GenerateBaseView(options.pool, options.entity);
-                    precomputedViewSQL = viewBaseSQL;
-                }
+                const viewPieces = await this.GenerateBaseViewPieces(options.pool, options.entity);
+                precomputedViewSQL = viewPieces.viewSQL;
+                precomputedViewPermSQL = viewPieces.viewPermSQL;
+                const viewBaseSQL = viewPieces.viewSQL + viewPieces.viewPermSQL;
                 const s = this.GenerateSingleEntitySQLFileHeader(options.entity, options.entity.GeneratedViewName) + viewBaseSQL;
 
                 // Compare generated view SQL against what's currently in the database.
@@ -2487,7 +2531,7 @@ export class SQLCodeGenBase {
                 ViewSQL: precomputedViewSQL,
                 CrudCreateSQL: precomputedCrudCreateSQL,
                 CrudUpdateSQL: precomputedCrudUpdateSQL,
-                CrudDeleteSQL: precomputedCrudDeleteSQL,
+                CrudDeleteSQL: options.entity.spDeleteGenerated ? precomputedCrudDeleteSQL : '',
                 FtsSQL: precomputedFtsSQL,
                 ViewPermSQL: precomputedViewPermSQL,
             };
@@ -3182,6 +3226,11 @@ export class SQLCodeGenBase {
         return joins.join('\n');
     }
 
+    /**
+     * Generates the base view SQL including permissions.
+     * Note: Subclasses should override {@link GenerateBaseViewPieces} instead of this method
+     * so phased execution can run view creation and permissions in separate phases.
+     */
     async GenerateBaseView(pool: CodeGenConnection, entity: EntityInfo): Promise<string> {
         const { viewSQL, viewPermSQL } = await this.GenerateBaseViewPieces(pool, entity);
         return viewSQL + viewPermSQL;
@@ -4469,5 +4518,3 @@ export class SQLCodeGenBase {
         return ordered;
     }
 }
-
-const ORIGINAL_GENERATE_BASE_VIEW = SQLCodeGenBase.prototype.GenerateBaseView;
