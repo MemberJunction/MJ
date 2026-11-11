@@ -6,6 +6,7 @@
  *
  * See `docs/telemetry-shareable-schema.md` for the normative specification this mirrors.
  */
+// case-violation-ok-legacy-back-compat: field names (kind/min/max/entity/bucketKey/granularity/values/buckets) verbatim-mirror the normative DSL spec in docs/telemetry-shareable-schema.md §3 — not a free naming choice to PascalCase.
 export type TelemetryFieldType =
   | { kind: 'count' } // Non-negative integer
   | { kind: 'duration_ms' } // Non-negative floating-point latency

@@ -95,9 +95,12 @@ export class EventLoopLagProbe extends BaseHealthProbe {
 
   /**
    * Resolves with the elapsed time between scheduling and running a `setImmediate` callback,
-   * in milliseconds. A busy event loop delays the callback proportionally to its backlog.
+   * in milliseconds. A busy event loop delays the callback proportionally to its backlog. Public
+   * so it can also be used as a standalone diagnostic (e.g. `mj doctor --live`) independent of a
+   * full `Evaluate()` call, and so tests can substitute a deterministic value without reaching
+   * past TypeScript's access modifiers.
    */
-  protected measureEventLoopLagMs(): Promise<number> {
+  public measureEventLoopLagMs(): Promise<number> {
     return new Promise<number>((resolve) => {
       const start = process.hrtime.bigint();
       setImmediate(() => {
