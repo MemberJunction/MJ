@@ -1,5 +1,58 @@
 # @memberjunction/open-app-engine
 
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- 8fb8a07: Open App CLI messages and exit codes: `mj app check-updates` and migration downloads explain a private repository the credential cannot read, the credential message names the token in use and covers fine-grained and SSO tokens; `mj app remove`/`enable`/`disable` exit 1 once on failure; `mj migrate` without `--schema` uses the schema from `mj-app.json` and logs it.
+- 76dc1bb: Open App config writer: key and section searches skip comments (the stock MJAPI header's example `module.exports` no longer receives writes) and edits stay inside their target array/object; the app schema goes to `excludeSchemas_append` when the host uses it; appending after a trailing comma no longer leaves an array hole, and a write that adds a hole is rejected; bare `entityPackageName` keys are recognized so installs stop adding quoted duplicates; upgrades add the schema to `excludeSchemas` only when the schema was renamed; the install summary no longer tells the operator to run CodeGen.
+- 064f9a9: `mj app upgrade`: when the package install fails after the package files were written, the upgrade restores every file its package step changed (workspace `package.json` files and lockfiles), skips the config step, and leaves the app at its previous version and status instead of finalizing it `Disabled`. The failure message says the schema stays migrated and gives the retry command (#5517).
+- a0079ce: Check hosts by parsed hostname instead of substring, as CodeQL flagged: the Teams webhook action accepts only https URLs on `webhook.office.com` or its subdomains (a URL with that text in its path or query no longer passes), and Azure AD issuer, Azure SQL host and Azure Blob upload detection match the host name itself.
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [a01e840]
+- Updated dependencies [6555a44]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [2641e47]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6c6f0dc]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b68d388]
+- Updated dependencies [66fcfde]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/record-cloning@6.3.0-edge.0
+  - @memberjunction/sql-dialect@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

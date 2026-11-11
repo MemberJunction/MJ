@@ -2882,10 +2882,13 @@ WHERE p.prokind IN ('f', 'p')
             };
         }
 
-        // Composite keys or non-auto, non-UUID PKs
-        const selectWhere = entity.PrimaryKeys.map((k: EntityFieldInfo) =>
-            `${pgDialect.QuoteIdentifier(k.Name)} = ${pgDialect.ParameterRef(k.CodeName)}`
-        ).join(' AND ');
+        // Composite keys or non-auto, non-UUID PKs. #3526: a key column that allows NULL is matched
+        // NULL-safely (IS NOT DISTINCT FROM would not use a btree index).
+        const selectWhere = entity.PrimaryKeys.map((k: EntityFieldInfo) => {
+            const col = pgDialect.QuoteIdentifier(k.Name);
+            const param = pgDialect.ParameterRef(k.CodeName);
+            return k.AllowsNull ? `(${col} = ${param} OR (${col} IS NULL AND ${param} IS NULL))` : `${col} = ${param}`;
+        }).join(' AND ');
 
         // Composite-PK tables: every PK column has AllowUpdateAPI=0, so generateInsertFieldString
         // filters them all out. Prepend them to finalColumns/finalValues so the INSERT is valid.

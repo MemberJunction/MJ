@@ -1,5 +1,11 @@
 # @memberjunction/video-studio-core
 
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- de3d6f9: Tests: raise the wall-clock ceiling on the "pathological 50,000-character input" checks from 200 ms to 2000 ms. They guard against quadratic/backtracking scans, not machine speed; one failed the v6.3.0-edge.0 publish gate at 211 ms on a CI runner.
+
 ## 6.2.0
 
 ### Minor Changes

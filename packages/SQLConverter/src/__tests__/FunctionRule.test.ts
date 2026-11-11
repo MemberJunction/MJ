@@ -529,3 +529,66 @@ END`;
     });
   });
 });
+
+describe('FunctionRule — Open App hierarchy TVFs (issue #5364 item 6)', () => {
+  const APP = '__mj_BizAppsAccounting';
+  const convertIn = (sql: string) => rule.PostProcess!(sql, sql, CreateConversionContext('tsql', 'postgres', APP));
+  const descendants = [
+    `CREATE FUNCTION [${APP}].[fnGLAccountParentGLAccountID_GetDescendants]`,
+    '(',
+    '    @RootID uniqueidentifier,',
+    '    @MaxDepth INT = NULL',
+    ')',
+    'RETURNS TABLE',
+    'AS',
+    'RETURN',
+    '(',
+    '    WITH CTE_Descendants AS (',
+    '        SELECT [ID], [ParentGLAccountID], 0 AS [RelativeDepth],',
+    "            CAST('/' + CAST([ID] AS NVARCHAR(36)) + '/' AS NVARCHAR(MAX)) AS [Path]",
+    `        FROM [${APP}].[GLAccount] WHERE [ID] = @RootID`,
+    '        UNION ALL',
+    '        SELECT c.[ID], c.[ParentGLAccountID], p.[RelativeDepth] + 1 AS [RelativeDepth],',
+    "            CAST(p.[Path] + CAST(c.[ID] AS NVARCHAR(36)) + '/' AS NVARCHAR(MAX)) AS [Path]",
+    `        FROM [${APP}].[GLAccount] c`,
+    '        INNER JOIN CTE_Descendants p ON c.[ParentGLAccountID] = p.[ID]',
+    '        WHERE (@MaxDepth IS NULL OR p.[RelativeDepth] < @MaxDepth) AND p.[RelativeDepth] < 100',
+    '    )',
+    '    SELECT d.[ID] AS [ID], d.[RelativeDepth] AS [Depth], d.[Path],',
+    `        CAST(CASE WHEN EXISTS (SELECT 1 FROM [${APP}].[GLAccount] WHERE [ParentGLAccountID] = d.[ID]) THEN 0 ELSE 1 END AS BIT) AS [IsLeaf],`,
+    `        (SELECT COUNT(1) FROM [${APP}].[GLAccount] WHERE [ParentGLAccountID] = d.[ID]) AS [ChildCount]`,
+    '    FROM CTE_Descendants d',
+    ');',
+  ].join('\n');
+
+  it('converts an app-schema inline TVF to a typed SQL function in that schema', () => {
+    const out = convertIn(descendants);
+    expect(out).toContain(`CREATE OR REPLACE FUNCTION ${APP}."fnGLAccountParentGLAccountID_GetDescendants"(`);
+    expect(out).toContain('RETURNS TABLE("ID" UUID, "Depth" INTEGER, "Path" TEXT, "IsLeaf" BOOLEAN, "ChildCount" INTEGER) AS $$');
+    expect(out).toContain('WITH RECURSIVE');
+    expect(out).toContain('$$ LANGUAGE sql;');
+    expect(out).not.toMatch(/RETURNS TABLE\s*\n\s*AS\s*\n\s*RETURN/);
+  });
+
+  it('keeps depth arithmetic as + while turning string concatenation into ||', () => {
+    const out = convertIn(descendants);
+    expect(out).toContain('p."RelativeDepth" + 1 AS "RelativeDepth"');
+    expect(out).not.toContain('|| 1');
+    expect(out).toContain(`CAST('/' || CAST("ID" AS VARCHAR(36)) || '/' AS TEXT)`);
+  });
+
+  it('declares the GetAncestors and GetHierarchyMeta result columns with their real types', () => {
+    const ancestors = descendants
+      .replace('_GetDescendants', '_GetAncestors');
+    expect(convertIn(ancestors)).toContain('RETURNS TABLE("ID" UUID, "LevelUp" INTEGER, "Path" TEXT)');
+    const meta = descendants.replace('_GetDescendants', '_GetHierarchyMeta');
+    expect(convertIn(meta)).toContain('RETURNS TABLE("RootID" UUID, "Depth" INTEGER, "Path" TEXT, "IsLeaf" BOOLEAN, "ChildCount" INTEGER)');
+  });
+
+  it('leaves a hand-written app function to a person, as a counted gap', () => {
+    const sql = `CREATE FUNCTION [${APP}].[fnFiscalPeriodFor](@d DATE) RETURNS INT AS BEGIN RETURN 1 END`;
+    const out = convertIn(sql);
+    expect(out).toContain('-- NEEDS HAND AUTHORING: function');
+    expect(out.split('\n').filter((l) => l.trim() && !l.startsWith('--'))).toEqual([]);
+  });
+});
