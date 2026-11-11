@@ -197,6 +197,24 @@ function buildRequest(
     }
     return { request, processedQuery: query };
   }
+  if (Array.isArray(parameters) && parameters.length > 0 && parameters.every(p => p instanceof TypedQueryParameter || p instanceof NamedQueryParameter)) {
+    const boundByName = new Map<string, unknown>();
+    for (const p of parameters) {
+      if (boundByName.has(p.Name)) {
+        if (!Object.is(boundByName.get(p.Name), p.Value)) {
+          throw new Error(`Duplicate query parameter '@${p.Name}' bound with conflicting values.`);
+        }
+        continue;
+      }
+      boundByName.set(p.Name, p.Value);
+      if (p instanceof TypedQueryParameter) {
+        BindTypedParameters(request, [p]);
+      } else {
+        request.input(p.Name, p.Value);
+      }
+    }
+    return { request, processedQuery: query };
+  }
 
   let processedQuery = query;
   if (parameters) {

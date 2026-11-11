@@ -858,7 +858,11 @@ describe('SQLServerDataProvider save-call variable suffix (loom #12 WP3)', () =>
       for (const e of [same1, same2, other]) e.TransactionGroup = group;
       same1.Set('Name', 'One');
       same2.Set('Name', 'Two');
-      const saves = [same1, same2, other].map((e) => provider.Save(e, TEST_USER, new EntitySaveOptions()));
+      const saves: Promise<unknown>[] = [];
+      for (const e of [same1, same2, other]) {
+        saves.push(provider.Save(e, TEST_USER, new EntitySaveOptions()));
+        await Promise.resolve();
+      }
       mssqlState.QueueResult({
         recordsets: [
           [{ __mj_batch_item: 0 }], [{ ...savedWidgetRow(), Name: 'One' }],

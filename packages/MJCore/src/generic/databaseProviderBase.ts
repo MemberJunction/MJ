@@ -33,6 +33,18 @@ export type FieldChange = {
     newValue: unknown;
 };
 
+type EntityFieldValue = string | number | boolean | Date | Uint8Array | object | null | undefined;
+
+interface EntityFieldStateSnapshot {
+    Name: string;
+    Kind: 'primitive' | 'date' | 'bytes' | 'json' | 'uncomparable';
+    PrimitiveValue?: string | number | boolean | null | undefined;
+    DateMs?: number;
+    BytesCopy?: Uint8Array;
+    SerializedJson?: string;
+    Dirty: boolean;
+}
+
 /**
  * Options controlling how {@link Metadata.GetRecordDependencies} discovers dependent records.
  */
@@ -2262,6 +2274,13 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     }
                 }
 
+                // Snapshot field values before Step 3 (before-save hooks / cross-entity policy / auto-numbering).
+                // If no hook mutates any field value on a new record, the 2nd CheckCreateRLS check at step 3b
+                // is redundant with step 2b and can be safely skipped.
+                const preHookFieldSnapshot: EntityFieldStateSnapshot[] | null = (!bReplay && bNewRecord)
+                    ? this.CaptureEntityFieldSnapshot(entity)
+                    : null;
+
                 // Step 3: Before-save hook (entity actions, AI actions)
                 if (!bReplay) {
                     await this.OnBeforeSaveExecute(entity, user, options, saveContext);
@@ -2306,22 +2325,19 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 // escalation, not just a leak). This runs AFTER the before-save hooks by design:
                 // hooks can mutate field values, including filter-referenced ones, and the
                 // authorization boundary must cover the values that actually get written.
-                // Nothing existing moves — step 2b and step 3 keep their order; this is a new,
-                // additive step. Applies to BOTH creates and updates: a before-save hook can
-                // move a brand-new record's values outside the Create filter just as easily as
-                // it can move an existing row outside the Update filter, so CheckCreateRLS is
-                // called a second time here (idempotent, side-effect-free) rather than only
-                // gating updates. Post-image failure gets a specific message (unlike step 2b's
-                // deliberately generic one on the update path): the caller demonstrably had
-                // access to the pre-hook state, so the diagnostic leaks nothing new.
+                // When before-save hooks leave field values and dirty flags completely unchanged,
+                // the second CheckCreateRLS evaluation is redundant with step 2b and safely skipped.
                 if (!bReplay) {
                     if (bNewRecord) {
-                        const postHookCreatePass = await this.CheckCreateRLS(entity, user);
-                        if (!postHookCreatePass) {
-                            entityResult.Success = false;
-                            entityResult.EndedAt = new Date();
-                            entityResult.Message = `Access denied for new ${entity.EntityInfo.Name} record: a before-save hook produced field values that no longer pass row-level security`;
-                            throw new Error(entityResult.Message);
+                        const fieldsMutated = preHookFieldSnapshot === null || this.HasEntityFieldStateMutated(entity, preHookFieldSnapshot);
+                        if (fieldsMutated) {
+                            const postHookCreatePass = await this.CheckCreateRLS(entity, user);
+                            if (!postHookCreatePass) {
+                                entityResult.Success = false;
+                                entityResult.EndedAt = new Date();
+                                entityResult.Message = `Access denied for new ${entity.EntityInfo.Name} record: a before-save hook produced field values that no longer pass row-level security`;
+                                throw new Error(entityResult.Message);
+                            }
                         }
                     } else {
                         const postImagePass = await this.CheckUpdateRLSPostImage(entity, user);
@@ -2834,6 +2850,106 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         entity: BaseEntity,
         user: UserInfo
     ): Promise<boolean>;
+
+    /**
+     * Captures an immutable snapshot of an entity's fields (name, value, dirty status)
+     * so we can detect whether before-save hooks mutated any field (including in-place
+     * Date, Uint8Array, or JSON object mutations and case-sensitive string changes).
+     */
+    protected CaptureEntityFieldSnapshot(entity: BaseEntity): EntityFieldStateSnapshot[] {
+        return entity.Fields.map((f) => this.snapshotSingleFieldState(f.Name, f.Value as EntityFieldValue, f.Dirty));
+    }
+
+    private snapshotSingleFieldState(name: string, val: EntityFieldValue, dirty: boolean): EntityFieldStateSnapshot {
+        if (val === null) {
+            return { Name: name, Kind: 'primitive', PrimitiveValue: null, Dirty: dirty };
+        }
+        if (val === undefined) {
+            return { Name: name, Kind: 'primitive', PrimitiveValue: undefined, Dirty: dirty };
+        }
+        if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') {
+            return { Name: name, Kind: 'primitive', PrimitiveValue: val, Dirty: dirty };
+        }
+        if (val instanceof Date) {
+            return { Name: name, Kind: 'date', DateMs: val.getTime(), Dirty: dirty };
+        }
+        if (val instanceof Uint8Array) {
+            return { Name: name, Kind: 'bytes', BytesCopy: val.slice(), Dirty: dirty };
+        }
+        if (typeof val === 'object') {
+            try {
+                return { Name: name, Kind: 'json', SerializedJson: JSON.stringify(val), Dirty: dirty };
+            } catch {
+                return { Name: name, Kind: 'uncomparable', Dirty: dirty };
+            }
+        }
+        return { Name: name, Kind: 'uncomparable', Dirty: dirty };
+    }
+
+    /**
+     * Checks whether an entity's field values or dirty flags have mutated compared to a previous snapshot.
+     */
+    protected HasEntityFieldStateMutated(
+        entity: BaseEntity,
+        snapshot: EntityFieldStateSnapshot[],
+    ): boolean {
+        const currentFields = entity.Fields;
+        if (snapshot.length !== currentFields.length) {
+            return true;
+        }
+        for (let i = 0; i < snapshot.length; i++) {
+            const prev = snapshot[i];
+            const curr = currentFields[i];
+            if (prev.Name !== curr.Name || prev.Dirty !== curr.Dirty) {
+                return true;
+            }
+            if (!this.matchesFieldSnapshot(prev, curr.Value as EntityFieldValue)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private matchesFieldSnapshot(prev: EntityFieldStateSnapshot, curr: EntityFieldValue): boolean {
+        if (prev.Kind === 'uncomparable') {
+            return false;
+        }
+        if (prev.Kind === 'primitive') {
+            if (typeof prev.PrimitiveValue === 'number' && typeof curr === 'number' && Number.isNaN(prev.PrimitiveValue) && Number.isNaN(curr)) {
+                return true;
+            }
+            return prev.PrimitiveValue === curr;
+        }
+        if (prev.Kind === 'date') {
+            if (!(curr instanceof Date)) {
+                return false;
+            }
+            const currMs = curr.getTime();
+            return (Number.isNaN(prev.DateMs) && Number.isNaN(currMs)) || prev.DateMs === currMs;
+        }
+        if (prev.Kind === 'bytes') {
+            if (!(curr instanceof Uint8Array) || !prev.BytesCopy || prev.BytesCopy.length !== curr.length) {
+                return false;
+            }
+            for (let i = 0; i < curr.length; i++) {
+                if (prev.BytesCopy[i] !== curr[i]) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        if (prev.Kind === 'json') {
+            if (curr === null || typeof curr !== 'object' || curr instanceof Date || curr instanceof Uint8Array) {
+                return false;
+            }
+            try {
+                return prev.SerializedJson === JSON.stringify(curr);
+            } catch {
+                return false;
+            }
+        }
+        return false;
+    }
 
     /**************************************************************************/
     // END ---- Save/Delete Orchestration
