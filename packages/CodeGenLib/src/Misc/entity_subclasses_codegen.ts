@@ -1611,7 +1611,7 @@ VALUES (${lit(newGeneratedCodeId)}, ${validatorCodeCategoryID}, ${lit(v.aiModelI
       const validationFunctions = validators.map((f) => {
         // output the function text and the function description in a JSDoc block
 
-        const cleansedText = RewriteUUIDComparisons(NormalizeGeneratedValidatorText(f.functionText), uuidFieldNames);
+        const cleansedText = RewriteUUIDComparisons(NormalizeGeneratedValidatorText(f.functionText, `${f.functionName} on entity '${entity.Name}'`), uuidFieldNames);
         // next up, format the function text to have proper indentation with 4 spaces preceding the start of each line
         const formattedText = cleansedText.split('\n').map((l) => `    ${l}`).join('\n');
 
