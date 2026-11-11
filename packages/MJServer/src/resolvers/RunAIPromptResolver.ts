@@ -11,6 +11,7 @@ import { ChatParams, ChatMessage, ChatMessageRole, GetAIAPIKey, BaseLLM } from '
 import { MJGlobal } from '@memberjunction/global';
 import { MJAIModelVendorEntity } from '@memberjunction/core-entities';
 import { GetReadWriteProvider } from '../util.js';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 @ObjectType()
 export class AIPromptRunResult {
@@ -103,6 +104,7 @@ interface SimplePromptModelChoice {
     APIName: string;
 }
 
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class RunAIPromptResolver extends ResolverBase {
     /**

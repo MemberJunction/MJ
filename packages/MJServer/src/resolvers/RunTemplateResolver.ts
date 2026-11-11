@@ -6,6 +6,7 @@ import { MJTemplateContentEntity, MJTemplateEntityExtended } from '@memberjuncti
 import { GetTemplateRunRefusal, TemplateEngineServer } from '@memberjunction/templates';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 @ObjectType()
 export class TemplateRunResult {
@@ -29,6 +30,7 @@ export class TemplateRunResult {
  * only for backward compatibility with existing external API consumers and may be removed in a future
  * major version.
  */
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class RunTemplateResolver extends ResolverBase {
     /** @deprecated Use the `Template.Run` Remote Operation instead. Retained for backcompat. */

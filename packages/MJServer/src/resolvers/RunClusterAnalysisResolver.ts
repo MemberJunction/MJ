@@ -10,6 +10,7 @@ import {
     ClusterAlgorithm,
     ClusterDistanceMetric,
 } from '@memberjunction/clustering-engine';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 /* ───── GraphQL input ───── */
 
@@ -130,6 +131,7 @@ export class RunClusterAnalysisResult {
 
 /* ───── Resolver ───── */
 
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class RunClusterAnalysisResolver extends ResolverBase {
     @Mutation(() => RunClusterAnalysisResult)

@@ -6,6 +6,7 @@ import { RenderPipeline } from '@memberjunction/generic-database-provider';
 import { AppContext } from '../types.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 
 /**
@@ -104,6 +105,7 @@ export class TestQuerySQLResult {
  *
  * @see https://github.com/MemberJunction/MJ/issues/2172
  */
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class TestQuerySQLResolver extends ResolverBase {
     @Query(() => TestQuerySQLResult, {

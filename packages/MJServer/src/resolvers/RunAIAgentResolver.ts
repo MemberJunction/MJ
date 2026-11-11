@@ -15,6 +15,8 @@ import { StatusUpdateOwnerID } from '../generic/PushStatusResolver.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
 import { ResolveWidgetGuestRunContext, ElevateUserPayload } from '../realtimeWidget/widgetGuestElevation.js';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
+import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 import { AuthorizeConversationTurn } from '../realtimeSessions/sessionAccess.js';
 import { IsTrustedAgentRunCaller } from './agent-run-data-guard.js';
 import { EscapeSQLString, IsValidUUID, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
@@ -718,6 +720,7 @@ export class RunAIAgentResolver extends ResolverBase {
      * Public mutation for regular users to run AI agents with authentication.
      * Supports fire-and-forget mode to avoid Azure proxy timeouts on long-running agent executions.
      */
+    @RefuseScopeLimitedPrincipals()
     @Mutation(() => AIAgentRunResult)
     async RunAIAgent(
         @Arg('agentId') agentId: string,
@@ -1205,6 +1208,16 @@ export class RunAIAgentResolver extends ResolverBase {
         // visitor's session is refused before any elevated work happens. The reply row is written
         // as the guest too, never as the elevated principal, which owns no guest's conversation.
         const widgetElevation = await ResolveWidgetGuestRunContext(userPayload, p);
+        // Every OTHER scope-limited session (resource-scoped magic links, anonymous guests without a
+        // resolvable widget) is refused: its RLS scope does not bound which agent runs or what the
+        // agent does, so only the pinned-agent widget path above may dispatch for a guest. The refusal
+        // returns this resolver's own { success: false } shape rather than throwing the decorator's
+        // AuthorizationError, so a refused guest sees the same result as any other failed run.
+        if (!widgetElevation && IsScopeLimitedPrincipal(currentUser) && !userPayload.isSystemUser) {
+            const errorMessage = 'RunAIAgentFromConversationDetail is not available to scope-limited sessions';
+            LogStatus(`[Auth] Refused RunAIAgentFromConversationDetail for a scope-limited session (user ${currentUser.ID}).`);
+            return { success: false, errorMessage, result: JSON.stringify({ success: false, errorMessage }) };
+        }
         const effectiveAgentId = widgetElevation ? widgetElevation.PinnedAgentId : agentId;
         // Check API key scope authorization for agent execution against the resolved agent id.
         await this.CheckAPIKeyScopeAuthorization('agent:execute', effectiveAgentId, userPayload);
@@ -1469,6 +1482,7 @@ export class RunAIAgentResolver extends ResolverBase {
      * Updates the request record with the response and optionally spawns a
      * new agent run to resume execution with the human's input.
      */
+    @RefuseScopeLimitedPrincipals()
     @Mutation(() => AIAgentRunResult)
     async RespondToAgentRequest(
         @Arg('requestId') requestId: string,
@@ -1548,6 +1562,7 @@ export class RunAIAgentResolver extends ResolverBase {
      * Reassign an agent request to a different user.
      * Updates RequestForUserID and sends a notification to the new assignee.
      */
+    @RefuseScopeLimitedPrincipals()
     @Mutation(() => AIAgentRunResult)
     async ReassignAgentRequest(
         @Arg('requestId') requestId: string,
