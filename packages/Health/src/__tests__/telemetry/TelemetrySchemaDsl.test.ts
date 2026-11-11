@@ -97,6 +97,17 @@ describe('CheckTelemetrySchemaAllowlist', () => {
     expect(violations.length).toBe(3);
   });
 
+  it('rejects field names exceeding 256 characters', () => {
+    const longName = 'SafeFieldName' + 'a'.repeat(250);
+    const longSchema: Record<string, { kind: 'count' }> = {
+      [longName]: { kind: 'count' },
+    };
+    const violations = CheckTelemetrySchemaAllowlist(longSchema);
+    expect(violations.length).toBe(1);
+    expect(violations[0].Field).toBe(longName);
+    expect(violations[0].Reason).toContain('exceeds maximum length of 256');
+  });
+
   it('ValidateTelemetrySchemaAllowlist returns status object and AssertTelemetrySchemaAllowlist throws on violation', () => {
     const validRes = ValidateTelemetrySchemaAllowlist(SAFE_SCHEMA);
     expect(validRes.Valid).toBe(true);

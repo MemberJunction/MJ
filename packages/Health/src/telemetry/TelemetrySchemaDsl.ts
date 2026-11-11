@@ -115,11 +115,16 @@ export function CheckTelemetrySchemaAllowlist<T>(schema: TelemetrySchema<T>): Te
   const violations: TelemetrySchemaAllowlistViolation[] = [];
 
   for (const field of Object.keys(schema) as (keyof T & string)[]) {
+    if (field.length > 256) {
+      violations.push({ Field: field, Reason: 'Field name exceeds maximum length of 256 characters.' });
+      continue;
+    }
+
     const fieldType = schema[field as keyof T];
     const lowerField = field.toLowerCase();
 
     // Check token exception: explicitly allow numeric tokens fields ending in Tokens or TokenCount
-    const isAllowedTokensField = fieldType.kind === 'tokens' && /(?:Tokens|TokenCount)$/i.test(field);
+    const isAllowedTokensField = fieldType.kind === 'tokens' && (lowerField.endsWith('tokens') || lowerField.endsWith('tokencount'));
 
     let forbiddenMatch: string | undefined;
     for (const sub of FORBIDDEN_FIELD_NAME_SUBSTRINGS) {
@@ -132,7 +137,7 @@ export function CheckTelemetrySchemaAllowlist<T>(schema: TelemetrySchema<T>): Te
       }
     }
 
-    if (!forbiddenMatch && STANDALONE_IP_PATTERN.test(field)) {
+    if (!forbiddenMatch && field.length <= 256 && STANDALONE_IP_PATTERN.test(field)) {
       forbiddenMatch = 'ip';
     }
 

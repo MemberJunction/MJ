@@ -102,4 +102,32 @@ describe('RouteScrubber.Scrub', () => {
     expect(result.ScrubbedPath).not.toContain('123-45-6789');
     expect(result.ScrubbedPath).toBe('/unknown');
   });
+
+  it('scrubs pathological slash-heavy strings in < 10ms and fails closed to /unknown', () => {
+    const pathological = '/'.repeat(3000) + 'not-a-route';
+    const start = performance.now();
+    const result = RouteScrubber.Scrub(pathological);
+    const durationMs = performance.now() - start;
+
+    expect(durationMs).toBeLessThan(10);
+    expect(result.RouteTemplate).toBe('unknown');
+    expect(result.ScrubbedPath).toBe('/unknown');
+  });
+
+  it('fails closed to /unknown for oversized URLs (> 4096 chars)', () => {
+    const oversized = '/resource/record/Contacts/' + 'a'.repeat(4100);
+    const result = RouteScrubber.Scrub(oversized);
+    expect(result.RouteTemplate).toBe('unknown');
+    expect(result.ScrubbedPath).toBe('/unknown');
+
+    const empty = '';
+    expect(RouteScrubber.Scrub(empty).ScrubbedPath).toBe('/unknown');
+  });
+
+  it('cleans trailing slashes on valid routes so they still scrub cleanly', () => {
+    const result = RouteScrubber.Scrub('/resource/record/Contacts/123///');
+    expect(result.RouteTemplate).toBe('resource/record/:entityName/:recordId');
+    expect(result.ScrubbedPath).toBe('/resource/record/Contacts/_id_');
+    expect(result.EntityName).toBe('Contacts');
+  });
 });

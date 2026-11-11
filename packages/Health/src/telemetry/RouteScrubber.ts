@@ -61,7 +61,15 @@ export class RouteScrubber {
    * matching the remaining clean path against {@link KNOWN_ROUTES}.
    */
   public static Scrub(rawUrl: string): ScrubbedRouteResult {
-    const withoutQueryOrFragment = rawUrl.split(/[?#]/)[0];
+    if (typeof rawUrl !== 'string' || rawUrl.length === 0 || rawUrl.length > 4096) {
+      return { RouteTemplate: 'unknown', ScrubbedPath: '/unknown' };
+    }
+
+    const qIdx = rawUrl.indexOf('?');
+    const hIdx = rawUrl.indexOf('#');
+    const cutIdx = qIdx === -1 ? hIdx : hIdx === -1 ? qIdx : Math.min(qIdx, hIdx);
+    const withoutQueryOrFragment = cutIdx === -1 ? rawUrl : rawUrl.slice(0, cutIdx);
+
     let decoded: string;
     try {
       decoded = decodeURIComponent(withoutQueryOrFragment);
@@ -73,7 +81,18 @@ export class RouteScrubber {
       return { RouteTemplate: 'unknown', ScrubbedPath: '/unknown' };
     }
 
-    const cleanUrl = decoded.replace(/^\/+|\/+$/g, '');
+    let start = 0;
+    while (start < decoded.length && decoded.charCodeAt(start) === 47) {
+      start++;
+    }
+    let end = decoded.length;
+    while (end > start && decoded.charCodeAt(end - 1) === 47) {
+      end--;
+    }
+    const cleanUrl = decoded.slice(start, end);
+    if (cleanUrl.length === 0) {
+      return { RouteTemplate: 'unknown', ScrubbedPath: '/unknown' };
+    }
 
     for (const route of this.KNOWN_ROUTES) {
       const match = cleanUrl.match(route.pattern);
