@@ -1,5 +1,5 @@
 import { NgZone } from '@angular/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClassEx } from '@memberjunction/global';
 import {
     ConnectGraphQLClient,
     GraphQLDataProvider,
@@ -24,7 +24,7 @@ export interface RootZoneHolder {
  * to `NgZone.runOutsideAngular` so continuous socket traffic does not trigger continuous
  * Angular change-detection cycles or keep the browser main thread hot.
  */
-@RegisterClass(GraphQLDataProvider, null, 0, true)
+@RegisterClassEx(GraphQLDataProvider, { skipNullKeyWarning: true })
 export class AngularGraphQLDataProvider extends GraphQLDataProvider {
     private _ngZone: NgZone | null = null;
 
