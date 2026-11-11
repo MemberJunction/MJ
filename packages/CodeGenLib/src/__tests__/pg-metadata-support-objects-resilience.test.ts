@@ -348,7 +348,7 @@ describe('Fix 2 — fixed-name temp tables cannot pick up a stale cached plan', 
         it('still writes Description and __mj_UpdatedAt, and still returns the pre-UPDATE description', () => {
             expect(body).toContain('"Description" = fr.new_description');
             expect(body).toContain('"__mj_UpdatedAt" = now()');
-            expect(body).toContain('fr.current_description::text');
+            expect(body).toContain('(fr.current_description || \'\')::text');
             expect(body.indexOf('INSERT INTO _ues_filtered')).toBeLessThan(body.indexOf('UPDATE __mj."Entity" tgt SET'));
         });
 
@@ -386,6 +386,51 @@ describe('Fix 2 — fixed-name temp tables cannot pick up a stale cached plan', 
             expect(body).toContain(`CREATE TEMP TABLE IF NOT EXISTS ${t}`);
             expect(body).toContain(`TRUNCATE ${t};`);
             expect(body).not.toContain(`DROP TABLE IF EXISTS ${t}`);
+        });
+    });
+
+    describe('Fix 3 — RETURN QUERY detoasts temp-table TEXT columns before TRUNCATE', () => {
+        it('spUpdateExistingEntityFieldsFromSchema detoasts all TEXT columns with || \'\' before TRUNCATE', () => {
+            const body = routine('spUpdateExistingEntityFieldsFromSchema');
+            const returnQueryBlock = body.slice(body.indexOf('RETURN QUERY'), body.indexOf('WHERE fr.is_material_change;'));
+            expect(returnQueryBlock).toContain("(fr.entity_name || '')::text");
+            expect(returnQueryBlock).toContain("(fr.entity_field_name || '')::text");
+            expect(returnQueryBlock).toContain("(fr.existing_description || '')::text");
+            expect(returnQueryBlock).toContain("(fr.sql_description || '')::text");
+            expect(returnQueryBlock).toContain("(fr.new_type || '')::text");
+            expect(returnQueryBlock).toContain("(fr.new_default_value || '')::text");
+            expect(returnQueryBlock).toContain("(fr.related_entity_field_name || '')::text");
+            expect(returnQueryBlock).toContain("(fr.change_reasons || '')::text");
+            expect(body.indexOf('RETURN QUERY')).toBeLessThan(body.lastIndexOf('TRUNCATE _uef_filtered;'));
+        });
+
+        it('spUpdateExistingEntitiesFromSchema detoasts all TEXT columns with || \'\' before TRUNCATE', () => {
+            const body = routine('spUpdateExistingEntitiesFromSchema');
+            const returnQueryBlock = body.slice(body.indexOf('RETURN QUERY'), body.indexOf('FROM _ues_filtered fr;'));
+            expect(returnQueryBlock).toContain("(fr.entity_name || '')::text");
+            expect(returnQueryBlock).toContain("(fr.current_description || '')::text");
+            expect(returnQueryBlock).toContain("(fr.new_description || '')::text");
+            expect(returnQueryBlock).toContain("(fr.entity_description || '')::text");
+            expect(returnQueryBlock).toContain("(fr.schema_name || '')::text");
+            expect(body.indexOf('RETURN QUERY')).toBeLessThan(body.lastIndexOf('TRUNCATE _ues_filtered;'));
+        });
+
+        it('spDeleteUnneededEntityFields detoasts entity_name and field_name with || \'\' before TRUNCATE', () => {
+            const body = routine('spDeleteUnneededEntityFields');
+            const returnQueryBlock = body.slice(body.indexOf('RETURN QUERY'), body.indexOf('FROM _del_deleted d;'));
+            expect(returnQueryBlock).toContain("(d.entity_name || '')::text");
+            expect(returnQueryBlock).toContain("(d.field_name || '')::text");
+            expect(body.indexOf('RETURN QUERY')).toBeLessThan(body.lastIndexOf('TRUNCATE _del_deleted;'));
+        });
+
+        it('spRecompileAllViews detoasts drift text columns with || \'\' before TRUNCATE', () => {
+            const body = routine('spRecompileAllViews');
+            const returnQueryBlock = body.slice(body.indexOf('RETURN QUERY'), body.indexOf('FROM _rav_drift d'));
+            expect(returnQueryBlock).toContain("(d.schema_name || '')::text");
+            expect(returnQueryBlock).toContain("(d.view_name || '')::text");
+            expect(returnQueryBlock).toContain("(d.entity_name || '')::text");
+            expect(returnQueryBlock).toContain("(d.missing_columns || '')::text");
+            expect(body.indexOf('RETURN QUERY')).toBeLessThan(body.lastIndexOf('TRUNCATE _rav_drift;'));
         });
     });
 

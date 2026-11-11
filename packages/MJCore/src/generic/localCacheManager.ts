@@ -125,6 +125,18 @@ function markResultsFullyFrozen(payload: object): void {
     }
 }
 
+/**
+ * Caches the `cheapRowKey -> arrayIndex` lookup map per `results` array reference so consecutive
+ * row mutations on large cached views reuse the existing index in $O(\Delta)$ instead of rescanning
+ * all $N$ rows.
+ */
+interface CachedResultPkIndex {
+    PkSignature: string;
+    IndexByKey: Map<string, number>;
+    NullPkIndices: number[];
+}
+const cachedResultPkIndexes = new WeakMap<readonly unknown[], CachedResultPkIndex>();
+
 // ============================================================================
 // TYPES AND INTERFACES
 // ============================================================================
@@ -1461,17 +1473,37 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
+     * Resolves the primary key field names for a given entity name against the provided or default metadata provider.
+     */
+    private resolveEntityPrimaryKeyFields(entityName?: string, provider?: IMetadataProvider): string[] | undefined {
+        if (!entityName) return undefined;
+        try {
+            const md = provider ?? new Metadata();
+            const entity = md.EntityByName(entityName);
+            if (entity?.PrimaryKeys && entity.PrimaryKeys.length > 0) {
+                return entity.PrimaryKeys.map(pk => pk.Name);
+            }
+        } catch {
+            // fail-safe: ignore errors when metadata is unavailable
+        }
+        return undefined;
+    }
+
+    /**
      * Storage write options for a RunView slot: the entity name as index group, so a shared
      * provider can find the slot from any process, and the time left before the slot's own expiry
      * (external-data-source entities), so a rewrite does not extend it.
      *
      * @param fingerprint - The slot key
      * @param expiresAt - Absolute expiry (ms since epoch), when the slot has one
+     * @param pubSubOverride - Compact row-delta payload and action when broadcasting row updates
+     * @param primaryKeyFields - Ordered primary-key field names for the entity
      */
     private runViewWriteOptions(
         fingerprint: string,
         expiresAt?: number,
-        pubSubOverride?: { pubSubAction: 'row_delta'; pubSubData: string }
+        pubSubOverride?: { pubSubAction: 'row_delta'; pubSubData: string },
+        primaryKeyFields?: string[]
     ): LocalStorageWriteOptions {
         const options: LocalStorageWriteOptions = {};
         const entity = this.extractEntityFromFingerprint(fingerprint);
@@ -1484,6 +1516,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (pubSubOverride) {
             options.pubSubAction = pubSubOverride.pubSubAction;
             options.pubSubData = pubSubOverride.pubSubData;
+        }
+        if (primaryKeyFields && primaryKeyFields.length > 0) {
+            options.PrimaryKeyFields = primaryKeyFields;
         }
         return options;
     }
@@ -3542,8 +3577,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             // Native object storage — IDB structured-clones, localStorage / Redis serialize internally.
             const writeNow = Date.now();
             const expiresAt = ttlMs ? writeNow + ttlMs : undefined;
+            const primaryKeyFields = this.resolveEntityPrimaryKeyFields(params.EntityName, provider);
             await this._storageProvider.SetItem<CachedRunViewData>(fingerprint, data, CacheCategory.RunViewCache,
-                this.runViewWriteOptions(fingerprint, expiresAt));
+                this.runViewWriteOptions(fingerprint, expiresAt, undefined, primaryKeyFields));
 
             this._lastVerifiedAt.set(fingerprint, writeNow);
             this.registerEntry({
@@ -4066,14 +4102,142 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                     return false;
                 }
                 const pkFieldNames = changes[0].Key.KeyValuePairs.map(kv => kv.FieldName);
-                const resultMap = this.indexRowsByKey(cached.results, pkFieldNames);
-                const deltaChanges = this.applyChangesToRowMap(resultMap, changes);
-                if (!deltaChanges.changed) {
+                const pkSignature = pkFieldNames.join('\u001f');
+
+                let pkIndex = cachedResultPkIndexes.get(cached.results);
+                if (!pkIndex || pkIndex.PkSignature !== pkSignature) {
+                    const indexByKey = new Map<string, number>();
+                    const nullPkIndices: number[] = [];
+                    for (let i = 0; i < cached.results.length; i++) {
+                        const rowObj = cached.results[i] as Record<string, unknown>;
+                        if (pkFieldNames.some(fn => rowObj[fn] == null)) {
+                            nullPkIndices.push(i);
+                            continue;
+                        }
+                        indexByKey.set(this.cheapRowKey(rowObj, pkFieldNames), i);
+                    }
+                    pkIndex = { PkSignature: pkSignature, IndexByKey: indexByKey, NullPkIndices: nullPkIndices };
+                    cachedResultPkIndexes.set(cached.results, pkIndex);
+                }
+
+                let changed = false;
+                let displacedMaxTimestamp = pkIndex.NullPkIndices.length > 0;
+                const upsertsByKey = new Map<string, Record<string, CacheRowValue>>();
+                const deletesByKey = new Map<string, Record<string, CachePrimaryKeyValue>>();
+                const deletedOriginalIndices = new Set<number>(pkIndex.NullPkIndices);
+                const updatedRowByIndex = new Map<number, Record<string, CacheRowValue>>();
+
+                for (const change of changes) {
+                    const keyStr = this.cheapKeyFromCompositeKey(change.Key);
+                    const existingIdx = pkIndex.IndexByKey.get(keyStr);
+                    const oldRow = existingIdx !== undefined ? (cached.results[existingIdx] as Record<string, unknown> | undefined) : undefined;
+
+                    if (change.Row) {
+                        const rowObj = change.Row as Record<string, CacheRowValue>;
+                        if (oldRow && cached.maxUpdatedAt && oldRow.__mj_UpdatedAt === cached.maxUpdatedAt) {
+                            displacedMaxTimestamp = true;
+                        }
+                        upsertsByKey.set(keyStr, rowObj);
+                        deletesByKey.delete(keyStr);
+                        if (existingIdx !== undefined && !deletedOriginalIndices.has(existingIdx)) {
+                            updatedRowByIndex.set(existingIdx, rowObj);
+                        }
+                        changed = true;
+                    } else {
+                        // Deletion
+                        let wasPresent = false;
+                        if (upsertsByKey.has(keyStr)) {
+                            upsertsByKey.delete(keyStr);
+                            wasPresent = true;
+                        }
+                        if (existingIdx !== undefined && !deletedOriginalIndices.has(existingIdx)) {
+                            deletedOriginalIndices.add(existingIdx);
+                            updatedRowByIndex.delete(existingIdx);
+                            wasPresent = true;
+                        }
+                        if (wasPresent) {
+                            if (oldRow && cached.maxUpdatedAt && oldRow.__mj_UpdatedAt === cached.maxUpdatedAt) {
+                                displacedMaxTimestamp = true;
+                            }
+                            if (existingIdx !== undefined) {
+                                const pkRecord: Record<string, CachePrimaryKeyValue> = {};
+                                for (const kv of change.Key.KeyValuePairs) {
+                                    const v = kv.Value;
+                                    pkRecord[kv.FieldName] =
+                                        typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' || v === null
+                                            ? v
+                                            : String(v);
+                                }
+                                deletesByKey.set(keyStr, pkRecord);
+                            }
+                            changed = true;
+                        }
+                    }
+                }
+
+                if (!changed) {
                     return true; // only removals of rows the slot does not hold
                 }
+
+                let nextResults: unknown[];
+                let nextIndexByKey: Map<string, number>;
+
+                if (deletedOriginalIndices.size === 0) {
+                    // Fast path: pure updates and/or inserts (the 99% case)
+                    nextResults = cached.results.slice();
+                    nextIndexByKey = new Map(pkIndex.IndexByKey);
+
+                    for (const [keyStr, rowObj] of upsertsByKey) {
+                        const existingIdx = nextIndexByKey.get(keyStr);
+                        if (existingIdx !== undefined) {
+                            nextResults[existingIdx] = rowObj;
+                        } else {
+                            const newIdx = nextResults.length;
+                            nextResults.push(rowObj);
+                            nextIndexByKey.set(keyStr, newIdx);
+                        }
+                    }
+                } else {
+                    // Delete pass: compact array and re-index in a single pass
+                    nextResults = [];
+                    nextIndexByKey = new Map<string, number>();
+                    const indexMap = new Int32Array(cached.results.length);
+
+                    let nextIdx = 0;
+                    for (let i = 0; i < cached.results.length; i++) {
+                        if (deletedOriginalIndices.has(i)) {
+                            indexMap[i] = -1;
+                        } else {
+                            indexMap[i] = nextIdx++;
+                            const updated = updatedRowByIndex.get(i);
+                            nextResults.push(updated ?? cached.results[i]);
+                        }
+                    }
+
+                    for (const [k, oldIdx] of pkIndex.IndexByKey) {
+                        const newIdx = indexMap[oldIdx];
+                        if (newIdx !== -1) {
+                            nextIndexByKey.set(k, newIdx);
+                        }
+                    }
+
+                    for (const [keyStr, rowObj] of upsertsByKey) {
+                        if (!nextIndexByKey.has(keyStr)) {
+                            const newIdx = nextResults.length;
+                            nextResults.push(rowObj);
+                            nextIndexByKey.set(keyStr, newIdx);
+                        }
+                    }
+                }
+
+                cachedResultPkIndexes.set(nextResults, { PkSignature: pkSignature, IndexByKey: nextIndexByKey, NullPkIndices: [] });
+
+                const upsertedRows = Array.from(upsertsByKey.values());
+                const deletedPrimaryKeys = Array.from(deletesByKey.values());
+
                 return await this.storeCachedResults(
                     fingerprint,
-                    Array.from(resultMap.values()),
+                    nextResults,
                     newMaxUpdatedAt,
                     {
                         totalRowCount: cached.totalRowCount,
@@ -4081,76 +4245,23 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                         schemaHash: cached.schemaHash,
                         schemaStamp: cached.schemaStamp,
                         providerInternalScaffolding: cached.providerInternalScaffolding,
+                        priorMaxUpdatedAt: cached.maxUpdatedAt,
+                        displacedMaxTimestamp,
                     },
                     cached.providerInternalScaffolding
                         ? undefined
                         : {
-                              upsertedRows: deltaChanges.upsertedRows,
-                              deletedPrimaryKeys: deltaChanges.deletedPrimaryKeys,
+                              upsertedRows,
+                              deletedPrimaryKeys,
                               primaryKeyFields: pkFieldNames,
                           },
-                    { priorResults: cached.results, changedRows: deltaChanges.upsertedRows }
+                    { priorResults: cached.results, changedRows: upsertedRows }
                 );
             } catch (e) {
                 LogError(`LocalCacheManager.ApplyRowChanges failed: ${e}`);
                 return false;
             }
         });
-    }
-
-    /**
-     * Rows keyed by a cheap delimiter-joined PK string (no per-row CompositeKey/KeyValuePair
-     * allocation); matching is consistent because {@link cheapKeyFromCompositeKey} uses the same
-     * format. Rows missing a PK value are dropped.
-     */
-    private indexRowsByKey(rows: unknown[], pkFieldNames: string[]): Map<string, unknown> {
-        const resultMap = new Map<string, unknown>();
-        for (const row of rows) {
-            const rowObj = row as Record<string, unknown>;
-            if (pkFieldNames.some(fn => rowObj[fn] == null)) continue;
-            resultMap.set(this.cheapRowKey(rowObj, pkFieldNames), row);
-        }
-        return resultMap;
-    }
-
-    /** Applies `changes` to `rows` in order and collects the collapsed net row delta for pub/sub. */
-    private applyChangesToRowMap(
-        rows: Map<string, unknown>,
-        changes: ReadonlyArray<CachedRowChange>
-    ): {
-        changed: boolean;
-        upsertedRows: Array<Record<string, CacheRowValue>>;
-        deletedPrimaryKeys: Array<Record<string, CachePrimaryKeyValue>>;
-    } {
-        let changed = false;
-        const upsertsByKey = new Map<string, Record<string, CacheRowValue>>();
-        const deletesByKey = new Map<string, Record<string, CachePrimaryKeyValue>>();
-        for (const change of changes) {
-            const keyStr = this.cheapKeyFromCompositeKey(change.Key);
-            if (change.Row) {
-                rows.set(keyStr, change.Row);
-                deletesByKey.delete(keyStr);
-                upsertsByKey.set(keyStr, change.Row as Record<string, CacheRowValue>);
-                changed = true;
-            } else if (rows.delete(keyStr)) {
-                upsertsByKey.delete(keyStr);
-                const pkRecord: Record<string, CachePrimaryKeyValue> = {};
-                for (const kv of change.Key.KeyValuePairs) {
-                    const v = kv.Value;
-                    pkRecord[kv.FieldName] =
-                        typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' || v === null
-                            ? v
-                            : String(v);
-                }
-                deletesByKey.set(keyStr, pkRecord);
-                changed = true;
-            }
-        }
-        return {
-            changed,
-            upsertedRows: Array.from(upsertsByKey.values()),
-            deletedPrimaryKeys: Array.from(deletesByKey.values()),
-        };
     }
 
     /**
@@ -4199,7 +4310,15 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         fingerprint: string,
         updatedResults: unknown[],
         newMaxUpdatedAt: string,
-        prior?: { totalRowCount?: number; rowCount: number; schemaHash?: string; schemaStamp?: string; providerInternalScaffolding?: boolean },
+        prior?: {
+            totalRowCount?: number;
+            rowCount: number;
+            schemaHash?: string;
+            schemaStamp?: string;
+            providerInternalScaffolding?: boolean;
+            priorMaxUpdatedAt?: string;
+            displacedMaxTimestamp?: boolean;
+        },
         rowDelta?: {
             upsertedRows: Array<Record<string, CacheRowValue>>;
             deletedPrimaryKeys: Array<Record<string, CachePrimaryKeyValue>>;
@@ -4211,7 +4330,24 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // stamp means the same thing whichever funnel wrote the slot and matches what the database
         // reports for the same rows (the client smart-cache check compares the two). The caller's
         // value (the event time) is used only when the rows carry no timestamp column.
-        const maxUpdatedAt = LocalCacheManager.MaxUpdatedAtOfRows(updatedResults) ?? newMaxUpdatedAt;
+        let maxUpdatedAt: string | undefined;
+        if (rowDelta && prior?.priorMaxUpdatedAt && !prior.displacedMaxTimestamp) {
+            const priorEpoch = Date.parse(prior.priorMaxUpdatedAt);
+            if (!Number.isNaN(priorEpoch)) {
+                const deltaMax = LocalCacheManager.MaxUpdatedAtOfRows(rowDelta.upsertedRows);
+                if (deltaMax) {
+                    const deltaEpoch = Date.parse(deltaMax);
+                    if (!Number.isNaN(deltaEpoch)) {
+                        maxUpdatedAt = deltaEpoch > priorEpoch ? deltaMax : prior.priorMaxUpdatedAt;
+                    }
+                } else {
+                    maxUpdatedAt = prior.priorMaxUpdatedAt;
+                }
+            }
+        }
+        if (!maxUpdatedAt) {
+            maxUpdatedAt = LocalCacheManager.MaxUpdatedAtOfRows(updatedResults) ?? newMaxUpdatedAt;
+        }
         const now = Date.now();
         const existingEntry = this._registry.get(fingerprint);
         const data: CachedRunViewData = {
@@ -4279,8 +4415,19 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             };
         }
 
-        await this._storageProvider!.SetItem<CachedRunViewData>(fingerprint, data, CacheCategory.RunViewCache,
-            this.runViewWriteOptions(fingerprint, existingEntry?.expiresAt, pubSubOverride));
+        const writeOpts = this.runViewWriteOptions(fingerprint, existingEntry?.expiresAt, pubSubOverride, rowDelta?.primaryKeyFields);
+        let appliedDelta = false;
+        if (pubSubOverride && typeof this._storageProvider!.ApplyRunViewRowDelta === 'function') {
+            appliedDelta = await this._storageProvider!.ApplyRunViewRowDelta<CachedRunViewData>(
+                fingerprint,
+                pubSubOverride.pubSubData,
+                data,
+                writeOpts
+            );
+        }
+        if (!appliedDelta) {
+            await this._storageProvider!.SetItem<CachedRunViewData>(fingerprint, data, CacheCategory.RunViewCache, writeOpts);
+        }
 
         this._lastVerifiedAt.set(fingerprint, now);
         if (existingEntry) {

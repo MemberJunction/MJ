@@ -46,6 +46,7 @@ import type { PubSubEngine } from 'type-graphql';
 import { PublishStatusUpdate, SetPushStatusPublishHook } from '../generic/PushStatusResolver.js';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import type { CacheSettingsConfig } from '../config.js';
+import { CacheInvalidationBroadcastManager, RedisStreamBroadcastProvider, type BaseCacheInvalidationBroadcastProvider } from '../broadcast/index.js';
 
 function settings(overrides: Partial<CacheSettingsConfig>): CacheSettingsConfig {
     return { maxMemoryMB: 150, maxPercentOfCachePerEntity: 50, maxEntryPercentOfCache: 'auto', defaultTTLSeconds: 0, evictionSweepIntervalSeconds: 300, verboseLogging: false, engineSweepIntervalSeconds: 300, ...overrides };
@@ -379,12 +380,18 @@ describe('entity invalidation fan-out wiring', () => {
         }
     }
 
+    let originalProvider: BaseCacheInvalidationBroadcastProvider | undefined;
+
     beforeEach(() => {
         publish.mockReset();
         ResetEntityInvalidationFanOutForTests();
+        originalProvider = CacheInvalidationBroadcastManager.Instance.Provider;
     });
     afterEach(() => {
         ResetEntityInvalidationFanOutForTests();
+        if (originalProvider) {
+            CacheInvalidationBroadcastManager.Instance.SetProvider(originalProvider);
+        }
     });
 
     it('subscribes to the entity-cache-invalidation channel on the shared connection', async () => {
@@ -476,5 +483,27 @@ describe('entity invalidation fan-out wiring', () => {
             timestamp: new Date(),
         });
         expect(redis.PublishMessage).not.toHaveBeenCalled();
+    });
+
+    it('skips duplicate Redis channel publish when CacheInvalidationBroadcastManager.Instance.Provider exposes PublishClusterInvalidation', async () => {
+        const redis = new FakeSharedCache();
+        await WireEntityInvalidationFanOut(redis.AsProvider());
+
+        // Use a real RedisStreamBroadcastProvider (which exposes PublishClusterInvalidation)
+        const clusterProvider = new RedisStreamBroadcastProvider();
+        CacheInvalidationBroadcastManager.Instance.SetProvider(clusterProvider);
+
+        PublishEntityInvalidationToPeers({
+            entityName: 'MJ: Users',
+            primaryKeyValues: '{"ID":"789"}',
+            action: 'save',
+            sourceServerId: MJGlobal.Instance.ProcessUUID,
+            timestamp: new Date('2026-11-11T12:00:00.000Z'),
+            originSessionId: 'session-stream',
+        });
+
+        // Must skip publishing to the legacy entity-cache-invalidation Redis channel because
+        // cluster-sequenced invalidation is already handled by Redis Streams
+        expect(redis.Published).toHaveLength(0);
     });
 });

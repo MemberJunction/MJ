@@ -1,9 +1,9 @@
-import { ActionParam } from '@memberjunction/actions-base';
+import { ActionParam, ResolveCompanyIntegration } from '@memberjunction/actions-base';
 import { BaseAction, OAuth2Manager } from '@memberjunction/actions';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { UserInfo } from '@memberjunction/core';
 import { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
-import { Metadata, RunView } from '@memberjunction/core';
+
 
 /**
  * Common response structure for form submissions
@@ -93,27 +93,20 @@ export abstract class BaseFormBuilderAction extends BaseAction {
     /**
      * Gets the company integration record for the specified company and form platform
      */
-    protected async getCompanyIntegration(companyId: string, contextUser: UserInfo): Promise<MJCompanyIntegrationEntity> {
-        if (this._companyIntegration && UUIDsEqual(this._companyIntegration.CompanyID, companyId)) {
+    protected async getCompanyIntegration(companyId: string, contextUser: UserInfo, companyIntegrationId?: string | null): Promise<MJCompanyIntegrationEntity> {
+        if (this._companyIntegration && UUIDsEqual(this._companyIntegration.CompanyID, companyId)
+            && (!companyIntegrationId || UUIDsEqual(this._companyIntegration.ID, companyIntegrationId))) {
             return this._companyIntegration;
         }
 
-        const rv = new RunView();
-        const result = await rv.RunView<MJCompanyIntegrationEntity>({
-            EntityName: 'MJ: Company Integrations',
-            ExtraFilter: `CompanyID = '${companyId}' AND Integration.Name = '${this.integrationName}'`,
-            ResultType: 'entity_object'
-        }, contextUser);
-
-        if (!result.Success) {
-            throw new Error(`Failed to retrieve company integration: ${result.ErrorMessage}`);
-        }
-
-        if (!result.Results || result.Results.length === 0) {
-            throw new Error(`No ${this.integrationName} integration found for company ${companyId}. Please configure the integration first.`);
-        }
-
-        this._companyIntegration = result.Results[0];
+        // #4929: a validated company ID, the bindable Integration column, active connections only, and a refusal
+        // (naming the candidates) when the company has more than one, instead of the first row.
+        this._companyIntegration = await ResolveCompanyIntegration({
+            CompanyID: companyId,
+            IntegrationNames: [this.integrationName],
+            CompanyIntegrationID: companyIntegrationId,
+            ContextUser: contextUser,
+        });
         return this._companyIntegration;
     }
 

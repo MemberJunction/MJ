@@ -72,7 +72,7 @@ import { getSystemUser, validateAuthProvidersRegistered } from './auth/index.js'
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { CreateAdhocSQLAuthorizer } from './resolvers/AdhocQueryResolver.js';
-import { CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, PublishEntityInvalidationToPeers, StartEngineSweeper, StartMetadataSweep, StartUserCacheChecks, WarmupLeaseMsFromSettings, WireEntityInvalidationFanOut, WirePushStatusFanOut, WireSharedCacheEvents } from './sharedCache.js';
+import { CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, PublishEntityInvalidationToPeers, StartEngineSweeper, StartMetadataSweep, StartUserCacheChecks, WarmupLeaseMsFromSettings, WireEntityInvalidationFanOut, WirePushStatusFanOut, WireSharedCacheEvents, WrapSharedCacheWithL1 } from './sharedCache.js';
 import { PubSubManager } from './generic/PubSubManager.js';
 import { StartOrphanedConversationDetailReconciler } from './generic/OrphanedConversationDetailReconciler.js';
 import {
@@ -126,7 +126,8 @@ import { ApiRoute, ApiRootPath, ConfiguredPublicUrl } from './apiRoot.js';
 import { MountHealthcheckRoute, MountPublicCoreRoutes, MountExtensionHealthRoute, MountAuthCatalogRoute, MountAuthenticatedCoreRoutes } from './coreRoutes.js';
 import { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
 import { CreateMetadataRefreshSignalHandler, METADATA_REFRESH_SIGNAL } from './metadataRefreshSignal.js';
-import { CacheInvalidationBroadcastManager } from './broadcast/index.js';
+import { CacheInvalidationBroadcastManager, RedisStreamBroadcastProvider } from './broadcast/index.js';
+import { AttachRedisClusterPubSub } from './generic/RedisClusterPubSubEngine.js';
 import { ResolveServerRole, ShouldRunBackgroundWorkers } from './serverRoleConfigUnits.js';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
@@ -311,6 +312,7 @@ import type { ApolloServerPlugin } from '@apollo/server';
 import type { GraphQLSchema } from 'graphql';
 import { BaseServerMiddleware, ServerMiddlewareContext } from './middleware/BaseServerMiddleware.js';
 import { SuppressTaskGraphSubmission } from '@memberjunction/ai-core-plus';
+import { NotificationEngine } from '@memberjunction/notifications';
 
 export type MJServerOptions = {
   /**
@@ -556,7 +558,9 @@ const setupComplete$ = new ReplaySubject(1);
     const safeRedisUrl = (process.env.REDIS_URL ?? '').replace(/:\/\/[^@]+@/, '://***@');
     startupLog.LogIf('verbose', `Redis cache provider connected: ${safeRedisUrl}`);
   }
-  const effectiveStorageProvider = sharedCache ?? new InMemoryLocalStorageProvider();
+  const effectiveStorageProvider = sharedCache
+    ? WrapSharedCacheWithL1(sharedCache, configInfo.cacheSettings)
+    : new InMemoryLocalStorageProvider();
   const cacheManagerConfig = CacheManagerConfigFromSettings(configInfo.cacheSettings);
   await LocalCacheManager.Instance.Initialize(effectiveStorageProvider, cacheManagerConfig);
   const warmupLeaseMs = WarmupLeaseMsFromSettings(configInfo.cacheSettings);
@@ -987,9 +991,6 @@ const setupComplete$ = new ReplaySubject(1);
   // handed to it later). Unconditional on purpose: the guard that used to sit here
   // skipped exactly the case that needed it.
   await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider, cacheManagerConfig); // global-provider-ok: bootstrap
-  if (sharedCache) {
-    await LocalCacheManager.Instance.SetStorageProvider(sharedCache);
-  }
   // The derived per-entry ceiling, so the boot log says what the largest cacheable entry actually is.
   startupLog.LogIf('verbose', `LocalCacheManager: largest cacheable entry ${Math.floor(LocalCacheManager.Instance.MaxEntrySizeBytes / 1024 / 1024)} MB (maxEntryPercentOfCache: ${configInfo.cacheSettings?.maxEntryPercentOfCache ?? 'auto'})`);
   const engineSweepMs = StartEngineSweeper(configInfo.cacheSettings);
@@ -1120,7 +1121,12 @@ const setupComplete$ = new ReplaySubject(1);
   if (!pubSub.asyncIterator && typeof pubSub.asyncIterableIterator === 'function') {
     pubSub.asyncIterator = pubSub.asyncIterableIterator;
   }
-  PubSubManager.Instance.SetPubSubEngine(pubSub as unknown as PubSubEngine);
+  let activePubSub = pubSub as unknown as PubSubEngine;
+  if (sharedCache) {
+    const clusterBridge = await AttachRedisClusterPubSub(activePubSub, sharedCache);
+    activePubSub = clusterBridge.Engine;
+  }
+  PubSubManager.Instance.SetPubSubEngine(activePubSub);
 
   // Wire the ClientToolRequestManager so BaseAgent can publish client tool requests
   // via the same PubSub infrastructure used for pipeline progress and cache invalidation.
@@ -1158,7 +1164,19 @@ const setupComplete$ = new ReplaySubject(1);
   // config.ts loads and validates at module scope, so importing it there would pull full config
   // validation into every import chain that touches the resolver, unit tests included.
   ConfigureRecordDataBroadcast(configInfo.cacheSettings?.recordDataBroadcastEntities);
-  CacheInvalidationBroadcastManager.Instance.Configure(configInfo.cacheSettings?.broadcast);
+  const broadcastConfig = { ...configInfo.cacheSettings?.broadcast };
+  if (sharedCache && (!broadcastConfig.provider || broadcastConfig.provider === 'RedisStream')) {
+    broadcastConfig.provider = 'RedisStream';
+  }
+  const broadcastProvider = CacheInvalidationBroadcastManager.Instance.Configure(broadcastConfig);
+  if (sharedCache && broadcastProvider instanceof RedisStreamBroadcastProvider) {
+    await broadcastProvider.BindTransport(sharedCache);
+    broadcastProvider.SetLocalPubSubDeliverer((sequencedPayload) => {
+      if (PubSubManager.Instance.PubSubEngine) {
+        void PubSubManager.Instance.PubSubEngine.publish(CACHE_INVALIDATION_TOPIC, sequencedPayload);
+      }
+    });
+  }
 
   // Global listener: broadcast CACHE_INVALIDATION to all browser clients whenever
   // ANY BaseEntity save/delete occurs on this server — regardless of whether it
@@ -1187,7 +1205,9 @@ const setupComplete$ = new ReplaySubject(1);
               : undefined,
         };
         PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, invalidationPayload);
-        PublishEntityInvalidationToPeers(invalidationPayload);
+        if (typeof CacheInvalidationBroadcastManager.Instance.Provider?.PublishClusterInvalidation !== 'function') {
+          PublishEntityInvalidationToPeers(invalidationPayload);
+        }
       }
     }
   });
@@ -1754,6 +1774,10 @@ const setupComplete$ = new ReplaySubject(1);
     msg => console.warn(msg),
     runBackgroundWorkers ? RSUPostRestartProgressSession.WasKilledAtRestart : undefined
   );
+
+  // Notification delivery providers from mj.config.cjs (env vars and defaults apply when unset)
+  NotificationEngine.EmailProviderName = configInfo.notifications?.emailProvider;
+  NotificationEngine.SMSProviderName = configInfo.notifications?.smsProvider;
 
   // Initialize and start scheduled jobs service if enabled
   let scheduledJobsService: ScheduledJobsService | null = null;
@@ -2562,3 +2586,6 @@ export type { HostAssertedIdentity, HostAssertionResult } from './realtimeWidget
 export { IsScopeLimitedPrincipal } from './auth/scopeLimitedPrincipal.js';
 export const GetServerStartupSummary = () => StartupLogger.GetLastStartupSnapshot();
 export type { StartupSummarySnapshot } from './logging/StartupLogger.js';
+
+export * from './generic/RedisClusterPubSubEngine.js';
+export { WrapSharedCacheWithL1 } from './sharedCache.js';

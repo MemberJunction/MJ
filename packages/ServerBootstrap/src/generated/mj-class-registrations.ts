@@ -1457,7 +1457,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (81 classes)
+// @memberjunction/core-entities-server (82 classes)
 import {
     FieldSuggestionCommentDriver,
     MJAIAgentCoAgentEntityServer,
@@ -1527,6 +1527,7 @@ import {
     MJRubricScaleEntityServer,
     MJRubricScaleLevelEntityServer,
     MJRubricVersionEntityServer,
+    MJScopedNotificationConfigEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
@@ -1827,7 +1828,7 @@ import {
     WorkQueueValidateBindingsServerOperation,
 } from '@memberjunction/work-queue-engine';
 
-// @memberjunction/server (7 classes)
+// @memberjunction/server (8 classes)
 import {
     AWSIoTCoreBroadcastProvider,
     AzureWebPubSubBroadcastProvider,
@@ -1835,6 +1836,7 @@ import {
     MJEntityPermissionEntityServer,
     MJTenantFilterMiddleware,
     RateLimitMiddleware,
+    RedisStreamBroadcastProvider,
     SequencedRoleBucketBroadcastProvider,
 } from '@memberjunction/server';
 
@@ -2949,6 +2951,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MJRubricScaleEntityServer,
     MJRubricScaleLevelEntityServer,
     MJRubricVersionEntityServer,
+    MJScopedNotificationConfigEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
@@ -3094,11 +3097,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     Get_AI_Model_Cost_Action,
     GitHubAddCommentAction,
     GitHubCommitFilesAndCreatePRAction,
-    GitHubCommitFilesToBranchAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    GitHubCommitFilesToBranchAction,
     GitHubCreateOrUpdateIssueAction,
     GitHubCreatePullRequestAction,
     GitHubGetPullRequestContextAction,
@@ -3213,6 +3216,7 @@ const CLASS_REGISTRATIONS_6: any[] = [
     MJEntityPermissionEntityServer,
     MJTenantFilterMiddleware,
     RateLimitMiddleware,
+    RedisStreamBroadcastProvider,
     SequencedRoleBucketBroadcastProvider,
     DiagnosticRetentionScheduledJobDriver,
     DiagnosticsBuildBundleServerOperation,
@@ -3247,7 +3251,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1331;
+export const CLASS_REGISTRATIONS_COUNT = 1333;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

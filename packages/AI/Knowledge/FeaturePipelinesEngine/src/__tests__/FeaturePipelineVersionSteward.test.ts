@@ -295,6 +295,20 @@ describe('FeaturePipelineVersionSteward.StewardPipelineByID & StewardFeaturePipe
         });
     });
 
+    it('links the backfill to the scheduled job run and renews its lease (#5938)', async () => {
+        plan.mockResolvedValue({ Kind: 'backfill', Version: 2, RecordIDs: ['r1', 'r2'] });
+        runByID.mockResolvedValue(completedRun);
+        const heartbeat = vi.fn();
+        const params = buildActionParams('RP-1');
+        params.Context = { Provider: provider, ScheduledJobRunID: 'SJR-7', Heartbeat: heartbeat };
+
+        const result = await new StewardFeaturePipelineVersionAction().Run(params);
+
+        expect(result.Success).toBe(true);
+        expect(runByID.mock.calls[runByID.mock.calls.length - 1][1]).toMatchObject({ ScheduledJobRunID: 'SJR-7' });
+        expect(heartbeat).toHaveBeenCalled();
+    });
+
     it('fails with MISSING_PARAMETERS when RecordProcessID is omitted', async () => {
         const action = new StewardFeaturePipelineVersionAction();
         const result = await action.Run(buildActionParams(undefined));

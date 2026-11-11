@@ -1264,7 +1264,10 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     }
 
     const currentEntityRef = this.IsPolymorphicFK ? this.polymorphicEntityRefValue : null;
-    if (this._resolvedFKValue !== fkValue || (this.IsPolymorphicFK && this._resolvedFKEntityRef !== currentEntityRef)) {
+    const valueChanged = !this.sameFKValue(this._resolvedFKValue, fkValue) ||
+      (this.IsPolymorphicFK && !this.sameFKValue(this._resolvedFKEntityRef, currentEntityRef));
+
+    if (valueChanged) {
       this._resolvedFKName = undefined;
       this._fkNameLoading = false;
     }
@@ -1308,6 +1311,19 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Whether an async lookup is in flight */
   private _fkNameLoading = false;
 
+  /** Monotonic request sequence so out-of-order FK name completions never overwrite newer values */
+  private _fkResolveSeq = 0;
+
+  private sameFKValue(a: unknown, b: unknown): boolean {
+    if (a === b) return true;
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    if (typeof a === 'string' && typeof b === 'string') {
+      return UUIDsEqual(a, b) || a.trim().toLowerCase() === b.trim().toLowerCase();
+    }
+    return String(a) === String(b);
+  }
+
   /**
    * Asynchronously resolves the display name for an FK field (or polymorphic FK field)
    * that lacks a RelatedEntityNameFieldMap by calling Metadata.GetEntityRecordName.
@@ -1338,6 +1354,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     }
 
     const currentEntityRef = this.IsPolymorphicFK ? this.polymorphicEntityRefValue : null;
+    const seq = ++this._fkResolveSeq;
     this._fkNameLoading = true;
     this._resolvedFKValue = fkValue;
     this._resolvedFKEntityRef = currentEntityRef;
@@ -1345,7 +1362,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const md = this.ProviderToUse;
     md.GetEntityRecordName(relatedEntityName, pk)
       .then(name => {
-        if (this._destroyed) return;
+        if (this._destroyed || seq !== this._fkResolveSeq) return;
         this._resolvedFKName = name || null;
         this._fkNameLoading = false;
         this.cdr.markForCheck();
@@ -1356,7 +1373,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
         });
       })
       .catch(() => {
-        if (this._destroyed) return;
+        if (this._destroyed || seq !== this._fkResolveSeq) return;
         this._resolvedFKName = null;
         this._fkNameLoading = false;
       });
