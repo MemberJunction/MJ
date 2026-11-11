@@ -107,6 +107,14 @@ export class VitestCatchTarget extends BaseCatchTarget {
         if (actual !== pinned) throw new InfrastructureError(`host pnpm is ${actual} with the pin, but the sandbox image uses ${pinned}`);
     }
 
+    /** The names in `packages` whose folder holds a regular `package.json` in the revision; a package the revision does not have is left out. */
+    public PackagesAt(revision: PreparedRevision, packages: string[]): string[] {
+        return packages.filter((name) => {
+            const dir = this.o.PackageMap.Get(name)?.Dir;
+            return dir !== undefined && lstatSync(join(revision.RootDir, dir, 'package.json'), { throwIfNoEntry: false })?.isFile() === true;
+        });
+    }
+
     /**
      * `turbo run build --filter=<pkg>...` for the packages under test, minus `Sandbox.BuildExclude`, inside the sandbox with the
      * local cache only. Concurrency is one task per sandbox cpu: turbo's default of ten parallel compilers exceeds the memory cap.

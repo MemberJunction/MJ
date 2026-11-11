@@ -8,7 +8,7 @@ import { RedactionCheck, SecretsFromEnvironment } from '../sandbox/Redaction';
 import type { Settings } from '../settings';
 
 /** The target methods the pipeline steps call. */
-export type PipelineTarget = Pick<VitestCatchTarget, 'Prepare' | 'BuildPackages' | 'WriteTests' | 'TypeCheck' | 'Run' | 'Coverage' | 'Cleanup'>;
+export type PipelineTarget = Pick<VitestCatchTarget, 'Prepare' | 'BuildPackages' | 'PackagesAt' | 'WriteTests' | 'TypeCheck' | 'Run' | 'Coverage' | 'Cleanup'>;
 
 /** The folder that holds the sandbox Dockerfile, next to `src/` and `dist/`. */
 const SANDBOX_DIR = fileURLToPath(new URL('../../sandbox', import.meta.url));

@@ -87,6 +87,19 @@ describe('VitestCatchTarget.Run', () => {
   });
 });
 
+describe('VitestCatchTarget.PackagesAt', () => {
+  it('keeps the packages whose package.json is a regular file in the revision and drops the rest', () => {
+    const map = { Get: (n: string) => (n === '@memberjunction/core' ? { Name: n, Dir: 'packages/MJCore', HasVitest: true, HasTests: true } : null) };
+    const target = new VitestCatchTarget({ Repo: { Root: '/repo' } as never, Sandbox: new Sandbox(DEFAULT_SETTINGS.Sandbox, async () => ({ ExitCode: 0, TimedOut: false, Stdout: '', Stderr: '', DurationMs: 1 })), Settings: DEFAULT_SETTINGS, WorkRoot: '/work', StoreDir: '/work/pnpm-store', PackageMap: map as never });
+    const root = mkdtempSync(join(tmpdir(), 'jit-pkgs-'));
+    const revision = { Ref: { Kind: 'Base' as const, SHA: 'a' }, RootDir: root };
+    expect(target.PackagesAt(revision, ['@memberjunction/core'])).toEqual([]);
+    mkdirSync(join(root, 'packages/MJCore'), { recursive: true }); writeFileSync(join(root, 'packages/MJCore/package.json'), '{}');
+    expect(target.PackagesAt(revision, ['@memberjunction/core', '@memberjunction/unknown'])).toEqual(['@memberjunction/core']);
+    rmSync(root, { recursive: true, force: true });
+  });
+});
+
 describe('VitestCatchTarget.Prepare', () => {
   const LOCK = 'lockfileVersion: 9.0\n\npatchedDependencies:\n  type-graphql@2.0.0-beta.3:\n    hash: abc123\n    path: patches/type-graphql@2.0.0-beta.3.patch\n\nimporters:\n  .:\n    dependencies:\n      type-graphql:\n        version: 2.0.0-beta.3(patch_hash=abc123)(graphql@16.12.0)\n';
   function prepWorld(hostRunner: (f: string, a: string[], cwd: string) => Promise<string>, onRun: (o: SandboxRunOptions) => { Stdout: string; ExitCode: number } = () => ({ Stdout: '', ExitCode: 0 })) {

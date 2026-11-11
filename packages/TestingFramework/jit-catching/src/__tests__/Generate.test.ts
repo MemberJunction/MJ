@@ -23,6 +23,7 @@ describe('GenerateStep', () => {
       Target: {
         Prepare: async (r: RevisionRef): Promise<PreparedRevision> => { order.push(`prepare ${r.Kind} ${r.SHA}`); return { Ref: r, RootDir: '/work/base' }; },
         BuildPackages: async (_r: PreparedRevision, p: string[]) => { order.push(`build ${p.join(',')}`); },
+        PackagesAt: (_r: PreparedRevision, p: string[]) => p,
       },
       Analyzer: { Analyze: async (_run, text) => { pr = text; return a; }, Usage: { Model: 'claude-sonnet-5-5', InputTokens: 7, OutputTokens: 3, CacheReadTokens: 1, CostUSD: 0.25 } },
       Generator: { Generate: async (r: GenerationRequest): Promise<GenerationResult> => { requests.push(r); return { Tests: r.Method === 'DodgyDiff' ? [candidate(ID_A)] : [], Tokens: { Model: 'm', InputTokens: 2, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 0.5 }, TranscriptPath: null, EndReason: 'success', Turns: 1 }; } },
@@ -44,6 +45,30 @@ describe('GenerateStep', () => {
     expect(g.Tests.map((t) => t.ID)).toEqual([ID_A]);
   });
 
+  it('builds and generates only for the packages that exist at base, and names the skipped ones on stderr', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'jit-gen-')); const redaction = new RedactionCheck([]);
+    const NEW = '@memberjunction/new'; const built: string[][] = []; const requests: GenerationRequest[] = [];
+    const a: ChangeAnalysis = { ...analysis(), PackagesToTest: [PKG, NEW], Risks: [] };
+    const tools: GenerateTools = {
+      EnsureImage: async () => undefined,
+      Target: { Prepare: async (r: RevisionRef): Promise<PreparedRevision> => ({ Ref: r, RootDir: '/work/base' }), BuildPackages: async (_r: PreparedRevision, p: string[]) => { built.push(p); },
+        PackagesAt: (_r: PreparedRevision, p: string[]) => p.filter((n) => n !== NEW) },
+      Analyzer: { Analyze: async () => a, Usage: { Model: 'claude-sonnet-5-5', InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 0 } },
+      Generator: { Generate: async (r: GenerationRequest): Promise<GenerationResult> => { requests.push(r); return { Tests: [], Tokens: { Model: 'm', InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 0 }, TranscriptPath: null, EndReason: 'success', Turns: 1 }; } },
+      PackageMap: { Get: (n: string) => (n === PKG ? { Name: PKG, Dir: PKG_DIR, HasVitest: true, HasTests: true } : n === NEW ? { Name: NEW, Dir: 'packages/New', HasVitest: true, HasTests: false } : null), PackageForPath: () => null },
+    };
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr: string[] = []; vi.spyOn(process.stderr, 'write').mockImplementation((c) => { stderr.push(String(c)); return true; });
+    const { RunID } = await GenerateStep({ PR: null, BaseSHA: BASE_SHA, HeadSHA: HEAD_SHA, Trigger: 'Backtest', RepoRoot: root, Settings: DEFAULT_SETTINGS, Env: FULL_ENV,
+      Deps: { GitHub: { GetPullRequest: vi.fn() }, Repo: { Fetch: async () => undefined, MergeBase: vi.fn(), Subject: async () => 't' }, Redaction: redaction, ForRun: () => tools } });
+
+    expect(built).toEqual([[PKG]]);
+    expect(requests.map((r) => r.Package)).toEqual([PKG]);
+    expect(stderr.join('')).toContain(`run ${RunID}: ${NEW} is not in base; skipped`);
+    expect(new RunDir(root, RunID, redaction).ReadGeneration().Analysis.PackagesToTest).toEqual([PKG]);
+    rmSync(root, { recursive: true, force: true });
+  });
+
   it('keeps one model\'s generator and analyzer usage apart by role, and records one session per request with its end reason', async () => {
     const root = mkdtempSync(join(tmpdir(), 'jit-gen-')); const redaction = new RedactionCheck([]);
     const a: ChangeAnalysis = { ...analysis(), Risks: [
@@ -52,7 +77,7 @@ describe('GenerateStep', () => {
     const info = { Name: PKG, Dir: PKG_DIR, HasVitest: true, HasTests: true };
     const tools: GenerateTools = {
       EnsureImage: async () => undefined,
-      Target: { Prepare: async (r: RevisionRef): Promise<PreparedRevision> => ({ Ref: r, RootDir: '/work/base' }), BuildPackages: async () => undefined },
+      Target: { Prepare: async (r: RevisionRef): Promise<PreparedRevision> => ({ Ref: r, RootDir: '/work/base' }), BuildPackages: async () => undefined, PackagesAt: (_r: PreparedRevision, p: string[]) => p },
       Analyzer: { Analyze: async () => a, Usage: { Model: 'm', InputTokens: 7, OutputTokens: 3, CacheReadTokens: 1, CostUSD: 0.25 } },
       Generator: { Generate: async (r: GenerationRequest): Promise<GenerationResult> => ({ Tests: r.Method === 'DodgyDiff' ? [candidate(ID_A)] : [],
         Tokens: { Model: 'm', InputTokens: 2, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 0.5 }, TranscriptPath: null, EndReason: r.Method === 'DodgyDiff' ? 'success' : 'aborted_token_budget', Turns: 7 }) },
@@ -72,7 +97,7 @@ describe('GenerateStep', () => {
     const info = { Name: PKG, Dir: PKG_DIR, HasVitest: true, HasTests: true };
     const tools: GenerateTools = {
       EnsureImage: async () => undefined,
-      Target: { Prepare: async (r: RevisionRef): Promise<PreparedRevision> => ({ Ref: r, RootDir: '/work/base' }), BuildPackages: async () => undefined },
+      Target: { Prepare: async (r: RevisionRef): Promise<PreparedRevision> => ({ Ref: r, RootDir: '/work/base' }), BuildPackages: async () => undefined, PackagesAt: (_r: PreparedRevision, p: string[]) => p },
       Analyzer: { Analyze: async () => a, Usage: { Model: 'claude-sonnet-5-5', InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 } },
       Generator: { Generate: async (r: GenerationRequest): Promise<GenerationResult> => {
         if (r.Method === 'IntentAware') throw new Error('agent crashed\n  at stack');
@@ -98,7 +123,7 @@ describe('GenerateStep', () => {
     const spent = { Model: DEFAULT_SETTINGS.GeneratorModel, InputTokens: 900, OutputTokens: 40, CacheReadTokens: 300, CostUSD: 0.75 };
     const tools: GenerateTools = {
       EnsureImage: async () => undefined,
-      Target: { Prepare: async (r: RevisionRef): Promise<PreparedRevision> => ({ Ref: r, RootDir: '/work/base' }), BuildPackages: async () => undefined },
+      Target: { Prepare: async (r: RevisionRef): Promise<PreparedRevision> => ({ Ref: r, RootDir: '/work/base' }), BuildPackages: async () => undefined, PackagesAt: (_r: PreparedRevision, p: string[]) => p },
       Analyzer: { Analyze: async () => analysis(), Usage: { Model: 'claude-sonnet-5-5', InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 } },
       Generator: { Generate: async (): Promise<GenerationResult> => { throw new SessionError('Claude Code process exited with code 1', spent); } },
       PackageMap: { Get: () => info, PackageForPath: () => info },
@@ -118,7 +143,7 @@ describe('GenerateStep', () => {
     const info = { Name: PKG, Dir: PKG_DIR, HasVitest: true, HasTests: true };
     const tools: GenerateTools = {
       EnsureImage: async () => undefined,
-      Target: { Prepare: async (r: RevisionRef): Promise<PreparedRevision> => ({ Ref: r, RootDir: '/work/base' }), BuildPackages: async () => undefined },
+      Target: { Prepare: async (r: RevisionRef): Promise<PreparedRevision> => ({ Ref: r, RootDir: '/work/base' }), BuildPackages: async () => undefined, PackagesAt: (_r: PreparedRevision, p: string[]) => p },
       Analyzer: { Analyze: async () => ({ ...analysis(), Summary: 'leaks super-secret-value-123' }), Usage: { Model: 'claude-sonnet-5-5', InputTokens: 7, OutputTokens: 3, CacheReadTokens: 1, CostUSD: 0.25 } },
       Generator: { Generate: async (): Promise<GenerationResult> => ({ Tests: [candidate(ID_A)], Tokens: { Model: 'm', InputTokens: 2, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 0.5 }, TranscriptPath: null, EndReason: 'success', Turns: 1 }) },
       PackageMap: { Get: () => info, PackageForPath: () => info },
@@ -150,6 +175,7 @@ describe('GenerateStep', () => {
       Target: {
         Prepare: async (r: RevisionRef): Promise<PreparedRevision> => { order.push(`prepare ${r.Kind} ${r.SHA}`); return { Ref: r, RootDir: '/work/base' }; },
         BuildPackages: async (_r: PreparedRevision, p: string[]) => { order.push(`build ${p.join(',')}`); },
+        PackagesAt: (_r: PreparedRevision, p: string[]) => p,
       },
       Analyzer: { Analyze: async (_run, text) => { pr = text; return { ...analysis(), Risks: [] }; }, Usage: { Model: 'a', InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 } },
       Generator: { Generate: async (): Promise<GenerationResult> => ({ Tests: [], Tokens: { Model: 'm', InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 }, TranscriptPath: null, EndReason: 'success', Turns: 1 }) },
