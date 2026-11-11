@@ -378,7 +378,7 @@ export class AIPromptRunner extends BaseModelRunner {
               selection.selectionInfo?.vendorSelected?.ID ?? params.override?.vendorId ?? null,
               selection.promptModelConfiguration)
           : null;
-        params.data = this.ApplyNativeTemplateFlags(params.data, nativeDecision);
+        await this.finalizeTemplateData(params, nativeDecision);
 
         // Check if we have a system prompt override
         if (params.systemPromptOverride) {
@@ -1981,6 +1981,17 @@ export class AIPromptRunner extends BaseModelRunner {
       _NATIVE_TOOL_CALLING: current._NATIVE_TOOL_CALLING ?? false,
       _NATIVE_CONTROL_FLOW: current._NATIVE_CONTROL_FLOW ?? 'envelope'
     };
+  }
+
+  /**
+   * Sets the native tool-calling flags from this attempt's decision, then lets the caller re-render
+   * anything it rendered from the data before a model was selected ({@link AIPromptParams.OnTemplateDataFinalized}).
+   */
+  private async finalizeTemplateData(params: AIPromptParams, nativeDecision: NativeToolCallingDecision | null): Promise<void> {
+    params.data = this.ApplyNativeTemplateFlags(params.data, nativeDecision);
+    if (params.OnTemplateDataFinalized) {
+      await params.OnTemplateDataFinalized(params);
+    }
   }
 
   /**
@@ -4452,8 +4463,10 @@ export class AIPromptRunner extends BaseModelRunner {
       // Use raw result as fallback when parsed result is undefined, null, or empty string
       resultToSave = rawResult;
       
-      // Also set error message when we have to fall back to raw result
-      if (!promptRun.ErrorMessage) {
+      // Also set error message when we have to fall back to raw result. A turn that answered with tool calls has
+      // nothing else to parse: its empty text is the expected result, not a parse failure.
+      const answeredWithToolCalls = (modelResult.data?.choices?.[0]?.message?.toolCalls?.length ?? 0) > 0;
+      if (!promptRun.ErrorMessage && !answeredWithToolCalls) {
         const validationErrors = parsedResult.validationResult?.Errors;
         if (validationErrors && validationErrors.length > 0) {
           promptRun.ErrorMessage = `JSON parsing/validation failed: ${validationErrors.map(e => e.Message).join('; ')}`;
