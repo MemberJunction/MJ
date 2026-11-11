@@ -79,6 +79,8 @@ import {
   DescribeStatementFailure,
   SummarizeSqlParameters,
   FormatSqlParameterTypesForError,
+  RowFilterParameterCollector,
+  type RowFilterBoundParameter,
 } from '@memberjunction/generic-database-provider';
 import type { DatabasePoolStats, DescribeStatementResult } from '@memberjunction/generic-database-provider';
 import { BindTypedParameters } from './typedParameters';
@@ -3168,36 +3170,82 @@ export class SQLServerDataProvider
       }
       const { batchSQL, effectiveBatchParams } = SQLServerDataProvider.buildBatchExecutionPayload(queries, parameters);
 
-      // Create execution context
-      const context: SQLExecutionContext = {
-        pool: this._pool,
-        transaction: joinsAmbient ? this._transaction : null,
-        logSqlStatement: this._logSqlStatement.bind(this),
-        clearTransaction: () => { 
-          this._transaction = null;
-        }
-      };
-
-      // Execute using instance method (which handles queue for transactions)
-      const result = await this._internalExecuteSQLInstance(batchSQL, effectiveBatchParams, context, {
-        description: options?.description || 'Batch execution',
-        ignoreLogging: options?.ignoreLogging || false,
-        isMutation: options?.isMutation || false,
-        contextUser: contextUser
-      });
-      
-      // Return array of recordsets - one for each query
-      // Handle both single and multiple recordsets
-      if (result.recordsets && Array.isArray(result.recordsets)) {
-        return result.recordsets;
-      } else if (result.recordset) {
-        return [result.recordset];
-      } else {
-        return [];
-      }
+      return await this.executeBatchText(batchSQL, effectiveBatchParams, joinsAmbient, options, contextUser);
     } catch (e) {
       LogError(e);
       throw e;
+    }
+  }
+
+  /**
+   * Runs `queries` as one batch whose statements all reference the same `parameters` (the bound
+   * row-filter values of one RunView: its data, count and aggregate statements carry the same
+   * WHERE). The parameters are declared once for the batch, under their own names, so the batch
+   * text is the same for every user.
+   */
+  protected override async ExecuteSQLBatchWithSharedParameters(
+    queries: string[],
+    parameters: RowFilterBoundParameter[],
+    options?: ExecuteSQLBatchOptions,
+    contextUser?: UserInfo,
+  ): Promise<Record<string, unknown>[][]> {
+    try {
+      const joinsAmbient = !options?.ignoreAmbientTransaction && this.IsCallerInAmbientTransaction();
+      if (joinsAmbient) {
+        this.AssertAmbientTransactionUsable();
+      }
+      return await this.executeBatchText(queries.join(';\n'), parameters, joinsAmbient, options, contextUser);
+    } catch (e) {
+      LogError(e);
+      throw e;
+    }
+  }
+
+  /**
+   * Row-filter values bind as `@rls_p<n>` NVARCHAR(4000) parameters. A fixed declared length keeps
+   * the `sp_executesql` signature the same for every user (an inferred one is the value's length);
+   * a longer value stays literal.
+   */
+  protected override CreateRowFilterParameterBinder(): RowFilterParameterCollector | null {
+    return new RowFilterParameterCollector((index, value) => value.length > 4000
+      ? null
+      : { Placeholder: `@rls_p${index}`, Parameter: new TypedQueryParameter(`rls_p${index}`, 'nvarchar(4000)', value) });
+  }
+
+  /** Executes one batch text with its parameters and returns one recordset per statement. */
+  private async executeBatchText(
+    batchSQL: string,
+    batchParameters: Record<string, unknown> | RowFilterBoundParameter[],
+    joinsAmbient: boolean,
+    options: ExecuteSQLBatchOptions | undefined,
+    contextUser: UserInfo | undefined,
+  ): Promise<any[][]> {
+    // Create execution context
+    const context: SQLExecutionContext = {
+      pool: this._pool,
+      transaction: joinsAmbient ? this._transaction : null,
+      logSqlStatement: this._logSqlStatement.bind(this),
+      clearTransaction: () => {
+        this._transaction = null;
+      }
+    };
+
+    // Execute using instance method (which handles queue for transactions)
+    const result = await this._internalExecuteSQLInstance(batchSQL, batchParameters, context, {
+      description: options?.description || 'Batch execution',
+      ignoreLogging: options?.ignoreLogging || false,
+      isMutation: options?.isMutation || false,
+      contextUser: contextUser
+    });
+
+    // Return array of recordsets - one for each query
+    // Handle both single and multiple recordsets
+    if (result.recordsets && Array.isArray(result.recordsets)) {
+      return result.recordsets;
+    } else if (result.recordset) {
+      return [result.recordset];
+    } else {
+      return [];
     }
   }
 
