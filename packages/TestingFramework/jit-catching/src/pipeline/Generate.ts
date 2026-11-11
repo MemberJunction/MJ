@@ -19,7 +19,7 @@ import { PreflightEnv } from './Preflight';
 
 /** The tools that write into one run's folder, built once the run ID is known. */
 export interface GenerateTools {
-    Target: Pick<PipelineTarget, 'Prepare' | 'BuildPackages'>;
+    Target: Pick<PipelineTarget, 'Prepare' | 'BuildPackages' | 'PackagesAt'>;
     Analyzer: Pick<ChangeAnalyzer, 'Analyze' | 'Usage'>;
     Generator: Pick<BaseTestGenerator, 'Generate'>;
     PackageMap: Pick<PackageMap, 'Get' | 'PackageForPath'>;
@@ -71,9 +71,12 @@ export async function GenerateStep(o: GenerateOptions): Promise<{ RunID: string 
     return { RunID: run.ID };
 }
 
-/** Analyses the change, builds base, runs the sessions (adding each finished session's usage to `finished`) and writes `generation.json`. */
+/** Analyses the change, keeps the packages base has, builds base, runs the sessions (adding each finished session's usage to `finished`) and writes `generation.json`. */
 async function analyzeAndGenerate(run: Run, dir: RunDir, t: GenerateTools, base: PreparedRevision, text: PullRequestText, settings: Settings, finished: TokenUsage[]): Promise<void> {
-    const analysis = await t.Analyzer.Analyze(run, text);
+    const found = await t.Analyzer.Analyze(run, text);
+    const present = t.Target.PackagesAt(base, found.PackagesToTest);
+    for (const name of found.PackagesToTest) if (!present.includes(name)) process.stderr.write(`run ${run.ID}: ${name} is not in base; skipped\n`);
+    const analysis: ChangeAnalysis = { ...found, PackagesToTest: present };
     await t.Target.BuildPackages(base, analysis.PackagesToTest);
     const requests = buildRequests(run, analysis, base.RootDir, settings, t.PackageMap);
     const results = await RunWithConcurrency(requests, settings.Limits.ParallelSessions, async (r) => {
