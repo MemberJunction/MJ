@@ -915,8 +915,9 @@ GO
  * table was created without), field categories and descriptions; base views,
  * spCreate/spUpdate/spDelete, permissions and FK indexes.
  * Regenerated at the M1 merge of next (origin/next 5fd5335a5f) on databases built from scratch by
- * mj migrate: the first pass ran on the hand-written section alone; the second, on a database
- * with the first pass applied, added the MJ: Entities -> MJ: Latest Feature Values relationship.
+ * mj migrate: the first pass ran on the hand-written section alone; a second pass, on a database
+ * with the first pass applied, emitted the excluded spDeleteAIConfiguration below and the deleted
+ * relationship named in the hand-edit paragraph.
  * Excluded (not this migration's): spDeleteAIConfiguration, which both passes emitted, the first
  * with a cascade update of AIPromptModel.ConfigurationID and the second with the cascade delete
  * that the committed V202610231210 body already has; a database built with neither copy emits
@@ -925,7 +926,9 @@ GO
  * Four hand edits, each marked "HAND EDIT" where it is, must be re-applied after any regeneration: the
  * three EntityUniqueKey inserts for the training schema's existing constraints are guarded by ID or by
  * (EntityID, Name) (D4-72), and the MJ: Latest Feature Values EntityID field is inserted with
- * AutoUpdateRelatedEntityInfo = 0, with CodeGen's "Set LLM-identified FKs" block for that entity left out (D4-80).
+ * AutoUpdateRelatedEntityInfo = 0 (D4-80). Two generated blocks are deleted, not edited (no marker): CodeGen's
+ * "Set LLM-identified FKs" block for MJ: Latest Feature Values and the MJ: Entities -> MJ: Latest Feature Values
+ * EntityRelationship it derived from that FK (a relationship with no FK behind it).
  * ===================================================================================== */
 
 /* SQL generated to create new entity MJ: ML Model Publish Records */
@@ -13302,16 +13305,3 @@ SET
    GeneratedFormSection = 'Category'
 WHERE 
    ID = 'BAAA72F2-AE65-4178-9E82-951211B42F51';
-
-
-/* ---------------------------------- second CodeGen pass ---------------------------------- */
-
-
-/* Create Entity Relationship: MJ: Entities -> MJ: Latest Feature Values (One To Many via EntityID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '7e7805b7-4d22-4490-b022-e0eb1924d947' OR ([EntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = '1AC777D7-EEE8-485F-83DB-2127DBB4BFB7' AND [RelatedEntityJoinField] = 'EntityID')
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('7e7805b7-4d22-4490-b022-e0eb1924d947', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '1AC777D7-EEE8-485F-83DB-2127DBB4BFB7', 'EntityID', 'One To Many', 1, 1, 95, GETUTCDATE(), GETUTCDATE())
-   END;

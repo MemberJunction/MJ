@@ -3081,31 +3081,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: Latest Feature Values Section -->
-    <mj-collapsible-panel
-        SectionKey="mJLatestFeatureValues"
-        SectionName="MJ: Latest Feature Values"
-        Icon="fa-solid fa-star-half-stroke"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJLatestFeatureValues')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Latest Feature Values','EntityID')"
-                [NewRecordValues]="NewRecordValues('MJ: Latest Feature Values','EntityID')"
-                [AllowLoad]="IsSectionExpanded('mJLatestFeatureValues')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJLatestFeatureValues', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Feature Values Section -->
     <mj-collapsible-panel
         SectionKey="mJFeatureValues"

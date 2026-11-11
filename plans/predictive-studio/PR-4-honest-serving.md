@@ -134,9 +134,10 @@ database; `mj test` skips that check because the client-transport suites need MJ
 Read the regenerated diff after CodeGen: append any `CodeGen_Run_*.sql` to the migration that caused it (after at least
 50 blank lines) or delete it if there was no DDL; restore `sync` blocks CodeGen writes back into `metadata/**/*.json`.
 After any tail regeneration, re-apply the tail's four `HAND EDIT`s: D4-72's three `EntityUniqueKey` guards and D4-80's
-pin (`[AutoUpdateRelatedEntityInfo] = 0` in the `MJ: Latest Feature Values.EntityID` `EntityField` insert, and CodeGen's
-"Set LLM-identified FKs for MJ: Latest Feature Values" block removed); then prove a clean build's `codegen --skipfiles`
-emits nothing.
+pin (`[AutoUpdateRelatedEntityInfo] = 0` in the `MJ: Latest Feature Values.EntityID` `EntityField` insert), and delete
+CodeGen's "Set LLM-identified FKs for MJ: Latest Feature Values" block and any `MJ: Entities → MJ: Latest Feature Values`
+relationship it derives; then prove a clean build's `codegen --skipfiles` emits nothing and no `EntityRelationship` row
+names `MJ: Latest Feature Values` as its related entity.
 Never run `mj migrate`, `mj codegen` or `mj sync push` against a database you did not create.
 
 **Bootstrap facts measured at M1 (2026-11-10):**
@@ -3527,7 +3528,7 @@ does not depend on `@memberjunction/core-entities`)
 - [x] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M1` → exit 0, summary in the commit body
 - [x] one checkpoint commit, each path staged by name (the plan and `.changeset/ps-honest-serving.md` among them)
 - [x] `git push` through the pre-push hook (`milestone-exit.mjs --mode pre-push`, D-072) — at the merge-of-next pass (D4-79)
-- [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --edit-pr` → the open PR's body from §10 (the only file it changes is
+- [x] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --edit-pr` → the open PR's body from §10 (the only file it changes is
   §10's `gen:head`, which rides in the next commit) — at the merge-of-next pass (D4-79)
 
 **Milestone exit (UI first where the milestone ships UI, D-076):** `pr-body.mjs` (no `--edit-pr`) → `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M1` → exit 0, summary in the commit body → one checkpoint commit (the plan and the changeset staged by name) → push (the pre-push hook runs `--mode pre-push`, D-072) → `pr-body.mjs --edit-pr`
@@ -9355,8 +9356,8 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   three inserts is wrapped in `IF NOT EXISTS (… WHERE [ID] = … OR ([EntityID] = … AND [Name] = …))`, marked
   `HAND EDIT`, and re-applied after any tail regeneration that still emits them. Reported to next's owners in §10
   Coordination. The tail's hand edits are four since the M1 merge-of-next pass: these three guards and D4-80's pin
-  (`AutoUpdateRelatedEntityInfo = 0` on `MJ: Latest Feature Values.EntityID`, `HAND EDIT (4)`, with CodeGen's
-  "Set LLM-identified FKs" block for that entity left out).
+  (`AutoUpdateRelatedEntityInfo = 0` on `MJ: Latest Feature Values.EntityID`, `HAND EDIT (4)`), plus two deleted
+  generated blocks (the "Set LLM-identified FKs" block for that entity and the relationship derived from it).
 - **D4-73 · Publish-record immutability has one exception: the entity-delete procedure** (decided at M1, Task M1.3's
   review). `spDeleteEntityWithCoreDependencies` clears `SignOffID`, `ReplacesModelID` and `TrainingRunID` on the
   `MJ: ML Model Publish Records` rows that survive when the row they reference is removed with its entity; no other
@@ -9424,8 +9425,13 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   vwLatestFeatureValues.EntityID is pinned (AutoUpdateRelatedEntityInfo = 0) so CodeGen's LLM decoration never infers
   a soft FK on the view entity; the real FK is FeatureValue.EntityID, which the delete procedure already covers; the
   fixture needs no view entry. The tail's `INSERT INTO EntityField` for that field carries
-  `[AutoUpdateRelatedEntityInfo] = 0` (marked `HAND EDIT (4)`), and CodeGen's "Set LLM-identified FKs for MJ: Latest
-  Feature Values" block is left out of the tail; `ManageMetadata.LLMForeignKeyMayApply` (`manage-metadata.ts:4524`)
+  `[AutoUpdateRelatedEntityInfo] = 0` (marked `HAND EDIT (4)`); both the inferred FK and the relationship row CodeGen
+  derived from it are removed: CodeGen's "Set LLM-identified FKs for MJ: Latest Feature Values" block and its second-pass
+  `EntityRelationship` `7e7805b7-4d22-4490-b022-e0eb1924d947` (`MJ: Entities` → `MJ: Latest Feature Values` on
+  `EntityID`) are deleted from the tail — deletions, not a fifth hand edit (CodeGen creates relationships only from
+  fields that point at another entity, `manage-metadata.ts:5033–5075`, and its stale cleanup skips a field that points
+  at nothing, `:5409`, so it would never remove that row itself; a relationship with no FK behind it is inconsistent
+  metadata); `ManageMetadata.LLMForeignKeyMayApply` (`manage-metadata.ts:4524`)
   and the field-sync step (`:4775`) skip a field so pinned, so the tail is the same whether or not the LLM decoration
   runs or what it decides (M1's run inferred nothing; the merge-of-next run inferred `EntityID → MJ: Entities`, which
   failed `delete-entity-fk-coverage.test.ts` and next's `polymorphic-fk` standard). Alternatives rejected: a policy
@@ -9598,7 +9604,7 @@ are monitored on real outcomes.
 - Environment variables read by new code: <!-- gen:env -->none<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->0<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->0<!-- /gen:checks -->
-- Head: <!-- gen:head -->e8f5683866<!-- /gen:head -->
+- Head: <!-- gen:head -->83cbdff672<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,
@@ -9630,10 +9636,15 @@ shadow-scoring rows, PSI drift detector, drift action, drift job and IT166 (D4-3
 **Coordination with `next`'s owners (found at M1).** next's `V202611101200__v6.3.x__Entity_Unique_Key_Sets.sql` created
 `__mj.EntityUniqueKey` without rows for PR 3's three unique constraints (`UQ_MLEvaluationProtocol_Lineage_Version`,
 `UQ_MLPredictionUnit_Lineage_Version`, `UQ_MLTrainingSnapshot_ContentHash`), so CodeGen writes them on any database
-built from `next`; this PR's tail carries them, each guarded by ID or `(EntityID, Name)` (D4-72). next's newest
-`spCreateEntityOrganicKey`/`spUpdateEntityOrganicKey` lack the `@Source` parameter its `EntityOrganicKey` table has; the
-tail carries their regeneration. Both are reported to the owners of `V202611101200`; when `next` fixes them, the
-regenerated tail drops the rows and this PR's hand edits go with them.
+built from `next`; this PR's tail carries them, each guarded by ID or `(EntityID, Name)` (D4-72). (The M1 tail also
+regenerated `spCreateEntityOrganicKey`/`spUpdateEntityOrganicKey`, which lacked `@Source`; next's
+`V202611101900__v6.3.x__ConversationTypes_Comments_FieldSuggestions.sql` re-creates both with it (its :3832, :3946), so
+the tail regenerated at the merge of next carries neither.) The tail's hand edits are four — the three
+`EntityUniqueKey` guards (D4-72) and the `AutoUpdateRelatedEntityInfo = 0` pin on `MJ: Latest Feature Values.EntityID`
+(D4-80) — and two generated blocks are deleted rather than edited: CodeGen's "Set LLM-identified FKs" block for that
+entity and the `MJ: Entities → MJ: Latest Feature Values` relationship CodeGen derived from that FK (D4-80). The
+`EntityUniqueKey` gap is reported to the owners of `V202611101200`; when `next` fixes it, the regenerated tail drops
+those rows and their guards go with them.
 
 **Naming (program D-039).** Persisted JSON and wire property names ported from `reference/contracts/contracts.ts`
 (`Delivery`, publish-record JSON, `ScoredRow`, `MonitoringJobSpec`, …) keep the contract's camelCase and `Id` because
@@ -10150,6 +10161,10 @@ plus the keep-list, runtime verification against MJAPI and the database (§7 of 
   build` (selects `packages/MJGlobal` and Core). Simulated in a clean worktree of `e8f5683866`: install EXIT=0, build
   EXIT=0, `dist/index.js` present, `pnpm run setup:python` EXIT=0, `pnpm run test:python` → `495 passed in 97.80s`. The
   follow-up push's CI result is the line below (read after that push; it rides M2's first commit).
+  After `83cbdff672`'s push: `gh pr checks 6517 | grep -i sidecar` → `Predictive Studio sidecar (pytest)	pass	3m57s
+  https://github.com/MemberJunction/MJ/actions/runs/43074066357/job/130709928023`; its log → `495 passed in 154.48s`,
+  equal to the local count (495).
+  The same run's `Integration (SQL Server, deterministic)` job (`130709927644`) → success.
 - **State left behind:** `MJ_PS_PR4_claude` from the fourth clean build (D4-80's pin), plus the sync push,
   `truth:provision`, the IT metadata, the C1 corpus and the two suite runs above; truth sidecar on `:61968`; MJAPI
   stopped; the seven owner files untracked as before; the interrupted deterministic re-run of this pass went with the
@@ -10157,6 +10172,45 @@ plus the keep-list, runtime verification against MJAPI and the database (§7 of 
   plans repo.
 - **Next step (exact):** M2's Start list, first command: `export PS_MJ="$MJ" PS_AGENT="$AGENT"` with `tools/ps-env.sh`
   loaded, then `git fetch origin next` (read the M1.6 CI line below first).
+
+### 2026-11-11 13:06 CST — Claude (Opus 5.5, merge-of-next review fix round 1) — M1
+
+- **Review (`m1-merge-next-review.md`): I1 + three minors.** I1 (ruling: drop it): the tail's second-pass
+  `EntityRelationship` `7e7805b7-4d22-4490-b022-e0eb1924d947` (`MJ: Entities` → `MJ: Latest Feature Values` on
+  `EntityID`, `One To Many`, `Sequence` 95) existed only because of the LLM-inferred FK D4-80 removed; `e8f5683866`
+  committed the matching "MJ: Latest Feature Values" section in `mjentity.form.component.html`. Deleted from the tail
+  with the second-pass separator (the block was that pass's only content); the tail header's hand-edit paragraph now
+  says four hand edits plus two deleted generated blocks; `grep -c -i "7e7805b7\|second CodeGen pass"` → 0; `wc -l`
+  13317 → 13307.
+- **Fifth clean build:** `DROP/CREATE` (RCSI) → `migrate` → `Migrations complete in 231.2s — 176 applied` →
+  `codegen --skipfiles` → `MJ CodeGen complete — 460 entities in 143.21s`, emitted files **0**, LLM-FK lines for the
+  entity 0; `SELECT AutoUpdateRelatedEntityInfo, IsSoftForeignKey, RelatedEntityID … Name='EntityID'` → `0|0|NULL`;
+  `SELECT COUNT(*) FROM __mj.EntityRelationship WHERE RelatedEntityID = '1AC777D7-EEE8-485F-83DB-2127DBB4BFB7'` → **0**;
+  flyway 170 `V202611101901`, 175 `V202611110217`; `sync push` → `"created":3,"updated":12,"unchanged":16759,"deleted":0,…,"errorCount":0`
+  (3 write-backs restored); `codegen --skipdb` → `460 entities in 43.74s`; `git diff --stat HEAD -- packages` →
+  `mjentity.form.component.html | 25 ---`, `mjentity.form.component.ts | 1 -` (2 files, 26 deletions: the section and
+  its `mJLatestFeatureValues` section entry), no other generated churn; `pnpm run build` → `Tasks: 321 successful, 321 total`;
+  `truth:provision` → `pstruth: 47 entities, direct SQL sanctioned on 47`; IT metadata → `"created":699,…,"errorCount":0`; C1 corpus → `{"C1Person":2015,"C1OrderHeader":15420,…}`, `immutable fields declared: 272`; MJAPI restarted and stopped.
+- **Tests and checks:** Core `pnpm test` → `Test Files 34 passed (34) / Tests 468 passed (468)`; CodeGenLib → `Test Files 164 passed | 6
+  skipped (170) / Tests 2483 passed | 66 skipped (2549)`, `delete-entity-fk-coverage.test.ts (11 tests)`; TruthSuite → `Test Files
+  18 passed (18) / Tests 105 passed (105)`; `test:db -- serving-schema` → `Test Files 3 passed (3) / Tests 25 passed (25)`
+  (serving-schema 21); entityfield-sequence ✓; `check:codegen-tail` OK; `check:guards` exit 0; `check:standards` exit 0
+  (`✓ No errors. 14302 warning(s)`).
+- **Minors:** M1 — M1's `--edit-pr` exit box ticked (the earlier edit ticked only its continuation line). M2 — §10's
+  "Coordination with `next`'s owners" paragraph rewritten: the merged tail carries no `spCreate`/`spUpdateEntityOrganicKey`
+  (next's `V202611101900` re-creates both with `@Source`, its :3832 and :3946), and the hand-edit sentence lists the
+  three guards, the pin and the two deleted generated blocks. M3 — none (`packages/GeneratedEntities/package.json`
+  came from next's release bump). M4 — PR CI on `83cbdff672`: `gh pr checks 6517` → 33 pass, 7 skipping, 0 failing
+  (sidecar pytest `pass 3m57s`, run `43074066357`; deterministic job `130709927644` success); this commit's run is read
+  after its push (line below, rides M2's first commit).
+- **Plan edits:** D4-80 (the inferred FK and the derived relationship row both removed; the removal is a deletion, not a
+  fifth hand edit; why CodeGen never removes it itself: `manage-metadata.ts:5033–5075`, `:5409`); D4-72's hand-edit
+  list; §2's re-apply note (delete the derived relationship too, prove no relationship names the view); §10 (M2); M1
+  exit box (M1).
+- **State left behind:** `MJ_PS_PR4_claude` from the fifth clean build, bootstrapped for M2 (sync push, truth suite,
+  IT metadata, C1 corpus); MJAPI stopped; truth sidecar on `:61968`; the seven owner files untracked.
+- **Next step (exact):** M2's Start list, first command: `export PS_MJ="$MJ" PS_AGENT="$AGENT"` with `tools/ps-env.sh`
+  loaded, then `git fetch origin next`.
 
 ## 12. Refresh log (append-only)
 
