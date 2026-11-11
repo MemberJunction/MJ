@@ -5641,17 +5641,16 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             });
             Y.applyUpdate(missingOneDoc, Y.encodeStateAsUpdate(heavyDoc));
 
-            heavyDoc.transact(() => {
-                const yText = heavyDoc.getText('content');
-                for (let i = 59_999; i >= 0; i--) {
-                    yText.delete(i * 2, 1);
-                }
-            });
+            const missingFirstDelta: Array<{ retain?: number; delete?: number }> = [{ retain: 2 }];
+            for (let i = 1; i < 60_000; i++) {
+                missingFirstDelta.push({ delete: 1 }, { retain: 1 });
+            }
             missingOneDoc.transact(() => {
-                const yText = missingOneDoc.getText('content');
-                for (let i = 59_999; i >= 1; i--) {
-                    yText.delete(i * 2, 1);
-                }
+                missingOneDoc.getText('content').applyDelta(missingFirstDelta);
+            });
+            Y.applyUpdate(heavyDoc, Y.encodeStateAsUpdate(missingOneDoc));
+            heavyDoc.transact(() => {
+                heavyDoc.getText('content').delete(0, 1);
             });
 
             const targetSnap = Y.snapshot(heavyDoc);
