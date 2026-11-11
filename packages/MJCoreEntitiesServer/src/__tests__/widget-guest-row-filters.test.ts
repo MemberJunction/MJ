@@ -14,7 +14,7 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const permissionsPath = join(repoRoot, 'metadata/entity-permissions/.entity-permissions.json');
 const migrationPath = join(
     repoRoot,
-    'migrations/v6/V202611051303__v6.3.x__Widget_Guest_Own_Row_Filters.sql',
+    'migrations/v6/V202611111300__v6.3.x__Widget_Guest_Own_Row_Filters.sql',
 );
 
 const ROLE_LOOKUP = '@lookup:MJ: Roles.Name=Widget Guest';
