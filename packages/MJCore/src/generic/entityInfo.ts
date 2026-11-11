@@ -4,7 +4,7 @@ import { IMetadataProvider } from "./interfaces"
 import { MetadataProviderFor } from "./infoProviderResolution"
 import { RunViewParams } from "../views/runView"
 import { BaseEntity } from "./baseEntity"
-import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo"
+import { MarkupFilterOptions, RowFilterParameterBinder, RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo"
 import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, SQLMaxByteLength, FormatValue, CodeNameFromString, CanonicalPrimaryKeyValue } from "./util"
 import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
@@ -5474,6 +5474,19 @@ export class EntityInfo extends BaseInfo {
             return '';
         }
 
+        const sRLSSQL = this.roleRowFilterClause(user, type, null);
+        if (sRLSSQL.length === 0) {
+            return '';
+        }
+        return `${returnPrefix && returnPrefix.length > 0 ? returnPrefix + ' ' : ''}${sRLSSQL}`;
+    }
+
+    /**
+     * The role layer of the row filter, '' when no role filter applies. Callers check the
+     * role-RLS exemption first. With a `binder`, user values bind as parameters
+     * ({@link RowLevelSecurityFilterInfo.MarkupFilterParameterized}).
+     */
+    private roleRowFilterClause(user: UserInfo, type: EntityPermissionType, binder: RowFilterParameterBinder | null): string {
         const userRLS = this.GetUserRowLevelSecurityInfo(user, type);
         if (!userRLS || userRLS.length === 0) {
             return '';
@@ -5482,9 +5495,8 @@ export class EntityInfo extends BaseInfo {
         // parenthesized, and a group of two or more is parenthesized as a whole, so a predicate the
         // caller ANDs beside the clause (`WHERE ID = @p0 AND <clause>`) applies to every filter rather
         // than binding to the first one only. A single filter keeps its one pair of parentheses.
-        const terms = userRLS.map((rls) => `(${rls.MarkupFilterText(user)})`);
-        const sRLSSQL = terms.length > 1 ? `(${terms.join(' OR ')})` : terms[0];
-        return `${returnPrefix && returnPrefix.length > 0 ? returnPrefix + ' ' : ''}${sRLSSQL}`;
+        const terms = userRLS.map((rls) => `(${binder ? rls.MarkupFilterParameterized(user, binder) : rls.MarkupFilterText(user)})`);
+        return terms.length > 1 ? `(${terms.join(' OR ')})` : terms[0];
     }
 
     /**
@@ -5503,22 +5515,40 @@ export class EntityInfo extends BaseInfo {
      *
      * The application-ceiling layer (APIApplicationScope.RowFilterID) is deferred to v2 by
      * design decision; the column ships unused and the term composes here when it lands.
+     *
+     * With a `binder`, the user's values bind as query parameters (#5713): same layers, same
+     * order, same composition, but each token that is a whole quoted literal is replaced by the
+     * placeholder `binder` returns, so the clause text is the same for every user and the
+     * database reuses one plan per query shape. The binder collects the parameters in
+     * placeholder order, and binds nothing when no layer contributes. The binder is an optional
+     * argument of this method rather than a separate one so that every implementation of the
+     * method, test doubles included, keeps answering the call. The RunView cache fingerprint
+     * must call this without a binder: the literal clause is what keeps two users from sharing
+     * a cached result.
      */
-    public GetEffectiveRowFilterWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string): string {
+    public GetEffectiveRowFilterWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string, binder?: RowFilterParameterBinder): string {
+        const sql = this.effectiveRowFilterClause(user, type, binder ?? null);
+        if (sql.length === 0) {
+            return '';
+        }
+        return `${returnPrefix && returnPrefix.length > 0 ? returnPrefix + ' ' : ''}${sql}`;
+    }
+
+    /** The composed row-filter clause without a prefix; literal when `binder` is null. */
+    private effectiveRowFilterClause(user: UserInfo, type: EntityPermissionType, binder: RowFilterParameterBinder | null): string {
         const layers: string[] = [];
-        const roleClause = this.GetUserRowLevelSecurityWhereClause(user, type, '');
+        // The literal form goes through GetUserRowLevelSecurityWhereClause, which applies the exemption itself.
+        const roleClause = binder === null
+            ? this.GetUserRowLevelSecurityWhereClause(user, type, '')
+            : (this.UserExemptFromRowLevelSecurity(user, type) ? '' : this.roleRowFilterClause(user, type, binder));
         if (roleClause && roleClause.length > 0) {
             layers.push(`(${roleClause})`);
         }
-        const keyClause = this.getAPIKeyRowFilterClause(user, type);
+        const keyClause = this.getAPIKeyRowFilterClause(user, type, binder);
         if (keyClause && keyClause.length > 0) {
             layers.push(`(${keyClause})`);
         }
-        if (layers.length === 0) {
-            return '';
-        }
-        const sql = layers.join(' AND ');
-        return `${returnPrefix && returnPrefix.length > 0 ? returnPrefix + ' ' : ''}${sql}`;
+        return layers.join(' AND ');
     }
 
     /**
@@ -5529,7 +5559,7 @@ export class EntityInfo extends BaseInfo {
      * or unloaded) contributes `(1=0)`, and unresolved tokens inside a filter collapse it
      * to `(1=0)` via the match-nothing markup mode.
      */
-    private getAPIKeyRowFilterClause(user: UserInfo, type: EntityPermissionType): string {
+    private getAPIKeyRowFilterClause(user: UserInfo, type: EntityPermissionType, binder: RowFilterParameterBinder | null): string {
         const bindings = user?.APIKeyRowFilters;
         if (!bindings || bindings.length === 0) {
             return '';
@@ -5546,7 +5576,8 @@ export class EntityInfo extends BaseInfo {
                     LogError(`API-key row filter ${b.FilterID} for entity ${this.Name} not found in metadata — resolving to (1=0)`);
                     return '(1=0)';
                 }
-                return `(${filter.MarkupFilterText(user, { unresolvedBehavior: 'match-nothing' })})`;
+                const options: MarkupFilterOptions = { unresolvedBehavior: 'match-nothing' };
+                return `(${binder ? filter.MarkupFilterParameterized(user, binder, options) : filter.MarkupFilterText(user, options)})`;
             });
         return clauses.join(' AND ');
     }
