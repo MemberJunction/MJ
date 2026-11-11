@@ -1111,10 +1111,14 @@ import {
     WhiteboardToolLibrary,
 } from '@memberjunction/ai-agents';
 
-// @memberjunction/ai-agent-harness (8 classes)
+// @memberjunction/ai-agent-harness (12 classes)
 import {
+    AntigravityCliAdapter,
+    AntigravityCloudAdapter,
     ClaudeCodeCliAdapter,
+    ClaudeCodeCloudAdapter,
     CodexAdapter,
+    CodexCloudAdapter,
     GeminiCliAdapter,
     HarnessAgentBase,
     HarnessAgentType,
@@ -2395,8 +2399,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     TextToolLibrary,
     WhiteboardChannelServer,
     WhiteboardToolLibrary,
+    AntigravityCliAdapter,
+    AntigravityCloudAdapter,
     ClaudeCodeCliAdapter,
+    ClaudeCodeCloudAdapter,
     CodexAdapter,
+    CodexCloudAdapter,
     GeminiCliAdapter,
     HarnessAgentBase,
     HarnessAgentType,
@@ -2567,14 +2575,14 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ConfigureAgentUserPolicyAction,
     CopyObjectAction,
     CreateDirectoryAction,
-    CreateDocumentAction,
-    CreateEmployeeAction,
-    CreateFormContributionAction,
-    CreateInteractiveFormAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    CreateDocumentAction,
+    CreateEmployeeAction,
+    CreateFormContributionAction,
+    CreateInteractiveFormAction,
     CreateListAction,
     CreateMermaidDiagramAction,
     CreateRecordAction,
@@ -2771,6 +2779,10 @@ const CLASS_REGISTRATIONS_5: any[] = [
     WorkQueueGetSubscriptionStatsServerOperation,
     WorkQueueListDeadLettersServerOperation,
     WorkQueueListPartitionsServerOperation,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_6: any[] = [
     WorkQueueReplayDeadLetterServerOperation,
     WorkQueueValidateBindingsServerOperation,
     HelloWorldHandler,
@@ -2784,13 +2796,14 @@ export const CLASS_REGISTRATIONS: any[] = [
     ...CLASS_REGISTRATIONS_3,
     ...CLASS_REGISTRATIONS_4,
     ...CLASS_REGISTRATIONS_5,
+    ...CLASS_REGISTRATIONS_6,
 ];
 
 /** Marker constant indicating the manifest has been loaded. */
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1199;
+export const CLASS_REGISTRATIONS_COUNT = 1203;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

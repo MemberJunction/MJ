@@ -20,6 +20,13 @@ import * as crypto from 'node:crypto';
 const SCALAR_SECRET_KEYS: readonly string[] = [
     'token',
     'apiKey',
+    'antigravityApiKey',
+    'geminiApiKey',
+    'googleApiKey',
+    'anthropicApiKey',
+    'openaiApiKey',
+    'codexApiKey',
+    'bearerToken',
     'accessToken',
     'personalAccessToken',
     'secret',
@@ -28,6 +35,88 @@ const SCALAR_SECRET_KEYS: readonly string[] = [
     'password',
     'value',
 ];
+
+/** Credential environment specification for a registered harness driver class. */
+export interface HarnessDriverCredentialSpec {
+    /** Canonical environment variable injected into the session for this driver. */
+    PrimaryEnvVar: string;
+    /** Ordered candidate environment variables inspected during zero-config server fallback. */
+    FallbackEnvVars: readonly string[];
+}
+
+/**
+ * Canonical credential environment variable mappings across CLI and Cloud harness adapters.
+ */
+export const HARNESS_DRIVER_CREDENTIAL_SPECS: Readonly<Record<string, HarnessDriverCredentialSpec>> = {
+    ClaudeCodeCliAdapter: {
+        PrimaryEnvVar: 'ANTHROPIC_API_KEY',
+        FallbackEnvVars: [
+            'AI_VENDOR_API_KEY__CLAUDECODECLIADAPTER',
+            'AI_VENDOR_API_KEY__ANTHROPICLLM',
+            'ANTHROPIC_API_KEY',
+        ],
+    },
+    ClaudeCodeCloudAdapter: {
+        PrimaryEnvVar: 'ANTHROPIC_API_KEY',
+        FallbackEnvVars: [
+            'AI_VENDOR_API_KEY__CLAUDECODECLOUDADAPTER',
+            'AI_VENDOR_API_KEY__ANTHROPICLLM',
+            'ANTHROPIC_API_KEY',
+        ],
+    },
+    CodexAdapter: {
+        PrimaryEnvVar: 'OPENAI_API_KEY',
+        FallbackEnvVars: [
+            'AI_VENDOR_API_KEY__CODEXADAPTER',
+            'AI_VENDOR_API_KEY__OPENAILM',
+            'OPENAI_API_KEY',
+        ],
+    },
+    CodexCloudAdapter: {
+        PrimaryEnvVar: 'OPENAI_API_KEY',
+        FallbackEnvVars: [
+            'AI_VENDOR_API_KEY__CODEXCLOUDADAPTER',
+            'AI_VENDOR_API_KEY__OPENAILM',
+            'OPENAI_API_KEY',
+            'CODEX_API_KEY',
+        ],
+    },
+    GeminiCliAdapter: {
+        PrimaryEnvVar: 'GEMINI_API_KEY',
+        FallbackEnvVars: [
+            'AI_VENDOR_API_KEY__GEMINICLIADAPTER',
+            'AI_VENDOR_API_KEY__GEMINILLM',
+            'GEMINI_API_KEY',
+            'GOOGLE_API_KEY',
+        ],
+    },
+    AntigravityCliAdapter: {
+        PrimaryEnvVar: 'GEMINI_API_KEY',
+        FallbackEnvVars: [
+            'AI_VENDOR_API_KEY__ANTIGRAVITYCLIADAPTER',
+            'ANTIGRAVITY_API_KEY',
+            'GEMINI_API_KEY',
+            'GOOGLE_API_KEY',
+            'AI_VENDOR_API_KEY__GEMINILLM',
+        ],
+    },
+    AntigravityCloudAdapter: {
+        PrimaryEnvVar: 'GEMINI_API_KEY',
+        FallbackEnvVars: [
+            'AI_VENDOR_API_KEY__ANTIGRAVITYCLOUDADAPTER',
+            'ANTIGRAVITY_API_KEY',
+            'GEMINI_API_KEY',
+            'GOOGLE_API_KEY',
+            'AI_VENDOR_API_KEY__GEMINILLM',
+        ],
+    },
+};
+
+export interface ResolvedProviderCredential {
+    Secret: string;
+    SourceKey: string;
+    IsBearer: boolean;
+}
 
 export interface ResolveHarnessCredentialOptions {
     /** Optional environment variable name being populated (e.g., `'GH_TOKEN'`, `'GITHUB_TOKEN'`). */
@@ -196,6 +285,191 @@ export function ApplyGitHubEnvironmentConventions(
     }
 
     return environment;
+}
+
+/**
+ * Mirrors Antigravity / Gemini API key environment variables within a granted environment bag so
+ * granting any one of `GEMINI_API_KEY`, `GOOGLE_API_KEY`, or `ANTIGRAVITY_API_KEY` satisfies both
+ * `agy` CLI (`GEMINI_API_KEY`) and `AntigravityCloudAdapter` without leaking ungranted host vars.
+ */
+export function NormalizeAntigravityEnvironment(
+    environment: Record<string, string>
+): Record<string, string> {
+    const resolved =
+        nonEmptyEnvValue(environment.GEMINI_API_KEY) ??
+        nonEmptyEnvValue(environment.ANTIGRAVITY_API_KEY) ??
+        nonEmptyEnvValue(environment.GOOGLE_API_KEY);
+
+    if (!resolved) {
+        return environment;
+    }
+
+    if (!nonEmptyEnvValue(environment.GEMINI_API_KEY)) {
+        environment.GEMINI_API_KEY = resolved;
+    }
+    if (!nonEmptyEnvValue(environment.ANTIGRAVITY_API_KEY)) {
+        environment.ANTIGRAVITY_API_KEY = resolved;
+    }
+    if (!nonEmptyEnvValue(environment.GOOGLE_API_KEY)) {
+        environment.GOOGLE_API_KEY = resolved;
+    }
+
+    return environment;
+}
+
+/**
+ * Applies zero-config vendor API key fallback for `driverClass` into `targetEnvironment` when no
+ * explicit `MJ: AI Agent Credentials` rows populated a key. Returns the matched source variable
+ * name, or `null` when no fallback key was available.
+ */
+export function ResolveDriverVendorFallbackEnvironment(
+    driverClass: string,
+    targetEnvironment: Record<string, string>,
+    sourceEnv: NodeJS.ProcessEnv = process.env
+): string | null {
+    const spec = HARNESS_DRIVER_CREDENTIAL_SPECS[driverClass];
+    if (!spec) {
+        return null;
+    }
+
+    for (const candidateKey of spec.FallbackEnvVars) {
+        const val = nonEmptyEnvValue(sourceEnv[candidateKey]);
+        if (val) {
+            targetEnvironment[spec.PrimaryEnvVar] = val;
+            if (
+                driverClass === 'AntigravityCliAdapter' ||
+                driverClass === 'AntigravityCloudAdapter'
+            ) {
+                NormalizeAntigravityEnvironment(targetEnvironment);
+            }
+            return candidateKey;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Resolves the effective API key or Bearer token for a cloud harness provider (`antigravity`,
+ * `anthropic`, or `openai`), preferring secrets injected via `MJ: AI Agent Credentials` in
+ * `environment` and falling back to `fallbackEnv` (`process.env`) when omitted.
+ */
+export function ResolveProviderCredentialSecret(
+    provider: 'antigravity' | 'anthropic' | 'openai',
+    environment: Record<string, string>,
+    fallbackEnv?: NodeJS.ProcessEnv
+): ResolvedProviderCredential | null {
+    if (provider === 'antigravity') {
+        const bearerKeys: readonly string[] = [
+            'ANTIGRAVITY_BEARER_TOKEN',
+            'GOOGLE_OAUTH_ACCESS_TOKEN',
+        ];
+        const bearerHit = findFirstEnvSecret(bearerKeys, environment, fallbackEnv);
+        if (bearerHit) {
+            return {
+                Secret: stripBearerPrefix(bearerHit.Secret),
+                SourceKey: bearerHit.SourceKey,
+                IsBearer: true,
+            };
+        }
+
+        const apiKeyCandidates: readonly string[] = [
+            'ANTIGRAVITY_API_KEY',
+            'GEMINI_API_KEY',
+            'GOOGLE_API_KEY',
+            'AI_VENDOR_API_KEY__ANTIGRAVITYCLOUDADAPTER',
+            'AI_VENDOR_API_KEY__GEMINILLM',
+        ];
+        const keyHit = findFirstEnvSecret(apiKeyCandidates, environment, fallbackEnv);
+        if (!keyHit) {
+            return null;
+        }
+        const isBearer = /^Bearer\s+/i.test(keyHit.Secret);
+        return {
+            Secret: isBearer ? stripBearerPrefix(keyHit.Secret) : keyHit.Secret,
+            SourceKey: keyHit.SourceKey,
+            IsBearer: isBearer,
+        };
+    }
+
+    if (provider === 'anthropic') {
+        const bearerHit = findFirstEnvSecret(['ANTHROPIC_AUTH_TOKEN'], environment, fallbackEnv);
+        if (bearerHit) {
+            return {
+                Secret: stripBearerPrefix(bearerHit.Secret),
+                SourceKey: bearerHit.SourceKey,
+                IsBearer: true,
+            };
+        }
+        const keyHit = findFirstEnvSecret(
+            [
+                'ANTHROPIC_API_KEY',
+                'AI_VENDOR_API_KEY__CLAUDECODECLOUDADAPTER',
+                'AI_VENDOR_API_KEY__ANTHROPICLLM',
+            ],
+            environment,
+            fallbackEnv
+        );
+        if (!keyHit) {
+            return null;
+        }
+        const isBearer = /^Bearer\s+/i.test(keyHit.Secret);
+        return {
+            Secret: isBearer ? stripBearerPrefix(keyHit.Secret) : keyHit.Secret,
+            SourceKey: keyHit.SourceKey,
+            IsBearer: isBearer,
+        };
+    }
+
+    const openaiHit = findFirstEnvSecret(
+        [
+            'OPENAI_API_KEY',
+            'CODEX_API_KEY',
+            'AI_VENDOR_API_KEY__CODEXCLOUDADAPTER',
+            'AI_VENDOR_API_KEY__OPENAILM',
+        ],
+        environment,
+        fallbackEnv
+    );
+    if (!openaiHit) {
+        return null;
+    }
+    return {
+        Secret: stripBearerPrefix(openaiHit.Secret),
+        SourceKey: openaiHit.SourceKey,
+        IsBearer: true,
+    };
+}
+
+function findFirstEnvSecret(
+    keys: readonly string[],
+    primary: Record<string, string>,
+    fallback?: NodeJS.ProcessEnv
+): { Secret: string; SourceKey: string } | null {
+    for (const key of keys) {
+        const fromPrimary = nonEmptyEnvValue(primary[key]);
+        if (fromPrimary) {
+            return { Secret: fromPrimary, SourceKey: key };
+        }
+    }
+    if (fallback) {
+        for (const key of keys) {
+            const fromFallback = nonEmptyEnvValue(fallback[key]);
+            if (fromFallback) {
+                return { Secret: fromFallback, SourceKey: key };
+            }
+        }
+    }
+    return null;
+}
+
+function nonEmptyEnvValue(value: string | undefined): string | undefined {
+    const trimmed = value?.trim();
+    return trimmed && trimmed.length > 0 ? trimmed : undefined;
+}
+
+function stripBearerPrefix(value: string): string {
+    return value.replace(/^Bearer\s+/i, '').trim();
 }
 
 // ============================================================================

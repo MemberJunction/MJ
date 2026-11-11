@@ -43149,8 +43149,8 @@ export class MJAIAgentActionEntity extends BaseEntity<MJAIAgentActionEntityType>
     * * ResultExpirationTurns: This rule ensures that if the ResultExpirationTurns field has a value, it must be zero or greater (it cannot be negative). If ResultExpirationTurns is left empty, there is no restriction.
     * * Table-Level: This rule ensures that if the compact mode is set to 'First N Chars', a compact length must be specified. For any other compact mode, the compact length can be left empty.
     * * Table-Level: This rule ensures that if the result expiration mode is set to 'Compact', a compact mode value must also be provided. If the result expiration mode is not 'Compact', compact mode can be left empty.
+    * * Table-Level: This rule ensures that CompactMode, CompactLength, and CompactPromptID are only filled in when the result expiration mode is 'Compact'. For any other result expiration mode, all three must be empty.
     * * Table-Level: This rule ensures that if both minimum and maximum executions per run are specified, the minimum cannot be greater than the maximum. If either value is not specified, the rule is not enforced.
-    * * Table-Level: This rule ensures that if the result expiration mode is set to 'Compact', then CompactMode, CompactLength, and CompactPromptID must all be empty (null). If the expiration mode is not 'Compact', these fields may be filled in.
     * @public
     * @method
     * @override
@@ -43164,8 +43164,8 @@ export class MJAIAgentActionEntity extends BaseEntity<MJAIAgentActionEntityType>
         this.ValidateResultExpirationTurnsNonNegative(result);
         this.ValidateCompactLengthRequiredForFirstNCharsMode(result);
         this.ValidateCompactModeWhenResultExpirationModeIsCompact(result);
+        this.ValidateCompactSettingsOnlyWhenResultExpirationModeIsCompact(result);
         this.ValidateMinExecutionsPerRunIsLessThanOrEqualToMaxExecutionsPerRun(result);
-        this.ValidateResultExpirationModeRequiresCompactFieldsEmpty(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -43262,6 +43262,18 @@ export class MJAIAgentActionEntity extends BaseEntity<MJAIAgentActionEntityType>
     }
 
     /**
+    * This rule ensures that CompactMode, CompactLength, and CompactPromptID are only filled in when the result expiration mode is 'Compact'. For any other result expiration mode, all three must be empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactSettingsOnlyWhenResultExpirationModeIsCompact(result: ValidationResult) {
+    	if (this.ResultExpirationMode !== "Compact" && (this.CompactMode != null || this.CompactLength != null || this.CompactPromptID != null)) {
+    		result.Errors.push(new ValidationErrorInfo("ResultExpirationMode", "CompactMode, CompactLength, and CompactPromptID must be empty unless ResultExpirationMode is 'Compact'.", this.ResultExpirationMode, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * This rule ensures that if both minimum and maximum executions per run are specified, the minimum cannot be greater than the maximum. If either value is not specified, the rule is not enforced.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
@@ -43270,20 +43282,6 @@ export class MJAIAgentActionEntity extends BaseEntity<MJAIAgentActionEntityType>
     public ValidateMinExecutionsPerRunIsLessThanOrEqualToMaxExecutionsPerRun(result: ValidationResult) {
     	if (this.MinExecutionsPerRun != null && this.MaxExecutionsPerRun != null && this.MinExecutionsPerRun > this.MaxExecutionsPerRun) {
     		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "Minimum executions per run cannot be greater than maximum executions per run.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if the result expiration mode is set to 'Compact', then CompactMode, CompactLength, and CompactPromptID must all be empty (null). If the expiration mode is not 'Compact', these fields may be filled in.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateResultExpirationModeRequiresCompactFieldsEmpty(result: ValidationResult) {
-    	if (this.ResultExpirationMode === "Compact") {
-    		if (this.CompactMode != null || this.CompactLength != null || this.CompactPromptID != null) {
-    			result.Errors.push(new ValidationErrorInfo("ResultExpirationMode", "When ResultExpirationMode is set to 'Compact', the fields CompactMode, CompactLength, and CompactPromptID must be empty.", this.ResultExpirationMode, ValidationErrorType.Failure));
-    		}
     	}
     }
 
@@ -45884,6 +45882,19 @@ export interface MJAIAgentHarnessEntity_IHarnessCapabilitySettings {
      * own configuration selects and MJ's model preference is advisory only.
      */
     ModelSelection?: boolean;
+
+    // ── Cloud execution & async wake ────────────────────────────────────────────
+    /**
+     * The adapter executes remotely over HTTP against a cloud agent platform (Google Antigravity
+     * Cloud, Claude Code Cloud, OpenAI Codex Cloud) rather than spawning a local or container CLI
+     * process.
+     */
+    SupportsCloudExecution?: boolean;
+    /**
+     * The adapter can detach cleanly from an in-flight background cloud run when `turnWaitBudgetMs`
+     * elapses under `adaptive-wake` mode while preserving `ExternalSessionID` for the next `AgentWake`.
+     */
+    SupportsAsyncWakeHandoff?: boolean;
 }
 
 /**

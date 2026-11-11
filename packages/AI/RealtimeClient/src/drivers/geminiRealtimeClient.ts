@@ -17,6 +17,7 @@ import {
     RenderRealtimeMemorySeedAsContextNote,
     type RealtimeAvatarUnavailableReason,
     type RealtimeClientTransport,
+    type RealtimeContextNoteOptions,
     type RealtimeReconnectFailureCode,
     type RealtimeReconnectReason,
 } from '@memberjunction/ai';
@@ -934,13 +935,14 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * holds generation until a `turnComplete: true` commit arrives. {@link openClientTurn}
      * tracks this so {@link SendToolResult} can commit the turn and unblock the spoken reply.
      */
-    public SendContextNote(text: string): void {
+    public SendContextNote(text: string, options?: RealtimeContextNoteOptions): void {
         if (!this.session && !this.IsReconnecting) {
             return;
         }
         this.conversationMemory.Record({
             Kind: 'note',
             Text: text,
+            ...options,
         });
         this.enqueueOrRun(() => {
             this.session?.sendClientContent({ turns: [{ role: 'user', parts: [{ text }] }], turnComplete: false });

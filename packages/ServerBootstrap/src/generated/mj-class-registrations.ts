@@ -1325,10 +1325,14 @@ import {
     DefaultRuntimeActionBridgeBuilder,
 } from '@memberjunction/action-runtime-host';
 
-// @memberjunction/ai-agent-harness (8 classes)
+// @memberjunction/ai-agent-harness (12 classes)
 import {
+    AntigravityCliAdapter,
+    AntigravityCloudAdapter,
     ClaudeCodeCliAdapter,
+    ClaudeCodeCloudAdapter,
     CodexAdapter,
+    CodexCloudAdapter,
     GeminiCliAdapter,
     HarnessAgentBase,
     HarnessAgentType,
@@ -2799,8 +2803,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     WhiteboardChannelServer,
     WhiteboardToolLibrary,
     DefaultRuntimeActionBridgeBuilder,
+    AntigravityCliAdapter,
+    AntigravityCloudAdapter,
     ClaudeCodeCliAdapter,
+    ClaudeCodeCloudAdapter,
     CodexAdapter,
+    CodexCloudAdapter,
     GeminiCliAdapter,
     HarnessAgentBase,
     HarnessAgentType,
@@ -2897,14 +2905,14 @@ const CLASS_REGISTRATIONS_4: any[] = [
     UserRoutineDispatcherDriver,
     FieldSuggestionCommentDriver,
     MJAIAgentCoAgentEntityServer,
-    MJAIAgentEntityServer,
-    MJAIAgentExampleEntityServer,
-    MJAIAgentNoteEntityServer,
-    MJAIAgentRelationshipEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJAIAgentEntityServer,
+    MJAIAgentExampleEntityServer,
+    MJAIAgentNoteEntityServer,
+    MJAIAgentRelationshipEntityServer,
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
     MJAIAgentSessionEntityServer,
@@ -3101,14 +3109,14 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GetGraphContextAction,
     GetListRecordsAction,
     GetMetadataAction,
-    GetMyCalendarAndAvailabilityAction,
-    GetObjectAction,
-    GetRecordAction,
-    GetRecordListMembershipAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    GetMyCalendarAndAvailabilityAction,
+    GetObjectAction,
+    GetRecordAction,
+    GetRecordListMembershipAction,
     GetRecordsAction,
     GetSignatureStatusAction,
     GetSkillDetailsAction,
@@ -3267,7 +3275,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1341;
+export const CLASS_REGISTRATIONS_COUNT = 1345;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
