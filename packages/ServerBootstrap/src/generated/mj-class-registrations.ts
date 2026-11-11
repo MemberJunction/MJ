@@ -1828,7 +1828,7 @@ import {
     WorkQueueValidateBindingsServerOperation,
 } from '@memberjunction/work-queue-engine';
 
-// @memberjunction/server (7 classes)
+// @memberjunction/server (8 classes)
 import {
     AWSIoTCoreBroadcastProvider,
     AzureWebPubSubBroadcastProvider,
@@ -1836,6 +1836,7 @@ import {
     MJEntityPermissionEntityServer,
     MJTenantFilterMiddleware,
     RateLimitMiddleware,
+    RedisStreamBroadcastProvider,
     SequencedRoleBucketBroadcastProvider,
 } from '@memberjunction/server';
 
@@ -3215,6 +3216,7 @@ const CLASS_REGISTRATIONS_6: any[] = [
     MJEntityPermissionEntityServer,
     MJTenantFilterMiddleware,
     RateLimitMiddleware,
+    RedisStreamBroadcastProvider,
     SequencedRoleBucketBroadcastProvider,
     DiagnosticRetentionScheduledJobDriver,
     DiagnosticsBuildBundleServerOperation,
@@ -3249,7 +3251,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1332;
+export const CLASS_REGISTRATIONS_COUNT = 1333;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

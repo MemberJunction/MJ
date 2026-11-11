@@ -173,3 +173,16 @@ export type {
   MeetingResult,
   StartMeetingResult,
 } from './graphQLMeetingClient';
+
+export { ClientTabInvalidationMultiplexer } from './ClientTabInvalidationMultiplexer';
+export type {
+    TabMultiplexerEnvironment,
+    BroadcastChannelLike,
+    WebLocksLike,
+    SharedWorkerLike,
+    TabInvalidationMessage,
+    CacheInvalidationEventData,
+    TabMultiplexerCallbacks,
+    ClientTabInvalidationMultiplexerOptions,
+} from './ClientTabInvalidationMultiplexer';
+

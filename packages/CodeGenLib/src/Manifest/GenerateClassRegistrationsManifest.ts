@@ -17,6 +17,7 @@
 import ts from 'typescript';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
 import { glob } from 'glob';
 import { ordinalCompare } from '@memberjunction/global';
 
@@ -140,6 +141,22 @@ export interface GenerateManifestOptions {
      * @default false
      */
     strict?: boolean;
+
+    /**
+     * Whether to use disk caching for the AST extraction.
+     * When true (the default), loads and saves the AST cache to disk.
+     * When false, uses in-memory caching only.
+     *
+     * @default true
+     */
+    useDiskCache?: boolean;
+
+    /**
+     * Optional explicit file path for the AST cache file.
+     * If omitted and `useDiskCache` is true, the path is resolved automatically
+     * via {@link ResolveDefaultAstCachePath}.
+     */
+    astCachePath?: string;
 }
 
 /**
@@ -207,6 +224,7 @@ interface PackageJsonInfo {
     dir: string;
     dependencies: Record<string, string>;
     devDependencies: Record<string, string>;
+    peerDependencies: Record<string, string>;
 }
 
 /**
@@ -222,7 +240,8 @@ function readPackageJson(dir: string): PackageJsonInfo | null {
             name: pkg.name || path.basename(dir),
             dir,
             dependencies: pkg.dependencies || {},
-            devDependencies: pkg.devDependencies || {}
+            devDependencies: pkg.devDependencies || {},
+            peerDependencies: pkg.peerDependencies || {}
         };
     } catch {
         return null;
@@ -265,6 +284,40 @@ function isPackageExcluded(packageName: string, excludePackages: string[]): bool
     return excludePackages.some(prefix => packageName.startsWith(prefix));
 }
 
+function isWorkspaceSourceDir(dir: string): boolean {
+    const normalized = dir.replace(/\\/g, '/');
+    return !normalized.includes('/node_modules/') && !normalized.includes('/.pnpm/');
+}
+
+function resolvePackageDirMemo(
+    depName: string,
+    searchDir: string,
+    root: string,
+    cache: Map<string, string | null>
+): string | null {
+    if (searchDir === root) return null;
+    const key = `${searchDir}::${depName}`;
+    if (cache.has(key)) {
+        return cache.get(key)!;
+    }
+
+    const candidate = path.join(searchDir, 'node_modules', depName);
+    let resolved: string | null;
+    if (fs.existsSync(path.join(candidate, 'package.json'))) {
+        try {
+            resolved = fs.realpathSync(candidate);
+        } catch {
+            resolved = candidate;
+        }
+    } else {
+        const parent = path.dirname(searchDir);
+        resolved = parent === searchDir ? null : resolvePackageDirMemo(depName, parent, root, cache);
+    }
+
+    cache.set(key, resolved);
+    return resolved;
+}
+
 function walkDependencyTree(
     appDir: string,
     log: (msg: string) => void,
@@ -274,9 +327,31 @@ function walkDependencyTree(
     // Map of package name -> resolved directory
     const visited = new Map<string, string>();
     const queue: Array<{ depName: string; fromDir: string }> = [];
+    const queuedPairs = new Set<string>();
+    const resolveCache = new Map<string, string | null>();
+    const pkgJsonCache = new Map<string, PackageJsonInfo | null>();
+
+    const readPkgCached = (dir: string): PackageJsonInfo | null => {
+        if (pkgJsonCache.has(dir)) return pkgJsonCache.get(dir)!;
+        const parsed = readPackageJson(dir);
+        pkgJsonCache.set(dir, parsed);
+        return parsed;
+    };
+
+    const resolveCached = (depName: string, fromDir: string): string | null => {
+        const root = path.parse(fromDir).root;
+        return resolvePackageDirMemo(depName, fromDir, root, resolveCache);
+    };
+
+    const enqueueEdge = (depName: string, fromDir: string): void => {
+        const pairKey = `${fromDir}::${depName}`;
+        if (queuedPairs.has(pairKey)) return;
+        queuedPairs.add(pairKey);
+        queue.push({ depName, fromDir });
+    };
 
     // Start with the app's own package.json
-    const appPkg = readPackageJson(appDir);
+    const appPkg = readPkgCached(appDir);
     if (!appPkg) {
         log(`No package.json found in ${appDir}`);
         return visited;
@@ -295,36 +370,68 @@ function walkDependencyTree(
         ? { ...appPkg.dependencies, ...appPkg.devDependencies }
         : { ...appPkg.dependencies };
     for (const depName of Object.keys(allDeps)) {
-        queue.push({ depName, fromDir: appDir });
+        enqueueEdge(depName, appDir);
     }
 
     while (queue.length > 0) {
         const { depName, fromDir } = queue.shift()!;
 
-        // Skip if already visited
-        if (visited.has(depName)) continue;
+        // If already visited, prefer live workspace package directories over node_modules/.pnpm tarball copies
+        if (visited.has(depName)) {
+            const existingDir = visited.get(depName)!;
+            if (isWorkspaceSourceDir(existingDir)) continue;
+            const candidateDir = resolveCached(depName, fromDir);
+            if (!candidateDir || candidateDir === existingDir || !isWorkspaceSourceDir(candidateDir)) {
+                continue;
+            }
+            log(`Preferring workspace source for ${depName}: ${candidateDir} (over ${existingDir})`);
+            visited.set(depName, candidateDir);
+            const upgradedPkg = readPkgCached(candidateDir);
+            if (upgradedPkg) {
+                for (const transitiveDep of Object.keys(upgradedPkg.dependencies)) {
+                    const existingTransitive = visited.get(transitiveDep);
+                    if (!existingTransitive || !isWorkspaceSourceDir(existingTransitive)) {
+                        enqueueEdge(transitiveDep, candidateDir);
+                    }
+                }
+            }
+            continue;
+        }
 
         // Skip packages matching exclusion prefixes
         if (isPackageExcluded(depName, excludePackages)) continue;
 
         // Resolve to actual directory on disk
-        const depDir = resolvePackageDir(depName, fromDir);
+        const depDir = resolveCached(depName, fromDir);
         if (!depDir) continue; // External package not found locally, skip
 
         visited.set(depName, depDir);
 
         // Read this package's dependencies and add to queue (only dependencies, not devDeps for transitive)
-        const depPkg = readPackageJson(depDir);
+        const depPkg = readPkgCached(depDir);
         if (depPkg) {
             for (const transitiveDep of Object.keys(depPkg.dependencies)) {
-                if (!visited.has(transitiveDep)) {
-                    queue.push({ depName: transitiveDep, fromDir: depDir });
+                const existingTransitive = visited.get(transitiveDep);
+                if (!existingTransitive || !isWorkspaceSourceDir(existingTransitive)) {
+                    enqueueEdge(transitiveDep, depDir);
                 }
             }
         }
     }
 
     return visited;
+}
+
+/**
+ * Test helper for walking the dependency tree.
+ */
+export function WalkDependencyTreeForTest(
+    appDir: string,
+    log?: (msg: string) => void,
+    excludePackages: string[] = [],
+    includeRootDevDependencies: boolean = true
+): Map<string, string> {
+    return walkDependencyTree(appDir, log || (() => {}), excludePackages, includeRootDevDependencies);
 }
 
 // ============================================================================
@@ -654,6 +761,308 @@ function extractRegisterClassFromDecoratorArray(
 }
 
 // ============================================================================
+// Manifest AST Cache
+// ============================================================================
+
+export const MAX_AST_CACHE_ENTRIES = 20000;
+
+export interface SaveManifestASTCacheOptions {
+    /**
+     * If true (default), prunes entries from the cache whose files no longer exist on disk.
+     */
+    PruneMissingFiles?: boolean;
+    // case-violation-ok-legacy-back-compat: support camelCase caller option
+    pruneMissingFiles?: boolean;
+
+    /**
+     * Maximum number of entries to keep in the cache file.
+     * Defaults to {@link MAX_AST_CACHE_ENTRIES} (20000).
+     */
+    MaxEntries?: number;
+    // case-violation-ok-legacy-back-compat: support camelCase caller option
+    maxEntries?: number;
+}
+
+interface CachedDecoratorShape {
+    className: string;
+    baseClassName?: string;
+    key?: string;
+}
+
+interface ManifestAstCacheRecord {
+    contentHash: string;
+    size: number;
+    isCompiledJS: boolean;
+    lastSeenMs: number;
+    classes: CachedDecoratorShape[];
+    mtimeMs?: number;
+}
+
+interface ManifestAstCacheDiskPayload {
+    version: 2;
+    entries: Record<string, ManifestAstCacheRecord>;
+}
+
+const astCacheMap = new Map<string, ManifestAstCacheRecord>();
+let astCacheHits = 0;
+let astCacheMisses = 0;
+let astCacheDirty = false;
+let astCacheLoadedFromPath: string | null = null;
+
+export function ClearManifestASTCache(): void {
+    astCacheMap.clear();
+    astCacheHits = 0;
+    astCacheMisses = 0;
+    astCacheDirty = false;
+    astCacheLoadedFromPath = null;
+}
+
+export function GetManifestASTCacheStats(): { Hits: number; Misses: number; Size: number } {
+    return {
+        Hits: astCacheHits,
+        Misses: astCacheMisses,
+        Size: astCacheMap.size
+    };
+}
+
+export function ResetManifestASTCacheStats(): void {
+    astCacheHits = 0;
+    astCacheMisses = 0;
+}
+
+export function LoadManifestASTCacheFromDisk(cacheFilePath: string): void {
+    if (astCacheLoadedFromPath === cacheFilePath && astCacheMap.size > 0) {
+        return;
+    }
+    try {
+        if (!fs.existsSync(cacheFilePath)) return;
+        const content = fs.readFileSync(cacheFilePath, 'utf-8');
+        const payload = JSON.parse(content) as ManifestAstCacheDiskPayload;
+        if (payload && payload.version === 2 && typeof payload.entries === 'object' && payload.entries !== null) {
+            for (const [key, record] of Object.entries(payload.entries)) {
+                if (
+                    record &&
+                    typeof record.contentHash === 'string' &&
+                    typeof record.size === 'number' &&
+                    typeof record.isCompiledJS === 'boolean' &&
+                    Array.isArray(record.classes)
+                ) {
+                    const validClasses: CachedDecoratorShape[] = [];
+                    for (const c of record.classes) {
+                        if (c && typeof c.className === 'string') {
+                            validClasses.push({
+                                className: c.className,
+                                ...(typeof c.baseClassName === 'string' ? { baseClassName: c.baseClassName } : {}),
+                                ...(typeof c.key === 'string' ? { key: c.key } : {})
+                            });
+                        }
+                    }
+                    astCacheMap.set(key, {
+                        contentHash: record.contentHash,
+                        size: record.size,
+                        isCompiledJS: record.isCompiledJS,
+                        lastSeenMs: typeof record.lastSeenMs === 'number' ? record.lastSeenMs : Date.now(),
+                        classes: validClasses,
+                        ...(typeof record.mtimeMs === 'number' ? { mtimeMs: record.mtimeMs } : {})
+                    });
+                }
+            }
+            astCacheLoadedFromPath = cacheFilePath;
+            astCacheDirty = false;
+        }
+    } catch {
+        // Ignored: read errors should never fail manifest generation
+    }
+}
+
+export function SaveManifestASTCacheToDisk(
+    cacheFilePath: string,
+    options?: SaveManifestASTCacheOptions
+): void {
+    try {
+        const shouldPrune = options?.PruneMissingFiles ?? options?.pruneMissingFiles ?? true;
+
+        // Concurrent merge: if cache file already exists on disk, read version 2 entries and merge
+        if (fs.existsSync(cacheFilePath)) {
+            try {
+                const diskContent = fs.readFileSync(cacheFilePath, 'utf-8');
+                const diskPayload = JSON.parse(diskContent) as ManifestAstCacheDiskPayload;
+                if (diskPayload && diskPayload.version === 2 && typeof diskPayload.entries === 'object' && diskPayload.entries !== null) {
+                    for (const [key, diskRecord] of Object.entries(diskPayload.entries)) {
+                        if (diskRecord && typeof diskRecord.contentHash === 'string') {
+                            const memRecord = astCacheMap.get(key);
+                            if (!memRecord) {
+                                astCacheMap.set(key, diskRecord);
+                            } else if ((diskRecord.lastSeenMs ?? 0) > (memRecord.lastSeenMs ?? 0)) {
+                                astCacheMap.set(key, diskRecord);
+                            }
+                        }
+                    }
+                }
+            } catch {
+                // Ignore read/parse error during disk merge
+            }
+        }
+
+        // Prune stale entries on save: drop any entry whose filePath no longer exists on disk
+        if (shouldPrune) {
+            for (const [key] of Array.from(astCacheMap.entries())) {
+                const sepIdx = key.indexOf('::');
+                const entryFilePath = sepIdx !== -1 ? key.substring(sepIdx + 2) : key;
+                try {
+                    if (path.isAbsolute(entryFilePath) && !fs.existsSync(entryFilePath)) {
+                        astCacheMap.delete(key);
+                    }
+                } catch {
+                    astCacheMap.delete(key);
+                }
+            }
+        }
+
+        // Cap total entries at maxEntries (defaults to MAX_AST_CACHE_ENTRIES = 20000), keeping newest lastSeenMs
+        const maxEntries = options?.MaxEntries ?? options?.maxEntries ?? MAX_AST_CACHE_ENTRIES;
+        if (astCacheMap.size > maxEntries) {
+            const sortedEntries = Array.from(astCacheMap.entries()).sort(
+                (a, b) => (b[1].lastSeenMs ?? 0) - (a[1].lastSeenMs ?? 0)
+            );
+            astCacheMap.clear();
+            for (let i = 0; i < maxEntries; i++) {
+                astCacheMap.set(sortedEntries[i][0], sortedEntries[i][1]);
+            }
+        }
+
+        const entries: Record<string, ManifestAstCacheRecord> = {};
+        for (const [key, value] of astCacheMap.entries()) {
+            entries[key] = value;
+        }
+        const payload: ManifestAstCacheDiskPayload = {
+            version: 2,
+            entries
+        };
+
+        const dir = path.dirname(cacheFilePath);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+
+        const tmpPath = `${cacheFilePath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
+        try {
+            fs.writeFileSync(tmpPath, JSON.stringify(payload), 'utf-8');
+            fs.renameSync(tmpPath, cacheFilePath);
+        } catch (writeErr) {
+            try {
+                if (fs.existsSync(tmpPath)) {
+                    fs.unlinkSync(tmpPath);
+                }
+            } catch {
+                // Ignore unlink failure
+            }
+            throw writeErr;
+        }
+
+        astCacheLoadedFromPath = cacheFilePath;
+        astCacheDirty = false;
+    } catch {
+        // Ignored: write errors should never fail manifest generation
+    }
+}
+
+export function ResolveDefaultAstCachePath(startDir: string): string | null {
+    const baseDir = findCacheBaseDir(startDir);
+    try {
+        if (
+            fs.existsSync(path.join(baseDir, 'turbo.json')) ||
+            fs.existsSync(path.join(baseDir, '.turbo'))
+        ) {
+            return path.join(baseDir, '.turbo', 'mj-manifest-ast-cache-v2.json');
+        }
+        if (fs.existsSync(path.join(baseDir, 'node_modules'))) {
+            return path.join(baseDir, 'node_modules', '.cache', 'memberjunction', 'mj-manifest-ast-cache-v2.json');
+        }
+    } catch {
+        // Ignore access errors
+    }
+    return null;
+}
+
+/** @deprecated Use {@link ResolveDefaultAstCachePath}. */
+export const resolveDefaultAstCachePath = ResolveDefaultAstCachePath;
+
+function findCacheBaseDir(startDir: string): string {
+    let current = startDir;
+    const root = path.parse(current).root;
+    while (current !== root) {
+        try {
+            if (
+                fs.existsSync(path.join(current, 'pnpm-workspace.yaml')) ||
+                fs.existsSync(path.join(current, 'turbo.json')) ||
+                fs.existsSync(path.join(current, '.git'))
+            ) {
+                return current;
+            }
+        } catch {
+            // Ignore access errors
+        }
+        const parent = path.dirname(current);
+        if (parent === current) break;
+        current = parent;
+    }
+    return startDir;
+}
+
+function extractRegisterClassForFile(
+    filePath: string,
+    depName: string,
+    isCompiledJS: boolean
+): RegisteredClassInfo[] {
+    let sourceText: string;
+    try {
+        sourceText = fs.readFileSync(filePath, 'utf-8');
+    } catch {
+        return [];
+    }
+
+    const contentHash = crypto.createHash('sha256').update(sourceText).digest('hex');
+    const cacheKey = `${isCompiledJS ? 'js' : 'ts'}::${filePath}`;
+    const cached = astCacheMap.get(cacheKey);
+
+    if (
+        cached &&
+        cached.contentHash === contentHash &&
+        cached.isCompiledJS === isCompiledJS
+    ) {
+        astCacheHits++;
+        cached.lastSeenMs = Date.now();
+        return cached.classes.map(c => ({
+            className: c.className,
+            filePath,
+            packageName: depName,
+            ...(c.baseClassName !== undefined ? { baseClassName: c.baseClassName } : {}),
+            ...(c.key !== undefined ? { key: c.key } : {})
+        }));
+    }
+
+    astCacheMisses++;
+    const parsed = isCompiledJS
+        ? extractRegisterClassFromCompiledJS(filePath, sourceText, depName)
+        : extractRegisterClassDecorators(filePath, sourceText, depName);
+
+    astCacheMap.set(cacheKey, {
+        contentHash,
+        size: Buffer.byteLength(sourceText, 'utf-8'),
+        isCompiledJS,
+        lastSeenMs: Date.now(),
+        classes: parsed.map(c => ({
+            className: c.className,
+            ...(c.baseClassName !== undefined ? { baseClassName: c.baseClassName } : {}),
+            ...(c.key !== undefined ? { key: c.key } : {})
+        }))
+    });
+    astCacheDirty = true;
+    return parsed;
+}
+
+// ============================================================================
 // Export Verification
 // ============================================================================
 
@@ -904,10 +1313,14 @@ function topologicallySortPackages(
         const pkgDir = depTree.get(pkg);
         const pkgJson = pkgDir ? readPackageJson(pkgDir) : null;
         if (!pkgJson) continue;
-        for (const depName of Object.keys(pkgJson.dependencies)) {
+        const combinedDeps = [...Object.keys(pkgJson.dependencies), ...Object.keys(pkgJson.peerDependencies)];
+        for (const depName of combinedDeps) {
             if (packageSet.has(depName) && depName !== pkg) {
-                depsOf.get(pkg)!.add(depName);
-                dependentsOf.get(depName)!.push(pkg);
+                const pkgDeps = depsOf.get(pkg)!;
+                if (!pkgDeps.has(depName)) {
+                    pkgDeps.add(depName);
+                    dependentsOf.get(depName)!.push(pkg);
+                }
             }
         }
     }
@@ -939,6 +1352,17 @@ function topologicallySortPackages(
         result.push(...missing);
     }
     return result;
+}
+
+/**
+ * Test helper for topologically sorting packages.
+ */
+export function TopologicallySortPackagesForTest(
+    packageMap: Map<string, string[]>,
+    depTree: Map<string, string>,
+    log?: (msg: string) => void
+): string[] {
+    return topologicallySortPackages(packageMap, depTree, log || (() => {}));
 }
 
 // NOTE: deliberately takes no dep-tree-size argument. The walked count is environment-dependent
@@ -1627,10 +2051,7 @@ async function scanPackagesForDecoratorsAsync(
         const { files, isCompiledJS } = await findScannableFiles(depDir, excludePatterns, scanDist);
         for (const filePath of files) {
             try {
-                const sourceText = fs.readFileSync(filePath, 'utf-8');
-                const found = isCompiledJS
-                    ? extractRegisterClassFromCompiledJS(filePath, sourceText, depName)
-                    : extractRegisterClassDecorators(filePath, sourceText, depName);
+                const found = extractRegisterClassForFile(filePath, depName, isCompiledJS);
                 classes.push(...found);
             } catch (err) {
                 errors.push(`Error reading ${filePath}: ${err}`);
@@ -1668,10 +2089,7 @@ function scanPackagesForDecorators(
 
         for (const filePath of files) {
             try {
-                const sourceText = fs.readFileSync(filePath, 'utf-8');
-                const found = isCompiledJS
-                    ? extractRegisterClassFromCompiledJS(filePath, sourceText, depName)
-                    : extractRegisterClassDecorators(filePath, sourceText, depName);
+                const found = extractRegisterClassForFile(filePath, depName, isCompiledJS);
                 classes.push(...found);
             } catch (err) {
                 errors.push(`Error reading ${filePath}: ${err}`);
@@ -2052,7 +2470,9 @@ export async function GenerateClassRegistrationsManifest(
         excludePackages = [],
         syncDependencies = true,
         scanDist = false,
-        lazyConfigPath
+        lazyConfigPath,
+        useDiskCache = true,
+        astCachePath: explicitAstCachePath
     } = options;
 
     const errors: string[] = [];
@@ -2064,6 +2484,16 @@ export async function GenerateClassRegistrationsManifest(
     };
 
     const absoluteAppDir = path.resolve(appDir);
+
+    astCacheHits = 0;
+    astCacheMisses = 0;
+
+    const cacheFilePath = useDiskCache
+        ? (explicitAstCachePath ?? ResolveDefaultAstCachePath(absoluteAppDir))
+        : null;
+    if (cacheFilePath) {
+        LoadManifestASTCacheFromDisk(cacheFilePath);
+    }
 
     // Read the app's package.json
     const appPkg = readPackageJson(absoluteAppDir);
@@ -2091,10 +2521,7 @@ export async function GenerateClassRegistrationsManifest(
         let foundInPackage = false;
         for (const filePath of files) {
             try {
-                const sourceText = fs.readFileSync(filePath, 'utf-8');
-                const classes = isCompiledJS
-                    ? extractRegisterClassFromCompiledJS(filePath, sourceText, depName)
-                    : extractRegisterClassDecorators(filePath, sourceText, depName);
+                const classes = extractRegisterClassForFile(filePath, depName, isCompiledJS);
                 if (classes.length > 0) {
                     foundInPackage = true;
                     allClasses.push(...classes);
@@ -2141,6 +2568,9 @@ export async function GenerateClassRegistrationsManifest(
         }
     } catch (err) {
         errors.push(`Error writing manifest: ${err}`);
+        if (cacheFilePath && astCacheDirty) {
+            SaveManifestASTCacheToDisk(cacheFilePath);
+        }
         return { success: false, outputPath: absoluteOutputPath, ManifestChanged: false, classes: allClasses, packages: [], totalDepsWalked: depTree.size, AddedDependencies: {}, errors };
     }
 
@@ -2265,6 +2695,10 @@ export async function GenerateClassRegistrationsManifest(
         } catch (err) {
             errors.push(`Error generating lazy config: ${err}`);
         }
+    }
+
+    if (cacheFilePath && astCacheDirty) {
+        SaveManifestASTCacheToDisk(cacheFilePath);
     }
 
     return {
