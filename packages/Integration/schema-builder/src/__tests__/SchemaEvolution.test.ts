@@ -214,6 +214,24 @@ describe('SchemaEvolution', () => {
             // Rows already in the table have no value for it, so it cannot be NOT NULL.
             expect(diff.AddedColumns[0].IsNullable).toBe(true);
         });
+
+        it('should not warn about a key column that differs only in nullability', () => {
+            // The state a key column is left in once it was added as nullable.
+            const target: TargetTableConfig = {
+                ...MakeTargetConfig([
+                    { SourceFieldName: 'newsletter_id', TargetColumnName: 'newsletter_id', TargetSqlType: 'NVARCHAR(100)', IsNullable: false, MaxLength: 100, Precision: null, Scale: null, DefaultValue: null },
+                ]),
+                PrimaryKeyFields: ['newsletter_id'],
+            };
+            const existing = MakeExistingTable([
+                { Name: 'newsletter_id', SqlType: 'NVARCHAR(100)', IsNullable: true },
+            ]);
+
+            const diff = evo.DiffSchema(MakeSourceObject(), target, existing, 'sqlserver');
+            expect(diff.Warnings).toEqual([]);
+            expect(diff.AddedColumns).toHaveLength(0);
+            expect(diff.ModifiedColumns).toHaveLength(0);
+        });
     });
 
     describe('GenerateEvolutionMigration', () => {
