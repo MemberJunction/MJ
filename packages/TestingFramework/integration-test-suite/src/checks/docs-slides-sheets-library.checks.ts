@@ -15,7 +15,7 @@
  */
 
 import { IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import {
@@ -117,13 +117,20 @@ async function checkDsl1MetadataAndAppWiring(ctx: IntegrationCheckContext): Prom
     AssertEqual(workingStatesEnt!.AllowDeleteAPI, false, 'MJ: Artifact Working States must have AllowDeleteAPI=false');
     AssertEqual(workingStatesEnt!.AllowAllRowsAPI, false, 'MJ: Artifact Working States must have AllowAllRowsAPI=false (B1)');
     AssertEqual(workingStatesEnt!.AllowUserSearchAPI, false, 'MJ: Artifact Working States must have AllowUserSearchAPI=false (B1)');
-    const wsUiPerm = workingStatesEnt!.Permissions.find((p) => p.Role === 'UI');
+    const roleNameByNormId = new Map<string, string>(
+        ctx.Provider.Roles.map((r) => [NormalizeUUID(r.ID), r.Name]),
+    );
+    const resolvePermRoleName = (perm: { Role: string | null; RoleID: string | null }): string | null =>
+        perm.Role ?? (perm.RoleID ? (roleNameByNormId.get(NormalizeUUID(perm.RoleID)) ?? null) : null);
+
+    const wsUiPerm = workingStatesEnt!.Permissions.find((p) => resolvePermRoleName(p) === 'UI' && !p.IsDeny);
     AssertEqual(wsUiPerm?.CanRead ?? false, false, 'MJ: Artifact Working States must deny UI role CanRead');
     for (const perm of workingStatesEnt!.Permissions) {
-        if (perm.CanRead) {
+        if (perm.CanRead && !perm.IsDeny) {
+            const roleName = resolvePermRoleName(perm);
             Assert(
-                perm.Role === 'Developer' || perm.Role === 'Integration',
-                `Only Developer/Integration roles may hold server-internal permission on MJ: Artifact Working States (found '${perm.Role}')`,
+                roleName === 'Developer' || roleName === 'Integration',
+                `Only Developer/Integration roles may hold server-internal permission on MJ: Artifact Working States (found '${roleName}')`,
             );
         }
     }
@@ -1297,13 +1304,20 @@ async function checkDslc1WorkingStateUnreachableOverGraphQL(ctx: IntegrationChec
     AssertEqual(wsEnt!.AllowCreateAPI, false, 'MJ: Artifact Working States AllowCreateAPI must be false');
     AssertEqual(wsEnt!.AllowUpdateAPI, false, 'MJ: Artifact Working States AllowUpdateAPI must be false');
     AssertEqual(wsEnt!.AllowDeleteAPI, false, 'MJ: Artifact Working States AllowDeleteAPI must be false');
-    const wsClientUiPerm = wsEnt!.Permissions.find((p) => p.Role === 'UI');
+    const clientRoleNameByNormId = new Map<string, string>(
+        ctx.Provider.Roles.map((r) => [NormalizeUUID(r.ID), r.Name]),
+    );
+    const resolveClientPermRoleName = (perm: { Role: string | null; RoleID: string | null }): string | null =>
+        perm.Role ?? (perm.RoleID ? (clientRoleNameByNormId.get(NormalizeUUID(perm.RoleID)) ?? null) : null);
+
+    const wsClientUiPerm = wsEnt!.Permissions.find((p) => resolveClientPermRoleName(p) === 'UI' && !p.IsDeny);
     AssertEqual(wsClientUiPerm?.CanRead ?? false, false, 'MJ: Artifact Working States must deny UI role CanRead');
     for (const perm of wsEnt!.Permissions) {
-        if (perm.CanRead) {
+        if (perm.CanRead && !perm.IsDeny) {
+            const roleName = resolveClientPermRoleName(perm);
             Assert(
-                perm.Role === 'Developer' || perm.Role === 'Integration',
-                `Only Developer/Integration roles may hold server-internal permission on MJ: Artifact Working States (found '${perm.Role}')`,
+                roleName === 'Developer' || roleName === 'Integration',
+                `Only Developer/Integration roles may hold server-internal permission on MJ: Artifact Working States (found '${roleName}')`,
             );
         }
     }
@@ -1574,28 +1588,40 @@ async function checkDslc3TicketMintSocketUpgradeAndReadOnlyRejection(): Promise<
     Assert(wsOutcome.upgraded, 'WebSocket upgrade to /collaboration/yjs with valid ticket must succeed');
     Assert(wsOutcome.readonlyRejected, 'Read-only peer Yjs update frame must be rejected with readonly-rejected');
 
-    // 4. Reusing the same single-use ticket on a second WebSocket connection must close immediately with 1008 (never pass on timeout)
-    const replayOutcome = await new Promise<{ closedCode: number; timedOut: boolean }>((resolve) => {
+    // 4. Reusing the same single-use ticket on a second WebSocket connection must be rejected immediately before opening (HTTP 401 pre-handshake -> CloseEvent 1006 + error, or 1008 Policy Violation; never open or pass on timeout)
+    const replayOutcome = await new Promise<{
+        opened: boolean;
+        hadError: boolean;
+        closedCode: number;
+        timedOut: boolean;
+    }>((resolve) => {
         const replaySocket = new WebSocket(wsUrl);
+        let opened = false;
+        let hadError = false;
         const timer = setTimeout(() => {
             try {
                 replaySocket.close();
             } catch {
                 // ignore
             }
-            resolve({ closedCode: 0, timedOut: true });
+            resolve({ opened, hadError, closedCode: 0, timedOut: true });
         }, 5_000);
+        replaySocket.addEventListener('open', () => {
+            opened = true;
+        });
         replaySocket.addEventListener('close', (ev: CloseEvent) => {
             clearTimeout(timer);
-            resolve({ closedCode: ev.code, timedOut: false });
+            resolve({ opened, hadError, closedCode: ev.code, timedOut: false });
         });
         replaySocket.addEventListener('error', () => {
-            // close event follows error
+            hadError = true;
         });
     });
     Assert(
-        !replayOutcome.timedOut && replayOutcome.closedCode === 1008,
-        `Replaying a consumed single-use collaboration ticket must close with 1008 Policy Violation without timing out (got code=${replayOutcome.closedCode}, timedOut=${replayOutcome.timedOut})`,
+        !replayOutcome.timedOut &&
+            !replayOutcome.opened &&
+            (replayOutcome.closedCode === 1008 || (replayOutcome.closedCode === 1006 && replayOutcome.hadError)),
+        `Replaying a consumed single-use collaboration ticket must be rejected without opening or timing out (got opened=${replayOutcome.opened}, hadError=${replayOutcome.hadError}, code=${replayOutcome.closedCode}, timedOut=${replayOutcome.timedOut})`,
     );
 }
 
