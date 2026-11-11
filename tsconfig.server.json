@@ -13,6 +13,8 @@
     "allowSyntheticDefaultImports": true,
     "emitDecoratorMetadata": true,
     "skipLibCheck": true,
-    "useDefineForClassFields": false
+    "useDefineForClassFields": false,
+    "incremental": true,
+    "tsBuildInfoFile": "${configDir}/dist/tsconfig.tsbuildinfo"
   }
 }
