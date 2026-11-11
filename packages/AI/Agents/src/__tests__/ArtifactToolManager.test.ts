@@ -18,7 +18,7 @@ import { FileStorageBase, FileStorageEngine } from '@memberjunction/storage';
 import '../artifact-tools/JSONToolLibrary';
 import '../artifact-tools/DataSnapshotToolLibrary';
 import '../artifact-tools/SearchResultSetToolLibrary';
-import '../artifact-tools/DocumentToolLibrary';
+import { DocumentToolLibrary } from '../artifact-tools/DocumentToolLibrary';
 import '../artifact-tools/SpreadsheetToolLibrary';
 import '../artifact-tools/ExcelToolLibrary';
 
@@ -1522,6 +1522,274 @@ describe('ArtifactToolManager', () => {
             expect(commitCallCount).toBe(1);
             expect(liveRoomText).toBe('# Line One (Human Edit)\n\n# Line Two (Agent Edit)'); // Human edit + Agent edit ONCE!
             expect(persistedVersions).toHaveLength(1);
+        });
+
+        it('R10-6 (S7c): reconciles concurrent human edit during Save() between deferCommit preview and commit()', async () => {
+            const artifactUuid = 'cccc1111-2222-4333-8444-777777777777';
+            const user = new UserInfo();
+            user.ID = 'user-r10-6';
+            user.Name = 'Agent User';
+            user.Email = 'agent@example.com';
+            user.IsActive = true;
+            const persistedVersions: Array<{
+                ID: string;
+                ArtifactID: string;
+                VersionNumber: number;
+                Content: string;
+            }> = [];
+
+            const mockProvider = {
+                RunView: async (params: { EntityName: string }) => {
+                    if (params.EntityName === 'MJ: Artifacts') {
+                        return {
+                            Success: true,
+                            Results: [
+                                {
+                                    ID: artifactUuid,
+                                    Name: 'Proposal.md',
+                                    UserID: user.ID,
+                                    DelegateEntityID: null,
+                                    DelegateRecordID: null,
+                                },
+                            ],
+                        };
+                    }
+                    if (params.EntityName === 'MJ: Artifact Versions') {
+                        const latest =
+                            persistedVersions.length > 0
+                                ? persistedVersions[persistedVersions.length - 1]
+                                : { ID: 'ver-1', VersionNumber: 1 };
+                        return {
+                            Success: true,
+                            Results: [{ ID: latest.ID, VersionNumber: latest.VersionNumber, ContentMode: 'Text' }],
+                        };
+                    }
+                    return { Success: true, Results: [] };
+                },
+                GetEntityObject: async (entityName: string) => {
+                    if (entityName === 'MJ: Artifact Versions') {
+                        const record = {
+                            ID: `ver-${persistedVersions.length + 2}`,
+                            ArtifactID: artifactUuid,
+                            VersionNumber: persistedVersions.length + 2,
+                            UserID: user.ID,
+                            Name: 'Proposal.md',
+                            Comments: null as string | null,
+                            ContentHash: null as string | null,
+                            ContentMode: 'Text' as const,
+                            FileID: null as string | null,
+                            Content: null as string | null,
+                            Configuration: null as string | null,
+                            NewRecord: () => {},
+                            Load: async () => false,
+                            Save: async function (this: { ID: string; VersionNumber: number; Content: string | null }) {
+                                const existingIdx = persistedVersions.findIndex((v) => v.ID === this.ID);
+                                if (existingIdx >= 0) {
+                                    persistedVersions[existingIdx].Content = this.Content ?? '';
+                                } else {
+                                    persistedVersions.push({
+                                        ID: this.ID || `ver-${persistedVersions.length + 2}`,
+                                        ArtifactID: artifactUuid,
+                                        VersionNumber: this.VersionNumber || (persistedVersions.length + 2),
+                                        Content: this.Content ?? '',
+                                    });
+                                }
+                                return true;
+                            },
+                        };
+                        return record;
+                    }
+                    return null;
+                },
+            };
+
+            const initialMarkdown = '# Project Proposal\n\nBudget.\n';
+            const agentDesired = '# Project Proposal\n\n$10k (agent)\n';
+            const humanMerged = '# Project Proposal\n\n$25k (human)\n';
+
+            SetArtifactLiveMutationHook(async (evt) => {
+                expect(evt.deferCommit).toBe(true);
+                // At dryRun preview: no conflict yet!
+                return {
+                    mergedContent: agentDesired,
+                    hadConflict: false,
+                    rejectedHunksCount: 0,
+                    commit: async () => {
+                        // Concurrent human edit happened during Save()!
+                        // Commit reconciles against live room and rejects agent edit
+                        return {
+                            applied: true,
+                            mergedContent: humanMerged,
+                            hadConflict: true,
+                            rejectedHunksCount: 1,
+                            rejectedAgentHunks: [
+                                {
+                                    BaseLines: ['Budget.'],
+                                    LiveLines: ['$25k (human)'],
+                                    RejectedAgentLines: ['$10k (agent)'],
+                                },
+                            ],
+                        };
+                    },
+                };
+            });
+
+            manager.Initialize(
+                [
+                    {
+                        name: 'Proposal.md',
+                        typeName: 'Markdown Document',
+                        toolLibraryClass: 'DocumentToolLibrary',
+                        artifactId: artifactUuid,
+                        versionId: 'ver-1',
+                        versionNumber: 1,
+                        content: initialMarkdown,
+                    },
+                ],
+                { contextUser: user, provider: mockProvider as unknown as IMetadataProvider },
+            );
+
+            const blocksCall = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'get_blocks',
+                input: {},
+            });
+            const blocksData = blocksCall.result.data as {
+                revisionHash: string;
+                blocks: Array<{ blockId: string; rawMarkdown: string }>;
+            };
+            const budgetBlock = blocksData.blocks.find((b) => b.rawMarkdown.includes('Budget'))!;
+
+            const replaceCall = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'replace_block',
+                input: {
+                    blockId: budgetBlock.blockId,
+                    markdown: '$10k (agent)',
+                    expectedRevisionHash: blocksData.revisionHash,
+                },
+            });
+
+            expect(replaceCall.result.success).toBe(true);
+            const callData = replaceCall.result.data as {
+                rejectedEditsCount: number;
+                conflictWarning: string;
+                revisionHash: string;
+                warnings: string[];
+            };
+
+            // Result must reflect the commit's real outcome!
+            expect(callData.rejectedEditsCount).toBe(1);
+            expect(callData.conflictWarning).toContain('1 edit not applied because of concurrent edits');
+            expect(callData.warnings).toContain(callData.conflictWarning);
+
+            // Persisted v2 and entry.content both match humanMerged!
+            expect(persistedVersions).toHaveLength(1);
+            expect(persistedVersions[0].Content).toBe(humanMerged);
+
+            const readAfter = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'get_blocks',
+                input: {},
+            });
+            expect(JSON.stringify(readAfter.result.data)).toContain('$25k (human)');
+
+            const docLib = new DocumentToolLibrary();
+            expect(callData.revisionHash).toBe(docLib.ComputeRevisionHash(humanMerged));
+        });
+
+        it('R9-9: sequential SpreadsheetToolLibrary write_cells mutations with returned revisionHash succeed after live merge', async () => {
+            const artifactUuid = 'dddd1111-2222-4333-8444-888888888888';
+
+            const sheetEngine = SpreadsheetEngine.Instance;
+            const wb = sheetEngine.CreateEmptyWorkbook('MergeTest', ['Sheet1'], 10, 5);
+            sheetEngine.SetCell(wb, 'Sheet1', 'A1', { Value: 'Initial A1' }, true);
+            const initialWbJson = sheetEngine.SerializeWorkbook(wb);
+
+            let liveMergedWbJson = '';
+
+            SetArtifactLiveMutationHook(async (evt) => {
+                // First mutation: agent writes B1. Live room has concurrent C1 write!
+                if (evt.updatedContent.includes('Agent B1')) {
+                    const parsed = sheetEngine.ParseWorkbook(evt.updatedContent);
+                    sheetEngine.SetCell(parsed, 'Sheet1', 'C1', { Value: 'Human C1' }, true);
+                    liveMergedWbJson = sheetEngine.SerializeWorkbook(parsed);
+                    return {
+                        mergedContent: liveMergedWbJson,
+                        hadConflict: false,
+                        rejectedHunksCount: 0,
+                        commit: async () => ({
+                            applied: true,
+                            mergedContent: liveMergedWbJson,
+                            hadConflict: false,
+                            rejectedHunksCount: 0,
+                        }),
+                    };
+                }
+                return {
+                    mergedContent: evt.updatedContent,
+                    hadConflict: false,
+                    commit: async () => ({
+                        applied: true,
+                        mergedContent: evt.updatedContent,
+                    }),
+                };
+            });
+
+            manager.Initialize([
+                {
+                    name: 'Financials.xlsx',
+                    typeName: 'Spreadsheet',
+                    toolLibraryClass: 'SpreadsheetToolLibrary',
+                    artifactId: artifactUuid,
+                    versionId: 'ver-sheet-1',
+                    versionNumber: 1,
+                    content: initialWbJson,
+                },
+            ]);
+
+            // Call 1: write B1
+            const call1 = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'write_cells',
+                input: {
+                    sheet: 'Sheet1',
+                    cells: [{ address: 'B1', value: 'Agent B1' }],
+                },
+            });
+            expect(call1.result.success).toBe(true);
+            const call1Data = call1.result.data as { revisionHash: string };
+            expect(call1Data.revisionHash).toBeDefined();
+
+            // Call 2: sequential write_cells passing expectedRevisionHash returned by Call 1
+            const call2 = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'write_cells',
+                input: {
+                    sheet: 'Sheet1',
+                    cells: [{ address: 'D1', value: 'Agent D1' }],
+                    expectedRevisionHash: call1Data.revisionHash,
+                },
+            });
+
+            expect(call2.result.success).toBe(true);
+            expect(call2.result.errorMessage).toBeUndefined();
+
+            // Read range back through manager to verify all 3 edits (B1 agent, C1 human merged, D1 agent)
+            const readBack = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'read_range',
+                input: {
+                    sheet: 'Sheet1',
+                    range: 'A1:D1',
+                },
+            });
+            expect(readBack.result.success).toBe(true);
+            const cells = (readBack.result.data as { cells: Array<{ address: string; rawValue: unknown }> }).cells;
+            const cellMap = new Map(cells.map((c) => [c.address, c.rawValue]));
+            expect(cellMap.get('B1')).toBe('Agent B1');
+            expect(cellMap.get('C1')).toBe('Human C1');
+            expect(cellMap.get('D1')).toBe('Agent D1');
         });
     });
 });

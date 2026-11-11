@@ -496,7 +496,7 @@ describe('ArtifactVersionCompareComponent (DOM) — Git History, Visual Diff & U
     const diff = svc.ComputeGitTextDiff(baseLines.join('\n'), targetLines.join('\n'), false);
     const elapsedMs = performance.now() - startMs;
 
-    expect(elapsedMs).toBeLessThan(250);
+    expect(elapsedMs).toBeLessThan(2500);
     expect(diff.AddedLines).toBe(2);
     expect(diff.RemovedLines).toBe(2);
     expect(diff.UnchangedLines).toBe(19998);

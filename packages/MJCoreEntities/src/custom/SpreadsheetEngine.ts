@@ -2309,13 +2309,18 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         : cell.Formula;
 
                     if (transitivelyDependentFormulaKeys.has(cellKey)) {
-                        cleanedCells[addr] = {
+                        const cellCopy: SpreadsheetCellSpec = {
                             ...cell,
                             Formula: resolvedFormula,
                             ComputedValue: null,
                             DisplayValue: '',
                             Style: cell.Style ? { ...cell.Style } : undefined
                         };
+                        if (!Boolean(cell.Formula && this.ParseMjCustomFunctionFormula(cell.Formula))) {
+                            delete cellCopy.AccessDenied;
+                            delete cellCopy.ErrorMessage;
+                        }
+                        cleanedCells[addr] = cellCopy;
                         continue;
                     }
 
@@ -2324,6 +2329,10 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         Formula: resolvedFormula,
                         Style: cell.Style ? { ...cell.Style } : undefined
                     };
+                    if (!Boolean(cell.Formula && this.ParseMjCustomFunctionFormula(cell.Formula))) {
+                        delete clonedCell.AccessDenied;
+                        delete clonedCell.ErrorMessage;
+                    }
                     if (this.unimplementedResultCells.has(cell)) {
                         this.unimplementedResultCells.add(clonedCell);
                     }
@@ -3960,14 +3969,20 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 : isMetadataOnlyEdit
                   ? existing?.LiveTableID ?? this.isCellInLiveTableFootprint(sheet, parsed.row, parsed.col)
                   : null;
+        const isMjFormula = Boolean(formula && /^=\s*_?(?:xll\.)?MJ\.(?:VIEW|QUERY|FIELD)\s*\(/i.test(formula));
+        const keepExistingMjDiagnostics = isMetadataOnlyEdit || (isMjFormula && formula === existing?.Formula);
         const preservedErrorMessage =
             input.ErrorMessage !== undefined
                 ? input.ErrorMessage
-                : existing?.ErrorMessage ?? null;
+                : keepExistingMjDiagnostics
+                  ? existing?.ErrorMessage ?? null
+                  : null;
         const preservedAccessDenied =
             input.AccessDenied !== undefined
                 ? input.AccessDenied
-                : existing?.AccessDenied ?? false;
+                : keepExistingMjDiagnostics
+                  ? existing?.AccessDenied ?? false
+                  : false;
 
         if (existing) {
             this.removeCellFromVirtualAxisIndex(sheet, existing);
@@ -4082,12 +4097,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         const affected = Array.from(affectedSet);
         if (affected.length > 0) {
             if (recalculate) {
-                if (affected.length > 256) {
-                    this.workbookDagCache.delete(workbook);
-                    this.EvaluateWorkbook(workbook);
-                } else {
-                    this.recalculateAfterCellEdit(workbook, sheet, affected[0], affected.slice(1));
-                }
+                this.recalculateAfterCellEdit(workbook, sheet, affected[0], affected.slice(1));
             } else {
                 this.workbookDagCache.delete(workbook);
             }
@@ -6045,16 +6055,17 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 const evalRowCriteriaOutcome = (
                     readCritVal: (pairIdx: number) => SpreadsheetCellValue
                 ): 'match' | 'nomatch' | '#MJ_ACCESS_DENIED!' | typeof UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL => {
+                    let matched = true;
                     for (let pIdx = 0; pIdx < descPairs.length; pIdx++) {
                         const cv = readCritVal(pIdx);
                         if (cv === '#MJ_ACCESS_DENIED!' || cv === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) {
                             return cv;
                         }
                         if (!this.matchesCriteria(cv, descPairs[pIdx].crit)) {
-                            return 'nomatch';
+                            matched = false;
                         }
                     }
-                    return 'match';
+                    return matched ? 'match' : 'nomatch';
                 };
 
                 if (allDirectDescriptors && descPairs.length > 0) {
@@ -6132,6 +6143,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 const pairs: Array<{ range: SpreadsheetCellValue[]; crit: SpreadsheetCellValue }> = [];
                 for (let i = 0; i < args.length; i += 2) {
                     const r = resolveFlattenedRange(args[i]);
+                    if (r.length === 1 && (r[0] === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL || r[0] === '#MJ_ACCESS_DENIED!')) {
+                        return r[0];
+                    }
                     const c = evalScalar(args[i + 1]);
                     if (c === '#MJ_ACCESS_DENIED!' || c === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return c;
                     if (pairs.length > 0 && r.length !== pairs[0].range.length) return '#VALUE!';
@@ -6140,18 +6154,17 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 const len = pairs[0].range.length;
                 let matches = 0;
                 for (let idx = 0; idx < len; idx++) {
-                    let definitelyFalse = false;
+                    let matched = true;
                     for (const p of pairs) {
                         const cv = p.range[idx];
                         if (cv === '#MJ_ACCESS_DENIED!' || cv === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) {
                             return cv;
                         }
                         if (!this.matchesCriteria(cv, p.crit)) {
-                            definitelyFalse = true;
-                            break;
+                            matched = false;
                         }
                     }
-                    if (definitelyFalse) continue;
+                    if (!matched) continue;
                     matches++;
                 }
                 return matches;
@@ -6194,6 +6207,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         dr: number,
                         dc: number
                     ): 'match' | 'nomatch' | '#MJ_ACCESS_DENIED!' | typeof UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL => {
+                        let matched = true;
                         for (let pIdx = 0; pIdx < critDescPairs.length; pIdx++) {
                             const pd = critDescPairs[pIdx].desc;
                             const cv = getCellVal(
@@ -6204,10 +6218,10 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                                 return cv;
                             }
                             if (!this.matchesCriteria(cv, critDescPairs[pIdx].crit)) {
-                                return 'nomatch';
+                                matched = false;
                             }
                         }
-                        return 'match';
+                        return matched ? 'match' : 'nomatch';
                     };
 
                     const totalCells = rowSpan * colSpan;
@@ -6292,9 +6306,15 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 }
 
                 const targetRange = resolveFlattenedRange(args[0]);
+                if (targetRange.length === 1 && (targetRange[0] === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL || targetRange[0] === '#MJ_ACCESS_DENIED!')) {
+                    return targetRange[0];
+                }
                 const pairs: Array<{ range: SpreadsheetCellValue[]; crit: SpreadsheetCellValue }> = [];
                 for (let i = 1; i < args.length; i += 2) {
                     const r = resolveFlattenedRange(args[i]);
+                    if (r.length === 1 && (r[0] === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL || r[0] === '#MJ_ACCESS_DENIED!')) {
+                        return r[0];
+                    }
                     const c = evalScalar(args[i + 1]);
                     if (c === '#MJ_ACCESS_DENIED!' || c === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return c;
                     if (r.length !== targetRange.length) return '#VALUE!';
@@ -6303,18 +6323,17 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 let sum = 0;
                 let numericCount = 0;
                 for (let idx = 0; idx < targetRange.length; idx++) {
-                    let definitelyFalse = false;
+                    let matched = true;
                     for (const p of pairs) {
                         const cv = p.range[idx];
                         if (cv === '#MJ_ACCESS_DENIED!' || cv === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) {
                             return cv;
                         }
                         if (!this.matchesCriteria(cv, p.crit)) {
-                            definitelyFalse = true;
-                            break;
+                            matched = false;
                         }
                     }
-                    if (definitelyFalse) continue;
+                    if (!matched) continue;
                     const tv = targetRange[idx];
                     if (tv === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL || this.isErrorValue(tv)) return tv;
                     if (typeof tv === 'number' && !Number.isNaN(tv)) {
@@ -7539,6 +7558,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         dr: number,
                         dc: number
                     ): 'match' | 'nomatch' | '#MJ_ACCESS_DENIED!' | typeof UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL => {
+                        let matched = true;
                         for (let pIdx = 0; pIdx < critDescPairs.length; pIdx++) {
                             const pd = critDescPairs[pIdx].desc;
                             const cv = getCellVal(
@@ -7549,10 +7569,10 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                                 return cv;
                             }
                             if (!this.matchesCriteria(cv, critDescPairs[pIdx].crit)) {
-                                return 'nomatch';
+                                matched = false;
                             }
                         }
-                        return 'match';
+                        return matched ? 'match' : 'nomatch';
                     };
 
                     const totalCells = rowSpan * colSpan;
@@ -7639,9 +7659,21 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 }
 
                 const targetVals = resolveFlattenedRange(args[0]);
+                if (
+                    targetVals.length === 1 &&
+                    (targetVals[0] === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL || targetVals[0] === '#MJ_ACCESS_DENIED!')
+                ) {
+                    return targetVals[0];
+                }
                 const pairs: Array<{ vals: SpreadsheetCellValue[]; crit: SpreadsheetCellValue }> = [];
                 for (let i = 1; i < args.length; i += 2) {
                     const critVals = resolveFlattenedRange(args[i]);
+                    if (
+                        critVals.length === 1 &&
+                        (critVals[0] === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL || critVals[0] === '#MJ_ACCESS_DENIED!')
+                    ) {
+                        return critVals[0];
+                    }
                     const crit = evalScalar(args[i + 1]);
                     if (crit === '#MJ_ACCESS_DENIED!' || crit === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return crit;
                     if (critVals.length !== targetVals.length) return '#VALUE!';
@@ -7649,18 +7681,17 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 }
                 const matched: number[] = [];
                 for (let rIdx = 0; rIdx < targetVals.length; rIdx++) {
-                    let definitelyFalse = false;
+                    let rowMatched = true;
                     for (const p of pairs) {
                         const cv = p.vals[rIdx];
                         if (cv === '#MJ_ACCESS_DENIED!' || cv === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) {
                             return cv;
                         }
                         if (!this.matchesCriteria(cv, p.crit)) {
-                            definitelyFalse = true;
-                            break;
+                            rowMatched = false;
                         }
                     }
-                    if (definitelyFalse) continue;
+                    if (!rowMatched) continue;
                     const tv = targetVals[rIdx];
                     if (tv === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL || this.isErrorValue(tv)) return tv;
                     if (typeof tv === 'number' && Number.isFinite(tv)) {

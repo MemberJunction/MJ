@@ -1,5 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
+import { CompileSafeUserRegex, IsSafeUserRegex } from '@memberjunction/core-entities';
+import { EnsureNodeVmSafeRegexExecutorRegistered, ExecuteSafeRegexBatchWithRecovery } from './node-vm-safe-regex';
 
 interface LineMatch {
     lineNumber: number;
@@ -59,15 +61,54 @@ export class TextToolLibrary extends BaseArtifactToolLibrary {
     }
 
     private handleGrep(content: string, input: Record<string, unknown>): ArtifactToolResult {
-        const patternStr = String(input.pattern);
+        EnsureNodeVmSafeRegexExecutorRegistered();
+        const patternStr = input.pattern != null ? String(input.pattern) : '';
+        if (!patternStr) {
+            return { success: false, data: null, errorMessage: 'grep requires a non-empty pattern.' };
+        }
+        if (patternStr.length > 256) {
+            return {
+                success: false,
+                data: null,
+                errorMessage: 'Unsafe or overly complex regular expression rejected'
+            };
+        }
+
         const flags = input.flags != null ? String(input.flags) : undefined;
-        const regex = new RegExp(patternStr, flags);
+        const cleanFlags = flags ? flags.replace(/[gy]/g, () => '') : '';
+        const effectiveFlags = cleanFlags.length > 0 ? cleanFlags : undefined;
+
+        try {
+            new RegExp(patternStr, effectiveFlags);
+        } catch (err) {
+            return {
+                success: false,
+                data: null,
+                errorMessage: `Invalid regular expression: ${err instanceof Error ? err.message : String(err)}`
+            };
+        }
+
+        const safeRegex = CompileSafeUserRegex(patternStr, effectiveFlags);
+        if (!safeRegex || !IsSafeUserRegex(patternStr, effectiveFlags)) {
+            return {
+                success: false,
+                data: null,
+                errorMessage: 'Unsafe or overly complex regular expression rejected'
+            };
+        }
 
         const lines = content.split('\n');
-        const matches: LineMatch[] = [];
+        const recRes = ExecuteSafeRegexBatchWithRecovery(
+            safeRegex,
+            lines,
+            performance.now() + 500,
+            40,
+            65_536
+        );
 
+        const matches: LineMatch[] = [];
         for (let i = 0; i < lines.length; i++) {
-            if (regex.test(lines[i])) {
+            if (recRes.Matches[i]) {
                 matches.push({ lineNumber: i, text: lines[i] });
             }
         }

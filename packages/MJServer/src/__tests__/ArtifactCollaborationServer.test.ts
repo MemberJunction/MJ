@@ -519,7 +519,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         });
     });
 
-    function connectYjsClient(userId: string): Promise<{
+    function connectYjsClient(userId: string, customArtifactId?: string): Promise<{
         ws: WsClient;
         doc: Y.Doc;
         awareness: awarenessProtocol.Awareness;
@@ -533,8 +533,9 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             const permissionFrames: CollaborationPermissionStatusFrame[] = [];
             const controlFrames: CollaborationControlFrame[] = [];
 
+            const targetArtId = customArtifactId ?? artifactId;
             const ws = new WsClient(
-                `ws://127.0.0.1:${wsPort}${ARTIFACT_COLLABORATION_WS_PATH}?artifactId=${artifactId}&testUserId=${userId}`
+                `ws://127.0.0.1:${wsPort}${ARTIFACT_COLLABORATION_WS_PATH}?artifactId=${targetArtId}&testUserId=${userId}`
             );
 
             ws.on('message', (raw: Buffer) => {
@@ -569,6 +570,20 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
                     const encoder = encoding.createEncoder();
                     encoding.writeVarUint(encoder, YJS_MESSAGE_SYNC);
                     syncProtocol.writeUpdate(encoder, update);
+                    ws.send(encoding.toUint8Array(encoder));
+                }
+            });
+
+            awareness.on('update', ({ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] }, origin: unknown) => {
+                if (origin === 'server') {
+                    return;
+                }
+                const changed = added.concat(updated, removed);
+                if (changed.length > 0 && ws.readyState === WsClient.OPEN) {
+                    const updateBytes = awarenessProtocol.encodeAwarenessUpdate(awareness, changed);
+                    const encoder = encoding.createEncoder();
+                    encoding.writeVarUint(encoder, YJS_MESSAGE_AWARENESS);
+                    encoding.writeVarUint8Array(encoder, updateBytes);
                     ws.send(encoding.toUint8Array(encoder));
                 }
             });
@@ -5479,12 +5494,12 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
 
             await new Promise((r) => setTimeout(r, 50));
 
-            // Room MUST snap authoritatively to v1Clean (dropping mid-word typing), advance RoomEpoch, and broadcast room-reset + version-saved
+            // Room MUST snap authoritatively to v1Clean (dropping mid-word typing), advance RoomEpoch, and broadcast version-saved (without room-reset)
             expect(await server.GetRoomContent(restoreArtId, editorUser)).toBe(v1Clean);
             expect(room!.BaseVersionID).toBe('ver-r1-3');
             expect(room!.BaseVersionNumber).toBe(3);
             expect(room!.RoomEpoch).not.toBe(initialEpoch);
-            expect(controlFrames.some((f) => f.action === 'room-reset')).toBe(true);
+            expect(controlFrames.some((f) => f.action === 'room-reset')).toBe(false);
             expect(controlFrames.some((f) => f.action === 'version-saved' && f.versionNumber === 3)).toBe(true);
         } finally {
             ws.close();
@@ -5924,19 +5939,19 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         // Live room must be completely unmodified by dryRun
         expect(await server.GetRoomContent(artR9, editorUser)).toBe(postRestoreText);
 
-        // 4. R9-8: Monotonic counter merge & ID suffix scanning in AST merge
+        // 4. R9-8 / R10-4: Monotonic counter merge & ID suffix scanning in AST merge on Whiteboard root
         const baseJson = JSON.stringify({
             idCounter: 10,
             zCounter: 5,
             seq: 1,
-            items: [{ id: 'item-10', text: 'Base item' }]
+            pages: [{ id: 'item-10', text: 'Base item' }]
         }, null, 2);
 
         const liveJson = JSON.stringify({
             idCounter: 12,
             zCounter: 8,
             seq: 2,
-            items: [
+            pages: [
                 { id: 'item-10', text: 'Base item' },
                 { id: 'item-12', text: 'Live item' }
             ]
@@ -5946,7 +5961,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             idCounter: 11,
             zCounter: 15,
             seq: 3,
-            items: [
+            pages: [
                 { id: 'item-10', text: 'Base item' },
                 { id: 'item-15', text: 'Incoming item' }
             ]
@@ -5957,16 +5972,17 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             idCounter: number;
             zCounter: number;
             seq: number;
-            items: Array<{ id: string; text: string }>;
+            pages: Array<{ id: string; text: string }>;
         };
 
-        // Counters must take Math.max
+        // Counters must take Math.max on Whiteboard root
         expect(mergedObj.zCounter).toBe(15);
-        expect(mergedObj.seq).toBe(3);
+        // seq is not a whiteboard root counter; live edit wins on conflict
+        expect(mergedObj.seq).toBe(2);
         // idCounter must be at least maxSuffix (item-15 has suffix 15 > live 12)
         expect(mergedObj.idCounter).toBe(15);
-        expect(mergedObj.items.some((it) => it.id === 'item-15')).toBe(true);
-        expect(mergedObj.items.some((it) => it.id === 'item-12')).toBe(true);
+        expect(mergedObj.pages.some((it) => it.id === 'item-15')).toBe(true);
+        expect(mergedObj.pages.some((it) => it.id === 'item-12')).toBe(true);
     });
 
     it('R9: multi-node concurrent restore, cold working-state restore, and deferCommit + MJ_ARTIFACT_VERSION_SAVED idempotency', async () => {
@@ -6238,5 +6254,316 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             await relayA.Shutdown();
             await relayB.Shutdown();
         }
+    });
+
+    it('R10-2 Reconnect after Restore: preserves awareness, avoids duplication, and converges cleanly', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+        const reconnectArtId = 'e8100000-0000-4000-8000-000000000001';
+        permissionTable.set(reconnectArtId, { CanRead: true, CanEdit: true });
+        const v1Text = '# Strategy Document\n\nv1 baseline text.\n';
+        const v2Text = '# Strategy Document\n\nv1 baseline text.\n\n## Section Added by Alice and Bob in v2\n';
+
+        versions.push({
+            ID: 'ver-r10-1',
+            ArtifactID: reconnectArtId,
+            VersionNumber: 1,
+            Name: 'Strategy.md',
+            Content: v1Text,
+            ContentHash: 'hash-r10-1',
+            UserID: editorUser.ID
+        });
+
+        // 1. Alice and Bob connect via WebSocket
+        const clientA = await connectYjsClient(editorUser.ID, reconnectArtId);
+        const clientB = await connectYjsClient(secondEditorUser.ID, reconnectArtId);
+
+        await clientA.waitForText('v1 baseline text.');
+        await clientB.waitForText('v1 baseline text.');
+
+        // Alice sets awareness
+        clientA.awareness.setLocalStateField('user', { name: 'Alice', color: '#ff0000' });
+
+        // Alice edits doc to v2
+        clientA.doc.transact(() => {
+            const yText = clientA.doc.getText('content');
+            yText.insert(yText.length, '\n## Section Added by Alice and Bob in v2\n');
+        });
+
+        await clientB.waitForText('## Section Added by Alice and Bob in v2');
+        expect(clientB.doc.getText('content').toString()).toContain('## Section Added by Alice and Bob in v2');
+
+        // Compact to v2
+        versions.push({
+            ID: 'ver-r10-2',
+            ArtifactID: reconnectArtId,
+            VersionNumber: 2,
+            Name: 'Strategy.md',
+            Content: v2Text,
+            ContentHash: 'hash-r10-2',
+            UserID: editorUser.ID
+        });
+
+        // 2. Bob disconnects with his v2 doc
+        clientB.ws.close();
+
+        // 3. Restore to v1 runs on server
+        versions.push({
+            ID: 'ver-r10-3',
+            ArtifactID: reconnectArtId,
+            VersionNumber: 3,
+            Name: 'Strategy.md',
+            Content: v1Text,
+            ContentHash: 'hash-r10-1',
+            Description: 'Restored from Version 1',
+            UserID: editorUser.ID
+        });
+
+        await server.RestoreToSavedVersion(
+            reconnectArtId,
+            {
+                ID: 'ver-r10-3',
+                VersionNumber: 3,
+                Content: v1Text
+            },
+            editorUser
+        );
+
+        // Alice's client should converge to v1Text via Yjs sync-update without room-reset
+        await clientA.waitForText('v1 baseline text.');
+        await vi.waitFor(() => {
+            expect(clientA.doc.getText('content').toString()).toBe(v1Text);
+        });
+
+        // Alice's awareness state is NOT wiped by restore
+        expect(clientA.awareness.getLocalState()?.['user']).toEqual({ name: 'Alice', color: '#ff0000' });
+        const room = await server.GetOrCreateRoom(reconnectArtId, editorUser);
+        expect(room?.Awareness.getStates().size).toBeGreaterThan(0);
+
+        // 4. Bob reconnects with his old v2 doc
+        const wsBobReconnect = new WsClient(
+            `ws://127.0.0.1:${wsPort}${ARTIFACT_COLLABORATION_WS_PATH}?artifactId=${reconnectArtId}&testUserId=${secondEditorUser.ID}`
+        );
+
+        wsBobReconnect.on('message', (raw: Buffer) => {
+            const bytes = new Uint8Array(raw);
+            const decoder = decoding.createDecoder(bytes);
+            const msgType = decoding.readVarUint(decoder);
+            if (msgType === YJS_MESSAGE_SYNC) {
+                const encoder = encoding.createEncoder();
+                encoding.writeVarUint(encoder, YJS_MESSAGE_SYNC);
+                syncProtocol.readSyncMessage(decoder, encoder, clientB.doc, 'server');
+                if (encoding.length(encoder) > 1 && wsBobReconnect.readyState === WsClient.OPEN) {
+                    wsBobReconnect.send(encoding.toUint8Array(encoder));
+                }
+            }
+        });
+
+        wsBobReconnect.on('open', () => {
+            const encoder = encoding.createEncoder();
+            encoding.writeVarUint(encoder, YJS_MESSAGE_SYNC);
+            syncProtocol.writeSyncStep1(encoder, clientB.doc);
+            wsBobReconnect.send(encoding.toUint8Array(encoder));
+        });
+
+        // Room, Alice, and Bob all end with v1 content (ZERO duplication!)
+        await vi.waitFor(() => {
+            expect(clientB.doc.getText('content').toString()).toBe(v1Text);
+        });
+
+        const serverFinalText = await server.GetRoomContent(reconnectArtId, editorUser);
+        expect(serverFinalText).toBe(v1Text);
+        expect(clientA.doc.getText('content').toString()).toBe(v1Text);
+        expect(clientB.doc.getText('content').toString()).toBe(v1Text);
+        expect(serverFinalText).not.toContain('## Section Added by Alice and Bob in v2');
+
+        clientA.ws.close();
+        wsBobReconnect.close();
+    });
+
+    it('R10-2 Multi-Node Restore + 15ms DB Latency Race: converges identically with post-restore edit preserved and zero duplication', async () => {
+        class LatencyRaceNodeA extends ArtifactCollaborationServer {
+            public constructor() {
+                super();
+            }
+        }
+        class LatencyRaceNodeB extends ArtifactCollaborationServer {
+            public constructor() {
+                super();
+            }
+        }
+
+        const bus = new InMemoryYjsRelayBus();
+        const relayA = new InMemoryYjsRoomRelay(bus, 'r10-race-node-a');
+        const relayB = new InMemoryYjsRoomRelay(bus, 'r10-race-node-b');
+        const nodeA = new LatencyRaceNodeA();
+        const nodeB = new LatencyRaceNodeB();
+
+        const raceArtId = 'e8100000-0000-4000-8000-000000000002';
+        permissionTable.set(raceArtId, { CanRead: true, CanEdit: true });
+        const v1Clean = '# System Architecture\n\nClean v1 content.\n';
+        const v2Draft = '# System Architecture\n\nDraft v2 content.\n';
+
+        versions.push(
+            {
+                ID: 'ver-race-1',
+                ArtifactID: raceArtId,
+                VersionNumber: 1,
+                Name: 'Arch.md',
+                Content: v1Clean,
+                ContentHash: 'hash-race-1',
+                UserID: editorUser.ID
+            },
+            {
+                ID: 'ver-race-2',
+                ArtifactID: raceArtId,
+                VersionNumber: 2,
+                Name: 'Arch.md',
+                Content: v2Draft,
+                ContentHash: 'hash-race-2',
+                UserID: editorUser.ID
+            }
+        );
+
+        nodeA.SetMetadataProviderOverride(createMockProvider());
+
+        // Node B has 15ms simulated RunViews latency
+        const providerB = createMockProvider();
+        const origRunViews = providerB.RunViews.bind(providerB);
+        providerB.RunViews = async (params) => {
+            await new Promise((r) => setTimeout(r, 15));
+            return origRunViews(params);
+        };
+
+        nodeB.SetMetadataProviderOverride(providerB);
+        nodeA.SetRoomRelay(relayA);
+        nodeB.SetRoomRelay(relayB);
+
+        try {
+            // Both nodes initialize room at v2Draft
+            const roomA = await nodeA.GetOrCreateRoom(raceArtId, editorUser);
+            const roomB = await nodeB.GetOrCreateRoom(raceArtId, secondEditorUser);
+            expect(roomA).not.toBeNull();
+            expect(roomB).not.toBeNull();
+
+            // Register v3 restore in DB
+            versions.push({
+                ID: 'ver-race-3',
+                ArtifactID: raceArtId,
+                VersionNumber: 3,
+                Name: 'Arch.md',
+                Content: v1Clean,
+                ContentHash: 'hash-race-1',
+                Description: 'Restored from Version 1',
+                UserID: editorUser.ID
+            });
+
+            // Node A restores to v1
+            await nodeA.RestoreToSavedVersion(
+                raceArtId,
+                {
+                    ID: 'ver-race-3',
+                    VersionNumber: 3,
+                    Content: v1Clean
+                },
+                editorUser
+            );
+
+            // Alice immediately appends "Alice post-restore\n" on Node A
+            roomA!.Doc.transact(() => {
+                const yTextA = roomA!.Doc.getText('content');
+                yTextA.insert(yTextA.length, 'Alice post-restore\n');
+            }, 'alice-post-restore');
+
+            // Wait for relay to propagate to Node B (including Node B's 15ms simulated RunView latency)
+            await vi.waitFor(async () => {
+                const contentB = await nodeB.GetRoomContent(raceArtId, secondEditorUser);
+                expect(contentB).toContain('Alice post-restore\n');
+            }, { timeout: 2000 });
+
+            const expected = `${v1Clean}Alice post-restore\n`;
+            const contentA = await nodeA.GetRoomContent(raceArtId, editorUser);
+            const contentB = await nodeB.GetRoomContent(raceArtId, secondEditorUser);
+
+            expect(contentA).toBe(expected);
+            expect(contentB).toBe(expected);
+            expect(contentA).not.toContain(v2Draft);
+            expect(contentB).not.toContain(v2Draft);
+        } finally {
+            await nodeA.Shutdown();
+            await nodeB.Shutdown();
+            await relayA.Shutdown();
+            await relayB.Shutdown();
+        }
+    });
+
+    it('R10-4 JSON Counter Narrowing: lowering seq or pageCounter, or order IDs do not clamp; whiteboard root clamps idCounter and zCounter', () => {
+        const server = ArtifactCollaborationServer.Instance;
+
+        // 1. Lowering seq 5 -> 2 (human) while agent is at 5: no clamping, HadConflict === false
+        const baseSeq = JSON.stringify({ seq: 5, title: 'Document' }, null, 2);
+        const liveSeqHuman = JSON.stringify({ seq: 2, title: 'Document' }, null, 2);
+        const incSeqAgent = JSON.stringify({ seq: 5, title: 'Document' }, null, 2);
+        const mergeSeq1 = server.MergeConcurrentDocumentEditsDetailed(baseSeq, liveSeqHuman, incSeqAgent);
+        expect(mergeSeq1.HadConflict).toBe(false);
+        expect(JSON.parse(mergeSeq1.MergedText).seq).toBe(2);
+
+        // 2. Lowering seq 5 -> 0 (agent) while human is at 5: no clamping, HadConflict === false
+        const incSeqAgentZero = JSON.stringify({ seq: 0, title: 'Document' }, null, 2);
+        const mergeSeq2 = server.MergeConcurrentDocumentEditsDetailed(baseSeq, incSeqAgent, incSeqAgentZero);
+        expect(mergeSeq2.HadConflict).toBe(false);
+        expect(JSON.parse(mergeSeq2.MergedText).seq).toBe(0);
+
+        // 3. Lowering nested pageCounter 10 -> 3: no clamping, HadConflict === false
+        const basePage = JSON.stringify({ config: { pageCounter: 10 } }, null, 2);
+        const livePageLower = JSON.stringify({ config: { pageCounter: 3 } }, null, 2);
+        const incPageUnchanged = JSON.stringify({ config: { pageCounter: 10 } }, null, 2);
+        const mergePage = server.MergeConcurrentDocumentEditsDetailed(basePage, livePageLower, incPageUnchanged);
+        expect(mergePage.HadConflict).toBe(false);
+        expect(JSON.parse(mergePage.MergedText).config.pageCounter).toBe(3);
+
+        // 4. Unrelated "id": "order-99999": idCounter does not clamp to 99999
+        const baseOrder = JSON.stringify({
+            idCounter: 5,
+            orders: [{ id: 'order-99999', amount: 100 }]
+        }, null, 2);
+        const liveOrder = JSON.stringify({
+            idCounter: 5,
+            orders: [{ id: 'order-99999', amount: 100 }]
+        }, null, 2);
+        const incOrder = JSON.stringify({
+            idCounter: 6,
+            orders: [
+                { id: 'order-99999', amount: 100 },
+                { id: 'order-100000', amount: 200 }
+            ]
+        }, null, 2);
+        const mergeOrder = server.MergeConcurrentDocumentEditsDetailed(baseOrder, liveOrder, incOrder);
+        expect(mergeOrder.HadConflict).toBe(false);
+        expect(JSON.parse(mergeOrder.MergedText).idCounter).toBe(6);
+
+        // 5. Whiteboard root concurrent human + agent additions: clamps idCounter and zCounter
+        const baseWb = JSON.stringify({
+            idCounter: 1,
+            zCounter: 1,
+            pages: [{ id: 'p1', elements: [{ id: 'shape-1' }] }]
+        }, null, 2);
+        const liveWb = JSON.stringify({
+            idCounter: 2,
+            zCounter: 2,
+            pages: [{ id: 'p1', elements: [{ id: 'shape-1' }, { id: 'shape-2' }] }]
+        }, null, 2);
+        const incWb = JSON.stringify({
+            idCounter: 3,
+            zCounter: 3,
+            pages: [{ id: 'p1', elements: [{ id: 'shape-1' }, { id: 'sticky-3' }] }]
+        }, null, 2);
+        const mergeWb = server.MergeConcurrentDocumentEditsDetailed(baseWb, liveWb, incWb);
+        const mergedWbObj = JSON.parse(mergeWb.MergedText) as {
+            idCounter: number;
+            zCounter: number;
+            pages: Array<{ id: string; elements: Array<{ id: string }> }>;
+        };
+        expect(mergedWbObj.idCounter).toBeGreaterThanOrEqual(3);
+        expect(mergedWbObj.zCounter).toBe(3);
     });
 });

@@ -58,6 +58,7 @@ export interface ArtifactLiveMutationEvent {
  * mutation into a live Yjs room or persisted working state (`R8-2d`).
  */
 export interface ArtifactLiveMutationHookResult {
+  applied?: boolean;
   mergedContent?: string;
   hadConflict?: boolean;
   rejectedHunksCount?: number;
@@ -67,7 +68,7 @@ export interface ArtifactLiveMutationHookResult {
     RejectedAgentLines: string[];
   }>;
   /** Optional commit callback executed after version persistence succeeds (`R9-5`). */
-  commit?: (persisted?: { versionId?: string; versionNumber?: number }) => Promise<void> | void;
+  commit?: (persisted?: { versionId?: string; versionNumber?: number }) => Promise<ArtifactLiveMutationHookResult | void>;
   /** Optional rollback callback executed if version persistence fails (`R9-5`). */
   rollback?: () => Promise<void> | void;
 }
@@ -1057,6 +1058,7 @@ export class ArtifactToolManager {
 
         // 3. Persist a single MJ: Artifact Versions record per agent run when artifactId, contextUser, and provider are available
         let persisted = false;
+        let commitWarning: string | null = null;
         if (targetEntry.artifactId && this.contextUser && this.provider) {
           const persistOutcome = await this.persistArtifactVersionMutation(
             targetEntry,
@@ -1097,10 +1099,37 @@ export class ArtifactToolManager {
           persisted = true;
           if (hookResult && typeof hookResult === 'object') {
             try {
-              await hookResult.commit?.({
+              const commitOutcome = await hookResult.commit?.({
                 versionId: targetEntry.versionId,
                 versionNumber: targetEntry.versionNumber,
               });
+              if (commitOutcome && typeof commitOutcome === 'object') {
+                hookResult = commitOutcome;
+                if (commitOutcome.applied === false) {
+                  const warnMsg = `Deferred mutation was not applied to active room for artifact '${targetEntry.artifactId}'`;
+                  LogError(`ArtifactToolManager: ${warnMsg}`);
+                  commitWarning = warnMsg;
+                }
+                if (typeof commitOutcome.mergedContent === 'string' && commitOutcome.mergedContent !== effectiveContent) {
+                  effectiveContent = commitOutcome.mergedContent;
+                  targetEntry.content = effectiveContent;
+                  if (previousOriginalXlsxBytes) {
+                    try {
+                      const mergedWorkbook = SpreadsheetEngine.Instance.ParseWorkbook(effectiveContent);
+                      const mergedBytes = XlsxOpenXmlAdapter.Instance.PatchXlsxBytes(previousOriginalXlsxBytes, mergedWorkbook);
+                      targetEntry.originalXlsxBytes = mergedBytes;
+                      xlsxBase64 = Buffer.from(mergedBytes).toString('base64');
+                    } catch (repatchErr) {
+                      LogError(
+                        `ArtifactToolManager: failed re-patching xlsx bytes after live merge for artifact '${targetEntry.artifactId}': ${
+                          repatchErr instanceof Error ? repatchErr.message : String(repatchErr)
+                        }`,
+                      );
+                    }
+                  }
+                  await this.persistArtifactVersionMutation(targetEntry, effectiveContent, xlsxBase64, call.tool);
+                }
+              }
             } catch (commitErr) {
               LogError(
                 `ArtifactToolManager: commit hook failed for artifact '${targetEntry.artifactId}': ${
@@ -1175,6 +1204,12 @@ export class ArtifactToolManager {
         for (const [k, v] of Object.entries(rawData)) {
           if (k === 'updatedContent' || k === 'xlsxBase64') continue;
           sanitizedData[k] = v;
+        }
+        if (commitWarning) {
+          const existingWarnings = Array.isArray(sanitizedData.warnings)
+            ? sanitizedData.warnings.filter((w): w is string => typeof w === 'string')
+            : [];
+          sanitizedData.warnings = [...existingWarnings, commitWarning];
         }
         if (
           effectiveContent !== updatedContent &&

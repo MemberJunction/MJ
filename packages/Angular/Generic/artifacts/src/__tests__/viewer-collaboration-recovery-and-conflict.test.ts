@@ -63,6 +63,7 @@ function buildCollabProvider(): IMetadataProvider {
       Email: 'alice@example.com',
     },
     Entities: [],
+    EntityByName: (name: string) => undefined,
     Queries: [],
     ConfigData: { URL: 'https://example.com/graphql' },
     ExecuteGQL: async (query: string) => {

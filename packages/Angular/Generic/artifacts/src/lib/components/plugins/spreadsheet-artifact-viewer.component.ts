@@ -3404,13 +3404,7 @@ export class SpreadsheetArtifactViewerComponent
   // ---------------------------------------------------------------------------
 
   private resolveArtifactsEntityId(provider: IMetadataProvider): string | undefined {
-    if (typeof provider.EntityByName === 'function') {
-      const byName = provider.EntityByName('MJ: Artifacts');
-      if (byName?.ID) {
-        return byName.ID;
-      }
-    }
-    return provider.Entities?.find((e) => e.Name === 'MJ: Artifacts')?.ID;
+    return provider.EntityByName('MJ: Artifacts')?.ID;
   }
 
   private async resolveArtifactTypeId(

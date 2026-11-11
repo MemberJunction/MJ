@@ -2626,4 +2626,153 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
             NormalizedFilter: '[Current_Schema] = 1'
         });
     });
+
+    it('R10-3: Clear AccessDenied and ErrorMessage when a denied =MJ.* cell is overwritten', () => {
+        const wb = engine.CreateEmptyWorkbook('R10_3_Test', ['Sheet1'], 10, 10);
+        const s = wb.Worksheets[0];
+
+        // 1. Initial denied MJ formula cell
+        engine.SetCell(wb, s.SheetID, 'A1', {
+            Formula: '=MJ.VIEW("Apps")',
+            AccessDenied: true,
+            ErrorMessage: 'No permission to read Apps'
+        }, false);
+
+        expect(s.Cells['A1']?.AccessDenied).toBe(true);
+        expect(s.Cells['A1']?.ErrorMessage).toBe('No permission to read Apps');
+
+        // Style edit preserves ErrorMessage and AccessDenied
+        engine.SetCell(wb, s.SheetID, 'A1', { Style: { Bold: true } }, false);
+        expect(s.Cells['A1']?.AccessDenied).toBe(true);
+        expect(s.Cells['A1']?.ErrorMessage).toBe('No permission to read Apps');
+        expect(s.Cells['A1']?.Style?.Bold).toBe(true);
+
+        // Re-applying the same formula preserves ErrorMessage and AccessDenied
+        engine.SetCell(wb, s.SheetID, 'A1', { Formula: '=MJ.VIEW("Apps")' }, false);
+        expect(s.Cells['A1']?.AccessDenied).toBe(true);
+        expect(s.Cells['A1']?.ErrorMessage).toBe('No permission to read Apps');
+
+        // Evaluating or clearing other cells preserves A1's diagnostics
+        engine.SetCell(wb, s.SheetID, 'B1', { Value: 'temp' }, false);
+        engine.ClearRange(wb, s.SheetID, 'B1', true);
+        expect(s.Cells['A1']?.AccessDenied).toBe(true);
+        expect(s.Cells['A1']?.ErrorMessage).toBe('No permission to read Apps');
+
+        // 2. Overwriting denied cell with scalar 42 clears AccessDenied and ErrorMessage
+        engine.SetCell(wb, s.SheetID, 'A1', { Value: 42 }, true);
+        expect(s.Cells['A1']?.AccessDenied).toBe(false);
+        expect(s.Cells['A1']?.ErrorMessage).toBeNull();
+        expect(s.Cells['A1']?.DisplayValue).toBe('42');
+        expect(s.Cells['A1']?.ComputedValue).toBe(42);
+
+        // Serialize and parse: AccessDenied and ErrorMessage must NOT leak into serialized JSON
+        const jsonStr = engine.SerializeWorkbook(wb);
+        expect(jsonStr).not.toContain('No permission to read Apps');
+        expect(jsonStr).not.toContain('"AccessDenied":true');
+
+        const reparsed = JSON.parse(jsonStr);
+        const serializedCellA1 = reparsed.Worksheets[0].Cells['A1'];
+        expect(serializedCellA1?.AccessDenied).toBeUndefined();
+        expect(serializedCellA1?.ErrorMessage).toBeUndefined();
+
+        const parsed = engine.ParseWorkbook(jsonStr);
+        expect(parsed.Worksheets[0].Cells['A1']?.AccessDenied).toBeUndefined();
+        expect(parsed.Worksheets[0].Cells['A1']?.ErrorMessage).toBeUndefined();
+
+        // 3. Overwriting denied cell with formula =1+1 clears AccessDenied and ErrorMessage
+        engine.SetCell(wb, s.SheetID, 'A1', {
+            Formula: '=MJ.VIEW("Apps")',
+            AccessDenied: true,
+            ErrorMessage: 'No permission to read Apps'
+        }, false);
+        expect(s.Cells['A1']?.AccessDenied).toBe(true);
+
+        engine.SetCell(wb, s.SheetID, 'A1', { Formula: '=1+1' }, true);
+        expect(s.Cells['A1']?.AccessDenied).toBe(false);
+        expect(s.Cells['A1']?.ErrorMessage).toBeNull();
+        expect(s.Cells['A1']?.ComputedValue).toBe(2);
+
+        const jsonStr2 = engine.SerializeWorkbook(wb);
+        const reparsed2 = JSON.parse(jsonStr2);
+        expect(reparsed2.Worksheets[0].Cells['A1']?.AccessDenied).toBeUndefined();
+        expect(reparsed2.Worksheets[0].Cells['A1']?.ErrorMessage).toBeUndefined();
+
+        // 4. Hydrating once access is granted clears cleanly
+        engine.SetCell(wb, s.SheetID, 'A1', {
+            Formula: '=MJ.VIEW("Apps")',
+            AccessDenied: true,
+            ErrorMessage: 'No permission to read Apps'
+        }, false);
+        engine.SetCell(wb, s.SheetID, 'A1', {
+            AccessDenied: false,
+            ErrorMessage: null,
+            Value: 'AppRecords'
+        }, false);
+        expect(s.Cells['A1']?.AccessDenied).toBe(false);
+        expect(s.Cells['A1']?.ErrorMessage).toBeNull();
+    });
+
+    it('R10-5: ClearRange of >256 cells evaluates incrementally without calling full EvaluateWorkbook', () => {
+        const wb = engine.CreateEmptyWorkbook('R10_5_Test', ['Sheet1'], 400, 10);
+        const s = wb.Worksheets[0];
+
+        // Populate 300 cells in col A and 300 dependent formulas in col B
+        for (let r = 1; r <= 300; r++) {
+            engine.SetCell(wb, s.SheetID, `A${r}`, { Value: r }, false);
+            engine.SetCell(wb, s.SheetID, `B${r}`, { Formula: `=A${r}*2` }, false);
+        }
+        engine.EvaluateWorkbook(wb);
+        expect(s.Cells['B1']?.ComputedValue).toBe(2);
+        expect(s.Cells['B300']?.ComputedValue).toBe(600);
+
+        const evalSpy = vi.spyOn(engine, 'EvaluateWorkbook');
+        try {
+            const affected = engine.ClearRange(wb, s.SheetID, 'A1:A300', true);
+            expect(evalSpy).not.toHaveBeenCalled();
+            expect(affected.length).toBeGreaterThanOrEqual(300);
+            expect(s.Cells['B1']?.ComputedValue).toBe(0);
+            expect(s.Cells['B300']?.ComputedValue).toBe(0);
+        } finally {
+            evalSpy.mockRestore();
+        }
+    });
+
+    it('R10: *IFS order-independent error/sentinel propagation and IFERROR(SUMIFS(..., UNIQUE(...)), 0)', () => {
+        const wb = engine.CreateEmptyWorkbook('IFS_Order_Test', ['Sheet1'], 10, 10);
+        const s = wb.Worksheets[0];
+
+        // Setup base data in A1:A4, B1:B4
+        engine.SetCell(wb, s.SheetID, 'A1', { Value: 'a' }, false);
+        engine.SetCell(wb, s.SheetID, 'A2', { Value: 'b' }, false);
+        engine.SetCell(wb, s.SheetID, 'A3', { Value: 'c' }, false);
+        engine.SetCell(wb, s.SheetID, 'A4', { Value: 'd' }, false);
+
+        engine.SetCell(wb, s.SheetID, 'B1', { Value: 10 }, false);
+        engine.SetCell(wb, s.SheetID, 'B2', { Value: 20 }, false);
+        engine.SetCell(wb, s.SheetID, 'B3', { Value: 30 }, false);
+        engine.SetCell(wb, s.SheetID, 'B4', { Value: 40 }, false);
+
+        // Case 1: D has unimplemented dynamic array
+        engine.SetCell(wb, s.SheetID, 'D1', { Formula: '=UNIQUE(A1:A4)' }, true);
+        expect(s.Cells['D1']?.ComputedValue).toBe('#NAME?');
+
+        // In both argument orders, SUMIFS must produce #NAME? (not 0 when pair 1 is checked after non-matching pair 0)
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(B1:B4, A1:A4, "zz", D1:D4, ">1")')).toBe('#NAME?');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(B1:B4, D1:D4, ">1", A1:A4, "zz")')).toBe('#NAME?');
+
+        // COUNTIFS in both argument orders
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(A1:A4, "zz", D1:D4, ">1")')).toBe('#NAME?');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(D1:D4, ">1", A1:A4, "zz")')).toBe('#NAME?');
+
+        // Case 2: D has access-denied cell
+        engine.SetCell(wb, s.SheetID, 'D1', { Formula: '=MJ.VIEW("Denied")', AccessDenied: true, ErrorMessage: 'No permission' }, false);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(B1:B4, A1:A4, "zz", D1:D4, ">1")')).toBe('#MJ_ACCESS_DENIED!');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUMIFS(B1:B4, D1:D4, ">1", A1:A4, "zz")')).toBe('#MJ_ACCESS_DENIED!');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(A1:A4, "zz", D1:D4, ">1")')).toBe('#MJ_ACCESS_DENIED!');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(D1:D4, ">1", A1:A4, "zz")')).toBe('#MJ_ACCESS_DENIED!');
+
+        // Case 3: IFERROR(SUMIFS(B1:B4, UNIQUE(B1:B5), ">1"), 0) propagates #NAME? (NOT swallowed to 0 via #VALUE!)
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=IFERROR(SUMIFS(B1:B4, UNIQUE(B1:B5), ">1"), 0)')).toBe('#NAME?');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=IFERROR(COUNTIFS(UNIQUE(B1:B5), ">1"), 0)')).toBe('#NAME?');
+    });
 });

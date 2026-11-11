@@ -588,36 +588,11 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
         // or persisted working states reconcile out-of-band version writes (REST save, Restore, Library edit).
         if (saveResult && contentDirty && typeof this.Content === 'string' && this.ArtifactID) {
             try {
-                let versionId = '';
-                try {
-                    versionId = typeof this.ID === 'string' ? this.ID : '';
-                } catch {
-                    versionId = '';
-                }
-                let versionNumber = 0;
-                try {
-                    versionNumber = typeof this.VersionNumber === 'number' ? this.VersionNumber : 0;
-                } catch {
-                    versionNumber = 0;
-                }
-                let descriptionValue: string | null = null;
-                try {
-                    descriptionValue = typeof this.Description === 'string' ? this.Description : null;
-                } catch {
-                    descriptionValue = null;
-                }
-                let commentsValue: string | null = null;
-                try {
-                    commentsValue = typeof this.Comments === 'string' ? this.Comments : null;
-                } catch {
-                    commentsValue = null;
-                }
-                let updatedByUserId: string | undefined;
-                try {
-                    updatedByUserId = this.UserID || this.ContextCurrentUser?.ID;
-                } catch {
-                    updatedByUserId = this.ContextCurrentUser?.ID;
-                }
+                const versionId = typeof this.ID === 'string' ? this.ID : '';
+                const versionNumber = typeof this.VersionNumber === 'number' ? this.VersionNumber : 0;
+                const descriptionValue = typeof this.Description === 'string' ? this.Description : null;
+                const commentsValue = typeof this.Comments === 'string' ? this.Comments : null;
+                const updatedByUserId = this.UserID || this.ContextCurrentUser?.ID;
                 const payload: ArtifactVersionSavedEventPayload = {
                     ArtifactID: this.ArtifactID,
                     VersionID: versionId,

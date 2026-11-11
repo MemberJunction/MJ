@@ -2907,12 +2907,8 @@ export class SlideDeckArtifactViewerComponent
 
     const provider = this.getSafeProvider();
     const currentUser = this.getSafeCurrentUser();
-    const hasProviderBackend =
-      Boolean(provider) &&
-      (typeof (provider as { RunView?: unknown }).RunView === 'function' ||
-        (Array.isArray(provider?.Entities) && provider.Entities.length > 0));
 
-    if (!provider || !currentUser || !hasProviderBackend) {
+    if (!provider || !currentUser) {
       this.blockResultsByBlockId.set(block.BlockID, {
         Success: false,
         BlockID: block.BlockID,
@@ -3617,13 +3613,7 @@ export class SlideDeckArtifactViewerComponent
   }
 
   private resolveArtifactsEntityId(provider: IMetadataProvider): string | undefined {
-    if (typeof provider.EntityByName === 'function') {
-      const byName = provider.EntityByName('MJ: Artifacts');
-      if (byName?.ID) {
-        return byName.ID;
-      }
-    }
-    return provider.Entities?.find((e) => e.Name === 'MJ: Artifacts')?.ID;
+    return provider.EntityByName('MJ: Artifacts')?.ID;
   }
 
   private async resolveArtifactTypeId(

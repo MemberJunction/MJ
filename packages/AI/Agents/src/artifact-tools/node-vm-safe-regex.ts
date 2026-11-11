@@ -158,26 +158,29 @@ export function ExecuteSafeRegexBatchWithRecovery(
                     ? batchRes.TimedOutIndex
                     : 0;
 
-            // 1. Keep all completed results for indices 0 .. timedOutIndex - 1
+            // a. Keep all completed results for indices 0 .. timedOutIndex - 1
             for (let j = 0; j < timedOutIndexInSlice; j++) {
                 matches[cursor + j] = batchRes.Matches[j];
                 inputTooLong[cursor + j] = batchRes.InputTooLong[j];
             }
 
-            // 2. Mark ONLY timedOutIndex as timedOut: true
-            const absoluteTimedOutIdx = cursor + timedOutIndexInSlice;
-            timedOut[absoluteTimedOutIdx] = true;
+            // b. If timedOutIndexInSlice > 0: advance cursor without marking as timed out
+            if (timedOutIndexInSlice > 0) {
+                cursor += timedOutIndexInSlice;
+                continue;
+            }
 
-            // 3. Advance to timedOutIndex + 1
-            const nextIdx = absoluteTimedOutIdx + 1;
-            cursor = nextIdx;
-            if (cursor < total && performance.now() >= deadlineMs) {
+            // c. If timedOutIndexInSlice === 0: sliceTexts[0] already ran at index 0 with the entire callBudget to itself
+            if (callBudget < perCallMaxMs) {
                 budgetExpired = true;
                 for (let j = cursor; j < total; j++) {
                     budgetSkipped[j] = true;
                 }
                 break;
             }
+
+            timedOut[cursor] = true;
+            cursor += 1;
         }
     }
 

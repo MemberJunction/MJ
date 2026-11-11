@@ -20,6 +20,7 @@ const MAX_BATCH_CHARS = 262_144;
 const MAX_REGEX_INPUT_BYTES = 65_536;
 const MAX_SAFE_UTF16_UNITS_FOR_64KB = 21_845;
 const MAX_REPORTED_UNSEARCHABLE_BLOCKS = 25;
+const MAX_REPORTED_UNSEARCHABLE_LINES = 50;
 
 function exceedsRegexInputBytes(text: string): boolean {
     if (text.length <= MAX_SAFE_UTF16_UNITS_FOR_64KB) {
@@ -35,6 +36,11 @@ export interface UnsearchableDocumentBlock {
     startLine: number;
     endLine: number;
     reason: 'exceeds_64kb_regex_limit' | 'regex_timeout';
+}
+
+export interface UnsearchableDocumentLine {
+    lineNumber: number;
+    reason: 'exceeds_64kb_regex_limit' | 'regex_timeout' | 'budget_expired';
 }
 
 /**
@@ -175,7 +181,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                         case_sensitive: {
                             type: 'boolean',
                             description:
-                                'Case-sensitive matching. Defaults to true for literal search; when use_regex is true, defaults to regex flags (case-sensitive unless flags includes "i", and explicit case_sensitive overrides flags).'
+                                'Case-sensitive matching. Defaults to false (case-insensitive) for literal search; when use_regex is true, defaults to regex flags (case-sensitive unless flags includes "i", and explicit case_sensitive overrides flags).'
                         },
                         caseSensitive: {
                             type: 'boolean',
@@ -903,6 +909,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                     partial: false,
                     timedOut: false,
                     unsearchableCount: 0,
+                    unsearchableLines: [],
                     warnings: []
                 }
             };
@@ -944,11 +951,28 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         }
 
         const matches: Array<{ lineNumber: number; text: string }> = [];
+        const unsearchableLines: UnsearchableDocumentLine[] = [];
         let tooLongCount = 0;
         let timeoutCount = 0;
         let budgetSkippedCount = 0;
         let budgetExpired = false;
         const regexDeadline = performance.now() + GREP_REGEX_BUDGET_MS;
+
+        const recordUnsearchableLine = (
+            lineNumber: number,
+            reason: UnsearchableDocumentLine['reason']
+        ): void => {
+            if (reason === 'exceeds_64kb_regex_limit') {
+                tooLongCount++;
+            } else if (reason === 'regex_timeout') {
+                timeoutCount++;
+            } else {
+                budgetSkippedCount++;
+            }
+            if (unsearchableLines.length < MAX_REPORTED_UNSEARCHABLE_LINES) {
+                unsearchableLines.push({ lineNumber, reason });
+            }
+        };
 
         let pendingLineNums: number[] = [];
         let pendingTexts: string[] = [];
@@ -957,7 +981,9 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         const flushLineBatch = (): void => {
             if (pendingLineNums.length === 0) return;
             if (budgetExpired) {
-                budgetSkippedCount += pendingLineNums.length;
+                for (let k = 0; k < pendingLineNums.length; k++) {
+                    recordUnsearchableLine(pendingLineNums[k], 'budget_expired');
+                }
                 pendingLineNums = [];
                 pendingTexts = [];
                 pendingChars = 0;
@@ -978,11 +1004,11 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                 if (recRes.Matches[k]) {
                     matches.push({ lineNumber: pendingLineNums[k], text: pendingTexts[k] });
                 } else if (recRes.TimedOut[k]) {
-                    timeoutCount++;
+                    recordUnsearchableLine(pendingLineNums[k], 'regex_timeout');
                 } else if (recRes.BudgetSkipped[k]) {
-                    budgetSkippedCount++;
+                    recordUnsearchableLine(pendingLineNums[k], 'budget_expired');
                 } else if (recRes.InputTooLong[k]) {
-                    tooLongCount++;
+                    recordUnsearchableLine(pendingLineNums[k], 'exceeds_64kb_regex_limit');
                 }
             }
             pendingLineNums = [];
@@ -994,11 +1020,11 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             const line = lines[i];
             if (exceedsRegexInputBytes(line)) {
                 flushLineBatch();
-                tooLongCount++;
+                recordUnsearchableLine(i, 'exceeds_64kb_regex_limit');
                 continue;
             }
             if (budgetExpired) {
-                budgetSkippedCount++;
+                recordUnsearchableLine(i, 'budget_expired');
                 continue;
             }
             pendingLineNums.push(i);
@@ -1034,6 +1060,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                 partial,
                 timedOut,
                 unsearchableCount,
+                unsearchableLines,
                 warnings
             }
         };

@@ -331,6 +331,8 @@ export interface CollaborationGraphQLResponseMap {
   CommitArtifactInlineEdit?: ServerCommitInlineEditPayload | null;
   ExecuteAnchoredCommentAgentMention?: ServerAnchoredCommentAgentMentionPayload | null;
   RestoreArtifactVersion?: ServerRestoreArtifactVersionPayload | null;
+  errors?: Array<{ message?: string }> | null;
+  error?: string | null;
 }
 
 export type CollaborationGraphQLVariables = Record<
@@ -376,6 +378,12 @@ function resolveDefaultMetadataProvider(explicitProvider?: IMetadataProvider | n
     return explicitProvider;
   }
   return Metadata.Provider ?? null; // global-provider-ok: fallback when Angular caller did not supply a bound provider
+}
+
+function isUnsupportedRestoreMutationError(message: string): boolean {
+  return /Cannot query field ['"]?RestoreArtifactVersion['"]?|Unknown field ['"]?RestoreArtifactVersion['"]?|RestoreArtifactVersion.*not defined/i.test(
+    message,
+  );
 }
 
 function decodeBase64ToUint8Array(input: string): Uint8Array | null {
@@ -3143,10 +3151,20 @@ export class DocumentCollaborationService implements OnDestroy {
       });
       const payload = gqlRes?.RestoreArtifactVersion;
       if (!payload) {
+        const gqlErrorMsg =
+          gqlRes?.error ||
+          (gqlRes?.errors && gqlRes.errors.length > 0 ? gqlRes.errors[0]?.message : undefined);
+        if (gqlErrorMsg && isUnsupportedRestoreMutationError(gqlErrorMsg)) {
+          return {
+            Success: false,
+            Supported: false,
+            ErrorMessage: gqlErrorMsg,
+          };
+        }
         return {
           Success: false,
           Supported: true,
-          ErrorMessage: 'Server did not return RestoreArtifactVersion response.',
+          ErrorMessage: gqlErrorMsg || 'Server did not return RestoreArtifactVersion response.',
         };
       }
       return {
@@ -3157,11 +3175,19 @@ export class DocumentCollaborationService implements OnDestroy {
         ErrorMessage: payload.ErrorMessage ?? undefined,
       };
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (isUnsupportedRestoreMutationError(msg)) {
+        return {
+          Success: false,
+          Supported: false,
+          ErrorMessage: msg,
+        };
+      }
       LogError(err);
       return {
         Success: false,
         Supported: true,
-        ErrorMessage: err instanceof Error ? err.message : 'Failed to restore artifact version on server.',
+        ErrorMessage: msg || 'Failed to restore artifact version on server.',
       };
     }
   }

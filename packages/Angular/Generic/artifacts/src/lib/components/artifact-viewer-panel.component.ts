@@ -1934,22 +1934,63 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
               'MJ: Artifact Versions',
               this.CurrentUser,
             );
-            const loaded = await restoredVer.Load(serverRestore.VersionID);
+            let loaded = false;
+            try {
+              loaded = await restoredVer.Load(serverRestore.VersionID);
+            } catch (loadErr) {
+              LogError(loadErr);
+              loaded = false;
+            }
+            if (!loaded) {
+              LogError(
+                `ArtifactViewerPanelComponent: server restored version '${serverRestore.VersionID}' (v${serverRestore.VersionNumber ?? '?'}) could not be loaded.`,
+              );
+              const rv = RunView.FromMetadataProvider(md);
+              const refreshRes = await rv.RunView<MJArtifactVersionEntity>(
+                {
+                  EntityName: 'MJ: Artifact Versions',
+                  ExtraFilter: `ArtifactID='${EscapeSQLString(this.Artifact.ID)}'`,
+                  OrderBy: 'VersionNumber DESC',
+                },
+                this.CurrentUser,
+              );
+              if (refreshRes.Success && refreshRes.Results && refreshRes.Results.length > 0) {
+                this.AllVersions = refreshRes.Results;
+                this.applyVersionScope(this.activeScope);
+                const matched = this.AllVersions.find(
+                  (v) =>
+                    v.ID?.toLowerCase() === serverRestore.VersionID?.toLowerCase() ||
+                    (serverRestore.VersionNumber != null && v.VersionNumber === serverRestore.VersionNumber),
+                );
+                if (matched) {
+                  if (matched.ID) {
+                    this.fullVersionCache.set(String(matched.ID).toLowerCase(), matched);
+                  }
+                  this.artifactVersion = matched;
+                  const restoredVersionNum =
+                    matched.VersionNumber ?? serverRestore.VersionNumber ?? versionNumber + 1;
+                  this.SelectedVersionNumber = restoredVersionNum;
+                  this.JsonContent = this.formatJSON(matched.Content || '{}');
+                  this.IsCompareMode = false;
+                  this.notificationService.CreateSimpleNotification(
+                    `Restored v${versionNumber} as new version v${restoredVersionNum}`,
+                    'success',
+                    3500,
+                  );
+                  return;
+                }
+              }
+              this.notificationService.CreateSimpleNotification(
+                `Restored v${versionNumber} on server, but could not reload the new version record. Please refresh.`,
+                'error',
+                4000,
+              );
+              return;
+            }
+
             const restoredVersionNum =
               serverRestore.VersionNumber ??
-              (loaded && restoredVer.VersionNumber ? restoredVer.VersionNumber : versionNumber + 1);
-            if (!loaded) {
-              restoredVer.ArtifactID = this.Artifact.ID;
-              restoredVer.UserID = this.CurrentUser.ID;
-              restoredVer.VersionNumber = restoredVersionNum;
-              restoredVer.Name = sourceVersion.Name || this.Artifact.Name;
-              restoredVer.Description = `Restored from v${versionNumber}`;
-              restoredVer.Comments = `Restored from v${versionNumber}`;
-              restoredVer.Content = sourceVersion.Content;
-              if (sourceVersion.Configuration) {
-                restoredVer.Configuration = sourceVersion.Configuration;
-              }
-            }
+              (restoredVer.VersionNumber ? restoredVer.VersionNumber : versionNumber + 1);
             if (serverRestore.VersionID) {
               this.fullVersionCache.set(String(serverRestore.VersionID).toLowerCase(), restoredVer);
             }

@@ -716,17 +716,52 @@ export const ServerCacheChecks: NamedCheck[] = [
         Name: 'S26: MJ: Record Changes is hardcoded cache-exempt (rows arrive via raw SQL)',
         Fn: async (ctx): Promise<void> => {
             const rv = new RunView();
-            ctx.Storage.ResetCounts();
-            const result = await rv.RunView({
-                EntityName: 'MJ: Record Changes',
-                ExtraFilter: "'tag-s26' <> 'never'",
-                Fields: ['ID'],
-                MaxRows: 5,
-                ResultType: 'simple'
-            }, ctx.User);
-            Assert(result.Success, `RunView failed: ${result.ErrorMessage}`);
-            AssertEqual(ctx.Storage.SetCount('RunViewCache') + ctx.Storage.GetCount('RunViewCache'), 0,
-                'Record Changes must never touch the cache regardless of its flags');
+            const RECORD_CHANGES_CACHE_KEY_PREFIX = 'MJ: Record Changes|';
+            let recordChangesCacheReads = 0;
+            const hadOwnGetItem = Object.prototype.hasOwnProperty.call(ctx.Storage, 'GetItem');
+            const hadOwnGetItems = Object.prototype.hasOwnProperty.call(ctx.Storage, 'GetItems');
+            const origGetItem = ctx.Storage.GetItem.bind(ctx.Storage);
+            const origGetItems = ctx.Storage.GetItems.bind(ctx.Storage);
+            ctx.Storage.GetItem = <T>(key: string, category?: string): Promise<T | null> => {
+                if (category === 'RunViewCache' && key.startsWith(RECORD_CHANGES_CACHE_KEY_PREFIX)) {
+                    recordChangesCacheReads++;
+                }
+                return origGetItem<T>(key, category);
+            };
+            ctx.Storage.GetItems = <T>(keys: string[], category?: string): Promise<Map<string, T | null>> => {
+                if (category === 'RunViewCache' && keys.some((k) => k.startsWith(RECORD_CHANGES_CACHE_KEY_PREFIX))) {
+                    recordChangesCacheReads++;
+                }
+                return origGetItems<T>(keys, category);
+            };
+
+            try {
+                ctx.Storage.ResetCounts();
+                const result = await rv.RunView({
+                    EntityName: 'MJ: Record Changes',
+                    ExtraFilter: "'tag-s26' <> 'never'",
+                    Fields: ['ID'],
+                    MaxRows: 5,
+                    ResultType: 'simple'
+                }, ctx.User);
+                Assert(result.Success, `RunView failed: ${result.ErrorMessage}`);
+                const recordChangesCacheWrites = ctx.Storage.Writes.filter(
+                    (w) => w.Category === 'RunViewCache' && w.Key.startsWith(RECORD_CHANGES_CACHE_KEY_PREFIX)
+                ).length;
+                AssertEqual(recordChangesCacheWrites + recordChangesCacheReads, 0,
+                    'Record Changes must never touch the cache regardless of its flags');
+            } finally {
+                if (hadOwnGetItem) {
+                    ctx.Storage.GetItem = origGetItem;
+                } else {
+                    Reflect.deleteProperty(ctx.Storage, 'GetItem');
+                }
+                if (hadOwnGetItems) {
+                    ctx.Storage.GetItems = origGetItems;
+                } else {
+                    Reflect.deleteProperty(ctx.Storage, 'GetItems');
+                }
+            }
         }
     },
     {

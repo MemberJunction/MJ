@@ -375,7 +375,12 @@ export const ArtifactToolsChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const fx = guardOrSkip();
             const tr = await interrogate(ctx, fx, 'Markdown Document', 'text/markdown', ASSET_MD, false, 'grep', { pattern: MANIFEST_EXPECTED.md.sentinelPattern }, 'AT5 MD grep');
-            const matches = Array.isArray(tr.result.data) ? (tr.result.data as unknown[]) : [];
+            const rawData = tr.result.data;
+            const matches = Array.isArray(rawData)
+                ? rawData
+                : Array.isArray(asRecord(rawData).matches)
+                  ? (asRecord(rawData).matches as Array<Record<string, unknown>>)
+                  : [];
             AssertEqual(matches.length, MANIFEST_EXPECTED.md.sentinelMatchCount, 'AT5: markdown grep match count');
         }
     },
@@ -387,7 +392,12 @@ export const ArtifactToolsChecks: NamedCheck[] = [
             const fx = guardOrSkip();
             // XML artifact type has no ToolLibraryClass → composite chain resolves to TextToolLibrary; grep works.
             const tr = await interrogate(ctx, fx, 'XML', 'application/xml', ASSET_XML, false, 'grep', { pattern: MANIFEST_EXPECTED.xml.grepPattern }, 'AT6 XML grep');
-            const matches = Array.isArray(tr.result.data) ? (tr.result.data as unknown[]) : [];
+            const rawData = tr.result.data;
+            const matches = Array.isArray(rawData)
+                ? rawData
+                : Array.isArray(asRecord(rawData).matches)
+                  ? (asRecord(rawData).matches as Array<Record<string, unknown>>)
+                  : [];
             AssertEqual(matches.length, MANIFEST_EXPECTED.xml.grepMatchCount, 'AT6: XML grep <name> match count (via TextToolLibrary fallback)');
         }
     },

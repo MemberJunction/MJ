@@ -386,6 +386,8 @@ describe('Wave 2 Slides: SlideDeckExportService, Per-Slide Yjs Session Sync & Sl
           Fields: [],
         },
       ],
+      EntityByName: (name: string) =>
+        name === 'MJ: Artifacts' ? { ID: 'AE24303E-F36B-1410-8DB0-00021F8B792E', Name: 'MJ: Artifacts' } : undefined,
       RunView: async (params: { EntityName: string; ExtraFilter?: string }) => {
         if (params.EntityName === 'MJ: Artifacts') {
           return {

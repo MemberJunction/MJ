@@ -12,7 +12,7 @@ afterEach(() => {
 
 describe('ArtifactTypePluginViewerComponent DOM', () => {
   it('renders loading spinner state when isLoading is true', () => {
-    vi.spyOn(ArtifactTypePluginViewerComponent.prototype, 'ngOnInit').mockImplementation(() => {});
+    vi.spyOn(ArtifactTypePluginViewerComponent.prototype, 'ngOnInit').mockImplementation(async () => {});
     const f = renderComponentFixture(ArtifactTypePluginViewerComponent, {
       declarations: [ArtifactTypePluginViewerComponent],
       setup: (inst) => {
@@ -25,7 +25,7 @@ describe('ArtifactTypePluginViewerComponent DOM', () => {
   });
 
   it('renders error title and technical details when error state is populated', () => {
-    vi.spyOn(ArtifactTypePluginViewerComponent.prototype, 'ngOnInit').mockImplementation(() => {});
+    vi.spyOn(ArtifactTypePluginViewerComponent.prototype, 'ngOnInit').mockImplementation(async () => {});
     const f = renderComponentFixture(ArtifactTypePluginViewerComponent, {
       declarations: [ArtifactTypePluginViewerComponent],
       setup: (inst) => {
@@ -42,7 +42,7 @@ describe('ArtifactTypePluginViewerComponent DOM', () => {
   });
 
   it('exposes ContentCommitted, openEntityRecord, navigationRequest, pluginLoaded, and tabsChanged outputs', () => {
-    vi.spyOn(ArtifactTypePluginViewerComponent.prototype, 'ngOnInit').mockImplementation(() => {});
+    vi.spyOn(ArtifactTypePluginViewerComponent.prototype, 'ngOnInit').mockImplementation(async () => {});
     const f = renderComponentFixture(ArtifactTypePluginViewerComponent, {
       declarations: [ArtifactTypePluginViewerComponent],
     });
@@ -52,18 +52,14 @@ describe('ArtifactTypePluginViewerComponent DOM', () => {
     const nav = capture(f.componentInstance.navigationRequest);
     const loaded = capture(f.componentInstance.pluginLoaded);
     const tabs = capture(f.componentInstance.tabsChanged);
-    const pluginDouble = {
-      isLoading: false,
-      hasDisplayContent: true,
-    } satisfies Pick<BaseArtifactViewerPluginComponent, 'isLoading' | 'hasDisplayContent'>;
     f.componentInstance.ContentCommitted.emit('updated');
     f.componentInstance.openEntityRecord.emit({
       entityName: 'Accounts',
       compositeKey: new CompositeKey([{ FieldName: 'ID', Value: 'acc-1' }]),
     });
-    f.componentInstance.navigationRequest.emit({ appName: 'Chat' });
-    f.componentInstance.pluginLoaded.emit(pluginDouble as unknown as BaseArtifactViewerPluginComponent);
-    f.componentInstance.tabsChanged.emit([]);
+    f.componentInstance.navigationRequest.emit({ appName: 'Chat', navItemName: 'Chats' });
+    f.componentInstance.pluginLoaded.emit();
+    f.componentInstance.tabsChanged.emit();
     expect(committed).toEqual(['updated']);
     expect(opened.length).toBe(1);
     expect(nav.length).toBe(1);
