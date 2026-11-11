@@ -65,7 +65,8 @@ export class SchemaEvolution {
             if (pkNames.has(lowerName)) {
                 if (existingNames.has(lowerName)) {
                     const existingCol = existing.Columns.find(c => c.Name.toLowerCase() === lowerName);
-                    if (existingCol && this.hasColumnChanged(existingCol, col)) {
+                    // Only the type is compared: an added key column is nullable on purpose.
+                    if (existingCol && this.hasColumnChanged(existingCol, { ...col, IsNullable: existingCol.IsNullable })) {
                         warnings.push(`PK column '${col.TargetColumnName}' type changed from ${existingCol.SqlType} to ${col.TargetSqlType} — skipped (requires manual constraint drop/recreate)`);
                     }
                 } else {
