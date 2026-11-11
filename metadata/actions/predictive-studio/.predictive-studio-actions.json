@@ -3,11 +3,12 @@
     "_comments": [
       "Train ML Model — thin Action boundary over TrainingEngine.trainModel.",
       "Type='Custom' + DriverClass binds to the @RegisterClass(BaseAction,'PredictiveStudioTrainModelAction') class.",
-      "The action validates PipelineID, delegates to the engine (production seams), and maps the result."
+      "The action validates PipelineID, refuses the retired MaxRows input by name, delegates to the engine (production seams), and maps the run's stored gate decision onto the outputs.",
+      "MaxRows is retired: the Prediction Unit decides the rows and every eligible row is read. Its param row is deleted (deleteRecord)."
     ],
     "fields": {
       "Name": "Train ML Model",
-      "Description": "Trains a predictive model from an ML Training Pipeline definition. Carves a locked holdout, trains via the sidecar, persists an immutable Draft ML Model, and flags single-feature dominance (possible target leakage). Outputs the new model id, its honest holdout metrics, and whether it was leakage-flagged.",
+      "Description": "Trains a predictive model from an ML Training Pipeline under the pipeline's Prediction Unit and Evaluation Protocol: freezes a Training Snapshot, carves the locked holdout by date, selects on inner folds, fits the baselines and stores the three-outcome gate decision with its reason on the training run. Outputs the run's gate outcome and reason, the snapshot and protocol, the model id (none under no-signal), the test-set scores and whether one feature dominates the predictions (possible target leakage).",
       "Type": "Custom",
       "DriverClass": "PredictiveStudioTrainModelAction",
       "Status": "Active",
@@ -41,7 +42,7 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "Optional row cap for the training read. Training reads every row of the target entity; a MaxRows smaller than the rows in scope is refused with READ_CAP_EXCEEDED rather than training on a sample. Omit it unless you want that check."
+            "Description": "Retired. Training reads every eligible row the Prediction Unit resolves; a supplied MaxRows is refused by name."
           },
           "primaryKey": {
             "ID": "1AEC4C95-D252-462D-9DD7-F287F8B5D6F5"
@@ -49,6 +50,10 @@
           "sync": {
             "lastModified": "2026-10-28T00:35:16.257Z",
             "checksum": "60cfd48c8df13cbf40a7a132f06fd767e971c7cbaac12e5af13197b39d7f6fc0"
+          },
+          "deleteRecord": {
+            "delete": true,
+            "deletedAt": "2026-10-31T18:14:11.270Z"
           }
         },
         {
@@ -59,7 +64,7 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "Id of the produced (Draft) MJ: ML Models row."
+            "Description": "Id of the produced (Draft) MJ: ML Models row; null when the stored gate decision ships no model (no-signal, or the existing rule kept)."
           },
           "primaryKey": {
             "ID": "E682EE84-2051-4D3F-B892-39CFE781BBA1"
@@ -77,7 +82,7 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "JSON of the metrics scored once on the locked holdout set the search never saw (the honest performance number)."
+            "Description": "JSON of the test-set scores measured once on the locked holdout: the produced model's stored scores when a model exists, otherwise the trainer's finalist scores."
           },
           "primaryKey": {
             "ID": "55F8564C-CBAF-40FE-A32A-1B3876137CF1"
@@ -104,6 +109,62 @@
             "lastModified": "2026-07-01T17:33:33.725Z",
             "checksum": "b98ee9aa7419dbf70f6ba0595fcfce238586825150e03cf750273d7a6e6b7713"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "GateOutcome",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "The gate's stored outcome: model, keep-simple-baseline or no-signal."
+          },
+          "primaryKey": {
+            "ID": "A41AB128-1D5C-49B5-BCEA-4E7D38E85111"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "GateReason",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "The stored reason for the gate outcome, generated from the stored comparisons."
+          },
+          "primaryKey": {
+            "ID": "4C4ACFB0-44C7-4B2A-B5C0-E849A9231D4B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TrainingSnapshotID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "The MJ: ML Training Snapshots row the run trained on."
+          },
+          "primaryKey": {
+            "ID": "8B5E2C10-6A7D-4F93-B1E4-0C9D2A7F5E36"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EvaluationProtocolID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "The MJ: ML Evaluation Protocols row (exact version) the run was evaluated under."
+          },
+          "primaryKey": {
+            "ID": "D99B752A-10C9-424D-919B-E421A16BCDFA"
+          }
         }
       ],
       "MJ: Action Result Codes": [
@@ -112,7 +173,7 @@
             "ActionID": "@parent:ID",
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
-            "Description": "Model trained and persisted (Draft)."
+            "Description": "The training run completed; GateOutcome and GateReason say whether a model was produced (ModelID is null when none was)."
           },
           "primaryKey": {
             "ID": "030CA913-F3CA-4A8B-8B29-F6F16F07807B"
@@ -142,7 +203,7 @@
             "ActionID": "@parent:ID",
             "ResultCode": "TRAINING_FAILED",
             "IsSuccess": false,
-            "Description": "The training engine failed (pipeline not found, sidecar error, or a save failure)."
+            "Description": "The training engine failed (pipeline not found, sidecar error, or a save failure), or a retired input (MaxRows) was supplied."
           },
           "primaryKey": {
             "ID": "3D57A26B-CAD2-430C-BF17-54A5798D96BA"
@@ -157,7 +218,7 @@
             "ActionID": "@parent:ID",
             "ResultCode": "READ_CAP_EXCEEDED",
             "IsSuccess": false,
-            "Description": "Training refused: the MaxRows parameter is smaller than the rows in scope, so the model would be trained on a fraction of its scope. Omit MaxRows and train again; training reads every row of the target entity. The same code the PredictiveStudio.TrainModel operation returns."
+            "Description": "Training refused: a read would return fewer rows than are in scope, so the model would be trained on a fraction of its scope; training reads every row of the target entity. The same code the PredictiveStudio.TrainModel operation returns."
           },
           "primaryKey": {
             "ID": "CA1C5767-E6E5-4DCA-9E4B-CE775C8D1A0A"
@@ -219,7 +280,10 @@
       "Type": "Custom",
       "DriverClass": "PredictiveStudioScoreRecordSetAction",
       "Status": "Active",
-      "IconClass": "fa-solid fa-gauge-high"
+      "IconClass": "fa-solid fa-gauge-high",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -673,7 +737,10 @@
       "Type": "Custom",
       "DriverClass": "PredictiveStudioPromoteModelAction",
       "Status": "Active",
-      "IconClass": "fa-solid fa-circle-check"
+      "IconClass": "fa-solid fa-circle-check",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -840,6 +907,39 @@
             "lastModified": "2026-07-01T17:33:34.470Z",
             "checksum": "c17d3d3fa656d3b4c2c44d2cec56734c8a4281b13e1360172354bddbf94aa9b5"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SIGNOFF_REASON_REQUIRED",
+            "IsSuccess": false,
+            "Description": "A leakage sign-off was given without a reason; overriding a leakage-flagged model requires a non-empty Reason."
+          },
+          "primaryKey": {
+            "ID": "2210EFA6-996E-4B50-BBDD-2EDD89BB2B7B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CALIBRATION_HOLD",
+            "IsSuccess": false,
+            "Description": "The model is held: its holdout calibration slope is outside 0.8-1.2 or could not be measured, so it is not offered and cannot be validated or published (no sign-off overrides this)."
+          },
+          "primaryKey": {
+            "ID": "2BA2642A-EEE4-4C7E-9403-7CB2EBC70E36"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MODEL_NOT_SERVABLE",
+            "IsSuccess": false,
+            "Description": "The model cannot be published: its artifact is a series forecaster, which /predict does not serve yet."
+          },
+          "primaryKey": {
+            "ID": "655E1445-800B-4AC4-8EFF-8FE9DF2D5EF6"
+          }
         }
       ]
     },
@@ -866,7 +966,10 @@
       "Type": "Custom",
       "DriverClass": "PredictiveStudioScheduleModelScoringAction",
       "Status": "Active",
-      "IconClass": "fa-solid fa-calendar-check"
+      "IconClass": "fa-solid fa-calendar-check",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -1087,6 +1190,588 @@
     "sync": {
       "lastModified": "2026-07-01T17:33:33.586Z",
       "checksum": "235c098a3be2ec1579ed84a9cfc8fad0ae93a9604e71375a4b3c6074249aace7"
+    }
+  },
+  {
+    "_comments": [
+      "Migrate Pipelines to Prediction Units and Evaluation Protocols — the Prediction Unit data migration, run by the release step (dry run by default, idempotent). It holds two kinds of pipeline: one whose adverse class is not declared (a re-run migrates it once declared) and one that declares a time index (held until a forecast unit with a rolling-origin protocol is bound).",
+      "Type='Custom' + DriverClass binds to @RegisterClass(BaseAction,'PredictiveStudioMigratePipelinesAction')."
+    ],
+    "fields": {
+      "Name": "Migrate Pipelines to Prediction Units and Evaluation Protocols",
+      "Description": "Gives every ML Training Pipeline that lacks one a version-1 Prediction Unit (from TargetEntity, TargetVariable, ProblemType and AsOfStrategy) and a version-1 Evaluation Protocol (from ValidationStrategy and LeakageGuard: the trailing holdout fraction becomes a date cutoff, k-fold becomes repeated inner folds, the deny lists become exclusions), and binds both. Pipelines that cannot be expressed (offset as-of, a single-valued target, sequence models) are archived with the reason in their description; two kinds of pipeline are held (kept as is, no unit or protocol written, training refused, reason in the description): a binary pipeline whose adverse class its OutcomeConfig, newest model or target name does not declare, until a later run migrates it; and a pipeline that declares a time index (ValidationStrategy.TimeIndexColumn), which needs a forecast unit with a rolling-origin protocol rather than a seeded-random holdout. Dry run by default; skips pipelines already bound. Outputs a per-pipeline report.",
+      "Type": "Custom",
+      "DriverClass": "PredictiveStudioMigratePipelinesAction",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-right-left",
+      "Config": {
+        "disallowWhenTainted": true
+      }
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DryRun",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "true (default) reports what would be created, archived or held without saving."
+          },
+          "primaryKey": {
+            "ID": "DF3F1253-BA20-4224-9B87-A19E05B9FE3A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PipelineIDs",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "Optional subset of MJ: ML Training Pipelines ids; all pipelines when omitted."
+          },
+          "primaryKey": {
+            "ID": "3EB79100-19DA-4341-8AC2-2950BE29A8F5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Report",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "JSON array, one row per pipeline: action (migrated, would-migrate, archived, would-archive, held, would-hold, skipped, failed), reason, unit and protocol ids, cutoff, notes."
+          },
+          "primaryKey": {
+            "ID": "03DEA6E2-A25E-43B8-85C1-94F0C1454DE5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MigratedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Pipelines migrated (or that a dry run would migrate)."
+          },
+          "primaryKey": {
+            "ID": "AF55093A-B866-47B7-9DDB-9C39948F3169"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ArchivedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Pipelines archived (or that a dry run would archive) because they have no Prediction Unit form."
+          },
+          "primaryKey": {
+            "ID": "6C1F8E2B-0D4A-4C7E-9B35-2F8A61D04E77"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HeldCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Pipelines held (or that a dry run would hold): an undeclared adverse class (migrated by a later run once declared) or a declared time index (held until a forecast unit with a rolling-origin protocol is bound). Training them is refused."
+          },
+          "primaryKey": {
+            "ID": "7D66347C-E018-431A-8C36-7E7C799B1AEC"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SkippedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Pipelines skipped (already bound to a unit and a protocol, or already archived)."
+          },
+          "primaryKey": {
+            "ID": "D450982D-E9B7-4D1A-8484-E1666EF1D4A5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FailedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Pipelines whose migration failed; the report names the reason."
+          },
+          "primaryKey": {
+            "ID": "9E2D4B71-35C8-4F0A-A6E1-7B03C5D8F214"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "5748E03D-0233-4BDD-83EA-FF9A946ADEA2"
+    }
+  },
+  {
+    "_comments": [
+      "Evaluate Feature and Prediction Drift — thin Action boundary over EvaluateFeatureAndPredictionDrift and LoadFeatureAndPredictionDriftFromFeatureValues.",
+      "Computes Population Stability Index (PSI) across baseline quantile bins, confidence-floor degradation, and champion-vs-challenger shadow divergence,",
+      "loading rolling windows from MJ: Feature Values when RecordProcessID or ModelID is supplied without inline feature arrays."
+    ],
+    "fields": {
+      "Name": "Evaluate Feature and Prediction Drift",
+      "Description": "Evaluates Population Stability Index (PSI) feature and prediction drift across numeric, categorical, and pre-binned distributions, confidence-floor degradation, and champion-vs-challenger shadow divergence. Loads baseline and rolling evaluation windows from pipeline-generated MJ: Feature Values (Source = 'Pipeline', human overrides excluded) when RecordProcessID or an MJ: ML Models ModelID is provided, and emits a drift alert notification when thresholds are breached. Because champion Feature Values are upserted in place by ValueKeyHash, each window holds changed values computed in that window (not a full population snapshot), and each evaluation-window challenger row is paired with the latest champion row for the same record and feature. An ML Model process with no challenger configured has no drift population (reports InsufficientData). Feature Values store no latency metrics, so the scheduled sweep reports no P95 latency ratio.",
+      "Type": "Custom",
+      "DriverClass": "PredictiveStudioEvaluateDriftAction",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-wave-square"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RecordProcessID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional ID of the MJ: Record Processes row whose MJ: Feature Values (Champion and Challenger) should be loaded and evaluated. When omitted with no ModelID or inline features, the action sweeps all active ML Model and Infer Record Processes."
+          },
+          "primaryKey": {
+            "ID": "BAD3857D-FD2F-478B-8D1B-A787895D2689"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ModelID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional ID of the MJ: ML Models row being evaluated."
+          },
+          "primaryKey": {
+            "ID": "DD4BD809-7A9A-4C42-B902-8006A4CDD9F4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BaselineWindowEnd",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional ISO-8601 end timestamp of the 28-day baseline window (defaults to EvaluationWindowStart)."
+          },
+          "primaryKey": {
+            "ID": "30EE8975-2F29-4281-9C5C-67A650AE00F4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EvaluationWindowStart",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional ISO-8601 start timestamp of the rolling evaluation window (defaults to 7 days before now)."
+          },
+          "primaryKey": {
+            "ID": "D2119413-E620-483D-9858-FE3FDDEBF165"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NumericFeatures",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional map of numeric feature names to { Baseline: number[], Evaluation: number[], Bins?: number }."
+          },
+          "primaryKey": {
+            "ID": "55ACC329-302D-4736-976E-8E6AB175FFA8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CategoricalFeatures",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional map of categorical feature names to { Baseline: string[], Evaluation: string[] }."
+          },
+          "primaryKey": {
+            "ID": "41ACFA8D-E532-4B64-A0AD-197FE5570131"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PrebinnedFeatures",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional map of pre-binned feature names to { BaselineProportions: number[], EvaluationProportions: number[], BaselineSampleCount?: number, EvaluationSampleCount?: number }."
+          },
+          "primaryKey": {
+            "ID": "7C32E9F5-5A2A-4ECA-9C2C-0A0E73B4B919"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConfidenceAndDivergence",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional confidence-floor and champion-vs-challenger shadow divergence input."
+          },
+          "primaryKey": {
+            "ID": "1C3C774E-3A84-4DFB-B0CC-C5D0DB09963F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WarningPSIThreshold",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional PSI warning threshold (defaults to 0.10; must be > 0 and < CriticalPSIThreshold)."
+          },
+          "primaryKey": {
+            "ID": "41E81A09-121C-4211-ACE9-96EB7AAD5E61"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CriticalPSIThreshold",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional PSI critical threshold (defaults to 0.25; must be > WarningPSIThreshold)."
+          },
+          "primaryKey": {
+            "ID": "6050F3D9-557A-42A8-B5CD-5FE55F5144E9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Epsilon",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional Laplace smoothing epsilon in (0, 0.01] (defaults to 0.0001)."
+          },
+          "primaryKey": {
+            "ID": "8FBD6EE0-A1B5-4A7A-8830-1EE2BF47A2B6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MinSampleSize",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional minimum valid sample size per window before PSI is evaluated (defaults to 100)."
+          },
+          "primaryKey": {
+            "ID": "35586C14-3565-46D1-9F2B-90021B14BFD2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EmitAlertOnDrift",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Whether to emit a drift alert when ShouldAlert is true (defaults to true)."
+          },
+          "primaryKey": {
+            "ID": "4EE7A519-74E6-4064-AF30-1D7FC4308065"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NotifyUserID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional active User ID to receive drift alerts. Honoured only when the action runs as the system user (e.g. from scheduled jobs) or as an Owner; any other caller is notified themselves. The system user without a NotifyUserID sends no alert."
+          },
+          "primaryKey": {
+            "ID": "B8BB82A6-B9C9-46B3-BCB3-4E2B2C07C5D7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxRows",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional maximum number of Feature Value rows loaded per window (baseline and evaluation, each newest-first) per process during drift evaluation (defaults to 100,000). Must be a positive whole number. A process with a fuller window reports Truncated=true in ProcessResults."
+          },
+          "primaryKey": {
+            "ID": "E6B65E19-1457-421D-B9DB-A5CC0B4C3D39"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OverallSeverity",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Overall drift severity ('None', 'Warning', or 'Critical')."
+          },
+          "primaryKey": {
+            "ID": "6BF7D6C7-738B-47BE-BD08-16A64041D29A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxPSI",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Maximum Population Stability Index observed across evaluated features."
+          },
+          "primaryKey": {
+            "ID": "E8DD41D8-AA10-4889-AD9E-E9CD1509B93A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DriftedFeatures",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "List of FeaturePSIResult entries whose Severity is 'Warning' or 'Critical'."
+          },
+          "primaryKey": {
+            "ID": "55E7A367-59B2-4D01-A56C-A3E2C3DBD7A5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FeatureResults",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "Per-feature PSI results for all evaluated features."
+          },
+          "primaryKey": {
+            "ID": "D7F72508-672F-4761-B16D-A3844C250E14"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DivergenceMetrics",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Computed confidence-floor degradation and champion-vs-challenger divergence metrics."
+          },
+          "primaryKey": {
+            "ID": "2BEC7223-8135-4871-B63D-5BAA0B15BD7F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ShouldAlert",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Whether drift or divergence exceeded an alerting threshold."
+          },
+          "primaryKey": {
+            "ID": "CF752FBD-862F-4F8D-8425-2F62EA4347D1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "InsufficientData",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Whether one or more evaluated features or windows had fewer than MinSampleSize samples."
+          },
+          "primaryKey": {
+            "ID": "9CF911B1-AD8F-4D3F-ADA8-4A3B91001473"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Truncated",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Whether a drift window held more than MaxRows Feature Value rows, so only its newest MaxRows were evaluated. Set when one Record Process or model is evaluated; a scheduled sweep reports it per process in ProcessResults."
+          },
+          "primaryKey": {
+            "ID": "C3B31AA9-9C8E-468B-8589-9049AD7C6CEE"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AlertEmitted",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Whether an alert record was emitted."
+          },
+          "primaryKey": {
+            "ID": "02E2A8E1-023E-4D33-B78C-B76E6A56BBF0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AlertID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "ID of the emitted MJ: User Notifications alert record, when AlertEmitted is true."
+          },
+          "primaryKey": {
+            "ID": "C51A8001-709B-4914-B9BB-8A1BAA5FB2A0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ProcessResults",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "Per-Record-Process drift evaluation summaries when the action runs in scheduled sweep mode."
+          },
+          "primaryKey": {
+            "ID": "5F38028E-2EDC-4FDB-AC82-A11FDC54FAA1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Summary",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Human-readable drift summary."
+          },
+          "primaryKey": {
+            "ID": "B2C2E98C-0B84-4D6B-9E3E-141E723241CF"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Feature and prediction drift evaluation completed."
+          },
+          "primaryKey": {
+            "ID": "3B85FFEC-D9EA-48F7-A5E1-993697EA4B20"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "No feature distributions or RecordProcessID/ModelID were provided."
+          },
+          "primaryKey": {
+            "ID": "D715F230-B3FF-48CA-9F78-B557FD9E8A81"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_PARAMETER",
+            "IsSuccess": false,
+            "Description": "One or more PSI threshold or smoothing parameters were out of range."
+          },
+          "primaryKey": {
+            "ID": "06E09800-525D-4A71-B4F4-37809BF1EB65"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred during drift evaluation."
+          },
+          "primaryKey": {
+            "ID": "0FA1B422-8E43-4385-B81C-D849E4DF2053"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "9673E816-6985-4773-B172-E669522FC13D"
     }
   }
 ]

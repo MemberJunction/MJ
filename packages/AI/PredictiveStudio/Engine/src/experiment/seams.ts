@@ -11,15 +11,19 @@
  */
 
 import {
+  LogError,
   Metadata,
   type BaseEntity,
   type UserInfo,
   type IMetadataProvider,
 } from '@memberjunction/core';
-import { isErrorMetric } from '@memberjunction/predictive-studio-core';
 
+import type { MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 import { TrainingEngine } from '../training';
-import type { TrainingDeps } from '../training';
+import type { TrainingDeps, TrainModelInput, TrainModelResult } from '../training';
+import { RunViewTrainingSnapshotStore } from '../snapshot/training-snapshot-store';
+import { TrainingAttemptFailedError } from './budget';
+import { ExperimentScores } from './scores';
 import type {
   IClock,
   IExperimentEntityFactory,
@@ -87,8 +91,9 @@ export interface IPipelineResolver {
  * iteration it resolves the pipeline (via an injected {@link IPipelineResolver}),
  * trains it through the engine (producing an immutable Draft `MJ: ML Models` +
  * its `MJ: ML Training Runs` leaf linked to the iteration via
- * `experimentSessionIterationId`), and extracts the normalized holdout Score for
- * the plan's `SuccessMetric` to drive the leaderboard.
+ * `experimentSessionIterationId`), and extracts the normalized holdout Score that
+ * drives the leaderboard: on the plan's `SuccessMetric`, or on the model's primary
+ * proper score when its holdout gave none on it ({@link ExperimentScores.ExtractNormalizedScore}).
  */
 export class TrainingEngineExperimentTrainer implements IExperimentTrainer {
   /**
@@ -102,85 +107,64 @@ export class TrainingEngineExperimentTrainer implements IExperimentTrainer {
     private readonly engine: TrainingEngine = new TrainingEngine(),
   ) {}
 
-  /** @inheritdoc */
+  /**
+   * @inheritdoc
+   * The session's remaining compute seconds become the run's timeout (the engine takes the smaller of them and the
+   * protocol's compute budget); a session with no seconds bound leaves the protocol's.
+   *
+   * @throws TrainingAttemptFailedError when the attempt failed after its run row existed, carrying the run's compute
+   */
   public async train(input: TrainExperimentInput): Promise<TrainExperimentResult> {
     const pipelineId = await this.pipelineResolver.resolvePipelineId(input);
-    const { model, run } = await this.engine.trainModel(
-      {
-        pipelineId,
-        experimentSessionIterationId: input.iterationId,
-      },
-      this.trainingDeps,
-    );
-    const score = ExtractNormalizedScore(model.HoldoutMetrics, model.Metrics, input.plan.TargetDefinition.SuccessMetric, input.plan.TargetDefinition.ProblemType);
+    const { model, run } = await this.trainPipeline({
+      pipelineId,
+      experimentSessionIterationId: input.iterationId,
+      ...(input.timeoutSeconds === null ? {} : { timeoutSeconds: input.timeoutSeconds }),
+    }, input.iterationId);
+    // A run whose gate decision shipped no artifact has no model to score: the iteration completes with no score
+    // (its run's stored gate record says why) and the session continues.
+    const scored = model === null ? null : ExperimentScores.ExtractNormalizedScore(model.HoldoutMetrics, input.plan.TargetDefinition.SuccessMetric);
     return {
       model,
       run,
-      Score: score,
+      Score: scored === null ? null : scored.Score,
+      ScoreMetric: scored === null ? null : scored.Metric,
+      // A NULL run ComputeCost (no PS_COMPUTE_USD_PER_SECOND rate configured) is unbudgeted: it adds 0 to the
+      // session's MaxComputeCost sum.
       ComputeCost: run.ComputeCost ?? 0,
+      ComputeSeconds: run.ComputeSeconds || 0,
       TokensUsed: 0,
     };
   }
-}
 
-/**
- * Extract the **normalized** leaderboard score from a model's holdout metrics
- * (preferred — the honest, search-never-saw-it number, §8.2), falling back to
- * the training metrics. The score is normalized so **higher is always better**:
- * error metrics (RMSE/MAE/loss) are negated, ranking metrics (AUC/F1/accuracy)
- * pass through. Returns `0` when the metric is absent (a failed/empty run).
- *
- * Exported for unit testing the normalization in isolation.
- *
- * @param holdoutMetricsJson the model's `HoldoutMetrics` JSON (preferred)
- * @param trainMetricsJson the model's `Metrics` JSON (fallback)
- * @param successMetric the plan's `SuccessMetric` (e.g. `AUC`, `RMSE`)
- * @param problemType classification vs. regression (informs the error-metric direction)
- */
-export function ExtractNormalizedScore(
-  holdoutMetricsJson: string | null,
-  trainMetricsJson: string | null,
-  successMetric: string,
-  problemType: 'classification' | 'regression',
-): number {
-  const metrics = parseMetrics(holdoutMetricsJson) ?? parseMetrics(trainMetricsJson) ?? {};
-  const key = successMetric.toLowerCase();
-  const raw = metrics[key];
-  if (raw == null || !Number.isFinite(raw)) {
-    return 0;
-  }
-  // `problemType` is retained on the signature for callers/back-compat; the
-  // error-metric direction is metric-name driven (shared with maintenance via
-  // the Core `isErrorMetric`) so the two consumers can never drift apart.
-  void problemType;
-  return isErrorMetric(key) ? -raw : raw;
-}
-
-/** @deprecated Use {@link ExtractNormalizedScore}. */
-export function extractNormalizedScore(
-  holdoutMetricsJson: string | null,
-  trainMetricsJson: string | null,
-  successMetric: string,
-  problemType: 'classification' | 'regression',
-): number {
-  return ExtractNormalizedScore(holdoutMetricsJson, trainMetricsJson, successMetric, problemType);
-}
-
-/** Parse a metrics JSON column into a lower-cased numeric record, or null. */
-function parseMetrics(json: string | null): Record<string, number> | null {
-  if (json == null || json.trim().length === 0) {
-    return null;
-  }
-  try {
-    const parsed = JSON.parse(json) as Record<string, unknown>;
-    const out: Record<string, number> = {};
-    for (const [k, v] of Object.entries(parsed)) {
-      if (typeof v === 'number') {
-        out[k.toLowerCase()] = v;
-      }
+  /**
+   * Train through the engine. When the attempt fails after its run row was written (a refusal at any stage after the
+   * run exists, or any other error), the run already recorded the compute it spent; the failure becomes a
+   * {@link TrainingAttemptFailedError} carrying that run's seconds and USD (the engine's error as its `cause`, its
+   * message unchanged), so the session charges the failed attempt what it spent. A failure before any run row exists
+   * spent nothing and passes through unchanged.
+   */
+  private async trainPipeline(trainInput: TrainModelInput, iterationId: string): Promise<TrainModelResult> {
+    try {
+      return await this.engine.trainModel(trainInput, this.trainingDeps);
+    } catch (err) {
+      const run = await this.failedAttemptRun(iterationId);
+      if (run === null || !(err instanceof Error)) throw err;
+      throw new TrainingAttemptFailedError(err.message, run.ComputeSeconds || 0, run.ComputeCost || 0, err);
     }
-    return out;
-  } catch {
-    return null;
+  }
+
+  /**
+   * The run the failed attempt wrote, read through the training deps' run reader, or null when it wrote none. A failed
+   * read is logged and treated as no run, so it never masks the attempt's own error.
+   */
+  private async failedAttemptRun(iterationId: string): Promise<MJMLTrainingRunEntity | null> {
+    const runs = this.trainingDeps.snapshots || new RunViewTrainingSnapshotStore(this.trainingDeps.provider, this.trainingDeps.contextUser);
+    try {
+      return await runs.FindRunForIteration(iterationId);
+    } catch (readErr) {
+      LogError(`TrainingEngineExperimentTrainer: reading the run of failed iteration ${iterationId} failed: ${readErr instanceof Error ? readErr.message : String(readErr)}`);
+      return null;
+    }
   }
 }

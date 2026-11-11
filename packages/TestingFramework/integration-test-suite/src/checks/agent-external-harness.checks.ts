@@ -37,7 +37,7 @@ import { MJGlobal } from '@memberjunction/global';
 import { RunView } from '@memberjunction/core';
 import type { MJAIAgentHarnessEntity_IHarnessCapabilitySettings } from '@memberjunction/core-entities';
 import { BaseAgent, BaseAgentType } from '@memberjunction/ai-agents';
-import { BaseHarnessAdapter } from '@memberjunction/ai-agent-harness';
+import { BaseHarnessAdapter, type HarnessCapabilities } from '@memberjunction/ai-agent-harness';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
@@ -62,7 +62,10 @@ const DEMO_AGENT_NAME = 'Demo Harness Agent';
  * accusing correct metadata of a typo. The check was right that something had drifted and wrong
  * about which side.
  */
-const KNOWN_CAPABILITIES: Record<keyof MJAIAgentHarnessEntity_IHarnessCapabilitySettings, true> = {
+const KNOWN_CAPABILITIES: Record<
+    keyof MJAIAgentHarnessEntity_IHarnessCapabilitySettings | keyof HarnessCapabilities,
+    true
+> = {
     SessionResume: true,
     MidTurnCancellation: true,
     StructuredOutput: true,
@@ -72,6 +75,8 @@ const KNOWN_CAPABILITIES: Record<keyof MJAIAgentHarnessEntity_IHarnessCapability
     McpClient: true,
     WorkspaceScoping: true,
     ModelSelection: true,
+    SupportsCloudExecution: true,
+    SupportsAsyncWakeHandoff: true,
 };
 
 interface AgentTypeRow { ID: string; Name: string; DriverClass: string | null; SystemPromptID: string | null; }

@@ -1452,6 +1452,9 @@ importers:
 
   packages/AI/PredictiveStudio/Core:
     dependencies:
+      '@memberjunction/global':
+        specifier: 6.2.0
+        version: link:../../../MJGlobal
       zod:
         specifier: ^3.25.0
         version: 3.25.76
@@ -1495,6 +1498,12 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.2.0
         version: link:../../../MJCoreEntities
+      '@memberjunction/feature-pipelines':
+        specifier: 6.2.0
+        version: link:../../Knowledge/FeaturePipelines
+      '@memberjunction/generic-database-provider':
+        specifier: 6.2.0
+        version: link:../../../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.2.0
         version: link:../../../MJGlobal
@@ -1510,6 +1519,9 @@ importers:
       '@memberjunction/record-set-processor-base':
         specifier: 6.2.0
         version: link:../../../RecordSetProcessor/base
+      '@memberjunction/storage':
+        specifier: 6.2.0
+        version: link:../../../MJStorage
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
@@ -1572,6 +1584,9 @@ importers:
       '@memberjunction/predictive-studio-sidecar':
         specifier: 6.2.0
         version: link:../Sidecar
+      '@memberjunction/storage':
+        specifier: 6.2.0
+        version: link:../../../MJStorage
       '@memberjunction/testing-integration':
         specifier: 6.2.0
         version: link:../../../TestingFramework/testing-integration
@@ -4322,6 +4337,9 @@ importers:
       docx:
         specifier: ^9.5.1
         version: 9.6.1
+      dompurify:
+        specifier: ^3.3.0
+        version: 3.3.1
       exceljs:
         specifier: ^4.4.0
         version: 4.4.0
@@ -4624,6 +4642,9 @@ importers:
       '@memberjunction/ng-auth-services':
         specifier: 6.2.0
         version: link:../Explorer/auth-services
+      '@memberjunction/ng-base-forms':
+        specifier: 6.2.0
+        version: link:../Generic/base-forms
       '@memberjunction/ng-clustering':
         specifier: 6.2.0
         version: link:../Generic/clustering
@@ -4740,6 +4761,9 @@ importers:
       '@memberjunction/ng-auth-services':
         specifier: 6.2.0
         version: link:../Explorer/auth-services
+      '@memberjunction/ng-base-forms':
+        specifier: 6.2.0
+        version: link:../Generic/base-forms
       '@memberjunction/ng-conversations':
         specifier: 6.2.0
         version: link:../Generic/conversations
@@ -16898,6 +16922,9 @@ importers:
 
   packages/TestingFramework/integration-test-suite:
     dependencies:
+      '@memberjunction/a2aserver':
+        specifier: 6.2.0
+        version: link:../../AI/A2AServer
       '@memberjunction/actions':
         specifier: 6.2.0
         version: link:../../Actions/Engine
@@ -17039,6 +17066,12 @@ importers:
       '@memberjunction/graphql-dataprovider':
         specifier: 6.2.0
         version: link:../../GraphQLDataProvider
+      '@memberjunction/integration-engine':
+        specifier: 6.2.0
+        version: link:../../Integration/engine
+      '@memberjunction/integration-schema-builder':
+        specifier: 6.2.0
+        version: link:../../Integration/schema-builder
       '@memberjunction/livekit-room-server':
         specifier: 6.2.0
         version: link:../../LiveKitRoomServer
@@ -17087,12 +17120,21 @@ importers:
       '@memberjunction/scheduling-engine':
         specifier: 6.2.0
         version: link:../../Scheduling/engine
+      '@memberjunction/schema-engine':
+        specifier: 6.2.0
+        version: link:../../SchemaEngine
       '@memberjunction/search-engine':
         specifier: 6.2.0
         version: link:../../SearchEngine
+      '@memberjunction/server':
+        specifier: 6.2.0
+        version: link:../../MJServer
       '@memberjunction/server-bootstrap-lite':
         specifier: 6.2.0
         version: link:../../ServerBootstrapLite
+      '@memberjunction/sql-dialect':
+        specifier: 6.2.0
+        version: link:../../SQLDialect
       '@memberjunction/sqlserver-dataprovider':
         specifier: 6.2.0
         version: link:../../SQLServerDataProvider

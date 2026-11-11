@@ -3,33 +3,41 @@
  *
  * Dependency-injection seams and input/output shapes for the
  * {@link TrainingEngine} (plan §3 / §4.3 / §4.4 / §8.2 / §11). Every external
- * dependency the engine touches — entity creation, record loading, the Python
- * sidecar, and artifact storage — is expressed as a narrow interface here so the
+ * dependency the engine touches — entity creation, record loading, the trainer
+ * (the Python sidecar's trainer/evaluator), and artifact storage — is expressed as a narrow interface here so the
  * orchestrator is unit-testable with no live database and no live sidecar.
  *
  * The production implementations of these seams (`MetadataEntityFactory`,
- * `RunViewRecordLoader`, `MJSidecarTrainer`, `MJFilesArtifactStore`) are thin
+ * `RunViewRecordLoader`, `MJSidecarTrainer`, `StorageProviderArtifactStore`) are thin
  * adapters around `Metadata.GetEntityObject`, `RunView`, `MLSidecar`, and
- * `MJ: Files`; the tests inject in-memory fakes implementing the same contracts.
+ * `MJ: Files` over an MJ storage provider; the tests inject in-memory fakes implementing the same contracts.
  */
 
 import type { BaseEntity, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import type {
-  TrainRequest,
-  TrainResponse,
   ProblemType,
-  MatrixData,
   SourceBinding,
   FeatureStepGraph,
   AsOfStrategy,
   OutcomeConfig,
   EvaluationRecord,
+  TrainerRequest,
+  TrainerResult,
+  CandidateSpec,
+  PREDICTOR_ARTIFACT_FORMAT,
 } from '@memberjunction/predictive-studio-core';
 import type {
   MJMLTrainingPipelineEntity,
   MJMLModelEntity,
   MJMLTrainingRunEntity,
 } from '@memberjunction/core-entities';
+import type { ICountingDataAccess } from '../feature-assembly/data-access';
+import type { IAssemblyMetadata } from '../feature-assembly/assembly-metadata';
+import type { IPredictionUnitStore } from '../prediction-unit/unit-store';
+import type { IRecordHistoryReader } from '../feature-assembly/as-of/record-history';
+import type { ISnapshotFileStore } from '../snapshot/snapshot-file-store';
+import type { ITrainingSnapshotStore } from '../snapshot/training-snapshot-store';
+import type { IEvaluationProtocolStore } from './evaluation-protocol-store';
 
 /**
  * Factory seam for creating strongly-typed entity objects. Wraps
@@ -93,33 +101,37 @@ export interface IRecordLoader {
    * @returns the `DriverClass` driver key, or `null` when not found
    */
   resolveAlgorithmDriverKey?(algorithmId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<string | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+
+  /**
+   * The `MJ: ML Algorithms` row whose `DriverClass` is `driverKey`: the algorithm a shipped baseline member's model row
+   * names. Null when the catalog has no row for the driver (the baseline-only GLMs and the forecast baselines have none).
+   *
+   * @param driverKey the sidecar driver key (e.g. `logistic_regression`)
+   * @param contextUser request user
+   * @param provider the provider the read runs on (no global fallback)
+   * @throws Error naming both rows when two catalog rows share the driver key
+   */
+  resolveAlgorithmIDForDriver(driverKey: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<string | null>;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
 }
 
 /**
- * Sidecar seam — the `/train` call. Wraps {@link MLSidecar} from
- * `@memberjunction/predictive-studio-sidecar` in production; tests inject a fake
- * that returns a canned {@link TrainResponse} and captures the request so the
- * test can assert the matrix/preprocessing/holdout shape sent to the sidecar.
+ * The protocol-driven training seam: one Training Run over one immutable Training Snapshot per call, answered with a
+ * {@link TrainerResult}. Every pipeline trains through it.
  */
-export interface ISidecarTrainer {
+export interface ITrainerEvaluator {
   /**
-   * Train a model from an assembled feature matrix. The implementation is
-   * responsible for sidecar lifecycle (start/connect); the engine only calls
-   * this method.
+   * Run one training. Transport failures and sidecar faults are retried up to `req.maxRetries` times; a refused request
+   * or a malformed answer throws. Every other outcome, including exhausted retries, is a {@link TrainerResult}.
    *
-   * The engine carves the **locked holdout** (plan §8.2) in TypeScript before
-   * calling this — `req.data` contains ONLY the training portion (the rows the
-   * model may train and tune on). The locked-holdout rows travel separately in
-   * the optional second argument so the sidecar scores them **exactly once** and
-   * returns `holdout_metrics`; they never enter `req.data`. Keeping the holdout
-   * out of the public {@link TrainRequest} shape preserves that contract while
-   * making the carve auditable and deterministic on the orchestrator side.
-   *
-   * @param req the fully-built train request (training matrix + schema + preprocessing + validation)
-   * @param lockedHoldout the carved-off holdout matrix to score exactly once (optional)
+   * @param req the request the first attempt sends
+   * @param reissue builds the same request with freshly pre-authorised snapshot downloads; every retry sends its result,
+   *   since a download URL expires (ten minutes on the cloud storage providers) and a retry can start long after the first
    */
-  train(req: TrainRequest, lockedHoldout?: MatrixData): Promise<TrainResponse>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  RunTrainer(req: TrainerRequest, reissue: TrainerRequestReissue): Promise<TrainerResult>;
 }
+
+/** Builds a trainer request again with freshly pre-authorised snapshot downloads (the rest of the request is unchanged). */
+export type TrainerRequestReissue = () => Promise<TrainerRequest>;
 
 /**
  * Artifact-storage seam (plan §11). The serialized model artifact is persisted
@@ -130,14 +142,32 @@ export interface ISidecarTrainer {
 export interface IArtifactStore {
   /**
    * Persist the serialized artifact bytes under a name and return the storage
-   * file id to record on the model.
+   * file id to record on the model. The store writes as the user it was built for.
    *
    * @param bytes the serialized model artifact
    * @param name a human-readable artifact name (e.g. `model-<pipeline>-v<version>.bin`)
-   * @param contextUser request user — required on the server for isolation/audit
    * @returns the file id to store in `MLModel.ArtifactFileID`
    */
-  save(bytes: Uint8Array, name: string, contextUser?: UserInfo): Promise<string>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  save(bytes: Uint8Array, name: string): Promise<string>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+
+  /**
+   * Remove an artifact this store saved: its file record and its bytes. Used to roll back the artifacts of a run that
+   * failed after storing them, so none is left unreferenced.
+   *
+   * @param fileId the id `save` returned
+   * @throws Error when the artifact cannot be removed
+   */
+  delete(fileId: string): Promise<void>;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
+
+  /**
+   * Refuse when this store cannot write here (for a storage provider: no provider by the configured name, its driver
+   * is not configured on this server, or a probe object cannot be written under the store's key prefix). The training
+   * engine calls it before anything of a run is written and before the trainer runs, so a run never spends its compute
+   * and then fails to store its artifacts.
+   *
+   * @throws Error naming what is missing
+   */
+  AssertWritable(): Promise<void>;
 }
 
 /**
@@ -153,18 +183,18 @@ export interface TrainModelInput {
    * omitted for a one-off standalone train outside a session.
    */
   experimentSessionIterationId?: string;
-  /**
-   * Optional per-record label-event dates (keyed by record primary key). Feature assembly's `offset` as-of mode
-   * reads them, but training refuses every as-of mode other than `none` before assembly
-   * (`AsOfSettingHasNoEffectError`), so training does not use them today.
-   */
-  labelEventDates?: Record<string, Date>;
-  /** Optional primary-key field on the target entity (defaults to `ID`). */
-  primaryKeyField?: string;
-  /** Optional cap on training rows pulled from the target entity. */
-  maxRows?: number;
   /** Sidecar version string recorded in model lineage (provenance). */
   sidecarVersion?: string;
+  /**
+   * The candidates of this search; absent means the pipeline's own algorithm as the single candidate. More candidates
+   * than the bound protocol's budget allows refuse the search before a run row is written (`too-many-candidates`).
+   */
+  candidates?: readonly CandidateSpec[];  // case-violation-ok-legacy-back-compat: matches the existing TrainModelInput member casing
+  /**
+   * Seconds left in an enclosing budget (an experiment session). The trainer's timeout is the smaller of this and the
+   * protocol's compute budget; absent or null means no enclosing budget.
+   */
+  timeoutSeconds?: number | null;  // case-violation-ok-legacy-back-compat: matches the existing TrainModelInput member casing
 }
 
 /**
@@ -178,14 +208,37 @@ export interface TrainingDeps {
   entityFactory: IEntityFactory;
   /** Record-loading seam (pipeline + next-version). */
   recordLoader: IRecordLoader;
-  /** Sidecar `/train` seam. */
-  sidecar: ISidecarTrainer;
   /** Artifact-storage seam. */
   artifactStore: IArtifactStore;
   /** Request user — threaded through every entity op for isolation/audit. */
   contextUser: UserInfo;
   /** The provider every training read runs on; required because the training reads have no global fallback. */
   provider: IMetadataProvider;
+  /** Prediction Unit store for a pipeline that points at a unit; defaults to a `RunViewPredictionUnitStore` on `provider`. */
+  predictionUnits?: IPredictionUnitStore;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** Entity metadata the unit row reader resolves against; defaults to a `ProviderAssemblyMetadata` on `provider`. */
+  assemblyMetadata?: IAssemblyMetadata;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** The counting data access the unit rows are read through; defaults to a `RunViewDataAccess` on `provider`. */
+  dataAccess?: ICountingDataAccess;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** The clock for a unit whose censoring cutoff is `now`; defaults to the current time. */
+  now?: () => Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** The Record Changes history the as-of assembly replays; defaults to a `RunViewRecordHistoryReader` (complete reads) over `dataAccess`. */
+  history?: IRecordHistoryReader;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
+  /**
+   * Where a Prediction Unit run writes its Training Snapshot's files. Required on the unit path: a unit run trains only
+   * from a snapshot, so a unit run without a file store fails with an error (incomplete deps; the run is recorded
+   * `Failed`, not as a `refused` envelope) rather than training from rows nothing recorded.
+   */
+  snapshotFiles?: ISnapshotFileStore;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
+  /** Reads snapshots by content hash and ID, and training runs by ID; defaults to a `RunViewTrainingSnapshotStore` on `provider`. */
+  snapshots?: ITrainingSnapshotStore;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
+  /**
+   * The trainer every Prediction Unit pipeline trains through. Required on that path: a unit run without one fails
+   * before anything is read. Production wiring passes an `MJSidecarTrainer` over the process-shared sidecar.
+   */
+  trainer?: ITrainerEvaluator;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
+  /** Reads the Evaluation Protocol a pipeline is bound to; defaults to a `RunViewEvaluationProtocolStore` on `provider`. */
+  protocols?: IEvaluationProtocolStore;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
 }
 
 /**
@@ -193,12 +246,13 @@ export interface TrainingDeps {
  * produced model and the run that produced it.
  */
 export interface TrainModelResult {
-  /** The immutable `MJ: ML Models` row produced (Draft status). */
-  model: MJMLModelEntity;
+  /**
+   * The immutable `MJ: ML Models` row produced (Draft status), or null when the run's gate decision ships no artifact
+   * (`no-signal`, or the unit's existing heuristic rule kept); the run's stored gate record says why.
+   */
+  model: MJMLModelEntity | null;
   /** The `MJ: ML Training Runs` row recording this attempt. */
   run: MJMLTrainingRunEntity;
-  /** Feature columns that were constant across every training row (also noted on the run). */
-  constantFeatures?: string[];
 }
 
 /**
@@ -228,6 +282,50 @@ export interface ModelTrainingLineage {
   assembledAt: string;
   /** How the stored metrics were measured (`EvaluationLineage.Key`). */
   evaluation: EvaluationRecord;
+}
+
+/**
+ * What the Lineage of a model trained under an Evaluation Protocol adds: the protocol it was judged under and the
+ * format of its artifact (the trainer's envelope, which carries its own in-fold encoding).
+ */
+export interface TrainerModelLineage {
+  evaluationProtocolId: string;  // case-violation-ok-legacy-back-compat: a stored Lineage JSON key, beside the ModelTrainingLineage keys
+  artifactFormat: typeof PREDICTOR_ARTIFACT_FORMAT;  // case-violation-ok-legacy-back-compat: a stored Lineage JSON key, beside the ModelTrainingLineage keys
+  /** What the gate shipped as this model: the finalist's name, or the simple baseline member kept (`glm`, `oneFeature`, `naive`, `seasonalNaive`). */
+  shippedMember: string;  // case-violation-ok-legacy-back-compat: a stored Lineage JSON key, beside the ModelTrainingLineage keys
+  /**
+   * The driver key of the shipped artifact. It can differ from the driver of the model row's `AlgorithmID`: a shipped
+   * count or non-negative GLM (`poisson_glm`, `tweedie_glm`) or forecast baseline (`naive`, `seasonal-naive`) has no
+   * `MJ: ML Algorithms` row, so the row names the pipeline's algorithm and this key holds the truth.
+   */
+  shippedDriver: string;  // case-violation-ok-legacy-back-compat: a stored Lineage JSON key, beside the ModelTrainingLineage keys
+  /**
+   * The run's leakage audit: the top feature of the finalist's held-out importance and its share, whatever shipped.
+   * A kept simple baseline stores no importance of its own (`FeatureImportance` is `{}`), so the promotion gate reads
+   * this audit to judge it against the pipeline's current dominance threshold. Null when the trainer measured no
+   * importance (a forecast reports none).
+   */
+  trainingLeakageAudit: TrainingLeakageAudit | null;  // case-violation-ok-legacy-back-compat: a stored Lineage JSON key, beside the ModelTrainingLineage keys
+  /**
+   * Set when the shipped finalist's family is hidden for its holdout calibration (a probability task whose slope is
+   * outside 0.8–1.2, or could not be measured): the model stays `Draft` and the promotion gate never moves it to
+   * Validated or Published, with or without a sign-off. Null when nothing is held (a kept baseline member is not
+   * judged by the finalist's calibration report).
+   */
+  calibrationHold: CalibrationHold | null;  // case-violation-ok-legacy-back-compat: a stored Lineage JSON key, beside the ModelTrainingLineage keys
+}
+
+/** The finalist importance's top feature and its share of the total, as a trainer run's model Lineage records it. */
+export interface TrainingLeakageAudit {
+  topFeature: string;  // case-violation-ok-legacy-back-compat: a stored Lineage JSON key, beside the TrainerModelLineage keys
+  /** The top feature's share of the total importance (0..1). */
+  topShare: number;  // case-violation-ok-legacy-back-compat: a stored Lineage JSON key, beside the TrainerModelLineage keys
+}
+
+/** Why a model's family is hidden for its calibration, as its Lineage records it. */
+export interface CalibrationHold {
+  /** The finalist's holdout calibration slope; null when the slope could not be measured. */
+  slope: number | null;  // case-violation-ok-legacy-back-compat: a stored Lineage JSON key, beside the TrainerModelLineage keys
 }
 
 /** Re-export for downstream training consumers without reaching into core. */

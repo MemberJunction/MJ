@@ -1481,7 +1481,8 @@
     "fields": {
       "Name": "HTTP Request",
       "Config": {
-        "outputTrustLevel": "Untrusted"
+        "outputTrustLevel": "Untrusted",
+        "disallowWhenTainted": true
       },
       "Description": "Make HTTP requests with full control over headers, authentication, and request options",
       "DriverClass": "__HTTPRequest",
@@ -1744,7 +1745,10 @@
       "Description": "Execute GraphQL queries and mutations with variable support",
       "DriverClass": "__GraphQLQuery",
       "Type": "Custom",
-      "Status": "Active"
+      "Status": "Active",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -2155,7 +2159,10 @@
       "Description": "Add rate limiting to any API endpoint with automatic retry and backoff",
       "DriverClass": "__APIRateLimiter",
       "Type": "Custom",
-      "Status": "Active"
+      "Status": "Active",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -3590,7 +3597,10 @@
       "Description": "Send messages to Slack channels via incoming webhooks with rich formatting support",
       "DriverClass": "__SlackWebhook",
       "Type": "Custom",
-      "Status": "Active"
+      "Status": "Active",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -3778,7 +3788,10 @@
       "Description": "Send messages to Microsoft Teams channels via incoming webhooks with card formatting",
       "DriverClass": "__TeamsWebhook",
       "Type": "Custom",
-      "Status": "Active"
+      "Status": "Active",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [

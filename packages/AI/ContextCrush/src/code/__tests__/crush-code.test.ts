@@ -119,4 +119,16 @@ describe('CrushCode (sql)', () => {
     const result = CrushCode(sql, 'sql');
     expect(result.Text).toBe(sql);
   });
+
+  it('processes pathological repeated parentheses and trailing whitespace in linear time without ReDoS', () => {
+    const pathologicalTs = `fn(${')'.repeat(20_000)} {\n  a();\n  b();\n  c();\n}`;
+    const pathologicalSql = `SELECT 1;${' '.repeat(50_000)}\nSELECT 2;`;
+    const start = Date.now();
+    const tsResult = CrushCode(pathologicalTs, 'typescript', { DropComments: true });
+    const sqlResult = CrushCode(pathologicalSql, 'sql', { DropComments: true });
+    expect(Date.now() - start).toBeLessThan(500);
+    expect(tsResult.Text.length).toBeGreaterThan(0);
+    expect(sqlResult.Text).toBe('SELECT 1;\nSELECT 2;');
+  });
 });
+
