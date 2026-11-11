@@ -468,6 +468,12 @@
 
             @if (IsLoadingCreateTablesObjects) {
               <mj-loading text="Loading source objects..." size="small"></mj-loading>
+            } @else if (CreateTablesObjectsError) {
+              <mj-empty-state class="create-tables-error" Icon="fa-solid fa-triangle-exclamation"
+                Title="Could not list source objects"
+                [Message]="CreateTablesObjectsError"
+                ActionText="Retry" ActionIcon="fa-solid fa-rotate-right"
+                (Action)="RetryCreateTablesObjects()" />
             } @else if (CreateTablesObjects.length === 0) {
               <div class="auto-map-result auto-map-success">
                 <i class="fa-solid fa-circle-info"></i>
