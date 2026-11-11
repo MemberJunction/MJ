@@ -1,0 +1,34 @@
+{
+  "Version": 1,
+  "Seed": 1,
+  "Bug": [
+    {
+      "BugPR": 4253,
+      "FixPR": 4293,
+      "BugMergeSHA": "ff288021132d87a0e532f40e5a915306396fb422",
+      "FixMergeSHA": "d878d5451fe542d193c0fb51a0d0288b82c0ce84",
+      "Description": "An ExtraFilter of the form IN (SELECT … FROM <entity BaseView>) is refused by the SELECT/EXISTS screen instead of being allowed.",
+      "Slice": "Tuning"
+    },
+    {
+      "BugPR": 5897,
+      "FixPR": 5940,
+      "BugMergeSHA": "c5a8c4254466620da067971e7dda374e3902af31",
+      "FixMergeSHA": "b0697542cfeb78ab21b52bf454ea2641672c3d27",
+      "Description": "In the xAI realtime client, a late transcript for an earlier item replaces the next user turn instead of pairing with its own turn.",
+      "Slice": "Tuning"
+    }
+  ],
+  "Clean": [
+    {
+      "PR": 3484,
+      "MergeSHA": "38414642ab950b5c0484d1c642d109c57566da4d",
+      "Slice": "Tuning"
+    },
+    {
+      "PR": 3519,
+      "MergeSHA": "2d919c6461bc2258d7b57dbf2f15e8191512e3ba",
+      "Slice": "Tuning"
+    }
+  ]
+}
